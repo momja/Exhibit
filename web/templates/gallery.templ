@@ -1,0 +1,73 @@
+// gallery.templ — templ templates for the artifact gallery UI.
+// Run `templ generate` to produce gallery_templ.go.
+package templates
+
+import "github.com/artifact-viewer/artifact-viewer/internal/store"
+
+templ Layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>{ title } — Artifact Viewer</title>
+		<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+		<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+		<link rel="stylesheet" href="/static/app.css"/>
+	</head>
+	<body class="bg-gray-950 text-gray-100 min-h-screen">
+		{ children... }
+	</body>
+	</html>
+}
+
+templ GalleryPage(artifacts []*store.Artifact, query string) {
+	@Layout("Gallery") {
+		<div class="max-w-7xl mx-auto p-6">
+			<header class="mb-8">
+				<h1 class="text-3xl font-bold mb-4">Artifact Viewer</h1>
+				<form hx-get="/gallery" hx-target="#artifact-grid" hx-push-url="true">
+					<input
+						type="search"
+						name="q"
+						value={ query }
+						placeholder="Search artifacts..."
+						class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+				</form>
+			</header>
+			<div id="artifact-grid">
+				@ArtifactGrid(artifacts)
+			</div>
+		</div>
+	}
+}
+
+templ ArtifactGrid(artifacts []*store.Artifact) {
+	if len(artifacts) == 0 {
+		<div class="text-center text-gray-400 py-16">
+			<p class="text-lg">No artifacts yet.</p>
+			<p class="text-sm mt-2">Upload an HTML file to get started.</p>
+		</div>
+	} else {
+		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+			for _, a := range artifacts {
+				@ArtifactCard(a)
+			}
+		</div>
+	}
+}
+
+templ ArtifactCard(a *store.Artifact) {
+	<div class="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-blue-500 transition-colors">
+		<a href={ templ.SafeURL("/artifacts/" + a.ID) } class="block">
+			<div class="aspect-video bg-gray-900 flex items-center justify-center">
+				<span class="text-gray-500 text-sm">Preview</span>
+			</div>
+			<div class="p-3">
+				<h3 class="font-medium text-gray-100 truncate">{ a.Title }</h3>
+				<p class="text-xs text-gray-400 mt-1">{ a.CreatedAt.Format("Jan 2, 2006") }</p>
+			</div>
+		</a>
+	</div>
+}
