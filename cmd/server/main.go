@@ -20,6 +20,10 @@ func main() {
 	addr := getenv("ADDR", ":8080")
 	renderAddr := getenv("RENDER_ADDR", ":8081")
 
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		log.Fatalf("create data dir: %v", err)
+	}
+
 	st, err := store.OpenSQLite(dbPath)
 	if err != nil {
 		log.Fatalf("open store: %v", err)
