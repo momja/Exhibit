@@ -40,6 +40,10 @@ func (ro *Router) setupRoutes() {
 	ro.Use(middleware.Recoverer)
 	ro.Use(loggingMiddleware)
 
+	// Gallery UI — no auth header required (token embedded in page JS)
+	ro.Get("/", ro.galleryIndex)
+	ro.Get("/artifacts/{artifactID}", ro.galleryDetail)
+
 	// Public share route — no auth required
 	ro.Get("/s/{shareID}", ro.serveShare)
 
