@@ -95,9 +95,8 @@ the network — which is governed entirely by the security model in §6.
 Even though the product is local-first in feel, it is built as a hostable service from
 day one to support later cross-device and multi-user use. The defining rule:
 
-> **There is exactly one write path: the HTTP API.** Every ingest route — CLI push,
-> directory watcher, paste-in-browser — calls the API. Nothing writes the datastore
-> directly.
+> **There is exactly one write path: the HTTP API.** Every ingest route — web upload,
+> paste-in-browser — calls the API. Nothing writes the datastore directly.
 
 This keeps every future feature (sync, sharing, multi-user) flowing through one
 auditable mutation surface.
@@ -112,13 +111,13 @@ auditable mutation surface.
 │  paste)     │               │  └─────────┬──────────┘  │
 └─────────────┘               │            │             │
 ┌─────────────┐               │  ┌─────────▼──────────┐  │
-│  Watcher    │ ────────────► │  │  Store interface   │  │
-│ (a client)  │               │  │  - metadata: SQLite│  │
+│  Chrome ext │ ────────────► │  │  Store interface   │  │
+│  (future)   │               │  │  - metadata: SQLite│  │
 └─────────────┘               │  │  - blobs: FS now,  │  │
-┌─────────────┐               │  │    S3-compatible   │  │
-│  Chrome ext │ ────────────► │  │    later           │  │
-│  (future)   │               │  └────────────────────┘  │
-└─────────────┘               │  ┌────────────────────┐  │
+                              │  │    S3-compatible   │  │
+                              │  │    later           │  │
+                              │  └────────────────────┘  │
+                              │  ┌────────────────────┐  │
                               │  │ Render origin      │  │
                               │  │ (isolated host)    │  │
                               │  └────────────────────┘  │
@@ -289,28 +288,22 @@ of what justifies hosting the service.
 
 The artifact is already a file on disk after a Claude Code / Gemini CLI session. No
 skill or special output format is needed — the file *is* the artifact. It enters the
-library through the web UI (drag/drop or paste the HTML) or, for a watched directory,
-automatically (§8.2). On ingest the service scans the file, surfaces its network
-footprint for approval (§6.2), stores it, and returns the rendered/share URL.
+library through the web UI (drag/drop or paste the HTML). On ingest the service scans
+the file, surfaces its network footprint for approval (§6.2), stores it, and returns
+the rendered/share URL.
 
-### 8.2 Capture (passive)
-
-Point the watcher at a projects dir. Files matching `*.artifact.html` or living in an
-`/artifacts/` folder are auto-ingested (the watcher calls the same API). The library
-fills itself with no command.
-
-### 8.3 Rediscover
+### 8.2 Rediscover
 
 Open the web gallery, search "bar chart" (matches indexed source + title + tags),
 click the thumbnail, the tool renders live in its sandboxed iframe with its state
 hydrated from the service. No regeneration, no digging through chat logs.
 
-### 8.4 Use across devices
+### 8.3 Use across devices
 
 Set state on iPhone → shim writes through to the service → open the same artifact on
 Mac → shim hydrates the state back. Transparent to the artifact.
 
-### 8.5 Share
+### 8.4 Share
 
 One button mints a share row and returns `/s/:shareId`, openable by anyone in any
 browser with no account and no dependency on the originating assistant — or export a
@@ -320,8 +313,8 @@ single self-contained `.html`.
 
 - **No tier-3 backends / no PaaS.** No running servers, SSR, or databases per artifact.
 - **No fetch-by-URL importer as the primary path.** Vendor share URLs are auth-gated
-  (esp. Anthropic); ingest is file upload / paste via the web UI or the watcher (with a
-  Chrome extension as a possible future import path).
+  (esp. Anthropic); ingest is file upload / paste via the web UI (with a Chrome
+  extension as a possible future import path).
 - **No pre-render analysis step / no agent inspection** to detect storage usage — the
   runtime shim observes instead.
 - **No CSP violation-report pipeline** — replaced by scan + explicit per-artifact
@@ -335,7 +328,7 @@ single self-contained `.html`.
 1. **Static core (tier 1):** service + single-write API, SQLite + blob store behind the
    Store interface, sandboxed iframe renderer on an isolated origin, ingest scan +
    allowlist + CSP generation, web gallery with search/tags/collections (upload + paste
-   ingest), directory watcher.
+   ingest).
 2. **State shim:** unconditional `localStorage`/`sessionStorage` interception with
    hydrate-then-write-through against `/api/artifacts/:id/state`; extend to IndexedDB
    and `window.storage`. Unlocks cross-device use.
