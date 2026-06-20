@@ -2,7 +2,6 @@
 
 build:
 	go build -o bin/server ./cmd/server
-	go build -o bin/watcher ./cmd/watcher
 
 test:
 	go test ./...
