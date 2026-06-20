@@ -2,6 +2,9 @@
 
 This file provides instructions and context for AI coding agents working on this project.
 
+## Coding Best Practices
+- Follow John Ousterhout's advice, and pull complexity downwards. Write clean, readable code.
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
 

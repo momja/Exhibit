@@ -113,19 +113,10 @@ GET  /s/:shareID       Serve shared artifact (render origin only)
 
 The render surface sets `Content-Security-Policy` from the artifact's `network_allowlist`, injects the storage shim, and serves the document. The iframe has `sandbox="allow-scripts"` without `allow-same-origin`, giving it an opaque origin.
 
-## Directory watcher
-
-Auto-ingest any `*.artifact.html` file dropped into a directory:
-
-```bash
-WATCH_DIR=~/artifacts API_URL=http://localhost:8080 AUTH_TOKEN=dev-token \
-  go run ./cmd/watcher
-```
-
 ## Building
 
 ```bash
-make build       # produces bin/server and bin/watcher
+make build       # produces bin/server
 make test        # go test ./...
 make run         # go run ./cmd/server
 ```
@@ -159,7 +150,6 @@ docker run -p 8080:8080 -p 8081:8081 \
 ```
 cmd/
   server/     main entry point
-  watcher/    directory watcher client
 internal/
   api/        HTTP handlers, router, middleware
   blob/       Blob store interface + filesystem implementation
