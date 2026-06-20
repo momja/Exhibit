@@ -1,0 +1,46 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    volumes:
+      - data:/data
+    environment:
+      - DATA_DIR=/data
+      - ADDR=:8080
+      - RENDER_ADDR=:8081
+      - APP_ORIGIN=${APP_ORIGIN:-http://localhost:8080}
+      - RENDER_ORIGIN=${RENDER_ORIGIN:-http://localhost:8081}
+      - AUTH_TOKEN=${AUTH_TOKEN:-dev-token}
+
+  litestream:
+    image: litestream/litestream
+    profiles: ["replication"]
+    volumes:
+      - data:/data
+      - ./litestream.yml:/etc/litestream.yml
+    environment:
+      - LITESTREAM_ACCESS_KEY_ID
+      - LITESTREAM_SECRET_ACCESS_KEY
+      - LITESTREAM_BUCKET_URL
+    command: replicate -exec "/server"
+    depends_on:
+      - app
+
+  minio:
+    image: minio/minio
+    profiles: ["replication-local"]
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+
+volumes:
+  data: {}
+  minio: {}
