@@ -93,27 +93,27 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 		return
 	}
 
-	csp := buildCSP(a.NetworkAllowlist)
+	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin)
 	w.Header().Set("Content-Security-Policy", csp)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// Prevent the render origin from being framed by arbitrary pages
-	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 
 	doc := injectShim(string(bodyBytes), a.ID, rd.cfg.AppOrigin)
 	fmt.Fprint(w, doc)
 }
 
 // buildCSP generates a per-artifact Content-Security-Policy header value
-// from the artifact's network allowlist.
-func buildCSP(allowlist []string) string {
+// from the artifact's network allowlist. appOrigin is the only origin
+// permitted to embed this page in an iframe.
+func buildCSP(allowlist []string, appOrigin string) string {
+	frameAncestors := "frame-ancestors " + appOrigin
 	if len(allowlist) == 0 {
-		// No network access permitted
 		return strings.Join([]string{
 			"default-src 'none'",
 			"script-src 'unsafe-inline' 'unsafe-eval'",
 			"style-src 'unsafe-inline'",
 			"img-src data:",
 			"connect-src 'none'",
+			frameAncestors,
 		}, "; ")
 	}
 
@@ -125,6 +125,7 @@ func buildCSP(allowlist []string) string {
 		"img-src data: " + origins,
 		"connect-src " + origins,
 		"font-src " + origins,
+		frameAncestors,
 	}, "; ")
 }
 
