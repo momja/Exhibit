@@ -14,7 +14,7 @@ Five rules shape every structural decision. When a choice is ambiguous, these de
 1. **It's just a file.** A tier-1/2 artifact is a self-contained document that runs in
    the *visitor's* browser. The service stores and serves it; it never executes artifact
    code. This is why the system stays small and why artifacts are durable.
-2. **One write path.** Every mutation — upload, paste, watcher, future extension, state
+2. **One write path.** Every mutation — upload, paste, future extension, state
    write-through — enters through the HTTP API. Nothing writes the datastore directly.
    This single seam is where auth, validation, and (later) replication and multi-user
    all attach.

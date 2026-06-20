@@ -5,3 +5,6 @@
 .beads-credential-key
 data/
 server
+
+# Stray beads export at repo root (canonical file lives in .beads/issues.jsonl)
+/issues.jsonl

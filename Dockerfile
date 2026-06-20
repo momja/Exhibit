@@ -14,13 +14,11 @@ COPY . .
 
 # Build the server binary
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/watcher ./cmd/watcher
 
 # --- Runtime stage ---
 FROM gcr.io/distroless/static-debian12
 
 COPY --from=builder /bin/server /server
-COPY --from=builder /bin/watcher /watcher
 
 # Data volume for SQLite and blob storage
 VOLUME ["/data"]
