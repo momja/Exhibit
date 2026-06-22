@@ -5,6 +5,10 @@ This file provides instructions and context for AI coding agents working on this
 ## Coding Best Practices
 - Follow John Ousterhout's advice, and pull complexity downwards. Write clean, readable code.
 
+## Version Control
+- **Never** develop on the `main` branch. Use the standard branch names `feature/{id}/{description}` or `bug/{id}/{description}` where `id` is the bead ID.
+- **Never** merge directly to `main` and **Never** push main. You can bush all non-release branches. If working on multiple dependent issues, create a merge branch separate from `main`.
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
 
