@@ -47,6 +47,25 @@ func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, renderDetailPage(a, string(src), ro.cfg.RenderOrigin, ro.cfg.AuthToken))
 }
 
+func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "artifactID")
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	if err != nil || a == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	rc, err := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
+	if err != nil {
+		http.Error(w, "blob not found", http.StatusInternalServerError)
+		return
+	}
+	defer rc.Close()
+	src, _ := io.ReadAll(rc)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, renderEditPage(a, string(src), ro.cfg.AuthToken))
+}
+
 func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.Collection, query, renderOrigin, token string) string {
 	var cards strings.Builder
 	if len(arts) == 0 {
@@ -103,6 +122,9 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .empty{color:#888;font-size:14px;padding:20px 0}
 #status{margin-top:10px;font-size:13px;color:#555}
 #scan-result{margin-top:10px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
+.mode-tabs{display:flex;gap:6px;margin-bottom:8px}
+.tab-btn{padding:5px 14px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;color:#555}
+.tab-btn.active{background:#0070f3;color:#fff;border-color:#0070f3}
 </style>
 </head>
 <body>
@@ -113,7 +135,12 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 <div class="upload">
   <h2>Upload Artifact</h2>
   <input type="text" id="title" placeholder="Title (optional)">
+  <div class="mode-tabs">
+    <button class="tab-btn active" onclick="setMode('paste')">Paste HTML</button>
+    <button class="tab-btn" onclick="setMode('url')">From URL</button>
+  </div>
   <textarea id="body" placeholder="Paste HTML artifact source here…"></textarea>
+  <input type="text" id="url-input" placeholder="https://example.com/tool.html" style="display:none;width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;margin-bottom:8px">
   <div id="scan-result"></div>
   <div class="upload-row">
     <button class="btn" onclick="ingest()">Upload</button>
@@ -131,20 +158,38 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 
 <script>
 const TOKEN = ` + fmt.Sprintf("%q", token) + `;
+let currentMode = 'paste';
+
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('body').style.display = mode === 'paste' ? 'block' : 'none';
+  document.getElementById('url-input').style.display = mode === 'url' ? 'block' : 'none';
+}
 
 async function ingest() {
   const title = document.getElementById('title').value.trim();
-  const body  = document.getElementById('body').value.trim();
   const status = document.getElementById('status');
   const scanDiv = document.getElementById('scan-result');
-  if (!body) { status.textContent = 'Paste an artifact first.'; return; }
   status.textContent = 'Uploading…';
   scanDiv.style.display = 'none';
+
+  let payload;
+  if (currentMode === 'url') {
+    const url = document.getElementById('url-input').value.trim();
+    if (!url) { status.textContent = 'Enter a URL first.'; return; }
+    payload = {title: title || '', url, network_allowlist: []};
+  } else {
+    const body = document.getElementById('body').value.trim();
+    if (!body) { status.textContent = 'Paste an artifact first.'; return; }
+    payload = {title: title || 'Untitled', body, network_allowlist: []};
+  }
 
   const resp = await fetch('/api/artifacts', {
     method: 'POST',
     headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
-    body: JSON.stringify({title: title || 'Untitled', body, network_allowlist: []})
+    body: JSON.stringify(payload)
   });
   const data = await resp.json();
   if (!resp.ok) { status.textContent = 'Error: ' + (data.error || resp.statusText); return; }
@@ -213,6 +258,8 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
 <div class="toolbar">
   <a href="` + renderOrigin + `/a/` + a.ID + `" target="_blank">Open in new tab ↗</a>
   <span style="color:#ddd">|</span>
+  <a href="/artifacts/` + a.ID + `/edit">Edit</a>
+  <span style="color:#ddd">|</span>
   <span style="color:#888">Allowlist:</span>
   <span id="al-display">` + renderAllowlistBadges(a.NetworkAllowlist) + `</span>
   <input id="al-input" type="text" placeholder="Add origin (https://example.com)" style="display:none">
@@ -270,6 +317,79 @@ func renderAllowlistBadges(list []string) string {
 		b.WriteString(`<code style="background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:4px">` + htmlEsc(o) + `</code>`)
 	}
 	return b.String()
+}
+
+func renderEditPage(a *store.Artifact, src, token string) string {
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Edit: ` + htmlEsc(a.Title) + ` — Artifact Viewer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
+header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}
+header h1{font-size:18px;font-weight:600;flex:1}
+header a{color:#0070f3;text-decoration:none;font-size:14px}
+main{padding:24px;max-width:900px;margin:0 auto}
+.edit-card{background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.edit-card h2{font-size:15px;font-weight:600;margin-bottom:12px;color:#333}
+.edit-card input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:10px;outline:none}
+.edit-card input[type=text]:focus{border-color:#0070f3}
+.edit-card textarea{width:100%;height:400px;font-family:monospace;font-size:12px;border:1px solid #ddd;border-radius:6px;padding:10px;resize:vertical;outline:none}
+.edit-card textarea:focus{border-color:#0070f3}
+.btn-row{display:flex;gap:8px;margin-top:12px;align-items:center}
+.btn{padding:8px 18px;background:#0070f3;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
+.btn:hover{background:#005ed4}
+.btn-sec{background:#fff;color:#333;border:1px solid #ddd}
+.btn-sec:hover{border-color:#0070f3;color:#0070f3;background:#fff}
+#status{font-size:13px;color:#555}
+</style>
+</head>
+<body>
+<header>
+  <a href="/artifacts/` + a.ID + `">← Back</a>
+  <h1>Edit Artifact</h1>
+</header>
+<main>
+<div class="edit-card">
+  <h2>Edit</h2>
+  <input type="text" id="title" value="` + htmlEsc(a.Title) + `" placeholder="Title">
+  <textarea id="body">` + htmlEsc(src) + `</textarea>
+  <div class="btn-row">
+    <button class="btn" onclick="save()">Save</button>
+    <a href="/artifacts/` + a.ID + `"><button class="btn btn-sec" type="button">Cancel</button></a>
+    <span id="status"></span>
+  </div>
+</div>
+</main>
+<script>
+const TOKEN = ` + fmt.Sprintf("%q", token) + `;
+const ID = ` + fmt.Sprintf("%q", a.ID) + `;
+
+async function save() {
+  const title = document.getElementById('title').value.trim();
+  const body  = document.getElementById('body').value;
+  const status = document.getElementById('status');
+  if (!body.trim()) { status.textContent = 'Body cannot be empty.'; return; }
+  status.textContent = 'Saving…';
+  const resp = await fetch('/api/artifacts/' + ID, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({title: title || 'Untitled', body})
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    status.textContent = '✗ Error: ' + (data.error || resp.statusText);
+    return;
+  }
+  status.textContent = '✓ Saved';
+  setTimeout(() => { window.location.href = '/artifacts/' + ID; }, 500);
+}
+</script>
+</body>
+</html>`
 }
 
 func htmlEsc(s string) string {
