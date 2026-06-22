@@ -223,6 +223,43 @@ func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) string
 		allowlistJSON = "[" + strings.Join(parts, ",") + "]"
 	}
 
+	// "Update from source" is only offered for artifacts created from a URL.
+	refetchToolbar := ""
+	refetchScript := ""
+	if a.SourceURL != "" {
+		refetchToolbar = `
+  <span style="color:#ddd">|</span>
+  <button onclick="refetchSource()">Update from source ↻</button>`
+		refetchScript = `
+const SOURCE_URL = ` + fmt.Sprintf("%q", a.SourceURL) + `;
+
+async function refetchSource() {
+  const warning = 'Re-fetch a fresh snapshot from the source URL?\n\n' +
+    SOURCE_URL + '\n\n' +
+    'This overwrites the stored content with whatever the URL returns now and ' +
+    're-scans its network allowlist. It is NOT versioned and cannot be undone. ' +
+    "The artifact's saved state/data may break if the new content changed.";
+  if (!confirm(warning)) return;
+  const st = document.getElementById('al-status');
+  st.textContent = 'Fetching…';
+  try {
+    const r = await fetch('/api/artifacts/' + ID + '/refetch', {
+      method: 'POST',
+      headers: {'Authorization':'Bearer '+TOKEN}
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      st.textContent = '✗ Error: ' + (txt.trim() || r.statusText);
+      return;
+    }
+    st.textContent = '✓ Updated — reloading…';
+    window.location.reload();
+  } catch (e) {
+    st.textContent = '✗ Error: ' + e.message;
+  }
+}`
+	}
+
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -258,7 +295,7 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
 <div class="toolbar">
   <a href="` + renderOrigin + `/a/` + a.ID + `" target="_blank">Open in new tab ↗</a>
   <span style="color:#ddd">|</span>
-  <a href="/artifacts/` + a.ID + `/edit">Edit</a>
+  <a href="/artifacts/` + a.ID + `/edit">Edit</a>` + refetchToolbar + `
   <span style="color:#ddd">|</span>
   <span style="color:#888">Allowlist:</span>
   <span id="al-display">` + renderAllowlistBadges(a.NetworkAllowlist) + `</span>
@@ -303,6 +340,7 @@ async function saveAllowlist() {
   st.textContent = r.ok ? '✓ Saved — reload to apply' : '✗ Error';
   renderBadges();
 }
+` + refetchScript + `
 </script>
 </body>
 </html>`
