@@ -13,6 +13,7 @@ import (
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"golang.org/x/net/html"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -57,10 +58,32 @@ func (ro *Router) listArtifacts(w http.ResponseWriter, r *http.Request) {
 }
 
 type createArtifactRequest struct {
-	Title            string   `json:"title"`
-	Body             string   `json:"body"`
+	Title            string     `json:"title"`
+	Body             string     `json:"body"`
+	URL              string     `json:"url"`
 	Tier             store.Tier `json:"tier"`
-	NetworkAllowlist []string `json:"network_allowlist"`
+	NetworkAllowlist []string   `json:"network_allowlist"`
+}
+
+// extractTitle pulls the text content of the first <title> element from HTML.
+func extractTitle(body string) string {
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		return ""
+	}
+	var title string
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "title" && n.FirstChild != nil {
+			title = n.FirstChild.Data
+			return
+		}
+		for c := n.FirstChild; c != nil && title == ""; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	return strings.TrimSpace(title)
 }
 
 type createArtifactResponse struct {
@@ -75,8 +98,32 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// Fetch from URL if no body provided
+	if req.URL != "" && req.Body == "" {
+		resp, err := http.Get(req.URL) //nolint:noctx
+		if err != nil {
+			http.Error(w, "failed to fetch URL: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer resp.Body.Close()
+		fetched, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+		if err != nil {
+			http.Error(w, "failed to read URL content: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		req.Body = string(fetched)
+		if req.Title == "" {
+			if t := extractTitle(req.Body); t != "" {
+				req.Title = t
+			} else {
+				req.Title = req.URL
+			}
+		}
+	}
+
 	if req.Body == "" {
-		http.Error(w, "body is required", http.StatusBadRequest)
+		http.Error(w, "body or url is required", http.StatusBadRequest)
 		return
 	}
 	if req.Tier == 0 {
@@ -174,6 +221,21 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	if a == nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
+	}
+
+	// Handle body update: overwrite the blob and re-scan network footprint.
+	if bodyVal, ok := updates["body"]; ok {
+		bodyStr, _ := bodyVal.(string)
+		if bodyStr != "" {
+			if err := ro.cfg.Blob.Put(r.Context(), a.SourceBlobID, bytes.NewReader([]byte(bodyStr))); err != nil {
+				http.Error(w, "failed to update artifact body: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if _, hasAllowlist := updates["network_allowlist"]; !hasAllowlist {
+				updates["network_allowlist"] = scanner.Scan(bodyStr)
+			}
+		}
+		delete(updates, "body")
 	}
 
 	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, updates); err != nil {

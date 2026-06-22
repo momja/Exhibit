@@ -43,6 +43,7 @@ func (ro *Router) setupRoutes() {
 	// Gallery UI — no auth header required (token embedded in page JS)
 	ro.Get("/", ro.galleryIndex)
 	ro.Get("/artifacts/{artifactID}", ro.galleryDetail)
+	ro.Get("/artifacts/{artifactID}/edit", ro.galleryEdit)
 
 	// Public share route — no auth required
 	ro.Get("/s/{shareID}", ro.serveShare)
