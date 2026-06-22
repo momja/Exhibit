@@ -154,6 +154,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		OwnerID:          ownerID,
 		Title:            req.Title,
 		SourceBlobID:     blobID,
+		SourceURL:        req.URL,
 		Tier:             req.Tier,
 		NetworkAllowlist: allowlist,
 		CreatedAt:        now,

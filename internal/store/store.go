@@ -17,6 +17,7 @@ type Artifact struct {
 	OwnerID          int64     `json:"owner_id"`
 	Title            string    `json:"title"`
 	SourceBlobID     string    `json:"source_blob_id"`
+	SourceURL        string    `json:"source_url"`
 	Tier             Tier      `json:"tier"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
