@@ -143,7 +143,14 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Seed the allowlist from the scanned footprint unless the caller supplied
+	// an explicit one. This mirrors the PATCH path (updateArtifact) so detected
+	// origins are persisted and the render CSP permits them; an explicit
+	// allowlist always wins.
 	allowlist := req.NetworkAllowlist
+	if len(allowlist) == 0 {
+		allowlist = footprint
+	}
 	if allowlist == nil {
 		allowlist = []string{}
 	}

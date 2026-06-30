@@ -145,6 +145,70 @@ func TestCreateArtifactRequiresBodyOrURL(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "body or url is required")
 }
 
+// createArtifactResp POSTs an artifact and returns the decoded create response.
+func createArtifactResp(t *testing.T, r *Router, payload map[string]any) map[string]any {
+	t.Helper()
+	b, _ := json.Marshal(payload)
+	req := httptest.NewRequest("POST", "/api/artifacts", bytes.NewReader(b))
+	req.Header.Set("Authorization", authHeader())
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	return resp
+}
+
+func TestCreateArtifactSeedsAllowlistFromScan(t *testing.T) {
+	r := newTestRouter(t)
+
+	body := `<html><head><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head><body></body></html>`
+	resp := createArtifactResp(t, r, map[string]any{
+		"title":             "Charty",
+		"body":              body,
+		"network_allowlist": []string{},
+	})
+
+	// The scanned footprint is surfaced to the caller...
+	assert.Contains(t, resp["network_footprint"], "https://cdn.jsdelivr.net")
+	// ...and persisted on the artifact's allowlist so the render CSP permits it.
+	art := resp["artifact"].(map[string]any)
+	assert.Equal(t, []any{"https://cdn.jsdelivr.net"}, art["network_allowlist"])
+}
+
+func TestCreateArtifactExplicitAllowlistWins(t *testing.T) {
+	r := newTestRouter(t)
+
+	// Body references a CDN, but the caller supplies an explicit allowlist:
+	// the explicit list must win over the scan.
+	body := `<html><head><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head></html>`
+	resp := createArtifactResp(t, r, map[string]any{
+		"title":             "Explicit",
+		"body":              body,
+		"network_allowlist": []string{"https://example.com"},
+	})
+
+	art := resp["artifact"].(map[string]any)
+	assert.Equal(t, []any{"https://example.com"}, art["network_allowlist"])
+}
+
+func TestCreateArtifactFromURLSeedsAllowlist(t *testing.T) {
+	r := newTestRouter(t)
+
+	const page = `<html><head><title>Fetcher</title><script src="https://cdn.jsdelivr.net/npm/x"></script></head><body></body></html>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		io.WriteString(w, page)
+	}))
+	defer srv.Close()
+
+	resp := createArtifactResp(t, r, map[string]any{"url": srv.URL, "network_allowlist": []string{}})
+	art := resp["artifact"].(map[string]any)
+	assert.Equal(t, []any{"https://cdn.jsdelivr.net"}, art["network_allowlist"])
+}
+
 func TestPatchArtifactBodyRescansAllowlist(t *testing.T) {
 	r := newTestRouter(t)
 
