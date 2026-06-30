@@ -59,6 +59,7 @@ func (ro *Router) setupRoutes() {
 			r.Route("/{artifactID}", func(r chi.Router) {
 				r.Get("/", ro.getArtifact)
 				r.Patch("/", ro.updateArtifact)
+				r.Post("/refetch", ro.refetchArtifact)
 				r.Delete("/", ro.deleteArtifact)
 				r.Get("/state", ro.getState)
 				r.Put("/state", ro.setState)

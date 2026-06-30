@@ -79,7 +79,7 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	var allowlistJSON string
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.Tier, &createdAt, &updatedAt, &allowlistJSON)
+	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &allowlistJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -103,8 +103,8 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	return &a, nil
 }
 
-const artifactCols = "id, owner_id, title, source_blob_id, tier, created_at, updated_at, network_allowlist"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.tier, a.created_at, a.updated_at, a.network_allowlist"
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, network_allowlist"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.network_allowlist"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
@@ -112,9 +112,9 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 		now = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, tier, network_allowlist, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.Tier, marshalAllowlist(a.NetworkAllowlist),
+		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, network_allowlist, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, marshalAllowlist(a.NetworkAllowlist),
 		now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
 	return err

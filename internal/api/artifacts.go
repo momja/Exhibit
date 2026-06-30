@@ -154,6 +154,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		OwnerID:          ownerID,
 		Title:            req.Title,
 		SourceBlobID:     blobID,
+		SourceURL:        req.URL,
 		Tier:             req.Tier,
 		NetworkAllowlist: allowlist,
 		CreatedAt:        now,
@@ -238,6 +239,57 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		delete(updates, "body")
 	}
 
+	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, updates); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	a, _ = ro.cfg.Store.GetArtifact(r.Context(), id)
+	writeJSON(w, http.StatusOK, a)
+}
+
+// refetchArtifact re-fetches the current HTML/CSS/JS from an artifact's source
+// URL and overwrites the stored body with that fresh snapshot. This is a
+// destructive snapshot replace — not versioned, no history. The network
+// allowlist is re-scanned from the new content; the title is left untouched.
+func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "artifactID")
+
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if a == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if a.SourceURL == "" {
+		http.Error(w, "artifact has no source URL to re-fetch from", http.StatusBadRequest)
+		return
+	}
+
+	// Fetch the latest content, mirroring the createArtifact fetch pattern.
+	resp, err := http.Get(a.SourceURL) //nolint:noctx
+	if err != nil {
+		http.Error(w, "failed to fetch URL: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer resp.Body.Close()
+	fetched, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	if err != nil {
+		http.Error(w, "failed to read URL content: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Overwrite the existing blob with the fresh snapshot.
+	if err := ro.cfg.Blob.Put(r.Context(), a.SourceBlobID, bytes.NewReader(fetched)); err != nil {
+		http.Error(w, "failed to update artifact body: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Re-scan the network footprint and bump updated_at. Title is preserved.
+	updates := map[string]any{"network_allowlist": scanner.Scan(string(fetched))}
 	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, updates); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

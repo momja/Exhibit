@@ -91,6 +91,49 @@ func TestCreateArtifactFromURL(t *testing.T) {
 	assert.Equal(t, page, getArtifactBody(t, r, id))
 }
 
+func TestCreateArtifactFromURLRecordsSourceURL(t *testing.T) {
+	r := newTestRouter(t)
+
+	const page = `<html><head><title>Fetched Tool</title></head><body><h1>hi</h1></body></html>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		io.WriteString(w, page)
+	}))
+	defer srv.Close()
+
+	id := createArtifact(t, r, map[string]any{"url": srv.URL, "network_allowlist": []string{}})
+
+	req := httptest.NewRequest("GET", "/api/artifacts/"+id, nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	var art map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&art))
+	// The source URL is recorded and returned by the API.
+	assert.Equal(t, srv.URL, art["source_url"])
+}
+
+func TestCreateArtifactFromBodyHasEmptySourceURL(t *testing.T) {
+	r := newTestRouter(t)
+
+	id := createArtifact(t, r, map[string]any{
+		"title":             "Pasted",
+		"body":              "<html><body>pasted</body></html>",
+		"network_allowlist": []string{},
+	})
+
+	req := httptest.NewRequest("GET", "/api/artifacts/"+id, nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	var art map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&art))
+	// Paste-based creation leaves the source URL empty.
+	assert.Equal(t, "", art["source_url"])
+}
+
 func TestCreateArtifactFromURLTitleFallback(t *testing.T) {
 	r := newTestRouter(t)
 
@@ -224,6 +267,55 @@ func TestPatchArtifactEmptyBodyIgnored(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
 	assert.Equal(t, "Renamed", updated["title"])
 	assert.Equal(t, original, getArtifactBody(t, r, id))
+}
+
+func TestRefetchArtifactOverwritesBody(t *testing.T) {
+	r := newTestRouter(t)
+
+	// The upstream page changes between create and refetch.
+	page := `<html><head><title>v1</title></head><body><h1>first</h1></body></html>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		io.WriteString(w, page)
+	}))
+	defer srv.Close()
+
+	id := createArtifact(t, r, map[string]any{"url": srv.URL, "network_allowlist": []string{}})
+	require.Equal(t, page, getArtifactBody(t, r, id))
+
+	// Upstream now serves new content that also references an external origin.
+	page = `<html><head><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head><body><h1>second</h1></body></html>`
+
+	req := httptest.NewRequest("POST", "/api/artifacts/"+id+"/refetch", nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var updated map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
+	// The stored body is overwritten with the fresh snapshot.
+	assert.Equal(t, page, getArtifactBody(t, r, id))
+	// The allowlist is re-scanned from the new content.
+	assert.Contains(t, updated["network_allowlist"], "https://cdn.jsdelivr.net")
+}
+
+func TestRefetchArtifactWithoutSourceURL(t *testing.T) {
+	r := newTestRouter(t)
+
+	// Paste-created artifact has no source URL.
+	id := createArtifact(t, r, map[string]any{
+		"title":             "Pasted",
+		"body":              "<html><body>pasted</body></html>",
+		"network_allowlist": []string{},
+	})
+
+	req := httptest.NewRequest("POST", "/api/artifacts/"+id+"/refetch", nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "no source URL")
 }
 
 func TestGalleryEditPage(t *testing.T) {
