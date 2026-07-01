@@ -143,14 +143,14 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Seed the allowlist from the scanned footprint unless the caller supplied
-	// an explicit one. This mirrors the PATCH path (updateArtifact) so detected
-	// origins are persisted and the render CSP permits them; an explicit
-	// allowlist always wins.
+	// The allowlist holds only origins the user has explicitly approved; it is
+	// NEVER seeded from the scan. The scanned footprint is returned to the
+	// caller (network_footprint) as transparency so the user can review and
+	// approve origins before any network access is granted. Until an origin is
+	// approved the render CSP stays connect-src 'none' and the artifact is
+	// network-inert. See spec §6.2 ("Nothing is rendered with network access
+	// until they decide").
 	allowlist := req.NetworkAllowlist
-	if len(allowlist) == 0 {
-		allowlist = footprint
-	}
 	if allowlist == nil {
 		allowlist = []string{}
 	}
@@ -238,9 +238,11 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "failed to update artifact body: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			if _, hasAllowlist := updates["network_allowlist"]; !hasAllowlist {
-				updates["network_allowlist"] = scanner.Scan(bodyStr)
-			}
+			// Do NOT auto-add newly scanned origins to the allowlist — approval
+			// is an explicit user action. Existing approved origins are kept as
+			// they are; origins introduced by the edited body surface via the
+			// footprint / runtime prompt and must be approved before they gain
+			// network access. See spec §6.2.
 		}
 		delete(updates, "body")
 	}
