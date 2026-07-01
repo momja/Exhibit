@@ -194,16 +194,58 @@ async function ingest() {
   const data = await resp.json();
   if (!resp.ok) { status.textContent = 'Error: ' + (data.error || resp.statusText); return; }
 
+  const id = data.artifact.id;
   const footprint = data.network_footprint || [];
   if (footprint.length > 0) {
-    scanDiv.style.display = 'block';
-    scanDiv.innerHTML = '<strong>Network origins detected:</strong> ' + footprint.map(o =>
-      '<code style="background:#eee;padding:1px 5px;border-radius:3px">' + o + '</code>'
-    ).join(' ') + '<br><small style="color:#888">These are already in the artifact\'s allowlist. Edit via the detail page.</small>';
+    // The artifact is saved but network-blocked (CSP connect-src 'none').
+    // Pause here for explicit approval — nothing is added to the allowlist,
+    // and no origin gains network access, until the user decides.
+    status.textContent = '✓ Saved — review network access below.';
+    showApproval(id, footprint);
+    return;
   }
+  finishIngest(id);
+}
+
+// showApproval presents the scanned origins for explicit approval. Origins are
+// blocked until the user approves them; nothing is written to the allowlist here.
+function showApproval(id, footprint) {
+  const scanDiv = document.getElementById('scan-result');
+  const rows = footprint.map(o =>
+    '<label style="display:block;margin:4px 0">' +
+    '<input type="checkbox" class="al-origin" value="' + o + '" checked> ' +
+    '<code style="background:#eee;padding:1px 5px;border-radius:3px">' + o + '</code></label>'
+  ).join('');
+  scanDiv.style.display = 'block';
+  scanDiv.innerHTML =
+    '<strong>This artifact wants to contact these origins.</strong>' +
+    '<div style="color:#a00;margin:4px 0 8px">They are blocked until you approve them.</div>' +
+    rows +
+    '<div class="upload-row">' +
+    '<button class="btn btn-sm" onclick="approveOrigins(\'' + id + '\')">Approve selected &amp; enable</button>' +
+    '<button class="btn btn-sm" style="background:#888" onclick="finishIngest(\'' + id + '\')">Keep all blocked</button>' +
+    '</div>';
+}
+
+// approveOrigins writes the user-selected origins to the artifact's allowlist.
+async function approveOrigins(id) {
+  const selected = Array.from(document.querySelectorAll('.al-origin:checked')).map(c => c.value);
+  const status = document.getElementById('status');
+  status.textContent = 'Applying…';
+  const r = await fetch('/api/artifacts/' + id, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({network_allowlist: selected})
+  });
+  if (!r.ok) { status.textContent = '✗ Failed to update allowlist'; return; }
+  finishIngest(id);
+}
+
+function finishIngest(id) {
+  const status = document.getElementById('status');
   status.textContent = '✓ Saved — ';
   const link = document.createElement('a');
-  link.href = '/artifacts/' + data.artifact.id;
+  link.href = '/artifacts/' + id;
   link.textContent = 'View artifact';
   status.appendChild(link);
   setTimeout(() => location.reload(), 1200);
