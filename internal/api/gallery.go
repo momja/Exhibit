@@ -219,7 +219,7 @@ function showApproval(id, footprint) {
   scanDiv.style.display = 'block';
   scanDiv.innerHTML =
     '<strong>This artifact wants to contact these origins.</strong>' +
-    '<div style="color:#a00;margin:4px 0 8px">They are blocked until you approve them.</div>' +
+    '<div style="color:#888;margin:4px 0 8px">The most secure option will <em>always</em> be to disable all external origins. Use your own discretion when allowing access to the listed networks below. This is a static scan and may not include every origin the application needs to work.</div>' +
     rows +
     '<div class="upload-row">' +
     '<button class="btn btn-sm" onclick="approveOrigins(\'' + id + '\')">Approve selected &amp; enable</button>' +
