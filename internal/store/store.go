@@ -30,10 +30,14 @@ type Collection struct {
 	Name    string `json:"name"`
 }
 
+// DefaultTagColor is applied to a tag when no color is supplied.
+const DefaultTagColor = "#6B7280"
+
 type Tag struct {
 	ID      string `json:"id"`
 	OwnerID int64  `json:"owner_id"`
 	Name    string `json:"name"`
+	Color   string `json:"color"`
 }
 
 type Share struct {
