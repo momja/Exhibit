@@ -90,7 +90,8 @@ func (ro *Router) listTags(w http.ResponseWriter, r *http.Request) {
 }
 
 type createTagRequest struct {
-	Name string `json:"name"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
 }
 
 func (ro *Router) createTag(w http.ResponseWriter, r *http.Request) {
@@ -104,11 +105,17 @@ func (ro *Router) createTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	color := req.Color
+	if color == "" {
+		color = store.DefaultTagColor
+	}
+
 	ownerID := ownerIDFromCtx(r.Context())
 	t := &store.Tag{
 		ID:      uuid.New().String(),
 		OwnerID: ownerID,
 		Name:    req.Name,
+		Color:   color,
 	}
 
 	if err := ro.cfg.Store.CreateTag(r.Context(), t); err != nil {
