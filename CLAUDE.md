@@ -12,6 +12,27 @@ This file provides instructions and context for AI coding agents working on this
 - **Never** develop on the `main` branch. Use the standard branch names `feature/{id}/{description}` or `bug/{id}/{description}` where `id` is the bead ID.
 - **Never** merge directly to `main` and **Never** push main. You can bush all non-release branches. If working on multiple dependent issues, create a merge branch separate from `main`.
 
+### Parallel Worktree Agents & Beads
+
+Beads runs Dolt in **server mode**, so each git worktree gets its **own** Dolt
+server + DB — bead state does NOT share across worktrees. When fanning out
+parallel agents (one worktree each):
+
+- A worktree agent's `bd claim`/`bd close` lands only in *its* DB; `bd show` on
+  `main` will not reflect it. Don't trust cross-worktree bead status.
+- Agents that follow Session Completion `bd dolt push` to origin. Reconcile with
+  **`main` as the canonical server**: `bd dolt pull` (a real Dolt merge, not a
+  clobber), resolve any per-row conflicts (`dolt conflicts` /
+  `DOLT_CONFLICTS_RESOLVE`), then `bd dolt push`. Verify the total issue count is
+  unchanged.
+- **Never merge `.beads/metadata.json` or a worktree's `issues.jsonl` into main.**
+  A fresh worktree can bootstrap its DB under the wrong `dolt_database` name, and
+  an agent may commit a "fix" that repoints main's beads at a nonexistent DB —
+  take main's versions of these files.
+
+(Details in beads memories `gotcha-beads-worktree-agent-divergence` and
+`gotcha-supacode-worktree-agent-bare-claude-tab`.)
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
 
