@@ -5,6 +5,9 @@ This file provides instructions and context for AI coding agents working on this
 ## Coding Best Practices
 - Follow John Ousterhout's advice, and pull complexity downwards. Write clean, readable code.
 
+## UI Conventions
+- **Icons:** all new UI uses **Phosphor Icons**, self-hosted / embedded on the app origin (never a third-party CDN). See `docs/technical_stack.md` §1 (stack table) and §9 (Gallery UI) for the load method and markup pattern.
+
 ## Version Control
 - **Never** develop on the `main` branch. Use the standard branch names `feature/{id}/{description}` or `bug/{id}/{description}` where `id` is the bead ID.
 - **Never** merge directly to `main` and **Never** push main. You can bush all non-release branches. If working on multiple dependent issues, create a merge branch separate from `main`.

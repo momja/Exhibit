@@ -269,13 +269,16 @@ func (s *SQLiteStore) RemoveArtifactFromCollection(ctx context.Context, artifact
 }
 
 func (s *SQLiteStore) CreateTag(ctx context.Context, t *Tag) error {
-	_, err := s.db.ExecContext(ctx, "INSERT INTO tags (id, owner_id, name) VALUES (?, ?, ?)",
-		t.ID, t.OwnerID, t.Name)
+	if t.Color == "" {
+		t.Color = DefaultTagColor
+	}
+	_, err := s.db.ExecContext(ctx, "INSERT INTO tags (id, owner_id, name, color) VALUES (?, ?, ?, ?)",
+		t.ID, t.OwnerID, t.Name, t.Color)
 	return err
 }
 
 func (s *SQLiteStore) ListTags(ctx context.Context, ownerID int64) ([]*Tag, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, owner_id, name FROM tags WHERE owner_id=?", ownerID)
+	rows, err := s.db.QueryContext(ctx, "SELECT id, owner_id, name, color FROM tags WHERE owner_id=?", ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +286,7 @@ func (s *SQLiteStore) ListTags(ctx context.Context, ownerID int64) ([]*Tag, erro
 	var ts []*Tag
 	for rows.Next() {
 		var t Tag
-		if err := rows.Scan(&t.ID, &t.OwnerID, &t.Name); err != nil {
+		if err := rows.Scan(&t.ID, &t.OwnerID, &t.Name, &t.Color); err != nil {
 			return nil, err
 		}
 		ts = append(ts, &t)

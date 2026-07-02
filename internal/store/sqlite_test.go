@@ -126,3 +126,29 @@ func TestCollectionsAndTags(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, tags, 1)
 }
+
+func TestCreateTagColor(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	// Explicit color is persisted verbatim.
+	err := s.CreateTag(ctx, &Tag{ID: "tag-red", OwnerID: 1, Name: "urgent", Color: "#FF0000"})
+	require.NoError(t, err)
+
+	// Omitted color falls back to the default.
+	defaulted := &Tag{ID: "tag-default", OwnerID: 1, Name: "misc"}
+	err = s.CreateTag(ctx, defaulted)
+	require.NoError(t, err)
+	assert.Equal(t, DefaultTagColor, defaulted.Color, "CreateTag should backfill the default color on the passed tag")
+
+	tags, err := s.ListTags(ctx, 1)
+	require.NoError(t, err)
+	require.Len(t, tags, 2)
+
+	colors := map[string]string{}
+	for _, tag := range tags {
+		colors[tag.ID] = tag.Color
+	}
+	assert.Equal(t, "#FF0000", colors["tag-red"])
+	assert.Equal(t, DefaultTagColor, colors["tag-default"])
+}
