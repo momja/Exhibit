@@ -27,6 +27,7 @@ safety" (§12).
 | Ingest scan | `x/net/html` parser (+ JS heuristic) | — |
 | Thumbnails | Headless Chromium worker (`chromedp`) — optional | client `html2canvas` |
 | Gallery UI | `templ` + htmx + Alpine + Tailwind | SvelteKit / React SPA |
+| Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | TLS / proxy | **Operator's choice** — app serves plain HTTP, takes origin config | (not shipped) |
 | Backup/replication | Litestream sidecar (Compose profile) | Turso/libSQL (HA) |
 
@@ -187,6 +188,34 @@ the better default; reach for a SPA only if the interactions outgrow it.
 
 Note that CodeMirror and the renderer iframe live inside whichever shell you pick — they
 are islands of client JS regardless of the surrounding approach.
+
+**Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
+[Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent
+icon vocabulary without re-deciding. Load it **self-hosted on the app origin, never from a
+third-party CDN** — consistent with this project's self-contained, `go:embed`-ed static
+asset stance (§12–§13) and the two-origin security model (icons ship with the app surface,
+not the render origin). Vendor the `@phosphor-icons/web` package at build time, bundle its
+CSS + webfont into the embedded assets, and serve them from the app origin. Icons are then
+plain markup that `templ` partials emit directly — no client JS, no runtime fetch:
+
+```html
+<!-- Load once in the app shell's <head>, from our own origin: -->
+<link rel="stylesheet" href="/assets/phosphor/regular.css">
+
+<!-- weight = the class family: ph (regular), ph-bold, ph-fill, ph-duotone, ph-thin, ph-light -->
+<i class="ph ph-magnifying-glass"></i>   <!-- search -->
+<i class="ph-bold ph-trash"></i>          <!-- delete, bold weight -->
+```
+
+If you prefer inline SVG (crisper sizing control, no webfont), vendor the same icons as an
+embedded SVG sprite and reference symbols by id — still served from the app origin, still
+no CDN:
+
+```html
+<svg class="icon" width="20" height="20" aria-hidden="true"><use href="/assets/phosphor.svg#magnifying-glass"></use></svg>
+```
+
+Either path, the rule is fixed: **Phosphor Icons, self-hosted, no external icon CDN.**
 
 ## 10. Auth
 
