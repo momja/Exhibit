@@ -91,11 +91,13 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Artifact Viewer</title>
+<link rel="icon" type="image/svg+xml" href="` + exhibitFaviconDataURI + `">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
 header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}
 header h1{font-size:18px;font-weight:600}
+header .logo{height:32px;width:auto;display:block;flex:0 0 auto}
 header a{color:#0070f3;text-decoration:none;font-size:14px}
 main{padding:24px;max-width:1200px;margin:0 auto}
 .upload{background:#fff;border-radius:10px;padding:20px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -129,6 +131,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 </head>
 <body>
 <header>
+  ` + exhibitLogoSVG + `
   <h1>Artifact Viewer</h1>
 </header>
 <main>
