@@ -127,7 +127,13 @@ func (s *SQLiteStore) GetArtifact(ctx context.Context, id string) (*Artifact, er
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	return a, err
+	if err != nil {
+		return nil, err
+	}
+	if err := s.attachTags(ctx, []*Artifact{a}); err != nil {
+		return nil, err
+	}
+	return a, nil
 }
 
 func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error) {
@@ -195,7 +201,13 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 		}
 		results = append(results, a)
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.attachTags(ctx, results); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 func (s *SQLiteStore) UpdateArtifact(ctx context.Context, id string, updates map[string]any) error {
@@ -268,13 +280,59 @@ func (s *SQLiteStore) RemoveArtifactFromCollection(ctx context.Context, artifact
 	return err
 }
 
+// isUniqueViolation reports whether err is a SQLite UNIQUE constraint error.
+// The modernc driver exposes no typed error, so match on the message.
+func isUniqueViolation(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+}
+
 func (s *SQLiteStore) CreateTag(ctx context.Context, t *Tag) error {
 	if t.Color == "" {
 		t.Color = DefaultTagColor
 	}
 	_, err := s.db.ExecContext(ctx, "INSERT INTO tags (id, owner_id, name, color) VALUES (?, ?, ?, ?)",
 		t.ID, t.OwnerID, t.Name, t.Color)
+	if isUniqueViolation(err) {
+		return ErrDuplicateName
+	}
 	return err
+}
+
+func (s *SQLiteStore) UpdateTag(ctx context.Context, ownerID int64, id string, name, color *string) (*Tag, error) {
+	res, err := s.db.ExecContext(ctx,
+		"UPDATE tags SET name = COALESCE(?, name), color = COALESCE(?, color) WHERE id=? AND owner_id=?",
+		name, color, id, ownerID)
+	if isUniqueViolation(err) {
+		return nil, ErrDuplicateName
+	}
+	if err != nil {
+		return nil, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, ErrNotFound
+	}
+	t := &Tag{ID: id, OwnerID: ownerID}
+	err = s.db.QueryRowContext(ctx, "SELECT name, color FROM tags WHERE id=?", id).Scan(&t.Name, &t.Color)
+	return t, err
+}
+
+func (s *SQLiteStore) DeleteTag(ctx context.Context, ownerID int64, id string) error {
+	res, err := s.db.ExecContext(ctx, "DELETE FROM tags WHERE id=? AND owner_id=?", id, ownerID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *SQLiteStore) ListTags(ctx context.Context, ownerID int64) ([]*Tag, error) {
@@ -294,16 +352,75 @@ func (s *SQLiteStore) ListTags(ctx context.Context, ownerID int64) ([]*Tag, erro
 	return ts, rows.Err()
 }
 
-func (s *SQLiteStore) AddArtifactTag(ctx context.Context, artifactID, tagID string) error {
-	_, err := s.db.ExecContext(ctx,
+func (s *SQLiteStore) AddArtifactTag(ctx context.Context, ownerID int64, artifactID, tagID string) error {
+	var ok bool
+	err := s.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM artifacts WHERE id=? AND owner_id=?)
+		    AND EXISTS(SELECT 1 FROM tags WHERE id=? AND owner_id=?)`,
+		artifactID, ownerID, tagID, ownerID).Scan(&ok)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+	_, err = s.db.ExecContext(ctx,
 		"INSERT OR IGNORE INTO artifact_tags (artifact_id, tag_id) VALUES (?, ?)", artifactID, tagID)
 	return err
 }
 
-func (s *SQLiteStore) RemoveArtifactTag(ctx context.Context, artifactID, tagID string) error {
-	_, err := s.db.ExecContext(ctx,
-		"DELETE FROM artifact_tags WHERE artifact_id=? AND tag_id=?", artifactID, tagID)
-	return err
+func (s *SQLiteStore) RemoveArtifactTag(ctx context.Context, ownerID int64, artifactID, tagID string) error {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM artifact_tags WHERE artifact_id=? AND tag_id=?
+		    AND artifact_id IN (SELECT id FROM artifacts WHERE owner_id=?)
+		    AND tag_id IN (SELECT id FROM tags WHERE owner_id=?)`,
+		artifactID, tagID, ownerID, ownerID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// attachTags populates Tags on each artifact with one batched query,
+// avoiding a per-artifact lookup.
+func (s *SQLiteStore) attachTags(ctx context.Context, arts []*Artifact) error {
+	if len(arts) == 0 {
+		return nil
+	}
+	byID := make(map[string]*Artifact, len(arts))
+	placeholders := make([]string, len(arts))
+	args := make([]any, len(arts))
+	for i, a := range arts {
+		a.Tags = []*Tag{}
+		byID[a.ID] = a
+		placeholders[i] = "?"
+		args[i] = a.ID
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT at.artifact_id, t.id, t.owner_id, t.name, t.color
+		   FROM artifact_tags at JOIN tags t ON t.id = at.tag_id
+		  WHERE at.artifact_id IN (`+strings.Join(placeholders, ",")+`)
+		  ORDER BY t.name`, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var artID string
+		var t Tag
+		if err := rows.Scan(&artID, &t.ID, &t.OwnerID, &t.Name, &t.Color); err != nil {
+			return err
+		}
+		byID[artID].Tags = append(byID[artID].Tags, &t)
+	}
+	return rows.Err()
 }
 
 func (s *SQLiteStore) GetState(ctx context.Context, artifactID string) (map[string]string, error) {

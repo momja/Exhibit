@@ -22,6 +22,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
+func writeError(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg})
+}
+
 func (ro *Router) listArtifacts(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	opts := store.ListOptions{

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
@@ -89,6 +90,18 @@ func (ro *Router) listTags(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tags)
 }
 
+// writeTagError maps store errors from tag mutations to HTTP responses.
+func writeTagError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not found")
+	case errors.Is(err, store.ErrDuplicateName):
+		writeError(w, http.StatusConflict, "a tag with that name already exists")
+	default:
+		writeError(w, http.StatusInternalServerError, err.Error())
+	}
+}
+
 type createTagRequest struct {
 	Name  string `json:"name"`
 	Color string `json:"color"`
@@ -97,11 +110,11 @@ type createTagRequest struct {
 func (ro *Router) createTag(w http.ResponseWriter, r *http.Request) {
 	var req createTagRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
 	if req.Name == "" {
-		http.Error(w, "name is required", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
 
@@ -119,19 +132,58 @@ func (ro *Router) createTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ro.cfg.Store.CreateTag(r.Context(), t); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeTagError(w, err)
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, t)
 }
 
+// updateTagRequest uses pointers so an omitted field is distinguishable from
+// an explicit value; omitted fields are left unchanged.
+type updateTagRequest struct {
+	Name  *string `json:"name"`
+	Color *string `json:"color"`
+}
+
+func (ro *Router) updateTag(w http.ResponseWriter, r *http.Request) {
+	var req updateTagRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		return
+	}
+	if req.Name != nil && *req.Name == "" {
+		writeError(w, http.StatusBadRequest, "name cannot be empty")
+		return
+	}
+
+	ownerID := ownerIDFromCtx(r.Context())
+	t, err := ro.cfg.Store.UpdateTag(r.Context(), ownerID, chi.URLParam(r, "tagID"), req.Name, req.Color)
+	if err != nil {
+		writeTagError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, t)
+}
+
+func (ro *Router) deleteTag(w http.ResponseWriter, r *http.Request) {
+	ownerID := ownerIDFromCtx(r.Context())
+	if err := ro.cfg.Store.DeleteTag(r.Context(), ownerID, chi.URLParam(r, "tagID")); err != nil {
+		writeTagError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (ro *Router) addArtifactTag(w http.ResponseWriter, r *http.Request) {
 	tagID := chi.URLParam(r, "tagID")
 	artifactID := chi.URLParam(r, "artifactID")
+	ownerID := ownerIDFromCtx(r.Context())
 
-	if err := ro.cfg.Store.AddArtifactTag(r.Context(), artifactID, tagID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := ro.cfg.Store.AddArtifactTag(r.Context(), ownerID, artifactID, tagID); err != nil {
+		writeTagError(w, err)
 		return
 	}
 
@@ -141,9 +193,10 @@ func (ro *Router) addArtifactTag(w http.ResponseWriter, r *http.Request) {
 func (ro *Router) removeArtifactTag(w http.ResponseWriter, r *http.Request) {
 	tagID := chi.URLParam(r, "tagID")
 	artifactID := chi.URLParam(r, "artifactID")
+	ownerID := ownerIDFromCtx(r.Context())
 
-	if err := ro.cfg.Store.RemoveArtifactTag(r.Context(), artifactID, tagID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := ro.cfg.Store.RemoveArtifactTag(r.Context(), ownerID, artifactID, tagID); err != nil {
+		writeTagError(w, err)
 		return
 	}
 
