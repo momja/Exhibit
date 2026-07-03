@@ -45,6 +45,9 @@ func (ro *Router) setupRoutes() {
 	ro.Get("/artifacts/{artifactID}", ro.galleryDetail)
 	ro.Get("/artifacts/{artifactID}/edit", ro.galleryEdit)
 
+	// Embedded static assets (client JS islands, e.g. the CodeMirror editor)
+	ro.Handle("/assets/*", assetsHandler())
+
 	// Public share route — no auth required
 	ro.Get("/s/{shareID}", ro.serveShare)
 
