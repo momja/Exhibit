@@ -8,3 +8,6 @@ server
 
 # Stray beads export at repo root (canonical file lives in .beads/issues.jsonl)
 /issues.jsonl
+
+# Node is build-time only (make assets); the bundled output is committed
+node_modules/
