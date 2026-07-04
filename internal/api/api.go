@@ -85,6 +85,8 @@ func (ro *Router) setupRoutes() {
 		r.Route("/api/tags", func(r chi.Router) {
 			r.Get("/", ro.listTags)
 			r.Post("/", ro.createTag)
+			r.Patch("/{tagID}", ro.updateTag)
+			r.Delete("/{tagID}", ro.deleteTag)
 			r.Post("/{tagID}/artifacts/{artifactID}", ro.addArtifactTag)
 			r.Delete("/{tagID}/artifacts/{artifactID}", ro.removeArtifactTag)
 		})
