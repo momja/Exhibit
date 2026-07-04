@@ -422,6 +422,9 @@ main{padding:24px;max-width:900px;margin:0 auto}
 .edit-card input[type=text]:focus{border-color:#0070f3}
 .edit-card textarea{width:100%;height:400px;font-family:monospace;font-size:12px;border:1px solid #ddd;border-radius:6px;padding:10px;resize:vertical;outline:none}
 .edit-card textarea:focus{border-color:#0070f3}
+.edit-card .cm-editor{height:400px;font-size:12px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
+.edit-card .cm-editor.cm-focused{outline:none;border-color:#0070f3}
+.edit-card .cm-scroller{overflow:auto}
 .btn-row{display:flex;gap:8px;margin-top:12px;align-items:center}
 .btn{padding:8px 18px;background:#0070f3;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
 .btn:hover{background:#005ed4}
@@ -452,9 +455,17 @@ main{padding:24px;max-width:900px;margin:0 auto}
   </div>
 </div>
 </main>
+<script src="/assets/editor.js"></script>
 <script>
 const TOKEN = ` + fmt.Sprintf("%q", token) + `;
 const ID = ` + fmt.Sprintf("%q", a.ID) + `;
+
+// Mount the CodeMirror island over the body textarea. The editor keeps
+// textarea.value in sync, so save() below is oblivious to it — and if the
+// bundle failed to load, the plain textarea still works.
+if (window.ArtifactEditor) {
+  ArtifactEditor.mount(document.getElementById('body'));
+}
 
 async function save() {
   const title = document.getElementById('title').value.trim();
