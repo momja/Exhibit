@@ -51,6 +51,17 @@ func (ro *Router) setupRoutes() {
 	// Public share route — no auth required
 	ro.Get("/s/{shareID}", ro.serveShare)
 
+	// Public artifact state routes (the storage shim's hydrate + write-through).
+	// These must be reachable without the app auth token: the shim runs inside a
+	// sandboxed, opaque-origin iframe on RENDER_ORIGIN and has no token. Access is
+	// scoped per-artifact and CORS is limited to the render origin.
+	ro.Group(func(r chi.Router) {
+		r.Use(corsMiddleware(ro.cfg.RenderOrigin))
+		r.Options("/api/artifacts/{artifactID}/state", func(http.ResponseWriter, *http.Request) {})
+		r.Get("/api/artifacts/{artifactID}/state", ro.getState)
+		r.Put("/api/artifacts/{artifactID}/state", ro.setState)
+	})
+
 	// Authenticated API routes
 	ro.Group(func(r chi.Router) {
 		r.Use(authMiddleware(ro.cfg.AuthToken))
@@ -64,8 +75,6 @@ func (ro *Router) setupRoutes() {
 				r.Patch("/", ro.updateArtifact)
 				r.Post("/refetch", ro.refetchArtifact)
 				r.Delete("/", ro.deleteArtifact)
-				r.Get("/state", ro.getState)
-				r.Put("/state", ro.setState)
 				// Artifact-centric collection membership routes
 				r.Post("/collections/{collectionID}", ro.addArtifactToCollection)
 				r.Delete("/collections/{collectionID}", ro.removeArtifactFromCollection)

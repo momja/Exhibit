@@ -102,8 +102,9 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 }
 
 // buildCSP generates a per-artifact Content-Security-Policy header value
-// from the artifact's network allowlist. appOrigin is the only origin
-// permitted to embed this page in an iframe.
+// from the artifact's network allowlist. appOrigin is permitted to embed this
+// page in an iframe and, crucially, is always allowed in connect-src so the
+// storage shim can reach the state proxy at appOrigin/api/artifacts/:id/state.
 func buildCSP(allowlist []string, appOrigin string) string {
 	frameAncestors := "frame-ancestors " + appOrigin
 	if len(allowlist) == 0 {
@@ -112,7 +113,7 @@ func buildCSP(allowlist []string, appOrigin string) string {
 			"script-src 'unsafe-inline' 'unsafe-eval'",
 			"style-src 'unsafe-inline'",
 			"img-src data:",
-			"connect-src 'none'",
+			"connect-src " + appOrigin,
 			frameAncestors,
 		}, "; ")
 	}
@@ -123,7 +124,7 @@ func buildCSP(allowlist []string, appOrigin string) string {
 		"script-src 'unsafe-inline' 'unsafe-eval' " + origins,
 		"style-src 'unsafe-inline' " + origins,
 		"img-src data: " + origins,
-		"connect-src " + origins,
+		"connect-src " + appOrigin + " " + origins,
 		"font-src " + origins,
 		frameAncestors,
 	}, "; ")
