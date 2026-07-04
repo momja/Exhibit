@@ -6,6 +6,8 @@ Exhibit is a personal library for self-contained web tools — the kind generate
 
 Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs in a sandboxed iframe on an isolated origin with a per-artifact Content Security Policy. State (localStorage, sessionStorage) syncs through the server so tools simple 'serverless' projects have a shared data state across all your devices.
 
+![Screenshot](./docs/screenshots/exhibit_screenshot.png)
+
 ## Quick start
 
 ```bash
