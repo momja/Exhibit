@@ -22,3 +22,32 @@ if command -v bd >/dev/null 2>&1; then
   if [ $_bd_exit -ne 0 ]; then exit $_bd_exit; fi
 fi
 # --- END BEADS INTEGRATION v1.0.2 ---
+
+# --- Auto-close merged beads (user; preserved outside the bd markers) ---
+# When a merge/pull lands on the default branch, close any bead whose ID appears
+# in the commit messages THIS merge introduced. Scoped to ORIG_HEAD..HEAD and to
+# `main` on purpose — deliberately narrower than `bd orphans`, which scans all
+# refs and would close issues still living on open PR branches. Only genuinely
+# open/in_progress issues are touched. Best-effort: it never blocks the merge
+# (post-merge exit status is ignored by git anyway).
+if command -v bd >/dev/null 2>&1; then
+  _bac_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  if [ "$_bac_branch" = "main" ] && git rev-parse -q --verify ORIG_HEAD >/dev/null 2>&1; then
+    # Bead IDs look like exhibit-ay7, exhibit-38e, exhibit-tww.1, exhibit-tww.1.2
+    _bac_ids=$(git log --format='%B' ORIG_HEAD..HEAD 2>/dev/null \
+      | grep -oE 'exhibit-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*' | sort -u)
+    for _bac_id in $_bac_ids; do
+      _bac_status=$(bd show "$_bac_id" --json 2>/dev/null \
+        | grep -oE '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1)
+      case "$_bac_status" in
+        *closed*|"") : ;;  # already closed, or unknown ID — leave it alone
+        *)
+          if bd close "$_bac_id" --reason="Auto-closed by post-merge hook (merged to main)" >/dev/null 2>&1; then
+            echo "beads: auto-closed $_bac_id (referenced in a merged commit)"
+          fi
+          ;;
+      esac
+    done
+  fi
+fi
+# --- End auto-close merged beads ---
