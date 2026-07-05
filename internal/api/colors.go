@@ -24,6 +24,19 @@ const (
 	pillTextLight = "#ffffff"
 )
 
+// tagColorPresets is the preset swatch palette offered in the tag edit/add
+// modals, alongside a custom hex input. A small, distinct, colorblind-
+// friendlyish spread rather than an exhaustive picker.
+var tagColorPresets = []string{
+	"#6B7280", // gray (store.DefaultTagColor)
+	"#EF4444", // red
+	"#F59E0B", // amber
+	"#10B981", // green
+	"#3B82F6", // blue
+	"#8B5CF6", // purple
+	"#EC4899", // pink
+}
+
 // normalizeHexColor validates a tag color for safe use inside an HTML style
 // attribute, expanding #RGB to #RRGGBB. Tag colors are user-authored free
 // text (see store.DefaultTagColor and createTag), so anything that isn't a

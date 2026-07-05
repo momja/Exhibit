@@ -139,6 +139,26 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .mode-tabs{display:flex;gap:6px;margin-bottom:8px}
 .tab-btn{padding:5px 14px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;color:#555}
 .tab-btn.active{background:var(--brand-blue);color:#fff;border-color:var(--brand-blue)}
+.btn-sec{background:#fff;color:#333;border:1px solid #ddd}
+.btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:#fff}
+.btn-danger{background:#e00;color:#fff;border:none}
+.btn-danger:hover{background:#c00}
+.spacer{flex:1}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal-overlay[hidden]{display:none}
+.modal{background:#fff;border-radius:10px;padding:20px;width:320px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,.25)}
+.modal h2{font-size:16px;font-weight:600}
+.modal label{display:block;font-size:12px;color:#555;margin:12px 0 4px}
+.modal input[type=text]{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none}
+.modal input[type=text]:focus{border-color:var(--brand-blue)}
+.color-presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.color-swatch{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.color-swatch.selected{border-color:#333}
+.color-custom-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.color-custom-row input[type=color]{width:36px;height:30px;padding:0;border:1px solid #ddd;border-radius:6px;cursor:pointer}
+.color-custom-row input[type=text]{flex:1}
+.modal-error{color:#c00;font-size:12px;margin-top:10px}
+.modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
 </style>
 </head>
 <body>
@@ -170,6 +190,8 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 
 <div class="grid">` + cards.String() + `</div>
 </main>
+
+` + renderEditTagModal() + `
 
 <script>
 const TOKEN = ` + fmt.Sprintf("%q", token) + `;
@@ -267,7 +289,7 @@ function finishIngest(id) {
 }
 
 // Tag pill hover controls: detach (x) removes this tag from this artifact
-// only; edit (pencil) opens the edit-tag modal (defined once that lands).
+// only; edit (pencil) opens the edit-tag modal.
 document.addEventListener('click', function(e) {
   const detachBtn = e.target.closest('.tag-pill-detach');
   if (detachBtn) {
@@ -276,7 +298,7 @@ document.addEventListener('click', function(e) {
     return;
   }
   const editBtn = e.target.closest('.tag-pill-edit');
-  if (editBtn && typeof openEditTagModal === 'function') {
+  if (editBtn) {
     e.preventDefault();
     openEditTagModal(editBtn.dataset.tagId, editBtn.dataset.tagName, editBtn.dataset.tagColor);
   }
@@ -297,6 +319,96 @@ async function detachTag(btn) {
   } catch (e) {}
   btn.disabled = false;
 }
+
+// Edit-tag modal: rename + recolor (PATCH) or delete (DELETE) a tag. Both
+// mutations are global, so on success we reload the gallery rather than
+// patching just the one card — every pill of that tag updates/disappears
+// everywhere at once.
+let editingTagId = null;
+
+function openEditTagModal(tagId, tagName, tagColor) {
+  editingTagId = tagId;
+  document.getElementById('tag-edit-name').value = tagName;
+  setModalColor('tag-edit', tagColor);
+  setModalError('tag-edit', '');
+  document.getElementById('tag-edit-modal').hidden = false;
+  document.getElementById('tag-edit-name').focus();
+}
+
+function closeTagEditModal() {
+  document.getElementById('tag-edit-modal').hidden = true;
+  editingTagId = null;
+}
+
+// setModalColor/setModalError are shared by the edit-tag modal (tww.2.4)
+// and the add-tag modal (tww.2.5), which reuse the same field ids under a
+// different prefix (e.g. 'tag-edit' / 'tag-add').
+function setModalColor(prefix, hex) {
+  document.getElementById(prefix + '-color-hex').value = hex;
+  document.getElementById(prefix + '-color-picker').value = hex;
+  document.querySelectorAll('#' + prefix + '-modal .color-swatch').forEach(function(sw) {
+    sw.classList.toggle('selected', sw.dataset.color.toLowerCase() === hex.toLowerCase());
+  });
+}
+
+function setModalError(prefix, message) {
+  const el = document.getElementById(prefix + '-error');
+  el.textContent = message;
+  el.hidden = !message;
+}
+
+function wireColorControls(prefix) {
+  document.querySelectorAll('#' + prefix + '-modal .color-swatch').forEach(function(sw) {
+    sw.addEventListener('click', function() { setModalColor(prefix, sw.dataset.color); });
+  });
+  document.getElementById(prefix + '-color-picker').addEventListener('input', function(e) {
+    setModalColor(prefix, e.target.value);
+  });
+  document.getElementById(prefix + '-color-hex').addEventListener('input', function(e) {
+    if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) setModalColor(prefix, e.target.value);
+  });
+}
+wireColorControls('tag-edit');
+
+document.getElementById('tag-edit-cancel').addEventListener('click', closeTagEditModal);
+document.getElementById('tag-edit-modal').addEventListener('click', function(e) {
+  if (e.target.id === 'tag-edit-modal') closeTagEditModal();
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && !document.getElementById('tag-edit-modal').hidden) closeTagEditModal();
+});
+
+document.getElementById('tag-edit-save').addEventListener('click', async function() {
+  const name = document.getElementById('tag-edit-name').value.trim();
+  const color = document.getElementById('tag-edit-color-hex').value.trim();
+  if (!name) { setModalError('tag-edit', 'Name is required.'); return; }
+  const r = await fetch('/api/tags/' + encodeURIComponent(editingTagId), {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({name: name, color: color})
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(function() { return {}; });
+    setModalError('tag-edit', data.error || 'Failed to save tag.');
+    return;
+  }
+  location.reload();
+});
+
+document.getElementById('tag-edit-delete').addEventListener('click', async function() {
+  const name = document.getElementById('tag-edit-name').value;
+  if (!confirm('Delete tag "' + name + '"? It will be removed from every artifact. This cannot be undone.')) return;
+  const r = await fetch('/api/tags/' + encodeURIComponent(editingTagId), {
+    method: 'DELETE',
+    headers: {'Authorization':'Bearer '+TOKEN}
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(function() { return {}; });
+    setModalError('tag-edit', data.error || 'Failed to delete tag.');
+    return;
+  }
+  location.reload();
+});
 </script>
 </body>
 </html>`
@@ -332,6 +444,49 @@ func renderTagPills(artifactID string, tags []*store.Tag) string {
 	}
 	b.WriteString(`</ul>`)
 	return b.String()
+}
+
+// renderColorSwatches renders the shared preset-color palette used by both
+// the edit-tag modal (tww.2.4) and the add-tag modal (tww.2.5). Swatches are
+// plain buttons scoped by the caller's modal id in CSS/JS, so the markup
+// itself carries no modal-specific state.
+func renderColorSwatches() string {
+	var b strings.Builder
+	b.WriteString(`<div class="color-presets">`)
+	for _, c := range tagColorPresets {
+		b.WriteString(fmt.Sprintf(
+			`<button type="button" class="color-swatch" data-color="%s" style="background:%s" aria-label="%s"></button>`,
+			c, c, c))
+	}
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
+// renderEditTagModal renders the (initially hidden) edit-tag modal shell
+// shared by every card's pencil control. There is one instance per gallery
+// page load; openEditTagModal (in the page script) populates it for
+// whichever tag was clicked.
+func renderEditTagModal() string {
+	return `<div id="tag-edit-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tag-edit-title">
+    <h2 id="tag-edit-title">Edit tag</h2>
+    <label for="tag-edit-name">Name</label>
+    <input type="text" id="tag-edit-name" maxlength="60">
+    <label>Color</label>
+    ` + renderColorSwatches() + `
+    <div class="color-custom-row">
+      <input type="color" id="tag-edit-color-picker" aria-label="Custom color">
+      <input type="text" id="tag-edit-color-hex" placeholder="#rrggbb" maxlength="7" aria-label="Color hex code">
+    </div>
+    <div id="tag-edit-error" class="modal-error" hidden></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-danger" id="tag-edit-delete"><i class="ph ph-trash"></i> Delete</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="tag-edit-cancel">Cancel</button>
+      <button type="button" class="btn" id="tag-edit-save"><i class="ph ph-check"></i> Save</button>
+    </div>
+  </div>
+</div>`
 }
 
 func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) string {

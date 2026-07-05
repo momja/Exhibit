@@ -69,6 +69,27 @@ func TestTagPillHoverControls(t *testing.T) {
 	assert.Contains(t, page, `opacity:0;pointer-events:none`)
 }
 
+func TestGalleryIndexRendersEditTagModal(t *testing.T) {
+	r := newTestRouter(t)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	// One shared, initially-hidden modal shell per page load; per-tag state
+	// is populated by openEditTagModal in the page script.
+	assert.Contains(t, page, `<div id="tag-edit-modal" class="modal-overlay" hidden>`)
+	assert.Contains(t, page, `<input type="text" id="tag-edit-name" maxlength="60">`)
+	assert.Contains(t, page, `<div class="color-presets">`)
+	assert.Contains(t, page, `data-color="#6B7280"`) // store.DefaultTagColor preset
+	assert.Contains(t, page, `id="tag-edit-color-hex"`)
+	assert.Contains(t, page, `id="tag-edit-delete"`)
+	assert.Contains(t, page, `id="tag-edit-save"`)
+	assert.Contains(t, page, `function openEditTagModal(`)
+}
+
 func TestPillTextColorContrast(t *testing.T) {
 	assert.Equal(t, pillTextDark, pillTextColor("#FFFFFF"))
 	assert.Equal(t, pillTextLight, pillTextColor("#000000"))
