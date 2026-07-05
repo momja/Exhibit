@@ -36,7 +36,7 @@ safety" (§12).
 **Decided: Go.** The product's entire value rests on being trivially self-hostable, and
 Go fits that goal precisely: it compiles to one static binary with no runtime, which
 becomes a ~15–25 MB `scratch`/`distroless` image; its concurrency model handles the
-shim's frequent small write-through calls without an async framework; and the SQLite +
+frequent small state write-through calls without an async framework; and the SQLite +
 FTS5 + blob design has mature, dependency-light Go support. (Python + FastAPI would have
 ported the architecture cleanly too, at the cost of a heavier image and a process
 manager — noted only to record the road not taken.)
@@ -91,7 +91,9 @@ Renderer construction:
 - Inject a generated **per-artifact CSP** (`connect-src`/`script-src`/`img-src` built
   from the artifact's allowlist) into the served document. The browser enforces the
   network boundary; this is the wall behind §6 of the main spec.
-- Inject the **storage shim** (§6 here) into `<head>` *before* any artifact script runs.
+- Inject the **storage shim** (§6 here) into `<head>` *before* any artifact script runs,
+  with the artifact's current state inlined into it. Serve the document `Cache-Control:
+  no-store` — it's dynamic (inlined state + per-artifact CSP) and must not be cached.
 
 **Tier 2 (React via CDN), when demand arrives:** start with Babel standalone loaded
 inside the iframe and `type="text/babel"` scripts — zero build infrastructure, matches
@@ -133,9 +135,14 @@ script.
 Responsibilities (per the main spec §5):
 
 - Replace `localStorage`/`sessionStorage` with objects implementing the `Storage`
-  interface, backed by an in-memory cache that is **hydrated once on load** from
-  `GET /api/artifacts/:id/state`, served synchronously thereafter, and **written through
-  asynchronously** on `setItem`.
+  interface, backed by an in-memory cache. The cache is **inlined into the shim by the
+  render surface** at request time, so `getItem` is correct on the first *synchronous*
+  read (a load-time `fetch` would race the artifact's startup reads and lose).
+- On `setItem`, update the cache synchronously, then **`postMessage` the change to the
+  host frame** (pinned to the app origin). The host — same origin as the API and
+  authenticated — performs the `PUT /api/artifacts/:id/state`. The shim itself makes
+  **no network calls**: the sandbox's opaque origin can't reach the API cross-origin, so
+  it never has to, and `connect-src` need not include the app origin.
 - Proxy `IndexedDB` (optionally via `fake-indexeddb` retargeted at the service) and
   provide a `window.storage`-style async API for artifacts written to that contract.
 - Last-write-wins on conflicts.

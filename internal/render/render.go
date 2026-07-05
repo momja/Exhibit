@@ -4,6 +4,7 @@
 package render
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -96,14 +97,27 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin)
 	w.Header().Set("Content-Security-Policy", csp)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// The render doc is dynamic: it inlines the artifact's live state and the
+	// per-artifact CSP. It must never be cached, or an iframe can load a stale
+	// document (old shim/state) after a redeploy or state change.
+	w.Header().Set("Cache-Control", "no-store")
 
-	doc := injectShim(string(bodyBytes), a.ID, rd.cfg.AppOrigin)
+	// Inline the artifact's persisted state so the shim's cache is ready before
+	// any artifact script runs (avoids the async-hydration race). Degrade to an
+	// empty cache if state can't be read — the artifact still renders.
+	state, err := rd.cfg.Store.GetState(r.Context(), a.ID)
+	if err != nil {
+		state = nil
+	}
+
+	doc := injectShim(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state)
 	fmt.Fprint(w, doc)
 }
 
 // buildCSP generates a per-artifact Content-Security-Policy header value
-// from the artifact's network allowlist. appOrigin is the only origin
-// permitted to embed this page in an iframe.
+// from the artifact's network allowlist. appOrigin is the only origin permitted
+// to embed this page in an iframe. The storage shim needs no connect-src of its
+// own: it reads inlined state and writes via postMessage to the host frame.
 func buildCSP(allowlist []string, appOrigin string) string {
 	frameAncestors := "frame-ancestors " + appOrigin
 	if len(allowlist) == 0 {
@@ -136,28 +150,21 @@ const shimTemplate = `<script>
   var ARTIFACT_ID = %q;
   var API_ORIGIN = %q;
 
-  // In-memory cache hydrated from the server
-  var cache = {};
-  var hydrated = false;
+  // State is inlined by the render surface at request time, so getItem is
+  // correct on the first *synchronous* read. Fetching it asynchronously would
+  // race the artifact's own startup reads (which run before a fetch resolves).
+  var cache = %s;
 
-  // Hydrate state from API on load
-  fetch(API_ORIGIN + '/api/artifacts/' + ARTIFACT_ID + '/state', {
-    headers: { 'Content-Type': 'application/json' }
-  }).then(function(r) {
-    return r.ok ? r.json() : {};
-  }).then(function(state) {
-    cache = state || {};
-    hydrated = true;
-  }).catch(function() {
-    hydrated = true;
-  });
-
+  // Writes go to the trusted host frame (same-origin with the API and
+  // authenticated) via postMessage. The sandbox gives this iframe an opaque
+  // 'null' origin, so it cannot call the API cross-origin itself. targetOrigin
+  // is pinned to API_ORIGIN so the message can only reach our own host.
   function writeThrough(key, value) {
-    fetch(API_ORIGIN + '/api/artifacts/' + ARTIFACT_ID + '/state', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: key, value: value })
-    }).catch(function() {});
+    if (window.parent === window) return; // top-level: no host to persist through
+    window.parent.postMessage(
+      { __avState: true, artifactId: ARTIFACT_ID, key: key, value: value },
+      API_ORIGIN
+    );
   }
 
   var shimStorage = {
@@ -191,9 +198,20 @@ const shimTemplate = `<script>
 </script>`
 
 // injectShim inserts the storage shim as the first element inside <head>.
-// If no <head> is found, the shim is prepended to the document.
-func injectShim(body, artifactID, appOrigin string) string {
-	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin)
+// If no <head> is found, the shim is prepended to the document. The artifact's
+// current state is inlined into the shim so the cache is populated before any
+// artifact script runs.
+func injectShim(body, artifactID, appOrigin string, state map[string]string) string {
+	if state == nil {
+		state = map[string]string{}
+	}
+	// json.Marshal escapes <, >, & as </>/&, so the literal is
+	// safe to embed inside a <script> element (can't break out with </script>).
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		stateJSON = []byte("{}")
+	}
+	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, stateJSON)
 
 	// Try to inject after <head>
 	idx := strings.Index(strings.ToLower(body), "<head>")
