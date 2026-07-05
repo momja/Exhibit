@@ -1,6 +1,6 @@
 ---
 id: exhibit-tww.2.3
-status: open
+status: closed
 deps: [exhibit-tww.1.4, exhibit-tww.2.1, exhibit-tww.2.2]
 links: []
 created: 2026-07-01T05:09:44Z

@@ -125,8 +125,14 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .card-actions a{color:#555;text-decoration:none}
 .card-actions a:hover{color:var(--brand-blue)}
 .tag-pills{display:flex;flex-wrap:wrap;gap:6px;list-style:none}
-.tag-pill{display:inline-flex;align-items:center;max-width:100%;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.4}
+.tag-pill{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.4}
 .tag-pill-label{overflow-wrap:anywhere}
+.tag-pill-edit,.tag-pill-detach{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:14px;height:14px;padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .12s ease,background .12s ease}
+.tag-pill-edit i,.tag-pill-detach i{font-size:11px;line-height:1}
+.tag-pill:hover .tag-pill-edit,.tag-pill:hover .tag-pill-detach,
+.tag-pill:focus-within .tag-pill-edit,.tag-pill:focus-within .tag-pill-detach,
+.tag-pill-edit:focus-visible,.tag-pill-detach:focus-visible{opacity:1;pointer-events:auto}
+.tag-pill-edit:hover,.tag-pill-detach:hover{background:rgba(0,0,0,.15)}
 .empty{color:#888;font-size:14px;padding:20px 0}
 #status{margin-top:10px;font-size:13px;color:#555}
 #scan-result{margin-top:10px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
@@ -259,6 +265,38 @@ function finishIngest(id) {
   status.appendChild(link);
   setTimeout(() => location.reload(), 1200);
 }
+
+// Tag pill hover controls: detach (x) removes this tag from this artifact
+// only; edit (pencil) opens the edit-tag modal (defined once that lands).
+document.addEventListener('click', function(e) {
+  const detachBtn = e.target.closest('.tag-pill-detach');
+  if (detachBtn) {
+    e.preventDefault();
+    detachTag(detachBtn);
+    return;
+  }
+  const editBtn = e.target.closest('.tag-pill-edit');
+  if (editBtn && typeof openEditTagModal === 'function') {
+    e.preventDefault();
+    openEditTagModal(editBtn.dataset.tagId, editBtn.dataset.tagName, editBtn.dataset.tagColor);
+  }
+});
+
+async function detachTag(btn) {
+  const pill = btn.closest('.tag-pill');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/tags/' + encodeURIComponent(btn.dataset.tagId) + '/artifacts/' + encodeURIComponent(btn.dataset.artifactId), {
+      method: 'DELETE',
+      headers: {'Authorization':'Bearer '+TOKEN}
+    });
+    if (r.ok) {
+      pill.remove();
+      return;
+    }
+  } catch (e) {}
+  btn.disabled = false;
+}
 </script>
 </body>
 </html>`
@@ -266,10 +304,11 @@ function finishIngest(id) {
 
 // renderTagPills renders an artifact's tags as colored pills. It returns ""
 // when there are no tags so cards without tags render with no empty pill
-// row. The container and per-pill hooks (classnames, data attributes) are
-// deliberately present even though nothing reads them yet: follow-on tickets
-// attach hover controls (pencil/x) to .tag-pill and a trailing '+' button to
-// .tag-pills without needing to touch this markup again.
+// row. Each pill carries a hover/focus-revealed edit (pencil) control on the
+// left and a detach (x) control on the right; both are real <button>s so
+// they're reachable by keyboard without extra handling, and they occupy
+// fixed space at all times so revealing them on hover never shifts the pill
+// layout — only their opacity changes.
 func renderTagPills(artifactID string, tags []*store.Tag) string {
 	if len(tags) == 0 {
 		return ""
@@ -279,9 +318,17 @@ func renderTagPills(artifactID string, tags []*store.Tag) string {
 	for _, t := range tags {
 		bg := normalizeHexColor(t.Color)
 		fg := pillTextColor(bg)
+		name := htmlEsc(t.Name)
 		b.WriteString(fmt.Sprintf(
-			`<li class="tag-pill" data-tag-id="%s" style="background:%s;color:%s"><span class="tag-pill-label">%s</span></li>`,
-			t.ID, bg, fg, htmlEsc(t.Name)))
+			`<li class="tag-pill" data-tag-id="%s" style="background:%s;color:%s">`+
+				`<button type="button" class="tag-pill-edit" data-tag-id="%s" data-tag-name="%s" data-tag-color="%s" aria-label="Edit tag %s"><i class="ph ph-pencil-simple"></i></button>`+
+				`<span class="tag-pill-label">%s</span>`+
+				`<button type="button" class="tag-pill-detach" data-tag-id="%s" data-artifact-id="%s" aria-label="Remove tag %s from this artifact"><i class="ph ph-x"></i></button>`+
+				`</li>`,
+			t.ID, bg, fg,
+			t.ID, name, bg, name,
+			name,
+			t.ID, artifactID, name))
 	}
 	b.WriteString(`</ul>`)
 	return b.String()
