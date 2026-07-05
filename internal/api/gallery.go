@@ -76,11 +76,12 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 <div class="card">
   <a class="card-title" href="/artifacts/%s">%s</a>
   <div class="card-meta">%s</div>
+  %s
   <div class="card-actions">
     <a href="/artifacts/%s">Details</a>
     <a href="%s/a/%s" target="_blank">Open ↗</a>
   </div>
-</div>`, a.ID, htmlEsc(a.Title), a.CreatedAt.Format("Jan 2, 2006"), a.ID, renderOrigin, a.ID))
+</div>`, a.ID, htmlEsc(a.Title), a.CreatedAt.Format("Jan 2, 2006"), renderTagPills(a.ID, a.Tags), a.ID, renderOrigin, a.ID))
 	}
 
 	searchVal := htmlEsc(query)
@@ -123,6 +124,9 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .card-actions{display:flex;gap:12px;font-size:13px}
 .card-actions a{color:#555;text-decoration:none}
 .card-actions a:hover{color:var(--brand-blue)}
+.tag-pills{display:flex;flex-wrap:wrap;gap:6px;list-style:none}
+.tag-pill{display:inline-flex;align-items:center;max-width:100%;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.4}
+.tag-pill-label{overflow-wrap:anywhere}
 .empty{color:#888;font-size:14px;padding:20px 0}
 #status{margin-top:10px;font-size:13px;color:#555}
 #scan-result{margin-top:10px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
@@ -258,6 +262,29 @@ function finishIngest(id) {
 </script>
 </body>
 </html>`
+}
+
+// renderTagPills renders an artifact's tags as colored pills. It returns ""
+// when there are no tags so cards without tags render with no empty pill
+// row. The container and per-pill hooks (classnames, data attributes) are
+// deliberately present even though nothing reads them yet: follow-on tickets
+// attach hover controls (pencil/x) to .tag-pill and a trailing '+' button to
+// .tag-pills without needing to touch this markup again.
+func renderTagPills(artifactID string, tags []*store.Tag) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf(`<ul class="tag-pills" data-artifact-id="%s">`, artifactID))
+	for _, t := range tags {
+		bg := normalizeHexColor(t.Color)
+		fg := pillTextColor(bg)
+		b.WriteString(fmt.Sprintf(
+			`<li class="tag-pill" data-tag-id="%s" style="background:%s;color:%s"><span class="tag-pill-label">%s</span></li>`,
+			t.ID, bg, fg, htmlEsc(t.Name)))
+	}
+	b.WriteString(`</ul>`)
+	return b.String()
 }
 
 func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) string {
