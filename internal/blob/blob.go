@@ -29,9 +29,13 @@ func (s *FSStore) Put(ctx context.Context, id string, r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = io.Copy(f, r)
-	return err
+	if _, err := io.Copy(f, r); err != nil {
+		_ = f.Close() // copy already failed; return that error, not Close's
+		return err
+	}
+	// On the write path a Close error can mean the bytes never flushed, so it
+	// must surface rather than be dropped by a bare defer.
+	return f.Close()
 }
 
 func (s *FSStore) Get(ctx context.Context, id string) (io.ReadCloser, error) {
