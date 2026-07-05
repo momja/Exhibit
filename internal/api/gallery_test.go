@@ -41,6 +41,34 @@ func TestGalleryIndexRendersTagPills(t *testing.T) {
 	assert.NotContains(t, page, `data-artifact-id="`+untaggedID+`"`)
 }
 
+func TestTagPillHoverControls(t *testing.T) {
+	r := newTestRouter(t)
+	tag := createTestTag(t, r, "charts", "#FFFFFF")
+	id := createTestArtifact(t, r, "Tagged")
+
+	w := doJSON(t, r, "POST", "/api/tags/"+tag.ID+"/artifacts/"+id, nil)
+	require.Equal(t, http.StatusNoContent, w.Code)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req)
+	require.Equal(t, http.StatusOK, w2.Code)
+	page := w2.Body.String()
+
+	// Pencil (edit) on the left of the label, x (detach) on the right —
+	// both real <button>s so they're keyboard-focusable, and both carry the
+	// data the click handlers need.
+	assert.Contains(t, page, `<button type="button" class="tag-pill-edit" data-tag-id="`+tag.ID+`" data-tag-name="charts" data-tag-color="#ffffff" aria-label="Edit tag charts"><i class="ph ph-pencil-simple"></i></button>`)
+	assert.Contains(t, page, `<span class="tag-pill-label">charts</span>`)
+	assert.Contains(t, page, `<button type="button" class="tag-pill-detach" data-tag-id="`+tag.ID+`" data-artifact-id="`+id+`" aria-label="Remove tag charts from this artifact"><i class="ph ph-x"></i></button>`)
+
+	// Hidden-until-hover/focus is CSS-driven (opacity/pointer-events on
+	// .tag-pill-edit/.tag-pill-detach), not a layout property, so revealing
+	// them never shifts the pill.
+	assert.Contains(t, page, `.tag-pill-edit,.tag-pill-detach{display:inline-flex`)
+	assert.Contains(t, page, `opacity:0;pointer-events:none`)
+}
+
 func TestPillTextColorContrast(t *testing.T) {
 	assert.Equal(t, pillTextDark, pillTextColor("#FFFFFF"))
 	assert.Equal(t, pillTextLight, pillTextColor("#000000"))
