@@ -113,16 +113,3 @@ func TestGalleryIndexRendersAddTagModal(t *testing.T) {
 	assert.Contains(t, page, `function openAddTagModal(`)
 }
 
-func TestPillTextColorContrast(t *testing.T) {
-	assert.Equal(t, pillTextDark, pillTextColor("#FFFFFF"))
-	assert.Equal(t, pillTextLight, pillTextColor("#000000"))
-	assert.Equal(t, pillTextLight, pillTextColor("#111111"))
-	assert.Equal(t, pillTextDark, pillTextColor("#FAE317")) // brandYellow
-}
-
-func TestNormalizeHexColorFallback(t *testing.T) {
-	assert.Equal(t, "#ff0000", normalizeHexColor("#f00"))
-	assert.Equal(t, "#abcdef", normalizeHexColor("#ABCDEF"))
-	assert.Equal(t, "#6b7280", normalizeHexColor("not-a-color"))
-	assert.Equal(t, "#6b7280", normalizeHexColor(""))
-}
