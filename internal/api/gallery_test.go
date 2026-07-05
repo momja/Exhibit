@@ -112,4 +112,3 @@ func TestGalleryIndexRendersAddTagModal(t *testing.T) {
 	assert.Contains(t, page, `id="tag-add-confirm"`)
 	assert.Contains(t, page, `function openAddTagModal(`)
 }
-
