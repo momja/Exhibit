@@ -21,6 +21,65 @@ func TestEditorAssetServed(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "ArtifactEditor")
 }
 
+func TestPhosphorIconAssetsServed(t *testing.T) {
+	r := newTestRouter(t)
+
+	req := httptest.NewRequest("GET", "/assets/phosphor/regular.css", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "text/css")
+	css := w.Body.String()
+	// The five icons this ticket introduces must be present in the vendored
+	// stylesheet, and the @font-face must only reference the embedded woff2 —
+	// no dangling references to formats we don't ship (which would 404).
+	for _, class := range []string{"ph-pencil-simple", "ph-x", "ph-plus", "ph-trash", "ph-check"} {
+		assert.Contains(t, css, "."+class+":before")
+	}
+	assert.Contains(t, css, `url("./Phosphor.woff2") format("woff2")`)
+	assert.NotContains(t, css, ".woff\"")
+	assert.NotContains(t, css, ".ttf\"")
+
+	req = httptest.NewRequest("GET", "/assets/phosphor/Phosphor.woff2", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "font/woff2")
+}
+
+func TestGalleryPagesLoadPhosphorIconsFromAppOrigin(t *testing.T) {
+	r := newTestRouter(t)
+
+	id := createArtifact(t, r, map[string]any{
+		"title":             "Icon Check",
+		"body":              "<html><body>content</body></html>",
+		"network_allowlist": []string{},
+	})
+
+	const stylesheetTag = `<link rel="stylesheet" href="/assets/phosphor/regular.css">`
+
+	for _, path := range []string{"/", "/artifacts/" + id, "/artifacts/" + id + "/edit"} {
+		req := httptest.NewRequest("GET", path, nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, path)
+		page := w.Body.String()
+		// The stylesheet is same-origin (a root-relative path), never a
+		// third-party CDN URL.
+		assert.Contains(t, page, stylesheetTag, path)
+	}
+
+	// The documented markup pattern — <i class="ph ph-<name>"></i> — renders
+	// somewhere in the gallery, using the icon set this ticket introduces.
+	req := httptest.NewRequest("GET", "/artifacts/"+id+"/edit", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	page := w.Body.String()
+	assert.Contains(t, page, `<i class="ph ph-check"></i>`)
+	assert.Contains(t, page, `<i class="ph ph-x"></i>`)
+	assert.Contains(t, page, `<i class="ph ph-trash"></i>`)
+}
+
 func TestGalleryEditPageMountsEditor(t *testing.T) {
 	r := newTestRouter(t)
 

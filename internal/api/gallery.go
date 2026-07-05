@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/artifact-viewer/artifact-viewer/internal/color"
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
 )
@@ -76,11 +77,12 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 <div class="card">
   <a class="card-title" href="/artifacts/%s">%s</a>
   <div class="card-meta">%s</div>
+  %s
   <div class="card-actions">
     <a href="/artifacts/%s">Details</a>
     <a href="%s/a/%s" target="_blank">Open ↗</a>
   </div>
-</div>`, a.ID, htmlEsc(a.Title), a.CreatedAt.Format("Jan 2, 2006"), a.ID, renderOrigin, a.ID))
+</div>`, a.ID, htmlEsc(a.Title), a.CreatedAt.Format("Jan 2, 2006"), renderTagRow(a.ID, a.Tags), a.ID, renderOrigin, a.ID))
 	}
 
 	searchVal := htmlEsc(query)
@@ -92,8 +94,9 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Artifact Viewer</title>
 <link rel="icon" type="image/svg+xml" href="` + exhibitFaviconDataURI + `">
+` + phosphorCSSLink + `
 <style>
-:root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
+:root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
 header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}
@@ -108,7 +111,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .upload input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px;outline:none}
 .upload input[type=text]:focus{border-color:var(--brand-blue)}
 .upload-row{display:flex;gap:8px;margin-top:10px}
-.btn{padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
 .btn:hover{background:var(--brand-blue-hover)}
 .btn-sm{padding:5px 12px;font-size:13px}
 .search-row{display:flex;gap:8px;margin-bottom:20px}
@@ -122,12 +125,45 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .card-actions{display:flex;gap:12px;font-size:13px}
 .card-actions a{color:#555;text-decoration:none}
 .card-actions a:hover{color:var(--brand-blue)}
+.tag-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.tag-add-btn{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:20px;height:20px;padding:0;border:1px dashed #ccc;border-radius:50%;background:transparent;color:#888;cursor:pointer}
+.tag-add-btn:hover,.tag-add-btn:focus-visible{border-color:var(--brand-blue);border-style:solid;color:var(--brand-blue)}
+.tag-add-btn i{font-size:11px;line-height:1}
+.tag-pills{display:flex;flex-wrap:wrap;gap:6px;list-style:none}
+.tag-pill{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.4}
+.tag-pill-label{overflow-wrap:anywhere}
+.tag-pill-edit,.tag-pill-detach{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:14px;height:14px;padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .12s ease,background .12s ease}
+.tag-pill-edit i,.tag-pill-detach i{font-size:11px;line-height:1}
+.tag-pill:hover .tag-pill-edit,.tag-pill:hover .tag-pill-detach,
+.tag-pill:focus-within .tag-pill-edit,.tag-pill:focus-within .tag-pill-detach,
+.tag-pill-edit:focus-visible,.tag-pill-detach:focus-visible{opacity:1;pointer-events:auto}
+.tag-pill-edit:hover,.tag-pill-detach:hover{background:rgba(0,0,0,.15)}
 .empty{color:#888;font-size:14px;padding:20px 0}
 #status{margin-top:10px;font-size:13px;color:#555}
 #scan-result{margin-top:10px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
 .mode-tabs{display:flex;gap:6px;margin-bottom:8px}
 .tab-btn{padding:5px 14px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;color:#555}
 .tab-btn.active{background:var(--brand-blue);color:#fff;border-color:var(--brand-blue)}
+.btn-sec{background:#fff;color:#333;border:1px solid #ddd}
+.btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:#fff}
+.btn-danger{background:#e00;color:#fff;border:none}
+.btn-danger:hover{background:#c00}
+.spacer{flex:1}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal-overlay[hidden]{display:none}
+.modal{background:#fff;border-radius:10px;padding:20px;width:320px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,.25)}
+.modal h2{font-size:16px;font-weight:600}
+.modal label{display:block;font-size:12px;color:#555;margin:12px 0 4px}
+.modal input[type=text],.modal select{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;background:#fff;color:#111}
+.modal input[type=text]:focus,.modal select:focus{border-color:var(--brand-blue)}
+.color-presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.color-swatch{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.color-swatch.selected{border-color:#333}
+.color-custom-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.color-custom-row input[type=color]{width:36px;height:30px;padding:0;border:1px solid #ddd;border-radius:6px;cursor:pointer}
+.color-custom-row input[type=text]{flex:1}
+.modal-error{color:#c00;font-size:12px;margin-top:10px}
+.modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
 </style>
 </head>
 <body>
@@ -147,7 +183,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
   <input type="text" id="url-input" placeholder="https://example.com/tool.html" style="display:none;width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;margin-bottom:8px">
   <div id="scan-result"></div>
   <div class="upload-row">
-    <button class="btn" onclick="ingest()">Upload</button>
+    <button class="btn" onclick="ingest()"><i class="ph ph-plus"></i> Upload</button>
   </div>
   <div id="status"></div>
 </div>
@@ -159,6 +195,9 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 
 <div class="grid">` + cards.String() + `</div>
 </main>
+
+` + renderEditTagModal() + `
+` + renderAddTagModal(tags) + `
 
 <script>
 const TOKEN = ` + fmt.Sprintf("%q", token) + `;
@@ -254,9 +293,329 @@ function finishIngest(id) {
   status.appendChild(link);
   setTimeout(() => location.reload(), 1200);
 }
+
+// Tag pill hover controls: detach (x) removes this tag from this artifact
+// only; edit (pencil) opens the edit-tag modal. The trailing '+' opens the
+// add-tag modal for that card.
+document.addEventListener('click', function(e) {
+  const detachBtn = e.target.closest('.tag-pill-detach');
+  if (detachBtn) {
+    e.preventDefault();
+    detachTag(detachBtn);
+    return;
+  }
+  const editBtn = e.target.closest('.tag-pill-edit');
+  if (editBtn) {
+    e.preventDefault();
+    openEditTagModal(editBtn.dataset.tagId, editBtn.dataset.tagName, editBtn.dataset.tagColor);
+    return;
+  }
+  const addBtn = e.target.closest('.tag-add-btn');
+  if (addBtn) {
+    e.preventDefault();
+    openAddTagModal(addBtn.dataset.artifactId);
+  }
+});
+
+async function detachTag(btn) {
+  const pill = btn.closest('.tag-pill');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/tags/' + encodeURIComponent(btn.dataset.tagId) + '/artifacts/' + encodeURIComponent(btn.dataset.artifactId), {
+      method: 'DELETE',
+      headers: {'Authorization':'Bearer '+TOKEN}
+    });
+    if (r.ok) {
+      pill.remove();
+      return;
+    }
+  } catch (e) {}
+  btn.disabled = false;
+}
+
+// Edit-tag modal: rename + recolor (PATCH) or delete (DELETE) a tag. Both
+// mutations are global, so on success we reload the gallery rather than
+// patching just the one card — every pill of that tag updates/disappears
+// everywhere at once.
+let editingTagId = null;
+
+function openEditTagModal(tagId, tagName, tagColor) {
+  editingTagId = tagId;
+  document.getElementById('tag-edit-name').value = tagName;
+  setModalColor('tag-edit', tagColor);
+  setModalError('tag-edit', '');
+  document.getElementById('tag-edit-modal').hidden = false;
+  document.getElementById('tag-edit-name').focus();
+}
+
+function closeTagEditModal() {
+  document.getElementById('tag-edit-modal').hidden = true;
+  editingTagId = null;
+}
+
+// setModalColor/setModalError are shared by the edit-tag modal (tww.2.4)
+// and the add-tag modal (tww.2.5), which reuse the same field ids under a
+// different prefix (e.g. 'tag-edit' / 'tag-add').
+function setModalColor(prefix, hex) {
+  document.getElementById(prefix + '-color-hex').value = hex;
+  document.getElementById(prefix + '-color-picker').value = hex;
+  document.querySelectorAll('#' + prefix + '-modal .color-swatch').forEach(function(sw) {
+    sw.classList.toggle('selected', sw.dataset.color.toLowerCase() === hex.toLowerCase());
+  });
+}
+
+function setModalError(prefix, message) {
+  const el = document.getElementById(prefix + '-error');
+  el.textContent = message;
+  el.hidden = !message;
+}
+
+function wireColorControls(prefix) {
+  document.querySelectorAll('#' + prefix + '-modal .color-swatch').forEach(function(sw) {
+    sw.addEventListener('click', function() { setModalColor(prefix, sw.dataset.color); });
+  });
+  document.getElementById(prefix + '-color-picker').addEventListener('input', function(e) {
+    setModalColor(prefix, e.target.value);
+  });
+  document.getElementById(prefix + '-color-hex').addEventListener('input', function(e) {
+    if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) setModalColor(prefix, e.target.value);
+  });
+}
+wireColorControls('tag-edit');
+
+document.getElementById('tag-edit-cancel').addEventListener('click', closeTagEditModal);
+document.getElementById('tag-edit-modal').addEventListener('click', function(e) {
+  if (e.target.id === 'tag-edit-modal') closeTagEditModal();
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  if (!document.getElementById('tag-edit-modal').hidden) closeTagEditModal();
+  if (!document.getElementById('tag-add-modal').hidden) closeTagAddModal();
+});
+
+document.getElementById('tag-edit-save').addEventListener('click', async function() {
+  const name = document.getElementById('tag-edit-name').value.trim();
+  const color = document.getElementById('tag-edit-color-hex').value.trim();
+  if (!name) { setModalError('tag-edit', 'Name is required.'); return; }
+  const r = await fetch('/api/tags/' + encodeURIComponent(editingTagId), {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({name: name, color: color})
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(function() { return {}; });
+    setModalError('tag-edit', data.error || 'Failed to save tag.');
+    return;
+  }
+  location.reload();
+});
+
+document.getElementById('tag-edit-delete').addEventListener('click', async function() {
+  const name = document.getElementById('tag-edit-name').value;
+  if (!confirm('Delete tag "' + name + '"? It will be removed from every artifact. This cannot be undone.')) return;
+  const r = await fetch('/api/tags/' + encodeURIComponent(editingTagId), {
+    method: 'DELETE',
+    headers: {'Authorization':'Bearer '+TOKEN}
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(function() { return {}; });
+    setModalError('tag-edit', data.error || 'Failed to delete tag.');
+    return;
+  }
+  location.reload();
+});
+
+// Add-tag modal: pick an existing tag from the dropdown, or "create new" to
+// reveal the same name+color fields as the edit-tag modal. Confirm creates
+// the tag first (if new) and always attaches it; attaching a tag the
+// artifact already has is a no-op on the server, so no special-casing is
+// needed here.
+let addingArtifactId = null;
+
+function openAddTagModal(artifactId) {
+  addingArtifactId = artifactId;
+  document.getElementById('tag-add-select').value = '';
+  document.getElementById('tag-add-create-fields').hidden = true;
+  document.getElementById('tag-add-name').value = '';
+  setModalColor('tag-add', '` + store.DefaultTagColor + `');
+  setModalError('tag-add', '');
+  document.getElementById('tag-add-modal').hidden = false;
+  document.getElementById('tag-add-select').focus();
+}
+
+function closeTagAddModal() {
+  document.getElementById('tag-add-modal').hidden = true;
+  addingArtifactId = null;
+}
+
+document.getElementById('tag-add-select').addEventListener('change', function(e) {
+  document.getElementById('tag-add-create-fields').hidden = e.target.value !== '__new__';
+});
+wireColorControls('tag-add');
+
+document.getElementById('tag-add-cancel').addEventListener('click', closeTagAddModal);
+document.getElementById('tag-add-modal').addEventListener('click', function(e) {
+  if (e.target.id === 'tag-add-modal') closeTagAddModal();
+});
+
+document.getElementById('tag-add-confirm').addEventListener('click', async function() {
+  const choice = document.getElementById('tag-add-select').value;
+  if (!choice) { setModalError('tag-add', 'Choose a tag or create a new one.'); return; }
+
+  let tagId = choice;
+  if (choice === '__new__') {
+    const name = document.getElementById('tag-add-name').value.trim();
+    if (!name) { setModalError('tag-add', 'Name is required.'); return; }
+    const color = document.getElementById('tag-add-color-hex').value.trim();
+    const created = await fetch('/api/tags', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+      body: JSON.stringify({name: name, color: color})
+    });
+    const data = await created.json().catch(function() { return {}; });
+    if (!created.ok) { setModalError('tag-add', data.error || 'Failed to create tag.'); return; }
+    tagId = data.id;
+  }
+
+  const attached = await fetch('/api/tags/' + encodeURIComponent(tagId) + '/artifacts/' + encodeURIComponent(addingArtifactId), {
+    method: 'POST',
+    headers: {'Authorization':'Bearer '+TOKEN}
+  });
+  if (!attached.ok) {
+    const data = await attached.json().catch(function() { return {}; });
+    setModalError('tag-add', data.error || 'Failed to attach tag.');
+    return;
+  }
+  location.reload();
+});
 </script>
 </body>
 </html>`
+}
+
+// renderTagPills renders an artifact's tags as colored pills. It returns ""
+// when there are no tags so cards without tags render with no empty pill
+// row. Each pill carries a hover/focus-revealed edit (pencil) control on the
+// left and a detach (x) control on the right; both are real <button>s so
+// they're reachable by keyboard without extra handling, and they occupy
+// fixed space at all times so revealing them on hover never shifts the pill
+// layout — only their opacity changes.
+func renderTagPills(artifactID string, tags []*store.Tag) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf(`<ul class="tag-pills" data-artifact-id="%s">`, artifactID))
+	for _, t := range tags {
+		bg := color.Normalize(t.Color)
+		fg := color.ContrastText(bg)
+		name := htmlEsc(t.Name)
+		b.WriteString(fmt.Sprintf(
+			`<li class="tag-pill" data-tag-id="%s" style="background:%s;color:%s">`+
+				`<button type="button" class="tag-pill-edit" data-tag-id="%s" data-tag-name="%s" data-tag-color="%s" aria-label="Edit tag %s"><i class="ph ph-pencil-simple"></i></button>`+
+				`<span class="tag-pill-label">%s</span>`+
+				`<button type="button" class="tag-pill-detach" data-tag-id="%s" data-artifact-id="%s" aria-label="Remove tag %s from this artifact"><i class="ph ph-x"></i></button>`+
+				`</li>`,
+			t.ID, bg, fg,
+			t.ID, name, bg, name,
+			name,
+			t.ID, artifactID, name))
+	}
+	b.WriteString(`</ul>`)
+	return b.String()
+}
+
+// renderTagRow wraps an artifact's tag pills with a trailing '+' button that
+// opens the add-tag modal. Unlike the pills themselves, the '+' always
+// renders — even for an untagged artifact, it's the only way to attach a
+// first tag — so it lives outside renderTagPills's empty-tags short circuit.
+func renderTagRow(artifactID string, tags []*store.Tag) string {
+	return `<div class="tag-row">` + renderTagPills(artifactID, tags) + fmt.Sprintf(
+		`<button type="button" class="tag-add-btn" data-artifact-id="%s" aria-label="Add tag"><i class="ph ph-plus"></i></button>`,
+		artifactID) + `</div>`
+}
+
+// renderColorSwatches renders the shared preset-color palette used by both
+// the edit-tag modal (tww.2.4) and the add-tag modal (tww.2.5). Swatches are
+// plain buttons scoped by the caller's modal id in CSS/JS, so the markup
+// itself carries no modal-specific state.
+func renderColorSwatches() string {
+	var b strings.Builder
+	b.WriteString(`<div class="color-presets">`)
+	for _, c := range color.Presets {
+		b.WriteString(fmt.Sprintf(
+			`<button type="button" class="color-swatch" data-color="%s" style="background:%s" aria-label="%s"></button>`,
+			c, c, c))
+	}
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
+// renderEditTagModal renders the (initially hidden) edit-tag modal shell
+// shared by every card's pencil control. There is one instance per gallery
+// page load; openEditTagModal (in the page script) populates it for
+// whichever tag was clicked.
+func renderEditTagModal() string {
+	return `<div id="tag-edit-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tag-edit-title">
+    <h2 id="tag-edit-title">Edit tag</h2>
+    <label for="tag-edit-name">Name</label>
+    <input type="text" id="tag-edit-name" maxlength="60">
+    <label>Color</label>
+    ` + renderColorSwatches() + `
+    <div class="color-custom-row">
+      <input type="color" id="tag-edit-color-picker" aria-label="Custom color">
+      <input type="text" id="tag-edit-color-hex" placeholder="#rrggbb" maxlength="7" aria-label="Color hex code">
+    </div>
+    <div id="tag-edit-error" class="modal-error" hidden></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-danger" id="tag-edit-delete"><i class="ph ph-trash"></i> Delete</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="tag-edit-cancel">Cancel</button>
+      <button type="button" class="btn" id="tag-edit-save"><i class="ph ph-check"></i> Save</button>
+    </div>
+  </div>
+</div>`
+}
+
+// renderAddTagModal renders the (initially hidden) add-tag modal shell shared
+// by every card's trailing '+' button. It offers a dropdown of every existing
+// tag (server-rendered from the same ListTags call the gallery already makes)
+// plus a "create new" option that reveals the same name+color fields as the
+// edit-tag modal (openAddTagModal/wireColorControls('tag-add') in the page
+// script).
+func renderAddTagModal(tags []*store.Tag) string {
+	var opts strings.Builder
+	for _, t := range tags {
+		opts.WriteString(fmt.Sprintf(`<option value="%s">%s</option>`, t.ID, htmlEsc(t.Name)))
+	}
+	return `<div id="tag-add-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tag-add-title">
+    <h2 id="tag-add-title">Add tag</h2>
+    <label for="tag-add-select">Tag</label>
+    <select id="tag-add-select">
+      <option value="">Choose a tag…</option>
+      ` + opts.String() + `
+      <option value="__new__">+ Create new tag</option>
+    </select>
+    <div id="tag-add-create-fields" hidden>
+      <label for="tag-add-name">Name</label>
+      <input type="text" id="tag-add-name" maxlength="60">
+      <label>Color</label>
+      ` + renderColorSwatches() + `
+      <div class="color-custom-row">
+        <input type="color" id="tag-add-color-picker" aria-label="Custom color">
+        <input type="text" id="tag-add-color-hex" placeholder="#rrggbb" maxlength="7" aria-label="Color hex code">
+      </div>
+    </div>
+    <div id="tag-add-error" class="modal-error" hidden></div>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="tag-add-cancel">Cancel</button>
+      <button type="button" class="btn" id="tag-add-confirm"><i class="ph ph-check"></i> Add</button>
+    </div>
+  </div>
+</div>`
 }
 
 func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) string {
@@ -312,16 +671,17 @@ async function refetchSource() {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>` + htmlEsc(a.Title) + ` — Artifact Viewer</title>
+` + phosphorCSSLink + `
 <style>
-:root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
+:root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;display:flex;flex-direction:column;height:100vh}
 header{background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
 header a{color:var(--brand-blue);text-decoration:none;font-size:13px}
 header h1{font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toolbar{background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 20px;display:flex;gap:12px;align-items:center;flex-shrink:0;font-size:13px}
-.toolbar a{color:var(--brand-blue);text-decoration:none}
-.toolbar button{padding:4px 12px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer}
+.toolbar a{color:var(--brand-blue);text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.toolbar button{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer}
 .toolbar button:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
 .panels{display:flex;flex:1;overflow:hidden;gap:0}
 .panel{flex:1;overflow:auto;background:#fff}
@@ -342,12 +702,12 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
 <div class="toolbar">
   <a href="` + renderOrigin + `/a/` + a.ID + `" target="_blank">Open in new tab ↗</a>
   <span style="color:#ddd">|</span>
-  <a href="/artifacts/` + a.ID + `/edit">Edit</a>` + refetchToolbar + `
+  <a href="/artifacts/` + a.ID + `/edit"><i class="ph ph-pencil-simple"></i> Edit</a>` + refetchToolbar + `
   <span style="color:#ddd">|</span>
   <span style="color:#888">Allowlist:</span>
   <span id="al-display">` + renderAllowlistBadges(a.NetworkAllowlist) + `</span>
   <input id="al-input" type="text" placeholder="Add origin (https://example.com)" style="display:none">
-  <button onclick="addOrigin()">+ Add origin</button>
+  <button onclick="addOrigin()"><i class="ph ph-plus"></i> Add origin</button>
   <span id="al-status" style="color:#888"></span>
 </div>
 <div class="panels">
@@ -428,8 +788,9 @@ func renderEditPage(a *store.Artifact, src, token string) string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Edit: ` + htmlEsc(a.Title) + ` — Artifact Viewer</title>
+` + phosphorCSSLink + `
 <style>
-:root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
+:root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
 header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}
@@ -446,7 +807,7 @@ main{padding:24px;max-width:900px;margin:0 auto}
 .edit-card .cm-editor.cm-focused{outline:none;border-color:var(--brand-blue)}
 .edit-card .cm-scroller{overflow:auto}
 .btn-row{display:flex;gap:8px;margin-top:12px;align-items:center}
-.btn{padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
 .btn:hover{background:var(--brand-blue-hover)}
 .btn-sec{background:#fff;color:#333;border:1px solid #ddd}
 .btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:#fff}
@@ -467,11 +828,11 @@ main{padding:24px;max-width:900px;margin:0 auto}
   <input type="text" id="title" value="` + htmlEsc(a.Title) + `" placeholder="Title">
   <textarea id="body">` + htmlEsc(src) + `</textarea>
   <div class="btn-row">
-    <button class="btn" onclick="save()">Save</button>
-    <a href="/artifacts/` + a.ID + `"><button class="btn btn-sec" type="button">Cancel</button></a>
+    <button class="btn" onclick="save()"><i class="ph ph-check"></i> Save</button>
+    <a href="/artifacts/` + a.ID + `"><button class="btn btn-sec" type="button"><i class="ph ph-x"></i> Cancel</button></a>
     <span id="status"></span>
     <span class="spacer"></span>
-    <button class="btn btn-danger" type="button" onclick="deleteArtifact()">Delete</button>
+    <button class="btn btn-danger" type="button" onclick="deleteArtifact()"><i class="ph ph-trash"></i> Delete</button>
   </div>
 </div>
 </main>
