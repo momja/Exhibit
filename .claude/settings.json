@@ -1,5 +1,19 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "agent",
+            "if": "Bash(git push*)",
+            "timeout": 300,
+            "statusMessage": "Checking docs are up to date before push…",
+            "prompt": "You are about to push commits to a remote (hook input: $ARGUMENTS). Before this git push proceeds, verify the repo's documentation is consistent with the commits about to be pushed that aren't yet on the upstream branch.\n\n1. Identify the ticket behind this branch: run `git branch --show-current` and parse it against this repo's naming convention `feature/{id}/{description}`, `bug/{id}/{description}`, or `chore/{id}/{description}`. If it matches, run `tk show <id>` to read the ticket's description, design notes, and acceptance criteria — that's the *why* behind the diff, which the code alone won't tell you (e.g. a deliberate tradeoff, a note about what NOT to change, context on a value that looks arbitrary). If the branch doesn't match that pattern (e.g. main, or an untracked branch) or `tk show` finds nothing, skip this step and proceed on the diff alone.\n2. Find the commit range being pushed: `git rev-parse --abbrev-ref --symbolic-full-name @{u}` for the upstream (fall back to `origin/main` if there is no upstream), then inspect `git diff <upstream>...HEAD` and `git log <upstream>..HEAD`.\n3. Read README.md, AGENTS.md, and every file under docs/ (product_requirement_doc.md, architecture.md, technical_stack.md) and check whether any of them describe behavior, APIs, config, schemas, screenshots, or architecture that the diff just changed. Use the ticket's *why* (step 1) to judge intent where the diff alone is ambiguous.\n4. If a doc is stale (documents an old default, a removed/renamed field or endpoint, a changed schema, an outdated screenshot, or a design decision the diff supersedes), edit the doc(s) directly to bring them back in sync. Keep edits minimal and factual — don't rewrite unrelated sections. For screenshots, use the `shot-scraper` CLI against the running app if a UI-affecting change needs a refreshed image.\n5. If you changed any doc files, stage and commit them as a new commit (never amend) with a concise message describing the doc fix, following this repo's commit conventions (no --no-verify, no force flags).\n6. If everything is already consistent, or the diff has no doc-relevant surface (pure refactor, test-only change, internal tooling), do nothing and let the push proceed as-is.\n\nNever block or cancel the push — your only job is to make sure any necessary doc commit exists locally before it goes out. Do not run `git push` yourself."
+          }
+        ]
+      }
+    ],
     "PreCompact": [
       {
         "hooks": [

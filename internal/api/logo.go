@@ -1,6 +1,9 @@
 package api
 
-import "encoding/base64"
+import (
+	"encoding/base64"
+	"fmt"
+)
 
 // exhibitLogoSVG is the Exhibit brand mark, inlined here because the service
 // serves no /static route — the gallery composes its whole document as a string
@@ -12,7 +15,7 @@ import "encoding/base64"
 // root carries only viewBox (no width/height) so CSS can size it, plus role +
 // aria-label for an accessible name. It is used two ways: inlined directly in
 // the header, and base64-encoded into the favicon data URI below.
-const exhibitLogoSVG = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 40.316795 49.983387" role="img" aria-label="Exhibit logo" class="logo" focusable="false">
+var exhibitLogoSVG = fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 40.316795 49.983387" role="img" aria-label="Exhibit logo" class="logo" focusable="false">
   <defs>
     <linearGradient id="linearGradient294">
       <stop style="stop-color:#808080;stop-opacity:1" offset="0"/>
@@ -41,14 +44,14 @@ const exhibitLogoSVG = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="htt
     <rect style="fill:#808080;fill-opacity:1;stroke:#808080;stroke-width:0;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill;filter:url(#filter30)" width="37.476799" height="36.98209" x="36.80545" y="47.547268"/>
     <path style="color:#000000;fill:url(#radialGradient296);stroke-width:2.43232;stroke-linecap:round;-inkscape-stroke:none" d="M 58.467752,40.747145 45.560307,58.310204 a 0.26725721,0.26725721 0 0 0 0.05701,0.375298 0.26725721,0.26725721 0 0 0 0.375301,-0.05701 L 58.41075,41.72577 67.950003,58.376709 a 0.26725721,0.26725721 0 0 0 0.3658,0.09977 0.26725721,0.26725721 0 0 0 0.09977,-0.365799 z"/>
     <rect style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:1.00649;stroke-linecap:round;stroke-dasharray:none" width="37.476799" height="36.98209" x="36.80545" y="47.547268"/>
-    <rect style="fill:#23559e;fill-opacity:1;stroke:#000000;stroke-width:1.99229;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" width="12.447359" height="16.068565" x="61.341995" y="67.967896"/>
+    <rect style="fill:%s;fill-opacity:1;stroke:#000000;stroke-width:1.99229;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" width="12.447359" height="16.068565" x="61.341995" y="67.967896"/>
     <circle style="fill:url(#radialGradient294);stroke:url(#radialGradient292);stroke-width:0;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" cx="58.593651" cy="40.417534" r="2.6903682"/>
-    <path style="font-weight:bold;font-size:41.0282px;line-height:0;font-family:'.Diwan Kufi PUA';text-align:center;letter-spacing:2.44032px;text-anchor:middle;fill:#de281d;stroke:#000000;stroke-width:1.98523;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" d="M 60.383501,72.781407 H 37.290736 V 48.036637 H 60.383501 V 52.82273 H 45.481485 v 4.270925 h 13.829928 v 4.786094 H 45.481485 v 6.115565 h 14.902016 z" aria-label="E"/>
+    <path style="font-weight:bold;font-size:41.0282px;line-height:0;font-family:'.Diwan Kufi PUA';text-align:center;letter-spacing:2.44032px;text-anchor:middle;fill:%s;stroke:#000000;stroke-width:1.98523;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" d="M 60.383501,72.781407 H 37.290736 V 48.036637 H 60.383501 V 52.82273 H 45.481485 v 4.270925 h 13.829928 v 4.786094 H 45.481485 v 6.115565 h 14.902016 z" aria-label="E"/>
     <path style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:1;stroke-linecap:round;stroke-dasharray:none" d="m 50.96285,47.859368 5.356268,-7.874052 4.90919,8.007163"/>
-    <rect style="fill:#fae317;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-linecap:round;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill" width="23.057453" height="10.245288" x="37.318401" y="73.774017"/>
+    <rect style="fill:%s;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-linecap:round;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill" width="23.057453" height="10.245288" x="37.318401" y="73.774017"/>
     <circle style="fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" cx="56.133476" cy="38.734268" r="2.1087794"/>
   </g>
-</svg>`
+</svg>`, brandBlue, brandRed, brandYellow)
 
 // exhibitFaviconDataURI is the same artwork encoded for a <link rel="icon">.
 // base64 sidesteps the URL-escaping the SVG's many '#' color values would
