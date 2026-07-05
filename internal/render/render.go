@@ -97,6 +97,10 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin)
 	w.Header().Set("Content-Security-Policy", csp)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// The render doc is dynamic: it inlines the artifact's live state and the
+	// per-artifact CSP. It must never be cached, or an iframe can load a stale
+	// document (old shim/state) after a redeploy or state change.
+	w.Header().Set("Cache-Control", "no-store")
 
 	// Inline the artifact's persisted state so the shim's cache is ready before
 	// any artifact script runs (avoids the async-hydration race). Degrade to an
