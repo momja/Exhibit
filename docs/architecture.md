@@ -86,8 +86,10 @@ The only way data changes. Route groups:
 - `GET /api/artifacts`, `GET /api/artifacts/:id` — list/detail (drives the gallery).
 - `PATCH /api/artifacts/:id` — metadata edits: title, tags, collections,
   `network_allowlist`.
-- `GET/PUT /api/artifacts/:id/state` — the storage shim's hydrate and write-through
-  endpoint (§6).
+- `GET/PUT /api/artifacts/:id/state` — the storage shim's state endpoint (§6). Reads are
+  normally satisfied by render-time inlining, not this route; `PUT` is called by the
+  **host frame** on the shim's behalf (the sandboxed iframe can't reach the API itself).
+  Authenticated like every other mutating route.
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
 - collection/tag CRUD.
 
@@ -101,15 +103,21 @@ middleware-and-data change rather than a rewrite.
 A read-only surface on `RENDER_ORIGIN` whose entire job is to emit an artifact as an
 executable document with the correct security envelope:
 
-- Looks up the artifact, pulls its body from the blob store and its `network_allowlist`.
+- Looks up the artifact, pulls its body from the blob store, its `network_allowlist`, and
+  its current state.
 - Generates the per-artifact CSP (`connect-src`/`script-src`/`img-src` from the
-  allowlist) and sets it as a response header on the document.
-- Injects the **storage shim** as the first `<head>` script, then the artifact body.
+  allowlist) and sets it as a response header on the document. `connect-src` is the
+  allowlist alone — the shim needs no network of its own (§6).
+- Injects the **storage shim** as the first `<head>` script, with the artifact's state
+  **inlined** into it so `getItem` is correct synchronously, then the artifact body.
+- Sets `Cache-Control: no-store` — the document is dynamic (inlined state + per-artifact
+  CSP) and must never be served stale from a cache.
 - Serves into the sandboxed iframe via `srcdoc`/blob URL with `sandbox="allow-scripts"`
   and **no** `allow-same-origin`.
 
-The render surface never mutates anything. It reads, wraps, and serves. This read-only
-property is what makes it safe to expose under the no-auth share path (§7).
+The render surface never mutates anything. It reads (including state, to inline it), wraps,
+and serves. This read-only property is what makes it safe to expose under the no-auth share
+path (§7).
 
 ### 3.3 Store interface
 
@@ -194,22 +202,28 @@ footprint is a decision the user makes at the door, not a surprise at runtime.
 
 ```
 visitor ──GET render URL──► Render surface
-  Render ──► Store.get(artifact) + allowlist
-  Render ──► build CSP from allowlist; compose <head>(shim) + body
-  Render ──► serve into sandboxed iframe (allow-scripts, NO allow-same-origin)
+  Render ──► Store.get(artifact) + allowlist + state
+  Render ──► build CSP from allowlist; compose <head>(shim, state INLINED) + body
+  Render ──► Cache-Control: no-store; serve into sandboxed iframe
+            (allow-scripts, NO allow-same-origin)
 
-  iframe load:
-    shim ──GET /api/artifacts/:id/state──► hydrate in-memory cache (one fetch)
+  iframe load (opaque 'null' origin — cannot call the API directly):
     artifact runs:
-      getItem  ──► served synchronously from cache
-      setItem  ──► update cache sync; PUT /state async (write-through, LWW)
+      getItem  ──► served synchronously from the inlined cache (no fetch, no race)
+      setItem  ──► update cache sync; postMessage({k,v}) to the host frame
+                     host (app origin, authed) ──► PUT /state (write-through, LWW)
     artifact fetch to origin X:
       on allowlist  ──► browser permits
       not on list   ──► browser blocks (CSP); UI prompts user → approve → PATCH allowlist
 ```
 
+Two properties fall out of the sandbox's opaque origin: reads are **inlined at render**
+(a load-time fetch would race the artifact's synchronous startup reads), and writes are
+**bridged through the host frame** (the iframe can't call the API cross-origin, so the
+authenticated host does it — no CORS, state endpoint stays authed).
+
 The state endpoints are why cross-device "just works": all state lives server-side, so a
-second device hydrates the same cache. No replication required for this (§8 distinguishes
+second device inlines the same state at render. No replication required for this (§8 distinguishes
 it from server durability).
 
 ## 7. Sharing

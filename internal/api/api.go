@@ -64,6 +64,8 @@ func (ro *Router) setupRoutes() {
 				r.Patch("/", ro.updateArtifact)
 				r.Post("/refetch", ro.refetchArtifact)
 				r.Delete("/", ro.deleteArtifact)
+				// State: written by the host frame on the artifact's behalf
+				// (the sandboxed iframe bridges writes via postMessage).
 				r.Get("/state", ro.getState)
 				r.Put("/state", ro.setState)
 				// Artifact-centric collection membership routes

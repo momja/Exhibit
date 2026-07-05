@@ -200,18 +200,28 @@ The artifact uses whichever it was written for; we don't need to know which.
 
 ### 5.3 Bridging sync APIs to a remote store
 
-`localStorage` is synchronous; the network isn't. Resolve with **hydrate-then-write-
-through**:
+Two facts shape the solution: `localStorage` is **synchronous** and artifacts read it at
+**startup** (before any `await`), while the network is async; and the artifact runs in a
+**sandboxed, opaque-origin iframe** that cannot call the app API directly (its origin is
+`null`, so every network call is cross-origin and CORS-blocked). Resolve each direction
+separately:
 
-1. On iframe load, one async fetch pulls this artifact's state from
-   `/api/artifacts/:id/state` into an in-memory cache.
-2. `getItem` serves synchronously from the cache.
-3. `setItem` updates the cache synchronously and writes through to the service
-   asynchronously in the background.
-4. Conflict policy: last-write-wins (adequate for this use case).
+1. **Reads — inline at render.** The render surface serializes this artifact's current
+   state into the shim's in-memory cache **at request time**, embedded in the served
+   document. So `getItem` is correct on the very first *synchronous* read, with no
+   load-time fetch. (An async fetch-on-load instead races the artifact's own startup
+   reads and loses — the artifact reads an empty cache before hydration lands.)
+2. **Writes — bridge through the host frame.** `setItem` updates the cache synchronously,
+   then posts the change to the **host frame** (the app-origin page embedding the iframe)
+   via `postMessage`, pinned to the app origin. The host — same origin as the API and
+   already authenticated — performs the write-through `PUT /api/artifacts/:id/state`. The
+   sandbox never touches the network, so there is no CORS surface and the state endpoint
+   stays authenticated (the single write path, §4.1, is preserved: the host calls the API).
+3. Conflict policy: last-write-wins (adequate for this use case).
 
-Result: iPhone writes land on the server; Mac reads them back. Cross-device state with
-no skill, no special artifact format, and no cooperation from the artifact's author.
+Result: iPhone writes land on the server; Mac reads them back — the second device's render
+inlines the same state. Cross-device state with no skill, no special artifact format, and
+no cooperation from the artifact's author.
 
 ### 5.4 Boundary
 
@@ -296,12 +306,13 @@ the rendered/share URL.
 
 Open the web gallery, search "bar chart" (matches indexed source + title + tags),
 click the thumbnail, the tool renders live in its sandboxed iframe with its state
-hydrated from the service. No regeneration, no digging through chat logs.
+inlined from the service. No regeneration, no digging through chat logs.
 
 ### 8.3 Use across devices
 
-Set state on iPhone → shim writes through to the service → open the same artifact on
-Mac → shim hydrates the state back. Transparent to the artifact.
+Set state on iPhone → shim posts to the host, which writes through to the service →
+open the same artifact on Mac → the render inlines the state back into the shim.
+Transparent to the artifact.
 
 ### 8.4 Share
 
@@ -330,7 +341,8 @@ single self-contained `.html`.
    allowlist + CSP generation, web gallery with search/tags/collections (upload + paste
    ingest).
 2. **State shim:** unconditional `localStorage`/`sessionStorage` interception with
-   hydrate-then-write-through against `/api/artifacts/:id/state`; extend to IndexedDB
+   render-time state inlining for reads and a `postMessage`-to-host bridge for writes
+   (host performs the authenticated `PUT /api/artifacts/:id/state`); extend to IndexedDB
    and `window.storage`. Unlocks cross-device use.
 3. **Sharing:** `shares` rows, public `/s/:id`, self-contained `.html` export.
 4. **Tier 2 (only if demand):** in-browser Babel transpile first; CDN allowlist for

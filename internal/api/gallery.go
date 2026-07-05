@@ -359,6 +359,23 @@ const TOKEN = ` + fmt.Sprintf("%q", token) + `;
 const ID = ` + fmt.Sprintf("%q", a.ID) + `;
 let allowlist = ` + allowlistJSON + `;
 
+// State bridge: the artifact runs in a sandboxed (opaque-origin) iframe and
+// cannot call the API itself. Its storage shim posts state writes here; we
+// forward them same-origin with the auth token. Validate the message shape and
+// that it truly came from our artifact frame (e.origin is 'null' when sandboxed,
+// so identity is established by the source window, not the origin string).
+window.addEventListener('message', function(e) {
+  const d = e.data;
+  if (!d || d.__avState !== true || d.artifactId !== ID) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || e.source !== frame.contentWindow) return;
+  fetch('/api/artifacts/' + encodeURIComponent(ID) + '/state', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({ key: d.key, value: d.value })
+  }).catch(function(){});
+});
+
 function renderBadges() {
   document.getElementById('al-display').innerHTML = allowlist.length
     ? allowlist.map(o => '<code>' + o + '</code> ').join('')
