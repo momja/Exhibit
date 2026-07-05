@@ -26,3 +26,12 @@ This project uses a CLI ticket system for task management. Run `tk help` when yo
 ## Tech Stack
 
 @docs/technical_stack.md
+
+## Documentation
+
+All docs are in `./docs/` directory.
+
+### Screenshots
+
+Agents can take screenshots using the CLI tool `shot-scraper`.
+Screenshots should stay up to date with UI changes.

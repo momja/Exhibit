@@ -93,40 +93,41 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 <title>Artifact Viewer</title>
 <link rel="icon" type="image/svg+xml" href="` + exhibitFaviconDataURI + `">
 <style>
+:root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
 header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}
 header h1{font-size:18px;font-weight:600}
 header .logo{height:32px;width:auto;display:block;flex:0 0 auto}
-header a{color:#0070f3;text-decoration:none;font-size:14px}
+header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
 main{padding:24px;max-width:1200px;margin:0 auto}
 .upload{background:#fff;border-radius:10px;padding:20px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .upload h2{font-size:15px;font-weight:600;margin-bottom:12px;color:#333}
 .upload textarea{width:100%;height:160px;font-family:monospace;font-size:12px;border:1px solid #ddd;border-radius:6px;padding:10px;resize:vertical;outline:none}
-.upload textarea:focus{border-color:#0070f3}
+.upload textarea:focus{border-color:var(--brand-blue)}
 .upload input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px;outline:none}
-.upload input[type=text]:focus{border-color:#0070f3}
+.upload input[type=text]:focus{border-color:var(--brand-blue)}
 .upload-row{display:flex;gap:8px;margin-top:10px}
-.btn{padding:8px 18px;background:#0070f3;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
-.btn:hover{background:#005ed4}
+.btn{padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--brand-blue-hover)}
 .btn-sm{padding:5px 12px;font-size:13px}
 .search-row{display:flex;gap:8px;margin-bottom:20px}
 .search-row input{flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none}
-.search-row input:focus{border-color:#0070f3}
+.search-row input:focus{border-color:var(--brand-blue)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
 .card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:8px}
-.card-title{font-size:15px;font-weight:600;color:#0070f3;text-decoration:none;word-break:break-word}
+.card-title{font-size:15px;font-weight:600;color:var(--brand-blue);text-decoration:none;word-break:break-word}
 .card-title:hover{text-decoration:underline}
 .card-meta{font-size:12px;color:#888}
 .card-actions{display:flex;gap:12px;font-size:13px}
 .card-actions a{color:#555;text-decoration:none}
-.card-actions a:hover{color:#0070f3}
+.card-actions a:hover{color:var(--brand-blue)}
 .empty{color:#888;font-size:14px;padding:20px 0}
 #status{margin-top:10px;font-size:13px;color:#555}
 #scan-result{margin-top:10px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
 .mode-tabs{display:flex;gap:6px;margin-bottom:8px}
 .tab-btn{padding:5px 14px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;color:#555}
-.tab-btn.active{background:#0070f3;color:#fff;border-color:#0070f3}
+.tab-btn.active{background:var(--brand-blue);color:#fff;border-color:var(--brand-blue)}
 </style>
 </head>
 <body>
@@ -312,15 +313,16 @@ async function refetchSource() {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>` + htmlEsc(a.Title) + ` — Artifact Viewer</title>
 <style>
+:root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;display:flex;flex-direction:column;height:100vh}
 header{background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
-header a{color:#0070f3;text-decoration:none;font-size:13px}
+header a{color:var(--brand-blue);text-decoration:none;font-size:13px}
 header h1{font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toolbar{background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 20px;display:flex;gap:12px;align-items:center;flex-shrink:0;font-size:13px}
-.toolbar a{color:#0070f3;text-decoration:none}
+.toolbar a{color:var(--brand-blue);text-decoration:none}
 .toolbar button{padding:4px 12px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer}
-.toolbar button:hover{border-color:#0070f3;color:#0070f3}
+.toolbar button:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
 .panels{display:flex;flex:1;overflow:hidden;gap:0}
 .panel{flex:1;overflow:auto;background:#fff}
 .panel+.panel{border-left:1px solid #e0e0e0}
@@ -427,26 +429,27 @@ func renderEditPage(a *store.Artifact, src, token string) string {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Edit: ` + htmlEsc(a.Title) + ` — Artifact Viewer</title>
 <style>
+:root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
 header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}
 header h1{font-size:18px;font-weight:600;flex:1}
-header a{color:#0070f3;text-decoration:none;font-size:14px}
+header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
 main{padding:24px;max-width:900px;margin:0 auto}
 .edit-card{background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .edit-card h2{font-size:15px;font-weight:600;margin-bottom:12px;color:#333}
 .edit-card input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:10px;outline:none}
-.edit-card input[type=text]:focus{border-color:#0070f3}
+.edit-card input[type=text]:focus{border-color:var(--brand-blue)}
 .edit-card textarea{width:100%;height:400px;font-family:monospace;font-size:12px;border:1px solid #ddd;border-radius:6px;padding:10px;resize:vertical;outline:none}
-.edit-card textarea:focus{border-color:#0070f3}
+.edit-card textarea:focus{border-color:var(--brand-blue)}
 .edit-card .cm-editor{height:400px;font-size:12px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
-.edit-card .cm-editor.cm-focused{outline:none;border-color:#0070f3}
+.edit-card .cm-editor.cm-focused{outline:none;border-color:var(--brand-blue)}
 .edit-card .cm-scroller{overflow:auto}
 .btn-row{display:flex;gap:8px;margin-top:12px;align-items:center}
-.btn{padding:8px 18px;background:#0070f3;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
-.btn:hover{background:#005ed4}
+.btn{padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--brand-blue-hover)}
 .btn-sec{background:#fff;color:#333;border:1px solid #ddd}
-.btn-sec:hover{border-color:#0070f3;color:#0070f3;background:#fff}
+.btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:#fff}
 .btn-danger{background:#e00;color:#fff;border:none}
 .btn-danger:hover{background:#c00}
 .spacer{flex:1}
