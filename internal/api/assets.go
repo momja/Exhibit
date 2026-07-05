@@ -6,9 +6,11 @@ import (
 	"net/http"
 )
 
-// assetsFS embeds the esbuild-bundled client JS islands (built from web/editor
-// by `make assets` and committed) so production serves them from the binary
-// with no Node runtime.
+// assetsFS embeds the build-time frontend assets — the esbuild-bundled editor
+// JS (web/editor) and the vendored Phosphor Icons CSS/webfont (web/icons) — so
+// production serves them from the binary with no Node runtime. These are built
+// by `make assets` (or the Dockerfile's Node stage), not committed to git; a
+// checkout without them fails this go:embed at compile time by design.
 //
 //go:embed assets
 var assetsFS embed.FS
