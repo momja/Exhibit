@@ -88,9 +88,12 @@ Renderer construction:
   iframe in an opaque origin. This is what prevents an artifact from touching the app's
   cookies/storage and what lets two artifacts coexist without reading each other, even on
   a shared render origin.
-- Inject a generated **per-artifact CSP** (`connect-src`/`script-src`/`img-src` built
-  from the artifact's allowlist) into the served document. The browser enforces the
-  network boundary; this is the wall behind §6 of the main spec.
+- Inject a generated **per-artifact CSP** (`connect-src`/`script-src`/`style-src`/
+  `img-src`/`font-src` built from the artifact's allowlist) into the served document. The
+  browser enforces the network boundary; this is the wall behind §6 of the main spec.
+  Inlined assets are exempt from the allowlist since they carry no network egress:
+  `style-src` always carries `'unsafe-inline'` and `img-src`/`font-src` always carry
+  `data:`, so inline styles and inlined `data:` images/fonts render without approval.
 - Inject the **storage shim** (§6 here) into `<head>` *before* any artifact script runs,
   with the artifact's current state inlined into it. Serve the document `Cache-Control:
   no-store` — it's dynamic (inlined state + per-artifact CSP) and must not be cached.
