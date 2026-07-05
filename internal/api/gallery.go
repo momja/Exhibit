@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/artifact-viewer/artifact-viewer/internal/color"
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
 )
@@ -95,7 +96,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 <link rel="icon" type="image/svg+xml" href="` + exhibitFaviconDataURI + `">
 ` + phosphorCSSLink + `
 <style>
-:root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
+:root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
 header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}
@@ -506,8 +507,8 @@ func renderTagPills(artifactID string, tags []*store.Tag) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf(`<ul class="tag-pills" data-artifact-id="%s">`, artifactID))
 	for _, t := range tags {
-		bg := normalizeHexColor(t.Color)
-		fg := pillTextColor(bg)
+		bg := color.Normalize(t.Color)
+		fg := color.ContrastText(bg)
 		name := htmlEsc(t.Name)
 		b.WriteString(fmt.Sprintf(
 			`<li class="tag-pill" data-tag-id="%s" style="background:%s;color:%s">`+
@@ -541,7 +542,7 @@ func renderTagRow(artifactID string, tags []*store.Tag) string {
 func renderColorSwatches() string {
 	var b strings.Builder
 	b.WriteString(`<div class="color-presets">`)
-	for _, c := range tagColorPresets {
+	for _, c := range color.Presets {
 		b.WriteString(fmt.Sprintf(
 			`<button type="button" class="color-swatch" data-color="%s" style="background:%s" aria-label="%s"></button>`,
 			c, c, c))
@@ -672,7 +673,7 @@ async function refetchSource() {
 <title>` + htmlEsc(a.Title) + ` — Artifact Viewer</title>
 ` + phosphorCSSLink + `
 <style>
-:root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
+:root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;display:flex;flex-direction:column;height:100vh}
 header{background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
@@ -789,7 +790,7 @@ func renderEditPage(a *store.Artifact, src, token string) string {
 <title>Edit: ` + htmlEsc(a.Title) + ` — Artifact Viewer</title>
 ` + phosphorCSSLink + `
 <style>
-:root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
+:root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
 header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}

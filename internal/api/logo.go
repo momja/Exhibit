@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/base64"
 	"fmt"
+
+	"github.com/artifact-viewer/artifact-viewer/internal/color"
 )
 
 // exhibitLogoSVG is the Exhibit brand mark, inlined here because the service
@@ -51,7 +53,7 @@ var exhibitLogoSVG = fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:
     <rect style="fill:%s;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-linecap:round;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill" width="23.057453" height="10.245288" x="37.318401" y="73.774017"/>
     <circle style="fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" cx="56.133476" cy="38.734268" r="2.1087794"/>
   </g>
-</svg>`, brandBlue, brandRed, brandYellow)
+</svg>`, color.BrandBlue, color.BrandRed, color.BrandYellow)
 
 // exhibitFaviconDataURI is the same artwork encoded for a <link rel="icon">.
 // base64 sidesteps the URL-escaping the SVG's many '#' color values would
