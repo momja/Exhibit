@@ -1,0 +1,51 @@
+# golangci-lint configuration (v2 schema).
+#
+# The tool is NOT vendored/embedded — install it yourself before running:
+#   go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.0
+# Then: make lint   (== golangci-lint run ./...)
+version: "2"
+
+linters:
+  # Start from an empty set and turn on exactly what we want, so the enabled
+  # set is explicit rather than tracking golangci-lint's shifting defaults.
+  default: none
+  enable:
+    - govet       # vet's suspicious-construct checks
+    - staticcheck # staticcheck; in v2 the old `gosimple` (S1xxx) and `stylecheck`
+                  # linters are folded into this one, so it covers gosimple too.
+    - errcheck    # unchecked errors
+    - unused      # unused code (constants, vars, functions, types)
+    - ineffassign # ineffectual assignments — cheap, high signal
+
+  settings:
+    errcheck:
+      # Functions whose returned error is genuinely not actionable at the call
+      # site. Kept narrow and per-function (not a blanket errcheck disable).
+      exclude-functions:
+        # Writes to an http.ResponseWriter: if the write fails the client has
+        # already gone, so there is no useful error path to take.
+        - fmt.Fprint
+        - fmt.Fprintf
+        - (*encoding/json.Encoder).Encode
+        # Read-/cleanup-path Close(): the resource is only being released, so a
+        # Close error is not actionable. (The *write* path checks Close — see
+        # internal/blob/blob.go, where a dropped Close could mean lost bytes.)
+        - (io.ReadCloser).Close
+        - (io.Closer).Close
+        - (*database/sql.Rows).Close
+        - (*database/sql.DB).Close
+
+  exclusions:
+    rules:
+      # Test code: unchecked cleanup (Close/Remove) and decode-in-assertion
+      # errors are noise — a failing assertion, not a dropped errcheck, is what
+      # surfaces a broken test.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  # Formatting checks (report code that isn't gofmt/goimports-clean).
+  enable:
+    - gofmt     # canonical gofmt formatting
+    - goimports # import grouping/ordering (goimports-equivalent)
