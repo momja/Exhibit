@@ -3,11 +3,12 @@
 build:
 	go build -o bin/server ./cmd/server
 
-# Rebuild the client JS islands (CodeMirror editor) into the go:embed-served
-# asset dir. Requires Node at build time only; the output is committed so
-# production builds need no Node.
+# Rebuild the embedded static assets (CodeMirror editor JS, Phosphor Icons
+# CSS/webfont) into the go:embed-served asset dir. Requires Node at build time
+# only; the output is committed so production builds need no Node.
 assets:
 	cd web/editor && npm install && npm run build
+	cd web/icons && npm install && npm run build
 
 test:
 	go test ./...
