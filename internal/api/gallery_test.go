@@ -37,8 +37,10 @@ func TestGalleryIndexRendersTagPills(t *testing.T) {
 	assert.Contains(t, page, `data-tag-id="`+light.ID+`" style="background:#111111;color:#ffffff"`)
 	assert.Contains(t, page, `<span class="tag-pill-label">urgent</span>`)
 
-	// Untagged card: no empty pill row at all.
-	assert.NotContains(t, page, `data-artifact-id="`+untaggedID+`"`)
+	// Untagged card: no empty pill row, but still a trailing '+' to add the
+	// first tag (tww.2.5).
+	assert.NotContains(t, page, `<ul class="tag-pills" data-artifact-id="`+untaggedID+`">`)
+	assert.Contains(t, page, `<button type="button" class="tag-add-btn" data-artifact-id="`+untaggedID+`" aria-label="Add tag">`)
 }
 
 func TestTagPillHoverControls(t *testing.T) {
@@ -88,6 +90,27 @@ func TestGalleryIndexRendersEditTagModal(t *testing.T) {
 	assert.Contains(t, page, `id="tag-edit-delete"`)
 	assert.Contains(t, page, `id="tag-edit-save"`)
 	assert.Contains(t, page, `function openEditTagModal(`)
+}
+
+func TestGalleryIndexRendersAddTagModal(t *testing.T) {
+	r := newTestRouter(t)
+	tag := createTestTag(t, r, "charts", "")
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	// One shared, initially-hidden modal shell with a dropdown built from
+	// every existing tag, plus a "create new" option that reveals the same
+	// name+color fields as the edit-tag modal.
+	assert.Contains(t, page, `<div id="tag-add-modal" class="modal-overlay" hidden>`)
+	assert.Contains(t, page, `<option value="`+tag.ID+`">charts</option>`)
+	assert.Contains(t, page, `<option value="__new__">+ Create new tag</option>`)
+	assert.Contains(t, page, `<input type="text" id="tag-add-name" maxlength="60">`)
+	assert.Contains(t, page, `id="tag-add-confirm"`)
+	assert.Contains(t, page, `function openAddTagModal(`)
 }
 
 func TestPillTextColorContrast(t *testing.T) {
