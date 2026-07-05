@@ -82,7 +82,7 @@ GET  /api/artifacts/:id/state      Get all state key-value pairs
 PUT  /api/artifacts/:id/state      Set one key {"key":"...","value":"..."}
 ```
 
-The storage shim intercepts `localStorage`/`sessionStorage` in the iframe and routes through these endpoints. No artifact changes needed — any tool that uses standard storage APIs gets cross-device sync automatically.
+The storage shim intercepts `localStorage`/`sessionStorage` in the iframe. Reads are served from state **inlined into the shim at render time** (so `getItem` is correct synchronously); writes are **`postMessage`-ed to the host frame**, which performs the authenticated `PUT` above (the sandboxed iframe has an opaque origin and can't call the API itself). No artifact changes needed — any tool that uses standard storage APIs gets cross-device sync automatically.
 
 ### Collections & Tags
 
@@ -115,7 +115,7 @@ GET  /a/:artifactID    Serve artifact (render origin only)
 GET  /s/:shareID       Serve shared artifact (render origin only)
 ```
 
-The render surface sets `Content-Security-Policy` from the artifact's `network_allowlist`, injects the storage shim, and serves the document. The iframe has `sandbox="allow-scripts"` without `allow-same-origin`, giving it an opaque origin.
+The render surface sets `Content-Security-Policy` from the artifact's `network_allowlist`, injects the storage shim with the artifact's state inlined, and serves the document `Cache-Control: no-store`. The iframe has `sandbox="allow-scripts"` without `allow-same-origin`, giving it an opaque origin.
 
 ## Building
 
@@ -157,10 +157,9 @@ cmd/
 internal/
   api/        HTTP handlers, router, middleware
   blob/       Blob store interface + filesystem implementation
-  render/     Render surface handler (CSP, shim injection)
+  render/     Render surface handler (CSP, state inlining, shim injection)
   scanner/    Ingest scanner (extracts network origins from HTML)
   store/      Store interface, SQLite implementation, migrations
 web/
-  static/     shim.js (storage shim)
   templates/  gallery.templ
 ```
