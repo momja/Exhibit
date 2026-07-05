@@ -1,6 +1,6 @@
 ---
 id: exhibit-tww.1.3
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-07-01T05:09:09Z
