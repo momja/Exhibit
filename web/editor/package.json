@@ -3,7 +3,8 @@
   "private": true,
   "description": "CodeMirror 6 source-editor island, bundled by esbuild into internal/api/assets/editor.js (see `make assets`). Node is a build-time-only dependency.",
   "scripts": {
-    "build": "esbuild editor.js --bundle --minify --format=iife --target=es2020 --outfile=../../internal/api/assets/editor.js"
+    "build": "esbuild editor.js --bundle --minify --format=iife --target=es2020 --outfile=../../internal/api/assets/editor.js",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@codemirror/commands": "^6.8.1",
@@ -17,6 +18,9 @@
     "codemirror": "^6.0.2"
   },
   "devDependencies": {
-    "esbuild": "^0.25.8"
+    "@eslint/js": "^9.32.0",
+    "esbuild": "^0.25.8",
+    "eslint": "^9.32.0",
+    "globals": "^16.3.0"
   }
 }
