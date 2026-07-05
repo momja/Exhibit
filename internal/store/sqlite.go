@@ -58,8 +58,7 @@ func marshalAllowlist(list []string) string {
 
 func unmarshalAllowlist(s string) []string {
 	var list []string
-	json.Unmarshal([]byte(s), &list)
-	if list == nil {
+	if err := json.Unmarshal([]byte(s), &list); err != nil || list == nil {
 		return []string{}
 	}
 	return list

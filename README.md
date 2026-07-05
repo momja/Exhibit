@@ -123,7 +123,23 @@ The render surface sets `Content-Security-Policy` from the artifact's `network_a
 make build       # produces bin/server
 make test        # go test ./...
 make run         # go run ./cmd/server
+make lint        # golangci-lint run ./...
 ```
+
+### Linting
+
+`make lint` runs [golangci-lint](https://golangci-lint.run) (config in
+`.golangci.yml`). The linter is **not** vendored or embedded, so install it
+yourself once:
+
+```bash
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.0
+# ensure $(go env GOPATH)/bin is on your PATH, then:
+make lint
+```
+
+See the [official install guide](https://golangci-lint.run/welcome/install/) for
+alternatives (Homebrew, the install script, CI setup).
 
 Docker:
 
