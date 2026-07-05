@@ -1,0 +1,11 @@
+{
+  "name": "artifact-viewer-icons",
+  "private": true,
+  "description": "Vendors the Phosphor Icons regular-weight CSS + webfont into internal/api/assets/phosphor (see `make assets`), so the gallery serves icons from the app origin instead of a third-party CDN. Node is a build-time-only dependency.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@phosphor-icons/web": "^2.1.1"
+  }
+}

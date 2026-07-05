@@ -92,6 +92,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Artifact Viewer</title>
 <link rel="icon" type="image/svg+xml" href="` + exhibitFaviconDataURI + `">
+` + phosphorCSSLink + `
 <style>
 :root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -108,7 +109,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .upload input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px;outline:none}
 .upload input[type=text]:focus{border-color:var(--brand-blue)}
 .upload-row{display:flex;gap:8px;margin-top:10px}
-.btn{padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
 .btn:hover{background:var(--brand-blue-hover)}
 .btn-sm{padding:5px 12px;font-size:13px}
 .search-row{display:flex;gap:8px;margin-bottom:20px}
@@ -147,7 +148,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
   <input type="text" id="url-input" placeholder="https://example.com/tool.html" style="display:none;width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;margin-bottom:8px">
   <div id="scan-result"></div>
   <div class="upload-row">
-    <button class="btn" onclick="ingest()">Upload</button>
+    <button class="btn" onclick="ingest()"><i class="ph ph-plus"></i> Upload</button>
   </div>
   <div id="status"></div>
 </div>
@@ -312,6 +313,7 @@ async function refetchSource() {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>` + htmlEsc(a.Title) + ` — Artifact Viewer</title>
+` + phosphorCSSLink + `
 <style>
 :root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -320,8 +322,8 @@ header{background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 20px;display
 header a{color:var(--brand-blue);text-decoration:none;font-size:13px}
 header h1{font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toolbar{background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 20px;display:flex;gap:12px;align-items:center;flex-shrink:0;font-size:13px}
-.toolbar a{color:var(--brand-blue);text-decoration:none}
-.toolbar button{padding:4px 12px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer}
+.toolbar a{color:var(--brand-blue);text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.toolbar button{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer}
 .toolbar button:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
 .panels{display:flex;flex:1;overflow:hidden;gap:0}
 .panel{flex:1;overflow:auto;background:#fff}
@@ -342,12 +344,12 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
 <div class="toolbar">
   <a href="` + renderOrigin + `/a/` + a.ID + `" target="_blank">Open in new tab ↗</a>
   <span style="color:#ddd">|</span>
-  <a href="/artifacts/` + a.ID + `/edit">Edit</a>` + refetchToolbar + `
+  <a href="/artifacts/` + a.ID + `/edit"><i class="ph ph-pencil-simple"></i> Edit</a>` + refetchToolbar + `
   <span style="color:#ddd">|</span>
   <span style="color:#888">Allowlist:</span>
   <span id="al-display">` + renderAllowlistBadges(a.NetworkAllowlist) + `</span>
   <input id="al-input" type="text" placeholder="Add origin (https://example.com)" style="display:none">
-  <button onclick="addOrigin()">+ Add origin</button>
+  <button onclick="addOrigin()"><i class="ph ph-plus"></i> Add origin</button>
   <span id="al-status" style="color:#888"></span>
 </div>
 <div class="panels">
@@ -428,6 +430,7 @@ func renderEditPage(a *store.Artifact, src, token string) string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Edit: ` + htmlEsc(a.Title) + ` — Artifact Viewer</title>
+` + phosphorCSSLink + `
 <style>
 :root{--brand-blue:` + brandBlue + `;--brand-blue-hover:` + brandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -446,7 +449,7 @@ main{padding:24px;max-width:900px;margin:0 auto}
 .edit-card .cm-editor.cm-focused{outline:none;border-color:var(--brand-blue)}
 .edit-card .cm-scroller{overflow:auto}
 .btn-row{display:flex;gap:8px;margin-top:12px;align-items:center}
-.btn{padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
 .btn:hover{background:var(--brand-blue-hover)}
 .btn-sec{background:#fff;color:#333;border:1px solid #ddd}
 .btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:#fff}
@@ -467,11 +470,11 @@ main{padding:24px;max-width:900px;margin:0 auto}
   <input type="text" id="title" value="` + htmlEsc(a.Title) + `" placeholder="Title">
   <textarea id="body">` + htmlEsc(src) + `</textarea>
   <div class="btn-row">
-    <button class="btn" onclick="save()">Save</button>
-    <a href="/artifacts/` + a.ID + `"><button class="btn btn-sec" type="button">Cancel</button></a>
+    <button class="btn" onclick="save()"><i class="ph ph-check"></i> Save</button>
+    <a href="/artifacts/` + a.ID + `"><button class="btn btn-sec" type="button"><i class="ph ph-x"></i> Cancel</button></a>
     <span id="status"></span>
     <span class="spacer"></span>
-    <button class="btn btn-danger" type="button" onclick="deleteArtifact()">Delete</button>
+    <button class="btn btn-danger" type="button" onclick="deleteArtifact()"><i class="ph ph-trash"></i> Delete</button>
   </div>
 </div>
 </main>
