@@ -1,6 +1,6 @@
 ---
 id: exhibit-qk7
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-07-02T05:36:40Z
