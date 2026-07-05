@@ -111,9 +111,9 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 }
 
 // buildCSP generates a per-artifact Content-Security-Policy header value
-// from the artifact's network allowlist. appOrigin is permitted to embed this
-// page in an iframe and, crucially, is always allowed in connect-src so the
-// storage shim can reach the state proxy at appOrigin/api/artifacts/:id/state.
+// from the artifact's network allowlist. appOrigin is the only origin permitted
+// to embed this page in an iframe. The storage shim needs no connect-src of its
+// own: it reads inlined state and writes via postMessage to the host frame.
 func buildCSP(allowlist []string, appOrigin string) string {
 	frameAncestors := "frame-ancestors " + appOrigin
 	if len(allowlist) == 0 {
@@ -122,7 +122,7 @@ func buildCSP(allowlist []string, appOrigin string) string {
 			"script-src 'unsafe-inline' 'unsafe-eval'",
 			"style-src 'unsafe-inline'",
 			"img-src data:",
-			"connect-src " + appOrigin,
+			"connect-src 'none'",
 			frameAncestors,
 		}, "; ")
 	}
@@ -133,7 +133,7 @@ func buildCSP(allowlist []string, appOrigin string) string {
 		"script-src 'unsafe-inline' 'unsafe-eval' " + origins,
 		"style-src 'unsafe-inline' " + origins,
 		"img-src data: " + origins,
-		"connect-src " + appOrigin + " " + origins,
+		"connect-src " + origins,
 		"font-src " + origins,
 		frameAncestors,
 	}, "; ")
@@ -151,12 +151,16 @@ const shimTemplate = `<script>
   // race the artifact's own startup reads (which run before a fetch resolves).
   var cache = %s;
 
+  // Writes go to the trusted host frame (same-origin with the API and
+  // authenticated) via postMessage. The sandbox gives this iframe an opaque
+  // 'null' origin, so it cannot call the API cross-origin itself. targetOrigin
+  // is pinned to API_ORIGIN so the message can only reach our own host.
   function writeThrough(key, value) {
-    fetch(API_ORIGIN + '/api/artifacts/' + ARTIFACT_ID + '/state', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: key, value: value })
-    }).catch(function() {});
+    if (window.parent === window) return; // top-level: no host to persist through
+    window.parent.postMessage(
+      { __avState: true, artifactId: ARTIFACT_ID, key: key, value: value },
+      API_ORIGIN
+    );
   }
 
   var shimStorage = {
