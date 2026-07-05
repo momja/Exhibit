@@ -4,6 +4,7 @@
 package render
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -97,7 +98,15 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 	w.Header().Set("Content-Security-Policy", csp)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	doc := injectShim(string(bodyBytes), a.ID, rd.cfg.AppOrigin)
+	// Inline the artifact's persisted state so the shim's cache is ready before
+	// any artifact script runs (avoids the async-hydration race). Degrade to an
+	// empty cache if state can't be read — the artifact still renders.
+	state, err := rd.cfg.Store.GetState(r.Context(), a.ID)
+	if err != nil {
+		state = nil
+	}
+
+	doc := injectShim(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state)
 	fmt.Fprint(w, doc)
 }
 
@@ -137,21 +146,10 @@ const shimTemplate = `<script>
   var ARTIFACT_ID = %q;
   var API_ORIGIN = %q;
 
-  // In-memory cache hydrated from the server
-  var cache = {};
-  var hydrated = false;
-
-  // Hydrate state from API on load
-  fetch(API_ORIGIN + '/api/artifacts/' + ARTIFACT_ID + '/state', {
-    headers: { 'Content-Type': 'application/json' }
-  }).then(function(r) {
-    return r.ok ? r.json() : {};
-  }).then(function(state) {
-    cache = state || {};
-    hydrated = true;
-  }).catch(function() {
-    hydrated = true;
-  });
+  // State is inlined by the render surface at request time, so getItem is
+  // correct on the first *synchronous* read. Fetching it asynchronously would
+  // race the artifact's own startup reads (which run before a fetch resolves).
+  var cache = %s;
 
   function writeThrough(key, value) {
     fetch(API_ORIGIN + '/api/artifacts/' + ARTIFACT_ID + '/state', {
@@ -192,9 +190,20 @@ const shimTemplate = `<script>
 </script>`
 
 // injectShim inserts the storage shim as the first element inside <head>.
-// If no <head> is found, the shim is prepended to the document.
-func injectShim(body, artifactID, appOrigin string) string {
-	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin)
+// If no <head> is found, the shim is prepended to the document. The artifact's
+// current state is inlined into the shim so the cache is populated before any
+// artifact script runs.
+func injectShim(body, artifactID, appOrigin string, state map[string]string) string {
+	if state == nil {
+		state = map[string]string{}
+	}
+	// json.Marshal escapes <, >, & as </>/&, so the literal is
+	// safe to embed inside a <script> element (can't break out with </script>).
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		stateJSON = []byte("{}")
+	}
+	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, stateJSON)
 
 	// Try to inject after <head>
 	idx := strings.Index(strings.ToLower(body), "<head>")
