@@ -4,9 +4,8 @@ A read-it-later library for self-contained web tools.
 
 ## 1. Objective
 
-Provide the easiest way to **save, organize, find, share, and re-run** small,
-self-standing HTML + JavaScript tools — the kind people now generate constantly
-with Claude Code, Gemini CLI, ChatGPT, and Claude Artifacts.
+Provide the easiest way to **save, organize, find, share, and use** small,
+self-standing HTML + JavaScript tools — the kind people generate with AI tools.
 
 The target artifact is a single-file tool that either:
 
@@ -16,7 +15,8 @@ The target artifact is a single-file tool that either:
 
 Everything in this spec is in service of that objective. Anything that pulls the
 product away from "it's just a file you can store forever and render anywhere" is
-explicitly out of scope.
+explicitly out of scope. This is like the user's home library. They have full control
+over their artifacts.
 
 ## 2. Reference points
 
@@ -34,18 +34,16 @@ dependencies. Notable details that inform this spec:
   CSP allowlist helper and an SVG sandbox for displaying untrusted markup safely.
 
 What Simon's site *doesn't* do — and what this product adds — is the **library
-layer**: collections, categories, full-text search, a rendered gallery, one-gesture
-capture from a CLI session, and cross-device state for the tools themselves. His site
+layer**: collections, categories, full-text search, a rendered gallery,
+and cross-device state for the tools themselves. His site
 is a curated folder; this is the shelf, the index, and the sync.
 
 ### How the major providers handle it
 
 - **Anthropic (Claude Artifacts):** dual-pane live rendering of HTML/CSS/JS/React in
   a sandboxed iframe, a version slider, and an injected async `window.storage` API
-  that proxies persistence to a backend (per-artifact scope). Sharing exists but
-  share URLs are auth-gated — you generally can't fetch someone's artifact source by
-  URL without access. This is the single biggest reason a "fetch-by-URL" importer is
-  unreliable and we lean on file/paste ingest instead.
+  that proxies persistence to a backend (per-artifact scope). Sharing exists and 
+  share URLs are auth-gated.
 - **OpenAI (ChatGPT Canvas):** side-panel document/code editor focused on inline
   editing and selection-scoped revisions, with a back-button version history. More
   editorial than rendering-oriented; weaker as a "build interactive thing" surface and
