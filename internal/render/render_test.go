@@ -44,3 +44,32 @@ func TestBuildCSPConnectSrcAlwaysIncludesAppOrigin(t *testing.T) {
 		}
 	})
 }
+
+// The shim must inline state so the artifact's synchronous startup reads see it,
+// rather than fetching asynchronously (which the artifact's own init would race).
+func TestInjectShimInlinesStateWithoutAsyncHydrate(t *testing.T) {
+	state := map[string]string{"tkgraph:config:v1": `{"lastSource":"github"}`}
+	doc := injectShim("<html><head></head><body></body></html>", "abc", "https://app.test", state)
+
+	// The state value is embedded directly in the shim's cache.
+	if !strings.Contains(doc, "lastSource") || !strings.Contains(doc, "github") {
+		t.Fatalf("state not inlined into shim: %s", doc)
+	}
+	// No async hydrate: write-through uses fetch().catch(), but there must be no
+	// .then() chain reading state back — that's the GET hydrate that races.
+	if strings.Contains(doc, ".then(function") {
+		t.Fatalf("shim still hydrates asynchronously — reintroduces the race: %s", doc)
+	}
+	// The closing tag must not be breakable out of the <script>.
+	if strings.Contains(doc, "</script>{") {
+		t.Fatalf("state JSON not HTML-escaped for <script> context")
+	}
+}
+
+// A nil/empty state must produce a valid empty-object cache, never `null`.
+func TestInjectShimNilStateIsEmptyObject(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	if !strings.Contains(doc, "var cache = {}") {
+		t.Fatalf("nil state should inline an empty object, got: %s", doc)
+	}
+}
