@@ -254,9 +254,12 @@ with a per-artifact allowlist as the source of truth:
    to contact (fetch/post/import). Nothing is rendered with network access until they
    decide.
 3. **Approve → allowlist.** Approved origins are written to the artifact's
-   `network_allowlist`. The render-time CSP `connect-src` / `script-src` / `img-src`
-   are generated from this list; everything else is blocked by the browser. Default for
-   a no-network tool is effectively `connect-src 'none'`.
+   `network_allowlist`. The render-time CSP `connect-src` / `script-src` / `style-src` /
+   `img-src` / `font-src` are generated from this list; everything else is blocked by the
+   browser. Default for a no-network tool is effectively `connect-src 'none'`. Inlined,
+   no-egress assets are exempt from allowlist approval: `style-src 'unsafe-inline'` always
+   permits inline `<style>`/`style=""`, and `img-src`/`font-src` always permit `data:`
+   URIs (an inlined image or `@font-face` font is not a network request).
 4. **Runtime escape → prompt.** If a rendered artifact attempts an origin **not** on
    its allowlist, the attempt is blocked and the user is alerted with the specific
    origin and asked to approve. On approval, the allowlist (and thus the CSP) is
