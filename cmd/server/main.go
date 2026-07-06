@@ -28,7 +28,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("open store: %v", err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }() // best-effort cleanup at shutdown
 
 	bl, err := blob.NewFSStore(blobDir)
 	if err != nil {
