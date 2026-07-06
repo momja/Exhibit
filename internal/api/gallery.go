@@ -711,7 +711,12 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
   <span id="al-status" style="color:#888"></span>
 </div>
 <div class="panels">
-  <iframe src="` + renderOrigin + `/a/` + a.ID + `" sandbox="allow-scripts" loading="lazy"></iframe>
+  <!-- allow= delegates the clipboard Permissions Policy into the sandboxed frame.
+       Without it, the frame's opaque origin has clipboard-read/write denied and
+       copy/paste (a common artifact interaction) throws a permissions-policy
+       violation. This is a local capability, not network egress — the artifact's
+       origin stays opaque and connect-src is still governed by the allowlist. -->
+  <iframe src="` + renderOrigin + `/a/` + a.ID + `" sandbox="allow-scripts" allow="clipboard-read; clipboard-write" loading="lazy"></iframe>
   <div class="panel"><pre>` + htmlEsc(src) + `</pre></div>
 </div>
 <script>
