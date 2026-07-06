@@ -1,4 +1,4 @@
-# Artifact Viewer — Technology Specification (Supplemental)
+# Exhibit — Technology Specification (Supplemental)
 
 Companion to `artifact-viewer-spec.md`. That document defines *what* to build and the
 boundaries; this one recommends *how* — concrete technologies, with the reasoning and
