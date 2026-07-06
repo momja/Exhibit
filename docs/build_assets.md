@@ -20,35 +20,16 @@ This keeps generated output out of version control (no stale bundles, no noisy d
 dependency bumps) while preserving the deployment promise: one small image, one process,
 no Node at runtime.
 
-## 2. Layout
-
-```
-web/                                    # asset source (an "asset workspace" per subdir)
-  editor/
-    package.json                        # `build` → esbuild bundle
-    editor.js                           # CodeMirror island source
-  icons/
-    package.json                        # `build` → node build.mjs
-    build.mjs                           # vendors Phosphor regular weight
-scripts/
-  build-assets.sh                       # discovers + builds every workspace
-internal/api/
-  assets.go                             # //go:embed assets
-  assets/                               # ← generated output, gitignored
-    editor.js
-    phosphor/{regular.css,Phosphor.woff2,LICENSE}
-```
+## 2. Asset workspaces
 
 An **asset workspace** is any immediate subdirectory of `web/` that carries a
 `package.json`. Each workspace owns its own `build` script and is responsible for writing
-its output into `internal/api/assets/`. The two current workspaces:
+its output somewhere under `internal/api/assets/` (the `go:embed` root). That directory
+is generated, not committed (§6).
 
-- **`web/editor`** — bundles the CodeMirror 6 source-view island with esbuild into
-  `internal/api/assets/editor.js` (a single minified IIFE).
-- **`web/icons`** — vendors the Phosphor Icons "regular" weight (the `ph`/`ph-*`
-  classes) out of `@phosphor-icons/web` into `internal/api/assets/phosphor/`, rewriting
-  the upstream `@font-face` to reference only the woff2 we ship. This is the
-  self-hosted, no-CDN icon delivery required by `technical_stack.md` §9.
+The convention is the stable contract — a workspace's `package.json` `description`
+documents what it builds and where, so the source stays self-describing without this
+page enumerating each one.
 
 ## 3. The build entrypoint
 
