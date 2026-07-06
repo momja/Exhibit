@@ -105,9 +105,17 @@ executable document with the correct security envelope:
 
 - Looks up the artifact, pulls its body from the blob store, its `network_allowlist`, and
   its current state.
-- Generates the per-artifact CSP (`connect-src`/`script-src`/`img-src` from the
-  allowlist) and sets it as a response header on the document. `connect-src` is the
-  allowlist alone — the shim needs no network of its own (§6).
+- Generates the per-artifact CSP (`connect-src`/`script-src`/`style-src`/`img-src`/
+  `font-src` from the allowlist) and sets it as a response header on the document.
+  `connect-src` is the allowlist alone — the shim needs no network of its own (§6).
+  Style/font defaults are permissive for *inlined* assets but strict for *network*
+  ones, matching the "it's just a file" thesis: `style-src` always carries
+  `'unsafe-inline'` (inline `<style>` blocks and `style=""` attributes never need
+  network approval), and `img-src`/`font-src` always carry `data:` so an artifact
+  that inlines its own images or fonts (`@font-face { src: url(data:…) }`) renders
+  with zero network egress. Loading a stylesheet, image, or font *from a remote
+  origin* still requires that origin on the allowlist — the network boundary is
+  unchanged; only inlined, no-egress assets are permitted by default.
 - Injects the **storage shim** as the first `<head>` script, with the artifact's state
   **inlined** into it so `getItem` is correct synchronously, then the artifact body.
 - Sets `Cache-Control: no-store` — the document is dynamic (inlined state + per-artifact

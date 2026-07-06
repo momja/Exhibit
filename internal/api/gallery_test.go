@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -111,4 +113,22 @@ func TestGalleryIndexRendersAddTagModal(t *testing.T) {
 	assert.Contains(t, page, `<input type="text" id="tag-add-name" maxlength="60">`)
 	assert.Contains(t, page, `id="tag-add-confirm"`)
 	assert.Contains(t, page, `function openAddTagModal(`)
+}
+
+// The detail-view iframe is sandboxed with an opaque origin, so clipboard
+// copy/paste — a common artifact interaction — is denied by Permissions Policy
+// unless the embedder delegates it via the allow= attribute. Delegating
+// clipboard is a local capability (no network egress), so it must not weaken the
+// sandbox: allow-scripts stays, allow-same-origin stays omitted, and the network
+// boundary remains the per-artifact CSP/allowlist.
+func TestDetailPageIframeDelegatesClipboard(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Clip Tool", Tier: store.Tier1, CreatedAt: time.Now()}
+	page := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+
+	assert.Contains(t, page, `allow="clipboard-read; clipboard-write"`,
+		"iframe must delegate clipboard so copy/paste doesn't violate Permissions Policy")
+	// The delegation must not come at the cost of the sandbox: scripts allowed,
+	// same-origin still withheld (opaque origin preserved).
+	assert.Contains(t, page, `sandbox="allow-scripts"`)
+	assert.NotContains(t, page, "allow-same-origin")
 }
