@@ -1,4 +1,4 @@
-# Artifact Viewer — Specification
+# Exhibit — Specification
 
 A read-it-later library for self-contained web tools.
 
