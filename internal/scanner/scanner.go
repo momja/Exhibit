@@ -15,10 +15,28 @@ import (
 
 // Scan parses an HTML document and returns a deduplicated list of origins
 // referenced by src, href, action attributes and inline fetch/import calls.
+// Relative references are dropped — use ScanWithBase to resolve them.
 func Scan(body string) []string {
+	return scan(body, nil)
+}
+
+// ScanWithBase behaves like Scan but, when baseURL is a non-empty absolute
+// http(s) URL, resolves relative references against it so residual external
+// origins still surface in the footprint. This matters for snapshot imports:
+// anything that couldn't be inlined (runtime-constructed fetch URLs, over-limit
+// assets) would otherwise be silently dropped and 404 at render time. When
+// baseURL is empty or not an absolute http(s) URL, the result equals Scan(body).
+// Absolute references are unaffected by the base in either entry point.
+func ScanWithBase(body, baseURL string) []string {
+	return scan(body, parseBase(baseURL))
+}
+
+// scan is the shared implementation behind Scan and ScanWithBase. A nil base
+// drops relative references; a non-nil base resolves them to their real origin.
+func scan(body string, base *url.URL) []string {
 	seen := make(map[string]struct{})
 	add := func(raw string) {
-		origin := extractOrigin(raw)
+		origin := resolveOrigin(raw, base)
 		if origin != "" {
 			seen[origin] = struct{}{}
 		}
@@ -49,6 +67,22 @@ func Scan(body string) []string {
 	return origins
 }
 
+// parseBase returns the parsed base URL when baseURL is a non-empty absolute
+// http(s) URL, and nil otherwise. A nil base makes ScanWithBase equal Scan.
+func parseBase(baseURL string) *url.URL {
+	if baseURL == "" {
+		return nil
+	}
+	u, err := url.Parse(baseURL)
+	if err != nil || !u.IsAbs() || u.Host == "" {
+		return nil
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil
+	}
+	return u
+}
+
 // walkHTML traverses the HTML node tree and calls add for each URL attribute found.
 func walkHTML(n *html.Node, add func(string)) {
 	if n.Type == html.ElementNode {
@@ -75,23 +109,31 @@ var fetchPattern = regexp.MustCompile(`fetch\(\s*['"]([^'"]+)['"]`)
 // importPattern matches ESM import URL literals.
 var importPattern = regexp.MustCompile(`(?:import|from)\s+['"]([^'"]+)['"]`)
 
-// extractOrigin returns the scheme+host origin from a URL string,
-// or empty string if the URL is relative or invalid.
-func extractOrigin(raw string) string {
+// resolveOrigin returns the scheme+host origin from a URL string. Absolute and
+// protocol-relative references are reduced to their origin directly (base has no
+// effect on them). A path-relative reference (no host) is resolved against base
+// when one is supplied; without a base it is dropped, exactly as before. Note a
+// relative that resolves to the base's own origin is still reported: from the
+// artifact's opaque-origin sandbox that origin is external.
+func resolveOrigin(raw string, base *url.URL) string {
 	raw = strings.TrimSpace(raw)
-	if raw == "" || strings.HasPrefix(raw, "//") {
-		if strings.HasPrefix(raw, "//") {
-			raw = "https:" + raw
-		} else {
-			return ""
-		}
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(raw, "//") {
+		raw = "https:" + raw
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
 		return ""
 	}
 	if u.Host == "" {
-		return "" // relative URL
+		// A path-relative reference (data:/blob:/mailto: are absolute — IsAbs
+		// is true — so they fall through and are dropped by the scheme check).
+		if base == nil || u.IsAbs() {
+			return ""
+		}
+		u = base.ResolveReference(u)
 	}
 	scheme := u.Scheme
 	if scheme == "" {
