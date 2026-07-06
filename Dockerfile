@@ -1,24 +1,20 @@
 # syntax=docker/dockerfile:1
 
 # --- Asset build stage (Node, build-time only) ---
-# Fetches/bundles the frontend assets that go:embed serves — the CodeMirror
-# source-editor JS (web/editor) and the vendored Phosphor Icons CSS + webfont
-# (web/icons). These are NOT committed to git; they are produced fresh here on
-# every image build. The runtime image below carries none of Node — only the
-# built bytes — so the running server still needs no Node and no internet egress.
+# Builds every frontend asset workspace under web/ into internal/api/assets,
+# which go:embed serves. It runs the same scripts/build-assets.sh that
+# `make assets` uses and discovers workspaces automatically, so adding a new
+# asset never means editing this Dockerfile. The output is not committed to git;
+# it is produced fresh on every image build. The runtime image below carries
+# only the built bytes — no Node, no internet egress.
 FROM node:22-bookworm-slim AS assets
 
 WORKDIR /app
 
-# Copy only the two asset workspaces (keeps this stage's cache independent of
-# Go source and templ template edits).
-COPY web/editor/ ./web/editor/
-COPY web/icons/ ./web/icons/
+COPY web/ ./web/
+COPY scripts/ ./scripts/
 
-# Both build scripts write to ../../internal/api/assets/* (i.e.
-# /app/internal/api/assets), which the Go stage below overlays before compiling.
-RUN cd web/editor && npm ci && npm run build
-RUN cd web/icons  && npm ci && npm run build
+RUN sh scripts/build-assets.sh
 
 # --- Go build stage ---
 FROM golang:1.25-bookworm AS builder
