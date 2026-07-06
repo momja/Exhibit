@@ -42,10 +42,11 @@ All routes require `Authorization: Bearer <token>` except public share links.
 ### Artifacts
 
 ```
-POST   /api/artifacts              Ingest an artifact
+POST   /api/artifacts              Ingest an artifact (inline body, or url to fetch once)
 GET    /api/artifacts              List artifacts (?q=search&tags=a,b&collections=c)
 GET    /api/artifacts/:id          Get artifact metadata (?body=true for source)
-PATCH  /api/artifacts/:id          Update title, network_allowlist, etc.
+PATCH  /api/artifacts/:id          Update title, body, network_allowlist, etc.
+POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts)
 DELETE /api/artifacts/:id          Delete artifact and blob
 ```
 
@@ -144,13 +145,13 @@ alternatives (Homebrew, the install script, CI setup).
 Docker:
 
 ```bash
-docker build -t artifact-viewer .
+docker build -t exhibit .
 docker run -p 8080:8080 -p 8081:8081 \
   -e AUTH_TOKEN=changeme \
   -e APP_ORIGIN=https://app.example.com \
   -e RENDER_ORIGIN=https://artifacts.example.com \
   -v artifact-data:/data \
-  artifact-viewer
+  exhibit
 ```
 
 ## Security model
@@ -171,11 +172,16 @@ docker run -p 8080:8080 -p 8081:8081 \
 cmd/
   server/     main entry point
 internal/
-  api/        HTTP handlers, router, middleware
+  api/        HTTP handlers, router, middleware, gallery pages
   blob/       Blob store interface + filesystem implementation
+  color/      Brand color constants
   render/     Render surface handler (CSP, state inlining, shim injection)
   scanner/    Ingest scanner (extracts network origins from HTML)
+  snapshot/   Bounded asset fetcher for snapshot-on-import vendoring
   store/      Store interface, SQLite implementation, migrations
-web/
-  templates/  gallery.templ
+web/          Build-time asset workspaces (see docs/build_assets.md)
+  editor/     CodeMirror editor bundle (esbuild)
+  icons/      Phosphor Icons vendoring
+scripts/
+  build-assets.sh  Builds web/* workspaces into internal/api/assets/
 ```

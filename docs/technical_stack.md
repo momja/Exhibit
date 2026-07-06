@@ -1,6 +1,6 @@
 # Exhibit — Technology Specification (Supplemental)
 
-Companion to `artifact-viewer-spec.md`. That document defines *what* to build and the
+Companion to `product_requirement_doc.md`. That document defines *what* to build and the
 boundaries; this one recommends *how* — concrete technologies, with the reasoning and
 one credible alternative per choice so the decisions are yours, not assumed.
 
@@ -26,7 +26,7 @@ safety" (§12).
 | Storage shim | Vanilla JS, bundled with `esbuild` | — |
 | Ingest scan | `x/net/html` parser (+ JS heuristic) | — |
 | Thumbnails | Headless Chromium worker (`chromedp`) — optional | client `html2canvas` |
-| Gallery UI | `templ` + htmx + Alpine + Tailwind | SvelteKit / React SPA |
+| Gallery UI | Server-rendered Go HTML + vanilla-JS islands (§9) | `templ` + htmx / SvelteKit |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | TLS / proxy | **Operator's choice** — app serves plain HTTP, takes origin config | (not shipped) |
 | Backup/replication | Litestream sidecar (Compose profile) | Turso/libSQL (HA) |
@@ -56,10 +56,11 @@ the smallest possible Docker image. It supports FTS5, which you need. Switch to 
 `mattn/go-sqlite3` only if you later measure search/write performance that demands it —
 unlikely at this product's scale.
 
-**Search: SQLite FTS5.** Build a single external-content FTS5 table indexing the
-artifact source, title, and tag text. This delivers the gallery's search with zero extra
-infrastructure. Do **not** introduce Elasticsearch/Meilisearch — it breaks the
-single-service promise for a feature SQLite already does well at this scale.
+**Search: SQLite FTS5.** A single external-content FTS5 table delivers the gallery's
+search with zero extra infrastructure. Today it indexes artifact titles; extending it
+to source and tag text (the spec's full search promise) is tracked as av-b6o9. Do
+**not** introduce Elasticsearch/Meilisearch — it breaks the single-service promise
+for a feature SQLite already does well at this scale.
 
 **Migrations: `goose`.** Embed migration files in the binary (`go:embed`) and run them on
 startup so a fresh container self-initializes.
@@ -82,12 +83,15 @@ separate:
 
 Renderer construction:
 
-- Serve the artifact document into the iframe via `srcdoc` or a blob URL on the isolated
-  render origin (§12 covers the origin/TLS implications).
+- Serve the artifact document from the isolated render origin and point the iframe's
+  `src` at it (`RENDER_ORIGIN/a/:id`; §12 covers the origin/TLS implications).
 - `sandbox="allow-scripts"` — and deliberately **omit `allow-same-origin`**, putting the
   iframe in an opaque origin. This is what prevents an artifact from touching the app's
   cookies/storage and what lets two artifacts coexist without reading each other, even on
   a shared render origin.
+- The embedding page grants `allow="clipboard-read; clipboard-write"` on the iframe —
+  a Permissions Policy delegation so artifacts can use the async Clipboard API without
+  any relaxation of the sandbox or CSP.
 - Inject a generated **per-artifact CSP** (`connect-src`/`script-src`/`style-src`/
   `img-src`/`font-src` built from the artifact's allowlist) into the served document. The
   browser enforces the network boundary; this is the wall behind §6 of the main spec.
@@ -188,17 +192,19 @@ and add real thumbnails later without schema changes.
 
 ## 9. Gallery UI
 
-**Recommendation: server-rendered `templ` + htmx + Alpine.js + Tailwind.** The gallery is
-CRUD-shaped — grid, search, tag/collection filters, a detail view. htmx handles the
-interactivity (live search, filter, infinite scroll) with server-rendered partials, which
-keeps everything inside the one Go binary and avoids a separate SPA build/deploy. `templ`
-gives type-safe Go templates; Alpine covers the small client-side bits (modals, the
-allowlist editor toggles); Tailwind for styling.
+**As built: server-rendered HTML emitted directly by Go handlers** in
+`internal/api/gallery.go`, with inline CSS and vanilla JS for the small client-side
+bits (modals, the tag editor, the allowlist editor). The gallery is CRUD-shaped —
+grid, search, tag/collection filters, a detail view — and full-page server renders
+have covered it so far, keeping everything inside the one Go binary with no template
+engine or frontend framework at all.
 
-**Alternative: SvelteKit or a React SPA.** Reasonable if you want richer client state or
-already prefer that workflow, at the cost of a second build artifact and a JSON API
-contract you'd maintain anyway. Given the goal of operational simplicity, the htmx path is
-the better default; reach for a SPA only if the interactions outgrow it.
+**Upgrade path: `templ` + htmx + Alpine.js + Tailwind** (the original recommendation)
+if the hand-rolled pages outgrow themselves — htmx for partial swaps (live search,
+infinite scroll), `templ` for type-safe templates. A SvelteKit/React SPA remains the
+further alternative, at the cost of a second build artifact and a JSON API contract
+you'd maintain anyway. Given the goal of operational simplicity, escalate only when
+the interactions demand it.
 
 Note that CodeMirror and the renderer iframe live inside whichever shell you pick — they
 are islands of client JS regardless of the surrounding approach.
@@ -210,7 +216,7 @@ third-party CDN** — consistent with this project's self-contained, `go:embed`-
 asset stance (§12–§13) and the two-origin security model (icons ship with the app surface,
 not the render origin). Vendor the `@phosphor-icons/web` package at build time, bundle its
 CSS + webfont into the embedded assets, and serve them from the app origin. Icons are then
-plain markup that `templ` partials emit directly — no client JS, no runtime fetch:
+plain markup the server-rendered pages emit directly — no client JS, no runtime fetch:
 
 ```html
 <!-- Load once in the app shell's <head>, from our own origin: -->
@@ -280,7 +286,7 @@ same plain SQLite file; replication is a sidecar, selected at deploy time.
 ```yaml
 services:
   app:
-    image: artifact-viewer
+    image: exhibit
     volumes: [ data:/data ]            # opens /data/app.db in both modes
     environment:
       - REPLICATION=${REPLICATION:-off}
@@ -328,8 +334,10 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
   Litestream + an S3-compatible bucket (or MinIO) for backup, a Chromium thumbnail
   worker. None of these are part of a release — they're things a deployer adds around
   the image.
-- **Build-time only:** Go toolchain, Node + esbuild (to bundle CodeMirror and gallery
-  JS), Tailwind CLI, `templ` generator, `goose` (or run migrations from the binary).
+- **Build-time only:** Go toolchain, Node + esbuild (to bundle CodeMirror and vendor
+  the Phosphor icon assets — see `build_assets.md`), `goose` (migrations are embedded
+  and run from the binary). Dev-only: golangci-lint (`make lint`, not vendored) and
+  ESLint for the editor workspace (§5).
 
 The deliberate outcome: in production it's one small image and one process by default,
 with safety and richness added as opt-in Compose profiles — matching the spec's promise

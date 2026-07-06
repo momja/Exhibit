@@ -148,13 +148,14 @@ is painful:
 artifacts(
   id, owner_id,            -- owner_id hardcoded to 1 for now
   title, source_blob_id,
+  source_url,              -- set when ingested by URL; enables re-fetch (§8.1)
   tier,                    -- 1 | 2
   created_at, updated_at,
   network_allowlist        -- JSON array of approved origins (see §6)
 )
 collections(id, owner_id, name)
 artifact_collections(artifact_id, collection_id)
-tags(id, owner_id, name)
+tags(id, owner_id, name, color)  -- name unique per owner
 artifact_tags(artifact_id, tag_id)
 artifact_state(artifact_id, key, value, updated_at)  -- the storage shim, §5
 shares(id, artifact_id, public, expires_at)          -- sharing as a row, §7
@@ -299,9 +300,12 @@ of what justifies hosting the service.
 
 The artifact is already a file on disk after a Claude Code / Gemini CLI session. No
 skill or special output format is needed — the file *is* the artifact. It enters the
-library through the web UI (drag/drop or paste the HTML). On ingest the service scans
-the file, surfaces its network footprint for approval (§6.2), stores it, and returns
-the rendered/share URL.
+library through the web UI: drag/drop or paste the HTML, or paste a **URL** — the
+service fetches the page once and vendors it as an owned file (the URL is recorded as
+`source_url`, and the user can later re-fetch it on demand as a snapshot update — no
+version history, with a warning that stored state may not survive the new body). On
+ingest the service scans the file, surfaces its network footprint for approval (§6.2),
+stores it, and returns the rendered/share URL.
 
 ### 8.2 Rediscover
 
@@ -324,9 +328,11 @@ single self-contained `.html`.
 ## 9. Explicit non-goals
 
 - **No tier-3 backends / no PaaS.** No running servers, SSR, or databases per artifact.
-- **No fetch-by-URL importer as the primary path.** Vendor share URLs are auth-gated
-  (esp. Anthropic); ingest is file upload / paste via the web UI (with a Chrome
-  extension as a possible future import path).
+- **No live-linked imports.** URL-paste ingest exists (§8.1) but is a one-time
+  vendoring fetch — after ingest the file is owned and served locally, never hot-linked
+  or auto-synced. Vendor share URLs are auth-gated (esp. Anthropic), so the reliable
+  paths remain file upload / paste (with a Chrome extension as a possible future
+  import path for chat UIs).
 - **No pre-render analysis step / no agent inspection** to detect storage usage — the
   runtime shim observes instead.
 - **No CSP violation-report pipeline** — replaced by scan + explicit per-artifact
