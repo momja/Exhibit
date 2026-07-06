@@ -1,6 +1,6 @@
 ---
 id: exhibit-lwb.4
-status: open
+status: closed
 deps: [exhibit-lwb.2]
 links: []
 created: 2026-06-30T02:57:39Z
