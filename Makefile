@@ -1,4 +1,4 @@
-.PHONY: build test run clean assets
+.PHONY: build test run clean assets lint
 
 build:
 	go build -o bin/server ./cmd/server
@@ -12,6 +12,11 @@ assets:
 
 test:
 	go test ./...
+
+# Static analysis. golangci-lint is not vendored — install it yourself first:
+#   go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.0
+lint:
+	golangci-lint run ./...
 
 run:
 	go run ./cmd/server

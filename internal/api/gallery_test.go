@@ -132,4 +132,3 @@ func TestDetailPageIframeDelegatesClipboard(t *testing.T) {
 	assert.Contains(t, page, `sandbox="allow-scripts"`)
 	assert.NotContains(t, page, "allow-same-origin")
 }
-
