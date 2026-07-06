@@ -327,3 +327,8 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
 The deliberate outcome: in production it's one small image and one process by default,
 with safety and richness added as opt-in Compose profiles — matching the spec's promise
 that the easy path and the serious path share almost all of the same system.
+
+The Node-built assets (CodeMirror bundle, Phosphor Icons) are generated into
+`internal/api/assets/` at build time and **not** committed to git. See `build_assets.md`
+for the workspace layout, the `scripts/build-assets.sh` entrypoint, and how the
+Dockerfile's Node stage feeds `go:embed`.
