@@ -129,6 +129,10 @@ Bundle CodeMirror (and the gallery's JS) with `esbuild` into a static asset the 
 serves via `go:embed`. No Node runtime in production — Node is a build-time-only
 dependency.
 
+Lint the editor source with ESLint (flat config, `@eslint/js` recommended rules) before
+it's bundled: `cd web/editor && npm run lint`. The config mirrors the esbuild target
+(es2020, ES-module, browser globals).
+
 ## 6. The storage shim
 
 Plain **vanilla JavaScript**, no framework — it must run before anything else in the
