@@ -92,7 +92,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Artifact Viewer</title>
+<title>Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="` + exhibitFaviconDataURI + `">
 ` + phosphorCSSLink + `
 <style>
@@ -169,7 +169,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 <body>
 <header>
   ` + exhibitLogoSVG + `
-  <h1>Artifact Viewer</h1>
+  <h1>Exhibit</h1>
 </header>
 <main>
 <div class="upload">
@@ -670,7 +670,7 @@ async function refetchSource() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>` + htmlEsc(a.Title) + ` — Artifact Viewer</title>
+<title>` + htmlEsc(a.Title) + ` — Exhibit</title>
 ` + phosphorCSSLink + `
 <style>
 :root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
@@ -792,7 +792,7 @@ func renderEditPage(a *store.Artifact, src, token string) string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Edit: ` + htmlEsc(a.Title) + ` — Artifact Viewer</title>
+<title>Edit: ` + htmlEsc(a.Title) + ` — Exhibit</title>
 ` + phosphorCSSLink + `
 <style>
 :root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}

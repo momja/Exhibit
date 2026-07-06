@@ -1,4 +1,4 @@
-# Artifact Viewer — Architecture
+# Exhibit — Architecture
 
 Companion to `artifact-viewer-spec.md` (the *what* and the boundaries) and
 `artifact-viewer-tech-stack.md` (the *with what*). This document describes *how the
