@@ -1,0 +1,14 @@
+# Node build inputs/outputs — installed and produced inside the image's Node
+# stage, never sent from the host. Excluding the built assets here guarantees
+# the Go stage embeds only what the Node stage produced, never a stale local copy.
+node_modules/
+internal/api/assets/
+
+# Local dev artifacts and data — not needed to build the image.
+bin/
+server
+data/
+*.db
+.dolt/
+.beads-credential-key
+.git/
