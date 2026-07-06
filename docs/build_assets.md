@@ -1,4 +1,4 @@
-# Artifact Viewer — Build-Time Frontend Assets
+# Exhibit — Build-Time Frontend Assets
 
 Companion to `technical_stack.md` (§13, *build-time vs runtime dependencies*). That
 section states the rule; this page shows the mechanism — how the frontend assets that
