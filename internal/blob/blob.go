@@ -3,6 +3,7 @@ package blob
 import (
 	"context"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -29,15 +30,24 @@ func (s *FSStore) Put(ctx context.Context, id string, r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(f, r); err != nil {
+	n, err := io.Copy(f, r)
+	if err != nil {
 		_ = f.Close() // copy already failed; return that error, not Close's
 		return err
 	}
 	// On the write path a Close error can mean the bytes never flushed, so it
 	// must surface rather than be dropped by a bare defer.
-	return f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
+	slog.DebugContext(ctx, "blob stored", slog.String("id", id), slog.Int64("bytes", n))
+	return nil
 }
 
 func (s *FSStore) Get(ctx context.Context, id string) (io.ReadCloser, error) {
-	return os.Open(filepath.Join(s.dir, id))
+	rc, err := os.Open(filepath.Join(s.dir, id))
+	if err == nil {
+		slog.DebugContext(ctx, "blob opened", slog.String("id", id))
+	}
+	return rc, err
 }

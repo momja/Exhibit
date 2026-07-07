@@ -1,12 +1,13 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 
 	"github.com/artifact-viewer/artifact-viewer/internal/api"
 	"github.com/artifact-viewer/artifact-viewer/internal/blob"
+	"github.com/artifact-viewer/artifact-viewer/internal/logging"
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
 )
 
@@ -20,19 +21,37 @@ func main() {
 	addr := getenv("ADDR", ":8080")
 	renderAddr := getenv("RENDER_ADDR", ":8081")
 
+	// Debug mode: verbose, leveled logging for test environments. Either
+	// DEBUG=1 (any non-empty value) or LOG_LEVEL=debug turns it on; any
+	// other LOG_LEVEL name (info/warn/error) is honored as-is. Unknown
+	// levels default to info so a typo never silences the service.
+	level := logging.ParseLevel(getenv("LOG_LEVEL", "info"))
+	if os.Getenv("DEBUG") != "" {
+		level = slog.LevelDebug
+	}
+	logging.Configure(level)
+	slog.Info("exhibit starting",
+		slog.String("app_origin", appOrigin),
+		slog.String("render_origin", renderOrigin),
+		slog.String("addr", addr),
+		slog.String("render_addr", renderAddr),
+		slog.String("log_level", levelName(level)),
+		slog.Bool("debug", level <= slog.LevelDebug),
+	)
+
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		log.Fatalf("create data dir: %v", err)
+		fatal("create data dir", err)
 	}
 
 	st, err := store.OpenSQLite(dbPath)
 	if err != nil {
-		log.Fatalf("open store: %v", err)
+		fatal("open store", err)
 	}
 	defer func() { _ = st.Close() }() // best-effort cleanup at shutdown
 
 	bl, err := blob.NewFSStore(blobDir)
 	if err != nil {
-		log.Fatalf("open blob store: %v", err)
+		fatal("open blob store", err)
 	}
 
 	router := api.NewRouter(api.Config{
@@ -43,11 +62,23 @@ func main() {
 		AuthToken:    authToken,
 	})
 
-	log.Printf("App server on %s (app origin: %s, render origin: %s)", addr, appOrigin, renderOrigin)
 	go func() {
-		log.Fatal(http.ListenAndServe(renderAddr, router.RenderHandler()))
+		slog.Info("render server listening", slog.String("addr", renderAddr))
+		if err := http.ListenAndServe(renderAddr, router.RenderHandler()); err != nil {
+			fatal("render server", err)
+		}
 	}()
-	log.Fatal(http.ListenAndServe(addr, router))
+	slog.Info("app server listening", slog.String("addr", addr))
+	if err := http.ListenAndServe(addr, router); err != nil {
+		fatal("app server", err)
+	}
+}
+
+// fatal logs the error at error level and exits, mirroring log.Fatalf without
+// pulling the stdlib log package into the startup path.
+func fatal(msg string, err error) {
+	slog.Error(msg, slog.String("err", err.Error()))
+	os.Exit(1)
 }
 
 func getenv(key, def string) string {
@@ -55,4 +86,18 @@ func getenv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// levelName returns a human-readable name for a slog.Level for startup logs.
+func levelName(l slog.Level) string {
+	switch {
+	case l <= slog.LevelDebug:
+		return "debug"
+	case l >= slog.LevelError:
+		return "error"
+	case l >= slog.LevelWarn:
+		return "warn"
+	default:
+		return "info"
+	}
 }
