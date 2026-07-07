@@ -6,6 +6,7 @@
 package scanner
 
 import (
+	"log/slog"
 	"net/url"
 	"regexp"
 	"strings"
@@ -46,6 +47,7 @@ func Scan(body string) []string {
 	for o := range seen {
 		origins = append(origins, o)
 	}
+	slog.Debug("scan complete", slog.Int("origins", len(origins)), slog.Any("footprint", origins))
 	return origins
 }
 

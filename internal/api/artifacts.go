@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,6 +25,20 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+// serverError logs err at error level with the operation label and request
+// context, then responds 500. The label makes the log line greppable without
+// a stack; the response body keeps the raw error to preserve existing client
+// behavior. This is the seam that turns a bare 500 into diagnosable feedback
+// in test environments (the request middleware already records the status).
+func serverError(w http.ResponseWriter, r *http.Request, label string, err error) {
+	slog.ErrorContext(r.Context(), label,
+		slog.String("err", err.Error()),
+		slog.String("method", r.Method),
+		slog.String("path", r.URL.Path),
+	)
+	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
 func (ro *Router) listArtifacts(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +67,7 @@ func (ro *Router) listArtifacts(w http.ResponseWriter, r *http.Request) {
 
 	artifacts, err := ro.cfg.Store.ListArtifacts(r.Context(), opts)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "list artifacts", err)
 		return
 	}
 	if artifacts == nil {
@@ -107,6 +122,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	if req.URL != "" && req.Body == "" {
 		resp, err := http.Get(req.URL) //nolint:noctx
 		if err != nil {
+			slog.WarnContext(r.Context(), "ingest fetch failed", slog.String("url", req.URL), slog.String("err", err.Error()))
 			http.Error(w, "failed to fetch URL: "+err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -143,7 +159,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 
 	// Store the artifact body
 	if err := ro.cfg.Blob.Put(r.Context(), blobID, bytes.NewReader([]byte(req.Body))); err != nil {
-		http.Error(w, "failed to store artifact body: "+err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "store artifact body", err)
 		return
 	}
 
@@ -173,9 +189,18 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ro.cfg.Store.PutArtifact(r.Context(), a); err != nil {
-		http.Error(w, "failed to store artifact: "+err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "store artifact", err)
 		return
 	}
+
+	slog.DebugContext(r.Context(), "artifact created",
+		slog.String("id", id),
+		slog.String("title", req.Title),
+		slog.Int("body_bytes", len(req.Body)),
+		slog.Any("footprint", footprint),
+		slog.Any("allowlist", allowlist),
+		slog.Int("tier", int(req.Tier)),
+	)
 
 	resp := createArtifactResponse{
 		Artifact:         a,
@@ -189,10 +214,11 @@ func (ro *Router) getArtifact(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "get artifact", err)
 		return
 	}
 	if a == nil {
+		slog.DebugContext(r.Context(), "artifact not found", slog.String("id", id))
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
@@ -227,7 +253,7 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	// Verify artifact exists
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "get artifact for update", err)
 		return
 	}
 	if a == nil {
@@ -240,9 +266,11 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		bodyStr, _ := bodyVal.(string)
 		if bodyStr != "" {
 			if err := ro.cfg.Blob.Put(r.Context(), a.SourceBlobID, bytes.NewReader([]byte(bodyStr))); err != nil {
-				http.Error(w, "failed to update artifact body: "+err.Error(), http.StatusInternalServerError)
+				serverError(w, r, "update artifact body", err)
 				return
 			}
+			slog.DebugContext(r.Context(), "artifact body rewritten",
+				slog.String("id", id), slog.Int("body_bytes", len(bodyStr)))
 			// Do NOT auto-add newly scanned origins to the allowlist — approval
 			// is an explicit user action. Existing approved origins are kept as
 			// they are; origins introduced by the edited body surface via the
@@ -253,7 +281,7 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, updates); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "update artifact", err)
 		return
 	}
 
@@ -270,7 +298,7 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "get artifact for refetch", err)
 		return
 	}
 	if a == nil {
@@ -285,6 +313,7 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	// Fetch the latest content, mirroring the createArtifact fetch pattern.
 	resp, err := http.Get(a.SourceURL) //nolint:noctx
 	if err != nil {
+		slog.WarnContext(r.Context(), "refetch failed", slog.String("id", id), slog.String("url", a.SourceURL), slog.String("err", err.Error()))
 		http.Error(w, "failed to fetch URL: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -297,16 +326,18 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 
 	// Overwrite the existing blob with the fresh snapshot.
 	if err := ro.cfg.Blob.Put(r.Context(), a.SourceBlobID, bytes.NewReader(fetched)); err != nil {
-		http.Error(w, "failed to update artifact body: "+err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "refetch update body", err)
 		return
 	}
 
 	// Re-scan the network footprint and bump updated_at. Title is preserved.
 	updates := map[string]any{"network_allowlist": scanner.Scan(string(fetched))}
 	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, updates); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "refetch update artifact", err)
 		return
 	}
+
+	slog.InfoContext(r.Context(), "artifact refetched", slog.String("id", id), slog.Int("body_bytes", len(fetched)))
 
 	a, _ = ro.cfg.Store.GetArtifact(r.Context(), id)
 	writeJSON(w, http.StatusOK, a)
@@ -317,7 +348,7 @@ func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "get artifact for delete", err)
 		return
 	}
 	if a == nil {
@@ -326,9 +357,11 @@ func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ro.cfg.Store.DeleteArtifact(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "delete artifact", err)
 		return
 	}
+
+	slog.InfoContext(r.Context(), "artifact deleted", slog.String("id", id))
 
 	w.WriteHeader(http.StatusNoContent)
 }

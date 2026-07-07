@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/artifact-viewer/artifact-viewer/internal/blob"
+	"github.com/artifact-viewer/artifact-viewer/internal/logging"
 	"github.com/artifact-viewer/artifact-viewer/internal/render"
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -36,9 +37,8 @@ func NewRouter(cfg Config) *Router {
 }
 
 func (ro *Router) setupRoutes() {
-	ro.Use(middleware.Logger)
 	ro.Use(middleware.Recoverer)
-	ro.Use(loggingMiddleware)
+	ro.Use(logging.RequestMiddleware)
 
 	// Gallery UI — no auth header required (token embedded in page JS)
 	ro.Get("/", ro.galleryIndex)
@@ -111,8 +111,8 @@ func (ro *Router) RenderHandler() http.Handler {
 	})
 
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(logging.RequestMiddleware)
 
 	// Serve a rendered artifact by id
 	r.Get("/a/{artifactID}", renderer.ServeArtifact)

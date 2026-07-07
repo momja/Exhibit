@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -35,7 +36,7 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 	// Verify artifact exists
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), req.ArtifactID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "create share artifact lookup", err)
 		return
 	}
 	if a == nil {
@@ -51,9 +52,12 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ro.cfg.Store.CreateShare(r.Context(), sh); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "create share", err)
 		return
 	}
+
+	slog.DebugContext(r.Context(), "share created",
+		slog.String("share_id", sh.ID), slog.String("artifact_id", req.ArtifactID), slog.Bool("public", req.Public))
 
 	resp := createShareResponse{
 		Share:    sh,
@@ -67,7 +71,7 @@ func (ro *Router) deleteShare(w http.ResponseWriter, r *http.Request) {
 
 	sh, err := ro.cfg.Store.GetShare(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "delete share lookup", err)
 		return
 	}
 	if sh == nil {
@@ -76,9 +80,10 @@ func (ro *Router) deleteShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ro.cfg.Store.DeleteShare(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "delete share", err)
 		return
 	}
 
+	slog.DebugContext(r.Context(), "share deleted", slog.String("share_id", id))
 	w.WriteHeader(http.StatusNoContent)
 }
