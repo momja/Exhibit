@@ -26,7 +26,7 @@ safety" (§12).
 | Storage shim | Vanilla JS, bundled with `esbuild` | — |
 | Ingest scan | `x/net/html` parser (+ JS heuristic) | — |
 | Thumbnails | Headless Chromium worker (`chromedp`) — optional | client `html2canvas` |
-| Gallery UI | Server-rendered Go HTML + vanilla-JS islands (§9) | `templ` + htmx / SvelteKit |
+| Gallery UI | Server-rendered Go HTML + vanilla-JS islands (§9) | — (new story if outgrown) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | TLS / proxy | **Operator's choice** — app serves plain HTTP, takes origin config | (not shipped) |
 | Backup/replication | Litestream sidecar (Compose profile) | Turso/libSQL (HA) |
@@ -199,12 +199,10 @@ grid, search, tag/collection filters, a detail view — and full-page server ren
 have covered it so far, keeping everything inside the one Go binary with no template
 engine or frontend framework at all.
 
-**Upgrade path: `templ` + htmx + Alpine.js + Tailwind** (the original recommendation)
-if the hand-rolled pages outgrow themselves — htmx for partial swaps (live search,
-infinite scroll), `templ` for type-safe templates. A SvelteKit/React SPA remains the
-further alternative, at the cost of a second build artifact and a JSON API contract
-you'd maintain anyway. Given the goal of operational simplicity, escalate only when
-the interactions demand it.
+If the interactions ever outgrow hand-rolled pages, adopting a template engine or
+frontend framework is its own story, specced when the need is concrete. Until then,
+operational simplicity — one binary, no frontend build beyond the existing islands —
+stays the default.
 
 Note that CodeMirror and the renderer iframe live inside whichever shell you pick — they
 are islands of client JS regardless of the surrounding approach.
