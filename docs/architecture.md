@@ -145,8 +145,7 @@ Blob:   put/get artifact bodies by id
 ```
 
 - **Metadata, collections, tags, shares, state** → SQLite (one file, WAL mode).
-- **Search** → an FTS5 table over artifact titles. (Indexing source text and tag
-  names to match the spec's search promise is tracked as av-b6o9.)
+- **Search** → an FTS5 table over artifact titles.
 - **Bodies** → filesystem now, S3-compatible later — same `Blob` interface.
 
 Because handlers never touch SQLite or the filesystem directly, swapping the metadata
@@ -210,7 +209,7 @@ client ──POST /api/artifacts (body + metadata, or a source URL)──► API
 client ──confirm (+ edited allowlist)──► API
   API ──► Blob.put(body)         (untrusted bytes at rest)
   API ──► Store.put(artifact, network_allowlist, tier, source_url, ...)
-  API ──► FTS5 index (title; see av-b6o9 for source + tags)
+  API ──► FTS5 index (title)
   API ──► respond: artifact id + render URL
 ```
 

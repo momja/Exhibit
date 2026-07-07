@@ -26,7 +26,7 @@ safety" (§12).
 | Storage shim | Vanilla JS, bundled with `esbuild` | — |
 | Ingest scan | `x/net/html` parser (+ JS heuristic) | — |
 | Thumbnails | Headless Chromium worker (`chromedp`) — optional | client `html2canvas` |
-| Gallery UI | Server-rendered Go HTML + vanilla-JS islands (§9) | — (new story if outgrown) |
+| Gallery UI | Server-rendered Go HTML + vanilla-JS islands (§9) | — |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | TLS / proxy | **Operator's choice** — app serves plain HTTP, takes origin config | (not shipped) |
 | Backup/replication | Litestream sidecar (Compose profile) | Turso/libSQL (HA) |
@@ -57,10 +57,7 @@ the smallest possible Docker image. It supports FTS5, which you need. Switch to 
 unlikely at this product's scale.
 
 **Search: SQLite FTS5.** A single external-content FTS5 table delivers the gallery's
-search with zero extra infrastructure. Today it indexes artifact titles; extending it
-to source and tag text (the spec's full search promise) is tracked as av-b6o9. Do
-**not** introduce Elasticsearch/Meilisearch — it breaks the single-service promise
-for a feature SQLite already does well at this scale.
+search with zero extra infrastructure. It indexes artifact titles.
 
 **Migrations: `goose`.** Embed migration files in the binary (`go:embed`) and run them on
 startup so a fresh container self-initializes.
@@ -199,13 +196,8 @@ grid, search, tag/collection filters, a detail view — and full-page server ren
 have covered it so far, keeping everything inside the one Go binary with no template
 engine or frontend framework at all.
 
-If the interactions ever outgrow hand-rolled pages, adopting a template engine or
-frontend framework is its own story, specced when the need is concrete. Until then,
-operational simplicity — one binary, no frontend build beyond the existing islands —
-stays the default.
-
-Note that CodeMirror and the renderer iframe live inside whichever shell you pick — they
-are islands of client JS regardless of the surrounding approach.
+CodeMirror and the renderer iframe are islands of client JS inside these
+server-rendered pages.
 
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent
