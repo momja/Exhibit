@@ -156,6 +156,8 @@ docker run -p 8080:8080 -p 8081:8081 \
 
 ## Security model
 
+Full stance — CSP, vendoring, clipboard/file defaults — in [docs/security.md](./docs/security.md). In brief:
+
 - Artifacts run in the visitor's browser, never on the server. The server stores and serves a file.
 - The render origin is separate from the app origin — artifact code cannot read app cookies, real-origin storage, or make authenticated same-origin requests.
 - Each artifact has a `network_allowlist` (JSON array of origins). The render surface generates a `Content-Security-Policy` from this list. Everything else is blocked by the browser.
