@@ -1,7 +1,7 @@
 # Exhibit — Architecture
 
-Companion to `artifact-viewer-spec.md` (the *what* and the boundaries) and
-`artifact-viewer-tech-stack.md` (the *with what*). This document describes *how the
+Companion to `product_requirement_doc.md` (the *what* and the boundaries) and
+`technical_stack.md` (the *with what*). This document describes *how the
 system is structured* — components, boundaries, data flow, and the request lifecycles
 that matter. It assumes the decisions already made: Go service, single SQLite file,
 blob store behind an interface, sandboxed-iframe renderer on a separate origin,
@@ -81,11 +81,16 @@ the tech-stack doc.
 
 The only way data changes. Route groups:
 
-- `POST /api/artifacts` — ingest. Accepts a document body + metadata; runs the scan,
-  returns the network footprint for approval, persists on confirmation.
+- `POST /api/artifacts` — ingest. Accepts a document body + metadata, **or a source
+  URL** the service fetches once and stores as a file (the URL is persisted as
+  `source_url`); runs the scan, returns the network footprint for approval, persists
+  on confirmation.
 - `GET /api/artifacts`, `GET /api/artifacts/:id` — list/detail (drives the gallery).
-- `PATCH /api/artifacts/:id` — metadata edits: title, tags, collections,
-  `network_allowlist`.
+- `PATCH /api/artifacts/:id` — edits: title, body (rewrites the stored blob), tags,
+  collections, `network_allowlist`.
+- `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
+  `source_url` and replaces the stored body. A snapshot, not a versioned update.
+- `DELETE /api/artifacts/:id` — deletes the artifact, its blob, and associated state.
 - `GET/PUT /api/artifacts/:id/state` — the storage shim's state endpoint (§6). Reads are
   normally satisfied by render-time inlining, not this route; `PUT` is called by the
   **host frame** on the shim's behalf (the sandboxed iframe can't reach the API itself).
@@ -120,8 +125,11 @@ executable document with the correct security envelope:
   **inlined** into it so `getItem` is correct synchronously, then the artifact body.
 - Sets `Cache-Control: no-store` — the document is dynamic (inlined state + per-artifact
   CSP) and must never be served stale from a cache.
-- Serves into the sandboxed iframe via `srcdoc`/blob URL with `sandbox="allow-scripts"`
-  and **no** `allow-same-origin`.
+- Is loaded by the app's pages as the `src` of a sandboxed iframe
+  (`<iframe src="RENDER_ORIGIN/a/:id" sandbox="allow-scripts">`) with **no**
+  `allow-same-origin`. The embedding page delegates clipboard access into the
+  sandbox via Permissions Policy (`allow="clipboard-read; clipboard-write"`) so
+  copy/paste works inside artifacts without weakening the origin isolation.
 
 The render surface never mutates anything. It reads (including state, to inline it), wraps,
 and serves. This read-only property is what makes it safe to expose under the no-auth share
@@ -137,7 +145,7 @@ Blob:   put/get artifact bodies by id
 ```
 
 - **Metadata, collections, tags, shares, state** → SQLite (one file, WAL mode).
-- **Search** → an FTS5 table over artifact source + title + tags.
+- **Search** → an FTS5 table over artifact titles.
 - **Bodies** → filesystem now, S3-compatible later — same `Blob` interface.
 
 Because handlers never touch SQLite or the filesystem directly, swapping the metadata
@@ -154,11 +162,12 @@ the allowlist; the CSP is the wall.
 
 ### 3.5 Gallery (web UI)
 
-Server-rendered (`templ` + htmx + Alpine + Tailwind). Talks to the API like any other
-client. Hosts two islands of client JS: the **CodeMirror** source view and the
-**renderer iframe** (which actually points at `RENDER_ORIGIN`). Everything else —
-search, filter, tag/collection management, the allowlist editor — is server-rendered
-partials swapped over htmx.
+Server-rendered HTML emitted directly by Go handlers (`internal/api/gallery.go`),
+styled with inline CSS and wired with small amounts of vanilla JS. Talks to the API
+like any other client. Hosts two islands of client JS: the **CodeMirror** source
+editor (an esbuild-built, `go:embed`-served bundle) and the **renderer iframe**
+(which actually points at `RENDER_ORIGIN`). Everything else — search, filter,
+tag/collection management, the allowlist editor — is full-page server renders.
 
 ### 3.6 Optional satellites (composed around, not shipped in)
 
@@ -193,18 +202,27 @@ to never run artifact code at all.
 ## 5. Ingest data flow
 
 ```
-client ──POST /api/artifacts (body + metadata)──► API
+client ──POST /api/artifacts (body + metadata, or a source URL)──► API
+  API ──► if URL: fetch once (size-capped), body := fetched bytes, keep source_url
   API ──► scanner: tokenize, extract origins ──► footprint list
   API ──► respond: "these N origins will be contacted — approve?"
 client ──confirm (+ edited allowlist)──► API
   API ──► Blob.put(body)         (untrusted bytes at rest)
-  API ──► Store.put(artifact, network_allowlist, tier, ...)
-  API ──► FTS5 index (source + title + tags)
+  API ──► Store.put(artifact, network_allowlist, tier, source_url, ...)
+  API ──► FTS5 index (title)
   API ──► respond: artifact id + render URL
 ```
 
 Two-step by design: scan and surface *before* anything is renderable, so the network
-footprint is a decision the user makes at the door, not a surprise at runtime.
+footprint is a decision the user makes at the door, not a surprise at runtime. The
+allowlist is **never seeded from the scan** — only origins the user explicitly
+approves are written; until then the render CSP stays `connect-src 'none'`.
+
+URL ingest is a *one-time vendoring fetch*, not a live link: the fetched document
+becomes an owned file like any other artifact. The recorded `source_url` enables a
+user-initiated `POST /api/artifacts/:id/refetch` that re-snapshots the body
+(overwrite, no version history — and a warning that stored state may no longer fit
+the new body).
 
 ## 6. Render + state data flow
 
