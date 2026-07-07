@@ -74,7 +74,7 @@ No build-plumbing edits required:
 1. Create `web/<name>/` with a `package.json`.
 2. Give it a `build` script that writes its output somewhere under
    `internal/api/assets/` (e.g. `internal/api/assets/<name>/…`).
-3. Reference the output from a `templ` template or handler, served under `/assets/`.
+3. Reference the output from a server-rendered page or handler, served under `/assets/`.
 
 `scripts/build-assets.sh` picks it up automatically on the next `make assets` /
 `docker build`. Add the built output path to `.gitignore` if it lands outside the
