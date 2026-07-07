@@ -168,9 +168,7 @@ styled with inline CSS and wired with small amounts of vanilla JS. Talks to the 
 like any other client. Hosts two islands of client JS: the **CodeMirror** source
 editor (an esbuild-built, `go:embed`-served bundle) and the **renderer iframe**
 (which actually points at `RENDER_ORIGIN`). Everything else — search, filter,
-tag/collection management, the allowlist editor — is full-page server renders. The
-originally recommended `templ` + htmx + Alpine + Tailwind stack remains the upgrade
-path if the interactions outgrow hand-rolled pages (see `technical_stack.md` §9).
+tag/collection management, the allowlist editor — is full-page server renders.
 
 ### 3.6 Optional satellites (composed around, not shipped in)
 
