@@ -88,8 +88,9 @@ The only way data changes. Route groups:
   patched).
 - `GET /api/artifacts`, `GET /api/artifacts/:id` — list/detail (drives the gallery).
 - `PATCH /api/artifacts/:id` — edits: title, body (rewrites the stored blob),
-  `network_allowlist`, and other scalar columns. Tag and collection membership use
-  the dedicated `POST/DELETE /api/artifacts/:id/tags/:tagID` and
+  `network_allowlist`, `downloads_approved` / `clipboard_approved` (the capability
+  bridge's first-use approvals, §6), and other scalar columns. Tag and collection
+  membership use the dedicated `POST/DELETE /api/artifacts/:id/tags/:tagID` and
   `.../collections/:colID` routes.
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
   `source_url` and replaces the stored body. A snapshot, not a versioned update.
@@ -283,12 +284,30 @@ visitor ──GET render URL──► Render surface
     artifact fetch to origin X:
       on allowlist  ──► browser permits
       not on list   ──► browser blocks (CSP); UI prompts user → approve → PATCH allowlist
+    artifact download (anchor with a blob:/data: href, clicked or click()ed):
+      shim intercepts ──► postMessage filename + bytes to the host frame
+        already approved ──► host triggers the download from the app origin
+        first attempt    ──► host prompts (artifact + filename);
+                               approve ──► PATCH downloads_approved (persisted
+                               server-side, revocable in the toolbar) ──► download
+                               deny    ──► bytes dropped; artifact keeps running
+      any vector the shim misses ──► stays blocked (sandbox omits allow-downloads)
 ```
 
 Two properties fall out of the sandbox's opaque origin: reads are **inlined at render**
 (a load-time fetch would race the artifact's synchronous startup reads), and writes are
 **bridged through the host frame** (the iframe can't call the API cross-origin, so the
 authenticated host does it — no CORS, state endpoint stays authed).
+
+Downloads ride the same host-frame bridge. The sandbox deliberately omits
+`allow-downloads`, so nothing in the frame downloads directly; the shim intercepts
+the common export vectors (`blob:`/`data:` anchors — recovering `blob:` payloads
+from a `createObjectURL` registry rather than a `connect-src`-governed fetch) and
+transfers the bytes to the host, which owns the first-use approval prompt and, once
+approved, performs the download from the app origin. The shim is UX, not
+enforcement: evading it just leaves the download sandbox-blocked. The bridge
+installs only when a host frame exists — top-level renders (direct visit, shares)
+have no sandbox and need no bridge. See `security.md` §4 for the full policy.
 
 The state endpoints are why cross-device "just works": all state lives server-side, so a
 second device inlines the same state at render. No replication required for this (§8 distinguishes
