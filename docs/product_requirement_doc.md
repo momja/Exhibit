@@ -190,10 +190,10 @@ something the runtime reports with certainty. Instead:
 Before any artifact script executes, the iframe is initialized with replacements for
 the standard storage surfaces:
 
-- `localStorage` and `sessionStorage` (synchronous)
-- `IndexedDB` (async/structured — proxy, or back `fake-indexeddb` with the service)
-- `window.storage`-style async API (for artifacts written to the Claude contract;
-  trivial since it's already async)
+- `localStorage` and `sessionStorage` (synchronous) — **shipped in v1**
+- `IndexedDB` (async/structured) — **deferred** (build-order step 2 remaining)
+- `window.storage`-style async API (for artifacts written to the Claude contract) —
+  **deferred** (build-order step 2 remaining)
 
 The artifact uses whichever it was written for; we don't need to know which.
 
@@ -261,10 +261,10 @@ with a per-artifact allowlist as the source of truth:
    no-egress assets are exempt from allowlist approval: `style-src 'unsafe-inline'` always
    permits inline `<style>`/`style=""`, and `img-src`/`font-src` always permit `data:`
    URIs (an inlined image or `@font-face` font is not a network request).
-4. **Runtime escape → prompt.** If a rendered artifact attempts an origin **not** on
-   its allowlist, the attempt is blocked and the user is alerted with the specific
-   origin and asked to approve. On approval, the allowlist (and thus the CSP) is
-   updated for that artifact.
+4. **Runtime escape → blocked.** If a rendered artifact attempts an origin **not** on
+   its allowlist, the attempt is blocked by the browser's CSP. The user can approve
+   the origin afterward in the artifact's allowlist editor, which updates the CSP on
+   next render. A runtime approval prompt is tracked by `exhibit-fr7`.
 5. **Per-artifact settings.** The allowlist is visible and editable in each artifact's
    settings — the user can review, add, or revoke origins at any time.
 
@@ -288,8 +288,9 @@ Sharing is a first-class resource, not an export-to-file action.
 - A share is a row: `shares(id, artifact_id, public, expires_at)`.
 - Served at `GET /s/:shareId` with no auth, from the isolated render origin, under the
   artifact's own CSP allowlist.
-- A one-file self-contained `.html` **export** also remains available (CSS/JS already
-  inline) for email/Slack/offline — the portable fallback that needs no service at all.
+- A one-file self-contained `.html` export is **planned** (CSS/JS already inline) — the
+  portable fallback for email/Slack/offline that needs no service at all. Tracked in
+  build-order step 3.
 
 Because the artifact is already a portable file, sharing is nearly free; this is much
 of what justifies hosting the service.
@@ -301,7 +302,7 @@ of what justifies hosting the service.
 The artifact is already a file on disk after a Claude Code / Gemini CLI session. No
 skill or special output format is needed — the file *is* the artifact. It enters the
 library through the web UI: drag/drop or paste the HTML, or paste a **URL** — the
-service fetches the page once and vendors it as an owned file (the URL is recorded as
+service fetches the page once and stores it as an owned file (the URL is recorded as (inlining of relative assets is tracked by the open `exhibit-lwb` epic)
 `source_url`, and the user can later re-fetch it on demand as a snapshot update — no
 version history, with a warning that stored state may not survive the new body). On
 ingest the service scans the file, surfaces its network footprint for approval (§6.2),
@@ -309,7 +310,7 @@ stores it, and returns the rendered/share URL.
 
 ### 8.2 Rediscover
 
-Open the web gallery, search "bar chart" (matches indexed source + title + tags),
+Open the web gallery, search "bar chart" (matches indexed title; expanded to source + tags tracked by `av-b6o9`),
 click the thumbnail, the tool renders live in its sandboxed iframe with its state
 inlined from the service. No regeneration, no digging through chat logs.
 
@@ -322,7 +323,7 @@ Transparent to the artifact.
 ### 8.4 Share
 
 One button mints a share row and returns `/s/:shareId`, openable by anyone in any
-browser with no account and no dependency on the originating assistant — or export a
+browser with no account and no dependency on the originating assistant — or (planned) export a
 single self-contained `.html`.
 
 ## 9. Explicit non-goals
@@ -330,16 +331,11 @@ single self-contained `.html`.
 - **No tier-3 backends / no PaaS.** No running servers, SSR, or databases per artifact.
 - **No live-linked imports.** URL-paste ingest exists (§8.1) but is a one-time
   vendoring fetch — after ingest the file is owned and served locally, never hot-linked
-  or auto-synced. Vendor share URLs are auth-gated (esp. Anthropic), so the reliable
-  paths remain file upload / paste (with a Chrome extension as a possible future
-  import path for chat UIs).
+  or auto-synced.
 - **No pre-render analysis step / no agent inspection** to detect storage usage — the
   runtime shim observes instead.
 - **No CSP violation-report pipeline** — replaced by scan + explicit per-artifact
   allowlist with runtime permission prompts.
-- **No build of a custom sandbox runtime.** If tier 3 is ever revisited, wrap an
-  existing sandbox (E2B / OpenSandbox) as a distinct, time-limited artifact type that
-  explicitly does **not** carry the permanent-storage guarantee.
 
 ## 10. Build order
 
