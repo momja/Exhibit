@@ -785,6 +785,18 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
 .allowlist{padding:8px 20px;background:#fffbe6;border-bottom:1px solid #ffe58f;font-size:13px;flex-shrink:0}
 .allowlist code{background:#fff3;padding:1px 5px;border-radius:3px;font-size:12px}
 .allowlist input{border:1px solid #ddd;border-radius:4px;padding:3px 8px;font-size:12px;width:240px;margin:0 6px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--brand-blue-hover)}
+.btn-sec{background:#fff;color:#333;border:1px solid #ddd}
+.btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:#fff}
+.spacer{flex:1}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal-overlay[hidden]{display:none}
+.modal{background:#fff;border-radius:10px;padding:20px;width:380px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,.25)}
+.modal h2{font-size:16px;font-weight:600}
+.modal p{font-size:13px;color:#555;margin-top:10px;overflow-wrap:anywhere}
+.modal code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:12px}
+.modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
 </style>
 </head>
 <body>
@@ -802,6 +814,10 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
   <span id="al-display">` + renderAllowlistBadges(a.NetworkAllowlist) + `</span>
   <input id="al-input" type="text" placeholder="Add origin (https://example.com)" style="display:none">
   <button onclick="addOrigin()"><i class="ph ph-plus"></i> Add origin</button>
+  <span style="color:#ddd">|</span>
+  <span style="color:#888">Downloads:</span>
+  <span id="dl-state"></span>
+  <button id="dl-revoke" onclick="revokeDownloads()" style="display:none"><i class="ph ph-prohibit"></i> Revoke</button>
   <span id="al-status" style="color:#888"></span>
 </div>
 <div class="panels">
@@ -812,6 +828,19 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
        origin stays opaque and connect-src is still governed by the allowlist. -->
   <iframe src="` + renderOrigin + `/a/` + a.ID + `" sandbox="allow-scripts" allow="clipboard-read; clipboard-write" loading="lazy"></iframe>
   <div class="panel"><pre>` + htmlEsc(src) + `</pre></div>
+</div>
+
+<div id="dl-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dl-title">
+    <h2 id="dl-title">Allow downloads?</h2>
+    <p><strong>` + htmlEsc(a.Title) + `</strong> wants to download <code id="dl-filename"></code>.</p>
+    <p>Allowing lets this artifact save files to your device from now on. You can revoke this at any time from the toolbar.</p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="dl-block">Block</button>
+      <button type="button" class="btn" id="dl-allow"><i class="ph ph-download-simple"></i> Allow downloads</button>
+    </div>
+  </div>
 </div>
 <script>
 const TOKEN = ` + fmt.Sprintf("%q", token) + `;
@@ -833,6 +862,89 @@ window.addEventListener('message', function(e) {
     headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
     body: JSON.stringify({ key: d.key, value: d.value })
   }).catch(function(){});
+});
+
+// Download bridge: the sandboxed frame cannot download anything itself (the
+// sandbox omits allow-downloads). The shim posts intercepted download
+// attempts here — filename + transferred bytes, validated the same way as
+// state messages. On the artifact's first attempt we prompt; the user's
+// approval is persisted server-side (downloads_approved, via PATCH — the
+// single write path) so it survives reloads and devices, and is revocable
+// from the toolbar. Denial just drops the bytes; the artifact keeps running.
+let downloadsApproved = ` + fmt.Sprintf("%t", a.DownloadsApproved) + `;
+let pendingDownload = null;
+
+window.addEventListener('message', function(e) {
+  const d = e.data;
+  if (!d || d.__avDownload !== true || d.artifactId !== ID) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || e.source !== frame.contentWindow) return;
+  if (!(d.bytes instanceof ArrayBuffer)) return;
+  const dl = {
+    filename: String(d.filename || 'download'),
+    mime: String(d.mime || 'application/octet-stream'),
+    bytes: d.bytes
+  };
+  if (downloadsApproved) { triggerDownload(dl); return; }
+  pendingDownload = dl;
+  document.getElementById('dl-filename').textContent = dl.filename;
+  document.getElementById('dl-modal').hidden = false;
+});
+
+// Reconstructs the transferred bytes as a Blob and downloads it via an
+// app-origin anchor. The revoke is deferred so the browser has started the
+// download before the object URL disappears.
+function triggerDownload(dl) {
+  const url = URL.createObjectURL(new Blob([dl.bytes], {type: dl.mime}));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = dl.filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+}
+
+function renderDownloadState() {
+  document.getElementById('dl-state').textContent = downloadsApproved ? 'allowed' : 'ask first';
+  document.getElementById('dl-revoke').style.display = downloadsApproved ? 'inline-flex' : 'none';
+}
+renderDownloadState();
+
+async function setDownloadsApproved(approved) {
+  const st = document.getElementById('al-status');
+  const r = await fetch('/api/artifacts/' + ID, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({downloads_approved: approved})
+  }).catch(function() { return null; });
+  if (!r || !r.ok) { st.textContent = '✗ Failed to update download permission'; return false; }
+  downloadsApproved = approved;
+  renderDownloadState();
+  return true;
+}
+
+async function revokeDownloads() {
+  await setDownloadsApproved(false);
+}
+
+function closeDownloadModal() {
+  document.getElementById('dl-modal').hidden = true;
+  pendingDownload = null;
+}
+
+document.getElementById('dl-block').addEventListener('click', closeDownloadModal);
+document.getElementById('dl-modal').addEventListener('click', function(e) {
+  if (e.target.id === 'dl-modal') closeDownloadModal();
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && !document.getElementById('dl-modal').hidden) closeDownloadModal();
+});
+document.getElementById('dl-allow').addEventListener('click', async function() {
+  const dl = pendingDownload;
+  if (!(await setDownloadsApproved(true))) return;
+  closeDownloadModal();
+  if (dl) triggerDownload(dl);
 });
 
 function renderBadges() {
