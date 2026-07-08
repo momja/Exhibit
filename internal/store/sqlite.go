@@ -216,9 +216,6 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 }
 
 func (s *SQLiteStore) UpdateArtifact(ctx context.Context, id string, updates map[string]any) error {
-	if len(updates) == 0 {
-		return nil
-	}
 	setClauses := make([]string, 0, len(updates)+1)
 	args := make([]any, 0, len(updates)+1)
 	for k, v := range updates {

@@ -71,6 +71,9 @@ type Store interface {
 	PutArtifact(ctx context.Context, a *Artifact) error
 	GetArtifact(ctx context.Context, id string) (*Artifact, error)
 	ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error)
+	// UpdateArtifact applies the given column updates and bumps updated_at.
+	// Empty/nil updates are a pure touch (the bump alone) — used when only
+	// the blob body changed.
 	UpdateArtifact(ctx context.Context, id string, updates map[string]any) error
 	DeleteArtifact(ctx context.Context, id string) error
 

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -289,10 +290,20 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a)
 }
 
+type refetchArtifactResponse struct {
+	Artifact *store.Artifact `json:"artifact"`
+	// NewOrigins are origins scanned from the fresh snapshot that are not on
+	// the artifact's approved allowlist — surfaced for explicit user approval,
+	// mirroring the ingest footprint flow. Origins the user previously revoked
+	// reappear here rather than being silently re-added.
+	NewOrigins []string `json:"new_origins"`
+}
+
 // refetchArtifact re-fetches the current HTML/CSS/JS from an artifact's source
 // URL and overwrites the stored body with that fresh snapshot. This is a
 // destructive snapshot replace — not versioned, no history. The network
-// allowlist is re-scanned from the new content; the title is left untouched.
+// allowlist and title are left untouched; newly scanned origins are returned
+// for approval, never auto-approved (spec §6.2).
 func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
 
@@ -330,9 +341,23 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Re-scan the network footprint and bump updated_at. Title is preserved.
-	updates := map[string]any{"network_allowlist": scanner.Scan(string(fetched))}
-	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, updates); err != nil {
+	// The allowlist holds only origins the user explicitly approved and is
+	// never written from a scan. Scan the fresh snapshot and surface the
+	// origins that would need new approval; the row update is just the
+	// updated_at bump for the body overwrite.
+	approved := make(map[string]struct{}, len(a.NetworkAllowlist))
+	for _, o := range a.NetworkAllowlist {
+		approved[o] = struct{}{}
+	}
+	newOrigins := []string{}
+	for _, o := range scanner.Scan(string(fetched)) {
+		if _, ok := approved[o]; !ok {
+			newOrigins = append(newOrigins, o)
+		}
+	}
+	sort.Strings(newOrigins)
+
+	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, nil); err != nil {
 		serverError(w, r, "refetch update artifact", err)
 		return
 	}
@@ -340,7 +365,7 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	slog.InfoContext(r.Context(), "artifact refetched", slog.String("id", id), slog.Int("body_bytes", len(fetched)))
 
 	a, _ = ro.cfg.Store.GetArtifact(r.Context(), id)
-	writeJSON(w, http.StatusOK, a)
+	writeJSON(w, http.StatusOK, refetchArtifactResponse{Artifact: a, NewOrigins: newOrigins})
 }
 
 func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {

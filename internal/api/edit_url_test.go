@@ -338,6 +338,38 @@ func TestPatchArtifactEmptyBodyIgnored(t *testing.T) {
 	assert.Equal(t, original, getArtifactBody(t, r, id))
 }
 
+// refetchArtifactAPI POSTs a refetch and returns the decoded response.
+func refetchArtifactAPI(t *testing.T, r *Router, id string) map[string]any {
+	t.Helper()
+	req := httptest.NewRequest("POST", "/api/artifacts/"+id+"/refetch", nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	return resp
+}
+
+// patchAllowlist PATCHes the artifact's network_allowlist (the explicit
+// user-approval write) and returns the updated allowlist.
+func patchAllowlist(t *testing.T, r *Router, id string, origins []string) []any {
+	t.Helper()
+	pb, _ := json.Marshal(map[string]any{"network_allowlist": origins})
+	req := httptest.NewRequest("PATCH", "/api/artifacts/"+id, bytes.NewReader(pb))
+	req.Header.Set("Authorization", authHeader())
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var updated map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
+	list, _ := updated["network_allowlist"].([]any)
+	return list
+}
+
 func TestRefetchArtifactOverwritesBody(t *testing.T) {
 	r := newTestRouter(t)
 
@@ -355,18 +387,87 @@ func TestRefetchArtifactOverwritesBody(t *testing.T) {
 	// Upstream now serves new content that also references an external origin.
 	page = `<html><head><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head><body><h1>second</h1></body></html>`
 
-	req := httptest.NewRequest("POST", "/api/artifacts/"+id+"/refetch", nil)
-	req.Header.Set("Authorization", authHeader())
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	var updated map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
+	resp := refetchArtifactAPI(t, r, id)
 	// The stored body is overwritten with the fresh snapshot.
 	assert.Equal(t, page, getArtifactBody(t, r, id))
-	// The allowlist is re-scanned from the new content.
-	assert.Contains(t, updated["network_allowlist"], "https://cdn.jsdelivr.net")
+	// The newly scanned origin is surfaced for approval, NOT auto-approved:
+	// the allowlist stays empty until the user explicitly approves.
+	assert.Contains(t, resp["new_origins"], "https://cdn.jsdelivr.net")
+	art := resp["artifact"].(map[string]any)
+	assert.Empty(t, art["network_allowlist"])
+}
+
+func TestRefetchKeepsApprovedOriginsSurfacesOnlyNew(t *testing.T) {
+	r := newTestRouter(t)
+
+	page := `<html><head><script src="https://approved.example/lib.js"></script></head></html>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		io.WriteString(w, page)
+	}))
+	defer srv.Close()
+
+	id := createArtifact(t, r, map[string]any{"url": srv.URL, "network_allowlist": []string{}})
+	patchAllowlist(t, r, id, []string{"https://approved.example"})
+
+	// Upstream still uses the approved origin and adds a new one.
+	page = `<html><head><script src="https://approved.example/lib.js"></script>` +
+		`<script src="https://new.example/x.js"></script></head></html>`
+
+	resp := refetchArtifactAPI(t, r, id)
+	// The approved origin that is still present stays approved untouched...
+	art := resp["artifact"].(map[string]any)
+	assert.Equal(t, []any{"https://approved.example"}, art["network_allowlist"])
+	// ...and only the not-yet-approved origin is surfaced for a decision.
+	assert.Equal(t, []any{"https://new.example"}, resp["new_origins"])
+}
+
+func TestRefetchDoesNotReAddRevokedOrigins(t *testing.T) {
+	r := newTestRouter(t)
+
+	page := `<html><head><script src="https://revoked.example/lib.js"></script></head></html>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		io.WriteString(w, page)
+	}))
+	defer srv.Close()
+
+	id := createArtifact(t, r, map[string]any{"url": srv.URL, "network_allowlist": []string{}})
+	// The user approves the origin, then revokes it.
+	patchAllowlist(t, r, id, []string{"https://revoked.example"})
+	patchAllowlist(t, r, id, []string{})
+
+	// Content still references the revoked origin; refetch must not re-add it.
+	resp := refetchArtifactAPI(t, r, id)
+	art := resp["artifact"].(map[string]any)
+	assert.Empty(t, art["network_allowlist"])
+	// It is surfaced again so re-adding requires explicit consent.
+	assert.Equal(t, []any{"https://revoked.example"}, resp["new_origins"])
+}
+
+func TestRefetchApprovalAddsOnlySelectedOrigins(t *testing.T) {
+	r := newTestRouter(t)
+
+	page := `<html><body>plain</body></html>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		io.WriteString(w, page)
+	}))
+	defer srv.Close()
+
+	id := createArtifact(t, r, map[string]any{"url": srv.URL, "network_allowlist": []string{}})
+
+	// Upstream now references two origins.
+	page = `<html><head><script src="https://one.example/a.js"></script>` +
+		`<script src="https://two.example/b.js"></script></head></html>`
+
+	resp := refetchArtifactAPI(t, r, id)
+	assert.Equal(t, []any{"https://one.example", "https://two.example"}, resp["new_origins"])
+
+	// The user approves only one of the surfaced origins (the client PATCHes
+	// existing allowlist + selection); the other stays blocked.
+	got := patchAllowlist(t, r, id, []string{"https://one.example"})
+	assert.Equal(t, []any{"https://one.example"}, got)
 }
 
 func TestRefetchArtifactWithoutSourceURL(t *testing.T) {

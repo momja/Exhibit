@@ -261,14 +261,23 @@ async function ingest() {
   finishIngest(id);
 }
 
+// alEsc escapes a scanned origin before it is interpolated into HTML. Origins
+// come from untrusted artifact content and can contain a literal " (the
+// scanner only strips <, >, and spaces), which would otherwise break out of
+// the value="…" attribute and inject markup into this app-origin page.
+function alEsc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 // showApproval presents the scanned origins for explicit approval. Origins are
 // blocked until the user approves them; nothing is written to the allowlist here.
 function showApproval(id, footprint) {
   const scanDiv = document.getElementById('scan-result');
   const rows = footprint.map(o =>
     '<label style="display:block;margin:4px 0">' +
-    '<input type="checkbox" class="al-origin" value="' + o + '" checked> ' +
-    '<code style="background:#eee;padding:1px 5px;border-radius:3px">' + o + '</code></label>'
+    '<input type="checkbox" class="al-origin" value="' + alEsc(o) + '" checked> ' +
+    '<code style="background:#eee;padding:1px 5px;border-radius:3px">' + alEsc(o) + '</code></label>'
   ).join('');
   scanDiv.style.display = 'block';
   scanDiv.innerHTML =
@@ -653,20 +662,24 @@ func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) string
 
 	// "Update from source" is only offered for artifacts created from a URL.
 	refetchToolbar := ""
+	refetchBanner := ""
 	refetchScript := ""
 	if a.SourceURL != "" {
 		refetchToolbar = `
   <span style="color:#ddd">|</span>
   <button onclick="refetchSource()">Update from source ↻</button>`
+		refetchBanner = `
+<div id="refetch-approval" class="allowlist" style="display:none"></div>`
 		refetchScript = `
 const SOURCE_URL = ` + fmt.Sprintf("%q", a.SourceURL) + `;
 
 async function refetchSource() {
   const warning = 'Re-fetch a fresh snapshot from the source URL?\n\n' +
     SOURCE_URL + '\n\n' +
-    'This overwrites the stored content with whatever the URL returns now and ' +
-    're-scans its network allowlist. It is NOT versioned and cannot be undone. ' +
-    "The artifact's saved state/data may break if the new content changed.";
+    'This overwrites the stored content with whatever the URL returns now. ' +
+    'It is NOT versioned and cannot be undone. ' +
+    "The artifact's saved state/data may break if the new content changed.\n\n" +
+    'Origins not already approved stay blocked until you approve them.';
   if (!confirm(warning)) return;
   const st = document.getElementById('al-status');
   st.textContent = 'Fetching…';
@@ -680,11 +693,53 @@ async function refetchSource() {
       st.textContent = '✗ Error: ' + (txt.trim() || r.statusText);
       return;
     }
+    const data = await r.json();
+    const newOrigins = data.new_origins || [];
+    if (newOrigins.length > 0) {
+      // The body is updated but the new origins are still blocked (they are
+      // not in the CSP). Pause for explicit approval, mirroring ingest.
+      st.textContent = '✓ Updated — review network access below.';
+      showRefetchApproval(newOrigins);
+      return;
+    }
     st.textContent = '✓ Updated — reloading…';
     window.location.reload();
   } catch (e) {
     st.textContent = '✗ Error: ' + e.message;
   }
+}
+
+// showRefetchApproval presents origins found in the fresh snapshot that are
+// not on the approved allowlist. Nothing is added until the user approves;
+// "Keep blocked" leaves the allowlist untouched. alEsc (defined in the main
+// detail-page script) escapes the untrusted origin strings.
+function showRefetchApproval(origins) {
+  const div = document.getElementById('refetch-approval');
+  const rows = origins.map(o =>
+    '<label style="display:block;margin:4px 0">' +
+    '<input type="checkbox" class="rf-origin" value="' + alEsc(o) + '" checked> ' +
+    '<code>' + alEsc(o) + '</code></label>'
+  ).join('');
+  div.style.display = 'block';
+  div.innerHTML =
+    '<strong>The updated content wants to contact origins that are not approved.</strong>' +
+    '<div style="color:#888;margin:4px 0 8px">The most secure option will <em>always</em> be to keep them blocked. Origins you previously removed are not re-added unless you approve them here.</div>' +
+    rows +
+    '<div style="margin-top:8px;display:flex;gap:8px">' +
+    '<button onclick="approveRefetchOrigins()">Approve selected &amp; enable</button>' +
+    '<button onclick="window.location.reload()">Keep blocked</button>' +
+    '</div>';
+}
+
+// approveRefetchOrigins merges the user-selected origins into the existing
+// allowlist (never replacing it) and persists via the normal PATCH.
+async function approveRefetchOrigins() {
+  const selected = Array.from(document.querySelectorAll('.rf-origin:checked')).map(c => c.value);
+  for (const o of selected) {
+    if (!allowlist.includes(o)) allowlist.push(o);
+  }
+  if (selected.length > 0) await saveAllowlist();
+  window.location.reload();
 }`
 	}
 
@@ -704,8 +759,8 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:13px}
 header h1{font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toolbar{background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 20px;display:flex;gap:12px;align-items:center;flex-shrink:0;font-size:13px}
 .toolbar a{color:var(--brand-blue);text-decoration:none;display:inline-flex;align-items:center;gap:4px}
-.toolbar button{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer}
-.toolbar button:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
+.toolbar button,.allowlist button{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer}
+.toolbar button:hover,.allowlist button:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
 .panels{display:flex;flex:1;overflow:hidden;gap:0}
 .panel{flex:1;overflow:auto;background:#fff}
 .panel+.panel{border-left:1px solid #e0e0e0}
@@ -732,7 +787,7 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
   <input id="al-input" type="text" placeholder="Add origin (https://example.com)" style="display:none">
   <button onclick="addOrigin()"><i class="ph ph-plus"></i> Add origin</button>
   <span id="al-status" style="color:#888"></span>
-</div>
+</div>` + refetchBanner + `
 <div class="panels">
   <!-- allow= delegates the clipboard Permissions Policy into the sandboxed frame.
        Without it, the frame's opaque origin has clipboard-read/write denied and
@@ -764,9 +819,18 @@ window.addEventListener('message', function(e) {
   }).catch(function(){});
 });
 
+// alEsc escapes an origin before it is interpolated into HTML. Approved
+// origins can carry a literal " scanned from untrusted artifact content (the
+// scanner only strips <, >, and spaces), which would otherwise break out of a
+// value="…" attribute and inject markup into this app-origin page.
+function alEsc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function renderBadges() {
   document.getElementById('al-display').innerHTML = allowlist.length
-    ? allowlist.map(o => '<code>' + o + '</code> ').join('')
+    ? allowlist.map(o => '<code>' + alEsc(o) + '</code> ').join('')
     : '<span style="color:#aaa">none</span>';
 }
 

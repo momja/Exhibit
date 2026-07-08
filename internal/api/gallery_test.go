@@ -160,3 +160,24 @@ func TestDetailPageIframeDelegatesClipboard(t *testing.T) {
 	assert.Contains(t, page, `sandbox="allow-scripts"`)
 	assert.NotContains(t, page, "allow-same-origin")
 }
+
+// Scanned origins come from untrusted artifact content and can carry a literal
+// " (the scanner only strips <, >, and spaces). If interpolated raw into the
+// approval UI's value="…" attribute they break out and inject markup into this
+// app-origin page (which holds the API token) — a confirmed on-hover XSS. The
+// detail page must define alEsc and route every origin interpolation through it.
+func TestDetailPageEscapesOriginsInApprovalUI(t *testing.T) {
+	a := &store.Artifact{
+		ID: "abc123", OwnerID: 1, Title: "URL Tool", Tier: store.Tier1,
+		SourceURL: "https://example.com/tool.html", CreatedAt: time.Now(),
+	}
+	page := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+
+	assert.Contains(t, page, "function alEsc", "detail page must define the origin escaper")
+	// Every origin sink routes through alEsc; no raw origin interpolation remains.
+	assert.Contains(t, page, "alEsc(o)")
+	assert.NotContains(t, page, `value="' + o + '"`,
+		"refetch approval must not interpolate a raw origin into an attribute")
+	assert.NotContains(t, page, "'<code>' + o + '</code>'",
+		"badge rendering must not interpolate a raw origin")
+}
