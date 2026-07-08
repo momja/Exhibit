@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -13,7 +14,7 @@ func (ro *Router) getState(w http.ResponseWriter, r *http.Request) {
 	// Verify artifact exists
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), artifactID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "get state artifact lookup", err)
 		return
 	}
 	if a == nil {
@@ -23,9 +24,11 @@ func (ro *Router) getState(w http.ResponseWriter, r *http.Request) {
 
 	state, err := ro.cfg.Store.GetState(r.Context(), artifactID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "get state", err)
 		return
 	}
+	slog.DebugContext(r.Context(), "state read",
+		slog.String("artifact_id", artifactID), slog.Int("keys", len(state)))
 	writeJSON(w, http.StatusOK, state)
 }
 
@@ -50,7 +53,7 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 	// Verify artifact exists
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), artifactID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "set state artifact lookup", err)
 		return
 	}
 	if a == nil {
@@ -59,9 +62,15 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ro.cfg.Store.SetState(r.Context(), artifactID, req.Key, req.Value); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "set state", err)
 		return
 	}
+
+	slog.DebugContext(r.Context(), "state written",
+		slog.String("artifact_id", artifactID),
+		slog.String("key", req.Key),
+		slog.Int("value_bytes", len(req.Value)),
+	)
 
 	w.WriteHeader(http.StatusNoContent)
 }

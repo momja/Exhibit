@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/artifact-viewer/artifact-viewer/internal/blob"
+	"github.com/artifact-viewer/artifact-viewer/internal/logging"
 	"github.com/artifact-viewer/artifact-viewer/internal/render"
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -36,9 +37,11 @@ func NewRouter(cfg Config) *Router {
 }
 
 func (ro *Router) setupRoutes() {
-	ro.Use(middleware.Logger)
+	// RequestMiddleware is outermost so that panic recovery (Recoverer)
+	// happens inside the wrapped writer and the final structured request
+	// log still records the 500 status.
+	ro.Use(logging.RequestMiddleware)
 	ro.Use(middleware.Recoverer)
-	ro.Use(loggingMiddleware)
 
 	// Gallery UI — no auth header required (token embedded in page JS)
 	ro.Get("/", ro.galleryIndex)
@@ -111,7 +114,7 @@ func (ro *Router) RenderHandler() http.Handler {
 	})
 
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(logging.RequestMiddleware)
 	r.Use(middleware.Recoverer)
 
 	// Serve a rendered artifact by id

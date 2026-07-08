@@ -15,7 +15,7 @@ func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	arts, err := ro.cfg.Store.ListArtifacts(r.Context(), store.ListOptions{Query: q, Limit: 100})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, r, "gallery index list artifacts", err)
 		return
 	}
 	if arts == nil {
@@ -32,13 +32,17 @@ func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
-	if err != nil || a == nil {
+	if err != nil {
+		serverError(w, r, "gallery detail lookup", err)
+		return
+	}
+	if a == nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	rc, err := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
 	if err != nil {
-		http.Error(w, "blob not found", http.StatusInternalServerError)
+		serverError(w, r, "gallery detail blob", err)
 		return
 	}
 	defer rc.Close()
@@ -51,13 +55,17 @@ func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
-	if err != nil || a == nil {
+	if err != nil {
+		serverError(w, r, "gallery edit lookup", err)
+		return
+	}
+	if a == nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	rc, err := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
 	if err != nil {
-		http.Error(w, "blob not found", http.StatusInternalServerError)
+		serverError(w, r, "gallery edit blob", err)
 		return
 	}
 	defer rc.Close()

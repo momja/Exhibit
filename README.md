@@ -32,6 +32,19 @@ All config is via environment variables:
 | `RENDER_ORIGIN` | `http://localhost:8081` | Public URL of the render surface (must be a different origin) |
 | `AUTH_TOKEN` | `dev-token` | Bearer token for all API calls |
 | `DATA_DIR` | `./data` | Directory for SQLite DB and blob storage |
+| `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, or `error` (unknown → `info`) |
+| `DEBUG` | unset | Any non-empty value forces debug-level logging (overrides `LOG_LEVEL`) |
+
+## Debug mode
+
+Set `DEBUG=1` (or `LOG_LEVEL=debug`) to enable verbose, leveled logging for test
+environments. In debug mode every HTTP request is logged with the remote
+address, response size, query string, and request id, and the ingest/render/
+store/blob/scanner/snapshot seams emit trace-level detail — artifact creates,
+state writes, CSP built per artifact, scanned origins, and snapshot asset
+fetches. At the default `info` level the service stays quiet except for a one
+line per request (promoted to `warn` on 4xx and `error` on 5xx) and lifecycle
+events. Logs are structured text via `log/slog` to stdout.
 
 The app and render surface are two route groups in one process. Point two hostnames at the same port and set `APP_ORIGIN`/`RENDER_ORIGIN` accordingly — the render origin separation is what keeps artifact code from touching the app's cookies and storage.
 
