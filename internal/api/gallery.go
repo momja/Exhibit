@@ -26,7 +26,7 @@ func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 	cols, _ := ro.cfg.Store.ListCollections(r.Context(), 1)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, renderGalleryPage(arts, tags, cols, q, ro.cfg.RenderOrigin, ro.cfg.AuthToken))
+	fmt.Fprint(w, renderGalleryPage(arts, tags, cols, q, ro.cfg.AuthToken))
 }
 
 func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
@@ -75,22 +75,24 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, renderEditPage(a, string(src), ro.cfg.AuthToken))
 }
 
-func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.Collection, query, renderOrigin, token string) string {
+func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.Collection, query, token string) string {
 	var cards strings.Builder
 	if len(arts) == 0 {
 		cards.WriteString(`<p class="empty">No artifacts yet. Upload one above.</p>`)
 	}
+	// The whole card opens the artifact's detail/viewer page; the explicit
+	// 'Details' action does the same. The separate 'Open' card action was
+	// removed so there is exactly one way to open an artifact from a card.
 	for _, a := range arts {
 		cards.WriteString(fmt.Sprintf(`
-<div class="card">
+<div class="card" data-href="/artifacts/%s">
   <a class="card-title" href="/artifacts/%s">%s</a>
   <div class="card-meta">%s</div>
   %s
   <div class="card-actions">
     <a href="/artifacts/%s">Details</a>
-    <a href="%s/a/%s" target="_blank">Open ↗</a>
   </div>
-</div>`, a.ID, htmlEsc(a.Title), a.CreatedAt.Format("Jan 2, 2006"), renderTagRow(a.ID, a.Tags), a.ID, renderOrigin, a.ID))
+</div>`, a.ID, a.ID, htmlEsc(a.Title), a.CreatedAt.Format("Jan 2, 2006"), renderTagRow(a.ID, a.Tags), a.ID))
 	}
 
 	searchVal := htmlEsc(query)
@@ -126,7 +128,8 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .search-row input{flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none}
 .search-row input:focus{border-color:var(--brand-blue)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
-.card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:8px}
+.card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:box-shadow .12s ease}
+.card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .card-title{font-size:15px;font-weight:600;color:var(--brand-blue);text-decoration:none;word-break:break-word}
 .card-title:hover{text-decoration:underline}
 .card-meta{font-size:12px;color:#888}
@@ -323,6 +326,18 @@ document.addEventListener('click', function(e) {
     e.preventDefault();
     openAddTagModal(addBtn.dataset.artifactId);
   }
+});
+
+// Clicking anywhere on a card opens that artifact's detail/viewer page — the
+// card itself is the way in. Clicks that land on an interactive child (the
+// title or Details link, or anything in the tag row — pills, edit/detach,
+// the '+' button) are left alone so those keep their own behavior. The 'Open'
+// card action was removed; this is the single open affordance per card.
+document.addEventListener('click', function(e) {
+  if (e.target.closest('a, button, .tag-row, .card-actions')) return;
+  const card = e.target.closest('.card');
+  if (!card || !card.dataset.href) return;
+  window.location.href = card.dataset.href;
 });
 
 async function detachTag(btn) {
