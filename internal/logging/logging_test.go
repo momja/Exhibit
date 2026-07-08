@@ -1,9 +1,11 @@
 package logging
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -187,4 +189,106 @@ func TestRequestMiddlewareUsesRequestContext(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusCreated, rec.Code)
 	require.True(t, strings.Contains(buf.String(), "status=201"))
+}
+
+func TestRequestMiddlewareLogsRecoveredPanicsAs500(t *testing.T) {
+	// When RequestMiddleware is outermost and an inner recoverer writes a 500,
+	// the structured request log must still see the 500 status.
+	buf := captureLogger(t, slog.LevelInfo)
+
+	recoverer := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if recover() != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+			}()
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	h := RequestMiddleware(recoverer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("boom")
+	})))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/artifacts", nil))
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	out := buf.String()
+	assert.Contains(t, out, "level=ERROR")
+	assert.Contains(t, out, "status=500")
+	assert.Contains(t, out, "path=/api/artifacts")
+}
+
+func TestStatusWriterWriteOnce(t *testing.T) {
+	rec := httptest.NewRecorder()
+	sw := &statusWriter{ResponseWriter: rec}
+	sw.WriteHeader(http.StatusOK)
+	sw.WriteHeader(http.StatusInternalServerError) // must be ignored
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, http.StatusOK, sw.status)
+}
+
+func TestStatusWriterDefaultsToOKWhenHandlerDoesNotWrite(t *testing.T) {
+	buf := captureLogger(t, slog.LevelInfo)
+
+	h := RequestMiddleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		// handler neither calls WriteHeader nor Write
+	}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, buf.String(), "status=200")
+}
+
+func TestStatusWriterPreservesFlusher(t *testing.T) {
+	rec := httptest.NewRecorder()
+	sw := &statusWriter{ResponseWriter: rec}
+
+	f, ok := http.ResponseWriter(sw).(http.Flusher)
+	assert.True(t, ok, "statusWriter must implement http.Flusher")
+	assert.NotPanics(t, func() { f.Flush() })
+}
+
+// mockOptionalWriter implements http.ResponseWriter plus http.Flusher,
+// http.Hijacker, and http.Pusher so we can assert statusWriter delegates
+// optional interfaces to the underlying writer.
+type mockOptionalWriter struct {
+	*httptest.ResponseRecorder
+	flushed  bool
+	hijacked bool
+	pushed   bool
+}
+
+func (m *mockOptionalWriter) Flush() { m.flushed = true }
+func (m *mockOptionalWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	m.hijacked = true
+	return nil, nil, nil
+}
+func (m *mockOptionalWriter) Push(target string, _ *http.PushOptions) error {
+	m.pushed = true
+	_ = target
+	return nil
+}
+
+func TestStatusWriterPreservesOptionalInterfaces(t *testing.T) {
+	mock := &mockOptionalWriter{ResponseRecorder: httptest.NewRecorder()}
+	sw := &statusWriter{ResponseWriter: mock}
+
+	f, ok := http.ResponseWriter(sw).(http.Flusher)
+	require.True(t, ok)
+	f.Flush()
+	assert.True(t, mock.flushed)
+
+	h, ok := http.ResponseWriter(sw).(http.Hijacker)
+	require.True(t, ok)
+	_, _, err := h.Hijack()
+	assert.NoError(t, err)
+	assert.True(t, mock.hijacked)
+
+	p, ok := http.ResponseWriter(sw).(http.Pusher)
+	require.True(t, ok)
+	assert.NoError(t, p.Push("/x", nil))
+	assert.True(t, mock.pushed)
 }

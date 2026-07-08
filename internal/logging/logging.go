@@ -10,7 +10,10 @@
 package logging
 
 import (
+	"bufio"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -50,6 +53,9 @@ func Configure(level slog.Level) *slog.Logger {
 // statusWriter wraps http.ResponseWriter to capture the status code and body
 // size for request logging. It is write-once: the first WriteHeader wins and
 // an implicit 200 is recorded on the first Write if WriteHeader was skipped.
+// It preserves the optional http.Flusher, http.Hijacker, and http.Pusher
+// interfaces of the underlying writer so downstream handlers/middleware keep
+// those capabilities.
 type statusWriter struct {
 	http.ResponseWriter
 	status int
@@ -57,9 +63,10 @@ type statusWriter struct {
 }
 
 func (w *statusWriter) WriteHeader(status int) {
-	if w.status == 0 {
-		w.status = status
+	if w.status != 0 {
+		return
 	}
+	w.status = status
 	w.ResponseWriter.WriteHeader(status)
 }
 
@@ -70,6 +77,32 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	n, err := w.ResponseWriter.Write(b)
 	w.bytes += n
 	return n, err
+}
+
+var (
+	_ http.Flusher  = (*statusWriter)(nil)
+	_ http.Hijacker = (*statusWriter)(nil)
+	_ http.Pusher   = (*statusWriter)(nil)
+)
+
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := w.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, fmt.Errorf("statusWriter: %T does not implement http.Hijacker", w.ResponseWriter)
+}
+
+func (w *statusWriter) Push(target string, opts *http.PushOptions) error {
+	if p, ok := w.ResponseWriter.(http.Pusher); ok {
+		return p.Push(target, opts)
+	}
+	return http.ErrNotSupported
 }
 
 // RequestMiddleware logs every HTTP request through the default slog logger.
@@ -85,6 +118,9 @@ func RequestMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w}
 		next.ServeHTTP(sw, r)
+		if sw.status == 0 {
+			sw.status = http.StatusOK
+		}
 		duration := time.Since(start)
 
 		attrs := []slog.Attr{
