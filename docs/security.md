@@ -103,11 +103,34 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
 - **File reads** — `<input type="file">` and drag-in work normally: the user
   picks the file, the artifact reads only what was picked, and the contents are
   subject to the same egress rules as any other data in the frame.
-- **Downloads** — the sandbox omits `allow-downloads`, so an artifact embedded in
-  the gallery cannot initiate downloads. An artifact opened directly on the
-  render origin ("Open in new tab") is a top-level page, not a sandboxed frame,
-  so downloads work there — the user has explicitly navigated to the tool, and
-  the per-artifact CSP still applies via the response header.
+- **Downloads** — the sandbox omits `allow-downloads`, so nothing in an embedded
+  artifact frame can initiate a download directly. Because export-a-file is a
+  core capability for tools (CSV generators, image editors), downloads are
+  instead **mediated by the host frame with first-use approval**, reusing the
+  storage shim's postMessage channel (§1):
+  - The shim intercepts the common export vectors inside the frame — anchor
+    activations with `blob:`/`data:` hrefs, both user clicks (capture phase) and
+    programmatic `click()` — and posts filename + bytes to the host, pinned to
+    the app origin. Bytes cross the boundary as transferred data, not a
+    capability grant. `blob:` payloads are recovered from a `createObjectURL`
+    registry the shim keeps, so it needs no fetch (`connect-src` is untouched).
+  - On the artifact's **first** download attempt the host prompts, naming the
+    artifact and the filename. Approval is persisted server-side
+    (`downloads_approved`, PATCHed through the API — the single write path), so
+    it survives reloads and devices, and is revocable at any time from the
+    artifact's toolbar. Denial drops the bytes without breaking the artifact.
+  - Once approved, the host reconstructs the file and triggers the download
+    from the app origin.
+  - **The sandbox remains the wall.** Approval never adds `allow-downloads`;
+    vectors the shim doesn't catch (navigation-triggered downloads, an artifact
+    deleting the shim's hooks) simply stay blocked by the browser. Like the
+    ingest scan, the shim is UX, not enforcement — evading it gains nothing.
+  - The bridge only installs when a host frame exists. An artifact opened
+    directly on the render origin ("Open in new tab") is a top-level page, not
+    a sandboxed frame, so downloads work there natively — the user has
+    explicitly navigated to the tool, and the per-artifact CSP still applies
+    via the response header. Share pages get no bridge: opened top-level they
+    behave the same way; there is no authenticated host to mediate for them.
 
 ## 5. Residual risk
 

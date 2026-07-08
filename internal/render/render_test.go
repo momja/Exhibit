@@ -171,3 +171,43 @@ func TestInjectShimNilStateIsEmptyObject(t *testing.T) {
 		t.Fatalf("nil state should inline an empty object, got: %s", doc)
 	}
 }
+
+// The download bridge (av-ryby): the sandbox omits allow-downloads, so the
+// shim intercepts the common export vectors and posts filename + bytes to the
+// host frame, which owns approval and performs the download. The shim itself
+// must never gain a network path for this (blob payloads come from a
+// createObjectURL registry, not a connect-src-governed fetch).
+func TestShimInstallsDownloadBridge(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+
+	// The message shape the host's download listener validates.
+	if !strings.Contains(doc, "__avDownload") {
+		t.Fatalf("shim missing the download bridge message: %s", doc)
+	}
+	// Capture-phase click interception: the shim must see the activation
+	// before the artifact's own handlers and before the (blocked) default.
+	if !strings.Contains(doc, "document.addEventListener('click'") || !strings.Contains(doc, "}, true);") {
+		t.Fatalf("shim missing capture-phase click interception: %s", doc)
+	}
+	// blob: payloads are recovered from the createObjectURL registry — a
+	// fetch(blobURL) would be governed by connect-src and blocked at 'none'.
+	if !strings.Contains(doc, "URL.createObjectURL") {
+		t.Fatalf("shim missing the createObjectURL registry: %s", doc)
+	}
+	// Detached anchors (createElement -> click() without appendChild) never
+	// reach the document listener; their programmatic clicks must be routed.
+	if !strings.Contains(doc, "HTMLAnchorElement.prototype.click") {
+		t.Fatalf("shim missing the programmatic-click route: %s", doc)
+	}
+}
+
+// The bridge must only install when a host frame exists. Opened top-level
+// (direct render-origin visit or a share) there is no sandbox and native
+// downloads already work — intercepting there would break them, and share
+// pages get no bridge in v1.
+func TestShimDownloadBridgeIsFramedOnly(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	if !strings.Contains(doc, "if (window.parent !== window) {") {
+		t.Fatalf("download bridge must be guarded to framed (gallery-embedded) contexts: %s", doc)
+	}
+}

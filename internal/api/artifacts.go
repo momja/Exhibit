@@ -224,6 +224,16 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// downloads_approved (the download bridge's first-use approval flag) is a
+	// strict boolean; reject anything else up front so a bad PATCH is a 400,
+	// not a stored value that later fails to scan.
+	if v, ok := updates["downloads_approved"]; ok {
+		if _, isBool := v.(bool); !isBool {
+			http.Error(w, "downloads_approved must be a boolean", http.StatusBadRequest)
+			return
+		}
+	}
+
 	// Verify artifact exists
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
 	if err != nil {

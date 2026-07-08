@@ -151,7 +151,8 @@ artifacts(
   source_url,              -- set when ingested by URL; enables re-fetch (§8.1)
   tier,                    -- 1 | 2
   created_at, updated_at,
-  network_allowlist        -- JSON array of approved origins (see §6)
+  network_allowlist,       -- JSON array of approved origins (see §6)
+  downloads_approved       -- first-use approval for the host-mediated download bridge
 )
 collections(id, owner_id, name)
 artifact_collections(artifact_id, collection_id)

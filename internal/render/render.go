@@ -155,8 +155,10 @@ func buildCSP(allowlist []string, appOrigin string) string {
 	}, "; ")
 }
 
-// shimScript is the storage shim injected before any artifact scripts run.
-// It intercepts localStorage/sessionStorage and routes state through the API.
+// shimScript is the shim injected before any artifact scripts run. It
+// intercepts localStorage/sessionStorage and routes state through the API,
+// and bridges download attempts to the host frame (the sandbox omits
+// allow-downloads, so downloads only happen host-side after user approval).
 const shimTemplate = `<script>
 (function() {
   var ARTIFACT_ID = %q;
@@ -206,6 +208,102 @@ const shimTemplate = `<script>
     Object.defineProperty(window, 'localStorage', { value: shimStorage, writable: false });
     Object.defineProperty(window, 'sessionStorage', { value: shimStorage, writable: false });
   } catch(e) {}
+
+  // ---- Download bridge ----
+  // The sandbox deliberately omits allow-downloads, so nothing in this frame
+  // can download directly. When embedded in the gallery, the shim intercepts
+  // the common export vectors — anchor activations with blob:/data: hrefs —
+  // and posts filename + bytes to the host frame, which asks for first-use
+  // approval and performs the download from the app origin. Vectors the shim
+  // does not catch simply stay blocked by the sandbox; evading the shim gains
+  // nothing. Top-level (no host frame) there is no sandbox and native
+  // downloads already work, so the bridge stays uninstalled — including on
+  // share pages, which get no bridge.
+  if (window.parent !== window) {
+    // blob: URLs cannot be dereferenced here without a fetch (which
+    // connect-src governs), so remember the Blob behind every URL this
+    // document mints. The shim runs first, so the registry sees them all.
+    var blobURLs = {};
+    var createObjectURL = URL.createObjectURL.bind(URL);
+    var revokeObjectURL = URL.revokeObjectURL.bind(URL);
+    URL.createObjectURL = function(obj) {
+      var url = createObjectURL(obj);
+      if (obj instanceof Blob) blobURLs[url] = obj;
+      return url;
+    };
+    URL.revokeObjectURL = function(url) {
+      delete blobURLs[url];
+      revokeObjectURL(url);
+    };
+
+    var dataURLToBlob = function(href) {
+      var comma = href.indexOf(',');
+      if (comma < 0) return null;
+      var meta = href.slice(5, comma);
+      var data = href.slice(comma + 1);
+      var mime = meta.replace(/;base64$/i, '') || 'text/plain';
+      try {
+        if (/;base64$/i.test(meta)) {
+          var bin = atob(data);
+          var bytes = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          return new Blob([bytes], { type: mime });
+        }
+        return new Blob([decodeURIComponent(data)], { type: mime });
+      } catch (e) {
+        return null;
+      }
+    };
+
+    var isDownloadHref = function(href) {
+      // Coerce first: an SVG <a> (which closest('a') also matches) exposes href
+      // as an SVGAnimatedString, not a string, so a bare .slice would throw.
+      // Stringified it can't match blob:/data:, so SVG anchors are safely skipped.
+      href = String(href);
+      return href.slice(0, 5) === 'blob:' || href.slice(0, 5) === 'data:';
+    };
+
+    // Posts the anchor's payload to the host frame. The bytes cross the
+    // boundary as transferred data, not a capability grant, and targetOrigin
+    // stays pinned to the app origin like every other shim message.
+    var bridgeDownload = function(anchor) {
+      var href = anchor.href;
+      var blob = href.slice(0, 5) === 'data:' ? dataURLToBlob(href) : blobURLs[href];
+      if (!blob) return;
+      var filename = anchor.getAttribute('download') || 'download';
+      var reader = new FileReader();
+      reader.onload = function() {
+        window.parent.postMessage(
+          { __avDownload: true, artifactId: ARTIFACT_ID, filename: filename, mime: blob.type, bytes: reader.result },
+          API_ORIGIN,
+          [reader.result]
+        );
+      };
+      reader.readAsArrayBuffer(blob);
+    };
+
+    // Capture phase sees the click before the artifact's own handlers — for
+    // user clicks and programmatic click() on in-document anchors alike —
+    // without suppressing them (preventDefault only, no stopPropagation).
+    document.addEventListener('click', function(e) {
+      var anchor = e.target && e.target.closest ? e.target.closest('a') : null;
+      if (!anchor || !isDownloadHref(anchor.href || '')) return;
+      e.preventDefault();
+      bridgeDownload(anchor);
+    }, true);
+
+    // Detached anchors (createElement -> click() without appendChild — the
+    // canonical export-a-CSV pattern) never propagate to the document
+    // listener, so route their programmatic clicks through the bridge here.
+    var nativeClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function() {
+      if (!this.isConnected && isDownloadHref(this.href || '')) {
+        bridgeDownload(this);
+        return;
+      }
+      nativeClick.apply(this, arguments);
+    };
+  }
 })();
 </script>`
 
