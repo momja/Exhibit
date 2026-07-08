@@ -17,8 +17,10 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"sort"
 	"strings"
 	"syscall"
+	"testing"
 	"time"
 )
 
@@ -151,6 +153,32 @@ func newFetcher(baseURL string, limits Limits, control func(network, address str
 		client: client,
 		cache:  make(map[string]cached),
 	}, nil
+}
+
+// NewFetcherForTests returns a Fetcher with the non-public-address dial guard
+// disabled so tests in other packages can fetch from loopback httptest fixture
+// servers. It refuses to run outside a test binary: ingest fetches URLs taken
+// from untrusted documents, and skipping the guard there would reopen the SSRF
+// hole guardControl exists to close.
+func NewFetcherForTests(baseURL string, limits Limits) (*Fetcher, error) {
+	if !testing.Testing() {
+		panic("snapshot.NewFetcherForTests called outside a test binary")
+	}
+	return newFetcher(baseURL, limits, nil)
+}
+
+// Vendored reports the assets successfully fetched in this run: their resolved
+// URLs (sorted, for stable output) and their cumulative size in bytes. It backs
+// the ingest report's "what got inlined" summary.
+func (f *Fetcher) Vendored() (urls []string, totalBytes int64) {
+	urls = make([]string, 0, len(f.cache))
+	for u, c := range f.cache {
+		if c.asset != nil {
+			urls = append(urls, u)
+		}
+	}
+	sort.Strings(urls)
+	return urls, f.totalBytes
 }
 
 // Resolve resolves a document reference — relative, root-relative,

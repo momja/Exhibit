@@ -2,7 +2,6 @@ package snapshot
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"net/url"
 	"regexp"
@@ -178,11 +177,6 @@ func (ci *cssInliner) record(ref string, err error) {
 		return
 	}
 	ci.errs = append(ci.errs, &FetchError{Ref: ref, Kind: ErrNetwork, Err: err})
-}
-
-// dataURI encodes an asset as data:<content-type>;base64,<standard-base64>.
-func dataURI(a *Asset) string {
-	return "data:" + a.ContentType + ";base64," + base64.StdEncoding.EncodeToString(a.Body)
 }
 
 // skipRef reports references that carry no network egress and must be left

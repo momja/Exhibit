@@ -75,6 +75,57 @@ curl -X POST http://localhost:8080/api/artifacts \
   -d '{"title":"My Tool","body":"<html>...</html>","network_allowlist":["https://cdn.jsdelivr.net"]}'
 ```
 
+**Ingest from a URL** — send `url` instead of `body` and the server fetches the
+page (bounded to 10 MiB). The title falls back to the page's `<title>`. Because
+the fetched page's relative references (`js/app.js`, `/assets/x.png`,
+`url(bg.png)`) would otherwise resolve against the render origin and 404, a URL
+ingest always injects a `<base href="<source-url>">` so they resolve against the
+source site instead.
+
+```bash
+curl -X POST http://localhost:8080/api/artifacts \
+  -H "Authorization: Bearer dev-token" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/tool.html"}'
+```
+
+**Snapshot (self-contained vendoring)** — add `"snapshot": true` to a URL ingest
+and the server fetches the page's own assets (images, styles, scripts, fonts,
+including nested CSS `@import`/`url()` chains) and inlines them into the stored
+document as `data:` URIs and inline `<script>`/`<style>`. The artifact becomes a
+genuinely self-contained file that renders identically even if the source site
+later disappears, and a fully vendored page collapses its network footprint
+toward `connect-src 'none'`. Fetching is bounded (per-asset and total size caps,
+an asset-count cap, timeouts, and an SSRF guard against non-public addresses).
+
+`snapshot` requires `url`; requesting it on a pasted `body` is a `400`. Partial
+failure never aborts the ingest — assets that can't be inlined (404, over a
+limit, runtime-constructed URLs) keep their original reference (still resolvable
+via the injected `<base href>`) and are reported. The response carries a
+`snapshot` report:
+
+```jsonc
+{
+  "artifact": { "id": "…", "title": "…", … },
+  "network_footprint": ["https://source.example.com"],  // residual origins to approve
+  "snapshot": {
+    "applied": true,
+    "vendored_urls": ["https://source.example.com/app.js", …],
+    "vendored_bytes": 151723,
+    "residual_origins": ["https://source.example.com"], // couldn't be inlined
+    "failures": [
+      { "ref": "img/missing.png", "url": "https://source.example.com/img/missing.png",
+        "kind": "http-status", "detail": "unexpected status 404 Not Found" }
+    ]
+  },
+  "render_url": "https://artifacts.example.com/a/…"
+}
+```
+
+As with any ingest, residual origins surface in `network_footprint` for
+**explicit** approval — the snapshot never seeds the `network_allowlist`, so a
+snapshotted artifact stays network-inert until you approve its residual origins.
+
 ### State (cross-device sync)
 
 ```
@@ -174,7 +225,8 @@ internal/
   api/        HTTP handlers, router, middleware
   blob/       Blob store interface + filesystem implementation
   render/     Render surface handler (CSP, state inlining, shim injection)
-  scanner/    Ingest scanner (extracts network origins from HTML)
+  scanner/    Ingest scanner (extracts network origins from HTML, base-aware)
+  snapshot/   URL-ingest asset vendoring (bounded fetch, HTML/CSS inlining, <base href>)
   store/      Store interface, SQLite implementation, migrations
 web/
   templates/  gallery.templ

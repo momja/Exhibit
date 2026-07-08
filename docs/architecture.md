@@ -150,7 +150,39 @@ Invoked by `POST /api/artifacts`. Parses the document with a real HTML tokenizer
 (`x/net/html`) to extract referenced origins (`src`/`href`/`action`/`<link>`/ESM
 imports), plus a literal-URL heuristic over inline JS. Produces the deduplicated origin
 list for the approval step. It is **transparency, not enforcement** — its output seeds
-the allowlist; the CSP is the wall.
+the approval step, never the allowlist directly; the CSP is the wall. For a URL ingest
+the scan is **base-aware**: relative references are resolved against the source URL so
+residual external origins still surface (a bare `Scan` drops relatives; `ScanWithBase`
+resolves them).
+
+### 3.4a Snapshot vendorer (URL ingest)
+
+`internal/snapshot`, invoked by `POST /api/artifacts` when the request carries
+`url` and `snapshot: true`. It runs **after fetch and before `Blob.put`** and turns a
+fetched page into a self-contained file so the artifact honours the "it's just a file"
+promise even after the source site rots:
+
+- A single bounded **`Fetcher`** owns all fetch policy in one place — reference
+  resolution against the source base, per-asset/total size caps, an asset-count cap,
+  timeouts, a redirect limit, and a dial-time SSRF guard rejecting non-public addresses.
+- **HTML inlining** walks the parsed tree and folds each fetchable reference into the
+  document: `<img>`/`<source>` (and `srcset`), icon `<link>`s → `data:` URIs;
+  `<script src>` → inline `<script>`; `<link rel=stylesheet>` → inline `<style>`.
+- **CSS inlining** recurses through `url()` and `@import` chains (each sheet re-based
+  against its own URL), inlining as `data:` URIs with cycle and depth guards.
+- **Partial failure is data, not an error.** Any reference that can't be inlined (404,
+  over a limit, blocked address, runtime-constructed URL) keeps its original value and
+  is recorded as a typed `FetchError`; the rest of the page is still vendored. The
+  handler assembles these into the response's `snapshot` report (vendored URLs/bytes,
+  residual origins, per-asset failures) so the user always gets a usable artifact.
+- **Fallback (`<base href>`).** Whether snapshot is off, failed, or left residual
+  relatives, a URL ingest injects `<base href="<source-url>">` at the top of `<head>`
+  so surviving relative references resolve against the source site rather than the
+  render origin. This is transform-independent option A; the CSP allowlist still governs
+  whether those origins are *reachable*.
+
+The vendorer never seeds the allowlist — residual origins go through the same explicit
+approval as any other footprint (spec §6.2).
 
 ### 3.5 Gallery (web UI)
 
@@ -193,15 +225,27 @@ to never run artifact code at all.
 ## 5. Ingest data flow
 
 ```
-client ──POST /api/artifacts (body + metadata)──► API
-  API ──► scanner: tokenize, extract origins ──► footprint list
-  API ──► respond: "these N origins will be contacted — approve?"
+client ──POST /api/artifacts (body | url [+ snapshot] + metadata)──► API
+  (url ingest)  API ──► fetch page (bounded 10 MiB), extract <title>
+  (snapshot on) API ──► snapshot.InlineHTMLAssets: bounded fetch + inline
+                          assets as data:/inline <script>/<style>
+                          ──► self-contained body + report (vendored,
+                              residual, per-asset failures — never fatal)
+  (url ingest)  API ──► ScanWithBase: resolve relatives vs source ──► footprint
+                          ──► inject <base href> for surviving relatives
+  (paste)       API ──► Scan: tokenize, extract origins ──► footprint list
+  API ──► respond: "these N origins will be contacted — approve?" (+ snapshot report)
 client ──confirm (+ edited allowlist)──► API
   API ──► Blob.put(body)         (untrusted bytes at rest)
   API ──► Store.put(artifact, network_allowlist, tier, ...)
   API ──► FTS5 index (source + title + tags)
   API ──► respond: artifact id + render URL
 ```
+
+The snapshot stage runs **after fetch, before `Blob.put`** (§3.4a) and is the only
+ingest-time transform; it degrades gracefully (partial failure produces a usable
+artifact plus a report) and never seeds the allowlist. A fully vendored page collapses
+its own network footprint toward `connect-src 'none'`.
 
 Two-step by design: scan and surface *before* anything is renderable, so the network
 footprint is a decision the user makes at the door, not a surprise at runtime.

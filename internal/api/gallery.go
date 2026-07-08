@@ -141,6 +141,8 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .empty{color:#888;font-size:14px;padding:20px 0}
 #status{margin-top:10px;font-size:13px;color:#555}
 #scan-result{margin-top:10px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
+.snapshot-report{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #e0e0e0}
+.snapshot-report:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
 .mode-tabs{display:flex;gap:6px;margin-bottom:8px}
 .tab-btn{padding:5px 14px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;color:#555}
 .tab-btn.active{background:var(--brand-blue);color:#fff;border-color:var(--brand-blue)}
@@ -181,6 +183,10 @@ main{padding:24px;max-width:1200px;margin:0 auto}
   </div>
   <textarea id="body" placeholder="Paste HTML artifact source here…"></textarea>
   <input type="text" id="url-input" placeholder="https://example.com/tool.html" style="display:none;width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;margin-bottom:8px">
+  <label id="snapshot-row" style="display:none;align-items:center;gap:6px;font-size:13px;color:#555;margin-bottom:8px;cursor:pointer">
+    <input type="checkbox" id="snapshot-toggle" checked>
+    Snapshot assets into the file (recommended) — fetches the page&#39;s images, styles and scripts and inlines them so the artifact stays self-contained
+  </label>
   <div id="scan-result"></div>
   <div class="upload-row">
     <button class="btn" onclick="ingest()"><i class="ph ph-plus"></i> Upload</button>
@@ -209,6 +215,7 @@ function setMode(mode) {
   event.target.classList.add('active');
   document.getElementById('body').style.display = mode === 'paste' ? 'block' : 'none';
   document.getElementById('url-input').style.display = mode === 'url' ? 'block' : 'none';
+  document.getElementById('snapshot-row').style.display = mode === 'url' ? 'flex' : 'none';
 }
 
 async function ingest() {
@@ -222,7 +229,9 @@ async function ingest() {
   if (currentMode === 'url') {
     const url = document.getElementById('url-input').value.trim();
     if (!url) { status.textContent = 'Enter a URL first.'; return; }
-    payload = {title: title || '', url, network_allowlist: []};
+    const snapshot = document.getElementById('snapshot-toggle').checked;
+    if (snapshot) status.textContent = 'Fetching page and snapshotting assets…';
+    payload = {title: title || '', url, snapshot, network_allowlist: []};
   } else {
     const body = document.getElementById('body').value.trim();
     if (!body) { status.textContent = 'Paste an artifact first.'; return; }
@@ -239,6 +248,7 @@ async function ingest() {
 
   const id = data.artifact.id;
   const footprint = data.network_footprint || [];
+  snapshotReportHTML = renderSnapshotReport(data.snapshot);
   if (footprint.length > 0) {
     // The artifact is saved but network-blocked (CSP connect-src 'none').
     // Pause here for explicit approval — nothing is added to the allowlist,
@@ -250,17 +260,70 @@ async function ingest() {
   finishIngest(id);
 }
 
+// The current ingest's snapshot report, kept so it stays on screen through
+// the approval step and after saving (finishIngest skips the auto-reload
+// that would wipe it).
+let snapshotReportHTML = '';
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1048576).toFixed(1) + ' MB';
+}
+
+// renderSnapshotReport turns the ingest response's snapshot report into HTML
+// for the scan-result panel: vendored summary, per-asset failures, and whether
+// the artifact came out fully self-contained. Returns '' when the ingest ran
+// without a snapshot.
+function renderSnapshotReport(rep) {
+  if (!rep) return '';
+  if (!rep.applied) {
+    return '<div class="snapshot-report"><strong>Snapshot failed</strong> — stored the original page with a ' +
+      '<code>&lt;base href&gt;</code> fallback so relative references still resolve.' +
+      (rep.error ? '<div style="color:#c00;margin-top:4px">' + esc(rep.error) + '</div>' : '') +
+      '</div>';
+  }
+  const urls = rep.vendored_urls || [];
+  let html = '<div class="snapshot-report"><strong>Snapshot report</strong>' +
+    '<div style="margin-top:4px">' + urls.length + ' asset' + (urls.length === 1 ? '' : 's') +
+    ' vendored into the file (' + fmtBytes(rep.vendored_bytes || 0) + ').</div>';
+  if (urls.length > 0) {
+    html += '<details style="margin-top:4px"><summary style="cursor:pointer">Vendored assets</summary>' +
+      '<ul style="margin:4px 0 0 18px">' +
+      urls.map(u => '<li><code>' + esc(u) + '</code></li>').join('') +
+      '</ul></details>';
+  }
+  const fails = rep.failures || [];
+  if (fails.length > 0) {
+    html += '<div style="color:#c00;margin-top:6px">' + fails.length + ' asset' + (fails.length === 1 ? '' : 's') +
+      ' could not be inlined (reference kept, see origins below):</div>' +
+      '<ul style="margin:4px 0 0 18px">' +
+      fails.map(f => '<li><code>' + esc(f.ref) + '</code> — ' + esc(f.kind) +
+        (f.detail ? ' (' + esc(f.detail) + ')' : '') + '</li>').join('') +
+      '</ul>';
+  }
+  if ((rep.residual_origins || []).length === 0) {
+    html += '<div style="color:#2a7d2a;margin-top:6px">No residual network references — the artifact is fully self-contained.</div>';
+  }
+  return html + '</div>';
+}
+
 // showApproval presents the scanned origins for explicit approval. Origins are
 // blocked until the user approves them; nothing is written to the allowlist here.
+// The snapshot report, when one exists, is shown above the approval controls.
 function showApproval(id, footprint) {
   const scanDiv = document.getElementById('scan-result');
   const rows = footprint.map(o =>
     '<label style="display:block;margin:4px 0">' +
-    '<input type="checkbox" class="al-origin" value="' + o + '" checked> ' +
-    '<code style="background:#eee;padding:1px 5px;border-radius:3px">' + o + '</code></label>'
+    '<input type="checkbox" class="al-origin" value="' + esc(o) + '" checked> ' +
+    '<code style="background:#eee;padding:1px 5px;border-radius:3px">' + esc(o) + '</code></label>'
   ).join('');
   scanDiv.style.display = 'block';
-  scanDiv.innerHTML =
+  scanDiv.innerHTML = snapshotReportHTML +
     '<strong>This artifact wants to contact these origins.</strong>' +
     '<div style="color:#888;margin:4px 0 8px">The most secure option will <em>always</em> be to disable all external origins. Use your own discretion when allowing access to the listed networks below. This is a static scan and may not include every origin the application needs to work.</div>' +
     rows +
@@ -291,6 +354,14 @@ function finishIngest(id) {
   link.href = '/artifacts/' + id;
   link.textContent = 'View artifact';
   status.appendChild(link);
+  if (snapshotReportHTML) {
+    // Keep the snapshot report readable (dropping any approval controls)
+    // instead of auto-reloading it away.
+    const scanDiv = document.getElementById('scan-result');
+    scanDiv.style.display = 'block';
+    scanDiv.innerHTML = snapshotReportHTML;
+    return;
+  }
   setTimeout(() => location.reload(), 1200);
 }
 
