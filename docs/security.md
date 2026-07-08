@@ -73,16 +73,22 @@ Points of stance embedded in that policy:
 
 ## 3. Vendoring: snapshot on import, never live-linked
 
-URL ingest fetches the page **once** and vendors its external assets into the
-stored document, so the artifact stays a self-contained file. Everything that
-pipeline fetches goes through one bounded fetcher (`internal/snapshot`), which
-owns the entire fetch policy:
+URL ingest fetches the page **once** and stores its body as the artifact.
+**Vendoring (inlining) of relative external assets** (images, scripts,
+stylesheets, fonts) is tracked by the open `exhibit-lwb` epic
+(`exhibit-lwb.3`–`exhibit-lwb.6`); today the top-level document body is stored
+verbatim without inlining, so relative asset references still resolve against
+the source site.
 
-- per-asset and total size budgets, and an asset-count cap;
-- request timeouts and a redirect limit;
-- a **dial-time guard rejecting non-public addresses** — loopback, private
-  ranges, link-local — so a crafted page cannot use ingest as an SSRF proxy into
-  the server's network.
+**Bounded fetcher status:** `internal/snapshot` contains a completed bounded
+`Fetcher` component (`exhibit-lwb.2` closed) with per-asset and total size
+budgets, an asset-count cap, request timeouts, a redirect limit, and a
+**dial-time guard rejecting non-public addresses** (loopback, private ranges,
+link-local) to prevent SSRF. However, this bounded fetcher is **not yet wired
+into the ingest or refetch paths** (`exhibit-lwb.6` open). Until that wiring
+lands, `POST /api/artifacts` (URL branch) and `POST .../refetch` use a bare
+`http.Get` with a 10 MiB body cap and no SSRF guard. The bounded pipeline
+described here is the target state.
 
 After ingest the stored copy never phones home. Updating it is an explicit user
 action (`POST /api/artifacts/:id/refetch`), which re-runs the same bounded

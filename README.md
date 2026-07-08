@@ -11,8 +11,11 @@ Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs
 ## Quick start
 
 ```bash
-# Run with defaults (SQLite in ./data, auth token: dev-token)
-go run ./cmd/server
+# Build and run (first build bundles CodeMirror and Phosphor assets)
+make build && ./bin/server
+
+# Or for development:
+make assets && go run ./cmd/server
 
 # Open the gallery
 open http://localhost:8080
@@ -60,7 +63,7 @@ GET    /api/artifacts              List artifacts (?q=search&tags=a,b&collection
 GET    /api/artifacts/:id          Get artifact metadata (?body=true for source)
 PATCH  /api/artifacts/:id          Update title, body, network_allowlist, etc.
 POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts)
-DELETE /api/artifacts/:id          Delete artifact and blob
+DELETE /api/artifacts/:id          Delete artifact and associated rows (blob body is orphaned in v1)
 ```
 
 **Ingest flow** — two steps by design:
@@ -108,6 +111,8 @@ DELETE /api/artifacts/:id/collections/:collectionID  Remove from collection
 
 GET    /api/tags                                     List tags
 POST   /api/tags                                     Create tag {"name":"..."}
+PATCH  /api/tags/:id                                 Rename or recolor a tag
+DELETE /api/tags/:id                                 Delete tag (cascade)
 POST   /api/artifacts/:id/tags/:tagID                Add tag
 DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 ```

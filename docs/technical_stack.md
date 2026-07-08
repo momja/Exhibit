@@ -151,8 +151,8 @@ Responsibilities (per the main spec §5):
   authenticated — performs the `PUT /api/artifacts/:id/state`. The shim itself makes
   **no network calls**: the sandbox's opaque origin can't reach the API cross-origin, so
   it never has to, and `connect-src` need not include the app origin.
-- Proxy `IndexedDB` (optionally via `fake-indexeddb` retargeted at the service) and
-  provide a `window.storage`-style async API for artifacts written to that contract.
+- `IndexedDB` interception and the `window.storage`-style async API are **deferred**
+  (build-order step 2 remaining). v1 ships `localStorage` and `sessionStorage` only.
 - Last-write-wins on conflicts.
 
 Keep this as a single audited file — it's security-sensitive (it sits between untrusted

@@ -84,13 +84,18 @@ The only way data changes. Route groups:
 - `POST /api/artifacts` — ingest. Accepts a document body + metadata, **or a source
   URL** the service fetches once and stores as a file (the URL is persisted as
   `source_url`); runs the scan, returns the network footprint for approval, persists
-  on confirmation.
+  immediately (network-inert with `connect-src 'none'` until the allowlist is
+  patched).
 - `GET /api/artifacts`, `GET /api/artifacts/:id` — list/detail (drives the gallery).
-- `PATCH /api/artifacts/:id` — edits: title, body (rewrites the stored blob), tags,
-  collections, `network_allowlist`.
+- `PATCH /api/artifacts/:id` — edits: title, body (rewrites the stored blob),
+  `network_allowlist`, and other scalar columns. Tag and collection membership use
+  the dedicated `POST/DELETE /api/artifacts/:id/tags/:tagID` and
+  `.../collections/:colID` routes.
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
   `source_url` and replaces the stored body. A snapshot, not a versioned update.
-- `DELETE /api/artifacts/:id` — deletes the artifact, its blob, and associated state.
+- `DELETE /api/artifacts/:id` — deletes the artifact and associated rows (tags,
+  collections, shares, state cascade via FK). The blob body on the filesystem is
+  orphaned in v1 (`Blob.Store` has no `Delete` method).
 - `GET/PUT /api/artifacts/:id/state` — the storage shim's state endpoint (§6). Reads are
   normally satisfied by render-time inlining, not this route; `PUT` is called by the
   **host frame** on the shim's behalf (the sandboxed iframe can't reach the API itself).
@@ -205,20 +210,22 @@ to never run artifact code at all.
 client ──POST /api/artifacts (body + metadata, or a source URL)──► API
   API ──► if URL: fetch once (size-capped), body := fetched bytes, keep source_url
   API ──► scanner: tokenize, extract origins ──► footprint list
-  API ──► respond: "these N origins will be contacted — approve?"
-client ──confirm (+ edited allowlist)──► API
   API ──► Blob.put(body)         (untrusted bytes at rest)
-  API ──► Store.put(artifact, network_allowlist, tier, source_url, ...)
+  API ──► Store.put(artifact, network_allowlist=[], tier, source_url, ...)
   API ──► FTS5 index (title)
-  API ──► respond: artifact id + render URL
+  API ──► respond: artifact id + render URL + footprint (network-inert until approved)
+client ──PATCH /api/artifacts/:id (approved allowlist)──► API
+  API ──► Store.update(artifact, network_allowlist) → now renderable with network egress
 ```
 
-Two-step by design: scan and surface *before* anything is renderable, so the network
-footprint is a decision the user makes at the door, not a surprise at runtime. The
-allowlist is **never seeded from the scan** — only origins the user explicitly
-approves are written; until then the render CSP stays `connect-src 'none'`.
+Two-step by design: the artifact is persisted immediately on POST (renderable but
+network-inert with `connect-src 'none'`); the user then approves origins in a
+separate `PATCH`, which writes the allowlist and gates network egress at next render.
+The allowlist is **never seeded from the scan** — only origins the user explicitly
+approves are written.
 
-URL ingest is a *one-time vendoring fetch*, not a live link: the fetched document
+URL ingest is a *one-time fetch* (inlining of relative assets is tracked by the open
+`exhibit-lwb` epic), not a live link: the fetched document
 becomes an owned file like any other artifact. The recorded `source_url` enables a
 user-initiated `POST /api/artifacts/:id/refetch` that re-snapshots the body
 (overwrite, no version history — and a warning that stored state may no longer fit
