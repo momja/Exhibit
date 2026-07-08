@@ -37,8 +37,11 @@ func NewRouter(cfg Config) *Router {
 }
 
 func (ro *Router) setupRoutes() {
-	ro.Use(middleware.Recoverer)
+	// RequestMiddleware is outermost so that panic recovery (Recoverer)
+	// happens inside the wrapped writer and the final structured request
+	// log still records the 500 status.
 	ro.Use(logging.RequestMiddleware)
+	ro.Use(middleware.Recoverer)
 
 	// Gallery UI — no auth header required (token embedded in page JS)
 	ro.Get("/", ro.galleryIndex)
@@ -111,8 +114,8 @@ func (ro *Router) RenderHandler() http.Handler {
 	})
 
 	r := chi.NewRouter()
-	r.Use(middleware.Recoverer)
 	r.Use(logging.RequestMiddleware)
+	r.Use(middleware.Recoverer)
 
 	// Serve a rendered artifact by id
 	r.Get("/a/{artifactID}", renderer.ServeArtifact)
