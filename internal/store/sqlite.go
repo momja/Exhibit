@@ -6,6 +6,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -43,7 +44,12 @@ func (s *SQLiteStore) migrate() error {
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		return err
 	}
-	return goose.Up(s.db, "migrations")
+	start := time.Now()
+	if err := goose.Up(s.db, "migrations"); err != nil {
+		return err
+	}
+	slog.Info("sqlite migrations applied", slog.Duration("duration", time.Since(start)))
+	return nil
 }
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }

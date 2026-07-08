@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -107,10 +108,19 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 	// empty cache if state can't be read — the artifact still renders.
 	state, err := rd.cfg.Store.GetState(r.Context(), a.ID)
 	if err != nil {
+		slog.WarnContext(r.Context(), "render state read failed",
+			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
 		state = nil
 	}
 
 	doc := injectShim(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state)
+	slog.DebugContext(r.Context(), "rendered artifact",
+		slog.String("artifact_id", a.ID),
+		slog.Int("body_bytes", len(bodyBytes)),
+		slog.Int("allowlist", len(a.NetworkAllowlist)),
+		slog.Int("state_keys", len(state)),
+		slog.String("csp", csp),
+	)
 	fmt.Fprint(w, doc)
 }
 

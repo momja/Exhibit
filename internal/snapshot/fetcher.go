@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -224,10 +225,19 @@ func (f *Fetcher) Fetch(ctx context.Context, ref string) (*Asset, error) {
 		if ferr.Kind != ErrBudget {
 			f.cache[targetURL] = cached{err: ferr}
 		}
+		slog.DebugContext(ctx, "snapshot asset fetch failed",
+			slog.String("ref", ref), slog.String("url", targetURL),
+			slog.String("kind", string(ferr.Kind)), slog.String("err", ferr.Error()))
 		return nil, ferr
 	}
 	f.totalBytes += int64(len(asset.Body))
 	f.cache[targetURL] = cached{asset: asset}
+	slog.DebugContext(ctx, "snapshot asset fetched",
+		slog.String("url", targetURL),
+		slog.String("content_type", asset.ContentType),
+		slog.Int("bytes", len(asset.Body)),
+		slog.Int64("budget_used", f.totalBytes),
+	)
 	return asset, nil
 }
 
