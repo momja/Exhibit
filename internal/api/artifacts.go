@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/artifact-viewer/artifact-viewer/internal/scanner"
+	"github.com/artifact-viewer/artifact-viewer/internal/snapshot"
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -80,6 +82,7 @@ type createArtifactRequest struct {
 	Title            string     `json:"title"`
 	Body             string     `json:"body"`
 	URL              string     `json:"url"`
+	Snapshot         bool       `json:"snapshot"`
 	Tier             store.Tier `json:"tier"`
 	NetworkAllowlist []string   `json:"network_allowlist"`
 }
@@ -108,7 +111,74 @@ func extractTitle(body string) string {
 type createArtifactResponse struct {
 	Artifact         *store.Artifact `json:"artifact"`
 	NetworkFootprint []string        `json:"network_footprint"`
+	Snapshot         *snapshotReport `json:"snapshot,omitempty"`
 	RenderURL        string          `json:"render_url"`
+}
+
+// snapshotReport tells the caller what the snapshot transform did with their
+// URL ingest: which assets were vendored into the document, which references
+// still point at the network, and which assets could not be inlined. Partial
+// failure is data here, never an ingest error — the user always gets a usable
+// artifact plus this report (exhibit-lwb.6). ResidualOrigins duplicates the
+// response's network_footprint so the report is self-contained; those origins
+// feed the same explicit-approval flow and never seed the allowlist.
+type snapshotReport struct {
+	Applied         bool              `json:"applied"`
+	Error           string            `json:"error,omitempty"` // why Applied is false
+	VendoredURLs    []string          `json:"vendored_urls"`
+	VendoredBytes   int64             `json:"vendored_bytes"`
+	ResidualOrigins []string          `json:"residual_origins"`
+	Failures        []snapshotFailure `json:"failures,omitempty"`
+}
+
+// snapshotFailure is one asset the snapshot could not inline. The reference
+// survives verbatim in the stored document, so with the injected <base href>
+// it still resolves to its real origin — reachable once that origin is
+// approved onto the allowlist.
+type snapshotFailure struct {
+	Ref    string `json:"ref"`
+	URL    string `json:"url,omitempty"`
+	Kind   string `json:"kind"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// newSnapshotFetcher builds the bounded asset fetcher for one snapshot run.
+// It is a seam for ingest tests, which swap in snapshot.NewFetcherForTests:
+// the production fetcher's SSRF dial guard refuses non-public addresses, and
+// httptest fixture servers live on loopback.
+var newSnapshotFetcher = func(pageURL string) (*snapshot.Fetcher, error) {
+	return snapshot.NewFetcher(pageURL, snapshot.DefaultLimits())
+}
+
+// snapshotBody vendors body's external assets into the document so the stored
+// artifact is self-contained (exhibit-lwb). It never fails the ingest: on a
+// transform-level error the original body comes back with Applied=false and
+// the caller's <base href> fallback keeps relative references resolving, while
+// per-asset failures are recorded in the report with the rest of the page
+// still vendored. ResidualOrigins is left for the caller, which computes it
+// from the final document.
+func snapshotBody(ctx context.Context, pageURL, body string) (string, *snapshotReport) {
+	report := &snapshotReport{VendoredURLs: []string{}}
+	f, err := newSnapshotFetcher(pageURL)
+	if err != nil {
+		report.Error = err.Error()
+		return body, report
+	}
+	out, fetchErrs, err := snapshot.InlineHTMLAssets(ctx, f, body)
+	if err != nil {
+		report.Error = err.Error()
+		return body, report
+	}
+	report.Applied = true
+	report.VendoredURLs, report.VendoredBytes = f.Vendored()
+	for _, fe := range fetchErrs {
+		fail := snapshotFailure{Ref: fe.Ref, URL: fe.URL, Kind: string(fe.Kind)}
+		if fe.Err != nil {
+			fail.Detail = fe.Err.Error()
+		}
+		report.Failures = append(report.Failures, fail)
+	}
+	return out, report
 }
 
 func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
@@ -146,12 +216,39 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "body or url is required", http.StatusBadRequest)
 		return
 	}
+	if req.Snapshot && req.URL == "" {
+		http.Error(w, "snapshot requires a source url", http.StatusBadRequest)
+		return
+	}
 	if req.Tier == 0 {
 		req.Tier = store.Tier1
 	}
 
-	// Scan for network footprint
-	footprint := scanner.Scan(req.Body)
+	var snapReport *snapshotReport
+	if req.Snapshot {
+		req.Body, snapReport = snapshotBody(r.Context(), req.URL, req.Body)
+	}
+
+	// Scan for network footprint. A URL ingest resolves relative references
+	// against the source page so residual origins surface for approval. The
+	// scan runs before the <base href> injection below, so the fallback tag
+	// itself is never reported as network egress — a fully vendored artifact
+	// keeps its empty footprint.
+	var footprint []string
+	if req.URL != "" {
+		footprint = scanner.ScanWithBase(req.Body, req.URL)
+		// Option A fallback (exhibit-lwb.6): relative references that survive
+		// ingest — snapshot off, failed, or partial — would otherwise resolve
+		// against the render origin and 404. The injected base points them
+		// back at the source site; whether that origin is reachable stays the
+		// allowlist's decision.
+		req.Body = snapshot.InjectBaseHref(req.Body, req.URL)
+	} else {
+		footprint = scanner.Scan(req.Body)
+	}
+	if snapReport != nil {
+		snapReport.ResidualOrigins = footprint
+	}
 
 	ownerID := ownerIDFromCtx(r.Context())
 	id := uuid.New().String()
@@ -205,6 +302,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	resp := createArtifactResponse{
 		Artifact:         a,
 		NetworkFootprint: footprint,
+		Snapshot:         snapReport,
 		RenderURL:        ro.cfg.RenderOrigin + "/a/" + id,
 	}
 	writeJSON(w, http.StatusCreated, resp)

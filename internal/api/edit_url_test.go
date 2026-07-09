@@ -87,8 +87,11 @@ func TestCreateArtifactFromURL(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&art))
 	assert.Equal(t, "Fetched Tool", art["title"])
 
-	// Fetched content is stored verbatim as the artifact body.
-	assert.Equal(t, page, getArtifactBody(t, r, id))
+	// Fetched content is stored with only the <base href> fallback injected
+	// (exhibit-lwb.6), so surviving relative references resolve against the
+	// source site instead of the render origin.
+	withBase := `<html><head><base href="` + srv.URL + `"><title>Fetched Tool</title></head><body><h1>hi</h1></body></html>`
+	assert.Equal(t, withBase, getArtifactBody(t, r, id))
 }
 
 func TestCreateArtifactFromURLRecordsSourceURL(t *testing.T) {
@@ -350,7 +353,10 @@ func TestRefetchArtifactOverwritesBody(t *testing.T) {
 	defer srv.Close()
 
 	id := createArtifact(t, r, map[string]any{"url": srv.URL, "network_allowlist": []string{}})
-	require.Equal(t, page, getArtifactBody(t, r, id))
+	// URL ingest injects the <base href> fallback into the stored body.
+	require.Equal(t,
+		`<html><head><base href="`+srv.URL+`"><title>v1</title></head><body><h1>first</h1></body></html>`,
+		getArtifactBody(t, r, id))
 
 	// Upstream now serves new content that also references an external origin.
 	page = `<html><head><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head><body><h1>second</h1></body></html>`
