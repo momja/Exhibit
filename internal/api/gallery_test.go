@@ -115,6 +115,34 @@ func TestGalleryIndexRendersAddTagModal(t *testing.T) {
 	assert.Contains(t, page, `function openAddTagModal(`)
 }
 
+// The artifact card used to expose both a 'Details' link and an 'Open ↗' link
+// (the latter opening the raw render origin in a new tab). The 'Open' action was
+// removed so there is exactly one way into an artifact from a card: the card
+// itself opens the detail/viewer page, and the 'Details' link does the same
+// explicitly. There must be no open-in-new-tab affordance and the card must
+// carry a click target so any non-interactive part of it navigates.
+func TestGalleryCardHasOnlyDetailsOpenAffordance(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Openless")
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	// The card opens the artifact's detail/viewer page from anywhere that
+	// isn't an interactive child; the data-href is what the click handler uses.
+	assert.Contains(t, page, `<div class="card" data-href="/artifacts/`+id+`">`)
+
+	// 'Details' remains the single named action and points at the detail page.
+	assert.Contains(t, page, `<a href="/artifacts/`+id+`">Details</a>`)
+
+	// The removed 'Open ↗' action and any new-tab opener are gone from cards.
+	assert.NotContains(t, page, "Open ↗")
+	assert.NotContains(t, page, `target="_blank"`)
+}
+
 // The detail-view iframe is sandboxed with an opaque origin, so clipboard
 // copy/paste — a common artifact interaction — is denied by Permissions Policy
 // unless the embedder delegates it via the allow= attribute. Delegating
