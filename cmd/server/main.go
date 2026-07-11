@@ -4,10 +4,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 
+	"github.com/artifact-viewer/artifact-viewer/internal/agent"
 	"github.com/artifact-viewer/artifact-viewer/internal/api"
 	"github.com/artifact-viewer/artifact-viewer/internal/blob"
 	"github.com/artifact-viewer/artifact-viewer/internal/logging"
+	"github.com/artifact-viewer/artifact-viewer/internal/secrets"
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
 )
 
@@ -54,12 +57,41 @@ func main() {
 		fatal("open blob store", err)
 	}
 
+	// Agent support (Exh-yvhp): BYO keys are sealed with the server secret;
+	// each chat session runs a `pi --mode rpc` sidecar. Degrades gracefully —
+	// no pi binary just disables the agent surface.
+	box, err := secrets.Load(os.Getenv("EXHIBIT_SECRET"), dataDir+"/secret.key")
+	if err != nil {
+		fatal("load server secret", err)
+	}
+	mockLLMURL := os.Getenv("MOCK_LLM_URL")
+	var agentMgr *agent.Manager
+	piBin := getenv("PI_BIN", "pi")
+	if path, err := exec.LookPath(piBin); err != nil {
+		slog.Warn("pi binary not found; agent support disabled", slog.String("pi_bin", piBin))
+	} else {
+		agentMgr, err = agent.New(agent.Config{
+			PiBin:      path,
+			WorkRoot:   dataDir + "/agent",
+			APIBaseURL: appOrigin,
+			AuthToken:  authToken,
+			MockLLMURL: mockLLMURL,
+		}, st)
+		if err != nil {
+			fatal("init agent manager", err)
+		}
+		slog.Info("agent support enabled", slog.String("pi_bin", path), slog.Bool("mock_llm", mockLLMURL != ""))
+	}
+
 	router := api.NewRouter(api.Config{
 		Store:        st,
 		Blob:         bl,
 		AppOrigin:    appOrigin,
 		RenderOrigin: renderOrigin,
 		AuthToken:    authToken,
+		Agent:        agentMgr,
+		Secrets:      box,
+		MockEnabled:  mockLLMURL != "",
 	})
 
 	go func() {
