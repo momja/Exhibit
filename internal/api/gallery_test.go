@@ -121,6 +121,25 @@ func TestGalleryIndexRendersAddTagModal(t *testing.T) {
 // itself opens the detail/viewer page, and the 'Details' link does the same
 // explicitly. There must be no open-in-new-tab affordance and the card must
 // carry a click target so any non-interactive part of it navigates.
+func TestGallerySearchIsEagerInput(t *testing.T) {
+	r := newTestRouter(t)
+	createTestArtifact(t, r, "Findable")
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	// Search is an inline input that filters as the user types — there is no
+	// form submit, no Search button, and no waiting for Enter.
+	assert.Contains(t, page, `<input type="text" id="search-input" name="q"`)
+	assert.Contains(t, page, `placeholder="Search artifacts…"`)
+	assert.Contains(t, page, `runSearch`) // debounce + fetch + grid-swap script
+	assert.NotContains(t, page, `type="submit"`)
+	assert.NotContains(t, page, `>Search</button>`)
+}
+
 func TestGalleryCardHasOnlyDetailsOpenAffordance(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Openless")

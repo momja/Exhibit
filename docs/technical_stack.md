@@ -192,7 +192,8 @@ and add real thumbnails later without schema changes.
 **As built: server-rendered HTML emitted directly by Go handlers** in
 `internal/api/gallery.go`, with inline CSS and vanilla JS for the small client-side
 bits (modals, the tag editor, the allowlist editor). The gallery is CRUD-shaped —
-grid, search, tag/collection filters, a detail view — and full-page server renders
+grid, search (eager client-filtered by swapping the server-rendered grid),
+tag/collection filters, a detail view — and full-page server renders
 have covered it so far, keeping everything inside the one Go binary with no template
 engine or frontend framework at all.
 

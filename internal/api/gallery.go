@@ -124,10 +124,13 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
 .btn:hover{background:var(--brand-blue-hover)}
 .btn-sm{padding:5px 12px;font-size:13px}
-.search-row{display:flex;gap:8px;margin-bottom:20px}
-.search-row input{flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none}
+.search-row{display:flex;align-items:center;gap:8px;margin-bottom:20px;position:relative}
+.search-row .search-icon{position:absolute;left:10px;color:#aaa;font-size:16px;pointer-events:none}
+.search-row input{flex:1;padding:9px 12px 9px 34px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none}
 .search-row input:focus{border-color:var(--brand-blue)}
+.search-clear{flex:0 0 auto;padding:5px 10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.grid.grid-loading{opacity:.5;transition:opacity .1s ease}
 .card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:box-shadow .12s ease}
 .card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .card-title{font-size:15px;font-weight:600;color:var(--brand-blue);text-decoration:none;word-break:break-word}
@@ -205,10 +208,11 @@ main{padding:24px;max-width:1200px;margin:0 auto}
   <div id="status"></div>
 </div>
 
-<form class="search-row" method="GET" action="/">
-  <input type="text" name="q" placeholder="Search…" value="` + searchVal + `">
-  <button class="btn btn-sm" type="submit">Search</button>
-</form>
+<div class="search-row">
+  <i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
+  <input type="text" id="search-input" name="q" placeholder="Search artifacts…" value="` + searchVal + `" autocomplete="off">
+  <button class="btn btn-sm search-clear" type="button" id="search-clear" aria-label="Clear search" hidden><i class="ph ph-x"></i></button>
+</div>
 
 <div class="grid">` + cards.String() + `</div>
 </main>
@@ -218,6 +222,48 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 
 <script>
 const TOKEN = ` + fmt.Sprintf("%q", token) + `;
+
+// Eager search: filter the gallery as the user types instead of waiting for a
+// submit. A debounced fetch re-asks the server-rendered gallery page with the
+// current query and swaps only the .grid contents, so search stays authoritative
+// (it runs the same FTS query as the form did) while the upload box, tag modals,
+// and delegated card/tag handlers stay untouched. The empty query lists all.
+(function() {
+  const input = document.getElementById('search-input');
+  const clear = document.getElementById('search-clear');
+  if (!input) return;
+  let timer = null;
+  let lastQ = input.value.trim();
+  syncClear();
+  input.addEventListener('input', function() {
+    syncClear();
+    clearTimeout(timer);
+    timer = setTimeout(runSearch, 220);
+  });
+  input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); runSearch(); } });
+  if (clear) clear.addEventListener('click', function() { input.value = ''; syncClear(); input.focus(); clearTimeout(timer); runSearch(); });
+  function syncClear() { if (clear) clear.hidden = !input.value; }
+  function runSearch() {
+    const q = input.value.trim();
+    if (q === lastQ) return;
+    lastQ = q;
+    const grid = document.querySelector('.grid');
+    if (!grid) return;
+    grid.classList.add('grid-loading');
+    const url = q ? '/?q=' + encodeURIComponent(q) : '/';
+    fetch(url, { headers: { 'X-Requested-With': 'gallery-search' }, credentials: 'same-origin' })
+      .then(function(r) { return r.ok ? r.text() : Promise.reject(r.statusText); })
+      .then(function(html) {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const fresh = doc.querySelector('.grid');
+        grid.innerHTML = fresh ? fresh.innerHTML : '';
+        grid.classList.remove('grid-loading');
+        if (history.replaceState) history.replaceState(null, '', url);
+      })
+      .catch(function() { grid.classList.remove('grid-loading'); });
+  }
+})();
+
 let currentMode = 'paste';
 
 function setMode(mode) {
