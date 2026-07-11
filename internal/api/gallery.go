@@ -109,7 +109,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 :root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}
+header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:12px 24px;display:flex;align-items:center;gap:16px}
 header h1{font-size:18px;font-weight:600}
 header .logo{height:32px;width:auto;display:block;flex:0 0 auto}
 header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
@@ -816,7 +816,7 @@ async function refetchSource() {
 :root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;display:flex;flex-direction:column;height:100vh}
-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+header{background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;z-index:20}
 header a{color:var(--brand-blue);text-decoration:none;font-size:13px}
 header h1{font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toolbar{background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 20px;display:flex;gap:12px;align-items:center;flex-shrink:0;font-size:13px}
@@ -938,7 +938,7 @@ func renderEditPage(a *store.Artifact, src, token string) string {
 :root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}
+header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:12px 24px;display:flex;align-items:center;gap:16px}
 header h1{font-size:18px;font-weight:600;flex:1}
 header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
 main{padding:24px;max-width:900px;margin:0 auto}

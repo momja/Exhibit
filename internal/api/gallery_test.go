@@ -140,6 +140,23 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 	assert.NotContains(t, page, `>Search</button>`)
 }
 
+func TestGalleryHeaderHasVisualSeparation(t *testing.T) {
+	r := newTestRouter(t)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	// The header must be visually distinct from the white content cards below
+	// it: it is sticky (stays visible while scrolling) and carries a real
+	// shadow + stronger border rather than the same near-invisible hairline
+	// the cards use. A bare 1px #e0e0e0 border alone read as flush with content.
+	assert.Contains(t, page, `header{position:sticky;top:0;z-index:20`)
+	assert.Contains(t, page, `box-shadow:0 1px 6px rgba(0,0,0,.07)`) // grep-friendly: 'box-shadow'
+}
+
 func TestGalleryCardHasOnlyDetailsOpenAffordance(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Openless")
