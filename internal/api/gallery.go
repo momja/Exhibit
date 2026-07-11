@@ -80,19 +80,17 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 	if len(arts) == 0 {
 		cards.WriteString(`<p class="empty">No artifacts yet. Upload one above.</p>`)
 	}
-	// The whole card opens the artifact's detail/viewer page; the explicit
-	// 'Details' action does the same. The separate 'Open' card action was
-	// removed so there is exactly one way to open an artifact from a card.
+	// The whole card opens the artifact's detail/viewer page — the card body
+	// and the title link are the affordances. The separate 'Details' link was
+	// removed: it navigated to the same page as the title click, so it was
+	// redundant. The earlier 'Open ↗' new-tab action was already gone.
 	for _, a := range arts {
 		cards.WriteString(fmt.Sprintf(`
 <div class="card" data-href="/artifacts/%s">
   <a class="card-title" href="/artifacts/%s">%s</a>
   <div class="card-meta">%s</div>
   %s
-  <div class="card-actions">
-    <a href="/artifacts/%s">Details</a>
-  </div>
-</div>`, a.ID, a.ID, htmlEsc(a.Title), a.CreatedAt.Format("Jan 2, 2006"), renderTagRow(a.ID, a.Tags), a.ID))
+</div>`, a.ID, a.ID, htmlEsc(a.Title), a.CreatedAt.Format("Jan 2, 2006"), renderTagRow(a.ID, a.Tags)))
 	}
 
 	searchVal := htmlEsc(query)
@@ -139,12 +137,14 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .card-actions{display:flex;gap:12px;font-size:13px}
 .card-actions a{color:#555;text-decoration:none}
 .card-actions a:hover{color:var(--brand-blue)}
+.card:hover .card-title{color:var(--brand-blue)}
 .tag-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
 .tag-add-btn{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:20px;height:20px;padding:0;border:1px dashed #ccc;border-radius:50%;background:transparent;color:#888;cursor:pointer}
 .tag-add-btn:hover,.tag-add-btn:focus-visible{border-color:var(--brand-blue);border-style:solid;color:var(--brand-blue)}
 .tag-add-btn i{font-size:11px;line-height:1}
 .tag-pills{display:flex;flex-wrap:wrap;gap:6px;list-style:none}
-.tag-pill{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.4}
+.tag-pill{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 7px 2px 5px;border-radius:999px;font-size:11px;font-weight:500;line-height:1.3;background:#f1f1f1;color:#555}
+.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#888}
 .tag-pill-label{overflow-wrap:anywhere}
 .tag-pill-edit,.tag-pill-detach{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:14px;height:14px;padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .12s ease,background .12s ease}
 .tag-pill-edit i,.tag-pill-detach i{font-size:11px;line-height:1}
@@ -633,13 +633,17 @@ document.getElementById('tag-add-confirm').addEventListener('click', async funct
 </html>`
 }
 
-// renderTagPills renders an artifact's tags as colored pills. It returns ""
-// when there are no tags so cards without tags render with no empty pill
-// row. Each pill carries a hover/focus-revealed edit (pencil) control on the
-// left and a detach (x) control on the right; both are real <button>s so
-// they're reachable by keyboard without extra handling, and they occupy
-// fixed space at all times so revealing them on hover never shifts the pill
-// layout — only their opacity changes.
+// renderTagPills renders an artifact's tags as small neutral pills, each led
+// by a colored dot that carries the tag's color — like a 'Development' label
+// with a green dot to its left. The pill itself is a single low-saturation
+// color so a row of tags reads as secondary metadata, not as headers bigger
+// than the card title. It returns "" when there are no tags so untagged cards
+// render with no empty pill row. Each pill carries a hover/focus-revealed edit
+// (pencil) control on the left and a detach (x) control on the right; both are
+// real <button>s so they're reachable by keyboard without extra handling, and
+// they occupy fixed space at all times so revealing them on hover never shifts
+// the pill layout — only their opacity changes. The tag color still flows to the
+// edit modal via data-tag-color.
 func renderTagPills(artifactID string, tags []*store.Tag) string {
 	if len(tags) == 0 {
 		return ""
@@ -647,17 +651,18 @@ func renderTagPills(artifactID string, tags []*store.Tag) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf(`<ul class="tag-pills" data-artifact-id="%s">`, artifactID))
 	for _, t := range tags {
-		bg := color.Normalize(t.Color)
-		fg := color.ContrastText(bg)
+		dot := color.Normalize(t.Color)
 		name := htmlEsc(t.Name)
 		b.WriteString(fmt.Sprintf(
-			`<li class="tag-pill" data-tag-id="%s" style="background:%s;color:%s">`+
+			`<li class="tag-pill" data-tag-id="%s">`+
 				`<button type="button" class="tag-pill-edit" data-tag-id="%s" data-tag-name="%s" data-tag-color="%s" aria-label="Edit tag %s"><i class="ph ph-pencil-simple"></i></button>`+
+				`<span class="tag-dot" style="background:%s" aria-hidden="true"></span>`+
 				`<span class="tag-pill-label">%s</span>`+
 				`<button type="button" class="tag-pill-detach" data-tag-id="%s" data-artifact-id="%s" aria-label="Remove tag %s from this artifact"><i class="ph ph-x"></i></button>`+
 				`</li>`,
-			t.ID, bg, fg,
-			t.ID, name, bg, name,
+			t.ID,
+			t.ID, name, dot, name,
+			dot,
 			name,
 			t.ID, artifactID, name))
 	}
