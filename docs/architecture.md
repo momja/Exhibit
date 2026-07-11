@@ -214,6 +214,35 @@ tag/collection management, the allowlist editor — is full-page server renders.
   image.
 - **Future Chrome extension** → another API client for chat-UI ingest.
 
+### 3.7 Agent sidecar (Pi harness, Exh-yvhp)
+
+The build/modify-with-AI surface follows the same satellite philosophy but is
+spawned by the service rather than composed by the operator: each chat session
+runs one `pi --mode rpc` subprocess (Pi, Mario Zechner's agent harness —
+JSONL over stdin/stdout), managed by `internal/agent`. If the `pi` binary is
+absent the surface degrades to disabled; nothing else changes.
+
+- **Single write path preserved:** the sidecar is loaded with built-in tools
+  disabled and exactly one extension (`internal/agent/ext/exhibit.ts`) whose
+  `create_artifact` / `update_artifact` / `get_artifact` tools call back into
+  the exhibit HTTP API with the service token. Agent output is scanned like
+  any ingest and its footprint is never auto-approved.
+- **BYO key, sealed at rest:** the user's provider key is stored AES-256-GCM
+  encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
+  handed to the subprocess only through its (minimal, built-from-scratch)
+  environment. Reads return masked hints; page JS never sees the key again.
+- **Streaming:** the service fans Pi's event stream out to the browser via
+  SSE (`/api/agent/sessions/:id/events`); prompts arriving mid-run become Pi
+  steering messages. Transcripts are persisted per artifact
+  (`agent_transcripts`) as colophon-style provenance for future remixing.
+- **Trust note:** the sidecar is a subprocess of the service executing
+  LLM-directed tool calls, but its reach is bounded to the same authenticated
+  API surface any client has — it holds no datastore access of its own.
+
+See `docs/agent.md` for the full flow, including snippet mode (the render
+surface's element picker that feeds an element screenshot + descriptor back
+into the prompt as multimodal context).
+
 ## 4. Trust boundaries
 
 Four boundaries, in decreasing trust:
@@ -328,7 +357,10 @@ specifies — server-side state is the whole mechanism.
   sandbox VMs. The moment an artifact needs a live server it stops being a file and
   leaves this system's scope.
 - **Not a multi-service deployment.** One Go process answers both origins; SQLite is
-  embedded; the only extra processes are optional satellites composed by the operator.
+  embedded; the only extra processes are optional satellites composed by the operator,
+  plus short-lived per-session Pi sidecars the service itself spawns for the agent
+  surface (§3.7) — spawned on demand, reaped on idle, absent entirely when `pi` is
+  not installed.
 - **Not a predictor.** No pre-render static/LLM analysis gates behavior. Policy and
   interception sit at the runtime boundary and observe.
 - **Not the owner of TLS or backup targets.** The release is the image plus a config
