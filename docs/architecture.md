@@ -203,8 +203,11 @@ Server-rendered HTML emitted directly by Go handlers (`internal/api/gallery.go`)
 styled with inline CSS and wired with small amounts of vanilla JS. Talks to the API
 like any other client. Hosts two islands of client JS: the **CodeMirror** source
 editor (an esbuild-built, `go:embed`-served bundle) and the **renderer iframe**
-(which actually points at `RENDER_ORIGIN`). Everything else — search, filter,
-tag/collection management, the allowlist editor — is full-page server renders.
+(which actually points at `RENDER_ORIGIN`). The gallery renders server-side,
+but search filters eagerly from the client: a debounced input refetches the
+same server-rendered gallery with the query and swaps only the grid, so the
+FTS5 search query stays authoritative without a full page reload. Filter,
+tag/collection management, and the allowlist editor are full-page server renders.
 
 ### 3.6 Optional satellites (composed around, not shipped in)
 
