@@ -281,9 +281,16 @@ func TestPatchArtifactBodyDoesNotAddScannedOrigins(t *testing.T) {
 
 	var updated map[string]any
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
+	art := updated["artifact"].(map[string]any)
 	// Editing the body must NOT silently grant network access: the newly
 	// scanned origin stays out of the allowlist until the user approves it.
-	assert.Empty(t, updated["network_allowlist"])
+	assert.Empty(t, art["network_allowlist"])
+
+	// The edit re-scanned the body (it differs from the previous no-network
+	// version) and surfaced the footprint plus the change flag so the edit
+	// dialog can re-run the explicit-approval flow — without seeding allowlist.
+	assert.Contains(t, updated["network_footprint"], "https://cdn.jsdelivr.net")
+	assert.True(t, updated["footprint_changed"].(bool))
 
 	// The blob body is overwritten with the new content.
 	assert.Equal(t, newBody, getArtifactBody(t, r, id))
@@ -312,7 +319,8 @@ func TestPatchArtifactBodyKeepsExplicitAllowlist(t *testing.T) {
 
 	var updated map[string]any
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
-	assert.Equal(t, []any{"https://example.com"}, updated["network_allowlist"])
+	art := updated["artifact"].(map[string]any)
+	assert.Equal(t, []any{"https://example.com"}, art["network_allowlist"])
 }
 
 func TestPatchArtifactEmptyBodyIgnored(t *testing.T) {
@@ -337,8 +345,65 @@ func TestPatchArtifactEmptyBodyIgnored(t *testing.T) {
 
 	var updated map[string]any
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
-	assert.Equal(t, "Renamed", updated["title"])
+	art := updated["artifact"].(map[string]any)
+	assert.Equal(t, "Renamed", art["title"])
 	assert.Equal(t, original, getArtifactBody(t, r, id))
+}
+
+func TestPatchArtifactUnchangedBodyReportsNoChange(t *testing.T) {
+	r := newTestRouter(t)
+
+	original := `<html><head><script src="https://cdn.jsdelivr.net/npm/x"></script></head><body>hi</body></html>`
+	id := createArtifact(t, r, map[string]any{
+		"title":             "Plain",
+		"body":              original,
+		"network_allowlist": []string{},
+	})
+
+	// PATCH the same body back — no diff, so the scan must not report a change.
+	patch := map[string]any{"body": original}
+	pb, _ := json.Marshal(patch)
+	req := httptest.NewRequest("PATCH", "/api/artifacts/"+id, bytes.NewReader(pb))
+	req.Header.Set("Authorization", authHeader())
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var updated map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
+	assert.False(t, updated["footprint_changed"].(bool), "identical body must not report a footprint change")
+	assert.Empty(t, updated["network_footprint"])
+}
+
+func TestPatchArtifactSameFootprintReportsNoChange(t *testing.T) {
+	r := newTestRouter(t)
+
+	// Two different bodies that contact the SAME origin — the content diffs
+	// but the network footprint does not, so the scan re-runs yet reports no
+	// change (no re-approval prompt).
+	first := `<html><head><script src="https://cdn.jsdelivr.net/npm/a"></script></head><body>v1</body></html>`
+	second := `<html><head><script src="https://cdn.jsdelivr.net/npm/b"></script></head><body>v2</body></html>`
+	id := createArtifact(t, r, map[string]any{
+		"title":             "Plain",
+		"body":              first,
+		"network_allowlist": []string{},
+	})
+
+	patch := map[string]any{"body": second}
+	pb, _ := json.Marshal(patch)
+	req := httptest.NewRequest("PATCH", "/api/artifacts/"+id, bytes.NewReader(pb))
+	req.Header.Set("Authorization", authHeader())
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var updated map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
+	assert.False(t, updated["footprint_changed"].(bool), "same origin set must not report a footprint change")
+	assert.Contains(t, updated["network_footprint"], "https://cdn.jsdelivr.net")
+	assert.Equal(t, second, getArtifactBody(t, r, id))
 }
 
 func TestRefetchArtifactOverwritesBody(t *testing.T) {
