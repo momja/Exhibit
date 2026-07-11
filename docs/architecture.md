@@ -88,9 +88,12 @@ The only way data changes. Route groups:
   patched).
 - `GET /api/artifacts`, `GET /api/artifacts/:id` — list/detail (drives the gallery).
 - `PATCH /api/artifacts/:id` — edits: title, body (rewrites the stored blob),
-  `network_allowlist`, and other scalar columns. Tag and collection membership use
-  the dedicated `POST/DELETE /api/artifacts/:id/tags/:tagID` and
-  `.../collections/:colID` routes.
+  `network_allowlist`, and other scalar columns. Rewriting the body re-executes
+  the scan and returns the footprint plus a `footprint_changed` flag so the edit
+  dialog can re-run the explicit-approval gate when origins differ from the
+  previous version; the allowlist is never seeded from that scan (spec §6.2).
+  Tag and collection membership use the dedicated `POST/DELETE
+  /api/artifacts/:id/tags/:tagID` and `.../collections/:colID` routes.
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
   `source_url` and replaces the stored body. A snapshot, not a versioned update.
 - `DELETE /api/artifacts/:id` — deletes the artifact and associated rows (tags,
