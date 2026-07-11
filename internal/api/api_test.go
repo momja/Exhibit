@@ -152,10 +152,14 @@ func TestPatchArtifact(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var updated store.Artifact
+	var updated updateArtifactResponse
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
-	assert.Equal(t, "Updated", updated.Title)
-	assert.Equal(t, []string{"https://example.com"}, updated.NetworkAllowlist)
+	require.NotNil(t, updated.Artifact)
+	assert.Equal(t, "Updated", updated.Artifact.Title)
+	assert.Equal(t, []string{"https://example.com"}, updated.Artifact.NetworkAllowlist)
+	// No body changed, so the re-scan reports nothing to re-approve.
+	assert.False(t, updated.FootprintChanged)
+	assert.Empty(t, updated.NetworkFootprint)
 }
 
 func TestStateAPI(t *testing.T) {
