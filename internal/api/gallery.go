@@ -143,14 +143,17 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .tag-add-btn:hover,.tag-add-btn:focus-visible{border-color:var(--brand-blue);border-style:solid;color:var(--brand-blue)}
 .tag-add-btn i{font-size:11px;line-height:1}
 .tag-pills{display:flex;flex-wrap:wrap;gap:6px;list-style:none}
-.tag-pill{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 7px 2px 5px;border-radius:999px;font-size:11px;font-weight:500;line-height:1.3;background:#f1f1f1;color:#555}
-.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#888}
+.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px;font-weight:500;line-height:1;background:#f1f1f1;color:#555}
+.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#888;transition:opacity .12s ease}
 .tag-pill-label{overflow-wrap:anywhere}
-.tag-pill-edit,.tag-pill-detach{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:14px;height:14px;padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .12s ease,background .12s ease}
+.tag-pill-edit,.tag-pill-detach{position:absolute;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:18px;height:18px;padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .12s ease,background .12s ease}
+.tag-pill-edit{left:2px}
+.tag-pill-detach{right:2px}
 .tag-pill-edit i,.tag-pill-detach i{font-size:11px;line-height:1}
 .tag-pill:hover .tag-pill-edit,.tag-pill:hover .tag-pill-detach,
 .tag-pill:focus-within .tag-pill-edit,.tag-pill:focus-within .tag-pill-detach,
 .tag-pill-edit:focus-visible,.tag-pill-detach:focus-visible{opacity:1;pointer-events:auto}
+.tag-pill:hover .tag-dot,.tag-pill:focus-within .tag-dot{opacity:0}
 .tag-pill-edit:hover,.tag-pill-detach:hover{background:rgba(0,0,0,.15)}
 .empty{color:#888;font-size:14px;padding:20px 0}
 #status{margin-top:10px;font-size:13px;color:#555}

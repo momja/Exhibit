@@ -52,7 +52,11 @@ func TestGalleryIndexRendersTagPills(t *testing.T) {
 
 	// Tags are smaller than the title: pill 11px vs card-title 15px, so the row
 	// never outweighs the artifact name it belongs to.
-	assert.Contains(t, page, `.tag-pill{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 7px 2px 5px;border-radius:999px;font-size:11px`)
+	assert.Contains(t, page, `.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px`)
+	// The dot and label flow together as one flex group; symmetric padding
+	// centers that group so the right side isn't padded more than the left.
+	// The dot is NOT absolutely positioned — it is a normal flex item.
+	assert.Contains(t, page, `.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#888;transition:opacity .12s ease}`)
 	assert.Contains(t, page, `.card-title{font-size:15px;font-weight:600`)
 }
 
@@ -78,10 +82,12 @@ func TestTagPillHoverControls(t *testing.T) {
 	assert.Contains(t, page, `<button type="button" class="tag-pill-detach" data-tag-id="`+tag.ID+`" data-artifact-id="`+id+`" aria-label="Remove tag charts from this artifact"><i class="ph ph-x"></i></button>`)
 
 	// Hidden-until-hover/focus is CSS-driven (opacity/pointer-events on
-	// .tag-pill-edit/.tag-pill-detach), not a layout property, so revealing
-	// them never shifts the pill.
-	assert.Contains(t, page, `.tag-pill-edit,.tag-pill-detach{display:inline-flex`)
+	// .tag-pill-edit/.tag-pill-detach). The controls are absolutely positioned
+	// over the pill's end caps (overlay) so revealing them never shifts the
+	// pill; the dot fades out when the edit pencil enters the left cap.
+	assert.Contains(t, page, `.tag-pill-edit,.tag-pill-detach{position:absolute`)
 	assert.Contains(t, page, `opacity:0;pointer-events:none`)
+	assert.Contains(t, page, `.tag-pill:hover .tag-dot,.tag-pill:focus-within .tag-dot{opacity:0}`)
 }
 
 func TestGalleryIndexRendersEditTagModal(t *testing.T) {
