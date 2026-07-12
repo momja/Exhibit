@@ -387,6 +387,10 @@ func injectShim(body, artifactID, appOrigin string, state map[string]string) str
 		stateJSON = []byte("{}")
 	}
 	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, stateJSON)
+	// The snippet element-picker (Exh-edjk) rides along with the shim: inert
+	// until the app-origin host activates it, so it costs nothing for plain
+	// renders and share views.
+	shim += "\n" + snippetScript(appOrigin)
 
 	// Try to inject after <head>
 	idx := strings.Index(strings.ToLower(body), "<head>")

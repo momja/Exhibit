@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/artifact-viewer/artifact-viewer/internal/blob"
+	"github.com/artifact-viewer/artifact-viewer/internal/secrets"
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,12 +34,16 @@ func newTestRouter(t *testing.T) *Router {
 	bl, err := blob.NewFSStore(blobDir)
 	require.NoError(t, err)
 
+	box, err := secrets.Load("test-secret", "")
+	require.NoError(t, err)
+
 	return NewRouter(Config{
 		Store:        st,
 		Blob:         bl,
 		AppOrigin:    "http://app.test",
 		RenderOrigin: "http://render.test",
 		AuthToken:    "secret",
+		Secrets:      box,
 	})
 }
 
@@ -152,10 +157,14 @@ func TestPatchArtifact(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var updated store.Artifact
+	var updated updateArtifactResponse
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
-	assert.Equal(t, "Updated", updated.Title)
-	assert.Equal(t, []string{"https://example.com"}, updated.NetworkAllowlist)
+	require.NotNil(t, updated.Artifact)
+	assert.Equal(t, "Updated", updated.Artifact.Title)
+	assert.Equal(t, []string{"https://example.com"}, updated.Artifact.NetworkAllowlist)
+	// No body changed, so the re-scan reports nothing to re-approve.
+	assert.False(t, updated.FootprintChanged)
+	assert.Empty(t, updated.NetworkFootprint)
 }
 
 func TestStateAPI(t *testing.T) {

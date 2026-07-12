@@ -6,7 +6,9 @@
 # `make assets` uses and discovers workspaces automatically, so adding a new
 # asset never means editing this Dockerfile. The output is not committed to git;
 # it is produced fresh on every image build. The runtime image below carries
-# only the built bytes — no Node, no internet egress.
+# only the built bytes from this stage — it does end up with its own Node
+# install too, but that's for the `pi` agent sidecar (see below), unrelated
+# to asset building.
 FROM node:22-bookworm-slim AS assets
 
 WORKDIR /app
@@ -37,7 +39,21 @@ COPY --from=assets /app/internal/api/assets/ ./internal/api/assets/
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
 
 # --- Runtime stage ---
-FROM gcr.io/distroless/static-debian12
+# TODO: install this conditionally. Don't install by default for all deploys
+# Node-based (not distroless): the agent surface (docs/agent.md) spawns `pi`
+# — Mario Zechner's pi-mono agent harness — as a subprocess of the server
+# itself, so it must live in this image. Pi is npm-only (no standalone
+# binary) and its bin script is a `#!/usr/bin/env node` shebang, which needs
+# a real userland (node + env) that distroless/static doesn't provide. The
+# server itself stays a static Go binary; only the agent surface pulls in
+# this larger base. If `pi` is ever removed from PATH the surface disables
+# itself (internal/agent), so this stays safe to run without it configured.
+FROM node:22-bookworm-slim
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends ca-certificates \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 
 COPY --from=builder /bin/server /server
 

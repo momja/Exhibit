@@ -37,6 +37,9 @@ All config is via environment variables:
 | `DATA_DIR` | `./data` | Directory for SQLite DB and blob storage |
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, or `error` (unknown → `info`) |
 | `DEBUG` | unset | Any non-empty value forces debug-level logging (overrides `LOG_LEVEL`) |
+| `PI_BIN` | `pi` | Pi agent harness executable; if not found, the agent surface is disabled |
+| `EXHIBIT_SECRET` | unset | Secret for encrypting stored agent API keys (else a random key is generated at `DATA_DIR/secret.key`) |
+| `MOCK_LLM_URL` | unset | Dev/test only: base URL of `cmd/mockllm`, enables the `exhibit-mock` provider |
 
 ## Debug mode
 
@@ -168,6 +171,28 @@ POST   /api/artifacts/:id/tags/:tagID                Add tag
 DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 ```
 
+### Agent (build/modify with AI, BYO key)
+
+```
+PUT    /api/agent/key                        Store provider API key {"provider","model","api_key"} (encrypted at rest)
+GET    /api/agent/key                        Key status (masked hint only — the key is never returned)
+DELETE /api/agent/key                        Remove the stored key
+POST   /api/agent/sessions                   Start a session {"artifact_id"?: bind to an existing artifact}
+POST   /api/agent/sessions/:id/prompt        Send a prompt {"message", "images"?: [{data, mime_type}]}
+POST   /api/agent/sessions/:id/abort         Abort the current run
+DELETE /api/agent/sessions/:id               End the session
+GET    /api/agent/sessions/:id/events        SSE event stream (?token= auth — EventSource can't set headers)
+GET    /api/artifacts/:id/transcripts        Agent conversations persisted with an artifact
+```
+
+Each session spawns a [Pi](https://github.com/badlogic/pi-mono) sidecar
+(`pi --mode rpc`) whose only tools call back into this API, so agent output
+enters the library through the same ingest path (scan + explicit allowlist
+approval) as everything else. The chat UI lives at `/agent`
+(`/agent?artifact=<id>` to modify an existing artifact); snippet mode
+(Ctrl+Shift+S) lets you click an element in the live preview and attach its
+screenshot + selector to your next prompt. See [docs/agent.md](./docs/agent.md).
+
 ### Shares
 
 ```
@@ -242,12 +267,15 @@ Full stance — CSP, vendoring, clipboard/file defaults — in [docs/security.md
 ```
 cmd/
   server/     main entry point
+  mockllm/    deterministic OpenAI-compatible mock LLM for agent E2E tests
 internal/
-  api/        HTTP handlers, router, middleware, gallery pages
+  agent/      Pi sidecar session manager + exhibit tools extension (ext/exhibit.ts)
+  api/        HTTP handlers, router, middleware, gallery + agent chat pages
   blob/       Blob store interface + filesystem implementation
   color/      Brand color constants
-  render/     Render surface handler (CSP, state inlining, shim injection)
+  render/     Render surface handler (CSP, state inlining, shim + snippet injection)
   scanner/    Ingest scanner (extracts network origins from HTML, base-aware)
+  secrets/    AES-GCM sealing for BYO agent API keys
   snapshot/   URL-ingest asset vendoring (bounded fetch, HTML/CSS inlining, <base href>)
   store/      Store interface, SQLite implementation, migrations
 web/          Build-time asset workspaces (see docs/build_assets.md)

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -460,6 +461,67 @@ func (s *SQLiteStore) SetState(ctx context.Context, artifactID, key, value strin
          ON CONFLICT(artifact_id, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
 		artifactID, key, value)
 	return err
+}
+
+func (s *SQLiteStore) SetAgentKey(ctx context.Context, k *AgentKey) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO agent_keys (owner_id, provider, model, key_ciphertext, updated_at)
+         VALUES (?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(owner_id) DO UPDATE SET provider=excluded.provider,
+             model=excluded.model, key_ciphertext=excluded.key_ciphertext,
+             updated_at=excluded.updated_at`,
+		k.OwnerID, k.Provider, k.Model, k.KeyCiphertext)
+	return err
+}
+
+func (s *SQLiteStore) GetAgentKey(ctx context.Context, ownerID int64) (*AgentKey, error) {
+	k := &AgentKey{OwnerID: ownerID}
+	var updated string
+	err := s.db.QueryRowContext(ctx,
+		"SELECT provider, model, key_ciphertext, updated_at FROM agent_keys WHERE owner_id=?",
+		ownerID).Scan(&k.Provider, &k.Model, &k.KeyCiphertext, &updated)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	k.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updated)
+	return k, nil
+}
+
+func (s *SQLiteStore) DeleteAgentKey(ctx context.Context, ownerID int64) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM agent_keys WHERE owner_id=?", ownerID)
+	return err
+}
+
+func (s *SQLiteStore) SaveTranscript(ctx context.Context, artifactID, sessionID, messagesJSON string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO agent_transcripts (artifact_id, session_id, messages, updated_at)
+         VALUES (?, ?, ?, datetime('now'))
+         ON CONFLICT(artifact_id, session_id) DO UPDATE SET
+             messages=excluded.messages, updated_at=excluded.updated_at`,
+		artifactID, sessionID, messagesJSON)
+	return err
+}
+
+func (s *SQLiteStore) ListTranscripts(ctx context.Context, artifactID string) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT session_id, messages FROM agent_transcripts WHERE artifact_id=? ORDER BY updated_at",
+		artifactID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]string)
+	for rows.Next() {
+		var sid, msgs string
+		if err := rows.Scan(&sid, &msgs); err != nil {
+			return nil, err
+		}
+		out[sid] = msgs
+	}
+	return out, rows.Err()
 }
 
 func (s *SQLiteStore) CreateShare(ctx context.Context, sh *Share) error {

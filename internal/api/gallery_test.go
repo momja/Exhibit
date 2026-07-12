@@ -31,18 +31,33 @@ func TestGalleryIndexRendersTagPills(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	page := w.Body.String()
 
-	// Tagged card: a pill list keyed to the artifact, with per-tag hooks and
-	// auto-contrasted text for both a light and a dark background.
+	// Tagged card: a pill list keyed to the artifact, with per-tag hooks.
+	// Pills are neutral (single low-saturation color) with the tag color
+	// carried by a leading dot — not a filled-color pill — so a row of tags
+	// reads as metadata, not as headers bigger than the card title.
 	assert.Contains(t, page, `<ul class="tag-pills" data-artifact-id="`+id+`">`)
-	assert.Contains(t, page, `data-tag-id="`+dark.ID+`" style="background:#ffffff;color:#111111"`)
+	assert.Contains(t, page, `<li class="tag-pill" data-tag-id="`+dark.ID+`">`)
+	assert.Contains(t, page, `<span class="tag-dot" style="background:#ffffff" aria-hidden="true"></span>`)
 	assert.Contains(t, page, `<span class="tag-pill-label">charts</span>`)
-	assert.Contains(t, page, `data-tag-id="`+light.ID+`" style="background:#111111;color:#ffffff"`)
+	assert.Contains(t, page, `<span class="tag-dot" style="background:#111111" aria-hidden="true"></span>`)
 	assert.Contains(t, page, `<span class="tag-pill-label">urgent</span>`)
+	// The filled-color pill style is gone.
+	assert.NotContains(t, page, `style="background:#ffffff;color:`)
+	assert.NotContains(t, page, `style="background:#111111;color:`)
 
 	// Untagged card: no empty pill row, but still a trailing '+' to add the
 	// first tag (tww.2.5).
 	assert.NotContains(t, page, `<ul class="tag-pills" data-artifact-id="`+untaggedID+`">`)
 	assert.Contains(t, page, `<button type="button" class="tag-add-btn" data-artifact-id="`+untaggedID+`" aria-label="Add tag">`)
+
+	// Tags are smaller than the title: pill 11px vs card-title 15px, so the row
+	// never outweighs the artifact name it belongs to.
+	assert.Contains(t, page, `.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px`)
+	// The dot and label flow together as one flex group; symmetric padding
+	// centers that group so the right side isn't padded more than the left.
+	// The dot is NOT absolutely positioned — it is a normal flex item.
+	assert.Contains(t, page, `.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#888;transition:opacity .12s ease}`)
+	assert.Contains(t, page, `.card-title{font-size:15px;font-weight:600`)
 }
 
 func TestTagPillHoverControls(t *testing.T) {
@@ -67,10 +82,12 @@ func TestTagPillHoverControls(t *testing.T) {
 	assert.Contains(t, page, `<button type="button" class="tag-pill-detach" data-tag-id="`+tag.ID+`" data-artifact-id="`+id+`" aria-label="Remove tag charts from this artifact"><i class="ph ph-x"></i></button>`)
 
 	// Hidden-until-hover/focus is CSS-driven (opacity/pointer-events on
-	// .tag-pill-edit/.tag-pill-detach), not a layout property, so revealing
-	// them never shifts the pill.
-	assert.Contains(t, page, `.tag-pill-edit,.tag-pill-detach{display:inline-flex`)
+	// .tag-pill-edit/.tag-pill-detach). The controls are absolutely positioned
+	// over the pill's end caps (overlay) so revealing them never shifts the
+	// pill; the dot fades out when the edit pencil enters the left cap.
+	assert.Contains(t, page, `.tag-pill-edit,.tag-pill-detach{position:absolute`)
 	assert.Contains(t, page, `opacity:0;pointer-events:none`)
+	assert.Contains(t, page, `.tag-pill:hover .tag-dot,.tag-pill:focus-within .tag-dot{opacity:0}`)
 }
 
 func TestGalleryIndexRendersEditTagModal(t *testing.T) {
@@ -115,13 +132,52 @@ func TestGalleryIndexRendersAddTagModal(t *testing.T) {
 	assert.Contains(t, page, `function openAddTagModal(`)
 }
 
-// The artifact card used to expose both a 'Details' link and an 'Open ↗' link
-// (the latter opening the raw render origin in a new tab). The 'Open' action was
-// removed so there is exactly one way into an artifact from a card: the card
-// itself opens the detail/viewer page, and the 'Details' link does the same
-// explicitly. There must be no open-in-new-tab affordance and the card must
-// carry a click target so any non-interactive part of it navigates.
-func TestGalleryCardHasOnlyDetailsOpenAffordance(t *testing.T) {
+// Search filters eagerly as the user types: an inline input with a debounce
+// + fetch + grid-swap script, no form submit and no Search button.
+func TestGallerySearchIsEagerInput(t *testing.T) {
+	r := newTestRouter(t)
+	createTestArtifact(t, r, "Findable")
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	assert.Contains(t, page, `<input type="text" id="search-input" name="q"`)
+	assert.Contains(t, page, `placeholder="Search artifacts…"`)
+	assert.Contains(t, page, `runSearch`) // debounce + fetch + grid-swap script
+	assert.NotContains(t, page, `type="submit"`)
+	assert.NotContains(t, page, `>Search</button>`)
+}
+
+// The exhibit header must read as distinct from the white content cards below
+// it: it is sticky (stays visible while scrolling) and carries a real shadow +
+// stronger border rather than the same near-invisible hairline the cards use.
+func TestGalleryHeaderHasVisualSeparation(t *testing.T) {
+	r := newTestRouter(t)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	// The header must be visually distinct from the white content cards below
+	// it: it is sticky (stays visible while scrolling) and carries a real
+	// shadow + stronger border rather than the same near-invisible hairline
+	// the cards use. A bare 1px #e0e0e0 border alone read as flush with content.
+	assert.Contains(t, page, `header{position:sticky;top:0;z-index:20`)
+	assert.Contains(t, page, `box-shadow:0 1px 6px rgba(0,0,0,.07)`) // grep-friendly: 'box-shadow'
+}
+
+// The artifact card's open affordances are the card body (click anywhere
+// non-interactive) and the title link — both go to the detail/viewer page.
+// The 'Details' link was removed: it navigated to the SAME page as the title
+// click, so it was redundant. The earlier 'Open ↗' new-tab action was already
+// gone. There must be no open-in-new-tab affordance and the card must carry a
+// click target so any non-interactive part of it navigates.
+func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Openless")
 
@@ -135,8 +191,12 @@ func TestGalleryCardHasOnlyDetailsOpenAffordance(t *testing.T) {
 	// isn't an interactive child; the data-href is what the click handler uses.
 	assert.Contains(t, page, `<div class="card" data-href="/artifacts/`+id+`">`)
 
-	// 'Details' remains the single named action and points at the detail page.
-	assert.Contains(t, page, `<a href="/artifacts/`+id+`">Details</a>`)
+	// The title link is the single named way into the artifact's detail page.
+	assert.Contains(t, page, `<a class="card-title" href="/artifacts/`+id+`">Openless</a>`)
+
+	// The redundant 'Details' link is gone (it duplicated the title click).
+	assert.NotContains(t, page, `>Details</a>`)
+	assert.NotContains(t, page, `class="card-actions"`)
 
 	// The removed 'Open ↗' action and any new-tab opener are gone from cards.
 	assert.NotContains(t, page, "Open ↗")

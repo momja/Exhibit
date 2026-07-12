@@ -26,17 +26,22 @@ func TestPatchDownloadsApproved(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&a))
 	assert.False(t, a.DownloadsApproved)
 
+	// PATCH wraps the artifact alongside the re-scan footprint (updateArtifactResponse).
+	var resp struct {
+		Artifact store.Artifact `json:"artifact"`
+	}
+
 	// Approve.
 	w = doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{"downloads_approved": true})
 	require.Equal(t, http.StatusOK, w.Code)
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&a))
-	assert.True(t, a.DownloadsApproved)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.True(t, resp.Artifact.DownloadsApproved)
 
 	// Revoke.
 	w = doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{"downloads_approved": false})
 	require.Equal(t, http.StatusOK, w.Code)
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&a))
-	assert.False(t, a.DownloadsApproved)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.False(t, resp.Artifact.DownloadsApproved)
 }
 
 // A non-bool downloads_approved must be a 400, not a stored value that later
