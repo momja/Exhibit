@@ -1,6 +1,6 @@
 ---
 id: av-hll6
-status: open
+status: closed
 deps: []
 links: [av-ryby]
 created: 2026-07-06T22:19:31Z
