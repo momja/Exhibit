@@ -32,3 +32,9 @@ Same bridge pattern as av-hll6 (clipboard) — if built together, factor a small
 - The iframe sandbox attribute still omits `allow-downloads`; no download occurs for unapproved artifacts by any vector.
 - /docs (security.md + architecture) document the bridge and the first-use approval model.
 
+
+## Notes
+
+**2026-07-12T17:05:10Z**
+
+Download bridge cherry-picked onto current main in PR #41 (feature/av-hll6/capability-bridge), landing together with av-hll6 clipboard on the shared bridge. Original standalone PR #31 was closed unmerged.

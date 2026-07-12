@@ -39,3 +39,9 @@ Same bridge pattern as av-ryby (downloads) — build the capability-bridge proto
 - Approval persists server-side, is revocable from artifact settings, and denial rejects the API call with a normal DOMException the artifact can handle.
 - Reproduce the reported violation first to confirm the opaque-origin delegation hypothesis; record the finding in this ticket.
 - /docs updated to describe clipboard behavior (native paste always works; API access is approval-gated).
+
+## Notes
+
+**2026-07-12T17:05:10Z**
+
+Implemented on feature/av-hll6/capability-bridge (PR #41) together with av-ryby's download bridge as a shared host-mediated capability bridge. Removed the no-op allow= clipboard delegation; navigator.clipboard read/write now proxied through the host with first-use approval (clipboard_approved, migration 006). Server-side + render tested; real-browser gesture/permission behavior still needs a manual pass (reproduce original violation).
