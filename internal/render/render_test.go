@@ -211,3 +211,28 @@ func TestShimDownloadBridgeIsFramedOnly(t *testing.T) {
 		t.Fatalf("download bridge must be guarded to framed (gallery-embedded) contexts: %s", doc)
 	}
 }
+
+// The clipboard bridge (av-hll6) proxies navigator.clipboard read/write through
+// the host frame: it replaces the API, posts the host-validated message shape,
+// and pins the request to the app origin like every other shim message. Like
+// the download bridge it installs framed-only (guarded by the same
+// window.parent check), so top-level/share renders are unaffected.
+func TestShimInstallsClipboardBridge(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+
+	// The message shape the host's clipboard listener validates.
+	if !strings.Contains(doc, "__avClipboard") {
+		t.Fatalf("shim missing the clipboard bridge message: %s", doc)
+	}
+	// The Clipboard API surface is actually replaced, not just referenced.
+	if !strings.Contains(doc, "writeText:") || !strings.Contains(doc, "readText:") {
+		t.Fatalf("shim must replace navigator.clipboard read/write: %s", doc)
+	}
+	if !strings.Contains(doc, "navigator") || !strings.Contains(doc, "'clipboard'") {
+		t.Fatalf("shim must install onto navigator.clipboard: %s", doc)
+	}
+	// Requests are pinned to the app origin, never broadcast.
+	if !strings.Contains(doc, "API_ORIGIN") {
+		t.Fatalf("clipboard messages must be pinned to the app origin: %s", doc)
+	}
+}

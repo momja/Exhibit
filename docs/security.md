@@ -99,13 +99,28 @@ pipeline. There are no live-linked imports and no automatic refresh.
 The dividing line for local capabilities: **local interaction with a user gesture
 is allowed; anything that produces egress or bypasses a user decision is not.**
 
-- **Clipboard** — the gallery's embed delegates
-  `allow="clipboard-read; clipboard-write"` into the sandboxed frame. Without
-  this, the opaque origin has clipboard access denied outright and copy/paste — a
-  common artifact interaction — throws a permissions-policy violation. This is a
-  local capability, not network egress: the browser still gates clipboard access
-  on a user gesture, and anything an artifact reads from the clipboard can only
-  leave the frame via `connect-src`, which the allowlist governs.
+- **Clipboard** — `navigator.clipboard` read/write is **mediated by the host
+  frame with first-use approval**, the same capability bridge as downloads
+  (below). An earlier attempt delegated `allow="clipboard-read; clipboard-write"`
+  into the frame, but a Permissions-Policy `allow=` keys on the frame's *src
+  origin*, which is opaque (no `allow-same-origin`) and matches nothing — so the
+  delegation was a no-op and copy/paste still threw a permissions-policy
+  violation. The delegation is removed; instead:
+  - The shim replaces `navigator.clipboard.readText`/`writeText` inside the
+    frame and posts each call to the host (pinned to the app origin), correlated
+    by request id so the returned Promise settles with the host's answer.
+  - On the artifact's **first** clipboard request the host prompts, naming the
+    artifact and the direction (read vs write). Approval persists server-side
+    (`clipboard_approved`, PATCHed through the API — the single write path),
+    survives reloads and devices, and is revocable from the toolbar. Denial
+    rejects the call with a `NotAllowedError` `DOMException` — exactly what a
+    real blocked clipboard call throws, so the artifact handles it unchanged.
+  - Once approved the host performs the op on the app origin (which holds
+    clipboard permission and, from the Allow click, transient user activation)
+    and posts the result back into the frame.
+  - **Native keyboard paste** (Ctrl/Cmd+V into a focused field) is a browser
+    event, not a Clipboard API call, so it always works and needs no approval;
+    the bridge governs only programmatic API access.
 - **File reads** — `<input type="file">` and drag-in work normally: the user
   picks the file, the artifact reads only what was picked, and the contents are
   subject to the same egress rules as any other data in the frame.

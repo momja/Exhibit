@@ -818,15 +818,19 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
   <span style="color:#888">Downloads:</span>
   <span id="dl-state"></span>
   <button id="dl-revoke" onclick="revokeDownloads()" style="display:none"><i class="ph ph-prohibit"></i> Revoke</button>
+  <span style="color:#ddd">|</span>
+  <span style="color:#888">Clipboard:</span>
+  <span id="clip-state"></span>
+  <button id="clip-revoke" onclick="revokeClipboard()" style="display:none"><i class="ph ph-prohibit"></i> Revoke</button>
   <span id="al-status" style="color:#888"></span>
 </div>
 <div class="panels">
-  <!-- allow= delegates the clipboard Permissions Policy into the sandboxed frame.
-       Without it, the frame's opaque origin has clipboard-read/write denied and
-       copy/paste (a common artifact interaction) throws a permissions-policy
-       violation. This is a local capability, not network egress — the artifact's
-       origin stays opaque and connect-src is still governed by the allowlist. -->
-  <iframe src="` + renderOrigin + `/a/` + a.ID + `" sandbox="allow-scripts" allow="clipboard-read; clipboard-write" loading="lazy"></iframe>
+  <!-- No allow="clipboard-*" delegation: the frame's opaque origin matches no
+       Permissions-Policy allowlist, so the delegation was a no-op (av-hll6).
+       Clipboard read/write is instead proxied through the host via the shim's
+       capability bridge, gated by per-artifact first-use approval. Native
+       keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. -->
+  <iframe src="` + renderOrigin + `/a/` + a.ID + `" sandbox="allow-scripts" loading="lazy"></iframe>
   <div class="panel"><pre>` + htmlEsc(src) + `</pre></div>
 </div>
 
@@ -839,6 +843,19 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
       <span class="spacer"></span>
       <button type="button" class="btn btn-sec" id="dl-block">Block</button>
       <button type="button" class="btn" id="dl-allow"><i class="ph ph-download-simple"></i> Allow downloads</button>
+    </div>
+  </div>
+</div>
+
+<div id="clip-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="clip-title">
+    <h2 id="clip-title">Allow clipboard access?</h2>
+    <p><strong>` + htmlEsc(a.Title) + `</strong> wants to <span id="clip-direction">use</span> your clipboard.</p>
+    <p>Allowing lets this artifact read and write your clipboard from now on. You can revoke this at any time from the toolbar.</p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="clip-block">Block</button>
+      <button type="button" class="btn" id="clip-allow"><i class="ph ph-clipboard-text"></i> Allow clipboard</button>
     </div>
   </div>
 </div>
@@ -911,14 +928,21 @@ function renderDownloadState() {
 }
 renderDownloadState();
 
-async function setDownloadsApproved(approved) {
+// Shared capability-bridge approval: persists a first-use grant server-side
+// via PATCH (the single write path). Downloads and clipboard both ride this.
+async function setCapabilityApproved(field, approved, label) {
   const st = document.getElementById('al-status');
   const r = await fetch('/api/artifacts/' + ID, {
     method: 'PATCH',
     headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
-    body: JSON.stringify({downloads_approved: approved})
+    body: JSON.stringify({[field]: approved})
   }).catch(function() { return null; });
-  if (!r || !r.ok) { st.textContent = '✗ Failed to update download permission'; return false; }
+  if (!r || !r.ok) { st.textContent = '✗ Failed to update ' + label + ' permission'; return false; }
+  return true;
+}
+
+async function setDownloadsApproved(approved) {
+  if (!(await setCapabilityApproved('downloads_approved', approved, 'download'))) return false;
   downloadsApproved = approved;
   renderDownloadState();
   return true;
@@ -945,6 +969,94 @@ document.getElementById('dl-allow').addEventListener('click', async function() {
   if (!(await setDownloadsApproved(true))) return;
   closeDownloadModal();
   if (dl) triggerDownload(dl);
+});
+
+// Clipboard bridge: the sandboxed frame's navigator.clipboard is denied by
+// permissions policy, so the shim proxies readText/writeText here. Same
+// first-use approval model as downloads (clipboard_approved, via PATCH). On
+// approval the host performs the op on the app origin — which has clipboard
+// access and, from the Allow click, transient user activation — and posts the
+// result back into the frame, correlated by id. Denial rejects the shim's
+// promise so the artifact sees a normal DOMException.
+let clipboardApproved = ` + fmt.Sprintf("%t", a.ClipboardApproved) + `;
+let pendingClip = null;
+
+window.addEventListener('message', function(e) {
+  const d = e.data;
+  if (!d || d.__avClipboard !== true || d.artifactId !== ID) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || e.source !== frame.contentWindow) return;
+  const op = d.op === 'read' ? 'read' : 'write';
+  const req = { id: String(d.id), op: op, text: op === 'write' ? String(d.text == null ? '' : d.text) : null };
+  if (clipboardApproved) { performClipboard(req); return; }
+  pendingClip = req;
+  document.getElementById('clip-direction').textContent = op === 'read' ? 'read' : 'write to';
+  document.getElementById('clip-modal').hidden = false;
+});
+
+// Posts a clipboard result back into the sandbox frame. targetOrigin is '*'
+// because the frame's origin is opaque; the payload is only what the artifact
+// itself asked to read or write.
+function replyClip(id, ok, text, error) {
+  const frame = document.querySelector('iframe');
+  if (!frame) return;
+  frame.contentWindow.postMessage(
+    { __avClipboardResult: true, id: id, ok: ok, text: text, error: error }, '*'
+  );
+}
+
+async function performClipboard(req) {
+  try {
+    if (req.op === 'read') {
+      const text = await navigator.clipboard.readText();
+      replyClip(req.id, true, text);
+    } else {
+      await navigator.clipboard.writeText(req.text);
+      replyClip(req.id, true);
+    }
+  } catch (err) {
+    replyClip(req.id, false, undefined, (err && err.message) || 'Clipboard operation failed');
+  }
+}
+
+function renderClipboardState() {
+  document.getElementById('clip-state').textContent = clipboardApproved ? 'allowed' : 'ask first';
+  document.getElementById('clip-revoke').style.display = clipboardApproved ? 'inline-flex' : 'none';
+}
+renderClipboardState();
+
+async function setClipboardApproved(approved) {
+  if (!(await setCapabilityApproved('clipboard_approved', approved, 'clipboard'))) return false;
+  clipboardApproved = approved;
+  renderClipboardState();
+  return true;
+}
+
+async function revokeClipboard() {
+  await setClipboardApproved(false);
+}
+
+// deny=true rejects the pending request so the artifact's clipboard call
+// settles (with a DOMException) instead of hanging forever.
+function closeClipModal(deny) {
+  document.getElementById('clip-modal').hidden = true;
+  if (deny && pendingClip) replyClip(pendingClip.id, false, undefined, 'Clipboard access denied');
+  pendingClip = null;
+}
+
+document.getElementById('clip-block').addEventListener('click', function() { closeClipModal(true); });
+document.getElementById('clip-modal').addEventListener('click', function(e) {
+  if (e.target.id === 'clip-modal') closeClipModal(true);
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && !document.getElementById('clip-modal').hidden) closeClipModal(true);
+});
+document.getElementById('clip-allow').addEventListener('click', async function() {
+  const req = pendingClip;
+  if (!(await setClipboardApproved(true))) return;
+  document.getElementById('clip-modal').hidden = true;
+  pendingClip = null;
+  if (req) performClipboard(req);
 });
 
 function renderBadges() {

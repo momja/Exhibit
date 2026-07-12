@@ -385,3 +385,30 @@ func TestDownloadsApproved(t *testing.T) {
 	err = s.UpdateArtifact(ctx, "dl-1", map[string]any{"downloads_approved": "yes"})
 	assert.Error(t, err)
 }
+
+// clipboard_approved is the sibling capability-bridge approval (av-hll6): same
+// default-false, round-trip, flip, and non-bool rejection as downloads_approved,
+// and the two are independent columns.
+func TestClipboardApproved(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "cl-1", OwnerID: 1, SourceBlobID: "b1"}))
+	got, err := s.GetArtifact(ctx, "cl-1")
+	require.NoError(t, err)
+	assert.False(t, got.ClipboardApproved, "new artifacts must not be pre-approved for clipboard")
+
+	require.NoError(t, s.UpdateArtifact(ctx, "cl-1", map[string]any{"clipboard_approved": true}))
+	got, err = s.GetArtifact(ctx, "cl-1")
+	require.NoError(t, err)
+	assert.True(t, got.ClipboardApproved)
+	assert.False(t, got.DownloadsApproved, "clipboard approval must not leak into downloads")
+
+	require.NoError(t, s.UpdateArtifact(ctx, "cl-1", map[string]any{"clipboard_approved": false}))
+	got, err = s.GetArtifact(ctx, "cl-1")
+	require.NoError(t, err)
+	assert.False(t, got.ClipboardApproved)
+
+	err = s.UpdateArtifact(ctx, "cl-1", map[string]any{"clipboard_approved": "yes"})
+	assert.Error(t, err)
+}
