@@ -189,6 +189,8 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 <header>
   ` + exhibitLogoSVG + `
   <h1>Exhibit</h1>
+  <span style="flex:1"></span>
+  <a href="/agent" style="display:inline-flex;align-items:center;gap:5px"><i class="ph ph-robot"></i> Agent</a>
 </header>
 <main>
 <div class="upload">
@@ -850,7 +852,9 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
 <div class="toolbar">
   <a href="` + renderOrigin + `/a/` + a.ID + `" target="_blank">Open in new tab ↗</a>
   <span style="color:#ddd">|</span>
-  <a href="/artifacts/` + a.ID + `/edit"><i class="ph ph-pencil-simple"></i> Edit</a>` + refetchToolbar + `
+  <a href="/artifacts/` + a.ID + `/edit"><i class="ph ph-pencil-simple"></i> Edit</a>
+  <span style="color:#ddd">|</span>
+  <a href="/agent?artifact=` + a.ID + `"><i class="ph ph-robot"></i> Modify with agent</a>` + refetchToolbar + `
   <span style="color:#ddd">|</span>
   <span style="color:#888">Allowlist:</span>
   <span id="al-display">` + renderAllowlistBadges(a.NetworkAllowlist) + `</span>

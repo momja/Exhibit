@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/artifact-viewer/artifact-viewer/internal/blob"
+	"github.com/artifact-viewer/artifact-viewer/internal/secrets"
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,12 +34,16 @@ func newTestRouter(t *testing.T) *Router {
 	bl, err := blob.NewFSStore(blobDir)
 	require.NoError(t, err)
 
+	box, err := secrets.Load("test-secret", "")
+	require.NoError(t, err)
+
 	return NewRouter(Config{
 		Store:        st,
 		Blob:         bl,
 		AppOrigin:    "http://app.test",
 		RenderOrigin: "http://render.test",
 		AuthToken:    "secret",
+		Secrets:      box,
 	})
 }
 
