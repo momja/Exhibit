@@ -2,7 +2,7 @@
 id: av-q3wo
 status: open
 deps: []
-links: [av-q30x]
+links: [av-q30x, Exh-yvhp]
 created: 2026-07-06T22:03:48Z
 type: epic
 priority: 2
@@ -24,3 +24,9 @@ Pi is Mario Zechner's agent harness (pi-mono; also used by OpenClaw). It runs as
 - Whether Pi supports a long-lived server mode with multiple concurrent sessions, and what the exhibit↔Pi API contract looks like (spawn-per-job vs persistent process). Research established patterns for multi-user BYO-key agent backends (OpenWebUI/LibreChat are prior art) before inventing one.
 - Where the chat UI lives (gallery page vs dedicated route) and how streaming output reaches the browser through the Go service.
 
+
+## Notes
+
+**2026-07-11T16:56:40Z**
+
+PoC of this epic's MVP scope (and beyond: modify flow + snippet element-context) landed under Exh-yvhp on branch feature/Exh-yvhp/pi-agent-poc. Answers the open questions: pi supports a long-lived RPC server mode (JSONL over stdio, spawn-per-session); exhibit<->pi contract is the RPC protocol + a TS extension whose tools call the exhibit API; key storage landed as agent_keys keyed by owner_id, AES-256-GCM under a server secret (EXHIBIT_SECRET or generated data/secret.key); chat UI is a dedicated /agent route with SSE streaming through the Go service.
