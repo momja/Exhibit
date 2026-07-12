@@ -105,6 +105,7 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .modal label{display:block;font-size:12px;color:#555;margin:12px 0 4px}
 .modal input,.modal select{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;background:#fff;color:#111}
 .modal input:focus,.modal select:focus{border-color:var(--brand-blue)}
+.modal input:read-only{background:#f2f2f2;color:#555;cursor:default}
 .modal-error{color:#c00;font-size:12px;margin-top:10px}
 .modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
 .btn-sec{background:#fff;color:#333;border:1px solid #ddd}
@@ -234,12 +235,12 @@ async function refreshKeyStatus() {
   const label = document.getElementById('key-btn-label');
   if (keyConfigured) {
     btn.classList.remove('warn');
-    label.textContent = d.provider + ' · ' + (d.model || 'default') + ' · ' + d.key_hint;
+    label.textContent = d.provider + ' · ' + (d.model || 'default');
     document.getElementById('key-provider').value = d.provider;
     document.getElementById('key-model').value = d.model || '';
     const cur = document.getElementById('current-key');
     cur.hidden = false;
-    cur.textContent = 'Configured: ' + d.provider + ' key ' + d.key_hint + ' — enter a new key below to replace it.';
+    cur.textContent = 'A key is already configured for ' + d.provider + '. Delete the masked value below to replace it.';
     document.getElementById('key-delete').hidden = false;
   } else {
     btn.classList.add('warn');
@@ -266,19 +267,59 @@ function providerChanged() {
   }
 }
 
+const MASKED_KEY_PLACEHOLDER = '••••••••';
+
+function showMaskedKey(secret) {
+  secret.value = MASKED_KEY_PLACEHOLDER;
+  secret.readOnly = true;
+  secret.dataset.masked = 'true';
+}
+function clearMaskedKey(secret) {
+  secret.value = '';
+  secret.readOnly = false;
+  secret.dataset.masked = 'false';
+}
+
 function openKeyModal() {
   document.getElementById('key-error').hidden = true;
-  document.getElementById('key-secret').value = '';
+  const secret = document.getElementById('key-secret');
+  if (keyConfigured) { showMaskedKey(secret); } else { clearMaskedKey(secret); }
   document.getElementById('key-modal').hidden = false;
-  document.getElementById('key-secret').focus();
+  secret.focus();
 }
 function closeKeyModal() { document.getElementById('key-modal').hidden = true; }
+
+// The masked placeholder is a single unit, not editable text: it can only be
+// cleared in full (Backspace/Delete), never edited in place. Cancel discards
+// any clear — reopening the modal re-derives the mask from server state
+// (keyConfigured), never from whatever was left in the field.
+(function () {
+  const secret = document.getElementById('key-secret');
+  secret.addEventListener('keydown', (e) => {
+    if (secret.dataset.masked !== 'true') return;
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      e.preventDefault();
+      clearMaskedKey(secret);
+    } else if (!['Tab', 'Shift', 'Control', 'Alt', 'Meta', 'Escape'].includes(e.key)) {
+      e.preventDefault();
+    }
+  });
+  secret.addEventListener('paste', (e) => {
+    if (secret.dataset.masked === 'true') e.preventDefault();
+  });
+})();
 
 async function saveKey() {
   const provider = document.getElementById('key-provider').value;
   const model = document.getElementById('key-model').value.trim();
-  const api_key = document.getElementById('key-secret').value.trim();
+  const secretInput = document.getElementById('key-secret');
   const errEl = document.getElementById('key-error');
+  if (secretInput.dataset.masked === 'true') {
+    errEl.textContent = 'Delete the masked key below and enter a new one to replace it.';
+    errEl.hidden = false;
+    return;
+  }
+  const api_key = secretInput.value.trim();
   if (!api_key) { errEl.textContent = 'Enter the API key.'; errEl.hidden = false; return; }
   const r = await apiFetch('/api/agent/key', {method:'PUT', body: JSON.stringify({provider, model, api_key})});
   if (!r.ok) {
