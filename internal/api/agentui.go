@@ -161,6 +161,7 @@ header h1{font-size:16px;font-weight:600;flex:1}
       <option value="openai">OpenAI</option>
       <option value="google">Google Gemini</option>
       <option value="openrouter">OpenRouter</option>
+      <option value="opencode-go">OpenCode Go</option>
       ` + mockOption + `
     </select>
     <label for="key-model">Model</label>
@@ -188,6 +189,8 @@ const MODEL_SUGGESTIONS = {
   'openai':      ['gpt-5.2', 'gpt-5-mini'],
   'google':      ['gemini-2.5-pro', 'gemini-2.5-flash'],
   'openrouter':  ['anthropic/claude-sonnet-4.5'],
+  // image-capable models first — snippet mode attaches screenshots
+  'opencode-go': ['kimi-k2.7-code', 'minimax-m3', 'qwen3.6-plus', 'mimo-v2.5', 'glm-5.2', 'deepseek-v4-pro'],
   'exhibit-mock':['exhibit-mock-1']
 };
 

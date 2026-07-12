@@ -46,6 +46,7 @@ var providerEnv = map[string]string{
 	"openai":       "OPENAI_API_KEY",
 	"google":       "GEMINI_API_KEY",
 	"openrouter":   "OPENROUTER_API_KEY",
+	"opencode-go":  "OPENCODE_API_KEY",
 	"exhibit-mock": "EXHIBIT_MOCK_API_KEY",
 }
 
@@ -155,9 +156,12 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	// Minimal environment: enough for node + jiti, the exhibit callback
 	// contract, and exactly one provider key. Deliberately NOT os.Environ():
 	// the server's own env must not leak other credentials into a session.
+	// HOME is pinned to the session workdir so pi cannot read the operator's
+	// ~/.pi/agent/auth.json — stored logins there would otherwise take
+	// precedence over the BYO key and silently bill the operator's account.
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
-		"HOME=" + os.Getenv("HOME"),
+		"HOME=" + workDir,
 		"LANG=" + os.Getenv("LANG"),
 		"TMPDIR=" + os.TempDir(),
 		"EXHIBIT_API_URL=" + m.cfg.APIBaseURL,
