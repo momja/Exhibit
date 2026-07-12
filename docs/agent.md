@@ -40,8 +40,15 @@ footprint awaiting approval.
   only `sk-…1234`-style hints.
 - At session spawn the key is decrypted and handed to the pi subprocess via a
   provider-specific env var (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
-  `GEMINI_API_KEY`, …) — never argv, never page JS. The subprocess env is
-  built minimal from scratch so server credentials cannot leak into sessions.
+  `GEMINI_API_KEY`, `OPENCODE_API_KEY`, …) — never argv, never page JS. The
+  subprocess env is built minimal from scratch so server credentials cannot
+  leak into sessions, and `HOME` is pinned to the session workdir so pi cannot
+  read the operator's `~/.pi/agent/auth.json` — a stored login there would
+  otherwise take precedence over the BYO key and silently bill the operator's
+  account.
+
+Supported providers: Anthropic, OpenAI, Google Gemini, OpenRouter, OpenCode
+Go, plus `exhibit-mock` when `MOCK_LLM_URL` is set.
 
 ## Sessions, streaming, transcripts
 
