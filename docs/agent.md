@@ -110,6 +110,39 @@ so the whole pipeline is testable end to end without real provider
 credentials; the exhibit extension registers it as a Pi custom provider only
 when `MOCK_LLM_URL` is set.
 
+## Extraction plan (epic `Exh-i0ll`)
+
+The agent is a PoC guest in this repository, not a permanent resident. The
+target shape is a **separate repository (`exhibit-agent`) holding a separate
+Go service** that integrates with Exhibit exclusively through the HTTP API —
+the same "optional satellite" standing as the thumbnail worker, just with a
+UI. Steps, in order:
+
+1. **Transcripts through the API** (`Exh-v6v4`): `Session.persistTranscript`
+   currently calls `store.SaveTranscript` directly — the one write bypassing
+   the HTTP API. Becomes `PUT /api/artifacts/:id/transcripts`; after this the
+   agent has zero store access and is extractable.
+2. **Exhibit-side seams** (`Exh-hz3g`): an `AGENT_URL` config that, when set,
+   points the gallery "Agent" link and the detail-page "Modify with agent"
+   action at the external agent UI; plus an additional configured embedder
+   origin accepted by the render-surface bridges (snippet picker activation
+   and postMessage target, `__avState` write bridge are today pinned to
+   `APP_ORIGIN` — the agent service's chat page must be allowed to embed
+   render iframes with both working).
+3. **Extraction** (`Exh-k75k`): move `internal/agent` (sessions, pi sidecar,
+   `ext/exhibit.ts`), `internal/secrets` + the `agent_keys` storage, the
+   `/agent` chat UI, the agent API routes, and `cmd/mockllm` into the new
+   repo. Config: `EXHIBIT_URL` + `EXHIBIT_TOKEN`, `PI_BIN`, its own port and
+   secret. The browser talks only to the agent service, which **proxies**
+   every Exhibit read/write through the API with its token — no CORS opened
+   on Exhibit, no token in page JS. Then delete the agent code from Exhibit
+   core.
+
+What stays in Exhibit, because it is genuinely core: the
+`agent_transcripts` table and its endpoints (artifact provenance belongs to
+the artifact), and the snippet picker (`internal/render/snippet.go` — a
+render-surface capability any embedding host can drive, not agent code).
+
 ## Known PoC limits
 
 - One configured key per owner (not per provider); model list is a datalist
