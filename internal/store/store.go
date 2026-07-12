@@ -58,6 +58,16 @@ type Share struct {
 	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 }
 
+// AgentKey is an owner's BYO agent provider credential. KeyCiphertext is the
+// AES-GCM-sealed API key; the store never sees plaintext (Exh-ky6e).
+type AgentKey struct {
+	OwnerID       int64     `json:"owner_id"`
+	Provider      string    `json:"provider"`
+	Model         string    `json:"model"`
+	KeyCiphertext string    `json:"-"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 type ListOptions struct {
 	Query       string
 	Tags        []string
@@ -99,6 +109,17 @@ type Store interface {
 	// State
 	GetState(ctx context.Context, artifactID string) (map[string]string, error)
 	SetState(ctx context.Context, artifactID, key, value string) error
+
+	// Agent (Exh-yvhp). SetAgentKey upserts the owner's single configured
+	// provider key; GetAgentKey returns nil when none is set.
+	SetAgentKey(ctx context.Context, k *AgentKey) error
+	GetAgentKey(ctx context.Context, ownerID int64) (*AgentKey, error)
+	DeleteAgentKey(ctx context.Context, ownerID int64) error
+	// SaveTranscript upserts the agent conversation that produced an
+	// artifact (messagesJSON is the Pi session's message list).
+	SaveTranscript(ctx context.Context, artifactID, sessionID, messagesJSON string) error
+	// ListTranscripts returns messagesJSON per session for an artifact.
+	ListTranscripts(ctx context.Context, artifactID string) (map[string]string, error)
 
 	// Shares
 	CreateShare(ctx context.Context, s *Share) error
