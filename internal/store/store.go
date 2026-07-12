@@ -35,7 +35,10 @@ type Artifact struct {
 	// DownloadsApproved records the user's first-use approval of the
 	// host-mediated download bridge for this artifact. False means the host
 	// frame prompts on the next download attempt.
-	DownloadsApproved bool   `json:"downloads_approved"`
+	DownloadsApproved bool `json:"downloads_approved"`
+	// ClipboardApproved is the same first-use approval for the clipboard
+	// bridge (navigator.clipboard read/write proxied through the host).
+	ClipboardApproved bool   `json:"clipboard_approved"`
 	Tags              []*Tag `json:"tags"` // populated on read by GetArtifact/ListArtifacts
 }
 

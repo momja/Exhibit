@@ -133,9 +133,15 @@ executable document with the correct security envelope:
   CSP) and must never be served stale from a cache.
 - Is loaded by the app's pages as the `src` of a sandboxed iframe
   (`<iframe src="RENDER_ORIGIN/a/:id" sandbox="allow-scripts">`) with **no**
-  `allow-same-origin`. The embedding page delegates clipboard access into the
-  sandbox via Permissions Policy (`allow="clipboard-read; clipboard-write"`) so
-  copy/paste works inside artifacts without weakening the origin isolation.
+  `allow-same-origin`. Capabilities the opaque-origin sandbox denies — downloads
+  (`allow-downloads` omitted) and `navigator.clipboard` read/write (Permissions
+  Policy) — are not re-granted on the frame; they are proxied through the host
+  frame by the shim's **capability bridge**, gated by per-artifact first-use
+  approval (`downloads_approved` / `clipboard_approved`, §6). A prior
+  `allow="clipboard-read; clipboard-write"` delegation was a no-op — Permissions
+  Policy `allow=` keys on the frame's opaque src origin, which matches nothing —
+  so it was removed. Native keyboard paste (Ctrl/Cmd+V) is a browser event and
+  works regardless.
 
 The render surface never mutates anything. It reads (including state, to inline it), wraps,
 and serves. This read-only property is what makes it safe to expose under the no-auth share
@@ -292,6 +298,13 @@ visitor ──GET render URL──► Render surface
                                server-side, revocable in the toolbar) ──► download
                                deny    ──► bytes dropped; artifact keeps running
       any vector the shim misses ──► stays blocked (sandbox omits allow-downloads)
+    artifact navigator.clipboard.readText()/writeText():
+      shim replaces the API ──► postMessage {op,id,text?} to the host frame
+        already approved ──► host runs the op on the app origin ──► posts result back
+        first attempt    ──► host prompts (artifact + direction);
+                               approve ──► PATCH clipboard_approved ──► op ──► result
+                               deny    ──► Promise rejects (NotAllowedError)
+      native Ctrl/Cmd+V paste ──► browser event, unaffected (no bridge, no approval)
 ```
 
 Two properties fall out of the sandbox's opaque origin: reads are **inlined at render**
@@ -307,7 +320,14 @@ transfers the bytes to the host, which owns the first-use approval prompt and, o
 approved, performs the download from the app origin. The shim is UX, not
 enforcement: evading it just leaves the download sandbox-blocked. The bridge
 installs only when a host frame exists — top-level renders (direct visit, shares)
-have no sandbox and need no bridge. See `security.md` §4 for the full policy.
+have no sandbox and need no bridge.
+
+Clipboard read/write rides the identical bridge (`clipboard_approved`): the shim
+replaces `navigator.clipboard.readText`/`writeText` and correlates each call by
+id so the returned Promise settles with the host's answer; a denial rejects with
+a `NotAllowedError` the artifact handles like any blocked clipboard call. Native
+keyboard paste is a browser event, not an API call, so it is never bridged. See
+`security.md` §4 for the full policy.
 
 The state endpoints are why cross-device "just works": all state lives server-side, so a
 second device inlines the same state at render. No replication required for this (§8 distinguishes

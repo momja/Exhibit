@@ -167,8 +167,9 @@ func buildCSP(allowlist []string, appOrigin string) string {
 
 // shimScript is the shim injected before any artifact scripts run. It
 // intercepts localStorage/sessionStorage and routes state through the API,
-// and bridges download attempts to the host frame (the sandbox omits
-// allow-downloads, so downloads only happen host-side after user approval).
+// and bridges the capabilities the sandbox denies — downloads (the sandbox
+// omits allow-downloads) and clipboard read/write (opaque-origin permissions
+// policy) — to the host frame, where they run only after user approval.
 const shimTemplate = `<script>
 (function() {
   var ARTIFACT_ID = %q;
@@ -313,6 +314,60 @@ const shimTemplate = `<script>
       }
       nativeClick.apply(this, arguments);
     };
+
+    // ---- Clipboard bridge (av-hll6) ----
+    // navigator.clipboard is denied in this opaque-origin frame by permissions
+    // policy, so proxy readText/writeText through the host frame the same way
+    // as downloads: post the request pinned to the app origin, the host prompts
+    // for first-use approval, performs the op on the app origin, and posts the
+    // result back. Each call carries an id so the returned Promise settles with
+    // the host's answer; a denial rejects with a NotAllowedError DOMException,
+    // exactly what a real blocked clipboard call throws, so artifacts handle it
+    // unchanged. Native keyboard paste (Ctrl/Cmd+V into a field) is a browser
+    // event, not an API call, and is unaffected.
+    var clipSeq = 0;
+    var clipPending = {};
+    window.addEventListener('message', function(e) {
+      // The host replies from the app origin. It must target '*' because this
+      // frame's origin is opaque, so identity is established by e.origin (the
+      // sender) and e.source, not the message's targetOrigin.
+      if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+      var d = e.data;
+      if (!d || d.__avClipboardResult !== true) return;
+      var p = clipPending[d.id];
+      if (!p) return;
+      delete clipPending[d.id];
+      if (d.ok) p.resolve(d.text != null ? d.text : undefined);
+      else p.reject(new DOMException(d.error || 'Clipboard access denied', 'NotAllowedError'));
+    });
+
+    var requestClip = function(op, text) {
+      return new Promise(function(resolve, reject) {
+        var id = 'c' + (++clipSeq);
+        clipPending[id] = { resolve: resolve, reject: reject };
+        window.parent.postMessage(
+          { __avClipboard: true, artifactId: ARTIFACT_ID, id: id, op: op, text: text },
+          API_ORIGIN
+        );
+      });
+    };
+
+    var clipboardShim = {
+      writeText: function(text) { return requestClip('write', String(text)); },
+      readText: function() { return requestClip('read'); }
+    };
+    try {
+      Object.defineProperty(navigator, 'clipboard', { value: clipboardShim, configurable: true });
+    } catch (e) {
+      // Some engines expose navigator.clipboard as a non-configurable getter;
+      // fall back to replacing just the two methods we bridge.
+      try {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText = clipboardShim.writeText;
+          navigator.clipboard.readText = clipboardShim.readText;
+        }
+      } catch (e2) {}
+    }
   }
 })();
 </script>`
