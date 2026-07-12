@@ -99,21 +99,59 @@ pipeline. There are no live-linked imports and no automatic refresh.
 The dividing line for local capabilities: **local interaction with a user gesture
 is allowed; anything that produces egress or bypasses a user decision is not.**
 
-- **Clipboard** — the gallery's embed delegates
-  `allow="clipboard-read; clipboard-write"` into the sandboxed frame. Without
-  this, the opaque origin has clipboard access denied outright and copy/paste — a
-  common artifact interaction — throws a permissions-policy violation. This is a
-  local capability, not network egress: the browser still gates clipboard access
-  on a user gesture, and anything an artifact reads from the clipboard can only
-  leave the frame via `connect-src`, which the allowlist governs.
+- **Clipboard** — `navigator.clipboard` read/write is **mediated by the host
+  frame with first-use approval**, the same capability bridge as downloads
+  (below). An earlier attempt delegated `allow="clipboard-read; clipboard-write"`
+  into the frame, but a Permissions-Policy `allow=` keys on the frame's *src
+  origin*, which is opaque (no `allow-same-origin`) and matches nothing — so the
+  delegation was a no-op and copy/paste still threw a permissions-policy
+  violation. The delegation is removed; instead:
+  - The shim replaces `navigator.clipboard.readText`/`writeText` inside the
+    frame and posts each call to the host (pinned to the app origin), correlated
+    by request id so the returned Promise settles with the host's answer.
+  - On the artifact's **first** clipboard request the host prompts, naming the
+    artifact and the direction (read vs write). Approval persists server-side
+    (`clipboard_approved`, PATCHed through the API — the single write path),
+    survives reloads and devices, and is revocable from the toolbar. Denial
+    rejects the call with a `NotAllowedError` `DOMException` — exactly what a
+    real blocked clipboard call throws, so the artifact handles it unchanged.
+  - Once approved the host performs the op on the app origin (which holds
+    clipboard permission and, from the Allow click, transient user activation)
+    and posts the result back into the frame.
+  - **Native keyboard paste** (Ctrl/Cmd+V into a focused field) is a browser
+    event, not a Clipboard API call, so it always works and needs no approval;
+    the bridge governs only programmatic API access.
 - **File reads** — `<input type="file">` and drag-in work normally: the user
   picks the file, the artifact reads only what was picked, and the contents are
   subject to the same egress rules as any other data in the frame.
-- **Downloads** — the sandbox omits `allow-downloads`, so an artifact embedded in
-  the gallery cannot initiate downloads. An artifact opened directly on the
-  render origin ("Open in new tab") is a top-level page, not a sandboxed frame,
-  so downloads work there — the user has explicitly navigated to the tool, and
-  the per-artifact CSP still applies via the response header.
+- **Downloads** — the sandbox omits `allow-downloads`, so nothing in an embedded
+  artifact frame can initiate a download directly. Because export-a-file is a
+  core capability for tools (CSV generators, image editors), downloads are
+  instead **mediated by the host frame with first-use approval**, reusing the
+  storage shim's postMessage channel (§1):
+  - The shim intercepts the common export vectors inside the frame — anchor
+    activations with `blob:`/`data:` hrefs, both user clicks (capture phase) and
+    programmatic `click()` — and posts filename + bytes to the host, pinned to
+    the app origin. Bytes cross the boundary as transferred data, not a
+    capability grant. `blob:` payloads are recovered from a `createObjectURL`
+    registry the shim keeps, so it needs no fetch (`connect-src` is untouched).
+  - On the artifact's **first** download attempt the host prompts, naming the
+    artifact and the filename. Approval is persisted server-side
+    (`downloads_approved`, PATCHed through the API — the single write path), so
+    it survives reloads and devices, and is revocable at any time from the
+    artifact's toolbar. Denial drops the bytes without breaking the artifact.
+  - Once approved, the host reconstructs the file and triggers the download
+    from the app origin.
+  - **The sandbox remains the wall.** Approval never adds `allow-downloads`;
+    vectors the shim doesn't catch (navigation-triggered downloads, an artifact
+    deleting the shim's hooks) simply stay blocked by the browser. Like the
+    ingest scan, the shim is UX, not enforcement — evading it gains nothing.
+  - The bridge only installs when a host frame exists. An artifact opened
+    directly on the render origin ("Open in new tab") is a top-level page, not
+    a sandboxed frame, so downloads work there natively — the user has
+    explicitly navigated to the tool, and the per-artifact CSP still applies
+    via the response header. Share pages get no bridge: opened top-level they
+    behave the same way; there is no authenticated host to mediate for them.
 
 ## 5. Residual risk
 

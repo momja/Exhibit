@@ -85,7 +85,7 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	var allowlistJSON string
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &allowlistJSON)
+	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &allowlistJSON, &a.DownloadsApproved, &a.ClipboardApproved)
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +109,8 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	return &a, nil
 }
 
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, network_allowlist"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.network_allowlist"
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, network_allowlist, downloads_approved, clipboard_approved"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.network_allowlist, a.downloads_approved, a.clipboard_approved"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
@@ -118,9 +118,9 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 		now = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, network_allowlist, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, marshalAllowlist(a.NetworkAllowlist),
+		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, network_allowlist, downloads_approved, clipboard_approved, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, marshalAllowlist(a.NetworkAllowlist), a.DownloadsApproved, a.ClipboardApproved,
 		now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
 	return err
@@ -233,6 +233,13 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, id string, updates map
 					strs[i], _ = s.(string)
 				}
 				v = marshalAllowlist(strs)
+			}
+		}
+		if k == "downloads_approved" || k == "clipboard_approved" {
+			// These columns are INTEGER 0/1; a non-bool here would store a value
+			// that later fails the bool scan and bricks reads of the artifact.
+			if _, ok := v.(bool); !ok {
+				return fmt.Errorf("%s must be a boolean", k)
 			}
 		}
 		setClauses = append(setClauses, k+"=?")

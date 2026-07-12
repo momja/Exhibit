@@ -348,6 +348,18 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The capability-bridge approval flags (downloads_approved,
+	// clipboard_approved) are strict booleans; reject anything else up front so
+	// a bad PATCH is a 400, not a stored value that later fails to scan.
+	for _, field := range []string{"downloads_approved", "clipboard_approved"} {
+		if v, ok := updates[field]; ok {
+			if _, isBool := v.(bool); !isBool {
+				http.Error(w, field+" must be a boolean", http.StatusBadRequest)
+				return
+			}
+		}
+	}
+
 	// Verify artifact exists
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
 	if err != nil {

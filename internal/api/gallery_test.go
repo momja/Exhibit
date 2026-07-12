@@ -203,20 +203,22 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.NotContains(t, page, `target="_blank"`)
 }
 
-// The detail-view iframe is sandboxed with an opaque origin, so clipboard
-// copy/paste — a common artifact interaction — is denied by Permissions Policy
-// unless the embedder delegates it via the allow= attribute. Delegating
-// clipboard is a local capability (no network egress), so it must not weaken the
-// sandbox: allow-scripts stays, allow-same-origin stays omitted, and the network
-// boundary remains the per-artifact CSP/allowlist.
-func TestDetailPageIframeDelegatesClipboard(t *testing.T) {
+// The detail-view iframe is sandboxed with an opaque origin. An allow=
+// delegation of clipboard keys on the frame's src origin, which is opaque and
+// matches nothing, so the delegation was a no-op (av-hll6). Clipboard is instead
+// proxied through the host via the capability bridge, so the detail page must
+// NOT carry the dead allow= delegation, and must wire the host-side handler —
+// without weakening the sandbox (allow-scripts stays, allow-same-origin omitted).
+func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Clip Tool", Tier: store.Tier1, CreatedAt: time.Now()}
 	page := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
 
-	assert.Contains(t, page, `allow="clipboard-read; clipboard-write"`,
-		"iframe must delegate clipboard so copy/paste doesn't violate Permissions Policy")
-	// The delegation must not come at the cost of the sandbox: scripts allowed,
-	// same-origin still withheld (opaque origin preserved).
+	assert.NotContains(t, page, `allow="clipboard-read; clipboard-write"`,
+		"the opaque-origin allow= delegation is a no-op and must be removed in favor of the bridge")
+	// The host frame mediates clipboard requests posted by the shim.
+	assert.Contains(t, page, "__avClipboard",
+		"detail page must handle the shim's clipboard bridge messages")
+	// The sandbox is unchanged: scripts allowed, same-origin still withheld.
 	assert.Contains(t, page, `sandbox="allow-scripts"`)
 	assert.NotContains(t, page, "allow-same-origin")
 }
