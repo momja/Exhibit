@@ -371,16 +371,28 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle body update: overwrite the blob and re-scan network footprint.
+	// Handle body update: capture the previous body before overwriting (so the
+	// post-edit can be diffed against it), write the new blob, and re-scan.
+	var newBody, oldBody string
+	bodySet := false
 	if bodyVal, ok := updates["body"]; ok {
-		bodyStr, _ := bodyVal.(string)
-		if bodyStr != "" {
-			if err := ro.cfg.Blob.Put(r.Context(), a.SourceBlobID, bytes.NewReader([]byte(bodyStr))); err != nil {
+		if bodyStr, ok := bodyVal.(string); ok && bodyStr != "" {
+			newBody = bodyStr
+			bodySet = true
+			// Read the previous body before it is overwritten so the edit
+			// dialog can tell whether the network footprint actually changed.
+			if rc, gerr := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID); gerr == nil {
+				if prev, perr := io.ReadAll(rc); perr == nil {
+					oldBody = string(prev)
+				}
+				rc.Close()
+			}
+			if err := ro.cfg.Blob.Put(r.Context(), a.SourceBlobID, bytes.NewReader([]byte(newBody))); err != nil {
 				serverError(w, r, "update artifact body", err)
 				return
 			}
 			slog.DebugContext(r.Context(), "artifact body rewritten",
-				slog.String("id", id), slog.Int("body_bytes", len(bodyStr)))
+				slog.String("id", id), slog.Int("body_bytes", len(newBody)))
 			// Do NOT auto-add newly scanned origins to the allowlist — approval
 			// is an explicit user action. Existing approved origins are kept as
 			// they are; origins introduced by the edited body surface via the
@@ -396,7 +408,59 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a, _ = ro.cfg.Store.GetArtifact(r.Context(), id)
-	writeJSON(w, http.StatusOK, a)
+
+	// Re-execute the network scan when the body actually changed (a diff
+	// against the previous version), and surface the footprint — and whether
+	// it differs from before — so the edit dialog can re-run the explicit
+	// approval flow the way ingest does. Edits that don't touch the body, or
+	// that leave the network footprint unchanged, report no change and stay on
+	// the existing allowlist. The allowlist itself is never seeded from here.
+	var footprint []string
+	footprintChanged := false
+	if bodySet && newBody != oldBody {
+		footprint = scanner.Scan(newBody)
+		footprintChanged = !sameOrigins(footprint, scanner.Scan(oldBody))
+	}
+	if footprint == nil {
+		footprint = []string{}
+	}
+
+	writeJSON(w, http.StatusOK, updateArtifactResponse{
+		Artifact:          a,
+		NetworkFootprint: footprint,
+		FootprintChanged: footprintChanged,
+	})
+}
+
+// updateArtifactResponse is the PATCH /api/artifacts/:id body. The artifact
+// is always present; network_footprint/footprint_changed are only meaningful
+// when the request rewrote the body. They let the edit dialog re-run the
+// explicit-origin approval flow when an edit changes the network footprint,
+// mirroring the two-step ingest scan→approval gate (spec §6.2) without ever
+// seeding the allowlist from a scan.
+type updateArtifactResponse struct {
+	Artifact          *store.Artifact `json:"artifact"`
+	NetworkFootprint  []string        `json:"network_footprint"`
+	FootprintChanged  bool            `json:"footprint_changed"`
+}
+
+// sameOrigins reports whether two origin lists describe the same set,
+// disregarding order and duplicates — used to tell whether an edit changed the
+// network footprint at all, so an unchanged origin set doesn't re-prompt.
+func sameOrigins(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[string]struct{}, len(a))
+	for _, o := range a {
+		seen[o] = struct{}{}
+	}
+	for _, o := range b {
+		if _, ok := seen[o]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // refetchArtifact re-fetches the current HTML/CSS/JS from an artifact's source

@@ -27,6 +27,7 @@ safety" (§12).
 | Ingest scan | `x/net/html` parser (+ JS heuristic) | — |
 | Thumbnails | Headless Chromium worker (`chromedp`) — optional | client `html2canvas` |
 | Gallery UI | Server-rendered Go HTML + vanilla-JS islands (§9) | — |
+| Agent harness | **Pi** (`pi --mode rpc` sidecar per session; TS tools extension; keys AES-GCM at rest; `cmd/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | TLS / proxy | **Operator's choice** — app serves plain HTTP, takes origin config | (not shipped) |
 | Backup/replication | Litestream sidecar (Compose profile) | Turso/libSQL (HA) |
@@ -192,7 +193,8 @@ and add real thumbnails later without schema changes.
 **As built: server-rendered HTML emitted directly by Go handlers** in
 `internal/api/gallery.go`, with inline CSS and vanilla JS for the small client-side
 bits (modals, the tag editor, the allowlist editor). The gallery is CRUD-shaped —
-grid, search, tag/collection filters, a detail view — and full-page server renders
+grid, search (eager client-filtered by swapping the server-rendered grid),
+tag/collection filters, a detail view — and full-page server renders
 have covered it so far, keeping everything inside the one Go binary with no template
 engine or frontend framework at all.
 

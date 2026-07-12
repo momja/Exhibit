@@ -25,17 +25,22 @@ func TestPatchClipboardApproved(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&a))
 	assert.False(t, a.ClipboardApproved)
 
+	// PATCH wraps the artifact alongside the re-scan footprint (updateArtifactResponse).
+	var resp struct {
+		Artifact store.Artifact `json:"artifact"`
+	}
+
 	// Approve.
 	w = doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{"clipboard_approved": true})
 	require.Equal(t, http.StatusOK, w.Code)
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&a))
-	assert.True(t, a.ClipboardApproved)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.True(t, resp.Artifact.ClipboardApproved)
 
 	// Revoke.
 	w = doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{"clipboard_approved": false})
 	require.Equal(t, http.StatusOK, w.Code)
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&a))
-	assert.False(t, a.ClipboardApproved)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.False(t, resp.Artifact.ClipboardApproved)
 }
 
 // A non-bool clipboard_approved must be a 400, not a stored value that later

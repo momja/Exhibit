@@ -80,19 +80,17 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 	if len(arts) == 0 {
 		cards.WriteString(`<p class="empty">No artifacts yet. Upload one above.</p>`)
 	}
-	// The whole card opens the artifact's detail/viewer page; the explicit
-	// 'Details' action does the same. The separate 'Open' card action was
-	// removed so there is exactly one way to open an artifact from a card.
+	// The whole card opens the artifact's detail/viewer page — the card body
+	// and the title link are the affordances. The separate 'Details' link was
+	// removed: it navigated to the same page as the title click, so it was
+	// redundant. The earlier 'Open ↗' new-tab action was already gone.
 	for _, a := range arts {
 		cards.WriteString(fmt.Sprintf(`
 <div class="card" data-href="/artifacts/%s">
   <a class="card-title" href="/artifacts/%s">%s</a>
   <div class="card-meta">%s</div>
   %s
-  <div class="card-actions">
-    <a href="/artifacts/%s">Details</a>
-  </div>
-</div>`, a.ID, a.ID, htmlEsc(a.Title), a.CreatedAt.Format("Jan 2, 2006"), renderTagRow(a.ID, a.Tags), a.ID))
+</div>`, a.ID, a.ID, htmlEsc(a.Title), a.CreatedAt.Format("Jan 2, 2006"), renderTagRow(a.ID, a.Tags)))
 	}
 
 	searchVal := htmlEsc(query)
@@ -109,7 +107,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 :root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}
+header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:12px 24px;display:flex;align-items:center;gap:16px}
 header h1{font-size:18px;font-weight:600}
 header .logo{height:32px;width:auto;display:block;flex:0 0 auto}
 header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
@@ -124,10 +122,13 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
 .btn:hover{background:var(--brand-blue-hover)}
 .btn-sm{padding:5px 12px;font-size:13px}
-.search-row{display:flex;gap:8px;margin-bottom:20px}
-.search-row input{flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none}
+.search-row{display:flex;align-items:center;gap:8px;margin-bottom:20px;position:relative}
+.search-row .search-icon{position:absolute;left:10px;color:#aaa;font-size:16px;pointer-events:none}
+.search-row input{flex:1;padding:9px 12px 9px 34px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none}
 .search-row input:focus{border-color:var(--brand-blue)}
+.search-clear{flex:0 0 auto;padding:5px 10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.grid.grid-loading{opacity:.5;transition:opacity .1s ease}
 .card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:box-shadow .12s ease}
 .card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .card-title{font-size:15px;font-weight:600;color:var(--brand-blue);text-decoration:none;word-break:break-word}
@@ -136,18 +137,23 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .card-actions{display:flex;gap:12px;font-size:13px}
 .card-actions a{color:#555;text-decoration:none}
 .card-actions a:hover{color:var(--brand-blue)}
+.card:hover .card-title{color:var(--brand-blue)}
 .tag-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
 .tag-add-btn{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:20px;height:20px;padding:0;border:1px dashed #ccc;border-radius:50%;background:transparent;color:#888;cursor:pointer}
 .tag-add-btn:hover,.tag-add-btn:focus-visible{border-color:var(--brand-blue);border-style:solid;color:var(--brand-blue)}
 .tag-add-btn i{font-size:11px;line-height:1}
 .tag-pills{display:flex;flex-wrap:wrap;gap:6px;list-style:none}
-.tag-pill{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.4}
+.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px;font-weight:500;line-height:1;background:#f1f1f1;color:#555}
+.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#888;transition:opacity .12s ease}
 .tag-pill-label{overflow-wrap:anywhere}
-.tag-pill-edit,.tag-pill-detach{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:14px;height:14px;padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .12s ease,background .12s ease}
+.tag-pill-edit,.tag-pill-detach{position:absolute;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:18px;height:18px;padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .12s ease,background .12s ease}
+.tag-pill-edit{left:2px}
+.tag-pill-detach{right:2px}
 .tag-pill-edit i,.tag-pill-detach i{font-size:11px;line-height:1}
 .tag-pill:hover .tag-pill-edit,.tag-pill:hover .tag-pill-detach,
 .tag-pill:focus-within .tag-pill-edit,.tag-pill:focus-within .tag-pill-detach,
 .tag-pill-edit:focus-visible,.tag-pill-detach:focus-visible{opacity:1;pointer-events:auto}
+.tag-pill:hover .tag-dot,.tag-pill:focus-within .tag-dot{opacity:0}
 .tag-pill-edit:hover,.tag-pill-detach:hover{background:rgba(0,0,0,.15)}
 .empty{color:#888;font-size:14px;padding:20px 0}
 #status{margin-top:10px;font-size:13px;color:#555}
@@ -183,6 +189,8 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 <header>
   ` + exhibitLogoSVG + `
   <h1>Exhibit</h1>
+  <span style="flex:1"></span>
+  <a href="/agent" style="display:inline-flex;align-items:center;gap:5px"><i class="ph ph-robot"></i> Agent</a>
 </header>
 <main>
 <div class="upload">
@@ -205,10 +213,11 @@ main{padding:24px;max-width:1200px;margin:0 auto}
   <div id="status"></div>
 </div>
 
-<form class="search-row" method="GET" action="/">
-  <input type="text" name="q" placeholder="Search…" value="` + searchVal + `">
-  <button class="btn btn-sm" type="submit">Search</button>
-</form>
+<div class="search-row">
+  <i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
+  <input type="text" id="search-input" name="q" placeholder="Search artifacts…" value="` + searchVal + `" autocomplete="off">
+  <button class="btn btn-sm search-clear" type="button" id="search-clear" aria-label="Clear search" hidden><i class="ph ph-x"></i></button>
+</div>
 
 <div class="grid">` + cards.String() + `</div>
 </main>
@@ -218,6 +227,48 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 
 <script>
 const TOKEN = ` + fmt.Sprintf("%q", token) + `;
+
+// Eager search: filter the gallery as the user types instead of waiting for a
+// submit. A debounced fetch re-asks the server-rendered gallery page with the
+// current query and swaps only the .grid contents, so search stays authoritative
+// (it runs the same FTS query as the form did) while the upload box, tag modals,
+// and delegated card/tag handlers stay untouched. The empty query lists all.
+(function() {
+  const input = document.getElementById('search-input');
+  const clear = document.getElementById('search-clear');
+  if (!input) return;
+  let timer = null;
+  let lastQ = input.value.trim();
+  syncClear();
+  input.addEventListener('input', function() {
+    syncClear();
+    clearTimeout(timer);
+    timer = setTimeout(runSearch, 220);
+  });
+  input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); runSearch(); } });
+  if (clear) clear.addEventListener('click', function() { input.value = ''; syncClear(); input.focus(); clearTimeout(timer); runSearch(); });
+  function syncClear() { if (clear) clear.hidden = !input.value; }
+  function runSearch() {
+    const q = input.value.trim();
+    if (q === lastQ) return;
+    lastQ = q;
+    const grid = document.querySelector('.grid');
+    if (!grid) return;
+    grid.classList.add('grid-loading');
+    const url = q ? '/?q=' + encodeURIComponent(q) : '/';
+    fetch(url, { headers: { 'X-Requested-With': 'gallery-search' }, credentials: 'same-origin' })
+      .then(function(r) { return r.ok ? r.text() : Promise.reject(r.statusText); })
+      .then(function(html) {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const fresh = doc.querySelector('.grid');
+        grid.innerHTML = fresh ? fresh.innerHTML : '';
+        grid.classList.remove('grid-loading');
+        if (history.replaceState) history.replaceState(null, '', url);
+      })
+      .catch(function() { grid.classList.remove('grid-loading'); });
+  }
+})();
+
 let currentMode = 'paste';
 
 function setMode(mode) {
@@ -587,13 +638,17 @@ document.getElementById('tag-add-confirm').addEventListener('click', async funct
 </html>`
 }
 
-// renderTagPills renders an artifact's tags as colored pills. It returns ""
-// when there are no tags so cards without tags render with no empty pill
-// row. Each pill carries a hover/focus-revealed edit (pencil) control on the
-// left and a detach (x) control on the right; both are real <button>s so
-// they're reachable by keyboard without extra handling, and they occupy
-// fixed space at all times so revealing them on hover never shifts the pill
-// layout — only their opacity changes.
+// renderTagPills renders an artifact's tags as small neutral pills, each led
+// by a colored dot that carries the tag's color — like a 'Development' label
+// with a green dot to its left. The pill itself is a single low-saturation
+// color so a row of tags reads as secondary metadata, not as headers bigger
+// than the card title. It returns "" when there are no tags so untagged cards
+// render with no empty pill row. Each pill carries a hover/focus-revealed edit
+// (pencil) control on the left and a detach (x) control on the right; both are
+// real <button>s so they're reachable by keyboard without extra handling, and
+// they occupy fixed space at all times so revealing them on hover never shifts
+// the pill layout — only their opacity changes. The tag color still flows to the
+// edit modal via data-tag-color.
 func renderTagPills(artifactID string, tags []*store.Tag) string {
 	if len(tags) == 0 {
 		return ""
@@ -601,17 +656,18 @@ func renderTagPills(artifactID string, tags []*store.Tag) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf(`<ul class="tag-pills" data-artifact-id="%s">`, artifactID))
 	for _, t := range tags {
-		bg := color.Normalize(t.Color)
-		fg := color.ContrastText(bg)
+		dot := color.Normalize(t.Color)
 		name := htmlEsc(t.Name)
 		b.WriteString(fmt.Sprintf(
-			`<li class="tag-pill" data-tag-id="%s" style="background:%s;color:%s">`+
+			`<li class="tag-pill" data-tag-id="%s">`+
 				`<button type="button" class="tag-pill-edit" data-tag-id="%s" data-tag-name="%s" data-tag-color="%s" aria-label="Edit tag %s"><i class="ph ph-pencil-simple"></i></button>`+
+				`<span class="tag-dot" style="background:%s" aria-hidden="true"></span>`+
 				`<span class="tag-pill-label">%s</span>`+
 				`<button type="button" class="tag-pill-detach" data-tag-id="%s" data-artifact-id="%s" aria-label="Remove tag %s from this artifact"><i class="ph ph-x"></i></button>`+
 				`</li>`,
-			t.ID, bg, fg,
-			t.ID, name, bg, name,
+			t.ID,
+			t.ID, name, dot, name,
+			dot,
 			name,
 			t.ID, artifactID, name))
 	}
@@ -770,7 +826,7 @@ async function refetchSource() {
 :root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;display:flex;flex-direction:column;height:100vh}
-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+header{background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;z-index:20}
 header a{color:var(--brand-blue);text-decoration:none;font-size:13px}
 header h1{font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toolbar{background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 20px;display:flex;gap:12px;align-items:center;flex-shrink:0;font-size:13px}
@@ -808,7 +864,9 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
 <div class="toolbar">
   <a href="` + renderOrigin + `/a/` + a.ID + `" target="_blank">Open in new tab ↗</a>
   <span style="color:#ddd">|</span>
-  <a href="/artifacts/` + a.ID + `/edit"><i class="ph ph-pencil-simple"></i> Edit</a>` + refetchToolbar + `
+  <a href="/artifacts/` + a.ID + `/edit"><i class="ph ph-pencil-simple"></i> Edit</a>
+  <span style="color:#ddd">|</span>
+  <a href="/agent?artifact=` + a.ID + `"><i class="ph ph-robot"></i> Modify with agent</a>` + refetchToolbar + `
   <span style="color:#ddd">|</span>
   <span style="color:#888">Allowlist:</span>
   <span id="al-display">` + renderAllowlistBadges(a.NetworkAllowlist) + `</span>
@@ -1116,7 +1174,7 @@ func renderEditPage(a *store.Artifact, src, token string) string {
 :root{--brand-blue:` + color.BrandBlue + `;--brand-blue-hover:` + color.BrandBlueHover + `}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:12px 24px;display:flex;align-items:center;gap:16px}
+header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:12px 24px;display:flex;align-items:center;gap:16px}
 header h1{font-size:18px;font-weight:600;flex:1}
 header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
 main{padding:24px;max-width:900px;margin:0 auto}
@@ -1138,6 +1196,8 @@ main{padding:24px;max-width:900px;margin:0 auto}
 .btn-danger:hover{background:#c00}
 .spacer{flex:1}
 #status{font-size:13px;color:#555}
+#scan-result{margin-top:12px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
+#scan-result code{background:#eee;padding:1px 5px;border-radius:3px}
 </style>
 </head>
 <body>
@@ -1157,6 +1217,7 @@ main{padding:24px;max-width:900px;margin:0 auto}
     <span class="spacer"></span>
     <button class="btn btn-danger" type="button" onclick="deleteArtifact()"><i class="ph ph-trash"></i> Delete</button>
   </div>
+  <div id="scan-result"></div>
 </div>
 </main>
 <script src="/assets/editor.js"></script>
@@ -1177,18 +1238,67 @@ async function save() {
   const status = document.getElementById('status');
   if (!body.trim()) { status.textContent = 'Body cannot be empty.'; return; }
   status.textContent = 'Saving…';
+  document.getElementById('scan-result').style.display = 'none';
   const resp = await fetch('/api/artifacts/' + ID, {
     method: 'PATCH',
     headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
     body: JSON.stringify({title: title || 'Untitled', body})
   });
+  const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    const data = await resp.json().catch(() => ({}));
     status.textContent = '✗ Error: ' + (data.error || resp.statusText);
     return;
   }
   status.textContent = '✓ Saved';
+  // If the edited body changed the network footprint, the server re-ran the
+  // scan and returned it. Re-run the explicit-approval flow so the user can
+  // review/enable new origins — the same gate ingest uses. The allowlist is
+  // never seeded from the scan; only the origins the user selects are written.
+  const footprint = data.network_footprint || [];
+  if (data.footprint_changed && footprint.length > 0) {
+    showApproval(footprint);
+    return;
+  }
   setTimeout(() => { window.location.href = '/artifacts/' + ID; }, 500);
+}
+
+function showApproval(footprint) {
+  const scanDiv = document.getElementById('scan-result');
+  const rows = footprint.map(o =>
+    '<label style="display:block;margin:4px 0">' +
+    '<input type="checkbox" class="al-origin" value="' + esc(o) + '" checked> ' +
+    '<code>' + esc(o) + '</code></label>'
+  ).join('');
+  scanDiv.style.display = 'block';
+  scanDiv.innerHTML = '<strong>Edited artifact wants to contact these origins.</strong>' +
+    '<div style="color:#888;margin:4px 0 8px">The most secure option will <em>always</em> be to disable all external origins. Origin approval is never automatic.</div>' +
+    rows +
+    '<div class="btn-row" style="margin-top:10px">' +
+    '<button class="btn btn-sm" onclick="approveOrigins()">Approve selected &amp; enable</button>' +
+    '<button class="btn btn-sm" style="background:#888" onclick="finishEdit()">Keep all blocked</button>' +
+    '</div>';
+}
+
+async function approveOrigins() {
+  const selected = Array.from(document.querySelectorAll('.al-origin:checked')).map(c => c.value);
+  const status = document.getElementById('status');
+  status.textContent = 'Applying…';
+  const r = await fetch('/api/artifacts/' + ID, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({network_allowlist: selected})
+  });
+  if (!r.ok) { status.textContent = '✗ Failed to update allowlist'; return; }
+  finishEdit();
+}
+
+function finishEdit() {
+  document.getElementById('status').textContent = '✓ Saved — reloading…';
+  setTimeout(() => { window.location.href = '/artifacts/' + ID; }, 400);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 async function deleteArtifact() {

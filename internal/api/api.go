@@ -3,9 +3,11 @@ package api
 import (
 	"net/http"
 
+	"github.com/artifact-viewer/artifact-viewer/internal/agent"
 	"github.com/artifact-viewer/artifact-viewer/internal/blob"
 	"github.com/artifact-viewer/artifact-viewer/internal/logging"
 	"github.com/artifact-viewer/artifact-viewer/internal/render"
+	"github.com/artifact-viewer/artifact-viewer/internal/secrets"
 	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -18,6 +20,11 @@ type Config struct {
 	AppOrigin    string
 	RenderOrigin string
 	AuthToken    string
+	// Agent chat support (Exh-yvhp). Agent is nil when the pi harness is
+	// unavailable; Secrets seals the BYO provider keys at rest.
+	Agent       *agent.Manager
+	Secrets     *secrets.Box
+	MockEnabled bool
 }
 
 // Router wraps chi.Mux and holds the config.
@@ -54,6 +61,12 @@ func (ro *Router) setupRoutes() {
 	// Public share route — no auth required
 	ro.Get("/s/{shareID}", ro.serveShare)
 
+	// Agent chat UI (token embedded in page JS, like the gallery) and the
+	// SSE event stream (EventSource can't set headers; the handler checks
+	// the same bearer token passed as ?token=).
+	ro.Get("/agent", ro.agentPage)
+	ro.Get("/api/agent/sessions/{sessionID}/events", ro.agentEvents)
+
 	// Authenticated API routes
 	ro.Group(func(r chi.Router) {
 		r.Use(authMiddleware(ro.cfg.AuthToken))
@@ -77,7 +90,19 @@ func (ro *Router) setupRoutes() {
 				// Artifact-centric tag routes
 				r.Post("/tags/{tagID}", ro.addArtifactTag)
 				r.Delete("/tags/{tagID}", ro.removeArtifactTag)
+				// Agent conversations persisted with this artifact
+				r.Get("/transcripts", ro.listTranscripts)
 			})
+		})
+
+		r.Route("/api/agent", func(r chi.Router) {
+			r.Get("/key", ro.getAgentKey)
+			r.Put("/key", ro.putAgentKey)
+			r.Delete("/key", ro.deleteAgentKey)
+			r.Post("/sessions", ro.createAgentSession)
+			r.Post("/sessions/{sessionID}/prompt", ro.agentPrompt)
+			r.Post("/sessions/{sessionID}/abort", ro.agentAbort)
+			r.Delete("/sessions/{sessionID}", ro.closeAgentSession)
 		})
 
 		r.Route("/api/collections", func(r chi.Router) {
