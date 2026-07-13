@@ -236,3 +236,74 @@ func TestShimInstallsClipboardBridge(t *testing.T) {
 		t.Fatalf("clipboard messages must be pinned to the app origin: %s", doc)
 	}
 }
+
+// The File System Access picker polyfill (av-70t9): the sandboxed iframe's
+// opaque origin makes showOpenFilePicker / showDirectoryPicker / showSaveFilePicker
+// unreachable (Blink throws a SecurityError that no sandbox token re-enables),
+// so the shim polyfills them on the classic <input type=file> picker, which
+// Blink subjects to no sandbox check. Open/directory return FSA-shaped handles;
+// save's createWritable routes through the download bridge. Like the other
+// bridges, framed-only (co-located inside the window.parent guard).
+func TestShimInstallsFSAPickerPolyfill(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+
+	// All three FSA entry points are replaced on window.
+	for _, name := range []string{"showOpenFilePicker", "showDirectoryPicker", "showSaveFilePicker"} {
+		if !strings.Contains(doc, "window."+name) {
+			t.Fatalf("shim must polyfill %s: %s", name, doc)
+		}
+	}
+	// The polyfill backs onto <input type=file>, the one picker Blink allows
+	// inside a sandboxed frame.
+	if !strings.Contains(doc, "input.type = 'file'") {
+		t.Fatalf("FSA polyfill must use an <input type=file> fallback: %s", doc)
+	}
+	// Directories use the webkitdirectory attribute so one pick yields a folder.
+	if !strings.Contains(doc, "webkitdirectory") {
+		t.Fatalf("showDirectoryPicker must fall back to webkitdirectory: %s", doc)
+	}
+	// A canceled picker rejects with AbortError, matching native FSA semantics.
+	if !strings.Contains(doc, "AbortError") {
+		t.Fatalf("canceled picker must reject with AbortError: %s", doc)
+	}
+	// File handles carry the FSA surface artifacts actually call.
+	if !strings.Contains(doc, "getFile") || !strings.Contains(doc, "createWritable") {
+		t.Fatalf("file handles must expose getFile/createWritable: %s", doc)
+	}
+	// Directory handles are async-iterable (values/entries/keys + the default
+	// async iterator), the shape `for await (const h of dir.values())` needs.
+	if !strings.Contains(doc, "Symbol.asyncIterator") {
+		t.Fatalf("directory handles must be async-iterable: %s", doc)
+	}
+	// The directory tree is reconstructed from webkitRelativePath so nested
+	// walks (for await ... of subdirHandle.values()) work, not just a flat list.
+	if !strings.Contains(doc, "webkitRelativePath") {
+		t.Fatalf("showDirectoryPicker must rebuild the tree from webkitRelativePath: %s", doc)
+	}
+}
+
+// The save picker has no native save dialog in a sandboxed iframe, so
+// createWritable materializes a download by reusing the av-ryby download
+// bridge (a detached blob:-href anchor click) — NOT by adding allow-downloads
+// to the sandbox or introducing a new host message type. This keeps the export
+// surface single-path and the sandbox token set unchanged (downloads_test.go
+// still asserts sandbox="allow-scripts" with no allow-downloads).
+func TestShimFSASaveReusesDownloadBridge(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+
+	// The save writable triggers a download via a detached anchor click, the
+	// same vector the download bridge intercepts.
+	if !strings.Contains(doc, "a.download = filename") || !strings.Contains(doc, "a.click()") {
+		t.Fatalf("createWritable.close() must trigger the download bridge via an anchor click: %s", doc)
+	}
+	// No separate host message for saves — the bytes ride __avDownload like
+	// every other export, so the host's single download listener handles them.
+	if strings.Contains(doc, "__avSave") {
+		t.Fatalf("save must reuse the __avDownload bridge, not a new message type: %s", doc)
+	}
+	// The writable stream honors the WriteParams form ({type:'write', data})
+	// that spec-conformant artifacts pass, not just bare Blob/ArrayBuffer.
+	if !strings.Contains(doc, "data.type === 'write'") {
+		t.Fatalf("createWritable.write must accept the WriteParams form: %s", doc)
+	}
+}

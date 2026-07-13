@@ -368,6 +368,207 @@ const shimTemplate = `<script>
         }
       } catch (e2) {}
     }
+
+    // ---- File System Access picker polyfill (av-70t9) ----
+    // The sandboxed iframe's opaque origin makes the File System Access API
+    // unreachable: Blink's VerifyIsAllowedToShowFilePicker throws a
+    // SecurityError, and no sandbox token re-enables it (even allow-same-origin
+    // wouldn't help — the render origin is cross-origin to the app origin).
+    // Polyfill showOpenFilePicker / showDirectoryPicker / showSaveFilePicker
+    // on the classic <input type=file> picker, which Blink subjects to no
+    // sandbox check at all (only a user-activation requirement, which the
+    // artifact's own click already provides). Open/directory return FSA-shaped
+    // handles backed by the picked File(s); save's createWritable materializes
+    // a download through the download bridge above (host-mediated, first-use
+    // approval) rather than adding allow-downloads to the sandbox — the bridge
+    // is the single export path av-ryby established, and the sandbox token set
+    // stays unchanged. No approval gates the input fallback: the user picks
+    // each file explicitly (ordinary web behavior). Install framed-only;
+    // top-level renders have native FSA and share pages get no bridge.
+
+    // Flattens an FSA "types" array ([{ description, accept: { mime: [exts] }}])
+    // into an <input accept> string, or undefined for no filter.
+    var acceptFromTypes = function(types) {
+      if (!types || !types.length) return undefined;
+      var set = {};
+      for (var i = 0; i < types.length; i++) {
+        var accept = types[i] && types[i].accept;
+        if (!accept) continue;
+        Object.keys(accept).forEach(function(mime) {
+          if (mime && mime !== '*/*') set[mime] = true;
+          accept[mime].forEach(function(ext) { set[ext] = true; });
+        });
+      }
+      var list = Object.keys(set);
+      return list.length ? list.join(',') : undefined;
+    };
+
+    // A FileSystemWritableFileStream that buffers writes and, on close,
+    // triggers the download bridge via a detached blob:-href anchor click —
+    // the same path a[download] exports take. seek/truncate are no-ops
+    // (sequential buffer); the polyfill is read/write-to-download only.
+    var makeWritable = function(filename, mime) {
+      var chunks = [];
+      var closed = false;
+      return {
+        write: function(data) {
+          if (closed) return Promise.reject(new DOMException('Writable stream is closed', 'InvalidStateError'));
+          // Unwrap the WriteParams form { type: 'write'|'seek'|'truncate', data }.
+          // Only those three exact type values are treated as WriteParams — a
+          // Blob also has a .type property (its MIME), so a broad typeof check
+          // would silently drop every Blob write. seek/truncate are no-ops
+          // (sequential buffer); 'write' unwraps .data.
+          if (data && typeof data === 'object' && (data.type === 'write' || data.type === 'seek' || data.type === 'truncate')) {
+            if (data.type === 'write') data = data.data;
+            else return Promise.resolve();
+          }
+          chunks.push(data);
+          return Promise.resolve();
+        },
+        close: function() {
+          if (closed) return Promise.resolve(undefined);
+          closed = true;
+          var blob = new Blob(chunks, { type: mime || 'application/octet-stream' });
+          var url = URL.createObjectURL(blob); // registered in blobURLs above
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          a.click(); // detached -> prototype.click override -> bridgeDownload -> host
+          return Promise.resolve(undefined);
+        },
+        abort: function() { closed = true; chunks = []; return Promise.resolve(undefined); },
+        seek: function() { return Promise.resolve(); },
+        truncate: function() { return Promise.resolve(); }
+      };
+    };
+
+    var makeFileHandle = function(file) {
+      return {
+        kind: 'file',
+        name: file.name,
+        getFile: function() { return Promise.resolve(file); },
+        createWritable: function() { return Promise.resolve(makeWritable(file.name, file.type)); }
+      };
+    };
+
+    // Reconstructs the directory tree from <input webkitdirectory>'s flat file
+    // list (each File carries .webkitRelativePath = "root/sub/file"). Empty
+    // subdirectories are invisible to webkitdirectory and are omitted — an
+    // acceptable limitation for the read-a-folder tools this targets.
+    var makeDirHandle = function(node) {
+      return {
+        kind: 'directory',
+        name: node.name,
+        values: function() { return dirIterator(node, 'values'); },
+        keys: function() { return dirIterator(node, 'keys'); },
+        entries: function() { return dirIterator(node, 'entries'); },
+        // Read-only polyfill: the sandbox can't persist writes to disk handles.
+        removeEntry: function() {
+          return Promise.reject(new DOMException('Directory is read-only', 'NotSupportedError'));
+        },
+        [Symbol.asyncIterator]: function() { return dirIterator(node, 'entries'); }
+      };
+    };
+
+    // Yields [name, handle] pairs for the direct children of a node, in
+    // insertion order (subdirectories first, then files).
+    var childPairs = function(node) {
+      var out = [];
+      Object.keys(node.dirs).forEach(function(n) { out.push([n, makeDirHandle(node.dirs[n])]); });
+      node.files.forEach(function(f) { out.push([f.name, makeFileHandle(f)]); });
+      return out;
+    };
+
+    var dirIterator = function(node, mode) {
+      var kids = childPairs(node);
+      var i = 0;
+      return {
+        next: function() {
+          return new Promise(function(resolve) {
+            if (i < kids.length) {
+              var pair = kids[i++];
+              resolve({ value: mode === 'values' ? pair[1] : (mode === 'keys' ? pair[0] : pair), done: false });
+            } else {
+              resolve({ value: undefined, done: true });
+            }
+          });
+        },
+        return: function() { return Promise.resolve({ value: undefined, done: true }); },
+        [Symbol.asyncIterator]: function() { return this; }
+      };
+    };
+
+    // Opens an <input type=file> and resolves with its FileList. .click() must
+    // run synchronously so the picker opens within the user-gesture window that
+    // triggered the FSA call — deferring to a microtask loses activation. Some
+    // browsers only open the picker for an in-DOM input, so append (hidden) and
+    // remove on change. A canceled picker (no files) rejects with AbortError,
+    // matching native FSA semantics.
+    var runFileInput = function(attrs) {
+      return new Promise(function(resolve, reject) {
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.style.position = 'fixed';
+        input.style.top = '-9999px';
+        input.style.opacity = '0';
+        if (attrs.multiple) input.multiple = true;
+        if (attrs.webkitdirectory) input.webkitdirectory = true;
+        if (attrs.accept) input.accept = attrs.accept;
+        input.onchange = function() {
+          var files = input.files;
+          if (input.parentNode) input.parentNode.removeChild(input);
+          if (!files || !files.length) {
+            reject(new DOMException('The user aborted the request.', 'AbortError'));
+            return;
+          }
+          resolve(files);
+        };
+        (document.body || document.documentElement).appendChild(input);
+        input.click();
+      });
+    };
+
+    // Map a FileList from runFileInput into FSA file handles.
+    var filesToHandles = function(files) {
+      var handles = [];
+      for (var i = 0; i < files.length; i++) handles.push(makeFileHandle(files[i]));
+      return handles;
+    };
+
+    // Rebuild a directory tree from a webkitdirectory FileList and return the
+    // root directory handle. Named (not inline) so the shim stays free of the
+    // inline then-callback form the async-state-hydration guard watches for —
+    // this runs only on a user picker gesture, never at startup.
+    var filesToDirHandle = function(files) {
+      var root = { name: '', dirs: {}, files: [] };
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        var parts = String(f.webkitRelativePath || f.name).split('/');
+        if (root.name === '') root.name = parts[0];
+        var node = root;
+        for (var j = 1; j < parts.length; j++) {
+          if (j === parts.length - 1) node.files.push(f);
+          else { var s = parts[j]; if (!node.dirs[s]) node.dirs[s] = { name: s, dirs: {}, files: [] }; node = node.dirs[s]; }
+        }
+      }
+      return makeDirHandle(root);
+    };
+
+    window.showOpenFilePicker = function(opts) {
+      opts = opts || {};
+      return runFileInput({ multiple: !!opts.multiple, accept: acceptFromTypes(opts.types) }).then(filesToHandles);
+    };
+
+    window.showDirectoryPicker = function() {
+      return runFileInput({ webkitdirectory: true }).then(filesToDirHandle);
+    };
+
+    window.showSaveFilePicker = function(opts) {
+      opts = opts || {};
+      // No native save dialog exists in a sandboxed iframe; return a handle
+      // whose createWritable() materializes a download via the bridge above.
+      return Promise.resolve(makeFileHandle(new File([], opts.suggestedName || 'download')));
+    };
   }
 })();
 </script>`
