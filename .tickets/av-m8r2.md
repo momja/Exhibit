@@ -39,3 +39,17 @@ No existing artifact data is lost: the column is additive with default 0 (the "n
 - A fresh DB and an under-migrated (v4) DB still migrate cleanly; v8 is a no-op whenever the column already exists.
 - `goose_db_version` records version 8 after migration; goose reaches "successfully migrated database to version: 8".
 - Existing store and API tests pass; the v8 repair is idempotent (re-running OpenSQLite is a no-op — "no migrations to run").
+
+## Notes
+
+**2026-07-13T05:36:17Z**
+
+Implemented on `bug/av-m8r2/migration-renumber-repair`.
+
+- `internal/store/migration_repair.go` (new): `ensureDownloadsApprovedColumn` introspects `PRAGMA table_info(artifacts)` and adds `downloads_approved INTEGER NOT NULL DEFAULT 0` only if absent; wrapped in a `NewGoMigration(8, ...)` registered once per process via `sync.Once` + `goose.SetGlobalMigrations`.
+- `internal/store/sqlite.go`: one-line `registerRepairMigration()` call at the top of `migrate()`, before `goose.SetBaseFS`.
+- `internal/store/sqlite_test.go`: `TestMigration008RepairsRenumberCollision` stages a collision DB (migrations 001-004 applied, then a forged `goose_db_version` row claiming v5 is applied with no `downloads_approved` column), opens it via `store.OpenSQLite`, and asserts both columns end up present, goose reaches v8, and `SELECT downloads_approved` succeeds.
+
+Verified across three DB populations through the real `store.OpenSQLite` path: (1) agent-PoC-era DB (v5=005_agent) — v5 skipped by goose, v8 adds the column; (2) the actual test `app.db` copy (under-migrated at v4) — 005 adds the column, v8 no-op; (3) fresh DB — 005 adds it, v8 no-op. All converge to v8 with both columns. Deployed to the test environment: `app.db` migrated to version 8, the gallery query that was failing (`SELECT a.downloads_approved`) now returns HTTP 200. Full `go test ./...` green; `go vet` clean.
+
+Note: the committed migrations 005/006/007 (already on main) alone repair fresh and under-migrated DBs. The v8 repair is specifically for the agent-PoC-era collision case where version 5 was consumed by a different migration; without it those DBs silently lose the `downloads_approved` column on upgrade.

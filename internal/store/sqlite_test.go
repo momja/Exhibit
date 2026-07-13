@@ -412,3 +412,82 @@ func TestClipboardApproved(t *testing.T) {
 	err = s.UpdateArtifact(ctx, "cl-1", map[string]any{"clipboard_approved": "yes"})
 	assert.Error(t, err)
 }
+
+// TestMigration008RepairsRenumberCollision guards against the version-5 reuse
+// introduced when 005_agent.sql was renumbered to 007 (commit 1162b17) and
+// version 5 was reassigned to 005_downloads_approved.sql. goose records
+// applied migrations by version number, so any database that had already
+// applied version 5 — as the agent migration — now sees version 5 as "already
+// applied" and silently skips 005_downloads_approved.sql. The downloads_approved
+// column is never added while clipboard_approved (006) is, and the runtime
+// blows up with "no such column: a.downloads_approved".
+//
+// This test stages exactly that history — migrations 001-004 applied, then a
+// goose_db_version row claiming version 5 is already applied (but no
+// downloads_approved column, as when v5 was the agent migration) — and asserts
+// that store.OpenSQLite converges the schema via the guarded v8 repair:
+// both capability columns end up present and a query selecting the column
+// succeeds. It also covers the fresh/under-migrated paths by construction,
+// since OpenSQLite runs the same goose.Up for everyone.
+func TestMigration008RepairsRenumberCollision(t *testing.T) {
+	f, err := os.CreateTemp("", "test-mig-collision-*.db")
+	require.NoError(t, err)
+	f.Close()
+	t.Cleanup(func() { os.Remove(f.Name()) })
+
+	db, err := sql.Open("sqlite", f.Name())
+	require.NoError(t, err)
+	db.SetMaxOpenConns(1)
+	_, err = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`)
+	require.NoError(t, err)
+
+	// Apply only 001-004, then forge the collision: record version 5 as already
+	// applied WITHOUT adding downloads_approved. This is the on-disk state of a
+	// database that ran the agent-PoC-era 005_agent.sql and then upgrades.
+	goose.SetBaseFS(migrationsFS)
+	require.NoError(t, goose.SetDialect("sqlite3"))
+	require.NoError(t, goose.UpTo(db, "migrations", 4))
+	_, err = db.Exec(`INSERT INTO goose_db_version (version_id, is_applied) VALUES (5, 1)`)
+	require.NoError(t, err)
+	db.Close()
+
+	// OpenSQLite runs goose.Up with the embedded migrations plus the registered
+	// v8 repair. goose skips on-disk 005 (version 5 is "already applied"),
+	// applies 006 (clipboard) and 007 (agent), then the v8 repair adds the
+	// missing downloads_approved column.
+	st, err := OpenSQLite(f.Name())
+	require.NoError(t, err)
+	t.Cleanup(func() { st.Close() })
+
+	db, err = sql.Open("sqlite", f.Name())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	var version int64
+	require.NoError(t, db.QueryRow(`SELECT MAX(version_id) FROM goose_db_version`).Scan(&version))
+	assert.Equal(t, int64(8), version, "v8 repair migration must run and be recorded")
+
+	hasCol := func(name string) bool {
+		rows, err := db.Query(`PRAGMA table_info(artifacts)`)
+		require.NoError(t, err)
+		defer rows.Close()
+		for rows.Next() {
+			var cid, nn, pk int
+			var n, ct string
+			var dflt sql.NullString
+			require.NoError(t, rows.Scan(&cid, &n, &ct, &nn, &dflt, &pk))
+			if n == name {
+				return true
+			}
+		}
+		return false
+	}
+	assert.True(t, hasCol("downloads_approved"),
+		"v8 repair must add the skipped downloads_approved column")
+	assert.True(t, hasCol("clipboard_approved"),
+		"006 must add clipboard_approved even when 005 was skipped")
+
+	// The decisive check: the SELECT that failed at runtime must now succeed.
+	_, err = db.Exec(`SELECT downloads_approved FROM artifacts LIMIT 1`)
+	require.NoError(t, err)
+}
