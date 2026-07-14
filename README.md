@@ -18,7 +18,7 @@ systems:
 | Tool | Version | Why |
 |------|---------|-----|
 | [Go](https://go.dev/dl/) | 1.25+ | Compiles the server (the only runtime dependency). |
-| [Node.js](https://nodejs.org/) + npm | 22+ | **Build-time only** — bundles the CodeMirror editor and vendors the Phosphor Icons assets (`make assets`). Not needed to *run* the server. |
+| [Node.js](https://nodejs.org/) + npm | 22+ | **Build-time only** — bundles assets (such as [CodeMirror](https://codemirror.net/), [Phosphor](https://phosphoricons.com/)) before runtime via (`make assets`). Not needed to *run* the server. |
 
 `make` and a POSIX shell are also required (preinstalled on Linux; on macOS, install the
 Xcode Command Line Tools with `xcode-select --install`).
