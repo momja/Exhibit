@@ -17,6 +17,8 @@ This file provides instructions and context for AI coding agents working on this
 ## Ticket System
 This project uses a CLI ticket system for task management. Run `tk help` when you need to use it.
 
+Read @TICKETS.md for more details.
+
 ## Product
 
 @docs/product_requirement_doc.md
