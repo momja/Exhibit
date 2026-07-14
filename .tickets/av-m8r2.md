@@ -1,6 +1,6 @@
 ---
 id: av-m8r2
-status: open
+status: closed
 deps: []
 links: [av-ryby, Exh-yvhp]
 created: 2026-07-13T05:36:17Z
