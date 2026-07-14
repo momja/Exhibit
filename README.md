@@ -10,6 +10,27 @@ Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs
 
 ## Quick start
 
+### Prerequisites
+
+Building from source needs two toolchains that aren't installed by default on most
+systems:
+
+| Tool | Version | Why |
+|------|---------|-----|
+| [Go](https://go.dev/dl/) | 1.25+ | Compiles the server (the only runtime dependency). |
+| [Node.js](https://nodejs.org/) + npm | 22+ | **Build-time only** — bundles assets (such as [CodeMirror](https://codemirror.net/), [Phosphor](https://phosphoricons.com/)) before runtime via (`make assets`). Not needed to *run* the server. |
+
+`make` and a POSIX shell are also required (preinstalled on Linux; on macOS, install the
+Xcode Command Line Tools with `xcode-select --install`).
+
+Optional:
+
+- [Docker](https://docs.docker.com/get-docker/) — build and run without a local Go/Node
+  toolchain (see [Building](#building)).
+- [`golangci-lint`](https://golangci-lint.run) — only for `make lint` (see [Linting](#linting)).
+- [`pi`](https://github.com/badlogic/pi-mono) — only for the AI agent surface; if absent,
+  that surface disables itself and nothing else changes.
+
 ```bash
 # Build and run (first build bundles CodeMirror and Phosphor assets)
 make build && ./bin/server
