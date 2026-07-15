@@ -116,6 +116,9 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .upload h2{font-size:15px;font-weight:600;margin-bottom:12px;color:#333}
 .upload textarea{width:100%;height:160px;font-family:monospace;font-size:12px;border:1px solid #ddd;border-radius:6px;padding:10px;resize:vertical;outline:none}
 .upload textarea:focus{border-color:var(--brand-blue)}
+.upload .cm-editor{height:160px;font-size:12px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
+.upload .cm-editor.cm-focused{outline:none;border-color:var(--brand-blue)}
+.upload .cm-scroller{overflow:auto}
 .upload input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px;outline:none}
 .upload input[type=text]:focus{border-color:var(--brand-blue)}
 .upload-row{display:flex;gap:8px;margin-top:10px}
@@ -225,6 +228,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 ` + renderEditTagModal() + `
 ` + renderAddTagModal(tags) + `
 
+<script src="/assets/editor.js"></script>
 <script>
 const TOKEN = ` + fmt.Sprintf("%q", token) + `;
 
@@ -271,11 +275,26 @@ const TOKEN = ` + fmt.Sprintf("%q", token) + `;
 
 let currentMode = 'paste';
 
+// Mount the CodeMirror island over the body textarea. The editor keeps
+// textarea.value in sync, so ingest() below still reads the field — and if the
+// bundle failed to load, the plain textarea still works. mount() hides the
+// textarea and reveals its own .cm-editor element, so setMode toggles that
+// element (bodyView.dom) rather than the now-hidden textarea.
+let bodyView = null;
+if (window.ArtifactEditor) {
+  bodyView = ArtifactEditor.mount(document.getElementById('body'));
+}
+
 function setMode(mode) {
   currentMode = mode;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   event.target.classList.add('active');
-  document.getElementById('body').style.display = mode === 'paste' ? 'block' : 'none';
+  // CodeMirror's base theme sets .cm-editor{display:flex!important}, so a plain
+  // inline display:none is overridden — hide the mounted editor (or the textarea
+  // fallback) with an !important inline rule, and clear it to reveal again.
+  const bodyEl = bodyView ? bodyView.dom : document.getElementById('body');
+  if (mode === 'paste') bodyEl.style.removeProperty('display');
+  else bodyEl.style.setProperty('display', 'none', 'important');
   document.getElementById('url-input').style.display = mode === 'url' ? 'block' : 'none';
   document.getElementById('snapshot-row').style.display = mode === 'url' ? 'flex' : 'none';
 }

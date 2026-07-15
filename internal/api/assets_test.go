@@ -101,3 +101,21 @@ func TestGalleryEditPageMountsEditor(t *testing.T) {
 	assert.Contains(t, page, "ArtifactEditor.mount")
 	assert.Contains(t, page, `<textarea id="body">`)
 }
+
+func TestGalleryLibraryPageMountsEditor(t *testing.T) {
+	r := newTestRouter(t)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	page := w.Body.String()
+	// The library (upload) page loads the same CodeMirror island and mounts it
+	// on the paste textarea, which stays present as the form's source of truth
+	// (av-44z3). setMode toggles the mounted editor for the Paste/URL tabs.
+	assert.Contains(t, page, `<script src="/assets/editor.js"></script>`)
+	assert.Contains(t, page, "ArtifactEditor.mount(document.getElementById('body'))")
+	assert.Contains(t, page, `<textarea id="body" placeholder=`)
+	assert.Contains(t, page, `.upload .cm-editor{`)
+}
