@@ -1,6 +1,6 @@
 ---
 id: av-isb3
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-07-15T01:34:21Z
