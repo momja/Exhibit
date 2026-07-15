@@ -68,11 +68,18 @@ func TestPatchClipboardApprovedRejectsNonBool(t *testing.T) {
 func TestDetailPageRendersClipboardBridge(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Copy <Tool>", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	require.NoError(t, err)
 
-	// Host-side handler for the shim's clipboard messages, and the result reply.
-	assert.Contains(t, page, "d.__avClipboard !== true")
-	assert.Contains(t, page, "__avClipboardResult")
+	// Host-side handler for the shim's clipboard messages, the result reply,
+	// and the PATCH that persists the decision — all live in the static page
+	// script the detail page loads.
+	assert.Contains(t, page, `<script src="/assets/gallery/detail.js"></script>`)
+	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(detailJS), "d.__avClipboard !== true")
+	assert.Contains(t, string(detailJS), "__avClipboardResult")
+	assert.Contains(t, string(detailJS), "clipboard_approved")
 	// The approval state is server-rendered, so a reload (or another device)
 	// sees the persisted decision.
 	assert.Contains(t, page, "let clipboardApproved = false;")
@@ -84,10 +91,10 @@ func TestDetailPageRendersClipboardBridge(t *testing.T) {
 	// Toolbar shows the state and offers revocation.
 	assert.Contains(t, page, `id="clip-state"`)
 	assert.Contains(t, page, `id="clip-revoke"`)
-	assert.Contains(t, page, "clipboard_approved")
 
 	// An approved artifact renders with the approval baked in.
 	a.ClipboardApproved = true
-	page = renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	page, err = renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	require.NoError(t, err)
 	assert.Contains(t, page, "let clipboardApproved = true;")
 }

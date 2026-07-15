@@ -1,0 +1,96 @@
+{{/*
+  Shared partials for the gallery pages. Pill/button markup is kept on single
+  lines: the gallery tests assert on contiguous markup substrings, and more to
+  the point each pill is one inline element whose exact whitespace matters to
+  flex layout less than to greppability.
+*/}}
+
+{{/* tagPills renders an artifact's tags as small neutral pills, each led by a
+     colored dot that carries the tag's color — like a 'Development' label with
+     a green dot to its left. The pill itself is a single low-saturation color
+     so a row of tags reads as secondary metadata, not as headers bigger than
+     the card title. It renders nothing when there are no tags so untagged
+     cards get no empty pill row. Each pill carries a hover/focus-revealed edit
+     (pencil) control on the left and a detach (x) control on the right; both
+     are real <button>s so they're reachable by keyboard without extra
+     handling, and they occupy fixed space at all times so revealing them on
+     hover never shifts the pill layout — only their opacity changes. The tag
+     color still flows to the edit modal via data-tag-color.
+     Data: {ArtifactID string; Tags []tagView}. */}}
+{{define "tagPills"}}{{if .Tags}}<ul class="tag-pills" data-artifact-id="{{.ArtifactID}}">{{range .Tags}}<li class="tag-pill" data-tag-id="{{.ID}}"><button type="button" class="tag-pill-edit" data-tag-id="{{.ID}}" data-tag-name="{{.Name}}" data-tag-color="{{.Color}}" aria-label="Edit tag {{.Name}}"><i class="ph ph-pencil-simple"></i></button><span class="tag-dot" style="background:{{.Color}}" aria-hidden="true"></span><span class="tag-pill-label">{{.Name}}</span><button type="button" class="tag-pill-detach" data-tag-id="{{.ID}}" data-artifact-id="{{$.ArtifactID}}" aria-label="Remove tag {{.Name}} from this artifact"><i class="ph ph-x"></i></button></li>{{end}}</ul>{{end}}{{end}}
+
+{{/* tagRow wraps an artifact's tag pills with a trailing '+' button that
+     opens the add-tag modal. Unlike the pills themselves, the '+' always
+     renders — even for an untagged artifact, it's the only way to attach a
+     first tag — so it lives outside tagPills' empty-tags short circuit.
+     Data: same as tagPills. */}}
+{{define "tagRow"}}<div class="tag-row">{{template "tagPills" .}}<button type="button" class="tag-add-btn" data-artifact-id="{{.ArtifactID}}" aria-label="Add tag"><i class="ph ph-plus"></i></button></div>{{end}}
+
+{{/* colorSwatches renders the shared preset-color palette used by both the
+     edit-tag modal (tww.2.4) and the add-tag modal (tww.2.5). Swatches are
+     plain buttons scoped by the caller's modal id in CSS/JS, so the markup
+     itself carries no modal-specific state. Data: []string (hex colors). */}}
+{{define "colorSwatches"}}<div class="color-presets">{{range .}}<button type="button" class="color-swatch" data-color="{{.}}" style="background:{{.}}" aria-label="{{.}}"></button>{{end}}</div>{{end}}
+
+{{/* editTagModal is the (initially hidden) edit-tag modal shell shared by
+     every card's pencil control. There is one instance per gallery page load;
+     openEditTagModal (in /assets/gallery/index.js) populates it for whichever
+     tag was clicked. Data: []string (the preset palette). */}}
+{{define "editTagModal"}}<div id="tag-edit-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tag-edit-title">
+    <h2 id="tag-edit-title">Edit tag</h2>
+    <label for="tag-edit-name">Name</label>
+    <input type="text" id="tag-edit-name" maxlength="60">
+    <label>Color</label>
+    {{template "colorSwatches" .}}
+    <div class="color-custom-row">
+      <input type="color" id="tag-edit-color-picker" aria-label="Custom color">
+      <input type="text" id="tag-edit-color-hex" placeholder="#rrggbb" maxlength="7" aria-label="Color hex code">
+    </div>
+    <div id="tag-edit-error" class="modal-error" hidden></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-danger" id="tag-edit-delete"><i class="ph ph-trash"></i> Delete</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="tag-edit-cancel">Cancel</button>
+      <button type="button" class="btn" id="tag-edit-save"><i class="ph ph-check"></i> Save</button>
+    </div>
+  </div>
+</div>{{end}}
+
+{{/* addTagModal is the (initially hidden) add-tag modal shell shared by every
+     card's trailing '+' button. It offers a dropdown of every existing tag
+     (server-rendered from the same ListTags call the gallery already makes)
+     plus a "create new" option that reveals the same name+color fields as the
+     edit-tag modal (openAddTagModal/wireColorControls('tag-add') in
+     /assets/gallery/index.js). Data: {Tags []tagView; Presets []string}. */}}
+{{define "addTagModal"}}<div id="tag-add-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tag-add-title">
+    <h2 id="tag-add-title">Add tag</h2>
+    <label for="tag-add-select">Tag</label>
+    <select id="tag-add-select">
+      <option value="">Choose a tag…</option>
+      {{range .Tags}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      <option value="__new__">+ Create new tag</option>
+    </select>
+    <div id="tag-add-create-fields" hidden>
+      <label for="tag-add-name">Name</label>
+      <input type="text" id="tag-add-name" maxlength="60">
+      <label>Color</label>
+      {{template "colorSwatches" .Presets}}
+      <div class="color-custom-row">
+        <input type="color" id="tag-add-color-picker" aria-label="Custom color">
+        <input type="text" id="tag-add-color-hex" placeholder="#rrggbb" maxlength="7" aria-label="Color hex code">
+      </div>
+    </div>
+    <div id="tag-add-error" class="modal-error" hidden></div>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="tag-add-cancel">Cancel</button>
+      <button type="button" class="btn" id="tag-add-confirm"><i class="ph ph-check"></i> Add</button>
+    </div>
+  </div>
+</div>{{end}}
+
+{{/* allowlistBadges renders an artifact's approved network origins as inline
+     <code> badges, or a muted "none". Data: []string (origins). */}}
+{{define "allowlistBadges"}}{{if .}}{{range .}}<code style="background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:4px">{{.}}</code>{{end}}{{else}}<span style="color:#aaa">none</span>{{end}}{{end}}

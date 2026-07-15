@@ -70,7 +70,8 @@ func TestDetailPageSandboxStillOmitsAllowDownloads(t *testing.T) {
 	for _, approved := range []bool{false, true} {
 		a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Exporter", Tier: store.Tier1,
 			CreatedAt: time.Now(), DownloadsApproved: approved}
-		page := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+		page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+		require.NoError(t, err)
 
 		start := strings.Index(page, "<iframe")
 		require.GreaterOrEqual(t, start, 0, "detail page must embed the renderer iframe")
@@ -87,10 +88,17 @@ func TestDetailPageSandboxStillOmitsAllowDownloads(t *testing.T) {
 func TestDetailPageRendersDownloadBridge(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "CSV <Exporter>", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	require.NoError(t, err)
 
-	// Host-side message handler for the shim's download messages.
-	assert.Contains(t, page, "d.__avDownload !== true")
+	// Host-side message handler for the shim's download messages, and the
+	// PATCH that persists the decision — both live in the static page script
+	// the detail page loads.
+	assert.Contains(t, page, `<script src="/assets/gallery/detail.js"></script>`)
+	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(detailJS), "d.__avDownload !== true")
+	assert.Contains(t, string(detailJS), "downloads_approved")
 	// The approval state is server-rendered, so a reload (or another device)
 	// sees the persisted decision.
 	assert.Contains(t, page, "let downloadsApproved = false;")
@@ -102,10 +110,10 @@ func TestDetailPageRendersDownloadBridge(t *testing.T) {
 	// Toolbar shows the state and offers revocation.
 	assert.Contains(t, page, `id="dl-state"`)
 	assert.Contains(t, page, `id="dl-revoke"`)
-	assert.Contains(t, page, "downloads_approved")
 
 	// An approved artifact renders with the approval baked in.
 	a.DownloadsApproved = true
-	page = renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	page, err = renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	require.NoError(t, err)
 	assert.Contains(t, page, "let downloadsApproved = true;")
 }
