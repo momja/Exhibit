@@ -60,6 +60,40 @@ func TestGalleryIndexRendersTagPills(t *testing.T) {
 	assert.Contains(t, page, `.card-title{font-size:15px;font-weight:600`)
 }
 
+func TestGalleryCardsShowSecurityBadge(t *testing.T) {
+	r := newTestRouter(t)
+
+	createTestArtifact(t, r, "Inert") // empty allowlist -> "No network"
+	for title, allowlist := range map[string][]string{
+		"One origin":  {"https://cdn.example.com"},
+		"Two origins": {"https://cdn.example.com", "https://api.example.com"},
+	} {
+		w := doJSON(t, r, "POST", "/api/artifacts", map[string]any{
+			"title": title, "body": "<html></html>", "network_allowlist": allowlist,
+		})
+		require.Equal(t, http.StatusCreated, w.Code)
+	}
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	// Every card footer pairs the date with exactly one badge: green
+	// shield-check for a network-inert artifact, amber globe + approved-origin
+	// count otherwise (singular label for a single origin).
+	assert.Contains(t, page, `<span class="net-badge net-none"><i class="ph ph-shield-check"></i>No network</span>`)
+	assert.Contains(t, page, `<span class="net-badge net-origins"><i class="ph ph-globe"></i>1 origin</span>`)
+	assert.Contains(t, page, `<span class="net-badge net-origins"><i class="ph ph-globe"></i>2 origins</span>`)
+	assert.NotContains(t, page, `1 origins`)
+
+	// The badge sits in a bottom-pinned footer row opposite the date.
+	assert.Contains(t, page, `<div class="card-foot"><span class="card-meta">`)
+	assert.Contains(t, page, `.net-none{color:#12a150}`)
+	assert.Contains(t, page, `.net-origins{color:#b45309}`)
+}
+
 func TestTagPillHoverControls(t *testing.T) {
 	r := newTestRouter(t)
 	tag := createTestTag(t, r, "charts", "#FFFFFF")

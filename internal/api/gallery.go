@@ -88,9 +88,9 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, cols []*store.
 		cards.WriteString(fmt.Sprintf(`
 <div class="card" data-href="/artifacts/%s">
   <a class="card-title" href="/artifacts/%s">%s</a>
-  <div class="card-meta">%s</div>
   %s
-</div>`, a.ID, a.ID, htmlEsc(a.Title), a.CreatedAt.Format("Jan 2, 2006"), renderTagRow(a.ID, a.Tags)))
+  <div class="card-foot"><span class="card-meta">%s</span>%s</div>
+</div>`, a.ID, a.ID, htmlEsc(a.Title), renderTagRow(a.ID, a.Tags), a.CreatedAt.Format("Jan 2, 2006"), renderSecurityBadge(a.NetworkAllowlist)))
 	}
 
 	searchVal := htmlEsc(query)
@@ -138,6 +138,11 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .card-title{font-size:15px;font-weight:600;color:var(--brand-blue);text-decoration:none;word-break:break-word}
 .card-title:hover{text-decoration:underline}
 .card-meta{font-size:12px;color:#888}
+.card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:10px;border-top:1px solid #eee}
+.net-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;white-space:nowrap}
+.net-badge i{font-size:13px}
+.net-none{color:#12a150}
+.net-origins{color:#b45309}
 .card-actions{display:flex;gap:12px;font-size:13px}
 .card-actions a{color:#555;text-decoration:none}
 .card-actions a:hover{color:var(--brand-blue)}
@@ -703,6 +708,22 @@ func renderTagRow(artifactID string, tags []*store.Tag) string {
 	return `<div class="tag-row">` + renderTagPills(artifactID, tags) + fmt.Sprintf(
 		`<button type="button" class="tag-add-btn" data-artifact-id="%s" aria-label="Add tag"><i class="ph ph-plus"></i></button>`,
 		artifactID) + `</div>`
+}
+
+// renderSecurityBadge summarizes an artifact's network posture in its card
+// footer: an empty allowlist renders as a green shield-check "No network"
+// (the artifact is CSP-inert), a non-empty one as an amber globe with the
+// approved-origin count. The badge is read-only transparency — the allowlist
+// itself is edited from the artifact's detail page.
+func renderSecurityBadge(allowlist []string) string {
+	if len(allowlist) == 0 {
+		return `<span class="net-badge net-none"><i class="ph ph-shield-check"></i>No network</span>`
+	}
+	label := fmt.Sprintf("%d origins", len(allowlist))
+	if len(allowlist) == 1 {
+		label = "1 origin"
+	}
+	return `<span class="net-badge net-origins"><i class="ph ph-globe"></i>` + label + `</span>`
 }
 
 // renderColorSwatches renders the shared preset-color palette used by both
