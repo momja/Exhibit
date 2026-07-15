@@ -129,7 +129,8 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .search-row .search-icon{position:absolute;left:10px;color:#aaa;font-size:16px;pointer-events:none}
 .search-row input{flex:1;padding:9px 12px 9px 34px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none}
 .search-row input:focus{border-color:var(--brand-blue)}
-.search-clear{flex:0 0 auto;padding:5px 10px}
+.search-clear{flex:0 0 auto;align-self:stretch;font-size:14px}
+.search-clear[hidden]{display:none!important}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
 .grid.grid-loading{opacity:.5;transition:opacity .1s ease}
 .card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:box-shadow .12s ease}
