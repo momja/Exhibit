@@ -1,0 +1,39 @@
+{{/* Artifact edit page. Data: editPageData (gallery.go). */}}
+{{define "edit"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Edit: {{.Title}} — Exhibit</title>
+<link rel="stylesheet" href="/assets/phosphor/regular.css">
+<style>:root{--brand-blue:{{.BrandBlue}};--brand-blue-hover:{{.BrandBlueHover}}}</style>
+<link rel="stylesheet" href="/assets/gallery/edit.css">
+</head>
+<body>
+<header>
+  <a href="/artifacts/{{.ID}}">← Back</a>
+  <h1>Edit Artifact</h1>
+</header>
+<main>
+<div class="edit-card">
+  <h2>Edit</h2>
+  <input type="text" id="title" value="{{.Title}}" placeholder="Title">
+  <textarea id="body">{{.Src}}</textarea>
+  <div class="btn-row">
+    <button class="btn" onclick="save()"><i class="ph ph-check"></i> Save</button>
+    <a href="/artifacts/{{.ID}}"><button class="btn btn-sec" type="button"><i class="ph ph-x"></i> Cancel</button></a>
+    <span id="status"></span>
+    <span class="spacer"></span>
+    <button class="btn btn-danger" type="button" onclick="deleteArtifact()"><i class="ph ph-trash"></i> Delete</button>
+  </div>
+  <div id="scan-result"></div>
+</div>
+</main>
+<script src="/assets/editor.js"></script>
+<script>
+const TOKEN = {{.Token}};
+const ID = {{.ID}};
+</script>
+<script src="/assets/gallery/edit.js"></script>
+</body>
+</html>{{end}}

@@ -209,8 +209,13 @@ approval as any other footprint (spec §6.2).
 
 ### 3.5 Gallery (web UI)
 
-Server-rendered HTML emitted directly by Go handlers (`internal/api/gallery.go`),
-styled with inline CSS and wired with small amounts of vanilla JS. Talks to the API
+Server-rendered pages built with the stdlib `html/template`: the templates live in
+`internal/api/templates/` (committed source, `go:embed`-ed), their handlers and view
+models in `internal/api/gallery.go`. Each page's stylesheet and script are static
+assets authored in the `web/gallery/` workspace and served under `/assets/gallery/`;
+per-request values (API token, artifact id, allowlist, capability approvals) reach
+the page scripts through a small inline bootstrap `<script>` the templates render,
+with html/template's contextual escaping JSON-encoding them. Talks to the API
 like any other client. Hosts two islands of client JS: the **CodeMirror** source
 editor (an esbuild-built, `go:embed`-served bundle) and the **renderer iframe**
 (which actually points at `RENDER_ORIGIN`). The gallery renders server-side,
