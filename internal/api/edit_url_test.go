@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -456,6 +457,17 @@ func TestRefetchArtifactWithoutSourceURL(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Contains(t, w.Body.String(), "no source URL")
+}
+
+// htmlEsc mirrors the escaping html/template applies to the characters this
+// file's fixtures contain (it does not escape ', which html/template does —
+// keep fixtures apostrophe-free or the expectation diverges).
+func htmlEsc(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	s = strings.ReplaceAll(s, `"`, "&#34;")
+	return s
 }
 
 func TestGalleryEditPage(t *testing.T) {
