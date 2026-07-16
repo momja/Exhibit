@@ -26,7 +26,7 @@ safety" (§12).
 | Storage shim | Vanilla JS, bundled with `esbuild` | — |
 | Ingest scan | `x/net/html` parser (+ JS heuristic) | — |
 | Thumbnails | Headless Chromium worker (`chromedp`) — optional | client `html2canvas` |
-| Gallery UI | Server-rendered Go HTML + vanilla-JS islands (§9) | — |
+| Gallery UI | Server-rendered stdlib `html/template` + static CSS/JS assets (§9) | templ (codegen — rejected) |
 | Agent harness | **Pi** (`pi --mode rpc` sidecar per session; TS tools extension; keys AES-GCM at rest; `cmd/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | TLS / proxy | **Operator's choice** — app serves plain HTTP, takes origin config | (not shipped) |
@@ -190,13 +190,19 @@ and add real thumbnails later without schema changes.
 
 ## 9. Gallery UI
 
-**As built: server-rendered HTML emitted directly by Go handlers** in
-`internal/api/gallery.go`, with inline CSS and vanilla JS for the small client-side
-bits (modals, the tag editor, the allowlist editor). The gallery is CRUD-shaped —
-grid, search (eager client-filtered by swapping the server-rendered grid),
-tag/collection filters, a detail view — and full-page server renders
-have covered it so far, keeping everything inside the one Go binary with no template
-engine or frontend framework at all.
+**As built: server-rendered pages via the stdlib `html/template`** — templates in
+`internal/api/templates/` (committed source, `go:embed`-ed), handlers and view models
+in `internal/api/gallery.go` (epi-q0u2). Each page's CSS and JS are static assets
+authored in the `web/gallery/` workspace, copied into the embedded assets at build
+time (§13), and served under `/assets/gallery/`; per-request values reach the page
+scripts through a small inline bootstrap `<script>` that html/template JSON-encodes.
+The gallery is CRUD-shaped — grid, search (eager client-filtered by swapping the
+server-rendered grid), tag/collection filters, a detail view — and full-page server
+renders cover it, keeping everything inside the one Go binary with no frontend
+framework and no template codegen. (templ — the codegen engine an early scaffold
+used — was considered for the extraction and rejected: the stdlib engine adds zero
+dependencies and no generate step, and its contextual auto-escaping replaces the
+hand-rolled HTML escaping the old string-concatenated pages needed.)
 
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.

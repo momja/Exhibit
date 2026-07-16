@@ -7,9 +7,9 @@ import (
 	"github.com/artifact-viewer/artifact-viewer/internal/color"
 )
 
-// exhibitLogoSVG is the Exhibit brand mark, inlined here because the service
-// serves no /static route — the gallery composes its whole document as a string
-// (see renderGalleryPage), so the logo travels with the binary as source.
+// exhibitLogoSVG is the Exhibit brand mark, inlined here so it travels with
+// the binary as source; the gallery template injects it as trusted markup
+// (template.HTML, see renderGalleryPage) rather than loading it as an asset.
 //
 // It is the design_files/exhibit_logo.svg artwork with editor-only cruft
 // (Inkscape/sodipodi metadata, the XML prolog, export hints) stripped; every
