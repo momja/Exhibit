@@ -2,7 +2,7 @@
 id: av-u0vc
 status: open
 deps: []
-links: [av-70t9]
+links: [av-70t9, av-8xxs]
 created: 2026-07-16T05:27:23Z
 type: task
 priority: 2
