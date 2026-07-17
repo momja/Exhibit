@@ -2,7 +2,7 @@
 id: av-tux9
 status: in_progress
 deps: []
-links: []
+links: [av-p3gj]
 created: 2026-07-15T06:21:33Z
 type: bug
 priority: 3
