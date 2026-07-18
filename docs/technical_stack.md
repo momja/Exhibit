@@ -96,8 +96,9 @@ Renderer construction:
   Inlined assets are exempt from the allowlist since they carry no network egress:
   `style-src` always carries `'unsafe-inline'` and `img-src`/`font-src` always carry
   `data:`, so inline styles and inlined `data:` images/fonts render without approval.
-- Inject the **storage shim** (§6 here) into `<head>` *before* any artifact script runs,
-  with the artifact's current state inlined into it. Serve the document `Cache-Control:
+- Inject the **render preamble** — the **storage shim** (§6 here) with the artifact's
+  current state inlined — into `<head>` *before* any artifact script runs.
+  Serve the document `Cache-Control:
   no-store` — it's dynamic (inlined state + per-artifact CSP) and must not be cached.
 
 **Tier 2 (React via CDN), when demand arrives:** start with Babel standalone loaded
@@ -144,12 +145,12 @@ script.
 Responsibilities (per the main spec §5):
 
 - Replace `localStorage`/`sessionStorage` with objects implementing the `Storage`
-  interface, backed by an in-memory cache. The cache is **inlined into the shim by the
-  render surface** at request time, so `getItem` is correct on the first *synchronous*
+  interface, backed by an in-memory cache. The cache is **inlined into the storage
+  shim by the render surface** at request time, so `getItem` is correct on the first *synchronous*
   read (a load-time `fetch` would race the artifact's startup reads and lose).
 - On `setItem`, update the cache synchronously, then **`postMessage` the change to the
   host frame** (pinned to the app origin). The host — same origin as the API and
-  authenticated — performs the `PUT /api/artifacts/:id/state`. The shim itself makes
+  authenticated — performs the `PUT /api/artifacts/:id/state`. The storage shim itself makes
   **no network calls**: the sandbox's opaque origin can't reach the API cross-origin, so
   it never has to, and `connect-src` need not include the app origin.
 - `IndexedDB` interception and the `window.storage`-style async API are **deferred**

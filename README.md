@@ -142,7 +142,7 @@ internal/
   api/        HTTP handlers, router, middleware, gallery + agent chat pages
   blob/       Blob store interface + filesystem implementation
   color/      Brand color constants
-  render/     Render surface handler (CSP, state inlining, shim + snippet injection)
+  render/     Render surface handler (CSP, state inlining, render preamble + snippet injection)
   scanner/    Ingest scanner (extracts network origins from HTML, base-aware)
   secrets/    AES-GCM sealing for BYO agent API keys
   snapshot/   URL-ingest asset vendoring (bounded fetch, HTML/CSS inlining, <base href>)
