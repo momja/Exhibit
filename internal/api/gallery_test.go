@@ -240,3 +240,33 @@ func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 	assert.Contains(t, page, `sandbox="allow-scripts"`)
 	assert.NotContains(t, page, "allow-same-origin")
 }
+
+// av-tux9: the detail page script rebuilds the allowlist toolbar badges after
+// add/save. Building them by interpolating each origin into innerHTML was a
+// self-XSS sink on the app origin — origins are user/scanner-controlled and
+// can legitimately contain markup metacharacters. The badges must be built as
+// DOM nodes via textContent, matching the server-side render which escapes
+// through the allowlistBadges partial.
+func TestDetailPageRenderBadgesKeepsOriginsInert(t *testing.T) {
+	r := newTestRouter(t)
+	payload := `https://x"><img src=x onerror=alert(1)>`
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Badge XSS", Tier: store.Tier1,
+		CreatedAt: time.Now(), NetworkAllowlist: []string{payload}}
+	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	require.NoError(t, err)
+
+	// The server-rendered initial badges escape the origin's metacharacters.
+	assert.Contains(t, page, `<code style="background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:4px">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
+		"server-side badges must HTML-escape origins")
+	assert.NotContains(t, page, `<code style="background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:4px">https://x"><img src=x onerror=alert(1)></code>`,
+		"raw payload must never reach badge markup")
+
+	// The client-side re-render (after add/save) builds each badge with
+	// createElement + textContent instead of interpolating the origin into
+	// innerHTML, so the injected markup stays inert text.
+	detailJS := galleryAsset(t, r, "/assets/gallery/detail.js")
+	assert.Contains(t, detailJS, "document.createElement('code')")
+	assert.Contains(t, detailJS, "badge.textContent = o")
+	assert.NotContains(t, detailJS, "'<code>' + o + '</code>'",
+		"renderBadges must not interpolate raw origins into innerHTML")
+}
