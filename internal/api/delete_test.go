@@ -98,5 +98,10 @@ func TestEditPageHasDeleteConfirmation(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	page := w.Body.String()
-	assert.Contains(t, page, "Are you sure you want to delete this artifact? The action cannot be reversed and all data will be lost.")
+	// The delete flow (confirm() + DELETE) lives in the static edit page
+	// script the page loads.
+	assert.Contains(t, page, `<script src="/assets/gallery/edit.js"></script>`)
+	editJS, err := embeddedAssets.ReadFile("assets/gallery/edit.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(editJS), "Are you sure you want to delete this artifact? The action cannot be reversed and all data will be lost.")
 }
