@@ -1,0 +1,69 @@
+{{/* Gallery index (library) page. Data: galleryPageData (gallery.go). */}}
+{{define "gallery"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Exhibit</title>
+<link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
+<link rel="stylesheet" href="/assets/phosphor/regular.css">
+<style>:root{--brand-blue:{{.BrandBlue}};--brand-blue-hover:{{.BrandBlueHover}}}</style>
+<link rel="stylesheet" href="/assets/gallery/index.css">
+</head>
+<body>
+<header>
+  {{.LogoSVG}}
+  <h1>Exhibit</h1>
+  <span style="flex:1"></span>
+  <a href="/agent" style="display:inline-flex;align-items:center;gap:5px"><i class="ph ph-robot"></i> Agent</a>
+</header>
+<main>
+<div class="upload">
+  <h2>Upload Artifact</h2>
+  <input type="text" id="title" placeholder="Title (optional)">
+  <div class="mode-tabs">
+    <button class="tab-btn active" onclick="setMode('paste')">Paste HTML</button>
+    <button class="tab-btn" onclick="setMode('url')">From URL</button>
+  </div>
+  <textarea id="body" placeholder="Paste HTML artifact source here…"></textarea>
+  <input type="text" id="url-input" placeholder="https://example.com/tool.html" style="display:none;width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;margin-bottom:8px">
+  <label id="snapshot-row" style="display:none;align-items:center;gap:6px;font-size:13px;color:#555;margin-bottom:8px;cursor:pointer">
+    <input type="checkbox" id="snapshot-toggle" checked>
+    Snapshot assets into the file (recommended) — fetches the page&#39;s images, styles and scripts and inlines them so the artifact stays self-contained
+  </label>
+  <div id="scan-result"></div>
+  <div class="upload-row">
+    <button class="btn" onclick="ingest()"><i class="ph ph-plus"></i> Upload</button>
+  </div>
+  <div id="status"></div>
+</div>
+
+<div class="search-row">
+  <i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
+  <input type="text" id="search-input" name="q" placeholder="Search artifacts…" value="{{.Query}}" autocomplete="off">
+  <button class="btn btn-sm search-clear" type="button" id="search-clear" aria-label="Clear search" hidden><i class="ph ph-x"></i></button>
+</div>
+
+{{/* The whole card opens the artifact's detail/viewer page — the card body
+     and the title link are the affordances. The separate 'Details' link was
+     removed: it navigated to the same page as the title click, so it was
+     redundant. The earlier 'Open ↗' new-tab action was already gone. */}}
+<div class="grid">{{if not .Cards}}<p class="empty">No artifacts yet. Upload one above.</p>{{end}}{{range .Cards}}
+<div class="card" data-href="/artifacts/{{.ArtifactID}}">
+  <a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>
+  <div class="card-meta">{{.Created}}</div>
+  {{template "tagRow" .}}
+</div>{{end}}</div>
+</main>
+
+{{template "editTagModal" .Presets}}
+{{template "addTagModal" .AddTagModal}}
+
+<script src="/assets/editor.js"></script>
+<script>
+const TOKEN = {{.Token}};
+const DEFAULT_TAG_COLOR = {{.DefaultTagColor}};
+</script>
+<script src="/assets/gallery/index.js"></script>
+</body>
+</html>{{end}}

@@ -95,10 +95,14 @@ func TestGalleryEditPageMountsEditor(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	page := w.Body.String()
-	// The edit page loads the CodeMirror island and mounts it on the body
-	// textarea, which stays present as the form's source of truth.
+	// The edit page loads the CodeMirror island and the static page script
+	// that mounts it on the body textarea, which stays present as the form's
+	// source of truth.
 	assert.Contains(t, page, `<script src="/assets/editor.js"></script>`)
-	assert.Contains(t, page, "ArtifactEditor.mount")
+	assert.Contains(t, page, `<script src="/assets/gallery/edit.js"></script>`)
+	editJS, err := embeddedAssets.ReadFile("assets/gallery/edit.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(editJS), "ArtifactEditor.mount")
 	assert.Contains(t, page, `<textarea id="body">`)
 }
 
@@ -111,11 +115,17 @@ func TestGalleryLibraryPageMountsEditor(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	page := w.Body.String()
-	// The library (upload) page loads the same CodeMirror island and mounts it
-	// on the paste textarea, which stays present as the form's source of truth
-	// (av-44z3). setMode toggles the mounted editor for the Paste/URL tabs.
+	// The library (upload) page loads the same CodeMirror island and the
+	// static page script that mounts it on the paste textarea, which stays
+	// present as the form's source of truth (av-44z3). setMode toggles the
+	// mounted editor for the Paste/URL tabs.
 	assert.Contains(t, page, `<script src="/assets/editor.js"></script>`)
-	assert.Contains(t, page, "ArtifactEditor.mount(document.getElementById('body'))")
+	assert.Contains(t, page, `<script src="/assets/gallery/index.js"></script>`)
+	indexJS, err := embeddedAssets.ReadFile("assets/gallery/index.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(indexJS), "ArtifactEditor.mount(document.getElementById('body'))")
 	assert.Contains(t, page, `<textarea id="body" placeholder=`)
-	assert.Contains(t, page, `.upload .cm-editor{`)
+	indexCSS, err := embeddedAssets.ReadFile("assets/gallery/index.css")
+	require.NoError(t, err)
+	assert.Contains(t, string(indexCSS), `.upload .cm-editor{`)
 }
