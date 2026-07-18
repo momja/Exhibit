@@ -1,6 +1,6 @@
 ---
 id: av-p3gj
-status: in_progress
+status: closed
 deps: []
 links: [av-tux9]
 created: 2026-07-17T17:48:48Z
