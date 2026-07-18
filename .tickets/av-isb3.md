@@ -1,12 +1,13 @@
 ---
 id: av-isb3
 status: in_progress
-deps: []
+deps: [av-xgik]
 links: [av-p0a1, av-41se, av-hwx2]
 created: 2026-07-15T01:34:21Z
 type: feature
 priority: 2
 assignee: Max Omdal
+parent: av-jafp
 tags: [ui, gallery]
 ---
 # Gallery cards: capability posture badge (capability row)

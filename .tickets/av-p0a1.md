@@ -1,12 +1,13 @@
 ---
 id: av-p0a1
 status: open
-deps: []
+deps: [av-xgik]
 links: [av-isb3, av-41se, av-hwx2]
 created: 2026-07-18T15:15:41Z
 type: feature
 priority: 2
 assignee: Max Omdal
+parent: av-jafp
 tags: [ui, edit]
 ---
 # Edit page: manage network allowlist + capabilities (responsive)

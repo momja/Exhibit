@@ -7,6 +7,7 @@ created: 2026-07-18T15:15:41Z
 type: feature
 priority: 2
 assignee: Max Omdal
+parent: av-jafp
 tags: [ui, viewer]
 ---
 # Viewer: read-only posture + Manage link
