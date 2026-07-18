@@ -1,4 +1,19 @@
 
+# OS / filesystem cruft — never commit platform metadata or thumbnail caches.
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
+.apdisk
+
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db
