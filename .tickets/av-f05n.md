@@ -17,3 +17,9 @@ ingest.spec.ts: through the UI (paste HTML with external references), assert the
 
 GIVEN pasted HTML with external origins WHEN uploaded THEN the approval dialog shows the scanned origins and only approved ones land on the allowlist. GIVEN a minted share WHEN /s/:id is opened with no credentials THEN it renders; expired/deleted shares do not. GIVEN seeded artifacts WHEN searching THEN only matches render; tag add/edit/detach round-trips through the modals.
 
+
+## Notes
+
+**2026-07-15T06:33:03Z**
+
+When building the UI-flow suite, explicitly cover the epi-q0u2 split-script seam end-to-end: the gallery page scripts (index/detail/edit) moved into static assets that read/reassign globals declared by each page's inline bootstrap (TOKEN, ID, SOURCE_URL, allowlist, downloadsApproved, clipboardApproved, DEFAULT_TAG_COLOR). A Go contract test (TestGalleryBootstrapSharesGlobalsWithAssets) pins that both sides name the same globals and stay classic (non-module) scripts, but it can't confirm the flows actually run. e2e should exercise: upload -> approve origins (PATCH + re-render), tag add/edit/delete, eager search grid-swap, download approval, clipboard bridge, allowlist add, and refetch — the flows whose wiring the inline->external split put at risk and which substring/Go tests structurally can't see.
