@@ -13,3 +13,7 @@ assignee: Max Omdal
 Details button currently has exact same URL as clicking the artifact title and hence serves no purpose.
 
 Remove it and add a button that navigates to the edit page: 'https://{{dns}}/artifacts/{{artifact_id}}/edit'
+
+## Complexity
+
+S

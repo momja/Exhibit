@@ -26,3 +26,7 @@ The share backend already exists (shares table + `GET /s/:shareId`, exhibit-7k3)
 - Revoked share IDs stop rendering.
 - av-f05n's share.spec.ts switches from API-minted shares to the UI button once it exists (noted in that ticket).
 
+
+## Complexity
+
+XL

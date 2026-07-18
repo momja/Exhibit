@@ -123,3 +123,7 @@ families sharing only a delivery mechanism" terminology question is a separate c
 (see the discussion attached to this work); this ticket is scoped to the capability-bridge
 family's registry only.
 
+
+## Complexity
+
+L

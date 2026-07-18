@@ -17,3 +17,7 @@ Define the manifest file format consumed by the new static-build subcommand: out
 
 A documented manifest format (e.g. YAML) exists with output dir, base URL/path, and site title/tagline fields. A Go package loads and validates a manifest file, returning clear errors for missing required fields or malformed values. Unit tests cover valid and invalid manifests.
 
+
+## Complexity
+
+M

@@ -10,3 +10,7 @@ assignee: Max Omdal
 ---
 # Add tk extension called 'muse' that will allow for these sorts of tickets https://github.com/wedow/ticket.git that don't exactly have a fleshed out plan
 
+
+## Complexity
+
+M

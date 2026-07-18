@@ -99,3 +99,7 @@ Update the snippet paragraph (~line 115) from "an attached screenshot plus an el
 
 - Reuse over rebuild: the SDK already ships the overlay (`selectRegion`), collectors (`collectRegionMetadata`, `detectFrameworks`), error buffer (`createErrorMonitor`), page context (`buildPageContext`), and cropping (`deviceRect`/`cropToPng`). The only bespoke code to keep is the sandbox rasterization for the BYO-pixels `capture` (generalized from the current per-element `foreignObject` rasterizer) — the SDK's default `captureViaDisplayMedia` won't work in the opaque-origin sandbox.
 - Branch per project rules: `feature/av-xkq4/bowser-snaps-snippet` via a supacode worktree; never develop on `main`.
+
+## Complexity
+
+M

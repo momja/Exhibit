@@ -28,3 +28,7 @@ Keep prior versions of an artifact's source body instead of destructively overwr
 - Deleting an artifact deletes its versions and their blobs (extends the existing delete path).
 - PRD §8.1 updated to distinguish internal version history from one-time external vendoring.
 
+
+## Complexity
+
+L

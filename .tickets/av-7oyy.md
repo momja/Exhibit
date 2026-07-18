@@ -18,3 +18,7 @@ Verify that the default state (PUBLIC_MODE_ENABLED unset or false) leaves the ap
 
 1. With public mode disabled (default), unauthenticated requests to /, /api/artifacts, and artifact view routes return 401/redirect to login. 2. Authenticated user experience is unchanged: upload form present, all management controls visible, tag edit works. 3. No public-only hero or tagline appears. 4. All existing tests (if any) pass. 5. Manual smoke test of the full self-hosted flow completes successfully.
 
+
+## Complexity
+
+M

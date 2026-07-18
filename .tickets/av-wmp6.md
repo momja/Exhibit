@@ -18,3 +18,7 @@ Modify the existing chi auth middleware to become public-mode aware. When PUBLIC
 
 1. Unauthenticated GET requests to /api/artifacts succeed when public mode is enabled. 2. Unauthenticated GET requests to /api/artifacts/:id succeed when public mode is enabled. 3. Unauthenticated POST/PUT/PATCH/DELETE to any API route returns 401 even in public mode. 4. When public mode is disabled, all routes require auth exactly as before. 5. The auth middleware passes a public-mode flag to request context so handlers can branch.
 
+
+## Complexity
+
+M

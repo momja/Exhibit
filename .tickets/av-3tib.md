@@ -12,3 +12,7 @@ assignee: Max Omdal
 
 Artifacts will be snapshotted and rendered as thumbnails in their gallery card beneath their title.
 
+
+## Complexity
+
+M

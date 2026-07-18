@@ -11,3 +11,7 @@ tags: [agent, logging, observability]
 ---
 # Persist full-fidelity pi agent output to a per-session log
 
+
+## Complexity
+
+S

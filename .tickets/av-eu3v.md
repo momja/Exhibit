@@ -18,3 +18,7 @@ Create a read-only variant of the gallery page for unauthenticated visitors when
 
 1. Root route '/' renders a clean artifact grid for unauthenticated users when public mode is on. 2. Upload form is absent. 3. Tag management controls (pencil, x, +) are absent. 4. Artifact 'Open' links work and lead to the public artifact view. 5. Search bar remains functional for filtering public artifacts. 6. The page uses the same inline CSS and markup style as the existing gallery.
 
+
+## Complexity
+
+M

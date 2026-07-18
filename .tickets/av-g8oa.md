@@ -17,3 +17,7 @@ GitHub Actions workflow (free on public repos): make build, go test ./..., then 
 
 GIVEN a PR WHEN CI runs THEN go tests and the Playwright suite both execute and failures upload traces. GIVEN a warm cache THEN the browser download step is skipped. GIVEN a PR touching internal/render/ with no e2e/ change and no e2e ticket reference THEN the guard step flags it. COVERAGE.md exists and maps every §1 claim to a spec or an explicit gap.
 
+
+## Complexity
+
+M

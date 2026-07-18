@@ -20,3 +20,7 @@ Pre-v1 decision (from the exhibit-i0k discussion): replace the network_allowlist
 artifacts has no network_allowlist column; decisions live in artifact_network_origins. Render CSP is generated from decision='allow' rows and matches prior behavior for migrated artifacts. Ingest approval and detail-page add/remove still work end to end. Duplicate (artifact,origin) is prevented by the PK (upsert). Tests: allow-row drives CSP; block rows never affect CSP; upsert/delete; cascade on artifact delete.
 
 
+
+## Complexity
+
+L

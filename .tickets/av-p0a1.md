@@ -43,3 +43,7 @@ Files: edit.tmpl (security markup), web/gallery/edit.css (panel + @media), web/g
 - Origins are escaped by html/template.
 
 No dependency — can start now (the badge and popover are independent of this page).
+
+## Complexity
+
+L

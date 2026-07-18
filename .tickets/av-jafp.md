@@ -29,3 +29,7 @@ Umbrella for the capability/allowlist UI reworked in Paper (file 01KWQV7Y6G82HDZ
 - Standard web components + a shared CSS layer over the server-rendered html/template stack; no frontend framework, no Tailwind (see av-xgik).
 
 Mockups: each child ticket references its specific Paper artboard(s).
+
+## Complexity
+
+XL

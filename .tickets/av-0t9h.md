@@ -42,3 +42,7 @@ Known CSP limitation to document in the allowlist editor help: per CSP3, path co
 - Allowlist editor UI accepts the new forms, surfaces validation errors, and documents the redirect caveat.
 - Unit tests cover entry validation (accept/reject matrix) and buildCSP normalization; scanner output remains exact origins only.
 
+
+## Complexity
+
+M

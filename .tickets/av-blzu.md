@@ -57,3 +57,7 @@ addition to `shimTemplate` guarded on `window.parent === window`. Note the
 share path (no shim) needs its own equivalent surface, since it can't reuse the
 shim's banner — keep the two consistent in product copy.
 
+
+## Complexity
+
+M

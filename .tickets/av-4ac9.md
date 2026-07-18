@@ -18,3 +18,7 @@ Add configuration layer for public instance mode: PUBLIC_MODE_ENABLED (bool), PU
 
 1. PUBLIC_MODE_ENABLED env var is read at startup and accessible to handlers. 2. PUBLIC_INSTANCE_NAME and PUBLIC_INSTANCE_DESCRIPTION are read and stored/accessible. 3. GET /api/settings/public returns {name, description} (empty strings if unset). 4. When public mode is off, existing auth behavior is unchanged. 5. Config is available to the Go gallery renderer without requiring a database round-trip if env-based.
 
+
+## Complexity
+
+M

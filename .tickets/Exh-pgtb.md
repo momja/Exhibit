@@ -17,3 +17,7 @@ Add an 'exhibit build --manifest=<path>' subcommand to the existing binary (not 
 
 Running 'exhibit build --manifest=<path>' against a real instance's data directory enumerates all artifacts in that instance and invokes the static render/index generation for each, writing output under the manifest's output directory. Fails clearly if pointed at a missing/empty data directory. Reuses the same Store/Blob interfaces the live service uses -- no parallel data-access path.
 
+
+## Complexity
+
+M

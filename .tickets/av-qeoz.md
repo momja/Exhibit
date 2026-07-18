@@ -20,3 +20,7 @@ The Library page currently mixes artifact upload functionality with artifact bro
 - Navigation provides a clear way to reach the Upload page
 - Existing upload behavior is preserved
 
+
+## Complexity
+
+S

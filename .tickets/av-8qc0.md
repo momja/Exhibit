@@ -17,3 +17,7 @@ fetcher.html fixture (button fetches a configurable origin, reports outcome into
 
 GIVEN fetcher.html with an empty allowlist WHEN it fetches the test-owned origin THEN the request never reaches the destination server and the page reports failure. GIVEN the origin is approved via PATCH THEN the fetch succeeds after re-render. GIVEN escape.html WHEN it attempts parent-DOM/cookie/app-origin access THEN every attempt is reported failed.
 
+
+## Complexity
+
+L

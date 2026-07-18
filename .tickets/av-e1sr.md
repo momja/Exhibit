@@ -17,3 +17,7 @@ Playwright workspace at e2e/ (top-level, deliberately outside web/ so scripts/bu
 
 GIVEN a seeded counter.html artifact WHEN the visitor opens it, clicks twice, and reloads THEN the counter reads 2 after reload — provable only if state traveled shim -> postMessage -> host PUT /state -> server -> re-inlined at render (opaque-origin iframe + no-store means no client storage can satisfy it). Suite runs green via 'make e2e' from a clean checkout after 'make build'.
 
+
+## Complexity
+
+L

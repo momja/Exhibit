@@ -29,3 +29,7 @@ Foundation for the security-posture UI epic (av-jafp). Gallery styling today is 
 - av-isb3 and av-p0a1 build on these shared classes without re-introducing inline component styles.
 
 Scoped to what the epic needs — not a full design-system rewrite.
+
+## Complexity
+
+M

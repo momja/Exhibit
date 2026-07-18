@@ -16,3 +16,7 @@ go.mod declares module github.com/artifact-viewer/artifact-viewer, a placeholder
 
 go.mod module line matches the real repo URL; all internal import paths updated repo-wide; project builds and tests pass.
 
+
+## Complexity
+
+S

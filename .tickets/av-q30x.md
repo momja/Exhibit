@@ -25,3 +25,7 @@ Motivation: individuals should be able to secure their instance on public networ
 - Session lifetime / remember-me policy.
 - CSRF: introducing cookie auth means mutating routes need CSRF protection that the bearer-token model didn't (same-site strict cookies may be sufficient — decide explicitly).
 
+
+## Complexity
+
+XL

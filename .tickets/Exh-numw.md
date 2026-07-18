@@ -17,3 +17,7 @@ Emit a static equivalent of the live gallery index -- a browsable grid of artifa
 
 The static build output includes an index page listing all built artifacts (grid, matching the live gallery's visual style) plus per-tag and per-collection listing pages, all linking to the correct static artifact pages. No broken links between index/listing pages and artifact pages.
 
+
+## Complexity
+
+M

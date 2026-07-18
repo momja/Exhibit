@@ -17,3 +17,7 @@ After the exhibit-i0k security fix, editing an artifact body (PATCH with a new b
 updateArtifact could return the re-scanned footprint in its response; the edit-page JS then reuses the ingest showApproval() flow to let the user approve newly-detected origins into network_allowlist via PATCH.
 
 
+
+## Complexity
+
+M

@@ -35,3 +35,7 @@ Paper file 01KWQV7Y6G82HDZJ5CKPJTSJ7Y:
 - No allowlist mutation originates from the viewer; management happens only on Edit.
 
 Depends on the capability cluster (av-isb3), the popover (av-41se), and the Edit-page destination (av-p0a1).
+
+## Complexity
+
+M

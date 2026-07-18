@@ -30,3 +30,7 @@ Pi is Mario Zechner's agent harness (pi-mono; also used by OpenClaw). It runs as
 **2026-07-11T16:56:40Z**
 
 PoC of this epic's MVP scope (and beyond: modify flow + snippet element-context) landed under Exh-yvhp on branch feature/Exh-yvhp/pi-agent-poc. Answers the open questions: pi supports a long-lived RPC server mode (JSONL over stdio, spawn-per-session); exhibit<->pi contract is the RPC protocol + a TS extension whose tools call the exhibit API; key storage landed as agent_keys keyed by owner_id, AES-256-GCM under a server secret (EXHIBIT_SECRET or generated data/secret.key); chat UI is a dedicated /agent route with SSE streaming through the Go service.
+
+## Complexity
+
+XL

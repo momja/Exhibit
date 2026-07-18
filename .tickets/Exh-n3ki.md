@@ -10,3 +10,7 @@ assignee: Max Omdal
 ---
 # Create a skill or prompt that will read all these super messy tickets, split their titles into descriptions, categorize them, etc. Also tickets created by humans should be distinguished from robo tickets
 
+
+## Complexity
+
+S

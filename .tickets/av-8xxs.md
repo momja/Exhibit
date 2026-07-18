@@ -82,3 +82,7 @@ that orthogonality legible so the two efforts aren't conflated.
 - The docs note that the av-u0vc registry covers the capability-bridge family only, orthogonal to storage adapters and polyfills.
 - No code identifiers, behavior, or tests are changed (identifier renames are a separate future ticket).
 
+
+## Complexity
+
+M

@@ -17,3 +17,7 @@ Document the 'exhibit build' subcommand, the manifest format (Exh-un03), and a d
 
 docs/ includes a page covering: the build command and flags, the manifest file format with an example, a step-by-step deploy to a real static host verified to work, and an explicit note that the output is a point-in-time read-only snapshot refreshed by re-running the build.
 
+
+## Complexity
+
+S

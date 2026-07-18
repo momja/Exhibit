@@ -38,3 +38,7 @@ Trigger: opens on hover, keyboard focus, AND tap; dismisses on blur / mouse-leav
 - Footer "Manage" link navigates to the Edit page (av-p0a1); it is absent on the no-auth share view.
 - Neutral treatment (no green/amber), matching the mockup.
 - Singular/plural origin phrasing ("1 origin" / "N origins") is correct here.
+
+## Complexity
+
+M

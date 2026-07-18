@@ -34,3 +34,13 @@ Name the field 'complexity' (not 'size'/'points') to avoid story-points baggage 
 - If a filtering wrapper is in scope, a small script/alias surfaces 'tk ready' grouped or filtered by complexity.
 - An upstream issue is filed at https://github.com/wedow/ticket proposing a first-class 'complexity' frontmatter field (link recorded as a note on this ticket).
 
+
+## Complexity
+
+M
+
+## Notes
+
+**2026-07-18T15:48:56Z**
+
+Upstream issue filed proposing a first-class complexity frontmatter field: https://github.com/wedow/ticket/issues/66

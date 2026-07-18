@@ -12,3 +12,7 @@ priority: 2
 Umbrella for the artifact body-edit experience on /artifacts/<id>/edit. Children share the same edit surface, form/API write path, and re-scan flow, so they should be built against a common structure rather than duplicated. Scope: (1) CodeMirror 6 source editor for the body field; (2) re-scanning the edited body and surfacing newly-detected network origins for approval.
 
 
+
+## Complexity
+
+XL
