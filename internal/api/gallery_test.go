@@ -270,3 +270,26 @@ func TestDetailPageRenderBadgesKeepsOriginsInert(t *testing.T) {
 	assert.NotContains(t, detailJS, "'<code>' + o + '</code>'",
 		"renderBadges must not interpolate raw origins into innerHTML")
 }
+
+// av-p3gj: the detail page inlines the allowlist into its bootstrap <script>
+// as a JS array. An origin containing the literal bytes </script> must not be
+// able to terminate that block early — html/template's JS-context encoding
+// escapes '<', '>', and '&' as \u003c etc., which stays valid JS string content
+// while keeping the payload from ending the script element. (The pre-template
+// gallery.go built this array with %q, which did not escape those bytes.)
+func TestDetailPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
+	payload := `https://evil</script><img src=x onerror=alert(1)>`
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Script Breakout", Tier: store.Tier1,
+		CreatedAt: time.Now(), NetworkAllowlist: []string{payload}}
+	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	require.NoError(t, err)
+
+	// The inlined JS array carries the payload with its HTML-significant
+	// characters escaped.
+	assert.Contains(t, page, `let allowlist = ["https://evil\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e"];`,
+		"the inlined allowlist must escape '<', '>', '&' so origins cannot end the script element")
+	// The raw breakout sequence never reaches the served page, so the script
+	// block's own terminator is the only </script> the HTML parser sees here.
+	assert.NotContains(t, page, `</script><img src=x onerror=alert(1)>`,
+		"an origin must never terminate the inline script block early")
+}
