@@ -6,12 +6,12 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/agent"
-	"github.com/artifact-viewer/artifact-viewer/internal/api"
-	"github.com/artifact-viewer/artifact-viewer/internal/blob"
-	"github.com/artifact-viewer/artifact-viewer/internal/logging"
-	"github.com/artifact-viewer/artifact-viewer/internal/secrets"
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
+	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/api"
+	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/logging"
+	"github.com/momja/Exhibit/internal/secrets"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 func main() {

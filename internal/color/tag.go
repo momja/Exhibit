@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // Presets is the preset swatch palette offered in the tag edit/add modals,

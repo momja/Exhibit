@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/color"
+	"github.com/momja/Exhibit/internal/color"
 )
 
 // exhibitLogoSVG is the Exhibit brand mark, inlined here so it travels with

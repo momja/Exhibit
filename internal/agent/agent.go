@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/google/uuid"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 //go:embed ext/exhibit.ts

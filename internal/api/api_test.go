@@ -8,9 +8,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/blob"
-	"github.com/artifact-viewer/artifact-viewer/internal/secrets"
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
+	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/secrets"
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

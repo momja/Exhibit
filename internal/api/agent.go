@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/agent"
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
+	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // --- BYO API key (Exh-ky6e) ---------------------------------------------

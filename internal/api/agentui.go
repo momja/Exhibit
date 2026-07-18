@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/color"
+	"github.com/momja/Exhibit/internal/color"
 )
 
 // agentPage serves the agent chat surface (Exh-jlbt): a build/modify-with-AI
