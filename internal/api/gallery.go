@@ -202,12 +202,8 @@ type detailPageData struct {
 	RenderOrigin string
 	SourceURL    string
 	Src          string
-	// Allowlist is rendered twice: as toolbar badges and, JSON-encoded by
-	// the JS bootstrap, as the page script's mutable working copy. Never
-	// nil — nil would encode as null and break allowlist.length.
-	Allowlist  []string
-	Capability capabilityView
-	Token      string
+	Capability   capabilityView
+	Token        string
 }
 
 func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (string, error) {
@@ -222,7 +218,6 @@ func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (strin
 		RenderOrigin: renderOrigin,
 		SourceURL:    a.SourceURL,
 		Src:          src,
-		Allowlist:    allowlist,
 		Capability: capabilityView{
 			ArtifactID:        a.ID,
 			NetworkAllowlist:  allowlist,

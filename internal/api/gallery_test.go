@@ -326,64 +326,38 @@ func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 	assert.NotContains(t, page, "allow-same-origin")
 }
 
-// av-tux9: the detail page script rebuilds the allowlist toolbar badges after
-// add/save. Building them by interpolating each origin into innerHTML was a
-// self-XSS sink on the app origin — origins are user/scanner-controlled and
-// can legitimately contain markup metacharacters. The badges must be built as
-// DOM nodes via textContent, matching the server-side render which escapes
-// through the allowlistBadges partial.
-func TestDetailPageRenderBadgesKeepsOriginsInert(t *testing.T) {
-	r := newTestRouter(t)
-	payload := `https://x"><img src=x onerror=alert(1)>`
-	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Badge XSS", Tier: store.Tier1,
-		CreatedAt: time.Now(), NetworkAllowlist: []string{payload}}
+// av-hwx2: allowlist management moved entirely to the Edit page (av-p0a1).
+// The viewer keeps only the read-only capability cluster (av-isb3/av-41se)
+// and a toolbar "Manage" link to Edit — no inline editor, no add-origin
+// control, and no client-side path that PATCHes network_allowlist.
+func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Read Only Tool", Tier: store.Tier1,
+		CreatedAt: time.Now(), NetworkAllowlist: []string{"https://example.com"}}
 	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
 	require.NoError(t, err)
 
-	// The server-rendered initial badges escape the origin's metacharacters.
-	assert.Contains(t, page, `<code class="badge">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
-		"server-side badges must HTML-escape origins")
-	assert.NotContains(t, page, `<code class="badge">https://x"><img src=x onerror=alert(1)></code>`,
-		"raw payload must never reach badge markup")
+	// No inline allowlist editor or add-origin control.
+	assert.NotContains(t, page, `id="al-display"`)
+	assert.NotContains(t, page, `id="al-input"`)
+	assert.NotContains(t, page, `addOrigin()`)
+	// A visible toolbar link to the Edit page's security panel, in addition
+	// to the one inside the popover.
+	assert.Contains(t, page, `<a href="/artifacts/abc123/edit#security-panel">Manage in allowlist settings →</a>`)
+	assert.Contains(t, page, `class="capability-popover-manage" href="/artifacts/abc123/edit#security-panel"`)
+	// The capability cluster (the read-only replacement UI) is still present.
+	assert.Contains(t, page, `class="capability-cluster`)
 
-	// The client-side re-render (after add/save) builds each badge with
-	// createElement + textContent instead of interpolating the origin into
-	// innerHTML, so the injected markup stays inert text.
-	detailJS := galleryAsset(t, r, "/assets/gallery/detail.js")
-	assert.Contains(t, detailJS, "document.createElement('code')")
-	assert.Contains(t, detailJS, "badge.textContent = o")
-	assert.NotContains(t, detailJS, "'<code>' + o + '</code>'",
-		"renderBadges must not interpolate raw origins into innerHTML")
-}
-
-// av-p3gj: the detail page inlines the allowlist into its bootstrap <script>
-// as a JS array. An origin containing the literal bytes </script> must not be
-// able to terminate that block early — html/template's JS-context encoding
-// escapes '<', '>', and '&' as \u003c etc., which stays valid JS string content
-// while keeping the payload from ending the script element. (The pre-template
-// gallery.go built this array with %q, which did not escape those bytes.)
-func TestDetailPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
-	payload := `https://evil</script><img src=x onerror=alert(1)>`
-	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Script Breakout", Tier: store.Tier1,
-		CreatedAt: time.Now(), NetworkAllowlist: []string{payload}}
-	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	// No client-side code path PATCHes network_allowlist from the viewer.
+	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
-
-	// The inlined JS array carries the payload with its HTML-significant
-	// characters escaped.
-	assert.Contains(t, page, `let allowlist = ["https://evil\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e"];`,
-		"the inlined allowlist must escape '<', '>', '&' so origins cannot end the script element")
-	// The raw breakout sequence never reaches the served page, so the script
-	// block's own terminator is the only </script> the HTML parser sees here.
-	assert.NotContains(t, page, `</script><img src=x onerror=alert(1)>`,
-		"an origin must never terminate the inline script block early")
+	assert.NotContains(t, string(detailJS), "network_allowlist",
+		"the viewer must never mutate network_allowlist; management is Edit-only")
 }
 
 // av-p0a1: the edit page's security panel renders allowlist rows via
 // html/template range (not hand-rolled string building), so origins the user
 // typed into the "Add origin" field — unrestricted, unlike scanner-derived
-// origins — stay inert even when they contain markup metacharacters. Same
-// reasoning as TestDetailPageRenderBadgesKeepsOriginsInert above. The
+// origins — stay inert even when they contain markup metacharacters. The
 // "referenced, not approved" rows (Unapproved) go through the identical
 // {{range}} construct in the template, so this coverage extends to them too.
 func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
