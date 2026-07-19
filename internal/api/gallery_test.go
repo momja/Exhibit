@@ -216,6 +216,91 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.NotContains(t, page, `target="_blank"`)
 }
 
+// av-isb3: the gallery card footer shows a neutral, informational capability
+// posture cluster opposite the created date — never a green/amber verdict
+// (spec 6.2 treats the allowlist as transparency, not a grade). A fully
+// sandboxed artifact (no allowlist entries, no capability grants) collapses
+// to exactly one muted ph-shield-check + "Sandboxed" mark.
+func TestGalleryCardShowsSandboxedWhenNoGrants(t *testing.T) {
+	r := newTestRouter(t)
+	createTestArtifact(t, r, "Plain")
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	assert.Contains(t, page, `<div class="capability-cluster">`)
+	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed`)
+	assert.NotContains(t, page, "has-grants")
+	assert.NotContains(t, page, "ph-globe")
+	assert.NotContains(t, page, "ph-download-simple")
+	assert.NotContains(t, page, "ph-clipboard")
+
+	// The badge is neutral: no color-as-verdict classes/hex from the old
+	// green/amber design ever appear.
+	assert.NotContains(t, page, "#12A150")
+	assert.NotContains(t, page, "#B45309")
+}
+
+// Network origins present: a ph-globe glyph plus a count equal to
+// len(NetworkAllowlist).
+func TestGalleryCardShowsNetworkCount(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Networked")
+	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+		"network_allowlist": []string{"https://a.example.com", "https://b.example.com"},
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req)
+	require.Equal(t, http.StatusOK, w2.Code)
+	page := w2.Body.String()
+
+	assert.Contains(t, page, `<div class="capability-cluster has-grants">`)
+	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">2</span>`)
+	assert.NotContains(t, page, "Sandboxed")
+}
+
+// Each capability glyph appears iff its approval flag is set, independent of
+// the others and independent of the network allowlist.
+func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Capable")
+	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+		"downloads_approved": true,
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req)
+	require.Equal(t, http.StatusOK, w2.Code)
+	page := w2.Body.String()
+
+	assert.Contains(t, page, `<div class="capability-cluster has-grants">`)
+	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>`)
+	assert.NotContains(t, page, "ph-clipboard")
+	assert.NotContains(t, page, "ph-globe")
+
+	w3 := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+		"clipboard_approved": true,
+	})
+	require.Equal(t, http.StatusOK, w3.Code)
+
+	req2 := httptest.NewRequest("GET", "/", nil)
+	w4 := httptest.NewRecorder()
+	r.ServeHTTP(w4, req2)
+	require.Equal(t, http.StatusOK, w4.Code)
+	page2 := w4.Body.String()
+
+	assert.Contains(t, page2, `<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>`)
+	assert.Contains(t, page2, `<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>`)
+}
+
 // The detail-view iframe is sandboxed with an opaque origin. An allow=
 // delegation of clipboard keys on the frame's src origin, which is opaque and
 // matches nothing, so the delegation was a no-op (av-hll6). Clipboard is instead

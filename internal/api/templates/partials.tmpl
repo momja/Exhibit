@@ -93,6 +93,16 @@
   </div>
 </div>{{end}}
 
+{{/* capabilityCluster renders the gallery card's neutral sandbox-posture
+     glyph cluster (av-isb3), in the card footer opposite the created date.
+     The allowlist is transparency, not a verdict (spec 6.2) — no green/amber,
+     ever. Fully sandboxed (empty allowlist, neither capability approved)
+     collapses to a single muted ph-shield-check + "Sandboxed"; otherwise each
+     grant gets its own neutral glyph, in a fixed order: network count, then
+     downloads, then clipboard. Data: {NetworkAllowlist []string;
+     DownloadsApproved, ClipboardApproved bool}. */}}
+{{define "capabilityCluster"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved)}}<div class="capability-cluster{{if not $sandboxed}} has-grants{{end}}">{{if $sandboxed}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{end}}</div>{{end}}
+
 {{/* allowlistBadges renders an artifact's approved network origins as .badge
      chips (components.css), or a faint "none". Keep in sync with
      renderBadges() in web/gallery/detail.js, which re-renders the same

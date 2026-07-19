@@ -1,6 +1,6 @@
 ---
 id: av-isb3
-status: in_progress
+status: closed
 deps: [av-xgik]
 links: [av-p0a1, av-41se, av-hwx2]
 created: 2026-07-15T01:34:21Z

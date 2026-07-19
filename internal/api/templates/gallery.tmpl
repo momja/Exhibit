@@ -55,8 +55,11 @@
 <div class="grid">{{if not .Cards}}<p class="empty">No artifacts yet. Upload one above.</p>{{end}}{{range .Cards}}
 <div class="card" data-href="/artifacts/{{.ArtifactID}}">
   <a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>
-  <div class="card-meta">{{.Created}}</div>
   {{template "tagRow" .}}
+  <div class="card-footer">
+    <div class="card-meta">{{.Created}}</div>
+    {{template "capabilityCluster" .}}
+  </div>
 </div>{{end}}</div>
 </main>
 
