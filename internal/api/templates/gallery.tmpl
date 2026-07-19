@@ -58,7 +58,7 @@
   {{template "tagRow" .}}
   <div class="card-footer">
     <div class="card-meta">{{.Created}}</div>
-    {{template "capabilityCluster" .}}
+    {{template "capabilityCluster" .Capability}}
   </div>
 </div>{{end}}</div>
 </main>
@@ -71,6 +71,7 @@
 const TOKEN = {{.Token}};
 const DEFAULT_TAG_COLOR = {{.DefaultTagColor}};
 </script>
+<script src="/assets/gallery/components.js"></script>
 <script src="/assets/gallery/index.js"></script>
 </body>
 </html>{{end}}

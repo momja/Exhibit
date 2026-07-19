@@ -244,11 +244,13 @@ document.addEventListener('click', function(e) {
 
 // Clicking anywhere on a card opens that artifact's detail/viewer page — the
 // card itself is the way in. Clicks that land on an interactive child (the
-// title or Details link, or anything in the tag row — pills, edit/detach,
-// the '+' button) are left alone so those keep their own behavior. The 'Open'
-// card action was removed; this is the single open affordance per card.
+// title or Details link, anything in the tag row — pills, edit/detach, the
+// '+' button — or the capability cluster, whose own click toggles its
+// popover in components.js) are left alone so those keep their own behavior.
+// The 'Open' card action was removed; this is the single open affordance per
+// card.
 document.addEventListener('click', function(e) {
-  if (e.target.closest('a, button, .tag-row, .card-actions')) return;
+  if (e.target.closest('a, button, .tag-row, .card-actions, [data-capability-trigger], .capability-popover')) return;
   const card = e.target.closest('.card');
   if (!card || !card.dataset.href) return;
   window.location.href = card.dataset.href;

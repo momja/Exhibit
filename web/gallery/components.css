@@ -45,10 +45,27 @@
  * (spec 6.2). Sandboxed (no .has-grants) stays fully muted; once a grant
  * exists the cluster reads slightly darker (mid-slate) so the glyphs read as
  * present information rather than a warning. */
-.capability-cluster{display:inline-flex;align-items:center;gap:var(--space-3);font-size:12px;color:var(--color-muted)}
+.capability-cluster{display:inline-flex;align-items:center;gap:var(--space-3);font-size:12px;color:var(--color-muted);cursor:pointer}
 .capability-cluster.has-grants{color:var(--color-ink-soft)}
 .capability-cluster .capability-glyph{display:inline-flex;align-items:center;font-size:14px;line-height:1}
 .capability-cluster .capability-count{color:var(--color-ink);font-weight:600}
+
+/* capability-wrap positions the popover (av-41se) relative to its trigger.
+ * The popover opens on :hover/:focus-within (mouse + keyboard-tab, including
+ * tabbing forward into the popover's own Manage link) with no JS required;
+ * components.js only adds the tap/Escape/aria-expanded behavior CSS can't
+ * express. It stays a plain div (not display:none) so it's always in the
+ * a11y/tab tree — visibility is purely visual. */
+.capability-wrap{position:relative;display:inline-flex}
+.capability-popover{position:absolute;top:100%;right:0;margin-top:var(--space-3);z-index:30;width:260px;max-width:80vw;background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);padding:var(--space-5);font-size:12px;color:var(--color-ink-soft);text-align:left;visibility:hidden;opacity:0;pointer-events:none;transition:opacity .12s ease}
+.capability-wrap:hover .capability-popover,.capability-wrap:focus-within .capability-popover,.capability-wrap.is-open .capability-popover{visibility:visible;opacity:1;pointer-events:auto}
+.capability-popover-header{font-weight:600;color:var(--color-ink);margin-bottom:var(--space-4)}
+.capability-popover-row{display:flex;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)}
+.capability-popover-row:last-child{margin-bottom:0}
+.capability-popover-label{color:var(--color-ink);font-weight:600;margin-bottom:var(--space-1)}
+.capability-popover-origins code{display:block;background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm);margin-top:var(--space-1);font-family:monospace;word-break:break-all}
+.capability-popover-manage{display:block;margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--color-hairline);color:var(--brand-blue);text-decoration:none}
+.capability-popover-manage:hover{text-decoration:underline}
 
 /* --- utilities -------------------------------------------------------- */
 .row{display:flex;align-items:center;gap:var(--space-3)}
