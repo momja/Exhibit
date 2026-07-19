@@ -13,6 +13,7 @@ import (
 	"net/http"
 
 	"github.com/momja/Exhibit/internal/color"
+	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/go-chi/chi/v5"
 )
@@ -214,13 +215,48 @@ type editPageData struct {
 	Title string
 	Src   string
 	Token string
+	// Allowlist is the artifact's approved network origins. Unapproved holds
+	// origins the current body references (per scanner.Scan) that are not yet
+	// on the allowlist — surfaced as one-click "Allow" rows. Unapproved is
+	// never merged into Allowlist server-side; that would auto-seed the
+	// allowlist from the scan, which spec §6.2 forbids.
+	Allowlist         []string
+	Unapproved        []string
+	DownloadsApproved bool
+	ClipboardApproved bool
 }
 
 func renderEditPage(a *store.Artifact, src, token string) (string, error) {
+	allowlist := a.NetworkAllowlist
+	if allowlist == nil {
+		allowlist = []string{}
+	}
+	unapproved := diffOrigins(scanner.Scan(src), allowlist)
 	return renderPage("edit", editPageData{
-		ID:        a.ID,
-		Title:     a.Title,
-		Src:       src,
-		Token:     token,
+		ID:                a.ID,
+		Title:             a.Title,
+		Src:               src,
+		Token:             token,
+		Allowlist:         allowlist,
+		Unapproved:        unapproved,
+		DownloadsApproved: a.DownloadsApproved,
+		ClipboardApproved: a.ClipboardApproved,
 	})
+}
+
+// diffOrigins returns the origins in footprint not already present in
+// approved, preserving footprint's order. Used to surface "referenced, not
+// approved" rows on the edit page without ever writing them to the allowlist.
+func diffOrigins(footprint, approved []string) []string {
+	have := make(map[string]bool, len(approved))
+	for _, o := range approved {
+		have[o] = true
+	}
+	out := []string{}
+	for _, o := range footprint {
+		if !have[o] {
+			out = append(out, o)
+		}
+	}
+	return out
 }
