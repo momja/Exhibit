@@ -31,44 +31,37 @@ Five rules shape every structural decision. When a choice is ambiguous, these de
 
 ## 2. System context
 
-```
-        ┌─────────────────────────────────────────────────────────┐
-        │                      Deployer's host                      │
-        │                                                           │
-  ┌─────┴──────┐   TLS    ┌──────────────┐                         │
-  │  Operator   │────────►│ Reverse proxy │  (operator-supplied,   │
-  │   browser   │         │ (their choice)│   not shipped)         │
-  └─────┬──────┘          └──────┬───────┘                         │
-        │                        │ plain HTTP                       │
-        │            ┌───────────┴────────────┐                     │
-        │  APP_ORIGIN│                         │RENDER_ORIGIN        │
-        │            ▼                         ▼                     │
-        │   ┌─────────────────┐      ┌──────────────────┐           │
-        │   │   App surface    │      │  Render surface   │          │
-        │   │  (gallery, API)  │      │ (serves artifact  │          │
-        │   │                  │      │  docs + CSP)      │          │
-        │   └────────┬─────────┘      └─────────┬────────┘           │
-        │            │   one Go process, two route groups            │
-        │            └───────────────┬──────────┘                    │
-        │                            ▼                               │
-        │                  ┌───────────────────┐                     │
-        │                  │  Store interface   │                     │
-        │                  │  SQLite + blobs FS  │                     │
-        │                  └───────────────────┘                     │
-        │   optional, composed around: Litestream→bucket, thumb worker│
-        └─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    operator["Operator browser"]
 
-  Visitor's browser (may be a different person/device entirely):
-   ┌──────────────────────────────────────────────────────────┐
-   │  Page from RENDER_ORIGIN                                    │
-   │   ┌────────────────────────────────────────────────┐       │
-   │   │ sandboxed <iframe> (opaque origin)               │      │
-   │   │   storage shim (localStorage→API) + artifact code  │     │
-   │   │   network limited by per-artifact CSP             │     │
-   │   └────────────────────────────────────────────────┘       │
-   │            │ state read/write-through, over API             │
-   └────────────┼──────────────────────────────────────────────┘
-                ▼  back to App surface API
+    subgraph host["Deployer's host"]
+        proxy["Reverse proxy (their choice)<br/>operator-supplied, not shipped"]
+        subgraph goproc["one Go process — two route groups"]
+            app["App surface<br/>(gallery, API)"]
+            render["Render surface<br/>(serves artifact docs + CSP)"]
+        end
+        store["Store interface<br/>SQLite + blobs FS"]
+        opt["optional, composed around:<br/>Litestream &rarr; bucket, thumb worker"]
+    end
+
+    operator -->|TLS| proxy
+    proxy -->|"plain HTTP &middot; APP_ORIGIN"| app
+    proxy -->|"plain HTTP &middot; RENDER_ORIGIN"| render
+    app --> store
+    render --> store
+    store -.-> opt
+
+    subgraph visitor["Visitor's browser (may be a different person / device)"]
+        subgraph page["Page from RENDER_ORIGIN"]
+            subgraph frame["sandboxed &lt;iframe&gt; — opaque origin"]
+                artifact["storage shim (localStorage &rarr; API) + artifact code<br/>network limited by per-artifact CSP"]
+            end
+        end
+    end
+
+    render -->|serves document| page
+    artifact -->|"state read / write-through, over API"| app
 ```
 
 The same Go process answers both origins; they are route groups, not separate services.
@@ -317,36 +310,41 @@ footprint is a decision the user makes at the door, not a surprise at runtime.
 
 ## 6. Render + state data flow
 
-```
-visitor ──GET render URL──► Render surface
-  Render ──► Store.get(artifact) + allowlist + state
-  Render ──► build CSP from allowlist; compose <head>(render preamble, state INLINED) + body
-  Render ──► Cache-Control: no-store; serve into sandboxed iframe
-            (allow-scripts, NO allow-same-origin)
+```mermaid
+flowchart TD
+    v(["visitor: GET render URL"]) --> r1["Render surface:<br/>Store.get(artifact) + allowlist + state"]
+    r1 --> r2["build CSP from allowlist; compose<br/>&lt;head&gt;(render preamble, state INLINED) + body"]
+    r2 --> r3["Cache-Control: no-store;<br/>serve into sandboxed iframe<br/>(allow-scripts, NO allow-same-origin)"]
+    r3 --> load{{"iframe load — opaque 'null' origin;<br/>cannot call the API directly; artifact runs"}}
 
-  iframe load (opaque 'null' origin — cannot call the API directly):
-    artifact runs:
-      getItem  ──► served synchronously from the inlined cache (no fetch, no race)
-      setItem  ──► update cache sync; postMessage({k,v}) to the host frame
-                     host (app origin, authed) ──► PUT /state (write-through, LWW)
-    artifact fetch to origin X:
-      on allowlist  ──► browser permits
-      not on list   ──► browser blocks (CSP); UI prompts user → approve → PATCH allowlist
-    artifact download (anchor with a blob:/data: href, clicked or click()ed):
-      download bridge intercepts ──► postMessage filename + bytes to the host frame
-        already approved ──► host triggers the download from the app origin
-        first attempt    ──► host prompts (artifact + filename);
-                               approve ──► PATCH downloads_approved (persisted
-                               server-side, revocable in the toolbar) ──► download
-                               deny    ──► bytes dropped; artifact keeps running
-      any vector the bridge misses ──► stays blocked (sandbox omits allow-downloads)
-    artifact navigator.clipboard.readText()/writeText():
-      clipboard bridge replaces the API ──► postMessage {op,id,text?} to the host frame
-        already approved ──► host runs the op on the app origin ──► posts result back
-        first attempt    ──► host prompts (artifact + direction);
-                               approve ──► PATCH clipboard_approved ──► op ──► result
-                               deny    ──► Promise rejects (NotAllowedError)
-      native Ctrl/Cmd+V paste ──► browser event, unaffected (no bridge, no approval)
+    load --> getItem["getItem"]
+    getItem --> getRes["served synchronously from the<br/>inlined cache — no fetch, no race"]
+    load --> setItem["setItem"]
+    setItem --> setRes["update cache sync;<br/>postMessage(k,v) to host frame"]
+    setRes --> setPut["host (app origin, authed):<br/>PUT /state — write-through, LWW"]
+
+    load --> fetch["artifact fetch to origin X"]
+    fetch --> fetchQ{"origin on allowlist?"}
+    fetchQ -->|yes| fPermit["browser permits"]
+    fetchQ -->|no| fBlock["browser blocks (CSP); UI prompts<br/>user &rarr; approve &rarr; PATCH allowlist"]
+
+    load --> dl["artifact download<br/>blob:/data: anchor, clicked or click()ed"]
+    dl --> dlInt["download bridge intercepts;<br/>postMessage filename + bytes to host"]
+    dlInt --> dlQ{"already approved?"}
+    dlQ -->|yes| dlGo["host triggers the download<br/>from the app origin"]
+    dlQ -->|first attempt| dlPrompt{"host prompts<br/>(artifact + filename)"}
+    dlPrompt -->|approve| dlOK["PATCH downloads_approved<br/>(server-side, revocable) &rarr; download"]
+    dlPrompt -->|deny| dlNo["bytes dropped;<br/>artifact keeps running"]
+    dl --> dlMiss["any vector the bridge misses &rarr;<br/>stays blocked (sandbox omits allow-downloads)"]
+
+    load --> cb["navigator.clipboard<br/>readText() / writeText()"]
+    cb --> cbInt["clipboard bridge replaces the API;<br/>postMessage op,id,text? to host"]
+    cbInt --> cbQ{"already approved?"}
+    cbQ -->|yes| cbGo["host runs the op on the app origin;<br/>posts result back"]
+    cbQ -->|first attempt| cbPrompt{"host prompts<br/>(artifact + direction)"}
+    cbPrompt -->|approve| cbOK["PATCH clipboard_approved &rarr;<br/>op &rarr; result"]
+    cbPrompt -->|deny| cbNo["Promise rejects (NotAllowedError)"]
+    cb --> cbNative["native Ctrl/Cmd+V paste &rarr;<br/>browser event, unaffected"]
 ```
 
 Two properties fall out of the sandbox's opaque origin: reads are **inlined at render**
