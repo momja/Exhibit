@@ -40,9 +40,15 @@
 .allowlist-row code{background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm)}
 
 /* Small inline posture indicator (icon + optional label) — the gallery card
- * badge (av-isb3) and the popover header (av-41se) build on this. */
-.capability-cluster{display:inline-flex;align-items:center;gap:var(--space-2);font-size:12px;color:var(--color-muted)}
+ * badge (av-isb3) and the popover header (av-41se) build on this. Neutral
+ * throughout, no green/amber: the allowlist is transparency, not a verdict
+ * (spec 6.2). Sandboxed (no .has-grants) stays fully muted; once a grant
+ * exists the cluster reads slightly darker (mid-slate) so the glyphs read as
+ * present information rather than a warning. */
+.capability-cluster{display:inline-flex;align-items:center;gap:var(--space-3);font-size:12px;color:var(--color-muted)}
+.capability-cluster.has-grants{color:var(--color-ink-soft)}
 .capability-cluster .capability-glyph{display:inline-flex;align-items:center;font-size:14px;line-height:1}
+.capability-cluster .capability-count{color:var(--color-ink);font-weight:600}
 
 /* --- utilities -------------------------------------------------------- */
 .row{display:flex;align-items:center;gap:var(--space-3)}

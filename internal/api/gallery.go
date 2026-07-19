@@ -110,12 +110,17 @@ func tagViews(tags []*store.Tag) []tagView {
 }
 
 // galleryCard is one artifact card on the index page. The tagRow/tagPills
-// partials read ArtifactID and Tags from it directly.
+// partials read ArtifactID and Tags from it directly; the capabilityCluster
+// partial reads NetworkAllowlist/DownloadsApproved/ClipboardApproved to
+// render the card-footer posture badge (av-isb3).
 type galleryCard struct {
-	ArtifactID string
-	Title      string
-	Created    string
-	Tags       []tagView
+	ArtifactID        string
+	Title             string
+	Created           string
+	Tags              []tagView
+	NetworkAllowlist  []string
+	DownloadsApproved bool
+	ClipboardApproved bool
 }
 
 // addTagModalData feeds the addTagModal partial: every existing tag for the
@@ -148,10 +153,13 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token s
 	cards := make([]galleryCard, len(arts))
 	for i, a := range arts {
 		cards[i] = galleryCard{
-			ArtifactID: a.ID,
-			Title:      a.Title,
-			Created:    a.CreatedAt.Format("Jan 2, 2006"),
-			Tags:       tagViews(a.Tags),
+			ArtifactID:        a.ID,
+			Title:             a.Title,
+			Created:           a.CreatedAt.Format("Jan 2, 2006"),
+			Tags:              tagViews(a.Tags),
+			NetworkAllowlist:  a.NetworkAllowlist,
+			DownloadsApproved: a.DownloadsApproved,
+			ClipboardApproved: a.ClipboardApproved,
 		}
 	}
 	return renderPage("gallery", galleryPageData{
