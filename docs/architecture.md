@@ -280,24 +280,26 @@ to never run artifact code at all.
 
 ## 5. Ingest data flow
 
-```
-client ──POST /api/artifacts (body | url [+ snapshot] + metadata)──► API
-  (url ingest)  API ──► fetch page (bounded 10 MiB), extract <title>
-  (snapshot on) API ──► snapshot.InlineHTMLAssets: bounded fetch + inline
-                          assets as data:/inline <script>/<style>
-                          ──► self-contained body + report (vendored,
-                              residual, per-asset failures — never fatal)
-  (url ingest)  API ──► ScanWithBase: resolve relatives vs source ──► footprint
-                          ──► inject <base href> for surviving relatives
-  (paste)       API ──► Scan: tokenize, extract origins ──► footprint list
-  API ──► respond: "these N origins will be contacted — approve?" (+ snapshot report)
-client ──confirm (+ edited allowlist)──► API
-  API ──► Blob.put(body)         (untrusted bytes at rest)
-  API ──► Store.put(artifact, network_allowlist=[], tier, source_url, ...)
-  API ──► FTS5 index (title)
-  API ──► respond: artifact id + render URL + footprint (network-inert until approved)
-client ──PATCH /api/artifacts/:id (approved allowlist)──► API
-  API ──► Store.update(artifact, network_allowlist) → now renderable with network egress
+```mermaid
+flowchart TD
+    post["client &rarr; POST /api/artifacts<br/>(body | url [+ snapshot] + metadata)"] --> kind{ingest type}
+
+    kind -->|url ingest| fetch["API: fetch page (bounded 10 MiB),<br/>extract &lt;title&gt;"]
+    fetch --> snapQ{snapshot on?}
+    snapQ -->|yes| snap["snapshot.InlineHTMLAssets — bounded fetch + inline<br/>assets as data:/inline &lt;script&gt;/&lt;style&gt; &rarr;<br/>self-contained body + report<br/>(vendored, residual, per-asset failures — never fatal)"]
+    snapQ -->|no| scan1
+    snap --> scan1["ScanWithBase: resolve relatives vs source &rarr; footprint;<br/>inject &lt;base href&gt; for surviving relatives"]
+
+    kind -->|paste| scan2["API: Scan — tokenize, extract origins &rarr;<br/>footprint list"]
+
+    scan1 --> resp1["API &rarr; respond: &quot;these N origins will be<br/>contacted — approve?&quot; (+ snapshot report)"]
+    scan2 --> resp1
+
+    resp1 --> confirm["client &rarr; confirm (+ edited allowlist) &rarr; API"]
+    confirm --> persist["API: Blob.put(body) — untrusted bytes at rest;<br/>Store.put(artifact, network_allowlist=[], tier, source_url, ...);<br/>FTS5 index (title)"]
+    persist --> resp2["API &rarr; respond: artifact id + render URL +<br/>footprint (network-inert until approved)"]
+    resp2 --> patch["client &rarr; PATCH /api/artifacts/:id<br/>(approved allowlist) &rarr; API"]
+    patch --> update["API: Store.update(artifact, network_allowlist) &rarr;<br/>now renderable with network egress"]
 ```
 
 The snapshot stage runs **after fetch, before `Blob.put`** (§3.4a) and is the only
