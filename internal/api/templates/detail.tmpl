@@ -21,7 +21,9 @@
   <span class="toolbar-sep">|</span>
   <a href="/artifacts/{{.ID}}/edit"><i class="ph ph-pencil-simple"></i> Edit</a>
   <span class="toolbar-sep">|</span>
-  <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot"></i> Modify with agent</a>{{if .SourceURL}}
+  <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot"></i> Modify with agent</a>
+  <span class="toolbar-sep">|</span>
+  {{template "capabilityCluster" .Capability}}{{if .SourceURL}}
   <span class="toolbar-sep">|</span>
   <button onclick="refetchSource()">Update from source ↻</button>{{end}}
   <span class="toolbar-sep">|</span>
@@ -82,9 +84,10 @@ let allowlist = {{.Allowlist}};
 {{/* The booleans are emitted as literal template text rather than {{value}}
      interpolations: html/template's JS escaper pads identifiers with spaces,
      and a plain `= true;` keeps the bootstrap greppable. */ -}}
-let downloadsApproved = {{if .DownloadsApproved}}true{{else}}false{{end}};
-let clipboardApproved = {{if .ClipboardApproved}}true{{else}}false{{end}};
+let downloadsApproved = {{if .Capability.DownloadsApproved}}true{{else}}false{{end}};
+let clipboardApproved = {{if .Capability.ClipboardApproved}}true{{else}}false{{end}};
 </script>
+<script src="/assets/gallery/components.js"></script>
 <script src="/assets/gallery/detail.js"></script>
 </body>
 </html>{{end}}

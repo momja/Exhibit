@@ -223,7 +223,7 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 // to exactly one muted ph-shield-check + "Sandboxed" mark.
 func TestGalleryCardShowsSandboxedWhenNoGrants(t *testing.T) {
 	r := newTestRouter(t)
-	createTestArtifact(t, r, "Plain")
+	id := createTestArtifact(t, r, "Plain")
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -231,7 +231,7 @@ func TestGalleryCardShowsSandboxedWhenNoGrants(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	page := w.Body.String()
 
-	assert.Contains(t, page, `<div class="capability-cluster">`)
+	assert.Contains(t, page, `<div class="capability-cluster" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger>`)
 	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed`)
 	assert.NotContains(t, page, "has-grants")
 	assert.NotContains(t, page, "ph-globe")
@@ -260,7 +260,7 @@ func TestGalleryCardShowsNetworkCount(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
-	assert.Contains(t, page, `<div class="capability-cluster has-grants">`)
+	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger>`)
 	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">2</span>`)
 	assert.NotContains(t, page, "Sandboxed")
 }
@@ -281,7 +281,7 @@ func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
-	assert.Contains(t, page, `<div class="capability-cluster has-grants">`)
+	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger>`)
 	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>`)
 	assert.NotContains(t, page, "ph-clipboard")
 	assert.NotContains(t, page, "ph-globe")

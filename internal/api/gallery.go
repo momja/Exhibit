@@ -12,10 +12,10 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/color"
 	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/store"
-	"github.com/go-chi/chi/v5"
 )
 
 func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
@@ -110,18 +110,34 @@ func tagViews(tags []*store.Tag) []tagView {
 	return views
 }
 
-// galleryCard is one artifact card on the index page. The tagRow/tagPills
-// partials read ArtifactID and Tags from it directly; the capabilityCluster
-// partial reads NetworkAllowlist/DownloadsApproved/ClipboardApproved to
-// render the card-footer posture badge (av-isb3).
-type galleryCard struct {
+// capabilityView is the data the capabilityCluster (badge, av-isb3) and
+// capabilityPopover (av-41se) partials render. It's shared verbatim by the
+// gallery card and the artifact detail/viewer page so the popover looks and
+// behaves identically in both places. ShowManage gates the popover's footer
+// "Manage in allowlist settings" link: true for both app-origin pages here.
+// The render surface (internal/render) — which serves /s/:shareID — never
+// composes gallery templates at all, so no caller there needs ShowManage;
+// the field exists so a caller without an owner session can render the same
+// partial without the link, and TestCapabilityPopoverManageLinkGatedByShowManage
+// exercises exactly that.
+type capabilityView struct {
 	ArtifactID        string
-	Title             string
-	Created           string
-	Tags              []tagView
 	NetworkAllowlist  []string
 	DownloadsApproved bool
 	ClipboardApproved bool
+	ShowManage        bool
+}
+
+// galleryCard is one artifact card on the index page. The tagRow/tagPills
+// partials read ArtifactID and Tags from it directly; the capabilityCluster
+// partial reads Capability to render the card-footer posture badge + popover
+// (av-isb3, av-41se).
+type galleryCard struct {
+	ArtifactID string
+	Title      string
+	Created    string
+	Tags       []tagView
+	Capability capabilityView
 }
 
 // addTagModalData feeds the addTagModal partial: every existing tag for the
@@ -154,13 +170,17 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token s
 	cards := make([]galleryCard, len(arts))
 	for i, a := range arts {
 		cards[i] = galleryCard{
-			ArtifactID:        a.ID,
-			Title:             a.Title,
-			Created:           a.CreatedAt.Format("Jan 2, 2006"),
-			Tags:              tagViews(a.Tags),
-			NetworkAllowlist:  a.NetworkAllowlist,
-			DownloadsApproved: a.DownloadsApproved,
-			ClipboardApproved: a.ClipboardApproved,
+			ArtifactID: a.ID,
+			Title:      a.Title,
+			Created:    a.CreatedAt.Format("Jan 2, 2006"),
+			Tags:       tagViews(a.Tags),
+			Capability: capabilityView{
+				ArtifactID:        a.ID,
+				NetworkAllowlist:  a.NetworkAllowlist,
+				DownloadsApproved: a.DownloadsApproved,
+				ClipboardApproved: a.ClipboardApproved,
+				ShowManage:        true,
+			},
 		}
 	}
 	return renderPage("gallery", galleryPageData{
@@ -185,10 +205,9 @@ type detailPageData struct {
 	// Allowlist is rendered twice: as toolbar badges and, JSON-encoded by
 	// the JS bootstrap, as the page script's mutable working copy. Never
 	// nil — nil would encode as null and break allowlist.length.
-	Allowlist         []string
-	DownloadsApproved bool
-	ClipboardApproved bool
-	Token             string
+	Allowlist  []string
+	Capability capabilityView
+	Token      string
 }
 
 func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (string, error) {
@@ -197,16 +216,21 @@ func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (strin
 		allowlist = []string{}
 	}
 	return renderPage("detail", detailPageData{
-		ID:                a.ID,
-		Title:             a.Title,
-		Created:           a.CreatedAt.Format("Jan 2, 2006 15:04"),
-		RenderOrigin:      renderOrigin,
-		SourceURL:         a.SourceURL,
-		Src:               src,
-		Allowlist:         allowlist,
-		DownloadsApproved: a.DownloadsApproved,
-		ClipboardApproved: a.ClipboardApproved,
-		Token:             token,
+		ID:           a.ID,
+		Title:        a.Title,
+		Created:      a.CreatedAt.Format("Jan 2, 2006 15:04"),
+		RenderOrigin: renderOrigin,
+		SourceURL:    a.SourceURL,
+		Src:          src,
+		Allowlist:    allowlist,
+		Capability: capabilityView{
+			ArtifactID:        a.ID,
+			NetworkAllowlist:  allowlist,
+			DownloadsApproved: a.DownloadsApproved,
+			ClipboardApproved: a.ClipboardApproved,
+			ShowManage:        true,
+		},
+		Token: token,
 	})
 }
 
