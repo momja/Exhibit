@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/blob"
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
+	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // Config holds the dependencies for the render surface.

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/scanner"
-	"github.com/artifact-viewer/artifact-viewer/internal/snapshot"
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/momja/Exhibit/internal/scanner"
+	"github.com/momja/Exhibit/internal/snapshot"
+	"github.com/momja/Exhibit/internal/store"
 	"golang.org/x/net/html"
 )
 

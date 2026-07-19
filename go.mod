@@ -1,4 +1,4 @@
-module github.com/artifact-viewer/artifact-viewer
+module github.com/momja/Exhibit
 
 go 1.25.7
 

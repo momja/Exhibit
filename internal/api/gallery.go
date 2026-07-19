@@ -12,9 +12,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/color"
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
+	"github.com/momja/Exhibit/internal/color"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {

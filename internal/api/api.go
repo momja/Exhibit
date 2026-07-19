@@ -3,14 +3,14 @@ package api
 import (
 	"net/http"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/agent"
-	"github.com/artifact-viewer/artifact-viewer/internal/blob"
-	"github.com/artifact-viewer/artifact-viewer/internal/logging"
-	"github.com/artifact-viewer/artifact-viewer/internal/render"
-	"github.com/artifact-viewer/artifact-viewer/internal/secrets"
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/logging"
+	"github.com/momja/Exhibit/internal/render"
+	"github.com/momja/Exhibit/internal/secrets"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // Config holds the dependencies and configuration for the API router.

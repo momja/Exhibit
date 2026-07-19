@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

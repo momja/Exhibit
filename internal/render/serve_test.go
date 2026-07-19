@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/blob"
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
+	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // newTestRenderer builds a Renderer backed by a temp SQLite store + FS blob,

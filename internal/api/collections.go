@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/artifact-viewer/artifact-viewer/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 func (ro *Router) listCollections(w http.ResponseWriter, r *http.Request) {
