@@ -117,9 +117,3 @@
      ShowManage is false (the no-owner-session / share case). Data:
      capabilityView (gallery.go). */}}
 {{define "capabilityPopover"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved)}}<div class="capability-popover" id="capability-popover-{{.ArtifactID}}"><div class="capability-popover-header">Sandbox posture</div>{{if $sandboxed}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-shield-check"></i></span><span>Fully contained — no network, download, or clipboard access</span></div>{{else}}{{if .NetworkAllowlist}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-globe"></i></span><div><div class="capability-popover-label">Network — {{len .NetworkAllowlist}} origin{{if ne (len .NetworkAllowlist) 1}}s{{end}}</div><div class="capability-popover-origins">{{range .NetworkAllowlist}}<code>{{.}}</code>{{end}}</div></div></div>{{end}}{{if .DownloadsApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-download-simple"></i></span><span>Downloads — Can save files to your device</span></div>{{end}}{{if .ClipboardApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-clipboard"></i></span><span>Clipboard — Can read and write your clipboard</span></div>{{end}}{{end}}{{if .ShowManage}}<a class="capability-popover-manage" href="/artifacts/{{.ArtifactID}}/edit#security-panel">Manage in allowlist settings →</a>{{end}}</div>{{end}}
-
-{{/* allowlistBadges renders an artifact's approved network origins as .badge
-     chips (components.css), or a faint "none". Keep in sync with
-     renderBadges() in web/gallery/detail.js, which re-renders the same
-     markup client-side after allowlist edits. Data: []string (origins). */}}
-{{define "allowlistBadges"}}{{if .}}{{range .}}<code class="badge">{{.}}</code>{{end}}{{else}}<span class="faint">none</span>{{end}}{{end}}

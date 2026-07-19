@@ -23,22 +23,11 @@
   <span class="toolbar-sep">|</span>
   <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot"></i> Modify with agent</a>
   <span class="toolbar-sep">|</span>
-  {{template "capabilityCluster" .Capability}}{{if .SourceURL}}
+  {{template "capabilityCluster" .Capability}}
+  <a href="/artifacts/{{.ID}}/edit#security-panel">Manage in allowlist settings →</a>
+  {{if .SourceURL}}
   <span class="toolbar-sep">|</span>
   <button onclick="refetchSource()">Update from source ↻</button>{{end}}
-  <span class="toolbar-sep">|</span>
-  <span class="muted">Allowlist:</span>
-  <span id="al-display">{{template "allowlistBadges" .Allowlist}}</span>
-  <input id="al-input" type="text" placeholder="Add origin (https://example.com)" style="display:none">
-  <button onclick="addOrigin()"><i class="ph ph-plus"></i> Add origin</button>
-  <span class="toolbar-sep">|</span>
-  <span class="muted">Downloads:</span>
-  <span id="dl-state"></span>
-  <button id="dl-revoke" onclick="revokeDownloads()" style="display:none"><i class="ph ph-prohibit"></i> Revoke</button>
-  <span class="toolbar-sep">|</span>
-  <span class="muted">Clipboard:</span>
-  <span id="clip-state"></span>
-  <button id="clip-revoke" onclick="revokeClipboard()" style="display:none"><i class="ph ph-prohibit"></i> Revoke</button>
   <span id="al-status" class="muted"></span>
 </div>
 <div class="panels">
@@ -80,7 +69,6 @@
 const TOKEN = {{.Token}};
 const ID = {{.ID}};
 const SOURCE_URL = {{.SourceURL}};
-let allowlist = {{.Allowlist}};
 {{/* The booleans are emitted as literal template text rather than {{value}}
      interpolations: html/template's JS escaper pads identifiers with spaces,
      and a plain `= true;` keeps the bootstrap greppable. */ -}}

@@ -63,8 +63,9 @@ func TestPatchClipboardApprovedRejectsNonBool(t *testing.T) {
 }
 
 // The detail page is the clipboard bridge's host side: it validates the shim's
-// clipboard messages, prompts on first use (naming the artifact), persists the
-// decision via PATCH, and exposes a revoke control in the toolbar.
+// clipboard messages, prompts on first use (naming the artifact), and persists
+// the decision via PATCH. The viewer is read-only (av-hwx2): it no longer
+// exposes a toolbar revoke control — that lives on the Edit page.
 func TestDetailPageRendersClipboardBridge(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Copy <Tool>", Tier: store.Tier1,
 		CreatedAt: time.Now()}
@@ -88,9 +89,8 @@ func TestDetailPageRendersClipboardBridge(t *testing.T) {
 	assert.Contains(t, page, `<strong>Copy &lt;Tool&gt;</strong> wants to`)
 	assert.Contains(t, page, `id="clip-allow"`)
 	assert.Contains(t, page, `id="clip-block"`)
-	// Toolbar shows the state and offers revocation.
-	assert.Contains(t, page, `id="clip-state"`)
-	assert.Contains(t, page, `id="clip-revoke"`)
+	// No toolbar revoke control in the read-only viewer.
+	assert.NotContains(t, page, `id="clip-revoke"`)
 
 	// An approved artifact renders with the approval baked in.
 	a.ClipboardApproved = true
