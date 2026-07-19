@@ -293,3 +293,61 @@ func TestDetailPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 	assert.NotContains(t, page, `</script><img src=x onerror=alert(1)>`,
 		"an origin must never terminate the inline script block early")
 }
+
+// av-p0a1: the edit page's security panel renders allowlist rows via
+// html/template range (not hand-rolled string building), so origins the user
+// typed into the "Add origin" field — unrestricted, unlike scanner-derived
+// origins — stay inert even when they contain markup metacharacters. Same
+// reasoning as TestDetailPageRenderBadgesKeepsOriginsInert above. The
+// "referenced, not approved" rows (Unapproved) go through the identical
+// {{range}} construct in the template, so this coverage extends to them too.
+func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
+	payload := `https://x"><img src=x onerror=alert(1)>`
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Edit XSS", Tier: store.Tier1,
+		CreatedAt: time.Now(), NetworkAllowlist: []string{payload}}
+	page, err := renderEditPage(a, "<p>src</p>", "tok")
+	require.NoError(t, err)
+
+	assert.Contains(t, page, `<code title="https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
+		"allowlist rows must HTML-escape the origin")
+	assert.Contains(t, page, `data-origin="https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;"`,
+		"the row's data-origin attribute must HTML-escape the origin")
+	assert.NotContains(t, page, `<code>https://x"><img src=x onerror=alert(1)></code>`,
+		"raw payload must never reach allowlist row markup")
+}
+
+// av-p0a1: origins the artifact's body references but hasn't approved
+// (ingest-scan footprint minus the allowlist) surface as one-click "Allow"
+// rows and must never be written to the allowlist itself.
+func TestEditPageSurfacesUnapprovedOriginsWithoutSeedingAllowlist(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "No auto-seed", Tier: store.Tier1,
+		CreatedAt: time.Now(), NetworkAllowlist: []string{}}
+	src := `<script src="https://cdn.example.com/lib.js"></script>`
+	page, err := renderEditPage(a, src, "tok")
+	require.NoError(t, err)
+
+	assert.Contains(t, page, `data-origin="https://cdn.example.com"`)
+	assert.Contains(t, page, `data-action="allow"`)
+	assert.Contains(t, page, `let allowlist = [];`,
+		"a referenced-but-unapproved origin must not appear in the allowlist")
+	assert.Contains(t, page, `let unapproved = ["https://cdn.example.com"];`,
+		"the referenced origin must surface as unapproved instead")
+}
+
+// av-p0a1: the edit page inlines both the allowlist and the unapproved
+// (referenced-but-not-approved) origins into its bootstrap <script> as JS
+// arrays, same pattern as TestDetailPageInlinesAllowlistWithoutScriptBreakout
+// above — an origin containing a literal </script> must not terminate the
+// block early.
+func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
+	payload := `https://evil</script><img src=x onerror=alert(1)>`
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Script Breakout", Tier: store.Tier1,
+		CreatedAt: time.Now(), NetworkAllowlist: []string{payload}}
+	page, err := renderEditPage(a, "<p>src</p>", "tok")
+	require.NoError(t, err)
+
+	assert.Contains(t, page, `let allowlist = ["https://evil\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e"];`,
+		"the inlined allowlist must escape '<', '>', '&' so origins cannot end the script element")
+	assert.NotContains(t, page, `</script><img src=x onerror=alert(1)>`,
+		"an origin must never terminate the inline script block early")
+}

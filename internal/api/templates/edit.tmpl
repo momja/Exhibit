@@ -18,6 +18,54 @@
 <main>
 <div class="edit-card">
   <h2>Edit</h2>
+
+  <details class="details-panel" id="security-panel">
+    <summary id="security-summary"></summary>
+    <div class="security-body">
+      <div class="security-col">
+        <h3 class="text-sm muted">Network allowlist</h3>
+        <div id="allowlist-rows">
+          {{range .Allowlist}}<div class="allowlist-row" data-origin="{{.}}">
+            <code title="{{.}}">{{.}}</code>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-sm btn-sec" data-action="remove">Remove</button>
+          </div>{{end}}
+        </div>
+        {{if .Unapproved}}
+        <h3 class="text-sm muted">Referenced, not approved</h3>
+        <div id="unapproved-rows">
+          {{range .Unapproved}}<div class="allowlist-row" data-origin="{{.}}">
+            <code title="{{.}}">{{.}}</code>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
+          </div>{{end}}
+        </div>
+        {{end}}
+        <div class="row" style="margin-top:8px">
+          <input type="text" id="al-add-input" class="field" placeholder="Add origin (https://example.com)">
+          <button type="button" class="btn btn-sm" id="al-add-btn">Add</button>
+        </div>
+      </div>
+      <div class="security-col">
+        <h3 class="text-sm muted">Capabilities</h3>
+        <label class="row">
+          <span class="spacer">Downloads</span>
+          <select id="dl-select" class="select">
+            <option value="false">Ask first</option>
+            <option value="true">Always allow</option>
+          </select>
+        </label>
+        <label class="row">
+          <span class="spacer">Clipboard</span>
+          <select id="clip-select" class="select">
+            <option value="false">Ask first</option>
+            <option value="true">Always allow</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </details>
+
   <input type="text" id="title" value="{{.Title}}" placeholder="Title">
   <textarea id="body">{{.Src}}</textarea>
   <div class="btn-row">
@@ -34,6 +82,13 @@
 <script>
 const TOKEN = {{.Token}};
 const ID = {{.ID}};
+let allowlist = {{.Allowlist}};
+let unapproved = {{.Unapproved}};
+{{/* Literal template text rather than {{value}} interpolation, matching the
+     detail page bootstrap (av-p3gj): html/template's JS escaper pads
+     booleans with spaces, and a plain `= true;` keeps this greppable. */ -}}
+let downloadsApproved = {{if .DownloadsApproved}}true{{else}}false{{end}};
+let clipboardApproved = {{if .ClipboardApproved}}true{{else}}false{{end}};
 </script>
 <script src="/assets/gallery/edit.js"></script>
 </body>

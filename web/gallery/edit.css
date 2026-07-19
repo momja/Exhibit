@@ -21,3 +21,29 @@ main{padding:24px;max-width:900px;margin:0 auto}
 #status{font-size:13px;color:#555}
 #scan-result{margin-top:12px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
 #scan-result code{background:#eee;padding:1px 5px;border-radius:3px}
+
+/* --- security panel: allowlist + capabilities, collapsed by default ---- */
+#security-panel{margin-bottom:16px}
+#security-panel>summary{list-style:none}
+#security-panel>summary::-webkit-details-marker{display:none}
+#security-panel>summary::before{content:'▸ ';display:inline-block}
+#security-panel[open]>summary::before{content:'▾ '}
+.security-body{display:flex;gap:24px;margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline)}
+.security-col{flex:1;min-width:0}
+.security-col h3{margin:10px 0 6px}
+.security-col h3:first-child{margin-top:0}
+#allowlist-rows,#unapproved-rows{max-height:180px;overflow-y:auto}
+.allowlist-row code{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.security-col label.row{margin-bottom:10px}
+
+/* --- responsive: single column, stacked security body, full-width actions */
+@media (max-width:640px){
+  main{padding:12px}
+  .edit-card{padding:14px}
+  .security-body{flex-direction:column;gap:16px}
+  .btn-row{flex-direction:column;align-items:stretch}
+  .btn-row #status{order:1;text-align:center}
+  .btn-row .spacer{display:none}
+  .btn-row button,.btn-row a{width:100%}
+  .btn-row a button{width:100%}
+}
