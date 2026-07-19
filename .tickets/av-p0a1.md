@@ -1,6 +1,6 @@
 ---
 id: av-p0a1
-status: open
+status: closed
 deps: [av-xgik]
 links: [av-isb3, av-41se, av-hwx2]
 created: 2026-07-18T15:15:41Z
