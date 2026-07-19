@@ -7,15 +7,16 @@
 <title>Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 <link rel="stylesheet" href="/assets/phosphor/regular.css">
-<style>:root{--brand-blue:{{.BrandBlue}};--brand-blue-hover:{{.BrandBlueHover}}}</style>
+<link rel="stylesheet" href="/assets/gallery/tokens.css">
+<link rel="stylesheet" href="/assets/gallery/components.css">
 <link rel="stylesheet" href="/assets/gallery/index.css">
 </head>
 <body>
 <header>
   {{.LogoSVG}}
   <h1>Exhibit</h1>
-  <span style="flex:1"></span>
-  <a href="/agent" style="display:inline-flex;align-items:center;gap:5px"><i class="ph ph-robot"></i> Agent</a>
+  <span class="spacer"></span>
+  <a href="/agent"><i class="ph ph-robot"></i> Agent</a>
 </header>
 <main>
 <div class="upload">
@@ -26,8 +27,11 @@
     <button class="tab-btn" onclick="setMode('url')">From URL</button>
   </div>
   <textarea id="body" placeholder="Paste HTML artifact source here…"></textarea>
-  <input type="text" id="url-input" placeholder="https://example.com/tool.html" style="display:none;width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;margin-bottom:8px">
-  <label id="snapshot-row" style="display:none;align-items:center;gap:6px;font-size:13px;color:#555;margin-bottom:8px;cursor:pointer">
+  {{/* url-input is styled by .upload input[type=text]; JS toggles only its
+       display (Paste/URL tabs). snapshot-row's flex styling lives in
+       index.css; JS toggles display between none and flex. */}}
+  <input type="text" id="url-input" placeholder="https://example.com/tool.html" style="display:none">
+  <label id="snapshot-row" style="display:none">
     <input type="checkbox" id="snapshot-toggle" checked>
     Snapshot assets into the file (recommended) — fetches the page&#39;s images, styles and scripts and inlines them so the artifact stays self-contained
   </label>

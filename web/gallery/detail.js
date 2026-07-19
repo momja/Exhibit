@@ -203,25 +203,25 @@ document.getElementById('clip-allow').addEventListener('click', async function()
   if (req) performClipboard(req);
 });
 
-// Badges are built as DOM nodes (never innerHTML): allowlist origins are
-// user/scanner-controlled strings that can contain markup metacharacters,
-// and interpolating them into HTML was a self-XSS sink on the app origin
-// (av-tux9). textContent keeps them inert.
 function renderBadges() {
-  const display = document.getElementById('al-display');
-  display.textContent = '';
+  // Origins are user/scanner-controlled and can contain markup metacharacters
+  // (av-tux9), so each badge is built via createElement + textContent rather
+  // than interpolated into innerHTML. Same .badge/.faint classes as the
+  // server-rendered allowlistBadges partial (partials.tmpl).
+  const el = document.getElementById('al-display');
+  el.innerHTML = '';
   if (!allowlist.length) {
-    const none = document.createElement('span');
-    none.style.color = '#aaa';
-    none.textContent = 'none';
-    display.appendChild(none);
+    const empty = document.createElement('span');
+    empty.className = 'faint';
+    empty.textContent = 'none';
+    el.appendChild(empty);
     return;
   }
   allowlist.forEach(o => {
     const badge = document.createElement('code');
+    badge.className = 'badge';
     badge.textContent = o;
-    display.appendChild(badge);
-    display.appendChild(document.createTextNode(' '));
+    el.appendChild(badge);
   });
 }
 

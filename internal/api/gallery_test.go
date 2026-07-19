@@ -256,9 +256,9 @@ func TestDetailPageRenderBadgesKeepsOriginsInert(t *testing.T) {
 	require.NoError(t, err)
 
 	// The server-rendered initial badges escape the origin's metacharacters.
-	assert.Contains(t, page, `<code style="background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:4px">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
+	assert.Contains(t, page, `<code class="badge">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
 		"server-side badges must HTML-escape origins")
-	assert.NotContains(t, page, `<code style="background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:4px">https://x"><img src=x onerror=alert(1)></code>`,
+	assert.NotContains(t, page, `<code class="badge">https://x"><img src=x onerror=alert(1)></code>`,
 		"raw payload must never reach badge markup")
 
 	// The client-side re-render (after add/save) builds each badge with

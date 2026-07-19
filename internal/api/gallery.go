@@ -12,9 +12,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/color"
 	"github.com/momja/Exhibit/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
@@ -125,22 +125,12 @@ type addTagModalData struct {
 	Presets []string
 }
 
-// brandVars carries the brand palette into each page's inline :root
-// declaration. The page stylesheets are static assets that can't see Go
-// constants, so the templates emit these as CSS custom properties the
-// stylesheets then reference.
-type brandVars struct {
-	BrandBlue      template.CSS
-	BrandBlueHover template.CSS
-}
-
-var pageBrandVars = brandVars{
-	BrandBlue:      template.CSS(color.BrandBlue),
-	BrandBlueHover: template.CSS(color.BrandBlueHover),
-}
+// The brand palette lives in web/gallery/tokens.css (av-xgik): pages link it
+// instead of the old per-template inline :root injection. tokens.css mirrors
+// internal/color/brand.go — keep the two in sync (color.BrandBlue still
+// colors the server-rendered SVG logo).
 
 type galleryPageData struct {
-	brandVars
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
 	Favicon template.URL
@@ -165,7 +155,6 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token s
 		}
 	}
 	return renderPage("gallery", galleryPageData{
-		brandVars:       pageBrandVars,
 		Favicon:         template.URL(exhibitFaviconDataURI),
 		LogoSVG:         template.HTML(exhibitLogoSVG),
 		Query:           query,
@@ -178,7 +167,6 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token s
 }
 
 type detailPageData struct {
-	brandVars
 	ID           string
 	Title        string
 	Created      string
@@ -200,7 +188,6 @@ func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (strin
 		allowlist = []string{}
 	}
 	return renderPage("detail", detailPageData{
-		brandVars:         pageBrandVars,
 		ID:                a.ID,
 		Title:             a.Title,
 		Created:           a.CreatedAt.Format("Jan 2, 2006 15:04"),
@@ -215,7 +202,6 @@ func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (strin
 }
 
 type editPageData struct {
-	brandVars
 	ID    string
 	Title string
 	Src   string
@@ -224,7 +210,6 @@ type editPageData struct {
 
 func renderEditPage(a *store.Artifact, src, token string) (string, error) {
 	return renderPage("edit", editPageData{
-		brandVars: pageBrandVars,
 		ID:        a.ID,
 		Title:     a.Title,
 		Src:       src,

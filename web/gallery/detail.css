@@ -1,7 +1,7 @@
 /* Artifact detail (viewer) page stylesheet. Served from the app origin at
- * /assets/gallery/detail.css; the page's <head> defines the --brand-blue /
- * --brand-blue-hover custom properties inline (they come from Go's
- * internal/color constants) before this sheet loads. */
+ * /assets/gallery/detail.css. Loads after tokens.css (design tokens incl.
+ * --brand-blue) and components.css (shared .btn/.badge/... classes); only
+ * detail-page-specific rules live here. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;display:flex;flex-direction:column;height:100vh}
 header{background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;z-index:20}
@@ -11,6 +11,7 @@ header h1{font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:el
 .toolbar a{color:var(--brand-blue);text-decoration:none;display:inline-flex;align-items:center;gap:4px}
 .toolbar button{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer}
 .toolbar button:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
+.toolbar-sep{color:var(--color-border)}
 .panels{display:flex;flex:1;overflow:hidden;gap:0}
 .panel{flex:1;overflow:auto;background:#fff}
 .panel+.panel{border-left:1px solid #e0e0e0}
@@ -19,11 +20,6 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
 .allowlist{padding:8px 20px;background:#fffbe6;border-bottom:1px solid #ffe58f;font-size:13px;flex-shrink:0}
 .allowlist code{background:#fff3;padding:1px 5px;border-radius:3px;font-size:12px}
 .allowlist input{border:1px solid #ddd;border-radius:4px;padding:3px 8px;font-size:12px;width:240px;margin:0 6px}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
-.btn:hover{background:var(--brand-blue-hover)}
-.btn-sec{background:#fff;color:#333;border:1px solid #ddd}
-.btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:#fff}
-.spacer{flex:1}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100}
 .modal-overlay[hidden]{display:none}
 .modal{background:#fff;border-radius:10px;padding:20px;width:380px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,.25)}
