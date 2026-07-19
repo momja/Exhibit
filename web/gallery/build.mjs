@@ -19,6 +19,9 @@ const outDir = path.join(here, "../../internal/api/assets/gallery");
 mkdirSync(outDir, { recursive: true });
 
 const files = [
+  // tokens.css and components.css are the shared layer (av-xgik) and must be
+  // linked before the page sheets that build on them.
+  "tokens.css", "components.css",
   "index.css", "index.js",
   "detail.css", "detail.js",
   "edit.css", "edit.js",

@@ -1,13 +1,13 @@
 /* Gallery index (library) page stylesheet. Served from the app origin at
- * /assets/gallery/index.css; the page's <head> defines the --brand-blue /
- * --brand-blue-hover custom properties inline (they come from Go's
- * internal/color constants) before this sheet loads. */
+ * /assets/gallery/index.css. Loads after tokens.css (design tokens incl.
+ * --brand-blue) and components.css (shared .btn/.card/.field/... classes);
+ * only index-page-specific rules live here. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
 header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:12px 24px;display:flex;align-items:center;gap:16px}
 header h1{font-size:18px;font-weight:600}
 header .logo{height:32px;width:auto;display:block;flex:0 0 auto}
-header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
+header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;gap:5px}
 main{padding:24px;max-width:1200px;margin:0 auto}
 .upload{background:#fff;border-radius:10px;padding:20px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .upload h2{font-size:15px;font-weight:600;margin-bottom:12px;color:#333}
@@ -19,9 +19,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .upload input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px;outline:none}
 .upload input[type=text]:focus{border-color:var(--brand-blue)}
 .upload-row{display:flex;gap:8px;margin-top:10px}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
-.btn:hover{background:var(--brand-blue-hover)}
-.btn-sm{padding:5px 12px;font-size:13px}
+#snapshot-row{align-items:center;gap:6px;font-size:13px;color:#555;margin-bottom:8px;cursor:pointer}
 .search-row{display:flex;align-items:center;gap:8px;margin-bottom:20px;position:relative}
 .search-row .search-icon{position:absolute;left:10px;color:#aaa;font-size:16px;pointer-events:none}
 .search-row input{flex:1;padding:9px 12px 9px 34px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none}
@@ -30,8 +28,10 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .search-clear[hidden]{display:none!important}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
 .grid.grid-loading{opacity:.5;transition:opacity .1s ease}
-.card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:box-shadow .12s ease}
-.card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}
+/* The .card surface (background/radius/padding/shadow) is components.css;
+ * the gallery card adds its grid-item behavior and hover lift. */
+.card{display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:box-shadow .12s ease}
+.card:hover{box-shadow:var(--shadow-card-hover)}
 .card-title{font-size:15px;font-weight:600;color:var(--brand-blue);text-decoration:none;word-break:break-word}
 .card-title:hover{text-decoration:underline}
 .card-meta{font-size:12px;color:#888}
@@ -64,11 +64,6 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .mode-tabs{display:flex;gap:6px;margin-bottom:8px}
 .tab-btn{padding:5px 14px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;color:#555}
 .tab-btn.active{background:var(--brand-blue);color:#fff;border-color:var(--brand-blue)}
-.btn-sec{background:#fff;color:#333;border:1px solid #ddd}
-.btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:#fff}
-.btn-danger{background:#e00;color:#fff;border:none}
-.btn-danger:hover{background:#c00}
-.spacer{flex:1}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100}
 .modal-overlay[hidden]{display:none}
 .modal{background:#fff;border-radius:10px;padding:20px;width:320px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,.25)}

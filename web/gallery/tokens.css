@@ -1,0 +1,53 @@
+/* Gallery design tokens — the shared vocabulary every gallery stylesheet and
+ * component builds on (av-xgik, foundation of the security-posture UI epic
+ * av-jafp). Loaded on every gallery page first, before components.css and the
+ * page sheet.
+ *
+ * --brand-blue / --brand-blue-hover mirror internal/color/brand.go — the Go
+ * constant still colors the server-rendered SVG logo, so keep the two in
+ * sync. They live here as committed CSS (instead of the old per-template
+ * inline <style> injection) so static stylesheets need no Go round-trip. */
+:root{
+	/* brand / accent */
+	--brand-blue:#23559e;
+	--brand-blue-hover:#1a4076;
+	--color-accent:var(--brand-blue);
+
+	/* neutrals */
+	--color-ink:#111;             /* primary text */
+	--color-ink-soft:#333;        /* headings, strong secondary text */
+	--color-muted:#888;           /* metadata, secondary text */
+	--color-faint:#aaa;           /* placeholder / empty hints */
+	--color-ground:#f0f0f0;       /* page background */
+	--color-panel:#fff;           /* cards, header, modals */
+	--color-hairline:#e0e0e0;     /* panel dividers */
+	--color-hairline-strong:#d9d9d9; /* header underline */
+	--color-border:#ddd;          /* control borders */
+
+	/* feedback */
+	--color-danger:#e00;
+	--color-danger-hover:#c00;
+
+	/* elevation */
+	--shadow-header:0 1px 6px rgba(0,0,0,.07);
+	--shadow-card:0 1px 3px rgba(0,0,0,.08);
+	--shadow-card-hover:0 2px 8px rgba(0,0,0,.12);
+	--shadow-modal:0 4px 24px rgba(0,0,0,.25);
+	--overlay:rgba(0,0,0,.4);
+
+	/* spacing scale */
+	--space-1:4px;
+	--space-2:6px;
+	--space-3:8px;
+	--space-4:10px;
+	--space-5:12px;
+	--space-6:16px;
+	--space-7:20px;
+	--space-8:24px;
+
+	/* radii */
+	--radius-sm:3px;   /* inline code, badges */
+	--radius-md:6px;   /* inputs, buttons */
+	--radius-lg:10px;  /* cards, modals */
+	--radius-pill:999px;
+}
