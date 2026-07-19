@@ -26,8 +26,9 @@ own code convention.
   share links (`/s/:shareID`).
 - Every rendered document carries `frame-ancestors <APP_ORIGIN>` in its CSP, so
   only the app's own pages may embed an artifact, and `Cache-Control: no-store`,
-  so a stale document (old shim, old state, old CSP) is never served from a cache.
-- The storage shim's write path is the only channel out of the sandbox: a
+  so a stale document (old render preamble, old state, old CSP) is never
+  served from a cache.
+- The render preamble's write path is the only channel out of the sandbox: a
   `postMessage` with `targetOrigin` pinned to the app origin. The host page
   accepts a state message only after checking its shape **and** that
   `e.source` is the artifact iframe's own window (the sandboxed frame's
@@ -96,18 +97,38 @@ pipeline. There are no live-linked imports and no automatic refresh.
 
 ## 4. Local I/O defaults: clipboard and files
 
+**Render preamble taxonomy** (canonical vocabulary for all docs). The JS
+injected into the rendered frame as the first `<head>` script(s) — replacing
+browser globals before any artifact code runs — is the **render preamble**.
+Its pieces share a *delivery mechanism*, not a *purpose*, and by purpose they
+are three families:
+
+- **Storage adapter** (established name: *storage shim*) — intercepts a
+  storage API (`localStorage`/`sessionStorage`; IndexedDB and `window.storage`
+  deferred) and swaps its *backing* to the server behind an unchanged surface
+  → portable, cross-device state.
+- **Capability bridge** — re-grants a capability the sandbox *denied*
+  (clipboard, downloads) by proxying the op to the trusted host under
+  first-use approval. Not persistence. This section.
+- **Polyfill** — reconstructs an API *absent* in this environment (e.g. File
+  System Access pickers, deferred as av-70t9) atop available primitives.
+
+The capability-registry work (av-u0vc) covers the **capability-bridge family
+only**; storage adapters and polyfills are orthogonal axes it does not touch.
+Bare "shim" never means the whole preamble — say "render preamble."
+
 The dividing line for local capabilities: **local interaction with a user gesture
 is allowed; anything that produces egress or bypasses a user decision is not.**
 
 - **Clipboard** — `navigator.clipboard` read/write is **mediated by the host
-  frame with first-use approval**, the same capability bridge as downloads
-  (below). An earlier attempt delegated `allow="clipboard-read; clipboard-write"`
+  frame with first-use approval** — a capability bridge on the same
+  host-mediation mechanism as downloads (below). An earlier attempt delegated `allow="clipboard-read; clipboard-write"`
   into the frame, but a Permissions-Policy `allow=` keys on the frame's *src
   origin*, which is opaque (no `allow-same-origin`) and matches nothing — so the
   delegation was a no-op and copy/paste still threw a permissions-policy
   violation. The delegation is removed; instead:
-  - The shim replaces `navigator.clipboard.readText`/`writeText` inside the
-    frame and posts each call to the host (pinned to the app origin), correlated
+  - The clipboard bridge replaces `navigator.clipboard.readText`/`writeText`
+    inside the frame and posts each call to the host (pinned to the app origin), correlated
     by request id so the returned Promise settles with the host's answer.
   - On the artifact's **first** clipboard request the host prompts, naming the
     artifact and the direction (read vs write). Approval persists server-side
@@ -128,13 +149,13 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
   artifact frame can initiate a download directly. Because export-a-file is a
   core capability for tools (CSV generators, image editors), downloads are
   instead **mediated by the host frame with first-use approval**, reusing the
-  storage shim's postMessage channel (§1):
-  - The shim intercepts the common export vectors inside the frame — anchor
+  render preamble's postMessage channel (§1):
+  - The download bridge intercepts the common export vectors inside the frame — anchor
     activations with `blob:`/`data:` hrefs, both user clicks (capture phase) and
     programmatic `click()` — and posts filename + bytes to the host, pinned to
     the app origin. Bytes cross the boundary as transferred data, not a
     capability grant. `blob:` payloads are recovered from a `createObjectURL`
-    registry the shim keeps, so it needs no fetch (`connect-src` is untouched).
+    registry the bridge keeps, so it needs no fetch (`connect-src` is untouched).
   - On the artifact's **first** download attempt the host prompts, naming the
     artifact and the filename. Approval is persisted server-side
     (`downloads_approved`, PATCHed through the API — the single write path), so
@@ -143,9 +164,9 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
   - Once approved, the host reconstructs the file and triggers the download
     from the app origin.
   - **The sandbox remains the wall.** Approval never adds `allow-downloads`;
-    vectors the shim doesn't catch (navigation-triggered downloads, an artifact
-    deleting the shim's hooks) simply stay blocked by the browser. Like the
-    ingest scan, the shim is UX, not enforcement — evading it gains nothing.
+    vectors the bridge doesn't catch (navigation-triggered downloads, an artifact
+    deleting the bridge's hooks) simply stay blocked by the browser. Like the
+    ingest scan, the bridge is UX, not enforcement — evading it gains nothing.
   - The bridge only installs when a host frame exists. An artifact opened
     directly on the render origin ("Open in new tab") is a top-level page, not
     a sandboxed frame, so downloads work there natively — the user has

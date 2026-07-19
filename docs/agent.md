@@ -77,7 +77,7 @@ state written in the preview persists.
 
 ## Snippet mode (element → agent context)
 
-The render surface injects a second inert script beside the storage shim
+The render surface injects a second inert script beside the render preamble
 (`internal/render/snippet.go`). The host page activates it via postMessage
 (Snippet button or **Ctrl+Shift+S**); the user hover-highlights and clicks an
 element inside the artifact. The script captures:

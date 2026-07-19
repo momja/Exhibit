@@ -186,10 +186,11 @@ something the runtime reports with certainty. Instead:
 > artifact uses storage, the shim captures it. If it doesn't, the shim sits idle at
 > zero cost. There is no branch to decide.
 
-### 5.2 What the shim intercepts
+### 5.2 What the storage shim intercepts
 
-Before any artifact script executes, the iframe is initialized with replacements for
-the standard storage surfaces:
+Before any artifact script executes, the iframe is initialized with **storage
+adapters** — replacements for the standard storage surfaces that keep the
+artifact-facing API identical and swap the backing to our server:
 
 - `localStorage` and `sessionStorage` (synchronous) — **shipped in v1**
 - `IndexedDB` (async/structured) — **deferred** (build-order step 2 remaining)
@@ -197,6 +198,13 @@ the standard storage surfaces:
   **deferred** (build-order step 2 remaining)
 
 The artifact uses whichever it was written for; we don't need to know which.
+
+IndexedDB is a storage adapter by goal but **not** "the localStorage shim again."
+The localStorage shim's defining trick is inlining all state synchronously at render
+— necessary because `localStorage` is synchronous and read at startup before any
+`await`, so an async fetch would lose the race (§5.3). IndexedDB is already
+asynchronous and can hold large structured stores, so inlining neither applies nor
+scales; it needs its own adapter design (likely lazy/bridged, not inlined).
 
 ### 5.3 Bridging sync APIs to a remote store
 
@@ -207,7 +215,7 @@ Two facts shape the solution: `localStorage` is **synchronous** and artifacts re
 separately:
 
 1. **Reads — inline at render.** The render surface serializes this artifact's current
-   state into the shim's in-memory cache **at request time**, embedded in the served
+   state into the storage shim's in-memory cache **at request time**, embedded in the served
    document. So `getItem` is correct on the very first *synchronous* read, with no
    load-time fetch. (An async fetch-on-load instead races the artifact's own startup
    reads and loses — the artifact reads an empty cache before hydration lands.)
@@ -225,7 +233,7 @@ no cooperation from the artifact's author.
 
 ### 5.4 Boundary
 
-The shim only captures state crossing standard storage APIs. An artifact that persists
+The storage shim only captures state crossing standard storage APIs. An artifact that persists
 by `fetch`-ing its *own external* backend (Firebase, a private API) manages its state
 elsewhere by definition — that's outside tiers 1/2 and we don't attempt to capture it.
 Those network calls are instead governed by §6.
@@ -317,9 +325,9 @@ inlined from the service. No regeneration, no digging through chat logs.
 
 ### 8.3 Use across devices
 
-Set state on iPhone → shim posts to the host, which writes through to the service →
-open the same artifact on Mac → the render inlines the state back into the shim.
-Transparent to the artifact.
+Set state on iPhone → the storage shim posts to the host, which writes through to
+the service → open the same artifact on Mac → the render inlines the state back
+into the storage shim. Transparent to the artifact.
 
 ### 8.4 Share
 
@@ -334,7 +342,7 @@ single self-contained `.html`.
   vendoring fetch — after ingest the file is owned and served locally, never hot-linked
   or auto-synced.
 - **No pre-render analysis step / no agent inspection** to detect storage usage — the
-  runtime shim observes instead.
+  runtime storage shim observes instead.
 - **No CSP violation-report pipeline** — replaced by scan + explicit per-artifact
   allowlist with runtime permission prompts.
 
@@ -344,7 +352,7 @@ single self-contained `.html`.
    Store interface, sandboxed iframe renderer on an isolated origin, ingest scan +
    allowlist + CSP generation, web gallery with search/tags/collections (upload + paste
    ingest).
-2. **State shim:** unconditional `localStorage`/`sessionStorage` interception with
+2. **Storage shim:** unconditional `localStorage`/`sessionStorage` interception with
    render-time state inlining for reads and a `postMessage`-to-host bridge for writes
    (host performs the authenticated `PUT /api/artifacts/:id/state`); extend to IndexedDB
    and `window.storage`. Unlocks cross-device use.
