@@ -2,7 +2,7 @@
 id: av-isb3
 status: closed
 deps: [av-xgik]
-links: [av-p0a1, av-41se, av-hwx2]
+links: [av-p0a1, av-41se, av-hwx2, av-mf1x, exhibit-fr7]
 created: 2026-07-15T01:34:21Z
 type: feature
 priority: 2
