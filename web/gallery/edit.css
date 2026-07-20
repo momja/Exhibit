@@ -1,7 +1,7 @@
 /* Artifact edit page stylesheet. Served from the app origin at
- * /assets/gallery/edit.css; the page's <head> defines the --brand-blue /
- * --brand-blue-hover custom properties inline (they come from Go's
- * internal/color constants) before this sheet loads. */
+ * /assets/gallery/edit.css. Loads after tokens.css (design tokens incl.
+ * --brand-blue) and components.css (shared .btn/.field/... classes); only
+ * edit-page-specific rules live here. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
 header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:12px 24px;display:flex;align-items:center;gap:16px}
@@ -10,21 +10,56 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
 main{padding:24px;max-width:900px;margin:0 auto}
 .edit-card{background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .edit-card h2{font-size:15px;font-weight:600;margin-bottom:12px;color:#333}
-.edit-card input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:10px;outline:none}
-.edit-card input[type=text]:focus{border-color:var(--brand-blue)}
+.edit-card>input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:10px;outline:none}
+.edit-card>input[type=text]:focus{border-color:var(--brand-blue)}
 .edit-card textarea{width:100%;height:400px;font-family:monospace;font-size:12px;border:1px solid #ddd;border-radius:6px;padding:10px;resize:vertical;outline:none}
 .edit-card textarea:focus{border-color:var(--brand-blue)}
 .edit-card .cm-editor{height:400px;font-size:12px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
 .edit-card .cm-editor.cm-focused{outline:none;border-color:var(--brand-blue)}
 .edit-card .cm-scroller{overflow:auto}
 .btn-row{display:flex;gap:8px;margin-top:12px;align-items:center}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:var(--brand-blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
-.btn:hover{background:var(--brand-blue-hover)}
-.btn-sec{background:#fff;color:#333;border:1px solid #ddd}
-.btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:#fff}
-.btn-danger{background:#e00;color:#fff;border:none}
-.btn-danger:hover{background:#c00}
-.spacer{flex:1}
 #status{font-size:13px;color:#555}
 #scan-result{margin-top:12px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
 #scan-result code{background:#eee;padding:1px 5px;border-radius:3px}
+
+/* --- security panel: allowlist + capabilities, collapsed by default ---- */
+#security-panel{margin-bottom:16px}
+#security-panel>summary{list-style:none;display:flex;align-items:center;gap:var(--space-2)}
+#security-panel>summary::-webkit-details-marker{display:none}
+/* Caret is a real icon (not a UTF-8 triangle) so it stays legible at any
+ * size/zoom, and lives outside #security-summary-text so the JS-driven
+ * posture-summary text refresh (edit.js renderSecurityPanel) never wipes it
+ * out. Two glyphs (caret-right / caret-down) are swapped by [open] rather
+ * than rotating one in place: Phosphor's caret-right glyph isn't centered
+ * in its em-box, so a CSS transform:rotate(90deg) pivots it around the
+ * box's geometric center instead of the visible mark's center, swinging it
+ * off to a corner at an angle instead of cleanly pointing down. */
+.security-caret{flex-shrink:0}
+.security-caret-open{display:none}
+#security-panel[open]>summary .security-caret-closed{display:none}
+#security-panel[open]>summary .security-caret-open{display:inline}
+.security-body{display:flex;gap:24px;margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline)}
+.security-col{flex:1;min-width:0}
+.security-col+.security-col{border-left:1px solid var(--color-hairline);padding-left:24px}
+.security-col h3{margin:10px 0 6px}
+.security-col h3:first-child{margin-top:0}
+#allowlist-rows,#unapproved-rows{max-height:180px;overflow-y:auto}
+.allowlist-row code{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Remove/Allow/Add sit in the same visual column across three different
+ * rows/labels, so they read as one consistent action width rather than
+ * shrink-to-fit text. */
+.allowlist-row .btn,#al-add-btn{min-width:76px;justify-content:center;flex-shrink:0}
+.security-col label.row{margin-bottom:10px}
+
+/* --- responsive: single column, stacked security body, full-width actions */
+@media (max-width:640px){
+  main{padding:12px}
+  .edit-card{padding:14px}
+  .security-body{flex-direction:column;gap:16px}
+  .security-col+.security-col{border-left:none;padding-left:0;border-top:1px solid var(--color-hairline);padding-top:16px}
+  .btn-row{flex-direction:column;align-items:stretch}
+  .btn-row #status{order:1;text-align:center}
+  .btn-row .spacer{display:none}
+  .btn-row button,.btn-row a{width:100%}
+  .btn-row a button{width:100%}
+}

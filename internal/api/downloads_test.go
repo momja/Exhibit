@@ -83,8 +83,9 @@ func TestDetailPageSandboxStillOmitsAllowDownloads(t *testing.T) {
 }
 
 // The detail page is the bridge's host side: it validates the shim's download
-// messages, prompts on first use (naming the artifact and filename), persists
-// the decision via PATCH, and exposes a revoke control in the toolbar.
+// messages, prompts on first use (naming the artifact and filename), and
+// persists the decision via PATCH. The viewer is read-only (av-hwx2): it no
+// longer exposes a toolbar revoke control — that lives on the Edit page.
 func TestDetailPageRendersDownloadBridge(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "CSV <Exporter>", Tier: store.Tier1,
 		CreatedAt: time.Now()}
@@ -107,9 +108,8 @@ func TestDetailPageRendersDownloadBridge(t *testing.T) {
 	assert.Contains(t, page, `<strong>CSV &lt;Exporter&gt;</strong> wants to download <code id="dl-filename"></code>`)
 	assert.Contains(t, page, `id="dl-allow"`)
 	assert.Contains(t, page, `id="dl-block"`)
-	// Toolbar shows the state and offers revocation.
-	assert.Contains(t, page, `id="dl-state"`)
-	assert.Contains(t, page, `id="dl-revoke"`)
+	// No toolbar revoke control in the read-only viewer.
+	assert.NotContains(t, page, `id="dl-revoke"`)
 
 	// An approved artifact renders with the approval baked in.
 	a.DownloadsApproved = true

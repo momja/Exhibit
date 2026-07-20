@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/color"
+	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -109,13 +110,34 @@ func tagViews(tags []*store.Tag) []tagView {
 	return views
 }
 
+// capabilityView is the data the capabilityCluster (badge, av-isb3) and
+// capabilityPopover (av-41se) partials render. It's shared verbatim by the
+// gallery card and the artifact detail/viewer page so the popover looks and
+// behaves identically in both places. ShowManage gates the popover's footer
+// "Manage in allowlist settings" link: true for both app-origin pages here.
+// The render surface (internal/render) — which serves /s/:shareID — never
+// composes gallery templates at all, so no caller there needs ShowManage;
+// the field exists so a caller without an owner session can render the same
+// partial without the link, and TestCapabilityPopoverManageLinkGatedByShowManage
+// exercises exactly that.
+type capabilityView struct {
+	ArtifactID        string
+	NetworkAllowlist  []string
+	DownloadsApproved bool
+	ClipboardApproved bool
+	ShowManage        bool
+}
+
 // galleryCard is one artifact card on the index page. The tagRow/tagPills
-// partials read ArtifactID and Tags from it directly.
+// partials read ArtifactID and Tags from it directly; the capabilityCluster
+// partial reads Capability to render the card-footer posture badge + popover
+// (av-isb3, av-41se).
 type galleryCard struct {
 	ArtifactID string
 	Title      string
 	Created    string
 	Tags       []tagView
+	Capability capabilityView
 }
 
 // addTagModalData feeds the addTagModal partial: every existing tag for the
@@ -125,22 +147,12 @@ type addTagModalData struct {
 	Presets []string
 }
 
-// brandVars carries the brand palette into each page's inline :root
-// declaration. The page stylesheets are static assets that can't see Go
-// constants, so the templates emit these as CSS custom properties the
-// stylesheets then reference.
-type brandVars struct {
-	BrandBlue      template.CSS
-	BrandBlueHover template.CSS
-}
-
-var pageBrandVars = brandVars{
-	BrandBlue:      template.CSS(color.BrandBlue),
-	BrandBlueHover: template.CSS(color.BrandBlueHover),
-}
+// The brand palette lives in web/gallery/tokens.css (av-xgik): pages link it
+// instead of the old per-template inline :root injection. tokens.css mirrors
+// internal/color/brand.go — keep the two in sync (color.BrandBlue still
+// colors the server-rendered SVG logo).
 
 type galleryPageData struct {
-	brandVars
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
 	Favicon template.URL
@@ -162,10 +174,16 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token s
 			Title:      a.Title,
 			Created:    a.CreatedAt.Format("Jan 2, 2006"),
 			Tags:       tagViews(a.Tags),
+			Capability: capabilityView{
+				ArtifactID:        a.ID,
+				NetworkAllowlist:  a.NetworkAllowlist,
+				DownloadsApproved: a.DownloadsApproved,
+				ClipboardApproved: a.ClipboardApproved,
+				ShowManage:        true,
+			},
 		}
 	}
 	return renderPage("gallery", galleryPageData{
-		brandVars:       pageBrandVars,
 		Favicon:         template.URL(exhibitFaviconDataURI),
 		LogoSVG:         template.HTML(exhibitLogoSVG),
 		Query:           query,
@@ -178,20 +196,14 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token s
 }
 
 type detailPageData struct {
-	brandVars
 	ID           string
 	Title        string
 	Created      string
 	RenderOrigin string
 	SourceURL    string
 	Src          string
-	// Allowlist is rendered twice: as toolbar badges and, JSON-encoded by
-	// the JS bootstrap, as the page script's mutable working copy. Never
-	// nil — nil would encode as null and break allowlist.length.
-	Allowlist         []string
-	DownloadsApproved bool
-	ClipboardApproved bool
-	Token             string
+	Capability   capabilityView
+	Token        string
 }
 
 func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (string, error) {
@@ -200,34 +212,70 @@ func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (strin
 		allowlist = []string{}
 	}
 	return renderPage("detail", detailPageData{
-		brandVars:         pageBrandVars,
-		ID:                a.ID,
-		Title:             a.Title,
-		Created:           a.CreatedAt.Format("Jan 2, 2006 15:04"),
-		RenderOrigin:      renderOrigin,
-		SourceURL:         a.SourceURL,
-		Src:               src,
-		Allowlist:         allowlist,
-		DownloadsApproved: a.DownloadsApproved,
-		ClipboardApproved: a.ClipboardApproved,
-		Token:             token,
+		ID:           a.ID,
+		Title:        a.Title,
+		Created:      a.CreatedAt.Format("Jan 2, 2006 15:04"),
+		RenderOrigin: renderOrigin,
+		SourceURL:    a.SourceURL,
+		Src:          src,
+		Capability: capabilityView{
+			ArtifactID:        a.ID,
+			NetworkAllowlist:  allowlist,
+			DownloadsApproved: a.DownloadsApproved,
+			ClipboardApproved: a.ClipboardApproved,
+			ShowManage:        true,
+		},
+		Token: token,
 	})
 }
 
 type editPageData struct {
-	brandVars
 	ID    string
 	Title string
 	Src   string
 	Token string
+	// Allowlist is the artifact's approved network origins. Unapproved holds
+	// origins the current body references (per scanner.Scan) that are not yet
+	// on the allowlist — surfaced as one-click "Allow" rows. Unapproved is
+	// never merged into Allowlist server-side; that would auto-seed the
+	// allowlist from the scan, which spec §6.2 forbids.
+	Allowlist         []string
+	Unapproved        []string
+	DownloadsApproved bool
+	ClipboardApproved bool
 }
 
 func renderEditPage(a *store.Artifact, src, token string) (string, error) {
+	allowlist := a.NetworkAllowlist
+	if allowlist == nil {
+		allowlist = []string{}
+	}
+	unapproved := diffOrigins(scanner.Scan(src), allowlist)
 	return renderPage("edit", editPageData{
-		brandVars: pageBrandVars,
-		ID:        a.ID,
-		Title:     a.Title,
-		Src:       src,
-		Token:     token,
+		ID:                a.ID,
+		Title:             a.Title,
+		Src:               src,
+		Token:             token,
+		Allowlist:         allowlist,
+		Unapproved:        unapproved,
+		DownloadsApproved: a.DownloadsApproved,
+		ClipboardApproved: a.ClipboardApproved,
 	})
+}
+
+// diffOrigins returns the origins in footprint not already present in
+// approved, preserving footprint's order. Used to surface "referenced, not
+// approved" rows on the edit page without ever writing them to the allowlist.
+func diffOrigins(footprint, approved []string) []string {
+	have := make(map[string]bool, len(approved))
+	for _, o := range approved {
+		have[o] = true
+	}
+	out := []string{}
+	for _, o := range footprint {
+		if !have[o] {
+			out = append(out, o)
+		}
+	}
+	return out
 }

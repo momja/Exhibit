@@ -216,6 +216,91 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.NotContains(t, page, `target="_blank"`)
 }
 
+// av-isb3: the gallery card footer shows a neutral, informational capability
+// posture cluster opposite the created date — never a green/amber verdict
+// (spec 6.2 treats the allowlist as transparency, not a grade). A fully
+// sandboxed artifact (no allowlist entries, no capability grants) collapses
+// to exactly one muted ph-shield-check + "Sandboxed" mark.
+func TestGalleryCardShowsSandboxedWhenNoGrants(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Plain")
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	assert.Contains(t, page, `<div class="capability-cluster" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger>`)
+	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed`)
+	assert.NotContains(t, page, "has-grants")
+	assert.NotContains(t, page, "ph-globe")
+	assert.NotContains(t, page, "ph-download-simple")
+	assert.NotContains(t, page, "ph-clipboard")
+
+	// The badge is neutral: no color-as-verdict classes/hex from the old
+	// green/amber design ever appear.
+	assert.NotContains(t, page, "#12A150")
+	assert.NotContains(t, page, "#B45309")
+}
+
+// Network origins present: a ph-globe glyph plus a count equal to
+// len(NetworkAllowlist).
+func TestGalleryCardShowsNetworkCount(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Networked")
+	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+		"network_allowlist": []string{"https://a.example.com", "https://b.example.com"},
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req)
+	require.Equal(t, http.StatusOK, w2.Code)
+	page := w2.Body.String()
+
+	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger>`)
+	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">2</span>`)
+	assert.NotContains(t, page, "Sandboxed")
+}
+
+// Each capability glyph appears iff its approval flag is set, independent of
+// the others and independent of the network allowlist.
+func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Capable")
+	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+		"downloads_approved": true,
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req)
+	require.Equal(t, http.StatusOK, w2.Code)
+	page := w2.Body.String()
+
+	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger>`)
+	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>`)
+	assert.NotContains(t, page, "ph-clipboard")
+	assert.NotContains(t, page, "ph-globe")
+
+	w3 := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+		"clipboard_approved": true,
+	})
+	require.Equal(t, http.StatusOK, w3.Code)
+
+	req2 := httptest.NewRequest("GET", "/", nil)
+	w4 := httptest.NewRecorder()
+	r.ServeHTTP(w4, req2)
+	require.Equal(t, http.StatusOK, w4.Code)
+	page2 := w4.Body.String()
+
+	assert.Contains(t, page2, `<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>`)
+	assert.Contains(t, page2, `<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>`)
+}
+
 // The detail-view iframe is sandboxed with an opaque origin. An allow=
 // delegation of clipboard keys on the frame's src origin, which is opaque and
 // matches nothing, so the delegation was a no-op (av-hll6). Clipboard is instead
@@ -241,55 +326,87 @@ func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 	assert.NotContains(t, page, "allow-same-origin")
 }
 
-// av-tux9: the detail page script rebuilds the allowlist toolbar badges after
-// add/save. Building them by interpolating each origin into innerHTML was a
-// self-XSS sink on the app origin — origins are user/scanner-controlled and
-// can legitimately contain markup metacharacters. The badges must be built as
-// DOM nodes via textContent, matching the server-side render which escapes
-// through the allowlistBadges partial.
-func TestDetailPageRenderBadgesKeepsOriginsInert(t *testing.T) {
-	r := newTestRouter(t)
-	payload := `https://x"><img src=x onerror=alert(1)>`
-	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Badge XSS", Tier: store.Tier1,
-		CreatedAt: time.Now(), NetworkAllowlist: []string{payload}}
+// av-hwx2: allowlist management moved entirely to the Edit page (av-p0a1).
+// The viewer keeps only the read-only capability cluster (av-isb3/av-41se)
+// and a toolbar "Manage" link to Edit — no inline editor, no add-origin
+// control, and no client-side path that PATCHes network_allowlist.
+func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Read Only Tool", Tier: store.Tier1,
+		CreatedAt: time.Now(), NetworkAllowlist: []string{"https://example.com"}}
 	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
 	require.NoError(t, err)
 
-	// The server-rendered initial badges escape the origin's metacharacters.
-	assert.Contains(t, page, `<code style="background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:4px">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
-		"server-side badges must HTML-escape origins")
-	assert.NotContains(t, page, `<code style="background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:4px">https://x"><img src=x onerror=alert(1)></code>`,
-		"raw payload must never reach badge markup")
+	// No inline allowlist editor or add-origin control.
+	assert.NotContains(t, page, `id="al-display"`)
+	assert.NotContains(t, page, `id="al-input"`)
+	assert.NotContains(t, page, `addOrigin()`)
+	// A visible toolbar link to the Edit page's security panel, in addition
+	// to the one inside the popover.
+	assert.Contains(t, page, `<a href="/artifacts/abc123/edit#security-panel">Manage in allowlist settings →</a>`)
+	assert.Contains(t, page, `class="capability-popover-manage" href="/artifacts/abc123/edit#security-panel"`)
+	// The capability cluster (the read-only replacement UI) is still present.
+	assert.Contains(t, page, `class="capability-cluster`)
 
-	// The client-side re-render (after add/save) builds each badge with
-	// createElement + textContent instead of interpolating the origin into
-	// innerHTML, so the injected markup stays inert text.
-	detailJS := galleryAsset(t, r, "/assets/gallery/detail.js")
-	assert.Contains(t, detailJS, "document.createElement('code')")
-	assert.Contains(t, detailJS, "badge.textContent = o")
-	assert.NotContains(t, detailJS, "'<code>' + o + '</code>'",
-		"renderBadges must not interpolate raw origins into innerHTML")
+	// No client-side code path PATCHes network_allowlist from the viewer.
+	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
+	require.NoError(t, err)
+	assert.NotContains(t, string(detailJS), "network_allowlist",
+		"the viewer must never mutate network_allowlist; management is Edit-only")
 }
 
-// av-p3gj: the detail page inlines the allowlist into its bootstrap <script>
-// as a JS array. An origin containing the literal bytes </script> must not be
-// able to terminate that block early — html/template's JS-context encoding
-// escapes '<', '>', and '&' as \u003c etc., which stays valid JS string content
-// while keeping the payload from ending the script element. (The pre-template
-// gallery.go built this array with %q, which did not escape those bytes.)
-func TestDetailPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
+// av-p0a1: the edit page's security panel renders allowlist rows via
+// html/template range (not hand-rolled string building), so origins the user
+// typed into the "Add origin" field — unrestricted, unlike scanner-derived
+// origins — stay inert even when they contain markup metacharacters. The
+// "referenced, not approved" rows (Unapproved) go through the identical
+// {{range}} construct in the template, so this coverage extends to them too.
+func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
+	payload := `https://x"><img src=x onerror=alert(1)>`
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Edit XSS", Tier: store.Tier1,
+		CreatedAt: time.Now(), NetworkAllowlist: []string{payload}}
+	page, err := renderEditPage(a, "<p>src</p>", "tok")
+	require.NoError(t, err)
+
+	assert.Contains(t, page, `<code title="https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
+		"allowlist rows must HTML-escape the origin")
+	assert.Contains(t, page, `data-origin="https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;"`,
+		"the row's data-origin attribute must HTML-escape the origin")
+	assert.NotContains(t, page, `<code>https://x"><img src=x onerror=alert(1)></code>`,
+		"raw payload must never reach allowlist row markup")
+}
+
+// av-p0a1: origins the artifact's body references but hasn't approved
+// (ingest-scan footprint minus the allowlist) surface as one-click "Allow"
+// rows and must never be written to the allowlist itself.
+func TestEditPageSurfacesUnapprovedOriginsWithoutSeedingAllowlist(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "No auto-seed", Tier: store.Tier1,
+		CreatedAt: time.Now(), NetworkAllowlist: []string{}}
+	src := `<script src="https://cdn.example.com/lib.js"></script>`
+	page, err := renderEditPage(a, src, "tok")
+	require.NoError(t, err)
+
+	assert.Contains(t, page, `data-origin="https://cdn.example.com"`)
+	assert.Contains(t, page, `data-action="allow"`)
+	assert.Contains(t, page, `let allowlist = [];`,
+		"a referenced-but-unapproved origin must not appear in the allowlist")
+	assert.Contains(t, page, `let unapproved = ["https://cdn.example.com"];`,
+		"the referenced origin must surface as unapproved instead")
+}
+
+// av-p0a1: the edit page inlines both the allowlist and the unapproved
+// (referenced-but-not-approved) origins into its bootstrap <script> as JS
+// arrays, same pattern as TestDetailPageInlinesAllowlistWithoutScriptBreakout
+// above — an origin containing a literal </script> must not terminate the
+// block early.
+func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 	payload := `https://evil</script><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Script Breakout", Tier: store.Tier1,
 		CreatedAt: time.Now(), NetworkAllowlist: []string{payload}}
-	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	page, err := renderEditPage(a, "<p>src</p>", "tok")
 	require.NoError(t, err)
 
-	// The inlined JS array carries the payload with its HTML-significant
-	// characters escaped.
 	assert.Contains(t, page, `let allowlist = ["https://evil\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e"];`,
 		"the inlined allowlist must escape '<', '>', '&' so origins cannot end the script element")
-	// The raw breakout sequence never reaches the served page, so the script
-	// block's own terminator is the only </script> the HTML parser sees here.
 	assert.NotContains(t, page, `</script><img src=x onerror=alert(1)>`,
 		"an origin must never terminate the inline script block early")
 }

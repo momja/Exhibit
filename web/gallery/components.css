@@ -1,0 +1,79 @@
+/* Shared gallery components — the small, hand-authored layer the
+ * security-posture UI epic (av-jafp: card badge av-isb3, posture popover
+ * av-41se, edit-page management av-p0a1) builds on. Explicitly NOT a utility
+ * framework: a handful of audited classes over tokens.css (av-xgik). Loaded
+ * on every gallery page after tokens.css and before the page sheet, so a
+ * page sheet can still override or extend a component.
+ *
+ * The .btn family, .card surface, and .spacer moved here from the three page
+ * stylesheets, where they were triplicated verbatim; values are unchanged. */
+
+/* --- buttons ---------------------------------------------------------- */
+.btn{display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-3) 18px;background:var(--brand-blue);color:var(--color-panel);border:none;border-radius:var(--radius-md);font-size:14px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--brand-blue-hover)}
+.btn-sm{padding:5px var(--space-5);font-size:13px}
+.btn-sec{background:var(--color-panel);color:var(--color-ink-soft);border:1px solid var(--color-border)}
+.btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:var(--color-panel)}
+.btn-danger{background:var(--color-danger);color:var(--color-panel);border:none}
+.btn-danger:hover{background:var(--color-danger-hover)}
+
+/* --- surfaces --------------------------------------------------------- */
+.card{background:var(--color-panel);border-radius:var(--radius-lg);padding:var(--space-6);box-shadow:var(--shadow-card)}
+
+/* Collapsible section (<details>/<summary>) with a muted posture summary —
+ * the edit page's security section (av-p0a1) is the first user. */
+.details-panel{background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:var(--space-3) var(--space-5)}
+.details-panel>summary{cursor:pointer;font-size:13px;color:var(--color-muted)}
+
+/* --- controls --------------------------------------------------------- */
+.field{width:100%;padding:var(--space-3) var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:14px;outline:none;background:var(--color-panel);color:var(--color-ink)}
+.field:focus{border-color:var(--brand-blue)}
+.select{padding:7px var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:14px;outline:none;background:var(--color-panel);color:var(--color-ink)}
+.select:focus{border-color:var(--brand-blue)}
+
+/* --- security-posture primitives -------------------------------------- */
+/* Inline origin/chip badge — the allowlist badges are the first user. */
+.badge{display:inline-block;background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm);margin-right:var(--space-1)}
+
+/* One allowlist entry: origin chip plus its remove/allow affordance. */
+.allowlist-row{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) 0;font-size:13px}
+.allowlist-row code{background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm)}
+
+/* Small inline posture indicator (icon + optional label) — the gallery card
+ * badge (av-isb3) and the popover header (av-41se) build on this. Neutral
+ * throughout, no green/amber: the allowlist is transparency, not a verdict
+ * (spec 6.2). Sandboxed (no .has-grants) stays fully muted; once a grant
+ * exists the cluster reads slightly darker (mid-slate) so the glyphs read as
+ * present information rather than a warning. */
+.capability-cluster{display:inline-flex;align-items:center;gap:var(--space-3);font-size:12px;color:var(--color-muted);cursor:pointer;border-radius:var(--radius-sm);padding:2px var(--space-2);margin:-2px calc(var(--space-2) * -1);transition:background-color .1s ease,color .1s ease}
+.capability-cluster.has-grants{color:var(--color-ink-soft)}
+.capability-cluster:hover,.capability-cluster:focus-visible{background-color:var(--color-ground);color:var(--color-ink-soft)}
+.capability-cluster .capability-glyph{display:inline-flex;align-items:center;font-size:14px;line-height:1}
+.capability-cluster .capability-count{color:var(--color-ink);font-weight:600}
+
+/* capability-wrap positions the popover (av-41se) relative to its trigger.
+ * The popover opens only on explicit activation — click/tap, or Enter/Space
+ * while the trigger has focus — handled by components.js; it does NOT open
+ * on hover or on mere keyboard focus (:focus-within intentionally left out
+ * of the visibility rule below). Hovering/focusing the trigger instead shows
+ * a plain affordance highlight (background/color change above) signalling
+ * it's clickable, without popping content open unasked. The popover stays a
+ * plain div (not display:none) so it's always in the a11y/tab tree —
+ * visibility is purely visual, gated on .is-open. */
+.capability-wrap{position:relative;display:inline-flex}
+.capability-popover{position:absolute;top:100%;right:0;margin-top:var(--space-3);z-index:30;width:260px;max-width:80vw;background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);padding:var(--space-5);font-size:12px;color:var(--color-ink-soft);text-align:left;visibility:hidden;opacity:0;pointer-events:none;transition:opacity .12s ease}
+.capability-wrap.is-open .capability-popover{visibility:visible;opacity:1;pointer-events:auto}
+.capability-popover-header{font-weight:600;color:var(--color-ink);margin-bottom:var(--space-4)}
+.capability-popover-row{display:flex;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)}
+.capability-popover-row:last-child{margin-bottom:0}
+.capability-popover-label{color:var(--color-ink);font-weight:600;margin-bottom:var(--space-1)}
+.capability-popover-origins code{display:block;background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm);margin-top:var(--space-1);font-family:monospace;word-break:break-all}
+.capability-popover-manage{display:block;margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--color-hairline);color:var(--brand-blue);text-decoration:none}
+.capability-popover-manage:hover{text-decoration:underline}
+
+/* --- utilities -------------------------------------------------------- */
+.row{display:flex;align-items:center;gap:var(--space-3)}
+.spacer{flex:1}
+.muted{color:var(--color-muted)}
+.faint{color:var(--color-faint)}
+.text-sm{font-size:12px}

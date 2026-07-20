@@ -29,7 +29,9 @@
 {{/* colorSwatches renders the shared preset-color palette used by both the
      edit-tag modal (tww.2.4) and the add-tag modal (tww.2.5). Swatches are
      plain buttons scoped by the caller's modal id in CSS/JS, so the markup
-     itself carries no modal-specific state. Data: []string (hex colors). */}}
+     itself carries no modal-specific state. The swatch/dot backgrounds stay
+     inline styles: they are per-tag dynamic values, which classes cannot
+     express. Data: []string (hex colors). */}}
 {{define "colorSwatches"}}<div class="color-presets">{{range .}}<button type="button" class="color-swatch" data-color="{{.}}" style="background:{{.}}" aria-label="{{.}}"></button>{{end}}</div>{{end}}
 
 {{/* editTagModal is the (initially hidden) edit-tag modal shell shared by
@@ -91,6 +93,27 @@
   </div>
 </div>{{end}}
 
-{{/* allowlistBadges renders an artifact's approved network origins as inline
-     <code> badges, or a muted "none". Data: []string (origins). */}}
-{{define "allowlistBadges"}}{{if .}}{{range .}}<code style="background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:4px">{{.}}</code>{{end}}{{else}}<span style="color:#aaa">none</span>{{end}}{{end}}
+{{/* capabilityCluster renders the gallery card's / viewer toolbar's neutral
+     sandbox-posture glyph cluster (av-isb3) as a focusable trigger for its
+     detail popover (av-41se), plus the popover itself. The allowlist is
+     transparency, not a verdict (spec 6.2) — no green/amber, ever. Fully
+     sandboxed (empty allowlist, neither capability approved) collapses to a
+     single muted ph-shield-check + "Sandboxed"; otherwise each grant gets its
+     own neutral glyph, in a fixed order: network count, then downloads, then
+     clipboard. The trigger is tabindex=0 + role=button so it's reachable by
+     keyboard independent of the card/toolbar around it; aria-describedby
+     wires it to the popover div by id. The popover opens only on explicit
+     activation (click/tap, or Enter/Space while focused) via components.js;
+     hover/focus alone just apply a CSS affordance highlight
+     (.capability-cluster:hover/:focus-visible) without opening anything.
+     Data: capabilityView (gallery.go). */}}
+{{define "capabilityCluster"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved)}}<div class="capability-wrap"><div class="capability-cluster{{if not $sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger>{{if $sandboxed}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}
+
+{{/* capabilityPopover is the "receipt" for what was approved at ingest
+     (spec 6.2) — capabilityCluster's aria-describedby target. One row per
+     active grant (network origins in monospace, then downloads, then
+     clipboard); the no-grants state collapses to a single "Fully contained"
+     reassurance row instead. The footer "Manage" link is omitted whenever
+     ShowManage is false (the no-owner-session / share case). Data:
+     capabilityView (gallery.go). */}}
+{{define "capabilityPopover"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved)}}<div class="capability-popover" id="capability-popover-{{.ArtifactID}}"><div class="capability-popover-header">Sandbox posture</div>{{if $sandboxed}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-shield-check"></i></span><span>Fully contained — no network, download, or clipboard access</span></div>{{else}}{{if .NetworkAllowlist}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-globe"></i></span><div><div class="capability-popover-label">Network — {{len .NetworkAllowlist}} origin{{if ne (len .NetworkAllowlist) 1}}s{{end}}</div><div class="capability-popover-origins">{{range .NetworkAllowlist}}<code>{{.}}</code>{{end}}</div></div></div>{{end}}{{if .DownloadsApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-download-simple"></i></span><span>Downloads — Can save files to your device</span></div>{{end}}{{if .ClipboardApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-clipboard"></i></span><span>Clipboard — Can read and write your clipboard</span></div>{{end}}{{end}}{{if .ShowManage}}<a class="capability-popover-manage" href="/artifacts/{{.ArtifactID}}/edit#security-panel">Manage in allowlist settings →</a>{{end}}</div>{{end}}

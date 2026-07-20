@@ -5,7 +5,6 @@
  *   ID                 - the artifact id
  *   SOURCE_URL         - source URL for URL-ingested artifacts ('' otherwise;
  *                        the Update-from-source button only renders when set)
- *   allowlist          - the artifact's current network allowlist (mutable)
  *   downloadsApproved  - persisted first-use download approval (mutable)
  *   clipboardApproved  - persisted first-use clipboard approval (mutable)
  */
@@ -67,14 +66,10 @@ function triggerDownload(dl) {
   setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
 }
 
-function renderDownloadState() {
-  document.getElementById('dl-state').textContent = downloadsApproved ? 'allowed' : 'ask first';
-  document.getElementById('dl-revoke').style.display = downloadsApproved ? 'inline-flex' : 'none';
-}
-renderDownloadState();
-
 // Shared capability-bridge approval: persists a first-use grant server-side
 // via PATCH (the single write path). Downloads and clipboard both ride this.
+// The viewer never surfaces a revoke control (that's now Edit-page-only,
+// av-hwx2) — this only grants on the artifact's first attempt.
 async function setCapabilityApproved(field, approved, label) {
   const st = document.getElementById('al-status');
   const r = await fetch('/api/artifacts/' + ID, {
@@ -89,12 +84,7 @@ async function setCapabilityApproved(field, approved, label) {
 async function setDownloadsApproved(approved) {
   if (!(await setCapabilityApproved('downloads_approved', approved, 'download'))) return false;
   downloadsApproved = approved;
-  renderDownloadState();
   return true;
-}
-
-async function revokeDownloads() {
-  await setDownloadsApproved(false);
 }
 
 function closeDownloadModal() {
@@ -163,21 +153,10 @@ async function performClipboard(req) {
   }
 }
 
-function renderClipboardState() {
-  document.getElementById('clip-state').textContent = clipboardApproved ? 'allowed' : 'ask first';
-  document.getElementById('clip-revoke').style.display = clipboardApproved ? 'inline-flex' : 'none';
-}
-renderClipboardState();
-
 async function setClipboardApproved(approved) {
   if (!(await setCapabilityApproved('clipboard_approved', approved, 'clipboard'))) return false;
   clipboardApproved = approved;
-  renderClipboardState();
   return true;
-}
-
-async function revokeClipboard() {
-  await setClipboardApproved(false);
 }
 
 // deny=true rejects the pending request so the artifact's clipboard call
@@ -202,51 +181,6 @@ document.getElementById('clip-allow').addEventListener('click', async function()
   pendingClip = null;
   if (req) performClipboard(req);
 });
-
-// Badges are built as DOM nodes (never innerHTML): allowlist origins are
-// user/scanner-controlled strings that can contain markup metacharacters,
-// and interpolating them into HTML was a self-XSS sink on the app origin
-// (av-tux9). textContent keeps them inert.
-function renderBadges() {
-  const display = document.getElementById('al-display');
-  display.textContent = '';
-  if (!allowlist.length) {
-    const none = document.createElement('span');
-    none.style.color = '#aaa';
-    none.textContent = 'none';
-    display.appendChild(none);
-    return;
-  }
-  allowlist.forEach(o => {
-    const badge = document.createElement('code');
-    badge.textContent = o;
-    display.appendChild(badge);
-    display.appendChild(document.createTextNode(' '));
-  });
-}
-
-async function addOrigin() {
-  const inp = document.getElementById('al-input');
-  if (inp.style.display === 'none') { inp.style.display='inline-block'; inp.focus(); return; }
-  const val = inp.value.trim();
-  if (!val) { inp.style.display='none'; return; }
-  allowlist.push(val);
-  inp.value = '';
-  inp.style.display = 'none';
-  await saveAllowlist();
-}
-
-async function saveAllowlist() {
-  const st = document.getElementById('al-status');
-  st.textContent = 'Saving…';
-  const r = await fetch('/api/artifacts/' + ID, {
-    method: 'PATCH',
-    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
-    body: JSON.stringify({network_allowlist: allowlist})
-  });
-  st.textContent = r.ok ? '✓ Saved — reload to apply' : '✗ Error';
-  renderBadges();
-}
 
 // "Update from source" — only reachable from the toolbar button, which the
 // server renders only for URL-ingested artifacts (SOURCE_URL is '' otherwise).
