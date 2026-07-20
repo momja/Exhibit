@@ -2,7 +2,7 @@
 id: av-p0a1
 status: closed
 deps: [av-xgik]
-links: [av-isb3, av-41se, av-hwx2]
+links: [av-isb3, av-41se, av-hwx2, exhibit-x87]
 created: 2026-07-18T15:15:41Z
 type: feature
 priority: 2

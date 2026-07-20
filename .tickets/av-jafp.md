@@ -2,7 +2,7 @@
 id: av-jafp
 status: closed
 deps: []
-links: []
+links: [exhibit-x87, exhibit-fr7]
 created: 2026-07-18T15:23:11Z
 type: epic
 priority: 2
