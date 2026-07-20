@@ -39,8 +39,11 @@ own code convention.
 
 ## 2. CSP: the allowlist is the wall
 
-Each artifact row carries a `network_allowlist` (JSON array of origins). At render
-time the surface generates the document's `Content-Security-Policy` from it:
+Each artifact carries a set of per-origin decisions (`artifact_network_origins`,
+one row per origin). The origins decided `allow` are the allowlist; origins decided
+`block` are "don't ask again" markers for the runtime prompt and are never part of
+it. At render time the surface generates the document's `Content-Security-Policy`
+from the allowlist:
 
 ```
 default-src 'none'

@@ -4,8 +4,14 @@
  *   TOKEN             - API bearer token
  *   ID                - the artifact id
  *   allowlist         - approved network origins (mutable working copy)
- *   unapproved        - origins the current body references but the
- *                        artifact hasn't approved (mutable working copy)
+ *   unapproved        - origins the current body references that carry no
+ *                        decision at all (mutable working copy)
+ *   blocked           - origins with an explicit block decision, i.e. a
+ *                        "don't ask again" answer (mutable working copy).
+ *                        They never reach the CSP; allowing one here moves it
+ *                        into the allowlist and Save's PATCH upserts it as an
+ *                        allow decision. Block decisions this page doesn't
+ *                        touch are never cleared by Save (exhibit-x87).
  *   downloadsApproved - persisted first-use download approval (mutable)
  *   clipboardApproved - persisted first-use clipboard approval (mutable)
  */
@@ -43,14 +49,23 @@ document.getElementById('allowlist-rows').addEventListener('click', function(e) 
   renderSecurityPanel();
 });
 
-document.getElementById('unapproved-rows') && document.getElementById('unapproved-rows').addEventListener('click', function(e) {
-  const btn = e.target.closest('[data-action="allow"]');
-  if (!btn) return;
-  const origin = btn.closest('.allowlist-row').dataset.origin;
-  unapproved = unapproved.filter(o => o !== origin);
-  if (!allowlist.includes(origin)) allowlist.push(origin);
-  renderSecurityPanel();
-});
+// "Allow" in either the undecided or the blocked section moves the origin into
+// the working allowlist; Save upserts it as an allow decision, which is also
+// what overrides a previous block.
+function bindAllowSection(containerId, take) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-action="allow"]');
+    if (!btn) return;
+    const origin = btn.closest('.allowlist-row').dataset.origin;
+    take(origin);
+    if (!allowlist.includes(origin)) allowlist.push(origin);
+    renderSecurityPanel();
+  });
+}
+bindAllowSection('unapproved-rows', o => { unapproved = unapproved.filter(x => x !== o); });
+bindAllowSection('blocked-rows', o => { blocked = blocked.filter(x => x !== o); });
 
 document.getElementById('al-add-btn').addEventListener('click', function() {
   const inp = document.getElementById('al-add-input');
@@ -68,20 +83,40 @@ document.getElementById('al-add-input').addEventListener('keydown', function(e) 
 // than interpolated markup — origins are user/scanner-controlled and can
 // contain HTML metacharacters (av-tux9), same reasoning as detail.js's
 // renderBadges().
-function buildOriginRow(origin, actionLabel, action) {
+function buildOriginRow(origin, actionLabel, action, note) {
   const row = document.createElement('div');
   row.className = 'allowlist-row';
   row.dataset.origin = origin;
   const code = document.createElement('code');
   code.textContent = origin;
   code.title = origin;
+  row.appendChild(code);
+  // A note labels the row's state (e.g. "blocked") so an explicit block
+  // decision never renders identically to a merely undecided origin.
+  if (note) {
+    const tag = document.createElement('span');
+    tag.className = 'text-sm muted';
+    tag.textContent = note;
+    row.appendChild(tag);
+  }
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = action === 'remove' ? 'btn btn-sm btn-sec' : 'btn btn-sm';
   btn.dataset.action = action;
   btn.textContent = actionLabel;
-  row.append(code, btn);
+  row.appendChild(btn);
   return row;
+}
+
+function renderOriginSection(containerId, origins, note) {
+  const rows = document.getElementById(containerId);
+  if (!rows) return; // section absent because it rendered empty server-side
+  const heading = rows.previousElementSibling;
+  rows.innerHTML = '';
+  origins.forEach(o => rows.appendChild(buildOriginRow(o, 'Allow', 'allow', note)));
+  const show = origins.length > 0;
+  rows.style.display = show ? '' : 'none';
+  if (heading) heading.style.display = show ? '' : 'none';
 }
 
 function renderSecurityPanel() {
@@ -89,15 +124,11 @@ function renderSecurityPanel() {
   alRows.innerHTML = '';
   allowlist.forEach(o => alRows.appendChild(buildOriginRow(o, 'Remove', 'remove')));
 
-  const unRows = document.getElementById('unapproved-rows');
-  const unHeading = unRows && unRows.previousElementSibling;
-  if (unRows) {
-    unRows.innerHTML = '';
-    unapproved.forEach(o => unRows.appendChild(buildOriginRow(o, 'Allow', 'allow')));
-    const show = unapproved.length > 0;
-    unRows.style.display = show ? '' : 'none';
-    if (unHeading) unHeading.style.display = show ? '' : 'none';
-  }
+  // Both sections offer "Allow"; the blocked one labels each row so an
+  // explicit "don't ask again" reads differently from an undecided origin.
+  // Each section (and its heading) hides once emptied.
+  renderOriginSection('unapproved-rows', unapproved, null);
+  renderOriginSection('blocked-rows', blocked, 'blocked');
 
   document.getElementById('security-summary-text').textContent =
     allowlist.length + (allowlist.length === 1 ? ' origin' : ' origins') +
@@ -144,11 +175,16 @@ async function save() {
 
 function showApproval(footprint) {
   const scanDiv = document.getElementById('scan-result');
-  const rows = footprint.map(o =>
-    '<label style="display:block;margin:4px 0">' +
-    '<input type="checkbox" class="al-origin" value="' + esc(o) + '" checked> ' +
-    '<code>' + esc(o) + '</code></label>'
-  ).join('');
+  // An origin the user previously blocked ("don't ask again") is listed but
+  // starts unchecked and labelled — re-approving it must be a deliberate act,
+  // not the default the other origins get.
+  const rows = footprint.map(o => {
+    const isBlocked = blocked.includes(o);
+    return '<label style="display:block;margin:4px 0">' +
+      '<input type="checkbox" class="al-origin" value="' + esc(o) + '"' + (isBlocked ? '' : ' checked') + '> ' +
+      '<code>' + esc(o) + '</code>' + (isBlocked ? ' <span class="text-sm muted">blocked</span>' : '') +
+      '</label>';
+  }).join('');
   scanDiv.style.display = 'block';
   scanDiv.innerHTML = '<strong>Edited artifact wants to contact these origins.</strong>' +
     '<div style="color:#888;margin:4px 0 8px">The most secure option will <em>always</em> be to disable all external origins. Origin approval is never automatic.</div>' +

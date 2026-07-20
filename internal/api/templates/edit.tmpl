@@ -39,6 +39,19 @@
           </div>{{end}}
         </div>
         {{end}}
+        {{if .Blocked}}
+        {{/* Origins with an explicit block decision (exhibit-x87). They never
+             reach the CSP; they are listed so a "don't ask again" answer stays
+             visible and reversible instead of reading as merely undecided. */}}
+        <h3 class="text-sm muted">Blocked</h3>
+        <div id="blocked-rows">
+          {{range .Blocked}}<div class="allowlist-row" data-origin="{{.}}">
+            <code title="{{.}}">{{.}}</code>
+            <span class="text-sm muted">blocked</span>
+            <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
+          </div>{{end}}
+        </div>
+        {{end}}
         <div class="row" style="margin-top:8px">
           <input type="text" id="al-add-input" class="field" placeholder="Add origin (https://example.com)">
           <button type="button" class="btn btn-sm" id="al-add-btn">Add</button>
@@ -82,6 +95,7 @@ const TOKEN = {{.Token}};
 const ID = {{.ID}};
 let allowlist = {{.Allowlist}};
 let unapproved = {{.Unapproved}};
+let blocked = {{.Blocked}};
 {{/* Literal template text rather than {{value}} interpolation, matching the
      detail page bootstrap (av-p3gj): html/template's JS escaper pads
      booleans with spaces, and a plain `= true;` keeps this greppable. */ -}}

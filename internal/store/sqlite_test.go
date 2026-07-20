@@ -463,9 +463,12 @@ func TestMigration008RepairsRenumberCollision(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	var version int64
-	require.NoError(t, db.QueryRow(`SELECT MAX(version_id) FROM goose_db_version`).Scan(&version))
-	assert.Equal(t, int64(8), version, "v8 repair migration must run and be recorded")
+	// Assert the v8 row specifically rather than MAX(version_id): migrations
+	// numbered above the repair (009 onward) legitimately run after it.
+	var repairApplied int
+	require.NoError(t, db.QueryRow(
+		`SELECT COUNT(*) FROM goose_db_version WHERE version_id=8 AND is_applied=1`).Scan(&repairApplied))
+	assert.Equal(t, 1, repairApplied, "v8 repair migration must run and be recorded")
 
 	hasCol := func(name string) bool {
 		rows, err := db.Query(`PRAGMA table_info(artifacts)`)

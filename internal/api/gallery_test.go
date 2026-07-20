@@ -354,6 +354,42 @@ func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
 		"the viewer must never mutate network_allowlist; management is Edit-only")
 }
 
+// allowDecisions builds the allow-decision rows the edit page reads for its
+// allowlist (exhibit-x87 — origins live in artifact_network_origins, so the
+// page is fed decisions rather than an Artifact field).
+func allowDecisions(origins ...string) []store.OriginDecision {
+	ds := make([]store.OriginDecision, len(origins))
+	for i, o := range origins {
+		ds[i] = store.OriginDecision{Origin: o, Decision: store.DecisionAllow, Source: "user"}
+	}
+	return ds
+}
+
+// exhibit-x87: an origin carrying an explicit block decision ("don't ask
+// again") must not read as merely undecided. It gets its own labelled section
+// with an Allow override, and never appears in the allowlist or in the
+// "referenced, not approved" list — even when the body references it.
+func TestEditPageShowsBlockedOriginsDistinctlyFromUndecided(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Blocked", Tier: store.Tier1,
+		CreatedAt: time.Now()}
+	src := `<script src="https://blocked.example.com/a.js"></script>` +
+		`<script src="https://new.example.com/b.js"></script>`
+	decisions := []store.OriginDecision{
+		{Origin: "https://blocked.example.com", Decision: store.DecisionBlock, Source: "runtime"},
+	}
+	page, err := renderEditPage(a, decisions, src, "tok")
+	require.NoError(t, err)
+
+	assert.Contains(t, page, `let blocked = ["https://blocked.example.com"];`,
+		"a blocked origin must surface in its own list")
+	assert.Contains(t, page, `let unapproved = ["https://new.example.com"];`,
+		"only origins with no decision at all are 'referenced, not approved'")
+	assert.Contains(t, page, `let allowlist = [];`,
+		"a block decision must never widen the allowlist")
+	assert.Contains(t, page, `<h3 class="text-sm muted">Blocked</h3>`,
+		"blocked origins need their own labelled section, not a plain Allow row")
+}
+
 // av-p0a1: the edit page's security panel renders allowlist rows via
 // html/template range (not hand-rolled string building), so origins the user
 // typed into the "Add origin" field — unrestricted, unlike scanner-derived
@@ -363,8 +399,8 @@ func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
 func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
 	payload := `https://x"><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Edit XSS", Tier: store.Tier1,
-		CreatedAt: time.Now(), NetworkAllowlist: []string{payload}}
-	page, err := renderEditPage(a, "<p>src</p>", "tok")
+		CreatedAt: time.Now()}
+	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "tok")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `<code title="https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
@@ -380,9 +416,9 @@ func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
 // rows and must never be written to the allowlist itself.
 func TestEditPageSurfacesUnapprovedOriginsWithoutSeedingAllowlist(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "No auto-seed", Tier: store.Tier1,
-		CreatedAt: time.Now(), NetworkAllowlist: []string{}}
+		CreatedAt: time.Now()}
 	src := `<script src="https://cdn.example.com/lib.js"></script>`
-	page, err := renderEditPage(a, src, "tok")
+	page, err := renderEditPage(a, nil, src, "tok")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `data-origin="https://cdn.example.com"`)
@@ -401,8 +437,8 @@ func TestEditPageSurfacesUnapprovedOriginsWithoutSeedingAllowlist(t *testing.T) 
 func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 	payload := `https://evil</script><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Script Breakout", Tier: store.Tier1,
-		CreatedAt: time.Now(), NetworkAllowlist: []string{payload}}
-	page, err := renderEditPage(a, "<p>src</p>", "tok")
+		CreatedAt: time.Now()}
+	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "tok")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let allowlist = ["https://evil\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e"];`,
