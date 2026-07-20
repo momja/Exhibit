@@ -2,7 +2,7 @@
 id: exhibit-x87
 status: in_progress
 deps: []
-links: [av-jafp, av-p0a1]
+links: [av-jafp, av-p0a1, av-5aje, exhibit-fr7]
 created: 2026-07-01T06:02:26Z
 type: task
 priority: 2
