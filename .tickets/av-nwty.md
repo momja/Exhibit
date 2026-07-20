@@ -50,3 +50,9 @@ CEILINGS (browser-imposed, no design removes them):
 - Fallbacks: no host frame, non-Chromium, and no-stored-handle each fall back to the av-70t9 <input> polyfill with no regression.
 - showDirectoryPicker live path re-reads current directory contents on reconnect (Chromium); falls back to webkitdirectory otherwise.
 
+
+## Notes
+
+**2026-07-20T00:06:24Z**
+
+Defaults confirmed by owner (not assumed): (1) single per-artifact `filesystem_approved` boolean, not per-slot grants; (2) approval bit stored server-side for Edit-UI consistency. The "micro-decision" in Design is settled — server-side.
