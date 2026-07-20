@@ -81,7 +81,9 @@ The only way data changes. Route groups:
   patched).
 - `GET /api/artifacts`, `GET /api/artifacts/:id` — list/detail (drives the gallery).
 - `PATCH /api/artifacts/:id` — edits: title, body (rewrites the stored blob),
-  `network_allowlist`, `downloads_approved` / `clipboard_approved` (the capability
+  `network_allowlist` (accepted unchanged as the whole approved set; the store
+  translates it into `decision='allow'` rows and deliberately leaves any
+  `decision='block'` rows alone, §3.3), `downloads_approved` / `clipboard_approved` (the capability
   bridge's first-use approvals, §6), and other scalar columns. Rewriting the body
   re-executes the scan and returns the footprint plus a `footprint_changed` flag so
   the edit dialog can re-run the explicit-approval gate when origins differ from the
@@ -110,8 +112,8 @@ middleware-and-data change rather than a rewrite.
 A read-only surface on `RENDER_ORIGIN` whose entire job is to emit an artifact as an
 executable document with the correct security envelope:
 
-- Looks up the artifact, pulls its body from the blob store, its `network_allowlist`, and
-  its current state.
+- Looks up the artifact, pulls its body from the blob store, its approved origins
+  (the artifact's `decision='allow'` rows, §3.3), and its current state.
 - Generates the per-artifact CSP (`connect-src`/`script-src`/`style-src`/`img-src`/
   `font-src` from the allowlist) and sets it as a response header on the document.
   `connect-src` is the allowlist alone — the storage shim needs no network of its own (§6).
@@ -150,11 +152,20 @@ path (§7).
 The seam between handlers and persistence. Handlers speak only to this interface:
 
 ```
-Store:  put/get/list/search artifacts, collections, tags, shares; get/put state
+Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
+        list/set/delete per-origin network decisions
 Blob:   put/get artifact bodies by id
 ```
 
 - **Metadata, collections, tags, shares, state** → SQLite (one file, WAL mode).
+- **Network origin decisions** → `artifact_network_origins`, one row per
+  (artifact, origin) — the primary key is what makes "one decision per origin" a
+  schema invariant rather than a convention, and `ON DELETE CASCADE` retires the
+  rows with the artifact. `decision='allow'` is the only input to the render CSP;
+  `decision='block'` records a "don't ask again" answer for the runtime prompt
+  (exhibit-fr7) and never widens the policy. A caller that knows only the
+  allowlist replaces the allow rows without touching block rows, so a save from
+  the edit page can never silently clear a decision it never displayed.
 - **Search** → an FTS5 table over artifact titles.
 - **Bodies** → filesystem now, S3-compatible later — same `Blob` interface.
 
@@ -296,10 +307,10 @@ flowchart TD
     scan2 --> resp1
 
     resp1 --> confirm["client &rarr; confirm (+ edited allowlist) &rarr; API"]
-    confirm --> persist["API: Blob.put(body) — untrusted bytes at rest;<br/>Store.put(artifact, network_allowlist=[], tier, source_url, ...);<br/>FTS5 index (title)"]
+    confirm --> persist["API: Blob.put(body) — untrusted bytes at rest;<br/>Store.put(artifact, tier, source_url, ...) with no allow rows;<br/>FTS5 index (title)"]
     persist --> resp2["API &rarr; respond: artifact id + render URL +<br/>footprint (network-inert until approved)"]
     resp2 --> patch["client &rarr; PATCH /api/artifacts/:id<br/>(approved allowlist) &rarr; API"]
-    patch --> update["API: Store.update(artifact, network_allowlist) &rarr;<br/>now renderable with network egress"]
+    patch --> update["API: replace the artifact's decision='allow' rows &rarr;<br/>now renderable with network egress"]
 ```
 
 The snapshot stage runs **after fetch, before `Blob.put`** (§3.4a) and is the only

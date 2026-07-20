@@ -84,7 +84,13 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 	defer rc.Close()
 	src, _ := io.ReadAll(rc)
 
-	page, err := renderEditPage(a, string(src), ro.cfg.AuthToken)
+	decisions, err := ro.cfg.Store.ListOriginDecisions(r.Context(), id)
+	if err != nil {
+		serverError(w, r, "gallery edit origin decisions", err)
+		return
+	}
+
+	page, err := renderEditPage(a, decisions, string(src), ro.cfg.AuthToken)
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
@@ -234,42 +240,58 @@ type editPageData struct {
 	Title string
 	Src   string
 	Token string
-	// Allowlist is the artifact's approved network origins. Unapproved holds
-	// origins the current body references (per scanner.Scan) that are not yet
-	// on the allowlist — surfaced as one-click "Allow" rows. Unapproved is
-	// never merged into Allowlist server-side; that would auto-seed the
-	// allowlist from the scan, which spec §6.2 forbids.
+	// An origin has three states here, not two (exhibit-x87): Allowlist holds
+	// the decision='allow' origins (the ones the render CSP is built from);
+	// Blocked holds the decision='block' origins — explicit "don't ask again"
+	// answers from the runtime prompt, which never widen the CSP but must stay
+	// visible and overridable rather than silently reading as undecided;
+	// Unapproved holds the origins the current body references (per
+	// scanner.Scan) that carry no decision at all, surfaced as one-click
+	// "Allow" rows. Unapproved is never merged into Allowlist server-side;
+	// that would auto-seed the allowlist from the scan, which spec §6.2
+	// forbids.
 	Allowlist         []string
+	Blocked           []string
 	Unapproved        []string
 	DownloadsApproved bool
 	ClipboardApproved bool
 }
 
-func renderEditPage(a *store.Artifact, src, token string) (string, error) {
-	allowlist := a.NetworkAllowlist
-	if allowlist == nil {
-		allowlist = []string{}
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, token string) (string, error) {
+	allowlist, blocked := []string{}, []string{}
+	for _, d := range decisions {
+		switch d.Decision {
+		case store.DecisionAllow:
+			allowlist = append(allowlist, d.Origin)
+		case store.DecisionBlock:
+			blocked = append(blocked, d.Origin)
+		}
 	}
-	unapproved := diffOrigins(scanner.Scan(src), allowlist)
+	// Only origins with no decision at all are "referenced, not approved" —
+	// a blocked origin is a decision already made and belongs in Blocked.
+	unapproved := diffOrigins(scanner.Scan(src), allowlist, blocked)
 	return renderPage("edit", editPageData{
 		ID:                a.ID,
 		Title:             a.Title,
 		Src:               src,
 		Token:             token,
 		Allowlist:         allowlist,
+		Blocked:           blocked,
 		Unapproved:        unapproved,
 		DownloadsApproved: a.DownloadsApproved,
 		ClipboardApproved: a.ClipboardApproved,
 	})
 }
 
-// diffOrigins returns the origins in footprint not already present in
-// approved, preserving footprint's order. Used to surface "referenced, not
+// diffOrigins returns the origins in footprint that appear in none of the
+// decided sets, preserving footprint's order. Used to surface "referenced, not
 // approved" rows on the edit page without ever writing them to the allowlist.
-func diffOrigins(footprint, approved []string) []string {
-	have := make(map[string]bool, len(approved))
-	for _, o := range approved {
-		have[o] = true
+func diffOrigins(footprint []string, decided ...[]string) []string {
+	have := make(map[string]bool)
+	for _, set := range decided {
+		for _, o := range set {
+			have[o] = true
+		}
 	}
 	out := []string{}
 	for _, o := range footprint {
