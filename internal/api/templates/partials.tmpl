@@ -102,11 +102,11 @@
      own neutral glyph, in a fixed order: network count, then downloads, then
      clipboard. The trigger is tabindex=0 + role=button so it's reachable by
      keyboard independent of the card/toolbar around it; aria-describedby
-     wires it to the popover div by id. Opening on hover/focus is CSS-only
-     (components.css .capability-wrap:hover/:focus-within); components.js
-     adds only what CSS can't do alone — a tap/click toggle for touch, Escape
-     to dismiss, and aria-expanded bookkeeping. Data: capabilityView
-     (gallery.go). */}}
+     wires it to the popover div by id. The popover opens only on explicit
+     activation (click/tap, or Enter/Space while focused) via components.js;
+     hover/focus alone just apply a CSS affordance highlight
+     (.capability-cluster:hover/:focus-visible) without opening anything.
+     Data: capabilityView (gallery.go). */}}
 {{define "capabilityCluster"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved)}}<div class="capability-wrap"><div class="capability-cluster{{if not $sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger>{{if $sandboxed}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}
 
 {{/* capabilityPopover is the "receipt" for what was approved at ingest
