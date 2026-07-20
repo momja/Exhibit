@@ -40,3 +40,29 @@ Name the field 'complexity' (not 'size'/'points') to avoid story-points baggage 
 **2026-07-20T02:00:47Z**
 
 Implementation PR #54 (local-convention path A: TICKETS.md vocabulary + tk-ready-complexity.sh + backfill) was closed by @momja: 'I don't see a path forward with the existing implementation of ticket. They haven't released a version that supports plugins yet.' Returning ticket to open; likely blocked on upstream (see wedow/ticket#66, the first-class-field proposal filed as part of the attempt). Branch chore/av-fvci/complexity-field retains the work if revisited.
+
+**2026-07-20T03:47:56Z**
+
+Tag-based option (raised 2026-07-20): express complexity as a reserved tag
+prefix — cx-xs / cx-s / cx-m / cx-l / cx-xl — instead of a body section.
+
+Why this beats path A: tags are a real frontmatter field tk already supports at
+creation (--tags) and can filter on (tk ls -T cx-l), so complexity becomes
+queryable *today* with no wrapper script and no upstream change. That was the
+exact blocker that closed PR #54 — the local convention was unqueryable, and
+the queryable version needed a plugin/field tk hasn't shipped. Tags route around
+both.
+
+What it doesn't give us, and should be accepted knowingly:
+- Nothing enforces exactly one cx-* tag per ticket; a mis-tagged or double-tagged
+  ticket is silently wrong. Convention + a lint script are the only guards.
+- Tags are an unordered flat namespace, so "everything at least M" is not
+  expressible as one query — it's a union of -T cx-m, -T cx-l, -T cx-xl.
+- It overloads one field with two taxonomies (topic tags like `security` next to
+  sizing tags), which is why the cx- prefix matters: it keeps the sizing
+  vocabulary greppable and visually distinct from topic tags.
+
+If adopted, this ticket's acceptance criteria change shape: define the cx-*
+vocabulary in TICKETS.md (agent-tier mapping unchanged), backfill obvious cases,
+and keep wedow/ticket#66 open as the eventual first-class-field cleanup rather
+than a blocker.

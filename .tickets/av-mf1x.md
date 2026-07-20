@@ -7,6 +7,7 @@ created: 2026-07-20T03:43:19Z
 type: bug
 priority: 3
 assignee: Max Omdal
+tags: [gallery, frontend, security]
 ---
 # Capability badge goes stale after a runtime origin approval
 

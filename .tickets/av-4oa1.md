@@ -7,6 +7,7 @@ created: 2026-07-20T03:43:03Z
 type: feature
 priority: 3
 assignee: Max Omdal
+tags: [draft, gallery, frontend]
 ---
 # Partial re-render for server-rendered chrome (htmx or equivalent)
 
