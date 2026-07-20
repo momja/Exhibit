@@ -14,20 +14,27 @@ Five rules shape every structural decision. When a choice is ambiguous, these de
 1. **It's just a file.** A tier-1/2 artifact is a self-contained document that runs in
    the *visitor's* browser. The service stores and serves it; it never executes artifact
    code. This is why the system stays small and why artifacts are durable.
+   This is a critical part of the user's ownership of their software. They
+   should be able to trivially take their software and data with them.
 2. **One write path.** Every mutation — upload, paste, future extension, state
    write-through — enters through the HTTP API. Nothing writes the datastore directly.
-   This single seam is where auth, validation, and (later) replication and multi-user
+   This is where auth, validation, and (later) replication and multi-user
    all attach.
 3. **Two origins, hard boundary.** The app and the artifacts it renders live on
    different origins. The trust boundary between "our application" and "untrusted
    artifact code" is an origin boundary enforced by the browser, not a code convention.
-4. **Observe, don't predict.** The system never analyzes an artifact ahead of time to
-   guess its behavior (storage use, network use). It installs interceptors and policy at
-   the runtime boundary and observes what actually happens.
-5. **Easy path and serious path share one system.** Single-user/local and
+   This is a core component of the artifact sandboxing.
+4. **Observe, don't predict.** The system will not analyze an artifact ahead of time to
+   _guess_ its behavior (storage use, network use). It installs interceptors and policy at
+   the runtime boundary and observes what actually happens. Scanning functions may be
+   done for heuristics, but never as a prescription for a contract.
+5. **_DEPRECATED_** **Easy path and serious path share one system.** Single-user/local and
    replicated/multi-user are the *same* binary and schema with optional pieces composed
    around them. No forks, no rewrites — seams placed early (owner_id, Store interface,
    single write path) make the upgrades additive.
+5. **Security should be simple, and by default.** The secure choice should be the default
+   choice. And it should be secure by the nature of the design, not the details of the
+   implementation.
 
 ## 2. System context
 

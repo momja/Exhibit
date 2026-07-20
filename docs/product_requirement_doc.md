@@ -5,7 +5,8 @@ A read-it-later library for self-contained web tools.
 ## 1. Objective
 
 Provide the easiest way to **save, organize, find, share, and use** small,
-self-standing HTML + JavaScript tools — the kind people generate with AI tools.
+self-standing HTML + JavaScript tools — the kind people generate with AI tools –
+for a general audience.
 
 The target artifact is a single-file tool that either:
 
