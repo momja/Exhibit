@@ -72,8 +72,28 @@ Points of stance embedded in that policy:
   with a real HTML tokenizer and surfaces the origins the artifact references,
   but its output **never seeds the allowlist** — only origins the user explicitly
   approves are written. A runtime attempt to reach anything else is blocked by
-  the browser; the user can approve the origin afterward in the artifact's
-  allowlist editor, which updates the CSP on next render.
+  the browser and then surfaced by the runtime prompt below.
+
+**Runtime permission prompt (exhibit-fr7).** The CSP has already blocked the
+request by the time anyone is asked about it — the prompt widens the policy for
+*next* time, it never rescues the request in flight. The render preamble listens
+for `securitypolicyviolation` in the artifact frame and posts the blocked origin
+to the **host frame**; the prompt itself renders in app chrome, because the
+artifact controls its own DOM and could forge a lookalike. Three answers:
+
+- **Allow** writes a `decision='allow'` row and reloads the frame. A CSP is a
+  response header fixed at load, so a widened policy needs a new document; the
+  host makes that transparent by reassigning the frame's `src`.
+- **Block once** dismisses; the next load asks again.
+- **Don't ask again** writes a `decision='block'` row. Block rows never widen
+  the CSP — they are inlined into the render preamble purely so that origin
+  stops being reported. They stay visible and reversible on the edit page
+  (Allow overrides one, Forget deletes it), so the answer is never a one-way
+  trap.
+
+Each origin is reported at most once per load, so a request in a retry loop
+cannot spam the host. The top-level render and share views have no trusted app
+chrome to host a prompt, so violations there stay silently blocked.
 
 ## 3. Vendoring: snapshot on import, never live-linked
 

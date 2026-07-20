@@ -48,6 +48,10 @@
           {{range .Blocked}}<div class="allowlist-row" data-origin="{{.}}">
             <code title="{{.}}">{{.}}</code>
             <span class="text-sm muted">blocked</span>
+            {{/* Forget drops the decision entirely, returning the origin to
+                 undecided so the runtime prompt can ask about it again — without
+                 it, "don't ask again" would be a one-way trap. */}}
+            <button type="button" class="btn btn-sm btn-sec" data-action="forget">Forget</button>
             <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
           </div>{{end}}
         </div>

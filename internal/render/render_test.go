@@ -134,7 +134,7 @@ func TestBuildCSPFontSrcHonorsAllowlistedOrigin(t *testing.T) {
 // not a cross-origin fetch — the sandboxed iframe's opaque origin can't call the
 // API, and the fetch approach was what CORS-blocked write-through.
 func TestShimWritesViaPostMessageNotFetch(t *testing.T) {
-	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil, nil)
 	if !strings.Contains(doc, "window.parent.postMessage") {
 		t.Fatalf("shim should write via postMessage to the host frame: %s", doc)
 	}
@@ -147,7 +147,7 @@ func TestShimWritesViaPostMessageNotFetch(t *testing.T) {
 // rather than fetching asynchronously (which the artifact's own init would race).
 func TestInjectShimInlinesStateWithoutAsyncHydrate(t *testing.T) {
 	state := map[string]string{"tkgraph:config:v1": `{"lastSource":"github"}`}
-	doc := injectShim("<html><head></head><body></body></html>", "abc", "https://app.test", state)
+	doc := injectShim("<html><head></head><body></body></html>", "abc", "https://app.test", state, nil)
 
 	// The state value is embedded directly in the shim's cache.
 	if !strings.Contains(doc, "lastSource") || !strings.Contains(doc, "github") {
@@ -166,7 +166,7 @@ func TestInjectShimInlinesStateWithoutAsyncHydrate(t *testing.T) {
 
 // A nil/empty state must produce a valid empty-object cache, never `null`.
 func TestInjectShimNilStateIsEmptyObject(t *testing.T) {
-	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil, nil)
 	if !strings.Contains(doc, "var cache = {}") {
 		t.Fatalf("nil state should inline an empty object, got: %s", doc)
 	}
@@ -178,7 +178,7 @@ func TestInjectShimNilStateIsEmptyObject(t *testing.T) {
 // must never gain a network path for this (blob payloads come from a
 // createObjectURL registry, not a connect-src-governed fetch).
 func TestShimInstallsDownloadBridge(t *testing.T) {
-	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil, nil)
 
 	// The message shape the host's download listener validates.
 	if !strings.Contains(doc, "__avDownload") {
@@ -206,7 +206,7 @@ func TestShimInstallsDownloadBridge(t *testing.T) {
 // downloads already work — intercepting there would break them, and share
 // pages get no bridge in v1.
 func TestShimDownloadBridgeIsFramedOnly(t *testing.T) {
-	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil, nil)
 	if !strings.Contains(doc, "if (window.parent !== window) {") {
 		t.Fatalf("download bridge must be guarded to framed (gallery-embedded) contexts: %s", doc)
 	}
@@ -218,7 +218,7 @@ func TestShimDownloadBridgeIsFramedOnly(t *testing.T) {
 // the download bridge it installs framed-only (guarded by the same
 // window.parent check), so top-level/share renders are unaffected.
 func TestShimInstallsClipboardBridge(t *testing.T) {
-	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil, nil)
 
 	// The message shape the host's clipboard listener validates.
 	if !strings.Contains(doc, "__avClipboard") {
@@ -245,7 +245,7 @@ func TestShimInstallsClipboardBridge(t *testing.T) {
 // save's createWritable routes through the download bridge. Like the other
 // bridges, framed-only (co-located inside the window.parent guard).
 func TestShimInstallsFSAPickerPolyfill(t *testing.T) {
-	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil, nil)
 
 	// All three FSA entry points are replaced on window.
 	for _, name := range []string{"showOpenFilePicker", "showDirectoryPicker", "showSaveFilePicker"} {
@@ -289,7 +289,7 @@ func TestShimInstallsFSAPickerPolyfill(t *testing.T) {
 // surface single-path and the sandbox token set unchanged (downloads_test.go
 // still asserts sandbox="allow-scripts" with no allow-downloads).
 func TestShimFSASaveReusesDownloadBridge(t *testing.T) {
-	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil, nil)
 
 	// The save writable triggers a download via a detached anchor click, the
 	// same vector the download bridge intercepts.
@@ -305,5 +305,47 @@ func TestShimFSASaveReusesDownloadBridge(t *testing.T) {
 	// that spec-conformant artifacts pass, not just bare Blob/ArrayBuffer.
 	if !strings.Contains(doc, "data.type === 'write'") {
 		t.Fatalf("createWritable.write must accept the WriteParams form: %s", doc)
+	}
+}
+
+// exhibit-fr7: a request the CSP blocks must be reported to the *host* frame,
+// never prompted for inside the artifact's own DOM (which the artifact controls
+// and could forge). The reporter listens for securitypolicyviolation and posts
+// the origin to the parent, pinned to the app origin like every other bridge.
+func TestShimReportsCSPViolationsToHost(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil, nil)
+
+	if !strings.Contains(doc, "securitypolicyviolation") {
+		t.Fatalf("shim must listen for CSP violations: %s", doc)
+	}
+	if !strings.Contains(doc, "__avNetwork") {
+		t.Fatalf("violations must be posted to the host as __avNetwork: %s", doc)
+	}
+}
+
+// Origins the user answered "don't ask again" for are inlined so a repeat
+// violation stays silent instead of re-prompting on every load. They must never
+// appear in the CSP — that is built from allow decisions alone.
+func TestInjectShimInlinesBlockedOrigins(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil,
+		[]string{"https://tracker.example.com"})
+
+	if !strings.Contains(doc, "https://tracker.example.com") {
+		t.Fatalf("blocked origins must be inlined for suppression: %s", doc)
+	}
+	if !strings.Contains(doc, "decidedOrigins") {
+		t.Fatalf("blocked origins must seed the reporter's dedupe set: %s", doc)
+	}
+	if csp := buildCSP(nil, "https://app.test"); strings.Contains(csp, "tracker.example.com") {
+		t.Fatalf("a block decision must never widen the CSP: %s", csp)
+	}
+}
+
+// An artifact with no block decisions must still inline a valid empty array,
+// never `null` — `null.forEach` would throw and take the whole shim with it.
+func TestInjectShimNilBlockedIsEmptyArray(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil, nil)
+	if !strings.Contains(doc, "([] || []).forEach") {
+		t.Fatalf("nil blocked list should inline an empty array, got: %s", doc)
 	}
 }

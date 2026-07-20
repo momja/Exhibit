@@ -99,6 +99,12 @@ The only way data changes. Route groups:
   normally satisfied by render-time inlining, not this route; `PUT` is called by the
   **host frame** on the storage shim's behalf (the sandboxed iframe can't reach the API itself).
   Authenticated like every other mutating route.
+- `GET/POST/DELETE /api/artifacts/:id/origins` — per-origin network decisions.
+  `POST` decides one origin (`allow` | `block`); `DELETE ?origin=…` forgets a
+  decision. This is the runtime permission prompt's write path (§6): it learns
+  about one blocked origin at a time, so restating the whole allowlist through
+  `PATCH` — as the edit page's Save does — would risk clobbering decisions it
+  never saw.
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
 - collection/tag CRUD.
 
@@ -112,8 +118,9 @@ middleware-and-data change rather than a rewrite.
 A read-only surface on `RENDER_ORIGIN` whose entire job is to emit an artifact as an
 executable document with the correct security envelope:
 
-- Looks up the artifact, pulls its body from the blob store, its approved origins
-  (the artifact's `decision='allow'` rows, §3.3), and its current state.
+- Looks up the artifact, pulls its body from the blob store, its origin decisions
+  (§3.3 — the `allow` rows build the CSP, the `block` rows mute the runtime
+  prompt), and its current state.
 - Generates the per-artifact CSP (`connect-src`/`script-src`/`style-src`/`img-src`/
   `font-src` from the allowlist) and sets it as a response header on the document.
   `connect-src` is the allowlist alone — the storage shim needs no network of its own (§6).
@@ -127,7 +134,10 @@ executable document with the correct security envelope:
   unchanged; only inlined, no-egress assets are permitted by default.
 - Injects the **render preamble** as the first `<head>` script(s) — the **storage
   shim** with the artifact's state **inlined** into it so `getItem` is correct
-  synchronously, plus the download/clipboard **capability bridges** — then the
+  synchronously, plus the download/clipboard **capability bridges** and the
+  **network permission reporter** (a `securitypolicyviolation` listener that posts
+  CSP-blocked origins to the host frame, seeded with the artifact's
+  `decision='block'` origins so a refused one is never re-reported) — then the
   artifact body. (Umbrella/family taxonomy: `security.md` §4.)
 - Sets `Cache-Control: no-store` — the document is dynamic (inlined state + per-artifact
   CSP) and must never be served stale from a cache.
@@ -339,7 +349,13 @@ flowchart TD
     load --> fetch["artifact fetch to origin X"]
     fetch --> fetchQ{"origin on allowlist?"}
     fetchQ -->|yes| fPermit["browser permits"]
-    fetchQ -->|no| fBlock["browser blocks (CSP); UI prompts<br/>user &rarr; approve &rarr; PATCH allowlist"]
+    fetchQ -->|no| fBlock["browser blocks (CSP); preamble posts the<br/>blocked origin to the host frame"]
+    fBlock --> fPrompt{"already decided?"}
+    fPrompt -->|block row exists| fQuiet["stays silent — no re-prompt"]
+    fPrompt -->|undecided| fAsk{"host prompts in app chrome<br/>(origin + directive)"}
+    fAsk -->|Allow| fAllow["POST /origins allow &rarr;<br/>transparent frame reload &rarr; new CSP"]
+    fAsk -->|Block once| fOnce["dismiss; asks again next load"]
+    fAsk -->|Don't ask again| fNever["POST /origins block &rarr;<br/>suppresses the prompt, never widens the CSP"]
 
     load --> dl["artifact download<br/>blob:/data: anchor, clicked or click()ed"]
     dl --> dlInt["download bridge intercepts;<br/>postMessage filename + bytes to host"]

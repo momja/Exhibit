@@ -65,6 +65,23 @@
     </div>
   </div>
 </div>
+{{/* Runtime network permission prompt (exhibit-fr7). The origin and directive
+     are filled in by detail.js via textContent — they come from the artifact's
+     own blocked request and must never be interpolated as markup. */}}
+<div id="net-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="net-title">
+    <h2 id="net-title">Allow network access?</h2>
+    <p><strong>{{.Title}}</strong> tried to contact <code id="net-origin"></code> and was blocked.</p>
+    <p class="text-sm muted"><span id="net-directive"></span></p>
+    <p>Allowing adds this origin to the artifact's allowlist and reloads it so the request can retry. You can revoke it later in allowlist settings.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-sec" id="net-never">Don't ask again</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="net-once">Block once</button>
+      <button type="button" class="btn" id="net-allow"><i class="ph ph-globe-hemisphere-west"></i> Allow origin</button>
+    </div>
+  </div>
+</div>
 <script>
 const TOKEN = {{.Token}};
 const ID = {{.ID}};

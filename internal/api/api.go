@@ -84,6 +84,12 @@ func (ro *Router) setupRoutes() {
 				// (the sandboxed iframe bridges writes via postMessage).
 				r.Get("/state", ro.getState)
 				r.Put("/state", ro.setState)
+				// Per-origin network decisions (exhibit-fr7): decided one
+				// origin at a time, so the runtime permission prompt never
+				// has to restate the artifact's whole allowlist.
+				r.Get("/origins", ro.listOriginDecisions)
+				r.Post("/origins", ro.setOriginDecision)
+				r.Delete("/origins", ro.deleteOriginDecision)
 				// Artifact-centric collection membership routes
 				r.Post("/collections/{collectionID}", ro.addArtifactToCollection)
 				r.Delete("/collections/{collectionID}", ro.removeArtifactFromCollection)

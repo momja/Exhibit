@@ -354,6 +354,33 @@ func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
 		"the viewer must never mutate network_allowlist; management is Edit-only")
 }
 
+// exhibit-fr7: the runtime network-permission prompt lives in trusted app
+// chrome, not in the artifact frame (which the artifact controls and could
+// forge). The viewer hosts the modal and answers through the per-origin
+// decision route — never by PATCHing the whole allowlist from the viewer,
+// which av-hwx2 made Edit-only.
+func TestDetailPagePromptsForBlockedNetworkOrigins(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Fetcher", Tier: store.Tier1, CreatedAt: time.Now()}
+	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	require.NoError(t, err)
+
+	// The modal, with all three answers the ticket specifies.
+	assert.Contains(t, page, `id="net-modal"`)
+	assert.Contains(t, page, `id="net-allow"`)
+	assert.Contains(t, page, `id="net-once"`)
+	assert.Contains(t, page, `id="net-never"`)
+	// The origin is filled in by script (textContent), never interpolated as
+	// markup — it comes from the artifact's own blocked request.
+	assert.Contains(t, page, `<code id="net-origin"></code>`)
+
+	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
+	require.NoError(t, err)
+	js := string(detailJS)
+	assert.Contains(t, js, "__avNetwork", "the viewer must handle the shim's CSP-violation reports")
+	assert.Contains(t, js, "/origins", "decisions go through the per-origin route")
+	assert.Contains(t, js, "frame.src = base", "Allow reloads the frame so the new CSP takes effect")
+}
+
 // allowDecisions builds the allow-decision rows the edit page reads for its
 // allowlist (exhibit-x87 — origins live in artifact_network_origins, so the
 // page is fed decisions rather than an Artifact field).
@@ -388,6 +415,27 @@ func TestEditPageShowsBlockedOriginsDistinctlyFromUndecided(t *testing.T) {
 		"a block decision must never widen the allowlist")
 	assert.Contains(t, page, `<h3 class="text-sm muted">Blocked</h3>`,
 		"blocked origins need their own labelled section, not a plain Allow row")
+}
+
+// exhibit-fr7: a "don't ask again" block must be reversible in two ways —
+// Allow (override it) and Forget (drop it, so the runtime prompt asks again).
+// Without Forget the answer is a one-way trap.
+func TestEditPageCanForgetABlockDecision(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Blocked", Tier: store.Tier1,
+		CreatedAt: time.Now()}
+	decisions := []store.OriginDecision{
+		{Origin: "https://tracker.example.com", Decision: store.DecisionBlock, Source: "runtime_prompt"},
+	}
+	page, err := renderEditPage(a, decisions, "<p>src</p>", "tok")
+	require.NoError(t, err)
+	assert.Contains(t, page, `data-action="forget"`)
+
+	// Forget deletes the decision through the per-origin route; PATCH's
+	// allowlist replacement cannot express "return this origin to undecided".
+	editJS, err := embeddedAssets.ReadFile("assets/gallery/edit.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(editJS), "'/origins?origin='")
+	assert.Contains(t, string(editJS), "method: 'DELETE'")
 }
 
 // av-p0a1: the edit page's security panel renders allowlist rows via

@@ -98,6 +98,26 @@ As with any ingest, residual origins surface in `network_footprint` for
 **explicit** approval — the snapshot never seeds the `network_allowlist`, so a
 snapshotted artifact stays network-inert until you approve its residual origins.
 
+## Network origin decisions
+
+```
+GET    /api/artifacts/:id/origins            List every decision (allow and block)
+POST   /api/artifacts/:id/origins            Decide one origin {"origin","decision":"allow"|"block","source"}
+DELETE /api/artifacts/:id/origins?origin=…   Forget one origin's decision (back to undecided)
+```
+
+`PATCH /api/artifacts/:id` with `network_allowlist` replaces the whole allow set
+and is what the edit page's Save uses. These routes decide a **single** origin,
+which is what the runtime permission prompt needs: it learns about one blocked
+origin at a time and must not restate — and so risk clobbering — the artifact's
+other decisions.
+
+`decision: "allow"` widens the artifact's CSP on its next render.
+`decision: "block"` records a "don't ask again" answer: it **never** reaches the
+CSP and only suppresses the runtime prompt for that origin. `DELETE` is how a
+block is forgotten — without it a block would be a permanent trap, since a
+blocked origin never prompts again on its own.
+
 ## State (cross-device sync)
 
 ```
