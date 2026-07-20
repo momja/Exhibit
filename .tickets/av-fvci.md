@@ -1,6 +1,6 @@
 ---
 id: av-fvci
-status: in_progress
+status: open
 deps: []
 links: []
 created: 2026-07-08T07:29:36Z
@@ -34,3 +34,9 @@ Name the field 'complexity' (not 'size'/'points') to avoid story-points baggage 
 - If a filtering wrapper is in scope, a small script/alias surfaces 'tk ready' grouped or filtered by complexity.
 - An upstream issue is filed at https://github.com/wedow/ticket proposing a first-class 'complexity' frontmatter field (link recorded as a note on this ticket).
 
+
+## Notes
+
+**2026-07-20T02:00:47Z**
+
+Implementation PR #54 (local-convention path A: TICKETS.md vocabulary + tk-ready-complexity.sh + backfill) was closed by @momja: 'I don't see a path forward with the existing implementation of ticket. They haven't released a version that supports plugins yet.' Returning ticket to open; likely blocked on upstream (see wedow/ticket#66, the first-class-field proposal filed as part of the attempt). Branch chore/av-fvci/complexity-field retains the work if revisited.
