@@ -1,6 +1,6 @@
 ---
 id: exhibit-fr7
-status: open
+status: in_progress
 deps: [exhibit-x87]
 links: [av-jafp]
 created: 2026-07-01T05:23:56Z
