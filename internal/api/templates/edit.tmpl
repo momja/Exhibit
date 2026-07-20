@@ -20,14 +20,13 @@
   <h2>Edit</h2>
 
   <details class="details-panel" id="security-panel">
-    <summary id="security-summary"></summary>
+    <summary id="security-summary"><i class="ph ph-caret-right security-caret" aria-hidden="true"></i> <span id="security-summary-text"></span></summary>
     <div class="security-body">
       <div class="security-col">
         <h3 class="text-sm muted">Network allowlist</h3>
         <div id="allowlist-rows">
           {{range .Allowlist}}<div class="allowlist-row" data-origin="{{.}}">
             <code title="{{.}}">{{.}}</code>
-            <span class="spacer"></span>
             <button type="button" class="btn btn-sm btn-sec" data-action="remove">Remove</button>
           </div>{{end}}
         </div>
@@ -36,7 +35,6 @@
         <div id="unapproved-rows">
           {{range .Unapproved}}<div class="allowlist-row" data-origin="{{.}}">
             <code title="{{.}}">{{.}}</code>
-            <span class="spacer"></span>
             <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
           </div>{{end}}
         </div>

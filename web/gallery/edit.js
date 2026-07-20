@@ -75,14 +75,12 @@ function buildOriginRow(origin, actionLabel, action) {
   const code = document.createElement('code');
   code.textContent = origin;
   code.title = origin;
-  const spacer = document.createElement('span');
-  spacer.className = 'spacer';
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = action === 'remove' ? 'btn btn-sm btn-sec' : 'btn btn-sm';
   btn.dataset.action = action;
   btn.textContent = actionLabel;
-  row.append(code, spacer, btn);
+  row.append(code, btn);
   return row;
 }
 
@@ -101,7 +99,7 @@ function renderSecurityPanel() {
     if (unHeading) unHeading.style.display = show ? '' : 'none';
   }
 
-  document.getElementById('security-summary').textContent =
+  document.getElementById('security-summary-text').textContent =
     allowlist.length + (allowlist.length === 1 ? ' origin' : ' origins') +
     ' · downloads: ' + (downloadsApproved ? 'always allow' : 'ask first') +
     ' · clipboard: ' + (clipboardApproved ? 'always allow' : 'ask first');
