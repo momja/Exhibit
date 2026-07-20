@@ -27,11 +27,17 @@ main{padding:24px;max-width:900px;margin:0 auto}
 #security-panel>summary{list-style:none;display:flex;align-items:center;gap:var(--space-2)}
 #security-panel>summary::-webkit-details-marker{display:none}
 /* Caret is a real icon (not a UTF-8 triangle) so it stays legible at any
- * size/zoom; it rotates in place on open rather than swapping glyphs, and
- * lives outside #security-summary-text so the JS-driven posture-summary
- * text refresh (edit.js renderSecurityPanel) never wipes it out. */
-.security-caret{transition:transform .15s ease;flex-shrink:0}
-#security-panel[open]>summary .security-caret{transform:rotate(90deg)}
+ * size/zoom, and lives outside #security-summary-text so the JS-driven
+ * posture-summary text refresh (edit.js renderSecurityPanel) never wipes it
+ * out. Two glyphs (caret-right / caret-down) are swapped by [open] rather
+ * than rotating one in place: Phosphor's caret-right glyph isn't centered
+ * in its em-box, so a CSS transform:rotate(90deg) pivots it around the
+ * box's geometric center instead of the visible mark's center, swinging it
+ * off to a corner at an angle instead of cleanly pointing down. */
+.security-caret{flex-shrink:0}
+.security-caret-open{display:none}
+#security-panel[open]>summary .security-caret-closed{display:none}
+#security-panel[open]>summary .security-caret-open{display:inline}
 .security-body{display:flex;gap:24px;margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline)}
 .security-col{flex:1;min-width:0}
 .security-col+.security-col{border-left:1px solid var(--color-hairline);padding-left:24px}
