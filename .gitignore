@@ -21,9 +21,6 @@ $RECYCLE.BIN/
 data/
 server
 
-# Stray beads export at repo root (canonical file lives in .beads/issues.jsonl)
-/issues.jsonl
-
 # Node is build-time only (make assets / the Dockerfile's Node stage); its
 # fetched/bundled output is produced at build time, not committed to git.
 node_modules/
@@ -34,3 +31,8 @@ node_modules/
 # bare `go build` fails on the //go:embed pattern rather than embedding stale
 # bytes.
 /internal/api/assets/
+
+/.pi/
+
+# Local Claude Code settings — no longer tracked in git history.
+/.claude/
