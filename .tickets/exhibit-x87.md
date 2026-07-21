@@ -1,6 +1,6 @@
 ---
 id: exhibit-x87
-status: in_progress
+status: closed
 deps: []
 links: [av-jafp, av-p0a1]
 created: 2026-07-01T06:02:26Z
