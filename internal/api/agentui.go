@@ -199,6 +199,7 @@ let sessionId = null;
 let eventSource = null;
 let streaming = false;
 let keyConfigured = false;
+let configuredProvider = null;   // provider the stored key currently belongs to, or null
 let pendingSnippets = [];   // [{image:{data,mimeType}, descriptor, thumbUrl}]
 let snippetMode = false;
 
@@ -231,6 +232,7 @@ async function refreshKeyStatus() {
   const r = await apiFetch('/api/agent/key');
   const d = await r.json();
   keyConfigured = !!d.configured;
+  configuredProvider = keyConfigured ? d.provider : null;
   const btn = document.getElementById('key-btn');
   const label = document.getElementById('key-btn-label');
   if (keyConfigured) {
@@ -240,7 +242,7 @@ async function refreshKeyStatus() {
     document.getElementById('key-model').value = d.model || '';
     const cur = document.getElementById('current-key');
     cur.hidden = false;
-    cur.textContent = 'A key is already configured for ' + d.provider + '. Delete the masked value below to replace it.';
+    cur.textContent = 'A key is already configured for ' + d.provider + '. Saving keeps it unless you delete the masked value below and enter a new one.';
     document.getElementById('key-delete').hidden = false;
   } else {
     btn.classList.add('warn');
@@ -264,6 +266,12 @@ function providerChanged() {
   const modelInput = document.getElementById('key-model');
   if (!modelInput.value && (MODEL_SUGGESTIONS[p] || []).length) {
     modelInput.value = MODEL_SUGGESTIONS[p][0];
+  }
+  // The masked key belongs to configuredProvider; switching away from it
+  // means that key can't be reused, so prompt for a fresh one.
+  const secret = document.getElementById('key-secret');
+  if (secret.dataset.masked === 'true' && p !== configuredProvider) {
+    clearMaskedKey(secret);
   }
 }
 
@@ -314,13 +322,16 @@ async function saveKey() {
   const model = document.getElementById('key-model').value.trim();
   const secretInput = document.getElementById('key-secret');
   const errEl = document.getElementById('key-error');
+  errEl.hidden = true;
+  let api_key = '';
   if (secretInput.dataset.masked === 'true') {
-    errEl.textContent = 'Delete the masked key below and enter a new one to replace it.';
-    errEl.hidden = false;
-    return;
+    // Field untouched: keep the existing key. providerChanged() already
+    // clears the mask if the provider no longer matches, so reaching here
+    // masked means provider === configuredProvider and it's safe to reuse.
+  } else {
+    api_key = secretInput.value.trim();
+    if (!api_key) { errEl.textContent = 'Enter the API key.'; errEl.hidden = false; return; }
   }
-  const api_key = secretInput.value.trim();
-  if (!api_key) { errEl.textContent = 'Enter the API key.'; errEl.hidden = false; return; }
   const r = await apiFetch('/api/agent/key', {method:'PUT', body: JSON.stringify({provider, model, api_key})});
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));

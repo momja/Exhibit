@@ -56,6 +56,71 @@ func TestAgentKeyLifecycle(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"configured":false`)
 }
 
+// Saving with an empty api_key should keep the existing key while still
+// updating the model — the fix for Exh-454g, where changing only the model
+// used to require re-entering the API key.
+func TestAgentKeyUpdateModelKeepsExistingKey(t *testing.T) {
+	r := newTestRouter(t)
+
+	w := doJSON(t, r, "PUT", "/api/agent/key", map[string]string{
+		"provider": "anthropic",
+		"model":    "claude-sonnet-4-5",
+		"api_key":  "sk-ant-supersecret-1234",
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+	before, err := r.cfg.Store.GetAgentKey(t.Context(), 1)
+	require.NoError(t, err)
+
+	w = doJSON(t, r, "PUT", "/api/agent/key", map[string]string{
+		"provider": "anthropic",
+		"model":    "claude-opus-4-8",
+		"api_key":  "",
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var got struct {
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+		KeyHint  string `json:"key_hint"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, "anthropic", got.Provider)
+	assert.Equal(t, "claude-opus-4-8", got.Model)
+	assert.Equal(t, "sk-…1234", got.KeyHint)
+
+	after, err := r.cfg.Store.GetAgentKey(t.Context(), 1)
+	require.NoError(t, err)
+	assert.Equal(t, before.KeyCiphertext, after.KeyCiphertext)
+	assert.Equal(t, "claude-opus-4-8", after.Model)
+}
+
+// An empty api_key with no key configured yet, or with a different provider
+// selected, must still be rejected — there is no existing key to fall back to.
+func TestAgentKeyRequiresKeyWhenNoneToReuse(t *testing.T) {
+	r := newTestRouter(t)
+
+	w := doJSON(t, r, "PUT", "/api/agent/key", map[string]string{
+		"provider": "anthropic",
+		"model":    "claude-sonnet-4-5",
+		"api_key":  "",
+	})
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	w = doJSON(t, r, "PUT", "/api/agent/key", map[string]string{
+		"provider": "anthropic",
+		"model":    "claude-sonnet-4-5",
+		"api_key":  "sk-ant-supersecret-1234",
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	w = doJSON(t, r, "PUT", "/api/agent/key", map[string]string{
+		"provider": "openai",
+		"model":    "gpt-5.2",
+		"api_key":  "",
+	})
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 func TestAgentKeyRejectsUnknownProvider(t *testing.T) {
 	r := newTestRouter(t)
 	w := doJSON(t, r, "PUT", "/api/agent/key", map[string]string{
