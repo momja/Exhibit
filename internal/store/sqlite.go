@@ -430,7 +430,7 @@ type blobGetter interface {
 }
 
 // BackfillSourceText populates source_text for artifacts left over from
-// before migration 010 (source_text = ''), so their pre-existing bodies
+// before migration 010 (an empty source_text), so their pre-existing bodies
 // become searchable without requiring a re-edit. It's a startup pass, not a
 // migration, because the blob store isn't reachable from SQL. Safe to call
 // repeatedly: rows already backfilled are excluded by the WHERE clause, and a
