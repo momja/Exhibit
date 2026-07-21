@@ -129,7 +129,7 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 // to embed this page in an iframe. The storage shim needs no connect-src of its
 // own: it reads inlined state and writes via postMessage to the host frame.
 //
-// Style/font defaults favor the common self-contained artifact:
+// Style/font/media defaults favor the common self-contained artifact:
 //   - style-src 'unsafe-inline' always permits inline <style> blocks and style=""
 //     attributes — the default way a single-file artifact carries its CSS, needing
 //     no network approval. Allowlisted origins are appended so a <link
@@ -139,6 +139,11 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 //     network egress. This mirrors the "it's just a file" thesis: inlined assets are
 //     not network requests, so blocking them buys no security while breaking a
 //     canonical pattern. The network boundary (the allowlist) is unaffected.
+//   - media-src always permits blob: so a <video>/<audio> element can play back a
+//     file the artifact loaded locally via <input type=file> + URL.createObjectURL
+//     — the object never leaves the browser, so it carries the same zero-egress
+//     property as the data: exemptions above, not a network request the allowlist
+//     needs to govern.
 func buildCSP(allowlist []string, appOrigin string) string {
 	frameAncestors := "frame-ancestors " + appOrigin
 	if len(allowlist) == 0 {
@@ -148,6 +153,7 @@ func buildCSP(allowlist []string, appOrigin string) string {
 			"style-src 'unsafe-inline'",
 			"img-src data:",
 			"font-src data:",
+			"media-src blob:",
 			"connect-src 'none'",
 			frameAncestors,
 		}, "; ")
@@ -160,6 +166,7 @@ func buildCSP(allowlist []string, appOrigin string) string {
 		"style-src 'unsafe-inline' " + origins,
 		"img-src data: " + origins,
 		"font-src data: " + origins,
+		"media-src blob: " + origins,
 		"connect-src " + origins,
 		frameAncestors,
 	}, "; ")

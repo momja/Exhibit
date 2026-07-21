@@ -91,11 +91,14 @@ Renderer construction:
   a Permissions Policy delegation so artifacts can use the async Clipboard API without
   any relaxation of the sandbox or CSP.
 - Inject a generated **per-artifact CSP** (`connect-src`/`script-src`/`style-src`/
-  `img-src`/`font-src` built from the artifact's allowlist) into the served document. The
-  browser enforces the network boundary; this is the wall behind §6 of the main spec.
-  Inlined assets are exempt from the allowlist since they carry no network egress:
-  `style-src` always carries `'unsafe-inline'` and `img-src`/`font-src` always carry
-  `data:`, so inline styles and inlined `data:` images/fonts render without approval.
+  `img-src`/`font-src`/`media-src` built from the artifact's allowlist) into the served
+  document. The browser enforces the network boundary; this is the wall behind §6 of the
+  main spec. Inlined/local assets are exempt from the allowlist since they carry no
+  network egress: `style-src` always carries `'unsafe-inline'`, `img-src`/`font-src`
+  always carry `data:`, and `media-src` always carries `blob:`, so inline styles,
+  inlined `data:` images/fonts, and a locally imported file played back via
+  `<video>`/`<audio src=blob:...>` (`URL.createObjectURL` on a picked `File`) all
+  render without approval.
 - Inject the **render preamble** — the **storage shim** (§6 here) with the artifact's
   current state inlined — into `<head>` *before* any artifact script runs.
   Serve the document `Cache-Control:
