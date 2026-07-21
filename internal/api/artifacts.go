@@ -426,7 +426,7 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, updateArtifactResponse{
-		Artifact:          a,
+		Artifact:         a,
 		NetworkFootprint: footprint,
 		FootprintChanged: footprintChanged,
 	})
@@ -439,9 +439,9 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 // mirroring the two-step ingest scan→approval gate (spec §6.2) without ever
 // seeding the allowlist from a scan.
 type updateArtifactResponse struct {
-	Artifact          *store.Artifact `json:"artifact"`
-	NetworkFootprint  []string        `json:"network_footprint"`
-	FootprintChanged  bool            `json:"footprint_changed"`
+	Artifact         *store.Artifact `json:"artifact"`
+	NetworkFootprint []string        `json:"network_footprint"`
+	FootprintChanged bool            `json:"footprint_changed"`
 }
 
 // sameOrigins reports whether two origin lists describe the same set,

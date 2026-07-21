@@ -14,6 +14,9 @@ POST   /api/artifacts              Ingest an artifact (inline body, or url to fe
 GET    /api/artifacts              List artifacts (?q=search&tags=a,b&collections=c)
 GET    /api/artifacts/:id          Get artifact metadata (?body=true for source)
 PATCH  /api/artifacts/:id          Update title, body, network_allowlist, etc.
+                                   (network_allowlist is the whole approved set; it
+                                   replaces the artifact's allow decisions and leaves
+                                   any blocked origins untouched)
 POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts)
 DELETE /api/artifacts/:id          Delete artifact and associated rows (blob body is orphaned in v1)
 ```
@@ -159,4 +162,4 @@ GET  /a/:artifactID    Serve artifact (render origin only)
 GET  /s/:shareID       Serve shared artifact (render origin only)
 ```
 
-The render surface sets `Content-Security-Policy` from the artifact's `network_allowlist`, injects the storage shim with the artifact's state inlined, and serves the document `Cache-Control: no-store`. The iframe has `sandbox="allow-scripts"` without `allow-same-origin`, giving it an opaque origin.
+The render surface sets `Content-Security-Policy` from the artifact's approved origins (its `decision='allow'` rows in `artifact_network_origins`), injects the storage shim with the artifact's state inlined, and serves the document `Cache-Control: no-store`. The iframe has `sandbox="allow-scripts"` without `allow-same-origin`, giving it an opaque origin.

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -56,20 +55,40 @@ func (s *SQLiteStore) migrate() error {
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }
 
-func marshalAllowlist(list []string) string {
-	if list == nil {
-		list = []string{}
+// toStringSlice normalizes an allowlist value arriving from a JSON PATCH
+// body ([]interface{}) or from Go code ([]string).
+func toStringSlice(v any) ([]string, bool) {
+	switch list := v.(type) {
+	case []string:
+		return list, true
+	case []interface{}:
+		strs := make([]string, 0, len(list))
+		for _, item := range list {
+			s, ok := item.(string)
+			if !ok {
+				return nil, false
+			}
+			strs = append(strs, s)
+		}
+		return strs, true
+	case nil:
+		return []string{}, true
 	}
-	b, _ := json.Marshal(list)
-	return string(b)
+	return nil, false
 }
 
-func unmarshalAllowlist(s string) []string {
-	var list []string
-	if err := json.Unmarshal([]byte(s), &list); err != nil || list == nil {
-		return []string{}
+// anyToTime normalizes a scanned timestamp — the modernc driver may hand back
+// a time.Time, a string, or []byte depending on the column's storage.
+func anyToTime(v any) time.Time {
+	switch t := v.(type) {
+	case time.Time:
+		return t.UTC()
+	case string:
+		return parseTS(t)
+	case []byte:
+		return parseTS(string(t))
 	}
-	return list
+	return time.Time{}
 }
 
 func parseTS(s string) time.Time {
@@ -83,35 +102,22 @@ func parseTS(s string) time.Time {
 
 func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	var a Artifact
-	var allowlistJSON string
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &allowlistJSON, &a.DownloadsApproved, &a.ClipboardApproved)
+	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved)
 	if err != nil {
 		return nil, err
 	}
-	a.NetworkAllowlist = unmarshalAllowlist(allowlistJSON)
-	switch v := createdAt.(type) {
-	case time.Time:
-		a.CreatedAt = v.UTC()
-	case string:
-		a.CreatedAt = parseTS(v)
-	case []byte:
-		a.CreatedAt = parseTS(string(v))
-	}
-	switch v := updatedAt.(type) {
-	case time.Time:
-		a.UpdatedAt = v.UTC()
-	case string:
-		a.UpdatedAt = parseTS(v)
-	case []byte:
-		a.UpdatedAt = parseTS(string(v))
-	}
+	// NetworkAllowlist is hydrated separately from artifact_network_origins
+	// (attachAllowlists); an artifact with no allow rows carries an empty list,
+	// never nil, so JSON callers always see [].
+	a.NetworkAllowlist = []string{}
+	a.CreatedAt, a.UpdatedAt = anyToTime(createdAt), anyToTime(updatedAt)
 	return &a, nil
 }
 
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, network_allowlist, downloads_approved, clipboard_approved"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.network_allowlist, a.downloads_approved, a.clipboard_approved"
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
@@ -119,12 +125,17 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 		now = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, network_allowlist, downloads_approved, clipboard_approved, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, marshalAllowlist(a.NetworkAllowlist), a.DownloadsApproved, a.ClipboardApproved,
+		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved,
 		now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	// The allowlist passed in is the set of origins the caller has approved;
+	// it lands as allow rows in the child table (exhibit-x87).
+	return s.ReplaceAllowedOrigins(ctx, a.ID, a.NetworkAllowlist, "user")
 }
 
 func (s *SQLiteStore) GetArtifact(ctx context.Context, id string) (*Artifact, error) {
@@ -138,6 +149,9 @@ func (s *SQLiteStore) GetArtifact(ctx context.Context, id string) (*Artifact, er
 		return nil, err
 	}
 	if err := s.attachTags(ctx, []*Artifact{a}); err != nil {
+		return nil, err
+	}
+	if err := s.attachAllowlists(ctx, []*Artifact{a}); err != nil {
 		return nil, err
 	}
 	return a, nil
@@ -214,6 +228,9 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 	if err := s.attachTags(ctx, results); err != nil {
 		return nil, err
 	}
+	if err := s.attachAllowlists(ctx, results); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 
@@ -221,21 +238,27 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, id string, updates map
 	if len(updates) == 0 {
 		return nil
 	}
+	// "network_allowlist" is no longer a column: it is the artifact's allow
+	// rows. Apply it through ReplaceAllowedOrigins (which leaves block rows
+	// alone) and drop it from the column update below.
+	if v, ok := updates["network_allowlist"]; ok {
+		origins, ok := toStringSlice(v)
+		if !ok {
+			return fmt.Errorf("network_allowlist must be an array of strings")
+		}
+		if err := s.ReplaceAllowedOrigins(ctx, id, origins, "user"); err != nil {
+			return err
+		}
+		updates = withoutKey(updates, "network_allowlist")
+		if len(updates) == 0 {
+			// Still bump updated_at so an allowlist-only PATCH is visible.
+			_, err := s.db.ExecContext(ctx, "UPDATE artifacts SET updated_at=datetime('now') WHERE id=?", id)
+			return err
+		}
+	}
 	setClauses := make([]string, 0, len(updates)+1)
 	args := make([]any, 0, len(updates)+1)
 	for k, v := range updates {
-		if k == "network_allowlist" {
-			switch list := v.(type) {
-			case []string:
-				v = marshalAllowlist(list)
-			case []interface{}:
-				strs := make([]string, len(list))
-				for i, s := range list {
-					strs[i], _ = s.(string)
-				}
-				v = marshalAllowlist(strs)
-			}
-		}
 		if k == "downloads_approved" || k == "clipboard_approved" {
 			// These columns are INTEGER 0/1; a non-bool here would store a value
 			// that later fails the bool scan and bricks reads of the artifact.
@@ -251,6 +274,147 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, id string, updates map
 	_, err := s.db.ExecContext(ctx,
 		"UPDATE artifacts SET "+strings.Join(setClauses, ", ")+" WHERE id=?", args...)
 	return err
+}
+
+// withoutKey returns a copy of m with key removed, leaving the caller's map
+// untouched (handlers reuse the decoded PATCH body after the store call).
+func withoutKey(m map[string]any, key string) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		if k != key {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func (s *SQLiteStore) ListOriginDecisions(ctx context.Context, artifactID string) ([]OriginDecision, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT origin, decision, source, created_at, updated_at
+		   FROM artifact_network_origins WHERE artifact_id=? ORDER BY origin`, artifactID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []OriginDecision{}
+	for rows.Next() {
+		var d OriginDecision
+		var createdAt, updatedAt any
+		if err := rows.Scan(&d.Origin, &d.Decision, &d.Source, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		d.CreatedAt, d.UpdatedAt = anyToTime(createdAt), anyToTime(updatedAt)
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteStore) AllowedOrigins(ctx context.Context, artifactID string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT origin FROM artifact_network_origins
+		  WHERE artifact_id=? AND decision=? ORDER BY origin`, artifactID, DecisionAllow)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var o string
+		if err := rows.Scan(&o); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteStore) SetOriginDecision(ctx context.Context, artifactID, origin, decision, source string) error {
+	if decision != DecisionAllow && decision != DecisionBlock {
+		return fmt.Errorf("invalid origin decision %q", decision)
+	}
+	// The (artifact_id, origin) primary key is what makes one decision per
+	// origin an invariant; the upsert flips an existing decision in place
+	// rather than creating a second, contradictory row.
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO artifact_network_origins (artifact_id, origin, decision, source)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(artifact_id, origin) DO UPDATE SET
+		   decision=excluded.decision, source=excluded.source, updated_at=datetime('now')`,
+		artifactID, origin, decision, source)
+	return err
+}
+
+func (s *SQLiteStore) DeleteOriginDecision(ctx context.Context, artifactID, origin string) error {
+	_, err := s.db.ExecContext(ctx,
+		"DELETE FROM artifact_network_origins WHERE artifact_id=? AND origin=?", artifactID, origin)
+	return err
+}
+
+func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, artifactID string, origins []string, source string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+
+	// Only allow rows are in scope. Block rows are decisions this caller
+	// doesn't know about ("don't ask again", exhibit-fr7) and survive.
+	if _, err := tx.ExecContext(ctx,
+		"DELETE FROM artifact_network_origins WHERE artifact_id=? AND decision=?",
+		artifactID, DecisionAllow); err != nil {
+		return err
+	}
+	for _, o := range origins {
+		if o == "" {
+			continue
+		}
+		// An origin listed here was explicitly approved, so an allow
+		// decision overrides any block row it previously carried.
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO artifact_network_origins (artifact_id, origin, decision, source)
+			 VALUES (?, ?, ?, ?)
+			 ON CONFLICT(artifact_id, origin) DO UPDATE SET
+			   decision=excluded.decision, source=excluded.source, updated_at=datetime('now')`,
+			artifactID, o, DecisionAllow, source); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// attachAllowlists hydrates NetworkAllowlist on a batch of artifacts from
+// their decision='allow' rows, in one query.
+func (s *SQLiteStore) attachAllowlists(ctx context.Context, arts []*Artifact) error {
+	if len(arts) == 0 {
+		return nil
+	}
+	byID := make(map[string]*Artifact, len(arts))
+	placeholders := make([]string, len(arts))
+	args := make([]any, 0, len(arts)+1)
+	for i, a := range arts {
+		a.NetworkAllowlist = []string{}
+		byID[a.ID] = a
+		placeholders[i] = "?"
+		args = append(args, a.ID)
+	}
+	args = append(args, DecisionAllow)
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT artifact_id, origin FROM artifact_network_origins
+		  WHERE artifact_id IN (`+strings.Join(placeholders, ",")+`) AND decision=?
+		  ORDER BY origin`, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var artID, origin string
+		if err := rows.Scan(&artID, &origin); err != nil {
+			return err
+		}
+		a := byID[artID]
+		a.NetworkAllowlist = append(a.NetworkAllowlist, origin)
+	}
+	return rows.Err()
 }
 
 func (s *SQLiteStore) DeleteArtifact(ctx context.Context, id string) error {

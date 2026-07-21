@@ -175,8 +175,8 @@ the outbound network footprint to show the user for approval.
   literal URLs) and clearly treat anything it finds as a hint. Whatever it misses is
   caught at runtime by the CSP allowlist + permission prompt.
 
-Present the deduplicated origin list at the approval step; write approved origins to the
-artifact's `network_allowlist`.
+Present the deduplicated origin list at the approval step; write approved origins as
+the artifact's `decision='allow'` rows in `artifact_network_origins`.
 
 ## 8. Thumbnails (optional, defer if needed)
 

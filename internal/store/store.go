@@ -23,15 +23,20 @@ const (
 )
 
 type Artifact struct {
-	ID               string    `json:"id"`
-	OwnerID          int64     `json:"owner_id"`
-	Title            string    `json:"title"`
-	SourceBlobID     string    `json:"source_blob_id"`
-	SourceURL        string    `json:"source_url"`
-	Tier             Tier      `json:"tier"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	NetworkAllowlist []string  `json:"network_allowlist"`
+	ID           string    `json:"id"`
+	OwnerID      int64     `json:"owner_id"`
+	Title        string    `json:"title"`
+	SourceBlobID string    `json:"source_blob_id"`
+	SourceURL    string    `json:"source_url"`
+	Tier         Tier      `json:"tier"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	// NetworkAllowlist is the artifact's approved origins, hydrated on read
+	// from the decision='allow' rows of artifact_network_origins (exhibit-x87).
+	// It is a projection, not a column: writes go through the origin-decision
+	// methods on Store (PutArtifact and UpdateArtifact's "network_allowlist"
+	// key translate to allow-row writes so the API shape stays unchanged).
+	NetworkAllowlist []string `json:"network_allowlist"`
 	// DownloadsApproved records the user's first-use approval of the
 	// host-mediated download bridge for this artifact. False means the host
 	// frame prompts on the next download attempt.
@@ -56,6 +61,25 @@ type Tag struct {
 	OwnerID int64  `json:"owner_id"`
 	Name    string `json:"name"`
 	Color   string `json:"color"`
+}
+
+// Origin decision values. Only DecisionAllow reaches the render CSP;
+// DecisionBlock is a "don't ask again" marker for the runtime permission
+// prompt (exhibit-fr7) and must never widen the policy.
+const (
+	DecisionAllow = "allow"
+	DecisionBlock = "block"
+)
+
+// OriginDecision is one user decision about one origin an artifact may
+// contact. Source records where the decision came from ("user", "legacy",
+// "runtime", …) and is informational only.
+type OriginDecision struct {
+	Origin    string    `json:"origin"`
+	Decision  string    `json:"decision"`
+	Source    string    `json:"source"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Share struct {
@@ -90,6 +114,22 @@ type Store interface {
 	ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error)
 	UpdateArtifact(ctx context.Context, id string, updates map[string]any) error
 	DeleteArtifact(ctx context.Context, id string) error
+
+	// Network origin decisions (exhibit-x87). ListOriginDecisions returns
+	// every decision for an artifact, allow and block alike, ordered by
+	// origin. AllowedOrigins is the CSP's read path: the origins of the
+	// decision='allow' rows only. SetOriginDecision upserts one origin's
+	// decision (the (artifact, origin) primary key means an origin can never
+	// hold two decisions). ReplaceAllowedOrigins makes the allow set exactly
+	// origins — it upserts those and deletes the artifact's other *allow*
+	// rows, deliberately leaving block rows untouched so a caller that only
+	// knows the allowlist (the edit page's single PATCH) can never silently
+	// clear a "don't ask again" decision.
+	ListOriginDecisions(ctx context.Context, artifactID string) ([]OriginDecision, error)
+	AllowedOrigins(ctx context.Context, artifactID string) ([]string, error)
+	SetOriginDecision(ctx context.Context, artifactID, origin, decision, source string) error
+	DeleteOriginDecision(ctx context.Context, artifactID, origin string) error
+	ReplaceAllowedOrigins(ctx context.Context, artifactID string, origins []string, source string) error
 
 	// Collections
 	CreateCollection(ctx context.Context, c *Collection) error

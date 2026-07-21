@@ -152,8 +152,14 @@ artifacts(
   source_url,              -- set when ingested by URL; enables re-fetch (§8.1)
   tier,                    -- 1 | 2
   created_at, updated_at,
-  network_allowlist,       -- JSON array of approved origins (see §6)
   downloads_approved       -- first-use approval for the host-mediated download bridge
+)
+-- one decision per (artifact, origin), cascading with the artifact (§6)
+artifact_network_origins(
+  artifact_id, origin,
+  decision,                -- 'allow' drives the render CSP; 'block' never does
+  source,                  -- provenance: user | legacy | runtime
+  created_at, updated_at
 )
 collections(id, owner_id, name)
 artifact_collections(artifact_id, collection_id)
@@ -265,7 +271,7 @@ with a per-artifact allowlist as the source of truth:
    to contact (fetch/post/import). Nothing is rendered with network access until they
    decide.
 3. **Approve → allowlist.** Approved origins are written to the artifact's
-   `network_allowlist`. The render-time CSP `connect-src` / `script-src` / `style-src` /
+   `artifact_network_origins` rows as `decision='allow'`. The render-time CSP `connect-src` / `script-src` / `style-src` /
    `img-src` / `font-src` are generated from this list; everything else is blocked by the
    browser. Default for a no-network tool is effectively `connect-src 'none'`. Inlined,
    no-egress assets are exempt from allowlist approval: `style-src 'unsafe-inline'` always
@@ -274,9 +280,13 @@ with a per-artifact allowlist as the source of truth:
 4. **Runtime escape → blocked.** If a rendered artifact attempts an origin **not** on
    its allowlist, the attempt is blocked by the browser's CSP. The user can approve
    the origin afterward in the artifact's allowlist editor, which updates the CSP on
-   next render. A runtime approval prompt is tracked by `exhibit-fr7`.
-5. **Per-artifact settings.** The allowlist is visible and editable in each artifact's
-   settings — the user can review, add, or revoke origins at any time.
+   next render. A runtime approval prompt is tracked by `exhibit-fr7`; a "don't ask
+   again" answer from it is stored as a `decision='block'` row, which suppresses the
+   prompt and **never** affects the CSP.
+5. **Per-artifact settings.** Decisions are visible and editable in each artifact's
+   settings — the user can review, add, or revoke approved origins at any time, and
+   blocked origins are listed separately so an earlier "don't ask again" stays visible
+   and can be overridden rather than reading as merely undecided.
 
 The static scan is **transparency, not a wall** (it's evadable). The enforced boundary
 is the browser-level CSP generated from the allowlist; the scan just front-loads the
