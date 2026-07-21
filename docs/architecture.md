@@ -120,16 +120,19 @@ executable document with the correct security envelope:
 - Looks up the artifact, pulls its body from the blob store, its `network_allowlist`, and
   its current state.
 - Generates the per-artifact CSP (`connect-src`/`script-src`/`style-src`/`img-src`/
-  `font-src` from the allowlist) and sets it as a response header on the document.
-  `connect-src` is the allowlist alone — the storage shim needs no network of its own (§6).
-  Style/font defaults are permissive for *inlined* assets but strict for *network*
-  ones, matching the "it's just a file" thesis: `style-src` always carries
-  `'unsafe-inline'` (inline `<style>` blocks and `style=""` attributes never need
-  network approval), and `img-src`/`font-src` always carry `data:` so an artifact
-  that inlines its own images or fonts (`@font-face { src: url(data:…) }`) renders
-  with zero network egress. Loading a stylesheet, image, or font *from a remote
-  origin* still requires that origin on the allowlist — the network boundary is
-  unchanged; only inlined, no-egress assets are permitted by default.
+  `font-src`/`media-src` from the allowlist) and sets it as a response header on the
+  document. `connect-src` is the allowlist alone — the storage shim needs no network of
+  its own (§6). Style/font/media defaults are permissive for *inlined or local* assets
+  but strict for *network* ones, matching the "it's just a file" thesis: `style-src`
+  always carries `'unsafe-inline'` (inline `<style>` blocks and `style=""` attributes
+  never need network approval), `img-src`/`font-src` always carry `data:` so an
+  artifact that inlines its own images or fonts (`@font-face { src: url(data:…) }`)
+  renders with zero network egress, and `media-src` always carries `blob:` so a
+  `<video>`/`<audio>` element can play back a file the artifact loaded locally via
+  `<input type=file>` + `URL.createObjectURL` — the object never leaves the browser.
+  Loading a stylesheet, image, font, or media file *from a remote origin* still
+  requires that origin on the allowlist — the network boundary is unchanged; only
+  inlined/local, no-egress assets are permitted by default.
 - Injects the **render preamble** as the first `<head>` script(s) — the **storage
   shim** with the artifact's state **inlined** into it so `getItem` is correct
   synchronously, plus the download/clipboard **capability bridges** — then the

@@ -130,6 +130,32 @@ func TestBuildCSPFontSrcHonorsAllowlistedOrigin(t *testing.T) {
 	}
 }
 
+// A locally imported file (<input type=file> -> URL.createObjectURL) played back
+// via <video>/<audio src=blob:...> never leaves the browser, so it must render
+// regardless of the allowlist. media-src must permit blob: in BOTH branches — in
+// the empty branch it would otherwise fall back to default-src 'none' and be
+// blocked (this was the reported bug: a blob: media load blocked under
+// "default-src 'none'" because no media-src directive existed at all).
+func TestBuildCSPMediaSrcAlwaysAllowsBlob(t *testing.T) {
+	const appOrigin = "https://app.example.com"
+
+	cases := map[string][]string{
+		"empty allowlist":     nil,
+		"populated allowlist": {"https://cdn.example.com"},
+	}
+	for name, allowlist := range cases {
+		t.Run(name, func(t *testing.T) {
+			ms, ok := directive(t, buildCSP(allowlist, appOrigin), "media-src")
+			if !ok {
+				t.Fatalf("media-src directive missing — a blob: media source falls back to default-src 'none' and is blocked")
+			}
+			if !strings.Contains(ms, "blob:") {
+				t.Fatalf("media-src %q must allow blob: for locally imported files", ms)
+			}
+		})
+	}
+}
+
 // Writes must go to the host frame via postMessage (pinned to the app origin),
 // not a cross-origin fetch — the sandboxed iframe's opaque origin can't call the
 // API, and the fetch approach was what CORS-blocked write-through.
