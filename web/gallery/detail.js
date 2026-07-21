@@ -182,6 +182,92 @@ document.getElementById('clip-allow').addEventListener('click', async function()
   if (req) performClipboard(req);
 });
 
+// Network permission prompt (exhibit-fr7): the artifact's CSP already blocked
+// the request — the browser is the wall — so this only asks whether to widen
+// the policy for next time. The prompt lives here, in trusted app chrome,
+// because the artifact controls its own DOM and could forge a lookalike.
+// Allow records an allow decision and transparently reloads the frame (a CSP is
+// a response header fixed at load, so a new policy needs a new document); Block
+// once just dismisses; "Don't ask again" records a block decision, which never
+// widens the CSP and only stops future prompts. Violations arriving while a
+// prompt is open queue up so a page contacting several origins asks about each.
+let pendingNet = null;
+const netQueue = [];
+
+window.addEventListener('message', function(e) {
+  const d = e.data;
+  if (!d || d.__avNetwork !== true || d.artifactId !== ID) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || e.source !== frame.contentWindow) return;
+  netQueue.push({ origin: String(d.origin || ''), directive: String(d.directive || '') });
+  if (!pendingNet) showNextNetPrompt();
+});
+
+function showNextNetPrompt() {
+  pendingNet = netQueue.shift() || null;
+  const modal = document.getElementById('net-modal');
+  if (!pendingNet) { modal.hidden = true; return; }
+  document.getElementById('net-origin').textContent = pendingNet.origin;
+  document.getElementById('net-directive').textContent =
+    pendingNet.directive ? 'Blocked by ' + pendingNet.directive : '';
+  modal.hidden = false;
+}
+
+// Records one origin's decision through the per-origin route, which touches
+// only that origin — restating the whole allowlist from this page could clobber
+// decisions made elsewhere since it loaded.
+async function setOriginDecision(origin, decision) {
+  const st = document.getElementById('al-status');
+  const r = await fetch('/api/artifacts/' + encodeURIComponent(ID) + '/origins', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({ origin: origin, decision: decision, source: 'runtime_prompt' })
+  }).catch(function() { return null; });
+  if (!r || !r.ok) { st.textContent = '✗ Failed to save decision for ' + origin; return false; }
+  return true;
+}
+
+document.getElementById('net-once').addEventListener('click', showNextNetPrompt);
+document.getElementById('net-modal').addEventListener('click', function(e) {
+  if (e.target.id === 'net-modal') showNextNetPrompt();
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && !document.getElementById('net-modal').hidden) showNextNetPrompt();
+});
+
+document.getElementById('net-never').addEventListener('click', async function() {
+  const req = pendingNet;
+  if (req && !(await setOriginDecision(req.origin, 'block'))) return;
+  showNextNetPrompt();
+});
+
+document.getElementById('net-allow').addEventListener('click', async function() {
+  const req = pendingNet;
+  if (!req) { showNextNetPrompt(); return; }
+  if (!(await setOriginDecision(req.origin, 'allow'))) return;
+  document.getElementById('net-modal').hidden = true;
+  pendingNet = null;
+  // Reloading re-runs the artifact under the new CSP, so any origin still
+  // blocked is reported again — drop the queue rather than ask twice.
+  netQueue.length = 0;
+  reloadFrame();
+});
+
+// Reassigns the frame's src to fetch a fresh document (and so a fresh CSP
+// header). The query string is a cache-buster only; the render route ignores
+// it. The status line stands in for the flash of an empty frame.
+function reloadFrame() {
+  const frame = document.querySelector('iframe');
+  const st = document.getElementById('al-status');
+  st.textContent = 'Applying…';
+  const base = frame.src.split('?')[0];
+  frame.src = base + '?r=' + Date.now();
+  frame.addEventListener('load', function onload() {
+    frame.removeEventListener('load', onload);
+    st.textContent = '';
+  });
+}
+
 // "Update from source" — only reachable from the toolbar button, which the
 // server renders only for URL-ingested artifacts (SOURCE_URL is '' otherwise).
 async function refetchSource() {

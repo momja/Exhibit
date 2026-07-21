@@ -10,8 +10,10 @@
  *                        "don't ask again" answer (mutable working copy).
  *                        They never reach the CSP; allowing one here moves it
  *                        into the allowlist and Save's PATCH upserts it as an
- *                        allow decision. Block decisions this page doesn't
- *                        touch are never cleared by Save (exhibit-x87).
+ *                        allow decision; forgetting one deletes the decision
+ *                        outright (exhibit-fr7) so the runtime prompt may ask
+ *                        again. Block decisions this page doesn't touch are
+ *                        never cleared by Save (exhibit-x87).
  *   downloadsApproved - persisted first-use download approval (mutable)
  *   clipboardApproved - persisted first-use clipboard approval (mutable)
  */
@@ -67,6 +69,20 @@ function bindAllowSection(containerId, take) {
 bindAllowSection('unapproved-rows', o => { unapproved = unapproved.filter(x => x !== o); });
 bindAllowSection('blocked-rows', o => { blocked = blocked.filter(x => x !== o); });
 
+// "Forget" drops a block decision instead of overriding it: the origin returns
+// to undecided, so the runtime prompt may ask about it again. PATCH can't
+// express this (it only replaces the allow set), so Save deletes these through
+// the per-origin route — collected here, applied there like every other edit.
+let forgotten = [];
+document.getElementById('blocked-rows')?.addEventListener('click', function(e) {
+  const btn = e.target.closest('[data-action="forget"]');
+  if (!btn) return;
+  const origin = btn.closest('.allowlist-row').dataset.origin;
+  blocked = blocked.filter(x => x !== origin);
+  if (!forgotten.includes(origin)) forgotten.push(origin);
+  renderSecurityPanel();
+});
+
 document.getElementById('al-add-btn').addEventListener('click', function() {
   const inp = document.getElementById('al-add-input');
   const val = inp.value.trim();
@@ -83,7 +99,9 @@ document.getElementById('al-add-input').addEventListener('keydown', function(e) 
 // than interpolated markup — origins are user/scanner-controlled and can
 // contain HTML metacharacters (av-tux9), same reasoning as detail.js's
 // renderBadges().
-function buildOriginRow(origin, actionLabel, action, note) {
+// actions is a list of [label, action] pairs, rendered left to right; the
+// primary (last) one gets the solid button style.
+function buildOriginRow(origin, actions, note) {
   const row = document.createElement('div');
   row.className = 'allowlist-row';
   row.dataset.origin = origin;
@@ -99,21 +117,23 @@ function buildOriginRow(origin, actionLabel, action, note) {
     tag.textContent = note;
     row.appendChild(tag);
   }
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = action === 'remove' ? 'btn btn-sm btn-sec' : 'btn btn-sm';
-  btn.dataset.action = action;
-  btn.textContent = actionLabel;
-  row.appendChild(btn);
+  actions.forEach(function(a, i) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = i === actions.length - 1 && a[1] !== 'remove' ? 'btn btn-sm' : 'btn btn-sm btn-sec';
+    btn.dataset.action = a[1];
+    btn.textContent = a[0];
+    row.appendChild(btn);
+  });
   return row;
 }
 
-function renderOriginSection(containerId, origins, note) {
+function renderOriginSection(containerId, origins, note, actions) {
   const rows = document.getElementById(containerId);
   if (!rows) return; // section absent because it rendered empty server-side
   const heading = rows.previousElementSibling;
   rows.innerHTML = '';
-  origins.forEach(o => rows.appendChild(buildOriginRow(o, 'Allow', 'allow', note)));
+  origins.forEach(o => rows.appendChild(buildOriginRow(o, actions, note)));
   const show = origins.length > 0;
   rows.style.display = show ? '' : 'none';
   if (heading) heading.style.display = show ? '' : 'none';
@@ -122,13 +142,14 @@ function renderOriginSection(containerId, origins, note) {
 function renderSecurityPanel() {
   const alRows = document.getElementById('allowlist-rows');
   alRows.innerHTML = '';
-  allowlist.forEach(o => alRows.appendChild(buildOriginRow(o, 'Remove', 'remove')));
+  allowlist.forEach(o => alRows.appendChild(buildOriginRow(o, [['Remove', 'remove']])));
 
   // Both sections offer "Allow"; the blocked one labels each row so an
-  // explicit "don't ask again" reads differently from an undecided origin.
-  // Each section (and its heading) hides once emptied.
-  renderOriginSection('unapproved-rows', unapproved, null);
-  renderOriginSection('blocked-rows', blocked, 'blocked');
+  // explicit "don't ask again" reads differently from an undecided origin, and
+  // adds "Forget" to drop the decision back to undecided. Each section (and its
+  // heading) hides once emptied.
+  renderOriginSection('unapproved-rows', unapproved, null, [['Allow', 'allow']]);
+  renderOriginSection('blocked-rows', blocked, 'blocked', [['Forget', 'forget'], ['Allow', 'allow']]);
 
   document.getElementById('security-summary-text').textContent =
     allowlist.length + (allowlist.length === 1 ? ' origin' : ' origins') +
@@ -160,6 +181,16 @@ async function save() {
     status.textContent = '✗ Error: ' + (data.error || resp.statusText);
     return;
   }
+  // Blocks the user chose to forget. Deleted after the PATCH so a failed save
+  // leaves every decision as it was.
+  for (const origin of forgotten) {
+    await fetch('/api/artifacts/' + encodeURIComponent(ID) +
+      '/origins?origin=' + encodeURIComponent(origin), {
+      method: 'DELETE',
+      headers: {'Authorization':'Bearer '+TOKEN}
+    }).catch(() => {});
+  }
+  forgotten = [];
   status.textContent = '✓ Saved';
   // If the edited body changed the network footprint, the server re-ran the
   // scan and returned it. Re-run the explicit-approval flow so the user can

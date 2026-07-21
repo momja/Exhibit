@@ -113,7 +113,18 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 		state = nil
 	}
 
-	doc := injectShim(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state)
+	// Origins the user answered "don't ask again" for. They never reach the CSP
+	// (that is built from allow rows alone); they are inlined into the shim so a
+	// repeat violation for an already-refused origin is not re-surfaced to the
+	// host frame's permission prompt.
+	blocked, err := rd.blockedOrigins(r, a.ID)
+	if err != nil {
+		slog.WarnContext(r.Context(), "render origin decisions read failed",
+			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
+		blocked = nil
+	}
+
+	doc := injectShim(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, blocked)
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
 		slog.Int("body_bytes", len(bodyBytes)),
@@ -122,6 +133,22 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 		slog.String("csp", csp),
 	)
 	fmt.Fprint(w, doc)
+}
+
+// blockedOrigins returns the artifact's decision='block' origins — the "don't
+// ask again" answers the runtime permission prompt recorded (exhibit-fr7).
+func (rd *Renderer) blockedOrigins(r *http.Request, artifactID string) ([]string, error) {
+	decisions, err := rd.cfg.Store.ListOriginDecisions(r.Context(), artifactID)
+	if err != nil {
+		return nil, err
+	}
+	var blocked []string
+	for _, d := range decisions {
+		if d.Decision == store.DecisionBlock {
+			blocked = append(blocked, d.Origin)
+		}
+	}
+	return blocked, nil
 }
 
 // buildCSP generates a per-artifact Content-Security-Policy header value
@@ -569,6 +596,33 @@ const shimTemplate = `<script>
       // whose createWritable() materializes a download via the bridge above.
       return Promise.resolve(makeFileHandle(new File([], opts.suggestedName || 'download')));
     };
+
+    // ---- Network permission reporter (exhibit-fr7) ----
+    // The CSP built from this artifact's allow decisions is the wall: a request
+    // to an undecided origin is already blocked by the browser before we hear
+    // about it. This only *reports* that block to the host frame so the user
+    // can decide, in trusted app chrome, whether to widen the policy. The
+    // prompt cannot live in this frame: the artifact controls this DOM and
+    // could forge it. Origins the user already refused ("don't ask again") are
+    // inlined below and stay silent; each origin is reported once per load, so
+    // a request in a retry loop cannot spam the host.
+    var decidedOrigins = {};
+    (%s || []).forEach(function(o) { decidedOrigins[o] = true; });
+    document.addEventListener('securitypolicyviolation', function(e) {
+      var uri = String(e.blockedURI || '');
+      // Inline/eval violations report keywords ('inline', 'eval'), not URLs,
+      // and are policy we set deliberately — only real origins are actionable.
+      if (uri.indexOf('http://') !== 0 && uri.indexOf('https://') !== 0) return;
+      var origin;
+      try { origin = new URL(uri).origin; } catch (err) { return; }
+      if (decidedOrigins[origin]) return;
+      decidedOrigins[origin] = true;
+      window.parent.postMessage(
+        { __avNetwork: true, artifactId: ARTIFACT_ID, origin: origin,
+          directive: String(e.violatedDirective || '') },
+        API_ORIGIN
+      );
+    });
   }
 })();
 </script>`
@@ -576,18 +630,26 @@ const shimTemplate = `<script>
 // injectShim inserts the storage shim as the first element inside <head>.
 // If no <head> is found, the shim is prepended to the document. The artifact's
 // current state is inlined into the shim so the cache is populated before any
-// artifact script runs.
-func injectShim(body, artifactID, appOrigin string, state map[string]string) string {
+// artifact script runs, as is its set of already-refused origins so the runtime
+// network prompt does not re-ask about them.
+func injectShim(body, artifactID, appOrigin string, state map[string]string, blocked []string) string {
 	if state == nil {
 		state = map[string]string{}
 	}
-	// json.Marshal escapes <, >, & as </>/&, so the literal is
+	if blocked == nil {
+		blocked = []string{}
+	}
+	// json.Marshal escapes <, >, & as </>/&, so the literals are
 	// safe to embed inside a <script> element (can't break out with </script>).
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
 		stateJSON = []byte("{}")
 	}
-	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, stateJSON)
+	blockedJSON, err := json.Marshal(blocked)
+	if err != nil {
+		blockedJSON = []byte("[]")
+	}
+	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, stateJSON, blockedJSON)
 	// The snippet element-picker (Exh-edjk) rides along with the shim: inert
 	// until the app-origin host activates it, so it costs nothing for plain
 	// renders and share views.

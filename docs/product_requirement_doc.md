@@ -276,16 +276,21 @@ with a per-artifact allowlist as the source of truth:
    no-egress assets are exempt from allowlist approval: `style-src 'unsafe-inline'` always
    permits inline `<style>`/`style=""`, and `img-src`/`font-src` always permit `data:`
    URIs (an inlined image or `@font-face` font is not a network request).
-4. **Runtime escape → blocked.** If a rendered artifact attempts an origin **not** on
-   its allowlist, the attempt is blocked by the browser's CSP. The user can approve
-   the origin afterward in the artifact's allowlist editor, which updates the CSP on
-   next render. A runtime approval prompt is tracked by `exhibit-fr7`; a "don't ask
-   again" answer from it is stored as a `decision='block'` row, which suppresses the
-   prompt and **never** affects the CSP.
+4. **Runtime escape → blocked, then prompted.** If a rendered artifact attempts an
+   origin **not** on its allowlist, the attempt is blocked by the browser's CSP. The
+   render preamble reports the blocked origin to the host frame, which prompts in the
+   app's own chrome (never inside the artifact's DOM, which the artifact could forge):
+   **Allow** approves the origin and transparently reloads the artifact so the request
+   can retry under the new CSP; **Block once** dismisses; **Don't ask again** stores a
+   `decision='block'` row, which suppresses future prompts for that origin and
+   **never** affects the CSP. Each origin is prompted at most once per load. The
+   top-level/share view has no trusted chrome to host a prompt, so violations there
+   stay silently blocked.
 5. **Per-artifact settings.** Decisions are visible and editable in each artifact's
    settings — the user can review, add, or revoke approved origins at any time, and
    blocked origins are listed separately so an earlier "don't ask again" stays visible
-   and can be overridden rather than reading as merely undecided.
+   and can be overridden (Allow) or dropped entirely (Forget) rather than reading as
+   merely undecided.
 
 The static scan is **transparency, not a wall** (it's evadable). The enforced boundary
 is the browser-level CSP generated from the allowlist; the scan just front-loads the
