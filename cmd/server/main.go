@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
@@ -55,6 +56,14 @@ func main() {
 	bl, err := blob.NewFSStore(blobDir)
 	if err != nil {
 		fatal("open blob store", err)
+	}
+
+	// One-time catch-up for artifacts stored before migration 010 added
+	// source_text: their bodies live in the blob store, unreachable from the
+	// SQL migration itself. Non-fatal — search still works over title/tags
+	// if this fails; it's an enhancement pass, not load-bearing for startup.
+	if err := st.BackfillSourceText(context.Background(), bl); err != nil {
+		slog.Warn("backfill artifact source text", slog.String("err", err.Error()))
 	}
 
 	// Agent support (Exh-yvhp): BYO keys are sealed with the server secret;

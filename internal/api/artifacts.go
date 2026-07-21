@@ -283,6 +283,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		NetworkAllowlist: allowlist,
 		CreatedAt:        now,
 		UpdatedAt:        now,
+		SourceText:       req.Body,
 	}
 
 	if err := ro.cfg.Store.PutArtifact(r.Context(), a); err != nil {
@@ -398,6 +399,7 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 			// they are; origins introduced by the edited body surface via the
 			// footprint / runtime prompt and must be approved before they gain
 			// network access. See spec §6.2.
+			updates["source_text"] = newBody
 		}
 		delete(updates, "body")
 	}
@@ -505,7 +507,10 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Re-scan the network footprint and bump updated_at. Title is preserved.
-	updates := map[string]any{"network_allowlist": scanner.Scan(string(fetched))}
+	updates := map[string]any{
+		"network_allowlist": scanner.Scan(string(fetched)),
+		"source_text":       string(fetched),
+	}
 	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, updates); err != nil {
 		serverError(w, r, "refetch update artifact", err)
 		return
