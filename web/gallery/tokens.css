@@ -7,6 +7,17 @@
  * constant still colors the server-rendered SVG logo, so keep the two in
  * sync. They live here as committed CSS (instead of the old per-template
  * inline <style> injection) so static stylesheets need no Go round-trip. */
+/* Opts every cross-document navigation between gallery/detail/edit into the
+ * View Transitions API (Exh-pb2k): instead of unloading straight to a blank
+ * default-white frame, the browser keeps the outgoing page's snapshot on
+ * screen and cross-fades to the incoming one. Lives here, not per-page,
+ * because it's a document-level opt-in and tokens.css is the one sheet every
+ * page loads first. No-op (ignored) in browsers without View Transitions
+ * support, so navigation there is unchanged. */
+@view-transition{
+	navigation:auto;
+}
+
 :root{
 	/* brand / accent */
 	--brand-blue:#23559e;
