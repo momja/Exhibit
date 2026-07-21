@@ -330,7 +330,7 @@ stores it, and returns the rendered/share URL.
 
 ### 8.2 Rediscover
 
-Open the web gallery, search "bar chart" (matches indexed title; expanded to source + tags tracked by `av-b6o9`),
+Open the web gallery, search "bar chart" (matches indexed title, source, or tags),
 click the thumbnail, the tool renders live in its sandboxed iframe with its state
 inlined from the service. No regeneration, no digging through chat logs.
 

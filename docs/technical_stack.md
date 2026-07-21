@@ -58,7 +58,8 @@ the smallest possible Docker image. It supports FTS5, which you need. Switch to 
 unlikely at this product's scale.
 
 **Search: SQLite FTS5.** A single external-content FTS5 table delivers the gallery's
-search with zero extra infrastructure. It indexes artifact titles.
+search with zero extra infrastructure. It indexes artifact title, source text, and tag
+names — a single search box query matches any of the three.
 
 **Migrations: `goose`.** Embed migration files in the binary (`go:embed`) and run them on
 startup so a fresh container self-initializes.

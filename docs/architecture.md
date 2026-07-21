@@ -176,7 +176,10 @@ Blob:   put/get artifact bodies by id
   (exhibit-fr7) and never widens the policy. A caller that knows only the
   allowlist replaces the allow rows without touching block rows, so a save from
   the edit page can never silently clear a decision it never displayed.
-- **Search** → an FTS5 table over artifact titles.
+- **Search** → an FTS5 table over artifact title, source text, and tag names.
+  `source_text`/`tags_text` are denormalized search shadows on `artifacts`, kept in
+  sync by triggers and, for `source_text`, by the API writing it alongside the blob
+  body — the blob store and the tags join remain the sources of truth (av-b6o9).
 - **Bodies** → filesystem now, S3-compatible later — same `Blob` interface.
 
 Because handlers never touch SQLite or the filesystem directly, swapping the metadata
