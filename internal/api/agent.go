@@ -36,16 +36,47 @@ func (ro *Router) putAgentKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported provider")
 		return
 	}
+	ownerID := ownerIDFromCtx(r.Context())
+
+	// An empty api_key means "keep the currently stored key" — lets the UI
+	// save a model/provider-label change without forcing re-entry of the
+	// secret (Exh-454g). Only valid when a key for this provider already
+	// exists; switching providers still needs a fresh key.
 	if req.APIKey == "" {
-		writeError(w, http.StatusBadRequest, "api_key is required")
+		existing, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerID)
+		if err != nil {
+			serverError(w, r, "get agent key", err)
+			return
+		}
+		if existing == nil {
+			writeError(w, http.StatusBadRequest, "api_key is required")
+			return
+		}
+		if existing.Provider != req.Provider {
+			writeError(w, http.StatusBadRequest, "api_key is required when changing provider")
+			return
+		}
+		plain, err := ro.cfg.Secrets.Decrypt(existing.KeyCiphertext)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "api_key is required")
+			return
+		}
+		row := &store.AgentKey{OwnerID: ownerID, Provider: req.Provider, Model: req.Model, KeyCiphertext: existing.KeyCiphertext}
+		if err := ro.cfg.Store.SetAgentKey(r.Context(), row); err != nil {
+			serverError(w, r, "store agent key", err)
+			return
+		}
+		slog.InfoContext(r.Context(), "agent key model updated",
+			slog.String("provider", req.Provider), slog.String("model", req.Model))
+		writeJSON(w, http.StatusOK, agentKeyStatus(req.Provider, req.Model, plain))
 		return
 	}
+
 	sealed, err := ro.cfg.Secrets.Encrypt(req.APIKey)
 	if err != nil {
 		serverError(w, r, "seal agent key", err)
 		return
 	}
-	ownerID := ownerIDFromCtx(r.Context())
 	row := &store.AgentKey{OwnerID: ownerID, Provider: req.Provider, Model: req.Model, KeyCiphertext: sealed}
 	if err := ro.cfg.Store.SetAgentKey(r.Context(), row); err != nil {
 		serverError(w, r, "store agent key", err)
