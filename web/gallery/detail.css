@@ -7,6 +7,10 @@ body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;display:flex
 header{background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;z-index:20}
 header a{color:var(--brand-blue);text-decoration:none;font-size:13px}
 header h1{font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Kebab + sheet scrim exist in the markup on every viewport but only mean
+ * something below the mobile breakpoint, where the toolbar becomes a sheet
+ * (av-g7n7). Above it they stay hidden, so desktop renders as it always has. */
+#sheet-toggle,.sheet-head,.sheet-scrim{display:none}
 .toolbar{background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 20px;display:flex;gap:12px;align-items:center;flex-shrink:0;font-size:13px}
 .toolbar a{color:var(--brand-blue);text-decoration:none;display:inline-flex;align-items:center;gap:4px}
 .toolbar button{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer}
@@ -27,3 +31,56 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
 .modal p{font-size:13px;color:#555;margin-top:10px;overflow-wrap:anywhere}
 .modal code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:12px}
 .modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
+
+/* --- mobile: compact header + actions bottom sheet (av-g7n7) -------------
+ * On a phone the artifact, not the chrome, owns the screen. The header
+ * collapses to one non-wrapping row (back arrow, ellipsized title, kebab)
+ * and the whole toolbar — the same DOM, restyled in place, so there is no
+ * second copy of the action list to keep in sync — becomes a bottom sheet
+ * the kebab slides up over a scrim. 640px matches edit.css. */
+@media (max-width:640px){
+  /* dvh, not vh: the sheet's bottom edge must clear the mobile URL bar. */
+  body{height:100dvh}
+  header{padding:8px 12px;gap:10px}
+  /* The date is demoted to the sheet header; the back link to its arrow. */
+  header .muted,header .back-label{display:none}
+  header a{font-size:18px;line-height:1}
+  #sheet-toggle{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:36px;height:36px;font-size:18px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-panel);color:var(--color-ink-soft);cursor:pointer}
+  /* One pane fits a phone. The source pane would halve an already narrow
+   * artifact; the sheet's Edit action is the way to the code. */
+  .panels .panel{display:none}
+
+  .sheet-scrim{display:block;position:fixed;inset:0;background:var(--overlay);z-index:30;opacity:0;pointer-events:none;transition:opacity .2s ease}
+  body.sheet-open .sheet-scrim{opacity:1;pointer-events:auto}
+
+  /* visibility (not just the transform) keeps the closed sheet out of the
+   * tab order; it flips back only after the slide-out finishes. */
+  .toolbar{position:fixed;left:0;right:0;bottom:0;z-index:40;flex-direction:column;align-items:stretch;gap:0;padding:0 0 max(12px,env(safe-area-inset-bottom));border-bottom:none;border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.25);max-height:85dvh;overflow-y:auto;font-size:15px;transform:translateY(100%);visibility:hidden;transition:transform .2s ease,visibility 0s .2s}
+  body.sheet-open .toolbar{transform:none;visibility:visible;transition:transform .2s ease}
+  .toolbar-sep{display:none}
+  .toolbar>a,.toolbar>button{padding:14px 20px;gap:12px;font-size:15px;border:none;border-radius:0;background:none}
+  /* align-items:stretch already gives the row its width; this only undoes the
+   * desktop button's centered label so it lines up with the anchors. */
+  .toolbar>button{justify-content:flex-start;color:var(--brand-blue)}
+
+  .sheet-head{display:flex;position:relative;align-items:baseline;gap:10px;padding:20px 20px 12px;border-bottom:1px solid var(--color-hairline)}
+  .sheet-grip{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:36px;height:4px;border-radius:var(--radius-pill);background:var(--color-border)}
+  .sheet-title{flex:1;min-width:0;font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* Permissions group: the capability popover's rows are exactly the receipt
+   * the sheet wants, but its hover-opened, top:100%/right:0 positioning would
+   * fly off-screen here. So the chip trigger goes away and the popover is
+   * pinned open and inline as the sheet's last group — same markup, no
+   * mobile-only duplicate of the rows. `order` keeps it (and the Manage link
+   * that follows it) below the plain actions without reordering the DOM,
+   * which would also reorder the desktop row. */
+  .capability-wrap{display:block;order:2}
+  .capability-cluster{display:none}
+  .toolbar .capability-popover{position:static;width:auto;max-width:none;visibility:visible;opacity:1;pointer-events:auto;border:none;border-top:1px solid var(--color-hairline);border-radius:0;box-shadow:none;margin:0;padding:16px 20px 8px;font-size:13px}
+  .capability-popover-header{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--color-muted)}
+  /* The toolbar's own Manage link sits right below; one is enough. Scoped by
+   * .toolbar to outrank `.toolbar a{display:inline-flex}` above. */
+  .toolbar .capability-popover-manage{display:none}
+  .toolbar a[href$="#security-panel"]{order:2}
+  #al-status{order:3;padding:0 20px 8px}
+}

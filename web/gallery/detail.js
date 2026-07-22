@@ -9,6 +9,36 @@
  *   clipboardApproved  - persisted first-use clipboard approval (mutable)
  */
 
+// Mobile actions sheet (av-g7n7): below 640px the toolbar is styled as a
+// bottom sheet that this kebab slides up over a scrim. One body class drives
+// both, and above the breakpoint the kebab and scrim are display:none — so
+// nothing here can fire, and the class means nothing to the desktop layout.
+const sheet = document.getElementById('actions-sheet');
+const sheetToggle = document.getElementById('sheet-toggle');
+
+function setSheetOpen(open) {
+  document.body.classList.toggle('sheet-open', open);
+  sheetToggle.setAttribute('aria-expanded', String(open));
+  // Move focus with the sheet: into its first action on open, back to the
+  // kebab on close, so the sheet is never dismissed out from under focus.
+  if (open) {
+    const first = sheet.querySelector('a,button');
+    if (first) first.focus();
+  } else if (sheet.contains(document.activeElement)) {
+    sheetToggle.focus();
+  }
+}
+
+sheetToggle.addEventListener('click', function() {
+  setSheetOpen(!document.body.classList.contains('sheet-open'));
+});
+document.getElementById('sheet-scrim').addEventListener('click', function() {
+  setSheetOpen(false);
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.body.classList.contains('sheet-open')) setSheetOpen(false);
+});
+
 // State bridge: the artifact runs in a sandboxed (opaque-origin) iframe and
 // cannot call the API itself. Its storage shim posts state writes here; we
 // forward them same-origin with the auth token. Validate the message shape and
