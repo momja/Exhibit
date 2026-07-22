@@ -150,6 +150,14 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 //     the browser falls back to script-src for worker scripts too; script-src
 //     already carries 'unsafe-eval', so a blob: script grants no capability beyond
 //     what eval already permits — it's the same zero-egress exemption as media-src.
+//   - form-action is built from the same allowlist as connect-src. This matters
+//     because form-action does NOT fall back to default-src — a sandbox that
+//     grants allow-forms without an explicit form-action would let an artifact
+//     submit a <form> to any origin, a network-egress vector the allowlist would
+//     otherwise govern. The empty-allowlist branch pins form-action to 'self'
+//     rather than 'none': a form with no/empty action submits to the current
+//     document (the render URL itself), which is zero-egress and needs no
+//     allowlist approval.
 func buildCSP(allowlist []string, appOrigin string) string {
 	frameAncestors := "frame-ancestors " + appOrigin
 	if len(allowlist) == 0 {
@@ -161,6 +169,7 @@ func buildCSP(allowlist []string, appOrigin string) string {
 			"font-src data:",
 			"media-src blob:",
 			"connect-src 'none'",
+			"form-action 'self'",
 			frameAncestors,
 		}, "; ")
 	}
@@ -174,6 +183,7 @@ func buildCSP(allowlist []string, appOrigin string) string {
 		"font-src data: " + origins,
 		"media-src blob: " + origins,
 		"connect-src " + origins,
+		"form-action 'self' " + origins,
 		frameAncestors,
 	}, "; ")
 }

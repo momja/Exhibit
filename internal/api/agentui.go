@@ -195,7 +195,7 @@ header h1{font-size:16px;font-weight:600;flex:1}
     </div>
     <div id="frame-wrap">
       <div id="empty-preview"><i class="ph ph-frame-corners"></i><span>The artifact preview appears here once the agent saves one.</span></div>
-      <iframe id="pv-frame" sandbox="allow-scripts" allow="clipboard-read; clipboard-write" style="display:none"></iframe>
+      <iframe id="pv-frame" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write" style="display:none"></iframe>
     </div>
   </div>
 </div>

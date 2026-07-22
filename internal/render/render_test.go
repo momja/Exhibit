@@ -183,6 +183,41 @@ func TestBuildCSPScriptSrcAlwaysAllowsBlob(t *testing.T) {
 	}
 }
 
+// form-action does NOT fall back to default-src, unlike the other directives
+// above. So it needs its own explicit value in both branches, built from the
+// same allowlist as connect-src (av-jlp8): the sandbox grants allow-forms, and
+// without a form-action directive an artifact could submit a <form> to any
+// origin, bypassing the network allowlist entirely.
+func TestBuildCSPFormActionMirrorsAllowlist(t *testing.T) {
+	const appOrigin = "https://app.example.com"
+
+	t.Run("empty allowlist pins form-action to self", func(t *testing.T) {
+		fa, ok := directive(t, buildCSP(nil, appOrigin), "form-action")
+		if !ok {
+			t.Fatalf("form-action directive missing — a form with no explicit action would then be unrestricted, not blocked")
+		}
+		if fa != "'self'" {
+			t.Fatalf("expected form-action 'self', got %q", fa)
+		}
+	})
+
+	t.Run("populated allowlist includes the allowlisted origin and self", func(t *testing.T) {
+		fa, ok := directive(t, buildCSP([]string{"https://api.github.com"}, appOrigin), "form-action")
+		if !ok {
+			t.Fatalf("form-action directive missing")
+		}
+		if !strings.Contains(fa, "https://api.github.com") {
+			t.Fatalf("form-action %q dropped the allowlisted origin", fa)
+		}
+		if !strings.Contains(fa, "'self'") {
+			t.Fatalf("form-action %q dropped 'self', breaking same-page/empty-action forms", fa)
+		}
+		if strings.Contains(fa, appOrigin) {
+			t.Fatalf("form-action %q must not include the app origin", fa)
+		}
+	})
+}
+
 // Writes must go to the host frame via postMessage (pinned to the app origin),
 // not a cross-origin fetch — the sandboxed iframe's opaque origin can't call the
 // API, and the fetch approach was what CORS-blocked write-through.
