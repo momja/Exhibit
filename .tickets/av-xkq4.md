@@ -4,98 +4,137 @@ status: open
 deps: []
 links: [Exh-yvhp]
 created: 2026-07-16T05:33:05Z
-type: feature
+type: epic
 priority: 2
 assignee: Max Omdal
-tags: [agent, render, build]
+tags: [agent, render, build, snippet]
 ---
-# Replace agent snippet tool with BOWSER_SNAPS SDK (drag-select region snapper)
+# Epic: Modular region capture — BOWSER_SNAPS SDK, decoupled from the agent
 
 ## Context
 
-The agent "snippet mode" (Exh-edjk) lets a user point at part of the live artifact preview and attach it to the next agent prompt as multimodal context. Today it is a **bespoke inline element-picker** in `internal/render/snippet.go`: the app-origin host activates it via `postMessage`, the user **clicks one element**, and it captures a hand-rolled structural descriptor + a single-element SVG-`foreignObject` screenshot, posting `{descriptor, image}` to the host (`internal/api/agentui.go`).
+The agent "snippet mode" (Exh-edjk) lets a user point at part of the live artifact
+preview and attach it to the next agent prompt as multimodal context. Today it is a
+**bespoke inline element-picker** in `internal/render/snippet.go`: the app-origin host
+activates it via `postMessage`, the user **clicks one element**, and it captures a
+hand-rolled structural descriptor + a single-element SVG-`foreignObject` screenshot,
+posting `{descriptor, image}` to the host (`internal/api/agentui.go`).
 
-Replace that hand-rolled tool with the owner's **BOWSER_SNAPS SDK** (https://github.com/momja/BOWSER_SNAPS, `sdk/` — pure dependency-free ESM). The SDK does the same job far better: a macOS-⌘⇧4-style **drag-select region** overlay plus a rich metadata collector — every element in the region with stable selectors, React/Vue/Angular **component names**, detected **frameworks**, a sanitized **DOM snippet**, and a rolling **console-error** buffer. That is strictly more context for "make this thing green / this area is broken" prompts, and it retires ~200 lines of bespoke picker/rasterizer code in favor of a maintained SDK the owner controls.
+Two goals for this epic:
 
-**Scope decisions (from the owner):**
-- **Drag-select region replaces all interaction for now.** The SDK will soon add click-to-pick; when it does it should slot in "roughly for free" behind the same host protocol — so keep the host/render message contract generic (`activate`/`deactivate`/`captured`/`cancelled`), not region-specific.
-- **Vendor the SDK the same way as CodeMirror/Phosphor:** an npm dependency in a new `web/` build workspace, esbuild-bundled at build time (Node is build-time-only; output is gitignored, not committed). The only twist: `bowser-snaps` is not on the public registry, so the dependency is `github:momja/BOWSER_SNAPS` (npm resolves git deps fine; `--private` only blocks publish, not install).
+1. **Replace** the hand-rolled picker with the owner's **BOWSER_SNAPS SDK**
+   (https://github.com/momja/BOWSER_SNAPS, `sdk/` — pure dependency-free ESM): a
+   macOS-⌘⇧4-style **drag-select region** overlay plus a rich metadata collector
+   (every element in the region with stable selectors, React/Vue/Angular **component
+   names**, detected **frameworks**, a sanitized **DOM snippet**, and a rolling
+   **console-error** buffer). Strictly more context for "make this area green / this is
+   broken" prompts, and it retires ~200 lines of bespoke picker/rasterizer code in
+   favour of a maintained SDK the owner controls.
+2. **Make the capture mechanism modular and independent of the agent**, so interaction
+   patterns can be added or swapped without touching any consumer.
 
-**Security model is unchanged and must stay that way.** Capture still happens *inside* the sandboxed, opaque-origin artifact iframe (the host cannot reach into it; the SDK's component detection needs to run in the artifact's own JS world anyway). The picker stays inert until the **app-origin** host activates it (origin-checked), all posts are pinned to `APP_ORIGIN`, and top-level/share renders (no parent frame) stay inert. The render doc's CSP is already `script-src 'unsafe-inline' 'unsafe-eval'`, so the bundled IIFE injects inline exactly like the current script — no CSP change. `getDisplayMedia` is unavailable in the opaque-origin sandbox, so we keep supplying **our own pixels** (the existing `foreignObject`→canvas rasterization, generalized from one element to the selection region) to the SDK's bring-your-own-pixels `capture` hook.
+### Why an epic (the isolation analysis that drove the split)
 
-## Design
+The current feature has two halves, isolated very differently:
 
-Cohesive single-branch feature. Five parts, in order.
+- **Capture side (`internal/render/snippet.go`) — already decoupled from the agent.**
+  Zero Go deps but `fmt`; wired in through exactly **one** call site
+  (`render.go:607`, inside `injectShim`). It does not know the agent exists — it picks,
+  builds `{descriptor, image}`, and `postMessage`s to `APP_ORIGIN`. Swapping the
+  interaction pattern is a change wholly within this file + its build.
+- **Consumer side (`internal/api/agentui.go`) — welded to the agent, not modular.**
+  The result is consumed in exactly one place: the agent chat page's **inline** JS
+  string (`renderAgentPage`). `pendingSnippets`, `toggleSnippet`, the `captured`
+  handler, `describeSnippet`, `renderSnippetChips`, `clearSnippets`, and `send()` are
+  all hand-inlined there. No reusable capture client exists — any non-agent consumer
+  would have to copy that machinery.
+- **The seam between them (`__exSnippet` postMessage) is informal.** String-keyed
+  `activate`/`deactivate`/`captured`/`cancelled` messages with an implicit payload
+  shape, matched by convention on both ends, formalized nowhere.
 
-### 1. New asset workspace `web/snippet/` (mirror `web/editor`)
+So the interaction side is already agent-independent; what is *not* independent is that
+the only consumer is the agent, welded into `agentui.go`, over an informal protocol.
+True modularity means (a) formalizing that seam and (b) giving the consumer side a
+reusable boundary. That is more than one cohesive PR — hence the decomposition below.
 
-Per `docs/build_assets.md`: any `web/*/package.json` with a `build` script is auto-discovered by `scripts/build-assets.sh` — no Dockerfile/Makefile edits needed.
+## Decomposition
 
-- `web/snippet/package.json`: `description` documenting what it builds and where; dependency `"bowser-snaps": "github:momja/BOWSER_SNAPS"`; devDependency `esbuild` (match `web/editor`'s version). `build` script:
-  `esbuild snippet-entry.js --bundle --minify --format=iife --target=es2020 --outfile=../../internal/api/assets/snippet.js`
-  Output lands under the already-embedded `internal/api/assets/` root (see `internal/api/assets.go` `//go:embed assets`). Commit the generated `package-lock.json`; `.gitignore` already excludes `internal/api/assets/` and `node_modules/`.
-- `web/snippet/snippet-entry.js` — the glue that wires the SDK to the host protocol. Imports from `bowser-snaps`:
-  `import { selectRegion, collectRegionMetadata, createErrorMonitor, buildPageContext, deviceRect, cropToPng } from 'bowser-snaps';`
-  Behavior:
-  - **On load (runs first in `<head>`, before artifact scripts):** `const errorMonitor = createErrorMonitor();` so console errors are buffered for any later snap. Read the host origin from a global the render prelude sets: `const APP_ORIGIN = window.__EXHIBIT_APP_ORIGIN;`. If there is no parent frame (`window.parent === window`), do nothing further (inert on direct/share renders).
-  - **Message listener** (`window.addEventListener('message', …)`): ignore anything whose `e.origin !== APP_ORIGIN` or without `e.data.__exSnippet`. Handle `'activate'` / `'deactivate'`. This is the same generic contract the current script uses, so future click-to-pick reuses it.
-  - **On `activate`:** run `const rect = await selectRegion();`. `null` (Esc / sub-4px) → post `{__exSnippet:'cancelled'}`. Otherwise: `const metadata = collectRegionMetadata(rect);` then rasterize a **BYO-pixels** capture and crop:
-    - `capture({rect, viewport})`: serialize a bounded clone of `document.documentElement` (reuse the current file's node-cap ≈300 / max-px ≈2000 guards and inline-computed-styles trick) into an SVG `foreignObject` sized to the viewport, draw to a canvas, `createImageBitmap` it. On any failure return `null`.
-    - If capture succeeded: `const dr = deviceRect(rect, viewport, bitmap.width, bitmap.height); const pngBytes = await cropToPng(bitmap, dr);` then base64-encode to `{ data, mimeType:'image/png' }`. If capture failed, proceed **image-less** (metadata-only) — same graceful degradation as today.
-    - Enrich the posted metadata with `page` (`buildPageContext()`) and `consoleErrors` (`errorMonitor.snapshot()`) alongside the collector's `{elements, frameworks, domSnippet}`. (Equivalent shortcut: build the whole thing via the SDK's higher-level `createSnapper({capture, errorMonitor})` and post `snap.metadata`, skipping its PNG-embed step which the agent path doesn't need. Prefer whichever reads cleaner — the building blocks avoid pulling in `embedMetadata`.)
-    - Post `{__exSnippet:'captured', metadata, image}` to `APP_ORIGIN`. Do **not** send the old single-element `descriptor` field.
-  - **Esc while active** → deactivate + `{__exSnippet:'cancelled'}`.
-  - Keep the overlay/teardown entirely inside the SDK (`selectRegion` owns its own shadow-DOM overlay), so the render script shrinks to glue.
+```
+av-c23y  Producer  ──►  av-zzbg  Capture client  ──►  av-g2f3  Agent consumer
+(render + web/snippet    (extract reusable, agent-      (rewire agentui.go +
+ + formal protocol)       agnostic host module)          prompt + docs + E2E)
+```
 
-### 2. Wire the bundle into the render surface as injected data (keep `render` Node-free)
+- **[[av-c23y]] — Producer.** New `web/snippet` esbuild workspace wrapping
+  BOWSER_SNAPS (drag-select region snap); inject the built bundle into the render
+  surface as `render.Config.SnippetBundle` data; delete the bespoke picker/rasterizer.
+  **Owns and documents the formal capture protocol** (`activate`/`deactivate` in;
+  `captured{metadata,image}`/`cancelled` out) so interaction patterns and consumers
+  vary independently. Emits the region snap; knows nothing about the agent. This is the
+  home for future interaction patterns (click-to-pick slots in here behind the same
+  contract).
+- **[[av-zzbg]] — Reusable capture client.** Extract the host-side capture handling out
+  of `agentui.go`'s inline script into a small, **agent-agnostic** shared module
+  (`web/gallery` asset convention): `mount(iframe)` → activate/deactivate + emit a
+  `captured` event to a subscriber; owns the chip/thumbnail UI. No agent, no prompt
+  logic. Acceptance requires it be mountable by a non-agent page. Depends on av-c23y
+  (consumes its protocol).
+- **[[av-g2f3]] — Agent as a thin consumer.** Rewire `agentui.go` to *use* the capture
+  client, add `describeSnapMetadata` (the agent-specific presentation of the SDK
+  metadata), update the `agent.go` system prompt, and the docs + mock-LLM E2E. Depends
+  on av-zzbg.
 
-Do **not** add a second `//go:embed` root in `internal/render` — that would make `go test ./internal/render` require the Node asset build. Instead inject the built bundle as data from the composition root that already embeds assets:
+Stories are separately reviewable; A→B→C is a hard dependency chain but they may land
+on one `feature/av-xkq4/*` merge branch rather than `main` if worked in sequence.
 
-- `internal/api/api.go` (~line 134, `render.New(render.Config{…})`): read the embedded `assets/snippet.js` (via the existing api assets FS) and pass it in a new `render.Config.SnippetBundle string` field.
-- `internal/render/render.go`: add `SnippetBundle string` to `Config`. Thread it into `injectShim` (add a `snippetBundle string` param; `serveArtifactDoc` passes `rd.cfg.SnippetBundle`).
-- `internal/render/snippet.go`: `snippetScript(appOrigin, bundle string)` returns a small **origin prelude** `<script>window.__EXHIBIT_APP_ORIGIN=%q</script>` (origin `%q`-quoted, the one dynamic value) immediately followed by `<script>` + `bundle` + `</script>`. Delete the giant hand-rolled `snippetTemplate` constant and its element-picker/rasterizer body. Keep the doc comment explaining the inert-until-activated, origin-pinned contract.
-- Existing `injectShim` tests (`internal/render/render_test.go`, the `injectShim("<head></head>", "abc", "https://app.test", nil)` calls) get an extra arg — pass a small stub bundle string (e.g. `"/*snip*/"`); they assert on shim content, not snippet content, so they keep passing with **no Node dependency**.
+## Cross-cutting constraints (apply to every child)
 
-### 3. Host consumer `internal/api/agentui.go`
+- **Security model unchanged.** Capture stays *inside* the sandboxed, opaque-origin
+  artifact iframe (the host can't reach in; the SDK's component detection needs the
+  artifact's own JS world). The picker stays inert until the **app-origin** host
+  activates it (origin-checked), all posts are pinned to `APP_ORIGIN`, and
+  top-level/share renders (no parent frame) stay inert. Render CSP is already
+  `script-src 'unsafe-inline' 'unsafe-eval'` — the bundled IIFE injects inline exactly
+  like today; **no CSP change**. `getDisplayMedia` is unavailable in the opaque-origin
+  sandbox, so we keep supplying **our own pixels** (the existing `foreignObject`→canvas
+  rasterization, generalized from one element to the region) to the SDK's
+  bring-your-own-pixels `capture` hook.
+- **Vendoring like CodeMirror/Phosphor.** npm dependency in a `web/*` esbuild
+  workspace, build-time only, output gitignored under `internal/api/assets/`. The one
+  twist: `bowser-snaps` is not on the public registry, so the dep is
+  `github:momja/BOWSER_SNAPS` (npm resolves git deps fine; `--private` only blocks
+  publish, not install).
+- **`render` stays Node-free to test.** The bundle reaches `render` as injected data
+  (`render.Config.SnippetBundle`), never a second `//go:embed` in `internal/render`, so
+  `go test ./internal/render` needs no asset build. (Ousterhout: treat the asset as
+  data; pull complexity down.)
+- **Docs describe only what's built** — each child updates docs *in its own PR*, not
+  ahead of the code.
 
-The received-message handler and prompt formatter move from a single-element `descriptor` to the SDK `metadata` object.
+## Epic-level acceptance
 
-- `pendingSnippets` entries become `{image, metadata, thumbUrl}` (drop `descriptor`). Update the init comment (~line 202) and the `captured` handler (~line 590): read `d.metadata` (+ `d.image`); build `thumbUrl` from `d.image` as today.
-- `renderSnippetChips` (~line 606): keep the thumbnail; label the chip from metadata — e.g. the first element's `selector`, or `"N elements"` when several (`s.metadata.elements && s.metadata.elements[0] && s.metadata.elements[0].selector`).
-- Replace `describeSnippet(descriptor)` (~line 522) with `describeSnapMetadata(metadata)` producing a compact agent-readable block: page path, `frameworks`, an elements list (selector · tag · component name · trimmed text), `consoleErrors` (if any — this is often the bug), and the trimmed `domSnippet`. This is the main UX win; keep it terse (the region can carry up to ~40 elements — cap the rendered list, e.g. top ~8 in the SDK's smallest-area-first order).
-- `send()` (~line 493): `images` mapping is unchanged (one PNG per snap → `{data, mime_type}`); message text uses `describeSnapMetadata`.
-
-### 4. Agent system prompt `internal/agent/agent.go`
-
-Update the snippet paragraph (~line 115) from "an attached screenshot plus an element descriptor with selector/outerHTML" to reflect the region snap: a screenshot of a selected region plus metadata listing the elements in it (selectors, component names), detected frameworks, console errors, and a DOM snippet — instruct the agent to locate the intended element(s) via those selectors/component names and to treat console errors as likely-relevant.
-
-### 5. Docs + tests
-
-- **Docs (same PR — repo rule: docs describe only what's built):**
-  - `docs/agent.md` "Snippet mode" section — rewrite for the SDK region snapper (what it captures now, the BYO-pixels capture, the unchanged security posture). Note click-to-pick is a future SDK addition behind the same host contract.
-  - `docs/architecture.md` §3.2 (render surface) — the snippet picker is now the BOWSER_SNAPS SDK bundle injected inline; §3.5/§13 asset-workspace mentions gain `web/snippet`.
-  - `docs/technical_stack.md` §1 stack table — add the snapshot SDK / `web/snippet` esbuild workspace row.
-  - `docs/build_assets.md` — `web/snippet` is auto-discovered; note it outputs `internal/api/assets/snippet.js` and is injected into the render surface via `render.Config.SnippetBundle` (not served to browsers directly).
-- **Tests:**
-  - `internal/render/render_test.go` — update `injectShim` call sites for the new param; add a focused test that `snippetScript` emits the origin prelude (`__EXHIBIT_APP_ORIGIN` `%q`-quoted) followed by the injected bundle, and that the origin is escaped safe for the `<script>` context.
-  - `internal/api` agentui tests — a unit test for `describeSnapMetadata` over a representative SDK metadata object (elements + frameworks + a console error) asserting the compact text shape.
-  - The mock-LLM E2E path (`cmd/mockllm`, which already scripts snippet acknowledgment) still exercises the pipeline; verify it drives a change end-to-end with the new payload (the `verify` skill / `docs/agent.md` §Configuration harness).
-
-### Rejected alternative
-
-`//go:embed assets/snippet.js` directly in `internal/render` — simpler wiring, but couples `go test ./internal/render` to the Node asset build. Injecting the bundle as `render.Config.SnippetBundle` from `internal/api` (which already embeds `assets`) keeps `render` a pure transformer and its tests Node-free (Ousterhout: pull complexity down / treat the asset as data).
-
-## Acceptance Criteria
-
-- `web/snippet/` is a discovered asset workspace: `make assets` (and `docker build`) bundle `bowser-snaps` (github dep) via esbuild into `internal/api/assets/snippet.js`; nothing generated is committed; a checkout that skips the asset build fails loud (empty embed dir), as with the other workspaces.
-- In the agent preview (`/agent?artifact=<id>`), activating snippet mode (Snip button / Ctrl+Shift+S) shows the SDK's drag-select overlay; dragging a region attaches a chip with a cropped region screenshot; the next prompt carries that screenshot as a multimodal image plus a compact metadata block (elements with selectors + component names, frameworks, console errors, DOM snippet). Esc cancels cleanly.
-- The bespoke element-picker/rasterizer in `internal/render/snippet.go` is gone; the injected script is the SDK IIFE bundle + an origin prelude, injected inline inside the sandbox, inert until the app-origin host activates it, all posts pinned to `APP_ORIGIN`, and inert on direct/share (top-level) renders. No CSP change.
-- Security posture unchanged: capture stays inside the opaque-origin iframe; origin checks on activation and on every post are intact.
-- `render` stays Node-free to test: the bundle arrives via `render.Config.SnippetBundle`; `go test ./internal/render` passes without running the Node build.
-- `go build ./...` + `go test ./...` (after `make assets`) pass; `web/snippet` builds clean; the mock-LLM flow drives an artifact edit via a region snap end-to-end.
-- Docs updated in the same PR (`agent.md`, `architecture.md`, `technical_stack.md`, `build_assets.md`); the future click-to-pick addition is noted as riding the same host contract.
+- The bespoke element-picker/rasterizer in `internal/render/snippet.go` is gone;
+  region capture is the BOWSER_SNAPS SDK bundle, injected inline in the sandbox, inert
+  until app-origin activation, all posts pinned to `APP_ORIGIN`, inert on
+  direct/share renders. No CSP change.
+- A **documented, versioned capture protocol** exists (av-c23y) and is the only contract
+  between producer and consumers.
+- A **reusable, agent-agnostic capture client** exists (av-zzbg) — the agent is one
+  consumer of it, not the owner of the capture UI. Adding a new interaction pattern
+  (e.g. click-to-pick) touches the producer only; adding a new consumer touches neither
+  producer nor client.
+- In the agent preview (`/agent?artifact=<id>`), drag-selecting a region attaches a
+  cropped screenshot chip; the next prompt carries that image plus a compact metadata
+  block (elements + selectors + component names, frameworks, console errors, DOM
+  snippet). Esc cancels cleanly.
+- `go build ./...` + `go test ./...` (after `make assets`) pass; `web/snippet` builds
+  clean; the mock-LLM flow drives an artifact edit via a region snap end-to-end.
 
 ## Notes
 
-- Reuse over rebuild: the SDK already ships the overlay (`selectRegion`), collectors (`collectRegionMetadata`, `detectFrameworks`), error buffer (`createErrorMonitor`), page context (`buildPageContext`), and cropping (`deviceRect`/`cropToPng`). The only bespoke code to keep is the sandbox rasterization for the BYO-pixels `capture` (generalized from the current per-element `foreignObject` rasterizer) — the SDK's default `captureViaDisplayMedia` won't work in the opaque-origin sandbox.
-- Branch per project rules: `feature/av-xkq4/bowser-snaps-snippet` via a supacode worktree; never develop on `main`.
+- Reuse over rebuild: the SDK already ships the overlay (`selectRegion`), collectors
+  (`collectRegionMetadata`, `detectFrameworks`), error buffer (`createErrorMonitor`),
+  page context (`buildPageContext`), and cropping (`deviceRect`/`cropToPng`). The only
+  bespoke code to keep is the sandbox rasterization for the BYO-pixels `capture`.
+- Full per-story implementation detail lives in the child tickets; this epic is the map
+  and the shared constraints.
