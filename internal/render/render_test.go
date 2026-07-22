@@ -156,6 +156,33 @@ func TestBuildCSPMediaSrcAlwaysAllowsBlob(t *testing.T) {
 	}
 }
 
+// A Worker constructed from a blob: URL (the standard workaround for spawning a
+// cross-origin worker script — e.g. ffmpeg.wasm — from an opaque-origin sandboxed
+// iframe, since a Worker cannot load a classic cross-origin script directly) must
+// execute regardless of the allowlist. There is no worker-src directive, so the
+// browser falls back to script-src for worker scripts; script-src must permit
+// blob: in BOTH branches, or the fallback leaves it out of the empty-allowlist
+// case entirely (default-src 'none') and drops it from the origin list otherwise.
+func TestBuildCSPScriptSrcAlwaysAllowsBlob(t *testing.T) {
+	const appOrigin = "https://app.example.com"
+
+	cases := map[string][]string{
+		"empty allowlist":     nil,
+		"populated allowlist": {"https://unpkg.com"},
+	}
+	for name, allowlist := range cases {
+		t.Run(name, func(t *testing.T) {
+			ss, ok := directive(t, buildCSP(allowlist, appOrigin), "script-src")
+			if !ok {
+				t.Fatalf("script-src directive missing")
+			}
+			if !strings.Contains(ss, "blob:") {
+				t.Fatalf("script-src %q must allow blob: for worker scripts loaded from a blob: URL", ss)
+			}
+		})
+	}
+}
+
 // Writes must go to the host frame via postMessage (pinned to the app origin),
 // not a cross-origin fetch — the sandboxed iframe's opaque origin can't call the
 // API, and the fetch approach was what CORS-blocked write-through.

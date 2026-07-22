@@ -144,12 +144,18 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 //     — the object never leaves the browser, so it carries the same zero-egress
 //     property as the data: exemptions above, not a network request the allowlist
 //     needs to govern.
+//   - script-src always permits blob: so a Worker constructed from a blob: URL
+//     (the standard way to run a cross-origin worker script from an opaque-origin
+//     sandbox, e.g. ffmpeg.wasm) can execute. There is no worker-src directive, so
+//     the browser falls back to script-src for worker scripts too; script-src
+//     already carries 'unsafe-eval', so a blob: script grants no capability beyond
+//     what eval already permits — it's the same zero-egress exemption as media-src.
 func buildCSP(allowlist []string, appOrigin string) string {
 	frameAncestors := "frame-ancestors " + appOrigin
 	if len(allowlist) == 0 {
 		return strings.Join([]string{
 			"default-src 'none'",
-			"script-src 'unsafe-inline' 'unsafe-eval'",
+			"script-src 'unsafe-inline' 'unsafe-eval' blob:",
 			"style-src 'unsafe-inline'",
 			"img-src data:",
 			"font-src data:",
@@ -162,7 +168,7 @@ func buildCSP(allowlist []string, appOrigin string) string {
 	origins := strings.Join(allowlist, " ")
 	return strings.Join([]string{
 		"default-src 'none'",
-		"script-src 'unsafe-inline' 'unsafe-eval' " + origins,
+		"script-src 'unsafe-inline' 'unsafe-eval' blob: " + origins,
 		"style-src 'unsafe-inline' " + origins,
 		"img-src data: " + origins,
 		"font-src data: " + origins,
