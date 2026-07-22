@@ -12,11 +12,19 @@
 </head>
 <body>
 <header>
-  <a href="/">← Gallery</a>
+  {{/* The label collapses to the bare arrow on phones (av-g7n7) — the
+       header there is one non-wrapping row and the title needs the width. */}}
+  <a href="/">←<span class="back-label"> Gallery</span></a>
   <h1>{{.Title}}</h1>
   <span class="muted text-sm">{{.Created}}</span>
+  {{/* Kebab: display:none above 640px, where the toolbar below is already a
+       visible row. Below it, the toolbar is a bottom sheet and this opens it. */}}
+  <button type="button" id="sheet-toggle" aria-label="Artifact actions" aria-haspopup="true" aria-expanded="false" aria-controls="actions-sheet"><i class="ph ph-dots-three-vertical"></i></button>
 </header>
-<div class="toolbar">
+<div class="toolbar" id="actions-sheet">
+  {{/* Sheet-only chrome (grab handle + title/date): display:none on desktop,
+       where the toolbar is an inline row that needs no header of its own. */}}
+  <div class="sheet-head"><span class="sheet-grip"></span><span class="sheet-title">{{.Title}}</span><span class="muted text-sm">{{.Created}}</span></div>
   <a href="{{.RenderOrigin}}/a/{{.ID}}" target="_blank">Open in new tab ↗</a>
   <span class="toolbar-sep">|</span>
   <a href="/artifacts/{{.ID}}/edit"><i class="ph ph-pencil-simple"></i> Edit</a>
@@ -30,6 +38,8 @@
   <button onclick="refetchSource()">Update from source ↻</button>{{end}}
   <span id="al-status" class="muted"></span>
 </div>
+{{/* Scrim behind the mobile actions sheet; display:none above 640px. */}}
+<div id="sheet-scrim" class="sheet-scrim"></div>
 <div class="panels">
   {{/* No allow="clipboard-*" delegation: the frame's opaque origin matches no
        Permissions-Policy allowlist, so the delegation was a no-op (av-hll6).
