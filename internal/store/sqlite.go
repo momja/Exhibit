@@ -6,6 +6,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 	"time"
@@ -125,9 +126,9 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 		now = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved,
+		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, source_text, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.SourceText,
 		now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
 	if err != nil {
@@ -420,6 +421,63 @@ func (s *SQLiteStore) attachAllowlists(ctx context.Context, arts []*Artifact) er
 func (s *SQLiteStore) DeleteArtifact(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, "DELETE FROM artifacts WHERE id=?", id)
 	return err
+}
+
+// blobGetter is the read side of blob.Store — the minimal seam
+// BackfillSourceText needs, so the store package doesn't import blob.
+type blobGetter interface {
+	Get(ctx context.Context, id string) (io.ReadCloser, error)
+}
+
+// BackfillSourceText populates source_text for artifacts left over from
+// before migration 010 (an empty source_text), so their pre-existing bodies
+// become searchable without requiring a re-edit. It's a startup pass, not a
+// migration, because the blob store isn't reachable from SQL. Safe to call
+// repeatedly: rows already backfilled are excluded by the WHERE clause, and a
+// row whose blob can't be read is logged and skipped rather than aborting
+// the rest.
+func (s *SQLiteStore) BackfillSourceText(ctx context.Context, blobs blobGetter) error {
+	rows, err := s.db.QueryContext(ctx, "SELECT id, source_blob_id FROM artifacts WHERE source_text = ''")
+	if err != nil {
+		return err
+	}
+	type pending struct{ id, blobID string }
+	var toFill []pending
+	for rows.Next() {
+		var p pending
+		if err := rows.Scan(&p.id, &p.blobID); err != nil {
+			rows.Close()
+			return err
+		}
+		toFill = append(toFill, p)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+
+	for _, p := range toFill {
+		rc, err := blobs.Get(ctx, p.blobID)
+		if err != nil {
+			slog.WarnContext(ctx, "backfill source_text: read blob failed",
+				slog.String("artifact_id", p.id), slog.String("blob_id", p.blobID), slog.String("err", err.Error()))
+			continue
+		}
+		body, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			slog.WarnContext(ctx, "backfill source_text: blob read error",
+				slog.String("artifact_id", p.id), slog.String("err", err.Error()))
+			continue
+		}
+		if _, err := s.db.ExecContext(ctx, "UPDATE artifacts SET source_text = ? WHERE id = ?", ExtractSearchText(string(body)), p.id); err != nil {
+			return fmt.Errorf("backfill source_text for %s: %w", p.id, err)
+		}
+	}
+	if len(toFill) > 0 {
+		slog.InfoContext(ctx, "backfilled artifact source_text", slog.Int("count", len(toFill)))
+	}
+	return nil
 }
 
 func (s *SQLiteStore) CreateCollection(ctx context.Context, c *Collection) error {
