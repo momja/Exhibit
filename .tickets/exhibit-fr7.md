@@ -1,6 +1,6 @@
 ---
 id: exhibit-fr7
-status: in_progress
+status: closed
 deps: [exhibit-x87]
 links: [av-jafp, av-isb3, av-mf1x, av-41se, av-5aje, exhibit-x87]
 created: 2026-07-01T05:23:56Z

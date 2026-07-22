@@ -1,6 +1,6 @@
 ---
 id: av-b6o9
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-07-06T23:12:04Z
