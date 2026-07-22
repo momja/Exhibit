@@ -76,7 +76,7 @@ func TestDetailPageSandboxStillOmitsAllowDownloads(t *testing.T) {
 		start := strings.Index(page, "<iframe")
 		require.GreaterOrEqual(t, start, 0, "detail page must embed the renderer iframe")
 		iframeTag := page[start : start+strings.Index(page[start:], ">")]
-		assert.Contains(t, iframeTag, `sandbox="allow-scripts"`)
+		assert.Contains(t, iframeTag, `sandbox="allow-scripts allow-forms"`)
 		assert.NotContains(t, iframeTag, "allow-downloads",
 			"approval must never relax the sandbox (approved=%v)", approved)
 	}

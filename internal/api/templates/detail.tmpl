@@ -46,7 +46,7 @@
        Clipboard read/write is instead proxied through the host via the shim's
        capability bridge, gated by per-artifact first-use approval. Native
        keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. */}}
-  <iframe src="{{.RenderOrigin}}/a/{{.ID}}" sandbox="allow-scripts" loading="lazy"></iframe>
+  <iframe src="{{.RenderOrigin}}/a/{{.ID}}" sandbox="allow-scripts allow-forms" loading="lazy"></iframe>
   <div class="panel"><pre>{{.Src}}</pre></div>
 </div>
 
