@@ -70,6 +70,7 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .tool-chip i{font-size:13px}
 .thinking{align-self:flex-start;color:#999;font-size:12.5px;font-style:italic}
 .composer{border-top:1px solid #e0e0e0;padding:10px 12px;display:flex;flex-direction:column;gap:8px;flex-shrink:0}
+.pv-nudge{display:none;align-self:center;align-items:center;gap:6px;border:1px solid #c4d7f7;background:#eef4ff;color:var(--brand-blue);border-radius:999px;padding:6px 14px;font:inherit;font-size:13px;cursor:pointer}
 #snippet-chips{display:flex;gap:8px;flex-wrap:wrap}
 .snippet-chip{display:flex;align-items:center;gap:8px;background:#eef4ff;border:1px solid #c4d7f7;border-radius:8px;padding:5px 8px;font-size:12px;color:#234}
 .snippet-chip img{height:36px;max-width:80px;border-radius:4px;border:1px solid #c4d7f7;background:#fff}
@@ -93,6 +94,8 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .snip-btn:hover:not(:disabled){border-color:var(--brand-blue);color:var(--brand-blue)}
 .snip-btn:disabled{color:#bbb;cursor:default}
 .snip-btn.active{background:var(--brand-blue);color:#fff;border-color:var(--brand-blue)}
+.snip-btn .kbd{color:#aaa;font-size:11px}
+.snip-more{display:none}
 #frame-wrap{flex:1;position:relative}
 #frame-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
 #empty-preview{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#999;font-size:14px}
@@ -114,19 +117,65 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .btn-danger:hover{background:#c00}
 .spacer{flex:1}
 .current-key{font-size:12.5px;color:#555;background:#f6f6f6;border:1px solid #e4e4e4;border-radius:6px;padding:8px 10px;margin-top:10px}
+
+/* Mobile (av-td4y): the two panes don't fit side by side, so a segmented
+   control shows one at a time. Everything here is additive — above 640px the
+   switch is hidden and the side-by-side sidecar is untouched. */
+.pane-switch{display:none;background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 12px;flex-shrink:0}
+.pane-tabs{display:flex;gap:4px;background:#f0f1f3;border-radius:10px;padding:4px}
+.pane-tab{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 10px;border:none;border-radius:8px;background:transparent;color:#666;font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.pane-tab[aria-selected="true"]{background:#fff;color:#111;box-shadow:0 1px 2px rgba(0,0,0,.14)}
+.pane-tab .dot{display:none;width:8px;height:8px;border-radius:50%;background:var(--brand-blue)}
+.pane-tab.has-update .dot{display:block}
+@media (max-width:640px){
+  /* dvh keeps the composer above the mobile URL bar instead of under it. */
+  body{height:100dvh}
+  header{padding:10px 12px;gap:10px}
+  header a{font-size:18px;line-height:1}
+  header a .lbl{display:none}
+  header h1{font-size:15px}
+  .key-btn{max-width:45vw;white-space:nowrap;overflow:hidden}
+  #key-btn-label{overflow:hidden;text-overflow:ellipsis}
+  .pane-switch{display:block}
+  .chat,.preview{width:100%;min-width:0;flex:1}
+  .chat{border-right:none}
+  .preview{display:none}
+  body.show-preview .chat{display:none}
+  body.show-preview .preview{display:flex}
+  .pv-nudge{display:inline-flex}
+  #hint{display:none}
+  /* The preview bar becomes a bottom action bar led by the snippet button. */
+  #frame-wrap{order:1}
+  .preview-bar{order:2;border-bottom:none;border-top:1px solid #e0e0e0;padding:10px 12px}
+  .preview-bar .title,.preview-bar .spacer,.preview-bar #pv-detail{display:none}
+  .preview-bar a{display:inline-flex;align-items:center;justify-content:center;width:46px;height:42px;border:1px solid #ddd;border-radius:8px;font-size:16px}
+  .preview-bar a .lbl{display:none}
+  .snip-btn{order:-1;flex:1;justify-content:center;height:42px;font-size:15px;font-weight:500;background:var(--brand-blue);border-color:var(--brand-blue);color:#fff}
+  .snip-btn:disabled{background:#b9c4d8;border-color:#b9c4d8;color:#f2f5fb}
+  .snip-btn.active{background:var(--brand-blue-hover);box-shadow:inset 0 0 0 2px rgba(255,255,255,.6)}
+  .snip-btn .kbd{display:none}
+  .snip-more{display:inline}
+}
 </style>
 </head>
 <body>
 <header>
-  <a href="/">← Gallery</a>
+  <a href="/">←<span class="lbl"> Gallery</span></a>
   <h1><i class="ph ph-robot"></i> Agent</h1>
   <button class="key-btn" id="key-btn" onclick="openKeyModal()"><i class="ph ph-key"></i> <span id="key-btn-label">API key</span></button>
 </header>
 ` + disabledBanner + `
+<div class="pane-switch">
+  <div class="pane-tabs" role="tablist" aria-label="Chat or preview">
+    <button type="button" class="pane-tab" id="tab-chat" role="tab" aria-selected="true" aria-controls="pane-chat" onclick="showPane('chat')"><i class="ph ph-chat-circle"></i> Chat</button>
+    <button type="button" class="pane-tab" id="tab-preview" role="tab" aria-selected="false" aria-controls="pane-preview" onclick="showPane('preview')"><i class="ph ph-monitor"></i> Preview <span class="dot" aria-hidden="true"></span></button>
+  </div>
+</div>
 <div class="layout">
-  <div class="chat">
+  <div class="chat" id="pane-chat">
     <div id="messages"></div>
     <div class="composer">
+      <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> Preview updated — tap Preview to view</button>
       <div id="snippet-chips"></div>
       <div class="compose-row">
         <textarea id="input" rows="1" placeholder="Describe the tool to build…"></textarea>
@@ -136,13 +185,13 @@ header h1{font-size:16px;font-weight:600;flex:1}
       <div id="hint">Enter to send · Shift+Enter for a new line · Ctrl+Shift+S to snippet an element from the preview</div>
     </div>
   </div>
-  <div class="preview">
+  <div class="preview" id="pane-preview">
     <div class="preview-bar">
       <span class="title" id="pv-title">No artifact yet</span>
-      <a id="pv-open" href="#" target="_blank" style="display:none">Open ↗</a>
+      <a id="pv-open" href="#" target="_blank" style="display:none"><span class="lbl">Open </span>↗</a>
       <a id="pv-detail" href="#" style="display:none">Details</a>
       <span class="spacer"></span>
-      <button class="snip-btn" id="snip-btn" disabled onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet <span style="color:#aaa;font-size:11px">Ctrl+Shift+S</span></button>
+      <button class="snip-btn" id="snip-btn" disabled onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
     </div>
     <div id="frame-wrap">
       <div id="empty-preview"><i class="ph ph-frame-corners"></i><span>The artifact preview appears here once the agent saves one.</span></div>
@@ -437,7 +486,9 @@ function handleAgentEvent(ev) {
     case 'exhibit_artifact_saved': {
       artifact = {id: ev.artifactId, title: ev.title || 'Artifact'};
       showArtifact(ev.artifactId, artifact.title);
-      let note = (ev.action === 'created' ? 'Artifact created' : 'Artifact updated') + ' — preview on the right.';
+      nudgePreview();
+      let note = (ev.action === 'created' ? 'Artifact created' : 'Artifact updated') +
+        (mobileQuery.matches ? ' — tap Preview to view it.' : ' — preview on the right.');
       if (ev.footprint && ev.footprint.length) {
         note += ' It references external origins (' + ev.footprint.join(', ') + '); they stay blocked until you approve them on the artifact page.';
       }
@@ -541,6 +592,37 @@ function autoGrow() {
 }
 inputEl.addEventListener('input', autoGrow);
 
+// --- Mobile panes (av-td4y) ------------------------------------------------
+// Below 640px the chat and the preview each take the whole screen and the
+// segmented control picks between them; above it the media query never fires,
+// so every call here is inert bookkeeping on an invisible control.
+const mobileQuery = window.matchMedia('(max-width:640px)');
+const tabChatEl = document.getElementById('tab-chat');
+const tabPreviewEl = document.getElementById('tab-preview');
+const nudgeEl = document.getElementById('pv-nudge');
+
+function showPane(pane) {
+  const preview = pane === 'preview';
+  document.body.classList.toggle('show-preview', preview);
+  tabChatEl.setAttribute('aria-selected', String(!preview));
+  tabPreviewEl.setAttribute('aria-selected', String(preview));
+  if (preview) clearPreviewNudge();
+}
+
+// An agent save the user can't see — they're on the Chat pane — lights the
+// Preview segment so the new render isn't missed.
+function nudgePreview() {
+  if (document.body.classList.contains('show-preview')) return;
+  tabPreviewEl.classList.add('has-update');
+  tabPreviewEl.setAttribute('aria-label', 'Preview, updated');
+  nudgeEl.hidden = false;
+}
+function clearPreviewNudge() {
+  tabPreviewEl.classList.remove('has-update');
+  tabPreviewEl.removeAttribute('aria-label');
+  nudgeEl.hidden = true;
+}
+
 // --- Preview + snippet mode (Exh-edjk) -------------------------------------
 function showArtifact(id, title) {
   document.getElementById('pv-title').textContent = title || 'Artifact';
@@ -563,7 +645,10 @@ function toggleSnippet() {
   snippetMode = !snippetMode;
   document.getElementById('snip-btn').classList.toggle('active', snippetMode);
   frameEl.contentWindow.postMessage({__exSnippet: snippetMode ? 'activate' : 'deactivate'}, '*');
-  if (snippetMode) addMsg('sys', 'Snippet mode: click an element in the preview (Esc to cancel).');
+  if (snippetMode) {
+    showPane('preview');   // you can't pick an element you can't see
+    addMsg('sys', 'Snippet mode: click an element in the preview (Esc to cancel).');
+  }
 }
 
 document.addEventListener('keydown', (e) => {
@@ -596,6 +681,8 @@ window.addEventListener('message', (e) => {
     }
     pendingSnippets.push(snip);
     renderSnippetChips();
+    // The element is attached to the composer, so the next step is typing.
+    showPane('chat');
     inputEl.focus();
   } else if (d.__exSnippet === 'cancelled') {
     snippetMode = false;
