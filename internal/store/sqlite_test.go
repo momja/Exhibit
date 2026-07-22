@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/pressly/goose/v3"
@@ -68,6 +70,107 @@ func TestListArtifacts(t *testing.T) {
 	all, err := s.ListArtifacts(ctx, ListOptions{})
 	require.NoError(t, err)
 	assert.Len(t, all, 3)
+}
+
+// TestSearchIndexesSourceAndTags exercises av-b6o9: the FTS index must match
+// on artifact source text and tag names, not just title. (Callers pass
+// ExtractSearchText output as SourceText, so these fixtures are the visible
+// text of a body, not raw HTML.)
+func TestSearchIndexesSourceAndTags(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{
+		ID: "a1", OwnerID: 1, Title: "Untitled Tool", SourceBlobID: "b1", Tier: Tier1,
+		SourceText: "uniquefunctionname dashboard",
+	}))
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{
+		ID: "a2", OwnerID: 1, Title: "Other Tool", SourceBlobID: "b2", Tier: Tier1,
+		SourceText: "no matching terms here",
+	}))
+
+	// Matches on source text a title search would never find.
+	found, err := s.ListArtifacts(ctx, ListOptions{Query: "uniquefunctionname"})
+	require.NoError(t, err)
+	require.Len(t, found, 1)
+	assert.Equal(t, "a1", found[0].ID)
+
+	tag := &Tag{ID: "tag1", OwnerID: 1, Name: "gadget"}
+	require.NoError(t, s.CreateTag(ctx, tag))
+	require.NoError(t, s.AddArtifactTag(ctx, 1, "a2", "tag1"))
+
+	// Matches on tag name.
+	found, err = s.ListArtifacts(ctx, ListOptions{Query: "gadget"})
+	require.NoError(t, err)
+	require.Len(t, found, 1)
+	assert.Equal(t, "a2", found[0].ID)
+
+	// Renaming the tag updates the index: old name stops matching, new name does.
+	_, err = s.UpdateTag(ctx, 1, "tag1", strPtr("widget"), nil)
+	require.NoError(t, err)
+
+	found, err = s.ListArtifacts(ctx, ListOptions{Query: "gadget"})
+	require.NoError(t, err)
+	assert.Len(t, found, 0)
+
+	found, err = s.ListArtifacts(ctx, ListOptions{Query: "widget"})
+	require.NoError(t, err)
+	require.Len(t, found, 1)
+	assert.Equal(t, "a2", found[0].ID)
+
+	// Removing the tag stops it from matching.
+	require.NoError(t, s.RemoveArtifactTag(ctx, 1, "a2", "tag1"))
+	found, err = s.ListArtifacts(ctx, ListOptions{Query: "widget"})
+	require.NoError(t, err)
+	assert.Len(t, found, 0)
+}
+
+// TestBackfillSourceText covers artifacts written before migration 010 added
+// source_text (simulated here by inserting with an empty SourceText, then
+// backfilling from a fake blob store) — legacy bodies must become searchable
+// without a re-edit. The backfill runs bodies through ExtractSearchText, so
+// only visible text becomes searchable, not markup or script.
+func TestBackfillSourceText(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{
+		ID: "legacy-1", OwnerID: 1, Title: "Legacy Tool", SourceBlobID: "blob-legacy", Tier: Tier1,
+	}))
+
+	// Not yet backfilled: no match on body content.
+	found, err := s.ListArtifacts(ctx, ListOptions{Query: "legacyuniqueterm"})
+	require.NoError(t, err)
+	assert.Len(t, found, 0)
+
+	blobs := fakeBlobGetter{
+		"blob-legacy": "<p>body containing legacyuniqueterm</p><script>const legacyscripttoken = 1</script>",
+	}
+	require.NoError(t, s.BackfillSourceText(ctx, blobs))
+
+	// Visible text from the blob is now searchable.
+	found, err = s.ListArtifacts(ctx, ListOptions{Query: "legacyuniqueterm"})
+	require.NoError(t, err)
+	require.Len(t, found, 1)
+	assert.Equal(t, "legacy-1", found[0].ID)
+
+	// Script content from the blob is not.
+	found, err = s.ListArtifacts(ctx, ListOptions{Query: "legacyscripttoken"})
+	require.NoError(t, err)
+	assert.Len(t, found, 0)
+
+	// Idempotent: calling again is a no-op (already-filled rows are excluded).
+	require.NoError(t, s.BackfillSourceText(ctx, blobs))
+}
+
+type fakeBlobGetter map[string]string
+
+func (f fakeBlobGetter) Get(_ context.Context, id string) (io.ReadCloser, error) {
+	body, ok := f[id]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	return io.NopCloser(strings.NewReader(body)), nil
 }
 
 func TestState(t *testing.T) {

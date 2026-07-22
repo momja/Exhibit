@@ -27,24 +27,32 @@ func listArtifactsQuery(t *testing.T, r *Router, q string) []map[string]any {
 
 // TestSearchMatchesSourceEndToEnd covers av-b6o9 through the actual HTTP
 // ingest path (not just the store layer): a term that only appears in the
-// artifact's body, never in its title, must still surface in gallery search.
+// artifact's visible body text, never in its title, must still surface in
+// gallery search — while a term that only appears in its <script> must not
+// (search indexes what an artifact shows, not the code it's made of).
 func TestSearchMatchesSourceEndToEnd(t *testing.T) {
 	r := newTestRouter(t)
 
 	createArtifact(t, r, map[string]any{
 		"title":             "Untitled Tool",
-		"body":              "<script>const uniqueSearchToken42 = 1;</script>",
+		"body":              "<p>uniqueSearchToken42 dashboard</p><script>const scriptOnlyToken99 = 1;</script>",
 		"network_allowlist": []string{},
 	})
 	createArtifact(t, r, map[string]any{
 		"title":             "Other Tool",
-		"body":              "<script>nothing interesting</script>",
+		"body":              "<p>nothing interesting</p>",
 		"network_allowlist": []string{},
 	})
 
+	// Visible body text matches, even though the title doesn't contain it.
 	found := listArtifactsQuery(t, r, "uniqueSearchToken42")
 	require.Len(t, found, 1)
 	assert.Equal(t, "Untitled Tool", found[0]["title"])
+
+	// Script content does not match — otherwise searching "script" or a
+	// common identifier would return every artifact.
+	found = listArtifactsQuery(t, r, "scriptOnlyToken99")
+	assert.Len(t, found, 0)
 }
 
 // TestArtifactJSONNeverLeaksSourceText guards the write-only contract on

@@ -470,7 +470,7 @@ func (s *SQLiteStore) BackfillSourceText(ctx context.Context, blobs blobGetter) 
 				slog.String("artifact_id", p.id), slog.String("err", err.Error()))
 			continue
 		}
-		if _, err := s.db.ExecContext(ctx, "UPDATE artifacts SET source_text = ? WHERE id = ?", string(body), p.id); err != nil {
+		if _, err := s.db.ExecContext(ctx, "UPDATE artifacts SET source_text = ? WHERE id = ?", ExtractSearchText(string(body)), p.id); err != nil {
 			return fmt.Errorf("backfill source_text for %s: %w", p.id, err)
 		}
 	}

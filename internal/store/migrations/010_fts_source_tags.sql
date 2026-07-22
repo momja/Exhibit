@@ -3,12 +3,13 @@
 -- and tag text, not just title. artifacts.source_text and .tags_text are
 -- denormalized search shadows of data that lives elsewhere (the blob store
 -- and the tags/artifact_tags join, respectively) — FTS5 needs the text
--- inside SQLite to index it. source_text is populated by the API whenever
--- it writes the blob body (see internal/api/artifacts.go); existing rows are
--- backfilled from the blob store once at startup (SQLiteStore.BackfillSourceText,
--- since blob content isn't reachable from SQL). tags_text is kept in sync
--- entirely by triggers below and is backfilled inline, since tag data is
--- already in SQLite.
+-- inside SQLite to index it. source_text holds the body's *visible* text
+-- (markup/script/style stripped by store.ExtractSearchText), populated by the
+-- API whenever it writes the blob body (see internal/api/artifacts.go);
+-- existing rows are backfilled from the blob store once at startup
+-- (SQLiteStore.BackfillSourceText, since blob content isn't reachable from
+-- SQL). tags_text is kept in sync entirely by triggers below and is
+-- backfilled inline, since tag data is already in SQLite.
 ALTER TABLE artifacts ADD COLUMN source_text TEXT NOT NULL DEFAULT '';
 ALTER TABLE artifacts ADD COLUMN tags_text TEXT NOT NULL DEFAULT '';
 

@@ -45,11 +45,12 @@ type Artifact struct {
 	// bridge (navigator.clipboard read/write proxied through the host).
 	ClipboardApproved bool   `json:"clipboard_approved"`
 	Tags              []*Tag `json:"tags"` // populated on read by GetArtifact/ListArtifacts
-	// SourceText is the artifact's body, written into PutArtifact only to
-	// seed the artifacts_fts search index (§8.2/§3.3: search over source,
-	// not just title). It is never scanned back out by GetArtifact/
-	// ListArtifacts — the blob store remains the body's source of truth —
-	// so this field is write-only from the caller's perspective.
+	// SourceText is the artifact's body reduced to its visible text (see
+	// ExtractSearchText), written into PutArtifact only to seed the
+	// artifacts_fts search index (§8.2/§3.3: search over source, not just
+	// title). It is never scanned back out by GetArtifact/ListArtifacts —
+	// the blob store remains the body's source of truth — so this field is
+	// write-only from the caller's perspective.
 	SourceText string `json:"-"`
 }
 
