@@ -55,9 +55,15 @@ var exhibitLogoSVG = fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:
   </g>
 </svg>`, color.BrandBlue, color.BrandRed, color.BrandYellow)
 
-// exhibitFaviconDataURI is the same artwork encoded for a <link rel="icon">.
-// base64 sidesteps the URL-escaping the SVG's many '#' color values would
-// otherwise need in a data URI. Rendered in the favicon's own document context,
-// so its element ids never collide with the inline header copy.
-var exhibitFaviconDataURI = "data:image/svg+xml;base64," +
+// exhibitLogoDataURI is the same artwork encoded as an image source, for a
+// <link rel="icon"> or an <img>. base64 sidesteps the URL-escaping the SVG's
+// many '#' color values would otherwise need in a data URI.
+//
+// Each use renders in its own image document, so the artwork's element ids
+// never collide with the inline header copy — which is why the 404 hero
+// (notfound.tmpl) hangs the oversized frame from here instead of inlining a
+// second <svg>: two inline copies on one page would duplicate every gradient
+// and filter id, and the second copy's url(#…) paint references would resolve
+// against the first copy's <defs>.
+var exhibitLogoDataURI = "data:image/svg+xml;base64," +
 	base64.StdEncoding.EncodeToString([]byte(exhibitLogoSVG))

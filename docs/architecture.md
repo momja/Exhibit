@@ -247,6 +247,16 @@ same server-rendered gallery with the query and swaps only the grid, so the
 FTS5 search query stays authoritative without a full page reload. Filter,
 tag/collection management, and the allowlist editor are full-page server renders.
 
+A fourth page, `notfound.tmpl`, answers every app-origin HTML 404 — an unrouted
+path (registered as the mux's `NotFound` handler) and a missing artifact on the
+detail or edit route alike — so the two arrive at the same page rather than at
+two different bare `http.Error` strings. It echoes the requested path back as a
+template value (contextually escaped, since that text is attacker-controlled),
+and offers the gallery link plus a plain GET form the index already answers via
+`?q=`. `/api/*` is excluded by path prefix: chi copies the not-found handler
+into every subrouter, and those routes keep the plain error their JSON clients
+already expect.
+
 ### 3.6 Optional satellites (composed around, not shipped in)
 
 - **Litestream** sidecar → streams the SQLite WAL to a bucket; supervises restore on

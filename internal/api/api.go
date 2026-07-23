@@ -126,6 +126,13 @@ func (ro *Router) setupRoutes() {
 			r.Delete("/{shareID}", ro.deleteShare)
 		})
 	})
+
+	// Registered last on purpose: chi copies the not-found handler into every
+	// subrouter that hasn't set one of its own at the moment NotFound is
+	// called, so an earlier registration would leave the /api/* subrouters on
+	// chi's default. The handler itself keeps /api/* on the plain-text
+	// fallback and renders the styled page for everything else (gallery.go).
+	ro.NotFound(ro.notFound)
 }
 
 // RenderHandler returns an http.Handler for the render origin.

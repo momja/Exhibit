@@ -1,0 +1,141 @@
+/* Not-found page stylesheet (av-at2v). Served from the app origin at
+ * /assets/gallery/notfound.css. Loads after tokens.css (design tokens incl.
+ * --brand-blue) and components.css (shared .btn/.field/... classes); only
+ * 404-page-specific rules live here.
+ *
+ * The header block is index.css's verbatim, so the chrome above the fold is
+ * pixel-identical to the gallery's rather than a near-miss copy.
+ *
+ * The --nf-* locals are the artboard's slate ramp. They stay page-local
+ * rather than moving into tokens.css: nothing else in the app uses them, and
+ * tokens.css is the shared vocabulary, not a catch-all. Two are darker than
+ * the exported design (muted #8b919c -> #6f7581, placeholder #9aa0aa ->
+ * #7d838e): the originals sit near 3:1 on --color-ground, which misses WCAG
+ * AA at 11-13px.
+ */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
+header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header);padding:12px 24px;display:flex;align-items:center;gap:16px}
+header h1{font-size:18px;font-weight:600}
+header .logo{height:32px;width:auto;display:block;flex:0 0 auto}
+header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;gap:5px}
+
+/* Two columns on the gallery ground: the hung (crooked) frame with its wall
+ * label on the left, the copy and the real controls on the right. The top/
+ * bottom padding is deliberately generous — the artboard hangs the frame in
+ * the middle of the wall, not against the header — and clamps down rather
+ * than pushing the fold on short viewports. */
+.exhibit-404{
+  --nf-slate:#3a3f49;        /* secondary button label, requested path */
+  --nf-body:#565c68;         /* body copy */
+  --nf-medium:#6b717c;       /* wall label medium line */
+  --nf-muted:#6f7581;        /* 11-13px muted labels */
+  --nf-placeholder:#7d838e;  /* search placeholder + its icon */
+  --nf-rule:#d6dae0;         /* wall label rule */
+  max-width:1216px;margin:0 auto;
+  padding:clamp(48px,18vh,168px) 24px clamp(56px,12vh,128px);
+  display:grid;grid-template-columns:minmax(0,604px) minmax(0,576px);align-items:start;
+}
+
+/* --- the hung frame ---------------------------------------------------- */
+/* overflow stays visible: a -15deg swing throws the frame's corners ~35px
+ * above and ~79px right of its own box, and a clipped pendulum reads as a
+ * rendering bug. Nothing downstream in the column is close enough to collide
+ * with the swept area. */
+/* The width is the image box, not the frame you see: the mark reserves its
+ * top ~22% for the nail and wire, so a 293px box draws the artboard's 272px
+ * frame. Same reason the nail sits at 4.2% rather than anywhere near the top
+ * edge. */
+.exhibit-404__stage{overflow:visible;margin-left:104px}
+.exhibit-404__frame{display:block;width:293px;height:auto;transform-origin:49.7% 4.2%;animation:knock 2.8s ease-in-out .25s both}
+
+/* The pivot is the nail already drawn into the mark, not the box centre: in
+ * the logo's own viewBox (0 0 40.316795 49.983387) the nail sits at
+ * (20.048, 2.1088) -> 49.7% 4.2%. Negative angles swing the bottom of the
+ * frame to the right, i.e. struck on the left. ease-in-out applies per
+ * segment, which is what gives the swing slow extremes and a fast pass
+ * through centre; the peaks decay 15 -> 9.5 -> 6.2 -> 4 -> 2.5 -> 1.4 -> 0.6
+ * before it settles straight. */
+@keyframes knock{
+  0%{rotate:0deg}
+  8%{rotate:-15deg}
+  22%{rotate:9.5deg}
+  36%{rotate:-6.2deg}
+  50%{rotate:4deg}
+  64%{rotate:-2.5deg}
+  78%{rotate:1.4deg}
+  90%{rotate:-0.6deg}
+  100%{rotate:0deg}
+}
+/* No swing, but the frame still hangs crooked — the joke survives, the motion
+ * doesn't. notfound.js checks the same query before wiring its replay. */
+@media (prefers-reduced-motion:reduce){
+  .exhibit-404__frame{animation:none;rotate:-3deg}
+}
+
+/* --- the wall label ---------------------------------------------------- */
+.exhibit-404__label{width:300px;margin-top:80px;padding-top:12px;border-top:1px solid var(--nf-rule);display:flex;flex-direction:column;gap:5px}
+.exhibit-404__label-kicker{font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--nf-muted)}
+.exhibit-404__label-title{font-size:14px;font-weight:600;color:var(--color-ink)}
+.exhibit-404__label-medium{font-size:13px;color:var(--nf-medium)}
+.exhibit-404__label-note{font-size:12px;font-family:monospace;color:var(--nf-muted)}
+
+/* --- copy + controls --------------------------------------------------- */
+.exhibit-404__copy{display:flex;flex-direction:column;align-items:flex-start;gap:22px}
+.exhibit-404__eyebrow{font-family:monospace;font-size:13px;font-weight:700;letter-spacing:.18em;color:var(--brand-blue)}
+/* max-width, not a <br>: the headline is meant to break after "hanging", and
+ * a measure does that without hard-coding the break into the markup. */
+.exhibit-404__headline{max-width:520px;font-size:56px;font-weight:800;letter-spacing:-.035em;line-height:58px;color:var(--color-ink)}
+.exhibit-404__body{max-width:472px;font-size:17px;line-height:28px;color:var(--nf-body)}
+.exhibit-404__path{display:inline-flex;align-items:center;gap:10px;max-width:100%;background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:9px 12px}
+.exhibit-404__path-label{flex:0 0 auto;font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--nf-muted)}
+.exhibit-404__path code{font-family:monospace;font-size:13px;color:var(--nf-slate);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exhibit-404__actions{display:flex;flex-wrap:wrap;gap:12px}
+/* The actions are anchors wearing .btn, so they need the link decoration off;
+ * everything else here is the 404's larger take on the shared button. */
+.exhibit-404__actions .btn{padding:12px 20px;font-size:15px;font-weight:600;text-decoration:none}
+.exhibit-404__actions .btn i{font-size:18px}
+.exhibit-404__actions .btn-sec{font-weight:500;color:var(--nf-slate)}
+.exhibit-404__find{width:100%;max-width:520px;padding-top:22px;border-top:1px solid var(--color-hairline);display:flex;flex-direction:column;gap:12px}
+.exhibit-404__find-label{font-size:13px;font-weight:500;color:var(--nf-muted)}
+.exhibit-404__search{position:relative;display:flex;align-items:center}
+.exhibit-404__search i{position:absolute;left:14px;font-size:18px;color:var(--nf-placeholder);pointer-events:none}
+.exhibit-404__search .field{padding:12px 14px 12px 44px;font-size:15px}
+.exhibit-404__search .field::placeholder{color:var(--nf-placeholder)}
+
+/* --- responsive ------------------------------------------------------- */
+/* Below a wide window there is no room for a 293px frame beside a 520px
+ * measure, so the two columns stack while the typography stays the desktop
+ * set — the phone treatment below is a different design, not just a narrower
+ * one, and shouldn't start this early. */
+@media (max-width:1023px){
+  .exhibit-404{grid-template-columns:minmax(0,1fr);padding-top:clamp(48px,8vh,96px)}
+  .exhibit-404__stage{margin-left:0}
+  .exhibit-404__copy{margin-top:56px}
+}
+
+/* Phone: one column, frame centred, one way out plus search. */
+@media (max-width:640px){
+  header{padding:10px 24px;gap:10px}
+  .exhibit-404__agent-label{display:none}
+  .exhibit-404{grid-template-columns:minmax(0,1fr);padding:32px 24px 64px}
+  .exhibit-404__stage{margin-left:0}
+  .exhibit-404__frame{width:215px;margin:0 auto}
+  /* Tighter than the desktop gap, but still clear of the swing's low point. */
+  .exhibit-404__label{width:100%;margin-top:28px}
+  /* The medium line is the first thing to go on a phone: it is the least
+     load-bearing of the four, and three lines keep the label a label. */
+  .exhibit-404__label-medium{display:none}
+  .exhibit-404__copy{margin-top:36px;gap:18px}
+  .exhibit-404__headline{font-size:36px;line-height:38px}
+  .exhibit-404__body{font-size:15px;line-height:24px;max-width:none}
+  /* Down to one way out plus search: the requested path, the secondary
+     button and the divider/label around the search are all desktop detail
+     that would otherwise stack into a wall of controls on a phone. */
+  .exhibit-404__path{display:none}
+  .exhibit-404__actions{width:100%}
+  .exhibit-404__actions .btn{width:100%;justify-content:center}
+  .exhibit-404__actions .btn-sec{display:none}
+  .exhibit-404__find{max-width:none;padding-top:0;border-top:none}
+  .exhibit-404__find-label{display:none}
+}
