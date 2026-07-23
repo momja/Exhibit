@@ -1,0 +1,68 @@
+{{/* Not-found page (av-at2v). Data: notFoundPageData (gallery.go).
+
+     The Exhibit mark is a picture frame on a nail, so a 404 is that frame
+     knocked askew and left rocking (the swing lives in notfound.css; the
+     click/hover replay in notfound.js). The wall label under it and the copy
+     beside it carry the museum conceit; the two buttons and the search box
+     are the app's real controls, not props. */}}
+{{define "notfound"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Not found — Exhibit</title>
+<link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
+<link rel="stylesheet" href="/assets/phosphor/regular.css">
+<link rel="stylesheet" href="/assets/gallery/tokens.css">
+<link rel="stylesheet" href="/assets/gallery/components.css">
+<link rel="stylesheet" href="/assets/gallery/notfound.css">
+</head>
+<body>
+<header>
+  {{.LogoSVG}}
+  <h1>Exhibit</h1>
+  <span class="spacer"></span>
+  <a href="/agent"><i class="ph ph-robot"></i> <span class="exhibit-404__agent-label">Agent</span></a>
+</header>
+<main class="exhibit-404">
+  {{/* The hero is the header's artwork again, drawn from the base64 data URI
+       rather than a second inline <svg>: two inline copies on one page would
+       duplicate every gradient/filter id, and the second copy's url(#…) paint
+       would resolve against the first copy's <defs>. alt="" because the wall
+       label below already names what is (not) hanging. */}}
+  <figure class="exhibit-404__stage">
+    <img class="exhibit-404__frame" src="{{.LogoImage}}" width="293" height="363" alt="">
+    <figcaption class="exhibit-404__label">
+      <span class="exhibit-404__label-kicker">NOT ON VIEW</span>
+      <span class="exhibit-404__label-title">Untitled (Artifact Not Found)</span>
+      <span class="exhibit-404__label-medium">n.d. — HTML, CSS, JavaScript</span>
+      <span class="exhibit-404__label-note">Deaccessioned from the collection</span>
+    </figcaption>
+  </figure>
+  <div class="exhibit-404__copy">
+    <p class="exhibit-404__eyebrow">ERROR 404</p>
+    <h2 class="exhibit-404__headline">Nothing hanging here.</h2>
+    <p class="exhibit-404__body">The artifact you&#39;re looking for isn&#39;t in this collection. It may have been deleted — or the link arrived slightly bent.</p>
+    <p class="exhibit-404__path"><span class="exhibit-404__path-label">REQUESTED</span> <code>{{.RequestedPath}}</code></p>
+    <div class="exhibit-404__actions">
+      <a class="btn" href="/"><i class="ph ph-arrow-left"></i> Back to the gallery</a>
+      <a class="btn btn-sec" href="/#upload"><i class="ph ph-plus"></i> Upload an artifact</a>
+    </div>
+    {{/* A plain GET form to the gallery index, which already reads ?q= and
+         runs it through the FTS5 search — no JS, and the same query the
+         gallery's own search box would have produced. */}}
+    <form class="exhibit-404__find" action="/" method="get">
+      <label class="exhibit-404__find-label" for="q">Or find it in the library</label>
+      <div class="exhibit-404__search">
+        <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+        {{/* type=text, not type=search: the gallery's own search box is a
+             text input, and Safari's search-field appearance ignores the
+             padding that makes room for the leading icon. */}}
+        <input class="field" type="text" id="q" name="q" placeholder="Search artifacts…" autocomplete="off" aria-label="Search artifacts">
+      </div>
+    </form>
+  </div>
+</main>
+<script src="/assets/gallery/notfound.js"></script>
+</body>
+</html>{{end}}
