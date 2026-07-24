@@ -21,3 +21,19 @@ Options to weigh (none obviously free): serve the render iframe from a real per-
 
 Decide and document the stance. If we mitigate, an artifact using a module Worker either runs in the embedded preview or tells the user why it can't and offers the top-level render. Whatever is chosen is written down in docs/security.md next to the sandbox section.
 
+
+## Notes
+
+**2026-07-24T06:31:27Z**
+
+DECISION (2026-07-23): pursue detect-and-warn, keep the opaque-origin sandbox. Reject per-artifact-subdomains + allow-same-origin as the DEFAULT.
+
+Why option 1 is rejected as default (not just cost): the opaque origin does double duty — it is the security boundary AND the enforcement mechanism for "all state is server state." In a no-allow-same-origin frame the real localStorage throws, so the storage shim is the ONLY possible store and cross-device is airtight. allow-same-origin gives the artifact a real, disk-backed origin store; the shim still overrides window.localStorage, but any surface it does not cover (IndexedDB — shim still deferred) lands state per-device again. So the trade is a triangle: module workers require a real origin -> a real origin requires real local storage -> real local storage undercuts server-authoritative state. Option 1 costs the airtightness of cross-device, not merely a wildcard cert. It stays available only as an explicit HARDENED opt-in, never the default.
+
+PLAN (phased):
+
+Phase 1 — detect & warn (render preamble, framed-only). Intercept the Worker constructor; when it is called with {type:'module'} while location.origin === 'null' (the opaque sandbox), postMessage a diagnostic to the host frame. The host shows a non-blocking banner on the preview: browsers block module workers in the embedded sandbox; offer "Open in new tab" (the top-level render runs the module worker fine). Debounce to first occurrence. This converts the silent, indefinite "Loading..." hang into an explained, actionable state. Classic blob:/data: workers are unaffected — they run in the sandbox after av-x01o; only module workers trip this. Possible extension: same treatment for SharedWorker and service-worker registration, which also fail on an opaque origin.
+
+Phase 2 — agent-assisted rewrite. Surface a "Fix with agent" action that hands the diagnostic (this artifact uses a module worker) to the agent sidecar (internal/agent); the agent attempts a sandbox-compatible rewrite — a classic worker driven by importScripts, or main-thread wasm — via its update_artifact tool. Output is rescanned like any ingest; footprint is never auto-approved.
+
+Explicitly NOT doing: allow-same-origin on a shared render origin (dissolves cross-artifact isolation); routing artifacts to top-level to "fix" it (loses the sandbox layer — note the per-artifact CSP travels with the document regardless, so top-level keeps the network wall but drops origin isolation).
