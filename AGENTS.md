@@ -5,6 +5,8 @@ This file provides instructions and context for AI coding agents working on this
 
 ## Coding Best Practices
 - Follow John Ousterhout's advice, and pull complexity downwards. Write clean, readable code.
+- **Naming Conventions:** Good names have two properties: precision and consistency.
+  - The greater the distance between a name’s declaration and its uses, the longer the name should be.
 
 ## UI Conventions
 - **Icons:** all new UI uses **Phosphor Icons**, self-hosted / embedded on the app origin (never a third-party CDN). See `docs/technical_stack.md` §1 (stack table) and §9 (Gallery UI) for the load method and markup pattern.
