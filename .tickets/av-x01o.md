@@ -2,7 +2,7 @@
 id: av-x01o
 status: in_progress
 deps: []
-links: []
+links: [av-yvtb]
 created: 2026-07-24T04:13:43Z
 type: bug
 priority: 1
