@@ -68,9 +68,13 @@ the wrong signal), it `postMessage`s an
 `__avModuleWorker` diagnostic to the host frame (pinned to the app origin, first
 occurrence only), then constructs the real worker unchanged — runtime behavior is
 not altered; the worker fails on its own as before. The gallery detail page
-listens for the diagnostic and reveals a non-blocking banner explaining the
-limitation and offering "Open in new tab" (the top-level render, which runs it).
-This converts a silent, indefinite hang into an explained, actionable state.
+listens for the diagnostic and reveals a non-blocking banner: a generic,
+reusable headline for a non-technical audience ("This artifact uses unsupported
+browser capabilities. Open it directly to run it.") over a default-collapsed
+`<details>` carrying the specific failure — the capability and, when known, the
+worker script URL — for anyone seeking support. It offers "Open in new tab" (the
+top-level render, which runs it). This converts a silent, indefinite hang into
+an explained, actionable state.
 `SharedWorker` and service-worker registration fail on an opaque origin too and
 are a possible follow-on; phase 1 covers module `Worker`s only. An agent-assisted
 rewrite to a sandbox-compatible worker is tracked as phase 2 of av-yvtb.

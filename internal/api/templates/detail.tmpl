@@ -40,14 +40,25 @@
 </div>
 {{/* Scrim behind the mobile actions sheet; display:none above 640px. */}}
 <div id="sheet-scrim" class="sheet-scrim"></div>
-{{/* Module-worker warning (av-yvtb): hidden until the render shim reports that
-     the artifact tried to spawn a Worker({type:'module'}), which browsers
-     refuse to run in the opaque-origin sandbox — it would hang silently on
-     "Loading…" otherwise. Opening the artifact top-level (a real origin) runs
-     it fine, so the banner points at the same URL as "Open in new tab". */}}
+{{/* Unsupported-capability warning (av-yvtb): hidden until the render shim
+     reports that the artifact tried something the opaque-origin sandbox can't
+     run — currently a Worker({type:'module'}), which browsers refuse in the
+     sandbox and would otherwise hang silently on "Loading…". The headline is a
+     deliberately generic, reusable line for a non-technical audience; the
+     specific failure is folded into a default-collapsed <details> for anyone
+     seeking support. Opening the artifact top-level (a real origin) runs it
+     fine, so the banner points at the same URL as "Open in new tab". */}}
 <div id="module-worker-banner" class="banner banner-warn" role="alert" hidden>
   <i class="ph ph-warning" aria-hidden="true"></i>
-  <span>This artifact runs a module worker, which browsers block in the embedded preview sandbox. Open it directly to run it.</span>
+  <div class="banner-body">
+    <span>This artifact uses unsupported browser capabilities. Open it directly to run it.</span>
+    {{/* detail.js fills #module-worker-detail with the specific failure once the
+         shim reports it (the capability and, when known, the script URL). */}}
+    <details class="banner-details">
+      <summary>Details</summary>
+      <p id="module-worker-detail"></p>
+    </details>
+  </div>
   <a class="banner-action" href="{{.RenderOrigin}}/a/{{.ID}}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</a>
 </div>
 <div class="panels">
