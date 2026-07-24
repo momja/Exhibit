@@ -1,0 +1,93 @@
+{{/* Agent chat surface (Exh-jlbt): a build/modify-with-AI chat on the left, a
+     live sandboxed preview of the session's artifact on the right. Data:
+     agentPageData (agentui.go). ?artifact=<id> opens the page in modify mode
+     bound to that artifact. Streaming arrives over SSE from the session's Pi
+     sidecar. */}}
+{{define "agent"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent — Exhibit</title>
+<link rel="stylesheet" href="/assets/phosphor/regular.css">
+<link rel="stylesheet" href="/assets/gallery/tokens.css">
+<link rel="stylesheet" href="/assets/gallery/agent.css">
+</head>
+<body>
+<header>
+  <a href="/">←<span class="lbl"> Gallery</span></a>
+  <h1><i class="ph ph-robot"></i> Agent</h1>
+  <button class="key-btn" id="key-btn" onclick="openKeyModal()"><i class="ph ph-key"></i> <span id="key-btn-label">API key</span></button>
+</header>
+{{if not .AgentEnabled}}<div class="banner-err">Agent support is disabled: the <code>pi</code> binary was not found on this server.</div>{{end}}
+<div class="pane-switch">
+  <div class="pane-tabs" role="tablist" aria-label="Chat or preview">
+    <button type="button" class="pane-tab" id="tab-chat" role="tab" aria-selected="true" aria-controls="pane-chat" onclick="showPane('chat')"><i class="ph ph-chat-circle"></i> Chat</button>
+    <button type="button" class="pane-tab" id="tab-preview" role="tab" aria-selected="false" aria-controls="pane-preview" onclick="showPane('preview')"><i class="ph ph-monitor"></i> Preview <span class="dot" aria-hidden="true"></span></button>
+  </div>
+</div>
+<div class="layout">
+  <div class="chat" id="pane-chat">
+    <div id="messages"></div>
+    <div class="composer">
+      <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> Preview updated — tap Preview to view</button>
+      <div id="snippet-chips"></div>
+      <div class="compose-row">
+        <textarea id="input" rows="1" placeholder="Describe the tool to build…"></textarea>
+        <button class="btn" id="send-btn" onclick="send()"><i class="ph ph-paper-plane-right"></i></button>
+        <button class="btn btn-stop" id="stop-btn" onclick="stopAgent()" style="display:none"><i class="ph ph-stop"></i></button>
+      </div>
+      <div id="hint">Enter to send · Shift+Enter for a new line · Ctrl+Shift+S to snippet an element from the preview</div>
+    </div>
+  </div>
+  <div class="preview" id="pane-preview">
+    <div class="preview-bar">
+      <span class="title" id="pv-title">No artifact yet</span>
+      <a id="pv-open" href="#" target="_blank" style="display:none"><span class="lbl">Open </span>↗</a>
+      <a id="pv-detail" href="#" style="display:none">Details</a>
+      <span class="spacer"></span>
+      <button class="snip-btn" id="snip-btn" disabled onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
+    </div>
+    <div id="frame-wrap">
+      <div id="empty-preview"><i class="ph ph-frame-corners"></i><span>The artifact preview appears here once the agent saves one.</span></div>
+      <iframe id="pv-frame" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write" style="display:none"></iframe>
+    </div>
+  </div>
+</div>
+
+<div id="key-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2>Agent API key</h2>
+    <p class="note">Bring your own key. It is sent to your Exhibit server once, encrypted there at rest, and used only by the server-side agent — this page never sees it again.</p>
+    <div class="current-key" id="current-key" hidden></div>
+    <label for="key-provider">Provider</label>
+    <select id="key-provider" onchange="providerChanged()">
+      <option value="anthropic">Anthropic</option>
+      <option value="openai">OpenAI</option>
+      <option value="google">Google Gemini</option>
+      <option value="openrouter">OpenRouter</option>
+      <option value="opencode-go">OpenCode Go</option>
+      {{if .MockEnabled}}<option value="exhibit-mock">Exhibit Mock (testing)</option>{{end}}
+    </select>
+    <label for="key-model">Model</label>
+    <input type="text" id="key-model" list="model-suggestions" placeholder="e.g. claude-sonnet-4-5">
+    <datalist id="model-suggestions"></datalist>
+    <label for="key-secret">API key</label>
+    <input type="password" id="key-secret" placeholder="sk-…" autocomplete="off">
+    <div id="key-error" class="modal-error" hidden></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-danger" id="key-delete" onclick="deleteKey()" hidden><i class="ph ph-trash"></i></button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" onclick="closeKeyModal()">Cancel</button>
+      <button type="button" class="btn" onclick="saveKey()"><i class="ph ph-check"></i> Save</button>
+    </div>
+  </div>
+</div>
+<script>
+const TOKEN = {{.Token}};
+const RENDER_ORIGIN = {{.RenderOrigin}};
+let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
+</script>
+<script src="/assets/gallery/agent.js"></script>
+</body>
+</html>{{end}}

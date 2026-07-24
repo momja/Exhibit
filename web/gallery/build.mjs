@@ -27,6 +27,7 @@ const files = [
   "detail.css", "detail.js",
   "edit.css", "edit.js",
   "notfound.css", "notfound.js",
+  "agent.css", "agent.js",
 ];
 
 for (const f of files) {
