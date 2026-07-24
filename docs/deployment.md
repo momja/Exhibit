@@ -1,42 +1,55 @@
 # Exhibit — Deployment
 
-Get Exhibit running in Docker in about 5 minutes.
+> [!WARNING]
+> Exhibit is in very early development. Breaking changes are likely, and there
+> is no guarantee of upgrade compatibility. Use at your own risk.
 
 ## 1. Run it
 
+Clone the repo:
+
 ```bash
-docker build -t exhibit .
-docker run -p 8080:8080 -p 8081:8081 \
-  -e AUTH_TOKEN=changeme \
-  -e APP_ORIGIN=https://app.example.com \
-  -e RENDER_ORIGIN=https://artifacts.example.com \
-  -v exhibit-data:/data \
-  exhibit
+git clone https://github.com/momja/Exhibit.git
+cd Exhibit
+```
+
+Then run it with Compose:
+
+```bash
+AUTH_TOKEN=changeme \
+APP_ORIGIN=https://app.example.com \
+RENDER_ORIGIN=https://artifacts.example.com \
+docker compose up
 ```
 
 Open `APP_ORIGIN`. Two ports: `8080` is the gallery/API, `8081` is where artifacts
 render — they must be different origins (put them on different hostnames behind
-your proxy; see §4).
-
-For local/dev use, `docker compose up` works with no flags (defaults to
-`localhost` origins and `dev-token`).
+your proxy; see [Reverse proxy / TLS](#4-reverse-proxy--tls)). Any of the env vars
+below can be set the same way; omit them all and it defaults to `localhost`
+origins and a `dev-token` auth token, which is fine for trying it out locally.
 
 ## 2. Configuration
 
-Env vars, all optional except `AUTH_TOKEN` for anything beyond localhost:
+Env vars, all optional except `AUTH_TOKEN`.
+
+> [!NOTE]
+> Exhibit is currently single-tenant, single-user: there's no login system, and
+> `AUTH_TOKEN` is a single shared static token, not a real auth boundary. If
+> you're exposing an instance beyond your own machine, put your own
+> authentication in front of it (e.g. at your reverse proxy) or be comfortable
+> with the consequences of running without one.
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `AUTH_TOKEN` | `dev-token` | API bearer token — **change this** |
 | `APP_ORIGIN` | `http://localhost:8080` | Public URL of the gallery/API |
-| `RENDER_ORIGIN` | `http://localhost:8081` | Public URL of the artifact renderer (must differ from `APP_ORIGIN`) |
+| `RENDER_ORIGIN` | `http://localhost:8081` | Public URL of the artifact renderer (must differ from `APP_ORIGIN` — see [why](./architecture.md#4-trust-boundaries)) |
 | `DATA_DIR` | `./data` | Where the SQLite DB + blobs live |
 | `ADDR` | `:8080` | App listen address |
 | `RENDER_ADDR` | `:8081` | Render listen address |
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
 | `PI_BIN` | `pi` | AI agent executable — unset/missing just disables that feature |
 | `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
-| `MOCK_LLM_URL` | unset | Testing only, leave unset |
 
 ## 3. No AI agent features
 
@@ -72,5 +85,6 @@ is fine until you need it.
 
 ---
 
-More detail: `architecture.md` (why two origins), `security.md` (CSP/sandbox
-policy), `agent.md` (the AI agent sidecar).
+More detail: [architecture.md](./architecture.md) (why two origins),
+[security.md](./security.md) (CSP/sandbox policy), [agent.md](./agent.md) (the
+AI agent sidecar).
