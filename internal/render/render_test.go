@@ -300,6 +300,60 @@ func TestShimDownloadBridgeIsFramedOnly(t *testing.T) {
 	}
 }
 
+// The module-worker interceptor (av-yvtb): Chrome refuses module-worker script
+// fetches for an opaque origin, so Worker({type:'module'}) silently hangs in the
+// sandbox. The preamble wraps the Worker constructor and, on the module-worker +
+// opaque-origin case, posts an __avModuleWorker diagnostic to the host frame,
+// pinned to the app origin like every other bridge — so the host can warn.
+func TestShimInstallsModuleWorkerInterceptor(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+
+	// The message shape the host's banner listener validates.
+	if !strings.Contains(doc, "__avModuleWorker") {
+		t.Fatalf("shim missing the module-worker diagnostic message: %s", doc)
+	}
+	// It must gate on the module worker type and the opaque origin, not fire for
+	// classic workers or top-level (real-origin) renders.
+	if !strings.Contains(doc, "options.type === 'module'") {
+		t.Fatalf("interceptor must gate on the module worker type: %s", doc)
+	}
+	// Gate on self.origin (the effective/opaque origin), not location.origin —
+	// the latter reports the URL's tuple origin for an http-loaded opaque
+	// document and would never match 'null'.
+	if !strings.Contains(doc, "self.origin === 'null'") {
+		t.Fatalf("interceptor must gate on the opaque ('null') effective origin: %s", doc)
+	}
+	// The diagnostic is pinned to the app origin like every other shim message.
+	if !strings.Contains(doc, "API_ORIGIN") {
+		t.Fatalf("module-worker messages must be pinned to the app origin: %s", doc)
+	}
+	// Runtime behavior is unchanged: the real Worker is still constructed.
+	if !strings.Contains(doc, "NativeWorker") {
+		t.Fatalf("interceptor must still construct the real Worker: %s", doc)
+	}
+	// The diagnostic fires at load and can race the host's listener, so it is
+	// buffered and replayed on the host's readiness ping — delivery must not
+	// depend on the host already listening when the worker is constructed.
+	if !strings.Contains(doc, "__avHostReady") {
+		t.Fatalf("interceptor must replay the diagnostic on the host-ready handshake: %s", doc)
+	}
+}
+
+// Like the other bridges, the module-worker interceptor installs framed-only —
+// guarded by the same window.parent check — so top-level and share renders
+// (which have a real origin and run module workers fine) neither install it nor
+// warn.
+func TestShimModuleWorkerInterceptorIsFramedOnly(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	// The interceptor block sits inside the framed guard; the diagnostic marker
+	// must appear after the guard opens.
+	guard := strings.Index(doc, "if (window.parent !== window) {")
+	marker := strings.Index(doc, "__avModuleWorker")
+	if guard < 0 || marker < 0 || marker < guard {
+		t.Fatalf("module-worker interceptor must be guarded to framed contexts: %s", doc)
+	}
+}
+
 // The clipboard bridge (av-hll6) proxies navigator.clipboard read/write through
 // the host frame: it replaces the API, posts the host-validated message shape,
 // and pins the request to the app origin like every other shim message. Like

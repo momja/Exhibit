@@ -56,6 +56,35 @@ window.addEventListener('message', function(e) {
   }).catch(function(){});
 });
 
+// Module-worker warning (av-yvtb): the sandboxed frame's opaque origin makes
+// Chrome refuse to fetch a module worker's script, so a Worker({type:'module'})
+// (e.g. ffmpeg.wasm 0.12) silently hangs forever on "Loading…" in the embedded
+// preview — while it runs fine opened top-level, which has a real origin. The
+// shim posts a diagnostic when it sees that case; reveal a non-blocking banner
+// explaining it and offering the "Open in new tab" render URL. Debounced in the
+// shim to the first occurrence, and we only reveal the banner once.
+window.addEventListener('message', function(e) {
+  const d = e.data;
+  if (!d || d.__avModuleWorker !== true || d.artifactId !== ID) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || e.source !== frame.contentWindow) return;
+  const banner = document.getElementById('module-worker-banner');
+  if (banner) banner.hidden = false;
+});
+
+// The module-worker diagnostic usually fires at iframe load — possibly before
+// this listener is attached, so the shim buffers it and replays on request.
+// Announce readiness on every iframe load (targetOrigin '*' — the frame is
+// opaque; the shim validates the ping came from our app origin) so any buffered
+// diagnostic is delivered even when the worker was constructed before we listened.
+(function() {
+  const frame = document.querySelector('iframe');
+  if (!frame) return;
+  frame.addEventListener('load', function() {
+    frame.contentWindow.postMessage({ __avHostReady: true }, '*');
+  });
+})();
+
 // Download bridge: the sandboxed frame cannot download anything itself (the
 // sandbox omits allow-downloads). The shim posts intercepted download
 // attempts here — filename + transferred bytes, validated the same way as

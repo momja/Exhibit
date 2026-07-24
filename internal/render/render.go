@@ -254,6 +254,64 @@ const shimTemplate = `<script>
   // downloads already work, so the bridge stays uninstalled — including on
   // share pages, which get no bridge.
   if (window.parent !== window) {
+    // ---- Module-worker diagnostic (av-yvtb) ----
+    // Chrome refuses to fetch a module worker's script for an opaque origin, so
+    // a Worker constructed with { type: 'module' } inside this sandbox (origin
+    // 'null') fires onerror with an empty message and never runs — no
+    // securitypolicyviolation, so it is not a CSP fault and cannot be relaxed
+    // with CSP. Classic blob:/data: workers run fine here (av-x01o). The result
+    // is a silent, indefinite hang (ffmpeg.wasm 0.12 always spawns a module
+    // worker). We can't make it run in the sandbox without dissolving the trust
+    // boundary, so instead detect the case and tell the host frame, which shows
+    // a banner offering the top-level render (where a real origin runs it fine).
+    // We do NOT change runtime behavior: the real Worker still constructs and
+    // returns; it just fails on its own as before. Debounced to first
+    // occurrence so a library spawning many workers warns once.
+    // NOTE: SharedWorker and service-worker registration also fail on an opaque
+    // origin — a possible follow-on, not handled here (phase 1 is module
+    // Workers only, the actual reported failure).
+    // Gate on self.origin (the document's *effective*, security-relevant
+    // origin), NOT location.origin: for an http-loaded opaque-sandbox document
+    // location.origin still reports the URL's tuple origin (e.g.
+    // 'http://render.example'), while self.origin / window.origin serialize the
+    // opaque origin to the string 'null' — the same value the host sees as
+    // e.origin. That is the condition the module-worker fetch actually fails on.
+    if (self.origin === 'null' && typeof Worker === 'function') {
+      var NativeWorker = Worker;
+      // Buffer the diagnostic (also the first-occurrence debounce): a module
+      // worker is typically constructed at load, which can race the host page's
+      // listener attachment — a one-shot postMessage would be lost if it fires
+      // first. So keep the payload and (a) post it immediately for the case the
+      // host is already listening, and (b) replay it whenever the host announces
+      // itself with an __avHostReady ping (the host sends one on iframe load).
+      // Between the two, delivery is guaranteed regardless of load ordering.
+      var pendingModuleWorker = null;
+      var postModuleWorker = function() {
+        if (pendingModuleWorker) window.parent.postMessage(pendingModuleWorker, API_ORIGIN);
+      };
+      window.addEventListener('message', function(e) {
+        // Only our own host (app origin) may trigger a replay, like every other
+        // shim message; the frame's origin is opaque so identity is e.source.
+        if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+        if (e.data && e.data.__avHostReady === true) postModuleWorker();
+      });
+      var WorkerShim = function(scriptURL, options) {
+        if (options && options.type === 'module' && !pendingModuleWorker) {
+          var url = null;
+          try { url = scriptURL != null ? String(scriptURL) : null; } catch (e) { url = null; }
+          pendingModuleWorker = { __avModuleWorker: true, artifactId: ARTIFACT_ID, url: url };
+          postModuleWorker();
+        }
+        // Construct the real Worker transparently: forward all args with 'new'
+        // so 'this', the prototype chain, and the return value are unchanged.
+        return new (Function.prototype.bind.apply(NativeWorker, [null].concat([].slice.call(arguments))))();
+      };
+      WorkerShim.prototype = NativeWorker.prototype;
+      try {
+        Object.defineProperty(window, 'Worker', { value: WorkerShim, writable: true, configurable: true });
+      } catch (e) {}
+    }
+
     // blob: URLs cannot be dereferenced here without a fetch (which
     // connect-src governs), so remember the Blob behind every URL this
     // document mints. The shim runs first, so the registry sees them all.

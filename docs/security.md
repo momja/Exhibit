@@ -37,6 +37,44 @@ own code convention.
   perform the `PUT /api/artifacts/:id/state`. The artifact itself never holds a
   credential and never reaches the API.
 
+### 1.1 Module workers: an accepted opaque-origin limitation
+
+The opaque origin has one benign casualty. Chrome refuses to fetch a **module**
+worker's script for an opaque origin, so a `Worker(url, { type: 'module' })`
+constructed inside the sandbox fires `onerror` with an empty message and never
+runs — with **no** `securitypolicyviolation`, so it is not a CSP fault and cannot
+be relaxed with CSP. Classic `blob:`/`data:` workers run fine in the same frame
+(av-x01o); only module workers trip this. The same module worker runs fine when
+the artifact is opened **top-level** at `RENDER_ORIGIN/a/:id`, which has a real
+origin. Practical impact: ffmpeg.wasm 0.12 always spawns its class worker as
+`{ type: 'module' }`, so it transcodes correctly in a new tab or share link but
+hangs on "Loading…" in the gallery's embedded preview.
+
+**Stance (av-yvtb): keep the opaque sandbox, detect and warn.** We deliberately
+do **not** fix this by giving the frame a real origin (per-artifact subdomains +
+`allow-same-origin`). The opaque origin does double duty — it is the trust
+boundary *and* the enforcement of "all state is server state": in a
+no-`allow-same-origin` frame the real `localStorage` throws, so the storage shim
+is the only possible store and cross-device is airtight. A real origin would hand
+the artifact a disk-backed store for any surface the shim doesn't cover (e.g.
+IndexedDB, still deferred), landing state per-device again. So a real origin
+stays an explicit **hardened opt-in**, never the default (spec §12).
+
+Instead the render preamble wraps the `Worker` constructor (framed-only, under
+the same `window.parent !== window` guard as the other bridges): when it sees
+`{ type: 'module' }` while `self.origin === 'null'` (the effective, opaque
+origin — `location.origin` still reports the URL's tuple origin here, so it is
+the wrong signal), it `postMessage`s an
+`__avModuleWorker` diagnostic to the host frame (pinned to the app origin, first
+occurrence only), then constructs the real worker unchanged — runtime behavior is
+not altered; the worker fails on its own as before. The gallery detail page
+listens for the diagnostic and reveals a non-blocking banner explaining the
+limitation and offering "Open in new tab" (the top-level render, which runs it).
+This converts a silent, indefinite hang into an explained, actionable state.
+`SharedWorker` and service-worker registration fail on an opaque origin too and
+are a possible follow-on; phase 1 covers module `Worker`s only. An agent-assisted
+rewrite to a sandbox-compatible worker is tracked as phase 2 of av-yvtb.
+
 ## 2. CSP: the allowlist is the wall
 
 Each artifact carries a set of per-origin decisions (`artifact_network_origins`,
