@@ -3,6 +3,11 @@
   "private": true,
   "description": "Gallery page stylesheets and scripts (index/detail/edit), copied verbatim into internal/api/assets/gallery (see `make assets`) and served from the app origin under /assets/gallery/. Dynamic per-request values reach the scripts through a small inline bootstrap the page templates render. Node is a build-time-only dependency.",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "lint": "stylelint '*.css'"
+  },
+  "devDependencies": {
+    "stylelint": "^17.14.1",
+    "stylelint-config-standard": "^40.0.0"
   }
 }

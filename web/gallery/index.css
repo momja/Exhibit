@@ -32,7 +32,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
  * the gallery card adds its grid-item behavior and hover lift. */
 .card{display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:box-shadow .12s ease}
 .card:hover{box-shadow:var(--shadow-card-hover)}
-.card-title{font-size:15px;font-weight:600;color:var(--brand-blue);text-decoration:none;word-break:break-word}
+.card-title{font-size:15px;font-weight:600;color:var(--brand-blue);text-decoration:none;overflow-wrap:anywhere}
 .card-title:hover{text-decoration:underline}
 .card-meta{font-size:12px;color:#888}
 /* Footer row: created date opposite the capability posture cluster

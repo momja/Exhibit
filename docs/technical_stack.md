@@ -213,6 +213,18 @@ hand-rolled HTML escaping the old string-concatenated pages needed.)
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.
 
+Lint the gallery stylesheets with **Stylelint** (`stylelint-config-standard`) before
+they're copied into the embedded assets: `cd web/gallery && npm run lint`. The config
+(`web/gallery/stylelint.config.mjs`) keeps the rules that catch real problems
+(deprecated values; it flags — but doesn't yet enforce reordering — same-specificity
+selectors declared out of cascade order) and turns off the purely stylistic ones that
+would fight this project's established conventions instead: one selector +
+declaration block per line (kept deliberately dense so the served CSS stays
+greppable for the Go tests that assert on exact substrings), legacy `rgba()`/
+decimal-alpha color syntax, `(max-width:640px)`-style media queries instead of range
+syntax, unquoted attribute selectors, and BEM (`__`/`--`) class names on the 404
+page. Each suppressed rule is commented with its rationale in the config itself.
+
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent
 icon vocabulary without re-deciding. Load it **self-hosted on the app origin, never from a
@@ -340,8 +352,8 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
   the image.
 - **Build-time only:** Go toolchain, Node + esbuild (to bundle CodeMirror and vendor
   the Phosphor icon assets — see `build_assets.md`), `goose` (migrations are embedded
-  and run from the binary). Dev-only: golangci-lint (`make lint`, not vendored) and
-  ESLint for the editor workspace (§5).
+  and run from the binary). Dev-only: golangci-lint (`make lint`, not vendored),
+  ESLint for the editor workspace (§5), and Stylelint for the gallery stylesheets (§9).
 
 The deliberate outcome: in production it's one small image and one process by default,
 with safety and richness added as opt-in Compose profiles — matching the spec's promise
