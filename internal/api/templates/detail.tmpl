@@ -42,21 +42,23 @@
 <div id="sheet-scrim" class="sheet-scrim"></div>
 {{/* Unsupported-capability warning (av-yvtb): hidden until the render shim
      reports that the artifact tried something the opaque-origin sandbox can't
-     run — currently a Worker({type:'module'}), which browsers refuse in the
-     sandbox and would otherwise hang silently on "Loading…". The headline is a
-     deliberately generic, reusable line for a non-technical audience; the
-     specific failure is folded into a default-collapsed <details> for anyone
-     seeking support. Opening the artifact top-level (a real origin) runs it
-     fine, so the banner points at the same URL as "Open in new tab". */}}
-<div id="module-worker-banner" class="banner banner-warn" role="alert" hidden>
+     run. Phase 1 detects a Worker({type:'module'}) (browsers refuse it in the
+     sandbox and it would otherwise hang silently on "Loading…"), but the banner
+     is deliberately capability-agnostic — the shim posts a generic
+     __avCapabilityWarning naming the capability, so later detections reuse this
+     same UI. The headline is a generic, reusable line for a non-technical
+     audience; the specific failure is folded into a default-collapsed <details>
+     for anyone seeking support. Opening the artifact top-level (a real origin)
+     runs it fine, so the banner points at the same URL as "Open in new tab". */}}
+<div id="capability-warning-banner" class="banner banner-warn" role="alert" hidden>
   <i class="ph ph-warning" aria-hidden="true"></i>
   <div class="banner-body">
     <span>This artifact uses unsupported browser capabilities. Open it directly to run it.</span>
-    {{/* detail.js fills #module-worker-detail with the specific failure once the
-         shim reports it (the capability and, when known, the script URL). */}}
+    {{/* detail.js fills #capability-warning-detail with the specific failure once
+         the shim reports it (the capability and, when known, its resource). */}}
     <details class="banner-details">
       <summary>Details</summary>
-      <p id="module-worker-detail"></p>
+      <p id="capability-warning-detail"></p>
     </details>
   </div>
   <a class="banner-action" href="{{.RenderOrigin}}/a/{{.ID}}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</a>

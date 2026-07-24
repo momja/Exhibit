@@ -254,53 +254,72 @@ const shimTemplate = `<script>
   // downloads already work, so the bridge stays uninstalled — including on
   // share pages, which get no bridge.
   if (window.parent !== window) {
-    // ---- Module-worker diagnostic (av-yvtb) ----
-    // Chrome refuses to fetch a module worker's script for an opaque origin, so
-    // a Worker constructed with { type: 'module' } inside this sandbox (origin
-    // 'null') fires onerror with an empty message and never runs — no
-    // securitypolicyviolation, so it is not a CSP fault and cannot be relaxed
-    // with CSP. Classic blob:/data: workers run fine here (av-x01o). The result
-    // is a silent, indefinite hang (ffmpeg.wasm 0.12 always spawns a module
-    // worker). We can't make it run in the sandbox without dissolving the trust
-    // boundary, so instead detect the case and tell the host frame, which shows
-    // a banner offering the top-level render (where a real origin runs it fine).
-    // We do NOT change runtime behavior: the real Worker still constructs and
-    // returns; it just fails on its own as before. Debounced to first
-    // occurrence so a library spawning many workers warns once.
-    // NOTE: SharedWorker and service-worker registration also fail on an opaque
-    // origin — a possible follow-on, not handled here (phase 1 is module
-    // Workers only, the actual reported failure).
+    // ---- Unsupported-capability diagnostic (av-yvtb) ----
+    // Some browser capabilities cannot work inside this opaque-origin sandbox no
+    // matter the CSP, and fail silently rather than throwing something the
+    // artifact surfaces. We detect those cases and post a GENERIC
+    // '__avCapabilityWarning' to the host frame, which shows a banner offering
+    // the top-level render (a real origin, where the capability works). The
+    // payload names the capability (so the host can describe it) and an optional
+    // resource string; the channel is intentionally capability-agnostic so
+    // future detections (SharedWorker, service-worker registration — both also
+    // fail on an opaque origin) reuse it without a host-side rewrite.
+    //
+    // Phase 1 detects exactly one capability: a module Worker. Chrome refuses to
+    // fetch a module worker's script for an opaque origin, so a Worker
+    // constructed with { type: 'module' } here (origin 'null') fires onerror
+    // with an empty message and never runs — no securitypolicyviolation, so it
+    // is not a CSP fault and cannot be relaxed with CSP. Classic blob:/data:
+    // workers run fine here (av-x01o). The result is a silent, indefinite hang
+    // (ffmpeg.wasm 0.12 always spawns a module worker). We do NOT change runtime
+    // behavior: the real Worker still constructs and returns; it just fails on
+    // its own as before. Debounced to the first warning so a library spawning
+    // many workers warns once.
+    //
     // Gate on self.origin (the document's *effective*, security-relevant
     // origin), NOT location.origin: for an http-loaded opaque-sandbox document
     // location.origin still reports the URL's tuple origin (e.g.
     // 'http://render.example'), while self.origin / window.origin serialize the
     // opaque origin to the string 'null' — the same value the host sees as
     // e.origin. That is the condition the module-worker fetch actually fails on.
-    if (self.origin === 'null' && typeof Worker === 'function') {
-      var NativeWorker = Worker;
-      // Buffer the diagnostic (also the first-occurrence debounce): a module
-      // worker is typically constructed at load, which can race the host page's
-      // listener attachment — a one-shot postMessage would be lost if it fires
-      // first. So keep the payload and (a) post it immediately for the case the
-      // host is already listening, and (b) replay it whenever the host announces
-      // itself with an __avHostReady ping (the host sends one on iframe load).
-      // Between the two, delivery is guaranteed regardless of load ordering.
-      var pendingModuleWorker = null;
-      var postModuleWorker = function() {
-        if (pendingModuleWorker) window.parent.postMessage(pendingModuleWorker, API_ORIGIN);
+    if (self.origin === 'null') {
+      // Buffer the diagnostic (also the first-occurrence debounce): the trigger
+      // (e.g. a module worker) is typically constructed at load, which can race
+      // the host page's listener attachment — a one-shot postMessage would be
+      // lost if it fires first. So keep the payload and (a) post it immediately
+      // for the case the host is already listening, and (b) replay it whenever
+      // the host announces itself with an __avHostReady ping (the host sends one
+      // on iframe load). Between the two, delivery is guaranteed regardless of
+      // load ordering.
+      var pendingCapabilityWarning = null;
+      var postCapabilityWarning = function() {
+        if (pendingCapabilityWarning) window.parent.postMessage(pendingCapabilityWarning, API_ORIGIN);
+      };
+      // warnCapability records the first unsupported capability seen (capability
+      // is a stable slug the host maps to copy; resource is an optional detail,
+      // e.g. the worker script URL) and posts it.
+      var warnCapability = function(capability, resource) {
+        if (pendingCapabilityWarning) return;
+        pendingCapabilityWarning = { __avCapabilityWarning: true, artifactId: ARTIFACT_ID, capability: capability, resource: resource || null };
+        postCapabilityWarning();
       };
       window.addEventListener('message', function(e) {
         // Only our own host (app origin) may trigger a replay, like every other
         // shim message; the frame's origin is opaque so identity is e.source.
         if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
-        if (e.data && e.data.__avHostReady === true) postModuleWorker();
+        if (e.data && e.data.__avHostReady === true) postCapabilityWarning();
       });
+    }
+
+    // Module-worker detection (phase 1) — wraps the Worker constructor to spot
+    // the { type: 'module' } case above and warn via warnCapability.
+    if (self.origin === 'null' && typeof Worker === 'function') {
+      var NativeWorker = Worker;
       var WorkerShim = function(scriptURL, options) {
-        if (options && options.type === 'module' && !pendingModuleWorker) {
+        if (options && options.type === 'module') {
           var url = null;
           try { url = scriptURL != null ? String(scriptURL) : null; } catch (e) { url = null; }
-          pendingModuleWorker = { __avModuleWorker: true, artifactId: ARTIFACT_ID, url: url };
-          postModuleWorker();
+          warnCapability('module-worker', url);
         }
         // Construct the real Worker transparently: forward all args with 'new'
         // so 'this', the prototype chain, and the return value are unchanged.

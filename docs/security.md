@@ -64,20 +64,26 @@ Instead the render preamble wraps the `Worker` constructor (framed-only, under
 the same `window.parent !== window` guard as the other bridges): when it sees
 `{ type: 'module' }` while `self.origin === 'null'` (the effective, opaque
 origin — `location.origin` still reports the URL's tuple origin here, so it is
-the wrong signal), it `postMessage`s an
-`__avModuleWorker` diagnostic to the host frame (pinned to the app origin, first
-occurrence only), then constructs the real worker unchanged — runtime behavior is
-not altered; the worker fails on its own as before. The gallery detail page
-listens for the diagnostic and reveals a non-blocking banner: a generic,
-reusable headline for a non-technical audience ("This artifact uses unsupported
-browser capabilities. Open it directly to run it.") over a default-collapsed
-`<details>` carrying the specific failure — the capability and, when known, the
-worker script URL — for anyone seeking support. It offers "Open in new tab" (the
-top-level render, which runs it). This converts a silent, indefinite hang into
-an explained, actionable state.
+the wrong signal), it `postMessage`s a diagnostic to the host frame (pinned to
+the app origin, first occurrence only), then constructs the real worker
+unchanged — runtime behavior is not altered; the worker fails on its own as
+before. The diagnostic is deliberately **capability-agnostic**: a generic
+`__avCapabilityWarning` message naming the capability (`module-worker` in phase 1)
+plus an optional resource string, so future detections reuse the same channel and
+banner rather than adding message types. The gallery detail page listens for it
+and reveals a non-blocking banner: a generic, reusable headline for a
+non-technical audience ("This artifact uses unsupported browser capabilities.
+Open it directly to run it.") over a default-collapsed `<details>` whose copy is
+selected from the reported capability — the specific failure and, when known, its
+resource (the worker script URL) — with a generic fallback for any
+not-yet-described capability. It offers "Open in new tab" (the top-level render,
+which runs it). This converts a silent, indefinite hang into an explained,
+actionable state.
 `SharedWorker` and service-worker registration fail on an opaque origin too and
-are a possible follow-on; phase 1 covers module `Worker`s only. An agent-assisted
-rewrite to a sandbox-compatible worker is tracked as phase 2 of av-yvtb.
+are a possible follow-on; phase 1 covers module `Worker`s only, and a new
+detection needs only a capability slug plus a copy entry, not a new message or
+banner. An agent-assisted rewrite to a sandbox-compatible worker is tracked as
+phase 2 of av-yvtb.
 
 ## 2. CSP: the allowlist is the wall
 

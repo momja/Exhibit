@@ -303,14 +303,20 @@ func TestShimDownloadBridgeIsFramedOnly(t *testing.T) {
 // The module-worker interceptor (av-yvtb): Chrome refuses module-worker script
 // fetches for an opaque origin, so Worker({type:'module'}) silently hangs in the
 // sandbox. The preamble wraps the Worker constructor and, on the module-worker +
-// opaque-origin case, posts an __avModuleWorker diagnostic to the host frame,
-// pinned to the app origin like every other bridge — so the host can warn.
+// opaque-origin case, posts a generic __avCapabilityWarning diagnostic to the
+// host frame (naming the 'module-worker' capability), pinned to the app origin
+// like every other bridge — so the host can warn.
 func TestShimInstallsModuleWorkerInterceptor(t *testing.T) {
 	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
 
-	// The message shape the host's banner listener validates.
-	if !strings.Contains(doc, "__avModuleWorker") {
-		t.Fatalf("shim missing the module-worker diagnostic message: %s", doc)
+	// The generic message shape the host's banner listener validates.
+	if !strings.Contains(doc, "__avCapabilityWarning") {
+		t.Fatalf("shim missing the capability-warning diagnostic message: %s", doc)
+	}
+	// The module-worker detection names its capability slug so the host can map
+	// it to support copy.
+	if !strings.Contains(doc, "'module-worker'") {
+		t.Fatalf("shim must name the module-worker capability: %s", doc)
 	}
 	// It must gate on the module worker type and the opaque origin, not fire for
 	// classic workers or top-level (real-origin) renders.
@@ -348,7 +354,7 @@ func TestShimModuleWorkerInterceptorIsFramedOnly(t *testing.T) {
 	// The interceptor block sits inside the framed guard; the diagnostic marker
 	// must appear after the guard opens.
 	guard := strings.Index(doc, "if (window.parent !== window) {")
-	marker := strings.Index(doc, "__avModuleWorker")
+	marker := strings.Index(doc, "__avCapabilityWarning")
 	if guard < 0 || marker < 0 || marker < guard {
 		t.Fatalf("module-worker interceptor must be guarded to framed contexts: %s", doc)
 	}
