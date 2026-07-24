@@ -56,6 +56,76 @@ window.addEventListener('message', function(e) {
   }).catch(function(){});
 });
 
+// Unsupported-capability warning (av-yvtb): some browser capabilities can't work
+// inside the render frame's opaque-origin sandbox and fail silently rather than
+// throwing — e.g. a module worker (Worker({type:'module'}), as ffmpeg.wasm 0.12
+// uses) hangs forever on "Loading…" here while running fine opened top-level,
+// which has a real origin. The shim posts a generic __avCapabilityWarning naming
+// the capability; we reveal a non-blocking banner whose headline is a generic,
+// reusable line and whose collapsed <details> describes the specific failure for
+// support. The channel is capability-agnostic on purpose: new detections need
+// only a CAPABILITY_COPY entry, not a new message type. Debounced in the shim to
+// the first occurrence, and we only reveal the banner once.
+//
+// CAPABILITY_COPY maps a capability slug (set by the shim) to its support text:
+// the sentence shown in <details> and the label for the optional resource string
+// the shim attaches (e.g. a worker's script URL). Unknown slugs fall back to a
+// generic description so an added detection is never left with empty details.
+const CAPABILITY_COPY = {
+  'module-worker': {
+    detail: "This artifact spawns a module worker (new Worker(url, { type: 'module' })), " +
+      'which browsers refuse to run in the embedded preview because its sandboxed ' +
+      'frame has no stable origin. Opening the artifact directly gives it a real ' +
+      'origin, where it runs normally.',
+    resourceLabel: 'Worker script'
+  }
+};
+const CAPABILITY_COPY_FALLBACK = {
+  detail: "This artifact uses a browser capability the embedded preview's sandboxed " +
+    'frame cannot provide. Opening the artifact directly runs it in a normal ' +
+    'browsing context, where the capability is available.',
+  resourceLabel: 'Resource'
+};
+window.addEventListener('message', function(e) {
+  const d = e.data;
+  if (!d || d.__avCapabilityWarning !== true || d.artifactId !== ID) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || e.source !== frame.contentWindow) return;
+  const banner = document.getElementById('capability-warning-banner');
+  if (!banner) return;
+  // Fill the collapsed details from the capability's copy. textContent, never
+  // innerHTML: d.resource is artifact-controlled and must not be interpreted as
+  // markup on the app origin.
+  const detail = document.getElementById('capability-warning-detail');
+  if (detail && !detail.textContent) {
+    const copy = CAPABILITY_COPY[d.capability] || CAPABILITY_COPY_FALLBACK;
+    detail.textContent = copy.detail;
+    if (d.resource) {
+      const label = document.createElement('div');
+      label.className = 'banner-detail-url';
+      label.textContent = copy.resourceLabel + ': ';
+      const code = document.createElement('code');
+      code.textContent = d.resource;
+      label.appendChild(code);
+      detail.appendChild(label);
+    }
+  }
+  banner.hidden = false;
+});
+
+// The module-worker diagnostic usually fires at iframe load — possibly before
+// this listener is attached, so the shim buffers it and replays on request.
+// Announce readiness on every iframe load (targetOrigin '*' — the frame is
+// opaque; the shim validates the ping came from our app origin) so any buffered
+// diagnostic is delivered even when the worker was constructed before we listened.
+(function() {
+  const frame = document.querySelector('iframe');
+  if (!frame) return;
+  frame.addEventListener('load', function() {
+    frame.contentWindow.postMessage({ __avHostReady: true }, '*');
+  });
+})();
+
 // Download bridge: the sandboxed frame cannot download anything itself (the
 // sandbox omits allow-downloads). The shim posts intercepted download
 // attempts here — filename + transferred bytes, validated the same way as
