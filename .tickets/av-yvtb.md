@@ -1,6 +1,6 @@
 ---
 id: av-yvtb
-status: in_progress
+status: closed
 deps: []
 links: [av-x01o]
 created: 2026-07-24T04:37:58Z

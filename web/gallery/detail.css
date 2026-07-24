@@ -21,6 +21,15 @@ header h1{font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:el
 .panel+.panel{border-left:1px solid #e0e0e0}
 iframe{width:100%;height:100%;border:none;display:block}
 pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all;color:#333;background:#fafafa;min-height:100%}
+/* Module-worker warning banner (av-yvtb): non-blocking, revealed by detail.js
+ * when the render shim reports a blocked Worker({type:'module'}). Mirrors the
+ * amber .allowlist notice tone. */
+.banner{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;flex-shrink:0;border-bottom:1px solid #ffe58f;background:#fffbe6;color:#614700}
+.banner[hidden]{display:none}
+.banner-warn i.ph-warning{color:#d48806;font-size:16px;flex-shrink:0}
+.banner span{flex:1}
+.banner-action{margin-left:auto;color:var(--brand-blue);text-decoration:none;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;flex-shrink:0}
+.banner-action:hover{text-decoration:underline}
 .allowlist{padding:8px 20px;background:#fffbe6;border-bottom:1px solid #ffe58f;font-size:13px;flex-shrink:0}
 .allowlist code{background:#fff3;padding:1px 5px;border-radius:3px;font-size:12px}
 .allowlist input{border:1px solid #ddd;border-radius:4px;padding:3px 8px;font-size:12px;width:240px;margin:0 6px}
