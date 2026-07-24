@@ -47,13 +47,29 @@ from the allowlist:
 
 ```
 default-src 'none'
-script-src  'unsafe-inline' 'unsafe-eval' <allowlisted origins>
+script-src  'unsafe-inline' 'unsafe-eval' blob: data: <allowlisted origins>
+worker-src  blob: data: <allowlisted origins>
 style-src   'unsafe-inline' <allowlisted origins>
 img-src     data: <allowlisted origins>
 font-src    data: <allowlisted origins>
+media-src   blob: <allowlisted origins>
 connect-src <allowlisted origins, or 'none' if the list is empty>
+form-action 'self' <allowlisted origins>
 frame-ancestors <APP_ORIGIN>
 ```
+
+Every source above belongs to one of two buckets, and sorting a new one into the
+right bucket is the whole design rule:
+
+| Bucket | Examples | Gating |
+|--------|----------|--------|
+| Network-reaching | a remote origin fetched, imported, styled from, or submitted to | scan → approve → allowlist (spec §6.2) |
+| Local / no-egress | `'unsafe-inline'`, `'unsafe-eval'`, `data:`, `blob:` | unconditional — always present |
+
+A local source runs or renders bytes the artifact already carries, or a file the
+visitor picked on their own machine. Nothing leaves the browser, so gating it
+behind per-artifact approval buys no security while breaking canonical
+single-file patterns.
 
 Points of stance embedded in that policy:
 
@@ -62,10 +78,18 @@ Points of stance embedded in that policy:
   product. CSP is not doing XSS duty here — containment of what the script can
   *touch* comes from the sandbox and origin isolation (§1); CSP's job is
   controlling what the script can *reach over the network*.
-- **Inlined assets are exempt from approval** because they are not network
-  requests: `style-src` always permits inline styles, `img-src`/`font-src` always
-  permit `data:` URIs. An artifact that carries its own CSS, images, and fonts
-  renders with zero egress — the "it's just a file" thesis in policy form.
+- **Inlined and locally constructed sources are exempt from approval** because
+  they are not network requests: `style-src` always permits inline styles,
+  `img-src`/`font-src` always permit `data:` URIs, `media-src` always permits
+  `blob:`, and `script-src`/`worker-src` always permit `blob:`/`data:`. An
+  artifact that carries its own CSS, images, and fonts, plays back a file the
+  visitor picked, and spins up a Worker from a `blob:` URL (ffmpeg.wasm and
+  friends) renders with zero egress — the "it's just a file" thesis in policy
+  form.
+- **`worker-src` is emitted explicitly**, not left to fall back to `script-src`,
+  because a missing `worker-src` fails *silently*: the `Worker` constructor
+  succeeds, no error is logged, no promise rejects, and the worker body simply
+  never runs — an indefinite "Loading…" with nothing to debug (av-x01o).
 - **A no-network artifact gets `connect-src 'none'`.** Nothing is reachable by
   default.
 - **The ingest scan is transparency, not enforcement.** It parses the document

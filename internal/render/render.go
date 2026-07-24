@@ -129,62 +129,77 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 // to embed this page in an iframe. The storage shim needs no connect-src of its
 // own: it reads inlined state and writes via postMessage to the host frame.
 //
-// Style/font/media defaults favor the common self-contained artifact:
+// Every source in this policy falls into one of two buckets, and which bucket a
+// new source belongs to is the only question worth asking when adding one:
+//
+//   - Network-reaching sources (a remote origin an artifact fetches, imports,
+//     or submits to) are egress. They are gated by scan → approve → allowlist
+//     per docs/product_requirement_doc.md §6.2, so they appear only as the
+//     appended `origins` below. An empty allowlist means an artifact reaches
+//     nothing.
+//   - Local, no-egress sources ('unsafe-inline', 'unsafe-eval', data:, blob:)
+//     execute or render bytes the artifact already carries or the visitor
+//     already picked locally. Nothing leaves the browser, so gating them behind
+//     per-artifact approval buys no security while breaking canonical
+//     single-file patterns. These are unconditional — present whether or not
+//     the artifact has an allowlist.
+//
+// Applying that split directive by directive:
 //   - style-src 'unsafe-inline' always permits inline <style> blocks and style=""
-//     attributes — the default way a single-file artifact carries its CSS, needing
-//     no network approval. Allowlisted origins are appended so a <link
-//     rel=stylesheet> to an approved origin is honored.
+//     attributes — the default way a single-file artifact carries its CSS.
+//     Allowlisted origins are appended so a <link rel=stylesheet> to an approved
+//     origin is honored.
 //   - img-src and font-src always permit data: URIs so an artifact that inlines its
 //     own images or fonts (e.g. @font-face { src: url(data:...) }) renders with zero
-//     network egress. This mirrors the "it's just a file" thesis: inlined assets are
-//     not network requests, so blocking them buys no security while breaking a
-//     canonical pattern. The network boundary (the allowlist) is unaffected.
+//     network egress.
 //   - media-src always permits blob: so a <video>/<audio> element can play back a
 //     file the artifact loaded locally via <input type=file> + URL.createObjectURL
-//     — the object never leaves the browser, so it carries the same zero-egress
-//     property as the data: exemptions above, not a network request the allowlist
-//     needs to govern.
-//   - script-src always permits blob: so a Worker constructed from a blob: URL
-//     (the standard way to run a cross-origin worker script from an opaque-origin
-//     sandbox, e.g. ffmpeg.wasm) can execute. There is no worker-src directive, so
-//     the browser falls back to script-src for worker scripts too; script-src
-//     already carries 'unsafe-eval', so a blob: script grants no capability beyond
-//     what eval already permits — it's the same zero-egress exemption as media-src.
+//     — the object never leaves the browser.
+//   - script-src always permits blob: and data: so a script the artifact builds at
+//     runtime can execute. Given 'unsafe-inline' and 'unsafe-eval' are already
+//     present (an artifact is a single file of its own code), these grant no
+//     capability the policy doesn't already allow.
+//   - worker-src is explicit rather than left to fall back to script-src, and
+//     always permits blob: and data:. A Worker built from a blob:/data: URL is the
+//     standard way to start one from an opaque-origin sandbox (e.g. ffmpeg.wasm);
+//     a missing worker-src silently produces a worker whose body never runs — no
+//     console error, no rejected promise, just a hang.
+//   - connect-src always permits blob: and data: alongside the allowlist. Reading
+//     back a blob: object URL the artifact itself minted, or a data: URI it built,
+//     is fetch used as local I/O — the bytes are already in the agent, nothing
+//     leaves the browser. (ffmpeg.wasm's core loads its own .wasm this way.) An
+//     artifact with no approved origins still gets no *network* reach: the
+//     allowlist portion is what governs egress, and it stays empty.
 //   - form-action is built from the same allowlist as connect-src. This matters
 //     because form-action does NOT fall back to default-src — a sandbox that
 //     grants allow-forms without an explicit form-action would let an artifact
 //     submit a <form> to any origin, a network-egress vector the allowlist would
-//     otherwise govern. The empty-allowlist branch pins form-action to 'self'
-//     rather than 'none': a form with no/empty action submits to the current
-//     document (the render URL itself), which is zero-egress and needs no
-//     allowlist approval.
+//     otherwise govern. form-action is pinned to 'self' even with an empty
+//     allowlist: a form with no/empty action submits to the current document (the
+//     render URL itself), which is zero-egress and needs no approval.
 func buildCSP(allowlist []string, appOrigin string) string {
-	frameAncestors := "frame-ancestors " + appOrigin
-	if len(allowlist) == 0 {
-		return strings.Join([]string{
-			"default-src 'none'",
-			"script-src 'unsafe-inline' 'unsafe-eval' blob:",
-			"style-src 'unsafe-inline'",
-			"img-src data:",
-			"font-src data:",
-			"media-src blob:",
-			"connect-src 'none'",
-			"form-action 'self'",
-			frameAncestors,
-		}, "; ")
+	origins := strings.Join(allowlist, " ")
+
+	// withOrigins appends the approved (network-reaching) origins to a directive's
+	// unconditional, no-egress sources.
+	withOrigins := func(directive string) string {
+		if origins == "" {
+			return directive
+		}
+		return directive + " " + origins
 	}
 
-	origins := strings.Join(allowlist, " ")
 	return strings.Join([]string{
 		"default-src 'none'",
-		"script-src 'unsafe-inline' 'unsafe-eval' blob: " + origins,
-		"style-src 'unsafe-inline' " + origins,
-		"img-src data: " + origins,
-		"font-src data: " + origins,
-		"media-src blob: " + origins,
-		"connect-src " + origins,
-		"form-action 'self' " + origins,
-		frameAncestors,
+		withOrigins("script-src 'unsafe-inline' 'unsafe-eval' blob: data:"),
+		withOrigins("worker-src blob: data:"),
+		withOrigins("style-src 'unsafe-inline'"),
+		withOrigins("img-src data:"),
+		withOrigins("font-src data:"),
+		withOrigins("media-src blob:"),
+		withOrigins("connect-src blob: data:"),
+		withOrigins("form-action 'self'"),
+		"frame-ancestors " + appOrigin,
 	}, "; ")
 }
 

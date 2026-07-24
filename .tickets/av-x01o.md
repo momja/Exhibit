@@ -1,6 +1,6 @@
 ---
 id: av-x01o
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-07-24T04:13:43Z
@@ -24,3 +24,9 @@ Reproduce the FFmpeg.wasm artifact (ab4fc00e-0d9f-4191-a120-778751b8aef1 on the 
 Add/extend a render_test.go case asserting worker-src is present with blob: and data: even when the artifact's allowlist is empty (connect-src 'none' case), mirroring the existing pattern for media-src/img-src/font-src (see render_test.go:32-52).
 Document the bucket distinction (network-reaching vs local/no-egress CSP directives) inline as a comment near buildCSP so future directive additions default to the correct bucket without re-litigating this.
 
+
+## Notes
+
+**2026-07-24T04:38:14Z**
+
+Fixed in buildCSP: explicit worker-src blob: data:, plus script-src data: and connect-src blob: data:, all unconditional (bucket b, no egress). Verified end-to-end in Chrome with a real ffmpeg.wasm artifact at the render origin: video upload -> core loads -> transcode -> download of a valid 80x60 mpeg4. Embedded-preview caveat filed as av-yvtb (module workers are refused in the opaque-origin sandbox, unrelated to CSP).

@@ -271,12 +271,16 @@ with a per-artifact allowlist as the source of truth:
    to contact (fetch/post/import). Nothing is rendered with network access until they
    decide.
 3. **Approve → allowlist.** Approved origins are written to the artifact's
-   `artifact_network_origins` rows as `decision='allow'`. The render-time CSP `connect-src` / `script-src` / `style-src` /
-   `img-src` / `font-src` are generated from this list; everything else is blocked by the
-   browser. Default for a no-network tool is effectively `connect-src 'none'`. Inlined,
-   no-egress assets are exempt from allowlist approval: `style-src 'unsafe-inline'` always
-   permits inline `<style>`/`style=""`, and `img-src`/`font-src` always permit `data:`
-   URIs (an inlined image or `@font-face` font is not a network request).
+   `artifact_network_origins` rows as `decision='allow'`. The render-time CSP `connect-src` / `script-src` /
+   `worker-src` / `style-src` / `img-src` / `font-src` / `media-src` are generated from this list;
+   everything else is blocked by the browser. Default for a no-network tool is effectively
+   `connect-src 'none'`. Inlined or locally constructed, no-egress sources are exempt from
+   allowlist approval: `style-src 'unsafe-inline'` always permits inline `<style>`/`style=""`,
+   `img-src`/`font-src` always permit `data:` URIs, `media-src` always permits `blob:`, and
+   `script-src`/`worker-src` always permit `blob:`/`data:` (an inlined image, an `@font-face`
+   font, a locally picked file, or a Worker the artifact builds at runtime is not a network
+   request). Sorting each new CSP source into one of those two buckets — network-reaching
+   (allowlist-gated) or local/no-egress (unconditional) — is the standing rule.
 4. **Runtime escape → blocked.** If a rendered artifact attempts an origin **not** on
    its allowlist, the attempt is blocked by the browser's CSP. The user can approve
    the origin afterward in the artifact's allowlist editor, which updates the CSP on

@@ -92,15 +92,19 @@ Renderer construction:
 - The embedding page grants `allow="clipboard-read; clipboard-write"` on the iframe —
   a Permissions Policy delegation so artifacts can use the async Clipboard API without
   any relaxation of the sandbox or CSP.
-- Inject a generated **per-artifact CSP** (`connect-src`/`script-src`/`style-src`/
-  `img-src`/`font-src`/`media-src` built from the artifact's allowlist) into the served
-  document. The browser enforces the network boundary; this is the wall behind §6 of the
-  main spec. Inlined/local assets are exempt from the allowlist since they carry no
-  network egress: `style-src` always carries `'unsafe-inline'`, `img-src`/`font-src`
-  always carry `data:`, and `media-src` always carries `blob:`, so inline styles,
-  inlined `data:` images/fonts, and a locally imported file played back via
-  `<video>`/`<audio src=blob:...>` (`URL.createObjectURL` on a picked `File`) all
-  render without approval.
+- Inject a generated **per-artifact CSP** (`connect-src`/`script-src`/`worker-src`/
+  `style-src`/`img-src`/`font-src`/`media-src` built from the artifact's allowlist) into
+  the served document. The browser enforces the network boundary; this is the wall behind
+  §6 of the main spec. Inlined/local sources are exempt from the allowlist since they
+  carry no network egress: `style-src` always carries `'unsafe-inline'`,
+  `img-src`/`font-src` always carry `data:`, `media-src` always carries `blob:`, and
+  `script-src`/`worker-src` always carry `blob:`/`data:` — so inline styles, inlined
+  `data:` images/fonts, a locally imported file played back via
+  `<video>`/`<audio src=blob:...>` (`URL.createObjectURL` on a picked `File`), and a
+  script or Worker the artifact constructs at runtime (ffmpeg.wasm and friends) all
+  run without approval. `worker-src` is emitted explicitly rather than inherited from
+  `script-src`: when it is missing the worker fails silently, constructing fine but
+  never executing its body.
 - Inject the **render preamble** — the **storage shim** (§6 here) with the artifact's
   current state inlined — into `<head>` *before* any artifact script runs.
   Serve the document `Cache-Control:
