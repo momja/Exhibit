@@ -117,6 +117,9 @@ docker run -p 8080:8080 -p 8081:8081 \
   exhibit
 ```
 
+For `docker-compose.yml`, backup/replication profiles, a smaller image without the
+AI agent surface, and reverse-proxy notes, see [docs/deployment.md](./docs/deployment.md).
+
 ## Security model
 
 Full stance — CSP, vendoring, clipboard/file defaults — in [docs/security.md](./docs/security.md). In brief:
