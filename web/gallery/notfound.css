@@ -117,7 +117,7 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inl
 /* Phone: one column, frame centred, one way out plus search. */
 @media (max-width:640px){
   header{padding:10px 24px;gap:10px}
-  .exhibit-404__agent-label{display:none}
+  .exhibit-404__add-label{display:none}
   .exhibit-404{grid-template-columns:minmax(0,1fr);padding:32px 24px 64px}
   .exhibit-404__stage{margin-left:0}
   .exhibit-404__frame{width:215px;margin:0 auto}
