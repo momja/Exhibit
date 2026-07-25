@@ -16,34 +16,15 @@
   {{.LogoSVG}}
   <h1>Exhibit</h1>
   <span class="spacer"></span>
-  <a href="/agent"><i class="ph ph-robot"></i> Agent</a>
+  {{/* Ingest moved to its own page (av-qo0j), so the library's single
+       creation affordance is this primary button. The agent link it replaced
+       isn't lost — the agent is the third creation route on /new, which is
+       where creation now lives. */}}
+  <a class="btn" href="/new"><i class="ph ph-plus"></i> Add artifact</a>
 </header>
 <main>
-{{/* id="upload" is the 404 page's "Upload an artifact" target — the gallery
-     index is where ingest lives, so that button lands on this card. */}}
-<div class="upload" id="upload">
-  <h2>Upload Artifact</h2>
-  <input type="text" id="title" placeholder="Title (optional)">
-  <div class="mode-tabs">
-    <button class="tab-btn active" onclick="setMode('paste')">Paste HTML</button>
-    <button class="tab-btn" onclick="setMode('url')">From URL</button>
-  </div>
-  <textarea id="body" placeholder="Paste HTML artifact source here…"></textarea>
-  {{/* url-input is styled by .upload input[type=text]; JS toggles only its
-       display (Paste/URL tabs). snapshot-row's flex styling lives in
-       index.css; JS toggles display between none and flex. */}}
-  <input type="text" id="url-input" placeholder="https://example.com/tool.html" style="display:none">
-  <label id="snapshot-row" style="display:none">
-    <input type="checkbox" id="snapshot-toggle" checked>
-    Snapshot assets into the file (recommended) — fetches the page&#39;s images, styles and scripts and inlines them so the artifact stays self-contained
-  </label>
-  <div id="scan-result"></div>
-  <div class="upload-row">
-    <button class="btn" onclick="ingest()"><i class="ph ph-plus"></i> Upload</button>
-  </div>
-  <div id="status"></div>
-</div>
-
+{{/* Search leads the page: with the upload card gone, the library opens on
+     the control you use to find things in it rather than below the fold. */}}
 <div class="search-row">
   <i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
   <input type="text" id="search-input" name="q" placeholder="Search artifacts…" value="{{.Query}}" autocomplete="off">
@@ -54,7 +35,7 @@
      and the title link are the affordances. The separate 'Details' link was
      removed: it navigated to the same page as the title click, so it was
      redundant. The earlier 'Open ↗' new-tab action was already gone. */}}
-<div class="grid">{{if not .Cards}}<p class="empty">No artifacts yet. Upload one above.</p>{{end}}{{range .Cards}}
+<div class="grid">{{if not .Cards}}<p class="empty">No artifacts yet. <a href="/new">Add your first artifact</a>.</p>{{end}}{{range .Cards}}
 <div class="card" data-href="/artifacts/{{.ArtifactID}}">
   <a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>
   {{template "tagRow" .}}
@@ -68,7 +49,8 @@
 {{template "editTagModal" .Presets}}
 {{template "addTagModal" .AddTagModal}}
 
-<script src="/assets/editor.js"></script>
+{{/* No CodeMirror island here: the only editor on this page was the ingest
+     form's source field, which moved to /new with it. */}}
 <script>
 const TOKEN = {{.Token}};
 const DEFAULT_TAG_COLOR = {{.DefaultTagColor}};

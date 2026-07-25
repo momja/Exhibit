@@ -22,7 +22,12 @@
   {{.LogoSVG}}
   <h1>Exhibit</h1>
   <span class="spacer"></span>
-  <a href="/agent"><i class="ph ph-robot"></i> <span class="exhibit-404__agent-label">Agent</span></a>
+  {{/* The same primary affordance the gallery header carries (av-qo0j). The
+       404 is app chrome wrapped around a missing artifact, so its header
+       offers the same single way to add one — not the agent entry point the
+       gallery no longer has. The label collapses to the bare icon on phones,
+       so the aria-label carries the name when the text is display:none. */}}
+  <a class="btn" href="/new" aria-label="Add artifact"><i class="ph ph-plus"></i> <span class="exhibit-404__add-label">Add artifact</span></a>
 </header>
 <main class="exhibit-404">
   {{/* The hero is the header's artwork again, drawn from the base64 data URI
@@ -46,7 +51,9 @@
     <p class="exhibit-404__path"><span class="exhibit-404__path-label">REQUESTED</span> <code>{{.RequestedPath}}</code></p>
     <div class="exhibit-404__actions">
       <a class="btn" href="/"><i class="ph ph-arrow-left"></i> Back to the gallery</a>
-      <a class="btn btn-sec" href="/#upload"><i class="ph ph-plus"></i> Upload an artifact</a>
+      {{/* Ingest is its own page now (av-qo0j) — this used to point at a
+           /#upload fragment on the gallery index that no longer exists. */}}
+      <a class="btn btn-sec" href="/new"><i class="ph ph-plus"></i> Add an artifact</a>
     </div>
     {{/* A plain GET form to the gallery index, which already reads ?q= and
          runs it through the FTS5 search — no JS, and the same query the

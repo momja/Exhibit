@@ -38,6 +38,19 @@ func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, page)
 }
 
+// galleryNew serves the add-artifact page (av-qo0j). It reads nothing from the
+// store: ingest is entirely a client-side conversation with POST
+// /api/artifacts, so the page needs only the API token its script posts with.
+func (ro *Router) galleryNew(w http.ResponseWriter, r *http.Request) {
+	page, err := renderNewPage(ro.cfg.AuthToken)
+	if err != nil {
+		serverError(w, r, "gallery new render", err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, page)
+}
+
 func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
@@ -243,6 +256,21 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token s
 		AddTagModal:     addTagModalData{Tags: tagViews(tags), Presets: color.Presets},
 		Token:           token,
 		DefaultTagColor: store.DefaultTagColor,
+	})
+}
+
+// newPageData feeds the add-artifact page. It is deliberately thin: the page
+// creates artifacts through the API like any other client, so the only
+// per-request value it needs is the bearer token its script posts with.
+type newPageData struct {
+	Favicon template.URL
+	Token   string
+}
+
+func renderNewPage(token string) (string, error) {
+	return renderPage("new", newPageData{
+		Favicon: template.URL(exhibitLogoDataURI),
+		Token:   token,
 	})
 }
 

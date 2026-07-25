@@ -203,7 +203,8 @@ authored in the `web/gallery/` workspace, copied into the embedded assets at bui
 time (§13), and served under `/assets/gallery/`; per-request values reach the page
 scripts through a small inline bootstrap `<script>` that html/template JSON-encodes.
 The gallery is CRUD-shaped — grid, search (eager client-filtered by swapping the
-server-rendered grid), tag/collection filters, a detail view — and full-page server
+server-rendered grid), tag/collection filters, a detail view, and an add-artifact
+page at `/new` (av-qo0j) — and full-page server
 renders cover it, keeping everything inside the one Go binary with no frontend
 framework and no template codegen. (templ — the codegen engine an early scaffold
 used — was considered for the extraction and rejected: the stdlib engine adds zero

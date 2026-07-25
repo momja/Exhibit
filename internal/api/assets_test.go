@@ -58,7 +58,7 @@ func TestGalleryPagesLoadPhosphorIconsFromAppOrigin(t *testing.T) {
 
 	const stylesheetTag = `<link rel="stylesheet" href="/assets/phosphor/regular.css">`
 
-	for _, path := range []string{"/", "/artifacts/" + id, "/artifacts/" + id + "/edit"} {
+	for _, path := range []string{"/", "/new", "/artifacts/" + id, "/artifacts/" + id + "/edit"} {
 		req := httptest.NewRequest("GET", path, nil)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -106,7 +106,32 @@ func TestGalleryEditPageMountsEditor(t *testing.T) {
 	assert.Contains(t, page, `<textarea id="body">`)
 }
 
-func TestGalleryLibraryPageMountsEditor(t *testing.T) {
+// The ingest page — /new since av-qo0j, the gallery index before it — loads
+// the same CodeMirror island and the static page script that mounts it on the
+// paste textarea, which stays present as the form's source of truth (av-44z3).
+func TestNewPageMountsEditor(t *testing.T) {
+	r := newTestRouter(t)
+
+	req := httptest.NewRequest("GET", "/new", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	page := w.Body.String()
+	assert.Contains(t, page, `<script src="/assets/editor.js"></script>`)
+	assert.Contains(t, page, `<script src="/assets/gallery/new.js"></script>`)
+	newJS, err := embeddedAssets.ReadFile("assets/gallery/new.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(newJS), "ArtifactEditor.mount(document.getElementById('body'))")
+	assert.Contains(t, page, `<textarea id="body" placeholder=`)
+	newCSS, err := embeddedAssets.ReadFile("assets/gallery/new.css")
+	require.NoError(t, err)
+	assert.Contains(t, string(newCSS), `.ingest-panel .cm-editor{`)
+}
+
+// The library page has no editor left to mount: its only one was the ingest
+// form's source field, which moved to /new with the rest of ingest.
+func TestGalleryLibraryPageHasNoEditor(t *testing.T) {
 	r := newTestRouter(t)
 
 	req := httptest.NewRequest("GET", "/", nil)
@@ -115,17 +140,6 @@ func TestGalleryLibraryPageMountsEditor(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	page := w.Body.String()
-	// The library (upload) page loads the same CodeMirror island and the
-	// static page script that mounts it on the paste textarea, which stays
-	// present as the form's source of truth (av-44z3). setMode toggles the
-	// mounted editor for the Paste/URL tabs.
-	assert.Contains(t, page, `<script src="/assets/editor.js"></script>`)
-	assert.Contains(t, page, `<script src="/assets/gallery/index.js"></script>`)
-	indexJS, err := embeddedAssets.ReadFile("assets/gallery/index.js")
-	require.NoError(t, err)
-	assert.Contains(t, string(indexJS), "ArtifactEditor.mount(document.getElementById('body'))")
-	assert.Contains(t, page, `<textarea id="body" placeholder=`)
-	indexCSS, err := embeddedAssets.ReadFile("assets/gallery/index.css")
-	require.NoError(t, err)
-	assert.Contains(t, string(indexCSS), `.upload .cm-editor{`)
+	assert.NotContains(t, page, `/assets/editor.js`)
+	assert.NotContains(t, page, `<textarea`)
 }

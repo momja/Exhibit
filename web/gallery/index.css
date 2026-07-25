@@ -9,17 +9,6 @@ header h1{font-size:18px;font-weight:600}
 header .logo{height:32px;width:auto;display:block;flex:0 0 auto}
 header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;gap:5px}
 main{padding:24px;max-width:1200px;margin:0 auto}
-.upload{background:#fff;border-radius:10px;padding:20px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.upload h2{font-size:15px;font-weight:600;margin-bottom:12px;color:#333}
-.upload textarea{width:100%;height:160px;font-family:monospace;font-size:12px;border:1px solid #ddd;border-radius:6px;padding:10px;resize:vertical;outline:none}
-.upload textarea:focus{border-color:var(--brand-blue)}
-.upload .cm-editor{height:160px;font-size:12px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
-.upload .cm-editor.cm-focused{outline:none;border-color:var(--brand-blue)}
-.upload .cm-scroller{overflow:auto}
-.upload input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px;outline:none}
-.upload input[type=text]:focus{border-color:var(--brand-blue)}
-.upload-row{display:flex;gap:8px;margin-top:10px}
-#snapshot-row{align-items:center;gap:6px;font-size:13px;color:#555;margin-bottom:8px;cursor:pointer}
 .search-row{display:flex;align-items:center;gap:8px;margin-bottom:20px;position:relative}
 .search-row .search-icon{position:absolute;left:10px;color:#aaa;font-size:16px;pointer-events:none}
 .search-row input{flex:1;padding:9px 12px 9px 34px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none}
@@ -61,13 +50,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .tag-pill:hover .tag-dot,.tag-pill:focus-within .tag-dot{opacity:0}
 .tag-pill-edit:hover,.tag-pill-detach:hover{background:rgba(0,0,0,.15)}
 .empty{color:#888;font-size:14px;padding:20px 0}
-#status{margin-top:10px;font-size:13px;color:#555}
-#scan-result{margin-top:10px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
-.snapshot-report{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #e0e0e0}
-.snapshot-report:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
-.mode-tabs{display:flex;gap:6px;margin-bottom:8px}
-.tab-btn{padding:5px 14px;font-size:13px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;color:#555}
-.tab-btn.active{background:var(--brand-blue);color:#fff;border-color:var(--brand-blue)}
+.empty a{color:var(--brand-blue)}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100}
 .modal-overlay[hidden]{display:none}
 .modal{background:#fff;border-radius:10px;padding:20px;width:320px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,.25)}
