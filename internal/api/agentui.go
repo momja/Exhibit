@@ -22,6 +22,7 @@ type agentPageData struct {
 	ArtifactJSON template.JS
 	MockEnabled  bool
 	AgentEnabled bool
+	BackURL      string
 }
 
 // agentPage serves the agent chat surface (Exh-jlbt): a build/modify-with-AI
@@ -30,12 +31,21 @@ type agentPageData struct {
 // artifact. Like the rest of the gallery it is one server-rendered document
 // with vanilla-JS islands; streaming arrives over SSE from the session's Pi
 // sidecar.
+//
+// BackURL mirrors the two ways this page is reached rather than hardcoding
+// the gallery: the detail page's "Modify with agent" link (?artifact=<id>)
+// expects the back link to return to that artifact, and the add-artifact
+// page's "Build with agent" tile (bare /agent) expects it back on /new -
+// otherwise "add artifact -> agent -> back" strands the visitor on the
+// gallery instead of where they came from.
 func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 	artifactJSON := "null"
+	backURL := "/new"
 	if id := r.URL.Query().Get("artifact"); id != "" {
 		if a, err := ro.cfg.Store.GetArtifact(r.Context(), id); err == nil && a != nil {
 			j, _ := json.Marshal(map[string]string{"id": a.ID, "title": a.Title})
 			artifactJSON = string(j)
+			backURL = "/artifacts/" + a.ID
 		}
 	}
 	page, err := renderPage("agent", agentPageData{
@@ -44,6 +54,7 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 		ArtifactJSON: template.JS(artifactJSON),
 		MockEnabled:  ro.cfg.MockEnabled,
 		AgentEnabled: ro.cfg.Agent != nil,
+		BackURL:      backURL,
 	})
 	if err != nil {
 		serverError(w, r, "agent page render", err)
