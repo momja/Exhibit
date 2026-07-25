@@ -16,6 +16,12 @@ cd Exhibit
 Then run it with Compose:
 
 ```bash
+docker compose up
+```
+
+or configure your origins (auth token is currently a placeholder. It's required but does not actually authenticate):
+
+```bash
 AUTH_TOKEN=changeme \
 APP_ORIGIN=https://app.example.com \
 RENDER_ORIGIN=https://artifacts.example.com \
