@@ -14,9 +14,7 @@ Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs
 
 ## Quick start
 
-The fastest way to run Exhibit is Docker Compose. That path — along with all
-configuration (env vars, `AUTH_TOKEN`, the two origins), reverse-proxy / TLS,
-and backups — lives in **[docs/deployment.md](./docs/deployment.md)**.
+The fastest way to run Exhibit is Docker Compose. Read **[docs/deployment.md](./docs/deployment.md)**.
 
 The rest of this section is for building and running **from source** for
 development.
