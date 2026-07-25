@@ -1,4 +1,4 @@
-// Copies the gallery page assets (index/detail/edit .css and .js) verbatim
+// Copies the gallery page assets (index/new/detail/edit/... .css and .js) verbatim
 // into internal/api/assets/gallery, which is go:embed-ed and served from the
 // app origin under /assets/gallery/. No bundling or minification: the files
 // are plain hand-written CSS/JS with no imports, and copying verbatim keeps
@@ -24,6 +24,7 @@ const files = [
   // them.
   "tokens.css", "components.css", "components.js",
   "index.css", "index.js",
+  "new.css", "new.js",
   "detail.css", "detail.js",
   "edit.css", "edit.js",
   "notfound.css", "notfound.js",

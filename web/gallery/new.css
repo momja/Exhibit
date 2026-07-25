@@ -1,0 +1,95 @@
+/* Add-artifact (ingest) page stylesheet. Served from the app origin at
+ * /assets/gallery/new.css. Loads after tokens.css (design tokens incl.
+ * --brand-blue) and components.css (shared .btn/.card/.field/... classes);
+ * only this page's rules live here.
+ *
+ * These rules were the .upload block on the gallery index until ingest moved
+ * to its own page (av-qo0j); the library sheet keeps search, grid and tags. */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
+header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header);padding:var(--space-5) var(--space-8);display:flex;align-items:center;gap:var(--space-6)}
+header h1{font-size:18px;font-weight:600}
+header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
+main{padding:var(--space-8);max-width:900px;margin:0 auto}
+
+/* --- lede -------------------------------------------------------------- */
+/* The page states its premise before offering controls: three routes, one
+ * outcome. The measure is capped so the line doesn't run the panel's width. */
+.lede h2{font-size:28px;font-weight:650;letter-spacing:-.025em}
+.lede p{font-size:14px;color:var(--color-muted);margin-top:7px;line-height:1.55;max-width:620px}
+
+/* --- route tiles ------------------------------------------------------- */
+/* Three peers, whatever their mechanics: two are the ingest panel's modes,
+ * the third is a link to the agent surface. Presenting them identically is
+ * the point — the user picks how the file arrives, not which widget to use. */
+.routes{--route-tint:#eef3fa;display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-5);margin:26px 0 var(--space-8)}
+.route{display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-3);padding:var(--space-6);border:1px solid var(--color-hairline);border-radius:var(--radius-lg);background:var(--color-panel);color:inherit;font:inherit;text-align:left;text-decoration:none;cursor:pointer}
+.route:hover{border-color:var(--color-border)}
+/* Selected reads as a ring rather than a fill, so the tile still shows its
+ * own content at full contrast while it is the active mode. */
+.route.is-selected{border-color:var(--brand-blue);box-shadow:0 0 0 3px var(--route-tint)}
+.route-icon{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:var(--radius-md);background:#f4f6f8;color:#5b6472;font-size:19px}
+.route.is-selected .route-icon{background:var(--route-tint);color:var(--brand-blue)}
+.route b{font-size:14px;font-weight:600}
+.route-note{font-size:12.5px;color:var(--color-muted);line-height:1.5}
+
+/* --- ingest panel ------------------------------------------------------ */
+/* .card carries the surface (components.css); this adds the field rhythm. */
+.ingest-panel{padding:var(--space-7)}
+.ingest-field{margin-bottom:var(--space-6)}
+.ingest-field[hidden]{display:none}
+/* Small-caps field labels: the panel asks for three unlike things (a name, a
+ * document, a URL) and the labels have to separate them without competing
+ * with the lede above. */
+.ingest-label{display:block;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#7b828e;margin-bottom:var(--space-2)}
+.ingest-label-opt{font-weight:400;text-transform:none;letter-spacing:0;color:var(--color-faint)}
+.ingest-panel textarea{width:100%;height:320px;font-family:monospace;font-size:12px;border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-4);resize:vertical;outline:none}
+.ingest-panel textarea:focus{border-color:var(--brand-blue)}
+/* The mounted CodeMirror replaces the textarea in place, so it inherits the
+ * same box the textarea drew. */
+.ingest-panel .cm-editor{height:320px;font-size:12px;border:1px solid var(--color-border);border-radius:var(--radius-md);overflow:hidden}
+.ingest-panel .cm-editor.cm-focused{outline:none;border-color:var(--brand-blue)}
+.ingest-panel .cm-scroller{overflow:auto}
+/* URL mode only — see new.js setMode for why it can never appear under
+ * Paste HTML. */
+.snapshot-row{display:flex;align-items:flex-start;gap:var(--space-2);font-size:13px;color:#555;line-height:1.5;margin-bottom:var(--space-6);cursor:pointer}
+.snapshot-row[hidden]{display:none}
+.snapshot-row input{margin-top:3px;flex:0 0 auto}
+/* Footer: the standing promise on the left, the two exits on the right.
+ * Cancel is an <a> wearing .btn, so it needs the underline turned off — the
+ * other pages get that from a `header a` rule this one's buttons sit below. */
+.ingest-foot{display:flex;align-items:center;gap:var(--space-4);margin-top:18px;padding-top:var(--space-6);border-top:1px solid var(--color-hairline)}
+a.btn{text-decoration:none}
+
+/* --- ingest feedback: status line, scan result, snapshot report --------- */
+#status{margin-top:var(--space-4);font-size:13px;color:#555}
+#status a{color:var(--brand-blue)}
+#scan-result{margin-top:var(--space-4);background:#f8f8f8;border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:var(--space-5);font-size:13px;display:none}
+.scan-note{color:var(--color-muted);margin:var(--space-1) 0 var(--space-3)}
+.scan-actions{display:flex;gap:var(--space-3);margin-top:var(--space-4)}
+/* One scanned origin awaiting approval. Nothing here is approved until the
+ * user submits — the artifact is already stored and network-inert. */
+.origin-row{display:block;margin:var(--space-1) 0}
+.origin-row code{background:#eee;padding:1px 5px;border-radius:var(--radius-sm)}
+.snapshot-report{margin-bottom:var(--space-4);padding-bottom:var(--space-4);border-bottom:1px solid var(--color-hairline)}
+.snapshot-report:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
+.snapshot-line{margin-top:var(--space-1)}
+.snapshot-line summary{cursor:pointer}
+.snapshot-list{margin:var(--space-1) 0 0 18px}
+.snapshot-bad{color:#c00;margin-top:var(--space-2)}
+.snapshot-good{color:#2a7d2a;margin-top:var(--space-2)}
+
+/* --- responsive: tiles stack, footer becomes full-width actions --------- */
+@media (max-width:640px){
+  main{padding:var(--space-5)}
+  .lede h2{font-size:24px}
+  .routes{grid-template-columns:1fr;margin:var(--space-7) 0 var(--space-7)}
+  .ingest-panel{padding:14px}
+  .ingest-panel textarea,.ingest-panel .cm-editor{height:240px}
+  .ingest-foot{flex-direction:column;align-items:stretch}
+  .ingest-foot .spacer{display:none}
+  .ingest-foot .btn{width:100%;justify-content:center}
+  /* The back link collapses to its arrow, as on the detail page — the header
+   * is one non-wrapping row and the page title needs the width. */
+  .back-label{display:none}
+}

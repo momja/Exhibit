@@ -1,0 +1,104 @@
+{{/* Add-artifact (ingest) page. Data: newPageData (gallery.go).
+
+     Ingest used to sit on top of the library index, pushing the collection —
+     the reason that page exists — below the fold (av-qo0j). It lives here
+     instead, as one page whose whole job is getting a file in.
+
+     The three routes in are presented as equals: two of them (Paste HTML,
+     From URL) are the two modes of the ingest panel below and swap what the
+     panel asks for; the third hands off to the agent surface, which owns its
+     own page. */}}
+{{define "new"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Add artifact — Exhibit</title>
+<link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
+<link rel="stylesheet" href="/assets/phosphor/regular.css">
+<link rel="stylesheet" href="/assets/gallery/tokens.css">
+<link rel="stylesheet" href="/assets/gallery/components.css">
+<link rel="stylesheet" href="/assets/gallery/new.css">
+</head>
+<body>
+<header>
+  {{/* The app's sub-page header idiom (detail.tmpl): back link, then the page
+       title. Deliberately not a Library/Studio nav — there are two surfaces,
+       and a back link says so more plainly than a switcher would. The label
+       collapses to the bare arrow on phones, as it does on the detail page. */}}
+  <a href="/">←<span class="back-label"> Gallery</span></a>
+  <h1>Add artifact</h1>
+</header>
+<main>
+<div class="lede">
+  <h2>Three ways in.</h2>
+  <p>However it arrives, it lands in your library as one self-contained file you own.</p>
+</div>
+
+{{/* data-mode marks the two tiles that drive the panel below; the agent tile
+     is a plain link and carries none, so the mode switch never selects it. */}}
+<div class="routes">
+  <button type="button" class="route is-selected" data-mode="paste" aria-pressed="true" onclick="setMode('paste')">
+    <span class="route-icon"><i class="ph ph-code"></i></span>
+    <b>Paste HTML</b>
+    <span class="route-note">Drop in source you already have from a chat or your editor.</span>
+  </button>
+  <button type="button" class="route" data-mode="url" aria-pressed="false" onclick="setMode('url')">
+    <span class="route-icon"><i class="ph ph-globe"></i></span>
+    <b>From URL</b>
+    <span class="route-note">Fetch a page once and keep your own copy. Assets inlined.</span>
+  </button>
+  <a class="route" href="/agent">
+    <span class="route-icon"><i class="ph ph-robot"></i></span>
+    <b>Build with agent</b>
+    <span class="route-note">Describe the tool and iterate with an assistant until it works.</span>
+  </a>
+</div>
+
+<div class="card ingest-panel">
+  <div class="ingest-field">
+    <label class="ingest-label" for="title">Title <span class="ingest-label-opt">optional</span></label>
+    <input class="field" type="text" id="title" placeholder="Untitled">
+  </div>
+
+  {{/* Exactly one of these two fields is visible at a time; setMode toggles
+       the wrappers' hidden attribute rather than the controls themselves, so
+       the CodeMirror island mounted over #body is never fought over (its base
+       theme sets .cm-editor{display:flex!important}). */}}
+  <div class="ingest-field" id="source-field">
+    <label class="ingest-label" for="body">Source</label>
+    <textarea id="body" placeholder="Paste HTML artifact source here…"></textarea>
+  </div>
+  <div class="ingest-field" id="url-field" hidden>
+    <label class="ingest-label" for="url-input">Page URL</label>
+    <input class="field" type="text" id="url-input" placeholder="https://example.com/tool.html">
+  </div>
+
+  {{/* URL mode only, and it must stay that way: POST /api/artifacts rejects
+       `snapshot` without a `url` (400 "snapshot requires a source url")
+       because the vendorer needs an absolute http(s) base to resolve the
+       page's references against. Pasted HTML has no such base. */}}
+  <label class="snapshot-row" id="snapshot-row" hidden>
+    <input type="checkbox" id="snapshot-toggle" checked>
+    <span>Snapshot assets into the file (recommended) — fetches the page&#39;s images, styles and scripts and inlines them so the artifact stays self-contained</span>
+  </label>
+
+  <div id="scan-result"></div>
+  <div id="status"></div>
+
+  <div class="ingest-foot">
+    <span class="muted text-sm">Network origins are surfaced for approval before anything runs.</span>
+    <span class="spacer"></span>
+    <a class="btn btn-sec" href="/">Cancel</a>
+    <button class="btn" type="button" onclick="ingest()"><i class="ph ph-plus"></i> Add to library</button>
+  </div>
+</div>
+</main>
+
+<script src="/assets/editor.js"></script>
+<script>
+const TOKEN = {{.Token}};
+</script>
+<script src="/assets/gallery/new.js"></script>
+</body>
+</html>{{end}}

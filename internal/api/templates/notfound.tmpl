@@ -46,7 +46,9 @@
     <p class="exhibit-404__path"><span class="exhibit-404__path-label">REQUESTED</span> <code>{{.RequestedPath}}</code></p>
     <div class="exhibit-404__actions">
       <a class="btn" href="/"><i class="ph ph-arrow-left"></i> Back to the gallery</a>
-      <a class="btn btn-sec" href="/#upload"><i class="ph ph-plus"></i> Upload an artifact</a>
+      {{/* Ingest is its own page now (av-qo0j) — this used to point at a
+           /#upload fragment on the gallery index that no longer exists. */}}
+      <a class="btn btn-sec" href="/new"><i class="ph ph-plus"></i> Add an artifact</a>
     </div>
     {{/* A plain GET form to the gallery index, which already reads ?q= and
          runs it through the FTS5 search — no JS, and the same query the

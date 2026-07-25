@@ -247,7 +247,18 @@ same server-rendered gallery with the query and swaps only the grid, so the
 FTS5 search query stays authoritative without a full page reload. Filter,
 tag/collection management, and the allowlist editor are full-page server renders.
 
-A fourth page, `notfound.tmpl`, answers every app-origin HTML 404 — an unrouted
+Ingest has its own page, `GET /new` (`new.tmpl`), rather than a form stacked on
+top of the library index (av-qo0j). It presents the three routes in as peers —
+Paste HTML and From URL, the two modes of one ingest panel, plus a link to the
+agent surface (§3.7) — and the index keeps a primary "Add artifact" button
+pointing at it. The page holds no server state of its own: it posts to
+`POST /api/artifacts` like any other API client, walks the user through the
+footprint approval, PATCHes the approved allowlist, and hands off to the new
+artifact's detail page. The snapshot toggle is URL-mode-only, because the
+vendorer (§3.4a) needs an absolute base URL to resolve a page's references
+against.
+
+`notfound.tmpl` answers every app-origin HTML 404 — an unrouted
 path (registered as the mux's `NotFound` handler) and a missing artifact on the
 detail or edit route alike — so the two arrive at the same page rather than at
 two different bare `http.Error` strings. It echoes the requested path back as a
