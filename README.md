@@ -14,26 +14,14 @@ Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs
 
 ## Quick start
 
-### Docker (fastest)
+The fastest way to run Exhibit is Docker Compose. That path — along with all
+configuration (env vars, `AUTH_TOKEN`, the two origins), reverse-proxy / TLS,
+and backups — lives in **[docs/deployment.md](./docs/deployment.md)**.
 
-No local toolchain needed — build the image and run it:
+The rest of this section is for building and running **from source** for
+development.
 
-```bash
-docker build -t exhibit .
-docker run -p 8080:8080 -p 8081:8081 \
-  -e AUTH_TOKEN=changeme \
-  -e APP_ORIGIN=https://app.example.com \
-  -e RENDER_ORIGIN=https://artifacts.example.com \
-  -v artifact-data:/data \
-  exhibit
-
-# Open the gallery
-open http://localhost:8080
-```
-
-### From source
-
-#### Prerequisites
+### Prerequisites
 
 Building from source needs two toolchains that aren't installed by default on most
 systems:
@@ -48,8 +36,6 @@ Xcode Command Line Tools with `xcode-select --install`).
 
 Optional:
 
-- [Docker](https://docs.docker.com/get-docker/) — build and run without a local Go/Node
-  toolchain (see [Docker (fastest)](#docker-fastest) above).
 - [`golangci-lint`](https://golangci-lint.run) — only for `make lint` (see [Linting](#linting)).
 - [`pi`](https://github.com/badlogic/pi-mono) — only for the AI agent surface; if absent,
   that surface disables itself and nothing else changes.
@@ -65,27 +51,10 @@ make assets && go run ./cmd/server
 open http://localhost:8080
 ```
 
-Set `AUTH_TOKEN` to something real before exposing to a network.
-
-## Configuration
-
-All config is via environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ADDR` | `:8080` | App server listen address |
-| `RENDER_ADDR` | `:8081` | Render surface listen address |
-| `APP_ORIGIN` | `http://localhost:8080` | Public URL of the app |
-| `RENDER_ORIGIN` | `http://localhost:8081` | Public URL of the render surface (must be a different origin) |
-| `AUTH_TOKEN` | `dev-token` | Bearer token for all API calls |
-| `DATA_DIR` | `./data` | Directory for SQLite DB and blob storage |
-| `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, or `error` (unknown → `info`) |
-| `DEBUG` | unset | Any non-empty value forces debug-level logging (overrides `LOG_LEVEL`) |
-| `PI_BIN` | `pi` | Pi agent harness executable; if not found, the agent surface is disabled |
-| `EXHIBIT_SECRET` | unset | Secret for encrypting stored agent API keys (else a random key is generated at `DATA_DIR/secret.key`) |
-| `MOCK_LLM_URL` | unset | Dev/test only: base URL of `cmd/mockllm`, enables the `exhibit-mock` provider |
-
-The app and render surface are two route groups in one process. Point two hostnames at the same port and set `APP_ORIGIN`/`RENDER_ORIGIN` accordingly — the render origin separation is what keeps artifact code from touching the app's cookies and storage.
+With no env vars set it defaults to `localhost` origins and a `dev-token` auth
+token, which is fine locally. Set `AUTH_TOKEN` and the origins before exposing it
+to a network — see [docs/deployment.md](./docs/deployment.md) for the full
+configuration reference.
 
 ## Building
 
@@ -116,9 +85,6 @@ alternatives (Homebrew, the install script, CI setup).
 The full HTTP API reference — every route plus the ingest, network-allowlist,
 state (cross-device sync), collection/tag, agent, sharing, and render-surface
 flows — lives in [docs/api.md](./docs/api.md).
-
-For `docker-compose.yml`, backup/replication profiles, a smaller image without the
-AI agent surface, and reverse-proxy notes, see [docs/deployment.md](./docs/deployment.md).
 
 ## Security model
 
