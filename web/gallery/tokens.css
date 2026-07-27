@@ -18,6 +18,15 @@
 	navigation:auto;
 }
 
+/* Blocks pinch- and double-tap-to-zoom on the app shell so it feels like a
+ * native app on mobile. The viewport meta's user-scalable=no is no longer
+ * honored by modern mobile browsers for accessibility, but touch-action
+ * still is; pan-x/pan-y preserve ordinary scrolling. Document-level, so it
+ * lives here rather than per-page. */
+html{
+	touch-action:pan-x pan-y;
+}
+
 :root{
 	/* brand / accent */
 	--brand-blue:#23559e;
