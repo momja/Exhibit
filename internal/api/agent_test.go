@@ -52,8 +52,31 @@ func TestAgentKeyLifecycle(t *testing.T) {
 
 	w = doJSON(t, r, "DELETE", "/api/agent/key", nil)
 	require.Equal(t, http.StatusNoContent, w.Code)
+
 	w = doJSON(t, r, "GET", "/api/agent/key", nil)
 	assert.Contains(t, w.Body.String(), `"configured":false`)
+}
+
+// The agent page's header back link must mirror the two ways it's reached
+// rather than always pointing at the gallery: the add-artifact page's "Build
+// with agent" tile links to bare /agent, so back must return to /new; the
+// detail page's "Modify with agent" link carries ?artifact=<id>, so back
+// must return to that artifact's detail page. A hardcoded "/" back link
+// strands a visitor who went add-artifact -> agent -> back on the gallery
+// instead of where they came from.
+func TestAgentPageBackLinkMirrorsEntryPoint(t *testing.T) {
+	r := newTestRouter(t)
+
+	page := getPage(t, r, "/agent")
+	assert.Contains(t, page, `<a href="/new">←<span class="lbl"> Back</span></a>`)
+
+	id := createArtifact(t, r, map[string]any{
+		"title":             "Modify me",
+		"body":              "<html><body>hi</body></html>",
+		"network_allowlist": []string{},
+	})
+	page = getPage(t, r, "/agent?artifact="+id)
+	assert.Contains(t, page, `<a href="/artifacts/`+id+`">←<span class="lbl"> Back</span></a>`)
 }
 
 // Saving with an empty api_key should keep the existing key while still
