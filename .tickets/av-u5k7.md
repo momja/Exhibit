@@ -1,6 +1,6 @@
 ---
 id: av-u5k7
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-07-30T16:53:34Z

@@ -24,7 +24,10 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .tool-chip.done{color:#2a7d2a;border-color:#bfe3bf;background:#f2faf2}
 .tool-chip.fail{color:#a00;border-color:#f2c4c4;background:#fdf3f3}
 .tool-chip i{font-size:13px}
-.thinking{align-self:flex-start;color:#999;font-size:12.5px;font-style:italic}
+.thinking{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;color:#999;font-size:12.5px;font-style:italic}
+.thinking i{font-size:13px;animation:thinking-spin 1s linear infinite}
+@keyframes thinking-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.thinking i{animation:none}}
 .composer{border-top:1px solid #e0e0e0;padding:10px 12px;display:flex;flex-direction:column;gap:8px;flex-shrink:0}
 .pv-nudge{display:none;align-self:center;align-items:center;gap:6px;border:1px solid #c4d7f7;background:#eef4ff;color:var(--brand-blue);border-radius:999px;padding:6px 14px;font:inherit;font-size:13px;cursor:pointer}
 #snippet-chips{display:flex;gap:8px;flex-wrap:wrap}
