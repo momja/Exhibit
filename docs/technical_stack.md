@@ -27,6 +27,7 @@ safety" (§12).
 | Ingest scan | `x/net/html` parser (+ JS heuristic) | — |
 | Thumbnails | Headless Chromium worker (`chromedp`) — optional | client `html2canvas` |
 | Gallery UI | Server-rendered stdlib `html/template` + static CSS/JS assets (§9) | templ (codegen — rejected) |
+| Partial re-render | **htmx** — self-hosted / embedded on app origin, no CDN (§9) | hand-rolled fetch-and-swap helper |
 | Agent harness | **Pi** (`pi --mode rpc` sidecar per session; TS tools extension; keys AES-GCM at rest; `cmd/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | TLS / proxy | **Operator's choice** — app serves plain HTTP, takes origin config | (not shipped) |
@@ -218,6 +219,26 @@ hand-rolled HTML escaping the old string-concatenated pages needed.)
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.
 
+**Partial re-render: htmx (av-6m3e).** When server-side state changes after
+load, the page re-fetches one server-rendered fragment and swaps it in rather
+than reloading (a reload drops live iframes, editor buffers, and SSE streams)
+or rebuilding the markup in JS (a second definition of the same component, in a
+second language). htmx buys the attribute vocabulary that keeps that wiring in
+the markup — trigger, target, swap — for ~15 KB and no build step, which is why
+it won over a hand-rolled fetch-and-swap helper. The rules it must follow:
+
+- Fragments render the **same named `html/template` partial** as the full page,
+  so a component has exactly one definition. The fragment routes live under
+  `/partials/*` next to the page routes.
+- htmx is **self-hosted on the app origin, never a CDN** — vendored at build
+  time by the `web/htmx/` workspace into the embedded assets, exactly like the
+  Phosphor icons below, and loaded from `/assets/htmx/htmx.min.js`.
+- Page JS keeps no cached references into a swappable region: after a swap the
+  old nodes are gone. Resolve elements on use.
+
+Shipped consumer: the agent surface's preview pane, re-rendered after every
+agent save (`architecture.md` §3.7, `docs/agent.md`).
+
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent
 icon vocabulary without re-deciding. Load it **self-hosted on the app origin, never from a
@@ -344,7 +365,7 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
   worker. None of these are part of a release — they're things a deployer adds around
   the image.
 - **Build-time only:** Go toolchain, Node + esbuild (to bundle CodeMirror and vendor
-  the Phosphor icon assets — see `build_assets.md`), `goose` (migrations are embedded
+  the Phosphor icon and htmx assets — see `build_assets.md`), `goose` (migrations are embedded
   and run from the binary). Dev-only: golangci-lint (`make lint`, not vendored) and
   ESLint for the editor workspace (§5).
 
@@ -352,7 +373,7 @@ The deliberate outcome: in production it's one small image and one process by de
 with safety and richness added as opt-in Compose profiles — matching the spec's promise
 that the easy path and the serious path share almost all of the same system.
 
-The Node-built assets (CodeMirror bundle, Phosphor Icons) are generated into
+The Node-built assets (CodeMirror bundle, Phosphor Icons, htmx) are generated into
 `internal/api/assets/` at build time and **not** committed to git. See `build_assets.md`
 for the workspace layout, the `scripts/build-assets.sh` entrypoint, and how the
 Dockerfile's Node stage feeds `go:embed`.

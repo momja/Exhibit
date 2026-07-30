@@ -2,8 +2,11 @@
  * /assets/gallery/agent.js. The page's inline bootstrap <script> defines the
  * per-request globals this file reads (and reassigns) before it loads:
  *   TOKEN         - API bearer token
- *   RENDER_ORIGIN - the render surface origin, for the preview iframe/links
  *   artifact      - {id,title} when opened in modify mode, else null (mutable)
+ *
+ * The preview pane's markup (title, links, iframe) is not built here: it is a
+ * server-rendered fragment htmx swaps in after every agent save (av-6m3e), so
+ * the render-origin URLs are composed server-side.
  */
 const MODEL_SUGGESTIONS = {
   'anthropic':   ['claude-sonnet-4-5', 'claude-opus-4-8', 'claude-haiku-4-5'],
@@ -25,7 +28,12 @@ let snippetMode = false;
 
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
-const frameEl = document.getElementById('pv-frame');
+
+// The preview pane is a server-rendered fragment htmx swaps in after every
+// agent save (av-6m3e), so #pv-frame is a *new element* each time — a cached
+// reference would go stale on the first swap and silently break the state
+// bridge and snippet mode. Always look it up on use.
+function previewFrame() { return document.getElementById('pv-frame'); }
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -266,8 +274,11 @@ function handleAgentEvent(ev) {
       break;
     }
     case 'exhibit_artifact_saved': {
+      // The server-side hook behind this event (Session.noteArtifactSaved)
+      // fires once create_artifact/update_artifact has landed, which makes it
+      // the trigger for re-rendering the preview pane.
       artifact = {id: ev.artifactId, title: ev.title || 'Artifact'};
-      showArtifact(ev.artifactId, artifact.title);
+      refreshPreview();
       nudgePreview();
       let note = (ev.action === 'created' ? 'Artifact created' : 'Artifact updated') +
         (mobileQuery.matches ? ' — tap Preview to view it.' : ' — preview on the right.');
@@ -406,31 +417,42 @@ function clearPreviewNudge() {
 }
 
 // --- Preview + snippet mode (Exh-edjk) -------------------------------------
-function showArtifact(id, title) {
-  document.getElementById('pv-title').textContent = title || 'Artifact';
-  const open = document.getElementById('pv-open');
-  open.href = RENDER_ORIGIN + '/a/' + id;
-  open.style.display = '';
-  const detail = document.getElementById('pv-detail');
-  detail.href = '/artifacts/' + id;
-  detail.style.display = '';
-  document.getElementById('empty-preview').style.display = 'none';
-  frameEl.style.display = '';
-  // The render doc is no-store; a fresh query string forces the iframe to
-  // re-fetch it after every agent save.
-  frameEl.src = RENDER_ORIGIN + '/a/' + id + '?r=' + Date.now();
-  document.getElementById('snip-btn').disabled = false;
+// Read by the pane's hx-vals: the fragment is fetched for whichever artifact
+// the session is currently bound to.
+function previewArtifactId() { return artifact ? artifact.id : ''; }
+
+// The agent saved an artifact — hand the pane to htmx (av-6m3e). The fragment
+// it fetches carries the title, the links, and a freshly stamped iframe src,
+// so nothing here rebuilds markup the template already owns.
+function refreshPreview() {
+  document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'));
 }
 
+// A swap replaces the iframe, so the artifact reloads from scratch: any
+// snippet pick in flight is against a document that no longer exists. Drop the
+// mode rather than leave the button lit over a dead selection.
+document.getElementById('pane-preview').addEventListener('htmx:afterSwap', () => {
+  if (snippetMode) endSnippetMode();
+});
+
 function toggleSnippet() {
-  if (!frameEl.src) return;
+  const frame = previewFrame();
+  if (!frame) return;
   snippetMode = !snippetMode;
   document.getElementById('snip-btn').classList.toggle('active', snippetMode);
-  frameEl.contentWindow.postMessage({__exSnippet: snippetMode ? 'activate' : 'deactivate'}, '*');
+  frame.contentWindow.postMessage({__exSnippet: snippetMode ? 'activate' : 'deactivate'}, '*');
   if (snippetMode) {
     showPane('preview');   // you can't pick an element you can't see
     addMsg('sys', 'Snippet mode: click an element in the preview (Esc to cancel).');
   }
+}
+
+// Leave snippet mode without messaging the frame — used when the pick is over
+// (captured, cancelled by the artifact, or invalidated by a swap).
+function endSnippetMode() {
+  snippetMode = false;
+  const btn = document.getElementById('snip-btn');
+  if (btn) btn.classList.remove('active');
 }
 
 document.addEventListener('keydown', (e) => {
@@ -444,7 +466,8 @@ document.addEventListener('keydown', (e) => {
 window.addEventListener('message', (e) => {
   const d = e.data;
   if (!d || d.__avState !== true || !artifact || d.artifactId !== artifact.id) return;
-  if (e.source !== frameEl.contentWindow) return;
+  const frame = previewFrame();
+  if (!frame || e.source !== frame.contentWindow) return;
   apiFetch('/api/artifacts/' + encodeURIComponent(artifact.id) + '/state', {
     method: 'PUT',
     body: JSON.stringify({key: d.key, value: d.value})
@@ -453,10 +476,11 @@ window.addEventListener('message', (e) => {
 
 window.addEventListener('message', (e) => {
   const d = e.data;
-  if (!d || !d.__exSnippet || e.source !== frameEl.contentWindow) return;
+  if (!d || !d.__exSnippet) return;
+  const frame = previewFrame();
+  if (!frame || e.source !== frame.contentWindow) return;
   if (d.__exSnippet === 'captured') {
-    snippetMode = false;
-    document.getElementById('snip-btn').classList.remove('active');
+    endSnippetMode();
     const snip = {descriptor: d.descriptor, image: d.image || null, thumbUrl: null};
     if (d.image && d.image.data) {
       snip.thumbUrl = 'data:' + (d.image.mimeType || 'image/png') + ';base64,' + d.image.data;
@@ -467,8 +491,7 @@ window.addEventListener('message', (e) => {
     showPane('chat');
     inputEl.focus();
   } else if (d.__exSnippet === 'cancelled') {
-    snippetMode = false;
-    document.getElementById('snip-btn').classList.remove('active');
+    endSnippetMode();
   }
 });
 
@@ -498,7 +521,8 @@ function clearSnippets() { pendingSnippets = []; renderSnippetChips(); }
 (async function boot() {
   const configured = await refreshKeyStatus();
   if (artifact) {
-    showArtifact(artifact.id, artifact.title);
+    // The pane is already showing this artifact — the page render included the
+    // same fragment a swap would fetch — so boot only has to say so.
     addMsg('sys', 'Editing "' + artifact.title + '". Describe the change you want — or snippet an element from the preview first.');
     inputEl.placeholder = 'Describe the change to make…';
   } else {

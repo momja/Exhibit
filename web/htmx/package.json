@@ -1,0 +1,11 @@
+{
+  "name": "artifact-viewer-htmx",
+  "private": true,
+  "description": "Vendors htmx into internal/api/assets/htmx (see `make assets`), so the pages that swap server-rendered fragments load it from the app origin instead of a third-party CDN. Node is a build-time-only dependency.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "htmx.org": "^2.0.7"
+  }
+}
