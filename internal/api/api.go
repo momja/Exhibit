@@ -68,6 +68,12 @@ func (ro *Router) setupRoutes() {
 	ro.Get("/agent", ro.agentPage)
 	ro.Get("/api/agent/sessions/{sessionID}/events", ro.agentEvents)
 
+	// Server-rendered fragments, swapped into a live page by htmx (av-6m3e).
+	// They render the same template partials the full page render uses, and
+	// carry no authority the page they belong to doesn't already have — so
+	// they sit with the page routes, outside the API's auth group.
+	ro.Get("/partials/agent-preview", ro.agentPreviewPartial)
+
 	// Authenticated API routes
 	ro.Group(func(r chi.Router) {
 		r.Use(authMiddleware(ro.cfg.AuthToken))

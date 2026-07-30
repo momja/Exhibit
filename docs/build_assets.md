@@ -8,8 +8,8 @@ section states the rule; this page shows the mechanism — how the frontend asse
 
 The running server ships as a single Go binary with its frontend assets embedded via
 `go:embed`, and needs **no Node runtime and no network egress**. But those assets — the
-CodeMirror editor bundle and the Phosphor Icons CSS + webfont — are *generated* by Node
-tooling (esbuild, an icon-vendoring script). Rather than commit that generated output,
+CodeMirror editor bundle, the Phosphor Icons CSS + webfont, htmx — are *generated* by
+Node tooling (esbuild, vendoring scripts). Rather than commit that generated output,
 we produce it fresh whenever the binary is built.
 
 > **Node is a build-time-only dependency.** The build generates the assets into

@@ -63,8 +63,8 @@ Go, plus `exhibit-mock` when `MOCK_LLM_URL` is set.
   `agent_transcripts` keyed by artifact — colophon-style provenance
   (`GET /api/artifacts/:id/transcripts`), the foundation for future remixing.
 - When a save-tool call succeeds, the session emits a synthetic
-  `exhibit_artifact_saved` event; the chat UI uses it to load/reload the live
-  preview iframe.
+  `exhibit_artifact_saved` event; the chat UI uses it to re-render the live
+  preview (see below).
 
 ## Chat UI
 
@@ -74,6 +74,29 @@ gallery: chat + streaming on the left, sandboxed preview iframe (same
 `sandbox="allow-scripts"`, opaque origin, render-origin CSP) on the right. The
 page also hosts the same `__avState` bridge as the detail page, so artifact
 state written in the preview persists.
+
+**Preview re-render (av-6m3e).** The preview pane is a server-rendered
+fragment, not DOM the page script assembles. `agent.tmpl`'s `agentPreview`
+partial renders the bar (title, Open/Details links, snippet button) and the
+frame well; `GET /partials/agent-preview?artifact=<id>` serves that same
+partial standalone. The pane carries the htmx wiring
+(`hx-get`/`hx-trigger="exhibit:artifact-saved from:body"`/`hx-swap="innerHTML"`),
+so a `create_artifact`/`update_artifact` save travels
+`Session.noteArtifactSaved` → `exhibit_artifact_saved` over SSE → `agent.js`
+dispatches `exhibit:artifact-saved` → htmx fetches the fragment → the pane
+swaps. Two consequences to keep in mind when touching this page:
+
+- The fragment's iframe `src` carries a fresh per-render stamp. The render
+  document is `Cache-Control: no-store`, but the browser only reloads a frame
+  whose `src` actually changed — the stamp is what makes the new body appear.
+- Each swap creates a *new* iframe element, so `agent.js` resolves `#pv-frame`
+  on use (`previewFrame()`) rather than caching it; a cached reference would
+  break the `__avState` bridge and snippet mode after the first save. A swap
+  also drops snippet mode, since the picked document no longer exists.
+
+htmx is vendored from `web/htmx/` into the embedded assets and served from the
+app origin (`/assets/htmx/htmx.min.js`) — never a CDN, same rule as the
+Phosphor icons.
 
 ## Snippet mode (element → agent context)
 

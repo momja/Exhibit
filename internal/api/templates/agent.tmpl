@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="/assets/phosphor/regular.css">
 <link rel="stylesheet" href="/assets/gallery/tokens.css">
 <link rel="stylesheet" href="/assets/gallery/agent.css">
+<script src="/assets/htmx/htmx.min.js"></script>
 </head>
 <body>
 <header>
@@ -40,19 +41,16 @@
       <div id="hint">Enter to send · Shift+Enter for a new line · Ctrl+Shift+S to snippet an element from the preview</div>
     </div>
   </div>
-  <div class="preview" id="pane-preview">
-    <div class="preview-bar">
-      <span class="title" id="pv-title">No artifact yet</span>
-      <a id="pv-open" href="#" target="_blank" style="display:none"><span class="lbl">Open </span>↗</a>
-      <a id="pv-detail" href="#" style="display:none">Details</a>
-      <span class="spacer"></span>
-      <button class="snip-btn" id="snip-btn" disabled onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
-    </div>
-    <div id="frame-wrap">
-      <div id="empty-preview"><i class="ph ph-frame-corners"></i><span>The artifact preview appears here once the agent saves one.</span></div>
-      <iframe id="pv-frame" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write" style="display:none"></iframe>
-    </div>
-  </div>
+  {{/* The pane's contents are a server-rendered fragment (agentPreview), and
+       every agent save re-fetches it: the artifact-saved hook fires the
+       exhibit:artifact-saved event on <body>, htmx GETs the fragment for the
+       session's current artifact, and swaps it in. The wiring lives here, in
+       markup, so agent.js never rebuilds markup the template already owns. */}}
+  <div class="preview" id="pane-preview"
+       hx-get="/partials/agent-preview"
+       hx-trigger="exhibit:artifact-saved from:body"
+       hx-vals='js:{artifact: previewArtifactId()}'
+       hx-swap="innerHTML">{{template "agentPreview" .Preview}}</div>
 </div>
 
 <div id="key-modal" class="modal-overlay" hidden>
@@ -85,9 +83,34 @@
 </div>
 <script>
 const TOKEN = {{.Token}};
-const RENDER_ORIGIN = {{.RenderOrigin}};
 let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 </script>
 <script src="/assets/gallery/agent.js"></script>
 </body>
 </html>{{end}}
+
+{{/* agentPreview is the preview pane's contents: the bar (title, links,
+     snippet button) and the frame well. It is rendered both by the agent page
+     above and by GET /partials/agent-preview (agentui.go), so the two states
+     of this pane — "no artifact yet" and "showing artifact X" — have exactly
+     one definition.
+
+     Consequences worth knowing before editing:
+     - The <iframe> is created by the swap, not reused: FrameURL carries a
+       fresh cache-busting stamp per render, which is what makes the preview
+       show the agent's new body (the render doc is Cache-Control: no-store,
+       but the src still has to change for the browser to refetch it). Page JS
+       must therefore look #pv-frame up on each use rather than caching it.
+     - Absent an artifact the frame well holds the empty state instead of a
+       src-less iframe, so there is never an iframe pointed at nothing.
+     Data: agentPreviewData (agentui.go). */}}
+{{define "agentPreview"}}<div class="preview-bar">
+      <span class="title" id="pv-title">{{if .HasArtifact}}{{.Title}}{{else}}No artifact yet{{end}}</span>
+      {{if .HasArtifact}}<a id="pv-open" href="{{.OpenURL}}" target="_blank"><span class="lbl">Open </span>↗</a>
+      <a id="pv-detail" href="{{.DetailURL}}">Details</a>{{end}}
+      <span class="spacer"></span>
+      <button class="snip-btn" id="snip-btn"{{if not .HasArtifact}} disabled{{end}} onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
+    </div>
+    <div id="frame-wrap">
+      {{if .HasArtifact}}<iframe id="pv-frame" src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>The artifact preview appears here once the agent saves one.</span></div>{{end}}
+    </div>{{end}}

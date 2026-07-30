@@ -256,6 +256,18 @@ same server-rendered gallery with the query and swaps only the grid, so the
 FTS5 search query stays authoritative without a full page reload. Filter,
 tag/collection management, and the allowlist editor are full-page server renders.
 
+Where state changes *after* load and a full reload would cost too much — it
+would drop a live iframe, an editor buffer, or an SSE stream — the page swaps
+in a **server-rendered fragment** instead, driven by **htmx** (vendored from
+`web/htmx/`, served from the app origin at `/assets/htmx/htmx.min.js`, never a
+CDN). Fragment routes live under `/partials/*` beside the page routes rather
+than in the API group: they render the same named template partial the full
+page render used — the point is that each component has exactly one definition
+— and carry no authority their page doesn't already have. The first consumer
+is the agent surface's preview pane (§3.7); the wiring (trigger, target, swap)
+sits in the markup, so page JS only dispatches the event that says "something
+changed".
+
 Ingest has its own page, `GET /new` (`new.tmpl`), rather than a form stacked on
 top of the library index (av-qo0j). It presents the three routes in as peers —
 Paste HTML and From URL, the two modes of one ingest panel, plus a link to the
@@ -306,6 +318,13 @@ absent the surface degrades to disabled; nothing else changes.
   SSE (`/api/agent/sessions/:id/events`); prompts arriving mid-run become Pi
   steering messages. Transcripts are persisted per artifact
   (`agent_transcripts`) as colophon-style provenance for future remixing.
+- **Live preview:** a successful save tool call emits the synthetic
+  `exhibit_artifact_saved` event, which the chat page turns into an htmx
+  fragment swap of the preview pane (§3.5): `GET /partials/agent-preview`
+  re-renders the pane's own template partial, iframe included, with a fresh
+  cache-busting stamp on the render URL. The pane therefore has one definition
+  for both the initial render and every re-render, and the swap costs neither
+  the transcript nor the SSE stream a reload would.
 - **Trust note:** the sidecar is a subprocess of the service executing
   LLM-directed tool calls, but its reach is bounded to the same authenticated
   API surface any client has — it holds no datastore access of its own.

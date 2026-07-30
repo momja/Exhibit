@@ -9,6 +9,10 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // agentPageData feeds the "agent" template. ArtifactJSON is pre-marshaled
@@ -18,11 +22,79 @@ import (
 // block despite the title coming from user-authored artifact data.
 type agentPageData struct {
 	Token        string
-	RenderOrigin string
 	ArtifactJSON template.JS
 	MockEnabled  bool
 	AgentEnabled bool
 	BackURL      string
+	Preview      agentPreviewData
+}
+
+// agentPreviewData feeds the "agentPreview" partial - the preview pane's
+// contents, rendered both into the full page and, after every agent save, into
+// the htmx fragment response (av-6m3e).
+//
+// FrameURL carries a per-render cache-busting stamp. The render document is
+// served Cache-Control: no-store, but a *stable* src is never re-requested at
+// all: the browser only reloads a frame whose src changed. The stamp is what
+// turns "the agent saved a new body" into "the visitor sees it".
+type agentPreviewData struct {
+	HasArtifact bool
+	Title       string
+	FrameURL    string
+	OpenURL     string
+	DetailURL   string
+}
+
+// newAgentPreviewData builds the pane's view model for one artifact; the zero
+// value (no artifact) renders the empty state.
+func (ro *Router) newAgentPreviewData(a *store.Artifact) agentPreviewData {
+	if a == nil {
+		return agentPreviewData{}
+	}
+	renderURL := ro.cfg.RenderOrigin + "/a/" + a.ID
+	return agentPreviewData{
+		HasArtifact: true,
+		Title:       a.Title,
+		FrameURL:    renderURL + "?r=" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		OpenURL:     renderURL,
+		DetailURL:   "/artifacts/" + a.ID,
+	}
+}
+
+// agentPreviewPartial serves the preview pane as a standalone fragment. The
+// agent page's htmx wiring re-fetches it whenever the session reports a saved
+// artifact, so a create_artifact/update_artifact tool call re-renders the pane
+// from the same template the initial page render used - no second, JS-side
+// definition of this markup, and no full page reload (which would drop the
+// chat transcript and the SSE stream).
+//
+// Unauthenticated, like /agent itself: this is page chrome for a surface whose
+// token lives in its own bootstrap script, and it exposes only a title the
+// requester must already know the artifact id to ask for.
+func (ro *Router) agentPreviewPartial(w http.ResponseWriter, r *http.Request) {
+	var artifact *store.Artifact
+	if id := r.URL.Query().Get("artifact"); id != "" {
+		a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+		if err != nil {
+			serverError(w, r, "agent preview lookup", err)
+			return
+		}
+		if a == nil {
+			// A fragment 404 is plain text on purpose: htmx leaves the pane
+			// untouched on an error response, so the visitor keeps the preview
+			// they had rather than watching it blank out.
+			http.Error(w, "artifact not found", http.StatusNotFound)
+			return
+		}
+		artifact = a
+	}
+	fragment, err := renderPage("agentPreview", ro.newAgentPreviewData(artifact))
+	if err != nil {
+		serverError(w, r, "agent preview render", err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, fragment)
 }
 
 // agentPage serves the agent chat surface (Exh-jlbt): a build/modify-with-AI
@@ -41,20 +113,22 @@ type agentPageData struct {
 func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 	artifactJSON := "null"
 	backURL := "/new"
+	var artifact *store.Artifact
 	if id := r.URL.Query().Get("artifact"); id != "" {
 		if a, err := ro.cfg.Store.GetArtifact(r.Context(), id); err == nil && a != nil {
 			j, _ := json.Marshal(map[string]string{"id": a.ID, "title": a.Title})
 			artifactJSON = string(j)
 			backURL = "/artifacts/" + a.ID
+			artifact = a
 		}
 	}
 	page, err := renderPage("agent", agentPageData{
 		Token:        ro.cfg.AuthToken,
-		RenderOrigin: ro.cfg.RenderOrigin,
 		ArtifactJSON: template.JS(artifactJSON),
 		MockEnabled:  ro.cfg.MockEnabled,
 		AgentEnabled: ro.cfg.Agent != nil,
 		BackURL:      backURL,
+		Preview:      ro.newAgentPreviewData(artifact),
 	})
 	if err != nil {
 		serverError(w, r, "agent page render", err)
