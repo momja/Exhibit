@@ -121,20 +121,29 @@ executable document with the correct security envelope:
 
 - Looks up the artifact, pulls its body from the blob store, its approved origins
   (the artifact's `decision='allow'` rows, §3.3), and its current state.
-- Generates the per-artifact CSP (`connect-src`/`script-src`/`style-src`/`img-src`/
-  `font-src`/`media-src` from the allowlist) and sets it as a response header on the
-  document. `connect-src` is the allowlist alone — the storage shim needs no network of
-  its own (§6). Style/font/media defaults are permissive for *inlined or local* assets
-  but strict for *network* ones, matching the "it's just a file" thesis: `style-src`
+- Generates the per-artifact CSP (`connect-src`/`script-src`/`worker-src`/`style-src`/
+  `img-src`/`font-src`/`media-src` from the allowlist) and sets it as a response header
+  on the document. `connect-src` is the allowlist alone — the storage shim needs no
+  network of its own (§6). Every source in the policy sits in one of two buckets, and
+  which bucket it belongs to is the only question a new directive raises: *network-
+  reaching* sources are egress and stay allowlist-gated, while *local, no-egress*
+  sources (`'unsafe-inline'`, `'unsafe-eval'`, `data:`, `blob:`) run bytes the artifact
+  already carries or the visitor already picked locally and are therefore
+  unconditional. That is the "it's just a file" thesis in policy form: `style-src`
   always carries `'unsafe-inline'` (inline `<style>` blocks and `style=""` attributes
   never need network approval), `img-src`/`font-src` always carry `data:` so an
   artifact that inlines its own images or fonts (`@font-face { src: url(data:…) }`)
-  renders with zero network egress, and `media-src` always carries `blob:` so a
+  renders with zero network egress, `media-src` always carries `blob:` so a
   `<video>`/`<audio>` element can play back a file the artifact loaded locally via
-  `<input type=file>` + `URL.createObjectURL` — the object never leaves the browser.
-  Loading a stylesheet, image, font, or media file *from a remote origin* still
-  requires that origin on the allowlist — the network boundary is unchanged; only
-  inlined/local, no-egress assets are permitted by default.
+  `<input type=file>` + `URL.createObjectURL`, and `script-src`/`worker-src` always
+  carry `blob:`/`data:` so a script or Worker the artifact builds at runtime (the
+  standard ffmpeg.wasm pattern) executes. `worker-src` is spelled out rather than
+  left to fall back to `script-src` because its absence fails *silently* — the
+  `Worker` constructor succeeds, nothing is logged, and the worker body simply never
+  runs (av-x01o). Loading a script, worker, stylesheet, image, font, or media file
+  *from a remote origin* still requires that origin on the allowlist — the network
+  boundary is unchanged; only inlined/local, no-egress sources are permitted by
+  default.
 - Injects the **render preamble** as the first `<head>` script(s) — the **storage
   shim** with the artifact's state **inlined** into it so `getItem` is correct
   synchronously, plus the download/clipboard **capability bridges** — then the

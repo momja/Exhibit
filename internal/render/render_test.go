@@ -29,29 +29,61 @@ func connectSrc(t *testing.T, csp string) string {
 	return v
 }
 
-// connect-src is derived purely from the artifact's own allowlist. The shim
-// needs no network access of its own (it reads inlined state and writes via
-// postMessage), so the app origin must NOT leak into connect-src — that would
-// let artifact code talk to the app origin.
+// connect-src's *network* portion is derived purely from the artifact's own
+// allowlist. The shim needs no network access of its own (it reads inlined state
+// and writes via postMessage), so the app origin must NOT leak into connect-src —
+// that would let artifact code talk to the app origin. blob:/data: are local I/O,
+// not egress (see TestBuildCSPConnectSrcAlwaysAllowsBlobAndData), so they are
+// present in both branches and are excluded from "network" here.
 func TestBuildCSPConnectSrcIsAllowlistOnly(t *testing.T) {
 	const appOrigin = "https://app.example.com"
 
-	t.Run("empty allowlist locks connect-src to none", func(t *testing.T) {
+	// network returns the connect-src sources that can actually reach the network.
+	network := func(cs string) string {
+		return strings.TrimSpace(strings.NewReplacer("blob:", "", "data:", "").Replace(cs))
+	}
+
+	t.Run("empty allowlist leaves connect-src with no network reach", func(t *testing.T) {
 		cs := connectSrc(t, buildCSP(nil, appOrigin))
-		if cs != "'none'" {
-			t.Fatalf("expected connect-src 'none', got %q", cs)
+		if n := network(cs); n != "" {
+			t.Fatalf("connect-src %q must reach nothing without an allowlist, got network sources %q", cs, n)
 		}
 	})
 
 	t.Run("populated allowlist is exactly the allowlist", func(t *testing.T) {
 		cs := connectSrc(t, buildCSP([]string{"https://api.github.com"}, appOrigin))
-		if !strings.Contains(cs, "https://api.github.com") {
-			t.Fatalf("connect-src %q dropped the allowlisted origin", cs)
+		if network(cs) != "https://api.github.com" {
+			t.Fatalf("connect-src %q must reach exactly the allowlisted origin", cs)
 		}
 		if strings.Contains(cs, appOrigin) {
 			t.Fatalf("connect-src %q must not include the app origin", cs)
 		}
 	})
+}
+
+// fetch()ing a blob: object URL the artifact minted itself, or a data: URI it
+// built, is local I/O: the bytes are already in the agent and nothing leaves the
+// browser. It is nonetheless governed by connect-src, so without these an
+// artifact whose library loads its own payload that way (ffmpeg.wasm fetches its
+// core .wasm from a blob: URL) fails with a bare "TypeError: Failed to fetch"
+// (av-x01o).
+func TestBuildCSPConnectSrcAlwaysAllowsBlobAndData(t *testing.T) {
+	const appOrigin = "https://app.example.com"
+
+	cases := map[string][]string{
+		"empty allowlist":     nil,
+		"populated allowlist": {"https://api.github.com"},
+	}
+	for name, allowlist := range cases {
+		t.Run(name, func(t *testing.T) {
+			cs := connectSrc(t, buildCSP(allowlist, appOrigin))
+			for _, src := range []string{"blob:", "data:"} {
+				if !strings.Contains(cs, src) {
+					t.Fatalf("connect-src %q must allow %s — reading back local bytes is not egress", cs, src)
+				}
+			}
+		})
+	}
 }
 
 // Inline CSS is the default way a single-file artifact carries its styling, so
@@ -156,14 +188,12 @@ func TestBuildCSPMediaSrcAlwaysAllowsBlob(t *testing.T) {
 	}
 }
 
-// A Worker constructed from a blob: URL (the standard workaround for spawning a
-// cross-origin worker script — e.g. ffmpeg.wasm — from an opaque-origin sandboxed
-// iframe, since a Worker cannot load a classic cross-origin script directly) must
-// execute regardless of the allowlist. There is no worker-src directive, so the
-// browser falls back to script-src for worker scripts; script-src must permit
-// blob: in BOTH branches, or the fallback leaves it out of the empty-allowlist
-// case entirely (default-src 'none') and drops it from the origin list otherwise.
-func TestBuildCSPScriptSrcAlwaysAllowsBlob(t *testing.T) {
+// A script the artifact builds at runtime (blob:/data: URL) is local execution,
+// not egress — and script-src already carries 'unsafe-inline'/'unsafe-eval', so
+// these grant nothing new. They must be present in BOTH branches, or the
+// empty-allowlist case falls back to default-src 'none' and the populated case
+// reduces to a bare origin list.
+func TestBuildCSPScriptSrcAlwaysAllowsBlobAndData(t *testing.T) {
 	const appOrigin = "https://app.example.com"
 
 	cases := map[string][]string{
@@ -176,10 +206,58 @@ func TestBuildCSPScriptSrcAlwaysAllowsBlob(t *testing.T) {
 			if !ok {
 				t.Fatalf("script-src directive missing")
 			}
-			if !strings.Contains(ss, "blob:") {
-				t.Fatalf("script-src %q must allow blob: for worker scripts loaded from a blob: URL", ss)
+			for _, src := range []string{"blob:", "data:"} {
+				if !strings.Contains(ss, src) {
+					t.Fatalf("script-src %q must allow %s for locally constructed scripts", ss, src)
+				}
 			}
 		})
+	}
+}
+
+// A Worker constructed from a blob:/data: URL (the standard way to spawn one —
+// e.g. ffmpeg.wasm — from an opaque-origin sandboxed iframe, since a Worker
+// cannot load a classic cross-origin script directly) runs the artifact's own
+// bytes locally and reaches nothing, so it must execute regardless of the
+// allowlist. worker-src is spelled out rather than left to fall back to
+// script-src, because its absence fails silently: the Worker constructor
+// succeeds, no error is logged and no promise rejects — the worker body simply
+// never runs, so an artifact hangs on "Loading..." forever (av-x01o).
+func TestBuildCSPWorkerSrcAlwaysAllowsBlobAndData(t *testing.T) {
+	const appOrigin = "https://app.example.com"
+
+	cases := map[string][]string{
+		"empty allowlist":     nil,
+		"populated allowlist": {"https://unpkg.com"},
+	}
+	for name, allowlist := range cases {
+		t.Run(name, func(t *testing.T) {
+			ws, ok := directive(t, buildCSP(allowlist, appOrigin), "worker-src")
+			if !ok {
+				t.Fatalf("worker-src directive missing — a blob:/data: worker then fails silently, never running its body")
+			}
+			for _, src := range []string{"blob:", "data:"} {
+				if !strings.Contains(ws, src) {
+					t.Fatalf("worker-src %q must allow %s for locally constructed workers", ws, src)
+				}
+			}
+		})
+	}
+}
+
+// A worker script fetched from a remote origin IS egress, so it stays gated by
+// the allowlist like every other network-reaching source: an approved origin
+// appears in worker-src, and the app origin never does.
+func TestBuildCSPWorkerSrcHonorsAllowlistedOrigin(t *testing.T) {
+	const appOrigin = "https://app.example.com"
+	const cdn = "https://unpkg.com"
+
+	ws, _ := directive(t, buildCSP([]string{cdn}, appOrigin), "worker-src")
+	if !strings.Contains(ws, cdn) {
+		t.Fatalf("worker-src %q dropped the allowlisted worker origin %q", ws, cdn)
+	}
+	if strings.Contains(ws, appOrigin) {
+		t.Fatalf("worker-src %q must not include the app origin", ws)
 	}
 }
 
@@ -277,8 +355,8 @@ func TestShimInstallsDownloadBridge(t *testing.T) {
 	if !strings.Contains(doc, "document.addEventListener('click'") || !strings.Contains(doc, "}, true);") {
 		t.Fatalf("shim missing capture-phase click interception: %s", doc)
 	}
-	// blob: payloads are recovered from the createObjectURL registry — a
-	// fetch(blobURL) would be governed by connect-src and blocked at 'none'.
+	// blob: payloads are recovered from the createObjectURL registry rather
+	// than re-fetched, so the bridge stays independent of connect-src.
 	if !strings.Contains(doc, "URL.createObjectURL") {
 		t.Fatalf("shim missing the createObjectURL registry: %s", doc)
 	}
