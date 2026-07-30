@@ -231,7 +231,9 @@ function handleAgentEvent(ev) {
         curAssistantEl.textContent += d.delta;
         messagesEl.scrollTop = messagesEl.scrollHeight;
       } else if (d.type === 'thinking_start' && !thinkingEl) {
-        thinkingEl = el('div', 'thinking', 'thinking…');
+        thinkingEl = el('div', 'thinking');
+        thinkingEl.appendChild(el('i', 'ph ph-circle-notch'));
+        thinkingEl.appendChild(document.createTextNode('thinking…'));
         messagesEl.appendChild(thinkingEl);
       } else if (d.type === 'text_end') {
         curAssistantEl = null;   // next text block gets its own bubble
