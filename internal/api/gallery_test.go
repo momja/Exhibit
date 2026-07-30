@@ -230,9 +230,11 @@ func TestGalleryCardEditChipStaysReachableWithoutHover(t *testing.T) {
 	r := newTestRouter(t)
 	css := galleryAsset(t, r, "/assets/gallery/index.css")
 
-	// Keyboard: focusing the chip (via :focus-within on the card) reveals it,
-	// so it is not a hover-only control for anyone tabbing through the grid.
-	assert.Contains(t, css, `.card:hover .card-edit,.card:focus-within .card-edit,.card-edit:focus-visible{opacity:1;pointer-events:auto}`)
+	// Keyboard: focus anywhere within the card reveals the chip, so it is not
+	// a hover-only control for anyone tabbing through the grid. :focus-within
+	// already covers the chip's own focus, so there is no separate
+	// :focus-visible clause to keep in sync.
+	assert.Contains(t, css, `.card:hover .card-edit,.card:focus-within .card-edit{opacity:1;pointer-events:auto}`)
 
 	// Touch: hover does not exist, so the chip is always visible there. Both
 	// queries are load-bearing — a hover-less input does not reliably report

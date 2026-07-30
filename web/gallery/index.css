@@ -38,8 +38,10 @@ main{padding:24px;max-width:1200px;margin:0 auto}
  * nothing on screen states it. --color-ink-soft measures 12.6:1 on the card
  * against 3.5:1 for a muted glyph, which would be carrying the control's
  * whole meaning at the floor of WCAG 1.4.11. */
-.card-edit{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:1px solid var(--color-border);border-radius:var(--radius-pill);background:var(--color-panel);color:var(--color-ink-soft);font-size:11px;font-weight:500;text-decoration:none;opacity:0;pointer-events:none;transition:opacity .12s ease,border-color .12s ease,color .12s ease}
-.card:hover .card-edit,.card:focus-within .card-edit,.card-edit:focus-visible{opacity:1;pointer-events:auto}
+.card-edit{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:1px solid var(--color-border);border-radius:var(--radius-pill);color:var(--color-ink-soft);font-size:11px;font-weight:500;text-decoration:none;opacity:0;pointer-events:none;transition:opacity .12s ease,border-color .12s ease,color .12s ease}
+/* :focus-within covers the chip's own focus too — it is a descendant of the
+ * card — so hover and focus-within are the whole rule. */
+.card:hover .card-edit,.card:focus-within .card-edit{opacity:1;pointer-events:auto}
 .card-edit:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
 .card-edit i{font-size:12px;line-height:1}
 /* Touch has no hover, so a hover-gated control is simply unreachable there —
