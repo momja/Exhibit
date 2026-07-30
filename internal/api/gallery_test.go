@@ -211,9 +211,44 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.NotContains(t, page, `>Details</a>`)
 	assert.NotContains(t, page, `class="card-actions"`)
 
+	// av-8u7p: the one card action that is not the detail page. It leads with
+	// the visible word 'Edit' in its accessible name so that label is a prefix
+	// of the name (WCAG 2.5.3) while the name still identifies the artifact.
+	assert.Contains(t, page, `<a class="card-edit" href="/artifacts/`+id+`/edit" aria-label="Edit Openless"><i class="ph ph-pencil-simple"></i>Edit</a>`)
+
 	// The removed 'Open ↗' action and any new-tab opener are gone from cards.
 	assert.NotContains(t, page, "Open ↗")
 	assert.NotContains(t, page, `target="_blank"`)
+}
+
+// av-8u7p: the card's Edit chip is hover-revealed, but 'hover-revealed' must
+// not mean 'unreachable'. These are the three rules that keep it operable for
+// people who never hover: keyboard focus reveals it, coarse pointers show it
+// unconditionally, and it holds its space so revealing it never reflows the
+// card under someone's cursor.
+func TestGalleryCardEditChipStaysReachableWithoutHover(t *testing.T) {
+	r := newTestRouter(t)
+	css := galleryAsset(t, r, "/assets/gallery/index.css")
+
+	// Keyboard: focusing the chip (via :focus-within on the card) reveals it,
+	// so it is not a hover-only control for anyone tabbing through the grid.
+	assert.Contains(t, css, `.card:hover .card-edit,.card:focus-within .card-edit,.card-edit:focus-visible{opacity:1;pointer-events:auto}`)
+
+	// Touch: hover does not exist, so the chip is always visible there. Both
+	// queries are load-bearing — a hover-less input does not reliably report
+	// hover:none (Chrome's touch emulation reports neither hover:none nor
+	// hover:hover), and the coarse pointer is what identifies those.
+	assert.Contains(t, css, `@media (hover:none),(pointer:coarse){.card-edit{opacity:1;pointer-events:auto}}`)
+
+	// The chip is a flex sibling of the title, not an absolutely positioned
+	// corner button — that is what keeps its hit box off the title link's.
+	assert.Contains(t, css, `.card-headrow{display:flex;align-items:flex-start;gap:var(--space-3)}`)
+	assert.NotContains(t, css, `.card-edit{position:absolute`)
+
+	// It reserves its space at rest (only opacity animates), so revealing it
+	// cannot shift the title out from under a cursor mid-click.
+	assert.Contains(t, css, `.card-edit{flex:0 0 auto;`)
+	assert.Contains(t, css, `height:24px;`)
 }
 
 // av-isb3: the gallery card footer shows a neutral, informational capability
