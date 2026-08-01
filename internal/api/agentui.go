@@ -37,12 +37,18 @@ type agentPageData struct {
 // served Cache-Control: no-store, but a *stable* src is never re-requested at
 // all: the browser only reloads a frame whose src changed. The stamp is what
 // turns "the agent saved a new body" into "the visitor sees it".
+//
+// Widget is the artifact's gallery tile (av-fafu), shown as a strip above the
+// live preview so a set_widget call lands somewhere visible — and so the
+// default tile is visible too, which is what "this artifact has no widget yet"
+// looks like. It carries the same stamp for the same reason.
 type agentPreviewData struct {
 	HasArtifact bool
 	Title       string
 	FrameURL    string
 	OpenURL     string
 	DetailURL   string
+	Widget      widgetView
 }
 
 // newAgentPreviewData builds the pane's view model for one artifact; the zero
@@ -52,12 +58,18 @@ func (ro *Router) newAgentPreviewData(a *store.Artifact) agentPreviewData {
 		return agentPreviewData{}
 	}
 	renderURL := ro.cfg.RenderOrigin + "/a/" + a.ID
+	stamp := "?r=" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	widget := newWidgetView(a, ro.cfg.RenderOrigin)
+	if widget.URL != "" {
+		widget.URL += stamp
+	}
 	return agentPreviewData{
 		HasArtifact: true,
 		Title:       a.Title,
-		FrameURL:    renderURL + "?r=" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		FrameURL:    renderURL + stamp,
 		OpenURL:     renderURL,
 		DetailURL:   "/artifacts/" + a.ID,
+		Widget:      widget,
 	}
 }
 

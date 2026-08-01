@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marathon Training Plan — widget</title>
+<style>
+  /* The host sets html,body{margin:0;height:100%;background:transparent} before
+     this document. The gallery card is already white, so the widget paints no
+     background of its own and simply sits on it.
+
+     Viewport is nominally 272x132 but must survive 230–420 x 120–170: every
+     size below is either relative or clamped against the viewport height. */
+
+  * { box-sizing: border-box; }
+
+  .widget {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 13px 15px;
+    overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #1a1a1a;
+    line-height: 1.3;
+  }
+
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .text { flex: 1 1 auto; min-width: 0; }
+
+  .label {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .headline {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-top: 3px;
+    font-size: min(34px, 25vh);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  /* Word headlines ("Not started") need to fit the same box a two-digit
+     number does, so they run at a smaller size. */
+  .headline.is-words { font-size: min(23px, 17vh); letter-spacing: -0.02em; }
+
+  .unit {
+    font-size: 0.45em;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: #888;
+  }
+  .headline.is-words .unit { display: none; }
+
+  .detail {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 4px;
+    font-size: 12.5px;
+    color: #444;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #23559e;
+  }
+  .detail.no-dot .dot { display: none; }
+
+  .ring { flex: none; line-height: 0; }
+  .ring.is-hidden { display: none; }
+  .ring svg { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+
+  .foot {
+    flex: none;
+    margin-top: 8px;
+    padding-top: 7px;
+    border-top: 1px solid #e0e0e0;
+    font-size: 10.5px;      /* the full progress line still fits at the 230px minimum */
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+</style>
+</head>
+<body>
+
+<div class="widget">
+  <div class="body">
+    <div class="text">
+      <div class="label" id="label">Marathon plan</div>
+      <div class="headline" id="headline"><span id="big">&nbsp;</span><span class="unit" id="unit"></span></div>
+      <div class="detail" id="detail"><i class="dot" id="dot"></i><span id="detailText"></span></div>
+    </div>
+
+    <div class="ring is-hidden" id="ring">
+      <svg viewBox="0 0 48 48" width="46" height="46" aria-hidden="true">
+        <circle cx="24" cy="24" r="20" fill="none" stroke="#e8e8e8" stroke-width="4"/>
+        <circle id="arc" cx="24" cy="24" r="20" fill="none" stroke="#23559e" stroke-width="4"
+                stroke-linecap="round" stroke-dasharray="125.66" stroke-dashoffset="125.66"
+                transform="rotate(-90 24 24)"/>
+        <text id="arcText" x="24" y="24.5" text-anchor="middle" dominant-baseline="central"
+              font-size="12" font-weight="600" fill="#23559e">0%</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="foot" id="foot">&nbsp;</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ==================================================================
+   * PLAN GENERATOR — verbatim copy of the one in artifact.html.
+   *
+   * Pure and deterministic: no dates, no randomness, no I/O, no
+   * dependence on stored state. Both documents must derive identical
+   * sessions from the same startDate, so the two copies are edited
+   * together or not at all.
+   * ================================================================== */
+  var PLAN_WEEKS = 16;
+
+  function buildPlan() {
+    var LAST_BUILD = PLAN_WEEKS - 4;         // week index 12 is the final build week
+    var SLOTS = [                            // day = offset from the plan's Monday
+      { day: 1, type: 'easy' },              // Tuesday
+      { day: 2, type: 'intervals' },         // Wednesday
+      { day: 4, type: 'tempo' },             // Friday
+      { day: 6, type: 'long' }               // Sunday
+    ];
+    var half = function (km) { return Math.round(km * 2) / 2; };
+    var weeks = [];
+
+    for (var w = 0; w < PLAN_WEEKS; w++) {
+      var taperAt = w - LAST_BUILD - 1;      // 0,1,2 through the taper; negative while building
+      var tapering = taperAt >= 0;
+      var stepBack = !tapering && w % 4 === 3;   // every 4th week is a recovery week
+      var race = w === PLAN_WEEKS - 1;
+      // One load factor drives the whole week, so a step-back or taper week
+      // backs every session off together rather than only the long run.
+      var load = tapering ? [0.65, 0.5, 0.35][taperAt] : (stepBack ? 0.7 : 1);
+      var build = Math.min(w, LAST_BUILD);   // volume stops climbing once the taper begins
+
+      var sessions = [];
+      for (var s = 0; s < SLOTS.length; s++) {
+        var slot = SLOTS[s], km;
+        if (slot.type === 'long') km = race ? 42.2 : half((16 + build * 1.4) * load);
+        else if (slot.type === 'easy') km = half((6 + build * 0.3) * load);
+        else if (slot.type === 'intervals') km = half((8 + build * 0.35) * load);
+        else km = half((8 + build * 0.45) * load);          // tempo
+        sessions.push({
+          // A recovery week — and race week, where nothing hard can help any
+          // more — swaps the interval session for an easy shakeout.
+          type: ((stepBack || race) && slot.type === 'intervals') ? 'easy' : slot.type,
+          day: slot.day,
+          km: km
+        });
+      }
+      weeks.push(sessions);
+    }
+    return weeks;
+  }
+  /* ================= end of the duplicated generator ================= */
+
+  var STORE_KEY = 'exhibit.marathon-plan.v1';
+  var PLAN = buildPlan();
+  var TOTAL_SESSIONS = PLAN_WEEKS * 4;
+
+  var TYPE_LABEL = { easy: 'Easy', tempo: 'Tempo', intervals: 'Intervals', long: 'Long run' };
+  var TYPE_COLOR = { easy: '#3f8f5f', tempo: '#b8791f', intervals: '#b34a4a', long: '#23559e' };
+  var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var DAYS_S = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var MONTHS_S = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /* ---------------- dates (local midnight, never UTC) ------------------ */
+
+  function today() { var d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+  function parseISO(s) { var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+  // Round rather than floor: a DST boundary makes a "day" 23 or 25 hours long.
+  function daysBetween(a, b) { return Math.round((b.getTime() - a.getTime()) / 86400000); }
+  function fmtKm(km) { return km % 1 === 0 ? String(km) : km.toFixed(1); }
+
+  /* ---------------- read-only state access -----------------------------
+   * The widget NEVER writes. It reads the artifact's single key, which the
+   * render surface has already inlined, so this synchronous read at startup
+   * is correct. Anything missing or malformed returns null and the widget
+   * falls through to its calm "no plan yet" state.
+   * -------------------------------------------------------------------- */
+  function readState() {
+    var raw;
+    try { raw = localStorage.getItem(STORE_KEY); } catch (e) { return null; }
+    if (!raw) return null;
+
+    var parsed;
+    try { parsed = JSON.parse(raw); } catch (e) { return null; }
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (typeof parsed.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(parsed.startDate)) return null;
+
+    var start = parseISO(parsed.startDate);
+    if (isNaN(start.getTime())) return null;
+
+    return {
+      start: start,
+      done: (parsed.done && typeof parsed.done === 'object') ? parsed.done : {}
+    };
+  }
+
+  /* ---------------- the one derivation --------------------------------- */
+
+  function view() {
+    var state = readState();
+    if (!state) {
+      return {
+        label: 'Marathon plan',
+        big: 'Not started',
+        words: true,
+        detail: '16 weeks · 4 runs a week',
+        foot: 'Open to pick a start date'
+      };
+    }
+
+    var now = today();
+    var offset = daysBetween(state.start, now);
+
+    // Truthy in `done` means resolved — `true` is completed, "skipped" is
+    // deliberately missed. Both are behind the runner; neither is "next".
+    var isDone = function (w, s) { return state.done[w + '-' + s] === true; };
+    var isResolved = function (w, s) { return !!state.done[w + '-' + s]; };
+
+    var completed = 0;
+    for (var w = 0; w < PLAN_WEEKS; w++) {
+      for (var s = 0; s < 4; s++) if (isDone(w, s)) completed++;
+    }
+    var pct = Math.round((completed / TOTAL_SESSIONS) * 100);
+
+    // Race day is the last session of the plan: week 16, Sunday.
+    var race = addDays(state.start, (PLAN_WEEKS - 1) * 7 + 6);
+    var raceLabel = DAYS_S[race.getDay()] + ' ' + race.getDate() + ' ' + MONTHS_S[race.getMonth()];
+
+    // The plan hasn't begun yet: count down to it rather than inventing a run.
+    if (offset < 0) {
+      var start = state.start;
+      return {
+        label: 'Plan starts in',
+        big: String(-offset),
+        unit: -offset === 1 ? 'day' : 'days',
+        detail: DAYS[start.getDay()] + ' ' + start.getDate() + ' ' + MONTHS_S[start.getMonth()],
+        dot: '#888',
+        foot: PLAN_WEEKS + ' weeks · race day ' + raceLabel,
+        pct: pct
+      };
+    }
+
+    var currentWeek = Math.min(Math.floor(offset / 7), PLAN_WEEKS - 1);
+    var doneThisWeek = 0;
+    for (var i = 0; i < 4; i++) if (isDone(currentWeek, i)) doneThisWeek++;
+    var footProgress = 'Week ' + (currentWeek + 1) + ' of ' + PLAN_WEEKS +
+      ' · ' + doneThisWeek + ' of 4 done this week';
+
+    // First session that is both still ahead and still unresolved.
+    var next = null;
+    for (var wk = 0; wk < PLAN_WEEKS && !next; wk++) {
+      for (var sn = 0; sn < 4; sn++) {
+        if (isResolved(wk, sn)) continue;
+        var date = addDays(state.start, wk * 7 + PLAN[wk][sn].day);
+        if (daysBetween(now, date) < 0) continue;      // already in the past
+        next = { week: wk, index: sn, date: date, session: PLAN[wk][sn] };
+        break;
+      }
+    }
+
+    if (!next) {
+      var km = 0;
+      for (var cw = 0; cw < PLAN_WEEKS; cw++) {
+        for (var cs = 0; cs < 4; cs++) if (isDone(cw, cs)) km += PLAN[cw][cs].km;
+      }
+      return {
+        label: 'Plan complete',
+        big: String(Math.round(km)),
+        unit: 'km',
+        detail: 'Marathon · ' + raceLabel,
+        dot: TYPE_COLOR.long,
+        foot: completed + ' of ' + TOTAL_SESSIONS + ' sessions over ' + PLAN_WEEKS + ' weeks',
+        pct: pct
+      };
+    }
+
+    return {
+      label: 'Next run',
+      big: fmtKm(next.session.km),
+      unit: 'km',
+      detail: TYPE_LABEL[next.session.type] + ' · ' + dayLabel(next.date, now),
+      dot: TYPE_COLOR[next.session.type],
+      foot: footProgress,
+      pct: pct
+    };
+  }
+
+  // Near dates read better by name than by number.
+  function dayLabel(d, now) {
+    var n = daysBetween(now, d);
+    if (n === 0) return 'Today';
+    if (n === 1) return 'Tomorrow';
+    if (n < 7) return DAYS[d.getDay()];
+    return DAYS_S[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS_S[d.getMonth()];
+  }
+
+  /* ---------------- paint ---------------------------------------------- */
+
+  var v = view();
+  var el = function (id) { return document.getElementById(id); };
+
+  el('label').textContent = v.label;
+  el('big').textContent = v.big;
+  el('unit').textContent = v.unit || '';
+  el('headline').className = 'headline' + (v.words ? ' is-words' : '');
+  el('detailText').textContent = v.detail;
+  el('foot').textContent = v.foot;
+
+  if (v.dot) el('dot').style.background = v.dot;
+  else el('detail').className = 'detail no-dot';
+
+  if (typeof v.pct === 'number') {
+    var C = 2 * Math.PI * 20;                       // r=20 in the SVG above
+    el('ring').className = 'ring';
+    el('arc').setAttribute('stroke-dashoffset', String(C * (1 - v.pct / 100)));
+    el('arcText').textContent = v.pct + '%';
+  }
+})();
+</script>
+</body>
+</html>

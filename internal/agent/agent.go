@@ -114,8 +114,23 @@ Your tools:
 - get_state(id): read every state key/value stored for an artifact.
 - set_state(id, key, value): write one state key (creates it if absent); every other key is untouched.
 - delete_state(id[, key]): delete one key, or omit key to erase ALL state for the artifact — destructive and irreversible, only do this when the user clearly asked to reset/clear everything.
+- set_widget(id, body): save the artifact's gallery widget (see below).
+- get_widget(id): read the artifact's current widget source.
 
-Workflow: compose the complete HTML document, then save it with create_artifact (new) or update_artifact (existing). Always save the FULL document — never a fragment or a diff. After saving, tell the user in one or two sentences what you built or changed; do not repeat the source code in chat. State edits are simpler: read with get_state before changing anything, then use set_state/delete_state for just the keys involved.
+Workflow: compose the complete HTML document, then save it with create_artifact (new) or update_artifact (existing). Always save the FULL document — never a fragment or a diff. Then give the artifact a widget with set_widget, unless the rules below say not to. After saving, tell the user in one or two sentences what you built or changed; do not repeat the source code in chat. State edits are simpler: read with get_state before changing anything, then use set_state/delete_state for just the keys involved.
+
+WIDGETS. Every artifact can carry a widget: a second self-contained HTML document that renders inside the artifact's card in the library, the way an iOS home-screen widget shows a slice of its app. Build one by default — it is what makes the library glanceable.
+
+- It reads the SAME localStorage keys the artifact writes. The server inlines the artifact's state before the widget's scripts run, so a plain synchronous localStorage.getItem at startup is correct. Read the same key and the same shape the artifact uses.
+- It CANNOT write: setItem is dropped. It cannot download files, use the clipboard, or open file pickers. It is a view.
+- It is NOT interactive. Clicks pass through it and open the artifact, so never draw a button, input, link, or anything that looks tappable.
+- Show ONE thing, large and legible — the single fact the user would want at a glance (a total, the next item due, current progress) plus at most one quiet supporting line. A widget is not a miniature of the tool.
+- Size: design for roughly 272x132 CSS px and stay fluid from 230 to 420 wide. Use width/height 100% and flexbox, never a fixed pixel layout width. The frame already sets margin:0, height:100%, a transparent background and a system-ui font; paint your own background if you want one.
+- Style for a light card: white surface, accent #23559e, muted text #888, hairline #e0e0e0.
+- Always handle empty state — a widget rendered before the user has entered anything must read calmly ("No runs logged yet"), never NaN, undefined, or blank.
+- Otherwise the same rules as the artifact: one file, everything inline, no external references (the widget inherits the artifact's network allowlist, so anything unapproved is blocked), inline SVG for charts and glyphs.
+- A stateless tool (a calculator, a converter) has nothing to report, so give it a STATIC widget: a small identity card — an inline-SVG glyph, the tool's name, one descriptive line — with no script at all. If even that adds nothing, skip set_widget and the library draws a default tile.
+- When you change what an artifact stores, update its widget in the same turn so the two stay in agreement.
 
 If the user message includes a snippet (an attached screenshot plus an element descriptor with selector/outerHTML), that is the exact element the user means — locate it in the source by the descriptor and apply the change there.`
 
@@ -460,11 +475,23 @@ func (s *Session) handleLine(line []byte) {
 				s.noteArtifactSaved(probe.Result.Details)
 			case "state_changed":
 				s.noteStateChanged(probe.Result.Details)
+			case "widget_saved":
+				s.noteWidgetSaved(probe.Result.Details)
 			}
 		}
 	}
 
 	s.broadcast(bytes.Clone(line))
+}
+
+// bindArtifact records which artifact this session is working on. Both save
+// tools reach it: whichever document the agent wrote first, the session is now
+// about that artifact — which is what the preview pane and the transcript
+// persist against.
+func (s *Session) bindArtifact(id string) {
+	s.mu.Lock()
+	s.ArtifactID = id
+	s.mu.Unlock()
 }
 
 // noteArtifactSaved binds the session to the saved artifact and emits a
@@ -474,9 +501,7 @@ func (s *Session) noteArtifactSaved(details map[string]any) {
 	if artifactID == "" {
 		return
 	}
-	s.mu.Lock()
-	s.ArtifactID = artifactID
-	s.mu.Unlock()
+	s.bindArtifact(artifactID)
 	ev, _ := json.Marshal(map[string]any{
 		"type":       "exhibit_artifact_saved",
 		"artifactId": artifactID,
@@ -510,6 +535,26 @@ func (s *Session) noteStateChanged(details map[string]any) {
 		"artifactId": artifactID,
 		"action":     details["action"],
 		"key":        details["key"],
+	})
+	s.broadcast(ev)
+}
+
+// noteWidgetSaved is the set_widget counterpart (av-fafu). It stays a distinct
+// event rather than reusing exhibit_artifact_saved because the two mean
+// different things to the chat UI — the artifact's live preview did not change,
+// only the tile beside it — and because a widget save carries its own warning:
+// origins the artifact's allowlist does not cover, which the browser will block.
+func (s *Session) noteWidgetSaved(details map[string]any) {
+	artifactID, _ := details["artifactId"].(string)
+	if artifactID == "" {
+		return
+	}
+	s.bindArtifact(artifactID)
+	ev, _ := json.Marshal(map[string]any{
+		"type":       "exhibit_widget_saved",
+		"artifactId": artifactID,
+		"widgetUrl":  details["widgetUrl"],
+		"unapproved": details["unapproved"],
 	})
 	s.broadcast(ev)
 }

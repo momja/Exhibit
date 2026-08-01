@@ -122,6 +122,22 @@
      Data: capabilityView (gallery.go). */}}
 {{define "capabilityCluster"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved)}}<div class="capability-wrap"><div class="capability-cluster{{if not $sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger>{{if $sandboxed}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}
 
+{{/* cardWidget is an artifact's tile (av-fafu) — the top band of its gallery
+     card, and the same markup the edit page's widget preview renders so the
+     author sees the tile exactly as the library will.
+
+     Two states, one definition. With a widget it is a sandboxed frame on the
+     render origin, opaque-origin like every artifact frame and carrying the
+     artifact's own CSP; without one it is the default monogram tile, plain
+     markup with no frame to load.
+
+     The frame is inert on purpose: pointer-events are off in CSS so a click
+     passes through to the card (which opens the artifact), and tabindex=-1
+     keeps its contents out of the tab order — the widget states a fact, it is
+     not a control. The <title> is the accessible name every iframe needs.
+     Data: widgetView (gallery.go). */}}
+{{define "cardWidget"}}<div class="card-widget">{{if .URL}}<iframe class="card-widget-frame" src="{{.URL}}" sandbox="allow-scripts" loading="lazy" tabindex="-1" scrolling="no" title="{{.Title}} widget"></iframe>{{else}}<div class="card-widget-default" style="--tile-hue:{{.Hue}}"><span class="card-widget-monogram">{{.Monogram}}</span></div>{{end}}</div>{{end}}
+
 {{/* capabilityPopover is the "receipt" for what was approved at ingest
      (spec 6.2) — capabilityCluster's aria-describedby target. One row per
      active grant (network origins in monospace, then downloads, then

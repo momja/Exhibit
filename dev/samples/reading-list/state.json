@@ -1,0 +1,66 @@
+{
+  "exhibit.reading-list.v1": {
+    "books": [
+      {
+        "id": "b1",
+        "title": "A Philosophy of Software Design",
+        "author": "John Ousterhout",
+        "pages": 190,
+        "read": 142,
+        "status": "reading",
+        "current": true,
+        "finishedAt": ""
+      },
+      {
+        "id": "b2",
+        "title": "The Design of Everyday Things",
+        "author": "Don Norman",
+        "pages": 368,
+        "read": 96,
+        "status": "reading",
+        "current": false,
+        "finishedAt": ""
+      },
+      {
+        "id": "b3",
+        "title": "Thinking in Systems",
+        "author": "Donella Meadows",
+        "pages": 240,
+        "read": 0,
+        "status": "queued",
+        "current": false,
+        "finishedAt": ""
+      },
+      {
+        "id": "b4",
+        "title": "The Soul of a New Machine",
+        "author": "Tracy Kidder",
+        "pages": 304,
+        "read": 304,
+        "status": "finished",
+        "current": false,
+        "finishedAt": "{{date:-96}}"
+      },
+      {
+        "id": "b5",
+        "title": "Seeing Like a State",
+        "author": "James C. Scott",
+        "pages": 445,
+        "read": 445,
+        "status": "finished",
+        "current": false,
+        "finishedAt": "{{date:-58}}"
+      },
+      {
+        "id": "b6",
+        "title": "Piranesi",
+        "author": "Susanna Clarke",
+        "pages": 272,
+        "read": 272,
+        "status": "finished",
+        "current": false,
+        "finishedAt": "{{date:-21}}"
+      }
+    ]
+  }
+}

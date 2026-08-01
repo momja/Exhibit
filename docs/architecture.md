@@ -112,6 +112,13 @@ The only way data changes. Route groups:
   text. Erasing all state touches state alone: body, origin decisions, and capability
   approvals survive. All of them are authenticated like every other route here — the
   inspector adds no second write path.
+- `GET/PUT/DELETE /api/artifacts/:id/widget` — the artifact's gallery-card widget
+  (av-fafu). A second document stored beside the artifact's body and hung off the
+  artifact rather than made a resource of its own, because it has no identity, no
+  allowlist and no state apart from it. `PUT` scans the widget and reports which of
+  its origins the *artifact's* allowlist doesn't cover — those are already blocked
+  at render, so this explains a blank tile rather than gating one, and (as
+  everywhere) never seeds the allowlist. See `widgets.md`.
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
 - collection/tag CRUD.
 
@@ -168,6 +175,19 @@ executable document with the correct security envelope:
   so it was removed. Native keyboard paste (Ctrl/Cmd+V) is a browser event and
   works regardless.
 
+- Serves an artifact's **widget** at `/w/:id` (av-fafu) — the glanceable tile its
+  gallery card renders. This is the same read path with the same CSP, built from
+  the same allowlist, and the same state inlined; it differs only in which blob it
+  reads and in taking the **narrowed preamble**: `WIDGET = true` short-circuits the
+  state write-through, and the capability-bridge half of the preamble is not spliced
+  in at all. So a widget's authority is a strict subset of its artifact's by
+  construction, with no second policy to keep in sync — and a gallery page's worth
+  of tiles doesn't ship a download bridge none of them can use. A widget render also
+  gets a small base stylesheet (`margin:0; height:100%; background:transparent`),
+  because a tile has no page of its own to establish a viewport. An artifact with no
+  widget 404s here; its card renders the default tile instead (§3.5). See
+  `widgets.md`.
+
 The render surface never mutates anything. It reads (including state, to inline it), wraps,
 and serves. This read-only property is what makes it safe to expose under the no-auth share
 path (§7).
@@ -199,7 +219,11 @@ Blob:   put/get artifact bodies by id
   *rendered* text (via `store.ExtractSearchText`: text nodes plus semantic
   attributes like `alt`/`placeholder`; markup, `<script>`, and `<style>` are
   dropped) so search matches what an artifact shows, not the code it's made of.
-- **Bodies** → filesystem now, S3-compatible later — same `Blob` interface.
+- **Bodies** → filesystem now, S3-compatible later — same `Blob` interface. An
+  artifact's **widget** (av-fafu) is a body too, so it lives here as a second blob
+  with only its id (`artifacts.widget_blob_id`, empty for "no widget") on the row.
+  The id is minted once and reused on every save, keeping the widget's render URL —
+  which gallery cards embed — stable across edits.
 
 Because handlers never touch SQLite or the filesystem directly, swapping the metadata
 engine (libSQL/Turso) or the blob backend (S3/MinIO) is a backend implementation change
@@ -283,7 +307,22 @@ page render used — the point is that each component has exactly one definition
 — and carry no authority their page doesn't already have. The first consumer
 is the agent surface's preview pane (§3.7); the wiring (trigger, target, swap)
 sits in the markup, so page JS only dispatches the event that says "something
-changed".
+changed". `/partials/card-widget` is the second: the edit page's widget panel
+swaps it after a save, refreshing the tile without a reload that would drop
+the CodeMirror buffer beside it.
+
+**Card widgets (av-fafu).** Each card leads with a tile: either the artifact's
+widget in a sandboxed frame from `RENDER_ORIGIN/w/:id`, or — when it has none —
+a **server-rendered default tile**, a monogram on a tint derived from the
+artifact id. The default is deliberately markup rather than a frame or a
+thumbnail: no-widget is the common case, and a gallery of forty cards must not
+pay forty frame loads (or a screenshot pipeline) to say "nothing to show". The
+widget frame is `pointer-events: none` and `tabindex="-1"`, so a click reaches
+the card beneath and opens the artifact — "informative, not interactive" is a
+consequence of the layout rather than something event handlers must enforce.
+Both states come from one `cardWidget` partial, shared by the gallery card, the
+edit page's preview, the agent preview pane, and the fragment route. See
+`widgets.md`.
 
 Ingest has its own page, `GET /new` (`new.tmpl`), rather than a form stacked on
 top of the library index (av-qo0j). It presents the three routes in as peers —
@@ -326,11 +365,12 @@ absent the surface degrades to disabled; nothing else changes.
   disabled and exactly one extension (`internal/agent/ext/exhibit.ts`) whose
   `create_artifact` / `update_artifact` / `get_artifact` tools, plus
   `get_state` / `set_state` / `delete_state` for the artifact's stored state
-  (av-lvi1), call back into the exhibit HTTP API with the service token —
-  the same routes and Store methods the edit page's state inspector (§3.5)
-  uses, so the agent gains no reach a browser client with the token doesn't
-  already have. Agent output is scanned like any ingest and its footprint is
-  never auto-approved.
+  (av-lvi1) and `set_widget` / `get_widget` for the artifact's gallery-card
+  widget (av-fafu), call back into the exhibit HTTP API with the service
+  token — the same routes and Store methods the edit page's state inspector
+  (§3.5) uses, so the agent gains no reach a browser client with the token
+  doesn't already have. Agent output is scanned like any ingest and its
+  footprint is never auto-approved.
 - **BYO key, sealed at rest:** the user's provider key is stored AES-256-GCM
   encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
   handed to the subprocess only through its (minimal, built-from-scratch)
@@ -346,6 +386,13 @@ absent the surface degrades to disabled; nothing else changes.
   cache-busting stamp on the render URL. The pane therefore has one definition
   for both the initial render and every re-render, and the swap costs neither
   the transcript nor the SSE stream a reload would.
+- **Widgets (av-fafu):** the system prompt carries the widget contract and the
+  agent builds one by default, so a tool and its gallery tile are authored
+  together. `set_widget` emits a distinct `exhibit_widget_saved` event rather
+  than reusing the artifact one — the live preview did not change, only the
+  tile beside it — and the pane's re-render brings that tile in. The pane shows
+  the tile precisely so the default tile is visible too: that is what "this
+  artifact has no widget yet" looks like.
 - **Trust note:** the sidecar is a subprocess of the service executing
   LLM-directed tool calls, but its reach is bounded to the same authenticated
   API surface any client has — it holds no datastore access of its own.

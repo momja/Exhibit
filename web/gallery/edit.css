@@ -96,6 +96,29 @@ input.state-input{max-width:340px}
 .state-add{display:flex;align-items:center;gap:var(--space-2);margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline);flex-wrap:wrap}
 .state-add .field{max-width:220px}
 
+/* --- gallery widget panel (av-fafu), collapsed by default ---------------- */
+/* Same collapsed-<details> shape as the security panel above, and it reuses
+ * that panel's caret rules — hence the shared .security-caret class in the
+ * markup rather than a second pair of icons needing the same [open] swap. */
+#widget-panel{margin-bottom:16px}
+#widget-panel>summary{list-style:none;display:flex;align-items:center;gap:var(--space-2)}
+#widget-panel>summary::-webkit-details-marker{display:none}
+#widget-panel[open]>summary .security-caret-closed{display:none}
+#widget-panel[open]>summary .security-caret-open{display:inline}
+.widget-body{display:flex;gap:24px;margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline)}
+/* The preview column is pinned to the tile's real width, so what the author
+ * sees is the box the library will draw rather than a stretched approximation.
+ * The component's card-bleed margins are cancelled: there is no .card padding
+ * here to pull back out of. */
+.widget-preview{flex:0 0 272px}
+.widget-preview .card-widget{margin:0;border:1px solid var(--color-hairline);border-radius:var(--radius-lg)}
+.widget-preview p{margin-top:10px;line-height:1.45}
+.widget-source{flex:1;min-width:0;display:flex;flex-direction:column}
+/* Shorter than the artifact's own editor below: a widget is a small document,
+ * and the artifact source stays the page's main event. */
+.widget-source textarea{height:220px}
+.widget-source .btn-row{margin-top:10px}
+
 /* --- responsive: single column, stacked security body, full-width actions */
 @media (max-width:640px){
   main{padding:12px}
@@ -108,6 +131,8 @@ input.state-input{max-width:340px}
   .state-field-label{min-width:0;max-width:none;flex:1 1 auto}
   .state-field>.field,.state-field>.state-toggle{order:2;flex:1 1 100%}
   input.state-input,.state-add .field,.state-adder .state-input{max-width:none}
+  .widget-body{flex-direction:column;gap:16px}
+  .widget-preview{flex:0 0 auto;max-width:272px}
   .btn-row{flex-direction:column;align-items:stretch}
   .btn-row #status{order:1;text-align:center}
   .btn-row .spacer{display:none}

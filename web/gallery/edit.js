@@ -240,3 +240,68 @@ async function deleteArtifact() {
     status.textContent = '✗ Error: ' + e.message;
   }
 }
+
+// --- gallery widget panel (av-fafu) ----------------------------------------
+// The widget is a separate document with its own endpoint, so it saves on its
+// own buttons rather than riding the artifact's Save. On success the panel
+// fires exhibit:widget-saved and htmx re-fetches the cardWidget fragment into
+// the preview slot — no page reload (which would drop the editor buffer) and
+// no markup rebuilt here that the template already owns.
+(function() {
+  const src = document.getElementById('widget-src');
+  const status = document.getElementById('widget-status');
+  const saveBtn = document.getElementById('widget-save');
+  const removeBtn = document.getElementById('widget-remove');
+  if (!src) return;
+
+  function refreshPreview() {
+    document.body.dispatchEvent(new CustomEvent('exhibit:widget-saved'));
+  }
+
+  saveBtn.addEventListener('click', async function() {
+    const body = src.value.trim();
+    if (!body) { status.textContent = 'Nothing to save — the source is empty.'; return; }
+    status.textContent = 'Saving…';
+    try {
+      const r = await fetch('/api/artifacts/' + ID + '/widget', {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+        body: JSON.stringify({body: body})
+      });
+      if (!r.ok) {
+        status.textContent = '✗ ' + ((await r.text().catch(() => '')).trim() || r.statusText);
+        return;
+      }
+      const data = await r.json();
+      // A widget shares the artifact's allowlist, so an origin missing from it
+      // is already blocked at render — a fact to report, not a pending
+      // approval. The allowlist panel above is where it would be granted.
+      status.textContent = (data.unapproved_origins || []).length
+        ? '✓ Saved — but ' + data.unapproved_origins.join(', ') + ' is not on the allowlist and will be blocked.'
+        : '✓ Saved';
+      refreshPreview();
+    } catch (e) {
+      status.textContent = '✗ ' + e.message;
+    }
+  });
+
+  removeBtn.addEventListener('click', async function() {
+    if (!confirm('Remove this artifact’s widget? Its card falls back to the default tile.')) return;
+    status.textContent = 'Removing…';
+    try {
+      const r = await fetch('/api/artifacts/' + ID + '/widget', {
+        method: 'DELETE',
+        headers: {'Authorization':'Bearer '+TOKEN}
+      });
+      if (!r.ok) {
+        status.textContent = '✗ ' + ((await r.text().catch(() => '')).trim() || r.statusText);
+        return;
+      }
+      src.value = '';
+      status.textContent = '✓ Removed';
+      refreshPreview();
+    } catch (e) {
+      status.textContent = '✗ ' + e.message;
+    }
+  });
+})();

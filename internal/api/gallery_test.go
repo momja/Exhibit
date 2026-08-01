@@ -414,7 +414,7 @@ func TestEditPageShowsBlockedOriginsDistinctlyFromUndecided(t *testing.T) {
 	decisions := []store.OriginDecision{
 		{Origin: "https://blocked.example.com", Decision: store.DecisionBlock, Source: "runtime"},
 	}
-	page, err := renderEditPage(a, decisions, src, "tok")
+	page, err := renderEditPage(a, decisions, src, "", "tok", "https://render.test")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let blocked = ["https://blocked.example.com"];`,
@@ -437,7 +437,7 @@ func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
 	payload := `https://x"><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Edit XSS", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "tok")
+	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "", "tok", "https://render.test")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `<code title="https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
@@ -455,7 +455,7 @@ func TestEditPageSurfacesUnapprovedOriginsWithoutSeedingAllowlist(t *testing.T) 
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "No auto-seed", Tier: store.Tier1,
 		CreatedAt: time.Now()}
 	src := `<script src="https://cdn.example.com/lib.js"></script>`
-	page, err := renderEditPage(a, nil, src, "tok")
+	page, err := renderEditPage(a, nil, src, "", "tok", "https://render.test")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `data-origin="https://cdn.example.com"`)
@@ -475,7 +475,7 @@ func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 	payload := `https://evil</script><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Script Breakout", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "tok")
+	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "", "tok", "https://render.test")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let allowlist = ["https://evil\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e"];`,

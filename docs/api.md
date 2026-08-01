@@ -140,6 +140,38 @@ by that code may still exist; they are indistinguishable from an intentional
 each stored value through a control inferred from its shape and never offers
 raw-text editing of a value.
 
+## Gallery widget
+
+```
+GET    /api/artifacts/:id/widget   Read the widget source (404 when there is none)
+PUT    /api/artifacts/:id/widget   Save/replace it {"body":"<html>…"}
+DELETE /api/artifacts/:id/widget   Detach it; the card falls back to the default tile
+```
+
+A widget is the small, informative tile an artifact's gallery card renders
+(`av-fafu`; see `widgets.md`). It is a second document under the *artifact's*
+security envelope, not a resource of its own: it reads the same state, renders
+under the same CSP allowlist, and can write nothing.
+
+`PUT` responds with the saved body plus transparency about its references:
+
+```json
+{
+  "body": "<html>…",
+  "network_footprint": ["https://cdn.example.com"],
+  "unapproved_origins": ["https://cdn.example.com"],
+  "widget_url": "https://artifacts.example.com/w/…"
+}
+```
+
+`unapproved_origins` are the footprint origins the **artifact's** allowlist does
+not cover. Unlike an ingest footprint these are not awaiting approval — they are
+already blocked at render — so the field exists to explain a blank tile, not to
+gate one. As everywhere else, the scan never seeds the allowlist.
+
+The widget's blob id is minted once and reused on every later save, so an
+artifact's widget URL is stable across edits.
+
 ## Collections & Tags
 
 ```
@@ -192,7 +224,10 @@ Share links resolve on the render origin, under the artifact's own CSP. No accou
 
 ```
 GET  /a/:artifactID    Serve artifact (render origin only)
+GET  /w/:artifactID    Serve the artifact's gallery widget (render origin only)
 GET  /s/:shareID       Serve shared artifact (render origin only)
 ```
 
 The render surface sets `Content-Security-Policy` from the artifact's approved origins (its `decision='allow'` rows in `artifact_network_origins`), injects the storage shim with the artifact's state inlined, and serves the document `Cache-Control: no-store`. The iframe has `sandbox="allow-scripts"` without `allow-same-origin`, giving it an opaque origin.
+
+`/w/:artifactID` is the same read path with the same CSP and the same inlined state — it differs only in which blob it serves and in getting the **narrowed preamble**: state writes stop at the in-memory cache and the capability bridges are not injected at all. It 404s for an artifact with no widget (`widgets.md`).

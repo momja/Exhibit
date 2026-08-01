@@ -1,0 +1,117 @@
+<meta charset="utf-8">
+<style>
+/* ---------------------------------------------------------------------------
+   Mortgage Calculator — gallery widget (the STATIC case).
+   This file deliberately contains no script element at all: the artifact
+   persists nothing, so its widget has nothing to read. What is left is the
+   identity card a stateless tool chooses for itself — a glyph, a name, and one
+   line of description. Pure HTML + inline CSS, no network, no interactivity.
+
+   Viewport is ~272x132 CSS px but must survive 230-420 wide and 120-170 tall,
+   so every dimension is either intrinsic or flexible. The host already sets
+   html,body{margin:0;height:100%;background:transparent}; the rules below
+   restate it so the file also stands alone in a browser tab.
+--------------------------------------------------------------------------- */
+html,body{margin:0;height:100%}
+
+.card{
+	box-sizing:border-box;
+	position:relative;
+	overflow:hidden;              /* clips the oversized watermark glyph */
+	width:100%;
+	height:100%;
+	min-height:100%;
+	display:flex;
+	align-items:center;
+	gap:14px;
+	padding:16px 18px;
+	background:linear-gradient(170deg,#fff 0%,#f7f9fc 100%);
+	font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+	color:#111;
+	/* Belt and braces: the host disables pointer events, and nothing here is
+	   clickable in the first place. */
+	cursor:default;
+	user-select:none;
+}
+
+/* The tinted tile the glyph sits in — the "app icon" of the card. */
+.tile{
+	flex:none;
+	width:56px;
+	height:56px;
+	border-radius:16px;
+	background:#eaf1fa;
+	box-shadow:inset 0 0 0 1px rgba(35,85,158,.10);
+	display:flex;
+	align-items:center;
+	justify-content:center;
+}
+.tile svg{display:block}
+
+.text{min-width:0}          /* lets the title wrap instead of overflowing */
+.title{
+	margin:0;
+	font-size:16px;
+	font-weight:600;
+	letter-spacing:-.012em;
+	line-height:1.22;
+	color:#111;
+}
+.subtitle{
+	margin:5px 0 0;
+	font-size:12.5px;
+	line-height:1.3;
+	color:#888;
+}
+
+/* A faint oversized echo of the same glyph, bleeding off the right edge.
+   Decoration, not data — a static tool's card should never look like it is
+   reporting a value. */
+.watermark{
+	position:absolute;
+	right:-30px;
+	bottom:-34px;
+	width:140px;
+	height:140px;
+	opacity:.045;
+	pointer-events:none;
+}
+
+/* Shorter than nominal: drop the watermark and tighten so nothing is squeezed. */
+@media (max-height:124px){
+	.card{padding:14px 16px;gap:12px}
+	.tile{width:50px;height:50px;border-radius:14px}
+	.watermark{display:none}
+}
+</style>
+
+<div class="card">
+	<div class="tile">
+		<!-- Hand-drawn house with a percent badge: the tool's own mark, inline so
+		     the widget carries zero network references. The badge is drawn large
+		     and its slash kept short — a full-diameter slash reads as a
+		     prohibition sign rather than a percent at this size. -->
+		<svg width="38" height="38" viewBox="0 0 32 32" fill="none"
+			stroke="#23559e" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M3.6 14.5 16.1 4.8l12.1 9.5"/>
+			<path d="M6.6 12.6v13.9h18.9V12.5"/>
+			<path d="M13.2 26.6v-6.3a2.7 2.7 0 0 1 5.5.1v6.2"/>
+			<circle cx="25.2" cy="24.8" r="6.7" fill="#fff" stroke-width="1.7"/>
+			<path d="M27.4 22.1 23.1 27.6" stroke-width="1.7"/>
+			<circle cx="23.3" cy="22.7" r="1.15" fill="#23559e" stroke="none"/>
+			<circle cx="27.2" cy="26.9" r="1.15" fill="#23559e" stroke="none"/>
+		</svg>
+	</div>
+
+	<div class="text">
+		<p class="title">Mortgage Calculator</p>
+		<p class="subtitle">Payment, amortization &amp; total interest</p>
+	</div>
+
+	<svg class="watermark" viewBox="0 0 32 32" fill="none" aria-hidden="true"
+		stroke="#23559e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M3.9 14.7 16.1 5.1l11.8 9.3"/>
+		<path d="M6.7 12.9v13.7h18.7V12.8"/>
+		<path d="M13.3 26.6v-6.2a2.7 2.7 0 0 1 5.4.1v6.1"/>
+	</svg>
+</div>

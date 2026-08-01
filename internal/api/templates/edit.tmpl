@@ -10,6 +10,9 @@
 <link rel="stylesheet" href="/assets/gallery/tokens.css">
 <link rel="stylesheet" href="/assets/gallery/components.css">
 <link rel="stylesheet" href="/assets/gallery/edit.css">
+{{/* htmx drives the widget panel's preview swap (av-fafu); self-hosted from
+     the app origin like every other asset, never a CDN. */}}
+<script src="/assets/htmx/htmx.min.js"></script>
 </head>
 <body>
 <header>
@@ -107,6 +110,36 @@
         <span id="state-status" class="text-sm muted"></span>
         <span class="spacer"></span>
         <button type="button" class="btn btn-sm btn-danger" id="state-erase"><i class="ph ph-warning"></i> Erase all data</button>
+      </div>
+    </div>
+  </details>
+
+  {{/* Gallery widget panel (av-fafu). It saves through its own endpoint
+       (PUT/DELETE /api/artifacts/:id/widget), not the artifact PATCH below,
+       so it carries its own buttons — one Save covering two different
+       documents would misreport what changed.
+
+       The preview is an htmx target: after a save the panel re-fetches the
+       cardWidget fragment and swaps it in, so the tile updates without a page
+       reload (which would drop the CodeMirror buffer below) and without page
+       JS rebuilding markup the partial already owns. */}}
+  <details class="details-panel" id="widget-panel">
+    <summary><i class="ph ph-caret-right security-caret security-caret-closed" aria-hidden="true"></i><i class="ph ph-caret-down security-caret security-caret-open" aria-hidden="true"></i> Gallery widget — {{if .WidgetSrc}}custom tile{{else}}default tile{{end}}</summary>
+    <div class="widget-body">
+      <div class="widget-preview">
+        <div id="widget-preview-slot"
+             hx-get="/partials/card-widget?artifact={{.ID}}"
+             hx-trigger="exhibit:widget-saved from:body"
+             hx-swap="innerHTML">{{template "cardWidget" .Widget}}</div>
+        <p class="text-sm muted">The tile this artifact shows on its library card. It reads the artifact's saved state but cannot change it, and it is not interactive — clicking it opens the artifact.</p>
+      </div>
+      <div class="widget-source">
+        <textarea id="widget-src" spellcheck="false" placeholder="A complete HTML document for the tile. Leave this empty to keep the default tile.">{{.WidgetSrc}}</textarea>
+        <div class="btn-row">
+          <button type="button" class="btn btn-sm" id="widget-save"><i class="ph ph-check"></i> Save widget</button>
+          <button type="button" class="btn btn-sm btn-sec" id="widget-remove"><i class="ph ph-trash"></i> Remove</button>
+          <span id="widget-status" class="text-sm muted"></span>
+        </div>
       </div>
     </div>
   </details>

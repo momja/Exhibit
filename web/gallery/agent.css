@@ -55,6 +55,16 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .snip-btn.active{background:var(--brand-blue);color:#fff;border-color:var(--brand-blue)}
 .snip-btn .kbd{color:#aaa;font-size:11px}
 .snip-more{display:none}
+/* Widget strip (av-fafu): the artifact's gallery tile, shown above the live
+ * preview so a set_widget call lands somewhere the user is already watching.
+ * The component's card-bleed negative margins are cancelled here — there is no
+ * .card padding to pull back out of — and the tile is boxed at its real width
+ * so it reads as the card face it will be. Hidden on phones, where the pane is
+ * a full-screen preview and the strip would only cost height. */
+.pv-widget{display:flex;align-items:center;gap:12px;padding:10px 16px;background:#fff;border-bottom:1px solid #e0e0e0;flex-shrink:0}
+.pv-widget .card-widget{margin:0;flex:0 0 auto;width:272px;border:1px solid #e0e0e0;border-radius:10px}
+.pv-widget-label{font-size:12px;color:#888}
+
 #frame-wrap{flex:1;position:relative}
 #frame-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
 #empty-preview{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#999;font-size:14px}
@@ -103,6 +113,8 @@ header h1{font-size:16px;font-weight:600;flex:1}
   body.show-preview .preview{display:flex}
   .pv-nudge{display:inline-flex}
   #hint{display:none}
+  /* The preview is full-screen here; the widget strip would only cost height. */
+  .pv-widget{display:none}
   /* The preview bar becomes a bottom action bar led by the snippet button. */
   #frame-wrap{order:1}
   .preview-bar{order:2;border-bottom:none;border-top:1px solid #e0e0e0;padding:10px 12px}

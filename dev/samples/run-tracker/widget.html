@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Run Log — widget</title>
+<style>
+  /* The host already sets html,body{margin:0;height:100%;background:transparent}.
+     Everything below paints inside that box and must survive 230–420 x 120–170. */
+  *{box-sizing:border-box}
+
+  .w{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    padding:12px 14px;
+    background:#fff;
+    color:#16181c;
+    font:400 13px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    /* Nothing here is interactive — the host swallows pointer events and a click
+       opens the full artifact. No hover states, no cursor changes, no controls. */
+    user-select:none;
+  }
+
+  .label{
+    flex:0 0 auto;
+    font-size:11px;
+    line-height:1;
+    letter-spacing:.03em;
+    color:#888;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .hero{
+    flex:0 0 auto;
+    display:flex;
+    align-items:baseline;
+    gap:5px;
+    margin-top:3px;
+    min-width:0;
+  }
+  .hero .val{
+    /* Fluid with the widget box; proportional figures (tabular-nums would make a
+       number like 121 look loose at this size). */
+    font-size:clamp(26px, calc(4vh + 11vw), 44px);
+    line-height:1.02;
+    font-weight:600;
+    letter-spacing:-.02em;
+    white-space:nowrap;
+  }
+  .hero .unit{
+    font-size:clamp(11px, calc(1.4vh + 3.4vw), 15px);
+    font-weight:500;
+    color:#888;
+  }
+
+  .spark{
+    /* Absorbs whatever height the box has left, so 120px and 170px tall both
+       fill rather than leaving a dead band under the caption. */
+    flex:1 1 auto;
+    min-height:18px;
+    margin:6px 0 5px;
+  }
+  .spark svg{display:block;width:100%;height:100%}
+
+  .sub{
+    flex:0 0 auto;
+    font-size:11.5px;
+    line-height:1.25;
+    color:#888;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  /* Empty state — calm, never blank, never NaN. */
+  .empty{
+    width:100%;
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    justify-content:center;
+    gap:3px;
+  }
+  .empty .t{font-size:15px;font-weight:600;color:#16181c}
+  .empty .s{font-size:12px;color:#888}
+</style>
+</head>
+<body>
+<div class="w" id="w"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ============================================================================
+   * READ-ONLY VIEW.
+   * This widget never calls setItem / removeItem — writes from a widget are
+   * silently dropped by the host, so pretending to write would only create
+   * state that disappears. It reads the same key the artifact writes:
+   *   exhibit.run-tracker.v1 -> { "runs":[{id,date:"YYYY-MM-DD",km,note}] }
+   * The host inlines that state before this script runs, so the synchronous
+   * getItem below is already correct on first paint.
+   * ========================================================================== */
+  var KEY = 'exhibit.run-tracker.v1';
+  var DAY = 86400000;
+  var ACCENT = '#23559e';
+  var ACCENT_SOFT = '#bccbe1';   // de-emphasis tint for past weeks
+  var HAIRLINE = '#e0e0e0';
+
+  var root = document.getElementById('w');
+
+  function readRuns() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return [];
+      var data = JSON.parse(raw);
+      var list = (data && Array.isArray(data.runs)) ? data.runs : [];
+      var out = [];
+      for (var i = 0; i < list.length; i++) {
+        var r = list[i];
+        if (!r || typeof r !== 'object') continue;
+        if (typeof r.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) continue;
+        var km = Number(r.km);
+        if (!isFinite(km) || km <= 0) continue;
+        out.push({ date: r.date, km: km, t: parseDate(r.date) });
+      }
+      return out;
+    } catch (err) {
+      // A missing, truncated, or foreign value must still render a clean widget.
+      return [];
+    }
+  }
+
+  // "YYYY-MM-DD" as a *local* midnight — Date(string) would parse it as UTC.
+  function parseDate(iso) {
+    var p = iso.split('-');
+    return new Date(+p[0], +p[1] - 1, +p[2]).getTime();
+  }
+  function startOfToday() {
+    var n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+  }
+  function km1(n) {
+    return n.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  }
+
+  var fmtWeekday = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
+  var fmtDate = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+
+  /* --------------------------------------------------------------------------
+   * Derive everything from `new Date()` at render time — the 30-day window has
+   * to move with the day, not with whenever the artifact was last saved.
+   * ------------------------------------------------------------------------ */
+  function summarize(runs) {
+    var today = startOfToday();
+    var cutoff = today - 29 * DAY;          // 30 days, today inclusive
+
+    var total30 = 0, count30 = 0, last = null;
+    // Eight rolling 7-day buckets, oldest first; index 7 is the current week.
+    var weeks = [0, 0, 0, 0, 0, 0, 0, 0];
+
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i];
+      if (r.t >= cutoff) { total30 += r.km; count30++; }
+      if (!last || r.t > last.t) last = r;
+
+      var weeksAgo = Math.floor((today - r.t) / DAY / 7);
+      if (weeksAgo < 0) weeksAgo = 0;       // a future-dated run counts as this week
+      if (weeksAgo <= 7) weeks[7 - weeksAgo] += r.km;
+    }
+
+    return { total30: total30, count30: count30, weeks: weeks, last: last, today: today };
+  }
+
+  function lastRunPhrase(last, today) {
+    var days = Math.round((today - last.t) / DAY);
+    var when;
+    if (days <= 0) when = 'today';
+    else if (days === 1) when = 'yesterday';
+    else if (days < 7) when = 'on ' + fmtWeekday.format(new Date(last.t));
+    else when = 'on ' + fmtDate.format(new Date(last.t));
+    return 'last: ' + km1(last.km) + ' km ' + when;
+  }
+
+  /* --------------------------------------------------------------------------
+   * Sparkline: eight weekly totals as slim columns. Bars (not a line) because
+   * each bucket is a discrete magnitude, not a reading on a continuum. Drawn at
+   * measured pixel size so the rounded caps never stretch.
+   * ------------------------------------------------------------------------ */
+  function drawSpark(host, weeks) {
+    var w = Math.round(host.clientWidth) || 244;
+    var h = Math.round(host.clientHeight) || 30;
+    if (w < 8 || h < 8) return;
+
+    var baseY = h - 1;                       // 1px baseline hairline sits here
+    var plotH = Math.max(6, baseY - 2);
+    var max = Math.max.apply(null, weeks);
+
+    // Bars stay ≤24px thick and left-aligned with the text above; the leftover
+    // width becomes air between them (up to a point) rather than fatter bars.
+    var n = weeks.length;
+    var bw = Math.min(24, (w - 5 * (n - 1)) / n);
+    var gap = Math.min(9, (w - n * bw) / (n - 1));
+    var span = n * bw + gap * (n - 1);
+
+    var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="' + w + '" height="' + h
+            + '" preserveAspectRatio="none" aria-hidden="true">';
+    svg += '<line x1="0" y1="' + baseY + '" x2="' + span + '" y2="' + baseY
+        + '" stroke="' + HAIRLINE + '" stroke-width="1"/>';
+
+    for (var i = 0; i < n; i++) {
+      if (max <= 0 || weeks[i] <= 0) continue;   // an empty week draws nothing
+      var bh = Math.max(2, (weeks[i] / max) * plotH);
+      var x = i * (bw + gap);
+      var y = baseY - bh;
+      var fill = (i === n - 1) ? ACCENT : ACCENT_SOFT;   // current week in the accent
+      svg += '<path d="' + barPath(x, y, bw, bh, 3) + '" fill="' + fill + '"/>';
+    }
+    svg += '</svg>';
+    host.innerHTML = svg;
+  }
+
+  // Rounded at the data end, square on the baseline.
+  function barPath(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h);
+    return 'M' + x + ',' + (y + h)
+         + 'V' + (y + r)
+         + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y
+         + 'H' + (x + w - r)
+         + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r)
+         + 'V' + (y + h) + 'Z';
+  }
+
+  /* --------------------------------------------------------------------------
+   * Render
+   * ------------------------------------------------------------------------ */
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function renderEmpty() {
+    root.textContent = '';
+    var box = el('div', 'empty');
+    box.appendChild(el('div', 't', 'No runs logged yet'));
+    box.appendChild(el('div', 's', 'Log a run to start the tally'));
+    root.appendChild(box);
+  }
+
+  function render() {
+    var runs = readRuns();
+    if (!runs.length) { renderEmpty(); return null; }
+
+    var s = summarize(runs);
+    root.textContent = '';
+
+    root.appendChild(el('div', 'label', 'Last 30 days'));
+
+    var hero = el('div', 'hero');
+    hero.appendChild(el('span', 'val', km1(s.total30)));
+    hero.appendChild(el('span', 'unit', 'km'));
+    root.appendChild(hero);
+
+    var spark = el('div', 'spark');
+    root.appendChild(spark);
+
+    var runWord = s.count30 === 1 ? '1 run' : s.count30 + ' runs';
+    root.appendChild(el('div', 'sub', runWord + ' · ' + lastRunPhrase(s.last, s.today)));
+
+    drawSpark(spark, s.weeks);
+    return { spark: spark, weeks: s.weeks };
+  }
+
+  var state = null;
+  try {
+    state = render();
+  } catch (err) {
+    renderEmpty();   // never a blank box, whatever went wrong
+  }
+
+  // The widget box is fluid; the sparkline is the only pixel-measured part.
+  if (state && window.ResizeObserver) {
+    var pending;
+    new ResizeObserver(function () {
+      clearTimeout(pending);
+      pending = setTimeout(function () { drawSpark(state.spark, state.weeks); }, 60);
+    }).observe(state.spark);
+  }
+})();
+</script>
+</body>
+</html>

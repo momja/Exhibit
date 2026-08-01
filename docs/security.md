@@ -232,6 +232,18 @@ The capability-registry work (av-u0vc) covers the **capability-bridge family
 only**; storage adapters and polyfills are orthogonal axes it does not touch.
 Bare "shim" never means the whole preamble — say "render preamble."
 
+**Widget renders take a narrowed preamble** (av-fafu). A gallery card's widget
+is served from the same render surface under the *artifact's* CSP, so its
+network reach is identical — but it gets the storage adapter with writes
+short-circuited, and **no capability bridges and no polyfills at all** (not
+injected, rather than injected and disabled). The reasoning is the dividing line
+this section already draws: a capability bridge re-grants something behind a
+*user gesture and a first-use decision*, and a tile renders unattended in a card
+behind `pointer-events: none`, where there is no gesture to attribute a prompt
+to — and where the artifact's own approvals were granted for the tool the user
+opened, not for its tile. A widget's authority is therefore a strict subset of
+its artifact's, by construction. See `widgets.md`.
+
 The dividing line for local capabilities: **local interaction with a user gesture
 is allowed; anything that produces egress or bypasses a user decision is not.**
 

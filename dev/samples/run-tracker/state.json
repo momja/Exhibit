@@ -1,0 +1,21 @@
+{
+  "exhibit.run-tracker.v1": {
+    "runs": [
+      { "id": "s1", "date": "{{date:-46}}", "km": 6.4, "note": "Easy loop" },
+      { "id": "s2", "date": "{{date:-42}}", "km": 10.1, "note": "" },
+      { "id": "s3", "date": "{{date:-38}}", "km": 5.0, "note": "Recovery" },
+      { "id": "s4", "date": "{{date:-33}}", "km": 14.2, "note": "Long run" },
+      { "id": "s5", "date": "{{date:-27}}", "km": 7.3, "note": "" },
+      { "id": "s6", "date": "{{date:-24}}", "km": 5.6, "note": "Track" },
+      { "id": "s7", "date": "{{date:-20}}", "km": 16.0, "note": "Long run" },
+      { "id": "s8", "date": "{{date:-17}}", "km": 8.2, "note": "" },
+      { "id": "s9", "date": "{{date:-13}}", "km": 6.1, "note": "Hills" },
+      { "id": "s10", "date": "{{date:-11}}", "km": 18.4, "note": "Long run" },
+      { "id": "s11", "date": "{{date:-8}}", "km": 5.4, "note": "Shakeout" },
+      { "id": "s12", "date": "{{date:-6}}", "km": 9.7, "note": "Tempo" },
+      { "id": "s13", "date": "{{date:-4}}", "km": 6.8, "note": "" },
+      { "id": "s14", "date": "{{date:-2}}", "km": 21.1, "note": "Half marathon" },
+      { "id": "s15", "date": "{{date:-1}}", "km": 5.2, "note": "Legs felt heavy" }
+    ]
+  }
+}

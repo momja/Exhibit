@@ -1,0 +1,223 @@
+package api
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func putWidgetReq(t *testing.T, r *Router, id, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	payload, _ := json.Marshal(map[string]string{"body": body})
+	req := httptest.NewRequest("PUT", "/api/artifacts/"+id+"/widget", bytes.NewReader(payload))
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+// The widget round-trips through the API — the single write path — and the
+// artifact reports carrying one.
+func TestWidgetPutGetRoundTrip(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+
+	const widget = "<html><body><b>42 km</b></body></html>"
+	w := putWidgetReq(t, r, id, widget)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var put widgetResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &put))
+	assert.Equal(t, "http://render.test/w/"+id, put.WidgetURL)
+
+	req := httptest.NewRequest("GET", "/api/artifacts/"+id+"/widget", nil)
+	req.Header.Set("Authorization", authHeader())
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var got widgetResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, widget, got.Body)
+
+	// The artifact now points at a widget blob, which is what makes its card
+	// render a live tile instead of the default.
+	req = httptest.NewRequest("GET", "/api/artifacts/"+id, nil)
+	req.Header.Set("Authorization", authHeader())
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Contains(t, w.Body.String(), `"widget_blob_id":"`)
+	assert.NotContains(t, w.Body.String(), `"widget_blob_id":""`)
+}
+
+// Re-saving must not mint a new blob: the widget's render URL is embedded in
+// gallery cards, so it has to stay stable across edits.
+func TestWidgetSaveReusesBlobID(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+
+	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>v1</b>").Code)
+	first := artifactField(t, r, id, "widget_blob_id")
+	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>v2</b>").Code)
+	assert.Equal(t, first, artifactField(t, r, id, "widget_blob_id"))
+}
+
+// A widget rides the artifact's allowlist, so it gets no approval flow of its
+// own — but the origins it references that the allowlist doesn't cover are
+// reported, because those are blocked at render and would otherwise show up as
+// a mysteriously blank tile. Reporting them must never approve them.
+func TestWidgetReportsUnapprovedOriginsWithoutApprovingThem(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+
+	w := putWidgetReq(t, r, id, `<html><body><img src="https://cdn.example.com/x.png"></body></html>`)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp widgetResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Contains(t, resp.NetworkFootprint, "https://cdn.example.com")
+	assert.Contains(t, resp.Unapproved, "https://cdn.example.com")
+
+	// The allowlist is untouched: a scan never grants network access (spec §6.2).
+	assert.Equal(t, "[]", artifactField(t, r, id, "network_allowlist"))
+}
+
+// An origin already approved for the artifact is not reported as unapproved —
+// the widget inherits that grant rather than needing its own.
+func TestWidgetInheritsArtifactAllowlist(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+
+	patch, _ := json.Marshal(map[string]any{"network_allowlist": []string{"https://cdn.example.com"}})
+	req := httptest.NewRequest("PATCH", "/api/artifacts/"+id, bytes.NewReader(patch))
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	w = putWidgetReq(t, r, id, `<html><body><img src="https://cdn.example.com/x.png"></body></html>`)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp widgetResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Empty(t, resp.Unapproved)
+}
+
+// Removing the widget detaches it; the card falls back to the default tile.
+func TestWidgetDelete(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>v1</b>").Code)
+
+	req := httptest.NewRequest("DELETE", "/api/artifacts/"+id+"/widget", nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusNoContent, w.Code)
+
+	req = httptest.NewRequest("GET", "/api/artifacts/"+id+"/widget", nil)
+	req.Header.Set("Authorization", authHeader())
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// Widget writes are mutations, so they pass the same auth boundary as every
+// other write — the single write path has no side door.
+func TestWidgetRoutesRequireAuth(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+
+	payload, _ := json.Marshal(map[string]string{"body": "<b>x</b>"})
+	req := httptest.NewRequest("PUT", "/api/artifacts/"+id+"/widget", bytes.NewReader(payload))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// A card with a widget frames it from the render origin; a card without one
+// renders the default tile and loads no frame at all.
+func TestGalleryCardRendersWidgetOrDefaultTile(t *testing.T) {
+	r := newTestRouter(t)
+	withWidget := createTestArtifact(t, r, "Run Log")
+	plain := createTestArtifact(t, r, "Mortgage Calculator")
+	require.Equal(t, http.StatusOK, putWidgetReq(t, r, withWidget, "<b>42 km</b>").Code)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	assert.Contains(t, page, `src="http://render.test/w/`+withWidget+`"`)
+	assert.NotContains(t, page, `src="http://render.test/w/`+plain+`"`)
+	// "Mortgage Calculator" -> MC on the default tile.
+	assert.Contains(t, page, `<span class="card-widget-monogram">MC</span>`)
+	// The frame must be inert: out of the tab order, and pointer-events are
+	// disabled in the stylesheet so a click reaches the card beneath it.
+	assert.Contains(t, page, `class="card-widget-frame"`)
+	assert.Contains(t, page, `tabindex="-1"`)
+}
+
+// The default tile's hue must be stable per artifact — a card that changes
+// face between visits is not recognizable.
+func TestDefaultTileHueIsStablePerArtifact(t *testing.T) {
+	assert.Equal(t, titleHue("abc"), titleHue("abc"))
+	assert.NotEqual(t, titleHue("abc"), titleHue("abd"))
+	assert.Less(t, titleHue("abc"), 360)
+}
+
+func TestMonogram(t *testing.T) {
+	cases := map[string]string{
+		"Run Log":              "RL",
+		"Mortgage Calculator":  "MC",
+		"reading-list":         "RL",
+		"Budget":               "B",
+		"":                     "—",
+		"🙂":                    "—",
+		"Über Tracker Deluxe":  "ÜT",
+		"  leading whitespace": "LW",
+	}
+	for title, want := range cases {
+		assert.Equal(t, want, monogram(title), "monogram(%q)", title)
+	}
+}
+
+// The edit page's preview swaps in this fragment after a save, so it must be
+// the same cardWidget markup the gallery renders — one definition — carrying a
+// cache-busting stamp (the browser only refetches a frame whose src changed).
+func TestCardWidgetPartialRendersStampedFrame(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>42 km</b>").Code)
+
+	req := httptest.NewRequest("GET", "/partials/card-widget?artifact="+id, nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	frag := w.Body.String()
+	assert.True(t, strings.HasPrefix(frag, `<div class="card-widget">`), frag)
+	assert.Contains(t, frag, "http://render.test/w/"+id+"?r=")
+}
+
+// artifactField returns one raw JSON field of an artifact, for assertions that
+// care about the stored value rather than a typed struct.
+func artifactField(t *testing.T, r *Router, id, field string) string {
+	t.Helper()
+	req := httptest.NewRequest("GET", "/api/artifacts/"+id, nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &raw))
+	return string(raw[field])
+}

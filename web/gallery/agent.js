@@ -305,6 +305,21 @@ function handleAgentEvent(ev) {
       addMsg('sys', label + (mobileQuery.matches ? ' — tap Preview to see it.' : ' — preview refreshed.'));
       break;
     }
+    case 'exhibit_widget_saved': {
+      // set_widget landed (av-fafu). The artifact body is unchanged, so this
+      // is not an artifact save — but the pane is re-rendered by the same
+      // fragment fetch, which is what brings the new tile in. A widget shares
+      // the artifact's allowlist, so unapproved origins are already blocked
+      // rather than merely pending; say so plainly.
+      if (!artifact) artifact = {id: ev.artifactId, title: 'Artifact'};
+      refreshPreview();
+      let note = 'Gallery widget saved — it appears on this artifact’s card in the library.';
+      if (ev.unapproved && ev.unapproved.length) {
+        note += ' It references ' + ev.unapproved.join(', ') + ', which the artifact’s allowlist does not cover, so the browser blocks those.';
+      }
+      addMsg('sys', note);
+      break;
+    }
     case 'extension_error':
       addMsg('err', 'Extension error: ' + (ev.error || 'unknown'));
       break;
@@ -441,9 +456,11 @@ function clearPreviewNudge() {
 // the session is currently bound to.
 function previewArtifactId() { return artifact ? artifact.id : ''; }
 
-// The agent saved an artifact — hand the pane to htmx (av-6m3e). The fragment
-// it fetches carries the title, the links, and a freshly stamped iframe src,
-// so nothing here rebuilds markup the template already owns.
+// The agent saved something — hand the pane to htmx (av-6m3e). The fragment it
+// fetches carries the title, the links, a freshly stamped iframe src, and the
+// widget tile (av-fafu), so nothing here rebuilds markup the template already
+// owns. Both save events route through here: the pane is re-rendered whole, so
+// it does not need to know which of the two documents changed.
 function refreshPreview() {
   document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'));
 }

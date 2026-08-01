@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Unit Converter</title>
+<style>
+  :root{
+    --ink:#111; --muted:#6b7280; --faint:#9ca3af;
+    --line:#e5e7eb; --panel:#fff; --ground:#f6f7f9; --accent:#23559e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:var(--ground);color:var(--ink);
+    min-height:100vh;padding:32px 20px;
+    display:flex;justify-content:center;
+  }
+  main{width:100%;max-width:520px}
+  h1{font-size:20px;font-weight:650;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:13px;margin-top:4px}
+
+  .tabs{display:flex;gap:4px;margin:20px 0 0;padding:4px;background:#eceef1;border-radius:10px}
+  .tab{
+    flex:1;padding:8px 6px;border:0;border-radius:7px;background:transparent;
+    font:inherit;font-size:13px;font-weight:550;color:var(--muted);cursor:pointer;
+  }
+  .tab[aria-selected="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:14px}
+  .field{display:flex;gap:10px;align-items:center}
+  .field + .field{margin-top:12px}
+  input,select{
+    padding:10px 12px;border:1px solid var(--line);border-radius:8px;
+    font:inherit;font-size:15px;background:var(--panel);color:var(--ink);outline:none;
+  }
+  input{flex:1;min-width:0;font-variant-numeric:tabular-nums}
+  input:focus,select:focus{border-color:var(--accent)}
+  select{flex:0 0 auto;max-width:46%}
+
+  .swap{display:flex;justify-content:center;margin:10px 0}
+  .swap button{
+    width:34px;height:34px;border:1px solid var(--line);border-radius:50%;
+    background:var(--panel);color:var(--muted);cursor:pointer;font-size:15px;line-height:1;
+  }
+  .swap button:hover{border-color:var(--accent);color:var(--accent)}
+
+  .result{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+  .result .big{font-size:28px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .result .big span{font-size:15px;font-weight:500;color:var(--muted);margin-left:4px}
+  .result .expr{color:var(--faint);font-size:12px;margin-top:6px;font-variant-numeric:tabular-nums}
+
+  .note{color:var(--faint);font-size:12px;margin-top:16px;line-height:1.5}
+</style>
+</head>
+<body>
+<main>
+  <h1>Unit Converter</h1>
+  <p class="sub">Length, mass, temperature, and volume.</p>
+
+  <div class="tabs" role="tablist" aria-label="Quantity">
+    <button class="tab" role="tab" data-kind="length" aria-selected="true">Length</button>
+    <button class="tab" role="tab" data-kind="mass" aria-selected="false">Mass</button>
+    <button class="tab" role="tab" data-kind="temperature" aria-selected="false">Temp</button>
+    <button class="tab" role="tab" data-kind="volume" aria-selected="false">Volume</button>
+  </div>
+
+  <div class="panel">
+    <div class="field">
+      <input id="amount" type="number" step="any" value="1" aria-label="Amount">
+      <select id="from" aria-label="Convert from"></select>
+    </div>
+    <div class="swap"><button id="swap" type="button" aria-label="Swap units">⇅</button></div>
+    <div class="field">
+      <input id="output" type="text" readonly aria-label="Result" tabindex="-1">
+      <select id="to" aria-label="Convert to"></select>
+    </div>
+
+    <div class="result">
+      <div class="big" id="big">—</div>
+      <div class="expr" id="expr"></div>
+    </div>
+  </div>
+
+  <p class="note">Stateless by design: nothing is saved, so this artifact stores no state
+    and carries no gallery widget — its card falls back to Exhibit's default tile.</p>
+</main>
+
+<script>
+// Each unit is expressed as a factor to the quantity's base unit, so a
+// conversion is one multiply and one divide. Temperature is the exception —
+// its scales are offset, not proportional — so it carries explicit to/from
+// base functions instead of a factor.
+const UNITS = {
+  length: {
+    base: 'm',
+    units: {
+      mm: {label: 'Millimetres', f: 0.001},
+      cm: {label: 'Centimetres', f: 0.01},
+      m:  {label: 'Metres', f: 1},
+      km: {label: 'Kilometres', f: 1000},
+      in: {label: 'Inches', f: 0.0254},
+      ft: {label: 'Feet', f: 0.3048},
+      yd: {label: 'Yards', f: 0.9144},
+      mi: {label: 'Miles', f: 1609.344}
+    },
+    from: 'km', to: 'mi'
+  },
+  mass: {
+    base: 'kg',
+    units: {
+      g:  {label: 'Grams', f: 0.001},
+      kg: {label: 'Kilograms', f: 1},
+      t:  {label: 'Tonnes', f: 1000},
+      oz: {label: 'Ounces', f: 0.028349523125},
+      lb: {label: 'Pounds', f: 0.45359237},
+      st: {label: 'Stone', f: 6.35029318}
+    },
+    from: 'kg', to: 'lb'
+  },
+  temperature: {
+    base: 'C',
+    units: {
+      C: {label: 'Celsius',    to: v => v,                from: v => v},
+      F: {label: 'Fahrenheit', to: v => (v - 32) * 5 / 9, from: v => v * 9 / 5 + 32},
+      K: {label: 'Kelvin',     to: v => v - 273.15,       from: v => v + 273.15}
+    },
+    from: 'C', to: 'F'
+  },
+  volume: {
+    base: 'L',
+    units: {
+      ml:      {label: 'Millilitres', f: 0.001},
+      L:       {label: 'Litres', f: 1},
+      tsp:     {label: 'Teaspoons (US)', f: 0.00492892159375},
+      tbsp:    {label: 'Tablespoons (US)', f: 0.01478676478125},
+      cup:     {label: 'Cups (US)', f: 0.2365882365},
+      pt:      {label: 'Pints (US)', f: 0.473176473},
+      gal:     {label: 'Gallons (US)', f: 3.785411784},
+      galImp:  {label: 'Gallons (Imp)', f: 4.54609}
+    },
+    from: 'L', to: 'cup'
+  }
+};
+
+let kind = 'length';
+const $ = id => document.getElementById(id);
+
+function fillSelects() {
+  const q = UNITS[kind];
+  for (const sel of [$('from'), $('to')]) {
+    sel.innerHTML = '';
+    for (const [code, u] of Object.entries(q.units)) {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = u.label;
+      sel.appendChild(opt);
+    }
+  }
+  $('from').value = q.from;
+  $('to').value = q.to;
+}
+
+function convert(value, fromCode, toCode) {
+  const q = UNITS[kind];
+  const from = q.units[fromCode], to = q.units[toCode];
+  if (from.to) return to.from(from.to(value));   // offset scales
+  return value * from.f / to.f;                  // proportional scales
+}
+
+// Format to a readable precision without pretending to significance the input
+// never had: up to 6 significant digits, trailing zeros dropped, and an
+// exponent only when a fixed rendering would be unreadable.
+function fmt(n) {
+  if (!isFinite(n)) return '—';
+  const abs = Math.abs(n);
+  if (abs !== 0 && (abs < 1e-4 || abs >= 1e9)) return n.toExponential(4);
+  return Number(n.toPrecision(6)).toLocaleString(undefined, {maximumFractionDigits: 6});
+}
+
+function render() {
+  const q = UNITS[kind];
+  const raw = $('amount').value;
+  const fromCode = $('from').value, toCode = $('to').value;
+  q.from = fromCode; q.to = toCode;
+
+  if (raw === '' || isNaN(Number(raw))) {
+    $('output').value = '';
+    $('big').textContent = '—';
+    $('expr').textContent = 'Enter an amount.';
+    return;
+  }
+  const value = Number(raw);
+  const out = convert(value, fromCode, toCode);
+  $('output').value = fmt(out);
+  $('big').innerHTML = fmt(out) + ' <span>' + toCode + '</span>';
+  $('expr').textContent = fmt(value) + ' ' + fromCode + ' = ' + fmt(out) + ' ' + toCode;
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t === tab)));
+    kind = tab.dataset.kind;
+    fillSelects();
+    render();
+  });
+});
+
+$('swap').addEventListener('click', () => {
+  const f = $('from').value;
+  $('from').value = $('to').value;
+  $('to').value = f;
+  render();
+});
+
+['amount', 'from', 'to'].forEach(id => $(id).addEventListener('input', render));
+['from', 'to'].forEach(id => $(id).addEventListener('change', render));
+
+fillSelects();
+render();
+</script>
+</body>
+</html>

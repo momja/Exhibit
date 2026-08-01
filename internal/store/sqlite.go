@@ -105,7 +105,7 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	var a Artifact
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved)
+	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.WidgetBlobID)
 	if err != nil {
 		return nil, err
 	}
@@ -117,8 +117,8 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	return &a, nil
 }
 
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved"
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, widget_blob_id"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.widget_blob_id"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
@@ -126,9 +126,9 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 		now = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, source_text, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.SourceText,
+		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, widget_blob_id, source_text, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.WidgetBlobID, a.SourceText,
 		now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
 	if err != nil {

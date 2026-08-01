@@ -77,6 +77,7 @@ func (ro *Router) setupRoutes() {
 	// carry no authority the page they belong to doesn't already have — so
 	// they sit with the page routes, outside the API's auth group.
 	ro.Get("/partials/agent-preview", ro.agentPreviewPartial)
+	ro.Get("/partials/card-widget", ro.cardWidgetPartial)
 
 	// Authenticated API routes
 	ro.Group(func(r chi.Router) {
@@ -103,6 +104,13 @@ func (ro *Router) setupRoutes() {
 				r.Get("/state", ro.getState)
 				r.Put("/state", ro.setState)
 				r.Delete("/state", ro.deleteState)
+				// The artifact's gallery-card widget (av-fafu) — a second
+				// document under the artifact's own security envelope, so it
+				// hangs off the artifact rather than being a resource of its
+				// own. widget.go explains why it carries no allowlist.
+				r.Get("/widget", ro.getWidget)
+				r.Put("/widget", ro.putWidget)
+				r.Delete("/widget", ro.deleteWidget)
 				// Artifact-centric collection membership routes
 				r.Post("/collections/{collectionID}", ro.addArtifactToCollection)
 				r.Delete("/collections/{collectionID}", ro.removeArtifactFromCollection)
@@ -170,6 +178,9 @@ func (ro *Router) RenderHandler() http.Handler {
 
 	// Serve a rendered artifact by id
 	r.Get("/a/{artifactID}", renderer.ServeArtifact)
+	// Serve an artifact's gallery-card widget (av-fafu) — same origin, same
+	// per-artifact CSP, narrower preamble.
+	r.Get("/w/{artifactID}", renderer.ServeWidget)
 	// Serve share via render origin
 	r.Get("/s/{shareID}", renderer.ServeShare)
 
