@@ -54,10 +54,29 @@
 .card-widget.has-frame.widget-failed .card-widget-frame{display:none}
 .card-widget-monogram{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:hsl(var(--tile-hue) 60% 100% / .72);box-shadow:0 1px 4px hsl(var(--tile-hue) 40% 30% / .16);color:hsl(var(--tile-hue) 42% 34%);font-size:22px;font-weight:600;letter-spacing:.5px}
 
-/* Collapsible section (<details>/<summary>) with a muted posture summary —
- * the edit page's security section (av-p0a1) is the first user. */
+/* Collapsible section (<details>/<summary>) with a muted summary line — the
+ * edit page's security section (av-p0a1) was the first user; the artifact
+ * source and gallery widget sections (av-fafu) are the rest, which is why the
+ * caret rules below live here keyed on the component rather than on one
+ * panel's id.
+ *
+ * The caret is a real icon (not a UTF-8 triangle) so it stays legible at any
+ * size/zoom, and it sits outside the summary's text span so JS that refreshes
+ * that text (edit.js renderSecurityPanel) never wipes it out. Two glyphs
+ * (caret-right / caret-down) are swapped by [open] rather than rotating one in
+ * place: Phosphor's caret-right glyph isn't centered in its em-box, so a
+ * transform:rotate(90deg) pivots around the box's geometric center instead of
+ * the visible mark's, swinging it off to a corner at an angle. */
 .details-panel{background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:var(--space-3) var(--space-5)}
-.details-panel>summary{cursor:pointer;font-size:13px;color:var(--color-muted)}
+.details-panel>summary{cursor:pointer;font-size:13px;color:var(--color-muted);list-style:none;display:flex;align-items:center;gap:var(--space-2)}
+.details-panel>summary::-webkit-details-marker{display:none}
+.details-caret{flex-shrink:0}
+.details-caret-open{display:none}
+.details-panel[open]>summary .details-caret-closed{display:none}
+.details-panel[open]>summary .details-caret-open{display:inline}
+/* The body of an open panel, separated from its summary by a hairline. Shared
+ * by all three panels so they open the same way. */
+.details-panel>.panel-body{margin-top:var(--space-5);padding-top:var(--space-5);border-top:1px solid var(--color-hairline)}
 
 /* --- controls --------------------------------------------------------- */
 .field{width:100%;padding:var(--space-3) var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:14px;outline:none;background:var(--color-panel);color:var(--color-ink)}

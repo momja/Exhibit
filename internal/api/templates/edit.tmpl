@@ -23,9 +23,17 @@
 <div class="edit-card">
   <h2>Edit</h2>
 
+  {{/* The title is the one field that belongs to no section, so it stays
+       above them rather than being buried in one. */}}
+  <input type="text" id="title" value="{{.Title}}" placeholder="Title">
+
+  {{/* The page is peer sections — security, state, artifact source, gallery
+       widget — each a .details-panel with the same caret and summary shape.
+       Artifact source is the only one rendered open: it is what "Edit" means,
+       and the others are things you go looking for. */}}
   <details class="details-panel" id="security-panel">
-    <summary id="security-summary"><i class="ph ph-caret-right panel-caret panel-caret-closed" aria-hidden="true"></i><i class="ph ph-caret-down panel-caret panel-caret-open" aria-hidden="true"></i> <span id="security-summary-text"></span></summary>
-    <div class="security-body">
+    <summary id="security-summary">{{template "panelCaret"}} <span id="security-summary-text"></span></summary>
+    <div class="panel-body security-body">
       <div class="security-col">
         <h3 class="text-sm muted">Network allowlist</h3>
         <div id="allowlist-rows">
@@ -85,8 +93,8 @@
        contents are fetched client-side on first open (state.js), since state
        is cold data no other part of this page needs. */}}
   <details class="details-panel" id="state-panel">
-    <summary id="state-summary"><i class="ph ph-caret-right panel-caret panel-caret-closed" aria-hidden="true"></i><i class="ph ph-caret-down panel-caret panel-caret-open" aria-hidden="true"></i> <span id="state-summary-text">Stored state</span></summary>
-    <div class="state-body">
+    <summary id="state-summary">{{template "panelCaret"}} <span id="state-summary-text">Stored state</span></summary>
+    <div class="panel-body state-body">
       <p class="text-sm muted">
         Data this artifact saved through <code>localStorage</code>, held on the server so it
         follows you between devices. Each value is edited through the control its type implies —
@@ -114,18 +122,28 @@
     </div>
   </details>
 
+  {{/* The artifact's own source. Saved by the page's Save button below,
+       together with the title — one document, one button. */}}
+  <details class="details-panel" id="source-panel" open>
+    <summary>{{template "panelCaret"}} Artifact source</summary>
+    <div class="panel-body">
+      <textarea id="body">{{.Src}}</textarea>
+      <div id="scan-result"></div>
+    </div>
+  </details>
+
   {{/* Gallery widget panel (av-fafu). It saves through its own endpoint
-       (PUT/DELETE /api/artifacts/:id/widget), not the artifact PATCH below,
-       so it carries its own buttons — one Save covering two different
-       documents would misreport what changed.
+       (PUT/DELETE /api/artifacts/:id/widget), not the artifact PATCH, so it
+       carries its own buttons — one Save covering two different documents
+       would misreport what changed.
 
        The preview is an htmx target: after a save the panel re-fetches the
        cardWidget fragment and swaps it in, so the tile updates without a page
-       reload (which would drop the CodeMirror buffer below) and without page
-       JS rebuilding markup the partial already owns. */}}
+       reload (which would drop both editors) and without page JS rebuilding
+       markup the partial already owns. */}}
   <details class="details-panel" id="widget-panel">
-    <summary><i class="ph ph-caret-right security-caret security-caret-closed" aria-hidden="true"></i><i class="ph ph-caret-down security-caret security-caret-open" aria-hidden="true"></i> Gallery widget — {{if .WidgetSrc}}custom tile{{else}}default tile{{end}}</summary>
-    <div class="widget-body">
+    <summary>{{template "panelCaret"}} Gallery widget — {{if .WidgetSrc}}custom tile{{else}}default tile{{end}}</summary>
+    <div class="panel-body widget-body">
       <div class="widget-preview">
         <div id="widget-preview-slot"
              hx-get="/partials/card-widget?artifact={{.ID}}"
@@ -144,8 +162,6 @@
     </div>
   </details>
 
-  <input type="text" id="title" value="{{.Title}}" placeholder="Title">
-  <textarea id="body">{{.Src}}</textarea>
   <div class="btn-row">
     <button class="btn" onclick="save()"><i class="ph ph-check"></i> Save</button>
     <a href="/artifacts/{{.ID}}"><button class="btn btn-sec" type="button"><i class="ph ph-x"></i> Cancel</button></a>
@@ -153,7 +169,6 @@
     <span class="spacer"></span>
     <button class="btn btn-danger" type="button" onclick="deleteArtifact()"><i class="ph ph-trash"></i> Delete</button>
   </div>
-  <div id="scan-result"></div>
 </div>
 </main>
 {{/* components.js carries the widget-tile health watcher (av-fafu), which the

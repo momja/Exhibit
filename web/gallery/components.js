@@ -100,16 +100,41 @@
   // widget that was about to work.
   var DEADLINE_MS = 6000;
 
-  function fail(frame) {
+  function setFailed(frame, failed) {
     var well = frame.closest('.card-widget');
-    if (well) well.classList.add('widget-failed');
+    if (well) well.classList.toggle('widget-failed', failed);
   }
 
   function watch(frame) {
     if (frame.dataset.widgetWatched) return;
     frame.dataset.widgetWatched = '1';
-    var timer = setTimeout(function() { fail(frame); }, DEADLINE_MS);
+
+    var timer = null;
+    function startDeadline() {
+      timer = setTimeout(function() { setFailed(frame, true); }, DEADLINE_MS);
+    }
     frame.addEventListener('__avresolved', function() { clearTimeout(timer); });
+
+    // The clock must not start until the frame is actually allowed to load.
+    // A tile inside a closed <details>, or below the fold under
+    // loading="lazy", has not been fetched at all — starting the deadline at
+    // page load would time it out for never answering a question it was never
+    // asked, and a long gallery would show monograms for everything below the
+    // fold. Intersection is the same condition loading="lazy" itself waits on,
+    // so the two stay in step.
+    if (typeof IntersectionObserver !== 'function') {
+      startDeadline();
+      return;
+    }
+    var io = new IntersectionObserver(function(entries) {
+      for (var i = 0; i < entries.length; i++) {
+        if (!entries[i].isIntersecting) continue;
+        io.disconnect();
+        startDeadline();
+        return;
+      }
+    });
+    io.observe(frame);
   }
 
   function watchAll(root) {
@@ -135,7 +160,11 @@
     for (var i = 0; i < frames.length; i++) {
       if (frames[i].contentWindow !== e.source) continue;
       frames[i].dispatchEvent(new CustomEvent('__avresolved'));
-      if (d.status !== 'ready') fail(frames[i]);
+      // A 'ready' also CLEARS the failed state, not just suppresses the
+      // deadline: a tile that was marked failed and then answers for itself
+      // (a reload, an htmx re-render into the same well) has earned its frame
+      // back.
+      setFailed(frames[i], d.status !== 'ready');
       return;
     }
   });

@@ -228,3 +228,71 @@ func artifactField(t *testing.T, r *Router, id, field string) string {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &raw))
 	return string(raw[field])
 }
+
+// The edit page presents its three sections — security, artifact source,
+// gallery widget — as peer .details-panel sections sharing one caret partial,
+// with only the artifact source open (that being what "Edit" means).
+func TestEditPageSectionsAreSymmetricPanels(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>42 km</b>").Code)
+
+	req := httptest.NewRequest("GET", "/artifacts/"+id+"/edit", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	for _, panel := range []string{
+		`<details class="details-panel" id="security-panel">`,
+		`<details class="details-panel" id="source-panel" open>`,
+		`<details class="details-panel" id="widget-panel">`,
+	} {
+		assert.Contains(t, page, panel)
+	}
+	// One caret definition, rendered by every summary (panelCaret partial).
+	assert.Equal(t, 3, strings.Count(page, `class="ph ph-caret-right details-caret details-caret-closed"`))
+	// Both source fields are real textareas the editor island mounts over, so
+	// the widget source is not a second-class field.
+	assert.Contains(t, page, `<textarea id="body">`)
+	assert.Contains(t, page, `<textarea id="widget-src"`)
+	assert.Contains(t, page, `<script src="/assets/editor.js"></script>`)
+}
+
+// Both source fields get CodeMirror, and it is mounted per panel rather than
+// eagerly: a closed <details> is display:none, and CodeMirror measures the DOM
+// when constructed, so mounting into a hidden panel yields a mis-sized editor.
+func TestEditScriptMountsBothEditorsLazily(t *testing.T) {
+	js, err := embeddedAssets.ReadFile("assets/gallery/edit.js")
+	require.NoError(t, err)
+	src := string(js)
+
+	assert.Contains(t, src, `mountEditorWhenOpen('source-panel', 'body')`)
+	assert.Contains(t, src, `mountEditorWhenOpen('widget-panel', 'widget-src')`)
+	// Mounting is gated on the panel being open, and re-checked on toggle.
+	assert.Contains(t, src, `if (editors[textareaID] || !panel.open) return;`)
+	assert.Contains(t, src, `panel.addEventListener('toggle', mount);`)
+	// Clearing the widget goes through setSource so the mounted editor's
+	// document is replaced too — a bare textarea.value assignment would leave
+	// the visible document stale (the sync only runs editor -> textarea).
+	assert.Contains(t, src, `setSource('widget-src', '')`)
+}
+
+// The widget-tile health watcher must not start its deadline until the frame
+// is actually allowed to load. A tile in a closed panel or below the fold
+// (loading="lazy") has not been fetched at all, and timing it out would show a
+// monogram for every healthy widget the visitor hasn't scrolled to yet.
+func TestWidgetHealthDeadlineWaitsForVisibility(t *testing.T) {
+	js, err := embeddedAssets.ReadFile("assets/gallery/components.js")
+	require.NoError(t, err)
+	src := string(js)
+
+	assert.Contains(t, src, "IntersectionObserver")
+	assert.Contains(t, src, "startDeadline()")
+	// The deadline is armed from the observer callback, never at watch() time.
+	i := strings.Index(src, "io.observe(frame)")
+	require.Greater(t, i, 0)
+	assert.Contains(t, src[:i], "if (!entries[i].isIntersecting) continue;")
+	// A later 'ready' clears a failed tile rather than only suppressing the timer.
+	assert.Contains(t, src, `setFailed(frames[i], d.status !== 'ready');`)
+}

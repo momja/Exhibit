@@ -122,6 +122,12 @@
      Data: capabilityView (gallery.go). */}}
 {{define "capabilityCluster"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved)}}<div class="capability-wrap"><div class="capability-cluster{{if not $sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger>{{if $sandboxed}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}
 
+{{/* panelCaret is the open/closed caret pair every .details-panel summary
+     leads with (the edit page's security, artifact source, and gallery widget
+     sections). Two glyphs swapped by [open] in components.css rather than one
+     rotated in place — see the comment there for why. Takes no data. */}}
+{{define "panelCaret"}}<i class="ph ph-caret-right details-caret details-caret-closed" aria-hidden="true"></i><i class="ph ph-caret-down details-caret details-caret-open" aria-hidden="true"></i>{{end}}
+
 {{/* cardWidget is an artifact's tile (av-fafu) — the top band of its gallery
      card, and the same markup the edit page's widget preview renders so the
      author sees the tile exactly as the library will.

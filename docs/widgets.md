@@ -53,9 +53,18 @@ still wants a face. There is no separate mechanism for it.
 | Agent chat | `set_widget` / `get_widget` tools; the preview pane shows the tile. |
 | `GET/PUT/DELETE /api/artifacts/:id/widget` | The single write path, like every other mutation. |
 
-The edit panel previews the tile at its real size beside its source, and swaps
-the `/partials/card-widget` fragment after a save rather than reloading the page
-out from under the artifact's editor:
+The edit page is three peer `.details-panel` sections — security, artifact
+source, gallery widget — sharing one caret partial, with only the artifact
+source open (that being what "Edit" means). **Both** source fields get the same
+CodeMirror island: an artifact and its widget are both single-file HTML
+documents, and there is no reason one should be a bare textarea. Each editor
+mounts when its panel first opens rather than at page load, because CodeMirror
+measures the DOM when constructed and a closed `<details>` is `display:none` —
+mounting into one yields zero-width gutters and a misplaced cursor.
+
+The panel previews the tile at its real size beside its source, and swaps the
+`/partials/card-widget` fragment after a save rather than reloading the page
+out from under either editor:
 
 ![The edit page's widget panel](screenshots/av-fafu/02-edit-widget-panel.png)
 
@@ -111,6 +120,12 @@ Falling back costs nothing because the default tile is always in the markup
 under the frame; failing is one class. It is diagnosis, not enforcement — a
 widget that suppresses its report just gets the monogram, the same outcome as
 failing, and nothing in the channel can grant it anything.
+
+The deadline starts when the frame **becomes visible**, not at page load. A
+tile in a closed panel, or below the fold under `loading="lazy"`, has not been
+fetched at all; timing it out would mark every healthy widget the visitor
+hasn't scrolled to as failed. Intersection is the same condition
+`loading="lazy"` itself waits on, so the two stay in step.
 
 ## Writing a widget
 

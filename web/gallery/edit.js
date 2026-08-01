@@ -16,13 +16,59 @@
  *   clipboardApproved - persisted first-use clipboard approval (mutable)
  */
 
-// Mount the CodeMirror island over the body textarea. The editor keeps
-// textarea.value in sync, so save() below is oblivious to it — and if the
-// bundle failed to load, the plain textarea still works. Line wrapping stays
-// off so long/deeply-nested lines scroll horizontally instead of reflowing.
-if (window.ArtifactEditor) {
-  ArtifactEditor.mount(document.getElementById('body'));
+// --- CodeMirror islands ----------------------------------------------------
+// Both source fields get the same editor: the artifact's own body and its
+// gallery widget are both single-file HTML documents, and there is no reason
+// one of them should be a bare textarea. The editor keeps textarea.value in
+// sync, so the save paths below are oblivious to it — and if the bundle failed
+// to load, both plain textareas still work. Line wrapping stays off so
+// long/deeply-nested lines scroll horizontally instead of reflowing.
+//
+// Mounting is deferred until a panel is actually open. CodeMirror measures the
+// DOM when it is constructed, and a closed <details> is display:none, so
+// mounting into one yields an editor with zero-width gutters and a misplaced
+// cursor when it is later revealed. Waiting for the first open sidesteps the
+// whole problem — and a panel the user never opens costs nothing.
+const editors = {};
+
+function mountEditorWhenOpen(panelID, textareaID) {
+  const panel = document.getElementById(panelID);
+  const textarea = document.getElementById(textareaID);
+  if (!panel || !textarea || !window.ArtifactEditor) return;
+  function mount() {
+    if (editors[textareaID] || !panel.open) return;
+    editors[textareaID] = ArtifactEditor.mount(textarea);
+  }
+  panel.addEventListener('toggle', mount);
+  mount(); // a panel rendered open (artifact source) mounts right away
 }
+
+// Replaces a field's contents from code. The textarea alone is not enough once
+// an editor is mounted over it: the sync only runs editor -> textarea, so a
+// bare textarea.value assignment would leave the visible document stale.
+function setSource(textareaID, text) {
+  const textarea = document.getElementById(textareaID);
+  if (textarea) textarea.value = text;
+  const view = editors[textareaID];
+  if (view) {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
+  }
+}
+
+mountEditorWhenOpen('source-panel', 'body');
+mountEditorWhenOpen('widget-panel', 'widget-src');
+
+// The capability popover links here as /edit#security-panel, and a fragment
+// pointing AT a <details> does not open it — the visitor would land on a
+// collapsed panel having just clicked "Manage in allowlist settings". Open
+// whichever panel the hash names.
+(function() {
+  const target = location.hash ? document.querySelector(location.hash) : null;
+  if (target && target.tagName === 'DETAILS') {
+    target.open = true;
+    target.scrollIntoView({ block: 'nearest' });
+  }
+})();
 
 // --- security panel: allowlist + capabilities (working copy, applied on Save) ---
 // All edits here mutate the in-memory allowlist/unapproved/downloadsApproved/
@@ -297,7 +343,7 @@ async function deleteArtifact() {
         status.textContent = '✗ ' + ((await r.text().catch(() => '')).trim() || r.statusText);
         return;
       }
-      src.value = '';
+      setSource('widget-src', '');
       status.textContent = '✓ Removed';
       refreshPreview();
     } catch (e) {

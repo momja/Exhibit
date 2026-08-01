@@ -22,23 +22,12 @@ main{padding:24px;max-width:900px;margin:0 auto}
 #scan-result{margin-top:12px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
 #scan-result code{background:#eee;padding:1px 5px;border-radius:3px}
 
-/* --- collapsible panels: security (allowlist + capabilities) and state -- */
-.details-panel{margin-bottom:16px}
-.details-panel>summary{list-style:none;display:flex;align-items:center;gap:var(--space-2)}
-.details-panel>summary::-webkit-details-marker{display:none}
-/* Caret is a real icon (not a UTF-8 triangle) so it stays legible at any
- * size/zoom, and lives outside the summary's text span so a JS-driven
- * summary refresh (edit.js renderSecurityPanel, state.js updateSummary)
- * never wipes it out. Two glyphs (caret-right / caret-down) are swapped by
- * [open] rather than rotating one in place: Phosphor's caret-right glyph
- * isn't centered in its em-box, so a CSS transform:rotate(90deg) pivots it
- * around the box's geometric center instead of the visible mark's center,
- * swinging it off to a corner at an angle instead of cleanly pointing down. */
-.panel-caret{flex-shrink:0}
-.panel-caret-open{display:none}
-.details-panel[open]>summary .panel-caret-closed{display:none}
-.details-panel[open]>summary .panel-caret-open{display:inline}
-.security-body{display:flex;gap:24px;margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline)}
+/* --- the panels: security, state, artifact source, gallery widget --------
+ * The panel/summary/caret rules are the .details-panel component
+ * (components.css) — only the edit page's own spacing and each panel's body
+ * layout live here. */
+.edit-card .details-panel{margin-bottom:16px}
+.security-body{display:flex;gap:24px}
 .security-col{flex:1;min-width:0}
 .security-col+.security-col{border-left:1px solid var(--color-hairline);padding-left:24px}
 .security-col h3{margin:10px 0 6px}
@@ -55,8 +44,8 @@ main{padding:24px;max-width:900px;margin:0 auto}
 /* Every value is edited through the control its inferred type implies, so the
  * nesting here is the value's own shape: rows hold controls, container
  * controls hold rows. Indentation (a left rule per nesting level) is what
- * keeps that legible without a table. */
-.state-body{margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline)}
+ * keeps that legible without a table. Spacing above the body comes from the
+ * shared .panel-body rule (components.css). */
 .state-body>p{margin-bottom:12px}
 .state-body code{background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm)}
 .state-row{padding:10px 0;border-top:1px solid var(--color-hairline)}
@@ -96,16 +85,8 @@ input.state-input{max-width:340px}
 .state-add{display:flex;align-items:center;gap:var(--space-2);margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline);flex-wrap:wrap}
 .state-add .field{max-width:220px}
 
-/* --- gallery widget panel (av-fafu), collapsed by default ---------------- */
-/* Same collapsed-<details> shape as the security panel above, and it reuses
- * that panel's caret rules — hence the shared .security-caret class in the
- * markup rather than a second pair of icons needing the same [open] swap. */
-#widget-panel{margin-bottom:16px}
-#widget-panel>summary{list-style:none;display:flex;align-items:center;gap:var(--space-2)}
-#widget-panel>summary::-webkit-details-marker{display:none}
-#widget-panel[open]>summary .security-caret-closed{display:none}
-#widget-panel[open]>summary .security-caret-open{display:inline}
-.widget-body{display:flex;gap:24px;margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline)}
+/* --- gallery widget panel (av-fafu) -------------------------------------- */
+.widget-body{display:flex;gap:24px}
 /* The preview column is pinned to the tile's real width, so what the author
  * sees is the box the library will draw rather than a stretched approximation.
  * The component's card-bleed margins are cancelled: there is no .card padding
@@ -114,9 +95,11 @@ input.state-input{max-width:340px}
 .widget-preview .card-widget{margin:0;border:1px solid var(--color-hairline);border-radius:var(--radius-lg)}
 .widget-preview p{margin-top:10px;line-height:1.45}
 .widget-source{flex:1;min-width:0;display:flex;flex-direction:column}
-/* Shorter than the artifact's own editor below: a widget is a small document,
- * and the artifact source stays the page's main event. */
-.widget-source textarea{height:220px}
+/* Shorter than the artifact's own editor: a widget is a small document, and
+ * the artifact source stays the page's main event. Both the textarea and the
+ * editor mounted over it take this height, so the panel doesn't jump when
+ * CodeMirror lands. */
+.widget-source textarea,.widget-source .cm-editor{height:220px}
 .widget-source .btn-row{margin-top:10px}
 
 /* --- responsive: single column, stacked security body, full-width actions */
