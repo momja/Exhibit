@@ -7,6 +7,7 @@ created: 2026-08-01T16:50:57Z
 type: feature
 priority: 2
 assignee: Max Omdal
+parent: av-p4hm
 tags: [ui, state, api]
 ---
 # State inspector on the edit page: typed form editing of artifact state
@@ -17,7 +18,7 @@ State is a flat key/value map (artifact_state, one row per (artifact, key), valu
 
 Three actions: Save (write the pending edits), Cancel (discard them), and Erase all data (critical, warning-styled, confirmed) which drops every state row for the artifact.
 
-Later the agent sidecar will read and edit state through the same API surface, so the routes this adds are the contract for that (follow-up, not in scope here).
+Later the agent sidecar will read and edit state through the same API surface, so the routes this adds are the contract for that (av-lvi1 — follow-up, not in scope here).
 
 ## Design
 
@@ -38,7 +39,7 @@ and matching Store methods (DeleteState / ClearState) beside GetState/SetState. 
 
 **Page wiring.** A collapsible panel on edit.tmpl beside the existing security panel, following the established pattern: server-rendered markup + the page's static asset JS in web/gallery/edit.{css,js}, per-request values (artifact id, token) via the inline bootstrap. Phosphor icons. State is fetched client-side on panel open rather than inlined, since it is cold data the page does not otherwise need.
 
-**Semantics note (do not silently change).** The shim's removeItem currently write-throughs an EMPTY STRING rather than deleting the row, so a removed key reads back as '' instead of null. The edit page's delete should genuinely drop the row (the correct semantic). Reconciling the shim's removeItem with row deletion is a separate ticket, not this one.
+**Semantics note (do not silently change).** The shim's removeItem currently write-throughs an EMPTY STRING rather than deleting the row, so a removed key reads back as '' instead of null. The edit page's delete should genuinely drop the row (the correct semantic). Reconciling the shim’s removeItem with row deletion is av-ms3r, not this ticket; the clear() write-through is av-st7c. Both consume the DELETE routes this ticket introduces.
 
 **Erase all** is destructive and irreversible (no version history for state): warning-styled button, explicit confirm naming the artifact, and it must not touch the artifact body or allowlist.
 
