@@ -159,6 +159,10 @@ func TestGalleryCardRendersWidgetOrDefaultTile(t *testing.T) {
 	assert.NotContains(t, page, `src="http://render.test/w/`+plain+`"`)
 	// "Mortgage Calculator" -> MC on the default tile.
 	assert.Contains(t, page, `<span class="card-widget-monogram">MC</span>`)
+	// "Run Log" -> RL, present even though that card HAS a widget: the default
+	// tile is always rendered under the frame, which is what lets a failing
+	// widget fall back by hiding one element instead of building markup.
+	assert.Contains(t, page, `<span class="card-widget-monogram">RL</span>`)
 	// The frame must be inert: out of the tab order, and pointer-events are
 	// disabled in the stylesheet so a click reaches the card beneath it.
 	assert.Contains(t, page, `class="card-widget-frame"`)
@@ -203,8 +207,11 @@ func TestCardWidgetPartialRendersStampedFrame(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	frag := w.Body.String()
-	assert.True(t, strings.HasPrefix(frag, `<div class="card-widget">`), frag)
+	assert.True(t, strings.HasPrefix(frag, `<div class="card-widget has-frame">`), frag)
 	assert.Contains(t, frag, "http://render.test/w/"+id+"?r=")
+	// The monogram ships under the frame so the health watcher's fallback is
+	// just a class flip, with no markup for page JS to build.
+	assert.Contains(t, frag, `class="card-widget-monogram"`)
 }
 
 // artifactField returns one raw JSON field of an artifact, for assertions that

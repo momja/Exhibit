@@ -126,17 +126,27 @@
      card, and the same markup the edit page's widget preview renders so the
      author sees the tile exactly as the library will.
 
-     Two states, one definition. With a widget it is a sandboxed frame on the
-     render origin, opaque-origin like every artifact frame and carrying the
-     artifact's own CSP; without one it is the default monogram tile, plain
-     markup with no frame to load.
+     The default monogram tile is ALWAYS in the markup, and the widget frame
+     (when there is one) sits over it. That is not redundancy — it is what
+     makes the failure path free: a widget that 404s, throws, or draws nothing
+     is hidden by one class from components.js and the monogram is simply
+     already there, with no markup for page JS to build and no second
+     definition of the tile. For an artifact with no widget the monogram IS the
+     tile and no frame loads at all.
+
+     `has-frame` is what keeps the monogram a fallback rather than a backdrop:
+     widgets render on a transparent background by contract, so a monogram left
+     painted underneath a working widget shows straight through it. The class
+     hides the default layer while a frame is live and the stylesheet brings it
+     back on failure — done with an explicit class rather than :has() so the
+     rule is greppable from the markup.
 
      The frame is inert on purpose: pointer-events are off in CSS so a click
      passes through to the card (which opens the artifact), and tabindex=-1
      keeps its contents out of the tab order — the widget states a fact, it is
      not a control. The <title> is the accessible name every iframe needs.
      Data: widgetView (gallery.go). */}}
-{{define "cardWidget"}}<div class="card-widget">{{if .URL}}<iframe class="card-widget-frame" src="{{.URL}}" sandbox="allow-scripts" loading="lazy" tabindex="-1" scrolling="no" title="{{.Title}} widget"></iframe>{{else}}<div class="card-widget-default" style="--tile-hue:{{.Hue}}"><span class="card-widget-monogram">{{.Monogram}}</span></div>{{end}}</div>{{end}}
+{{define "cardWidget"}}<div class="card-widget{{if .URL}} has-frame{{end}}"><div class="card-widget-default" style="--tile-hue:{{.Hue}}"><span class="card-widget-monogram">{{.Monogram}}</span></div>{{if .URL}}<iframe class="card-widget-frame" src="{{.URL}}" sandbox="allow-scripts" loading="lazy" tabindex="-1" scrolling="no" title="{{.Title}} widget"></iframe>{{end}}</div>{{end}}
 
 {{/* capabilityPopover is the "receipt" for what was approved at ingest
      (spec 6.2) — capabilityCluster's aria-describedby target. One row per

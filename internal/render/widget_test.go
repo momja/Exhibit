@@ -169,3 +169,46 @@ func TestServeWidgetNotFoundWithoutWidget(t *testing.T) {
 		t.Fatalf("expected 404 for an artifact with no widget, got %d", w.Code)
 	}
 }
+
+// A widget frame is cross-origin and opaque, so the host cannot tell a working
+// widget from a 404 page or one whose script threw — every case fires the same
+// `load`. The preamble therefore has the widget report on itself, and the host
+// falls back to the monogram tile on an error or on silence.
+func TestWidgetPreambleReportsHealthToHost(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true)
+
+	if !strings.Contains(doc, "__avWidget") {
+		t.Fatalf("widget preamble must post a health report to the host: %s", doc)
+	}
+	// Both outcomes must exist: 'ready' is what suppresses the host's deadline,
+	// 'error' is what trips the fallback immediately.
+	for _, marker := range []string{"post('ready')", "post('error'"} {
+		if !strings.Contains(doc, marker) {
+			t.Fatalf("widget preamble missing %s: %s", marker, doc)
+		}
+	}
+	// Rendering nothing is a failure by contract — a widget must always draw
+	// something, an empty state included.
+	if !strings.Contains(doc, "widget rendered nothing") {
+		t.Fatalf("widget preamble must treat an empty render as a failure: %s", doc)
+	}
+	// Uncaught errors and rejected promises both count.
+	if !strings.Contains(doc, "'unhandledrejection'") {
+		t.Fatalf("widget preamble must report rejected promises: %s", doc)
+	}
+	// Pinned to the app origin like every other message the preamble sends.
+	if !strings.Contains(doc, "window.parent.postMessage({ __avWidget: true, status: type, detail: detail || null }, API_ORIGIN)") {
+		t.Fatalf("health report must be pinned to the app origin: %s", doc)
+	}
+	// Top-level renders have no host to report to.
+	if !strings.Contains(doc, "if (window.parent === window) return;") {
+		t.Fatalf("health report must be framed-only: %s", doc)
+	}
+
+	// The artifact preamble has no such reporter: an artifact that fails is
+	// visible to the person looking at it, and has the capability-warning
+	// banner besides.
+	if strings.Contains(injectPreamble("<head></head>", "abc", "https://app.test", nil, false), "__avWidget") {
+		t.Fatal("artifact preamble must not carry the widget health reporter")
+	}
+}

@@ -41,10 +41,17 @@
  * background — and a widget that paints nothing must still read as part of the
  * card rather than as a hole cut in it. */
 .card-widget{position:relative;height:132px;margin:calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;border-radius:var(--radius-lg) var(--radius-lg) 0 0;overflow:hidden;background:var(--color-panel);border-bottom:1px solid var(--color-hairline)}
-.card-widget-frame{display:block;width:100%;height:100%;border:0;background:transparent;pointer-events:none}
+.card-widget-frame{position:absolute;inset:0;z-index:1;display:block;width:100%;height:100%;border:0;background:transparent;pointer-events:none}
 /* Default tile: a monogram on a tint derived from the artifact id (--tile-hue
  * comes from the server, so the same artifact always wears the same face). */
-.card-widget-default{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,hsl(var(--tile-hue) 58% 96%),hsl(calc(var(--tile-hue) + 28) 52% 89%))}
+.card-widget-default{position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,hsl(var(--tile-hue) 58% 96%),hsl(calc(var(--tile-hue) + 28) 52% 89%))}
+/* With a live frame the monogram is a fallback, not a backdrop: widgets render
+ * on a transparent background by contract, so leaving it painted underneath
+ * would show through the widget. It comes back — and the frame goes — only
+ * when the widget fails to report itself healthy (components.js). */
+.card-widget.has-frame .card-widget-default{display:none}
+.card-widget.has-frame.widget-failed .card-widget-default{display:flex}
+.card-widget.has-frame.widget-failed .card-widget-frame{display:none}
 .card-widget-monogram{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:hsl(var(--tile-hue) 60% 100% / .72);box-shadow:0 1px 4px hsl(var(--tile-hue) 40% 30% / .16);color:hsl(var(--tile-hue) 42% 34%);font-size:22px;font-weight:600;letter-spacing:.5px}
 
 /* Collapsible section (<details>/<summary>) with a muted posture summary —

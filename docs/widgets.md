@@ -95,6 +95,23 @@ shows current data. State that changes while a card is on screen does not push
 into it — the next render picks it up. For a glanceable tile that is the right
 trade: no sockets, no polling, no per-card subscriptions.
 
+**The widget vouches for itself.** A widget frame is cross-origin and opaque,
+so from the host a 404 page, a widget whose script threw, and a widget that
+rendered perfectly all fire the same `load` event. The failure a user would see
+is a blank rectangle where a number should be — the worst possible answer from
+a surface whose job is to be trustworthy at a glance. So the report comes from
+inside, via the one script in the frame that is ours and runs first: the
+preamble posts `__avWidget` with `ready` or `error` (uncaught error, rejected
+promise, or an empty render, which the contract counts as a failure). The host
+falls back to the monogram on an error, and also on **silence** past a
+deadline — which is what covers everything no in-frame script can report: a
+document that never loaded, a parse failure, a script that hung the thread.
+
+Falling back costs nothing because the default tile is always in the markup
+under the frame; failing is one class. It is diagnosis, not enforcement — a
+widget that suppresses its report just gets the monogram, the same outcome as
+failing, and nothing in the channel can grant it anything.
+
 ## Writing a widget
 
 The render preamble sets `html,body{margin:0;height:100%;background:transparent}`
@@ -146,3 +163,20 @@ what keeps "last 30 days" demo data from ageing into an empty widget.
 - A widget does not re-render while its card is on screen (see above).
 - `Blob.Store` has no `Delete`, so removing a widget orphans its blob — the
   same v1 behaviour as deleting an artifact.
+- **No size cap on a widget body** — an 8 MB widget is accepted and served
+  verbatim, and a widget renders once per card. Tracked by `av-wrbu`, which
+  covers the service's oversize/degenerate-input policy as a whole rather than
+  bolting a number onto this one route.
+- **Live tile count is unbounded.** Measured on 60 cards: the server side is a
+  non-issue (60 documents in 0.15 s, ~13 KB each), but the browser holds 60
+  live pages — 626 ms to load event, 26 MB JS heap, and any widget that
+  animates or observes keeps costing offscreen. Tracked by `av-1a9m`, blocked
+  on gallery paging (`av-kyhl`).
+- **Verified in Chromium only** — the click-through, the modern `hsl()`
+  syntax, lazy iframes, and `tabindex="-1"` focus containment all want a
+  Safari/Firefox pass.
+- **Accessibility was defaulted, not decided.** `tabindex="-1"` is not a
+  spec-guaranteed way to keep sequential focus out of nested content, and the
+  frame's `title` makes a screen reader announce a frame that duplicates the
+  card title with nothing actionable inside — while `aria-hidden` would be
+  wrong too, since the content is focusable. Needs a real decision.

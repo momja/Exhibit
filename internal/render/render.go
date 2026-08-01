@@ -794,18 +794,70 @@ const bridgeScript = `
     };
   }`
 
-// widgetBaseCSS is the only thing a widget render adds that an artifact render
-// does not: a floor for the card tile a widget is drawn into. A widget has no
-// page of its own to establish a viewport — it fills a fixed-size well — so the
-// default 8px body margin and `height:auto` would leave every widget author
-// writing the same four rules. Transparent by default so the card surface shows
-// through; a widget that wants its own background paints one. It is emitted
-// before the widget's own markup, so anything the widget declares wins.
+// widgetBaseCSS is one of two things a widget render adds that an artifact
+// render does not: a floor for the card tile a widget is drawn into. A widget
+// has no page of its own to establish a viewport — it fills a fixed-size well —
+// so the default 8px body margin and `height:auto` would leave every widget
+// author writing the same four rules. Transparent by default so the card
+// surface shows through; a widget that wants its own background paints one. It
+// is emitted before the widget's own markup, so anything the widget declares
+// wins.
 const widgetBaseCSS = `<style>
 html,body{margin:0;padding:0;height:100%;background:transparent;overflow:hidden}
 body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#111;-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}
 </style>`
+
+// widgetHealthScript is the other: a widget vouching for itself to the host.
+//
+// The host cannot see into this frame — it is cross-origin and opaque, so an
+// iframe `load` event fires just the same for a 404 page, for a widget whose
+// script threw on line one, and for one that rendered perfectly. From outside,
+// all three look identical, and the failure mode a card shows is a blank
+// rectangle where a number should be. For a surface whose whole job is to be
+// trustworthy at a glance, blank-with-no-explanation is the worst answer
+// available.
+//
+// So the report comes from inside, via the one script in the frame that is
+// ours and runs first. On load (plus a frame, so a widget that paints in a
+// rAF or a load handler still counts) it checks that something was actually
+// rendered and posts __avWidgetReady; an uncaught error, a rejected promise,
+// or an empty body posts __avWidgetError instead. The host falls back to the
+// default monogram tile on an error — or on hearing nothing at all, which
+// covers the cases no in-frame script can report: a document that never
+// loaded, a parse failure, a script that hung the thread.
+//
+// This is diagnosis, not enforcement: a widget that suppresses the report just
+// gets the monogram, which is the same outcome as failing. Nothing here can
+// grant it anything.
+const widgetHealthScript = `<script>
+(function() {
+  if (window.parent === window) return; // top-level: no host to report to
+  var API_ORIGIN = %q;
+  var sent = false;
+  function post(type, detail) {
+    if (sent) return;
+    sent = true;
+    window.parent.postMessage({ __avWidget: true, status: type, detail: detail || null }, API_ORIGIN);
+  }
+  window.addEventListener('error', function(e) {
+    post('error', e && e.message ? String(e.message) : 'script error');
+  });
+  window.addEventListener('unhandledrejection', function() { post('error', 'unhandled rejection'); });
+  window.addEventListener('load', function() {
+    requestAnimationFrame(function() {
+      // "Rendered nothing" is a failure by contract: a widget must always draw
+      // something, an empty state included. Element children or any
+      // non-whitespace text is enough to count as drawn — this is a liveness
+      // check, not a design review.
+      var body = document.body;
+      var drew = body && (body.children.length > 0 || (body.textContent || '').trim() !== '');
+      if (drew) post('ready');
+      else post('error', 'widget rendered nothing');
+    });
+  });
+})();
+</script>`
 
 // injectPreamble inserts the render preamble as the first element inside <head>
 // (prepended to the document if it has no <head>). The artifact's current state
@@ -834,6 +886,7 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 		// the *artifact* preview and hand it to the agent. A widget frame is
 		// pointer-events:none, so there is nothing to point at.
 		shim += "\n" + widgetBaseCSS
+		shim += "\n" + fmt.Sprintf(widgetHealthScript, appOrigin)
 	} else {
 		// The snippet element-picker (Exh-edjk) rides along with the shim: inert
 		// until the app-origin host activates it, so it costs nothing for plain
