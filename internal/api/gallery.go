@@ -108,7 +108,8 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, err := renderEditPage(a, decisions, string(src), ro.widgetSource(r, a), ro.cfg.AuthToken, ro.cfg.RenderOrigin)
+	canGenerate, generateHint := ro.widgetGenerateAvailability(r)
+	page, err := renderEditPage(a, decisions, string(src), ro.widgetSource(r, a), ro.cfg.AuthToken, ro.cfg.RenderOrigin, canGenerate, generateHint)
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
@@ -464,9 +465,14 @@ type editPageData struct {
 	// the default tile — so the two always agree without a third flag.
 	WidgetSrc string
 	Widget    widgetView
+	// Whether the "Generate widget" button can run an agent, and the reason it
+	// can't. Disabled-with-a-reason rather than hidden: a missing affordance is
+	// harder to diagnose than one that says what it needs.
+	CanGenerateWidget bool
+	GenerateHint      string
 }
 
-func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, widgetSrc, token, renderOrigin string) (string, error) {
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, widgetSrc, token, renderOrigin string, canGenerate bool, generateHint string) (string, error) {
 	allowlist, blocked := []string{}, []string{}
 	for _, d := range decisions {
 		switch d.Decision {
@@ -489,6 +495,8 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, wi
 		Unapproved:        unapproved,
 		WidgetSrc:         widgetSrc,
 		Widget:            newWidgetView(a, renderOrigin),
+		CanGenerateWidget: canGenerate,
+		GenerateHint:      generateHint,
 		DownloadsApproved: a.DownloadsApproved,
 		ClipboardApproved: a.ClipboardApproved,
 	})

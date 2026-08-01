@@ -393,6 +393,13 @@ absent the surface degrades to disabled; nothing else changes.
   tile beside it — and the pane's re-render brings that tile in. The pane shows
   the tile precisely so the default tile is visible too: that is what "this
   artifact has no widget yet" looks like.
+- **Agent as a function (av-fafu):** the edit page's "Generate widget" button
+  runs a *one-shot* session — `POST /api/artifacts/:id/widget/generate` creates
+  a `WidgetOnly` session, sends one fixed server-side prompt, and returns the
+  session id without waiting. The caller watches the same SSE route the chat
+  uses for `exhibit_widget_saved`, so a non-chat agent surface costs a route
+  and no second streaming path. The request deliberately does not block on the
+  turn: holding it open would make a slow model indistinguishable from a hang.
 - **Trust note:** the sidecar is a subprocess of the service executing
   LLM-directed tool calls, but its reach is bounded to the same authenticated
   API surface any client has — it holds no datastore access of its own.

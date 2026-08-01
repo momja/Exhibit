@@ -296,3 +296,92 @@ func TestWidgetHealthDeadlineWaitsForVisibility(t *testing.T) {
 	// A later 'ready' clears a failed tile rather than only suppressing the timer.
 	assert.Contains(t, src, `setFailed(frames[i], d.status !== 'ready');`)
 }
+
+// The generate route degrades honestly rather than 500ing: no pi binary is a
+// 503, and it says so. (The default test router has no agent manager.)
+func TestWidgetGenerateUnavailableWithoutAgent(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+
+	req := httptest.NewRequest("POST", "/api/artifacts/"+id+"/widget/generate", nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Contains(t, w.Body.String(), "pi binary")
+}
+
+// Generation starts an agent session, so it is a mutation and sits behind the
+// same auth boundary as every other write.
+func TestWidgetGenerateRequiresAuth(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+
+	req := httptest.NewRequest("POST", "/api/artifacts/"+id+"/widget/generate", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// A missing artifact is a 404 before any agent work is attempted — no session
+// is spawned for something that cannot be widgeted.
+func TestWidgetGenerateUnknownArtifact(t *testing.T) {
+	r := newTestRouter(t)
+
+	req := httptest.NewRequest("POST", "/api/artifacts/nope/widget/generate", nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// The button is rendered disabled with its reason rather than hidden: a missing
+// affordance is harder to diagnose than one that says what it needs. The test
+// router has no agent manager, so that is the reason here.
+func TestEditPageGenerateButtonDisabledWithReason(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+
+	req := httptest.NewRequest("GET", "/artifacts/"+id+"/edit", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	assert.Contains(t, page, `id="widget-generate"`)
+	assert.Contains(t, page, `disabled title="Agent support is off on this server`)
+	// No widget yet, so the button offers to make one rather than replace one.
+	assert.Contains(t, page, `<span id="widget-generate-label">Generate widget</span>`)
+}
+
+// With a widget already saved the same button reads as a replacement.
+func TestEditPageGenerateButtonSaysRegenerateWhenWidgetExists(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Run Log")
+	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>42 km</b>").Code)
+
+	req := httptest.NewRequest("GET", "/artifacts/"+id+"/edit", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Contains(t, w.Body.String(), `<span id="widget-generate-label">Regenerate</span>`)
+}
+
+// The button sends no prompt: the instruction is a server-side constant, so
+// there is nothing a caller can inject into the model's context through this
+// route. The client must not be building one either.
+func TestWidgetGenerateTakesNoCallerPrompt(t *testing.T) {
+	js, err := embeddedAssets.ReadFile("assets/gallery/edit.js")
+	require.NoError(t, err)
+	src := string(js)
+
+	i := strings.Index(src, "/widget/generate")
+	require.Greater(t, i, 0)
+	// The POST carries no body at all — just the auth header.
+	assert.NotContains(t, src[i:i+400], "JSON.stringify")
+	// Progress rides the session's existing SSE route, not a new mechanism.
+	assert.Contains(t, src, "new EventSource('/api/agent/sessions/'")
+	assert.Contains(t, src, "'exhibit_widget_saved'")
+	// A one-shot session is closed once it has done its job.
+	assert.Contains(t, src, "method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN}")
+}

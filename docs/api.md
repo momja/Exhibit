@@ -143,9 +143,10 @@ raw-text editing of a value.
 ## Gallery widget
 
 ```
-GET    /api/artifacts/:id/widget   Read the widget source (404 when there is none)
-PUT    /api/artifacts/:id/widget   Save/replace it {"body":"<html>…"}
-DELETE /api/artifacts/:id/widget   Detach it; the card falls back to the default tile
+GET    /api/artifacts/:id/widget            Read the widget source (404 when there is none)
+PUT    /api/artifacts/:id/widget            Save/replace it {"body":"<html>…"}
+DELETE /api/artifacts/:id/widget            Detach it; the card falls back to the default tile
+POST   /api/artifacts/:id/widget/generate   Have the agent write it
 ```
 
 A widget is the small, informative tile an artifact's gallery card renders
@@ -171,6 +172,20 @@ gate one. As everywhere else, the scan never seeds the allowlist.
 
 The widget's blob id is minted once and reused on every later save, so an
 artifact's widget URL is stable across edits.
+
+`POST …/widget/generate` starts a one-shot agent session scoped to writing this
+artifact's tile and returns immediately:
+
+```json
+{ "session_id": "…" }
+```
+
+It takes **no body** — the prompt is a server-side constant and the scoping is
+in the session's system prompt, so a caller cannot steer the model through this
+route. It does not wait for the result either: subscribe to the session's
+ordinary stream (`GET /api/agent/sessions/:id/events`) and watch for
+`exhibit_widget_saved`, then `DELETE /api/agent/sessions/:id`. Returns `503`
+when the `pi` binary is absent and `412` when no provider key is configured.
 
 ## Collections & Tags
 

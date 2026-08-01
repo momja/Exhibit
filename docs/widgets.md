@@ -49,9 +49,10 @@ still wants a face. There is no separate mechanism for it.
 |---|---|
 | `GET RENDER_ORIGIN/w/:artifactID` | Serves the widget document (`internal/render`). 404 when the artifact has none. |
 | Gallery card | Frames the widget, or renders the default tile (`cardWidget` partial). |
-| Artifact edit page | "Gallery widget" panel: source editor, live preview, Save / Remove. |
+| Artifact edit page | "Gallery widget" panel: source editor, live preview, Generate / Save / Remove. |
 | Agent chat | `set_widget` / `get_widget` tools; the preview pane shows the tile. |
 | `GET/PUT/DELETE /api/artifacts/:id/widget` | The single write path, like every other mutation. |
+| `POST /api/artifacts/:id/widget/generate` | Starts the one-shot agent session behind the Generate button. |
 
 The edit page is three peer `.details-panel` sections — security, artifact
 source, gallery widget — sharing one caret partial, with only the artifact
@@ -62,11 +63,33 @@ mounts when its panel first opens rather than at page load, because CodeMirror
 measures the DOM when constructed and a closed `<details>` is `display:none` —
 mounting into one yields zero-width gutters and a misplaced cursor.
 
+**Generate / Regenerate** is how you get a widget without writing one, and
+without leaving for the chat surface. The button carries **no prompt**: it
+POSTs to `/widget/generate`, which starts a one-shot agent session and returns
+its id immediately. Everything that makes the result a *widget* lives
+server-side — the fixed `generateWidgetPrompt` plus a `WidgetOnly` system
+prompt that tells the model to read the artifact, save with `set_widget`, and
+never touch `create_artifact`/`update_artifact` (the ordinary edit-mode
+instruction says the opposite, which is why the two are mutually exclusive
+branches of `sessionSystemPrompt`). There is nothing here a caller can put into
+the model's context.
+
+The request does **not** wait for the agent. A turn runs for tens of seconds,
+and holding it open would make every slow model indistinguishable from a hang.
+The page instead subscribes to the session's **existing** SSE stream and waits
+for the `exhibit_widget_saved` event `set_widget` already emits — so this added
+a route, not a second streaming mechanism, and the same event drives the
+preview swap here and in the chat surface. On arrival the panel pulls the saved
+source into the editor, swaps the tile, and closes the session rather than
+leaving a subprocess for the idle reaper. When the agent can't run (no `pi`
+binary, no API key) the button renders disabled carrying the reason, rather
+than vanishing.
+
 The panel previews the tile at its real size beside its source, and swaps the
 `/partials/card-widget` fragment after a save rather than reloading the page
 out from under either editor:
 
-![The edit page's widget panel](screenshots/av-fafu/02-edit-widget-panel.png)
+![The edit page's widget panel](screenshots/av-fafu/04-generate-widget.png)
 
 The agent's preview pane carries the tile above the live artifact, so a
 `set_widget` call lands somewhere the user is already watching:

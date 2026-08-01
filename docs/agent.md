@@ -64,6 +64,20 @@ approval that isn't pending. Both events re-fetch the same preview fragment, and
 the pane renders the tile so the default one is visible too — that being what
 "no widget yet" looks like.
 
+### One-shot sessions (the edit page's Generate button)
+
+`POST /api/artifacts/:id/widget/generate` runs the agent as a *function* rather
+than a chat: it creates a session with `CreateOpts.WidgetOnly`, sends one fixed
+server-side prompt, and returns the session id. The caller subscribes to the
+same SSE route the chat uses and waits for `exhibit_widget_saved`, so the whole
+feature adds a route and no streaming machinery.
+
+`WidgetOnly` exists because the ordinary modify-an-artifact scoping tells the
+model to "save with `update_artifact`" — exactly what a generate-the-tile
+session must never do. The two are mutually exclusive branches of
+`sessionSystemPrompt` for that reason, and `cmd/mockllm` plays the widget
+branch so the path is covered end to end.
+
 ## BYO API key (encrypted at rest)
 
 - `PUT/GET/DELETE /api/agent/key` — one configured provider key per owner

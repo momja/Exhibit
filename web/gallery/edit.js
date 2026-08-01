@@ -298,10 +298,20 @@ async function deleteArtifact() {
   const status = document.getElementById('widget-status');
   const saveBtn = document.getElementById('widget-save');
   const removeBtn = document.getElementById('widget-remove');
+  const generateBtn = document.getElementById('widget-generate');
   if (!src) return;
 
   function refreshPreview() {
     document.body.dispatchEvent(new CustomEvent('exhibit:widget-saved'));
+  }
+
+  // The summary line is the only thing outside this panel that reports whether
+  // the artifact has a widget, so keep it honest as the panel changes it.
+  function setHasWidget(has) {
+    const summary = document.getElementById('widget-summary-text');
+    if (summary) summary.textContent = has ? 'custom tile' : 'default tile';
+    const label = document.getElementById('widget-generate-label');
+    if (label) label.textContent = has ? 'Regenerate' : 'Generate widget';
   }
 
   saveBtn.addEventListener('click', async function() {
@@ -325,6 +335,7 @@ async function deleteArtifact() {
       status.textContent = (data.unapproved_origins || []).length
         ? '✓ Saved — but ' + data.unapproved_origins.join(', ') + ' is not on the allowlist and will be blocked.'
         : '✓ Saved';
+      setHasWidget(true);
       refreshPreview();
     } catch (e) {
       status.textContent = '✗ ' + e.message;
@@ -345,9 +356,94 @@ async function deleteArtifact() {
       }
       setSource('widget-src', '');
       status.textContent = '✓ Removed';
+      setHasWidget(false);
       refreshPreview();
     } catch (e) {
       status.textContent = '✗ ' + e.message;
     }
   });
+
+  // --- Generate with the agent ---------------------------------------------
+  // The button carries no prompt: POST returns a session id, and the whole
+  // instruction lives server-side. Progress comes from the session's ordinary
+  // SSE stream — the same route and the same exhibit_widget_saved event the
+  // chat surface uses — so this adds no streaming machinery of its own and the
+  // request never hangs waiting on a model.
+  if (generateBtn && !generateBtn.disabled) {
+    // An agent turn is slow but not unbounded; give up rather than spin forever.
+    const GENERATE_TIMEOUT_MS = 180000;
+
+    generateBtn.addEventListener('click', async function() {
+      generateBtn.disabled = true;
+      saveBtn.disabled = true;
+      status.textContent = 'Generating… the agent is reading the artifact and writing its tile.';
+
+      let events = null, timer = null;
+      function finish(message) {
+        if (timer) clearTimeout(timer);
+        if (events) events.close();
+        generateBtn.disabled = false;
+        saveBtn.disabled = false;
+        status.textContent = message;
+      }
+
+      try {
+        const r = await fetch('/api/artifacts/' + ID + '/widget/generate', {
+          method: 'POST',
+          headers: {'Authorization':'Bearer '+TOKEN}
+        });
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}));
+          finish('✗ ' + (data.error || r.statusText));
+          return;
+        }
+        const sessionId = (await r.json()).session_id;
+
+        // EventSource cannot set headers, so this route takes the same bearer
+        // token as ?token= — the existing contract, not a new one.
+        events = new EventSource('/api/agent/sessions/' + encodeURIComponent(sessionId) +
+          '/events?token=' + encodeURIComponent(TOKEN));
+        timer = setTimeout(function() {
+          finish('✗ Timed out waiting for the agent. Try again, or write the widget by hand.');
+        }, GENERATE_TIMEOUT_MS);
+
+        events.onmessage = async function(e) {
+          let ev;
+          try { ev = JSON.parse(e.data); } catch (err) { return; }
+
+          if (ev.type === 'exhibit_widget_saved') {
+            // Pull the saved source back into the editor so the user can see
+            // and edit what the agent wrote, not just its rendered tile.
+            try {
+              const got = await fetch('/api/artifacts/' + ID + '/widget', {
+                headers: {'Authorization':'Bearer '+TOKEN}
+              });
+              if (got.ok) setSource('widget-src', (await got.json()).body || '');
+            } catch (err) { /* the tile still rendered; the source can be re-read */ }
+            setHasWidget(true);
+            refreshPreview();
+            finish((ev.unapproved || []).length
+              ? '✓ Generated — but ' + ev.unapproved.join(', ') + ' is not on the allowlist and will be blocked.'
+              : '✓ Generated');
+            // One-shot session: the work is done, so don't leave a subprocess
+            // alive until the idle reaper gets to it.
+            fetch('/api/agent/sessions/' + encodeURIComponent(sessionId), {
+              method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN}
+            }).catch(function(){});
+            return;
+          }
+          // The turn ended without a widget: the model declined, errored, or
+          // ran out of room. Say so rather than leaving the button spinning.
+          if (ev.type === 'exhibit_session_closed') {
+            finish('✗ The agent finished without saving a widget.');
+          }
+        };
+        events.onerror = function() {
+          finish('✗ Lost the connection to the agent.');
+        };
+      } catch (e) {
+        finish('✗ ' + e.message);
+      }
+    });
+  }
 })();

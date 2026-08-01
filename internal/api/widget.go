@@ -139,6 +139,77 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// generateWidgetPrompt is the entire user turn the "Generate widget" button
+// sends. It is a server-side constant on purpose: the button takes no input, so
+// there is nothing a caller can put into the model's context through this
+// route. Everything that makes the result a *widget* — read the artifact
+// first, follow the tile contract, touch nothing but set_widget — is in the
+// session's system prompt (agent.CreateOpts.WidgetOnly), not here.
+const generateWidgetPrompt = "Build the gallery widget for this artifact."
+
+// generateWidget starts a one-shot agent session that writes this artifact's
+// widget, and returns its session id immediately.
+//
+// It deliberately does not wait for the result. An agent turn runs for tens of
+// seconds, and holding the request open for it would turn every slow model into
+// an indistinguishable hang. Instead the caller subscribes to the session's
+// existing SSE stream (GET /api/agent/sessions/:id/events) and watches for the
+// exhibit_widget_saved event the set_widget tool already emits — so this adds a
+// route, not a second streaming mechanism, and the edit page's preview swap is
+// driven by the same event the chat surface uses.
+func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "artifactID")
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	if err != nil {
+		serverError(w, r, "generate widget artifact lookup", err)
+		return
+	}
+	if a == nil {
+		writeError(w, http.StatusNotFound, "artifact not found")
+		return
+	}
+
+	opts, ok := ro.agentSessionOpts(w, r)
+	if !ok {
+		return // agentSessionOpts wrote the reason (no pi binary, no key, …)
+	}
+	opts.ArtifactID = id
+	opts.ArtifactTitle = a.Title
+	opts.WidgetOnly = true
+
+	s, err := ro.cfg.Agent.Create(r.Context(), opts)
+	if err != nil {
+		serverError(w, r, "create widget agent session", err)
+		return
+	}
+	if err := s.Prompt(r.Context(), generateWidgetPrompt, nil); err != nil {
+		// The session is useless without its prompt; don't leave the
+		// subprocess running until the idle reaper notices.
+		ro.cfg.Agent.Close(s.ID)
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	slog.InfoContext(r.Context(), "widget generation started",
+		slog.String("artifact_id", id), slog.String("session_id", s.ID))
+	writeJSON(w, http.StatusAccepted, map[string]any{"session_id": s.ID})
+}
+
+// widgetGenerateAvailability reports whether the edit page's "Generate widget"
+// button can run, and why not when it can't. The button is rendered disabled
+// with the reason rather than hidden: a missing affordance is harder to
+// diagnose than a disabled one that says what it needs.
+func (ro *Router) widgetGenerateAvailability(r *http.Request) (bool, string) {
+	if ro.cfg.Agent == nil {
+		return false, "Agent support is off on this server (no pi binary), so widgets must be written by hand."
+	}
+	k, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerIDFromCtx(r.Context()))
+	if err != nil || k == nil {
+		return false, "Add an agent API key to generate widgets."
+	}
+	return true, ""
+}
+
 // deleteWidget detaches the widget; the card falls back to the default tile.
 // The blob is left on disk, matching how DeleteArtifact orphans an artifact
 // body in v1 (Blob.Store has no Delete).

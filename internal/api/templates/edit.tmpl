@@ -142,7 +142,7 @@
        reload (which would drop both editors) and without page JS rebuilding
        markup the partial already owns. */}}
   <details class="details-panel" id="widget-panel">
-    <summary>{{template "panelCaret"}} Gallery widget — {{if .WidgetSrc}}custom tile{{else}}default tile{{end}}</summary>
+    <summary>{{template "panelCaret"}} Gallery widget — <span id="widget-summary-text">{{if .WidgetSrc}}custom tile{{else}}default tile{{end}}</span></summary>
     <div class="panel-body widget-body">
       <div class="widget-preview">
         <div id="widget-preview-slot"
@@ -153,8 +153,14 @@
       </div>
       <div class="widget-source">
         <textarea id="widget-src" spellcheck="false" placeholder="A complete HTML document for the tile. Leave this empty to keep the default tile.">{{.WidgetSrc}}</textarea>
+        {{/* Generate takes no prompt: the button IS the request, and the whole
+             instruction lives server-side (widget.go's generateWidgetPrompt
+             plus the session's WidgetOnly system prompt), so there is nothing
+             here for a caller to put into the model's context. Disabled with
+             its reason in the title when the agent can't run. */}}
         <div class="btn-row">
-          <button type="button" class="btn btn-sm" id="widget-save"><i class="ph ph-check"></i> Save widget</button>
+          <button type="button" class="btn btn-sm" id="widget-generate"{{if not .CanGenerateWidget}} disabled title="{{.GenerateHint}}"{{end}}><i class="ph ph-sparkle"></i> <span id="widget-generate-label">{{if .WidgetSrc}}Regenerate{{else}}Generate widget{{end}}</span></button>
+          <button type="button" class="btn btn-sm btn-sec" id="widget-save"><i class="ph ph-check"></i> Save widget</button>
           <button type="button" class="btn btn-sm btn-sec" id="widget-remove"><i class="ph ph-trash"></i> Remove</button>
           <span id="widget-status" class="text-sm muted"></span>
         </div>

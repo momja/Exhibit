@@ -99,6 +99,13 @@ type CreateOpts struct {
 	APIKey        string // decrypted, handed to the subprocess env only
 	ArtifactID    string // non-empty: session edits an existing artifact
 	ArtifactTitle string
+	// WidgetOnly scopes the session to building this artifact's gallery
+	// widget and nothing else (av-fafu) — the one-shot sessions behind the
+	// edit page's "Generate widget" button. It exists because the ordinary
+	// edit-an-artifact instruction below tells the model to save with
+	// update_artifact, which is exactly the wrong thing here: the artifact's
+	// own source must not change.
+	WidgetOnly bool
 }
 
 const defaultSystemPrompt = `You are the artifact builder inside Exhibit, a personal library of small self-contained web tools.
@@ -134,6 +141,27 @@ WIDGETS. Every artifact can carry a widget: a second self-contained HTML documen
 
 If the user message includes a snippet (an attached screenshot plus an element descriptor with selector/outerHTML), that is the exact element the user means — locate it in the source by the descriptor and apply the change there.`
 
+// sessionSystemPrompt builds a session's system prompt: the base (the config
+// override, else the default) plus at most one scoping paragraph naming what
+// this particular session is for.
+//
+// The three cases are mutually exclusive, which is why this is a switch and not
+// two ifs. A widget-only session must NOT also get the edit-an-artifact
+// paragraph: that one tells the model to save with update_artifact, which is
+// precisely what a "generate this artifact's tile" session must never do.
+func sessionSystemPrompt(base string, opts CreateOpts) string {
+	if base == "" {
+		base = defaultSystemPrompt
+	}
+	switch {
+	case opts.WidgetOnly:
+		return base + fmt.Sprintf("\n\nThis session has exactly one job: build the gallery widget for artifact id %q titled %q. First read the artifact with get_artifact to learn which localStorage keys it writes and what shape it stores in them, then save the tile with set_widget following the WIDGETS rules above. Do NOT call create_artifact or update_artifact — the artifact's own source must not change. Save one widget, say in one sentence what it shows, and stop.", opts.ArtifactID, opts.ArtifactTitle)
+	case opts.ArtifactID != "":
+		return base + fmt.Sprintf("\n\nThis session is editing the existing artifact id %q titled %q. Read it with get_artifact before changing it, and save with update_artifact (never create_artifact).", opts.ArtifactID, opts.ArtifactTitle)
+	}
+	return base
+}
+
 // Create decrypted-key session: spawns the pi subprocess and starts its reader.
 func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error) {
 	envKey, ok := providerEnv[opts.Provider]
@@ -150,13 +178,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		return nil, fmt.Errorf("create session dir: %w", err)
 	}
 
-	sysPrompt := m.cfg.SystemPrompt
-	if sysPrompt == "" {
-		sysPrompt = defaultSystemPrompt
-	}
-	if opts.ArtifactID != "" {
-		sysPrompt += fmt.Sprintf("\n\nThis session is editing the existing artifact id %q titled %q. Read it with get_artifact before changing it, and save with update_artifact (never create_artifact).", opts.ArtifactID, opts.ArtifactTitle)
-	}
+	sysPrompt := sessionSystemPrompt(m.cfg.SystemPrompt, opts)
 
 	args := []string{
 		"--mode", "rpc",

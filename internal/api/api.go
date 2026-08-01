@@ -111,6 +111,11 @@ func (ro *Router) setupRoutes() {
 				r.Get("/widget", ro.getWidget)
 				r.Put("/widget", ro.putWidget)
 				r.Delete("/widget", ro.deleteWidget)
+				// Starts a one-shot agent session that writes the widget and
+				// returns its id; the caller watches the session's existing
+				// SSE stream for the result rather than holding this request
+				// open for a whole agent turn.
+				r.Post("/widget/generate", ro.generateWidget)
 				// Artifact-centric collection membership routes
 				r.Post("/collections/{collectionID}", ro.addArtifactToCollection)
 				r.Delete("/collections/{collectionID}", ro.removeArtifactFromCollection)
