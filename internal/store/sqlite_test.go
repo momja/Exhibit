@@ -200,6 +200,64 @@ func TestState(t *testing.T) {
 	assert.Equal(t, "updated", state["key1"])
 }
 
+// DeleteState removes the row outright — the key reads back absent, not as the
+// empty string the shim's removeItem currently leaves behind (av-ms3r).
+func TestDeleteState(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{
+		ID: "del-state", OwnerID: 1, Title: "T", SourceBlobID: "b", Tier: Tier1,
+	}))
+	require.NoError(t, s.SetState(ctx, "del-state", "keep", "1"))
+	require.NoError(t, s.SetState(ctx, "del-state", "drop", "2"))
+
+	require.NoError(t, s.DeleteState(ctx, "del-state", "drop"))
+
+	state, err := s.GetState(ctx, "del-state")
+	require.NoError(t, err)
+	_, present := state["drop"]
+	assert.False(t, present, "deleted key must be absent, not blank")
+	assert.Equal(t, "1", state["keep"])
+
+	// Idempotent: "this key must not exist" is already true the second time,
+	// which is what lets the shim's removeItem call it unconditionally.
+	require.NoError(t, s.DeleteState(ctx, "del-state", "drop"))
+	require.NoError(t, s.DeleteState(ctx, "del-state", "never-existed"))
+}
+
+// ClearState drops every row for one artifact and only that artifact.
+func TestClearState(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	for _, id := range []string{"clear-a", "clear-b"} {
+		require.NoError(t, s.PutArtifact(ctx, &Artifact{
+			ID: id, OwnerID: 1, Title: "T", SourceBlobID: "b", Tier: Tier1,
+		}))
+		require.NoError(t, s.SetState(ctx, id, "k1", "v1"))
+		require.NoError(t, s.SetState(ctx, id, "k2", "v2"))
+	}
+
+	require.NoError(t, s.ClearState(ctx, "clear-a"))
+
+	state, err := s.GetState(ctx, "clear-a")
+	require.NoError(t, err)
+	assert.Empty(t, state)
+
+	other, err := s.GetState(ctx, "clear-b")
+	require.NoError(t, err)
+	assert.Len(t, other, 2, "clearing one artifact must not touch another's state")
+
+	// The artifact itself survives its state being erased.
+	a, err := s.GetArtifact(ctx, "clear-a")
+	require.NoError(t, err)
+	require.NotNil(t, a)
+
+	// Idempotent on an artifact that has no state at all.
+	require.NoError(t, s.ClearState(ctx, "clear-a"))
+}
+
 func TestCollectionsAndTags(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

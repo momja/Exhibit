@@ -22,22 +22,22 @@ main{padding:24px;max-width:900px;margin:0 auto}
 #scan-result{margin-top:12px;background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px;display:none}
 #scan-result code{background:#eee;padding:1px 5px;border-radius:3px}
 
-/* --- security panel: allowlist + capabilities, collapsed by default ---- */
-#security-panel{margin-bottom:16px}
-#security-panel>summary{list-style:none;display:flex;align-items:center;gap:var(--space-2)}
-#security-panel>summary::-webkit-details-marker{display:none}
+/* --- collapsible panels: security (allowlist + capabilities) and state -- */
+.details-panel{margin-bottom:16px}
+.details-panel>summary{list-style:none;display:flex;align-items:center;gap:var(--space-2)}
+.details-panel>summary::-webkit-details-marker{display:none}
 /* Caret is a real icon (not a UTF-8 triangle) so it stays legible at any
- * size/zoom, and lives outside #security-summary-text so the JS-driven
- * posture-summary text refresh (edit.js renderSecurityPanel) never wipes it
- * out. Two glyphs (caret-right / caret-down) are swapped by [open] rather
- * than rotating one in place: Phosphor's caret-right glyph isn't centered
- * in its em-box, so a CSS transform:rotate(90deg) pivots it around the
- * box's geometric center instead of the visible mark's center, swinging it
- * off to a corner at an angle instead of cleanly pointing down. */
-.security-caret{flex-shrink:0}
-.security-caret-open{display:none}
-#security-panel[open]>summary .security-caret-closed{display:none}
-#security-panel[open]>summary .security-caret-open{display:inline}
+ * size/zoom, and lives outside the summary's text span so a JS-driven
+ * summary refresh (edit.js renderSecurityPanel, state.js updateSummary)
+ * never wipes it out. Two glyphs (caret-right / caret-down) are swapped by
+ * [open] rather than rotating one in place: Phosphor's caret-right glyph
+ * isn't centered in its em-box, so a CSS transform:rotate(90deg) pivots it
+ * around the box's geometric center instead of the visible mark's center,
+ * swinging it off to a corner at an angle instead of cleanly pointing down. */
+.panel-caret{flex-shrink:0}
+.panel-caret-open{display:none}
+.details-panel[open]>summary .panel-caret-closed{display:none}
+.details-panel[open]>summary .panel-caret-open{display:inline}
 .security-body{display:flex;gap:24px;margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline)}
 .security-col{flex:1;min-width:0}
 .security-col+.security-col{border-left:1px solid var(--color-hairline);padding-left:24px}
@@ -51,12 +51,63 @@ main{padding:24px;max-width:900px;margin:0 auto}
 .allowlist-row .btn,#al-add-btn{min-width:76px;justify-content:center;flex-shrink:0}
 .security-col label.row{margin-bottom:10px}
 
+/* --- state inspector (av-hg5f): typed form editing of artifact state ---- */
+/* Every value is edited through the control its inferred type implies, so the
+ * nesting here is the value's own shape: rows hold controls, container
+ * controls hold rows. Indentation (a left rule per nesting level) is what
+ * keeps that legible without a table. */
+.state-body{margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline)}
+.state-body>p{margin-bottom:12px}
+.state-body code{background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm)}
+.state-row{padding:10px 0;border-top:1px solid var(--color-hairline)}
+.state-row:first-child{border-top:none}
+.state-row.is-deleted .state-key{text-decoration:line-through;opacity:.6}
+.state-row-head{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)}
+.state-key{font-size:13px;font-weight:600;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.state-type{font-size:11px;color:var(--color-muted);flex-shrink:0}
+.state-input{font-size:13px;padding:5px var(--space-3)}
+input.state-input{max-width:340px}
+.state-toggle{display:inline-flex;align-items:center;gap:var(--space-2);font-size:13px}
+/* Container controls: one indent rule per level of the value's own nesting. */
+.state-list,.state-records,.state-object{display:flex;flex-direction:column;gap:var(--space-2);padding-left:var(--space-5);border-left:2px solid var(--color-hairline)}
+.state-list-row{display:flex;align-items:center;gap:var(--space-2)}
+.state-list-row .state-input{flex:1;min-width:0}
+.state-field{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap}
+.state-field-label{font-size:12px;color:var(--color-muted);min-width:110px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* A field holding a nested container wraps it onto its own line, which would
+ * strand the property's remove button on a third line below it. Ordering pulls
+ * the button up beside the label it belongs to; a field holding a primitive is
+ * unaffected, since its control still precedes the button. */
+.state-field>button{order:1}
+.state-field>.state-list,.state-field>.state-records,.state-field>.state-object{order:2;flex:1 1 100%;min-width:0}
+.state-record{border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2)}
+.state-record-head{display:flex;align-items:center;gap:var(--space-2)}
+.state-move{padding:3px var(--space-2)}
+.state-inline-add{align-self:flex-start}
+.state-adder{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap}
+.state-adder .state-input{max-width:180px}
+.state-type-select{font-size:13px;padding:4px var(--space-3)}
+/* Read-only: a value with no matching control is shown as stored, never as an
+ * editable blob — a hand-typed JSON blob is the corruption this panel undoes. */
+.state-readonly{background:var(--color-ground);border-radius:var(--radius-md);padding:var(--space-3)}
+.state-readonly pre{margin-top:var(--space-2);font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
+.state-empty{display:flex;align-items:center;gap:var(--space-3);padding:16px 0;color:var(--color-muted);font-size:13px}
+.state-empty i{font-size:18px;color:var(--color-faint)}
+.state-add{display:flex;align-items:center;gap:var(--space-2);margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline);flex-wrap:wrap}
+.state-add .field{max-width:220px}
+
 /* --- responsive: single column, stacked security body, full-width actions */
 @media (max-width:640px){
   main{padding:12px}
   .edit-card{padding:14px}
   .security-body{flex-direction:column;gap:16px}
   .security-col+.security-col{border-left:none;padding-left:0;border-top:1px solid var(--color-hairline);padding-top:16px}
+  /* Narrow enough that a label, its control and its remove button can't share
+   * a line: keep the label paired with the button it applies to, and drop the
+   * control to its own full-width line beneath them. */
+  .state-field-label{min-width:0;max-width:none;flex:1 1 auto}
+  .state-field>.field,.state-field>.state-toggle{order:2;flex:1 1 100%}
+  input.state-input,.state-add .field,.state-adder .state-input{max-width:none}
   .btn-row{flex-direction:column;align-items:stretch}
   .btn-row #status{order:1;text-align:center}
   .btn-row .spacer{display:none}

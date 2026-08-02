@@ -20,7 +20,7 @@
   <h2>Edit</h2>
 
   <details class="details-panel" id="security-panel">
-    <summary id="security-summary"><i class="ph ph-caret-right security-caret security-caret-closed" aria-hidden="true"></i><i class="ph ph-caret-down security-caret security-caret-open" aria-hidden="true"></i> <span id="security-summary-text"></span></summary>
+    <summary id="security-summary"><i class="ph ph-caret-right panel-caret panel-caret-closed" aria-hidden="true"></i><i class="ph ph-caret-down panel-caret panel-caret-open" aria-hidden="true"></i> <span id="security-summary-text"></span></summary>
     <div class="security-body">
       <div class="security-col">
         <h3 class="text-sm muted">Network allowlist</h3>
@@ -77,6 +77,39 @@
     </div>
   </details>
 
+  {{/* State inspector (av-hg5f). The panel's shell renders server-side; its
+       contents are fetched client-side on first open (state.js), since state
+       is cold data no other part of this page needs. */}}
+  <details class="details-panel" id="state-panel">
+    <summary id="state-summary"><i class="ph ph-caret-right panel-caret panel-caret-closed" aria-hidden="true"></i><i class="ph ph-caret-down panel-caret panel-caret-open" aria-hidden="true"></i> <span id="state-summary-text">Stored state</span></summary>
+    <div class="state-body">
+      <p class="text-sm muted">
+        Data this artifact saved through <code>localStorage</code>, held on the server so it
+        follows you between devices. Each value is edited through the control its type implies —
+        never as raw text.
+      </p>
+      <div id="state-rows"></div>
+      <div class="state-add" id="state-add">
+        <input type="text" id="state-add-key" class="field" placeholder="New key">
+        <select id="state-add-type" class="select">
+          <option value="string">Text</option>
+          <option value="number">Number</option>
+          <option value="boolean">True/false</option>
+          <option value="list">List</option>
+          <option value="object">Object</option>
+        </select>
+        <button type="button" class="btn btn-sm" id="state-add-btn"><i class="ph ph-plus"></i> Add key</button>
+      </div>
+      <div class="btn-row state-actions">
+        <button type="button" class="btn btn-sm" id="state-save"><i class="ph ph-check"></i> Save state</button>
+        <button type="button" class="btn btn-sm btn-sec" id="state-cancel"><i class="ph ph-x"></i> Cancel</button>
+        <span id="state-status" class="text-sm muted"></span>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-sm btn-danger" id="state-erase"><i class="ph ph-warning"></i> Erase all data</button>
+      </div>
+    </div>
+  </details>
+
   <input type="text" id="title" value="{{.Title}}" placeholder="Title">
   <textarea id="body">{{.Src}}</textarea>
   <div class="btn-row">
@@ -93,6 +126,9 @@
 <script>
 const TOKEN = {{.Token}};
 const ID = {{.ID}};
+{{/* The persisted title, not the (editable) title field: the erase-all
+     confirmation must name the artifact the server will actually wipe. */ -}}
+const TITLE = {{.Title}};
 let allowlist = {{.Allowlist}};
 let unapproved = {{.Unapproved}};
 let blocked = {{.Blocked}};
@@ -103,5 +139,6 @@ let downloadsApproved = {{if .DownloadsApproved}}true{{else}}false{{end}};
 let clipboardApproved = {{if .ClipboardApproved}}true{{else}}false{{end}};
 </script>
 <script src="/assets/gallery/edit.js"></script>
+<script src="/assets/gallery/state.js"></script>
 </body>
 </html>{{end}}
