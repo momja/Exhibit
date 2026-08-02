@@ -49,3 +49,20 @@ Out of scope, tracked elsewhere: localStorage has its own top-level problem — 
 6. The agent system prompt (internal/agent/agent.go:106) and the PRD/technical_stack/security docs describe the corrected semantics: sessionStorage is frame-local and never persisted, and it is not a lossy approximation, because a sandboxed frame's opaque origin is fresh on every navigation.
 7. Existing artifact_state rows are untouched — no migration attempted, and the reason is documented.
 
+
+## Notes
+
+**2026-08-02T17:22:39Z**
+
+Verified empirically (2026-08-02), Chrome, sandbox="allow-scripts" iframe served over http — same setup as the render surface (detail.tmpl:72 / agent.tmpl:115). Probe result:
+
+  self.origin = null
+  localStorage:   THREW SecurityError — Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.
+  sessionStorage: THREW SecurityError — Failed to read the 'sessionStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.
+  indexedDB:      THREW SecurityError — Failed to execute 'open' on 'IDBFactory': access to the Indexed Database API is denied in this context.
+
+Settles the 'why shim sessionStorage at all if the frame already isolates it' question: an opaque origin does not get a PRIVATE storage area, it gets NO STORAGE KEY (storage is keyed by origin, and an opaque origin cannot produce one). So the getter throws on PROPERTY ACCESS, before any method call — leaving native sessionStorage in place means an artifact doing sessionStorage.getItem(...) at startup dies with an uncaught SecurityError and, since that is typically top-of-script, never runs at all. Hard failure, not graceful degradation. Something must be installed; this ticket only decides what.
+
+Also confirms the epic's scope note (av-p4hm): IndexedDB does not quietly fall back to per-device storage in the framed case — it throws too.
+
+Incidentally explains the original shortcut (34c0e99): both getters throw, so the author needed two replacements and reused the one object already built for localStorage.
