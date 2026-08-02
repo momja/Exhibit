@@ -105,7 +105,9 @@ GET  /api/artifacts/:id/state      Get all state key-value pairs
 PUT  /api/artifacts/:id/state      Set one key {"key":"...","value":"..."}
 ```
 
-The storage shim intercepts `localStorage`/`sessionStorage` in the iframe. Reads are served from state **inlined into the shim at render time** (so `getItem` is correct synchronously); writes are **`postMessage`-ed to the host frame**, which performs the authenticated `PUT` above (the sandboxed iframe has an opaque origin and can't call the API itself). No artifact changes needed — any tool that uses standard storage APIs gets cross-device sync automatically.
+These routes back `localStorage` only. The storage shim intercepts it in the iframe: reads are served from state **inlined into the shim at render time** (so `getItem` is correct synchronously); writes are **`postMessage`-ed to the host frame**, which performs the authenticated `PUT` above (the sandboxed iframe has an opaque origin and can't call the API itself). No artifact changes needed — any tool that uses `localStorage` gets cross-device sync automatically.
+
+`sessionStorage` is intercepted too, but into a separate in-memory namespace that never touches these routes — it is frame-local by design and produces no state rows (`security.md` §1.2).
 
 ## Collections & Tags
 
