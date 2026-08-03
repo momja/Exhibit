@@ -49,13 +49,21 @@ window.addEventListener('message', function(e) {
   if (!d || d.__avState !== true || d.artifactId !== ID) return;
   const frame = document.querySelector('iframe');
   if (!frame || e.source !== frame.contentWindow) return;
-  const base = '/api/artifacts/' + encodeURIComponent(ID) + '/state';
+  // URL construction lives in state-api.js so this and agent.js share one
+  // definition — the ".." path-traversal bug (av-hh1o) had to be fixed in
+  // three copies of it.
   if (d.op === 'clear') {
-    fetch(base, { method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN} }).catch(function(){});
+    fetch(window.ExhibitState.deleteURL(ID), {
+      method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN}
+    }).catch(function(){});
   } else if (d.op === 'delete') {
-    fetch(base + '/' + encodeURIComponent(d.key), { method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN} }).catch(function(){});
-  } else {
-    fetch(base, {
+    fetch(window.ExhibitState.deleteURL(ID, d.key), {
+      method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN}
+    }).catch(function(){});
+  } else if (d.op === 'set' || d.op === undefined) {
+    // Only a recognized write reaches the API. An unknown op used to fall
+    // through to this branch, so a future typo would silently become a write.
+    fetch(window.ExhibitState.url(ID), {
       method: 'PUT',
       headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
       body: JSON.stringify({ key: d.key, value: d.value })

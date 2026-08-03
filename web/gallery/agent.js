@@ -488,13 +488,17 @@ window.addEventListener('message', (e) => {
   if (!d || d.__avState !== true || !artifact || d.artifactId !== artifact.id) return;
   const frame = previewFrame();
   if (!frame || e.source !== frame.contentWindow) return;
-  const base = '/api/artifacts/' + encodeURIComponent(artifact.id) + '/state';
+  // URL construction lives in state-api.js so this and detail.js share one
+  // definition — the ".." path-traversal bug (av-hh1o) had to be fixed in
+  // three copies of it.
   if (d.op === 'clear') {
-    apiFetch(base, { method: 'DELETE' }).catch(() => {});
+    apiFetch(window.ExhibitState.deleteURL(artifact.id), { method: 'DELETE' }).catch(() => {});
   } else if (d.op === 'delete') {
-    apiFetch(base + '/' + encodeURIComponent(d.key), { method: 'DELETE' }).catch(() => {});
-  } else {
-    apiFetch(base, {
+    apiFetch(window.ExhibitState.deleteURL(artifact.id, d.key), { method: 'DELETE' }).catch(() => {});
+  } else if (d.op === 'set' || d.op === undefined) {
+    // Only a recognized write reaches the API. An unknown op used to fall
+    // through to this branch, so a future typo would silently become a write.
+    apiFetch(window.ExhibitState.url(artifact.id), {
       method: 'PUT',
       body: JSON.stringify({key: d.key, value: d.value})
     }).catch(() => {});

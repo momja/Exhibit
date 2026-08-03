@@ -125,10 +125,11 @@
     try {
       value = JSON.parse(raw);
     } catch (e) {
-      // Not JSON — a plain string, which includes the empty-string tombstones
-      // the shim's removeItem currently leaves behind (av-ms3r). They are
-      // indistinguishable from an intentional "" and are shown as what they
-      // are: an empty text value the user can delete.
+      // Not JSON — a plain string, which includes any legacy empty-string
+      // tombstones left by the early removeItem that wrote "" instead of
+      // deleting (av-ms3r, since fixed). They are indistinguishable from an
+      // intentional "" and are shown as what they are: an empty text value
+      // the user can delete.
       value = raw;
       json = false;
     }
@@ -484,12 +485,17 @@
     });
   }
 
-  function stateURL(key) {
-    const base = '/api/artifacts/' + encodeURIComponent(ID) + '/state';
-    // State keys are arbitrary artifact-chosen text — slashes and percent
-    // signs included — so the key is a single encoded path segment the
-    // handler unescapes.
-    return key === undefined ? base : base + '/' + encodeURIComponent(key);
+  // Both delegate to state-api.js, the one definition of these URLs shared
+  // with the storage-bridge listeners in detail.js and agent.js. State keys
+  // are arbitrary artifact-chosen text, so the key travels as a query value
+  // rather than a path segment — see that file for why a key of ".." made
+  // this URL delete the artifact (av-hh1o).
+  function stateURL() {
+    return window.ExhibitState.url(ID);
+  }
+
+  function stateDeleteURL(key) {
+    return window.ExhibitState.deleteURL(ID, key);
   }
 
   async function loadState() {
@@ -522,7 +528,7 @@
       // written, not deleted. Each write is its own request — a handful of
       // keys per artifact makes batching cost more clarity than it saves.
       for (const entry of doomed) {
-        const resp = await api('DELETE', stateURL(entry.key));
+        const resp = await api('DELETE', stateDeleteURL(entry.key));
         if (!resp.ok) throw new Error('deleting "' + entry.key + '": ' + resp.statusText);
       }
       for (const entry of changed) {
@@ -561,7 +567,7 @@
     setStatus('Erasing…');
     let resp;
     try {
-      resp = await api('DELETE', stateURL());
+      resp = await api('DELETE', stateDeleteURL());
     } catch (err) {
       setStatus('✗ Erase failed: ' + err.message);
       return;

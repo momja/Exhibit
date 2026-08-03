@@ -263,7 +263,10 @@ const shimTemplate = `<script>
         if (persist) persist('clear');
       },
       key: function(n) {
-        return Object.keys(store)[n] || null;
+        // Index the array rather than testing the value for truthiness: ""
+        // is a legitimate stored key, and '|| null' would report it missing.
+        var keys = Object.keys(store);
+        return n >= 0 && n < keys.length ? keys[n] : null;
       },
       get length() {
         return Object.keys(store).length;

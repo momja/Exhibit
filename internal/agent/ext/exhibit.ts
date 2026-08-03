@@ -224,10 +224,16 @@ export default function (pi: ExtensionAPI) {
 			key: Type.Optional(Type.String({ description: "State key to delete; omit to erase all state" })),
 		}),
 		async execute(_id, params) {
-			if (params.key) {
+			// Presence, not truthiness: "" is a legitimate Web Storage key, and
+			// a falsy test would route a request to delete it into erase-all.
+			if (params.key !== undefined) {
 				await api(
 					"DELETE",
-					"/api/artifacts/" + encodeURIComponent(params.id) + "/state/" + encodeURIComponent(params.key),
+					// The key is a query value, never a path segment — as a
+					// segment, a key of ".." resolves away and hits the artifact
+					// delete route (av-hh1o).
+					"/api/artifacts/" + encodeURIComponent(params.id) +
+						"/state?key=" + encodeURIComponent(params.key),
 				);
 				return ok(`Deleted state key ${JSON.stringify(params.key)} on artifact ${params.id}.`, {
 					exhibit: "state_changed",
