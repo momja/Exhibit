@@ -2,7 +2,7 @@
 id: av-hg5f
 status: in_progress
 deps: []
-links: []
+links: [av-ms3r, av-hh1o, av-p4hm]
 created: 2026-08-01T16:50:57Z
 type: feature
 priority: 2
