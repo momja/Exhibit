@@ -2,7 +2,7 @@
 id: av-wrbu
 status: open
 deps: []
-links: []
+links: [av-4bzn]
 created: 2026-08-01T18:49:39Z
 type: task
 priority: 2
