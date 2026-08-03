@@ -470,10 +470,17 @@ window.addEventListener('message', (e) => {
   if (!d || d.__avState !== true || !artifact || d.artifactId !== artifact.id) return;
   const frame = previewFrame();
   if (!frame || e.source !== frame.contentWindow) return;
-  apiFetch('/api/artifacts/' + encodeURIComponent(artifact.id) + '/state', {
-    method: 'PUT',
-    body: JSON.stringify({key: d.key, value: d.value})
-  }).catch(() => {});
+  const base = '/api/artifacts/' + encodeURIComponent(artifact.id) + '/state';
+  if (d.op === 'clear') {
+    apiFetch(base, { method: 'DELETE' }).catch(() => {});
+  } else if (d.op === 'delete') {
+    apiFetch(base + '/' + encodeURIComponent(d.key), { method: 'DELETE' }).catch(() => {});
+  } else {
+    apiFetch(base, {
+      method: 'PUT',
+      body: JSON.stringify({key: d.key, value: d.value})
+    }).catch(() => {});
+  }
 });
 
 window.addEventListener('message', (e) => {
