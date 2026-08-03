@@ -38,7 +38,7 @@ func TestDeleteStateKey(t *testing.T) {
 	putState(t, r, id, "keep", `{"a":1}`)
 	putState(t, r, id, "drop", `"gone"`)
 
-	w := doJSON(t, r, "DELETE", "/api/artifacts/"+id+"/state/drop", nil)
+	w := doJSON(t, r, "DELETE", "/api/artifacts/"+id+"/state?key=drop", nil)
 	require.Equal(t, http.StatusNoContent, w.Code)
 
 	state := getState(t, r, id)
@@ -54,13 +54,12 @@ func TestDeleteStateKeyIsIdempotent(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Stateful")
 
-	w := doJSON(t, r, "DELETE", "/api/artifacts/"+id+"/state/never-existed", nil)
+	w := doJSON(t, r, "DELETE", "/api/artifacts/"+id+"/state?key=never-existed", nil)
 	assert.Equal(t, http.StatusNoContent, w.Code)
 }
 
-// State keys are arbitrary artifact-chosen text, so the route takes one
-// percent-encoded path segment — including slashes, spaces and percent signs,
-// which chi hands to the handler still encoded.
+// State keys are arbitrary artifact-chosen text, so the key travels as a
+// percent-encoded query value — including slashes, spaces and percent signs.
 func TestDeleteStateKeyWithReservedCharacters(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Stateful")
@@ -70,7 +69,7 @@ func TestDeleteStateKeyWithReservedCharacters(t *testing.T) {
 		putState(t, r, id, "survivor", "2")
 
 		w := doJSON(t, r, "DELETE",
-			"/api/artifacts/"+id+"/state/"+url.PathEscape(key), nil)
+			"/api/artifacts/"+id+"/state?key="+url.QueryEscape(key), nil)
 		require.Equal(t, http.StatusNoContent, w.Code, key)
 
 		state := getState(t, r, id)
@@ -139,7 +138,7 @@ func TestDeleteStateUnknownArtifact(t *testing.T) {
 
 	for _, path := range []string{
 		"/api/artifacts/nope/state",
-		"/api/artifacts/nope/state/key",
+		"/api/artifacts/nope/state?key=key",
 	} {
 		w := doJSON(t, r, "DELETE", path, nil)
 		assert.Equal(t, http.StatusNotFound, w.Code, path)
@@ -155,7 +154,7 @@ func TestDeleteStateRequiresAuth(t *testing.T) {
 
 	for _, path := range []string{
 		"/api/artifacts/" + id + "/state",
-		"/api/artifacts/" + id + "/state/k",
+		"/api/artifacts/" + id + "/state?key=k",
 	} {
 		req := httptest.NewRequest("DELETE", path, nil)
 		w := httptest.NewRecorder()
@@ -217,4 +216,78 @@ func TestStateInspectorAssetServed(t *testing.T) {
 	// Keys and values reach the DOM as text, never as markup (av-tux9).
 	assert.NotContains(t, js, "innerHTML")
 	assert.Contains(t, js, "textContent")
+}
+
+// av-hh1o: keys that used to be unrepresentable or dangerous as a path
+// segment. "" and "." collapsed to a trailing slash and 404'd instead of
+// deleting, so the row survived and the next render re-inlined it; ".."
+// resolved away entirely and hit the artifact delete route. As query values
+// none of them has any segment structure left to normalize.
+func TestDeleteStateKeyDotSegments(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Stateful")
+
+	for _, key := range []string{"", ".", "..", "../..", "%2e%2e"} {
+		putState(t, r, id, key, "doomed")
+		putState(t, r, id, "survivor", "2")
+
+		w := doJSON(t, r, "DELETE",
+			"/api/artifacts/"+id+"/state?key="+url.QueryEscape(key), nil)
+		require.Equal(t, http.StatusNoContent, w.Code, "key %q", key)
+
+		state := getState(t, r, id)
+		_, present := state[key]
+		assert.False(t, present, "key %q should be gone", key)
+		assert.Equal(t, "2", state["survivor"], "unrelated key survives deleting %q", key)
+	}
+
+	// The artifact itself must still be there — the whole point of av-hh1o.
+	w := doJSON(t, r, "GET", "/api/artifacts/"+id, nil)
+	assert.Equal(t, http.StatusOK, w.Code, "artifact must survive deleting a '..' state key")
+}
+
+// Erase-all and "delete the empty-string key" are the same URL apart from the
+// presence of the parameter, so presence — not truthiness — has to be what
+// separates them.
+func TestDeleteStateDistinguishesEmptyKeyFromEraseAll(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Stateful")
+
+	putState(t, r, id, "", "empty-key-value")
+	putState(t, r, id, "other", "kept")
+
+	// ?key= present but empty: delete only the empty-string key.
+	w := doJSON(t, r, "DELETE", "/api/artifacts/"+id+"/state?key=", nil)
+	require.Equal(t, http.StatusNoContent, w.Code)
+
+	state := getState(t, r, id)
+	_, present := state[""]
+	assert.False(t, present, "empty-string key should be deleted")
+	assert.Equal(t, "kept", state["other"], "erase-all must not have run")
+
+	// No key at all: erase everything.
+	w = doJSON(t, r, "DELETE", "/api/artifacts/"+id+"/state", nil)
+	require.Equal(t, http.StatusNoContent, w.Code)
+	assert.Empty(t, getState(t, r, id))
+}
+
+// The defect was in client URL construction, not on the server, so the guard
+// belongs there too: no shipped script may build a state URL that puts the key
+// in the path. Asserting on the served asset bytes is how the other gallery
+// tests pin client behavior (the files are copied verbatim, not bundled).
+func TestClientsBuildStateKeyAsQueryNotPath(t *testing.T) {
+	r := newTestRouter(t)
+
+	for _, asset := range []string{"state-api.js", "state.js", "detail.js", "agent.js"} {
+		req := httptest.NewRequest("GET", "/assets/gallery/"+asset, nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, asset)
+		body := w.Body.String()
+
+		assert.NotContains(t, body, `'/state/'`,
+			"%s must not build a state key as a path segment (av-hh1o)", asset)
+		assert.NotContains(t, body, `"/state/"`,
+			"%s must not build a state key as a path segment (av-hh1o)", asset)
+	}
 }
