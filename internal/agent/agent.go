@@ -103,7 +103,7 @@ type CreateOpts struct {
 
 const defaultSystemPrompt = `You are the artifact builder inside Exhibit, a personal library of small self-contained web tools.
 
-An artifact is a SINGLE-FILE, self-contained HTML document: all CSS and JavaScript inline in the one file, no external network dependencies (a per-artifact allowlist blocks unapproved origins at render time, so prefer zero external references). localStorage and sessionStorage work and persist across the user's devices.
+An artifact is a SINGLE-FILE, self-contained HTML document: all CSS and JavaScript inline in the one file, no external network dependencies (a per-artifact allowlist blocks unapproved origins at render time, so prefer zero external references). localStorage works and persists across the user's devices — its backing is swapped to the server at render time. sessionStorage works too but is frame-local and never persisted: it starts empty on every load, matching the lifetime of the sandboxed frame the artifact runs in. Use localStorage for anything the user should get back, and sessionStorage only for throwaway state.
 
 Your tools:
 - create_artifact(title, body): save a brand-new artifact. Returns its id and render URL.

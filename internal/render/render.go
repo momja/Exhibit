@@ -204,10 +204,12 @@ func buildCSP(allowlist []string, appOrigin string) string {
 }
 
 // shimScript is the shim injected before any artifact scripts run. It
-// intercepts localStorage/sessionStorage and routes state through the API,
-// and bridges the capabilities the sandbox denies — downloads (the sandbox
-// omits allow-downloads) and clipboard read/write (opaque-origin permissions
-// policy) — to the host frame, where they run only after user approval.
+// intercepts the two Web Storage namespaces — localStorage, whose backing is
+// swapped to the server, and (framed only) sessionStorage, which stays in
+// memory for the life of the frame — and bridges the capabilities the sandbox
+// denies — downloads (the sandbox omits allow-downloads) and clipboard
+// read/write (opaque-origin permissions policy) — to the host frame, where
+// they run only after user approval.
 const shimTemplate = `<script>
 (function() {
   var ARTIFACT_ID = %q;
@@ -230,45 +232,74 @@ const shimTemplate = `<script>
     );
   }
 
-  var shimStorage = {
-    getItem: function(key) {
-      return Object.prototype.hasOwnProperty.call(cache, key) ? cache[key] : null;
-    },
-    setItem: function(key, value) {
-      cache[key] = String(value);
-      writeThrough(key, String(value));
-    },
-    removeItem: function(key) {
-      delete cache[key];
-      writeThrough(key, '');
-    },
-    clear: function() {
-      cache = {};
-    },
-    key: function(n) {
-      return Object.keys(cache)[n] || null;
-    },
-    get length() {
-      return Object.keys(cache).length;
-    }
-  };
+  // makeStorage builds one Storage-shaped object over its OWN cache. Each Web
+  // Storage namespace gets its own call, so a key written to one is invisible
+  // to the other — they are distinct namespaces with distinct lifetimes, and
+  // artifacts are written against that ('draft' in sessionStorage is this
+  // session's scratch copy; 'draft' in localStorage is the saved one).
+  // persist, when given, bridges a mutation onward; the namespace that passes
+  // null keeps every write inside this frame.
+  function makeStorage(initial, persist) {
+    var store = initial;
+    return {
+      getItem: function(key) {
+        return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
+      },
+      setItem: function(key, value) {
+        store[key] = String(value);
+        if (persist) persist(key, String(value));
+      },
+      removeItem: function(key) {
+        delete store[key];
+        if (persist) persist(key, '');
+      },
+      clear: function() {
+        store = {};
+      },
+      key: function(n) {
+        return Object.keys(store)[n] || null;
+      },
+      get length() {
+        return Object.keys(store).length;
+      }
+    };
+  }
 
+  // localStorage is the persisted namespace: its cache is the state inlined
+  // above and every mutation writes through to the host frame. Installed
+  // unconditionally — the native getter throws on the sandbox's opaque origin,
+  // and top-level it still serves the inlined reads.
   try {
-    Object.defineProperty(window, 'localStorage', { value: shimStorage, writable: false });
-    Object.defineProperty(window, 'sessionStorage', { value: shimStorage, writable: false });
+    Object.defineProperty(window, 'localStorage', { value: makeStorage(cache, writeThrough), writable: false });
   } catch(e) {}
 
-  // ---- Download bridge ----
-  // The sandbox deliberately omits allow-downloads, so nothing in this frame
-  // can download directly. When embedded in the gallery, the shim intercepts
-  // the common export vectors — anchor activations with blob:/data: hrefs —
-  // and posts filename + bytes to the host frame, which asks for first-use
-  // approval and performs the download from the app origin. Vectors the shim
-  // does not catch simply stay blocked by the sandbox; evading the shim gains
-  // nothing. Top-level (no host frame) there is no sandbox and native
-  // downloads already work, so the bridge stays uninstalled — including on
-  // share pages, which get no bridge.
+  // ---- Framed-only installs ----
+  // Everything below belongs to the sandboxed, opaque-origin frame the gallery
+  // embeds: the sessionStorage namespace, the capability diagnostic, and the
+  // bridges and polyfills that stand in for what that sandbox denies. Opened
+  // top-level (a direct render-origin visit or a share) there is no host frame
+  // and no sandbox — the document has a real origin where all of this works
+  // natively — so none of it installs.
   if (window.parent !== window) {
+    // ---- sessionStorage ----
+    // Its own, purely in-memory Storage object: separate cache, no persist
+    // callback, nothing server-side. sessionStorage means 'dies with the
+    // session' and artifacts pick it precisely for what must not survive — a
+    // dismissed banner, a wizard's in-progress step — so persisting it
+    // cross-device would invert the lifetime the author chose.
+    //
+    // In-memory is not an approximation here, it is exactly the native
+    // behavior: a sandboxed browsing context is assigned a FRESH opaque origin
+    // on every navigation and storage is keyed by origin, so native
+    // sessionStorage would likewise start empty after each (re)load and would
+    // be shared with no other frame. Installing something is forced — an
+    // opaque origin gets no storage key at all, so the native getter throws a
+    // SecurityError on property *access*, killing any artifact that reads
+    // storage at the top of its script.
+    try {
+      Object.defineProperty(window, 'sessionStorage', { value: makeStorage({}, null), writable: false });
+    } catch(e) {}
+
     // ---- Unsupported-capability diagnostic (av-yvtb) ----
     // Some browser capabilities cannot work inside this opaque-origin sandbox no
     // matter the CSP, and fail silently rather than throwing something the
@@ -346,6 +377,14 @@ const shimTemplate = `<script>
       } catch (e) {}
     }
 
+    // ---- Download bridge (av-ryby) ----
+    // The sandbox deliberately omits allow-downloads, so nothing in this frame
+    // can download directly. The bridge intercepts the common export vectors —
+    // anchor activations with blob:/data: hrefs — and posts filename + bytes to
+    // the host frame, which asks for first-use approval and performs the
+    // download from the app origin. Vectors it does not catch simply stay
+    // blocked by the sandbox; evading the bridge gains nothing.
+    //
     // blob: URLs cannot be dereferenced here without a fetch (which
     // connect-src governs), so remember the Blob behind every URL this
     // document mints. The shim runs first, so the registry sees them all.

@@ -85,6 +85,44 @@ detection needs only a capability slug plus a copy entry, not a new message or
 banner. An agent-assisted rewrite to a sandbox-compatible worker is tracked as
 phase 2 of av-yvtb.
 
+### 1.2 Web Storage in an opaque origin
+
+Storage is keyed by origin, and an opaque origin cannot produce a key — so the
+sandboxed frame gets no storage area at all. `localStorage`, `sessionStorage`,
+and `indexedDB` each throw a `SecurityError` on **property access**, before any
+method call, which kills an artifact that reads storage at the top of its
+script. The render preamble must therefore install *something* under both Web
+Storage names; the only question is what backs each one.
+
+- **`localStorage` → the server.** State is inlined at render and writes bridge
+  through the host frame (§1). This is the cross-device store, and the opaque
+  origin is what makes it airtight: there is no real per-device store to fall
+  back to.
+- **`sessionStorage` → a separate, purely in-memory namespace.** Its own cache,
+  no write-through, no `artifact_state` rows, nothing leaving the frame. The two
+  namespaces are distinct objects over distinct caches, so a key written to one
+  is not readable from the other — what the standard requires and what artifacts
+  are written against.
+
+In-memory is not a degradation of `sessionStorage` here, it is its native
+behavior: a sandboxed browsing context is assigned a **fresh opaque origin on
+every navigation**, so native `sessionStorage` would also start empty after each
+(re)load, and each frame's origin is unique, so two frames sharing one would be
+the wrong behavior. Keeping it out of the server is also the conservative
+choice: `sessionStorage` is where artifacts put what should *not* survive, so
+persisting it would both invert the lifetime the author chose and turn
+throwaway values into durable, cross-device rows.
+
+The `sessionStorage` replacement is **framed-only**, under the same
+`window.parent !== window` guard as the capability bridges. Opened top-level at
+`RENDER_ORIGIN/a/:id` the document has a real origin where native
+`sessionStorage` works, is tab-scoped, and survives a reload — replacing it
+there would be a strict downgrade. `localStorage` installs unconditionally,
+since it also serves the inlined reads top-level.
+
+`IndexedDB` is not intercepted (deferred). Note it does not quietly fall back
+to per-device storage in the frame either — like the others, it throws.
+
 ## 2. CSP: the allowlist is the wall
 
 Each artifact carries a set of per-origin decisions (`artifact_network_origins`,
@@ -179,9 +217,11 @@ Its pieces share a *delivery mechanism*, not a *purpose*, and by purpose they
 are three families:
 
 - **Storage adapter** (established name: *storage shim*) — intercepts a
-  storage API (`localStorage`/`sessionStorage`; IndexedDB and `window.storage`
-  deferred) and swaps its *backing* to the server behind an unchanged surface
-  → portable, cross-device state.
+  storage API (IndexedDB and `window.storage` deferred) and replaces its
+  *backing* behind an unchanged surface. `localStorage` is backed by the server
+  → portable, cross-device state. `sessionStorage` is a **separate namespace
+  over a separate, purely in-memory cache**, never persisted and never sent
+  anywhere — see §1.2.
 - **Capability bridge** — re-grants a capability the sandbox *denied*
   (clipboard, downloads) by proxying the op to the trusted host under
   first-use approval. Not persistence. This section.

@@ -8,7 +8,7 @@
 
 Exhibit is a personal gallery for your self-contained web tools. The little HTML micro-apps that can make your life a little better.
 
-Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs in a sandboxed iframe on an isolated origin with a per-artifact Content Security Policy. State (localStorage, sessionStorage) syncs through the server so tools simple 'serverless' projects have a shared data state across all your devices.
+Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs in a sandboxed iframe on an isolated origin with a per-artifact Content Security Policy. State written to `localStorage` syncs through the server, so simple 'serverless' tools share one data state across all your devices (`sessionStorage` stays ephemeral, as it should be).
 
 ![Screenshot](./docs/screenshots/exhibit_screenshot.png)
 
