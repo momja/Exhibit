@@ -49,11 +49,18 @@ window.addEventListener('message', function(e) {
   if (!d || d.__avState !== true || d.artifactId !== ID) return;
   const frame = document.querySelector('iframe');
   if (!frame || e.source !== frame.contentWindow) return;
-  fetch('/api/artifacts/' + encodeURIComponent(ID) + '/state', {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
-    body: JSON.stringify({ key: d.key, value: d.value })
-  }).catch(function(){});
+  const base = '/api/artifacts/' + encodeURIComponent(ID) + '/state';
+  if (d.op === 'clear') {
+    fetch(base, { method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN} }).catch(function(){});
+  } else if (d.op === 'delete') {
+    fetch(base + '/' + encodeURIComponent(d.key), { method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN} }).catch(function(){});
+  } else {
+    fetch(base, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+      body: JSON.stringify({ key: d.key, value: d.value })
+    }).catch(function(){});
+  }
 });
 
 // Unsupported-capability warning (av-yvtb): some browser capabilities can't work

@@ -1,6 +1,6 @@
 ---
 id: av-st7c
-status: open
+status: closed
 deps: [av-hg5f]
 links: [av-9jll, av-ms3r, av-p4hm]
 created: 2026-08-01T19:01:12Z

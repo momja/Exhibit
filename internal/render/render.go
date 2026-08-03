@@ -224,12 +224,17 @@ const shimTemplate = `<script>
   // authenticated) via postMessage. The sandbox gives this iframe an opaque
   // 'null' origin, so it cannot call the API cross-origin itself. targetOrigin
   // is pinned to API_ORIGIN so the message can only reach our own host.
-  function writeThrough(key, value) {
+  //
+  // op is explicit ('set' | 'delete' | 'clear') rather than inferred from
+  // key/value, because a delete must be unambiguously distinct from setting a
+  // key to '' — storing an empty string is legitimate and must stay possible.
+  // clear has no key at all, so it gets its own op rather than a sentinel key.
+  function persistState(op, key, value) {
     if (window.parent === window) return; // top-level: no host to persist through
-    window.parent.postMessage(
-      { __avState: true, artifactId: ARTIFACT_ID, key: key, value: value },
-      API_ORIGIN
-    );
+    var msg = { __avState: true, artifactId: ARTIFACT_ID, op: op };
+    if (key !== undefined) msg.key = key;
+    if (value !== undefined) msg.value = value;
+    window.parent.postMessage(msg, API_ORIGIN);
   }
 
   // makeStorage builds one Storage-shaped object over its OWN cache. Each Web
@@ -247,14 +252,15 @@ const shimTemplate = `<script>
       },
       setItem: function(key, value) {
         store[key] = String(value);
-        if (persist) persist(key, String(value));
+        if (persist) persist('set', key, String(value));
       },
       removeItem: function(key) {
         delete store[key];
-        if (persist) persist(key, '');
+        if (persist) persist('delete', key);
       },
       clear: function() {
         store = {};
+        if (persist) persist('clear');
       },
       key: function(n) {
         return Object.keys(store)[n] || null;
@@ -270,7 +276,7 @@ const shimTemplate = `<script>
   // unconditionally — the native getter throws on the sandbox's opaque origin,
   // and top-level it still serves the inlined reads.
   try {
-    Object.defineProperty(window, 'localStorage', { value: makeStorage(cache, writeThrough), writable: false });
+    Object.defineProperty(window, 'localStorage', { value: makeStorage(cache, persistState), writable: false });
   } catch(e) {}
 
   // ---- Framed-only installs ----
