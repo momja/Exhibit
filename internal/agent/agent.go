@@ -105,12 +105,17 @@ const defaultSystemPrompt = `You are the artifact builder inside Exhibit, a pers
 
 An artifact is a SINGLE-FILE, self-contained HTML document: all CSS and JavaScript inline in the one file, no external network dependencies (a per-artifact allowlist blocks unapproved origins at render time, so prefer zero external references). localStorage works and persists across the user's devices — its backing is swapped to the server at render time. sessionStorage works too but is frame-local and never persisted: it starts empty on every load, matching the lifetime of the sandboxed frame the artifact runs in. Use localStorage for anything the user should get back, and sessionStorage only for throwaway state.
 
+An artifact's stored state — everything its localStorage writes land in — is a flat map of string keys to string values, one row per key, visible and editable outside the chat too (the artifact's edit page has a state inspector). sessionStorage never appears here: it is frame-local and is never sent to the server. Values are opaque strings to the API, but artifacts almost always store JSON in them (an object, an array, a number encoded as text). When you read state and the user asks you to change or fix one field, treat the rest of that value as fixed text to reproduce exactly — same key order, spacing, and number formatting — not JSON to regenerate from scratch; a value you were not asked to touch must come back byte-identical.
+
 Your tools:
 - create_artifact(title, body): save a brand-new artifact. Returns its id and render URL.
 - update_artifact(id, body[, title]): overwrite an existing artifact's source.
 - get_artifact(id): read an artifact's current source and metadata.
+- get_state(id): read every state key/value stored for an artifact.
+- set_state(id, key, value): write one state key (creates it if absent); every other key is untouched.
+- delete_state(id[, key]): delete one key, or omit key to erase ALL state for the artifact — destructive and irreversible, only do this when the user clearly asked to reset/clear everything.
 
-Workflow: compose the complete HTML document, then save it with create_artifact (new) or update_artifact (existing). Always save the FULL document — never a fragment or a diff. After saving, tell the user in one or two sentences what you built or changed; do not repeat the source code in chat.
+Workflow: compose the complete HTML document, then save it with create_artifact (new) or update_artifact (existing). Always save the FULL document — never a fragment or a diff. After saving, tell the user in one or two sentences what you built or changed; do not repeat the source code in chat. State edits are simpler: read with get_state before changing anything, then use set_state/delete_state for just the keys involved.
 
 If the user message includes a snippet (an attached screenshot plus an element descriptor with selector/outerHTML), that is the exact element the user means — locate it in the source by the descriptor and apply the change there.`
 
@@ -449,8 +454,13 @@ func (s *Session) handleLine(line []byte) {
 			go s.persistTranscript(artifactID)
 		}
 	case "tool_execution_end":
-		if !probe.IsError && probe.Result.Details["exhibit"] == "artifact_saved" {
-			s.noteArtifactSaved(probe.Result.Details)
+		if !probe.IsError {
+			switch probe.Result.Details["exhibit"] {
+			case "artifact_saved":
+				s.noteArtifactSaved(probe.Result.Details)
+			case "state_changed":
+				s.noteStateChanged(probe.Result.Details)
+			}
 		}
 	}
 
@@ -474,6 +484,32 @@ func (s *Session) noteArtifactSaved(details map[string]any) {
 		"title":      details["title"],
 		"renderUrl":  details["renderUrl"],
 		"footprint":  details["footprint"],
+	})
+	s.broadcast(ev)
+}
+
+// noteStateChanged emits a synthetic event when a set_state/delete_state tool
+// call lands. State is inlined into the artifact document at render time, so
+// the preview iframe is stale after an edit until something re-renders it —
+// the chat UI reuses the exact htmx swap exhibit_artifact_saved already
+// drives (docs/agent.md "Preview re-render") rather than inventing a second
+// refresh path. Binds the session to the artifact the same way a save does,
+// in case state is edited before any create/update_artifact tool call.
+func (s *Session) noteStateChanged(details map[string]any) {
+	artifactID, _ := details["artifactId"].(string)
+	if artifactID == "" {
+		return
+	}
+	s.mu.Lock()
+	if s.ArtifactID == "" {
+		s.ArtifactID = artifactID
+	}
+	s.mu.Unlock()
+	ev, _ := json.Marshal(map[string]any{
+		"type":       "exhibit_state_changed",
+		"artifactId": artifactID,
+		"action":     details["action"],
+		"key":        details["key"],
 	})
 	s.broadcast(ev)
 }

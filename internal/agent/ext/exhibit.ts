@@ -1,12 +1,14 @@
 /**
- * Exhibit tools extension for Pi (Exh-hvaf).
+ * Exhibit tools extension for Pi (Exh-hvaf, av-lvi1).
  *
  * Loaded by the exhibit service into every agent session it spawns
- * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model
- * exactly three tools — create_artifact / update_artifact / get_artifact —
+ * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model six
+ * tools — create_artifact / update_artifact / get_artifact for the document,
+ * and get_state / set_state / delete_state for the artifact's stored state —
  * all of which go through the exhibit HTTP API, so agent output enters the
  * library through the same single write path as every other ingest (scan,
- * footprint, explicit allowlist approval). The extension never touches the
+ * footprint, explicit allowlist approval) and every other state edit (the
+ * edit page's state inspector, av-hg5f). The extension never touches the
  * datastore and never sees the user's provider key; it authenticates to
  * exhibit with the service token passed in EXHIBIT_TOKEN.
  *
@@ -40,6 +42,21 @@ async function api(method: string, path: string, body?: unknown): Promise<any> {
 
 function ok(text: string, details: Record<string, unknown>) {
 	return { content: [{ type: "text" as const, text }], details };
+}
+
+// Renders state as delimited raw-value blocks rather than a JSON object.
+// JSON.stringify()-ing the values would backslash-escape every quote inside
+// a JSON-shaped value, and a model asked to reproduce that escaped text back
+// through set_state is exactly the failure mode AC 5 exists to prevent —
+// this format shows each value's exact bytes, unescaped, so "copy this back
+// unchanged except for the one field I'm asked to touch" has a literal
+// source to copy from.
+function formatState(state: Record<string, string>): string {
+	const keys = Object.keys(state);
+	if (keys.length === 0) return "(no state stored for this artifact)";
+	return keys
+		.map((k) => `--- key: ${JSON.stringify(k)} ---\n${state[k]}`)
+		.join("\n\n");
 }
 
 export default function (pi: ExtensionAPI) {
@@ -136,6 +153,94 @@ export default function (pi: ExtensionAPI) {
 				exhibit: "artifact_read",
 				artifactId: a.id,
 				title: a.title,
+			});
+		},
+	});
+
+	pi.registerTool({
+		name: "get_state",
+		label: "Read artifact state",
+		description:
+			"Read every state key/value the artifact has stored (what its localStorage writes " +
+			"through to, per artifact_state — sessionStorage is frame-local and never appears " +
+			"here). Values are opaque strings; artifacts usually store JSON in them. Each key's " +
+			"value is shown verbatim, byte for byte — copy it back exactly via set_state except " +
+			"for whatever the user asked you to change. Do not reformat, reorder object keys, " +
+			"change number/whitespace formatting, or otherwise 'clean up' a value you were not " +
+			"asked to touch.",
+		parameters: Type.Object({
+			id: Type.String({ description: "Artifact id" }),
+		}),
+		async execute(_id, params) {
+			const state = await api("GET", "/api/artifacts/" + encodeURIComponent(params.id) + "/state");
+			return ok(formatState(state), {
+				exhibit: "state_read",
+				artifactId: params.id,
+				keys: Object.keys(state),
+			});
+		},
+	});
+
+	pi.registerTool({
+		name: "set_state",
+		label: "Set state key",
+		description:
+			"Write one state key on an artifact, creating it if absent. This is the same write " +
+			"path the edit page's state inspector uses. Only the given key changes — every other " +
+			"key is left exactly as stored, since this call never touches them. If the value is " +
+			"JSON and you are only changing one field inside it, reproduce every other byte " +
+			"(key order, spacing, number formatting) exactly as read from get_state — do not " +
+			"reformat the whole document.",
+		parameters: Type.Object({
+			id: Type.String({ description: "Artifact id" }),
+			key: Type.String({ description: "State key to write" }),
+			value: Type.String({ description: "New value, verbatim (JSON-encode it yourself if it's structured data)" }),
+		}),
+		async execute(_id, params) {
+			await api("PUT", "/api/artifacts/" + encodeURIComponent(params.id) + "/state", {
+				key: params.key,
+				value: params.value,
+			});
+			return ok(`Set state key ${JSON.stringify(params.key)} on artifact ${params.id}.`, {
+				exhibit: "state_changed",
+				artifactId: params.id,
+				action: "set",
+				key: params.key,
+			});
+		},
+	});
+
+	pi.registerTool({
+		name: "delete_state",
+		label: "Delete artifact state",
+		description:
+			"Delete artifact state. Pass key to remove just that one key (idempotent — no error " +
+			"if it was already absent). Omit key to erase ALL state for the artifact — this is " +
+			"destructive and irreversible (no version history), so only do it when the user " +
+			"clearly asked to reset/clear everything, not when they asked to fix or remove one " +
+			"field.",
+		parameters: Type.Object({
+			id: Type.String({ description: "Artifact id" }),
+			key: Type.Optional(Type.String({ description: "State key to delete; omit to erase all state" })),
+		}),
+		async execute(_id, params) {
+			if (params.key) {
+				await api(
+					"DELETE",
+					"/api/artifacts/" + encodeURIComponent(params.id) + "/state/" + encodeURIComponent(params.key),
+				);
+				return ok(`Deleted state key ${JSON.stringify(params.key)} on artifact ${params.id}.`, {
+					exhibit: "state_changed",
+					artifactId: params.id,
+					action: "deleted_key",
+					key: params.key,
+				});
+			}
+			await api("DELETE", "/api/artifacts/" + encodeURIComponent(params.id) + "/state");
+			return ok(`Erased all state on artifact ${params.id}.`, {
+				exhibit: "state_changed",
+				artifactId: params.id,
+				action: "cleared_all",
 			});
 		},
 	});

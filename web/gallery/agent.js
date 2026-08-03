@@ -290,6 +290,21 @@ function handleAgentEvent(ev) {
       addMsg('sys', note);
       break;
     }
+    case 'exhibit_state_changed': {
+      // State edits are inlined into the document at render time, so the
+      // preview iframe is stale until something re-renders it — reuse the
+      // same htmx swap a save uses rather than a second refresh mechanism.
+      if (!artifact || artifact.id !== ev.artifactId) {
+        artifact = {id: ev.artifactId, title: artifact ? artifact.title : 'Artifact'};
+      }
+      refreshPreview();
+      nudgePreview();
+      const label = ev.action === 'cleared_all' ? 'Erased all state'
+        : ev.action === 'deleted_key' ? 'Deleted state key "' + ev.key + '"'
+        : 'Set state key "' + ev.key + '"';
+      addMsg('sys', label + (mobileQuery.matches ? ' — tap Preview to see it.' : ' — preview refreshed.'));
+      break;
+    }
     case 'extension_error':
       addMsg('err', 'Extension error: ' + (ev.error || 'unknown'));
       break;
@@ -311,6 +326,9 @@ function toolLabel(name, args) {
     case 'create_artifact': return 'Creating "' + (args.title || 'artifact') + '"';
     case 'update_artifact': return 'Updating artifact';
     case 'get_artifact': return 'Reading artifact source';
+    case 'get_state': return 'Reading artifact state';
+    case 'set_state': return 'Setting state key "' + (args.key || '') + '"';
+    case 'delete_state': return args.key ? 'Deleting state key "' + args.key + '"' : 'Erasing all state';
     default: return name;
   }
 }
