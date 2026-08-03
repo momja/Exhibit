@@ -324,9 +324,13 @@ absent the surface degrades to disabled; nothing else changes.
 
 - **Single write path preserved:** the sidecar is loaded with built-in tools
   disabled and exactly one extension (`internal/agent/ext/exhibit.ts`) whose
-  `create_artifact` / `update_artifact` / `get_artifact` tools call back into
-  the exhibit HTTP API with the service token. Agent output is scanned like
-  any ingest and its footprint is never auto-approved.
+  `create_artifact` / `update_artifact` / `get_artifact` tools, plus
+  `get_state` / `set_state` / `delete_state` for the artifact's stored state
+  (av-lvi1), call back into the exhibit HTTP API with the service token —
+  the same routes and Store methods the edit page's state inspector (§3.5)
+  uses, so the agent gains no reach a browser client with the token doesn't
+  already have. Agent output is scanned like any ingest and its footprint is
+  never auto-approved.
 - **BYO key, sealed at rest:** the user's provider key is stored AES-256-GCM
   encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
   handed to the subprocess only through its (minimal, built-from-scratch)

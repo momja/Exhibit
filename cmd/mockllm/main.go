@@ -6,8 +6,12 @@
 // It plays a scripted artifact-builder:
 //   - first user prompt          -> create_artifact with a canned counter tool
 //     (deliberately styled with a yellow #submit-btn so snippet demos work)
-//   - prompt on a bound artifact -> get_artifact, then update_artifact with a
-//     color transformation derived from the user's words
+//   - a state command ("list state", "set state K to V", "delete state K",
+//     "clear all state") on a bound artifact -> the matching get_state /
+//     set_state / delete_state call (av-lvi1)
+//   - any other prompt on a bound artifact -> get_artifact, then
+//     update_artifact with a color transformation derived from the user's
+//     words
 //   - tool results              -> a short closing text, acknowledging any
 //     attached snippet screenshot
 package main
@@ -148,11 +152,19 @@ func decide(messages []chatMessage) turnPlan {
 				ack = "I used your snippet screenshot to locate the exact element. "
 			}
 			return turnPlan{kind: "text", text: ack + "Done! " + firstLine(result) + " The preview on the right is live — give it a click."}
+		case "get_state":
+			return turnPlan{kind: "text", text: "Here's the current state:\n\n" + result}
+		case "set_state", "delete_state":
+			return turnPlan{kind: "text", text: "Done. " + firstLine(result)}
 		}
 	}
 
-	// A user prompt. Bound artifact -> read it first; otherwise create.
+	// A user prompt. Bound artifact -> a state command, or read the body first;
+	// otherwise create.
 	if artifactID != "" {
+		if plan, ok := decideStateCommand(artifactID, lastUserText); ok {
+			return plan
+		}
 		return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]string{"id": artifactID}}
 	}
 	return turnPlan{
@@ -160,6 +172,42 @@ func decide(messages []chatMessage) turnPlan {
 		toolName: "create_artifact",
 		toolArgs: map[string]string{"title": titleFrom(lastUserText), "body": cannedTool},
 	}
+}
+
+// decideStateCommand recognizes a handful of literal state-management
+// phrasings ("list state", "set state K to V", "delete state K", "clear all
+// state") and maps them to the matching get_state/set_state/delete_state
+// call — the state-tool counterpart of transform() for the artifact body.
+func decideStateCommand(artifactID, userText string) (turnPlan, bool) {
+	if m := regexp.MustCompile(`(?i)set state (\S+) to (.+)`).FindStringSubmatch(userText); m != nil {
+		return turnPlan{
+			kind:     "tool",
+			toolName: "set_state",
+			toolArgs: map[string]string{"id": artifactID, "key": m[1], "value": strings.TrimSpace(m[2])},
+		}, true
+	}
+	if m := regexp.MustCompile(`(?i)delete state (\S+)`).FindStringSubmatch(userText); m != nil {
+		return turnPlan{
+			kind:     "tool",
+			toolName: "delete_state",
+			toolArgs: map[string]string{"id": artifactID, "key": m[1]},
+		}, true
+	}
+	if regexp.MustCompile(`(?i)(clear|erase|wipe)( all)? state`).MatchString(userText) {
+		return turnPlan{
+			kind:     "tool",
+			toolName: "delete_state",
+			toolArgs: map[string]string{"id": artifactID},
+		}, true
+	}
+	if regexp.MustCompile(`(?i)(list|show|read) state`).MatchString(userText) {
+		return turnPlan{
+			kind:     "tool",
+			toolName: "get_state",
+			toolArgs: map[string]string{"id": artifactID},
+		}, true
+	}
+	return turnPlan{}, false
 }
 
 // toolNameFor finds which tool a tool-result message answers.

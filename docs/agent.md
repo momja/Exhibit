@@ -24,12 +24,27 @@ browser chat UI ──POST prompt──► Go service ──JSONL stdin──►
 ```
 
 The single write path is preserved: the agent's only tools are
-`create_artifact` / `update_artifact` / `get_artifact`, registered by a Pi
-extension (`internal/agent/ext/exhibit.ts`, materialized to the data dir at
-startup) that calls back into the exhibit HTTP API with the service token.
-Agent output is scanned like any other ingest; scanned origins are **never**
-auto-approved — the chat UI tells the user when a saved artifact has a network
-footprint awaiting approval.
+`create_artifact` / `update_artifact` / `get_artifact` for the document, and
+`get_state` / `set_state` / `delete_state` for the artifact's stored state
+(av-lvi1) — all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
+materialized to the data dir at startup) that calls back into the exhibit HTTP
+API with the service token. Agent output is scanned like any other ingest;
+scanned origins are **never** auto-approved — the chat UI tells the user when
+a saved artifact has a network footprint awaiting approval.
+
+The state tools hit the same authenticated `GET/PUT/DELETE
+/api/artifacts/:id/state[/:key]` routes as the edit page's state inspector
+(av-hg5f) — no second write path, no store access of its own. Values are
+opaque strings and the system prompt tells the model to treat an untouched
+value as fixed text to reproduce byte-for-byte, since a value the user didn't
+ask to change silently reformatting (JSON key order, spacing, `1.0` vs `1`)
+would be a defect the API has no way to catch — it never inspects the string
+it's asked to store. A `set_state`/`delete_state` call marks the session's
+bound artifact — same as a save — and emits a synthetic
+`exhibit_state_changed` event so the chat UI re-renders the preview through
+the same htmx fragment swap `exhibit_artifact_saved` drives (below): state is
+inlined into the document at render time, so the pane would otherwise stay
+stale after an edit.
 
 ## BYO API key (encrypted at rest)
 
@@ -63,8 +78,9 @@ Go, plus `exhibit-mock` when `MOCK_LLM_URL` is set.
   `agent_transcripts` keyed by artifact — colophon-style provenance
   (`GET /api/artifacts/:id/transcripts`), the foundation for future remixing.
 - When a save-tool call succeeds, the session emits a synthetic
-  `exhibit_artifact_saved` event; the chat UI uses it to re-render the live
-  preview (see below).
+  `exhibit_artifact_saved` event; a `set_state`/`delete_state` call emits the
+  analogous `exhibit_state_changed` event. The chat UI uses either to
+  re-render the live preview (see below).
 
 ## Chat UI
 
@@ -84,7 +100,13 @@ partial standalone. The pane carries the htmx wiring
 so a `create_artifact`/`update_artifact` save travels
 `Session.noteArtifactSaved` → `exhibit_artifact_saved` over SSE → `agent.js`
 dispatches `exhibit:artifact-saved` → htmx fetches the fragment → the pane
-swaps. Two consequences to keep in mind when touching this page:
+swaps. A `set_state`/`delete_state` call (av-lvi1) drives the identical
+`exhibit:artifact-saved` dispatch via `Session.noteStateChanged` →
+`exhibit_state_changed`, reusing the same swap rather than inventing a second
+refresh path — it's the only way the pane picks up state edits, since state is
+inlined into the document at render time and the running iframe has no other
+way to learn it changed. Two consequences to keep in mind when touching this
+page:
 
 - The fragment's iframe `src` carries a fresh per-render stamp. The render
   document is `Cache-Control: no-store`, but the browser only reloads a frame
@@ -128,7 +150,9 @@ capture leaves the sandbox only as data posted to that host.
 | `MOCK_LLM_URL` | dev/test only: enables the `exhibit-mock` provider pointing at `cmd/mockllm` |
 
 `cmd/mockllm` is a deterministic OpenAI-compatible server (scripted
-create → read → update tool calls, color transforms, snippet acknowledgment)
+create → read → update tool calls, color transforms, snippet acknowledgment,
+plus a handful of literal state commands — "list state", "set state K to V",
+"delete state K", "clear all state" — mapped to the matching state tool call)
 so the whole pipeline is testable end to end without real provider
 credentials; the exhibit extension registers it as a Pi custom provider only
 when `MOCK_LLM_URL` is set.
