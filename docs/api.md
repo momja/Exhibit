@@ -101,13 +101,29 @@ snapshotted artifact stays network-inert until you approve its residual origins.
 ## State (cross-device sync)
 
 ```
-GET  /api/artifacts/:id/state      Get all state key-value pairs
-PUT  /api/artifacts/:id/state      Set one key {"key":"...","value":"..."}
+GET    /api/artifacts/:id/state       Get all state key-value pairs
+PUT    /api/artifacts/:id/state       Set one key {"key":"...","value":"..."}
+DELETE /api/artifacts/:id/state/:key  Remove one key's row
+DELETE /api/artifacts/:id/state       Erase every state row for the artifact
 ```
 
 These routes back `localStorage` only. The storage shim intercepts it in the iframe: reads are served from state **inlined into the shim at render time** (so `getItem` is correct synchronously); writes are **`postMessage`-ed to the host frame**, which performs the authenticated `PUT` above (the sandboxed iframe has an opaque origin and can't call the API itself). No artifact changes needed — any tool that uses `localStorage` gets cross-device sync automatically.
 
 `sessionStorage` is intercepted too, but into a separate in-memory namespace that never touches these routes — it is frame-local by design and produces no state rows (`security.md` §1.2).
+
+Both `DELETE`s answer `204` and are **idempotent**: a key that was never stored is
+already absent, which is all the caller asked for. They 404 only on an unknown
+artifact. `:key` is one percent-encoded path segment — state keys are arbitrary
+artifact-chosen text, so slashes and percent signs must be encoded by the client
+(`encodeURIComponent`). Erasing all state touches state alone: the artifact's
+body, origin decisions, and capability approvals are untouched.
+
+Deleting is a genuine row removal, which is what distinguishes it from the
+shim's current `removeItem` — that writes an empty string through, so the key
+reads back as `""` rather than absent. The edit page's state inspector
+(`/artifacts/:id/edit`) is the user-facing consumer of these routes: it renders
+each stored value through a control inferred from its shape and never offers
+raw-text editing of a value.
 
 ## Collections & Tags
 

@@ -686,6 +686,23 @@ func (s *SQLiteStore) SetState(ctx context.Context, artifactID, key, value strin
 	return err
 }
 
+// DeleteState removes one key's row. A key that was never stored is not an
+// error: the row is gone either way, which is the only thing the caller asked
+// for.
+func (s *SQLiteStore) DeleteState(ctx context.Context, artifactID, key string) error {
+	_, err := s.db.ExecContext(ctx,
+		"DELETE FROM artifact_state WHERE artifact_id=? AND key=?", artifactID, key)
+	return err
+}
+
+// ClearState removes every state row for the artifact, leaving the artifact
+// itself — body, origin decisions, capability approvals — untouched.
+func (s *SQLiteStore) ClearState(ctx context.Context, artifactID string) error {
+	_, err := s.db.ExecContext(ctx,
+		"DELETE FROM artifact_state WHERE artifact_id=?", artifactID)
+	return err
+}
+
 func (s *SQLiteStore) SetAgentKey(ctx context.Context, k *AgentKey) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO agent_keys (owner_id, provider, model, key_ciphertext, updated_at)
