@@ -1,6 +1,6 @@
 ---
 id: av-hg5f
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-08-01T16:50:57Z
@@ -56,3 +56,9 @@ and matching Store methods (DeleteState / ClearState) beside GetState/SetState. 
 9. DELETE routes for one key and for all state exist on the API and are covered by tests; the panel is covered by an api-level render test.
 10. An artifact with no stored state shows an explicit empty state, not a broken panel.
 
+
+## Notes
+
+**2026-08-02T21:24:46Z**
+
+Shipped. API: DELETE /api/artifacts/:id/state/:key (one row) and DELETE /api/artifacts/:id/state (all rows), both 204 + idempotent, behind the same auth as every other mutating route; Store gains DeleteState/ClearState. Panel: web/gallery/state.js on edit.tmpl, shell server-rendered, contents fetched on first open. Type inference: text/number/boolean/list/records(uniform array of objects)/object (bounded depth 3); anything raggeder renders read-only + deletable. No raw-text/JSON editing anywhere. Save writes only changed keys (untouched values are a true no-op), Cancel rebuilds from the last server-confirmed serialization, Erase all confirms by artifact title and touches state alone. Empty-string tombstones from the shim's removeItem show as the empty text values they are (av-ms3r) — no cleanup attempted.

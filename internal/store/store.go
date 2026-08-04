@@ -160,9 +160,16 @@ type Store interface {
 	// pairing did not exist.
 	RemoveArtifactTag(ctx context.Context, ownerID int64, artifactID, tagID string) error
 
-	// State
+	// State. DeleteState and ClearState are deliberately idempotent — the
+	// caller's intent is "this key must not exist" / "no state must remain",
+	// which a missing row already satisfies. That matters because their
+	// callers (the state inspector's delete, and the storage shim's
+	// removeItem/clear write-through) routinely fire on keys the server never
+	// saw.
 	GetState(ctx context.Context, artifactID string) (map[string]string, error)
 	SetState(ctx context.Context, artifactID, key, value string) error
+	DeleteState(ctx context.Context, artifactID, key string) error
+	ClearState(ctx context.Context, artifactID string) error
 
 	// Agent (Exh-yvhp). SetAgentKey upserts the owner's single configured
 	// provider key; GetAgentKey returns nil when none is set.

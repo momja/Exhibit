@@ -338,6 +338,148 @@ func TestInjectShimNilStateIsEmptyObject(t *testing.T) {
 	}
 }
 
+// storageInstall returns the value expression the shim binds to the named
+// window property, e.g. "makeStorage(cache, persistState)" for localStorage.
+// Comparing the two expressions is how the tests below establish that the two
+// Web Storage namespaces are backed by different objects.
+func storageInstall(t *testing.T, doc, property string) string {
+	t.Helper()
+	open := "Object.defineProperty(window, '" + property + "', { value: "
+	start := strings.Index(doc, open)
+	if start < 0 {
+		t.Fatalf("shim does not install window.%s: %s", property, doc)
+	}
+	rest := doc[start+len(open):]
+	end := strings.Index(rest, ", writable:")
+	if end < 0 {
+		t.Fatalf("could not read the window.%s install expression: %s", property, rest)
+	}
+	return rest[:end]
+}
+
+// localStorage and sessionStorage are two namespaces with two lifetimes, and
+// artifacts are written against that: 'draft' in sessionStorage is this
+// session's scratch copy, 'draft' in localStorage is the saved one. The shim
+// used to install ONE object over ONE cache under both names (av-9jll), so the
+// second write clobbered the first and a read from either name returned
+// whichever won. They must be built over separate caches, and only the
+// localStorage one may reach the server.
+func TestShimStorageNamespacesAreIndependent(t *testing.T) {
+	// A key inlined into the persisted namespace — the collision case: an
+	// artifact writing sessionStorage['draft'] must not see or overwrite it.
+	doc := injectShim("<head></head>", "abc", "https://app.test",
+		map[string]string{"draft": "saved"})
+
+	local := storageInstall(t, doc, "localStorage")
+	session := storageInstall(t, doc, "sessionStorage")
+	if local == session {
+		t.Fatalf("both namespaces install the same object (%s) — one cache, colliding keys", local)
+	}
+
+	// Each namespace owns its cache: the factory copies its argument into a
+	// per-instance binding rather than closing over one shared map.
+	if !strings.Contains(doc, "var store = initial;") {
+		t.Fatalf("storage objects must be built over their own cache, not a shared one: %s", doc)
+	}
+
+	// The persisted namespace gets the inlined state and the write bridge.
+	if !strings.Contains(local, "cache") || !strings.Contains(local, "persistState") {
+		t.Fatalf("localStorage must be backed by the inlined cache and write through: %s", local)
+	}
+
+	// The ephemeral one gets neither, so the inlined 'draft' is unreachable
+	// from it and its writes produce no artifact_state rows and no postMessage.
+	if strings.Contains(session, "cache") {
+		t.Fatalf("sessionStorage must not share the inlined localStorage cache: %s", session)
+	}
+	if strings.Contains(session, "persistState") {
+		t.Fatalf("sessionStorage must not write through to the server: %s", session)
+	}
+}
+
+// The sessionStorage shim installs ONLY when framed. In the sandbox it is
+// forced (the opaque origin has no storage key, so the native getter throws on
+// property access), and purely in-memory is exactly native behavior there —
+// each navigation gets a fresh opaque origin. Top-level at RENDER_ORIGIN/a/:id
+// the document has a real origin where native sessionStorage genuinely works,
+// is tab-scoped, and survives a reload, so replacing it is a strict downgrade.
+// localStorage keeps its unconditional install: it serves the inlined reads
+// top-level too (its own top-level write problem is av-blzu).
+func TestShimSessionStorageInstallIsFramedOnly(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+
+	guard := strings.Index(doc, "if (window.parent !== window) {")
+	if guard < 0 {
+		t.Fatalf("framed guard missing from the shim: %s", doc)
+	}
+	if strings.Index(doc, "Object.defineProperty(window, 'sessionStorage'") < guard {
+		t.Fatalf("sessionStorage is installed outside the framed guard — a top-level render would lose native sessionStorage: %s", doc)
+	}
+	if local := strings.Index(doc, "Object.defineProperty(window, 'localStorage'"); local < 0 || local > guard {
+		t.Fatalf("localStorage must install unconditionally so inlined reads work top-level too: %s", doc)
+	}
+}
+
+// removeItem and clear (av-ms3r, av-st7c) must not fall back to the old
+// key/value sentinel (deleting by writing ”), because ” is a legitimate
+// stored value that must remain distinguishable from an actual delete. Each
+// operation is tagged with an explicit op so the host bridge — and the two
+// listeners that consume it — can tell them apart with no ambiguity.
+func TestShimRemoveItemAndClearUseExplicitOp(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+
+	if !strings.Contains(doc, "persist('delete', key)") {
+		t.Fatalf("removeItem must post an explicit 'delete' op, not a '' sentinel: %s", doc)
+	}
+	if !strings.Contains(doc, "persist('clear')") {
+		t.Fatalf("clear must post an explicit 'clear' op with no key: %s", doc)
+	}
+	if !strings.Contains(doc, "persist('set', key, String(value))") {
+		t.Fatalf("setItem must still post its value under the 'set' op: %s", doc)
+	}
+	// The old bug: removeItem persisting '' as if it were a stored value.
+	if strings.Contains(doc, "persist(key, '')") {
+		t.Fatalf("removeItem must not persist an empty-string tombstone: %s", doc)
+	}
+}
+
+// clear() must write through — the original bug (av-st7c) dropped the cache
+// with no persist call at all, so the wipe looked successful until the next
+// render re-inlined every original key.
+func TestShimClearWritesThrough(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+
+	clearIdx := strings.Index(doc, "clear: function() {")
+	if clearIdx < 0 {
+		t.Fatalf("shim missing clear(): %s", doc)
+	}
+	nextMethod := strings.Index(doc[clearIdx+1:], "key: function(n) {")
+	if nextMethod < 0 {
+		t.Fatalf("could not bound the clear() body: %s", doc)
+	}
+	body := doc[clearIdx : clearIdx+1+nextMethod]
+	if !strings.Contains(body, "if (persist) persist('clear')") {
+		t.Fatalf("clear() does not write through to the host: %s", body)
+	}
+}
+
+// The top-level guard is centralized in persistState rather than duplicated
+// per operation, so clear() and removeItem() called with no host frame stay
+// cache-only and never throw — matching every other bridge's guard.
+func TestShimPersistStateGuardsTopLevelForEveryOp(t *testing.T) {
+	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+
+	fn := "function persistState(op, key, value) {"
+	start := strings.Index(doc, fn)
+	if start < 0 {
+		t.Fatalf("shim missing persistState: %s", doc)
+	}
+	body := doc[start : start+300]
+	if !strings.Contains(body, "if (window.parent === window) return;") {
+		t.Fatalf("persistState must guard every op (set/delete/clear) behind one top-level check: %s", body)
+	}
+}
+
 // The download bridge (av-ryby): the sandbox omits allow-downloads, so the
 // shim intercepts the common export vectors and posts filename + bytes to the
 // host frame, which owns approval and performs the download. The shim itself

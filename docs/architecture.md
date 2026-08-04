@@ -102,10 +102,16 @@ The only way data changes. Route groups:
 - `DELETE /api/artifacts/:id` — deletes the artifact and associated rows (tags,
   collections, shares, state cascade via FK). The blob body on the filesystem is
   orphaned in v1 (`Blob.Store` has no `Delete` method).
-- `GET/PUT /api/artifacts/:id/state` — the storage shim's state endpoint (§6). Reads are
-  normally satisfied by render-time inlining, not this route; `PUT` is called by the
-  **host frame** on the storage shim's behalf (the sandboxed iframe can't reach the API itself).
-  Authenticated like every other mutating route.
+- `GET/PUT /api/artifacts/:id/state`, `DELETE /api/artifacts/:id/state[/:key]` — the
+  artifact's state rows (§6). Reads are normally satisfied by render-time inlining, not
+  this route; `PUT` is called by the **host frame** on the storage shim's behalf (the
+  sandboxed iframe can't reach the API itself). The two `DELETE`s — one key, or all of
+  an artifact's state — are the row-removal path the edit page's state inspector (§3.5)
+  drives; they are idempotent (a key that was never stored is already absent) and `:key`
+  is one percent-encoded path segment, since state keys are arbitrary artifact-chosen
+  text. Erasing all state touches state alone: body, origin decisions, and capability
+  approvals survive. All of them are authenticated like every other route here — the
+  inspector adds no second write path.
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
 - collection/tag CRUD.
 
@@ -256,6 +262,17 @@ same server-rendered gallery with the query and swaps only the grid, so the
 FTS5 search query stays authoritative without a full page reload. Filter,
 tag/collection management, and the allowlist editor are full-page server renders.
 
+The edit page carries one further island, the **state inspector** (av-hg5f): a
+collapsible panel beside the security panel that reads the artifact's state rows
+and renders each value through a control inferred from its shape — text, number,
+boolean, ordered list, uniform-record repeater, labelled object fields — with a
+read-only pretty-print for values no control fits. It deliberately offers no
+raw-text/JSON editing of a value: a hand-typed blob is the corruption the panel
+exists to undo. Its shell renders server-side and its contents are fetched on
+first open (state is cold data the rest of the page never needs); edits apply
+through the same authenticated state routes (§3.1) on Save, so Cancel simply
+rebuilds the working copy from what the server last confirmed.
+
 Where state changes *after* load and a full reload would cost too much — it
 would drop a live iframe, an editor buffer, or an SSE stream — the page swaps
 in a **server-rendered fragment** instead, driven by **htmx** (vendored from
@@ -307,9 +324,13 @@ absent the surface degrades to disabled; nothing else changes.
 
 - **Single write path preserved:** the sidecar is loaded with built-in tools
   disabled and exactly one extension (`internal/agent/ext/exhibit.ts`) whose
-  `create_artifact` / `update_artifact` / `get_artifact` tools call back into
-  the exhibit HTTP API with the service token. Agent output is scanned like
-  any ingest and its footprint is never auto-approved.
+  `create_artifact` / `update_artifact` / `get_artifact` tools, plus
+  `get_state` / `set_state` / `delete_state` for the artifact's stored state
+  (av-lvi1), call back into the exhibit HTTP API with the service token —
+  the same routes and Store methods the edit page's state inspector (§3.5)
+  uses, so the agent gains no reach a browser client with the token doesn't
+  already have. Agent output is scanned like any ingest and its footprint is
+  never auto-approved.
 - **BYO key, sealed at rest:** the user's provider key is stored AES-256-GCM
   encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
   handed to the subprocess only through its (minimal, built-from-scratch)

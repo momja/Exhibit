@@ -1,6 +1,6 @@
 ---
 id: av-p4hm
-status: open
+status: closed
 deps: []
 links: [av-9jll, av-ms3r, av-st7c]
 created: 2026-08-01T19:00:28Z
@@ -37,3 +37,25 @@ Three defect fixes and two user-facing capabilities, deliberately kept as separa
 4. The agent sidecar can read and edit the same state through the same authenticated API routes, with no second write path.
 5. Documentation (PRD §5, technical_stack §6, security.md, and the agent system prompt in internal/agent/agent.go) describes the shipped semantics rather than the current pair-phrasing that permitted the alias.
 
+
+## Notes
+
+**2026-08-03T04:46:48Z**
+
+Delivered across five PRs on feature/av-p4hm/epic.
+
+SHIPPED
+- av-9jll (#83) sessionStorage split into its own in-memory namespace via a makeStorage(initial, persist) factory; the install moved inside the framed guard so a top-level render keeps native sessionStorage.
+- av-hg5f (#84) typed state inspector on the edit page, plus the DELETE state routes and Store methods the bug fixes consume.
+- av-st7c + av-ms3r (#85) clear() and removeItem now delete server-side, via an explicit op ('set'|'delete'|'clear') on the host bridge rather than an empty-string sentinel.
+- av-lvi1 (#86) get_state/set_state/delete_state on the agent sidecar, through the same authenticated routes; preview refresh reuses the existing htmx swap.
+- av-hh1o (#87) P0 found by review AFTER the four above merged: the per-key delete URL put the key in the path, so a key of '..' normalized to the artifact delete route and let an artifact destroy itself through the host frame's token. Key now travels as a query value. Introduced by av-hg5f and fixed before ever reaching main — no released version was affected.
+
+All 5 epic acceptance criteria met.
+
+DEFERRED, not blocking — worth filing if they are to be acted on:
+1. clear() then setItem() race: both un-awaited and unordered over the bridge, so 'reset, then write defaults' can lose the defaults. Set/set reordering was already possible; this widens it to a plausible real pattern.
+2. state.js: a key queued for deletion cannot be re-added in the same session; values that do not survive JSON.parse/stringify (1e999, integers past 2^53) re-save mangled if anything else in that row is edited.
+3. PRD §5.3 and the architecture.md §6 render/state diagram still show only setItem -> postMessage -> PUT, without the delete/clear directions the op protocol added.
+
+RELATED: av-1rvm (draft) carries the state undo/snapshot/export question this epic sharpened by making state destruction actually work. av-y98v closed as superseded.

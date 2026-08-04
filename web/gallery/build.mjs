@@ -26,7 +26,8 @@ const files = [
   "index.css", "index.js",
   "new.css", "new.js",
   "detail.css", "detail.js",
-  "edit.css", "edit.js",
+  "state-api.js",
+  "edit.css", "edit.js", "state.js",
   "notfound.css", "notfound.js",
   "agent.css", "agent.js",
 ];

@@ -88,9 +88,17 @@ func (ro *Router) setupRoutes() {
 				r.Post("/refetch", ro.refetchArtifact)
 				r.Delete("/", ro.deleteArtifact)
 				// State: written by the host frame on the artifact's behalf
-				// (the sandboxed iframe bridges writes via postMessage).
+				// (the sandboxed iframe bridges writes via postMessage), and
+				// by the edit page's state inspector (av-hg5f). DELETE is the
+				// row-removal contract the shim's removeItem/clear fixes
+				// consume too. One route serves both deletes, discriminated
+				// by whether a `key` query parameter is present — the key is
+				// deliberately NOT a path segment, because a key of ".." is
+				// resolved away by the browser before the request is sent and
+				// lands on the artifact delete above (av-hh1o).
 				r.Get("/state", ro.getState)
 				r.Put("/state", ro.setState)
+				r.Delete("/state", ro.deleteState)
 				// Artifact-centric collection membership routes
 				r.Post("/collections/{collectionID}", ro.addArtifactToCollection)
 				r.Delete("/collections/{collectionID}", ro.removeArtifactFromCollection)

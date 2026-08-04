@@ -290,6 +290,21 @@ function handleAgentEvent(ev) {
       addMsg('sys', note);
       break;
     }
+    case 'exhibit_state_changed': {
+      // State edits are inlined into the document at render time, so the
+      // preview iframe is stale until something re-renders it — reuse the
+      // same htmx swap a save uses rather than a second refresh mechanism.
+      if (!artifact || artifact.id !== ev.artifactId) {
+        artifact = {id: ev.artifactId, title: artifact ? artifact.title : 'Artifact'};
+      }
+      refreshPreview();
+      nudgePreview();
+      const label = ev.action === 'cleared_all' ? 'Erased all state'
+        : ev.action === 'deleted_key' ? 'Deleted state key "' + ev.key + '"'
+        : 'Set state key "' + ev.key + '"';
+      addMsg('sys', label + (mobileQuery.matches ? ' — tap Preview to see it.' : ' — preview refreshed.'));
+      break;
+    }
     case 'extension_error':
       addMsg('err', 'Extension error: ' + (ev.error || 'unknown'));
       break;
@@ -311,6 +326,9 @@ function toolLabel(name, args) {
     case 'create_artifact': return 'Creating "' + (args.title || 'artifact') + '"';
     case 'update_artifact': return 'Updating artifact';
     case 'get_artifact': return 'Reading artifact source';
+    case 'get_state': return 'Reading artifact state';
+    case 'set_state': return 'Setting state key "' + (args.key || '') + '"';
+    case 'delete_state': return args.key ? 'Deleting state key "' + args.key + '"' : 'Erasing all state';
     default: return name;
   }
 }
@@ -470,10 +488,21 @@ window.addEventListener('message', (e) => {
   if (!d || d.__avState !== true || !artifact || d.artifactId !== artifact.id) return;
   const frame = previewFrame();
   if (!frame || e.source !== frame.contentWindow) return;
-  apiFetch('/api/artifacts/' + encodeURIComponent(artifact.id) + '/state', {
-    method: 'PUT',
-    body: JSON.stringify({key: d.key, value: d.value})
-  }).catch(() => {});
+  // URL construction lives in state-api.js so this and detail.js share one
+  // definition — the ".." path-traversal bug (av-hh1o) had to be fixed in
+  // three copies of it.
+  if (d.op === 'clear') {
+    apiFetch(window.ExhibitState.deleteURL(artifact.id), { method: 'DELETE' }).catch(() => {});
+  } else if (d.op === 'delete') {
+    apiFetch(window.ExhibitState.deleteURL(artifact.id, d.key), { method: 'DELETE' }).catch(() => {});
+  } else if (d.op === 'set' || d.op === undefined) {
+    // Only a recognized write reaches the API. An unknown op used to fall
+    // through to this branch, so a future typo would silently become a write.
+    apiFetch(window.ExhibitState.url(artifact.id), {
+      method: 'PUT',
+      body: JSON.stringify({key: d.key, value: d.value})
+    }).catch(() => {});
+  }
 });
 
 window.addEventListener('message', (e) => {

@@ -154,18 +154,30 @@ script.
 
 Responsibilities (per the main spec §5):
 
-- Replace `localStorage`/`sessionStorage` with objects implementing the `Storage`
-  interface, backed by an in-memory cache. The cache is **inlined into the storage
-  shim by the render surface** at request time, so `getItem` is correct on the first *synchronous*
-  read (a load-time `fetch` would race the artifact's startup reads and lose).
-- On `setItem`, update the cache synchronously, then **`postMessage` the change to the
-  host frame** (pinned to the app origin). The host — same origin as the API and
-  authenticated — performs the `PUT /api/artifacts/:id/state`. The storage shim itself makes
-  **no network calls**: the sandbox's opaque origin can't reach the API cross-origin, so
-  it never has to, and `connect-src` need not include the app origin.
+- Replace `localStorage` and `sessionStorage` with **two** objects implementing the
+  `Storage` interface, each over its **own** in-memory cache — one factory, two calls.
+  They are separate namespaces in the standard and must stay separate here: a key
+  written to one is not readable from the other.
+- `localStorage` is the persisted one. Its cache is **inlined into the storage shim by
+  the render surface** at request time, so `getItem` is correct on the first
+  *synchronous* read (a load-time `fetch` would race the artifact's startup reads and
+  lose).
+- On `localStorage.setItem`, update the cache synchronously, then **`postMessage` the
+  change to the host frame** (pinned to the app origin). The host — same origin as the
+  API and authenticated — performs the `PUT /api/artifacts/:id/state`. The storage shim
+  itself makes **no network calls**: the sandbox's opaque origin can't reach the API
+  cross-origin, so it never has to, and `connect-src` need not include the app origin.
+- `sessionStorage` gets the second object with **no persist callback**: memory only,
+  no `postMessage`, no stored state. It is installed **only when framed**, alongside the
+  capability bridges under the same `window.parent !== window` guard. In the sandbox
+  that is exactly native behavior — a sandboxed context is assigned a fresh opaque
+  origin per navigation, and storage is keyed by origin — and installing *something* is
+  forced, because an opaque origin has no storage key and the native getter throws a
+  `SecurityError` on property access. Top-level the document has a real origin where
+  native `sessionStorage` is correct and reload-surviving, so it is left in place.
 - `IndexedDB` interception and the `window.storage`-style async API are **deferred**
   (build-order step 2 remaining). v1 ships `localStorage` and `sessionStorage` only.
-- Last-write-wins on conflicts.
+- Last-write-wins on conflicts (`localStorage`; nothing is stored for `sessionStorage`).
 
 Keep this as a single audited file — it's security-sensitive (it sits between untrusted
 artifact code and your API) and should be easy to read end to end.

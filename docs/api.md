@@ -101,11 +101,44 @@ snapshotted artifact stays network-inert until you approve its residual origins.
 ## State (cross-device sync)
 
 ```
-GET  /api/artifacts/:id/state      Get all state key-value pairs
-PUT  /api/artifacts/:id/state      Set one key {"key":"...","value":"..."}
+GET    /api/artifacts/:id/state       Get all state key-value pairs
+PUT    /api/artifacts/:id/state         Set one key {"key":"...","value":"..."}
+DELETE /api/artifacts/:id/state?key=K   Remove one key's row
+DELETE /api/artifacts/:id/state         Erase every state row for the artifact
 ```
 
-The storage shim intercepts `localStorage`/`sessionStorage` in the iframe. Reads are served from state **inlined into the shim at render time** (so `getItem` is correct synchronously); writes are **`postMessage`-ed to the host frame**, which performs the authenticated `PUT` above (the sandboxed iframe has an opaque origin and can't call the API itself). No artifact changes needed — any tool that uses standard storage APIs gets cross-device sync automatically.
+These routes back `localStorage` only. The storage shim intercepts it in the iframe: reads are served from state **inlined into the shim at render time** (so `getItem` is correct synchronously); writes are **`postMessage`-ed to the host frame**, which performs the authenticated `PUT` above (the sandboxed iframe has an opaque origin and can't call the API itself). No artifact changes needed — any tool that uses `localStorage` gets cross-device sync automatically.
+
+`sessionStorage` is intercepted too, but into a separate in-memory namespace that never touches these routes — it is frame-local by design and produces no state rows (`security.md` §1.2).
+
+One `DELETE` route serves both operations, discriminated by whether a `key`
+parameter is **present** — not by its value, since `""` is a legitimate Web
+Storage key that must stay deletable on its own. `?key=` (present, empty)
+removes the empty-string key; no `key` at all erases everything.
+
+The key is a **query value rather than a path segment**, deliberately. As a
+segment it was subject to URL normalization in the browser *before the request
+was sent*: a key of `..` turned `DELETE /api/artifacts/:id/state/..` into
+`DELETE /api/artifacts/:id/`, letting an artifact destroy itself through the
+host frame's token by calling `localStorage.removeItem('..')` (av-hh1o). A
+query value has no segment structure to resolve. It also means the empty-string
+key is representable at all, and that a long key can't overflow the request line
+on delete when the `PUT` body would have carried it fine. Clients still
+percent-encode the value (`encodeURIComponent`).
+
+Both deletes answer `204` and are **idempotent**: a key that was never stored is
+already absent, which is all the caller asked for. They 404 only on an unknown
+artifact. Erasing all state touches state alone: the artifact's body, origin
+decisions, and capability approvals are untouched.
+
+Deleting is a genuine row removal. The shim's `removeItem` drives this route, so
+a removed key is absent on the next render rather than reading back as `""` —
+early builds wrote an empty-string tombstone instead (av-ms3r), and rows written
+by that code may still exist; they are indistinguishable from an intentional
+`""` and are left for the user to clear by hand. The edit page's state inspector
+(`/artifacts/:id/edit`) is the user-facing consumer of these routes: it renders
+each stored value through a control inferred from its shape and never offers
+raw-text editing of a value.
 
 ## Collections & Tags
 

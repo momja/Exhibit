@@ -199,12 +199,40 @@ Before any artifact script executes, the iframe is initialized with **storage
 adapters** — replacements for the standard storage surfaces that keep the
 artifact-facing API identical and swap the backing to our server:
 
-- `localStorage` and `sessionStorage` (synchronous) — **shipped in v1**
+- `localStorage` (synchronous) — **shipped in v1**, backed by the server and
+  therefore cross-device
+- `sessionStorage` (synchronous) — **shipped in v1**, replaced by a *separate,
+  purely in-memory* namespace and never persisted (below)
 - `IndexedDB` (async/structured) — **deferred** (build-order step 2 remaining)
 - `window.storage`-style async API (for artifacts written to the Claude contract) —
   **deferred** (build-order step 2 remaining)
 
 The artifact uses whichever it was written for; we don't need to know which.
+
+The two Web Storage namespaces are **separate objects over separate caches** —
+a key written to one is not readable from the other, as the standard requires.
+Only `localStorage` reaches the server. `sessionStorage` is frame-local, lives
+in memory, and produces no stored state at all.
+
+That is not a lossy approximation of `sessionStorage`; it is exactly its native
+behavior in this frame. Storage is keyed by origin, and a sandboxed browsing
+context is assigned a **fresh opaque origin on every navigation**, so native
+`sessionStorage` would also start empty after each (re)load and would be shared
+with no other frame. Nor can the native one simply be left in place: an opaque
+origin gets no storage key at all, so the getter throws a `SecurityError` on
+property *access* — an artifact that reads storage at the top of its script
+would die before it runs. Something must be installed; in-memory is what
+matches the semantics.
+
+The replacement is therefore **framed-only**. Opened top-level at
+`RENDER_ORIGIN/a/:id` (a direct visit or a share) the document has a real,
+stable origin where native `sessionStorage` works correctly, is tab-scoped, and
+survives a reload — so it is left alone there.
+
+State written before the two namespaces were split is **not migrated**. Nothing
+recorded which surface a given row came from, so no rule can sort them after the
+fact; every existing row therefore stays `localStorage` state, and any of it that
+was really ephemeral is the user's to delete.
 
 IndexedDB is a storage adapter by goal but **not** "the localStorage shim again."
 The localStorage shim's defining trick is inlining all state synchronously at render
@@ -367,10 +395,12 @@ single self-contained `.html`.
    Store interface, sandboxed iframe renderer on an isolated origin, ingest scan +
    allowlist + CSP generation, web gallery with search/tags/collections (upload + paste
    ingest).
-2. **Storage shim:** unconditional `localStorage`/`sessionStorage` interception with
-   render-time state inlining for reads and a `postMessage`-to-host bridge for writes
-   (host performs the authenticated `PUT /api/artifacts/:id/state`); extend to IndexedDB
-   and `window.storage`. Unlocks cross-device use.
+2. **Storage shim:** `localStorage` interception — installed unconditionally, never
+   gated on analyzing the artifact — with render-time state inlining for reads and a
+   `postMessage`-to-host bridge for writes (host performs the authenticated
+   `PUT /api/artifacts/:id/state`), plus a separate in-memory `sessionStorage`
+   namespace in the framed case; extend to IndexedDB and `window.storage`. Unlocks
+   cross-device use.
 3. **Sharing:** `shares` rows, public `/s/:id`, self-contained `.html` export.
 4. **Tier 2 (only if demand):** in-browser Babel transpile first; CDN allowlist for
    `script-src`; ingest-time bundling only if render performance demands it.
