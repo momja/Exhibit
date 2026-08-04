@@ -1,6 +1,6 @@
 ---
 id: av-e0yj
-status: open
+status: in_progress
 deps: []
 links: [av-hrtv, Exh-k75k]
 created: 2026-08-03T05:01:16Z
@@ -48,3 +48,20 @@ Note the residual risk honestly in docs/security.md, which today has no agent se
 5. The sidecar no longer needs the master service token, or a follow-up ticket is filed for the scoped credential with this one noted as its blocker.
 6. docs/security.md gains an agent section stating the trust boundary, the residual prompt-injection risk, and what enforces the scope.
 
+
+## Notes
+
+**2026-08-04T03:58:45Z**
+
+Design direction (owner, 2026-08-03):
+
+Scope the agent to the artifact the session was opened against — not by prompt wording, by construction.
+
+1. Inline the current body into the session's initial context instead of making the agent spend a tool call reading it. Saves a round-trip on every modify session (relevant to Exh-w6dt / Exh-m3bg).
+2. Keep a read tool anyway: the inlined copy goes stale after the agent's own update_artifact or a concurrent human edit, so mid-conversation re-read must stay possible. It reads the SESSION'S artifact — no id parameter.
+3. Title injection is not solvable by sanitizing. Three layers instead:
+   - Containment is the actual fix: with scope enforced server-side, injected instructions cannot reach past the one artifact the user opened. Same shape as the project's standing rule that the scan is transparency and the CSP is the wall.
+   - Position: untrusted text never occupies the system role. Title and body go in a user/tool-role message inside a fenced envelope whose delimiter carries a per-session random nonce, so injected text cannot close the fence and impersonate instructions.
+   - Necessity: the agent needs the body, not the title. The title travels as fenced metadata only, never inside an instruction sentence.
+
+Residual risk to state plainly in docs rather than paper over: scoping bounds the blast radius to one artifact, not to zero. Injected content can still write a bad body into the artifact the user opened; that change is visible in the preview and the transcript, and av-hrtv closes the allowlist-inheritance channel that would make it exfiltrating rather than merely wrong.
