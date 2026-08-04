@@ -34,10 +34,19 @@
 {{/* The whole card opens the artifact's detail/viewer page — the card body
      and the title link are the affordances. The separate 'Details' link was
      removed: it navigated to the same page as the title click, so it was
-     redundant. The earlier 'Open ↗' new-tab action was already gone. */}}
+     redundant. The earlier 'Open ↗' new-tab action was already gone.
+
+     The one card action that is NOT the detail page — Edit — rides in the
+     title row as a hover/focus-revealed chip (av-8u7p). It sits beside the
+     title rather than over it so the two links' hit boxes never overlap, and
+     it carries a visible 'Edit' label: a bare pencil is reachable by voice
+     control through its accessible name, but that name is undiscoverable
+     when nothing on screen states it. The aria-label leads with that same
+     word, so the visible label is a prefix of the accessible name (WCAG
+     2.5.3) while the name still says which artifact it edits. */}}
 <div class="grid">{{if not .Cards}}<p class="empty">No artifacts yet. <a href="/new">Add your first artifact</a>.</p>{{end}}{{range .Cards}}
 <div class="card" data-href="/artifacts/{{.ArtifactID}}">
-  <a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>
+  <div class="card-headrow"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a><a class="card-edit" href="/artifacts/{{.ArtifactID}}/edit" aria-label="Edit {{.Title}}"><i class="ph ph-pencil-simple"></i>Edit</a></div>
   {{template "tagRow" .}}
   <div class="card-footer">
     <div class="card-meta">{{.Created}}</div>

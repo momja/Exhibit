@@ -23,6 +23,35 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .card:hover{box-shadow:var(--shadow-card-hover)}
 .card-title{font-size:15px;font-weight:600;color:var(--brand-blue);text-decoration:none;word-break:break-word}
 .card-title:hover{text-decoration:underline}
+/* Title row: the title beside its hover-revealed Edit chip (av-8u7p). The
+ * chip is a flex sibling rather than an absolutely positioned corner button
+ * so its hit box never sits on top of the title link's — a corner chip stays
+ * painted above a title anchor that remains clickable underneath it.
+ * min-width:0 lets the title shrink and wrap instead of pushing the chip out
+ * of the card. */
+.card-headrow{display:flex;align-items:flex-start;gap:var(--space-3)}
+.card-headrow .card-title{flex:1;min-width:0}
+/* The chip holds its space at rest and animates only opacity, the same way
+ * the tag-pill controls below do, so revealing it never reflows the card.
+ * It is labelled, not icon-only: a bare pencil is targetable by voice
+ * control via its accessible name, but that name is undiscoverable when
+ * nothing on screen states it. --color-ink-soft measures 12.6:1 on the card
+ * against 3.5:1 for a muted glyph, which would be carrying the control's
+ * whole meaning at the floor of WCAG 1.4.11. */
+.card-edit{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:1px solid var(--color-border);border-radius:var(--radius-pill);color:var(--color-ink-soft);font-size:11px;font-weight:500;text-decoration:none;opacity:0;pointer-events:none;transition:opacity .12s ease,border-color .12s ease,color .12s ease}
+/* :focus-within covers the chip's own focus too — it is a descendant of the
+ * card — so hover and focus-within are the whole rule. */
+.card:hover .card-edit,.card:focus-within .card-edit{opacity:1;pointer-events:auto}
+.card-edit:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
+.card-edit i{font-size:12px;line-height:1}
+/* Touch has no hover, so a hover-gated control is simply unreachable there —
+ * and using a library across devices is a core flow (spec 8.3). Both queries
+ * are needed, not one: a hover-less input does not always report
+ * hover:none (some report neither none nor hover), and on those the coarse
+ * pointer is what identifies it. Either match reveals the chip; the cost of
+ * a false positive is a chip that is always visible, against a false
+ * negative's unreachable control. */
+@media (hover:none),(pointer:coarse){.card-edit{opacity:1;pointer-events:auto}}
 .card-meta{font-size:12px;color:#888}
 /* Footer row: created date opposite the capability posture cluster
  * (av-isb3), separated from the card body by a hairline. */
