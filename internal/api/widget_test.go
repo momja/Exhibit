@@ -381,8 +381,10 @@ func TestWidgetGenerateTakesNoCallerPrompt(t *testing.T) {
 	require.Greater(t, i, 0)
 	// The POST carries no body at all — just the auth header.
 	assert.NotContains(t, src[i:i+400], "JSON.stringify")
-	// Progress rides the session's existing SSE route, not a new mechanism.
+	// Progress rides the session's existing SSE route, not a new mechanism —
+	// authenticated by the ticket the generate response carried (av-rgp1).
 	assert.Contains(t, src, "new EventSource('/api/agent/sessions/'")
+	assert.Contains(t, src, "'/events?ticket=' + encodeURIComponent(started.sse_ticket)")
 	assert.Contains(t, src, "'exhibit_widget_saved'")
 	// A one-shot session is closed once it has done its job.
 	assert.Contains(t, src, "method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN}")

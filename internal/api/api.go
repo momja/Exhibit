@@ -31,13 +31,17 @@ type Config struct {
 type Router struct {
 	*chi.Mux
 	cfg Config
+	// sseTickets authenticates the agent event stream, the one route a
+	// browser cannot send a header on (av-rgp1). See ssetickets.go.
+	sseTickets *sseTicketStore
 }
 
 // NewRouter constructs the chi router with all routes registered.
 func NewRouter(cfg Config) *Router {
 	r := &Router{
-		Mux: chi.NewRouter(),
-		cfg: cfg,
+		Mux:        chi.NewRouter(),
+		cfg:        cfg,
+		sseTickets: newSSETicketStore(sseTicketTTL),
 	}
 	r.setupRoutes()
 	return r
@@ -67,8 +71,11 @@ func (ro *Router) setupRoutes() {
 	ro.Get("/s/{shareID}", ro.serveShare)
 
 	// Agent chat UI (token embedded in page JS, like the gallery) and the
-	// SSE event stream (EventSource can't set headers; the handler checks
-	// the same bearer token passed as ?token=).
+	// SSE event stream. The stream sits outside the auth group because
+	// EventSource cannot set an Authorization header; it authenticates with
+	// a single-use, seconds-lived, session-bound ticket minted by an
+	// authenticated request instead, so the service token never travels in a
+	// URL (av-rgp1).
 	ro.Get("/agent", ro.agentPage)
 	ro.Get("/api/agent/sessions/{sessionID}/events", ro.agentEvents)
 
@@ -132,6 +139,9 @@ func (ro *Router) setupRoutes() {
 			r.Put("/key", ro.putAgentKey)
 			r.Delete("/key", ro.deleteAgentKey)
 			r.Post("/sessions", ro.createAgentSession)
+			// Mints a fresh SSE ticket for a session the caller already
+			// owns — the reconnect path, since a ticket is single-use.
+			r.Post("/sessions/{sessionID}/ticket", ro.agentSessionTicket)
 			r.Post("/sessions/{sessionID}/prompt", ro.agentPrompt)
 			r.Post("/sessions/{sessionID}/abort", ro.agentAbort)
 			r.Delete("/sessions/{sessionID}", ro.closeAgentSession)

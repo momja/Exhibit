@@ -397,12 +397,14 @@ async function deleteArtifact() {
           finish('✗ ' + (data.error || r.statusText));
           return;
         }
-        const sessionId = (await r.json()).session_id;
+        const started = await r.json();
+        const sessionId = started.session_id;
 
-        // EventSource cannot set headers, so this route takes the same bearer
-        // token as ?token= — the existing contract, not a new one.
+        // EventSource cannot set headers, so the stream authenticates with the
+        // single-use, session-bound ticket this response carried — never the
+        // service token, which must not travel in a URL (av-rgp1).
         events = new EventSource('/api/agent/sessions/' + encodeURIComponent(sessionId) +
-          '/events?token=' + encodeURIComponent(TOKEN));
+          '/events?ticket=' + encodeURIComponent(started.sse_ticket));
         timer = setTimeout(function() {
           finish('✗ Timed out waiting for the agent. Try again, or write the widget by hand.');
         }, GENERATE_TIMEOUT_MS);
