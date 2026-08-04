@@ -181,26 +181,36 @@ func TestCapabilityPopoverManageLinkOnGalleryAndDetail(t *testing.T) {
 }
 
 // Origins are rendered through html/template's contextual auto-escaping, not
-// hand-rolled escaping — an origin containing HTML-significant characters
-// (as the scanner can produce, per scanner-origins-need-html-escaping) must
+// hand-rolled escaping — an origin containing HTML-significant characters must
 // come out escaped, never as raw markup an attacker-controlled origin could
 // use to break out of the popover.
+//
+// Since av-i7hd such a value can no longer reach the store at all (the write
+// path rejects it, asserted below), so the escaping guarantee is exercised
+// against the partial directly — the shape a row written before that
+// validation existed still has.
 func TestCapabilityPopoverEscapesOrigins(t *testing.T) {
+	html, err := renderPartial(t, "capabilityCluster", capabilityView{
+		ArtifactID:       "art-escaped",
+		NetworkAllowlist: []string{`https://evil.example.com"><script>alert(1)</script>`},
+		ShowManage:       true,
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, html, "<script>alert(1)</script>")
+	assert.Contains(t, html, "&lt;script&gt;alert(1)&lt;/script&gt;")
+}
+
+// The same hostile value at the single write path: it is not stored and then
+// escaped, it is refused, and the 400 names the entry so the edit page can
+// point at the row the user typed (av-i7hd).
+func TestAllowlistRejectsHostileOrigin(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Escaped")
 	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
 		"network_allowlist": []string{`https://evil.example.com"><script>alert(1)</script>`},
 	})
-	require.Equal(t, http.StatusOK, w.Code)
-
-	req := httptest.NewRequest("GET", "/", nil)
-	w2 := httptest.NewRecorder()
-	r.ServeHTTP(w2, req)
-	require.Equal(t, http.StatusOK, w2.Code)
-	page := w2.Body.String()
-
-	assert.NotContains(t, page, "<script>alert(1)</script>")
-	assert.Contains(t, page, "&lt;script&gt;alert(1)&lt;/script&gt;")
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), `evil.example.com`)
 }
 
 // The popover's footer Manage link is gated by ShowManage — off in the

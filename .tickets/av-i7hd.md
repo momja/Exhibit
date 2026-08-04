@@ -1,6 +1,6 @@
 ---
 id: av-i7hd
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-07-24T21:15:01Z
@@ -60,3 +60,9 @@ Data migration: existing rows are already dirty. Either a goose migration that n
 - Decision recorded (in the ticket or docs) on whether existing artifact_network_origins rows are migrated or normalized lazily; if migrated, the migration collapses duplicates without widening any policy.
 - docs/security.md notes that allowlist entries are origins, validated at the single write path.
 
+
+## Notes
+
+**2026-08-04T19:02:21Z**
+
+Existing-row decision: MIGRATED, not lazily normalized. internal/store/migration_origins.go registers a Go goose migration at version 23 — renumbered off the originally-picked 12 during a rebase onto main, which had since claimed 12 for the widget_blob_id repair (av-9pm8) — (SQL can't parse URLs) that rewrites artifact_network_origins once: each value goes through origin.NormalizeOrigin, rows that only carried path/query/fragment/userinfo noise collapse onto the origin they always effectively named, values with no origin in them at all (CSP keywords, relatives, garbage) are dropped, and when several rows collapse onto one origin block wins over allow — so the repair can narrow a policy but never widen one. Lazy normalization was rejected because 'next save' may never come: an artifact nobody edits again would keep dirty rows forever, and the store invariant the rest of the code now assumes would hold only for recently-touched artifacts. Rendering never crashed on the old rows (they were joined into the CSP as-is), but a value containing ';' could have injected a CSP directive — the migration plus the store-side normalization closes that.

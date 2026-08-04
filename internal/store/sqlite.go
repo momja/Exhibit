@@ -14,6 +14,8 @@ import (
 
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
+
+	"github.com/momja/Exhibit/internal/origin"
 )
 
 //go:embed migrations/*.sql
@@ -50,6 +52,7 @@ func (s *SQLiteStore) migrate() error {
 	if err := rewindReusedVersion13(ctx, s.db); err != nil {
 		return fmt.Errorf("rewind version 13: %w", err)
 	}
+	registerOriginNormalizationMigration() // v23: normalize/collapse pre-av-i7hd origin rows
 	goose.SetBaseFS(migrationsFS)
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		return err
@@ -507,33 +510,46 @@ func (s *SQLiteStore) AllowedOrigins(ctx context.Context, ownerID int64, artifac
 // SetOriginDecision widens or narrows what an artifact may reach, so it is
 // the sharpest thing in this file to leave unscoped: the owner check runs
 // before the upsert, and a foreign artifact gets ErrNotFound rather than a
-// new allow row.
-func (s *SQLiteStore) SetOriginDecision(ctx context.Context, ownerID int64, artifactID, origin, decision, source string) error {
+// new allow row. One decision per *origin* (docs/architecture.md §3.3) only
+// holds if what lands in the row is an origin; a near-duplicate spelling
+// would otherwise split one decision into several (av-i7hd).
+func (s *SQLiteStore) SetOriginDecision(ctx context.Context, ownerID int64, artifactID, o, decision, source string) error {
 	if decision != DecisionAllow && decision != DecisionBlock {
 		return fmt.Errorf("invalid origin decision %q", decision)
 	}
 	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
 		return err
 	}
+	normalized, err := origin.NormalizeOrigin(o)
+	if err != nil {
+		return fmt.Errorf("invalid origin %q: %w", o, err)
+	}
+	o = normalized
 	// The (artifact_id, origin) primary key is what makes one decision per
 	// origin an invariant; the upsert flips an existing decision in place
 	// rather than creating a second, contradictory row.
-	_, err := s.db.ExecContext(ctx,
+	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO artifact_network_origins (artifact_id, origin, decision, source)
 		 VALUES (?, ?, ?, ?)
 		 ON CONFLICT(artifact_id, origin) DO UPDATE SET
 		   decision=excluded.decision, source=excluded.source, updated_at=datetime('now')`,
-		artifactID, origin, decision, source)
+		artifactID, o, decision, source)
 	return err
 }
 
 // DeleteOriginDecision is idempotent like the state deletes: removing a
 // decision that isn't there is what the caller asked for either way. Owner
-// scoping only guarantees it can never remove someone else's.
-func (s *SQLiteStore) DeleteOriginDecision(ctx context.Context, ownerID int64, artifactID, origin string) error {
+// scoping only guarantees it can never remove someone else's. The origin is
+// normalized when it can be, so a caller may spell it the way the user typed
+// it, but an unnormalizable value is still passed through verbatim — that is
+// exactly how a pre-normalization legacy row is deleted.
+func (s *SQLiteStore) DeleteOriginDecision(ctx context.Context, ownerID int64, artifactID, o string) error {
+	if normalized, _ := origin.NormalizeOrigin(o); normalized != "" {
+		o = normalized
+	}
 	_, err := s.db.ExecContext(ctx,
 		"DELETE FROM artifact_network_origins WHERE artifact_id=? AND origin=? AND "+ownedArtifact,
-		artifactID, origin, ownerID)
+		artifactID, o, ownerID)
 	return err
 }
 
@@ -555,9 +571,21 @@ func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, ownerID int64, 
 		return err
 	}
 	for _, o := range origins {
-		if o == "" {
+		// Defense in depth behind the API's validation (av-i7hd): the store's
+		// own invariant is that a row is an origin, so a caller that skipped
+		// normalization can't write a path-bearing or duplicate spelling here.
+		// Unlike the API this can't 400, so an unusable value is dropped rather
+		// than widening the CSP with something nobody approved.
+		normalized, err := origin.NormalizeOrigin(o)
+		if normalized == "" {
+			if o != "" && err != nil {
+				slog.Warn("dropping unusable allowlist origin",
+					slog.String("artifact_id", artifactID), slog.String("origin", o),
+					slog.String("err", err.Error()))
+			}
 			continue
 		}
+		o = normalized
 		// An origin listed here was explicitly approved, so an allow
 		// decision overrides any block row it previously carried.
 		if _, err := tx.ExecContext(ctx,
