@@ -114,12 +114,14 @@ events. Logs are structured text via `log/slog` to stdout.
 ```
 cmd/
   server/     main entry point
-  mockllm/    deterministic OpenAI-compatible mock LLM for agent E2E tests
+  mockllm/    serves internal/mockllm as a standalone process
 internal/
   agent/      Pi sidecar session manager + exhibit tools extension (ext/exhibit.ts)
+  agentscope/ Per-session agent credentials the API resolves to one artifact
   api/        HTTP handlers, router, middleware, gallery + agent chat pages
   blob/       Blob store interface + filesystem implementation
   color/      Brand color constants
+  mockllm/    Deterministic OpenAI-compatible stand-in LLM for agent tests
   render/     Render surface handler (CSP, state inlining, render preamble + snippet injection)
   scanner/    Ingest scanner (extracts network origins from HTML, base-aware)
   secrets/    AES-GCM sealing for BYO agent API keys

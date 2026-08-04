@@ -6,6 +6,8 @@ path). This document is the concrete HTTP API: every route, its auth, and the
 ingest, state, sharing, and render flows a client uses.
 
 All routes require `Authorization: Bearer <token>` except public share links.
+An agent session's own bearer token is accepted too, but only within its scope
+(see Agent, below).
 
 ## Artifacts
 
@@ -129,8 +131,8 @@ DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 PUT    /api/agent/key                        Store provider API key {"provider","model","api_key"} (encrypted at rest)
 GET    /api/agent/key                        Key status (masked hint only — the key is never returned)
 DELETE /api/agent/key                        Remove the stored key
-POST   /api/agent/sessions                   Start a session {"artifact_id"?: bind to an existing artifact}
-POST   /api/agent/sessions/:id/prompt        Send a prompt {"message", "images"?: [{data, mime_type}]}
+POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact}
+POST   /api/agent/sessions/:id/prompt        Send a prompt {"message", "images"?: [{data, mime_type}], "snippets"?: [descriptor]}
 POST   /api/agent/sessions/:id/abort         Abort the current run
 DELETE /api/agent/sessions/:id               End the session
 GET    /api/agent/sessions/:id/events        SSE event stream (?token= auth — EventSource can't set headers)
@@ -140,7 +142,12 @@ GET    /api/artifacts/:id/transcripts        Agent conversations persisted with 
 Each session spawns a [Pi](https://github.com/badlogic/pi-mono) sidecar
 (`pi --mode rpc`) whose only tools call back into this API, so agent output
 enters the library through the same ingest path (scan + explicit allowlist
-approval) as everything else. The chat UI lives at `/agent`
+approval) as everything else. The sidecar authenticates with a **per-session
+credential scoped to one artifact**, not the service token: it may
+`POST /api/artifacts` until it binds, then `GET`/`PATCH` only that artifact;
+every other route answers 403. `snippets` entries are element descriptors
+captured inside the artifact — untrusted text the server fences as data rather
+than splicing into `message`. See `docs/security.md` §5. The chat UI lives at `/agent`
 (`/agent?artifact=<id>` to modify an existing artifact); snippet mode
 (Ctrl+Shift+S) lets you click an element in the live preview and attach its
 screenshot + selector to your next prompt. See [docs/agent.md](./docs/agent.md).

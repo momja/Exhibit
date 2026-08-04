@@ -26,10 +26,49 @@ browser chat UI ──POST prompt──► Go service ──JSONL stdin──►
 The single write path is preserved: the agent's only tools are
 `create_artifact` / `update_artifact` / `get_artifact`, registered by a Pi
 extension (`internal/agent/ext/exhibit.ts`, materialized to the data dir at
-startup) that calls back into the exhibit HTTP API with the service token.
-Agent output is scanned like any other ingest; scanned origins are **never**
-auto-approved — the chat UI tells the user when a saved artifact has a network
-footprint awaiting approval.
+startup) that calls back into the exhibit HTTP API. Agent output is scanned
+like any other ingest; scanned origins are **never** auto-approved — the chat
+UI tells the user when a saved artifact has a network footprint awaiting
+approval.
+
+## Scope: one session, one artifact
+
+A session reaches exactly one artifact, and that is enforced twice — once for
+ergonomics, once for real. `security.md` §5 is the full statement; the shape:
+
+- **No tool takes an artifact id.** `create_artifact(title, body)`,
+  `update_artifact(body[, title])`, `get_artifact()`. A tool with no id
+  parameter cannot be talked into a different target, which matters because
+  artifact bodies and titles are untrusted text that reaches the model's
+  context. The extension resolves the target from `EXHIBIT_ARTIFACT_ID`, or
+  from the API's response to the first create.
+- **The API refuses anything outside the scope.** The sidecar authenticates
+  with a per-session credential (`internal/agentscope`) that resolves to
+  (owner, artifact), not the service token. `authMiddleware` allows exactly
+  `POST /api/artifacts` while unbound, plus `GET`/`PATCH` on the session's own
+  artifact; every other route — including the BYO provider key — is a 403
+  before any handler runs.
+- **Create mode binds server-side.** `POST /api/artifacts` binds the
+  credential to the id it just wrote. The binding never comes from a tool
+  result, which model-supplied arguments shape.
+- The credential is revoked when the subprocess exits.
+
+## Session context: instructions and data are separate
+
+- The **system prompt** is entirely server-authored (`internal/agent/prompt.go`).
+  No artifact title, body, or id is interpolated into it.
+- The artifact's **current source is inlined** into the session's opening
+  user-role message, so a modify session does not spend a tool call reading
+  what the server was already holding. `get_artifact` stays registered for the
+  re-read after the agent's own save or a concurrent human edit.
+- The source, the title, and any snippet descriptor arrive inside a fenced
+  block whose delimiter carries a **per-session random nonce**
+  (`-----BEGIN EXHIBIT UNTRUSTED DATA <nonce>-----`), so injected text cannot
+  close the fence and pose as an instruction. The system prompt states the
+  contract; the nonce is redacted from block content.
+- Snippet descriptors reach the API as their own `snippets` field on the
+  prompt request, not concatenated into `message` — page JS never composes the
+  envelope, and never needs the nonce.
 
 ## BYO API key (encrypted at rest)
 
@@ -47,24 +86,39 @@ footprint awaiting approval.
   otherwise take precedence over the BYO key and silently bill the operator's
   account.
 
+The same env carries the exhibit-side contract, and nothing broader than the
+session needs:
+
+| Var | Value |
+|-----|-------|
+| `EXHIBIT_API_URL` | app origin the tools call back into |
+| `EXHIBIT_TOKEN` | the session's **scoped** credential — not the service token |
+| `EXHIBIT_ARTIFACT_ID` | the session's artifact (empty in create mode) |
+| `EXHIBIT_DATA_NONCE` | fence id for untrusted tool output |
+| `EXHIBIT_SESSION_ID` | this session's id |
+
 Supported providers: Anthropic, OpenAI, Google Gemini, OpenRouter, OpenCode
 Go, plus `exhibit-mock` when `MOCK_LLM_URL` is set.
 
 ## Sessions, streaming, transcripts
 
-- `POST /api/agent/sessions` (optional `artifact_id` binds the session to an
-  existing artifact for modify mode), `POST …/prompt` (message + optional
-  base64 images), `POST …/abort`, `DELETE …`.
+- `POST /api/agent/sessions` (optional `artifact_id` scopes the session to an
+  existing artifact for modify mode, and inlines its source into the opening
+  message), `POST …/prompt` (`message` + optional base64 `images` + optional
+  `snippets`, the element descriptors the server fences as data),
+  `POST …/abort`, `DELETE …`.
 - `GET /api/agent/sessions/:id/events` — SSE. EventSource can't set headers,
-  so this one route authenticates the same bearer token via `?token=`.
+  so this one route authenticates the same bearer token via `?token=`. It
+  accepts only the app's token: a session credential is not a page credential.
 - `internal/agent` tracks streaming state (prompts sent mid-stream become Pi
   steering messages), keeps an event backlog for late subscribers, reaps idle
   sessions, and on every settled turn persists the full Pi message list to
   `agent_transcripts` keyed by artifact — colophon-style provenance
   (`GET /api/artifacts/:id/transcripts`), the foundation for future remixing.
 - When a save-tool call succeeds, the session emits a synthetic
-  `exhibit_artifact_saved` event; the chat UI uses it to re-render the live
-  preview (see below).
+  `exhibit_artifact_saved` event naming the session's own artifact (from the
+  credential's scope, not the tool result); the chat UI uses it to re-render
+  the live preview (see below).
 
 ## Chat UI
 
@@ -127,11 +181,16 @@ capture leaves the sandbox only as data posted to that host.
 | `EXHIBIT_SECRET` | optional server secret for key encryption (else `data/secret.key` is generated) |
 | `MOCK_LLM_URL` | dev/test only: enables the `exhibit-mock` provider pointing at `cmd/mockllm` |
 
-`cmd/mockllm` is a deterministic OpenAI-compatible server (scripted
-create → read → update tool calls, color transforms, snippet acknowledgment)
-so the whole pipeline is testable end to end without real provider
-credentials; the exhibit extension registers it as a Pi custom provider only
-when `MOCK_LLM_URL` is set.
+`internal/mockllm` is a deterministic OpenAI-compatible chat-completions
+handler (scripted create / update / re-read tool calls, color transforms,
+snippet acknowledgment, and a scripted *injected* model that obeys an
+"also update artifact &lt;id&gt;" planted in untrusted data) so the whole pipeline
+is testable without real provider credentials. `cmd/mockllm` serves it as a
+standalone process for driving the surface by hand; Go tests mount
+`mockllm.Handler()` on an httptest server and spawn a real pi sidecar against
+it (`internal/api/agent_pipeline_test.go`, skipped when `pi` is not
+installed). The exhibit extension registers the provider only when
+`MOCK_LLM_URL` is set.
 
 ## Extraction plan (epic `Exh-i0ll`)
 
@@ -154,14 +213,17 @@ UI. Steps, in order:
    render iframes with both working).
 3. **Extraction** (`Exh-k75k`): move `internal/agent` (sessions, pi sidecar,
    `ext/exhibit.ts`), `internal/secrets` + the `agent_keys` storage, the
-   `/agent` chat UI, the agent API routes, and `cmd/mockllm` into the new
-   repo. Config: `EXHIBIT_URL` + `EXHIBIT_TOKEN`, `PI_BIN`, its own port and
-   secret. The browser talks only to the agent service, which **proxies**
-   every Exhibit read/write through the API with its token — no CORS opened
-   on Exhibit, no token in page JS. Then delete the agent code from Exhibit
-   core.
+   `/agent` chat UI, the agent API routes, and `internal/mockllm` +
+   `cmd/mockllm` into the new repo. Config: `EXHIBIT_URL` + `EXHIBIT_TOKEN`,
+   `PI_BIN`, its own port and secret. The browser talks only to the agent
+   service, which **proxies** every Exhibit read/write through the API — no
+   CORS opened on Exhibit, no token in page JS. Then delete the agent code
+   from Exhibit core.
 
 What stays in Exhibit, because it is genuinely core: the
+`internal/agentscope` registry and the scope check in `authMiddleware`
+(authorization is Exhibit's to keep, so an extracted agent service would
+obtain a session credential from Exhibit rather than mint one), the
 `agent_transcripts` table and its endpoints (artifact provenance belongs to
 the artifact), and the snippet picker (`internal/render/snippet.go` — a
 render-surface capability any embedding host can drive, not agent code).
