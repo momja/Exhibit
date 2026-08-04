@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -184,6 +185,21 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		opts.ArtifactTitle = a.Title
+		// Open the session with the current source already in context rather
+		// than making the agent spend its first tool call fetching what this
+		// handler is holding anyway (av-e0yj). Both title and body are
+		// untrusted; the session fences them as data.
+		if rc, berr := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID); berr == nil {
+			body, rerr := io.ReadAll(rc)
+			rc.Close()
+			if rerr == nil {
+				opts.ArtifactBody = string(body)
+			}
+		} else {
+			// Not fatal: the agent can still call get_artifact.
+			slog.WarnContext(r.Context(), "agent session opened without inlined body",
+				slog.String("artifact_id", req.ArtifactID), slog.String("err", berr.Error()))
+		}
 	}
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)
@@ -193,18 +209,25 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":          s.ID,
-		"artifact_id": s.ArtifactID,
+		"artifact_id": s.ArtifactID(),
 		"provider":    k.Provider,
 		"model":       k.Model,
 	})
 }
 
+// agentPromptRequest keeps the user's words and the untrusted material apart
+// on the wire. Message is what the person typed and is the only part that
+// reaches the model as an instruction; every Snippets entry is an element
+// descriptor captured from inside the artifact (selector, text, outerHTML) and
+// is fenced as data by the session. Page JS therefore never composes the
+// envelope — the fence id it would need stays server-side (av-e0yj).
 type agentPromptRequest struct {
 	Message string `json:"message"`
 	Images  []struct {
 		Data     string `json:"data"`
 		MimeType string `json:"mime_type"`
 	} `json:"images"`
+	Snippets []string `json:"snippets"`
 }
 
 func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +255,14 @@ func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
 		}
 		images = append(images, agent.ImageContent{Type: "image", Data: im.Data, MimeType: mt})
 	}
-	if err := s.Prompt(r.Context(), req.Message, images); err != nil {
+	data := make([]agent.DataBlock, 0, len(req.Snippets))
+	for i, descriptor := range req.Snippets {
+		if strings.TrimSpace(descriptor) == "" {
+			continue
+		}
+		data = append(data, agent.SnippetBlock(i, len(req.Snippets), descriptor))
+	}
+	if err := s.Prompt(r.Context(), req.Message, images, data); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}

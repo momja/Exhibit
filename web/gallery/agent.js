@@ -337,11 +337,11 @@ async function send() {
   if (!(await ensureSession())) return;
 
   const images = pendingSnippets.filter(s => s.image).map(s => ({data: s.image.data, mime_type: s.image.mimeType}));
-  let message = text;
-  pendingSnippets.forEach((s, i) => {
-    message += '\n\n[Snippet ' + (i + 1) + '] The user selected this element in the current artifact' +
-      (s.image ? ' (screenshot attached)' : '') + ':\n' + describeSnippet(s.descriptor);
-  });
+  // A snippet descriptor carries the picked element's outerHTML — artifact
+  // content, i.e. untrusted. It travels as its own field so the server can
+  // fence it as data (av-e0yj); splicing it into `message` here would hand it
+  // to the model as part of the user's instruction.
+  const snippets = pendingSnippets.map(s => describeSnippet(s.descriptor));
 
   const bubble = addMsg('user', text);
   pendingSnippets.forEach(s => {
@@ -358,7 +358,7 @@ async function send() {
 
   const r = await apiFetch('/api/agent/sessions/' + sessionId + '/prompt', {
     method: 'POST',
-    body: JSON.stringify({message, images})
+    body: JSON.stringify({message: text, images, snippets})
   });
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));

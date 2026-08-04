@@ -291,6 +291,16 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A create-mode agent session binds here, to the id this handler just
+	// wrote (av-e0yj). Binding from the row rather than from the tool result
+	// the model sees is what makes the scope unforgeable; from here the
+	// session's credential reaches this artifact and nothing else.
+	if g := agentGrantFromCtx(r.Context()); g != nil {
+		g.BindArtifact(id)
+		slog.InfoContext(r.Context(), "agent session bound to the artifact it created",
+			slog.String("artifact_id", id))
+	}
+
 	slog.DebugContext(r.Context(), "artifact created",
 		slog.String("id", id),
 		slog.String("title", req.Title),

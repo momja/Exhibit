@@ -5,6 +5,18 @@
 // exhibit HTTP API (the single write path). The user's decrypted provider key
 // is handed to the subprocess through its environment and never appears in
 // argv, page JS, or the datastore.
+//
+// A session is a mixture of two kinds of text and keeps them apart on purpose
+// (av-e0yj). Instructions — the system prompt and the user's own messages —
+// are authored by Exhibit and by the person at the keyboard. Everything else
+// (artifact sources, artifact titles, picked page elements) is untrusted: URL
+// ingest stores remote pages verbatim, so a hostile page can end up writing
+// it. Untrusted text never occupies the system role and never gets spliced
+// into a sentence; it travels in a fenced data block whose delimiter carries a
+// per-session random nonce, so text inside a block cannot close the fence and
+// impersonate an instruction. Containment, not the fence, is the actual wall:
+// the session authenticates with an agentscope credential that reaches exactly
+// one artifact.
 package agent
 
 import (
@@ -23,6 +35,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -31,13 +44,16 @@ var extFS embed.FS
 
 // Config for the Manager.
 type Config struct {
-	PiBin        string // pi executable, e.g. "pi"
-	WorkRoot     string // scratch root; per-session cwd + the materialized extension
-	APIBaseURL   string // exhibit app origin the extension calls back into
-	AuthToken    string // exhibit API token for the extension
+	PiBin      string // pi executable, e.g. "pi"
+	WorkRoot   string // scratch root; per-session cwd + the materialized extension
+	APIBaseURL string // exhibit app origin the extension calls back into
+	// Credentials mints each session's scoped API token. Required: the
+	// sidecar authenticates with a per-session grant, never the operator's
+	// service token (av-e0yj).
+	Credentials  *agentscope.Registry
 	MockLLMURL   string // when set, sessions may use the "exhibit-mock" provider
 	IdleTimeout  time.Duration
-	SystemPrompt string // optional override; empty uses the default
+	SystemPrompt string // optional override of the role prompt; empty uses the default
 }
 
 // providerEnv maps a provider name to the env var pi reads its key from.
@@ -65,6 +81,9 @@ type Manager struct {
 
 // New materializes the extension under cfg.WorkRoot and starts the idle reaper.
 func New(cfg Config, st store.Store) (*Manager, error) {
+	if cfg.Credentials == nil {
+		return nil, fmt.Errorf("agent manager needs a credential registry")
+	}
 	if cfg.IdleTimeout == 0 {
 		cfg.IdleTimeout = 30 * time.Minute
 	}
@@ -93,26 +112,20 @@ type ImageContent struct {
 
 // CreateOpts describes a new session.
 type CreateOpts struct {
-	OwnerID       int64
-	Provider      string
-	Model         string
-	APIKey        string // decrypted, handed to the subprocess env only
-	ArtifactID    string // non-empty: session edits an existing artifact
+	OwnerID  int64
+	Provider string
+	Model    string
+	APIKey   string // decrypted, handed to the subprocess env only
+	// ArtifactID non-empty means modify mode: the session is scoped to that
+	// artifact and its source is inlined into the first prompt. Empty means
+	// create mode — the session binds to whatever its first create returns.
+	ArtifactID string
+	// ArtifactTitle and ArtifactBody are untrusted (a URL-ingested artifact
+	// carries the remote page's title and markup verbatim). They reach the
+	// model only inside a fenced data block, never in the system prompt.
 	ArtifactTitle string
+	ArtifactBody  string
 }
-
-const defaultSystemPrompt = `You are the artifact builder inside Exhibit, a personal library of small self-contained web tools.
-
-An artifact is a SINGLE-FILE, self-contained HTML document: all CSS and JavaScript inline in the one file, no external network dependencies (a per-artifact allowlist blocks unapproved origins at render time, so prefer zero external references). localStorage and sessionStorage work and persist across the user's devices.
-
-Your tools:
-- create_artifact(title, body): save a brand-new artifact. Returns its id and render URL.
-- update_artifact(id, body[, title]): overwrite an existing artifact's source.
-- get_artifact(id): read an artifact's current source and metadata.
-
-Workflow: compose the complete HTML document, then save it with create_artifact (new) or update_artifact (existing). Always save the FULL document — never a fragment or a diff. After saving, tell the user in one or two sentences what you built or changed; do not repeat the source code in chat.
-
-If the user message includes a snippet (an attached screenshot plus an element descriptor with selector/outerHTML), that is the exact element the user means — locate it in the source by the descriptor and apply the change there.`
 
 // Create decrypted-key session: spawns the pi subprocess and starts its reader.
 func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error) {
@@ -130,13 +143,24 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		return nil, fmt.Errorf("create session dir: %w", err)
 	}
 
-	sysPrompt := m.cfg.SystemPrompt
-	if sysPrompt == "" {
-		sysPrompt = defaultSystemPrompt
+	nonce, err := newNonce()
+	if err != nil {
+		return nil, err
 	}
-	if opts.ArtifactID != "" {
-		sysPrompt += fmt.Sprintf("\n\nThis session is editing the existing artifact id %q titled %q. Read it with get_artifact before changing it, and save with update_artifact (never create_artifact).", opts.ArtifactID, opts.ArtifactTitle)
+	// The credential is what actually confines this session: it resolves to
+	// (owner, artifact) and the API refuses everything else. The subprocess
+	// never sees the operator's service token (av-e0yj).
+	grant, err := m.cfg.Credentials.Issue(opts.OwnerID, opts.ArtifactID)
+	if err != nil {
+		return nil, err
 	}
+	spawned := false
+	defer func() {
+		if !spawned {
+			m.cfg.Credentials.Revoke(grant) // no live subprocess ⇒ no live token
+		}
+	}()
+	sysPrompt := buildSystemPrompt(m.cfg.SystemPrompt, nonce)
 
 	args := []string{
 		"--mode", "rpc",
@@ -165,7 +189,13 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		"LANG=" + os.Getenv("LANG"),
 		"TMPDIR=" + os.TempDir(),
 		"EXHIBIT_API_URL=" + m.cfg.APIBaseURL,
-		"EXHIBIT_TOKEN=" + m.cfg.AuthToken,
+		// Scoped to this session's artifact, not the service token.
+		"EXHIBIT_TOKEN=" + grant.Token(),
+		// The tools' target, so none of them needs an id parameter.
+		"EXHIBIT_ARTIFACT_ID=" + opts.ArtifactID,
+		// Fence id for untrusted tool output (get_artifact), matching the
+		// contract stated in the system prompt.
+		"EXHIBIT_DATA_NONCE=" + nonce,
 		"EXHIBIT_SESSION_ID=" + id,
 		envKey + "=" + opts.APIKey,
 	}
@@ -188,11 +218,13 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start pi: %w", err)
 	}
+	spawned = true
 
 	s := &Session{
 		ID:         id,
 		OwnerID:    opts.OwnerID,
-		ArtifactID: opts.ArtifactID,
+		grant:      grant,
+		nonce:      nonce,
 		mgr:        m,
 		cmd:        cmd,
 		stdin:      stdin,
@@ -200,6 +232,13 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		pending:    map[string]chan json.RawMessage{},
 		done:       make(chan struct{}),
 		lastActive: time.Now(),
+	}
+	// Modify mode opens with the artifact's current source already in
+	// context, so the agent does not spend a tool call reading what the
+	// server just had in hand. get_artifact stays available for the re-read
+	// after a save or a concurrent human edit.
+	if opts.ArtifactID != "" {
+		s.pendingData = []DataBlock{artifactSourceBlock(opts.ArtifactID, opts.ArtifactTitle, opts.ArtifactBody)}
 	}
 	go s.readLoop(stdout)
 	go s.drainStderr(stderr)
@@ -266,23 +305,35 @@ type Session struct {
 	ID      string
 	OwnerID int64
 
+	// grant is the session's API credential and the single source of truth
+	// for which artifact it may touch. In create mode it starts unbound and
+	// the API's create handler binds it — the session never derives its
+	// artifact from tool output, which the model's arguments shape.
+	grant *agentscope.Grant
+	// nonce fences untrusted text in this session's prompts.
+	nonce string
+
 	mgr   *Manager
 	cmd   *exec.Cmd
 	stdin io.WriteCloser
 
 	writeMu sync.Mutex // serializes stdin writes
 
-	mu         sync.Mutex // guards everything below
-	ArtifactID string     // artifact bound to this session (set on first save)
-	subs       map[chan []byte]struct{}
-	backlog    [][]byte
-	pending    map[string]chan json.RawMessage
-	streaming  bool
-	closed     bool
-	lastActive time.Time
+	mu          sync.Mutex // guards everything below
+	pendingData []DataBlock
+	subs        map[chan []byte]struct{}
+	backlog     [][]byte
+	pending     map[string]chan json.RawMessage
+	streaming   bool
+	closed      bool
+	lastActive  time.Time
 
 	done chan struct{}
 }
+
+// ArtifactID is the artifact this session is scoped to, or "" while a
+// create-mode session has yet to save anything.
+func (s *Session) ArtifactID() string { return s.grant.Scope().ArtifactID }
 
 // maxBacklog bounds replayed events for late SSE subscribers.
 const maxBacklog = 4096
@@ -310,19 +361,31 @@ func (s *Session) Subscribe() (<-chan []byte, func()) {
 	}
 }
 
-// Prompt sends a user prompt (optionally with images). If the agent is
-// mid-stream the message is queued as a steering message.
-func (s *Session) Prompt(ctx context.Context, message string, images []ImageContent) error {
-	cmd := map[string]any{"type": "prompt", "message": message}
+// Prompt sends a user prompt (optionally with images and untrusted data
+// blocks). If the agent is mid-stream the message is queued as a steering
+// message.
+//
+// message is the user's own words and travels as-is. Every DataBlock — the
+// artifact source a modify session opens with, an element picked in the
+// preview — is fenced onto the end of the same user-role message, so no
+// untrusted text ever reaches the model as an instruction.
+func (s *Session) Prompt(ctx context.Context, message string, images []ImageContent, data []DataBlock) error {
+	s.mu.Lock()
+	steer := s.streaming
+	// The session's opening block rides the first prompt. It is held, not
+	// cleared, until the prompt actually lands — a rejected send must not
+	// silently drop the artifact source from the conversation.
+	blocks := append(append([]DataBlock{}, s.pendingData...), data...)
+	s.lastActive = time.Now()
+	s.mu.Unlock()
+
+	cmd := map[string]any{"type": "prompt", "message": composePrompt(s.nonce, message, blocks)}
 	if len(images) > 0 {
 		cmd["images"] = images
 	}
-	s.mu.Lock()
-	if s.streaming {
+	if steer {
 		cmd["streamingBehavior"] = "steer"
 	}
-	s.lastActive = time.Now()
-	s.mu.Unlock()
 
 	resp, err := s.roundTrip(ctx, cmd)
 	if err != nil {
@@ -338,6 +401,9 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	if !r.Success {
 		return fmt.Errorf("prompt rejected: %s", r.Error)
 	}
+	s.mu.Lock()
+	s.pendingData = nil
+	s.mu.Unlock()
 	return nil
 }
 
@@ -443,9 +509,8 @@ func (s *Session) handleLine(line []byte) {
 		s.mu.Lock()
 		s.streaming = false
 		s.lastActive = time.Now()
-		artifactID := s.ArtifactID
 		s.mu.Unlock()
-		if artifactID != "" {
+		if artifactID := s.ArtifactID(); artifactID != "" {
 			go s.persistTranscript(artifactID)
 		}
 	case "tool_execution_end":
@@ -457,16 +522,21 @@ func (s *Session) handleLine(line []byte) {
 	s.broadcast(bytes.Clone(line))
 }
 
-// noteArtifactSaved binds the session to the saved artifact and emits a
-// synthetic event the chat UI uses to show the live preview.
+// noteArtifactSaved emits the synthetic event the chat UI uses to re-render
+// the live preview, after a create/update tool call lands.
+//
+// The id comes from the session's grant, which the API's create handler bound
+// from the row it wrote — not from the tool result, whose contents are shaped
+// by model-supplied arguments. A session therefore cannot be talked into
+// pointing its own preview, transcript, or scope at somebody else's artifact
+// (av-e0yj).
 func (s *Session) noteArtifactSaved(details map[string]any) {
-	artifactID, _ := details["artifactId"].(string)
+	artifactID := s.ArtifactID()
 	if artifactID == "" {
+		slog.Warn("agent reported a save with no artifact bound to the session",
+			slog.String("session_id", s.ID))
 		return
 	}
-	s.mu.Lock()
-	s.ArtifactID = artifactID
-	s.mu.Unlock()
 	ev, _ := json.Marshal(map[string]any{
 		"type":       "exhibit_artifact_saved",
 		"artifactId": artifactID,
@@ -536,12 +606,15 @@ func (s *Session) finish() {
 	s.closed = true
 	s.streaming = false
 	s.mu.Unlock()
+	// The credential dies with the process that held it.
+	s.mgr.cfg.Credentials.Revoke(s.grant)
 	close(s.done)
 	ev, _ := json.Marshal(map[string]string{"type": "exhibit_session_closed"})
 	s.broadcast(ev)
 }
 
 func (s *Session) kill() {
+	s.mgr.cfg.Credentials.Revoke(s.grant)
 	_ = s.stdin.Close()
 	if s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()

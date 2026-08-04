@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/logging"
 	"github.com/momja/Exhibit/internal/render"
@@ -22,9 +23,13 @@ type Config struct {
 	AuthToken    string
 	// Agent chat support (Exh-yvhp). Agent is nil when the pi harness is
 	// unavailable; Secrets seals the BYO provider keys at rest.
-	Agent       *agent.Manager
-	Secrets     *secrets.Box
-	MockEnabled bool
+	// AgentCredentials resolves the per-session scoped tokens agent sidecars
+	// authenticate with (av-e0yj) — the same registry the manager issues
+	// from. Nil means no agent credential is accepted at all.
+	Agent            *agent.Manager
+	AgentCredentials *agentscope.Registry
+	Secrets          *secrets.Box
+	MockEnabled      bool
 }
 
 // Router wraps chi.Mux and holds the config.
@@ -76,7 +81,7 @@ func (ro *Router) setupRoutes() {
 
 	// Authenticated API routes
 	ro.Group(func(r chi.Router) {
-		r.Use(authMiddleware(ro.cfg.AuthToken))
+		r.Use(ro.authMiddleware)
 		r.Use(ownerMiddleware)
 
 		r.Route("/api/artifacts", func(r chi.Router) {
