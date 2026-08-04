@@ -15,6 +15,7 @@ WORKDIR /app
 
 COPY web/ ./web/
 COPY scripts/ ./scripts/
+COPY internal/api/logo.svg ./internal/api/logo.svg
 
 RUN sh scripts/build-assets.sh
 
