@@ -112,6 +112,9 @@ type Router struct {
 	// contract, and attempt counters do not earn a table — see
 	// loginratelimit.go, which also holds the reasoning for what it keys on.
 	logins *loginLimiter
+	// sseTickets authenticates the agent event stream, the one route a
+	// browser cannot send a header on (av-rgp1). See ssetickets.go.
+	sseTickets *sseTicketStore
 }
 
 // compressibleTypes is the explicit set of response content types worth
@@ -308,10 +311,11 @@ func (cw *gzipResponseWriter) Close() error {
 // NewRouter constructs the chi router with all routes registered.
 func NewRouter(cfg Config) *Router {
 	r := &Router{
-		Mux:    chi.NewRouter(),
-		cfg:    cfg,
-		tokens: renderSigner(cfg.Secrets),
-		logins: newLoginLimiter(nil),
+		Mux:        chi.NewRouter(),
+		cfg:        cfg,
+		tokens:     renderSigner(cfg.Secrets),
+		logins:     newLoginLimiter(nil),
+		sseTickets: newSSETicketStore(sseTicketTTL),
 	}
 	r.setupRoutes()
 	return r
@@ -424,10 +428,12 @@ func (ro *Router) setupRoutes() {
 	ro.Get("/api/settings/public", ro.publicSettings)
 
 	// The agent SSE event stream. EventSource can't set headers, so the
-	// handler checks the same bearer token passed as ?token= (or the session
-	// cookie) itself rather than going through the API's auth middleware. It
-	// resolves a session by id and streams its events; it reads nothing
-	// owner-scoped, which is why it stays out of the page group above.
+	// handler authenticates itself rather than going through the API's auth
+	// middleware: the browser's session cookie when this instance has a login,
+	// and otherwise a single-use, seconds-lived, session-bound ticket minted by
+	// an ordinary authenticated request — so the static token never travels in
+	// a URL (av-rgp1). Redeeming either resolves the Principal the rest of the
+	// handler needs, which is why it can sit outside the page group above.
 	ro.Get("/api/agent/sessions/{sessionID}/events", ro.agentEvents)
 
 	// Authenticated API routes
@@ -487,6 +493,9 @@ func (ro *Router) setupRoutes() {
 			byok.Put("/key", ro.putAgentKey)
 			byok.Delete("/key", ro.deleteAgentKey)
 			r.Post("/sessions", ro.createAgentSession)
+			// Mints a fresh SSE ticket for a session the caller already
+			// owns — the reconnect path, since a ticket is single-use.
+			r.Post("/sessions/{sessionID}/ticket", ro.agentSessionTicket)
 			r.Post("/sessions/{sessionID}/prompt", ro.agentPrompt)
 			r.Post("/sessions/{sessionID}/abort", ro.agentAbort)
 			r.Delete("/sessions/{sessionID}", ro.closeAgentSession)

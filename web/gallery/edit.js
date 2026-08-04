@@ -411,12 +411,17 @@ async function deleteArtifact() {
           finish('✗ ' + (data.error || r.statusText));
           return;
         }
-        const sessionId = (await r.json()).session_id;
+        const started = await r.json();
+        const sessionId = started.session_id;
 
-        // EventSource cannot set headers, so the credential (when this page
-        // was given one) travels in the query string; api.js owns that, and
-        // omits it entirely when the session cookie is what authenticates.
-        events = apiEventSource('/api/agent/sessions/' + encodeURIComponent(sessionId) + '/events');
+        // EventSource cannot set headers, so the credential (when this page was
+        // given one) travels in the query string: the single-use, session-bound
+        // ticket this response carried, never the service token (av-rgp1).
+        // api.js owns that, and omits it entirely when the session cookie is
+        // what authenticates.
+        events = apiEventSource(
+          '/api/agent/sessions/' + encodeURIComponent(sessionId) + '/events',
+          started.sse_ticket);
         timer = setTimeout(function() {
           finish('✗ Timed out waiting for the agent. Try again, or write the widget by hand.');
         }, GENERATE_TIMEOUT_MS);

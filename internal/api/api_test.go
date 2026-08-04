@@ -90,6 +90,29 @@ func TestAuthMiddleware(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+// The token comparison is constant-time (crypto/subtle), so it cannot leak the
+// shared prefix to an attacker timing requests. Timing is not testable here;
+// what is testable is that the constant-time path still decides correctly for
+// the cases a byte-wise compare would have short-circuited on — a shared
+// prefix, a shared length, a longer guess (av-rgp1).
+func TestAuthMiddlewareRejectsNearMissTokens(t *testing.T) {
+	r := newTestRouter(t)
+
+	for _, guess := range []string{
+		"Bearer s",            // shares a prefix with "secret"
+		"Bearer secres",       // same length, differs in the last byte
+		"Bearer secretsecret", // right prefix, wrong length
+		"secret",              // no scheme
+		"Basic secret",        // wrong scheme
+	} {
+		req := httptest.NewRequest("GET", "/api/artifacts", nil)
+		req.Header.Set("Authorization", guess)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code, "guess %q must not authenticate", guess)
+	}
+}
+
 func TestIngestAndGet(t *testing.T) {
 	r := newTestRouter(t)
 

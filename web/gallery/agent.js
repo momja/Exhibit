@@ -194,7 +194,7 @@ async function deleteKey() {
 
 // --- Session + SSE --------------------------------------------------------
 function resetSession() {
-  if (eventSource) { eventSource.close(); eventSource = null; }
+  closeEvents();
   if (sessionId) { apiFetch('/api/agent/sessions/' + sessionId, {method:'DELETE'}).catch(()=>{}); }
   sessionId = null;
   setStreaming(false);
@@ -211,20 +211,65 @@ async function ensureSession() {
     return false;
   }
   sessionId = d.id;
-  connectEvents();
+  connectEvents(d.sse_ticket);
   return true;
 }
 
-function connectEvents() {
-  // api.js credentials the stream: a query-string token on a single-user
-  // instance, and nothing at all when the session cookie authenticates it.
-  eventSource = apiEventSource('/api/agent/sessions/' + encodeURIComponent(sessionId) + '/events');
+// api.js credentials the stream: a single-use, seconds-lived, session-bound
+// ticket on a single-user instance — never the service token, which a URL would
+// leak into request logs, proxy logs, and history (av-rgp1) — and nothing at all
+// when a session cookie authenticates it.
+//
+// Because a ticket is spent on connect, EventSource's own automatic retry
+// cannot reconnect us: it would replay a URL whose ticket is already gone. So
+// we drive reconnection ourselves, minting a ticket per attempt. The session's
+// backlog replay makes that lossless.
+const EVENTS_RETRY_MS = 1000;
+const EVENTS_RETRY_MAX_MS = 15000;
+let eventsRetryMs = EVENTS_RETRY_MS;
+let eventsRetryTimer = null;
+
+function closeEvents() {
+  if (eventsRetryTimer) { clearTimeout(eventsRetryTimer); eventsRetryTimer = null; }
+  if (eventSource) { eventSource.close(); eventSource = null; }
+}
+
+function connectEvents(ticket) {
+  eventSource = apiEventSource(
+    '/api/agent/sessions/' + encodeURIComponent(sessionId) + '/events', ticket);
+  eventSource.onopen = () => { eventsRetryMs = EVENTS_RETRY_MS; };
   eventSource.onmessage = (e) => {
     let ev;
     try { ev = JSON.parse(e.data); } catch { return; }
     handleAgentEvent(ev);
   };
-  eventSource.onerror = () => { /* EventSource retries automatically */ };
+  eventSource.onerror = () => { reconnectEvents(); };
+}
+
+function reconnectEvents() {
+  if (!sessionId || eventsRetryTimer) return;
+  closeEvents();
+  const wait = eventsRetryMs;
+  eventsRetryMs = Math.min(eventsRetryMs * 2, EVENTS_RETRY_MAX_MS);
+  eventsRetryTimer = setTimeout(async () => {
+    eventsRetryTimer = null;
+    if (!sessionId) return;
+    const watching = sessionId;
+    let r = null;
+    try {
+      r = await apiFetch('/api/agent/sessions/' + encodeURIComponent(watching) + '/ticket', {method:'POST'});
+    } catch { /* offline — fall through to another retry */ }
+    if (sessionId !== watching) return;   // session was reset while we waited
+    if (!r || !r.ok) {
+      // 404 means the session is gone (closed or reaped): stop retrying.
+      if (r && r.status === 404) { sessionId = null; setStreaming(false); return; }
+      reconnectEvents();
+      return;
+    }
+    const d = await r.json().catch(() => ({}));
+    if (d.sse_ticket) connectEvents(d.sse_ticket);
+    else reconnectEvents();
+  }, wait);
 }
 
 // Streaming display state

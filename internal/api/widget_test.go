@@ -386,9 +386,11 @@ func TestWidgetGenerateTakesNoCallerPrompt(t *testing.T) {
 	assert.NotContains(t, src[i:i+400], "JSON.stringify")
 	// Progress rides the session's existing SSE route, not a new mechanism.
 	// apiEventSource is that route credentialed for this visitor (av-5imk):
-	// a query-string token on a single-user instance, nothing at all when a
-	// session cookie is what authenticates the stream.
-	assert.Contains(t, src, "apiEventSource('/api/agent/sessions/'")
+	// the single-use ticket the generate response carried on a single-user
+	// instance (av-rgp1), nothing at all when a session cookie is what
+	// authenticates the stream.
+	assert.Contains(t, src, "apiEventSource(")
+	assert.Contains(t, src, "started.sse_ticket")
 	assert.Contains(t, src, "'exhibit_widget_saved'")
 	// A one-shot session is closed once it has done its job.
 	assert.Contains(t, src, "apiFetch('/api/agent/sessions/' + encodeURIComponent(sessionId), {")

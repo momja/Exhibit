@@ -1,6 +1,6 @@
 ---
 id: av-rgp1
-status: in_progress
+status: closed
 deps: []
 links: [av-wmp6, av-5imk]
 created: 2026-08-03T05:02:10Z
