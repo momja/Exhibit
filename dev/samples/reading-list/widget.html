@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reading List — widget</title>
+<style>
+/* ---------------------------------------------------------------------------
+   Reading List widget — the glanceable face of the Reading List artifact.
+
+   Contract it lives by:
+     * READ-ONLY. It never calls setItem/removeItem; it only reads the artifact's
+       key, which the host has already inlined before this script runs.
+     * NON-INTERACTIVE. No controls, no handlers, no pointer affordances — the
+       host swallows pointer events and a click opens the full artifact.
+     * FLUID. The viewport is ~272x132 but may be 230-420 wide, 120-170 tall,
+       so every box is percentage/flex based. vw/vh here resolve against the
+       widget's own iframe viewport, which makes them a safe fluid unit.
+     * NO NETWORK. Inline styles, inline SVG, system font stack.
+--------------------------------------------------------------------------- */
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+	font:400 13px/1.4 system-ui,sans-serif;
+	color:#111;
+	/* No background: the gallery card behind us is already #fff, and the host
+	   sets `background:transparent`. Painting one would only risk a seam. */
+	-webkit-font-smoothing:antialiased;
+}
+
+.w{
+	height:100%;width:100%;
+	padding:10px 13px;
+	display:flex;flex-direction:column;
+	overflow:hidden;
+}
+
+/* --- the loaded state ----------------------------------------------------
+   Five stacked facts have to survive a 120px-tall viewport, so every child is
+   flex:none (nothing may be squeezed into illegibility) and the vertical
+   budget is spent deliberately: title, author, bar, pages, footer.          */
+.book{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center}
+.book > *{flex:none}
+
+.title{
+	font-size:clamp(14px,5.4vw,17px);
+	font-weight:650;
+	line-height:1.18;
+	letter-spacing:-.01em;
+	/* Two lines, then ellipsis — a long title must never push the progress bar
+	   out of the widget. Short viewports fall back to one line (below). */
+	display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+	overflow:hidden;
+}
+.author{
+	margin-top:2px;
+	font-size:11.5px;line-height:1.25;color:#888;
+	white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+.progress{display:flex;align-items:center;gap:9px;margin-top:9px}
+.bar{flex:1;min-width:0;height:7px;border-radius:999px;background:#e0e0e0;overflow:hidden}
+.fill{height:100%;border-radius:999px;background:#23559e}
+.pct{
+	flex:none;font-size:13px;font-weight:650;color:#23559e;
+	font-variant-numeric:tabular-nums;letter-spacing:-.01em;
+}
+.pages{margin-top:4px;font-size:11px;line-height:1.2;color:#888;font-variant-numeric:tabular-nums}
+
+/* --- the empty state ----------------------------------------------------- */
+.empty{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;text-align:center}
+.empty svg{width:21px;height:21px;color:#c9c9c9}
+.empty .headline{font-size:13.5px;font-weight:550;line-height:1.2;color:#333}
+.empty .sub{font-size:11px;line-height:1.2;color:#888}
+
+/* --- footer -------------------------------------------------------------- */
+.foot{
+	flex:none;margin-top:7px;padding-top:6px;border-top:1px solid #e0e0e0;
+	font-size:10.5px;line-height:1.25;color:#888;font-variant-numeric:tabular-nums;
+	white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+/* Below the nominal 132px there is no room for a second title line; give it
+   up rather than clip the pages count off the bottom. The query resolves
+   against the widget's own viewport, so the host's height decides. */
+@media (max-height:130px){
+	.w{padding:9px 12px}
+	.title{-webkit-line-clamp:1}
+	.progress{margin-top:7px}
+}
+
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+
+<div class="w">
+	<!-- Loaded state -->
+	<div class="book" id="book" hidden>
+		<div class="title" id="title"></div>
+		<div class="author" id="author"></div>
+		<div class="progress">
+			<div class="bar"><div class="fill" id="fill"></div></div>
+			<div class="pct" id="pct"></div>
+		</div>
+		<div class="pages" id="pages"></div>
+	</div>
+
+	<!-- Empty state -->
+	<div class="empty" id="empty" hidden>
+		<!-- An open book, drawn as two facing pages: the silhouette still reads
+		     at ~21px, where a spine-and-cover glyph collapses into a square. -->
+		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<path d="M12 7c-1.6-1.7-4.3-2.5-9-2.5v13c4.7 0 7.4.8 9 2.5 1.6-1.7 4.3-2.5 9-2.5v-13c-4.7 0-7.4.8-9 2.5z"/>
+			<path d="M12 7v13"/>
+		</svg>
+		<div class="headline">No book in progress</div>
+		<div class="sub" id="empty-sub"></div>
+	</div>
+
+	<div class="foot" id="foot" hidden></div>
+</div>
+
+<script>
+(function(){
+	'use strict';
+
+	var KEY = 'exhibit.reading-list.v1';
+
+	/* Read once, synchronously. The host inlines the artifact's state into the
+	   storage shim before this script runs, so getItem is already correct here;
+	   there is nothing to wait for and nothing to re-fetch. */
+	var books = readBooks();
+
+	function readBooks() {
+		try {
+			var raw = localStorage.getItem(KEY);
+			if (!raw) return [];
+			var doc = JSON.parse(raw);
+			if (!doc || !Array.isArray(doc.books)) return [];
+			return doc.books.filter(function (b) { return b && typeof b === 'object'; });
+		} catch (err) {
+			// Missing, truncated, or foreign value — fall through to the empty
+			// state rather than showing a broken widget.
+			return [];
+		}
+	}
+
+	function text(v) { return typeof v === 'string' ? v.trim() : ''; }
+	function num(v) {
+		var n = Math.round(Number(v));
+		return isFinite(n) && n > 0 ? n : 0;
+	}
+	function statusOf(b) {
+		return b.status === 'reading' || b.status === 'queued' || b.status === 'finished' ? b.status : '';
+	}
+	function fraction(b) {
+		var pages = num(b.pages);
+		return pages ? Math.min(1, Math.max(0, num(b.read) / pages)) : 0;
+	}
+
+	/* Which book is the headline: the one the artifact flagged `current`,
+	   otherwise the furthest-along book still being read (the best available
+	   stand-in for "most recently progressed" — the schema carries no per-book
+	   timestamp, and later array position breaks ties as the newer entry). */
+	function pickCurrent() {
+		var reading = books.filter(function (b) { return statusOf(b) === 'reading' && text(b.title); });
+		if (!reading.length) return null;
+		var flagged = reading.filter(function (b) { return b.current === true; });
+		if (flagged.length) return flagged[flagged.length - 1];
+		return reading.reduce(function (best, b) {
+			return fraction(b) >= fraction(best) ? b : best;
+		});
+	}
+
+	function finishedThisYear() {
+		var year = String(new Date().getFullYear());
+		return books.filter(function (b) {
+			return statusOf(b) === 'finished' && text(b.finishedAt).slice(0, 4) === year;
+		}).length;
+	}
+
+	function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+	var el = {
+		book: document.getElementById('book'),
+		title: document.getElementById('title'),
+		author: document.getElementById('author'),
+		fill: document.getElementById('fill'),
+		pct: document.getElementById('pct'),
+		pages: document.getElementById('pages'),
+		empty: document.getElementById('empty'),
+		emptySub: document.getElementById('empty-sub'),
+		foot: document.getElementById('foot')
+	};
+
+	var current = pickCurrent();
+
+	if (current) {
+		var pages = num(current.pages);
+		var read = Math.min(num(current.read), pages || Infinity);
+		var percent = pages ? Math.round((read / pages) * 100) : 0;
+		// Hold at 99% until the artifact actually marks the book finished, so a
+		// rounded 100% never reads as "done" on the shelf that says otherwise.
+		if (percent >= 100) percent = 99;
+
+		el.title.textContent = text(current.title);
+		el.author.textContent = text(current.author) || 'Unknown author';
+		el.fill.style.width = percent + '%';
+		el.pct.textContent = percent + '%';
+		el.pages.textContent = pages
+			? read.toLocaleString() + ' of ' + pages.toLocaleString() + ' pages'
+			: plural(read, 'page read', 'pages read');
+		el.book.hidden = false;
+	} else {
+		var queued = books.filter(function (b) { return statusOf(b) === 'queued'; }).length;
+		var done = books.filter(function (b) { return statusOf(b) === 'finished'; }).length;
+		el.emptySub.textContent = queued ? plural(queued, 'book', 'books') + ' up next'
+			: done ? 'All caught up'
+			: 'Your shelf is empty';
+		el.empty.hidden = false;
+	}
+
+	// The footer is one quiet fact, and always a true one: this year's finishes
+	// when there are any, the shelf size otherwise, nothing at all when empty.
+	var thisYear = finishedThisYear();
+	if (thisYear) {
+		el.foot.textContent = thisYear + ' finished this year';
+		el.foot.hidden = false;
+	} else if (books.length) {
+		el.foot.textContent = plural(books.length, 'book', 'books') + ' on the shelf';
+		el.foot.hidden = false;
+	}
+})();
+</script>
+</body>
+</html>

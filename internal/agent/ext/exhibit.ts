@@ -2,9 +2,10 @@
  * Exhibit tools extension for Pi (Exh-hvaf, av-lvi1).
  *
  * Loaded by the exhibit service into every agent session it spawns
- * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model six
+ * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model eight
  * tools — create_artifact / update_artifact / get_artifact for the document,
- * and get_state / set_state / delete_state for the artifact's stored state —
+ * get_state / set_state / delete_state for the artifact's stored state, and
+ * set_widget / get_widget for the artifact's gallery-card widget (av-fafu) —
  * all of which go through the exhibit HTTP API, so agent output enters the
  * library through the same single write path as every other ingest (scan,
  * footprint, explicit allowlist approval) and every other state edit (the
@@ -248,6 +249,77 @@ export default function (pi: ExtensionAPI) {
 				artifactId: params.id,
 				action: "cleared_all",
 			});
+		},
+	});
+
+	pi.registerTool({
+		name: "set_widget",
+		label: "Set widget",
+		description:
+			"Save (or replace) an artifact's gallery widget — the small, glanceable tile its card " +
+			"shows in the library, like an iOS home-screen widget. body must be a complete, " +
+			"self-contained HTML document. The widget reads the SAME localStorage keys the artifact " +
+			"writes (state is inlined before its scripts run, so synchronous getItem at startup is " +
+			"correct), but it CANNOT write state, download files, or use the clipboard, and it is " +
+			"rendered non-interactive — a click on it opens the artifact. Design for a ~272x132 px " +
+			"tile that is fluid to 230-420 wide, show one or two facts, and always render a calm " +
+			"empty state. A stateless tool's widget is simply a static card with no script.",
+		parameters: Type.Object({
+			id: Type.String({ description: "Artifact id" }),
+			body: Type.String({ description: "Complete HTML document for the widget" }),
+		}),
+		async execute(_id, params) {
+			const r = await api("PUT", "/api/artifacts/" + encodeURIComponent(params.id) + "/widget", {
+				body: params.body,
+			});
+			const unapproved: string[] = r.unapproved_origins || [];
+			let text = `Saved the gallery widget for artifact ${params.id}.`;
+			if (unapproved.length > 0) {
+				// The widget shares the artifact's allowlist, so an origin the
+				// artifact never got approved for is simply blocked at render.
+				// Say so rather than letting it show up as a blank tile.
+				text +=
+					` Warning: it references ${unapproved.join(", ")}, which the artifact's network ` +
+					`allowlist does not cover — the browser will block those. Prefer a widget with no ` +
+					`external references at all.`;
+			}
+			return ok(text, {
+				exhibit: "widget_saved",
+				artifactId: params.id,
+				widgetUrl: r.widget_url,
+				unapproved,
+			});
+		},
+	});
+
+	pi.registerTool({
+		name: "get_widget",
+		label: "Read widget",
+		description:
+			"Read an artifact's current gallery widget source. Reports that there is no widget yet " +
+			"when the artifact has none.",
+		parameters: Type.Object({
+			id: Type.String({ description: "Artifact id" }),
+		}),
+		async execute(_id, params) {
+			const path = "/api/artifacts/" + encodeURIComponent(params.id) + "/widget";
+			try {
+				const r = await api("GET", path);
+				return ok(r.body || "", { exhibit: "widget_read", artifactId: params.id });
+			} catch (err) {
+				// A widget-less artifact 404s. That is an ordinary answer to this
+				// question, not a tool failure, so return it as text — an error
+				// would make the model retry or apologize for nothing.
+				const msg = err instanceof Error ? err.message : String(err);
+				if (msg.includes("-> 404")) {
+					return ok(`Artifact ${params.id} has no widget yet.`, {
+						exhibit: "widget_read",
+						artifactId: params.id,
+						missing: true,
+					});
+				}
+				throw err;
+			}
 		},
 	});
 }

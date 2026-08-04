@@ -8,10 +8,14 @@ package api
 
 import (
 	"fmt"
+	"hash/fnv"
 	"html/template"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/color"
@@ -29,7 +33,7 @@ func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 
 	tags, _ := ro.cfg.Store.ListTags(r.Context(), 1)
 
-	page, err := renderGalleryPage(arts, tags, q, ro.cfg.AuthToken)
+	page, err := renderGalleryPage(arts, tags, q, ro.cfg.AuthToken, ro.cfg.RenderOrigin)
 	if err != nil {
 		serverError(w, r, "gallery index render", err)
 		return
@@ -104,13 +108,68 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, err := renderEditPage(a, decisions, string(src), ro.cfg.AuthToken)
+	canGenerate, generateHint := ro.widgetGenerateAvailability(r)
+	page, err := renderEditPage(a, decisions, string(src), ro.widgetSource(r, a), ro.cfg.AuthToken, ro.cfg.RenderOrigin, canGenerate, generateHint)
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, page)
+}
+
+// widgetSource reads an artifact's widget body for the edit page's editor, or
+// "" when it has none. An unreadable widget blob is treated as absent rather
+// than as an error: the edit page's job is to let the user fix the artifact,
+// and failing the whole page over its tile would take that away.
+func (ro *Router) widgetSource(r *http.Request, a *store.Artifact) string {
+	if a.WidgetBlobID == "" {
+		return ""
+	}
+	rc, err := ro.cfg.Blob.Get(r.Context(), a.WidgetBlobID)
+	if err != nil {
+		return ""
+	}
+	defer rc.Close()
+	body, err := io.ReadAll(rc)
+	if err != nil {
+		return ""
+	}
+	return string(body)
+}
+
+// cardWidgetPartial re-renders one artifact's tile as a standalone fragment
+// (av-fafu). The edit page's widget panel swaps it in after a save so the
+// preview updates without a page reload — which would drop the CodeMirror
+// buffer beside it — and without page JS assembling markup the cardWidget
+// template already owns. Same rule as the agent preview fragment (av-6m3e):
+// one definition per component.
+//
+// The frame URL carries a cache-busting stamp because the browser only
+// re-requests a frame whose src changed, no-store or not.
+func (ro *Router) cardWidgetPartial(w http.ResponseWriter, r *http.Request) {
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), r.URL.Query().Get("artifact"))
+	if err != nil {
+		serverError(w, r, "card widget partial lookup", err)
+		return
+	}
+	if a == nil {
+		// Plain-text 404: htmx leaves the target untouched on an error
+		// response, so the visitor keeps the tile they had.
+		http.Error(w, "artifact not found", http.StatusNotFound)
+		return
+	}
+	view := newWidgetView(a, ro.cfg.RenderOrigin)
+	if view.URL != "" {
+		view.URL += "?r=" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	}
+	fragment, err := renderPage("cardWidget", view)
+	if err != nil {
+		serverError(w, r, "card widget partial render", err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, fragment)
 }
 
 // notFound serves the app's HTML 404 (av-at2v). It is both the mux's fallback
@@ -192,16 +251,87 @@ type capabilityView struct {
 	ShowManage        bool
 }
 
+// widgetView is a card's tile (av-fafu). Exactly one of its two states
+// renders: a live widget frame when the artifact has a widget document, or the
+// server-rendered default tile when it doesn't.
+//
+// The default is deliberately not an iframe or an image. An artifact without a
+// widget is the common case, and a gallery of forty cards must not pay forty
+// frame loads (or a thumbnail pipeline) to say "nothing to show here" — a
+// monogram on a tint derived from the artifact's own id costs one <div> and is
+// stable for the life of the artifact, so a card keeps the same face every
+// visit and stays recognizable at a glance.
+type widgetView struct {
+	// URL is the render-origin widget document, empty when there is no widget.
+	URL string
+	// Monogram and Hue drive the default tile. Hue is a plain 0–359 number the
+	// stylesheet feeds to hsl(), so the tint stays a presentation decision.
+	Monogram string
+	Hue      int
+	// Title is the owning artifact's title, used for the frame's accessible
+	// name — an iframe needs one, and "<artifact> widget" is what it is.
+	Title string
+}
+
 // galleryCard is one artifact card on the index page. The tagRow/tagPills
 // partials read ArtifactID and Tags from it directly; the capabilityCluster
 // partial reads Capability to render the card-footer posture badge + popover
-// (av-isb3, av-41se).
+// (av-isb3, av-41se); Widget renders the card's tile (av-fafu).
 type galleryCard struct {
 	ArtifactID string
 	Title      string
 	Created    string
 	Tags       []tagView
 	Capability capabilityView
+	Widget     widgetView
+}
+
+// newWidgetView builds a card's tile view model.
+func newWidgetView(a *store.Artifact, renderOrigin string) widgetView {
+	v := widgetView{
+		Monogram: monogram(a.Title),
+		Hue:      titleHue(a.ID),
+		Title:    a.Title,
+	}
+	if a.WidgetBlobID != "" {
+		v.URL = renderOrigin + "/w/" + a.ID
+	}
+	return v
+}
+
+// monogram reduces a title to the one or two letters the default tile shows.
+// It walks runes rather than bytes so a non-ASCII title yields a real letter
+// instead of half a UTF-8 sequence, and falls back to a dash for a title with
+// no letters at all (an untitled artifact, an emoji-only name).
+func monogram(title string) string {
+	var letters []rune
+	takeNext := true
+	for _, r := range title {
+		if unicode.IsSpace(r) || r == '-' || r == '_' {
+			takeNext = true
+			continue
+		}
+		if takeNext && unicode.IsLetter(r) {
+			letters = append(letters, unicode.ToUpper(r))
+			takeNext = false
+			if len(letters) == 2 {
+				break
+			}
+		}
+	}
+	if len(letters) == 0 {
+		return "—"
+	}
+	return string(letters)
+}
+
+// titleHue derives a stable 0–359 hue from an artifact id, so every card gets a
+// distinct-looking but unchanging tile. FNV-1a because the requirement is
+// "spread ids across the wheel", not secrecy.
+func titleHue(id string) int {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(id))
+	return int(h.Sum32() % 360)
 }
 
 // addTagModalData feeds the addTagModal partial: every existing tag for the
@@ -230,7 +360,7 @@ type galleryPageData struct {
 	DefaultTagColor string
 }
 
-func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token string) (string, error) {
+func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token, renderOrigin string) (string, error) {
 	cards := make([]galleryCard, len(arts))
 	for i, a := range arts {
 		cards[i] = galleryCard{
@@ -245,6 +375,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token s
 				ClipboardApproved: a.ClipboardApproved,
 				ShowManage:        true,
 			},
+			Widget: newWidgetView(a, renderOrigin),
 		}
 	}
 	return renderPage("gallery", galleryPageData{
@@ -328,9 +459,20 @@ type editPageData struct {
 	Unapproved        []string
 	DownloadsApproved bool
 	ClipboardApproved bool
+	// The gallery widget (av-fafu): its source for the editor, and the same
+	// tile view the library renders for the live preview beside it. WidgetSrc
+	// is "" when the artifact has no widget, which is also when Widget renders
+	// the default tile — so the two always agree without a third flag.
+	WidgetSrc string
+	Widget    widgetView
+	// Whether the "Generate widget" button can run an agent, and the reason it
+	// can't. Disabled-with-a-reason rather than hidden: a missing affordance is
+	// harder to diagnose than one that says what it needs.
+	CanGenerateWidget bool
+	GenerateHint      string
 }
 
-func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, token string) (string, error) {
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, widgetSrc, token, renderOrigin string, canGenerate bool, generateHint string) (string, error) {
 	allowlist, blocked := []string{}, []string{}
 	for _, d := range decisions {
 		switch d.Decision {
@@ -351,6 +493,10 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, to
 		Allowlist:         allowlist,
 		Blocked:           blocked,
 		Unapproved:        unapproved,
+		WidgetSrc:         widgetSrc,
+		Widget:            newWidgetView(a, renderOrigin),
+		CanGenerateWidget: canGenerate,
+		GenerateHint:      generateHint,
 		DownloadsApproved: a.DownloadsApproved,
 		ClipboardApproved: a.ClipboardApproved,
 	})

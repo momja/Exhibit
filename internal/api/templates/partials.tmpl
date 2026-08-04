@@ -122,6 +122,38 @@
      Data: capabilityView (gallery.go). */}}
 {{define "capabilityCluster"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved)}}<div class="capability-wrap"><div class="capability-cluster{{if not $sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger>{{if $sandboxed}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}
 
+{{/* panelCaret is the open/closed caret pair every .details-panel summary
+     leads with (the edit page's security, artifact source, and gallery widget
+     sections). Two glyphs swapped by [open] in components.css rather than one
+     rotated in place — see the comment there for why. Takes no data. */}}
+{{define "panelCaret"}}<i class="ph ph-caret-right details-caret details-caret-closed" aria-hidden="true"></i><i class="ph ph-caret-down details-caret details-caret-open" aria-hidden="true"></i>{{end}}
+
+{{/* cardWidget is an artifact's tile (av-fafu) — the top band of its gallery
+     card, and the same markup the edit page's widget preview renders so the
+     author sees the tile exactly as the library will.
+
+     The default monogram tile is ALWAYS in the markup, and the widget frame
+     (when there is one) sits over it. That is not redundancy — it is what
+     makes the failure path free: a widget that 404s, throws, or draws nothing
+     is hidden by one class from components.js and the monogram is simply
+     already there, with no markup for page JS to build and no second
+     definition of the tile. For an artifact with no widget the monogram IS the
+     tile and no frame loads at all.
+
+     `has-frame` is what keeps the monogram a fallback rather than a backdrop:
+     widgets render on a transparent background by contract, so a monogram left
+     painted underneath a working widget shows straight through it. The class
+     hides the default layer while a frame is live and the stylesheet brings it
+     back on failure — done with an explicit class rather than :has() so the
+     rule is greppable from the markup.
+
+     The frame is inert on purpose: pointer-events are off in CSS so a click
+     passes through to the card (which opens the artifact), and tabindex=-1
+     keeps its contents out of the tab order — the widget states a fact, it is
+     not a control. The <title> is the accessible name every iframe needs.
+     Data: widgetView (gallery.go). */}}
+{{define "cardWidget"}}<div class="card-widget{{if .URL}} has-frame{{end}}"><div class="card-widget-default" style="--tile-hue:{{.Hue}}"><span class="card-widget-monogram">{{.Monogram}}</span></div>{{if .URL}}<iframe class="card-widget-frame" src="{{.URL}}" sandbox="allow-scripts" loading="lazy" tabindex="-1" scrolling="no" title="{{.Title}} widget"></iframe>{{end}}</div>{{end}}
+
 {{/* capabilityPopover is the "receipt" for what was approved at ingest
      (spec 6.2) — capabilityCluster's aria-describedby target. One row per
      active grant (network origins in monospace, then downloads, then

@@ -43,8 +43,14 @@ type Artifact struct {
 	DownloadsApproved bool `json:"downloads_approved"`
 	// ClipboardApproved is the same first-use approval for the clipboard
 	// bridge (navigator.clipboard read/write proxied through the host).
-	ClipboardApproved bool   `json:"clipboard_approved"`
-	Tags              []*Tag `json:"tags"` // populated on read by GetArtifact/ListArtifacts
+	ClipboardApproved bool `json:"clipboard_approved"`
+	// WidgetBlobID is the blob holding this artifact's widget — the small,
+	// informative document its gallery card renders (av-fafu). Empty means the
+	// artifact has no widget and its card falls back to the default tile. The
+	// widget has no identity of its own: it reads this artifact's state and
+	// renders under this artifact's CSP allowlist.
+	WidgetBlobID string `json:"widget_blob_id"`
+	Tags         []*Tag `json:"tags"` // populated on read by GetArtifact/ListArtifacts
 	// SourceText is the artifact's body reduced to its visible text (see
 	// ExtractSearchText), written into PutArtifact only to seed the
 	// artifacts_fts search index (§8.2/§3.3: search over source, not just

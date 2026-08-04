@@ -139,40 +139,45 @@ type createAgentSessionRequest struct {
 	ArtifactID string `json:"artifact_id"`
 }
 
-func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
+// agentSessionOpts builds the CreateOpts for a new session from the owner's
+// stored provider key, writing the error response itself when the agent is
+// unavailable or no usable key is configured. Both session creators — the chat
+// surface and the widget generator (av-fafu) — go through it, so the key is
+// decrypted in exactly one place.
+func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agent.CreateOpts, bool) {
 	if ro.cfg.Agent == nil {
 		writeError(w, http.StatusServiceUnavailable, "agent support is not enabled (pi binary not found)")
-		return
+		return agent.CreateOpts{}, false
 	}
+	ownerID := ownerIDFromCtx(r.Context())
+	k, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerID)
+	if err != nil {
+		serverError(w, r, "get agent key", err)
+		return agent.CreateOpts{}, false
+	}
+	if k == nil {
+		writeError(w, http.StatusPreconditionFailed, "no API key configured — add one in agent settings")
+		return agent.CreateOpts{}, false
+	}
+	apiKey, err := ro.cfg.Secrets.Decrypt(k.KeyCiphertext)
+	if err != nil {
+		writeError(w, http.StatusPreconditionFailed, "stored API key is unreadable — re-enter it in agent settings")
+		return agent.CreateOpts{}, false
+	}
+	return agent.CreateOpts{OwnerID: ownerID, Provider: k.Provider, Model: k.Model, APIKey: apiKey}, true
+}
+
+func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 	var req createAgentSessionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	ownerID := ownerIDFromCtx(r.Context())
-
-	k, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerID)
-	if err != nil {
-		serverError(w, r, "get agent key", err)
+	opts, ok := ro.agentSessionOpts(w, r)
+	if !ok {
 		return
 	}
-	if k == nil {
-		writeError(w, http.StatusPreconditionFailed, "no API key configured — add one in agent settings")
-		return
-	}
-	apiKey, err := ro.cfg.Secrets.Decrypt(k.KeyCiphertext)
-	if err != nil {
-		writeError(w, http.StatusPreconditionFailed, "stored API key is unreadable — re-enter it in agent settings")
-		return
-	}
-
-	opts := agent.CreateOpts{
-		OwnerID:    ownerID,
-		Provider:   k.Provider,
-		Model:      k.Model,
-		APIKey:     apiKey,
-		ArtifactID: req.ArtifactID,
-	}
+	opts.ArtifactID = req.ArtifactID
 	if req.ArtifactID != "" {
 		a, err := ro.cfg.Store.GetArtifact(r.Context(), req.ArtifactID)
 		if err != nil {
@@ -194,8 +199,8 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":          s.ID,
 		"artifact_id": s.ArtifactID,
-		"provider":    k.Provider,
-		"model":       k.Model,
+		"provider":    opts.Provider,
+		"model":       opts.Model,
 	})
 }
 

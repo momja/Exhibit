@@ -47,6 +47,7 @@
      2.5.3) while the name still says which artifact it edits. */}}
 <div class="grid">{{if not .Cards}}<p class="empty">No artifacts yet. <a href="/new">Add your first artifact</a>.</p>{{end}}{{range .Cards}}
 <div class="card" data-href="/artifacts/{{.ArtifactID}}">
+  {{template "cardWidget" .Widget}}
   <div class="card-headrow"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a><a class="card-edit" href="/artifacts/{{.ArtifactID}}/edit" aria-label="Edit {{.Title}}"><i class="ph ph-pencil-simple"></i>Edit</a></div>
   {{template "tagRow" .}}
   <div class="card-footer">

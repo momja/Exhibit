@@ -10,6 +10,9 @@
 <link rel="stylesheet" href="/assets/gallery/tokens.css">
 <link rel="stylesheet" href="/assets/gallery/components.css">
 <link rel="stylesheet" href="/assets/gallery/edit.css">
+{{/* htmx drives the widget panel's preview swap (av-fafu); self-hosted from
+     the app origin like every other asset, never a CDN. */}}
+<script src="/assets/htmx/htmx.min.js"></script>
 </head>
 <body>
 <header>
@@ -20,9 +23,17 @@
 <div class="edit-card">
   <h2>Edit</h2>
 
+  {{/* The title is the one field that belongs to no section, so it stays
+       above them rather than being buried in one. */}}
+  <input type="text" id="title" value="{{.Title}}" placeholder="Title">
+
+  {{/* The page is peer sections — security, state, artifact source, gallery
+       widget — each a .details-panel with the same caret and summary shape.
+       Artifact source is the only one rendered open: it is what "Edit" means,
+       and the others are things you go looking for. */}}
   <details class="details-panel" id="security-panel">
-    <summary id="security-summary"><i class="ph ph-caret-right panel-caret panel-caret-closed" aria-hidden="true"></i><i class="ph ph-caret-down panel-caret panel-caret-open" aria-hidden="true"></i> <span id="security-summary-text"></span></summary>
-    <div class="security-body">
+    <summary id="security-summary">{{template "panelCaret"}} <span id="security-summary-text"></span></summary>
+    <div class="panel-body security-body">
       <div class="security-col">
         <h3 class="text-sm muted">Network allowlist</h3>
         <div id="allowlist-rows">
@@ -82,8 +93,8 @@
        contents are fetched client-side on first open (state.js), since state
        is cold data no other part of this page needs. */}}
   <details class="details-panel" id="state-panel">
-    <summary id="state-summary"><i class="ph ph-caret-right panel-caret panel-caret-closed" aria-hidden="true"></i><i class="ph ph-caret-down panel-caret panel-caret-open" aria-hidden="true"></i> <span id="state-summary-text">Stored state</span></summary>
-    <div class="state-body">
+    <summary id="state-summary">{{template "panelCaret"}} <span id="state-summary-text">Stored state</span></summary>
+    <div class="panel-body state-body">
       <p class="text-sm muted">
         Data this artifact saved through <code>localStorage</code>, held on the server so it
         follows you between devices. Each value is edited through the control its type implies —
@@ -111,8 +122,52 @@
     </div>
   </details>
 
-  <input type="text" id="title" value="{{.Title}}" placeholder="Title">
-  <textarea id="body">{{.Src}}</textarea>
+  {{/* The artifact's own source. Saved by the page's Save button below,
+       together with the title — one document, one button. */}}
+  <details class="details-panel" id="source-panel" open>
+    <summary>{{template "panelCaret"}} Artifact source</summary>
+    <div class="panel-body">
+      <textarea id="body">{{.Src}}</textarea>
+      <div id="scan-result"></div>
+    </div>
+  </details>
+
+  {{/* Gallery widget panel (av-fafu). It saves through its own endpoint
+       (PUT/DELETE /api/artifacts/:id/widget), not the artifact PATCH, so it
+       carries its own buttons — one Save covering two different documents
+       would misreport what changed.
+
+       The preview is an htmx target: after a save the panel re-fetches the
+       cardWidget fragment and swaps it in, so the tile updates without a page
+       reload (which would drop both editors) and without page JS rebuilding
+       markup the partial already owns. */}}
+  <details class="details-panel" id="widget-panel">
+    <summary>{{template "panelCaret"}} Gallery widget — <span id="widget-summary-text">{{if .WidgetSrc}}custom tile{{else}}default tile{{end}}</span></summary>
+    <div class="panel-body widget-body">
+      <div class="widget-preview">
+        <div id="widget-preview-slot"
+             hx-get="/partials/card-widget?artifact={{.ID}}"
+             hx-trigger="exhibit:widget-saved from:body"
+             hx-swap="innerHTML">{{template "cardWidget" .Widget}}</div>
+        <p class="text-sm muted">The tile this artifact shows on its library card. It reads the artifact's saved state but cannot change it, and it is not interactive — clicking it opens the artifact.</p>
+      </div>
+      <div class="widget-source">
+        <textarea id="widget-src" spellcheck="false" placeholder="A complete HTML document for the tile. Leave this empty to keep the default tile.">{{.WidgetSrc}}</textarea>
+        {{/* Generate takes no prompt: the button IS the request, and the whole
+             instruction lives server-side (widget.go's generateWidgetPrompt
+             plus the session's WidgetOnly system prompt), so there is nothing
+             here for a caller to put into the model's context. Disabled with
+             its reason in the title when the agent can't run. */}}
+        <div class="btn-row">
+          <button type="button" class="btn btn-sm" id="widget-generate"{{if not .CanGenerateWidget}} disabled title="{{.GenerateHint}}"{{end}}><i class="ph ph-sparkle"></i> <span id="widget-generate-label">{{if .WidgetSrc}}Regenerate{{else}}Generate widget{{end}}</span></button>
+          <button type="button" class="btn btn-sm btn-sec" id="widget-save"><i class="ph ph-check"></i> Save widget</button>
+          <button type="button" class="btn btn-sm btn-sec" id="widget-remove"><i class="ph ph-trash"></i> Remove</button>
+          <span id="widget-status" class="text-sm muted"></span>
+        </div>
+      </div>
+    </div>
+  </details>
+
   <div class="btn-row">
     <button class="btn" onclick="save()"><i class="ph ph-check"></i> Save</button>
     <a href="/artifacts/{{.ID}}"><button class="btn btn-sec" type="button"><i class="ph ph-x"></i> Cancel</button></a>
@@ -120,9 +175,11 @@
     <span class="spacer"></span>
     <button class="btn btn-danger" type="button" onclick="deleteArtifact()"><i class="ph ph-trash"></i> Delete</button>
   </div>
-  <div id="scan-result"></div>
 </div>
 </main>
+{{/* components.js carries the widget-tile health watcher (av-fafu), which the
+     widget panel's preview needs like any other page rendering a tile. */}}
+<script src="/assets/gallery/components.js"></script>
 <script src="/assets/editor.js"></script>
 <script>
 const TOKEN = {{.Token}};

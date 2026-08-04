@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reading List</title>
+<style>
+/* ---------------------------------------------------------------------------
+   Reading List — a self-contained Exhibit artifact.
+   Everything (styles, script, icons) is inline: no network references at all,
+   so the per-artifact CSP can stay at connect-src 'none'.
+   State lives under one localStorage key, which the companion widget reads.
+--------------------------------------------------------------------------- */
+:root{
+	--brand:#23559e;
+	--brand-hover:#1a4076;
+	--brand-tint:#eef3fa;
+	--ink:#111;
+	--ink-soft:#333;
+	--muted:#888;
+	--faint:#aaa;
+	--ground:#f0f0f0;
+	--panel:#fff;
+	--hairline:#e0e0e0;
+	--border:#ddd;
+	--danger:#c0392b;
+	--radius:10px;
+	--shadow:0 1px 3px rgba(0,0,0,.08);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+	margin:0;
+	padding:28px 20px 64px;
+	background:var(--ground);
+	color:var(--ink);
+	font:15px/1.5 system-ui,sans-serif;
+}
+.wrap{max-width:760px;margin:0 auto}
+
+/* --- header -------------------------------------------------------------- */
+.head{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+.head .mark{flex:none;width:26px;height:26px;color:var(--brand)}
+h1{margin:0;font-size:21px;font-weight:650;letter-spacing:-.01em}
+.head .sub{margin-left:auto;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* --- stats strip --------------------------------------------------------- */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stat{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 14px}
+.stat .n{font-size:24px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15}
+.stat .k{margin-top:2px;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+
+/* --- add form ------------------------------------------------------------ */
+.add{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px;margin-bottom:26px}
+.add form{display:flex;flex-wrap:wrap;gap:8px}
+.add .f-title{flex:3 1 200px}
+.add .f-author{flex:2 1 150px}
+.add .f-pages{flex:0 1 90px}
+.add .f-shelf{flex:0 1 130px}
+input,select{
+	width:100%;font:inherit;font-size:14px;color:var(--ink);background:var(--panel);
+	border:1px solid var(--border);border-radius:6px;padding:7px 9px;
+}
+input:focus-visible,select:focus-visible{outline:2px solid var(--brand);outline-offset:-1px;border-color:var(--brand)}
+input[type=number]{font-variant-numeric:tabular-nums}
+
+/* --- buttons ------------------------------------------------------------- */
+.btn{
+	font:inherit;font-size:13px;line-height:1;color:var(--ink-soft);background:var(--panel);
+	border:1px solid var(--border);border-radius:6px;padding:8px 11px;cursor:pointer;
+	display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+}
+.btn:hover{background:#f6f6f6;border-color:#cfcfcf}
+.btn:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.btn svg{width:14px;height:14px;flex:none}
+.btn-primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn-primary:hover{background:var(--brand-hover);border-color:var(--brand-hover)}
+.btn-quiet{border-color:transparent;background:transparent;color:var(--muted);padding:7px}
+.btn-quiet:hover{background:#f2f2f2;color:var(--danger);border-color:transparent}
+
+/* --- sections ------------------------------------------------------------ */
+section{margin-bottom:26px}
+.sec-head{display:flex;align-items:baseline;gap:8px;margin:0 2px 10px}
+h2{margin:0;font-size:13px;font-weight:650;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft)}
+.count{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+.empty{
+	background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);
+	padding:16px;color:var(--faint);font-size:14px;
+}
+
+/* --- current book card --------------------------------------------------- */
+.current{
+	background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);
+	padding:18px;border-top:3px solid var(--brand);
+}
+.current .pill{
+	display:inline-flex;align-items:center;gap:5px;margin-bottom:8px;
+	font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
+	color:var(--brand);background:var(--brand-tint);border-radius:999px;padding:4px 9px;
+}
+.current .pill svg{width:12px;height:12px}
+.current .t{font-size:19px;font-weight:650;letter-spacing:-.01em;line-height:1.3}
+.current .a{margin-top:2px;font-size:14px;color:var(--muted)}
+.current .counts{
+	display:flex;align-items:baseline;gap:8px;margin:14px 0 6px;
+	font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;
+}
+.current .counts .pct{margin-left:auto;font-size:15px;font-weight:650;color:var(--ink)}
+.current .slider{display:flex;align-items:center;gap:12px;margin-top:14px}
+.current .slider input[type=range]{flex:1;width:auto;padding:0;border:0;accent-color:var(--brand)}
+.current .slider input[type=number]{flex:none;width:88px}
+.current .acts{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--hairline)}
+.current .acts .spacer{flex:1}
+
+/* --- compact rows -------------------------------------------------------- */
+.rows{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.current + .rows{margin-top:10px}
+.row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--hairline)}
+.row:first-child{border-top:0}
+.row .main{flex:1;min-width:0}
+.row .t{font-size:14.5px;font-weight:550;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .a{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .meta{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.row .acts{display:flex;align-items:center;gap:6px;flex:none}
+.row input[type=number]{width:78px;font-size:13px;padding:5px 7px}
+.row .bar{margin-top:6px}
+
+/* --- progress bar -------------------------------------------------------- */
+.bar{height:6px;border-radius:999px;background:var(--hairline);overflow:hidden}
+.bar .fill{height:100%;border-radius:999px;background:var(--brand);transition:width .15s ease-out}
+.bar.done .fill{background:#4a7c59}
+
+@media (max-width:520px){
+	.stats{grid-template-columns:1fr;gap:8px}
+	.stat{display:flex;align-items:baseline;gap:8px}
+	.stat .k{margin-top:0}
+	.row{flex-wrap:wrap}
+	.row .acts{width:100%;justify-content:flex-end}
+}
+</style>
+</head>
+<body>
+
+<!-- Icon sprite: same-document <symbol>s, referenced with <use>. Inline SVG so
+     the artifact never asks the network for an icon font. -->
+<svg width="0" height="0" aria-hidden="true" style="position:absolute">
+	<symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H19v15H5.5A1.5 1.5 0 0 0 4 19.5z"/><path d="M4 19.5A1.5 1.5 0 0 1 5.5 21H19"/>
+	</symbol>
+	<symbol id="i-bookmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M6 3h12v18l-6-4.5L6 21z"/>
+	</symbol>
+	<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M4.5 12.5 9.5 17.5 19.5 6.5"/>
+	</symbol>
+	<symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M5 12h13"/><path d="M13 7l5 5-5 5"/>
+	</symbol>
+	<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+		<path d="M6 6l12 12M18 6L6 18"/>
+	</symbol>
+</svg>
+
+<div class="wrap">
+	<header class="head">
+		<svg class="mark" aria-hidden="true"><use href="#i-book"/></svg>
+		<h1>Reading List</h1>
+		<span class="sub" id="shelf-sub"></span>
+	</header>
+
+	<div class="stats" id="stats"></div>
+
+	<div class="add">
+		<form id="add-form" autocomplete="off">
+			<div class="f-title"><input id="f-title" name="title" placeholder="Title" aria-label="Title" required maxlength="200"></div>
+			<div class="f-author"><input id="f-author" name="author" placeholder="Author" aria-label="Author" maxlength="120"></div>
+			<div class="f-pages"><input id="f-pages" name="pages" type="number" placeholder="Pages" aria-label="Total pages" min="1" max="30000" required></div>
+			<div class="f-shelf">
+				<select id="f-shelf" aria-label="Shelf">
+					<option value="queued">Up next</option>
+					<option value="reading">Reading now</option>
+				</select>
+			</div>
+			<button class="btn btn-primary" type="submit">Add book</button>
+		</form>
+	</div>
+
+	<section>
+		<div class="sec-head"><h2>Reading now</h2><span class="count" id="c-reading"></span></div>
+		<div id="s-reading"></div>
+	</section>
+
+	<section>
+		<div class="sec-head"><h2>Up next</h2><span class="count" id="c-queued"></span></div>
+		<div id="s-queued"></div>
+	</section>
+
+	<section>
+		<div class="sec-head"><h2>Finished</h2><span class="count" id="c-finished"></span></div>
+		<div id="s-finished"></div>
+	</section>
+</div>
+
+<script>
+(function(){
+	'use strict';
+
+	/* =====================================================================
+	   Persistence
+	   One key, one JSON document. The companion widget reads this exact key
+	   and shape, so treat both as a published contract:
+	     {"books":[{id,title,author,pages,read,status,current,finishedAt}]}
+	   ===================================================================== */
+	var KEY = 'exhibit.reading-list.v1';
+	var STATUSES = ['reading', 'queued', 'finished'];
+
+	var books = load();
+
+	function load() {
+		try {
+			var raw = localStorage.getItem(KEY);
+			if (!raw) return [];
+			var doc = JSON.parse(raw);
+			var list = (doc && Array.isArray(doc.books)) ? doc.books : [];
+			return list.map(normalize).filter(Boolean);
+		} catch (err) {
+			// Corrupt or foreign value: start clean rather than crash. The next
+			// save overwrites it.
+			return [];
+		}
+	}
+
+	function save() {
+		try {
+			localStorage.setItem(KEY, JSON.stringify({ books: books }));
+		} catch (err) {
+			/* Storage full or unavailable — the in-memory list stays usable. */
+		}
+	}
+
+	/* Coerce whatever came out of storage into the documented shape. */
+	function normalize(raw) {
+		if (!raw || typeof raw !== 'object') return null;
+		var title = str(raw.title).slice(0, 200);
+		if (!title) return null;
+		var pages = int(raw.pages, 0, 30000);
+		var status = STATUSES.indexOf(raw.status) >= 0 ? raw.status : 'queued';
+		var read = status === 'finished' ? pages : int(raw.read, 0, pages);
+		return {
+			id: str(raw.id) || newId(),
+			title: title,
+			author: str(raw.author).slice(0, 120),
+			pages: pages,
+			read: read,
+			status: status,
+			current: status === 'reading' && raw.current === true,
+			finishedAt: status === 'finished' ? isoDate(raw.finishedAt) : ''
+		};
+	}
+
+	function str(v) { return typeof v === 'string' ? v.trim() : ''; }
+	function int(v, lo, hi) {
+		var n = Math.round(Number(v));
+		if (!isFinite(n)) return lo;
+		return Math.min(hi, Math.max(lo, n));
+	}
+	function isoDate(v) { return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : ''; }
+	function newId() {
+		if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+		return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+	}
+	function today() {
+		// Local calendar date, not toISOString() — that would shift a late-evening
+		// finish into tomorrow for anyone east of UTC.
+		var d = new Date();
+		var m = String(d.getMonth() + 1).padStart(2, '0');
+		var day = String(d.getDate()).padStart(2, '0');
+		return d.getFullYear() + '-' + m + '-' + day;
+	}
+
+	/* =====================================================================
+	   Model helpers
+	   ===================================================================== */
+	function shelf(status) {
+		return books.filter(function (b) { return b.status === status; });
+	}
+	function pct(b) {
+		if (!b.pages) return 0;
+		var p = Math.round((b.read / b.pages) * 100);
+		// Don't claim 100% until the book is actually finished.
+		if (p >= 100 && b.status !== 'finished') return 99;
+		return Math.min(100, Math.max(0, p));
+	}
+	function byId(id) {
+		for (var i = 0; i < books.length; i++) if (books[i].id === id) return books[i];
+		return null;
+	}
+
+	/* Exactly one book may be current. Setting one clears the rest. */
+	function setCurrent(id) {
+		books.forEach(function (b) { b.current = (b.id === id && b.status === 'reading'); });
+	}
+
+	/* Keep the invariant after any change: if the shelf has books in progress
+	   but no current one, promote the furthest along. */
+	function ensureCurrent() {
+		var reading = shelf('reading');
+		var flagged = reading.filter(function (b) { return b.current; });
+		if (flagged.length === 1) { setCurrent(flagged[0].id); return; }
+		if (!reading.length) { books.forEach(function (b) { b.current = false; }); return; }
+		var best = reading.reduce(function (a, b) {
+			return (pct(b) > pct(a) || (pct(b) === pct(a) && b.read >= a.read)) ? b : a;
+		});
+		setCurrent(best.id);
+	}
+
+	function commit() { ensureCurrent(); save(); render(); }
+
+	/* =====================================================================
+	   DOM helpers — everything user-supplied goes in as text, never markup.
+	   ===================================================================== */
+	function el(tag, cls, text) {
+		var n = document.createElement(tag);
+		if (cls) n.className = cls;
+		if (text != null) n.textContent = text;
+		return n;
+	}
+	function icon(id) {
+		var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+		svg.setAttribute('aria-hidden', 'true');
+		var use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+		use.setAttribute('href', '#' + id);
+		svg.appendChild(use);
+		return svg;
+	}
+	function button(cls, label, iconId, onClick, title) {
+		var b = el('button', 'btn ' + cls);
+		b.type = 'button';
+		if (iconId) b.appendChild(icon(iconId));
+		if (label) b.appendChild(document.createTextNode(label));
+		if (title) b.title = title;
+		b.setAttribute('aria-label', title || label);
+		b.addEventListener('click', onClick);
+		return b;
+	}
+	function bar(book) {
+		var wrap = el('div', 'bar' + (book.status === 'finished' ? ' done' : ''));
+		var fill = el('div', 'fill');
+		fill.style.width = pct(book) + '%';
+		wrap.appendChild(fill);
+		wrap.setAttribute('role', 'progressbar');
+		wrap.setAttribute('aria-valuenow', String(pct(book)));
+		wrap.setAttribute('aria-valuemin', '0');
+		wrap.setAttribute('aria-valuemax', '100');
+		return wrap;
+	}
+	function authorLine(b) { return b.author || 'Unknown author'; }
+	function prettyDate(iso) {
+		var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+		if (!m) return '';
+		var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+		return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+	}
+	function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+	/* =====================================================================
+	   Actions
+	   ===================================================================== */
+	function setRead(b, value) { b.read = int(value, 0, b.pages); }
+
+	function markFinished(b) {
+		b.status = 'finished';
+		b.read = b.pages;
+		b.current = false;
+		b.finishedAt = today();
+		commit();
+	}
+	function startReading(b) {
+		b.status = 'reading';
+		b.finishedAt = '';
+		commit();
+	}
+	function remove(b) {
+		books = books.filter(function (x) { return x.id !== b.id; });
+		commit();
+	}
+
+	/* =====================================================================
+	   Render
+	   ===================================================================== */
+	var nodes = {
+		stats: document.getElementById('stats'),
+		sub: document.getElementById('shelf-sub'),
+		reading: document.getElementById('s-reading'),
+		queued: document.getElementById('s-queued'),
+		finished: document.getElementById('s-finished'),
+		cReading: document.getElementById('c-reading'),
+		cQueued: document.getElementById('c-queued'),
+		cFinished: document.getElementById('c-finished')
+	};
+
+	function render() {
+		renderStats();
+		renderReading();
+		renderQueued();
+		renderFinished();
+	}
+
+	function renderStats() {
+		var year = String(new Date().getFullYear());
+		var finished = shelf('finished');
+		var finishedThisYear = finished.filter(function (b) { return b.finishedAt.slice(0, 4) === year; });
+
+		// There is no per-day reading log in the schema, so "pages this year" is
+		// the honest approximation: everything finished this year plus progress
+		// standing on the in-progress shelf.
+		var pagesThisYear = finishedThisYear.reduce(sumRead, 0) + shelf('reading').reduce(sumRead, 0);
+		var avg = finished.length ? Math.round(finished.reduce(function (t, b) { return t + b.pages; }, 0) / finished.length) : null;
+
+		nodes.stats.replaceChildren(
+			stat(String(finishedThisYear.length), 'Finished in ' + year),
+			stat(pagesThisYear.toLocaleString(), 'Pages in ' + year),
+			stat(avg == null ? '—' : avg.toLocaleString(), 'Avg book length')
+		);
+
+		nodes.sub.textContent = books.length
+			? plural(books.length, 'book', 'books') + ' on the shelf'
+			: '';
+
+		function sumRead(total, b) { return total + b.read; }
+	}
+
+	function stat(value, key) {
+		var box = el('div', 'stat');
+		box.appendChild(el('div', 'n', value));
+		box.appendChild(el('div', 'k', key));
+		return box;
+	}
+
+	function renderReading() {
+		var reading = shelf('reading');
+		nodes.cReading.textContent = reading.length ? String(reading.length) : '';
+		nodes.reading.replaceChildren();
+
+		if (!reading.length) {
+			nodes.reading.appendChild(el('div', 'empty',
+				books.length ? 'Nothing in progress. Start a book from Up next.'
+					: 'Nothing on the shelf yet — add your first book above.'));
+			return;
+		}
+
+		var current = reading.filter(function (b) { return b.current; })[0] || reading[0];
+		nodes.reading.appendChild(currentCard(current));
+
+		var rest = reading.filter(function (b) { return b.id !== current.id; });
+		if (rest.length) nodes.reading.appendChild(rowList(rest, readingRow));
+	}
+
+	/* The one current book, given room to breathe: slider + number field are
+	   two views of the same value, and both persist. */
+	function currentCard(b) {
+		var card = el('div', 'current');
+
+		var pill = el('div', 'pill');
+		pill.appendChild(icon('i-bookmark'));
+		pill.appendChild(document.createTextNode('Current'));
+		card.appendChild(pill);
+
+		card.appendChild(el('div', 't', b.title));
+		card.appendChild(el('div', 'a', authorLine(b)));
+
+		var counts = el('div', 'counts');
+		var readOut = el('span', null, b.read + ' of ' + b.pages + ' pages');
+		var pctOut = el('span', 'pct', pct(b) + '%');
+		counts.appendChild(readOut);
+		counts.appendChild(pctOut);
+		card.appendChild(counts);
+
+		var track = bar(b);
+		card.appendChild(track);
+
+		var slider = el('div', 'slider');
+		var range = document.createElement('input');
+		range.type = 'range';
+		range.min = '0';
+		range.max = String(b.pages || 0);
+		range.value = String(b.read);
+		range.setAttribute('aria-label', 'Pages read');
+		var num = document.createElement('input');
+		num.type = 'number';
+		num.min = '0';
+		num.max = String(b.pages || 0);
+		num.value = String(b.read);
+		num.setAttribute('aria-label', 'Pages read');
+
+		// Live-update the visible numbers without a re-render — re-rendering
+		// mid-drag would tear the slider out from under the pointer. The write
+		// itself is debounced so a drag is one save, not a hundred.
+		function sync(value, from) {
+			setRead(b, value);
+			if (from !== range) range.value = String(b.read);
+			if (from !== num) num.value = String(b.read);
+			track.firstChild.style.width = pct(b) + '%';
+			track.setAttribute('aria-valuenow', String(pct(b)));
+			readOut.textContent = b.read + ' of ' + b.pages + ' pages';
+			pctOut.textContent = pct(b) + '%';
+			deferSave();
+		}
+		range.addEventListener('input', function () { sync(range.value, range); });
+		num.addEventListener('input', function () { sync(num.value, num); });
+		num.addEventListener('change', function () { sync(num.value, num); flushSave(); });
+		range.addEventListener('change', flushSave);
+
+		slider.appendChild(range);
+		slider.appendChild(num);
+		card.appendChild(slider);
+
+		var acts = el('div', 'acts');
+		acts.appendChild(button('btn-primary', 'Mark finished', 'i-check', function () { markFinished(b); }));
+		acts.appendChild(el('div', 'spacer'));
+		acts.appendChild(button('btn-quiet', '', 'i-x', function () { remove(b); }, 'Remove ' + b.title));
+		card.appendChild(acts);
+
+		return card;
+	}
+
+	function rowList(list, build) {
+		var box = el('div', 'rows');
+		list.forEach(function (b) { box.appendChild(build(b)); });
+		return box;
+	}
+
+	/* In-progress books other than the current one. */
+	function readingRow(b) {
+		var row = el('div', 'row');
+		var main = el('div', 'main');
+		main.appendChild(el('div', 't', b.title));
+		main.appendChild(el('div', 'a', authorLine(b)));
+		main.appendChild(bar(b));
+		row.appendChild(main);
+		row.appendChild(el('div', 'meta', b.read + ' / ' + b.pages));
+
+		var acts = el('div', 'acts');
+		var num = document.createElement('input');
+		num.type = 'number';
+		num.min = '0';
+		num.max = String(b.pages || 0);
+		num.value = String(b.read);
+		num.setAttribute('aria-label', 'Pages read in ' + b.title);
+		num.addEventListener('change', function () { setRead(b, num.value); commit(); });
+		acts.appendChild(num);
+		acts.appendChild(button('', 'Make current', 'i-bookmark', function () { setCurrent(b.id); save(); render(); }));
+		acts.appendChild(button('', '', 'i-check', function () { markFinished(b); }, 'Mark ' + b.title + ' finished'));
+		acts.appendChild(button('btn-quiet', '', 'i-x', function () { remove(b); }, 'Remove ' + b.title));
+		row.appendChild(acts);
+		return row;
+	}
+
+	function renderQueued() {
+		var queued = shelf('queued');
+		nodes.cQueued.textContent = queued.length ? String(queued.length) : '';
+		nodes.queued.replaceChildren(queued.length
+			? rowList(queued, queuedRow)
+			: el('div', 'empty', 'No books waiting.'));
+	}
+
+	function queuedRow(b) {
+		var row = el('div', 'row');
+		var main = el('div', 'main');
+		main.appendChild(el('div', 't', b.title));
+		main.appendChild(el('div', 'a', authorLine(b)));
+		row.appendChild(main);
+		row.appendChild(el('div', 'meta', b.pages + ' pages'));
+
+		var acts = el('div', 'acts');
+		acts.appendChild(button('', 'Start reading', 'i-play', function () { startReading(b); }));
+		acts.appendChild(button('btn-quiet', '', 'i-x', function () { remove(b); }, 'Remove ' + b.title));
+		row.appendChild(acts);
+		return row;
+	}
+
+	function renderFinished() {
+		var finished = shelf('finished').slice().sort(function (a, b) {
+			return (b.finishedAt || '').localeCompare(a.finishedAt || '');
+		});
+		nodes.cFinished.textContent = finished.length ? String(finished.length) : '';
+		nodes.finished.replaceChildren(finished.length
+			? rowList(finished, finishedRow)
+			: el('div', 'empty', 'Nothing finished yet.'));
+	}
+
+	function finishedRow(b) {
+		var row = el('div', 'row');
+		var main = el('div', 'main');
+		main.appendChild(el('div', 't', b.title));
+		main.appendChild(el('div', 'a', authorLine(b)));
+		row.appendChild(main);
+
+		var when = prettyDate(b.finishedAt);
+		row.appendChild(el('div', 'meta', b.pages + ' pages' + (when ? ' · ' + when : '')));
+
+		var acts = el('div', 'acts');
+		acts.appendChild(button('btn-quiet', '', 'i-x', function () { remove(b); }, 'Remove ' + b.title));
+		row.appendChild(acts);
+		return row;
+	}
+
+	/* =====================================================================
+	   Debounced save (used by the slider drag path)
+	   ===================================================================== */
+	var saveTimer = null;
+	function deferSave() {
+		clearTimeout(saveTimer);
+		saveTimer = setTimeout(flushSave, 300);
+	}
+	function flushSave() {
+		clearTimeout(saveTimer);
+		saveTimer = null;
+		save();
+		renderStats();
+	}
+
+	/* =====================================================================
+	   Add form
+	   ===================================================================== */
+	document.getElementById('add-form').addEventListener('submit', function (e) {
+		e.preventDefault();
+		var title = document.getElementById('f-title');
+		var author = document.getElementById('f-author');
+		var pages = document.getElementById('f-pages');
+		var status = document.getElementById('f-shelf').value === 'reading' ? 'reading' : 'queued';
+
+		var t = title.value.trim();
+		var p = int(pages.value, 0, 30000);
+		if (!t || p < 1) { (t ? pages : title).focus(); return; }
+
+		books.push({
+			id: newId(),
+			title: t.slice(0, 200),
+			author: author.value.trim().slice(0, 120),
+			pages: p,
+			read: 0,
+			status: status,
+			current: false,
+			finishedAt: ''
+		});
+
+		title.value = '';
+		author.value = '';
+		pages.value = '';
+		title.focus();
+		commit();
+	});
+
+	// Repair the invariant on load (a hand-edited or partially written document
+	// may carry zero or several `current` flags), then draw.
+	ensureCurrent();
+	render();
+})();
+</script>
+</body>
+</html>

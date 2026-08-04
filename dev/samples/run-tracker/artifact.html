@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run Log</title>
+<style>
+  :root{
+    --bg:#f0f1f3;
+    --surface:#fff;
+    --ink:#16181c;
+    --ink-2:#4c525b;
+    --muted:#8a9099;
+    --line:#e3e5e9;
+    --line-soft:#eceef1;
+    --accent:#23559e;
+    --accent-ink:#1c4581;
+    --danger:#b42318;
+    --radius:14px;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font:400 15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 20px 56px}
+
+  .head{margin:0 0 20px}
+  .head h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em}
+  .head p{margin:4px 0 0;color:var(--muted);font-size:14px}
+
+  .grid{display:grid;gap:16px;grid-template-areas:"side" "main"}
+  .side{grid-area:side}
+  .main{grid-area:main;min-width:0;display:grid;gap:16px}
+  @media (min-width:880px){
+    .grid{grid-template-columns:minmax(0,1fr) 304px;grid-template-areas:"main side";align-items:start}
+    .side{position:sticky;top:28px}
+  }
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:0 1px 2px rgba(16,24,40,.04);
+  }
+  .card-pad{padding:18px 20px}
+
+  h2{margin:0 0 14px;font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--ink-2)}
+
+  /* ---------- form ---------- */
+  .field{margin-bottom:12px}
+  .field label{display:block;margin-bottom:5px;font-size:12px;font-weight:500;color:var(--ink-2)}
+  .field input{
+    width:100%;
+    padding:9px 11px;
+    font:inherit;
+    font-size:14px;
+    color:var(--ink);
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:9px;
+    transition:border-color .12s,box-shadow .12s;
+  }
+  .field input:focus{
+    outline:none;
+    border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(35,85,158,.14);
+  }
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (min-width:880px){.row2{grid-template-columns:1fr}}
+
+  .btn{
+    width:100%;
+    padding:10px 14px;
+    font:inherit;
+    font-size:14px;
+    font-weight:600;
+    color:#fff;
+    background:var(--accent);
+    border:0;
+    border-radius:9px;
+    cursor:pointer;
+    transition:background .12s;
+  }
+  .btn:hover{background:var(--accent-ink)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .err{margin:10px 0 0;font-size:12.5px;color:var(--danger);min-height:1em}
+  .err:empty{margin:0;min-height:0}
+
+  /* ---------- chart ---------- */
+  .chart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px}
+  .eyebrow{font-size:12px;font-weight:500;color:var(--muted);letter-spacing:.02em}
+  .hero{display:flex;align-items:baseline;gap:6px;margin-top:2px}
+  .hero-val{font-size:48px;line-height:1.05;font-weight:600;letter-spacing:-.02em}
+  .hero-unit{font-size:17px;font-weight:500;color:var(--muted)}
+  .range{font-size:12.5px;color:var(--muted);white-space:nowrap;padding-top:4px}
+
+  .plot{position:relative;margin-top:6px}
+  .plot svg{display:block;width:100%}
+  .plot svg:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  .grid-line{stroke:var(--line-soft);stroke-width:1}
+  .axis-line{stroke:var(--line);stroke-width:1}
+  .tick{font-size:11px;fill:var(--muted);font-variant-numeric:tabular-nums}
+  .tick-y{text-anchor:end}
+  .cross{stroke:#c6ccd4;stroke-width:1;display:none}
+  .cross.on{display:block}
+  .cursor-dot{display:none}
+  .cursor-dot.on{display:block}
+
+  .empty{
+    display:flex;align-items:center;justify-content:center;
+    height:210px;margin:0;padding:0 24px;
+    text-align:center;font-size:13.5px;color:var(--muted);
+  }
+
+  .tip{
+    position:absolute;pointer-events:none;
+    background:#fff;border:1px solid var(--line);border-radius:9px;
+    box-shadow:0 4px 14px rgba(16,24,40,.10);
+    padding:8px 10px;font-size:12.5px;line-height:1.45;
+    white-space:nowrap;display:none;z-index:2;
+  }
+  .tip.on{display:block}
+  .tip .tip-date{color:var(--muted);font-size:11.5px}
+  .tip .tip-main{font-weight:600}
+  .tip .tip-sub{color:var(--ink-2)}
+  .tip .tip-note{color:var(--muted);font-style:italic;max-width:200px;overflow:hidden;text-overflow:ellipsis}
+
+  /* ---------- stats ---------- */
+  .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  @media (min-width:620px){.stats{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  .stat{padding:14px 16px}
+  .stat .k{font-size:11.5px;color:var(--muted);letter-spacing:.02em}
+  .stat .v{margin-top:3px;font-size:22px;font-weight:600;letter-spacing:-.01em}
+  .stat .v small{font-size:13px;font-weight:500;color:var(--muted);margin-left:3px}
+
+  /* ---------- run list ---------- */
+  .list-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:2px}
+  .list-head h2{margin:0}
+  .list-count{font-size:12px;color:var(--muted)}
+  ul.runs{list-style:none;margin:0;padding:0}
+  ul.runs li{
+    display:grid;
+    grid-template-columns:104px minmax(0,1fr) auto;
+    align-items:center;
+    gap:12px;
+    padding:11px 0;
+    border-top:1px solid var(--line-soft);
+  }
+  ul.runs li:first-child{border-top:0}
+  .r-date{font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .r-body{min-width:0}
+  .r-km{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+  .r-km small{font-size:12px;font-weight:500;color:var(--muted);margin-left:2px}
+  .r-note{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .r-del{
+    display:flex;align-items:center;justify-content:center;
+    width:28px;height:28px;padding:0;
+    color:var(--muted);background:transparent;border:0;border-radius:7px;cursor:pointer;
+    transition:color .12s,background .12s;
+  }
+  .r-del:hover{color:var(--danger);background:#fdf3f2}
+  .r-del:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .list-empty{margin:0;padding:6px 0 2px;font-size:13.5px;color:var(--muted)}
+
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="head">
+    <h1>Run Log</h1>
+    <p class="sub">Every kilometre you've covered, adding up.</p>
+  </header>
+
+  <div class="grid">
+    <!-- ------------------------------ log a run ------------------------------ -->
+    <section class="side">
+      <div class="card card-pad">
+        <h2 id="formH">Log a run</h2>
+        <form id="runForm" novalidate>
+          <div class="row2">
+            <div class="field">
+              <label for="km">Distance (km)</label>
+              <input id="km" name="km" type="number" inputmode="decimal" step="0.01" min="0.01" max="500"
+                     placeholder="5.0" autocomplete="off" required>
+            </div>
+            <div class="field">
+              <label for="date">Date</label>
+              <input id="date" name="date" type="date" required>
+            </div>
+          </div>
+          <div class="field">
+            <label for="note">Note <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+            <input id="note" name="note" type="text" maxlength="80" placeholder="Easy pace along the river" autocomplete="off">
+          </div>
+          <button class="btn" type="submit">Add run</button>
+          <p class="err" id="formErr" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+
+    <div class="main">
+      <!-- ------------------------------ chart ------------------------------ -->
+      <section class="card card-pad" aria-labelledby="chartH">
+        <div class="chart-head">
+          <div>
+            <div class="eyebrow" id="chartH">Cumulative distance</div>
+            <div class="hero">
+              <span class="hero-val" id="heroVal">0.0</span>
+              <span class="hero-unit">km</span>
+            </div>
+          </div>
+          <div class="range" id="chartRange"></div>
+        </div>
+        <div class="plot" id="plot">
+          <p class="empty" id="chartEmpty">No runs logged yet — add your first one and the line starts here.</p>
+          <div class="tip" id="tip" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <!-- ------------------------------ stats ------------------------------ -->
+      <section class="stats" aria-label="Summary">
+        <div class="card stat"><div class="k">Runs</div><div class="v" id="sRuns">0</div></div>
+        <div class="card stat"><div class="k">Longest run</div><div class="v"><span id="sLongest">0.0</span><small>km</small></div></div>
+        <div class="card stat"><div class="k">Avg per week</div><div class="v"><span id="sAvg">0.0</span><small>km</small></div></div>
+        <div class="card stat"><div class="k">Last 30 days</div><div class="v"><span id="s30">0.0</span><small>km</small></div></div>
+      </section>
+
+      <!-- ------------------------------ run list ------------------------------ -->
+      <section class="card card-pad" aria-labelledby="listH">
+        <div class="list-head">
+          <h2 id="listH">Runs</h2>
+          <span class="list-count" id="listCount"></span>
+        </div>
+        <p class="list-empty" id="listEmpty">Nothing logged yet.</p>
+        <ul class="runs" id="runList"></ul>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ============================================================================
+   * Persistence
+   * The whole app lives under one localStorage key. Exhibit mirrors this key to
+   * the server, and the widget reads the exact same key/shape — so the shape
+   * below is a contract, not an implementation detail:
+   *   { "runs": [ { id, date:"YYYY-MM-DD", km:Number, note:String }, ... ] }
+   * ========================================================================== */
+  var KEY = 'exhibit.run-tracker.v1';
+  var DAY = 86400000;
+
+  var runs = load();          // always kept sorted newest-first
+  var chart = null;           // geometry + data of the current chart render
+  var hoverIndex = -1;
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return [];
+      var data = JSON.parse(raw);
+      var list = (data && Array.isArray(data.runs)) ? data.runs : [];
+      return list.map(normalize).filter(Boolean).sort(newestFirst);
+    } catch (err) {
+      // Malformed or unreadable storage must never take the app down.
+      console.warn('Run Log: could not read saved runs.', err);
+      return [];
+    }
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ runs: runs }));
+    } catch (err) {
+      console.warn('Run Log: could not save runs.', err);
+    }
+  }
+
+  // Accept only rows we can actually draw; drop anything else silently.
+  function normalize(r) {
+    if (!r || typeof r !== 'object') return null;
+    var date = (typeof r.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.date)) ? r.date : null;
+    var km = Number(r.km);
+    if (!date || !isFinite(km) || km <= 0) return null;
+    return {
+      id: r.id ? String(r.id) : uid(),
+      date: date,
+      km: km,
+      note: typeof r.note === 'string' ? r.note : ''
+    };
+  }
+
+  function newestFirst(a, b) {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return a.id < b.id ? 1 : -1;
+  }
+
+  function uid() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  /* ============================================================================
+   * Dates — "YYYY-MM-DD" is parsed as a *local* date. `new Date("2026-07-31")`
+   * would be parsed as UTC and can land on the previous day west of Greenwich.
+   * ========================================================================== */
+  function parseDate(iso) {
+    var p = iso.split('-');
+    return new Date(+p[0], +p[1] - 1, +p[2]);
+  }
+  function toISO(d) {
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + day;
+  }
+  function startOfToday() {
+    var n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+  }
+
+  var fmtShort = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+  var fmtLong = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+
+  function km1(n) {
+    return n.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  }
+  function tickLabel(n) {
+    return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  }
+
+  /* ============================================================================
+   * Derived data
+   * ========================================================================== */
+
+  // One point per day that has runs, carrying the running total.
+  function cumulativeSeries() {
+    var byDay = new Map();
+    runs.forEach(function (r) {
+      var e = byDay.get(r.date) || { date: r.date, km: 0, runs: [] };
+      e.km += r.km;
+      e.runs.push(r);
+      byDay.set(r.date, e);
+    });
+    var days = Array.from(byDay.values()).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    var cum = 0;
+    return days.map(function (d) {
+      cum += d.km;
+      return { date: d.date, t: parseDate(d.date).getTime(), km: d.km, cum: cum, runs: d.runs };
+    });
+  }
+
+  function stats() {
+    var total = 0, longest = 0, last30 = 0;
+    var cutoff = startOfToday() - 29 * DAY;   // 30-day window, today inclusive
+    var earliest = Infinity;
+
+    runs.forEach(function (r) {
+      var t = parseDate(r.date).getTime();
+      total += r.km;
+      if (r.km > longest) longest = r.km;
+      if (t >= cutoff) last30 += r.km;
+      if (t < earliest) earliest = t;
+    });
+
+    // Weeks covered, from the first run through today (never less than one).
+    var weeks = 1;
+    if (runs.length) {
+      var spanDays = Math.floor((startOfToday() - earliest) / DAY) + 1;
+      weeks = Math.max(1, Math.ceil(spanDays / 7));
+    }
+
+    return { total: total, count: runs.length, longest: longest, last30: last30, perWeek: total / weeks };
+  }
+
+  /* ============================================================================
+   * Rendering
+   * ========================================================================== */
+  var $ = function (id) { return document.getElementById(id); };
+  var plot = $('plot'), tip = $('tip'), chartEmpty = $('chartEmpty');
+
+  function renderAll() {
+    renderStats();
+    renderList();
+    renderChart();
+  }
+
+  function renderStats() {
+    var s = stats();
+    $('heroVal').textContent = km1(s.total);
+    $('sRuns').textContent = String(s.count);
+    $('sLongest').textContent = km1(s.longest);
+    $('sAvg').textContent = km1(s.perWeek);
+    $('s30').textContent = km1(s.last30);
+
+    var range = $('chartRange');
+    if (!runs.length) {
+      range.textContent = '';
+    } else {
+      var first = parseDate(runs[runs.length - 1].date);
+      var last = parseDate(runs[0].date);
+      range.textContent = first.getTime() === last.getTime()
+        ? fmtShort.format(first)
+        : fmtShort.format(first) + ' – ' + fmtShort.format(last);
+    }
+  }
+
+  // Rows are built with DOM nodes rather than innerHTML: notes are free text.
+  function renderList() {
+    var list = $('runList');
+    list.textContent = '';
+    $('listEmpty').style.display = runs.length ? 'none' : 'block';
+    $('listCount').textContent = runs.length
+      ? runs.length + (runs.length === 1 ? ' run' : ' runs')
+      : '';
+
+    runs.forEach(function (r) {
+      var li = document.createElement('li');
+
+      var date = document.createElement('div');
+      date.className = 'r-date';
+      date.textContent = fmtLong.format(parseDate(r.date));
+
+      var body = document.createElement('div');
+      body.className = 'r-body';
+      var km = document.createElement('div');
+      km.className = 'r-km';
+      km.textContent = km1(r.km);
+      var unit = document.createElement('small');
+      unit.textContent = 'km';
+      km.appendChild(unit);
+      body.appendChild(km);
+      if (r.note) {
+        var note = document.createElement('div');
+        note.className = 'r-note';
+        note.textContent = r.note;
+        body.appendChild(note);
+      }
+
+      var del = document.createElement('button');
+      del.className = 'r-del';
+      del.type = 'button';
+      del.setAttribute('aria-label', 'Remove ' + km1(r.km) + ' km run on ' + fmtLong.format(parseDate(r.date)));
+      del.innerHTML = '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">'
+        + '<path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+      del.addEventListener('click', function () { removeRun(r.id); });
+
+      li.appendChild(date);
+      li.appendChild(body);
+      li.appendChild(del);
+      list.appendChild(li);
+    });
+  }
+
+  /* ---------------------------------------------------------------------------
+   * The chart: cumulative km against date, drawn as a staircase because the
+   * total only moves on days that have a run — a straight interpolation would
+   * imply distance covered on rest days.
+   * ------------------------------------------------------------------------- */
+  var M = { top: 14, right: 16, bottom: 28, left: 44 };
+
+  function renderChart() {
+    var old = plot.querySelector('svg');
+    if (old) old.remove();
+    hideTip();
+
+    var pts = cumulativeSeries();
+    if (!pts.length) {
+      chart = null;
+      chartEmpty.style.display = 'flex';
+      return;
+    }
+    chartEmpty.style.display = 'none';
+
+    var W = Math.max(260, Math.round(plot.clientWidth || 640));
+    var H = 250;
+    var iw = W - M.left - M.right;
+    var ih = H - M.top - M.bottom;
+
+    // x domain: first run → today (so a lapse in running reads as a flat line).
+    var d0 = pts[0].t;
+    var d1 = Math.max(pts[pts.length - 1].t, startOfToday());
+    if (d1 - d0 <= 0) { d0 -= DAY; d1 += DAY; }
+
+    var yScale = niceScale(pts[pts.length - 1].cum);
+    var x = function (t) { return M.left + (t - d0) / (d1 - d0) * iw; };
+    var y = function (v) { return M.top + ih - (v / yScale.top) * ih; };
+    var baseY = y(0);
+
+    var svg = '';
+
+    // Gridlines + y ticks (hairline, solid, recessive).
+    yScale.ticks.forEach(function (v) {
+      var yy = y(v);
+      if (v > 0) svg += '<line class="grid-line" x1="' + M.left + '" y1="' + yy + '" x2="' + (W - M.right) + '" y2="' + yy + '"/>';
+      svg += '<text class="tick tick-y" x="' + (M.left - 9) + '" y="' + (yy + 4) + '">' + tickLabel(v) + '</text>';
+    });
+    svg += '<line class="axis-line" x1="' + M.left + '" y1="' + baseY + '" x2="' + (W - M.right) + '" y2="' + baseY + '"/>';
+
+    // x ticks, evenly spaced across the domain. A short span gets fewer of them,
+    // and any label that repeats its neighbour collapses into it — a 2-day
+    // domain must not print "Jul 30, Jul 30, Jul 31".
+    var spanDays = Math.round((d1 - d0) / DAY);
+    var nTicks = Math.min(W < 440 ? 3 : 5, Math.max(2, spanDays + 1));
+    var xTicks = [];
+    for (var i = 0; i < nTicks; i++) {
+      var t = d0 + (d1 - d0) * (i / (nTicks - 1));
+      var text = fmtShort.format(new Date(t));
+      var anchor = i === 0 ? 'start' : (i === nTicks - 1 ? 'end' : 'middle');
+      var prev = xTicks[xTicks.length - 1];
+      if (prev && prev.text === text) {
+        xTicks[xTicks.length - 1] = { t: t, text: text, anchor: anchor === 'end' ? 'end' : 'middle' };
+      } else {
+        xTicks.push({ t: t, text: text, anchor: anchor });
+      }
+    }
+    xTicks.forEach(function (tk) {
+      svg += '<text class="tick" x="' + x(tk.t) + '" y="' + (H - 8) + '" text-anchor="' + tk.anchor + '">'
+           + tk.text + '</text>';
+    });
+
+    // Staircase: rise on a run day, hold flat until the next one.
+    var line = 'M' + x(pts[0].t) + ',' + baseY + 'L' + x(pts[0].t) + ',' + y(pts[0].cum);
+    for (var j = 1; j < pts.length; j++) {
+      line += 'L' + x(pts[j].t) + ',' + y(pts[j - 1].cum) + 'L' + x(pts[j].t) + ',' + y(pts[j].cum);
+    }
+    var lastX = x(d1);
+    var lastY = y(pts[pts.length - 1].cum);
+    if (lastX > x(pts[pts.length - 1].t)) line += 'L' + lastX + ',' + lastY;
+
+    var area = line + 'L' + lastX + ',' + baseY + 'L' + x(pts[0].t) + ',' + baseY + 'Z';
+
+    svg += '<defs><linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">'
+         + '<stop offset="0%" stop-color="#23559e" stop-opacity="0.14"/>'
+         + '<stop offset="100%" stop-color="#23559e" stop-opacity="0.01"/></linearGradient></defs>';
+    svg += '<path d="' + area + '" fill="url(#fillGrad)"/>';
+    svg += '<path d="' + line + '" fill="none" stroke="#23559e" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+
+    // End marker, ringed in the surface colour so it stays legible on the line.
+    svg += '<circle cx="' + lastX + '" cy="' + lastY + '" r="4.5" fill="#23559e" stroke="#fff" stroke-width="2"/>';
+
+    // Hover layer: crosshair + dot, driven by the transparent hit rect.
+    svg += '<line class="cross" id="crossLine" x1="0" y1="' + M.top + '" x2="0" y2="' + baseY + '"/>';
+    svg += '<circle class="cursor-dot" id="cursorDot" r="4.5" fill="#23559e" stroke="#fff" stroke-width="2" cx="0" cy="0"/>';
+    svg += '<rect id="hit" x="' + M.left + '" y="' + M.top + '" width="' + iw + '" height="' + ih + '" fill="transparent"/>';
+
+    // Parsed as markup rather than built with createElementNS: the HTML parser
+    // puts <svg> in the right namespace on its own, which keeps the namespace
+    // URI — the only URL that would otherwise appear in this file — out of it.
+    // An ingest scan of this artifact should find no origins at all.
+    var label = 'Cumulative distance over time: ' + km1(pts[pts.length - 1].cum)
+      + ' km across ' + runs.length + ' runs. Every run is listed below the chart.';
+    var holder = document.createElement('div');
+    holder.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H
+      + '" role="img" tabindex="0" aria-label="' + label + '">' + svg + '</svg>';
+    var el = holder.firstElementChild;
+    plot.insertBefore(el, tip);
+
+    chart = { el: el, pts: pts, x: x, y: y, W: W, H: H, baseY: baseY, iw: iw, d0: d0, d1: d1 };
+    wireHover();
+  }
+
+  // Round the y axis up to a friendly step so the ticks read 0 / 10 / 20 / 30.
+  function niceScale(max, count) {
+    count = count || 4;
+    if (!(max > 0)) return { top: 1, ticks: [0, 1] };
+    var raw = max / count;
+    var mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    var norm = raw / mag;
+    var step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+    var top = Math.ceil(max / step) * step;
+    var ticks = [];
+    for (var v = 0; v <= top + step / 1000; v += step) ticks.push(Math.round(v * 1000) / 1000);
+    return { top: top, ticks: ticks };
+  }
+
+  /* ---------------------------------------------------------------------------
+   * Hover / keyboard read-out. The tooltip enhances; the run list below carries
+   * every value, so nothing is only reachable by pointer.
+   * ------------------------------------------------------------------------- */
+  function wireHover() {
+    var hit = chart.el.querySelector('#hit');
+    hit.addEventListener('pointermove', function (e) {
+      var rect = chart.el.getBoundingClientRect();
+      var px = (e.clientX - rect.left) * (chart.W / rect.width);
+      showAt(nearestIndex(px));
+    });
+    hit.addEventListener('pointerleave', hideTip);
+    chart.el.addEventListener('blur', hideTip);
+    chart.el.addEventListener('keydown', function (e) {
+      var last = chart.pts.length - 1;
+      if (e.key === 'ArrowRight') { showAt(Math.min(last, hoverIndex < 0 ? 0 : hoverIndex + 1)); }
+      else if (e.key === 'ArrowLeft') { showAt(Math.max(0, hoverIndex < 0 ? last : hoverIndex - 1)); }
+      else if (e.key === 'Home') { showAt(0); }
+      else if (e.key === 'End') { showAt(last); }
+      else if (e.key === 'Escape') { hideTip(); return; }
+      else return;
+      e.preventDefault();
+    });
+  }
+
+  function nearestIndex(px) {
+    var best = 0, bestD = Infinity;
+    for (var i = 0; i < chart.pts.length; i++) {
+      var d = Math.abs(chart.x(chart.pts[i].t) - px);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  function showAt(i) {
+    if (!chart || i < 0 || i >= chart.pts.length) return;
+    hoverIndex = i;
+    var p = chart.pts[i];
+    var cx = chart.x(p.t), cy = chart.y(p.cum);
+
+    var cross = chart.el.querySelector('#crossLine');
+    cross.setAttribute('x1', cx);
+    cross.setAttribute('x2', cx);
+    cross.classList.add('on');
+    var dot = chart.el.querySelector('#cursorDot');
+    dot.setAttribute('cx', cx);
+    dot.setAttribute('cy', cy);
+    dot.classList.add('on');
+
+    tip.textContent = '';
+    tip.appendChild(div('tip-date', fmtLong.format(parseDate(p.date))));
+    tip.appendChild(div('tip-main', km1(p.cum) + ' km total'));
+    tip.appendChild(div('tip-sub', '+' + km1(p.km) + ' km' + (p.runs.length > 1 ? ' · ' + p.runs.length + ' runs' : '')));
+    var noted = p.runs.filter(function (r) { return r.note; });
+    if (noted.length === 1) tip.appendChild(div('tip-note', noted[0].note));
+    tip.classList.add('on');
+
+    // Centred above the point, but stepped fully to one side rather than
+    // clamped when that would overflow — clamping at the right edge parks the
+    // tooltip on top of the most recent, most interesting part of the line.
+    var scale = plot.clientWidth / chart.W;
+    var cxCss = cx * scale;
+    var maxLeft = plot.clientWidth - tip.offsetWidth - 2;
+    var left = cxCss - tip.offsetWidth / 2;
+    if (left > maxLeft) left = Math.max(2, cxCss - tip.offsetWidth - 10);
+    else if (left < 2) left = Math.min(maxLeft, cxCss + 10);
+
+    var top = cy * (plot.clientHeight / chart.H) - tip.offsetHeight - 12;
+    tip.style.left = left + 'px';
+    tip.style.top = Math.max(2, top) + 'px';
+  }
+
+  function div(cls, text) {
+    var d = document.createElement('div');
+    d.className = cls;
+    d.textContent = text;
+    return d;
+  }
+
+  function hideTip() {
+    hoverIndex = -1;
+    tip.classList.remove('on');
+    if (chart) {
+      var c = chart.el.querySelector('#crossLine');
+      var d = chart.el.querySelector('#cursorDot');
+      if (c) c.classList.remove('on');
+      if (d) d.classList.remove('on');
+    }
+  }
+
+  /* ============================================================================
+   * Mutations
+   * ========================================================================== */
+  function addRun(km, date, note) {
+    runs.push({ id: uid(), date: date, km: km, note: note });
+    runs.sort(newestFirst);
+    save();
+    renderAll();
+  }
+
+  function removeRun(id) {
+    runs = runs.filter(function (r) { return r.id !== id; });
+    save();
+    renderAll();
+  }
+
+  /* ============================================================================
+   * Wiring
+   * ========================================================================== */
+  var form = $('runForm'), kmInput = $('km'), dateInput = $('date'), noteInput = $('note'), formErr = $('formErr');
+
+  dateInput.value = toISO(new Date());
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var km = Number(kmInput.value);
+    var date = dateInput.value;
+
+    if (!isFinite(km) || km <= 0) { fail('Enter a distance greater than zero.', kmInput); return; }
+    if (km > 500) { fail('That is further than 500 km — check the number.', kmInput); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { fail('Pick a date for this run.', dateInput); return; }
+
+    formErr.textContent = '';
+    addRun(Math.round(km * 100) / 100, date, noteInput.value.trim());
+    kmInput.value = '';
+    noteInput.value = '';
+    kmInput.focus();
+  });
+
+  function fail(msg, el) {
+    formErr.textContent = msg;
+    el.focus();
+  }
+
+  // The chart is drawn at real pixel size, so it has to be redrawn on resize.
+  var resizeTimer;
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(renderChart, 80);
+    }).observe(plot);
+  } else {
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(renderChart, 80);
+    });
+  }
+
+  renderAll();
+})();
+</script>
+</body>
+</html>

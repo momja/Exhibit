@@ -11,6 +11,11 @@
 <title>Agent — Exhibit</title>
 <link rel="stylesheet" href="/assets/phosphor/regular.css">
 <link rel="stylesheet" href="/assets/gallery/tokens.css">
+{{/* components.css joins the other pages' layering here (tokens → components →
+     page sheet) because the preview pane now renders the shared cardWidget
+     component (av-fafu). agent.css still loads last, so its own .btn/.spacer
+     definitions keep winning. */}}
+<link rel="stylesheet" href="/assets/gallery/components.css">
 <link rel="stylesheet" href="/assets/gallery/agent.css">
 <script src="/assets/htmx/htmx.min.js"></script>
 </head>
@@ -86,6 +91,9 @@ const TOKEN = {{.Token}};
 let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 </script>
 <script src="/assets/gallery/state-api.js"></script>
+{{/* components.js carries the widget-tile health watcher (av-fafu); the
+     preview pane renders a tile, so it needs it like the gallery does. */}}
+<script src="/assets/gallery/components.js"></script>
 <script src="/assets/gallery/agent.js"></script>
 </body>
 </html>{{end}}
@@ -112,6 +120,12 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
       <span class="spacer"></span>
       <button class="snip-btn" id="snip-btn"{{if not .HasArtifact}} disabled{{end}} onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
     </div>
+    {{/* The artifact's gallery tile (av-fafu), rendered by the same cardWidget
+         partial the library uses so what the agent sees here is what the
+         library will show. Before any set_widget call this is the default
+         tile — which is exactly the "no widget yet" state, so it needs no
+         empty case of its own. */}}
+    {{if .HasArtifact}}<div class="pv-widget">{{template "cardWidget" .Widget}}<span class="pv-widget-label">Gallery widget</span></div>{{end}}
     <div id="frame-wrap">
       {{if .HasArtifact}}<iframe id="pv-frame" src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>The artifact preview appears here once the agent saves one.</span></div>{{end}}
     </div>{{end}}

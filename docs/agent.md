@@ -24,9 +24,10 @@ browser chat UI ──POST prompt──► Go service ──JSONL stdin──►
 ```
 
 The single write path is preserved: the agent's only tools are
-`create_artifact` / `update_artifact` / `get_artifact` for the document, and
+`create_artifact` / `update_artifact` / `get_artifact` for the document,
 `get_state` / `set_state` / `delete_state` for the artifact's stored state
-(av-lvi1) — all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
+(av-lvi1), and `set_widget` / `get_widget` for the artifact's gallery tile
+(av-fafu) — all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
 materialized to the data dir at startup) that calls back into the exhibit HTTP
 API with the service token. Agent output is scanned like any other ingest;
 scanned origins are **never** auto-approved — the chat UI tells the user when
@@ -45,6 +46,37 @@ bound artifact — same as a save — and emits a synthetic
 the same htmx fragment swap `exhibit_artifact_saved` drives (below): state is
 inlined into the document at render time, so the pane would otherwise stay
 stale after an edit.
+
+## Widgets (av-fafu)
+
+`set_widget(id, body)` saves the artifact's gallery tile — the small
+informative document its library card renders (`widgets.md`). The system prompt
+carries the tile's whole contract (reads the artifact's state synchronously,
+cannot write it, never interactive, one fact large, ~272×132 fluid, always an
+empty state, static-with-no-script for a stateless tool), so the agent builds
+one by default and a tool arrives in the library with a face.
+
+A widget save emits `exhibit_widget_saved` rather than reusing
+`exhibit_artifact_saved`: the artifact body didn't change, only the tile beside
+it, and the event carries the origins the *artifact's* allowlist doesn't cover
+— already blocked at render, so the chat says so plainly instead of offering an
+approval that isn't pending. Both events re-fetch the same preview fragment, and
+the pane renders the tile so the default one is visible too — that being what
+"no widget yet" looks like.
+
+### One-shot sessions (the edit page's Generate button)
+
+`POST /api/artifacts/:id/widget/generate` runs the agent as a *function* rather
+than a chat: it creates a session with `CreateOpts.WidgetOnly`, sends one fixed
+server-side prompt, and returns the session id. The caller subscribes to the
+same SSE route the chat uses and waits for `exhibit_widget_saved`, so the whole
+feature adds a route and no streaming machinery.
+
+`WidgetOnly` exists because the ordinary modify-an-artifact scoping tells the
+model to "save with `update_artifact`" — exactly what a generate-the-tile
+session must never do. The two are mutually exclusive branches of
+`sessionSystemPrompt` for that reason, and `cmd/mockllm` plays the widget
+branch so the path is covered end to end.
 
 ## BYO API key (encrypted at rest)
 

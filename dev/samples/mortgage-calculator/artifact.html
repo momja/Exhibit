@@ -1,0 +1,702 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mortgage Calculator</title>
+<style>
+/* ---------------------------------------------------------------------------
+   Mortgage Calculator — a deliberately STATELESS Exhibit artifact.
+   Every input lives in the DOM and is seeded with a sensible default on load;
+   nothing is written to localStorage/sessionStorage. This is the sample that
+   proves a tool with nothing to persist can still carry a gallery widget.
+   Self-contained: all CSS/JS inline, no network references of any kind.
+--------------------------------------------------------------------------- */
+:root{
+	color-scheme:light;
+
+	/* neutrals */
+	--ink:#111;
+	--ink-soft:#333;
+	--muted:#6f6f6f;
+	--faint:#9a9a9a;
+	--ground:#f0f0f0;
+	--panel:#fff;
+	--hairline:#e6e6e6;
+	--border:#d8d8d8;
+
+	/* brand + the two chart series (validated pair: adjacent CVD ΔE 24.6).
+	   Each series is drawn as a 2px line over a wash of its own hue — big
+	   saturated blocks read loud, so saturation stays on the thin marks. */
+	--accent:#23559e;
+	--accent-soft:#eef3fa;
+	--principal:#23559e;
+	--principal-wash:rgba(35,85,158,.15);
+	--interest:#eb6834;
+	--interest-wash:rgba(235,104,52,.20);
+
+	/* chart chrome */
+	--grid:#ececec;
+	--axis:#c9c9c9;
+
+	--radius:10px;
+	--shadow:0 1px 3px rgba(0,0,0,.07);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+	margin:0;
+	padding:26px 22px 40px;
+	background:var(--ground);
+	color:var(--ink);
+	font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+	font-size:14px;
+	line-height:1.45;
+}
+
+.app{max-width:1120px;margin:0 auto}
+
+/* --- masthead ------------------------------------------------------------ */
+.masthead{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.mark{
+	flex:none;width:38px;height:38px;border-radius:11px;
+	background:var(--accent-soft);
+	display:grid;place-items:center;
+}
+.masthead h1{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em}
+.masthead p{margin:1px 0 0;font-size:13px;color:var(--muted)}
+
+/* --- layout -------------------------------------------------------------- */
+.layout{display:grid;grid-template-columns:322px minmax(0,1fr);gap:18px;align-items:start}
+.stack{display:grid;gap:18px;min-width:0}
+/* Stacked: the form pairs its fields up rather than stretching one per row. */
+@media (max-width:880px){
+	.layout{grid-template-columns:minmax(0,1fr)}
+	.form{grid-template-columns:1fr 1fr;gap:15px 16px;align-items:start}
+	.form-section{grid-column:1/-1}
+}
+@media (max-width:540px){
+	.form{grid-template-columns:minmax(0,1fr)}
+}
+
+.panel{
+	background:var(--panel);
+	border:1px solid var(--hairline);
+	border-radius:var(--radius);
+	box-shadow:var(--shadow);
+	overflow:hidden;
+}
+.panel-head{
+	display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;
+	padding:15px 18px 0;
+}
+.panel-head h2{margin:0;font-size:14px;font-weight:600;letter-spacing:-.005em}
+.panel-head p{margin:3px 0 0;font-size:12.5px;color:var(--muted);flex-basis:100%}
+.panel-body{padding:18px}
+
+/* --- form ---------------------------------------------------------------- */
+.form{display:grid;gap:15px}
+.form-section{
+	margin:4px 0 -2px;font-size:11.5px;font-weight:600;letter-spacing:.07em;
+	text-transform:uppercase;color:var(--faint);
+	padding-top:13px;border-top:1px solid var(--hairline);
+}
+.field{display:grid;gap:6px}
+.field > .lbl{font-size:12.5px;font-weight:600;color:var(--ink-soft)}
+.field .hint{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.row{display:flex;gap:8px;align-items:stretch}
+.row .control{flex:1;min-width:0}
+
+.control{
+	display:flex;align-items:center;
+	border:1px solid var(--border);border-radius:8px;background:#fff;
+	transition:border-color .12s,box-shadow .12s;
+}
+.control:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(35,85,158,.13)}
+.control .affix{padding:0 2px 0 11px;color:var(--faint);font-size:13.5px;user-select:none}
+.control .affix.trail{padding:0 11px 0 2px}
+.control input{
+	flex:1;min-width:0;width:100%;
+	border:0;outline:0;background:transparent;
+	padding:9px 11px;font:inherit;font-size:15px;color:var(--ink);
+	font-variant-numeric:tabular-nums;
+}
+.control .affix + input{padding-left:2px}
+.control input:has(+ .affix.trail){padding-right:2px}
+/* number inputs without the spinner furniture */
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+.seg{display:flex;flex:none;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff}
+.seg button{
+	border:0;background:transparent;font:inherit;font-size:13px;font-weight:600;
+	min-width:38px;padding:0 6px;color:var(--muted);cursor:pointer;
+}
+.seg button + button{border-left:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{
+	border:1px solid var(--border);background:#fff;border-radius:999px;
+	padding:3px 11px;font:inherit;font-size:12px;color:var(--muted);cursor:pointer;
+}
+.chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+
+/* --- headline result ----------------------------------------------------- */
+.result-label{margin:0;font-size:11.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+/* Hero figure: proportional figures on purpose — tabular-nums reads loose at
+   display sizes. Tabular is reserved for the columns below. */
+.hero{margin:6px 0 0;font-size:clamp(38px,5.6vw,52px);font-weight:600;letter-spacing:-.025em;line-height:1.02}
+.hero .cents{font-size:.52em;font-weight:600;letter-spacing:-.01em;color:var(--muted);margin-left:1px}
+
+.breakdown{list-style:none;margin:18px 0 0;padding:14px 0 0;border-top:1px solid var(--hairline);display:grid;gap:9px}
+.breakdown li{display:flex;justify-content:space-between;align-items:baseline;gap:14px;font-size:13.5px}
+.breakdown .nm{color:var(--muted)}
+.breakdown .amt{font-variant-numeric:tabular-nums;color:var(--ink)}
+.note{margin:16px 0 0;padding-top:14px;border-top:1px solid var(--hairline);font-size:12.5px;color:var(--muted)}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:1px;background:var(--hairline);border-top:1px solid var(--hairline)}
+.tile{background:var(--panel);padding:13px 18px}
+.tile .k{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.tile .v{margin-top:3px;font-size:18px;letter-spacing:-.015em;color:var(--ink)}
+
+/* --- chart --------------------------------------------------------------- */
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:3px}
+.chart-wrap{position:relative;padding:12px 18px 16px}
+svg.chart{display:block;width:100%;height:auto;touch-action:none}
+.tip{
+	position:absolute;left:0;top:0;z-index:2;pointer-events:none;opacity:0;
+	transform:translate(-50%,0);
+	background:#fff;border:1px solid var(--border);border-radius:8px;
+	box-shadow:0 4px 16px rgba(0,0,0,.13);
+	padding:8px 10px;font-size:12px;white-space:nowrap;
+	transition:opacity .1s ease;
+}
+.tip .t{font-weight:600;margin-bottom:5px}
+.tip dl{display:grid;grid-template-columns:auto auto;gap:3px 14px;margin:0}
+.tip dt{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.tip dt i{width:8px;height:8px;border-radius:2px}
+.tip dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+
+/* --- table --------------------------------------------------------------- */
+.table-scroll{max-height:330px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 18px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{
+	position:sticky;top:0;z-index:1;background:#fff;
+	font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);
+	box-shadow:inset 0 -1px 0 var(--hairline);
+}
+tbody tr:nth-child(even){background:#fafafa}
+tbody td:first-child{color:var(--muted)}
+
+footer{max-width:1120px;margin:20px auto 0;font-size:12px;color:var(--faint)}
+</style>
+
+<div class="app">
+	<header class="masthead">
+		<div class="mark" aria-hidden="true">
+			<svg width="22" height="22" viewBox="0 0 32 32" fill="none"
+				stroke="#23559e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M4.4 14.6 16 5.4l11.6 9.2"/>
+				<path d="M7 13.1v13.4h18V13.1"/>
+				<path d="M13.4 26.5v-6.1a2.6 2.6 0 0 1 5.2 0v6.1"/>
+			</svg>
+		</div>
+		<div>
+			<h1>Mortgage Calculator</h1>
+			<p>Monthly payment, amortization, and the true cost of the loan.</p>
+		</div>
+	</header>
+
+	<div class="layout">
+		<!-- ------------------------------- inputs ------------------------------- -->
+		<aside class="panel">
+			<div class="panel-body form">
+				<div class="field">
+					<label class="lbl" for="price">Home price</label>
+					<div class="control">
+						<span class="affix">$</span>
+						<input id="price" type="number" min="0" step="1000" value="450000" inputmode="decimal">
+					</div>
+				</div>
+
+				<div class="field">
+					<label class="lbl" for="down">Down payment</label>
+					<div class="row">
+						<div class="control">
+							<span class="affix" id="down-affix">%</span>
+							<input id="down" type="number" min="0" step="0.5" value="20" inputmode="decimal">
+						</div>
+						<div class="seg" role="group" aria-label="Down payment unit">
+							<button type="button" id="unit-pct" data-unit="percent" aria-pressed="true">%</button>
+							<button type="button" id="unit-amt" data-unit="amount" aria-pressed="false">$</button>
+						</div>
+					</div>
+					<p class="hint" id="down-hint"></p>
+				</div>
+
+				<div class="field">
+					<label class="lbl" for="rate">Interest rate</label>
+					<div class="control">
+						<input id="rate" type="number" min="0" max="25" step="0.05" value="6.5" inputmode="decimal">
+						<span class="affix trail">% APR</span>
+					</div>
+				</div>
+
+				<div class="field">
+					<label class="lbl" for="years">Loan term</label>
+					<div class="control">
+						<input id="years" type="number" min="1" max="50" step="1" value="30" inputmode="numeric">
+						<span class="affix trail">years</span>
+					</div>
+					<div class="chips" id="term-chips">
+						<button type="button" class="chip" data-years="15">15</button>
+						<button type="button" class="chip" data-years="20">20</button>
+						<button type="button" class="chip" data-years="30">30</button>
+					</div>
+				</div>
+
+				<p class="form-section">Monthly extras <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></p>
+
+				<div class="field">
+					<label class="lbl" for="tax">Property tax</label>
+					<div class="control">
+						<span class="affix">$</span>
+						<input id="tax" type="number" min="0" step="25" value="395" inputmode="decimal">
+						<span class="affix trail">/mo</span>
+					</div>
+				</div>
+
+				<div class="field">
+					<label class="lbl" for="ins">Home insurance</label>
+					<div class="control">
+						<span class="affix">$</span>
+						<input id="ins" type="number" min="0" step="10" value="125" inputmode="decimal">
+						<span class="affix trail">/mo</span>
+					</div>
+				</div>
+
+				<div class="field">
+					<label class="lbl" for="hoa">HOA dues</label>
+					<div class="control">
+						<span class="affix">$</span>
+						<input id="hoa" type="number" min="0" step="10" value="0" inputmode="decimal">
+						<span class="affix trail">/mo</span>
+					</div>
+				</div>
+			</div>
+		</aside>
+
+		<!-- ------------------------------- results ------------------------------ -->
+		<div class="stack">
+			<section class="panel">
+				<div class="panel-body">
+					<p class="result-label">Estimated monthly payment</p>
+					<p class="hero" id="hero">—</p>
+					<ul class="breakdown" id="breakdown"></ul>
+					<p class="note" id="breakdown-note" hidden></p>
+				</div>
+				<div class="tiles">
+					<div class="tile"><div class="k">Loan amount</div><div class="v" id="stat-loan">—</div></div>
+					<div class="tile"><div class="k">Total interest</div><div class="v" id="stat-interest">—</div></div>
+					<div class="tile"><div class="k">Total of payments</div><div class="v" id="stat-total">—</div></div>
+					<div class="tile"><div class="k">Payoff date</div><div class="v" id="stat-payoff">—</div></div>
+				</div>
+			</section>
+
+			<section class="panel">
+				<div class="panel-head">
+					<h2>Where each year's payment goes</h2>
+					<div class="legend" aria-hidden="true">
+						<span><i style="background:var(--principal)"></i>Principal</span>
+						<span><i style="background:var(--interest)"></i>Interest</span>
+					</div>
+					<p>The yearly total never changes — only the split does. Interest fills the
+						early years; principal takes over later.</p>
+				</div>
+				<div class="chart-wrap" id="chart-wrap">
+					<svg class="chart" id="chart" viewBox="0 0 760 262" role="img" aria-label="Stacked area chart of principal and interest paid per year"></svg>
+					<div class="tip" id="tip" aria-hidden="true"></div>
+				</div>
+			</section>
+
+			<section class="panel">
+				<div class="panel-head" style="padding-bottom:14px">
+					<h2>Yearly amortization</h2>
+					<p>Principal and interest paid during each year, and the balance left at year end.</p>
+				</div>
+				<div class="table-scroll">
+					<table>
+						<thead>
+							<tr><th scope="col">Year</th><th scope="col">Principal</th><th scope="col">Interest</th><th scope="col">Balance</th></tr>
+						</thead>
+						<tbody id="schedule"></tbody>
+					</table>
+				</div>
+			</section>
+		</div>
+	</div>
+</div>
+
+<footer>Estimates only — excludes PMI, closing costs, and future changes to taxes or insurance.</footer>
+
+<script>
+(function () {
+	'use strict';
+
+	/* This artifact is intentionally stateless: no localStorage, no sessionStorage,
+	   no persistence of any kind. Defaults live in the markup; everything else is
+	   derived on each render. */
+
+	var el = function (id) { return document.getElementById(id); };
+	var inputs = {
+		price: el('price'), down: el('down'), rate: el('rate'), years: el('years'),
+		tax: el('tax'), ins: el('ins'), hoa: el('hoa')
+	};
+	var downUnit = 'percent'; // 'percent' | 'amount' — mirrors the segmented control
+
+	/* ---------------------------------------------------------------- format */
+	var usd0 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+	var usd2 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+	var monthYear = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' });
+
+	function money0(v) { return usd0.format(Math.round(v)); }
+	function money2(v) { return usd2.format(v); }
+	function axisMoney(v) {
+		if (v === 0) return '$0';
+		if (v >= 1000) return '$' + (v / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 }) + 'k';
+		return '$' + Math.round(v);
+	}
+	function num(node, fallback) {
+		var n = parseFloat(node.value);
+		return isFinite(n) ? n : fallback;
+	}
+	function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+	function cents(v) { return Math.round(v * 100) / 100; }
+
+	/* ------------------------------------------------------------- the math */
+	function readModel() {
+		var price = clamp(num(inputs.price, 0), 0, 1e9);
+		var rawDown = Math.max(0, num(inputs.down, 0));
+		var downAmount = downUnit === 'percent' ? price * clamp(rawDown, 0, 100) / 100 : rawDown;
+		downAmount = clamp(downAmount, 0, price);
+		var downPercent = price > 0 ? downAmount / price * 100 : 0;
+
+		return {
+			price: price,
+			downAmount: downAmount,
+			downPercent: downPercent,
+			rate: clamp(num(inputs.rate, 0), 0, 25),
+			years: Math.round(clamp(num(inputs.years, 30), 1, 50)),
+			tax: Math.max(0, num(inputs.tax, 0)),
+			ins: Math.max(0, num(inputs.ins, 0)),
+			hoa: Math.max(0, num(inputs.hoa, 0)),
+			principal: price - downAmount
+		};
+	}
+
+	// Standard amortizing payment; the zero-rate case is a straight division.
+	function payment(loan, monthlyRate, months) {
+		if (loan <= 0 || months <= 0) return 0;
+		if (monthlyRate === 0) return loan / months;
+		var growth = Math.pow(1 + monthlyRate, months);
+		return loan * monthlyRate * growth / (growth - 1);
+	}
+
+	// Month-by-month amortization, aggregated per year.
+	function schedule(loan, monthlyRate, months, pmt) {
+		var rows = [], balance = loan, m = 0;
+		while (m < months && balance > 0.005) {
+			var principalPaid = 0, interestPaid = 0;
+			for (var i = 0; i < 12 && m < months && balance > 0.005; i++, m++) {
+				var interest = balance * monthlyRate;
+				var principal = Math.min(pmt - interest, balance); // final payment trims to the balance
+				balance -= principal;
+				principalPaid += principal;
+				interestPaid += interest;
+			}
+			rows.push({
+				year: rows.length + 1,
+				principal: principalPaid,
+				interest: interestPaid,
+				total: principalPaid + interestPaid,
+				balance: Math.max(balance, 0)
+			});
+		}
+		return rows;
+	}
+
+	function payoffDate(months) {
+		var now = new Date();
+		// Payment 1 lands next month, so payment `months` lands `months` months out.
+		return monthYear.format(new Date(now.getFullYear(), now.getMonth() + months, 1));
+	}
+
+	/* ------------------------------------------------------------ chart draw */
+	var PAD = { l: 58, r: 16, t: 16, b: 34 };
+	var VB = { w: 760, h: 262 };
+	var PLOT = { w: VB.w - PAD.l - PAD.r, h: VB.h - PAD.t - PAD.b };
+
+	function niceStep(v) {
+		if (v <= 0) return 1;
+		var mag = Math.pow(10, Math.floor(Math.log10(v)));
+		var n = v / mag;
+		var step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+		return step * mag;
+	}
+
+	function drawChart(rows) {
+		var svg = el('chart');
+		if (!rows.length) {
+			// Nothing financed — say so in the plot area rather than leaving a void.
+			svg.innerHTML = '<text x="' + (VB.w / 2) + '" y="' + (VB.h / 2) + '" text-anchor="middle" ' +
+				'dominant-baseline="middle" font-size="13" style="fill:var(--muted)">' +
+				'Nothing to amortize — there is no loan.</text>';
+			svg.setAttribute('aria-label', 'No loan to amortize.');
+			return null;
+		}
+
+		var years = rows.length;
+		var peak = rows.reduce(function (a, r) { return Math.max(a, r.total); }, 0);
+		var step = niceStep(peak / 4);
+		var top = step * Math.ceil(peak / step);
+		var x = function (i) { return PAD.l + PLOT.w * (i / years); };
+		var y = function (v) { return PAD.t + PLOT.h * (1 - v / top); };
+
+		var out = [];
+
+		// Gridlines + y ticks — solid hairlines, one step off the surface.
+		// Colors ride `style=` rather than presentation attributes: var() is a CSS
+		// value substitution and browsers do not resolve it inside fill="…".
+		for (var v = 0; v <= top + 1e-6; v += step) {
+			var gy = y(v).toFixed(1);
+			out.push('<line x1="' + PAD.l + '" y1="' + gy + '" x2="' + (VB.w - PAD.r) + '" y2="' + gy +
+				'" style="stroke:' + (v === 0 ? 'var(--axis)' : 'var(--grid)') + '" stroke-width="1"/>');
+			out.push('<text x="' + (PAD.l - 10) + '" y="' + gy + '" text-anchor="end" dominant-baseline="middle" ' +
+				'font-size="11" style="fill:var(--faint);font-variant-numeric:tabular-nums">' + axisMoney(v) + '</text>');
+		}
+
+		// Step outlines — each year is one flat band, matching the yearly table.
+		function stepPoints(pick) {
+			var pts = [[x(0), y(pick(rows[0]))]];
+			for (var i = 0; i < years; i++) {
+				pts.push([x(i + 1), y(pick(rows[i]))]);
+				if (i + 1 < years) pts.push([x(i + 1), y(pick(rows[i + 1]))]);
+			}
+			return pts;
+		}
+		function path(pts, close) {
+			return 'M' + pts.map(function (p, i) {
+				return (i ? 'L' : '') + p[0].toFixed(1) + ' ' + p[1].toFixed(1);
+			}).join(' ') + (close ? ' Z' : '');
+		}
+
+		var interestPts = stepPoints(function (r) { return r.interest; });
+		var totalPts = stepPoints(function (r) { return r.total; });
+		var floor = [[x(years), y(0)], [x(0), y(0)]];
+
+		// Two disjoint bands — interest from the baseline up, principal from there
+		// to the (flat) yearly total. Wash below, 2px line on top; the interest
+		// line is what separates the two fills, so no border is drawn around them.
+		out.push('<path d="' + path(interestPts.concat(floor), true) + '" style="fill:var(--interest-wash)"/>');
+		out.push('<path d="' + path(totalPts.concat(interestPts.slice().reverse()), true) + '" style="fill:var(--principal-wash)"/>');
+		out.push('<path d="' + path(totalPts) + '" fill="none" stroke-width="2" stroke-linejoin="round" style="stroke:var(--principal)"/>');
+		out.push('<path d="' + path(interestPts) + '" fill="none" stroke-width="2" stroke-linejoin="round" style="stroke:var(--interest)"/>');
+
+		// One direct label: the year principal overtakes interest — the chart's story.
+		var cross = -1;
+		for (var i = 0; i < years; i++) {
+			if (rows[i].principal > rows[i].interest) { cross = i; break; }
+		}
+		if (cross > 0) {
+			var cx = x(cross + 0.5);
+			var cy = y(rows[cross].interest);
+			var flip = cx > PAD.l + PLOT.w * 0.55;
+			// Sit the label under the total line when the stack crowds the plot top,
+			// so it never lands on the line it is pointing past.
+			var topY = y(rows[0].total);
+			var labelY = topY - PAD.t >= 24 ? PAD.t + 13 : topY + 17;
+			out.push('<line x1="' + cx.toFixed(1) + '" y1="' + (cy - 8).toFixed(1) + '" x2="' + cx.toFixed(1) +
+				'" y2="' + (labelY + 5).toFixed(1) + '" style="stroke:var(--axis)" stroke-width="1"/>');
+			out.push('<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="3.5" stroke="#fff" stroke-width="2" style="fill:var(--ink)"/>');
+			out.push('<text x="' + (cx + (flip ? -8 : 8)).toFixed(1) + '" y="' + labelY.toFixed(1) + '" text-anchor="' + (flip ? 'end' : 'start') +
+				'" font-size="11.5" style="fill:var(--muted)">Principal overtakes interest in year ' + (cross + 1) + '</text>');
+		}
+
+		// X ticks: year 1, a regular interval, and always the final year — with the
+		// penultimate tick dropped when the final year would crowd it.
+		var interval = years <= 12 ? 2 : 5;
+		var ticks = [];
+		for (var t = 1; t <= years; t += interval) ticks.push(t);
+		if (ticks[ticks.length - 1] !== years) {
+			if (years - ticks[ticks.length - 1] < interval / 2 && ticks.length > 1) ticks.pop();
+			ticks.push(years);
+		}
+		ticks.forEach(function (t) {
+			out.push('<text x="' + x(t - 0.5).toFixed(1) + '" y="' + (VB.h - 12) + '" text-anchor="middle" ' +
+				'font-size="11" style="fill:var(--faint);font-variant-numeric:tabular-nums">' + t + '</text>');
+		});
+
+		// Hover band (filled on pointer move, so it sits above the fills).
+		out.push('<rect id="hover-band" x="0" y="' + PAD.t + '" width="0" height="' + PLOT.h + '" fill="rgba(17,17,17,.07)" pointer-events="none"/>');
+
+		svg.innerHTML = out.join('');
+		svg.setAttribute('aria-label',
+			'Principal and interest paid per year over ' + years + ' years. ' +
+			'Interest falls from ' + money0(rows[0].interest) + ' in year 1 to ' +
+			money0(rows[years - 1].interest) + ' in year ' + years + '.');
+		return { years: years, x: x };
+	}
+
+	/* -------------------------------------------------------- hover tooltip */
+	var geometry = null, currentRows = [];
+
+	function moveTip(event) {
+		var svg = el('chart'), tip = el('tip'), band = document.getElementById('hover-band');
+		if (!geometry || !band) return;
+		var box = svg.getBoundingClientRect();
+		var scale = box.width / VB.w;
+		var svgX = (event.clientX - box.left) / scale;
+		var index = Math.floor((svgX - PAD.l) / PLOT.w * geometry.years);
+		if (index < 0 || index >= geometry.years) { hideTip(); return; }
+
+		var row = currentRows[index];
+		band.setAttribute('x', geometry.x(index).toFixed(1));
+		band.setAttribute('width', (geometry.x(index + 1) - geometry.x(index)).toFixed(1));
+		tip.innerHTML =
+			'<div class="t">Year ' + row.year + '</div><dl>' +
+			'<dt><i style="background:var(--principal)"></i>Principal</dt><dd>' + money0(row.principal) + '</dd>' +
+			'<dt><i style="background:var(--interest)"></i>Interest</dt><dd>' + money0(row.interest) + '</dd>' +
+			'<dt>Balance</dt><dd>' + money0(row.balance) + '</dd></dl>';
+		tip.style.opacity = '1';
+
+		// Position in CSS pixels relative to the wrapper, clamped so the tooltip
+		// never leaves the panel. (SVG elements have no offsetLeft/offsetTop, so
+		// both boxes are measured and subtracted.)
+		var wrap = el('chart-wrap');
+		var wrapBox = wrap.getBoundingClientRect();
+		var centerX = box.left - wrapBox.left + geometry.x(index + 0.5) * scale;
+		var half = tip.offsetWidth / 2;
+		tip.style.left = clamp(centerX, half + 4, Math.max(half + 4, wrap.clientWidth - half - 4)) + 'px';
+		tip.style.top = (box.top - wrapBox.top + (PAD.t + 6) * scale) + 'px';
+	}
+
+	function hideTip() {
+		var band = document.getElementById('hover-band');
+		el('tip').style.opacity = '0';
+		if (band) band.setAttribute('width', '0');
+	}
+
+	/* ------------------------------------------------------------- rendering */
+	function render() {
+		var m = readModel();
+		var monthlyRate = m.rate / 100 / 12;
+		var months = m.years * 12;
+		// Amortize with the exact payment and round only for display: a cent-rounded
+		// payment compounds into a stray few dollars of balance at payoff.
+		var piExact = payment(m.principal, monthlyRate, months);
+		var pi = cents(piExact);
+		var tax = cents(m.tax), ins = cents(m.ins), hoa = cents(m.hoa);
+		var total = cents(pi + tax + ins + hoa);
+
+		// hero + breakdown
+		var whole = Math.floor(total);
+		var frac = Math.round((total - whole) * 100);
+		el('hero').innerHTML = money0(whole) +
+			'<span class="cents">.' + String(frac).padStart(2, '0') + '</span>';
+
+		var parts = [{ nm: 'Principal & interest', amt: pi }];
+		if (tax > 0) parts.push({ nm: 'Property tax', amt: tax });
+		if (ins > 0) parts.push({ nm: 'Home insurance', amt: ins });
+		if (hoa > 0) parts.push({ nm: 'HOA dues', amt: hoa });
+
+		var list = el('breakdown');
+		list.innerHTML = parts.map(function (p) {
+			return '<li><span class="nm">' + p.nm + '</span><span class="amt">' + money2(p.amt) + '</span></li>';
+		}).join('');
+		list.hidden = parts.length < 2;
+		var note = el('breakdown-note');
+		note.hidden = parts.length >= 2;
+		note.textContent = 'Principal and interest only — add taxes, insurance, or HOA dues to see the full monthly cost.';
+
+		// down payment hint
+		el('down-affix').textContent = downUnit === 'percent' ? '%' : '$';
+		el('down-hint').textContent = m.price <= 0
+			? 'Enter a home price to size the down payment.'
+			: (downUnit === 'percent'
+				? money0(m.downAmount) + ' down · ' + money0(m.principal) + ' financed'
+				: m.downPercent.toFixed(1) + '% down · ' + money0(m.principal) + ' financed');
+
+		// schedule + stats
+		var rows = schedule(m.principal, monthlyRate, months, piExact);
+		var totalInterest = rows.reduce(function (a, r) { return a + r.interest; }, 0);
+		var totalPrincipal = rows.reduce(function (a, r) { return a + r.principal; }, 0);
+
+		el('stat-loan').textContent = money0(m.principal);
+		el('stat-interest').textContent = money0(totalInterest);
+		el('stat-total').textContent = money0(totalPrincipal + totalInterest);
+		el('stat-payoff').textContent = m.principal > 0 ? payoffDate(months) : 'Paid at closing';
+
+		el('schedule').innerHTML = rows.map(function (r) {
+			return '<tr><td>' + r.year + '</td><td>' + money0(r.principal) + '</td><td>' +
+				money0(r.interest) + '</td><td>' + money0(r.balance) + '</td></tr>';
+		}).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:22px">No loan to amortize.</td></tr>';
+
+		currentRows = rows;
+		geometry = drawChart(rows);
+		hideTip();
+	}
+
+	/* --------------------------------------------------------------- wiring */
+	Object.keys(inputs).forEach(function (key) {
+		inputs[key].addEventListener('input', render);
+	});
+
+	['unit-pct', 'unit-amt'].forEach(function (id) {
+		el(id).addEventListener('click', function () {
+			var next = this.getAttribute('data-unit');
+			if (next === downUnit) return;
+			// Convert the current figure so switching units never changes the money.
+			var price = clamp(num(inputs.price, 0), 0, 1e9);
+			var current = Math.max(0, num(inputs.down, 0));
+			if (next === 'percent') {
+				inputs.down.value = price > 0 ? Math.round(current / price * 1000) / 10 : 0;
+				inputs.down.step = '0.5';
+			} else {
+				inputs.down.value = Math.round(price * clamp(current, 0, 100) / 100);
+				inputs.down.step = '1000';
+			}
+			downUnit = next;
+			el('unit-pct').setAttribute('aria-pressed', String(next === 'percent'));
+			el('unit-amt').setAttribute('aria-pressed', String(next === 'amount'));
+			render();
+		});
+	});
+
+	function syncTermChips() {
+		var years = Math.round(num(inputs.years, 30));
+		Array.prototype.forEach.call(el('term-chips').children, function (chip) {
+			chip.setAttribute('aria-pressed', String(Number(chip.getAttribute('data-years')) === years));
+		});
+	}
+	el('term-chips').addEventListener('click', function (event) {
+		var chip = event.target.closest('.chip');
+		if (!chip) return;
+		inputs.years.value = chip.getAttribute('data-years');
+		syncTermChips();
+		render();
+	});
+	inputs.years.addEventListener('input', syncTermChips);
+
+	var chart = el('chart');
+	chart.addEventListener('pointermove', moveTip);
+	chart.addEventListener('pointerleave', hideTip);
+	window.addEventListener('resize', hideTip);
+
+	syncTermChips();
+	render();
+})();
+</script>

@@ -79,10 +79,42 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	rd.serveArtifactDoc(w, r, a)
 }
 
-// serveArtifactDoc reads the artifact body, injects the shim and CSP, and writes
-// the resulting document to the response.
+// ServeWidget serves an artifact's widget (av-fafu) — the small, informative
+// document its gallery card renders. It is the same read path as the artifact
+// itself, differing only in which blob it reads and which preamble it injects
+// (widget mode: state readable, writes and capability bridges absent). An
+// artifact with no widget 404s; the gallery renders its default tile instead
+// and never points a frame here.
+func (rd *Renderer) ServeWidget(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "artifactID")
+	a, err := rd.cfg.Store.GetArtifact(r.Context(), id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if a == nil || a.WidgetBlobID == "" {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	rd.serveDoc(w, r, a, a.WidgetBlobID, true)
+}
+
+// serveArtifactDoc serves the artifact's own body — the full, interactive tool.
 func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact) {
-	rc, err := rd.cfg.Blob.Get(r.Context(), a.SourceBlobID)
+	rd.serveDoc(w, r, a, a.SourceBlobID, false)
+}
+
+// serveDoc reads blobID, wraps it in the artifact's security envelope (CSP from
+// the artifact's allowlist, render preamble with the artifact's state inlined),
+// and writes the resulting document.
+//
+// The artifact and its widget deliberately share this one path. The security
+// envelope is a property of the *artifact*, not of which document is being
+// served: same allowlist, same CSP, same opaque-origin sandbox. widget only
+// selects the narrower preamble, so a widget's authority can only ever be a
+// subset of its artifact's — there is no second policy to keep in sync.
+func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, blobID string, widget bool) {
+	rc, err := rd.cfg.Blob.Get(r.Context(), blobID)
 	if err != nil {
 		http.Error(w, "artifact body not found", http.StatusNotFound)
 		return
@@ -113,9 +145,10 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 		state = nil
 	}
 
-	doc := injectShim(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state)
+	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, widget)
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
+		slog.Bool("widget", widget),
 		slog.Int("body_bytes", len(bodyBytes)),
 		slog.Int("allowlist", len(a.NetworkAllowlist)),
 		slog.Int("state_keys", len(state)),
@@ -210,10 +243,21 @@ func buildCSP(allowlist []string, appOrigin string) string {
 // denies — downloads (the sandbox omits allow-downloads) and clipboard
 // read/write (opaque-origin permissions policy) — to the host frame, where
 // they run only after user approval.
+//
+// WIDGET (av-fafu) narrows the same shim for a widget render. A widget is a
+// *view* of an artifact: it reads the artifact's state and shows one fact from
+// it. So in widget mode writes stop at the in-memory cache — the write-through
+// to the host is short-circuited — and bridgeScript below is not spliced in at
+// all. Both are subtractions from the one preamble rather than a second shim,
+// which is what makes "a widget's authority is a strict subset of its
+// artifact's" a property you can read off this file instead of a claim two
+// files have to keep agreeing on. A widget that calls setItem still behaves
+// like Storage within its own frame — it just cannot outlive the render.
 const shimTemplate = `<script>
 (function() {
   var ARTIFACT_ID = %q;
   var API_ORIGIN = %q;
+  var WIDGET = %t;
 
   // State is inlined by the render surface at request time, so getItem is
   // correct on the first *synchronous* read. Fetching it asynchronously would
@@ -230,6 +274,7 @@ const shimTemplate = `<script>
   // key to '' — storing an empty string is legitimate and must stay possible.
   // clear has no key at all, so it gets its own op rather than a sentinel key.
   function persistState(op, key, value) {
+    if (WIDGET) return;                    // a widget renders state, never edits it
     if (window.parent === window) return; // top-level: no host to persist through
     var msg = { __avState: true, artifactId: ARTIFACT_ID, op: op };
     if (key !== undefined) msg.key = key;
@@ -281,14 +326,29 @@ const shimTemplate = `<script>
   try {
     Object.defineProperty(window, 'localStorage', { value: makeStorage(cache, persistState), writable: false });
   } catch(e) {}
+%s
+})();
+</script>`
 
-  // ---- Framed-only installs ----
-  // Everything below belongs to the sandboxed, opaque-origin frame the gallery
-  // embeds: the sessionStorage namespace, the capability diagnostic, and the
-  // bridges and polyfills that stand in for what that sandbox denies. Opened
-  // top-level (a direct render-origin visit or a share) there is no host frame
-  // and no sandbox — the document has a real origin where all of this works
-  // natively — so none of it installs.
+// bridgeScript is the capability half of the render preamble: the bridges and
+// polyfills that give an artifact back what the opaque-origin sandbox takes
+// away (downloads, clipboard, file pickers) and the diagnostics for what it
+// cannot give back at all.
+//
+// It is a separate string, spliced into shimTemplate's trailing %s, because a
+// widget render omits it entirely rather than shipping it disabled (av-fafu).
+// Omission is both the honest encoding of "a widget has none of these
+// capabilities" and the cheap one: a gallery page renders one widget document
+// per card, and none of them should carry a download bridge they can't use.
+//
+// ---- Framed-only installs ----
+// Everything below belongs to the sandboxed, opaque-origin frame the gallery
+// embeds: the sessionStorage namespace, the capability diagnostic, and the
+// bridges and polyfills that stand in for what that sandbox denies. Opened
+// top-level (a direct render-origin visit or a share) there is no host frame
+// and no sandbox — the document has a real origin where all of this works
+// natively — so none of it installs.
+const bridgeScript = `
   if (window.parent !== window) {
     // ---- sessionStorage ----
     // Its own, purely in-memory Storage object: separate cache, no persist
@@ -732,15 +792,81 @@ const shimTemplate = `<script>
       // whose createWritable() materializes a download via the bridge above.
       return Promise.resolve(makeFileHandle(new File([], opts.suggestedName || 'download')));
     };
+  }`
+
+// widgetBaseCSS is one of two things a widget render adds that an artifact
+// render does not: a floor for the card tile a widget is drawn into. A widget
+// has no page of its own to establish a viewport — it fills a fixed-size well —
+// so the default 8px body margin and `height:auto` would leave every widget
+// author writing the same four rules. Transparent by default so the card
+// surface shows through; a widget that wants its own background paints one. It
+// is emitted before the widget's own markup, so anything the widget declares
+// wins.
+const widgetBaseCSS = `<style>
+html,body{margin:0;padding:0;height:100%;background:transparent;overflow:hidden}
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#111;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+</style>`
+
+// widgetHealthScript is the other: a widget vouching for itself to the host.
+//
+// The host cannot see into this frame — it is cross-origin and opaque, so an
+// iframe `load` event fires just the same for a 404 page, for a widget whose
+// script threw on line one, and for one that rendered perfectly. From outside,
+// all three look identical, and the failure mode a card shows is a blank
+// rectangle where a number should be. For a surface whose whole job is to be
+// trustworthy at a glance, blank-with-no-explanation is the worst answer
+// available.
+//
+// So the report comes from inside, via the one script in the frame that is
+// ours and runs first. On load (plus a frame, so a widget that paints in a
+// rAF or a load handler still counts) it checks that something was actually
+// rendered and posts __avWidgetReady; an uncaught error, a rejected promise,
+// or an empty body posts __avWidgetError instead. The host falls back to the
+// default monogram tile on an error — or on hearing nothing at all, which
+// covers the cases no in-frame script can report: a document that never
+// loaded, a parse failure, a script that hung the thread.
+//
+// This is diagnosis, not enforcement: a widget that suppresses the report just
+// gets the monogram, which is the same outcome as failing. Nothing here can
+// grant it anything.
+const widgetHealthScript = `<script>
+(function() {
+  if (window.parent === window) return; // top-level: no host to report to
+  var API_ORIGIN = %q;
+  var sent = false;
+  function post(type, detail) {
+    if (sent) return;
+    sent = true;
+    window.parent.postMessage({ __avWidget: true, status: type, detail: detail || null }, API_ORIGIN);
   }
+  window.addEventListener('error', function(e) {
+    post('error', e && e.message ? String(e.message) : 'script error');
+  });
+  window.addEventListener('unhandledrejection', function() { post('error', 'unhandled rejection'); });
+  window.addEventListener('load', function() {
+    requestAnimationFrame(function() {
+      // "Rendered nothing" is a failure by contract: a widget must always draw
+      // something, an empty state included. Element children or any
+      // non-whitespace text is enough to count as drawn — this is a liveness
+      // check, not a design review.
+      var body = document.body;
+      var drew = body && (body.children.length > 0 || (body.textContent || '').trim() !== '');
+      if (drew) post('ready');
+      else post('error', 'widget rendered nothing');
+    });
+  });
 })();
 </script>`
 
-// injectShim inserts the storage shim as the first element inside <head>.
-// If no <head> is found, the shim is prepended to the document. The artifact's
-// current state is inlined into the shim so the cache is populated before any
-// artifact script runs.
-func injectShim(body, artifactID, appOrigin string, state map[string]string) string {
+// injectPreamble inserts the render preamble as the first element inside <head>
+// (prepended to the document if it has no <head>). The artifact's current state
+// is inlined into the shim so the cache is populated before any script runs.
+//
+// widget selects the narrower preamble for a widget render (av-fafu): the same
+// storage shim with writes stopping at the cache, no capability bridges, no
+// element picker, plus the widget base stylesheet.
+func injectPreamble(body, artifactID, appOrigin string, state map[string]string, widget bool) string {
 	if state == nil {
 		state = map[string]string{}
 	}
@@ -750,11 +876,23 @@ func injectShim(body, artifactID, appOrigin string, state map[string]string) str
 	if err != nil {
 		stateJSON = []byte("{}")
 	}
-	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, stateJSON)
-	// The snippet element-picker (Exh-edjk) rides along with the shim: inert
-	// until the app-origin host activates it, so it costs nothing for plain
-	// renders and share views.
-	shim += "\n" + snippetScript(appOrigin)
+	bridges := bridgeScript
+	if widget {
+		bridges = ""
+	}
+	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, widget, stateJSON, bridges)
+	if widget {
+		// No snippet picker: it exists so the user can point at an element in
+		// the *artifact* preview and hand it to the agent. A widget frame is
+		// pointer-events:none, so there is nothing to point at.
+		shim += "\n" + widgetBaseCSS
+		shim += "\n" + fmt.Sprintf(widgetHealthScript, appOrigin)
+	} else {
+		// The snippet element-picker (Exh-edjk) rides along with the shim: inert
+		// until the app-origin host activates it, so it costs nothing for plain
+		// renders and share views.
+		shim += "\n" + snippetScript(appOrigin)
+	}
 
 	// Try to inject after <head>
 	idx := strings.Index(strings.ToLower(body), "<head>")

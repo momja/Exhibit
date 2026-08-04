@@ -152,7 +152,8 @@ artifacts(
   source_url,              -- set when ingested by URL; enables re-fetch (§8.1)
   tier,                    -- 1 | 2
   created_at, updated_at,
-  downloads_approved       -- first-use approval for the host-mediated download bridge
+  downloads_approved,      -- first-use approval for the host-mediated download bridge
+  widget_blob_id           -- the card's widget document; empty = default tile (§5.5)
 )
 -- one decision per (artifact, origin), cascading with the artifact (§6)
 artifact_network_origins(
@@ -273,6 +274,30 @@ by `fetch`-ing its *own external* backend (Firebase, a private API) manages its 
 elsewhere by definition — that's outside tiers 1/2 and we don't attempt to capture it.
 Those network calls are instead governed by §6.
 
+### 5.5 Widgets: state made glanceable
+
+Server-side state has a second payoff beyond cross-device sync: the library can
+*show* it. Every artifact may carry a **widget** — a second self-contained HTML
+document that renders inside its gallery card, reading the same keys the tool
+writes. A run tracker's card shows the last thirty days' distance; a training
+plan's shows the next scheduled run. This is the library layer §2 promised, made
+legible: a shelf of live tools rather than a list of filenames.
+
+The rules follow from what a tile is:
+
+- **A view, never an editor.** State writes stop at the widget's own in-memory
+  cache; the tile cannot change the library it sits in.
+- **Not interactive.** Clicks pass through to the card and open the artifact.
+- **No authority of its own.** Same sandbox, same per-artifact CSP allowlist, no
+  download or clipboard bridge — strictly a subset of the artifact's.
+- **Optional, and free to skip.** No widget renders a default tile; a stateless
+  tool can instead ship a *static* widget, which is simply a widget with no
+  script. There is no separate mechanism for either case.
+
+Because the widget is another self-contained file under the artifact's own
+envelope, it costs the "it's just a file" thesis nothing. Full design:
+`docs/widgets.md`.
+
 ## 6. Security model
 
 For tiers 1 and 2 the artifact runs **in the visitor's browser, not on the server** —
@@ -363,8 +388,10 @@ stores it, and returns the rendered/share URL.
 ### 8.2 Rediscover
 
 Open the web gallery, search "bar chart" (matches indexed title, the visible text of the source, or tags),
-click the thumbnail, the tool renders live in its sandboxed iframe with its state
-inlined from the service. No regeneration, no digging through chat logs.
+click the card, the tool renders live in its sandboxed iframe with its state
+inlined from the service. No regeneration, no digging through chat logs. Cards
+that carry a widget (§5.5) are often answer enough on their own — the number you
+opened the library for is already on the shelf.
 
 ### 8.3 Use across devices
 
@@ -388,6 +415,9 @@ single self-contained `.html`.
   runtime storage shim observes instead.
 - **No CSP violation-report pipeline** — replaced by scan + explicit per-artifact
   allowlist with runtime permission prompts.
+- **No interactive widgets.** A card's widget (§5.5) reports; it never acts. Making
+  tiles clickable would put a second, unaudited control surface in the library and
+  would need per-tile capability grants the artifact's own approvals never covered.
 
 ## 10. Build order
 

@@ -248,8 +248,11 @@ it won over a hand-rolled fetch-and-swap helper. The rules it must follow:
 - Page JS keeps no cached references into a swappable region: after a swap the
   old nodes are gone. Resolve elements on use.
 
-Shipped consumer: the agent surface's preview pane, re-rendered after every
-agent save (`architecture.md` §3.7, `docs/agent.md`).
+Shipped consumers: the agent surface's preview pane, re-rendered after every
+agent save (`architecture.md` §3.7, `docs/agent.md`); and the artifact edit
+page's widget panel, which swaps `/partials/card-widget` after a save so the
+tile refreshes without a reload that would drop the CodeMirror buffer beside it
+(`docs/widgets.md`).
 
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent

@@ -1,6 +1,6 @@
 ---
 id: av-fafu
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-08-01T04:21:41Z
@@ -21,3 +21,9 @@ Blob + column: artifacts.widget_blob_id (migration 011). API: GET/PUT/DELETE /ap
 
 1. An artifact with a widget shows it live in its gallery card, reading the artifact's cross-device state. 2. Clicking the widget opens the artifact — the widget is never interactive. 3. A widget cannot write state, download, or use the clipboard. 4. A widget's network reach is exactly the artifact's allowlist. 5. An artifact without a widget renders the default tile. 6. The agent can build and update a widget from the chat surface. 7. Four sample artifacts (stateful chart, next-item, static, progress) ship in dev/samples and seed into the dev environment.
 
+
+## Notes
+
+**2026-08-01T04:56:45Z**
+
+POC landed. Schema: artifacts.widget_blob_id (migration 011). Render: GET /w/:id, same CSP/state, narrowed preamble (WIDGET short-circuits write-through; bridgeScript not spliced in). API: GET/PUT/DELETE /api/artifacts/:id/widget. Gallery: cardWidget partial (frame or default monogram tile), pointer-events:none. Edit page: widget panel + /partials/card-widget htmx swap. Agent: set_widget/get_widget + widget contract in the system prompt + exhibit_widget_saved. Five samples in dev/samples covering live/static/none, seeded by scripts/seed-samples.py. Docs: docs/widgets.md.

@@ -75,3 +75,97 @@
     if (!e.relatedTarget || !wrap.contains(e.relatedTarget)) setOpen(wrap, false);
   });
 })();
+
+/* Widget tile health (av-fafu) — fall back to the monogram when a widget
+ * doesn't come up.
+ *
+ * A card's widget frame is cross-origin and opaque, so from out here a 404
+ * page, a widget whose script threw, and a widget that rendered perfectly all
+ * fire the same `load` event and are otherwise indistinguishable. The frame
+ * therefore reports on itself: the render preamble posts __avWidget with
+ * status 'ready' or 'error' (internal/render, widgetHealthScript).
+ *
+ * Two ways to fail, one outcome. An explicit 'error' falls back immediately.
+ * Hearing NOTHING within the deadline falls back too, which is the case that
+ * matters most — it covers everything no in-frame script can report: a
+ * document that never loaded, a parse failure, a script that hung the thread.
+ *
+ * Falling back is just hiding the frame: the default tile is always rendered
+ * beneath it (the cardWidget partial), so the monogram is already there. No
+ * markup is built here.
+ */
+(function() {
+  // Generous: a slow first paint is not a failure, and the cost of waiting is
+  // a blank tile for a moment, while the cost of being hasty is replacing a
+  // widget that was about to work.
+  var DEADLINE_MS = 6000;
+
+  function setFailed(frame, failed) {
+    var well = frame.closest('.card-widget');
+    if (well) well.classList.toggle('widget-failed', failed);
+  }
+
+  function watch(frame) {
+    if (frame.dataset.widgetWatched) return;
+    frame.dataset.widgetWatched = '1';
+
+    var timer = null;
+    function startDeadline() {
+      timer = setTimeout(function() { setFailed(frame, true); }, DEADLINE_MS);
+    }
+    frame.addEventListener('__avresolved', function() { clearTimeout(timer); });
+
+    // The clock must not start until the frame is actually allowed to load.
+    // A tile inside a closed <details>, or below the fold under
+    // loading="lazy", has not been fetched at all — starting the deadline at
+    // page load would time it out for never answering a question it was never
+    // asked, and a long gallery would show monograms for everything below the
+    // fold. Intersection is the same condition loading="lazy" itself waits on,
+    // so the two stay in step.
+    if (typeof IntersectionObserver !== 'function') {
+      startDeadline();
+      return;
+    }
+    var io = new IntersectionObserver(function(entries) {
+      for (var i = 0; i < entries.length; i++) {
+        if (!entries[i].isIntersecting) continue;
+        io.disconnect();
+        startDeadline();
+        return;
+      }
+    });
+    io.observe(frame);
+  }
+
+  function watchAll(root) {
+    (root && root.querySelectorAll ? root : document)
+      .querySelectorAll('.card-widget-frame').forEach(watch);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { watchAll(); });
+  } else {
+    watchAll();
+  }
+  // Tiles also arrive by htmx swap (the edit page's preview, the agent pane),
+  // so pick those up as they land rather than only at first paint.
+  document.addEventListener('htmx:afterSwap', function(e) { watchAll(e.target); });
+
+  window.addEventListener('message', function(e) {
+    var d = e.data;
+    if (!d || d.__avWidget !== true) return;
+    // The frame's origin is opaque ('null'), so identity is the source window,
+    // never e.origin — same rule as every other frame message on these pages.
+    var frames = document.querySelectorAll('.card-widget-frame');
+    for (var i = 0; i < frames.length; i++) {
+      if (frames[i].contentWindow !== e.source) continue;
+      frames[i].dispatchEvent(new CustomEvent('__avresolved'));
+      // A 'ready' also CLEARS the failed state, not just suppresses the
+      // deadline: a tile that was marked failed and then answers for itself
+      // (a reload, an htmx re-render into the same well) has earned its frame
+      // back.
+      setFailed(frames[i], d.status !== 'ready');
+      return;
+    }
+  });
+})();

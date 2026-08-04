@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marathon Training Plan</title>
+<style>
+  :root {
+    --bg: #f0f0f0;
+    --card: #fff;
+    --ink: #1a1a1a;
+    --muted: #888;
+    --hair: #e0e0e0;
+    --accent: #23559e;
+    --easy: #3f8f5f;
+    --tempo: #b8791f;
+    --intervals: #b34a4a;
+    --long: #23559e;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .app { max-width: 760px; margin: 0 auto; padding: 40px 20px 72px; }
+
+  /* ---------- header ---------- */
+  header { margin-bottom: 20px; }
+  h1 {
+    margin: 0;
+    font-size: 27px;
+    font-weight: 600;
+    letter-spacing: -0.021em;
+  }
+  .tagline { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+
+  /* ---------- summary card ---------- */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--hair);
+    border-radius: 12px;
+  }
+
+  .summary { padding: 20px 22px; margin-bottom: 24px; }
+
+  .summary-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .summary-where { font-size: 21px; font-weight: 600; letter-spacing: -0.015em; }
+  .summary-pct { color: var(--muted); font-size: 14px; }
+
+  .bar {
+    height: 6px;
+    margin: 14px 0 18px;
+    border-radius: 3px;
+    background: #ececec;
+    overflow: hidden;
+  }
+  .bar > i {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--accent);
+    transition: width 180ms ease;
+  }
+
+  .summary-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-top: 16px;
+    border-top: 1px solid var(--hair);
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .field { display: flex; align-items: center; gap: 9px; }
+  .field > label { color: var(--muted); }
+  input[type="date"] {
+    font: inherit;
+    font-size: 14px;
+    color: var(--ink);
+    padding: 5px 9px;
+    border: 1px solid var(--hair);
+    border-radius: 7px;
+    background: #fff;
+  }
+  input[type="date"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .race-day strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- week list ---------- */
+  .weeks { display: flex; flex-direction: column; gap: 8px; }
+
+  .week {
+    background: var(--card);
+    border: 1px solid var(--hair);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .week.is-current { border-color: #c9d7ec; box-shadow: 0 0 0 1px #c9d7ec; }
+  .week.is-past { background: #fafafa; }
+
+  .wk-head {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto auto 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+    background: none;
+    border: 0;
+    font: inherit;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+  }
+  .wk-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .wk-n { font-weight: 600; letter-spacing: -0.01em; }
+  .wk-dates { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .wk-status { color: var(--muted); font-size: 13px; white-space: nowrap; justify-self: end; }
+  .wk-status.is-full { color: var(--easy); }
+  .pill {
+    justify-self: start;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: #eaf0f9;
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+  .chev { width: 15px; height: 15px; color: #bbb; transition: transform 140ms ease; }
+  .week.is-open .chev { transform: rotate(90deg); }
+
+  .wk-body { padding: 2px 16px 12px; border-top: 1px solid var(--hair); }
+
+  /* ---------- session row ---------- */
+  .s {
+    display: grid;
+    grid-template-columns: 26px 108px 1fr auto 58px;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid #f2f2f2;
+  }
+  .s:last-child { border-bottom: 0; }
+
+  .check {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1.5px solid #cfcfcf;
+    border-radius: 50%;
+    background: #fff;
+    color: transparent;
+    cursor: pointer;
+  }
+  .check svg { width: 14px; height: 14px; }
+  .check:hover { border-color: var(--accent); }
+  .check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .s.is-done .check { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .s.is-skipped .check { border-color: #d8d8d8; color: #bbb; background: #f4f4f4; }
+
+  .s-day { font-size: 13.5px; color: #555; white-space: nowrap; }
+  .s-type { display: flex; align-items: center; gap: 8px; font-size: 14px; min-width: 0; }
+  .s-type .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .s-km { font-variant-numeric: tabular-nums; font-size: 14px; white-space: nowrap; }
+  .s-km b { font-weight: 600; }
+  .s-km span { color: var(--muted); font-weight: 400; }
+
+  .skip {
+    justify-self: end;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--muted);
+    background: none;
+    border: 0;
+    padding: 3px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .skip:hover { color: var(--ink); background: #f2f2f2; }
+  .skip:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+
+  .s.is-done .s-day, .s.is-done .s-type { color: var(--muted); }
+  .s.is-skipped .s-day, .s.is-skipped .s-type, .s.is-skipped .s-km { color: #bbb; }
+  .s.is-skipped .s-km { text-decoration: line-through; }
+  .s.is-skipped .dot { background: #d5d5d5 !important; }
+
+  .wk-total {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 10px;
+    margin-top: 2px;
+    border-top: 1px solid var(--hair);
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+
+  footer {
+    margin-top: 28px;
+    color: var(--muted);
+    font-size: 12.5px;
+    text-align: center;
+  }
+
+  @media (max-width: 560px) {
+    .s { grid-template-columns: 26px 1fr auto; row-gap: 2px; }
+    .s-day { grid-column: 2; }
+    .s-type { grid-column: 2; }
+    .s-km { grid-column: 3; grid-row: 1; }
+    .skip { grid-column: 3; grid-row: 2; }
+    .wk-head { grid-template-columns: auto 1fr auto auto; gap: 8px; }
+    .wk-dates { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<main class="app">
+  <header>
+    <h1>Marathon Training Plan</h1>
+    <p class="tagline">16 weeks, four runs a week, generated on this page. Nothing to sync, nothing to sign up for.</p>
+  </header>
+
+  <section class="card summary">
+    <div class="summary-head">
+      <div class="summary-where" id="where">&nbsp;</div>
+      <div class="summary-pct" id="pct">&nbsp;</div>
+    </div>
+    <div class="bar"><i id="bar" style="width:0%"></i></div>
+    <div class="summary-meta">
+      <div class="field">
+        <label for="start">Plan starts</label>
+        <input type="date" id="start">
+      </div>
+      <div class="race-day" id="raceday"></div>
+    </div>
+  </section>
+
+  <section class="weeks" id="weeks"></section>
+
+  <footer>Distances in kilometres. Your progress is stored in this artifact&rsquo;s own state.</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ==================================================================
+   * PLAN GENERATOR — duplicated VERBATIM in widget.html.
+   *
+   * Pure and deterministic: no dates, no randomness, no I/O, no
+   * dependence on stored state. Both documents must derive identical
+   * sessions from the same startDate, so the two copies are edited
+   * together or not at all.
+   * ================================================================== */
+  var PLAN_WEEKS = 16;
+
+  function buildPlan() {
+    var LAST_BUILD = PLAN_WEEKS - 4;         // week index 12 is the final build week
+    var SLOTS = [                            // day = offset from the plan's Monday
+      { day: 1, type: 'easy' },              // Tuesday
+      { day: 2, type: 'intervals' },         // Wednesday
+      { day: 4, type: 'tempo' },             // Friday
+      { day: 6, type: 'long' }               // Sunday
+    ];
+    var half = function (km) { return Math.round(km * 2) / 2; };
+    var weeks = [];
+
+    for (var w = 0; w < PLAN_WEEKS; w++) {
+      var taperAt = w - LAST_BUILD - 1;      // 0,1,2 through the taper; negative while building
+      var tapering = taperAt >= 0;
+      var stepBack = !tapering && w % 4 === 3;   // every 4th week is a recovery week
+      var race = w === PLAN_WEEKS - 1;
+      // One load factor drives the whole week, so a step-back or taper week
+      // backs every session off together rather than only the long run.
+      var load = tapering ? [0.65, 0.5, 0.35][taperAt] : (stepBack ? 0.7 : 1);
+      var build = Math.min(w, LAST_BUILD);   // volume stops climbing once the taper begins
+
+      var sessions = [];
+      for (var s = 0; s < SLOTS.length; s++) {
+        var slot = SLOTS[s], km;
+        if (slot.type === 'long') km = race ? 42.2 : half((16 + build * 1.4) * load);
+        else if (slot.type === 'easy') km = half((6 + build * 0.3) * load);
+        else if (slot.type === 'intervals') km = half((8 + build * 0.35) * load);
+        else km = half((8 + build * 0.45) * load);          // tempo
+        sessions.push({
+          // A recovery week — and race week, where nothing hard can help any
+          // more — swaps the interval session for an easy shakeout.
+          type: ((stepBack || race) && slot.type === 'intervals') ? 'easy' : slot.type,
+          day: slot.day,
+          km: km
+        });
+      }
+      weeks.push(sessions);
+    }
+    return weeks;
+  }
+  /* ================= end of the duplicated generator ================= */
+
+  var STORE_KEY = 'exhibit.marathon-plan.v1';
+  var PLAN = buildPlan();
+  var TOTAL_SESSIONS = PLAN_WEEKS * 4;
+
+  var TYPE_LABEL = { easy: 'Easy', tempo: 'Tempo', intervals: 'Intervals', long: 'Long run' };
+  var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var DAYS_S = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var MONTHS_S = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /* ---------------- dates (all local-midnight, never UTC) ------------- */
+
+  function midnight(d) { var x = new Date(d.getTime()); x.setHours(0, 0, 0, 0); return x; }
+  function today() { return midnight(new Date()); }
+  function parseISO(s) { var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function toISO(d) {
+    var m = d.getMonth() + 1, day = d.getDate();
+    return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+  }
+  function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+  // Round rather than floor: a DST boundary makes a "day" 23 or 25 hours long.
+  function daysBetween(a, b) { return Math.round((b.getTime() - a.getTime()) / 86400000); }
+
+  function fmtDay(d) { return DAYS_S[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS_S[d.getMonth()]; }
+  function fmtLong(d) { return DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS_S[d.getMonth()]; }
+  function fmtRange(a, b) {
+    var left = a.getMonth() === b.getMonth() ? String(a.getDate())
+      : a.getDate() + ' ' + MONTHS_S[a.getMonth()];
+    return left + '–' + b.getDate() + ' ' + MONTHS_S[b.getMonth()];
+  }
+  function fmtKm(km) { return km % 1 === 0 ? String(km) : km.toFixed(1); }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+  function upcomingMonday() {
+    var t = today();
+    var ahead = (8 - t.getDay()) % 7;     // 0 when today is already Monday
+    return toISO(addDays(t, ahead));
+  }
+
+  /* ---------------- persisted state ----------------------------------
+   * One key, one shape:
+   *   { "startDate": "YYYY-MM-DD", "done": { "<week>-<session>": true } }
+   * A skipped session stores the string "skipped" in the same map, so
+   * any reader doing `if (done[key])` still sees "resolved" and the
+   * shape stays a plain truthy map.
+   * ------------------------------------------------------------------ */
+
+  var state = load();
+
+  function load() {
+    var fresh = { startDate: upcomingMonday(), done: {} };
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return fresh;
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return fresh;
+      if (typeof parsed.startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.startDate)) {
+        var d = parseISO(parsed.startDate);
+        if (!isNaN(d.getTime())) fresh.startDate = parsed.startDate;
+      }
+      if (parsed.done && typeof parsed.done === 'object') fresh.done = parsed.done;
+    } catch (e) {
+      /* unreadable or malformed state falls back to a clean plan */
+    }
+    return fresh;
+  }
+
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+  }
+
+  function key(w, s) { return w + '-' + s; }
+  function isDone(w, s) { return state.done[key(w, s)] === true; }
+  function isSkipped(w, s) { return state.done[key(w, s)] === 'skipped'; }
+
+  function weekDone(w) {
+    var n = 0;
+    for (var s = 0; s < 4; s++) if (isDone(w, s)) n++;
+    return n;
+  }
+
+  function sessionDate(w, s) {
+    return addDays(parseISO(state.startDate), w * 7 + PLAN[w][s].day);
+  }
+
+  /* ---------------- derived position in the plan ---------------------- */
+
+  function position() {
+    var offset = daysBetween(parseISO(state.startDate), today());
+    var raw = Math.floor(offset / 7);
+    return {
+      offset: offset,
+      raw: raw,                                                   // may be <0 or >15
+      current: Math.min(Math.max(raw, 0), PLAN_WEEKS - 1),        // clamped, for display
+      started: raw >= 0,
+      finished: raw >= PLAN_WEEKS
+    };
+  }
+
+  /* ---------------- rendering ----------------------------------------- */
+
+  var open = {};                        // week index -> expanded (view state, not persisted)
+  var weeksEl = document.getElementById('weeks');
+  var startEl = document.getElementById('start');
+
+  var CHECK_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var DASH_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8h8" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>';
+  var CHEV_SVG = '<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function render() {
+    var pos = position();
+    var doneCount = 0;
+    for (var w = 0; w < PLAN_WEEKS; w++) doneCount += weekDone(w);
+    var pct = Math.round((doneCount / TOTAL_SESSIONS) * 100);
+
+    var where;
+    if (!pos.started) where = 'Starts in ' + plural(-pos.offset, 'day', 'days');
+    else if (pos.finished) where = 'Plan complete';
+    else where = 'Week ' + (pos.current + 1) + ' of ' + PLAN_WEEKS;
+
+    document.getElementById('where').textContent = where;
+    document.getElementById('pct').textContent =
+      pct + '% of sessions done · ' + doneCount + ' of ' + TOTAL_SESSIONS;
+    document.getElementById('bar').style.width = pct + '%';
+
+    var race = addDays(parseISO(state.startDate), (PLAN_WEEKS - 1) * 7 + 6);
+    document.getElementById('raceday').innerHTML =
+      'Race day <strong>' + fmtLong(race) + '</strong>';
+
+    if (startEl.value !== state.startDate) startEl.value = state.startDate;
+
+    weeksEl.innerHTML = PLAN.map(function (_, w) { return weekHTML(w, pos); }).join('');
+  }
+
+  function weekHTML(w, pos) {
+    var start = addDays(parseISO(state.startDate), w * 7);
+    var end = addDays(start, 6);
+    var isCurrent = pos.started && !pos.finished && w === pos.current;
+    var isPast = pos.raw > w;
+    var expanded = open[w];
+
+    var done = weekDone(w);
+    var total = PLAN[w].reduce(function (sum, s) { return sum + s.km; }, 0);
+
+    var status, statusClass = '';
+    if (isPast || isCurrent || done > 0) {
+      status = done + ' / 4 done';
+      if (done === 4) statusClass = ' is-full';
+    } else {
+      status = fmtKm(total) + ' km';
+    }
+
+    var cls = 'week' + (isCurrent ? ' is-current' : '') + (isPast ? ' is-past' : '') +
+      (expanded ? ' is-open' : '');
+
+    var html = '<article class="' + cls + '">' +
+      '<button class="wk-head" type="button" data-week="' + w + '" aria-expanded="' + (expanded ? 'true' : 'false') + '">' +
+        '<span class="wk-n">Week ' + (w + 1) + '</span>' +
+        '<span class="wk-dates">' + fmtRange(start, end) + '</span>' +
+        (isCurrent ? '<span class="pill">This week</span>' : '<span></span>') +
+        '<span class="wk-status' + statusClass + '">' + status + '</span>' +
+        CHEV_SVG +
+      '</button>';
+
+    if (expanded) {
+      html += '<div class="wk-body">' +
+        PLAN[w].map(function (session, s) { return sessionHTML(w, s, session); }).join('') +
+        '<div class="wk-total"><span>' + weekNote(w) + '</span><span>' +
+          fmtKm(total) + ' km total</span></div>' +
+      '</div>';
+    }
+
+    return html + '</article>';
+  }
+
+  function weekNote(w) {
+    if (w === PLAN_WEEKS - 1) return 'Race week';
+    if (w >= PLAN_WEEKS - 3) return 'Taper';
+    if (w % 4 === 3) return 'Recovery week';
+    return 'Build week';
+  }
+
+  function sessionHTML(w, s, session) {
+    var done = isDone(w, s), skipped = isSkipped(w, s);
+    var cls = 's' + (done ? ' is-done' : '') + (skipped ? ' is-skipped' : '');
+    var label = TYPE_LABEL[session.type];
+
+    return '<div class="' + cls + '">' +
+      '<button class="check" type="button" data-check="' + key(w, s) + '" ' +
+        'aria-pressed="' + (done ? 'true' : 'false') + '" ' +
+        'aria-label="Mark ' + label + ' run complete">' + (skipped ? DASH_SVG : CHECK_SVG) + '</button>' +
+      '<span class="s-day">' + fmtDay(sessionDate(w, s)) + '</span>' +
+      '<span class="s-type"><i class="dot" style="background:var(--' + session.type + ')"></i>' +
+        label + (skipped ? ' · skipped' : '') + '</span>' +
+      '<span class="s-km"><b>' + fmtKm(session.km) + '</b> <span>km</span></span>' +
+      '<button class="skip" type="button" data-skip="' + key(w, s) + '">' +
+        (skipped ? 'Undo' : 'Skip') + '</button>' +
+    '</div>';
+  }
+
+  /* ---------------- interaction ---------------------------------------- */
+
+  weeksEl.addEventListener('click', function (e) {
+    var head = e.target.closest('.wk-head');
+    if (head) {
+      var w = +head.getAttribute('data-week');
+      open[w] = !open[w];
+      render();
+      return;
+    }
+
+    var check = e.target.closest('[data-check]');
+    if (check) {
+      var k = check.getAttribute('data-check');
+      if (state.done[k] === true) delete state.done[k];
+      else state.done[k] = true;
+      save();
+      render();
+      return;
+    }
+
+    var skip = e.target.closest('[data-skip]');
+    if (skip) {
+      var sk = skip.getAttribute('data-skip');
+      if (state.done[sk] === 'skipped') delete state.done[sk];
+      else state.done[sk] = 'skipped';
+      save();
+      render();
+    }
+  });
+
+  startEl.addEventListener('change', function () {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startEl.value)) { startEl.value = state.startDate; return; }
+    state.startDate = startEl.value;
+    save();
+    openCurrentWeek();
+    render();
+  });
+
+  function openCurrentWeek() {
+    open = {};
+    open[position().current] = true;
+  }
+
+  /* Persist immediately so the widget has a start date to work from the
+   * first time the artifact is opened. */
+  openCurrentWeek();
+  save();
+  render();
+})();
+</script>
+</body>
+</html>

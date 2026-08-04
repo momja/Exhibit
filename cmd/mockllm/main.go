@@ -133,12 +133,26 @@ func decide(messages []chatMessage) turnPlan {
 		}
 	}
 
+	// Widget-only session (av-fafu): the edit page's "Generate widget" button
+	// scopes the system prompt to one job, and this branch plays it — read the
+	// artifact, then save a tile. It must never fall through to the
+	// update_artifact script below, which is exactly the mistake that scoping
+	// exists to prevent.
+	widgetOnly := strings.Contains(systemText, "exactly one job: build the gallery widget")
+
 	last := messages[len(messages)-1]
 	if last.Role == "tool" {
 		name := toolNameFor(messages, last.ToolCallID)
 		result, _ := textOf(last.Content)
 		switch name {
 		case "get_artifact":
+			if widgetOnly {
+				return turnPlan{
+					kind:     "tool",
+					toolName: "set_widget",
+					toolArgs: map[string]string{"id": artifactID, "body": cannedWidget},
+				}
+			}
 			body := bodyFromGetResult(result)
 			newBody, what := transform(body, lastUserText)
 			return turnPlan{
@@ -146,6 +160,8 @@ func decide(messages []chatMessage) turnPlan {
 				toolName: "update_artifact",
 				toolArgs: map[string]string{"id": artifactID, "body": newBody, "_note": what},
 			}
+		case "set_widget":
+			return turnPlan{kind: "text", text: "Saved the gallery widget — it shows the tool's headline figure at a glance."}
 		case "create_artifact", "update_artifact":
 			ack := ""
 			if lastUserImages > 0 {
@@ -271,6 +287,40 @@ func firstLine(s string) string {
 	}
 	return s
 }
+
+// cannedWidget is the tile the scripted agent saves for a widget-only session
+// (av-fafu). It reads the counter the canned tool writes, so the mock's two
+// halves agree, and it follows the real tile contract: fluid to its well, one
+// figure large, a calm empty state, and no writes.
+const cannedWidget = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Click Counter — widget</title>
+<style>
+.w{width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;padding:16px;background:#fff}
+.k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#888}
+.v{font-size:34px;font-weight:650;color:#111;line-height:1.1;margin-top:2px}
+.s{font-size:12px;color:#888;margin-top:auto}
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="k">Clicks</div>
+  <div class="v" id="v">—</div>
+  <div class="s" id="s">Nothing counted yet</div>
+</div>
+<script>
+(function(){
+  var raw = localStorage.getItem('count');
+  var n = raw === null ? null : parseInt(raw, 10);
+  if (n === null || isNaN(n)) return;            // keep the calm empty state
+  document.getElementById('v').textContent = n;
+  document.getElementById('s').textContent = n === 1 ? '1 click so far' : n + ' clicks so far';
+})();
+</script>
+</body>
+</html>`
 
 const cannedTool = `<!DOCTYPE html>
 <html lang="en">
