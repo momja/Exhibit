@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 )
 
@@ -18,8 +19,11 @@ func authMiddleware(token string) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
+			// Constant-time: a plain != returns on the first differing byte,
+			// which leaks the shared prefix to an attacker who can time
+			// enough requests.
 			auth := r.Header.Get("Authorization")
-			if auth != "Bearer "+token {
+			if subtle.ConstantTimeCompare([]byte(auth), []byte("Bearer "+token)) != 1 {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}

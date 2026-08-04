@@ -102,8 +102,20 @@ Go, plus `exhibit-mock` when `MOCK_LLM_URL` is set.
 - `POST /api/agent/sessions` (optional `artifact_id` binds the session to an
   existing artifact for modify mode), `POST …/prompt` (message + optional
   base64 images), `POST …/abort`, `DELETE …`.
-- `GET /api/agent/sessions/:id/events` — SSE. EventSource can't set headers,
-  so this one route authenticates the same bearer token via `?token=`.
+- `GET /api/agent/sessions/:id/events` — SSE. EventSource can't set headers, so
+  this one route authenticates with a **session SSE ticket** (`?ticket=`)
+  rather than the service token (av-rgp1): a token in a URL would be copied
+  into the debug request log, the operator's proxy access log, and browser
+  history, and the service token is the whole library. A ticket is a random
+  value bound to one session, single-use, and valid for 30 seconds — minted by
+  `POST /api/agent/sessions` (returned as `sse_ticket` beside the id),
+  `POST /api/artifacts/:id/widget/generate`, or `POST
+  /api/agent/sessions/:id/ticket`, all of them ordinary header-authenticated
+  requests. Redeeming it also fixes the stream's owner, so the same owner check
+  every other session route makes applies here too. Because a ticket is spent
+  on connect, the chat page drives its own reconnect (mint, then reconnect,
+  with backoff) instead of relying on EventSource's automatic retry; the
+  session's event backlog replays on subscribe, so nothing is lost.
 - `internal/agent` tracks streaming state (prompts sent mid-stream become Pi
   steering messages), keeps an event backlog for late subscribers, reaps idle
   sessions, and on every settled turn persists the full Pi message list to

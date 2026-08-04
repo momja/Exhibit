@@ -379,6 +379,19 @@ absent the surface degrades to disabled; nothing else changes.
   SSE (`/api/agent/sessions/:id/events`); prompts arriving mid-run become Pi
   steering messages. Transcripts are persisted per artifact
   (`agent_transcripts`) as colophon-style provenance for future remixing.
+- **Stream auth is a ticket, not the token (av-rgp1):** this is the one route
+  a browser cannot send an `Authorization` header on, because `EventSource`
+  has no way to set one. It therefore takes a **session SSE ticket** in the
+  query string — random, bound to one session, single-use, seconds-lived,
+  and minted only by an ordinary header-authenticated request (session
+  create, widget generate, or `POST …/sessions/:id/ticket` for reconnects).
+  The service token never appears in a URL, so it cannot be copied into this
+  service's debug request log, the operator's proxy access log, or browser
+  history; a recovered ticket buys at most a brief replay window on one
+  session's event stream, never the library. Redeeming the ticket also
+  establishes the stream's owner, so the owner check that guards every other
+  session route (`Session.OwnerID` vs the request's owner) applies here as
+  well — a session id alone is not a capability.
 - **Live preview:** a successful save tool call emits the synthetic
   `exhibit_artifact_saved` event, which the chat page turns into an htmx
   fragment swap of the preview pane (§3.5): `GET /partials/agent-preview`

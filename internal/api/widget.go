@@ -190,9 +190,18 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The caller watches this session's SSE stream, which authenticates with
+	// a ticket rather than the service token (av-rgp1), so mint the first
+	// one here — the button is one action, not two round trips.
+	ticket, err := ro.sseTickets.Issue(s.ID, opts.OwnerID)
+	if err != nil {
+		serverError(w, r, "issue sse ticket", err)
+		return
+	}
+
 	slog.InfoContext(r.Context(), "widget generation started",
 		slog.String("artifact_id", id), slog.String("session_id", s.ID))
-	writeJSON(w, http.StatusAccepted, map[string]any{"session_id": s.ID})
+	writeJSON(w, http.StatusAccepted, map[string]any{"session_id": s.ID, "sse_ticket": ticket})
 }
 
 // widgetGenerateAvailability reports whether the edit page's "Generate widget"
