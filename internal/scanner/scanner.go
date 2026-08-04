@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+
+	"github.com/momja/Exhibit/internal/origin"
 )
 
 // Scan parses an HTML document and returns a deduplicated list of origins
@@ -144,5 +146,16 @@ func resolveOrigin(raw string, base *url.URL) string {
 	if scheme != "http" && scheme != "https" {
 		return "" // skip data:, blob:, etc.
 	}
-	return scheme + "://" + u.Host
+	// Spell the origin exactly the way the allowlist stores it (av-i7hd), so a
+	// footprint entry for an already-approved origin never reads as a new,
+	// unapproved one because of case or a trailing dot.
+	candidate := scheme + "://" + u.Host
+	if normalized, _ := origin.NormalizeOrigin(candidate); normalized != "" {
+		return normalized
+	}
+	// A reference the allowlist would refuse (a remote plaintext http origin,
+	// say) is still reported: the scan's job is to say what the artifact will
+	// try to contact, not to decide what may be approved. Canonicalize the
+	// spelling by hand so it still dedupes with the rest of the footprint.
+	return scheme + "://" + strings.TrimSuffix(strings.ToLower(u.Host), ".")
 }
