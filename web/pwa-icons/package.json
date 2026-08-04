@@ -1,0 +1,11 @@
+{
+  "name": "exhibit-pwa-icons",
+  "private": true,
+  "description": "Rasterizes internal/api/logo.svg (the same source logo.go embeds) into the PWA icon PNGs manifest.json references, written to internal/api/assets/icons (see `make assets`). Node is a build-time-only dependency.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.3"
+  }
+}

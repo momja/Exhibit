@@ -59,6 +59,10 @@ func (ro *Router) setupRoutes() {
 	// Embedded static assets (client JS islands, e.g. the CodeMirror editor)
 	ro.Handle("/assets/*", assetsHandler())
 
+	// Web app manifest (av-fdcx) — app origin only, public and static like
+	// the favicon.
+	ro.Get("/manifest.json", ro.manifest)
+
 	// Public share route — no auth required
 	ro.Get("/s/{shareID}", ro.serveShare)
 
