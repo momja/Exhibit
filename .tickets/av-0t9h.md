@@ -42,3 +42,17 @@ Known CSP limitation to document in the allowlist editor help: per CSP3, path co
 - Allowlist editor UI accepts the new forms, surfaces validation errors, and documents the redirect caveat.
 - Unit tests cover entry validation (accept/reject matrix) and buildCSP normalization; scanner output remains exact origins only.
 
+
+## Notes
+
+**2026-08-04T19:02:06Z**
+
+av-i7hd landed (bug/av-i7hd/normalize-allowlist-origins) and changes the ground this ticket stands on.
+
+What shipped: internal/origin.NormalizeOrigin + NormalizeOrigins, applied at the single write path (POST /api/artifacts, PATCH /api/artifacts/:id) and defensively in the store (ReplaceAllowedOrigins / SetOriginDecision). An allowlist entry must now be exactly an origin: absolute https (http only for loopback hosts), lowercased scheme/host, trailing host dot stripped, default port dropped, and userinfo/path/query/fragment REJECTED with a 400 naming the entry (deliberately rejected, not silently truncated to the host). Host/scheme wildcards and CSP keywords are rejected too, so this ticket's validation half — 'reject https://*.example.com and bare *' — is already done and covered by tests.
+
+What this means for the remaining half: the path-scoping feature now contradicts a shipped rule rather than filling a gap. Implementing it is no longer 'add validation'; it is 'relax NormalizeOrigin to admit a second entry kind', and that needs a decision recorded first:
+- Entry kinds become two (origin vs path-scoped source), so the type is no longer 'an origin'. Places that assume one origin per entry — the (artifact_id, origin) primary key, the allowlist editor's decision list, diffOrigins against the scanner footprint (which still emits exact origins only), the runtime-prompt block rows — each need to say what a path-scoped row means. Two rows for the same host with different paths are two decisions about one origin.
+- If it goes ahead, the shape is a second constructor beside NormalizeOrigin (e.g. NormalizeSource) that returns a tagged value, not a loosening of NormalizeOrigin itself — the strict function is what the store invariant and the v12 repair migration depend on.
+- Migration 012 (store/migration_origins.go) normalized existing rows, collapsing legacy path-bearing entries onto their origin. So the pre-existing path rows this ticket might once have inherited are gone; path scoping would start from a clean, origin-only table.
+- Worth re-testing the premise: the CSP-redirect caveat already in this ticket means path scoping narrows only the first hop, and av-i7hd's argument is that a path-bearing source reads as narrower than it enforces. That is an argument for closing this as won't-do rather than building it.

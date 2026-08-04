@@ -88,9 +88,10 @@ The only way data changes. Route groups:
   patched).
 - `GET /api/artifacts`, `GET /api/artifacts/:id` — list/detail (drives the gallery).
 - `PATCH /api/artifacts/:id` — edits: title, body (rewrites the stored blob),
-  `network_allowlist` (accepted unchanged as the whole approved set; the store
-  translates it into `decision='allow'` rows and deliberately leaves any
-  `decision='block'` rows alone, §3.3), `downloads_approved` / `clipboard_approved` (the capability
+  `network_allowlist` (the whole approved set, normalized to origins by
+  `internal/origin` before it is stored — see below; the store translates it
+  into `decision='allow'` rows and deliberately leaves any `decision='block'`
+  rows alone, §3.3), `downloads_approved` / `clipboard_approved` (the capability
   bridge's first-use approvals, §6), and other scalar columns. Rewriting the body
   re-executes the scan and returns the footprint plus a `footprint_changed` flag so
   the edit dialog can re-run the explicit-approval gate when origins differ from the
@@ -121,6 +122,19 @@ The only way data changes. Route groups:
   everywhere) never seeds the allowlist. See `widgets.md`.
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
 - collection/tag CRUD.
+
+**Allowlist entries are origins, validated here** (av-i7hd). `POST` and
+`PATCH` both run `network_allowlist` through `origin.NormalizeOrigin`, which
+reduces a value to scheme + host + explicit non-default port (lowercased, with
+a trailing dot on the host stripped, and userinfo/path/query/fragment gone) and
+de-duplicates the result. This is validation at the single write path rather
+than a client convention, because the values are pasted straight into the
+render CSP: a path-bearing entry is *path-matched* by CSP, so it would silently
+mean something other than what the approval UI showed, and near-duplicate
+spellings of one host would make "one decision per (artifact, origin)" (§3.3)
+false in practice. A non-origin entry is a `400` naming the value rather than a
+silent truncation to its host — truncating would grant a whole origin from an
+entry the user approved as a single file.
 
 Middleware chain (via `chi`): request logging → auth (static token now, sessions later)
 → owner scoping (`owner_id`, fixed to 1 now) → handler. Auth and ownership are *one
@@ -206,7 +220,15 @@ Blob:   put/get artifact bodies by id
 - **Network origin decisions** → `artifact_network_origins`, one row per
   (artifact, origin) — the primary key is what makes "one decision per origin" a
   schema invariant rather than a convention, and `ON DELETE CASCADE` retires the
-  rows with the artifact. `decision='allow'` is the only input to the render CSP;
+  rows with the artifact. The primary key only delivers that invariant if the
+  value in the row *is* an origin, so the store normalizes it too
+  (`origin.NormalizeOrigin`, av-i7hd): the API's 400 is the user-facing rule and
+  this is the same rule as a store invariant, closing it to any future caller.
+  Rows written before that validation existed are repaired once by a Go
+  migration (version 12) that normalizes them and collapses the resulting
+  duplicates — keeping `block` over `allow` on a collision, so a repair can
+  narrow a policy but never widen one, and dropping values with no origin in
+  them at all. `decision='allow'` is the only input to the render CSP;
   `decision='block'` records a "don't ask again" answer for the runtime prompt
   (exhibit-fr7) and never widens the policy. A caller that knows only the
   allowlist replaces the allow rows without touching block rows, so a save from
