@@ -1,6 +1,6 @@
 ---
 id: av-4oa1
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-07-20T03:43:03Z
@@ -21,3 +21,9 @@ Evaluate htmx vs a ~20-line fetch-and-swap helper before committing; the decidin
 
 A server-rendered fragment can be re-fetched and swapped into a live page without a full reload, reusing the same template partial as the initial render. At least one real consumer is converted. The mechanism is documented in technical_stack.md §9 and architecture.md §3.5.
 
+
+## Notes
+
+**2026-08-04T18:49:45Z**
+
+Closed as already delivered: av-6m3e adopted htmx (web/htmx/ vendored, /assets/htmx/htmx.min.js) with /partials/agent-preview and /partials/card-widget as shipped consumers; documented in technical_stack.md §9 and architecture.md §3.5.

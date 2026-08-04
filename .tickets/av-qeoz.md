@@ -1,6 +1,6 @@
 ---
 id: av-qeoz
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-07-08T06:20:56Z
@@ -20,3 +20,9 @@ The Library page currently mixes artifact upload functionality with artifact bro
 - Navigation provides a clear way to reach the Upload page
 - Existing upload behavior is preserved
 
+
+## Notes
+
+**2026-08-04T18:49:45Z**
+
+Closed as already delivered: av-qo0j shipped GET /new (internal/api/templates/new.tmpl, api.go ro.Get("/new")) and the index links to it with the 'Add artifact' button.
