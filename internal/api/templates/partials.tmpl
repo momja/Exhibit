@@ -5,6 +5,19 @@
   flex layout less than to greppability.
 */}}
 
+{{/* pwaHead is the PWA installability markup shared by every app-origin
+     page head (av-fdcx): the manifest link plus the apple-* home-screen tags
+     iOS Safari reads instead of manifest.json's display mode. It is static
+     — no per-page data — so every template includes it the same way:
+     {{template "pwaHead"}}. Never add this to the render surface's artifact
+     document (internal/render) — artifacts are visitor-authored files and
+     own their own <head> (architecture.md §1). */}}
+{{define "pwaHead"}}<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Exhibit">{{end}}
+
 {{/* tagPills renders an artifact's tags as small neutral pills, each led by a
      colored dot that carries the tag's color — like a 'Development' label with
      a green dot to its left. The pill itself is a single low-saturation color
