@@ -367,8 +367,8 @@ func storageInstall(t *testing.T, doc, property string) string {
 func TestShimStorageNamespacesAreIndependent(t *testing.T) {
 	// A key inlined into the persisted namespace — the collision case: an
 	// artifact writing sessionStorage['draft'] must not see or overwrite it.
-	doc := injectShim("<head></head>", "abc", "https://app.test",
-		map[string]string{"draft": "saved"})
+	doc := injectPreamble("<head></head>", "abc", "https://app.test",
+		map[string]string{"draft": "saved"}, false)
 
 	local := storageInstall(t, doc, "localStorage")
 	session := storageInstall(t, doc, "sessionStorage")
@@ -406,7 +406,7 @@ func TestShimStorageNamespacesAreIndependent(t *testing.T) {
 // localStorage keeps its unconditional install: it serves the inlined reads
 // top-level too (its own top-level write problem is av-blzu).
 func TestShimSessionStorageInstallIsFramedOnly(t *testing.T) {
-	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
 
 	guard := strings.Index(doc, "if (window.parent !== window) {")
 	if guard < 0 {
@@ -426,7 +426,7 @@ func TestShimSessionStorageInstallIsFramedOnly(t *testing.T) {
 // operation is tagged with an explicit op so the host bridge — and the two
 // listeners that consume it — can tell them apart with no ambiguity.
 func TestShimRemoveItemAndClearUseExplicitOp(t *testing.T) {
-	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
 
 	if !strings.Contains(doc, "persist('delete', key)") {
 		t.Fatalf("removeItem must post an explicit 'delete' op, not a '' sentinel: %s", doc)
@@ -447,7 +447,7 @@ func TestShimRemoveItemAndClearUseExplicitOp(t *testing.T) {
 // with no persist call at all, so the wipe looked successful until the next
 // render re-inlined every original key.
 func TestShimClearWritesThrough(t *testing.T) {
-	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
 
 	clearIdx := strings.Index(doc, "clear: function() {")
 	if clearIdx < 0 {
@@ -467,7 +467,7 @@ func TestShimClearWritesThrough(t *testing.T) {
 // per operation, so clear() and removeItem() called with no host frame stay
 // cache-only and never throw — matching every other bridge's guard.
 func TestShimPersistStateGuardsTopLevelForEveryOp(t *testing.T) {
-	doc := injectShim("<head></head>", "abc", "https://app.test", nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
 
 	fn := "function persistState(op, key, value) {"
 	start := strings.Index(doc, fn)
