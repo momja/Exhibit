@@ -1,6 +1,6 @@
 ---
 id: av-hrtv
-status: open
+status: in_progress
 deps: []
 links: [av-e0yj]
 created: 2026-08-03T05:01:45Z
@@ -47,3 +47,9 @@ Sequence after av-e0yj: it is rewriting the same tool functions (dropping the id
 3. The chat UI shows the pending-approval note after a modification introduces an unapproved origin, as it already does after a creation.
 4. Approvals are NOT dropped or re-gated on a body rewrite; a test pins that an artifact with origin X approved still has X approved after an agent update.
 5. docs/security.md states the accepted risk: an approved origin grants egress for whatever code the artifact later contains.
+
+## Notes
+
+**2026-08-04T04:13:00Z**
+
+Started concurrently with av-e0yj rather than after it, at the owner's direction. Both touch exhibit.ts's update_artifact; this branch keeps its diff surgical and expects to be rebased onto bug/av-e0yj/scope-agent-tools before merge. If av-e0yj fixes the r.artifact.id read as it passes through, this ticket narrows to the footprint field, the tests, and the docs line.
