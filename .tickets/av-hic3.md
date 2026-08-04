@@ -1,6 +1,6 @@
 ---
 id: av-hic3
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-07-22T04:16:21Z
