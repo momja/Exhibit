@@ -41,7 +41,7 @@ func OpenSQLite(path string) (*SQLiteStore, error) {
 }
 
 func (s *SQLiteStore) migrate() error {
-	registerRepairMigration() // guarded, idempotent v8 repair for the 005 renumber collision
+	registerRepairMigrations() // guarded, idempotent repairs for the version collisions at 5 and 11
 	goose.SetBaseFS(migrationsFS)
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		return err
