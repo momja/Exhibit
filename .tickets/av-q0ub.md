@@ -1,6 +1,6 @@
 ---
 id: av-q0ub
-status: open
+status: in_progress
 deps: [av-ep8k, av-c5aq]
 links: [av-buyx, av-7k7b, av-wrbu]
 created: 2026-08-05T04:49:37Z

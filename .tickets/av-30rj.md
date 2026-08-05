@@ -1,6 +1,6 @@
 ---
 id: av-30rj
-status: open
+status: in_progress
 deps: [av-ep8k]
 links: [av-q30x]
 created: 2026-08-05T04:50:17Z
