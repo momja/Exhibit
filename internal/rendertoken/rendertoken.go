@@ -92,11 +92,14 @@ func NewRandomSigner() *Signer {
 
 // Mint returns a token authorizing ownerID to render artifactID for TTL.
 func (s *Signer) Mint(artifactID string, ownerID int64) string {
-	return s.mintAt(artifactID, ownerID, time.Now())
+	return s.MintFor(artifactID, ownerID, TTL)
 }
 
-func (s *Signer) mintAt(artifactID string, ownerID int64, now time.Time) string {
-	claims := fmt.Sprintf("%d.%d", ownerID, now.Add(TTL).Unix())
+// MintFor is Mint with an explicit lifetime: for a caller whose horizon is
+// known to be shorter than TTL, and for tests, which need an already-expired
+// token (a non-positive d) without waiting minutes to get one.
+func (s *Signer) MintFor(artifactID string, ownerID int64, d time.Duration) string {
+	claims := fmt.Sprintf("%d.%d", ownerID, time.Now().Add(d).Unix())
 	return claims + "." + s.tag(artifactID, claims)
 }
 
