@@ -112,6 +112,15 @@ type AgentKey struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// AgentConfig is an owner's non-secret agent preferences — settings applied
+// to every session the agent surface spawns for that owner. Kept separate
+// from AgentKey, which holds only the encrypted provider credential.
+type AgentConfig struct {
+	OwnerID      int64     `json:"owner_id"`
+	SystemPrompt string    `json:"system_prompt"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 type ListOptions struct {
 	Query       string
 	Tags        []string
@@ -182,6 +191,11 @@ type Store interface {
 	SetAgentKey(ctx context.Context, k *AgentKey) error
 	GetAgentKey(ctx context.Context, ownerID int64) (*AgentKey, error)
 	DeleteAgentKey(ctx context.Context, ownerID int64) error
+	// SetAgentConfig upserts the owner's non-secret agent preferences;
+	// GetAgentConfig returns nil when none are set.
+	SetAgentConfig(ctx context.Context, c *AgentConfig) error
+	GetAgentConfig(ctx context.Context, ownerID int64) (*AgentConfig, error)
+	DeleteAgentConfig(ctx context.Context, ownerID int64) error
 	// SaveTranscript upserts the agent conversation that produced an
 	// artifact (messagesJSON is the Pi session's message list).
 	SaveTranscript(ctx context.Context, artifactID, sessionID, messagesJSON string) error

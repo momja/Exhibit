@@ -258,6 +258,37 @@ func TestClearState(t *testing.T) {
 	require.NoError(t, s.ClearState(ctx, "clear-a"))
 }
 
+// AgentConfig is one row per owner (upsert on save, nil when unset) — same
+// singleton shape as AgentKey, but for non-secret preferences.
+func TestAgentConfig(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	got, err := s.GetAgentConfig(ctx, 1)
+	require.NoError(t, err)
+	assert.Nil(t, got, "no config set yet")
+
+	require.NoError(t, s.SetAgentConfig(ctx, &AgentConfig{OwnerID: 1, SystemPrompt: "be terse"}))
+	got, err = s.GetAgentConfig(ctx, 1)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "be terse", got.SystemPrompt)
+
+	// Upsert.
+	require.NoError(t, s.SetAgentConfig(ctx, &AgentConfig{OwnerID: 1, SystemPrompt: "be verbose"}))
+	got, err = s.GetAgentConfig(ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, "be verbose", got.SystemPrompt)
+
+	require.NoError(t, s.DeleteAgentConfig(ctx, 1))
+	got, err = s.GetAgentConfig(ctx, 1)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+
+	// Idempotent.
+	require.NoError(t, s.DeleteAgentConfig(ctx, 1))
+}
+
 func TestCollectionsAndTags(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

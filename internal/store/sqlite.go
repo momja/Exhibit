@@ -735,6 +735,37 @@ func (s *SQLiteStore) DeleteAgentKey(ctx context.Context, ownerID int64) error {
 	return err
 }
 
+func (s *SQLiteStore) SetAgentConfig(ctx context.Context, c *AgentConfig) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO agent_config (owner_id, system_prompt, updated_at)
+         VALUES (?, ?, datetime('now'))
+         ON CONFLICT(owner_id) DO UPDATE SET system_prompt=excluded.system_prompt,
+             updated_at=excluded.updated_at`,
+		c.OwnerID, c.SystemPrompt)
+	return err
+}
+
+func (s *SQLiteStore) GetAgentConfig(ctx context.Context, ownerID int64) (*AgentConfig, error) {
+	c := &AgentConfig{OwnerID: ownerID}
+	var updated string
+	err := s.db.QueryRowContext(ctx,
+		"SELECT system_prompt, updated_at FROM agent_config WHERE owner_id=?",
+		ownerID).Scan(&c.SystemPrompt, &updated)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	c.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updated)
+	return c, nil
+}
+
+func (s *SQLiteStore) DeleteAgentConfig(ctx context.Context, ownerID int64) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM agent_config WHERE owner_id=?", ownerID)
+	return err
+}
+
 func (s *SQLiteStore) SaveTranscript(ctx context.Context, artifactID, sessionID, messagesJSON string) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO agent_transcripts (artifact_id, session_id, messages, updated_at)
