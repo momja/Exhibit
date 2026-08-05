@@ -33,8 +33,13 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify artifact exists
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), req.ArtifactID)
+	ownerID := ownerIDFromCtx(r.Context())
+
+	// Verify the artifact exists in this owner's library. Minting a share for
+	// someone else's artifact would publish it through the deliberately
+	// unauthenticated /s/:id path, so this is the sharpest of the ownership
+	// checks — and CreateShare re-asserts it in SQL besides.
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, req.ArtifactID)
 	if err != nil {
 		serverError(w, r, "create share artifact lookup", err)
 		return
@@ -51,8 +56,8 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:  req.ExpiresAt,
 	}
 
-	if err := ro.cfg.Store.CreateShare(r.Context(), sh); err != nil {
-		serverError(w, r, "create share", err)
+	if err := ro.cfg.Store.CreateShare(r.Context(), ownerID, sh); err != nil {
+		writeArtifactError(w, r, "create share", err)
 		return
 	}
 
@@ -69,7 +74,8 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 func (ro *Router) deleteShare(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "shareID")
 
-	sh, err := ro.cfg.Store.GetShare(r.Context(), id)
+	ownerID := ownerIDFromCtx(r.Context())
+	sh, err := ro.cfg.Store.GetShare(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "delete share lookup", err)
 		return
@@ -79,8 +85,8 @@ func (ro *Router) deleteShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ro.cfg.Store.DeleteShare(r.Context(), id); err != nil {
-		serverError(w, r, "delete share", err)
+	if err := ro.cfg.Store.DeleteShare(r.Context(), ownerID, id); err != nil {
+		writeArtifactError(w, r, "delete share", err)
 		return
 	}
 

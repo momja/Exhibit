@@ -179,7 +179,7 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 	}
 	opts.ArtifactID = req.ArtifactID
 	if req.ArtifactID != "" {
-		a, err := ro.cfg.Store.GetArtifact(r.Context(), req.ArtifactID)
+		a, err := ro.cfg.Store.GetArtifact(r.Context(), opts.OwnerID, req.ArtifactID)
 		if err != nil {
 			serverError(w, r, "get artifact for agent session", err)
 			return
@@ -344,7 +344,7 @@ func (ro *Router) agentEvents(w http.ResponseWriter, r *http.Request) {
 // (colophon provenance, av-q3wo).
 func (ro *Router) listTranscripts(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
-	ts, err := ro.cfg.Store.ListTranscripts(r.Context(), id)
+	ts, err := ro.cfg.Store.ListTranscripts(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
 		serverError(w, r, "list transcripts", err)
 		return

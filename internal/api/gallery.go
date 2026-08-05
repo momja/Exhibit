@@ -25,13 +25,19 @@ import (
 
 func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
-	arts, err := ro.cfg.Store.ListArtifacts(r.Context(), store.ListOptions{Query: q, Limit: 100})
+	// The gallery pages sit outside the API's auth group (their token lives
+	// in the page bootstrap), so ownerIDFromCtx returns the default owner
+	// here rather than a middleware-supplied one. That is the same owner the
+	// API resolves today; when identity becomes real the pages inherit it
+	// from the same seam instead of from a literal 1.
+	ownerID := ownerIDFromCtx(r.Context())
+	arts, err := ro.cfg.Store.ListArtifacts(r.Context(), store.ListOptions{OwnerID: ownerID, Query: q, Limit: 100})
 	if err != nil {
 		serverError(w, r, "gallery index list artifacts", err)
 		return
 	}
 
-	tags, _ := ro.cfg.Store.ListTags(r.Context(), 1)
+	tags, _ := ro.cfg.Store.ListTags(r.Context(), ownerID)
 
 	page, err := renderGalleryPage(arts, tags, q, ro.cfg.AuthToken, ro.cfg.RenderOrigin)
 	if err != nil {
@@ -57,7 +63,7 @@ func (ro *Router) galleryNew(w http.ResponseWriter, r *http.Request) {
 
 func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
 		serverError(w, r, "gallery detail lookup", err)
 		return
@@ -85,7 +91,8 @@ func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 
 func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	ownerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "gallery edit lookup", err)
 		return
@@ -102,7 +109,7 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 	defer rc.Close()
 	src, _ := io.ReadAll(rc)
 
-	decisions, err := ro.cfg.Store.ListOriginDecisions(r.Context(), id)
+	decisions, err := ro.cfg.Store.ListOriginDecisions(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "gallery edit origin decisions", err)
 		return
@@ -148,7 +155,7 @@ func (ro *Router) widgetSource(r *http.Request, a *store.Artifact) string {
 // The frame URL carries a cache-busting stamp because the browser only
 // re-requests a frame whose src changed, no-store or not.
 func (ro *Router) cardWidgetPartial(w http.ResponseWriter, r *http.Request) {
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), r.URL.Query().Get("artifact"))
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), r.URL.Query().Get("artifact"))
 	if err != nil {
 		serverError(w, r, "card widget partial lookup", err)
 		return

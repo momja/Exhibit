@@ -38,7 +38,12 @@ func New(cfg Config) *Renderer {
 // ServeArtifact serves the artifact identified by {artifactID} from the URL.
 func (rd *Renderer) ServeArtifact(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
-	a, err := rd.cfg.Store.GetArtifact(r.Context(), id)
+	// Unscoped by necessity: RENDER_ORIGIN has no session and no owner in
+	// context, so there is nothing here to compare an owner against. Closing
+	// that gap is the signed render token's job (av-c5aq); until then the
+	// explicit accessor name is what keeps the gap greppable rather than
+	// looking like an ordinary read (av-ep8k).
+	a, err := rd.cfg.Store.GetArtifactUnscoped(r.Context(), id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -53,7 +58,9 @@ func (rd *Renderer) ServeArtifact(w http.ResponseWriter, r *http.Request) {
 // ServeShare serves an artifact via a share link.
 func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareID")
-	sh, err := rd.cfg.Store.GetShare(r.Context(), shareID)
+	// The share row is the authorization here (architecture §7), so this
+	// path is owner-independent by design — not an oversight.
+	sh, err := rd.cfg.Store.GetShareUnscoped(r.Context(), shareID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -67,7 +74,7 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a, err := rd.cfg.Store.GetArtifact(r.Context(), sh.ArtifactID)
+	a, err := rd.cfg.Store.GetArtifactUnscoped(r.Context(), sh.ArtifactID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -87,7 +94,7 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 // and never points a frame here.
 func (rd *Renderer) ServeWidget(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
-	a, err := rd.cfg.Store.GetArtifact(r.Context(), id)
+	a, err := rd.cfg.Store.GetArtifactUnscoped(r.Context(), id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -138,7 +145,10 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// Inline the artifact's persisted state so the shim's cache is ready before
 	// any artifact script runs (avoids the async-hydration race). Degrade to an
 	// empty cache if state can't be read — the artifact still renders.
-	state, err := rd.cfg.Store.GetState(r.Context(), a.ID)
+	// The owner comes from the artifact this handler already resolved, not
+	// from a request that has none — so the state read stays owner-scoped
+	// without a third unscoped accessor.
+	state, err := rd.cfg.Store.GetState(r.Context(), a.OwnerID, a.ID)
 	if err != nil {
 		slog.WarnContext(r.Context(), "render state read failed",
 			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))

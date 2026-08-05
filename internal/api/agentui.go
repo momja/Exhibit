@@ -86,7 +86,7 @@ func (ro *Router) newAgentPreviewData(a *store.Artifact) agentPreviewData {
 func (ro *Router) agentPreviewPartial(w http.ResponseWriter, r *http.Request) {
 	var artifact *store.Artifact
 	if id := r.URL.Query().Get("artifact"); id != "" {
-		a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+		a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 		if err != nil {
 			serverError(w, r, "agent preview lookup", err)
 			return
@@ -127,7 +127,7 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 	backURL := "/new"
 	var artifact *store.Artifact
 	if id := r.URL.Query().Get("artifact"); id != "" {
-		if a, err := ro.cfg.Store.GetArtifact(r.Context(), id); err == nil && a != nil {
+		if a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id); err == nil && a != nil {
 			j, _ := json.Marshal(map[string]string{"id": a.ID, "title": a.Title})
 			artifactJSON = string(j)
 			backURL = "/artifacts/" + a.ID

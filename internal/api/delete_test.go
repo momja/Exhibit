@@ -76,7 +76,7 @@ func TestDeleteArtifactCascadesState(t *testing.T) {
 
 	// The cascade removed all rows referencing the artifact, including its state.
 	// Query the store directly — the artifact row is gone, so no state can remain.
-	got, err := r.cfg.Store.GetState(req.Context(), id)
+	got, err := r.cfg.Store.GetState(req.Context(), 1, id)
 	require.NoError(t, err)
 	assert.Empty(t, got, "shim state should be removed by ON DELETE CASCADE")
 }

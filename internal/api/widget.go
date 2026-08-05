@@ -46,7 +46,7 @@ type putWidgetRequest struct {
 // need to tell "no widget" apart from "an empty one".
 func (ro *Router) getWidget(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
 		serverError(w, r, "get widget artifact lookup", err)
 		return
@@ -97,7 +97,8 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	ownerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "put widget artifact lookup", err)
 		return
@@ -116,8 +117,8 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.WidgetBlobID == "" {
-		if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, map[string]any{"widget_blob_id": blobID}); err != nil {
-			serverError(w, r, "attach widget", err)
+		if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, map[string]any{"widget_blob_id": blobID}); err != nil {
+			writeArtifactError(w, r, "attach widget", err)
 			return
 		}
 	}
@@ -159,7 +160,7 @@ const generateWidgetPrompt = "Build the gallery widget for this artifact."
 // driven by the same event the chat surface uses.
 func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
 		serverError(w, r, "generate widget artifact lookup", err)
 		return
@@ -215,7 +216,8 @@ func (ro *Router) widgetGenerateAvailability(r *http.Request) (bool, string) {
 // body in v1 (Blob.Store has no Delete).
 func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	ownerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "delete widget artifact lookup", err)
 		return
@@ -225,8 +227,8 @@ func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.WidgetBlobID != "" {
-		if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, map[string]any{"widget_blob_id": ""}); err != nil {
-			serverError(w, r, "detach widget", err)
+		if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, map[string]any{"widget_blob_id": ""}); err != nil {
+			writeArtifactError(w, r, "detach widget", err)
 			return
 		}
 		slog.InfoContext(r.Context(), "widget removed", slog.String("artifact_id", id))

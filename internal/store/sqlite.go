@@ -136,12 +136,45 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	}
 	// The allowlist passed in is the set of origins the caller has approved;
 	// it lands as allow rows in the child table (exhibit-x87).
-	return s.ReplaceAllowedOrigins(ctx, a.ID, a.NetworkAllowlist, "user")
+	return s.ReplaceAllowedOrigins(ctx, a.OwnerID, a.ID, a.NetworkAllowlist, "user")
 }
 
-func (s *SQLiteStore) GetArtifact(ctx context.Context, id string) (*Artifact, error) {
-	row := s.db.QueryRowContext(ctx,
-		"SELECT "+artifactCols+" FROM artifacts WHERE id = ?", id)
+// ownsArtifact reports whether ownerID owns artifactID. It is the one place
+// the EXISTS predicate is written for callers whose statement can't carry it
+// (multi-statement transactions, upserts), so those still fail with
+// ErrNotFound rather than silently touching another owner's rows.
+func (s *SQLiteStore) ownsArtifact(ctx context.Context, ownerID int64, artifactID string) error {
+	var ok bool
+	err := s.db.QueryRowContext(ctx,
+		"SELECT EXISTS(SELECT 1 FROM artifacts WHERE id=? AND owner_id=?)",
+		artifactID, ownerID).Scan(&ok)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// GetArtifact resolves an artifact within one owner's library. A row that
+// belongs to someone else is reported exactly like a row that never existed —
+// (nil, nil), which handlers render as 404 — so the API answers no questions
+// about ids outside the caller's library (av-ep8k).
+func (s *SQLiteStore) GetArtifact(ctx context.Context, ownerID int64, id string) (*Artifact, error) {
+	return s.getArtifactWhere(ctx,
+		"SELECT "+artifactCols+" FROM artifacts WHERE id=? AND owner_id=?", id, ownerID)
+}
+
+// GetArtifactUnscoped is the render/share read path — see the Store interface
+// comment for why it carries no owner and why the name is this loud.
+func (s *SQLiteStore) GetArtifactUnscoped(ctx context.Context, id string) (*Artifact, error) {
+	return s.getArtifactWhere(ctx,
+		"SELECT "+artifactCols+" FROM artifacts WHERE id=?", id)
+}
+
+func (s *SQLiteStore) getArtifactWhere(ctx context.Context, query string, args ...any) (*Artifact, error) {
+	row := s.db.QueryRowContext(ctx, query, args...)
 	a, err := scanArtifact(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -171,15 +204,19 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 	)
 
 	// Always use alias 'a' for artifacts so WHERE clauses and ORDER BY are consistent.
+	// owner_id leads every variant: the listing is one owner's library, and
+	// the search index is deliberately filtered *after* the MATCH so an FTS5
+	// hit on someone else's artifact is dropped rather than counted.
 	if opts.Query != "" {
 		// Use a subquery to avoid ambiguous column names from the FTS5 JOIN.
 		// The FTS5 MATCH expression works on the table name in a subquery.
 		query = `SELECT ` + artifactColsA + ` FROM artifacts a
-            WHERE a.rowid IN (SELECT rowid FROM artifacts_fts WHERE artifacts_fts MATCH ?)
-            AND 1=1`
-		args = append(args, opts.Query+"*")
+            WHERE a.owner_id = ?
+            AND a.rowid IN (SELECT rowid FROM artifacts_fts WHERE artifacts_fts MATCH ?)`
+		args = append(args, opts.OwnerID, opts.Query+"*")
 	} else {
-		query = `SELECT ` + artifactColsA + ` FROM artifacts a WHERE 1=1`
+		query = `SELECT ` + artifactColsA + ` FROM artifacts a WHERE a.owner_id = ?`
+		args = append(args, opts.OwnerID)
 	}
 
 	if len(opts.Tags) > 0 {
@@ -188,8 +225,10 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 			placeholders[i] = "?"
 			args = append(args, t)
 		}
+		args = append(args, opts.OwnerID)
 		wheres = append(wheres, `a.id IN (SELECT at.artifact_id FROM artifact_tags at
-            JOIN tags t ON t.id = at.tag_id WHERE t.name IN (`+strings.Join(placeholders, ",")+`))`)
+            JOIN tags t ON t.id = at.tag_id WHERE t.name IN (`+strings.Join(placeholders, ",")+`)
+            AND t.owner_id = ?)`)
 	}
 
 	if len(opts.Collections) > 0 {
@@ -198,8 +237,10 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 			placeholders[i] = "?"
 			args = append(args, c)
 		}
+		args = append(args, opts.OwnerID)
 		wheres = append(wheres, `a.id IN (SELECT ac.artifact_id FROM artifact_collections ac
-            JOIN collections c ON c.id = ac.collection_id WHERE c.name IN (`+strings.Join(placeholders, ",")+`))`)
+            JOIN collections c ON c.id = ac.collection_id WHERE c.name IN (`+strings.Join(placeholders, ",")+`)
+            AND c.owner_id = ?)`)
 	}
 
 	for _, w := range wheres {
@@ -235,7 +276,7 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 	return results, nil
 }
 
-func (s *SQLiteStore) UpdateArtifact(ctx context.Context, id string, updates map[string]any) error {
+func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error {
 	if len(updates) == 0 {
 		return nil
 	}
@@ -247,18 +288,18 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, id string, updates map
 		if !ok {
 			return fmt.Errorf("network_allowlist must be an array of strings")
 		}
-		if err := s.ReplaceAllowedOrigins(ctx, id, origins, "user"); err != nil {
+		if err := s.ReplaceAllowedOrigins(ctx, ownerID, id, origins, "user"); err != nil {
 			return err
 		}
 		updates = withoutKey(updates, "network_allowlist")
 		if len(updates) == 0 {
 			// Still bump updated_at so an allowlist-only PATCH is visible.
-			_, err := s.db.ExecContext(ctx, "UPDATE artifacts SET updated_at=datetime('now') WHERE id=?", id)
-			return err
+			return s.execOwned(ctx,
+				"UPDATE artifacts SET updated_at=datetime('now') WHERE id=? AND owner_id=?", id, ownerID)
 		}
 	}
 	setClauses := make([]string, 0, len(updates)+1)
-	args := make([]any, 0, len(updates)+1)
+	args := make([]any, 0, len(updates)+2)
 	for k, v := range updates {
 		if k == "downloads_approved" || k == "clipboard_approved" {
 			// These columns are INTEGER 0/1; a non-bool here would store a value
@@ -271,10 +312,27 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, id string, updates map
 		args = append(args, v)
 	}
 	setClauses = append(setClauses, "updated_at=datetime('now')")
-	args = append(args, id)
-	_, err := s.db.ExecContext(ctx,
-		"UPDATE artifacts SET "+strings.Join(setClauses, ", ")+" WHERE id=?", args...)
-	return err
+	args = append(args, id, ownerID)
+	return s.execOwned(ctx,
+		"UPDATE artifacts SET "+strings.Join(setClauses, ", ")+" WHERE id=? AND owner_id=?", args...)
+}
+
+// execOwned runs a statement whose WHERE clause already carries the owner
+// predicate and translates "matched nothing" into ErrNotFound — which is what
+// a cross-tenant id and an unknown id both look like from here.
+func (s *SQLiteStore) execOwned(ctx context.Context, query string, args ...any) error {
+	res, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // withoutKey returns a copy of m with key removed, leaving the caller's map
@@ -289,10 +347,16 @@ func withoutKey(m map[string]any, key string) map[string]any {
 	return out
 }
 
-func (s *SQLiteStore) ListOriginDecisions(ctx context.Context, artifactID string) ([]OriginDecision, error) {
+// ownedArtifact is the owner-scoped EXISTS predicate the artifact-child
+// tables filter through — the shape the tag joins established. Written once
+// so every child query spells ownership the same way.
+const ownedArtifact = `artifact_id IN (SELECT id FROM artifacts WHERE owner_id=?)`
+
+func (s *SQLiteStore) ListOriginDecisions(ctx context.Context, ownerID int64, artifactID string) ([]OriginDecision, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT origin, decision, source, created_at, updated_at
-		   FROM artifact_network_origins WHERE artifact_id=? ORDER BY origin`, artifactID)
+		   FROM artifact_network_origins WHERE artifact_id=? AND `+ownedArtifact+`
+		  ORDER BY origin`, artifactID, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -310,10 +374,11 @@ func (s *SQLiteStore) ListOriginDecisions(ctx context.Context, artifactID string
 	return out, rows.Err()
 }
 
-func (s *SQLiteStore) AllowedOrigins(ctx context.Context, artifactID string) ([]string, error) {
+func (s *SQLiteStore) AllowedOrigins(ctx context.Context, ownerID int64, artifactID string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT origin FROM artifact_network_origins
-		  WHERE artifact_id=? AND decision=? ORDER BY origin`, artifactID, DecisionAllow)
+		  WHERE artifact_id=? AND decision=? AND `+ownedArtifact+`
+		  ORDER BY origin`, artifactID, DecisionAllow, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -329,9 +394,16 @@ func (s *SQLiteStore) AllowedOrigins(ctx context.Context, artifactID string) ([]
 	return out, rows.Err()
 }
 
-func (s *SQLiteStore) SetOriginDecision(ctx context.Context, artifactID, origin, decision, source string) error {
+// SetOriginDecision widens or narrows what an artifact may reach, so it is
+// the sharpest thing in this file to leave unscoped: the owner check runs
+// before the upsert, and a foreign artifact gets ErrNotFound rather than a
+// new allow row.
+func (s *SQLiteStore) SetOriginDecision(ctx context.Context, ownerID int64, artifactID, origin, decision, source string) error {
 	if decision != DecisionAllow && decision != DecisionBlock {
 		return fmt.Errorf("invalid origin decision %q", decision)
+	}
+	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
+		return err
 	}
 	// The (artifact_id, origin) primary key is what makes one decision per
 	// origin an invariant; the upsert flips an existing decision in place
@@ -345,13 +417,20 @@ func (s *SQLiteStore) SetOriginDecision(ctx context.Context, artifactID, origin,
 	return err
 }
 
-func (s *SQLiteStore) DeleteOriginDecision(ctx context.Context, artifactID, origin string) error {
+// DeleteOriginDecision is idempotent like the state deletes: removing a
+// decision that isn't there is what the caller asked for either way. Owner
+// scoping only guarantees it can never remove someone else's.
+func (s *SQLiteStore) DeleteOriginDecision(ctx context.Context, ownerID int64, artifactID, origin string) error {
 	_, err := s.db.ExecContext(ctx,
-		"DELETE FROM artifact_network_origins WHERE artifact_id=? AND origin=?", artifactID, origin)
+		"DELETE FROM artifact_network_origins WHERE artifact_id=? AND origin=? AND "+ownedArtifact,
+		artifactID, origin, ownerID)
 	return err
 }
 
-func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, artifactID string, origins []string, source string) error {
+func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, ownerID int64, artifactID string, origins []string, source string) error {
+	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
+		return err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -418,9 +497,8 @@ func (s *SQLiteStore) attachAllowlists(ctx context.Context, arts []*Artifact) er
 	return rows.Err()
 }
 
-func (s *SQLiteStore) DeleteArtifact(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM artifacts WHERE id=?", id)
-	return err
+func (s *SQLiteStore) DeleteArtifact(ctx context.Context, ownerID int64, id string) error {
+	return s.execOwned(ctx, "DELETE FROM artifacts WHERE id=? AND owner_id=?", id, ownerID)
 }
 
 // blobGetter is the read side of blob.Store — the minimal seam
@@ -503,16 +581,34 @@ func (s *SQLiteStore) ListCollections(ctx context.Context, ownerID int64) ([]*Co
 	return cs, rows.Err()
 }
 
-func (s *SQLiteStore) AddArtifactToCollection(ctx context.Context, artifactID, collectionID string) error {
-	_, err := s.db.ExecContext(ctx,
+// AddArtifactToCollection requires *both* rows to be the caller's — the same
+// double-EXISTS gate AddArtifactTag uses. Checking only one would let a
+// caller file a foreign artifact onto their own shelf (leaking its existence)
+// or file their own artifact onto someone else's.
+func (s *SQLiteStore) AddArtifactToCollection(ctx context.Context, ownerID int64, artifactID, collectionID string) error {
+	var ok bool
+	err := s.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM artifacts WHERE id=? AND owner_id=?)
+		    AND EXISTS(SELECT 1 FROM collections WHERE id=? AND owner_id=?)`,
+		artifactID, ownerID, collectionID, ownerID).Scan(&ok)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+	_, err = s.db.ExecContext(ctx,
 		"INSERT OR IGNORE INTO artifact_collections (artifact_id, collection_id) VALUES (?, ?)",
 		artifactID, collectionID)
 	return err
 }
 
-func (s *SQLiteStore) RemoveArtifactFromCollection(ctx context.Context, artifactID, collectionID string) error {
+func (s *SQLiteStore) RemoveArtifactFromCollection(ctx context.Context, ownerID int64, artifactID, collectionID string) error {
 	_, err := s.db.ExecContext(ctx,
-		"DELETE FROM artifact_collections WHERE artifact_id=? AND collection_id=?", artifactID, collectionID)
+		`DELETE FROM artifact_collections WHERE artifact_id=? AND collection_id=?
+		    AND `+ownedArtifact+`
+		    AND collection_id IN (SELECT id FROM collections WHERE owner_id=?)`,
+		artifactID, collectionID, ownerID, ownerID)
 	return err
 }
 
@@ -659,9 +755,10 @@ func (s *SQLiteStore) attachTags(ctx context.Context, arts []*Artifact) error {
 	return rows.Err()
 }
 
-func (s *SQLiteStore) GetState(ctx context.Context, artifactID string) (map[string]string, error) {
+func (s *SQLiteStore) GetState(ctx context.Context, ownerID int64, artifactID string) (map[string]string, error) {
 	rows, err := s.db.QueryContext(ctx,
-		"SELECT key, value FROM artifact_state WHERE artifact_id=?", artifactID)
+		"SELECT key, value FROM artifact_state WHERE artifact_id=? AND "+ownedArtifact,
+		artifactID, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -677,7 +774,10 @@ func (s *SQLiteStore) GetState(ctx context.Context, artifactID string) (map[stri
 	return state, rows.Err()
 }
 
-func (s *SQLiteStore) SetState(ctx context.Context, artifactID, key, value string) error {
+func (s *SQLiteStore) SetState(ctx context.Context, ownerID int64, artifactID, key, value string) error {
+	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
+		return err
+	}
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO artifact_state (artifact_id, key, value, updated_at)
          VALUES (?, ?, ?, datetime('now'))
@@ -689,17 +789,19 @@ func (s *SQLiteStore) SetState(ctx context.Context, artifactID, key, value strin
 // DeleteState removes one key's row. A key that was never stored is not an
 // error: the row is gone either way, which is the only thing the caller asked
 // for.
-func (s *SQLiteStore) DeleteState(ctx context.Context, artifactID, key string) error {
+func (s *SQLiteStore) DeleteState(ctx context.Context, ownerID int64, artifactID, key string) error {
 	_, err := s.db.ExecContext(ctx,
-		"DELETE FROM artifact_state WHERE artifact_id=? AND key=?", artifactID, key)
+		"DELETE FROM artifact_state WHERE artifact_id=? AND key=? AND "+ownedArtifact,
+		artifactID, key, ownerID)
 	return err
 }
 
 // ClearState removes every state row for the artifact, leaving the artifact
 // itself — body, origin decisions, capability approvals — untouched.
-func (s *SQLiteStore) ClearState(ctx context.Context, artifactID string) error {
+func (s *SQLiteStore) ClearState(ctx context.Context, ownerID int64, artifactID string) error {
 	_, err := s.db.ExecContext(ctx,
-		"DELETE FROM artifact_state WHERE artifact_id=?", artifactID)
+		"DELETE FROM artifact_state WHERE artifact_id=? AND "+ownedArtifact,
+		artifactID, ownerID)
 	return err
 }
 
@@ -735,7 +837,10 @@ func (s *SQLiteStore) DeleteAgentKey(ctx context.Context, ownerID int64) error {
 	return err
 }
 
-func (s *SQLiteStore) SaveTranscript(ctx context.Context, artifactID, sessionID, messagesJSON string) error {
+func (s *SQLiteStore) SaveTranscript(ctx context.Context, ownerID int64, artifactID, sessionID, messagesJSON string) error {
+	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
+		return err
+	}
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO agent_transcripts (artifact_id, session_id, messages, updated_at)
          VALUES (?, ?, ?, datetime('now'))
@@ -745,10 +850,11 @@ func (s *SQLiteStore) SaveTranscript(ctx context.Context, artifactID, sessionID,
 	return err
 }
 
-func (s *SQLiteStore) ListTranscripts(ctx context.Context, artifactID string) (map[string]string, error) {
+func (s *SQLiteStore) ListTranscripts(ctx context.Context, ownerID int64, artifactID string) (map[string]string, error) {
 	rows, err := s.db.QueryContext(ctx,
-		"SELECT session_id, messages FROM agent_transcripts WHERE artifact_id=? ORDER BY updated_at",
-		artifactID)
+		"SELECT session_id, messages FROM agent_transcripts WHERE artifact_id=? AND "+ownedArtifact+
+			" ORDER BY updated_at",
+		artifactID, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -764,7 +870,13 @@ func (s *SQLiteStore) ListTranscripts(ctx context.Context, artifactID string) (m
 	return out, rows.Err()
 }
 
-func (s *SQLiteStore) CreateShare(ctx context.Context, sh *Share) error {
+// CreateShare mints a link to an artifact, so it is gated on owning that
+// artifact — otherwise a share row would be a way to publish someone else's
+// library through the deliberately unauthenticated /s/:id path.
+func (s *SQLiteStore) CreateShare(ctx context.Context, ownerID int64, sh *Share) error {
+	if err := s.ownsArtifact(ctx, ownerID, sh.ArtifactID); err != nil {
+		return err
+	}
 	var expiresAt *string
 	if sh.ExpiresAt != nil {
 		str := sh.ExpiresAt.Format(time.RFC3339)
@@ -776,9 +888,24 @@ func (s *SQLiteStore) CreateShare(ctx context.Context, sh *Share) error {
 	return err
 }
 
-func (s *SQLiteStore) GetShare(ctx context.Context, id string) (*Share, error) {
-	row := s.db.QueryRowContext(ctx,
+// GetShare resolves a share the caller owns (through its artifact) — the
+// read behind revoking one. Serving a share to its visitor is
+// GetShareUnscoped instead, because there the row is the authorization.
+func (s *SQLiteStore) GetShare(ctx context.Context, ownerID int64, id string) (*Share, error) {
+	return s.getShareWhere(ctx,
+		`SELECT id, artifact_id, public, expires_at FROM shares
+		  WHERE id=? AND `+ownedArtifact, id, ownerID)
+}
+
+// GetShareUnscoped resolves a share row with no owner check — see the Store
+// interface comment. `grep Unscoped` is the audit.
+func (s *SQLiteStore) GetShareUnscoped(ctx context.Context, id string) (*Share, error) {
+	return s.getShareWhere(ctx,
 		"SELECT id, artifact_id, public, expires_at FROM shares WHERE id=?", id)
+}
+
+func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...any) (*Share, error) {
+	row := s.db.QueryRowContext(ctx, query, args...)
 	var sh Share
 	var expiresAt *string
 	var public int
@@ -797,7 +924,7 @@ func (s *SQLiteStore) GetShare(ctx context.Context, id string) (*Share, error) {
 	return &sh, nil
 }
 
-func (s *SQLiteStore) DeleteShare(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM shares WHERE id=?", id)
-	return err
+func (s *SQLiteStore) DeleteShare(ctx context.Context, ownerID int64, id string) error {
+	return s.execOwned(ctx,
+		"DELETE FROM shares WHERE id=? AND "+ownedArtifact, id, ownerID)
 }

@@ -16,7 +16,7 @@ func (ro *Router) getState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := ro.cfg.Store.GetState(r.Context(), artifactID)
+	state, err := ro.cfg.Store.GetState(r.Context(), ownerIDFromCtx(r.Context()), artifactID)
 	if err != nil {
 		serverError(w, r, "get state", err)
 		return
@@ -54,8 +54,8 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ro.cfg.Store.SetState(r.Context(), artifactID, key, req.Value); err != nil {
-		serverError(w, r, "set state", err)
+	if err := ro.cfg.Store.SetState(r.Context(), ownerIDFromCtx(r.Context()), artifactID, key, req.Value); err != nil {
+		writeArtifactError(w, r, "set state", err)
 		return
 	}
 
@@ -105,7 +105,7 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	// version history for state — but bounded: it touches nothing else the
 	// artifact owns (body, origin decisions, capability approvals all survive).
 	if !query.Has("key") {
-		if err := ro.cfg.Store.ClearState(r.Context(), artifactID); err != nil {
+		if err := ro.cfg.Store.ClearState(r.Context(), ownerIDFromCtx(r.Context()), artifactID); err != nil {
 			serverError(w, r, "clear state", err)
 			return
 		}
@@ -115,7 +115,7 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	key := query.Get("key")
-	if err := ro.cfg.Store.DeleteState(r.Context(), artifactID, key); err != nil {
+	if err := ro.cfg.Store.DeleteState(r.Context(), ownerIDFromCtx(r.Context()), artifactID, key); err != nil {
 		serverError(w, r, "delete state", err)
 		return
 	}
@@ -125,12 +125,16 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// artifactExists reports whether the artifact is there, having already written
-// the 404/500 response when it is not. State rows outlive nothing: without this
-// check a delete against an unknown id would silently succeed, since removing
-// rows that don't exist is a no-op.
+// artifactExists reports whether the artifact is there *in the requesting
+// owner's library*, having already written the 404/500 response when it is
+// not. State rows outlive nothing: without this check a delete against an
+// unknown id would silently succeed, since removing rows that don't exist is
+// a no-op. Another owner's id fails it exactly like an unknown one — the
+// store makes the two indistinguishable, and the state queries carry the
+// owner predicate themselves, so this stays a courtesy 404 rather than the
+// thing enforcing the boundary (av-ep8k).
 func (ro *Router) artifactExists(w http.ResponseWriter, r *http.Request, artifactID, op string) bool {
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), artifactID)
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), artifactID)
 	if err != nil {
 		serverError(w, r, op+" artifact lookup", err)
 		return false
