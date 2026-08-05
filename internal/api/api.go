@@ -2,10 +2,12 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/logging"
 	"github.com/momja/Exhibit/internal/render"
@@ -25,6 +27,15 @@ type Config struct {
 	Agent       *agent.Manager
 	Secrets     *secrets.Box
 	MockEnabled bool
+	// Identity delegates login to an identity provider (av-30rj). Nil — the
+	// default — is a single-user instance: no /auth routes, no login gate,
+	// the static token and owner 1 exactly as before. Non-nil is the only
+	// thing that changes, and swapping one provider for another changes
+	// nothing but which constructor filled this field.
+	Identity auth.IdentityProvider
+	// SessionTTL bounds how long a login lasts; zero means
+	// DefaultSessionTTL. Logout revokes sooner, server-side.
+	SessionTTL time.Duration
 }
 
 // Router wraps chi.Mux and holds the config.
@@ -49,6 +60,14 @@ func (ro *Router) setupRoutes() {
 	// log still records the 500 status.
 	ro.Use(logging.RequestMiddleware)
 	ro.Use(middleware.Recoverer)
+	// Login gate for the server-rendered pages (av-30rj). A pass-through
+	// unless an identity provider is configured, so a single-user instance
+	// is unaffected.
+	ro.Use(ro.sessionGate)
+
+	// The login flow — registered only when a provider is configured
+	// (internal/api/auth.go).
+	ro.setupAuthRoutes(ro)
 
 	// Gallery UI — no auth header required (token embedded in page JS)
 	ro.Get("/", ro.galleryIndex)
@@ -81,7 +100,7 @@ func (ro *Router) setupRoutes() {
 
 	// Authenticated API routes
 	ro.Group(func(r chi.Router) {
-		r.Use(authMiddleware(ro.cfg.AuthToken))
+		r.Use(ro.authMiddleware)
 		r.Use(ownerMiddleware)
 
 		r.Route("/api/artifacts", func(r chi.Router) {

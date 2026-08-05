@@ -195,4 +195,29 @@ type Store interface {
 
 	// Lifecycle
 	Close() error
+
+	// --- Identity and sessions (av-30rj) -------------------------------
+	// The identity provider is a login-time concern only: it is exchanged
+	// once, at the callback, for a session row here. Everything below is
+	// ours and identical whichever provider issued the identity, which is
+	// what keeps a provider swap confined to one constructor. Types live in
+	// users.go, the SQLite implementation in sqlite_users.go.
+
+	// UpsertUser returns the user for a provider identity, creating the row
+	// just-in-time on first login and refreshing the stored email on every
+	// later one. The returned ID is the integer the rest of the schema
+	// already calls owner_id.
+	UpsertUser(ctx context.Context, externalID, email string) (*User, error)
+	GetUser(ctx context.Context, id int64) (*User, error)
+
+	// CreateSession records a logged-in browser under a caller-supplied
+	// opaque id. GetSession returns ErrNotFound when that id is unknown *or*
+	// expired — a revoked session and a lapsed one are the same answer to
+	// the only question a caller asks. DeleteSession is the revocation, and
+	// is idempotent. DeleteExpiredSessions is a janitor; nothing depends on
+	// it having run.
+	CreateSession(ctx context.Context, s *Session) error
+	GetSession(ctx context.Context, id string) (*Session, error)
+	DeleteSession(ctx context.Context, id string) error
+	DeleteExpiredSessions(ctx context.Context) (int64, error)
 }
