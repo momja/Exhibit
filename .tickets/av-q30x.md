@@ -2,7 +2,7 @@
 id: av-q30x
 status: open
 deps: []
-links: [av-q3wo, Exh-mety]
+links: [av-q3wo, Exh-mety, av-30rj]
 created: 2026-07-06T22:06:13Z
 type: epic
 priority: 2
@@ -25,3 +25,17 @@ Motivation: individuals should be able to secure their instance on public networ
 - Session lifetime / remember-me policy.
 - CSRF: introducing cookie auth means mutating routes need CSRF protection that the bearer-token model didn't (same-site strict cookies may be sufficient — decide explicitly).
 
+
+## Notes
+
+**2026-08-05T04:51:24Z**
+
+Scope boundary note (2026-08-04), from a multi-tenancy design pass. Nothing here contradicts this epic — it is correctly scoped as single-user login — but two of its decisions should not be inherited past that scope.
+
+1. **"Render origin stays out of it" is valid only while `owner_id` is 1.** The reasoning given (the share row is the authorization, so `/s/:shareId` needs no auth) stays true forever. But `/a/:id` and `/w/:id` are also unauthenticated today, and with one owner that is a defensible trade against an unguessable UUID. With more than one owner it is a cross-tenant read of body *and* inlined state. Tracked as av-c5aq under the av-swzv epic. Flagged here so a future reader does not carry "the render origin is out of scope for auth" forward as a settled principle.
+
+2. **Local password auth vs. delegating to a provider.** This epic picks username/password + scs/bcrypt and defers OIDC as too much config surface for a single-user instance. For a credential set once at deploy — no reset flow, no SMTP — that is defensible. The tension is that av-30rj (pluggable identity provider, for a hosted multi-user tier) needs a session layer with exactly the same shape: our own cookie, our own `sessions` table, the IdP touched only at `/auth/callback`.
+
+   If this epic has not started yet, there is an argument for building that session layer once and making the local credential *one provider implementation* rather than the foundation — one session layer instead of two, and OIDC becomes additive. If it has already shipped, av-30rj slots a provider in behind it and nothing user-visible changes for single-user instances. Either order works; the one to avoid is building two independent session mechanisms.
+
+Neither point needs action in this epic. They are recorded so the sequencing is a decision rather than a discovery.

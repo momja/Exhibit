@@ -2,7 +2,7 @@
 id: av-buyx
 status: open
 deps: []
-links: [av-xba2]
+links: [av-xba2, av-7k7b, av-q0ub, av-wrbu]
 created: 2026-07-05T00:20:33Z
 type: feature
 priority: 2
