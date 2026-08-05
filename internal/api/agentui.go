@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"strconv"
-	"time"
 
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -53,21 +51,26 @@ type agentPreviewData struct {
 
 // newAgentPreviewData builds the pane's view model for one artifact; the zero
 // value (no artifact) renders the empty state.
-func (ro *Router) newAgentPreviewData(a *store.Artifact) agentPreviewData {
+//
+// FrameURL and the widget tile carry freshly minted render tokens (av-c5aq) —
+// which costs nothing extra here, since both are re-minted on every htmx swap
+// anyway for the cache-busting stamp. OpenURL stays an app-origin link that
+// mints at click time, because the agent pane is a surface someone leaves open
+// for a long session.
+func (ro *Router) newAgentPreviewData(r *http.Request, a *store.Artifact) agentPreviewData {
 	if a == nil {
 		return agentPreviewData{}
 	}
-	renderURL := ro.cfg.RenderOrigin + "/a/" + a.ID
-	stamp := "?r=" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	widget := newWidgetView(a, ro.cfg.RenderOrigin)
+	urls := ro.renderURLs(r)
+	widget := newWidgetView(a, urls)
 	if widget.URL != "" {
-		widget.URL += stamp
+		widget.URL = cacheBust(widget.URL)
 	}
 	return agentPreviewData{
 		HasArtifact: true,
 		Title:       a.Title,
-		FrameURL:    renderURL + stamp,
-		OpenURL:     renderURL,
+		FrameURL:    cacheBust(urls.artifact(a.ID)),
+		OpenURL:     openURL(a.ID),
 		DetailURL:   "/artifacts/" + a.ID,
 		Widget:      widget,
 	}
@@ -100,7 +103,7 @@ func (ro *Router) agentPreviewPartial(w http.ResponseWriter, r *http.Request) {
 		}
 		artifact = a
 	}
-	fragment, err := renderPage("agentPreview", ro.newAgentPreviewData(artifact))
+	fragment, err := renderPage("agentPreview", ro.newAgentPreviewData(r, artifact))
 	if err != nil {
 		serverError(w, r, "agent preview render", err)
 		return
@@ -140,7 +143,7 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 		MockEnabled:  ro.cfg.MockEnabled,
 		AgentEnabled: ro.cfg.Agent != nil,
 		BackURL:      backURL,
-		Preview:      ro.newAgentPreviewData(artifact),
+		Preview:      ro.newAgentPreviewData(r, artifact),
 	})
 	if err != nil {
 		serverError(w, r, "agent page render", err)
