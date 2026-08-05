@@ -1,6 +1,6 @@
 ---
 id: av-30rj
-status: in_progress
+status: closed
 deps: [av-ep8k]
 links: [av-q30x]
 created: 2026-08-05T04:50:17Z
@@ -96,3 +96,13 @@ Blocked on the open question above. Provisional:
 6. A second provider can be configured without changes outside its constructor — demonstrated by a test double implementing `IdentityProvider`.
 7. Docs state the BYO reverse-proxy-auth path (Authelia, Tailscale, basic auth at the proxy) as a supported alternative, consistent with the "TLS/proxy is the operator's" stance.
 
+
+## Notes
+
+**2026-08-05T17:33:04Z**
+
+OSS-side seam shipped: auth.IdentityProvider (AuthURL/Exchange), generic OIDC via discovery + PKCE, users/sessions tables (migration 013), opaque server-side-revocable session cookie on the app origin only, /auth/{login,callback,logout}. Unset OIDC_ISSUER leaves the static-token single-user path byte-identical.
+
+The OPEN QUESTION is deliberately still open and untouched: where the hosted layer lives — (a) nested public module at hosted/, or (b) separate private repo importing the OSS module. Nothing in this branch presumes either. No hosted/ module was created and no vendor SDK is in go.mod, so both options remain equally cheap. Provisional AC 1-7 are met except the placement-dependent restructuring, which is (b)-only work.
+
+Migration numbering note: 012 was NOT free — versions 8 and 12 are occupied by Go migrations registered in internal/store/migration_repair.go with no file in migrations/. This ticket's migration is 013. Check that file, not just ls migrations/, before picking a number.

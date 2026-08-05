@@ -601,7 +601,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8); scope queries by owner |
+| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | S3/MinIO impl behind same interface |
