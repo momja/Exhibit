@@ -194,6 +194,18 @@ executable document with the correct security envelope:
   widget 404s here; its card renders the default tile instead (§3.5). See
   `widgets.md`.
 
+- Requires a **signed render token** on `/a/:id` and `/w/:id` (av-c5aq): an
+  HMAC-SHA256 credential scoped to one `(artifact, owner)` pair with a
+  ten-minute TTL, minted by the app origin into every frame `src` it emits and
+  verified here statelessly. It is how this surface acquires a principal — the
+  answer to "whose state should be inlined" — without a session, which it
+  deliberately cannot have: a top-level `/a/:id` is a real-origin document with
+  the artifact's own script in it, so any cookie readable there is readable by
+  the artifact. Links a visitor may click much later carry no token and go
+  through the app origin's `/artifacts/:id/open`, which mints on redirect.
+  `/s/:shareID` takes no token — the share row is the authorization (§7). Full
+  rationale: `security.md` §1.3.
+
 The render surface never mutates anything. It reads (including state, to inline it), wraps,
 and serves. This read-only property is what makes it safe to expose under the no-auth share
 path (§7).

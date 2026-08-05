@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -45,20 +44,22 @@ func newTestRenderer(t *testing.T, id, body string) (*Renderer, *store.SQLiteSto
 		t.Fatal(err)
 	}
 
-	rd := New(Config{Store: st, Blob: bl, AppOrigin: "https://app.test", RenderOrigin: "https://render.test"})
+	rd := New(Config{
+		Store: st, Blob: bl,
+		AppOrigin: "https://app.test", RenderOrigin: "https://render.test",
+		Tokens: testTokens,
+	})
 	return rd, st
 }
 
 // serve renders the artifact once and returns the response body — the
-// render-time inlined state a fresh page load (or reload) would see.
+// render-time inlined state a fresh page load (or reload) would see. It carries
+// the same (artifact, owner)-scoped token the app origin mints into a frame's
+// src (av-c5aq); token_test.go covers what happens without one.
 func serve(t *testing.T, rd *Renderer, id string) string {
 	t.Helper()
-	req := httptest.NewRequest("GET", "/a/"+id, nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("artifactID", id)
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
-	rd.ServeArtifact(w, req)
+	rd.ServeArtifact(w, renderRequest("/a/"+id, id, 1))
 	if w.Code != 200 {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -71,13 +72,8 @@ func serve(t *testing.T, rd *Renderer, id string) string {
 func TestServeArtifactIsNotCacheable(t *testing.T) {
 	rd, _ := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
 
-	req := httptest.NewRequest("GET", "/a/abc", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("artifactID", "abc")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
-
-	rd.ServeArtifact(w, req)
+	rd.ServeArtifact(w, renderRequest("/a/abc", "abc", 1))
 
 	if w.Code != 200 {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())

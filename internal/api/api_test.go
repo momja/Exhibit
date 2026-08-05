@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/secrets"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -48,6 +49,14 @@ func newTestRouter(t *testing.T) *Router {
 }
 
 func authHeader() string { return "Bearer secret" }
+
+// testRenderURLs is the token-minting context a page render normally takes from
+// the request (av-c5aq). Unit tests that call a render*Page function directly
+// need one; the key is throwaway because those tests assert on markup, not on
+// what the render surface will later accept.
+func testRenderURLs(origin string) renderURLs {
+	return renderURLs{origin: origin, signer: rendertoken.NewRandomSigner(), ownerID: defaultOwnerID}
+}
 
 func TestAuthMiddleware(t *testing.T) {
 	r := newTestRouter(t)

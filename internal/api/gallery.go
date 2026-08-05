@@ -19,9 +19,52 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/color"
+	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/store"
 )
+
+// renderURLs mints the render-origin URLs one page render points its frames at.
+// It carries the signing key and the owner the page is being rendered for, so
+// every URL on the page is minted in memory during that render: a gallery of
+// forty cards costs forty HMACs and zero round trips (av-c5aq AC#6).
+//
+// It is deliberately per-request rather than a Router field, because the owner
+// is a property of the request, not of the process — which is what keeps this
+// correct once sessions replace the fixed owner id.
+type renderURLs struct {
+	origin  string
+	signer  *rendertoken.Signer
+	ownerID int64
+}
+
+func (ro *Router) renderURLs(r *http.Request) renderURLs {
+	return renderURLs{
+		origin:  ro.cfg.RenderOrigin,
+		signer:  ro.tokens,
+		ownerID: ownerIDFromCtx(r.Context()),
+	}
+}
+
+// artifact returns the tokened URL of an artifact's render document, for an
+// iframe src. Links a visitor might click minutes later must NOT use this —
+// they go through openArtifact, which mints at click time (a token embedded in
+// a link goes stale while the page sits open).
+func (u renderURLs) artifact(id string) string {
+	return u.origin + "/a/" + id + "?" + rendertoken.Param + "=" + u.signer.Mint(id, u.ownerID)
+}
+
+// widget returns the tokened URL of an artifact's widget document.
+func (u renderURLs) widget(id string) string {
+	return u.origin + "/w/" + id + "?" + rendertoken.Param + "=" + u.signer.Mint(id, u.ownerID)
+}
+
+// cacheBust appends the per-render stamp that makes a browser actually refetch
+// a frame after a save. It is a second parameter, not the first, because the
+// token is already there — the render URLs above always carry a query string.
+func cacheBust(url string) string {
+	return url + "&r=" + strconv.FormatInt(time.Now().UnixNano(), 10)
+}
 
 func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
@@ -39,7 +82,7 @@ func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 
 	tags, _ := ro.cfg.Store.ListTags(r.Context(), ownerID)
 
-	page, err := renderGalleryPage(arts, tags, q, ro.cfg.AuthToken, ro.cfg.RenderOrigin)
+	page, err := renderGalleryPage(arts, tags, q, ro.cfg.AuthToken, ro.renderURLs(r))
 	if err != nil {
 		serverError(w, r, "gallery index render", err)
 		return
@@ -80,7 +123,7 @@ func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	defer rc.Close()
 	src, _ := io.ReadAll(rc)
 
-	page, err := renderDetailPage(a, string(src), ro.cfg.RenderOrigin, ro.cfg.AuthToken)
+	page, err := renderDetailPage(a, string(src), ro.renderURLs(r), ro.cfg.AuthToken)
 	if err != nil {
 		serverError(w, r, "gallery detail render", err)
 		return
@@ -116,13 +159,47 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	canGenerate, generateHint := ro.widgetGenerateAvailability(r)
-	page, err := renderEditPage(a, decisions, string(src), ro.widgetSource(r, a), ro.cfg.AuthToken, ro.cfg.RenderOrigin, canGenerate, generateHint)
+	page, err := renderEditPage(a, decisions, string(src), ro.widgetSource(r, a), ro.cfg.AuthToken, ro.renderURLs(r), canGenerate, generateHint)
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, page)
+}
+
+// openURL is the app-origin path that opens an artifact top-level on the render
+// origin. Pages link here instead of linking to RENDER_ORIGIN directly.
+func openURL(artifactID string) string {
+	return "/artifacts/" + artifactID + "/open"
+}
+
+// openArtifact is the "Open in new tab" door: it mints a fresh render token and
+// redirects to the render origin (av-c5aq).
+//
+// A link is not a frame. A frame's src is fetched the moment the page renders,
+// so a token baked into the markup is always fresh; a link sits in an open tab
+// until someone clicks it, which may be an hour later — long past any TTL short
+// enough to be worth having. Minting on the redirect makes the token's lifetime
+// start at the click, so the TTL can stay minutes without the affordance
+// breaking. It also keeps the token out of the page source, where a "copy link
+// address" would spread a credential.
+func (ro *Router) openArtifact(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "artifactID")
+	urls := ro.renderURLs(r)
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), urls.ownerID, id)
+	if err != nil {
+		serverError(w, r, "open artifact lookup", err)
+		return
+	}
+	if a == nil || a.OwnerID != urls.ownerID {
+		ro.notFound(w, r)
+		return
+	}
+	// The Location header carries a credential and a deadline; a cached
+	// redirect would hand out a token that has already expired.
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, urls.artifact(a.ID), http.StatusFound)
 }
 
 // widgetSource reads an artifact's widget body for the edit page's editor, or
@@ -166,9 +243,9 @@ func (ro *Router) cardWidgetPartial(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "artifact not found", http.StatusNotFound)
 		return
 	}
-	view := newWidgetView(a, ro.cfg.RenderOrigin)
+	view := newWidgetView(a, ro.renderURLs(r))
 	if view.URL != "" {
-		view.URL += "?r=" + strconv.FormatInt(time.Now().UnixNano(), 10)
+		view.URL = cacheBust(view.URL)
 	}
 	fragment, err := renderPage("cardWidget", view)
 	if err != nil {
@@ -293,15 +370,16 @@ type galleryCard struct {
 	Widget     widgetView
 }
 
-// newWidgetView builds a card's tile view model.
-func newWidgetView(a *store.Artifact, renderOrigin string) widgetView {
+// newWidgetView builds a card's tile view model, minting the tile frame's
+// render token as it goes.
+func newWidgetView(a *store.Artifact, urls renderURLs) widgetView {
 	v := widgetView{
 		Monogram: monogram(a.Title),
 		Hue:      titleHue(a.ID),
 		Title:    a.Title,
 	}
 	if a.WidgetBlobID != "" {
-		v.URL = renderOrigin + "/w/" + a.ID
+		v.URL = urls.widget(a.ID)
 	}
 	return v
 }
@@ -367,7 +445,7 @@ type galleryPageData struct {
 	DefaultTagColor string
 }
 
-func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token, renderOrigin string) (string, error) {
+func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token string, urls renderURLs) (string, error) {
 	cards := make([]galleryCard, len(arts))
 	for i, a := range arts {
 		cards[i] = galleryCard{
@@ -382,7 +460,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token, 
 				ClipboardApproved: a.ClipboardApproved,
 				ShowManage:        true,
 			},
-			Widget: newWidgetView(a, renderOrigin),
+			Widget: newWidgetView(a, urls),
 		}
 	}
 	return renderPage("gallery", galleryPageData{
@@ -412,29 +490,37 @@ func renderNewPage(token string) (string, error) {
 	})
 }
 
+// detailPageData feeds the viewer page. It carries two distinct render-origin
+// URLs rather than the bare origin, because the two have different lifetimes:
+// FrameURL embeds a render token and is consumed immediately (the iframe loads
+// with the page), while OpenURL is an app-origin redirect a visitor may click
+// long after the page was rendered — so its token is minted at click time
+// instead of going stale in the markup (av-c5aq).
 type detailPageData struct {
-	ID           string
-	Title        string
-	Created      string
-	RenderOrigin string
-	SourceURL    string
-	Src          string
-	Capability   capabilityView
-	Token        string
+	ID         string
+	Title      string
+	Created    string
+	FrameURL   string
+	OpenURL    string
+	SourceURL  string
+	Src        string
+	Capability capabilityView
+	Token      string
 }
 
-func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (string, error) {
+func renderDetailPage(a *store.Artifact, src string, urls renderURLs, token string) (string, error) {
 	allowlist := a.NetworkAllowlist
 	if allowlist == nil {
 		allowlist = []string{}
 	}
 	return renderPage("detail", detailPageData{
-		ID:           a.ID,
-		Title:        a.Title,
-		Created:      a.CreatedAt.Format("Jan 2, 2006 15:04"),
-		RenderOrigin: renderOrigin,
-		SourceURL:    a.SourceURL,
-		Src:          src,
+		ID:        a.ID,
+		Title:     a.Title,
+		Created:   a.CreatedAt.Format("Jan 2, 2006 15:04"),
+		FrameURL:  urls.artifact(a.ID),
+		OpenURL:   openURL(a.ID),
+		SourceURL: a.SourceURL,
+		Src:       src,
 		Capability: capabilityView{
 			ArtifactID:        a.ID,
 			NetworkAllowlist:  allowlist,
@@ -479,7 +565,7 @@ type editPageData struct {
 	GenerateHint      string
 }
 
-func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, widgetSrc, token, renderOrigin string, canGenerate bool, generateHint string) (string, error) {
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, widgetSrc, token string, urls renderURLs, canGenerate bool, generateHint string) (string, error) {
 	allowlist, blocked := []string{}, []string{}
 	for _, d := range decisions {
 		switch d.Decision {
@@ -501,7 +587,7 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, wi
 		Blocked:           blocked,
 		Unapproved:        unapproved,
 		WidgetSrc:         widgetSrc,
-		Widget:            newWidgetView(a, renderOrigin),
+		Widget:            newWidgetView(a, urls),
 		CanGenerateWidget: canGenerate,
 		GenerateHint:      generateHint,
 		DownloadsApproved: a.DownloadsApproved,

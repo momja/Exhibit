@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -54,17 +53,17 @@ func newWidgetRenderer(t *testing.T, id, body, widget string) *Renderer {
 		t.Fatal(err)
 	}
 
-	return New(Config{Store: st, Blob: bl, AppOrigin: "https://app.test", RenderOrigin: "https://render.test"})
+	return New(Config{
+		Store: st, Blob: bl,
+		AppOrigin: "https://app.test", RenderOrigin: "https://render.test",
+		Tokens: testTokens,
+	})
 }
 
 func serveWidget(t *testing.T, rd *Renderer, id string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest("GET", "/w/"+id, nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("artifactID", id)
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
-	rd.ServeWidget(w, req)
+	rd.ServeWidget(w, renderRequest("/w/"+id, id, 1))
 	return w
 }
 

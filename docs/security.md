@@ -123,6 +123,69 @@ since it also serves the inlined reads top-level.
 `IndexedDB` is not intercepted (deferred). Note it does not quietly fall back
 to per-device storage in the frame either — like the others, it throws.
 
+### 1.3 The render origin is sessionless: signed render tokens
+
+`RENDER_ORIGIN` holds **no session and sets no cookie** — asserted by a test
+over every route it answers, because this is the failure mode that would break
+silently rather than loudly.
+
+The reason is that a top-level `GET RENDER_ORIGIN/a/:id` is not sandboxed. It is
+a real-origin document with the artifact's own script inlined into it, so
+anything scoped to that origin is readable by the artifact — which can post it
+to any origin on its allowlist. A session cookie there would be handed to
+untrusted code on every render. So the render origin cannot learn who it is
+serving the way the app origin does; and it does need to know, because `/a/:id`
+and `/w/:id` were previously unauthenticated, leaving an unguessable id as the
+only thing between one owner's artifact — and the state inlined into it — and
+anyone who learned that id.
+
+**The credential is a signed URL token instead** (`internal/rendertoken`,
+av-c5aq):
+
+- **Scope: one artifact, one owner, ten minutes.** Nothing wider is ever minted
+  — no owner-wide token, no collection token, no long-lived one. The narrow
+  scope is what makes a URL-borne credential acceptable: the artifact *can* read
+  its own token out of `location.href`, and that gains it only the access it
+  already has, to itself, for a few more minutes.
+- **Shape: HMAC-SHA256 over `(version, artifact id, owner, expiry)`**, encoded
+  `<owner>.<expiry>.<tag>` in a `t` query parameter. Not a JWT: one issuer, one
+  verifier, one algorithm, so an algorithm-negotiation surface would be pure
+  cost. The artifact id is *mixed into the MAC* rather than carried as a field,
+  so a token minted for artifact A does not verify on artifact B's route — the
+  scoping is the signature itself, not a comparison a verifier could omit.
+- **Key: derived from the existing server secret** (`EXHIBIT_SECRET`, or the
+  generated `secret.key`), domain-separated from the AES-GCM key that seals
+  agent provider keys. One secret for an operator to manage, not two. With no
+  secret configured at all the process signs with an ephemeral random key, so
+  tokens work but do not survive a restart — the strict answer, since the
+  permissive one is an open render origin.
+- **Verification is stateless** — no table, no round trip — and **fails
+  closed**: no signer, no token, a bad signature, an expired token, or an
+  artifact belonging to another owner all answer `404`, identically, so the
+  surface is not an existence oracle for other tenants' libraries.
+
+Where a token is minted matters for both cost and staleness:
+
+- **Frames** — gallery card tiles, the detail page's viewer, the edit page's
+  widget panel, the agent preview pane, and the `/partials/*` fragments — get
+  their token minted **during the page render**, in memory, with the key already
+  loaded. A gallery of forty cards costs forty HMACs and no extra I/O.
+- **Links** ("Open in new tab") carry **no token at all**. They point at the app
+  origin's `/artifacts/:id/open`, which mints and redirects at click time. A
+  link sits in an open tab indefinitely, so a token baked into the markup would
+  be expired by the time anyone used it — and "copy link address" would spread a
+  credential.
+
+The verified owner is also the render surface's **state principal**: the answer
+to "whose state should be inlined into this document". Today `artifact_state` is
+keyed by artifact alone, so it selects nothing yet; av-q0ub is what makes it
+load-bearing.
+
+`/s/:shareID` is **unaffected and takes no token**: the share row *is* the
+authorization (`architecture.md` §7), which is what lets a shared link work for
+someone with no account. A share render inlines the artifact owner's state,
+because publishing an artifact is publishing it as its owner sees it.
+
 ## 2. CSP: the allowlist is the wall
 
 Each artifact carries a set of per-origin decisions (`artifact_network_origins`,
