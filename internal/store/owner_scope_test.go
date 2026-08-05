@@ -358,6 +358,19 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"SetAgentKey":         "carries the owner in AgentKey.OwnerID",
 		"GetArtifactUnscoped": "deliberate render/share exception (av-c5aq)",
 		"GetShareUnscoped":    "deliberate share exception (architecture §7)",
+
+		// Identity and sessions (av-30rj). These methods *establish* who the
+		// owner is; they cannot take one as input without assuming the answer
+		// to the question they exist to ask. A session id is a bearer
+		// credential looked up before any owner is known, and a user row is
+		// keyed by the provider's external id, not by owner_id. They are
+		// exempt because they sit upstream of owner scoping, not outside it.
+		"UpsertUser":            "resolves a provider identity to an owner; there is no owner yet",
+		"GetUser":               "keyed by user id, which *is* the owner id",
+		"CreateSession":         "session rows carry their own UserID; the caller has just authenticated",
+		"GetSession":            "looks up a bearer credential before any owner is known",
+		"DeleteSession":         "revocation by session id; the holder need not be resolved first",
+		"DeleteExpiredSessions": "a janitor over all rows, owned by no one",
 	}
 
 	iface := reflect.TypeOf((*Store)(nil)).Elem()

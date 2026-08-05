@@ -170,17 +170,25 @@ artifact_state(artifact_id, key, value, updated_at)  -- the storage shim, §5
 shares(id, artifact_id, public, expires_at)          -- sharing as a row, §7
 ```
 
-### 4.5 Identity & auth (staged)
+### 4.5 Identity & auth
 
-- **Now:** a single static token checked by middleware on every API call. `owner_id`
-  always `1` — but a *real predicate*, not a dormant column: every store query that
-  names an artifact filters on the owner, and one owner's id reads back to another
-  exactly as a nonexistent id does (404, never 403 — a permission error would confirm
-  the row exists). The render and share paths are the two deliberate, explicitly named
-  exceptions; see `architecture.md` §3.3.
-- **Later:** real users behind the same middleware seam (a device-code/OAuth flow added
-  without changing the underlying API contract). Because the predicate is already in
-  the queries, that step resolves a different owner rather than re-auditing them.
+- **Default:** a single static token checked by middleware on every API call.
+  `owner_id` is `1`, and an instance configured this way is single-user. The owner is
+  a *real predicate*, not a dormant column: every store query that names an artifact
+  filters on it, and one owner's id reads back to another exactly as a nonexistent id
+  does (404, never 403 — a permission error would confirm the row exists). The render
+  and share paths are the two deliberate, explicitly named exceptions; see
+  `architecture.md` §3.3.
+- **Optional login, always delegated:** an operator either authenticates at their own
+  reverse proxy (Authelia, Tailscale, basic auth) — Exhibit configures nothing for
+  that — or points `OIDC_ISSUER` at an identity provider. The provider is exchanged
+  once, at the callback, for a session of ours (opaque cookie, revocable
+  server-side); the same middleware seam resolves it to `owner_id`, so the API
+  contract is unchanged either way. The vendor surface is a two-method interface
+  (`architecture.md` §3.8) and no vendor SDK is a dependency.
+- **Deliberately not built:** local username/password login. Passwords drag in
+  hashing, reset mail, verification, rate limiting and eventually MFA — delegate, or
+  stay single-user.
 
 ## 5. Cross-device artifact state (the storage shim)
 

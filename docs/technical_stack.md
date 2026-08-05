@@ -30,6 +30,7 @@ safety" (§12).
 | Partial re-render | **htmx** — self-hosted / embedded on app origin, no CDN (§9) | hand-rolled fetch-and-swap helper |
 | Agent harness | **Pi** (`pi --mode rpc` sidecar per session; TS tools extension; keys AES-GCM at rest; `cmd/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
+| Login (optional) | Generic OIDC via discovery — `coreos/go-oidc/v3` + `golang.org/x/oauth2`, exchanged once for our own session (§10) | auth at the operator's proxy (also supported); vendor SDK (rejected) |
 | TLS / proxy | **Operator's choice** — app serves plain HTTP, takes origin config | (not shipped) |
 | Backup/replication | Litestream sidecar (Compose profile) | Turso/libSQL (HA) |
 
@@ -284,11 +285,42 @@ Either path, the rule is fixed: **Phosphor Icons, self-hosted, no external icon 
 
 ## 10. Auth
 
-- **Now:** a single static bearer token checked by `chi` middleware; `owner_id` fixed at
-  `1`. Sufficient for single-user/self-host.
-- **Later:** signed-cookie sessions (or a small library equivalent) behind the same
-  middleware seam, plus a login flow — no change to the API contract or data model
-  because `owner_id` and the auth boundary already exist.
+Two credentials, checked in that order by one `chi` middleware:
+
+- **A session cookie**, when the deployment has a login (below). Browser requests
+  carry it automatically, and the session is looked up per request.
+- **A static bearer token** (`AUTH_TOKEN`) otherwise — the API/CLI credential, and
+  the only credential a single-user instance has. With no login configured this is
+  exactly the check it has always been, with `owner_id` fixed at `1`.
+
+**Login is optional and always delegated (av-30rj).** Two supported ways to put one
+in front of an instance, and neither is more official than the other:
+
+- **At the operator's reverse proxy.** Authelia, Tailscale, oauth2-proxy, or plain
+  basic auth gate the request before it reaches the app. Nothing is configured in
+  Exhibit — consistent with TLS and proxying already being the operator's (§12).
+  Gate the *app* origin; the render origin serves shares to people with no account.
+- **An OIDC provider**, via three env vars (`OIDC_ISSUER`, `OIDC_CLIENT_ID`,
+  `OIDC_CLIENT_SECRET`). Authorization Code + PKCE, with every endpoint and signing
+  key discovered from the issuer's `/.well-known/openid-configuration` — discovery
+  is what makes "any provider" configuration rather than code. Libraries are
+  `coreos/go-oidc/v3` + `golang.org/x/oauth2`, the conventional Go pairing and both
+  generic; **no vendor SDK is in `go.mod`**, and a different provider is a
+  constructor implementing `auth.IdentityProvider`'s two methods.
+
+The provider is exchanged **exactly once**, at `/auth/callback`, for a session of
+our own: an opaque random id in an `HttpOnly`, `SameSite=Lax`, app-origin-only
+cookie, looked up per request against a `sessions` row. Per-request verification of
+a provider-signed token is the API-token pattern and the wrong default here — it
+puts a network check in the request path and makes logout impossible, since a
+signed token outlives any decision to revoke it. `/auth/logout` deletes the row, so
+the credential dies on the next request. Full rationale and the cookie's origin
+constraint: `architecture.md` §3.8.
+
+**Not built, deliberately:** local username/password login. Owning passwords means
+owning hashing, reset mail (so SMTP becomes a config requirement), verification,
+rate limiting and eventually MFA — a commitment neither of the two options above
+needs.
 
 ## 11. Future: Chrome extension
 
