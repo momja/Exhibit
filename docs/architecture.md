@@ -123,9 +123,15 @@ The only way data changes. Route groups:
 - collection/tag CRUD.
 
 Middleware chain (via `chi`): request logging → auth (static token now, sessions later)
-→ owner scoping (`owner_id`, fixed to 1 now) → handler. Auth and ownership are *one
+→ owner scoping (`owner_id`, resolving to 1 now) → handler. Auth and ownership are *one
 layer* every mutating route passes through, which is what makes multi-user a
 middleware-and-data change rather than a rewrite.
+
+The owner the middleware supplies is a **real query predicate**, not a value the
+store ignores (av-ep8k): handlers pass it into every Store method that names an
+artifact, and those filter on it in SQL (§3.3). So the remaining step toward
+multi-user is the middleware resolving a *different* owner — not an audit of
+which queries forgot to scope.
 
 ### 3.2 Render surface
 
@@ -201,6 +207,27 @@ Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
         list/set/delete per-origin network decisions
 Blob:   put/get artifact bodies by id
 ```
+
+**Owner scoping is in the queries** (av-ep8k). Every Store method that names an
+artifact takes the requesting `owner_id` and filters on it in SQL — the
+artifact-child tables (state, origin decisions, transcripts, shares, collection
+and tag membership) through the same owner-scoped `EXISTS` subquery the tag
+joins use. Ownership is therefore a property of the statement rather than a
+handler-level pre-check a later caller can forget.
+
+The contract those queries hold: **another owner's id is indistinguishable from
+an id that does not exist.** A cross-tenant read returns what a missing row
+returns; a cross-tenant write returns `ErrNotFound`, which handlers render as
+404. Never a 403 — a permission error would confirm the row exists and make the
+artifact routes a membership oracle over ids.
+
+Exactly two accessors opt out, and are named to say so: `GetArtifactUnscoped`
+and `GetShareUnscoped`. They serve the render surface, which has no session and
+no owner in context, and the share path, which is owner-independent by design
+because the share row *is* the authorization (§7). `grep Unscoped` is the whole
+audit of the un-owner-scoped read surface — a test enforces that the call sites
+stay inside `internal/render`, and closing the render gap with a signed token
+carrying a principal is av-c5aq.
 
 - **Metadata, collections, tags, shares, state** → SQLite (one file, WAL mode).
 - **Network origin decisions** → `artifact_network_origins`, one row per
@@ -543,7 +570,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | real sessions; scope queries by owner |
+| Multi-user | auth middleware + `owner_id` | real sessions; queries are already owner-scoped (§3.3) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | S3/MinIO impl behind same interface |

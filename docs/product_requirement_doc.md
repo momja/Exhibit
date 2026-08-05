@@ -147,7 +147,7 @@ is painful:
 
 ```sql
 artifacts(
-  id, owner_id,            -- owner_id hardcoded to 1 for now
+  id, owner_id,            -- resolves to 1 for now, but every query filters on it
   title, source_blob_id,
   source_url,              -- set when ingested by URL; enables re-fetch (§8.1)
   tier,                    -- 1 | 2
@@ -173,9 +173,14 @@ shares(id, artifact_id, public, expires_at)          -- sharing as a row, §7
 ### 4.5 Identity & auth (staged)
 
 - **Now:** a single static token checked by middleware on every API call. `owner_id`
-  always `1`.
+  always `1` — but a *real predicate*, not a dormant column: every store query that
+  names an artifact filters on the owner, and one owner's id reads back to another
+  exactly as a nonexistent id does (404, never 403 — a permission error would confirm
+  the row exists). The render and share paths are the two deliberate, explicitly named
+  exceptions; see `architecture.md` §3.3.
 - **Later:** real users behind the same middleware seam (a device-code/OAuth flow added
-  without changing the underlying API contract).
+  without changing the underlying API contract). Because the predicate is already in
+  the queries, that step resolves a different owner rather than re-auditing them.
 
 ## 5. Cross-device artifact state (the storage shim)
 
