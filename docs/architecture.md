@@ -122,10 +122,13 @@ The only way data changes. Route groups:
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
 - collection/tag CRUD.
 
-Middleware chain (via `chi`): request logging → auth (static token now, sessions later)
-→ owner scoping (`owner_id`, fixed to 1 now) → handler. Auth and ownership are *one
-layer* every mutating route passes through, which is what makes multi-user a
-middleware-and-data change rather than a rewrite.
+Middleware chain (via `chi`): request logging → auth → owner scoping (`owner_id`)
+→ handler. Auth accepts two credentials, in that order of preference: a session
+cookie, when an identity provider is configured (§3.8), and otherwise the static
+bearer token — the API/CLI credential, and the only credential a single-user
+instance has. The owner is whatever the session resolved to, or `1`. Auth and
+ownership are *one layer* every mutating route passes through, which is what
+makes multi-user a middleware-and-data change rather than a rewrite.
 
 ### 3.2 Render surface
 
@@ -408,6 +411,61 @@ See `docs/agent.md` for the full flow, including snippet mode (the render
 surface's element picker that feeds an element screenshot + descriptor back
 into the prompt as multimodal context).
 
+### 3.8 Identity provider seam (av-30rj)
+
+Login is optional and, when present, delegated. `internal/auth` holds the whole
+vendor surface, and it is two methods:
+
+```go
+type IdentityProvider interface {
+    AuthURL(state, verifier string) string
+    Exchange(ctx context.Context, code, verifier string) (*Identity, error)
+}
+type Identity struct{ ExternalID, Email string }
+```
+
+It is that small because **the provider is a login-time concern only**. The
+browser goes to the provider, comes back to `/auth/callback` with a code, and
+that code is exchanged exactly once for a session this service owns. From then
+on a request is authenticated by looking up its own session row — no provider
+call on the request path, and no provider-specific value anywhere downstream.
+
+The alternative shape — verifying a provider-signed token on every request —
+is the API-token pattern and is wrong here twice over: it puts a network check
+in the request path, and it makes logout impossible, because a signed token
+stays valid until its TTL whatever the user or the provider later decides.
+Owning the session fixes both, which is why Grafana, Gitea, Outline and Immich
+all land in the same place.
+
+- **The generic provider is the only one shipped.** `auth.OIDCProvider` does
+  Authorization Code + PKCE against any issuer, discovering endpoints and keys
+  from `/.well-known/openid-configuration` — discovery is what makes "any OIDC
+  provider" a matter of configuration rather than of code. Libraries are
+  `coreos/go-oidc/v3` + `golang.org/x/oauth2`, both generic; no vendor SDK
+  appears in `go.mod`. A second provider is a constructor and a
+  `var _ IdentityProvider` assertion, nothing else.
+- **Session:** an opaque random id in an `HttpOnly`, `SameSite=Lax`,
+  app-origin-only cookie, looked up per request against `sessions`. Never on
+  `RENDER_ORIGIN`: a top-level `/a/:id` is a real-origin document running the
+  artifact's own script, so a cookie readable there is readable by the artifact.
+  `Secure` follows `APP_ORIGIN`'s scheme, since a `Secure` cookie on a
+  plain-HTTP instance is silently dropped and makes login impossible.
+- **Schema:** `users(id, external_id, email, created_at)` and
+  `sessions(id, user_id, expires_at)`. `users.id` *is* `owner_id` — no table
+  outside `users` references a provider-specific identifier, so changing
+  provider is a re-link of those rows rather than a migration. `email` is
+  stored beside the subject precisely because subjects are provider-specific
+  and are the wrong key to re-link on.
+- **Default is unchanged.** With `OIDC_ISSUER` unset there is no provider, the
+  `/auth/*` routes are never registered, the page gate is a pass-through, and
+  the static token with `owner_id` 1 behaves exactly as it always has. An
+  operator who would rather authenticate at their reverse proxy (Authelia,
+  Tailscale, basic auth) does so with nothing configured here — consistent with
+  TLS and proxying already being theirs (`deployment.md` §3).
+- **Not built, deliberately:** local username/password login. It would commit
+  the project to hashing, reset mail, verification, rate limiting and
+  eventually MFA; delegating or staying single-user covers the same ground.
+
 ## 4. Trust boundaries
 
 Four boundaries, in decreasing trust:
@@ -543,7 +601,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | real sessions; scope queries by owner |
+| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8); scope queries by owner |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | S3/MinIO impl behind same interface |

@@ -16,15 +16,35 @@ const sqlTimeLayout = "2006-01-02 15:04:05"
 // first login (av-30rj). external_id is the match key; email is refreshed on
 // every login so the portable re-link key stays current when a person changes
 // address at the provider.
+//
+// It reads before it writes rather than leading with INSERT … ON CONFLICT,
+// because users.id is AUTOINCREMENT and SQLite consumes a sequence value on an
+// insert attempt even when the conflict clause turns it into an update. A
+// blind upsert would punch a hole in the owner ids on every repeat login.
 func (s *SQLiteStore) UpsertUser(ctx context.Context, externalID, email string) (*User, error) {
 	if externalID == "" {
 		return nil, errors.New("upsert user: empty external id")
 	}
-	_, err := s.db.ExecContext(ctx,
+	u, err := s.getUserBy(ctx, "external_id=?", externalID)
+	switch {
+	case err == nil:
+		if u.Email == email {
+			return u, nil
+		}
+		if _, err := s.db.ExecContext(ctx,
+			"UPDATE users SET email=? WHERE id=?", email, u.ID); err != nil {
+			return nil, err
+		}
+		u.Email = email
+		return u, nil
+	case !errors.Is(err, ErrNotFound):
+		return nil, err
+	}
+	// First login. DO NOTHING rather than a conflict error, so two logins
+	// racing on the same brand-new identity both resolve to the row below.
+	if _, err := s.db.ExecContext(ctx,
 		`INSERT INTO users (external_id, email) VALUES (?, ?)
-         ON CONFLICT(external_id) DO UPDATE SET email=excluded.email`,
-		externalID, email)
-	if err != nil {
+         ON CONFLICT(external_id) DO NOTHING`, externalID, email); err != nil {
 		return nil, err
 	}
 	return s.getUserBy(ctx, "external_id=?", externalID)
