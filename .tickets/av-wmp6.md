@@ -1,6 +1,6 @@
 ---
 id: av-wmp6
-status: open
+status: in_progress
 deps: [av-4ac9, av-ep8k]
 links: [av-7k7b, av-q0ub]
 created: 2026-07-09T06:04:24Z
