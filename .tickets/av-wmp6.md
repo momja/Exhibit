@@ -2,7 +2,7 @@
 id: av-wmp6
 status: in_progress
 deps: [av-4ac9, av-ep8k]
-links: [av-7k7b, av-q0ub]
+links: [av-7k7b, av-q0ub, av-5imk, av-rgp1]
 created: 2026-07-09T06:04:24Z
 type: feature
 priority: 1
