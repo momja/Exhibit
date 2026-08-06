@@ -204,18 +204,37 @@ type Store interface {
 	// pairing did not exist.
 	RemoveArtifactTag(ctx context.Context, ownerID int64, artifactID, tagID string) error
 
-	// State. DeleteState and ClearState are deliberately idempotent — the
-	// caller's intent is "this key must not exist" / "no state must remain",
+	// State. These methods take TWO principals, because they answer two
+	// different questions (av-q0ub):
+	//
+	//   ownerID — may this caller reach this artifact at all? Authorization,
+	//             enforced as the same owner-scoped EXISTS predicate every
+	//             other artifact-child method here uses, so a foreign artifact
+	//             id stays indistinguishable from one that does not exist.
+	//   userID  — whose rows? Selection: the viewer the state belongs to,
+	//             stored as artifact_state.user_id. It comes from the signed
+	//             render token on the render path (av-c5aq) and from the
+	//             session on the API path (av-30rj).
+	//
+	// Today every caller passes the same value for both, because the only
+	// principal that can reach an artifact is its owner. They diverge the
+	// moment a non-owner may view a shared artifact (av-7k7b) — which is why
+	// they are two parameters rather than one, and why artifactID sits between
+	// them: transposing the two is then a compile error rather than a
+	// cross-tenant read.
+	//
+	// DeleteState and ClearState are deliberately idempotent — the caller's
+	// intent is "this key must not exist" / "no state of mine must remain",
 	// which a missing row already satisfies. That matters because their
 	// callers (the state inspector's delete, and the storage shim's
 	// removeItem/clear write-through) routinely fire on keys the server never
-	// saw. Owner scoping does not change that: another owner's artifact has
-	// no rows *this* caller can remove, so the deletes stay silent no-ops
-	// there too, and its rows survive untouched.
-	GetState(ctx context.Context, ownerID int64, artifactID string) (map[string]string, error)
-	SetState(ctx context.Context, ownerID int64, artifactID, key, value string) error
-	DeleteState(ctx context.Context, ownerID int64, artifactID, key string) error
-	ClearState(ctx context.Context, ownerID int64, artifactID string) error
+	// saw. Neither scoping changes that: another owner's artifact, and another
+	// viewer's rows, hold nothing *this* caller can remove, so the deletes
+	// stay silent no-ops there too and those rows survive untouched.
+	GetState(ctx context.Context, ownerID int64, artifactID string, userID int64) (map[string]string, error)
+	SetState(ctx context.Context, ownerID int64, artifactID string, userID int64, key, value string) error
+	DeleteState(ctx context.Context, ownerID int64, artifactID string, userID int64, key string) error
+	ClearState(ctx context.Context, ownerID int64, artifactID string, userID int64) error
 
 	// Agent (Exh-yvhp). SetAgentKey upserts the owner's single configured
 	// provider key; GetAgentKey returns nil when none is set.

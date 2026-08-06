@@ -44,7 +44,7 @@ func seedForeignArtifact(t *testing.T, r *Router) string {
 		NetworkAllowlist: []string{"https://theirs.example.com"},
 		SourceText:       "distinctiveforeignterm",
 	}))
-	require.NoError(t, r.cfg.Store.SetState(ctx, otherOwner, id, "secret", "theirs"))
+	require.NoError(t, r.cfg.Store.SetState(ctx, otherOwner, id, otherOwner, "secret", "theirs"))
 	return id
 }
 
@@ -169,7 +169,7 @@ func TestForeignArtifactSurvivesTheRefusedWrites(t *testing.T) {
 		"the render CSP is built from this list; no other owner may widen it")
 	assert.NotEmpty(t, a.WidgetBlobID, "the widget must still be attached")
 
-	state, err := r.cfg.Store.GetState(ctx, otherOwner, foreignID)
+	state, err := r.cfg.Store.GetState(ctx, otherOwner, foreignID, otherOwner)
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"secret": "theirs"}, state)
 }

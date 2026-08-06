@@ -94,10 +94,10 @@ func TestClearThenReloadDoesNotResurrectState(t *testing.T) {
 	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
 	ctx := context.Background()
 
-	if err := st.SetState(ctx, 1, "abc", "a", "1"); err != nil {
+	if err := st.SetState(ctx, 1, "abc", 1, "a", "1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetState(ctx, 1, "abc", "b", "2"); err != nil {
+	if err := st.SetState(ctx, 1, "abc", 1, "b", "2"); err != nil {
 		t.Fatal(err)
 	}
 	before := serve(t, rd, "abc")
@@ -105,7 +105,7 @@ func TestClearThenReloadDoesNotResurrectState(t *testing.T) {
 		t.Fatalf("expected both keys inlined before clear: %s", before)
 	}
 
-	if err := st.ClearState(ctx, 1, "abc"); err != nil {
+	if err := st.ClearState(ctx, 1, "abc", 1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -128,14 +128,14 @@ func TestRemoveItemThenReloadKeyIsGone(t *testing.T) {
 	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
 	ctx := context.Background()
 
-	if err := st.SetState(ctx, 1, "abc", "gone", "x"); err != nil {
+	if err := st.SetState(ctx, 1, "abc", 1, "gone", "x"); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetState(ctx, 1, "abc", "stays", "y"); err != nil {
+	if err := st.SetState(ctx, 1, "abc", 1, "stays", "y"); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := st.DeleteState(ctx, 1, "abc", "gone"); err != nil {
+	if err := st.DeleteState(ctx, 1, "abc", 1, "gone"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -156,7 +156,7 @@ func TestSetItemEmptyStringThenReloadStaysEmptyString(t *testing.T) {
 	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
 	ctx := context.Background()
 
-	if err := st.SetState(ctx, 1, "abc", "note", ""); err != nil {
+	if err := st.SetState(ctx, 1, "abc", 1, "note", ""); err != nil {
 		t.Fatal(err)
 	}
 

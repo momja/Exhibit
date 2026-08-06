@@ -49,7 +49,7 @@ func newWidgetRenderer(t *testing.T, id, body, widget string) *Renderer {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetState(ctx, 1, id, "runs", `[{"km":5}]`); err != nil {
+	if err := st.SetState(ctx, 1, id, 1, "runs", `[{"km":5}]`); err != nil {
 		t.Fatal(err)
 	}
 

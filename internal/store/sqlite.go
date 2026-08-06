@@ -755,10 +755,16 @@ func (s *SQLiteStore) attachTags(ctx context.Context, arts []*Artifact) error {
 	return rows.Err()
 }
 
-func (s *SQLiteStore) GetState(ctx context.Context, ownerID int64, artifactID string) (map[string]string, error) {
+// The four state methods carry both principals the Store interface describes:
+// ownerID authorizes reaching the artifact (the ownedArtifact predicate), and
+// userID selects whose rows. Every query below therefore filters on user_id in
+// addition to the owner predicate — the two are ANDed, never substituted for
+// one another.
+
+func (s *SQLiteStore) GetState(ctx context.Context, ownerID int64, artifactID string, userID int64) (map[string]string, error) {
 	rows, err := s.db.QueryContext(ctx,
-		"SELECT key, value FROM artifact_state WHERE artifact_id=? AND "+ownedArtifact,
-		artifactID, ownerID)
+		"SELECT key, value FROM artifact_state WHERE artifact_id=? AND user_id=? AND "+ownedArtifact,
+		artifactID, userID, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -774,34 +780,37 @@ func (s *SQLiteStore) GetState(ctx context.Context, ownerID int64, artifactID st
 	return state, rows.Err()
 }
 
-func (s *SQLiteStore) SetState(ctx context.Context, ownerID int64, artifactID, key, value string) error {
+func (s *SQLiteStore) SetState(ctx context.Context, ownerID int64, artifactID string, userID int64, key, value string) error {
 	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
 		return err
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO artifact_state (artifact_id, key, value, updated_at)
-         VALUES (?, ?, ?, datetime('now'))
-         ON CONFLICT(artifact_id, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
-		artifactID, key, value)
+		`INSERT INTO artifact_state (artifact_id, user_id, key, value, updated_at)
+         VALUES (?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(artifact_id, user_id, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
+		artifactID, userID, key, value)
 	return err
 }
 
-// DeleteState removes one key's row. A key that was never stored is not an
-// error: the row is gone either way, which is the only thing the caller asked
-// for.
-func (s *SQLiteStore) DeleteState(ctx context.Context, ownerID int64, artifactID, key string) error {
+// DeleteState removes one key's row for one viewer. A key that was never stored
+// is not an error: the row is gone either way, which is the only thing the
+// caller asked for.
+func (s *SQLiteStore) DeleteState(ctx context.Context, ownerID int64, artifactID string, userID int64, key string) error {
 	_, err := s.db.ExecContext(ctx,
-		"DELETE FROM artifact_state WHERE artifact_id=? AND key=? AND "+ownedArtifact,
-		artifactID, key, ownerID)
+		"DELETE FROM artifact_state WHERE artifact_id=? AND user_id=? AND key=? AND "+ownedArtifact,
+		artifactID, userID, key, ownerID)
 	return err
 }
 
-// ClearState removes every state row for the artifact, leaving the artifact
-// itself — body, origin decisions, capability approvals — untouched.
-func (s *SQLiteStore) ClearState(ctx context.Context, ownerID int64, artifactID string) error {
+// ClearState removes every state row this viewer holds on the artifact, leaving
+// the artifact itself — body, origin decisions, capability approvals —
+// untouched, and leaving any other viewer's rows alone. "Erase all my state" is
+// the operation the state inspector offers; erasing *someone else's* state is a
+// different, deliberate act that no route grants today.
+func (s *SQLiteStore) ClearState(ctx context.Context, ownerID int64, artifactID string, userID int64) error {
 	_, err := s.db.ExecContext(ctx,
-		"DELETE FROM artifact_state WHERE artifact_id=? AND "+ownedArtifact,
-		artifactID, ownerID)
+		"DELETE FROM artifact_state WHERE artifact_id=? AND user_id=? AND "+ownedArtifact,
+		artifactID, userID, ownerID)
 	return err
 }
 

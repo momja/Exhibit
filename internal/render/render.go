@@ -166,11 +166,10 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 // selects the narrower preamble, so a widget's authority can only ever be a
 // subset of its artifact's — there is no second policy to keep in sync.
 // principal is the user this document is being rendered *for*: the owner named
-// by a verified render token, or (on a share) the artifact's own owner. Today
-// it selects nothing, because artifact_state is keyed by artifact alone — but
-// it is the answer to "whose state should be inlined here", which is the
-// question av-q0ub makes load-bearing when state gains a principal column. It
-// is threaded and logged now so that ticket changes one call, not a call chain.
+// by a verified render token, or (on a share) the artifact's own owner. It is
+// the answer to "whose state should be inlined here" — since av-q0ub
+// artifact_state is keyed by (artifact_id, user_id, key), and principal is that
+// user_id.
 func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, blobID string, widget bool, principal int64) {
 	rc, err := rd.cfg.Blob.Get(r.Context(), blobID)
 	if err != nil {
@@ -193,13 +192,18 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// document (old shim/state) after a redeploy or state change.
 	w.Header().Set("Cache-Control", "no-store")
 
-	// Inline the artifact's persisted state so the shim's cache is ready before
-	// any artifact script runs (avoids the async-hydration race). Degrade to an
-	// empty cache if state can't be read — the artifact still renders.
-	// The owner comes from the artifact this handler already resolved, not
-	// from a request that has none — so the state read stays owner-scoped
-	// without a third unscoped accessor.
-	state, err := rd.cfg.Store.GetState(r.Context(), a.OwnerID, a.ID)
+	// Inline the state so the shim's cache is ready before any artifact script
+	// runs (avoids the async-hydration race). Degrade to an empty cache if it
+	// can't be read — the artifact still renders.
+	//
+	// The two principals are read off different things on purpose (av-q0ub).
+	// Authorization comes from the artifact this handler already resolved, so
+	// the read stays owner-scoped without a third unscoped accessor. Selection
+	// comes from principal — the render token's subject, or the artifact's
+	// owner on a share. They are equal today because authorize() requires it,
+	// and the point of keeping them separate is that a shared artifact opened
+	// by someone else (av-7k7b) inlines *that viewer's* rows, not the owner's.
+	state, err := rd.cfg.Store.GetState(r.Context(), a.OwnerID, a.ID, principal)
 	if err != nil {
 		slog.WarnContext(r.Context(), "render state read failed",
 			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))

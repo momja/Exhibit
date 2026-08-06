@@ -40,7 +40,7 @@ func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 		NetworkAllowlist: []string{"https://seed.example.com"},
 		SourceText:       id + " seedsearchterm",
 	}))
-	require.NoError(t, s.SetState(ctx, owner, id, "seed", "value"))
+	require.NoError(t, s.SetState(ctx, owner, id, owner, "seed", "value"))
 	require.NoError(t, s.SaveTranscript(ctx, owner, id, "session-"+id, `[{"role":"user"}]`))
 	require.NoError(t, s.CreateShare(ctx, owner, &Share{ID: "share-" + id, ArtifactID: id, Public: true}))
 	require.NoError(t, s.CreateTag(ctx, &Tag{ID: "tag-" + id, OwnerID: owner, Name: "tag-" + id}))
@@ -116,17 +116,17 @@ func ownerCases() []ownerCase {
 			return false, s.RemoveArtifactTag(ctx, o, id, "tag-"+id)
 		}},
 		{"GetState", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			st, err := s.GetState(ctx, o, id)
+			st, err := s.GetState(ctx, o, id, o)
 			return len(st) == 0, err
 		}},
 		{"SetState", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.SetState(ctx, o, id, "planted", "by the wrong owner")
+			return false, s.SetState(ctx, o, id, o, "planted", "by the wrong owner")
 		}},
 		{"DeleteState", denySilentNoop, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.DeleteState(ctx, o, id, "seed")
+			return false, s.DeleteState(ctx, o, id, o, "seed")
 		}},
 		{"ClearState", denySilentNoop, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.ClearState(ctx, o, id)
+			return false, s.ClearState(ctx, o, id, o)
 		}},
 		{"SaveTranscript", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			return false, s.SaveTranscript(ctx, o, id, "planted-session", `[{"role":"user"}]`)
@@ -230,7 +230,7 @@ func assertBobIntact(t *testing.T, s *SQLiteStore) {
 		assert.Equal(t, bob, tag.OwnerID, "no tag from another owner may be attached")
 	}
 
-	state, err := s.GetState(ctx, bob, "bobs")
+	state, err := s.GetState(ctx, bob, "bobs", bob)
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"seed": "value"}, state,
 		"state must be neither erased nor planted into")

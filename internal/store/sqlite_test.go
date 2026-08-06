@@ -182,21 +182,21 @@ func TestState(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	state, err := s.GetState(ctx, 1, "state-test")
+	state, err := s.GetState(ctx, 1, "state-test", 1)
 	require.NoError(t, err)
 	assert.Empty(t, state)
 
-	err = s.SetState(ctx, 1, "state-test", "key1", "value1")
+	err = s.SetState(ctx, 1, "state-test", 1, "key1", "value1")
 	require.NoError(t, err)
 
-	state, err = s.GetState(ctx, 1, "state-test")
+	state, err = s.GetState(ctx, 1, "state-test", 1)
 	require.NoError(t, err)
 	assert.Equal(t, "value1", state["key1"])
 
 	// Upsert
-	err = s.SetState(ctx, 1, "state-test", "key1", "updated")
+	err = s.SetState(ctx, 1, "state-test", 1, "key1", "updated")
 	require.NoError(t, err)
-	state, _ = s.GetState(ctx, 1, "state-test")
+	state, _ = s.GetState(ctx, 1, "state-test", 1)
 	assert.Equal(t, "updated", state["key1"])
 }
 
@@ -209,12 +209,12 @@ func TestDeleteState(t *testing.T) {
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{
 		ID: "del-state", OwnerID: 1, Title: "T", SourceBlobID: "b", Tier: Tier1,
 	}))
-	require.NoError(t, s.SetState(ctx, 1, "del-state", "keep", "1"))
-	require.NoError(t, s.SetState(ctx, 1, "del-state", "drop", "2"))
+	require.NoError(t, s.SetState(ctx, 1, "del-state", 1, "keep", "1"))
+	require.NoError(t, s.SetState(ctx, 1, "del-state", 1, "drop", "2"))
 
-	require.NoError(t, s.DeleteState(ctx, 1, "del-state", "drop"))
+	require.NoError(t, s.DeleteState(ctx, 1, "del-state", 1, "drop"))
 
-	state, err := s.GetState(ctx, 1, "del-state")
+	state, err := s.GetState(ctx, 1, "del-state", 1)
 	require.NoError(t, err)
 	_, present := state["drop"]
 	assert.False(t, present, "deleted key must be absent, not blank")
@@ -222,8 +222,8 @@ func TestDeleteState(t *testing.T) {
 
 	// Idempotent: "this key must not exist" is already true the second time,
 	// which is what lets the shim's removeItem call it unconditionally.
-	require.NoError(t, s.DeleteState(ctx, 1, "del-state", "drop"))
-	require.NoError(t, s.DeleteState(ctx, 1, "del-state", "never-existed"))
+	require.NoError(t, s.DeleteState(ctx, 1, "del-state", 1, "drop"))
+	require.NoError(t, s.DeleteState(ctx, 1, "del-state", 1, "never-existed"))
 }
 
 // ClearState drops every row for one artifact and only that artifact.
@@ -235,17 +235,17 @@ func TestClearState(t *testing.T) {
 		require.NoError(t, s.PutArtifact(ctx, &Artifact{
 			ID: id, OwnerID: 1, Title: "T", SourceBlobID: "b", Tier: Tier1,
 		}))
-		require.NoError(t, s.SetState(ctx, 1, id, "k1", "v1"))
-		require.NoError(t, s.SetState(ctx, 1, id, "k2", "v2"))
+		require.NoError(t, s.SetState(ctx, 1, id, 1, "k1", "v1"))
+		require.NoError(t, s.SetState(ctx, 1, id, 1, "k2", "v2"))
 	}
 
-	require.NoError(t, s.ClearState(ctx, 1, "clear-a"))
+	require.NoError(t, s.ClearState(ctx, 1, "clear-a", 1))
 
-	state, err := s.GetState(ctx, 1, "clear-a")
+	state, err := s.GetState(ctx, 1, "clear-a", 1)
 	require.NoError(t, err)
 	assert.Empty(t, state)
 
-	other, err := s.GetState(ctx, 1, "clear-b")
+	other, err := s.GetState(ctx, 1, "clear-b", 1)
 	require.NoError(t, err)
 	assert.Len(t, other, 2, "clearing one artifact must not touch another's state")
 
@@ -255,7 +255,7 @@ func TestClearState(t *testing.T) {
 	require.NotNil(t, a)
 
 	// Idempotent on an artifact that has no state at all.
-	require.NoError(t, s.ClearState(ctx, 1, "clear-a"))
+	require.NoError(t, s.ClearState(ctx, 1, "clear-a", 1))
 }
 
 func TestCollectionsAndTags(t *testing.T) {
