@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/logging"
@@ -25,9 +26,13 @@ type Config struct {
 	AuthToken    string
 	// Agent chat support (Exh-yvhp). Agent is nil when the pi harness is
 	// unavailable; Secrets seals the BYO provider keys at rest.
-	Agent       *agent.Manager
-	Secrets     *secrets.Box
-	MockEnabled bool
+	// AgentCredentials resolves the per-session scoped tokens agent sidecars
+	// authenticate with (av-e0yj) — the same registry the manager issues
+	// from. Nil means no agent credential is accepted at all.
+	Agent            *agent.Manager
+	AgentCredentials *agentscope.Registry
+	Secrets          *secrets.Box
+	MockEnabled      bool
 	// Identity delegates login to an identity provider (av-30rj). Nil — the
 	// default — is a single-user instance: no /auth routes, no login gate,
 	// the static token and owner 1 exactly as before. Non-nil is the only

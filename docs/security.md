@@ -393,7 +393,128 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     via the response header. Share pages get no bridge: opened top-level they
     behave the same way; there is no authenticated host to mediate for them.
 
-## 5. Residual risk
+## 5. The agent sidecar: an API client driven by untrusted text
+
+Every other client of this API is driven by the person using it. The agent
+surface (`docs/agent.md`, architecture §3.7) is not: it is a `pi` subprocess
+executing tool calls an LLM emits, and the LLM's context contains text Exhibit
+did not author.
+
+**Where the untrusted text comes from.** Three channels, all inherent to the
+product rather than incidental:
+
+- **Artifact bodies.** URL ingest stores a remote page verbatim (§3), and
+  architecture §4 already classes a stored body as untrusted data. Handing one
+  to the agent — which is the entire point of "modify this artifact" — puts
+  attacker-authored HTML, including comments the user never sees rendered, into
+  the model's context.
+- **Artifact titles.** On a URL ingest the title is scraped from the fetched
+  page, so a hostile site chooses it.
+- **Snippet descriptors.** The element picker ships the picked subtree's
+  `outerHTML`. The user believes they are pointing at a button; they are also
+  forwarding whatever that subtree carries.
+
+### 5.1 The wall: a per-session credential scoped to one artifact
+
+The enforced boundary is **not** prompt wording, and not the tool schema. It is
+an authorization check on the API, in the same shape as the rest of this
+document: the ingest scan is transparency and the CSP is the wall (§2); the
+download bridge is UX and the sandbox is the wall (§4).
+
+- A chat session is issued a credential of its own (`internal/agentscope`) —
+  never the operator's service token. It resolves to a **scope**: an owner, and
+  at most one artifact.
+- `authMiddleware` resolves the bearer token to that scope and refuses anything
+  outside it with a 403, **before any handler runs**. The reach is written as a
+  deny-by-default allowlist, so adding an API route never silently widens it:
+
+  | Allowed | When |
+  |---|---|
+  | `POST /api/artifacts` | only while the session is still unbound |
+  | `GET` / `PATCH /api/artifacts/{id}` | only the session's own artifact |
+  | `GET` / `PUT` / `DELETE /api/artifacts/{id}/state` | only the session's own artifact |
+  | `GET` / `PUT` / `DELETE /api/artifacts/{id}/widget` | only the session's own artifact |
+
+  The two sub-resources are there because the agent has tools for them
+  (av-lvi1, av-fafu) — one allowlist entry per shipped tool, named
+  individually rather than by a "sub-paths of my artifact" wildcard, so a new
+  artifact route is out of reach until someone adds it here on purpose.
+
+  Everything else is refused — the BYO provider key, shares, deletes, tags,
+  collections, transcripts, `widget/generate` (a session may not start
+  another session), listing the library, and every other artifact in it.
+- This is the per-**artifact** half of the boundary. The credential's owner
+  becomes the request's `ownerID`, so the owner-scoped Store methods (av-ep8k)
+  bound the session to one tenant exactly as they bound a browser client, and
+  the path check then narrows that tenant's library to one artifact. The two
+  compose: an agent session reaches one artifact, and never another owner's
+  anything. Neither check substitutes for the other — without the owner, the
+  scope names an id that could belong to anybody; without the path check, the
+  session holds ordinary full authority over its own user's whole library.
+- A **modify** session is scoped at spawn to the artifact the user opened. A
+  **create** session starts unbound and binds to the id its first create
+  returns — bound from the row the create handler wrote, not from the tool
+  result, whose contents model-supplied arguments shape. The scope only ever
+  narrows: the first binding wins, and a second create is refused.
+- The credential is revoked when the session's subprocess exits, so a token
+  never outlives the process that held it.
+
+The extension's tools take **no artifact id** — a tool with no id parameter
+cannot be talked into a different target — but that is the ergonomic half. The
+server-side scope is what makes the guarantee hold if the tools are ever
+rewritten or bypassed.
+
+### 5.2 Position: untrusted text never occupies the system role
+
+Instructions and data sit in different places in the conversation.
+
+- The system prompt is entirely server-authored. No artifact title, body, or id
+  is interpolated into it.
+- The artifact's source, its title, and any snippet descriptor travel in a
+  **user-role message**, inside a fenced block:
+
+  ```
+  -----BEGIN EXHIBIT UNTRUSTED DATA <nonce>-----
+  label: current source of the artifact this session is editing
+  …
+  -----END EXHIBIT UNTRUSTED DATA <nonce>-----
+  ```
+
+  The delimiter carries a **per-session random nonce**, so content stored
+  before the session existed cannot close the fence and impersonate an
+  instruction. The system prompt states the contract and names the nonce; the
+  nonce is redacted from block content, which closes the one path by which a
+  session could plant its own fence id into a body and read it back.
+- The agent needs the *body*, not the title. The title rides along as fenced
+  metadata and never appears inside an instruction sentence.
+- The artifact source is inlined into the session's opening message rather than
+  fetched by a tool call, so the common case costs no round trip.
+  `get_artifact` remains for the re-read after the agent's own save or a
+  concurrent human edit, and its output comes back in the same envelope.
+
+No attempt is made to sanitize or strip instruction-shaped text. It is natural
+language; a filter for it would be theatre, and shipping one would invite
+trusting it.
+
+### 5.3 Residual risk, stated plainly
+
+Scoping bounds the blast radius to **one artifact, not to zero.** Delimiting
+reduces the success rate of an injection; it does not eliminate it. Injected
+content can still talk a session into writing a bad body into the artifact the
+user opened. What that costs, and what it does not:
+
+- The change is visible — in the chat transcript, and in the preview pane that
+  re-renders on every save.
+- It cannot reach another artifact, the library listing, the provider key, or a
+  share link: none of those is in the credential's scope.
+- It is *wrong*, not *exfiltrating* — so long as a rewritten body cannot
+  silently inherit the artifact's prior network approvals. Closing that channel
+  is `av-hrtv`; until it lands, an agent-written body keeps the approved
+  origins of the body it replaced.
+- Artifact bodies have no version history (`av-1rvm`), so an overwrite is not
+  yet undoable.
+
+## 6. Residual risk
 
 Accepted, with eyes open (see the PRD §6.3): the model controls what an artifact
 *reaches*, not what it *displays* — a malicious artifact can still render

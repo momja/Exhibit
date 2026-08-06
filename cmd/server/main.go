@@ -8,6 +8,7 @@ import (
 	"os/exec"
 
 	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/api"
 	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
@@ -88,17 +89,21 @@ func main() {
 		fatal("load server secret", err)
 	}
 	mockLLMURL := os.Getenv("MOCK_LLM_URL")
+	// Agent sessions authenticate with a per-session credential scoped to one
+	// artifact, never the service token (av-e0yj). One registry, shared: the
+	// manager issues from it, the API resolves and enforces against it.
+	agentCreds := agentscope.NewRegistry()
 	var agentMgr *agent.Manager
 	piBin := getenv("PI_BIN", "pi")
 	if path, err := exec.LookPath(piBin); err != nil {
 		slog.Warn("pi binary not found; agent support disabled", slog.String("pi_bin", piBin))
 	} else {
 		agentMgr, err = agent.New(agent.Config{
-			PiBin:      path,
-			WorkRoot:   dataDir + "/agent",
-			APIBaseURL: appOrigin,
-			AuthToken:  authToken,
-			MockLLMURL: mockLLMURL,
+			PiBin:       path,
+			WorkRoot:    dataDir + "/agent",
+			APIBaseURL:  appOrigin,
+			Credentials: agentCreds,
+			MockLLMURL:  mockLLMURL,
 		}, st)
 		if err != nil {
 			fatal("init agent manager", err)
@@ -120,16 +125,17 @@ func main() {
 	}
 
 	router := api.NewRouter(api.Config{
-		Store:        st,
-		Blob:         bl,
-		AppOrigin:    appOrigin,
-		RenderOrigin: renderOrigin,
-		AuthToken:    authToken,
-		Agent:        agentMgr,
-		Secrets:      box,
-		MockEnabled:  mockLLMURL != "",
-		Identity:     identity,
-		Public:       publicMode,
+		Store:            st,
+		Blob:             bl,
+		AppOrigin:        appOrigin,
+		RenderOrigin:     renderOrigin,
+		AuthToken:        authToken,
+		Agent:            agentMgr,
+		AgentCredentials: agentCreds,
+		Secrets:          box,
+		MockEnabled:      mockLLMURL != "",
+		Identity:         identity,
+		Public:           publicMode,
 	})
 
 	go func() {

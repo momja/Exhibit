@@ -176,6 +176,7 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 	}
 	opts.ArtifactID = id
 	opts.ArtifactTitle = a.Title
+	opts.ArtifactBody = ro.inlinedArtifactSource(r, a)
 	opts.WidgetOnly = true
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)
@@ -183,7 +184,7 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "create widget agent session", err)
 		return
 	}
-	if err := s.Prompt(r.Context(), generateWidgetPrompt, nil); err != nil {
+	if err := s.Prompt(r.Context(), generateWidgetPrompt, nil, nil); err != nil {
 		// The session is useless without its prompt; don't leave the
 		// subprocess running until the idle reaper notices.
 		ro.cfg.Agent.Close(s.ID)

@@ -440,11 +440,30 @@ absent the surface degrades to disabled; nothing else changes.
   `create_artifact` / `update_artifact` / `get_artifact` tools, plus
   `get_state` / `set_state` / `delete_state` for the artifact's stored state
   (av-lvi1) and `set_widget` / `get_widget` for the artifact's gallery-card
-  widget (av-fafu), call back into the exhibit HTTP API with the service
-  token — the same routes and Store methods the edit page's state inspector
-  (§3.5) uses, so the agent gains no reach a browser client with the token
-  doesn't already have. Agent output is scanned like any ingest and its
-  footprint is never auto-approved.
+  widget (av-fafu), call back into the exhibit HTTP API — the same routes and
+  Store methods the edit page's state inspector (§3.5) uses. Agent output is
+  scanned like any ingest and its footprint is never auto-approved.
+- **Scoped credential, not the service token (av-e0yj):** each session
+  authenticates with a token minted by `internal/agentscope` that resolves to
+  (owner, artifact). `authMiddleware` refuses anything outside that scope with
+  a 403 before a handler runs — a deny-by-default allowlist of
+  `POST /api/artifacts` while unbound, plus `GET`/`PATCH` on the session's own
+  artifact and the `state`/`widget` sub-resources its own tools call on that
+  same artifact. A create binds the credential to the id the handler just
+  wrote, so the binding is not something model output can shape. None of the
+  tools takes an artifact id.
+
+  The scope composes with — it does not replace — the owner scoping of
+  av-ep8k. The grant's owner becomes the request's `ownerID`, so every
+  owner-scoped Store call is bounded by it exactly as for a browser client;
+  the path check then narrows that owner's library to one artifact. Neither
+  half is sufficient alone: without the owner the session would be confined
+  to an id that could belong to anyone, and without the path check it would
+  hold ordinary full authority over its owner's whole library.
+- **Untrusted text stays out of the system role:** the artifact's source and
+  title reach the model in a user-role message inside a nonce-fenced data
+  block, never interpolated into the system prompt. The source is inlined at
+  session start, so a modify session spends no tool call on the first read.
 - **BYO key, sealed at rest:** the user's provider key is stored AES-256-GCM
   encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
   handed to the subprocess only through its (minimal, built-from-scratch)
@@ -475,8 +494,15 @@ absent the surface degrades to disabled; nothing else changes.
   and no second streaming path. The request deliberately does not block on the
   turn: holding it open would make a slow model indistinguishable from a hang.
 - **Trust note:** the sidecar is a subprocess of the service executing
-  LLM-directed tool calls, but its reach is bounded to the same authenticated
-  API surface any client has — it holds no datastore access of its own.
+  LLM-directed tool calls, and unlike every other API client it is steered by
+  text the service did not author — artifact bodies and titles arrive verbatim
+  from URL ingest. Its reach is therefore deliberately *narrower* than a normal
+  client's: read and rewrite one artifact — its source, its state, its widget —
+  and nothing else in the library. It holds no datastore
+  access of its own and no credential that outlives its process. What that does
+  not buy: injected content can still write a bad body into the artifact the
+  user opened — bounded, visible in the preview and transcript, and stated
+  plainly in `security.md` §5.3.
 
 See `docs/agent.md` for the full flow, including snippet mode (the render
 surface's element picker that feeds an element screenshot + descriptor back
