@@ -2,7 +2,7 @@
 id: av-q0ub
 status: in_progress
 deps: [av-ep8k, av-c5aq]
-links: [av-buyx, av-7k7b, av-wrbu]
+links: [av-buyx, av-7k7b, av-wrbu, av-wmp6]
 created: 2026-08-05T04:49:37Z
 type: feature
 priority: 1
