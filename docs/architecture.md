@@ -547,6 +547,9 @@ all land in the same place.
   artifact's own script, so a cookie readable there is readable by the artifact.
   `Secure` follows `APP_ORIGIN`'s scheme, since a `Secure` cookie on a
   plain-HTTP instance is silently dropped and makes login impossible.
+  `SameSite=Lax` is the CSRF control for every mutating route, and it holds only
+  while no GET route mutates — `security.md` §1.4 states the posture and
+  `internal/api/csrf_test.go` pins both halves of it.
 - **Schema:** `users(id, external_id, email, created_at)` and
   `sessions(id, user_id, expires_at)`. `users.id` *is* `owner_id` — no table
   outside `users` references a provider-specific identifier, so changing

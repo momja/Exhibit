@@ -215,6 +215,67 @@ the credential-bearing URL is the render URL, which is governed by the response
 that actually becomes the document. Setting it on the redirect would imply the
 redirect is the risky half.
 
+### 1.4 The app origin's session: `SameSite=Lax` is the CSRF control
+
+The session cookie (av-30rj) is an **ambient** credential: the browser attaches
+it to every request the app origin receives, including ones another site caused.
+The bearer token it joined has no such exposure — an attacker's page cannot set
+an `Authorization` header — so cookie auth is what introduced cross-site request
+forgery as a question here at all. It is answered by one cookie attribute rather
+than by a token layer.
+
+**`SameSite=Lax`, set explicitly** (`internal/api/auth.go`). That is sufficient,
+for two reasons which both have to hold:
+
+1. Lax **withholds the cookie on cross-site unsafe methods**. A forged
+   `POST`/`PUT`/`PATCH`/`DELETE` from another origin arrives with no credential
+   and is answered `401`. Setting the attribute explicitly matters on its own:
+   Chrome's "Lax+POST" two-minute grace applies only to cookies carrying *no*
+   `SameSite` attribute, so the browser default is weaker than the value.
+2. Lax **does send the cookie on a cross-site top-level GET** — which is safe
+   only because **no GET route mutates**. Every `r.Get` in the API group is a
+   read: list, detail, state, widget, transcripts, agent key, collections, tags.
+
+The property is "every GET is a *read*", deliberately not "every GET is
+*authenticated*". A public instance (av-4ac9) serves some of those reads with no
+credential at all, and an unauthenticated GET has no credential to abuse — so
+opening a route up does not weaken this, while making one mutate does.
+
+Both conditions are pinned by `internal/api/csrf_test.go`: the attribute
+directly, and the no-mutating-GET rule by walking the app mux with `chi.Walk` and
+requiring every registered GET route to be declared a read in an exact-match
+list. A newly added GET route fails the suite until someone classifies it.
+
+Two consequences worth stating, so neither is rediscovered as a compatibility
+problem:
+
+- **Changing `SameSite` is a security change, not a config tweak.** `None` — the
+  value an embed or a cross-origin browser client would ask for — hands every
+  mutating route to any page the user visits. There is no CSRF token underneath
+  to catch it.
+- **Adding a mutating GET is a security change too.** A
+  `GET /api/artifacts/:id/refetch` convenience route is exactly the shape that
+  would look harmless; it would be forgeable with an `<img>` tag. Mutations stay
+  on unsafe methods.
+
+**No CSRF tokens.** A token layer would be redundant machinery over a protection
+the browser already applies, on an API whose other credential cannot be forged at
+all. The cost of that choice is that the protection is one attribute deep — which
+is precisely why it is written down here and pinned by tests rather than left to
+be inferred from the code.
+
+The login flow holds the only GET routes that do change state, and each is safe
+for its own reason rather than by the rule above:
+
+- `GET /auth/login` mints short-lived state/verifier cookies before any session
+  exists. Forging it starts a login the attacker cannot finish.
+- `GET /auth/callback` **is** a cross-site top-level GET by construction — the
+  provider redirects the browser to it — and carries its own forgery defence:
+  the `state` it must match was parked in a cookie by this origin.
+- `GET /auth/logout` revokes a session. A forged request achieves nothing worse
+  than logging the user out, and logout stays a link because that is the
+  affordance people expect.
+
 ## 2. CSP: the allowlist is the wall
 
 Each artifact carries a set of per-origin decisions (`artifact_network_origins`,

@@ -198,7 +198,7 @@ func TestLoginCreatesUserJustInTimeAndStartsSession(t *testing.T) {
 	for _, name := range []string{stateCookieName, verifierCookieName, nextCookieName} {
 		assert.True(t, flow[name].HttpOnly, name)
 		assert.True(t, flow[name].Secure, name+" on an https app origin")
-		assert.Equal(t, http.SameSiteLaxMode, flow[name].SameSite, name)
+		assertCSRFDefence(t, flow[name], name)
 		assert.Empty(t, flow[name].Domain, name+" must be host-only — never reachable from the render origin")
 	}
 
@@ -222,6 +222,8 @@ func TestLoginCreatesUserJustInTimeAndStartsSession(t *testing.T) {
 	assert.True(t, session.HttpOnly)
 	assert.True(t, session.Secure)
 	assert.Empty(t, session.Domain)
+	// The credential a forged cross-site request would ride (av-ke2m).
+	assertCSRFDefence(t, session, sessionCookieName)
 	// The single-use flow cookies are cleared once redeemed.
 	for _, name := range []string{stateCookieName, verifierCookieName, nextCookieName} {
 		require.NotNil(t, landed[name], name)
