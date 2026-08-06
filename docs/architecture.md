@@ -111,7 +111,10 @@ The only way data changes. Route groups:
   is one percent-encoded path segment, since state keys are arbitrary artifact-chosen
   text. Erasing all state touches state alone: body, origin decisions, and capability
   approvals survive. All of them are authenticated like every other route here — the
-  inspector adds no second write path.
+  inspector adds no second write path. Every one is scoped to the session's own
+  rows (av-q0ub): the session supplies both principals §3.3 describes, so a read
+  never returns the union of every viewer's state and "erase all" means *mine*,
+  not the artifact's.
 - `GET/PUT/DELETE /api/artifacts/:id/widget` — the artifact's gallery-card widget
   (av-fafu). A second document stored beside the artifact's body and hung off the
   artifact rather than made a resource of its own, because it has no identity, no
@@ -245,6 +248,21 @@ stay inside `internal/render`, and closing the render gap with a signed token
 carrying a principal is av-c5aq.
 
 - **Metadata, collections, tags, shares, state** → SQLite (one file, WAL mode).
+- **Artifact state** → `artifact_state`, keyed by `(artifact_id, user_id, key)`
+  (av-q0ub). `user_id` is the **viewer**, deliberately not named `owner_id`,
+  because on a shared artifact they are different people. So the four state
+  methods take *two* principals and they answer different questions:
+  `ownerID` authorizes reaching the artifact (the same owner-scoped `EXISTS`
+  predicate every other artifact-child method uses), and `userID` selects whose
+  rows. They hold the same value at every call site today and will not once a
+  non-owner may open a shared artifact (av-7k7b), which is why they are two
+  parameters — with `artifactID` between them, so transposing the two is a
+  compile error rather than a cross-tenant read. Nothing is keyed by device:
+  one user on any number of devices is one set of rows, which is the entire
+  point of storing state server-side (§6). Two cascades retire a row — with its
+  artifact (FK), and with its viewer (a trigger on `users` DELETE; a real FK
+  would demand a `users` row for owner 1, which the static-token single-user
+  mode does not have).
 - **Network origin decisions** → `artifact_network_origins`, one row per
   (artifact, origin) — the primary key is what makes "one decision per origin" a
   schema invariant rather than a convention, and `ON DELETE CASCADE` retires the
@@ -622,7 +640,16 @@ keyboard paste is a browser event, not an API call, so it is never bridged. See
 
 The state endpoints are why cross-device "just works": all state lives server-side, so a
 second device inlines the same state at render. No replication required for this (§8 distinguishes
-it from server durability).
+it from server durability). A device is not a principal — `artifact_state` is keyed by
+viewer, never by device (§3.3) — so one person's phone and laptop read and write
+the same rows by construction, and the phone's `setItem` is simply what the
+laptop's next render inlines.
+
+Which viewer's rows those are is decided once, at the top of the render: the
+**principal** carried by the signed render token (av-c5aq), or the artifact's own
+owner on a share, since a share publishes the artifact *as its owner sees it*
+(§7). The authorization for that read still comes from the artifact row this
+handler already resolved, so inlining state adds no third unscoped accessor.
 
 ## 7. Sharing
 
@@ -640,7 +667,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8) and queries are owner-scoped (§3.3); `artifact_state` is still keyed by artifact alone (av-q0ub) |
+| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), queries are owner-scoped (§3.3), and `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub) — what remains is letting a non-owner reach a shared artifact at all (av-7k7b) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | S3/MinIO impl behind same interface |

@@ -166,7 +166,11 @@ collections(id, owner_id, name)
 artifact_collections(artifact_id, collection_id)
 tags(id, owner_id, name, color)  -- name unique per owner
 artifact_tags(artifact_id, tag_id)
-artifact_state(artifact_id, key, value, updated_at)  -- the storage shim, §5
+-- the storage shim, §5. user_id is the *viewer*, deliberately not owner_id: on
+-- a shared artifact they are different people, and state belongs to whoever
+-- wrote it. One user across any number of devices is still one set of rows —
+-- that is §5.3's whole promise, and nothing here is keyed by device.
+artifact_state(artifact_id, user_id, key, value, updated_at)
 shares(id, artifact_id, public, expires_at)          -- sharing as a row, §7
 ```
 

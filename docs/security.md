@@ -102,7 +102,10 @@ Storage names; the only question is what backs each one.
   no write-through, no `artifact_state` rows, nothing leaving the frame. The two
   namespaces are distinct objects over distinct caches, so a key written to one
   is not readable from the other — what the standard requires and what artifacts
-  are written against.
+  are written against. Because it produces no rows, giving state a principal
+  (av-q0ub) left `sessionStorage` untouched: there is nothing stored to scope,
+  and a frame-local, per-navigation namespace already belongs to exactly one
+  viewer on exactly one device.
 
 In-memory is not a degradation of `sessionStorage` here, it is its native
 behavior: a sandboxed browsing context is assigned a **fresh opaque origin on
@@ -177,9 +180,11 @@ Where a token is minted matters for both cost and staleness:
   credential.
 
 The verified owner is also the render surface's **state principal**: the answer
-to "whose state should be inlined into this document". Today `artifact_state` is
-keyed by artifact alone, so it selects nothing yet; av-q0ub is what makes it
-load-bearing.
+to "whose state should be inlined into this document". That answer is
+load-bearing — `artifact_state` is keyed by `(artifact_id, user_id, key)`
+(av-q0ub), and the token's principal *is* that `user_id`. A principal with rows
+of their own gets exactly those; a principal with none gets an empty cache,
+never somebody else's.
 
 `/s/:shareID` is **unaffected and takes no token**: the share row *is* the
 authorization (`architecture.md` §7), which is what lets a shared link work for

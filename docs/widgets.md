@@ -25,7 +25,10 @@ home-screen widget shows a slice of its app.
   server-persisted state into the widget exactly as it does for the artifact,
   so a plain synchronous `localStorage.getItem` at startup is correct. The
   widget reads the same keys the tool writes. Because state lives on the
-  server, the tile shows the same numbers on every device.
+  server, the tile shows the same numbers on every device — and, since state is
+  keyed by viewer (av-q0ub), it shows *the viewer's* numbers: the tile and the
+  tool it sits above are looking at one set of rows, selected by the same
+  render-token principal.
 - **Read-only.** `setItem` updates the widget's own in-memory cache and stops
   there — the write-through to the host frame is short-circuited. A tile cannot
   change the library it is displayed in.

@@ -34,3 +34,20 @@ Open questions to answer, not a proposed implementation:
 
 A short written policy in docs (likely security.md or architecture.md) covering: the size ceiling(s) and where enforced, the error shape clients can rely on, and the fallback-vs-fail rule for unresolved reads. Implementation follows in whatever tickets the policy implies.
 
+
+## Notes
+
+**2026-08-06T03:36:14Z**
+
+Scope addition from av-q0ub: state values need ceilings too, and the policy above does not currently enumerate them (it covers artifact bodies, widgets, and URL fetches).
+
+PUT /api/artifacts/:id/state accepts an unbounded value, and unlike a body or a widget it is written by UNTRUSTED ARTIFACT CODE: the storage shim's setItem is bridged through the host frame to this route, so an artifact can write as much as it likes, as often as it likes, without a person deciding anything. That makes it the one blob-ish input with no human in the loop, and the reason it belongs in this ticket rather than a later one.
+
+Three ceilings to decide, not one -- they fail differently and cap different things:
+  1. PER-KEY size. Bounds one value. Closest analogue to the existing body/widget question, and the one a 413 maps onto cleanly.
+  2. PER-ARTIFACT total. Bounds one tool's whole store. Matters because reads are INLINED INTO THE RENDER DOCUMENT (architecture.md 3.2): every byte of state is paid on every render of the artifact AND of its widget, and a widget renders once per card, so per-artifact state multiplies across a gallery page exactly the way an oversized widget body does.
+  3. PER-USER total. Bounds one principal across every artifact. av-q0ub keyed artifact_state by (artifact_id, user_id, key), so 'whose bytes are these' is now an answerable question and a per-user quota is expressible for the first time. This is the ceiling that matters once a non-owner may write state on someone else's artifact (av-7k7b) -- otherwise a visitor can grow the owner's database.
+
+Question 3 (failure shape) needs an extra answer here that the other routes do not need: localStorage.setItem has a standard way to say 'full' -- it throws QuotaExceededError -- so the shim can translate a 413 into the exception artifacts are already written to handle. That is a better answer than a silent drop, which is what an unbounded route effectively promises today. Question 4 (fall back vs fail) also applies to inlining: state that will not read currently degrades to an empty cache so the artifact still renders (render.go), which is a deliberate choice worth folding into the stated rule.
+
+Ceilings themselves are deliberately not proposed here -- that decision is this ticket's, which is why av-q0ub added state to its scope rather than inventing numbers of its own.
