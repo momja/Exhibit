@@ -147,7 +147,7 @@ func (ro *Router) setupRoutes() {
 	// Authenticated API routes
 	ro.Group(func(r chi.Router) {
 		r.Use(ro.authMiddleware)
-		r.Use(ownerMiddleware)
+		r.Use(ro.ownerMiddleware)
 
 		r.Route("/api/artifacts", func(r chi.Router) {
 			r.Get("/", ro.listArtifacts)

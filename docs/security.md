@@ -150,12 +150,21 @@ av-c5aq):
   scope is what makes a URL-borne credential acceptable: the artifact *can* read
   its own token out of `location.href`, and that gains it only the access it
   already has, to itself, for a few more minutes.
-- **Shape: HMAC-SHA256 over `(version, artifact id, owner, expiry)`**, encoded
-  `<owner>.<expiry>.<tag>` in a `t` query parameter. Not a JWT: one issuer, one
-  verifier, one algorithm, so an algorithm-negotiation surface would be pure
+- **Shape: HMAC-SHA256 over `(version, artifact id, claims)`**, encoded
+  `<owner>.<expiry>[.a].<tag>` in a `t` query parameter. Not a JWT: one issuer,
+  one verifier, one algorithm, so an algorithm-negotiation surface would be pure
   cost. The artifact id is *mixed into the MAC* rather than carried as a field,
   so a token minted for artifact A does not verify on artifact B's route — the
-  scoping is the signature itself, not a comparison a verifier could omit.
+  scoping is the signature itself, not a comparison a verifier could omit. The
+  tag is the last field and everything before it is the signed message, so a
+  claim can be added without changing what is authenticated; an unknown claim is
+  rejected rather than ignored, since a message this version cannot fully read
+  is one it must not act on half of.
+- **The optional `a` claim renders for nobody** (av-wmp6): a public instance
+  mints it for a visitor with no credential, and the document it authorizes
+  inlines no state and persists none. It lives *inside* the MAC because it
+  subtracts authority — as a query parameter, the viewer could delete it and be
+  handed the owner's data.
 - **Key: derived from the existing server secret** (`EXHIBIT_SECRET`, or the
   generated `secret.key`), domain-separated from the AES-GCM key that seals
   agent provider keys. One secret for an operator to manage, not two. With no
@@ -184,7 +193,10 @@ to "whose state should be inlined into this document". That answer is
 load-bearing — `artifact_state` is keyed by `(artifact_id, user_id, key)`
 (av-q0ub), and the token's principal *is* that `user_id`. A principal with rows
 of their own gets exactly those; a principal with none gets an empty cache,
-never somebody else's.
+never somebody else's. An **anonymous** token has no principal at all, so the
+state read is skipped entirely and the shim's write-through is short-circuited
+in the same preamble — "no principal means no state, in or out" is one fact in
+one file rather than two halves that have to keep agreeing.
 
 `/s/:shareID` is **unaffected and takes no token**: the share row *is* the
 authorization (`architecture.md` §7), which is what lets a shared link work for

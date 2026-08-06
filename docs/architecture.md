@@ -136,8 +136,7 @@ The only way data changes. Route groups:
   library has to name whose. An instance with public mode off answers this
   route `404` — indistinguishable from one that never had it, and unambiguous
   for the caller, since 200-with-empty-strings already means "public, but
-  unnamed". Public mode is configuration only; it opens no route and changes
-  no credential check.
+  unnamed".
 
 Middleware chain (via `chi`): request logging → auth → owner scoping (`owner_id`)
 → handler. Auth accepts two credentials, in that order of preference: a session
@@ -146,6 +145,22 @@ bearer token — the API/CLI credential, and the only credential a single-user
 instance has. The owner is whatever the session resolved to, or `1`. Auth and
 ownership are *one layer* every mutating route passes through, which is what
 makes multi-user a middleware-and-data change rather than a rewrite.
+
+**Public mode (av-wmp6)** is the one case where a request with no credential
+gets past that layer, and it is deliberately narrow. When `PUBLIC_MODE_ENABLED`
+is on, a request that resolved *no* credential may proceed if it is a `GET` of
+`/api/artifacts` or `/api/artifacts/:id` — the published library and one
+artifact in it — and nothing else. Every mutating method stays authenticated
+whatever the configuration says, and so does every other read: `/state` is the
+owner's data, `/transcripts` their conversations, and collections, tags,
+shares, and the agent routes are never reached. The list is a deny-by-default
+allowlist for the same reason the agent's is: a route added later must not
+become public because nobody thought about it. Owner resolution follows in the
+next middleware, which reads such a request as `PUBLIC_OWNER_ID` rather than
+the default owner — since av-ep8k made owner a real predicate, "the library"
+needs a named owner to mean anything. The pass is also recorded on the request
+context, which is how a page render knows to suppress edit controls and to mint
+render tokens that carry no principal (§3.2).
 
 The owner the middleware supplies is a **real query predicate**, not a value the
 store ignores (av-ep8k): handlers pass it into every Store method that names an
@@ -225,6 +240,18 @@ executable document with the correct security envelope:
   through the app origin's `/artifacts/:id/open`, which mints on redirect.
   `/s/:shareID` takes no token — the share row is the authorization (§7). Full
   rationale: `security.md` §1.3.
+
+- Renders **for nobody** when the token says so (av-wmp6). A token carries an
+  optional `anonymous` claim, and a document rendered under one inlines *no*
+  state and installs a shim that writes none — the artifact boots empty and its
+  storage dies with the frame. That is what a public instance's unauthenticated
+  visitor gets: publishing a library must not publish what is inside the tools,
+  or a run tracker's widget would put the owner's runs on the gallery grid
+  without so much as a click. The claim is inside the MAC precisely because it
+  *subtracts* authority — as a query parameter the viewer could drop it. Note
+  the deliberate asymmetry with `/s/:shareID`, which still inlines the owner's
+  state: a share is a decision its owner made about one artifact, where public
+  mode flips a whole library with one environment variable.
 
 The render surface never mutates anything. It reads (including state, to inline it), wraps,
 and serves. This read-only property is what makes it safe to expose under the no-auth share

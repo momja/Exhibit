@@ -36,14 +36,34 @@ type renderURLs struct {
 	origin  string
 	signer  *rendertoken.Signer
 	ownerID int64
+	// anonymous mints tokens that render the owner's artifact for nobody: no
+	// state inlined, no write-through (av-wmp6). It is set when the request
+	// being served is a public instance's unauthenticated visitor.
+	//
+	// The choice lives here, at the one place render URLs are minted, so that
+	// "a public visitor's frames carry no state" follows from the request
+	// rather than from every call site remembering to ask. A page that learns
+	// to serve public visitors (av-eu3v, av-epnt) inherits the property by
+	// marking the request; it cannot get the token flavour wrong separately.
+	anonymous bool
 }
 
 func (ro *Router) renderURLs(r *http.Request) renderURLs {
 	return renderURLs{
-		origin:  ro.cfg.RenderOrigin,
-		signer:  ro.tokens,
-		ownerID: ownerIDFromCtx(r.Context()),
+		origin:    ro.cfg.RenderOrigin,
+		signer:    ro.tokens,
+		ownerID:   ownerIDFromCtx(r.Context()),
+		anonymous: publicVisitor(r.Context()),
 	}
+}
+
+// mint signs one render-origin credential for id, as whoever this page is being
+// rendered for.
+func (u renderURLs) mint(id string) string {
+	if u.anonymous {
+		return u.signer.MintAnonymous(id, u.ownerID)
+	}
+	return u.signer.Mint(id, u.ownerID)
 }
 
 // artifact returns the tokened URL of an artifact's render document, for an
@@ -51,12 +71,12 @@ func (ro *Router) renderURLs(r *http.Request) renderURLs {
 // they go through openArtifact, which mints at click time (a token embedded in
 // a link goes stale while the page sits open).
 func (u renderURLs) artifact(id string) string {
-	return u.origin + "/a/" + id + "?" + rendertoken.Param + "=" + u.signer.Mint(id, u.ownerID)
+	return u.origin + "/a/" + id + "?" + rendertoken.Param + "=" + u.mint(id)
 }
 
 // widget returns the tokened URL of an artifact's widget document.
 func (u renderURLs) widget(id string) string {
-	return u.origin + "/w/" + id + "?" + rendertoken.Param + "=" + u.signer.Mint(id, u.ownerID)
+	return u.origin + "/w/" + id + "?" + rendertoken.Param + "=" + u.mint(id)
 }
 
 // cacheBust appends the per-render stamp that makes a browser actually refetch

@@ -73,11 +73,11 @@ func NoReferrer(next http.Handler) http.Handler {
 // to the principal named by the request's render token.
 func (rd *Renderer) ServeArtifact(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
-	a, principal, ok := rd.authorize(w, r, id)
+	a, viewer, ok := rd.authorize(w, r, id)
 	if !ok {
 		return
 	}
-	rd.serveArtifactDoc(w, r, a, principal)
+	rd.serveArtifactDoc(w, r, a, viewer)
 }
 
 // authorize is the front door for the two token-gated routes. It verifies the
@@ -89,39 +89,39 @@ func (rd *Renderer) ServeArtifact(w http.ResponseWriter, r *http.Request) {
 // an id exists. And every failure past that point answers 404, not 403 — "your
 // token is wrong" and "there is no such artifact" must look identical from
 // outside, or the surface becomes an id oracle for other tenants' libraries.
-func (rd *Renderer) authorize(w http.ResponseWriter, r *http.Request, id string) (*store.Artifact, int64, bool) {
+func (rd *Renderer) authorize(w http.ResponseWriter, r *http.Request, id string) (*store.Artifact, rendertoken.Claims, bool) {
 	if rd.cfg.Tokens == nil {
 		// No signer configured: nothing can present a valid token, so nothing
 		// may render. Failing closed is the point — an open render surface is
 		// the vulnerability this gate exists to close.
 		http.Error(w, "not found", http.StatusNotFound)
-		return nil, 0, false
+		return nil, rendertoken.Claims{}, false
 	}
-	principal, err := rd.cfg.Tokens.Verify(r.URL.Query().Get(rendertoken.Param), id)
+	viewer, err := rd.cfg.Tokens.Verify(r.URL.Query().Get(rendertoken.Param), id)
 	if err != nil {
 		slog.InfoContext(r.Context(), "render token rejected",
 			slog.String("artifact_id", id), slog.String("err", err.Error()))
 		http.Error(w, "not found", http.StatusNotFound)
-		return nil, 0, false
+		return nil, rendertoken.Claims{}, false
 	}
-	// Scoped by the token's principal (av-ep8k): the render surface now has an
+	// Scoped by the token's owner (av-ep8k): the render surface now has an
 	// owner to read as, so this is an ordinary owner-scoped read rather than
 	// one of the explicitly-named unscoped accessors. A cross-tenant id is
 	// therefore already indistinguishable from a nonexistent one here.
-	a, err := rd.cfg.Store.GetArtifact(r.Context(), principal, id)
+	a, err := rd.cfg.Store.GetArtifact(r.Context(), viewer.OwnerID, id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
-		return nil, 0, false
+		return nil, rendertoken.Claims{}, false
 	}
 	// The owner check is belt to the signature's braces: the token already
 	// names one artifact, so this can only fire if something minted a token for
 	// an artifact its owner does not own. Cheap, and it keeps the cross-tenant
 	// guarantee true even if a future minting call site gets the owner wrong.
-	if a == nil || a.OwnerID != principal {
+	if a == nil || a.OwnerID != viewer.OwnerID {
 		http.Error(w, "not found", http.StatusNotFound)
-		return nil, 0, false
+		return nil, rendertoken.Claims{}, false
 	}
-	return a, principal, true
+	return a, viewer, true
 }
 
 // ServeShare serves an artifact via a share link.
@@ -156,7 +156,13 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	// carries no token and has no principal of its own. State is inlined for
 	// the artifact's owner: a share publishes the artifact *as its owner sees
 	// it*, which is what a link recipient with no account can be shown.
-	rd.serveArtifactDoc(w, r, a, a.OwnerID)
+	//
+	// Deliberately NOT the anonymous viewer that a public-instance visitor gets
+	// (av-wmp6), even though both are strangers with no credential. A share is
+	// a decision its owner made about one artifact; public mode is one env var
+	// over a whole library. The blast radius differs by orders of magnitude, so
+	// the defaults do too.
+	rd.serveArtifactDoc(w, r, a, rendertoken.Claims{OwnerID: a.OwnerID})
 }
 
 // ServeWidget serves an artifact's widget (av-fafu) — the small, informative
@@ -167,7 +173,7 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 // and never points a frame here.
 func (rd *Renderer) ServeWidget(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
-	a, principal, ok := rd.authorize(w, r, id)
+	a, viewer, ok := rd.authorize(w, r, id)
 	if !ok {
 		return
 	}
@@ -175,12 +181,12 @@ func (rd *Renderer) ServeWidget(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	rd.serveDoc(w, r, a, a.WidgetBlobID, true, principal)
+	rd.serveDoc(w, r, a, a.WidgetBlobID, true, viewer)
 }
 
 // serveArtifactDoc serves the artifact's own body — the full, interactive tool.
-func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, principal int64) {
-	rd.serveDoc(w, r, a, a.SourceBlobID, false, principal)
+func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, viewer rendertoken.Claims) {
+	rd.serveDoc(w, r, a, a.SourceBlobID, false, viewer)
 }
 
 // serveDoc reads blobID, wraps it in the artifact's security envelope (CSP from
@@ -192,12 +198,12 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 // served: same allowlist, same CSP, same opaque-origin sandbox. widget only
 // selects the narrower preamble, so a widget's authority can only ever be a
 // subset of its artifact's — there is no second policy to keep in sync.
-// principal is the user this document is being rendered *for*: the owner named
-// by a verified render token, or (on a share) the artifact's own owner. It is
-// the answer to "whose state should be inlined here" — since av-q0ub
-// artifact_state is keyed by (artifact_id, user_id, key), and principal is that
-// user_id.
-func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, blobID string, widget bool, principal int64) {
+// viewer is who this document is being rendered *for*: the principal named by a
+// verified render token, or (on a share) the artifact's own owner. It is the
+// answer to "whose state should be inlined here" — since av-q0ub artifact_state
+// is keyed by (artifact_id, user_id, key), and viewer.OwnerID is that user_id —
+// or, when the viewer is anonymous, the answer "nobody's".
+func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, blobID string, widget bool, viewer rendertoken.Claims) {
 	rc, err := rd.cfg.Blob.Get(r.Context(), blobID)
 	if err != nil {
 		http.Error(w, "artifact body not found", http.StatusNotFound)
@@ -226,21 +232,32 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// The two principals are read off different things on purpose (av-q0ub).
 	// Authorization comes from the artifact this handler already resolved, so
 	// the read stays owner-scoped without a third unscoped accessor. Selection
-	// comes from principal — the render token's subject, or the artifact's
+	// comes from the viewer — the render token's subject, or the artifact's
 	// owner on a share. They are equal today because authorize() requires it,
 	// and the point of keeping them separate is that a shared artifact opened
 	// by someone else (av-7k7b) inlines *that viewer's* rows, not the owner's.
-	state, err := rd.cfg.Store.GetState(r.Context(), a.OwnerID, a.ID, principal)
-	if err != nil {
-		slog.WarnContext(r.Context(), "render state read failed",
-			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
-		state = nil
+	//
+	// An anonymous viewer (a public instance's unauthenticated visitor,
+	// av-wmp6) is that separation taken to its limit: there is no user_id to
+	// select by, so there is no state to inline. The query is skipped rather
+	// than issued and discarded — "nobody's rows" is not a row set the store
+	// should be asked for.
+	var state map[string]string
+	if !viewer.Anonymous {
+		s, err := rd.cfg.Store.GetState(r.Context(), a.OwnerID, a.ID, viewer.OwnerID)
+		if err != nil {
+			slog.WarnContext(r.Context(), "render state read failed",
+				slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
+			s = nil
+		}
+		state = s
 	}
 
-	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, widget)
+	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, widget, viewer.Anonymous)
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
-		slog.Int64("principal", principal),
+		slog.Int64("principal", viewer.OwnerID),
+		slog.Bool("anonymous", viewer.Anonymous),
 		slog.Bool("widget", widget),
 		slog.Int("body_bytes", len(bodyBytes)),
 		slog.Int("allowlist", len(a.NetworkAllowlist)),
@@ -346,11 +363,27 @@ func buildCSP(allowlist []string, appOrigin string) string {
 // artifact's" a property you can read off this file instead of a claim two
 // files have to keep agreeing on. A widget that calls setItem still behaves
 // like Storage within its own frame — it just cannot outlive the render.
+//
+// ANONYMOUS (av-wmp6) narrows it the same way for a viewer with no identity:
+// the public instance's unauthenticated visitor. Their document already inlines
+// no state — there is no principal whose rows to inline — and this is the same
+// fact from the write side. It belongs here, in the preamble, rather than in
+// the host frame for two reasons. It is one fact about one document, and
+// keeping both halves of it in one template is what makes "no principal means
+// no state, in or out" readable in a single place instead of inferred from two
+// files. And the host's bridge is shared machinery serving every frame on the
+// page: teaching it to drop messages per frame would mean tracking each frame's
+// principal, and its failure mode is the silent one this ticket exists to
+// remove (mutating routes stay authenticated, so the write would 401 into a
+// swallowed .catch and the tool would look like it saved). Not persisting is
+// honest; persisting into a void is not. The API's auth remains the
+// enforcement — this only stops the frame from lying to the visitor about it.
 const shimTemplate = `<script>
 (function() {
   var ARTIFACT_ID = %q;
   var API_ORIGIN = %q;
   var WIDGET = %t;
+  var ANONYMOUS = %t;
 
   // State is inlined by the render surface at request time, so getItem is
   // correct on the first *synchronous* read. Fetching it asynchronously would
@@ -368,6 +401,7 @@ const shimTemplate = `<script>
   // clear has no key at all, so it gets its own op rather than a sentinel key.
   function persistState(op, key, value) {
     if (WIDGET) return;                    // a widget renders state, never edits it
+    if (ANONYMOUS) return;                 // no principal to persist for; the API would refuse
     if (window.parent === window) return; // top-level: no host to persist through
     var msg = { __avState: true, artifactId: ARTIFACT_ID, op: op };
     if (key !== undefined) msg.key = key;
@@ -959,7 +993,11 @@ const widgetHealthScript = `<script>
 // widget selects the narrower preamble for a widget render (av-fafu): the same
 // storage shim with writes stopping at the cache, no capability bridges, no
 // element picker, plus the widget base stylesheet.
-func injectPreamble(body, artifactID, appOrigin string, state map[string]string, widget bool) string {
+//
+// anonymous marks a render for a viewer with no identity (av-wmp6). Callers
+// pass a nil state with it — there is no principal to have any — and the shim
+// stops writing through, so the frame's storage lives and dies with the frame.
+func injectPreamble(body, artifactID, appOrigin string, state map[string]string, widget, anonymous bool) string {
 	if state == nil {
 		state = map[string]string{}
 	}
@@ -973,7 +1011,7 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 	if widget {
 		bridges = ""
 	}
-	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, widget, stateJSON, bridges)
+	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, widget, anonymous, stateJSON, bridges)
 	if widget {
 		// No snippet picker: it exists so the user can point at an element in
 		// the *artifact* preview and hand it to the agent. A widget frame is
