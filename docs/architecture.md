@@ -124,6 +124,20 @@ The only way data changes. Route groups:
   everywhere) never seeds the allowlist. See `widgets.md`.
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
 - collection/tag CRUD.
+- `GET /api/settings/public` — the instance's own name and description
+  (av-4ac9). The one route in the `/api` namespace registered *outside* the
+  authenticated group, because a visitor with no credential is exactly who
+  needs it. The values are environment configuration carried on `api.Config`
+  (`PUBLIC_MODE_ENABLED`, `PUBLIC_INSTANCE_NAME`,
+  `PUBLIC_INSTANCE_DESCRIPTION`, `PUBLIC_OWNER_ID`) rather than a settings
+  table, since the server-rendered gallery reads them on every page render and
+  a table would buy nothing but a round trip. `PUBLIC_OWNER_ID` exists because
+  owner scoping is a real predicate (below): an instance that publishes a
+  library has to name whose. An instance with public mode off answers this
+  route `404` — indistinguishable from one that never had it, and unambiguous
+  for the caller, since 200-with-empty-strings already means "public, but
+  unnamed". Public mode is configuration only; it opens no route and changes
+  no credential check.
 
 Middleware chain (via `chi`): request logging → auth → owner scoping (`owner_id`)
 → handler. Auth accepts two credentials, in that order of preference: a session

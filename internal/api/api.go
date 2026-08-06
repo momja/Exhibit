@@ -37,6 +37,12 @@ type Config struct {
 	// SessionTTL bounds how long a login lasts; zero means
 	// DefaultSessionTTL. Logout revokes sooner, server-side.
 	SessionTTL time.Duration
+	// Public opts the instance into serving a read-only gallery to anonymous
+	// visitors (av-4ac9). The zero value — a private instance — is the
+	// default, and carrying the configuration here rather than in a table is
+	// what lets the server-rendered gallery consult it with no per-request
+	// database round trip. See publicmode.go.
+	Public PublicMode
 }
 
 // Router wraps chi.Mux and holds the config.
@@ -113,6 +119,12 @@ func (ro *Router) setupRoutes() {
 
 	// Public share route — no auth required
 	ro.Get("/s/{shareID}", ro.serveShare)
+
+	// The instance's public identity (av-4ac9). Registered here, outside the
+	// authenticated API group, because a visitor with no credential is
+	// precisely who needs it; a private instance answers 404 rather than
+	// naming itself. See publicmode.go for that choice.
+	ro.Get("/api/settings/public", ro.publicSettings)
 
 	// Agent chat UI (token embedded in page JS, like the gallery) and the
 	// SSE event stream (EventSource can't set headers; the handler checks

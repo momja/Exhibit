@@ -35,6 +35,12 @@ func main() {
 		level = slog.LevelDebug
 	}
 	logging.Configure(level)
+
+	// Public instance mode (av-4ac9): configuration only — it changes no
+	// authentication behaviour on its own. Read after logging is configured,
+	// because a malformed knob is reported rather than silently fixed up.
+	publicMode := api.PublicModeFromEnv()
+
 	slog.Info("exhibit starting",
 		slog.String("app_origin", appOrigin),
 		slog.String("render_origin", renderOrigin),
@@ -42,7 +48,14 @@ func main() {
 		slog.String("render_addr", renderAddr),
 		slog.String("log_level", levelName(level)),
 		slog.Bool("debug", level <= slog.LevelDebug),
+		slog.Bool("public_mode", publicMode.Enabled),
 	)
+	if publicMode.Enabled {
+		slog.Info("public instance mode enabled",
+			slog.String("instance_name", publicMode.Name),
+			slog.Int64("public_owner_id", publicMode.OwnerID),
+		)
+	}
 
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		fatal("create data dir", err)
@@ -116,6 +129,7 @@ func main() {
 		Secrets:      box,
 		MockEnabled:  mockLLMURL != "",
 		Identity:     identity,
+		Public:       publicMode,
 	})
 
 	go func() {
