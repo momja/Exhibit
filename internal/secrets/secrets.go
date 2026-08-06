@@ -9,6 +9,7 @@ package secrets
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -52,6 +53,21 @@ func Load(envSecret, keyFile string) (*Box, error) {
 	}
 	copy(b.key[:], raw)
 	return b, nil
+}
+
+// DeriveKey returns a 32-byte key for purpose, derived from the same server
+// secret this Box encrypts with. Other subsystems that need a key (the render
+// tokens of av-c5aq) take one from here rather than adding a second thing for
+// an operator to configure and lose. Each purpose string yields an independent
+// key, so a weakness in one use can't be replayed against another — in
+// particular the derived keys are one-way from, and never equal to, the AES-GCM
+// key above.
+func (b *Box) DeriveKey(purpose string) [32]byte {
+	mac := hmac.New(sha256.New, b.key[:])
+	mac.Write([]byte(purpose))
+	var out [32]byte
+	copy(out[:], mac.Sum(nil))
+	return out
 }
 
 // Encrypt seals plaintext and returns base64(nonce || ciphertext).

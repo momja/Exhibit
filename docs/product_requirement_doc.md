@@ -147,7 +147,7 @@ is painful:
 
 ```sql
 artifacts(
-  id, owner_id,            -- owner_id hardcoded to 1 for now
+  id, owner_id,            -- resolves to 1 for now, but every query filters on it
   title, source_blob_id,
   source_url,              -- set when ingested by URL; enables re-fetch (§8.1)
   tier,                    -- 1 | 2
@@ -166,16 +166,33 @@ collections(id, owner_id, name)
 artifact_collections(artifact_id, collection_id)
 tags(id, owner_id, name, color)  -- name unique per owner
 artifact_tags(artifact_id, tag_id)
-artifact_state(artifact_id, key, value, updated_at)  -- the storage shim, §5
+-- the storage shim, §5. user_id is the *viewer*, deliberately not owner_id: on
+-- a shared artifact they are different people, and state belongs to whoever
+-- wrote it. One user across any number of devices is still one set of rows —
+-- that is §5.3's whole promise, and nothing here is keyed by device.
+artifact_state(artifact_id, user_id, key, value, updated_at)
 shares(id, artifact_id, public, expires_at)          -- sharing as a row, §7
 ```
 
-### 4.5 Identity & auth (staged)
+### 4.5 Identity & auth
 
-- **Now:** a single static token checked by middleware on every API call. `owner_id`
-  always `1`.
-- **Later:** real users behind the same middleware seam (a device-code/OAuth flow added
-  without changing the underlying API contract).
+- **Default:** a single static token checked by middleware on every API call.
+  `owner_id` is `1`, and an instance configured this way is single-user. The owner is
+  a *real predicate*, not a dormant column: every store query that names an artifact
+  filters on it, and one owner's id reads back to another exactly as a nonexistent id
+  does (404, never 403 — a permission error would confirm the row exists). The render
+  and share paths are the two deliberate, explicitly named exceptions; see
+  `architecture.md` §3.3.
+- **Optional login, always delegated:** an operator either authenticates at their own
+  reverse proxy (Authelia, Tailscale, basic auth) — Exhibit configures nothing for
+  that — or points `OIDC_ISSUER` at an identity provider. The provider is exchanged
+  once, at the callback, for a session of ours (opaque cookie, revocable
+  server-side); the same middleware seam resolves it to `owner_id`, so the API
+  contract is unchanged either way. The vendor surface is a two-method interface
+  (`architecture.md` §3.8) and no vendor SDK is a dependency.
+- **Deliberately not built:** local username/password login. Passwords drag in
+  hashing, reset mail, verification, rate limiting and eventually MFA — delegate, or
+  stay single-user.
 
 ## 5. Cross-device artifact state (the storage shim)
 

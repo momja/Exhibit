@@ -1,6 +1,6 @@
 ---
 id: av-q0ub
-status: in_progress
+status: closed
 deps: [av-ep8k, av-c5aq]
 links: [av-buyx, av-7k7b, av-wrbu]
 created: 2026-08-05T04:49:37Z
@@ -47,3 +47,29 @@ Quotas belong with av-wrbu's policy rather than being invented here, but state i
 5. Cross-device sync for a single user is unchanged: the same user on two devices reads and writes one set of rows (this is the property the whole state design exists for — it must be covered by a test, not assumed).
 6. `av-wrbu` is updated to include state values in its size-ceiling policy.
 
+
+## Notes
+
+**2026-08-06T03:36:50Z**
+
+Shipped.
+
+SCHEMA. Migration 014_state_principal.sql rebuilds artifact_state as (artifact_id, user_id, key, value, updated_at) with PRIMARY KEY (artifact_id, user_id, key) -- a rebuild-and-copy, since SQLite cannot alter a primary key. Backfill joins each row to its artifact and files it under that artifact's owner_id (inner join: a row whose artifact is gone is already unreachable via the 001 cascade, and the new table could not hold it). Adds idx_artifact_state_user.
+
+WHY THE SECOND CASCADE IS A TRIGGER, NOT AN FK. AC#4 needs state to die with its viewer. 'REFERENCES users(id) ON DELETE CASCADE' would have been the obvious spelling and is wrong here: an owner id does not imply a users row. Single-user instances run on the static token as owner 1 with an EMPTY users table -- 013's own note says the first identity to log in BECOMES user 1 -- so with PRAGMA foreign_keys=ON a real FK would reject every state write on the most common deployment. No other owner-bearing column in this schema (artifacts.owner_id, tags.owner_id, collections.owner_id) carries such an FK either. An AFTER DELETE ON users trigger buys the cascade without the referential precondition.
+
+TWO PARAMETERS, NOT ONE. The Store's four state methods now read:
+  GetState(ctx, ownerID int64, artifactID string, userID int64)
+  SetState(ctx, ownerID int64, artifactID string, userID int64, key, value string)
+  DeleteState/ClearState likewise.
+ownerID is AUTHORIZATION (the existing owner-scoped EXISTS predicate: another owner's artifact stays indistinguishable from one that never existed). userID is SELECTION (whose rows). They hold the same value at every call site today and will not once av-7k7b lets a non-owner open a shared artifact. artifactID sits BETWEEN them on purpose, so transposing the two is a compile error rather than a cross-tenant read. ownerID stays first after ctx, so TestEveryArtifactScopedMethodTakesAnOwner passes without widening its rule or adding an exemption.
+
+WHERE THE PRINCIPAL COMES FROM. Render: the signed render token (av-c5aq) -- serveDoc's threaded 'principal' now feeds GetState's userID, while authorization still comes off the artifact row the handler already resolved, so no third unscoped accessor appears. ServeShare keeps passing a.OwnerID: the share row is the authorization and a share publishes the artifact as its owner sees it. API: the session, via a small statePrincipals(r) helper that returns it twice and names why the two are still two questions.
+
+SCOPING CHOICE WORTH RECORDING. ClearState (the 'erase all' DELETE) removes the CALLER's rows, not the artifact's. 'Erase my state' is what the state inspector offers; erasing another viewer's state is a different, deliberate act that no route grants.
+
+sessionStorage: unchanged, as designed. It is in-memory, framed-only and produces no artifact_state rows, so there is nothing stored to scope. Stated in security.md 1.2 so it is not re-litigated.
+
+TESTS. internal/store/state_principal_test.go, internal/api/state_principal_test.go, internal/render/state_principal_test.go. AC#1 runs 014 against a POPULATED pre-migration database seeded through the four-column schema, with artifacts under two different owners so a backfill hardcoding owner 1 fails. AC#5 is covered twice (store and API) plus a render-side test that a second device's render inlines the first's write and one key inlines once, not once per device. Relaxing the viewer predicate to always-true fails exactly the AC#2/AC#3 tests and nothing else.
+
+NOT DONE, DELIBERATELY. No DeleteUser Store method -- account deletion is not a feature yet, so AC#4 is asserted against the schema cascade itself. No quota enforcement: added to av-wrbu's scope (per-key, per-artifact, per-user) rather than invented here.

@@ -26,17 +26,25 @@ func TestAgentPreviewFragmentMatchesThePagesPane(t *testing.T) {
 	page := getPage(t, r, "/agent?artifact="+id)
 	fragment := getPage(t, r, "/partials/agent-preview?artifact="+id)
 
-	// Everything but the per-render cache-busting stamp is identical, and the
-	// pane's contents in the page are exactly the fragment.
-	assert.Contains(t, stripStamp(page), stripStamp(fragment))
+	// Everything but the two deliberately per-render values — the cache-busting
+	// stamp and the freshly minted render token — is identical, and the pane's
+	// contents in the page are exactly the fragment.
+	assert.Contains(t, normalizePerRender(page), normalizePerRender(fragment))
 	assert.Contains(t, fragment, `<span class="title" id="pv-title">Preview me</span>`)
-	assert.Contains(t, fragment, `href="http://render.test/a/`+id+`"`)
+	// "Open" is an app-origin link that mints its token when it is clicked, so
+	// it carries no credential in the markup at all (av-c5aq).
+	assert.Contains(t, fragment, `href="/artifacts/`+id+`/open"`)
 	assert.Contains(t, fragment, `href="/artifacts/`+id+`"`)
 }
 
 // The swap only shows the agent's new body if the iframe's src changed: the
 // render document is Cache-Control: no-store, but a browser never re-requests
 // an unchanged src at all. Each render therefore carries a fresh stamp.
+//
+// The stamp is what this asserts uniqueness on, deliberately. A render token is
+// also minted per render, but its expiry has one-second resolution and it
+// carries no nonce, so two renders in the same second produce byte-identical
+// tokens — a cache-buster that only works when the machine is slow is not one.
 func TestAgentPreviewFrameURLIsStampedPerRender(t *testing.T) {
 	r := newTestRouter(t)
 	id := createArtifact(t, r, map[string]any{
@@ -48,8 +56,12 @@ func TestAgentPreviewFrameURLIsStampedPerRender(t *testing.T) {
 	first := frameSrc(t, getPage(t, r, "/partials/agent-preview?artifact="+id))
 	second := frameSrc(t, getPage(t, r, "/partials/agent-preview?artifact="+id))
 
-	assert.True(t, strings.HasPrefix(first, "http://render.test/a/"+id+"?r="), first)
-	assert.NotEqual(t, first, second, "two renders produced the same iframe src, so the swap would not reload the artifact")
+	// The token leads, because every render URL carries one; the stamp is the
+	// optional extra some call sites append (av-c5aq).
+	assert.True(t, strings.HasPrefix(first, "http://render.test/a/"+id+"?t="), first)
+	assert.Contains(t, first, "&amp;r=", "the stamp follows the token, escaped by html/template")
+	assert.NotEqual(t, stripToken(first), stripToken(second),
+		"two renders produced the same stamp, so the swap would not reload the artifact")
 }
 
 // Without an artifact the pane holds the empty state and a disabled snippet
@@ -115,11 +127,24 @@ func TestAgentPreviewEscapesArtifactTitle(t *testing.T) {
 	assert.Contains(t, fragment, "&lt;img src=x")
 }
 
-var stampPattern = regexp.MustCompile(`\?r=\d+`)
+var (
+	// The stamp trails the token in an href/src attribute, where html/template
+	// escapes the separating '&' — so both spellings have to match.
+	stampPattern = regexp.MustCompile(`(?:\?|&amp;|&)r=\d+`)
+	// A render token is "<owner>.<exp>.<base64url mac>" (rendertoken), and all
+	// three parts move between renders.
+	tokenPattern = regexp.MustCompile(`t=\d+\.\d+\.[A-Za-z0-9_-]+`)
+)
 
-// stripStamp removes the per-render cache-buster so two renders of the same
-// artifact compare equal.
-func stripStamp(s string) string { return stampPattern.ReplaceAllString(s, "?r=STAMP") }
+// stripToken blanks the render token so two URLs compare on everything else.
+func stripToken(s string) string { return tokenPattern.ReplaceAllString(s, "t=TOKEN") }
+
+// normalizePerRender blanks both values that are per-render by design — the
+// cache-busting stamp and the minted render token — so two renders of the same
+// artifact compare equal on the markup that is supposed to be identical.
+func normalizePerRender(s string) string {
+	return stripToken(stampPattern.ReplaceAllString(s, "&r=STAMP"))
+}
 
 var framePattern = regexp.MustCompile(`<iframe id="pv-frame" src="([^"]*)"`)
 

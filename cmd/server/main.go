@@ -9,6 +9,7 @@ import (
 
 	"github.com/momja/Exhibit/internal/agent"
 	"github.com/momja/Exhibit/internal/api"
+	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/logging"
 	"github.com/momja/Exhibit/internal/secrets"
@@ -92,6 +93,19 @@ func main() {
 		slog.Info("agent support enabled", slog.String("pi_bin", path), slog.Bool("mock_llm", mockLLMURL != ""))
 	}
 
+	// Identity (av-30rj). Unset OIDC_ISSUER is the default and the whole of
+	// the single-user path: no provider, no /auth routes, static token and
+	// owner 1 as before. Set, it is the one constructor a provider swap
+	// touches — everything downstream is provider-agnostic.
+	identity := newIdentityProvider(context.Background(), appOrigin)
+	if identity != nil {
+		if n, err := st.DeleteExpiredSessions(context.Background()); err != nil {
+			slog.Warn("prune expired sessions", slog.String("err", err.Error()))
+		} else if n > 0 {
+			slog.Info("pruned expired sessions", slog.Int64("count", n))
+		}
+	}
+
 	router := api.NewRouter(api.Config{
 		Store:        st,
 		Blob:         bl,
@@ -101,6 +115,7 @@ func main() {
 		Agent:        agentMgr,
 		Secrets:      box,
 		MockEnabled:  mockLLMURL != "",
+		Identity:     identity,
 	})
 
 	go func() {
@@ -113,6 +128,35 @@ func main() {
 	if err := http.ListenAndServe(addr, router); err != nil {
 		fatal("app server", err)
 	}
+}
+
+// newIdentityProvider builds the OIDC provider from the environment, or
+// returns nil when OIDC_ISSUER is unset — the single-user default.
+//
+// Discovery runs here, at startup, off the issuer's
+// /.well-known/openid-configuration. That is what makes "any OIDC provider" a
+// matter of configuration rather than of code, and doing it eagerly means a
+// misconfigured or unreachable issuer is a startup failure the operator sees
+// immediately instead of a mystery at the first login.
+func newIdentityProvider(ctx context.Context, appOrigin string) auth.IdentityProvider {
+	issuer := os.Getenv("OIDC_ISSUER")
+	if issuer == "" {
+		return nil
+	}
+	provider, err := auth.NewOIDCProvider(ctx, auth.OIDCConfig{
+		Issuer:       issuer,
+		ClientID:     os.Getenv("OIDC_CLIENT_ID"),
+		ClientSecret: os.Getenv("OIDC_CLIENT_SECRET"),
+		// The redirect lives on the app origin, never the render origin —
+		// the session cookie must not be reachable from a document that
+		// runs artifact code.
+		RedirectURL: appOrigin + "/auth/callback",
+	})
+	if err != nil {
+		fatal("configure identity provider", err)
+	}
+	slog.Info("identity provider configured", slog.String("issuer", issuer))
+	return provider
 }
 
 // fatal logs the error at error level and exits, mirroring log.Fatalf without

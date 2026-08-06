@@ -40,7 +40,7 @@ func TestPatchAllowlistPreservesBlockDecisions(t *testing.T) {
 	id := created["artifact"].(map[string]any)["id"].(string)
 
 	// A runtime "don't ask again" answer, recorded outside the edit page.
-	require.NoError(t, r.cfg.Store.SetOriginDecision(ctx, id, "https://blocked.example.com", store.DecisionBlock, "runtime"))
+	require.NoError(t, r.cfg.Store.SetOriginDecision(ctx, 1, id, "https://blocked.example.com", store.DecisionBlock, "runtime"))
 
 	patch := map[string]any{"network_allowlist": []string{"https://new.example.com"}}
 	buf, _ = json.Marshal(patch)
@@ -56,7 +56,7 @@ func TestPatchAllowlistPreservesBlockDecisions(t *testing.T) {
 	assert.Equal(t, []string{"https://new.example.com"}, updated.Artifact.NetworkAllowlist,
 		"the PATCHed allowlist replaces the allow rows and never includes a blocked origin")
 
-	decisions, err := r.cfg.Store.ListOriginDecisions(ctx, id)
+	decisions, err := r.cfg.Store.ListOriginDecisions(ctx, 1, id)
 	require.NoError(t, err)
 	require.Len(t, decisions, 2, "the block decision must survive an allowlist-only save")
 	assert.Equal(t, "https://blocked.example.com", decisions[0].Origin)
@@ -92,7 +92,7 @@ func TestDeleteArtifactCascadesOriginDecisions(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusNoContent, w.Code)
 
-	decisions, err := r.cfg.Store.ListOriginDecisions(ctx, id)
+	decisions, err := r.cfg.Store.ListOriginDecisions(ctx, 1, id)
 	require.NoError(t, err)
 	assert.Empty(t, decisions)
 }

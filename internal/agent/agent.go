@@ -600,7 +600,11 @@ func (s *Session) persistTranscript(artifactID string) {
 	if err := json.Unmarshal(resp, &r); err != nil || len(r.Data.Messages) == 0 {
 		return
 	}
-	if err := s.mgr.st.SaveTranscript(ctx, artifactID, s.ID, string(r.Data.Messages)); err != nil {
+	// The session's owner, not the artifact's: a transcript can only attach to
+	// an artifact this session's owner actually holds, so an artifact id the
+	// model invented (or lifted from another library) fails with ErrNotFound
+	// instead of writing across the tenant boundary.
+	if err := s.mgr.st.SaveTranscript(ctx, s.OwnerID, artifactID, s.ID, string(r.Data.Messages)); err != nil {
 		slog.Warn("transcript save failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 	}
 }

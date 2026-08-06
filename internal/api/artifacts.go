@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -43,12 +44,25 @@ func serverError(w http.ResponseWriter, r *http.Request, label string, err error
 	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
+// writeArtifactError maps a store error from an artifact mutation to a
+// response. ErrNotFound becomes 404, never 403: the store reports an id
+// outside the caller's library exactly as it reports one that doesn't exist,
+// and the handler must not undo that by answering differently (av-ep8k).
+func writeArtifactError(w http.ResponseWriter, r *http.Request, label string, err error) {
+	if errors.Is(err, store.ErrNotFound) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	serverError(w, r, label, err)
+}
+
 func (ro *Router) listArtifacts(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	opts := store.ListOptions{
-		Query:  q.Get("q"),
-		Offset: 0,
-		Limit:  50,
+		OwnerID: ownerIDFromCtx(r.Context()),
+		Query:   q.Get("q"),
+		Offset:  0,
+		Limit:   50,
 	}
 	if l := q.Get("limit"); l != "" {
 		if n, err := strconv.Atoi(l); err == nil {
@@ -311,7 +325,8 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 
 func (ro *Router) getArtifact(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	ownerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "get artifact", err)
 		return
@@ -342,6 +357,7 @@ func (ro *Router) getArtifact(w http.ResponseWriter, r *http.Request) {
 
 func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
+	ownerID := ownerIDFromCtx(r.Context())
 
 	var updates map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
@@ -361,8 +377,10 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Verify artifact exists
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	// Verify the artifact exists *in this owner's library*. Another owner's
+	// id reads back as nil here, exactly like an unknown one, so the 404
+	// below reveals nothing about which ids exist (av-ep8k).
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "get artifact for update", err)
 		return
@@ -404,12 +422,12 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		delete(updates, "body")
 	}
 
-	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, updates); err != nil {
-		serverError(w, r, "update artifact", err)
+	if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, updates); err != nil {
+		writeArtifactError(w, r, "update artifact", err)
 		return
 	}
 
-	a, _ = ro.cfg.Store.GetArtifact(r.Context(), id)
+	a, _ = ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 
 	// Re-execute the network scan when the body actually changed (a diff
 	// against the previous version), and surface the footprint — and whether
@@ -471,8 +489,9 @@ func sameOrigins(a, b []string) bool {
 // allowlist is re-scanned from the new content; the title is left untouched.
 func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
+	ownerID := ownerIDFromCtx(r.Context())
 
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "get artifact for refetch", err)
 		return
@@ -511,21 +530,22 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 		"network_allowlist": scanner.Scan(string(fetched)),
 		"source_text":       store.ExtractSearchText(string(fetched)),
 	}
-	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, updates); err != nil {
-		serverError(w, r, "refetch update artifact", err)
+	if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, updates); err != nil {
+		writeArtifactError(w, r, "refetch update artifact", err)
 		return
 	}
 
 	slog.InfoContext(r.Context(), "artifact refetched", slog.String("id", id), slog.Int("body_bytes", len(fetched)))
 
-	a, _ = ro.cfg.Store.GetArtifact(r.Context(), id)
+	a, _ = ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	writeJSON(w, http.StatusOK, a)
 }
 
 func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "artifactID")
+	ownerID := ownerIDFromCtx(r.Context())
 
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "get artifact for delete", err)
 		return
@@ -535,8 +555,8 @@ func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ro.cfg.Store.DeleteArtifact(r.Context(), id); err != nil {
-		serverError(w, r, "delete artifact", err)
+	if err := ro.cfg.Store.DeleteArtifact(r.Context(), ownerID, id); err != nil {
+		writeArtifactError(w, r, "delete artifact", err)
 		return
 	}
 

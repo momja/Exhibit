@@ -104,8 +104,15 @@ snapshotted artifact stays network-inert until you approve its residual origins.
 GET    /api/artifacts/:id/state       Get all state key-value pairs
 PUT    /api/artifacts/:id/state         Set one key {"key":"...","value":"..."}
 DELETE /api/artifacts/:id/state?key=K   Remove one key's row
-DELETE /api/artifacts/:id/state         Erase every state row for the artifact
+DELETE /api/artifacts/:id/state         Erase every state row you hold on the artifact
 ```
+
+State rows are keyed by `(artifact, viewer, key)` (av-q0ub), and every route
+here addresses **your own** rows: a `GET` returns your state, not the union of
+every viewer's, and the second `DELETE` erases yours, not the artifact's.
+"Viewer" is the authenticated session — one person across any number of devices,
+which is what makes the sync below work; there is nothing device-shaped in the
+request.
 
 These routes back `localStorage` only. The storage shim intercepts it in the iframe: reads are served from state **inlined into the shim at render time** (so `getItem` is correct synchronously); writes are **`postMessage`-ed to the host frame**, which performs the authenticated `PUT` above (the sandboxed iframe has an opaque origin and can't call the API itself). No artifact changes needed — any tool that uses `localStorage` gets cross-device sync automatically.
 

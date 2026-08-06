@@ -111,7 +111,10 @@ The only way data changes. Route groups:
   is one percent-encoded path segment, since state keys are arbitrary artifact-chosen
   text. Erasing all state touches state alone: body, origin decisions, and capability
   approvals survive. All of them are authenticated like every other route here — the
-  inspector adds no second write path.
+  inspector adds no second write path. Every one is scoped to the session's own
+  rows (av-q0ub): the session supplies both principals §3.3 describes, so a read
+  never returns the union of every viewer's state and "erase all" means *mine*,
+  not the artifact's.
 - `GET/PUT/DELETE /api/artifacts/:id/widget` — the artifact's gallery-card widget
   (av-fafu). A second document stored beside the artifact's body and hung off the
   artifact rather than made a resource of its own, because it has no identity, no
@@ -122,10 +125,19 @@ The only way data changes. Route groups:
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
 - collection/tag CRUD.
 
-Middleware chain (via `chi`): request logging → auth (static token now, sessions later)
-→ owner scoping (`owner_id`, fixed to 1 now) → handler. Auth and ownership are *one
-layer* every mutating route passes through, which is what makes multi-user a
-middleware-and-data change rather than a rewrite.
+Middleware chain (via `chi`): request logging → auth → owner scoping (`owner_id`)
+→ handler. Auth accepts two credentials, in that order of preference: a session
+cookie, when an identity provider is configured (§3.8), and otherwise the static
+bearer token — the API/CLI credential, and the only credential a single-user
+instance has. The owner is whatever the session resolved to, or `1`. Auth and
+ownership are *one layer* every mutating route passes through, which is what
+makes multi-user a middleware-and-data change rather than a rewrite.
+
+The owner the middleware supplies is a **real query predicate**, not a value the
+store ignores (av-ep8k): handlers pass it into every Store method that names an
+artifact, and those filter on it in SQL (§3.3). So the remaining step toward
+multi-user is the middleware resolving a *different* owner — not an audit of
+which queries forgot to scope.
 
 ### 3.2 Render surface
 
@@ -188,6 +200,18 @@ executable document with the correct security envelope:
   widget 404s here; its card renders the default tile instead (§3.5). See
   `widgets.md`.
 
+- Requires a **signed render token** on `/a/:id` and `/w/:id` (av-c5aq): an
+  HMAC-SHA256 credential scoped to one `(artifact, owner)` pair with a
+  ten-minute TTL, minted by the app origin into every frame `src` it emits and
+  verified here statelessly. It is how this surface acquires a principal — the
+  answer to "whose state should be inlined" — without a session, which it
+  deliberately cannot have: a top-level `/a/:id` is a real-origin document with
+  the artifact's own script in it, so any cookie readable there is readable by
+  the artifact. Links a visitor may click much later carry no token and go
+  through the app origin's `/artifacts/:id/open`, which mints on redirect.
+  `/s/:shareID` takes no token — the share row is the authorization (§7). Full
+  rationale: `security.md` §1.3.
+
 The render surface never mutates anything. It reads (including state, to inline it), wraps,
 and serves. This read-only property is what makes it safe to expose under the no-auth share
 path (§7).
@@ -202,7 +226,43 @@ Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
 Blob:   put/get artifact bodies by id
 ```
 
+**Owner scoping is in the queries** (av-ep8k). Every Store method that names an
+artifact takes the requesting `owner_id` and filters on it in SQL — the
+artifact-child tables (state, origin decisions, transcripts, shares, collection
+and tag membership) through the same owner-scoped `EXISTS` subquery the tag
+joins use. Ownership is therefore a property of the statement rather than a
+handler-level pre-check a later caller can forget.
+
+The contract those queries hold: **another owner's id is indistinguishable from
+an id that does not exist.** A cross-tenant read returns what a missing row
+returns; a cross-tenant write returns `ErrNotFound`, which handlers render as
+404. Never a 403 — a permission error would confirm the row exists and make the
+artifact routes a membership oracle over ids.
+
+Exactly two accessors opt out, and are named to say so: `GetArtifactUnscoped`
+and `GetShareUnscoped`. They serve the render surface, which has no session and
+no owner in context, and the share path, which is owner-independent by design
+because the share row *is* the authorization (§7). `grep Unscoped` is the whole
+audit of the un-owner-scoped read surface — a test enforces that the call sites
+stay inside `internal/render`, and closing the render gap with a signed token
+carrying a principal is av-c5aq.
+
 - **Metadata, collections, tags, shares, state** → SQLite (one file, WAL mode).
+- **Artifact state** → `artifact_state`, keyed by `(artifact_id, user_id, key)`
+  (av-q0ub). `user_id` is the **viewer**, deliberately not named `owner_id`,
+  because on a shared artifact they are different people. So the four state
+  methods take *two* principals and they answer different questions:
+  `ownerID` authorizes reaching the artifact (the same owner-scoped `EXISTS`
+  predicate every other artifact-child method uses), and `userID` selects whose
+  rows. They hold the same value at every call site today and will not once a
+  non-owner may open a shared artifact (av-7k7b), which is why they are two
+  parameters — with `artifactID` between them, so transposing the two is a
+  compile error rather than a cross-tenant read. Nothing is keyed by device:
+  one user on any number of devices is one set of rows, which is the entire
+  point of storing state server-side (§6). Two cascades retire a row — with its
+  artifact (FK), and with its viewer (a trigger on `users` DELETE; a real FK
+  would demand a `users` row for owner 1, which the static-token single-user
+  mode does not have).
 - **Network origin decisions** → `artifact_network_origins`, one row per
   (artifact, origin) — the primary key is what makes "one decision per origin" a
   schema invariant rather than a convention, and `ON DELETE CASCADE` retires the
@@ -408,6 +468,61 @@ See `docs/agent.md` for the full flow, including snippet mode (the render
 surface's element picker that feeds an element screenshot + descriptor back
 into the prompt as multimodal context).
 
+### 3.8 Identity provider seam (av-30rj)
+
+Login is optional and, when present, delegated. `internal/auth` holds the whole
+vendor surface, and it is two methods:
+
+```go
+type IdentityProvider interface {
+    AuthURL(state, verifier string) string
+    Exchange(ctx context.Context, code, verifier string) (*Identity, error)
+}
+type Identity struct{ ExternalID, Email string }
+```
+
+It is that small because **the provider is a login-time concern only**. The
+browser goes to the provider, comes back to `/auth/callback` with a code, and
+that code is exchanged exactly once for a session this service owns. From then
+on a request is authenticated by looking up its own session row — no provider
+call on the request path, and no provider-specific value anywhere downstream.
+
+The alternative shape — verifying a provider-signed token on every request —
+is the API-token pattern and is wrong here twice over: it puts a network check
+in the request path, and it makes logout impossible, because a signed token
+stays valid until its TTL whatever the user or the provider later decides.
+Owning the session fixes both, which is why Grafana, Gitea, Outline and Immich
+all land in the same place.
+
+- **The generic provider is the only one shipped.** `auth.OIDCProvider` does
+  Authorization Code + PKCE against any issuer, discovering endpoints and keys
+  from `/.well-known/openid-configuration` — discovery is what makes "any OIDC
+  provider" a matter of configuration rather than of code. Libraries are
+  `coreos/go-oidc/v3` + `golang.org/x/oauth2`, both generic; no vendor SDK
+  appears in `go.mod`. A second provider is a constructor and a
+  `var _ IdentityProvider` assertion, nothing else.
+- **Session:** an opaque random id in an `HttpOnly`, `SameSite=Lax`,
+  app-origin-only cookie, looked up per request against `sessions`. Never on
+  `RENDER_ORIGIN`: a top-level `/a/:id` is a real-origin document running the
+  artifact's own script, so a cookie readable there is readable by the artifact.
+  `Secure` follows `APP_ORIGIN`'s scheme, since a `Secure` cookie on a
+  plain-HTTP instance is silently dropped and makes login impossible.
+- **Schema:** `users(id, external_id, email, created_at)` and
+  `sessions(id, user_id, expires_at)`. `users.id` *is* `owner_id` — no table
+  outside `users` references a provider-specific identifier, so changing
+  provider is a re-link of those rows rather than a migration. `email` is
+  stored beside the subject precisely because subjects are provider-specific
+  and are the wrong key to re-link on.
+- **Default is unchanged.** With `OIDC_ISSUER` unset there is no provider, the
+  `/auth/*` routes are never registered, the page gate is a pass-through, and
+  the static token with `owner_id` 1 behaves exactly as it always has. An
+  operator who would rather authenticate at their reverse proxy (Authelia,
+  Tailscale, basic auth) does so with nothing configured here — consistent with
+  TLS and proxying already being theirs (`deployment.md` §3).
+- **Not built, deliberately:** local username/password login. It would commit
+  the project to hashing, reset mail, verification, rate limiting and
+  eventually MFA; delegating or staying single-user covers the same ground.
+
 ## 4. Trust boundaries
 
 Four boundaries, in decreasing trust:
@@ -525,7 +640,16 @@ keyboard paste is a browser event, not an API call, so it is never bridged. See
 
 The state endpoints are why cross-device "just works": all state lives server-side, so a
 second device inlines the same state at render. No replication required for this (§8 distinguishes
-it from server durability).
+it from server durability). A device is not a principal — `artifact_state` is keyed by
+viewer, never by device (§3.3) — so one person's phone and laptop read and write
+the same rows by construction, and the phone's `setItem` is simply what the
+laptop's next render inlines.
+
+Which viewer's rows those are is decided once, at the top of the render: the
+**principal** carried by the signed render token (av-c5aq), or the artifact's own
+owner on a share, since a share publishes the artifact *as its owner sees it*
+(§7). The authorization for that read still comes from the artifact row this
+handler already resolved, so inlining state adds no third unscoped accessor.
 
 ## 7. Sharing
 
@@ -543,7 +667,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | real sessions; scope queries by owner |
+| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), queries are owner-scoped (§3.3), and `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub) — what remains is letting a non-owner reach a shared artifact at all (av-7k7b) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | S3/MinIO impl behind same interface |

@@ -2,13 +2,16 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/logging"
 	"github.com/momja/Exhibit/internal/render"
+	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/secrets"
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -25,22 +28,54 @@ type Config struct {
 	Agent       *agent.Manager
 	Secrets     *secrets.Box
 	MockEnabled bool
+	// Identity delegates login to an identity provider (av-30rj). Nil — the
+	// default — is a single-user instance: no /auth routes, no login gate,
+	// the static token and owner 1 exactly as before. Non-nil is the only
+	// thing that changes, and swapping one provider for another changes
+	// nothing but which constructor filled this field.
+	Identity auth.IdentityProvider
+	// SessionTTL bounds how long a login lasts; zero means
+	// DefaultSessionTTL. Logout revokes sooner, server-side.
+	SessionTTL time.Duration
 }
 
 // Router wraps chi.Mux and holds the config.
 type Router struct {
 	*chi.Mux
 	cfg Config
+	// tokens signs the render-origin credentials this surface mints for every
+	// frame and link it points at RENDER_ORIGIN (av-c5aq). Held on the Router
+	// rather than passed around so a page render mints in memory, with no I/O
+	// per card.
+	tokens *rendertoken.Signer
 }
 
 // NewRouter constructs the chi router with all routes registered.
 func NewRouter(cfg Config) *Router {
 	r := &Router{
-		Mux: chi.NewRouter(),
-		cfg: cfg,
+		Mux:    chi.NewRouter(),
+		cfg:    cfg,
+		tokens: renderSigner(cfg.Secrets),
 	}
 	r.setupRoutes()
 	return r
+}
+
+// renderSigner derives the render-token signing key from the same server secret
+// that seals agent provider keys, domain-separated so the two never share key
+// material. Deriving rather than configuring keeps the operator's contract at
+// one secret (EXHIBIT_SECRET or the generated data/secret.key).
+//
+// With no Box at all — a process constructed without secrets, which in practice
+// means a test — an ephemeral key is generated instead. Tokens then work end to
+// end but do not survive a restart, which is the strict answer; the permissive
+// one would be an unauthenticated render origin.
+func renderSigner(box *secrets.Box) *rendertoken.Signer {
+	if box == nil {
+		return rendertoken.NewRandomSigner()
+	}
+	key := box.DeriveKey(rendertoken.KeyPurpose)
+	return rendertoken.NewSigner(key)
 }
 
 func (ro *Router) setupRoutes() {
@@ -49,12 +84,25 @@ func (ro *Router) setupRoutes() {
 	// log still records the 500 status.
 	ro.Use(logging.RequestMiddleware)
 	ro.Use(middleware.Recoverer)
+	// Login gate for the server-rendered pages (av-30rj). A pass-through
+	// unless an identity provider is configured, so a single-user instance
+	// is unaffected.
+	ro.Use(ro.sessionGate)
+
+	// The login flow — registered only when a provider is configured
+	// (internal/api/auth.go).
+	ro.setupAuthRoutes(ro)
 
 	// Gallery UI — no auth header required (token embedded in page JS)
 	ro.Get("/", ro.galleryIndex)
 	ro.Get("/new", ro.galleryNew)
 	ro.Get("/artifacts/{artifactID}", ro.galleryDetail)
 	ro.Get("/artifacts/{artifactID}/edit", ro.galleryEdit)
+	// "Open in new tab": mints a fresh render token and redirects to
+	// RENDER_ORIGIN/a/:id (av-c5aq). Links go through here rather than
+	// carrying a token in the markup, which would be stale by the time
+	// anyone clicked it.
+	ro.Get("/artifacts/{artifactID}/open", ro.openArtifact)
 
 	// Embedded static assets (client JS islands, e.g. the CodeMirror editor)
 	ro.Handle("/assets/*", assetsHandler())
@@ -81,7 +129,7 @@ func (ro *Router) setupRoutes() {
 
 	// Authenticated API routes
 	ro.Group(func(r chi.Router) {
-		r.Use(authMiddleware(ro.cfg.AuthToken))
+		r.Use(ro.authMiddleware)
 		r.Use(ownerMiddleware)
 
 		r.Route("/api/artifacts", func(r chi.Router) {
@@ -175,6 +223,9 @@ func (ro *Router) RenderHandler() http.Handler {
 		Blob:         ro.cfg.Blob,
 		AppOrigin:    ro.cfg.AppOrigin,
 		RenderOrigin: ro.cfg.RenderOrigin,
+		// The same Signer the app surface mints with: one process, one key,
+		// stateless verification — no shared table, no round trip.
+		Tokens: ro.tokens,
 	})
 
 	r := chi.NewRouter()

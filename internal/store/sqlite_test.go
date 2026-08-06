@@ -43,7 +43,7 @@ func TestPutGetArtifact(t *testing.T) {
 	err := s.PutArtifact(ctx, a)
 	require.NoError(t, err)
 
-	got, err := s.GetArtifact(ctx, "test-id-1")
+	got, err := s.GetArtifact(ctx, 1, "test-id-1")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
@@ -67,7 +67,7 @@ func TestListArtifacts(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	all, err := s.ListArtifacts(ctx, ListOptions{})
+	all, err := s.ListArtifacts(ctx, ListOptions{OwnerID: 1})
 	require.NoError(t, err)
 	assert.Len(t, all, 3)
 }
@@ -90,7 +90,7 @@ func TestSearchIndexesSourceAndTags(t *testing.T) {
 	}))
 
 	// Matches on source text a title search would never find.
-	found, err := s.ListArtifacts(ctx, ListOptions{Query: "uniquefunctionname"})
+	found, err := s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "uniquefunctionname"})
 	require.NoError(t, err)
 	require.Len(t, found, 1)
 	assert.Equal(t, "a1", found[0].ID)
@@ -100,7 +100,7 @@ func TestSearchIndexesSourceAndTags(t *testing.T) {
 	require.NoError(t, s.AddArtifactTag(ctx, 1, "a2", "tag1"))
 
 	// Matches on tag name.
-	found, err = s.ListArtifacts(ctx, ListOptions{Query: "gadget"})
+	found, err = s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "gadget"})
 	require.NoError(t, err)
 	require.Len(t, found, 1)
 	assert.Equal(t, "a2", found[0].ID)
@@ -109,18 +109,18 @@ func TestSearchIndexesSourceAndTags(t *testing.T) {
 	_, err = s.UpdateTag(ctx, 1, "tag1", strPtr("widget"), nil)
 	require.NoError(t, err)
 
-	found, err = s.ListArtifacts(ctx, ListOptions{Query: "gadget"})
+	found, err = s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "gadget"})
 	require.NoError(t, err)
 	assert.Len(t, found, 0)
 
-	found, err = s.ListArtifacts(ctx, ListOptions{Query: "widget"})
+	found, err = s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "widget"})
 	require.NoError(t, err)
 	require.Len(t, found, 1)
 	assert.Equal(t, "a2", found[0].ID)
 
 	// Removing the tag stops it from matching.
 	require.NoError(t, s.RemoveArtifactTag(ctx, 1, "a2", "tag1"))
-	found, err = s.ListArtifacts(ctx, ListOptions{Query: "widget"})
+	found, err = s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "widget"})
 	require.NoError(t, err)
 	assert.Len(t, found, 0)
 }
@@ -139,7 +139,7 @@ func TestBackfillSourceText(t *testing.T) {
 	}))
 
 	// Not yet backfilled: no match on body content.
-	found, err := s.ListArtifacts(ctx, ListOptions{Query: "legacyuniqueterm"})
+	found, err := s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "legacyuniqueterm"})
 	require.NoError(t, err)
 	assert.Len(t, found, 0)
 
@@ -149,13 +149,13 @@ func TestBackfillSourceText(t *testing.T) {
 	require.NoError(t, s.BackfillSourceText(ctx, blobs))
 
 	// Visible text from the blob is now searchable.
-	found, err = s.ListArtifacts(ctx, ListOptions{Query: "legacyuniqueterm"})
+	found, err = s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "legacyuniqueterm"})
 	require.NoError(t, err)
 	require.Len(t, found, 1)
 	assert.Equal(t, "legacy-1", found[0].ID)
 
 	// Script content from the blob is not.
-	found, err = s.ListArtifacts(ctx, ListOptions{Query: "legacyscripttoken"})
+	found, err = s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "legacyscripttoken"})
 	require.NoError(t, err)
 	assert.Len(t, found, 0)
 
@@ -182,21 +182,21 @@ func TestState(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	state, err := s.GetState(ctx, "state-test")
+	state, err := s.GetState(ctx, 1, "state-test", 1)
 	require.NoError(t, err)
 	assert.Empty(t, state)
 
-	err = s.SetState(ctx, "state-test", "key1", "value1")
+	err = s.SetState(ctx, 1, "state-test", 1, "key1", "value1")
 	require.NoError(t, err)
 
-	state, err = s.GetState(ctx, "state-test")
+	state, err = s.GetState(ctx, 1, "state-test", 1)
 	require.NoError(t, err)
 	assert.Equal(t, "value1", state["key1"])
 
 	// Upsert
-	err = s.SetState(ctx, "state-test", "key1", "updated")
+	err = s.SetState(ctx, 1, "state-test", 1, "key1", "updated")
 	require.NoError(t, err)
-	state, _ = s.GetState(ctx, "state-test")
+	state, _ = s.GetState(ctx, 1, "state-test", 1)
 	assert.Equal(t, "updated", state["key1"])
 }
 
@@ -209,12 +209,12 @@ func TestDeleteState(t *testing.T) {
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{
 		ID: "del-state", OwnerID: 1, Title: "T", SourceBlobID: "b", Tier: Tier1,
 	}))
-	require.NoError(t, s.SetState(ctx, "del-state", "keep", "1"))
-	require.NoError(t, s.SetState(ctx, "del-state", "drop", "2"))
+	require.NoError(t, s.SetState(ctx, 1, "del-state", 1, "keep", "1"))
+	require.NoError(t, s.SetState(ctx, 1, "del-state", 1, "drop", "2"))
 
-	require.NoError(t, s.DeleteState(ctx, "del-state", "drop"))
+	require.NoError(t, s.DeleteState(ctx, 1, "del-state", 1, "drop"))
 
-	state, err := s.GetState(ctx, "del-state")
+	state, err := s.GetState(ctx, 1, "del-state", 1)
 	require.NoError(t, err)
 	_, present := state["drop"]
 	assert.False(t, present, "deleted key must be absent, not blank")
@@ -222,8 +222,8 @@ func TestDeleteState(t *testing.T) {
 
 	// Idempotent: "this key must not exist" is already true the second time,
 	// which is what lets the shim's removeItem call it unconditionally.
-	require.NoError(t, s.DeleteState(ctx, "del-state", "drop"))
-	require.NoError(t, s.DeleteState(ctx, "del-state", "never-existed"))
+	require.NoError(t, s.DeleteState(ctx, 1, "del-state", 1, "drop"))
+	require.NoError(t, s.DeleteState(ctx, 1, "del-state", 1, "never-existed"))
 }
 
 // ClearState drops every row for one artifact and only that artifact.
@@ -235,27 +235,27 @@ func TestClearState(t *testing.T) {
 		require.NoError(t, s.PutArtifact(ctx, &Artifact{
 			ID: id, OwnerID: 1, Title: "T", SourceBlobID: "b", Tier: Tier1,
 		}))
-		require.NoError(t, s.SetState(ctx, id, "k1", "v1"))
-		require.NoError(t, s.SetState(ctx, id, "k2", "v2"))
+		require.NoError(t, s.SetState(ctx, 1, id, 1, "k1", "v1"))
+		require.NoError(t, s.SetState(ctx, 1, id, 1, "k2", "v2"))
 	}
 
-	require.NoError(t, s.ClearState(ctx, "clear-a"))
+	require.NoError(t, s.ClearState(ctx, 1, "clear-a", 1))
 
-	state, err := s.GetState(ctx, "clear-a")
+	state, err := s.GetState(ctx, 1, "clear-a", 1)
 	require.NoError(t, err)
 	assert.Empty(t, state)
 
-	other, err := s.GetState(ctx, "clear-b")
+	other, err := s.GetState(ctx, 1, "clear-b", 1)
 	require.NoError(t, err)
 	assert.Len(t, other, 2, "clearing one artifact must not touch another's state")
 
 	// The artifact itself survives its state being erased.
-	a, err := s.GetArtifact(ctx, "clear-a")
+	a, err := s.GetArtifact(ctx, 1, "clear-a")
 	require.NoError(t, err)
 	require.NotNil(t, a)
 
 	// Idempotent on an artifact that has no state at all.
-	require.NoError(t, s.ClearState(ctx, "clear-a"))
+	require.NoError(t, s.ClearState(ctx, 1, "clear-a", 1))
 }
 
 func TestCollectionsAndTags(t *testing.T) {
@@ -271,7 +271,7 @@ func TestCollectionsAndTags(t *testing.T) {
 	err = s.CreateCollection(ctx, col)
 	require.NoError(t, err)
 
-	err = s.AddArtifactToCollection(ctx, "a1", "col1")
+	err = s.AddArtifactToCollection(ctx, 1, "a1", "col1")
 	require.NoError(t, err)
 
 	tag := &Tag{ID: "tag1", OwnerID: 1, Name: "charts"}
@@ -387,7 +387,7 @@ func TestDeleteTagCascades(t *testing.T) {
 	assert.Empty(t, tags)
 
 	// The artifact association is gone too.
-	a, err := s.GetArtifact(ctx, "a1")
+	a, err := s.GetArtifact(ctx, 1, "a1")
 	require.NoError(t, err)
 	assert.Empty(t, a.Tags)
 
@@ -434,7 +434,7 @@ func TestArtifactTagsHydrated(t *testing.T) {
 	require.NoError(t, s.AddArtifactTag(ctx, 1, "a1", "t2"))
 	require.NoError(t, s.AddArtifactTag(ctx, 1, "a2", "t2"))
 
-	arts, err := s.ListArtifacts(ctx, ListOptions{})
+	arts, err := s.ListArtifacts(ctx, ListOptions{OwnerID: 1})
 	require.NoError(t, err)
 	require.Len(t, arts, 3)
 
@@ -454,7 +454,7 @@ func TestArtifactTagsHydrated(t *testing.T) {
 	assert.Empty(t, tagNames["a3"])
 
 	// GetArtifact hydrates too.
-	a, err := s.GetArtifact(ctx, "a1")
+	a, err := s.GetArtifact(ctx, 1, "a1")
 	require.NoError(t, err)
 	require.Len(t, a.Tags, 2)
 	assert.Equal(t, "charts", a.Tags[0].Name)
@@ -526,24 +526,24 @@ func TestDownloadsApproved(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "dl-1", OwnerID: 1, SourceBlobID: "b1"}))
-	got, err := s.GetArtifact(ctx, "dl-1")
+	got, err := s.GetArtifact(ctx, 1, "dl-1")
 	require.NoError(t, err)
 	assert.False(t, got.DownloadsApproved, "new artifacts must not be pre-approved for downloads")
 
-	require.NoError(t, s.UpdateArtifact(ctx, "dl-1", map[string]any{"downloads_approved": true}))
-	got, err = s.GetArtifact(ctx, "dl-1")
+	require.NoError(t, s.UpdateArtifact(ctx, 1, "dl-1", map[string]any{"downloads_approved": true}))
+	got, err = s.GetArtifact(ctx, 1, "dl-1")
 	require.NoError(t, err)
 	assert.True(t, got.DownloadsApproved)
 
 	// Revoke.
-	require.NoError(t, s.UpdateArtifact(ctx, "dl-1", map[string]any{"downloads_approved": false}))
-	got, err = s.GetArtifact(ctx, "dl-1")
+	require.NoError(t, s.UpdateArtifact(ctx, 1, "dl-1", map[string]any{"downloads_approved": false}))
+	got, err = s.GetArtifact(ctx, 1, "dl-1")
 	require.NoError(t, err)
 	assert.False(t, got.DownloadsApproved)
 
 	// A non-bool would be stored as an unscannable value and brick reads of
 	// the artifact, so the store rejects it outright.
-	err = s.UpdateArtifact(ctx, "dl-1", map[string]any{"downloads_approved": "yes"})
+	err = s.UpdateArtifact(ctx, 1, "dl-1", map[string]any{"downloads_approved": "yes"})
 	assert.Error(t, err)
 }
 
@@ -555,22 +555,22 @@ func TestClipboardApproved(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "cl-1", OwnerID: 1, SourceBlobID: "b1"}))
-	got, err := s.GetArtifact(ctx, "cl-1")
+	got, err := s.GetArtifact(ctx, 1, "cl-1")
 	require.NoError(t, err)
 	assert.False(t, got.ClipboardApproved, "new artifacts must not be pre-approved for clipboard")
 
-	require.NoError(t, s.UpdateArtifact(ctx, "cl-1", map[string]any{"clipboard_approved": true}))
-	got, err = s.GetArtifact(ctx, "cl-1")
+	require.NoError(t, s.UpdateArtifact(ctx, 1, "cl-1", map[string]any{"clipboard_approved": true}))
+	got, err = s.GetArtifact(ctx, 1, "cl-1")
 	require.NoError(t, err)
 	assert.True(t, got.ClipboardApproved)
 	assert.False(t, got.DownloadsApproved, "clipboard approval must not leak into downloads")
 
-	require.NoError(t, s.UpdateArtifact(ctx, "cl-1", map[string]any{"clipboard_approved": false}))
-	got, err = s.GetArtifact(ctx, "cl-1")
+	require.NoError(t, s.UpdateArtifact(ctx, 1, "cl-1", map[string]any{"clipboard_approved": false}))
+	got, err = s.GetArtifact(ctx, 1, "cl-1")
 	require.NoError(t, err)
 	assert.False(t, got.ClipboardApproved)
 
-	err = s.UpdateArtifact(ctx, "cl-1", map[string]any{"clipboard_approved": "yes"})
+	err = s.UpdateArtifact(ctx, 1, "cl-1", map[string]any{"clipboard_approved": "yes"})
 	assert.Error(t, err)
 }
 
