@@ -59,6 +59,17 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `OIDC_ISSUER` | *(unset)* | Identity provider to delegate login to. Unset = single-user, no login |
 | `OIDC_CLIENT_ID` | *(unset)* | Client id registered at that provider — required when `OIDC_ISSUER` is set |
 | `OIDC_CLIENT_SECRET` | *(unset)* | Client secret, if your provider issues one |
+| `PUBLIC_MODE_ENABLED` | `false` | Marks the instance as a public one. Accepts `true`/`1`/`yes`/`on`; anything unrecognized is read as off |
+| `PUBLIC_INSTANCE_NAME` | *(unset)* | What this instance calls itself |
+| `PUBLIC_INSTANCE_DESCRIPTION` | *(unset)* | One line about it |
+| `PUBLIC_OWNER_ID` | `1` | Whose library the instance publishes — every artifact query filters on an owner, so a public instance has to name one. `1` is the owner a single-user library is already filed under |
+
+The four `PUBLIC_*` variables are read at startup and surfaced at
+`GET /api/settings/public`, which answers `{"name", "description"}` with no
+authentication when `PUBLIC_MODE_ENABLED` is on, and `404`s when it is off — an
+instance that has not opted in does not name itself to a stranger. That is
+currently all they do: **turning public mode on opens no route**. Every API
+route still authenticates exactly as it does with these unset.
 
 ## 3. Logging in (optional)
 
