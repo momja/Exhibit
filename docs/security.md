@@ -191,6 +191,30 @@ authorization (`architecture.md` §7), which is what lets a shared link work for
 someone with no account. A share render inlines the artifact owner's state,
 because publishing an artifact is publishing it as its owner sees it.
 
+**A credential in the URL means every render response withholds its `Referer`**
+(av-nr0p). `Referrer-Policy: no-referrer` is set by middleware on the render mux,
+so it is on all three routes and on their failures alike — a rejected token still
+travelled in the URL that produced the `404`. The case it closes has no attacker
+in it: an honest artifact loads a font from an allowlisted CDN, and without the
+header the render URL — token included — lands in that CDN's access logs. A
+malicious artifact is answered by the token's scope and TTL instead, since it can
+read `location.href` regardless.
+
+Two reasons this is stated rather than inherited. The document is untrusted and
+writes its own `<head>`, so it can ask for `<meta name="referrer"
+content="unsafe-url">`; a response header outranks the meta, which is what makes
+the policy not the artifact's to choose. And the browser default
+(`strict-origin-when-cross-origin`) would cover most of this today, but it is a
+default — it has changed before and is not uniform across engines — while every
+other property of this surface (CSP, sandbox, `no-store`) is explicit.
+
+The app origin's `/artifacts/:id/open` redirect deliberately does **not** carry
+the header. Its own URL holds no credential — the token is minted into the
+`Location`, not the request — so a `Referer` computed from it leaks nothing, and
+the credential-bearing URL is the render URL, which is governed by the response
+that actually becomes the document. Setting it on the redirect would imply the
+redirect is the risky half.
+
 ## 2. CSP: the allowlist is the wall
 
 Each artifact carries a set of per-origin decisions (`artifact_network_origins`,

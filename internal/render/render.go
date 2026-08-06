@@ -42,6 +42,33 @@ func New(cfg Config) *Renderer {
 	return &Renderer{cfg: cfg}
 }
 
+// NoReferrer sets `Referrer-Policy: no-referrer` on every response the render
+// surface emits (av-nr0p).
+//
+// A render URL carries a credential in its query string (`?t=`, av-c5aq), and
+// `Referer` is how a URL escapes the browser to a third party without anyone
+// asking it to: an honest artifact loading a font from an allowlisted CDN would
+// otherwise put its own render URL — token included — into that CDN's access
+// logs. `no-referrer` is the only value that holds no matter what the document
+// says, and the document is untrusted here: an artifact writes its own <head>
+// and can ask for `<meta name="referrer" content="unsafe-url">`. A response
+// header outranks the meta, which is what takes the choice away from the
+// artifact. The browser's own default (`strict-origin-when-cross-origin`) would
+// cover most of this in practice, but it is a default — it has changed before,
+// it is not uniform across engines, and every other property of this surface
+// (CSP, sandbox, no-store) is stated explicitly rather than inherited.
+//
+// It is middleware rather than a line beside the CSP in serveDoc because the
+// header has to survive the paths that never reach a document: a rejected token
+// 404s with the token still in the URL that produced it. Middleware also means
+// a route added to the render mux later is covered the day it is added.
+func NoReferrer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // ServeArtifact serves the artifact identified by {artifactID} from the URL,
 // to the principal named by the request's render token.
 func (rd *Renderer) ServeArtifact(w http.ResponseWriter, r *http.Request) {

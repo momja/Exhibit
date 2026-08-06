@@ -231,6 +231,10 @@ func (ro *Router) RenderHandler() http.Handler {
 	r := chi.NewRouter()
 	r.Use(logging.RequestMiddleware)
 	r.Use(middleware.Recoverer)
+	// Every response this mux emits — rendered document, 404 on a rejected
+	// token, unrouted path — withholds its Referer, because the URL that
+	// produced it carries a render token (av-nr0p).
+	r.Use(render.NoReferrer)
 
 	// Serve a rendered artifact by id
 	r.Get("/a/{artifactID}", renderer.ServeArtifact)
