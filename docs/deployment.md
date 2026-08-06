@@ -59,7 +59,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `OIDC_ISSUER` | *(unset)* | Identity provider to delegate login to. Unset = single-user, no login |
 | `OIDC_CLIENT_ID` | *(unset)* | Client id registered at that provider — required when `OIDC_ISSUER` is set |
 | `OIDC_CLIENT_SECRET` | *(unset)* | Client secret, if your provider issues one |
-| `PUBLIC_MODE_ENABLED` | `false` | Marks the instance as a public one. Accepts `true`/`1`/`yes`/`on`; anything unrecognized is read as off |
+| `PUBLIC_MODE_ENABLED` | `false` | Publishes this instance's library for reading without a credential. Accepts `true`/`1`/`yes`/`on`; anything unrecognized is read as off |
 | `PUBLIC_INSTANCE_NAME` | *(unset)* | What this instance calls itself |
 | `PUBLIC_INSTANCE_DESCRIPTION` | *(unset)* | One line about it |
 | `PUBLIC_OWNER_ID` | `1` | Whose library the instance publishes — every artifact query filters on an owner, so a public instance has to name one. `1` is the owner a single-user library is already filed under |
@@ -67,9 +67,25 @@ Env vars, all optional except `AUTH_TOKEN`.
 The four `PUBLIC_*` variables are read at startup and surfaced at
 `GET /api/settings/public`, which answers `{"name", "description"}` with no
 authentication when `PUBLIC_MODE_ENABLED` is on, and `404`s when it is off — an
-instance that has not opted in does not name itself to a stranger. That is
-currently all they do: **turning public mode on opens no route**. Every API
-route still authenticates exactly as it does with these unset.
+instance that has not opted in does not name itself to a stranger.
+
+**What turning it on actually opens.** Exactly two reads, to a request carrying
+no credential at all: `GET /api/artifacts` and `GET /api/artifacts/:id`, scoped
+to `PUBLIC_OWNER_ID`'s library. Nothing else changes. Every mutating method
+still requires the token or a session — a visitor cannot create, edit, or delete
+anything — and so does every other read, including artifact state, agent
+transcripts, tags, collections, shares, and the agent's provider key.
+
+**What a visitor does not get: your data inside the tools.** An artifact opened
+by an unauthenticated visitor renders with **no state inlined and no state
+saved** — it boots empty, and anything it stores lives only until they close the
+tab. A tool of yours that tracks runs shows a stranger an empty tracker, not
+your runs, and its gallery tile shows its empty state. This is the conservative
+default, not a per-artifact choice: publishing a library is one environment
+variable, and it should not also publish everything the library's tools hold.
+If you *want* a link that carries your data with it, that is what a share
+(`/s/:id`) is — a decision you make one artifact at a time, and it still renders
+as you see it.
 
 ## 3. Logging in (optional)
 

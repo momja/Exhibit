@@ -169,7 +169,7 @@ func TestOwnerStaysOneWithoutIdentityProvider(t *testing.T) {
 	req.Header.Set("Authorization", authHeader())
 	var seen int64
 	// The chain the API group installs, read through a handler of our own.
-	handler := ro.authMiddleware(ownerMiddleware(http.HandlerFunc(
+	handler := ro.authMiddleware(ro.ownerMiddleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) { seen = ownerIDFromCtx(r.Context()) })))
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 	assert.Equal(t, defaultOwnerID, seen)

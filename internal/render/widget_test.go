@@ -110,7 +110,7 @@ func TestServeWidgetUsesArtifactCSP(t *testing.T) {
 // short-circuited so no tile can mutate the library it is displayed in.
 func TestWidgetPreambleCannotWriteState(t *testing.T) {
 	doc := injectPreamble("<head></head>", "abc", "https://app.test",
-		map[string]string{"k": "v"}, true)
+		map[string]string{"k": "v"}, true, false)
 
 	if !strings.Contains(doc, "var WIDGET = true;") {
 		t.Fatalf("widget preamble must declare widget mode: %s", doc)
@@ -129,7 +129,7 @@ func TestWidgetPreambleCannotWriteState(t *testing.T) {
 // These are capabilities the *user* approved for a tool they opened, not for a
 // tile that renders unattended behind pointer-events:none.
 func TestWidgetPreambleInstallsNoCapabilityBridges(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true, false)
 
 	for _, marker := range []string{"__avDownload", "__avClipboard", "showOpenFilePicker", "__avSnippet"} {
 		if strings.Contains(doc, marker) {
@@ -138,7 +138,7 @@ func TestWidgetPreambleInstallsNoCapabilityBridges(t *testing.T) {
 	}
 	// The artifact preamble still has them — this is a widget-only subtraction,
 	// not a removal.
-	full := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
+	full := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
 	for _, marker := range []string{"__avDownload", "__avClipboard", "showOpenFilePicker"} {
 		if !strings.Contains(full, marker) {
 			t.Fatalf("artifact preamble lost %s: %s", marker, full)
@@ -150,11 +150,11 @@ func TestWidgetPreambleInstallsNoCapabilityBridges(t *testing.T) {
 // preamble establishes the viewport floor (no body margin, full height,
 // transparent) before the widget's markup, which can still override it.
 func TestWidgetPreambleAddsBaseStylesheet(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true, false)
 	if !strings.Contains(doc, "background:transparent") {
 		t.Fatalf("widget preamble must set a transparent base surface: %s", doc)
 	}
-	if strings.Contains(injectPreamble("<head></head>", "abc", "https://app.test", nil, false), "background:transparent") {
+	if strings.Contains(injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false), "background:transparent") {
 		t.Fatal("artifact preamble must not inject the widget base stylesheet")
 	}
 }
@@ -174,7 +174,7 @@ func TestServeWidgetNotFoundWithoutWidget(t *testing.T) {
 // `load`. The preamble therefore has the widget report on itself, and the host
 // falls back to the monogram tile on an error or on silence.
 func TestWidgetPreambleReportsHealthToHost(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true, false)
 
 	if !strings.Contains(doc, "__avWidget") {
 		t.Fatalf("widget preamble must post a health report to the host: %s", doc)
@@ -207,7 +207,7 @@ func TestWidgetPreambleReportsHealthToHost(t *testing.T) {
 	// The artifact preamble has no such reporter: an artifact that fails is
 	// visible to the person looking at it, and has the capability-warning
 	// banner besides.
-	if strings.Contains(injectPreamble("<head></head>", "abc", "https://app.test", nil, false), "__avWidget") {
+	if strings.Contains(injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false), "__avWidget") {
 		t.Fatal("artifact preamble must not carry the widget health reporter")
 	}
 }

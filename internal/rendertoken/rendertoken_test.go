@@ -2,6 +2,7 @@ package rendertoken
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -12,12 +13,78 @@ import (
 func TestMintedTokenVerifiesAndCarriesTheOwner(t *testing.T) {
 	s := NewRandomSigner()
 
-	owner, err := s.Verify(s.Mint("artifact-1", 7), "artifact-1")
+	c, err := s.Verify(s.Mint("artifact-1", 7), "artifact-1")
 	if err != nil {
 		t.Fatalf("a freshly minted token must verify: %v", err)
 	}
-	if owner != 7 {
-		t.Fatalf("owner = %d, want 7", owner)
+	if c.OwnerID != 7 {
+		t.Fatalf("owner = %d, want 7", c.OwnerID)
+	}
+	if c.Anonymous {
+		t.Fatal("a token minted for an owner must not read as anonymous")
+	}
+}
+
+// av-wmp6. The anonymous claim is what a public instance mints for a visitor
+// with no credential, and the render surface subtracts state on the strength of
+// it — so it has to survive the round trip intact, and the owner beside it must
+// still be the owner (it is what authorizes the read).
+func TestAnonymousTokenVerifiesAndSaysSo(t *testing.T) {
+	s := NewRandomSigner()
+
+	c, err := s.Verify(s.MintAnonymous("artifact-1", 7), "artifact-1")
+	if err != nil {
+		t.Fatalf("a freshly minted anonymous token must verify: %v", err)
+	}
+	if c.OwnerID != 7 {
+		t.Fatalf("owner = %d, want 7", c.OwnerID)
+	}
+	if !c.Anonymous {
+		t.Fatal("an anonymous token must verify as anonymous")
+	}
+}
+
+// The claim subtracts authority, so the interesting forgery is removing it: a
+// visitor who could turn their own anonymous token into an identified one would
+// have the owner's state inlined into their document. It is inside the MAC, so
+// neither adding nor removing it survives — and the plain token likewise cannot
+// be aged into an anonymous one, which keeps the two flavours from being
+// interchangeable in either direction.
+func TestTheAnonymousClaimCannotBeAddedOrRemoved(t *testing.T) {
+	s := NewRandomSigner()
+
+	anon := s.MintAnonymous("artifact-1", 1)
+	// Strip the claim, keeping the tag: "owner.exp.a.tag" -> "owner.exp.tag".
+	parts := strings.Split(anon, ".")
+	if len(parts) != 4 || parts[2] != anonymousClaim {
+		t.Fatalf("unexpected anonymous token shape %q", anon)
+	}
+	promoted := parts[0] + "." + parts[1] + "." + parts[3]
+	if _, err := s.Verify(promoted, "artifact-1"); err == nil {
+		t.Fatal("stripping the anonymous claim verified")
+	}
+
+	// And the other direction: appending it to an identified token.
+	plain := s.Mint("artifact-1", 1)
+	p := strings.Split(plain, ".")
+	demoted := p[0] + "." + p[1] + "." + anonymousClaim + "." + p[2]
+	if _, err := s.Verify(demoted, "artifact-1"); err == nil {
+		t.Fatal("appending the anonymous claim verified")
+	}
+}
+
+// A claim this version cannot read is one it must not act on half of: an
+// unknown trailing field is invalid, not ignored. Without this, a future
+// version's token would verify here as an ordinary identified one — which for
+// any claim that subtracts authority (as the anonymous one does) means the
+// subtraction silently disappears.
+func TestAnUnknownClaimIsRejected(t *testing.T) {
+	s := NewRandomSigner()
+
+	claims := "1." + strconv.FormatInt(time.Now().Add(time.Minute).Unix(), 10) + ".z"
+	tok := claims + "." + s.tag("artifact-1", claims)
+	if _, err := s.Verify(tok, "artifact-1"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("an unknown claim must be invalid, got %v", err)
 	}
 }
 

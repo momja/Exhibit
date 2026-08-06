@@ -51,6 +51,21 @@ const KeyPurpose = "exhibit/render-token/v1"
 // format cannot be produced by replaying a v1 tag.
 const version = "v1"
 
+// anonymousClaim is the trailing claim marking a document rendered for nobody
+// in particular — a visitor reading a public instance's library with no
+// credential of their own (av-wmp6).
+//
+// It is a claim rather than a query parameter because it *subtracts* authority:
+// the render surface inlines no state for an anonymous viewer and its shim
+// persists none. A parameter would be a privilege the viewer could drop by
+// editing the URL; inside the MAC it is the issuer's statement, not the
+// bearer's.
+//
+// It is optional and last, so a token minted without it is byte-for-byte the
+// token this package minted before the claim existed. Nothing in flight breaks
+// on the deploy that adds it.
+const anonymousClaim = "a"
+
 var (
 	// ErrInvalid covers every "this is not a token I issued for this artifact"
 	// case — malformed, wrong artifact, bad signature. They are deliberately
@@ -61,6 +76,22 @@ var (
 	// hits, and the fix (mint a new one) is different.
 	ErrExpired = errors.New("rendertoken: token expired")
 )
+
+// Claims is what a verified token says: who the document is being rendered
+// for, and whether that principal is a person at all.
+//
+// The two travel together because the render surface needs both and must never
+// act on one without the other. OwnerID authorizes the read — it is checked
+// against the artifact's owner. Anonymous says the reader has no identity of
+// their own, which is a different question with a different answer: their
+// document gets the artifact, and none of the owner's state.
+type Claims struct {
+	// OwnerID is the owner whose artifact this token renders.
+	OwnerID int64
+	// Anonymous marks a viewer with no identity — a public instance's
+	// unauthenticated visitor. The artifact renders; nobody's state does.
+	Anonymous bool
+}
 
 // Signer mints and verifies render tokens under one key.
 type Signer struct {
@@ -90,62 +121,94 @@ func NewRandomSigner() *Signer {
 	return NewSigner(key)
 }
 
-// Mint returns a token authorizing ownerID to render artifactID for TTL.
+// Mint returns a token authorizing ownerID to render artifactID for TTL, as
+// that owner: their state is the state the document inlines.
 func (s *Signer) Mint(artifactID string, ownerID int64) string {
 	return s.MintFor(artifactID, ownerID, TTL)
+}
+
+// MintAnonymous returns a token that renders ownerID's artifact for a viewer
+// with no identity — the public-instance case (av-wmp6). The document it
+// authorizes carries the artifact and no state at all.
+func (s *Signer) MintAnonymous(artifactID string, ownerID int64) string {
+	return s.MintAnonymousFor(artifactID, ownerID, TTL)
 }
 
 // MintFor is Mint with an explicit lifetime: for a caller whose horizon is
 // known to be shorter than TTL, and for tests, which need an already-expired
 // token (a non-positive d) without waiting minutes to get one.
 func (s *Signer) MintFor(artifactID string, ownerID int64, d time.Duration) string {
-	claims := fmt.Sprintf("%d.%d", ownerID, time.Now().Add(d).Unix())
+	return s.mint(artifactID, Claims{OwnerID: ownerID}, d)
+}
+
+// MintAnonymousFor is MintAnonymous with an explicit lifetime.
+func (s *Signer) MintAnonymousFor(artifactID string, ownerID int64, d time.Duration) string {
+	return s.mint(artifactID, Claims{OwnerID: ownerID, Anonymous: true}, d)
+}
+
+func (s *Signer) mint(artifactID string, c Claims, d time.Duration) string {
+	claims := fmt.Sprintf("%d.%d", c.OwnerID, time.Now().Add(d).Unix())
+	if c.Anonymous {
+		claims += "." + anonymousClaim
+	}
 	return claims + "." + s.tag(artifactID, claims)
 }
 
-// Verify checks tok against artifactID and returns the owner it authorizes.
+// Verify checks tok against artifactID and returns what it claims.
 //
 // artifactID comes from the URL the render surface is answering, and is mixed
 // into the MAC rather than carried in the token. So a token minted for artifact
 // A simply fails to verify on artifact B's route — the scoping is the signature
 // itself, not a field a verifier could forget to compare.
-func (s *Signer) Verify(tok, artifactID string) (ownerID int64, err error) {
-	owner, exp, sig, ok := split(tok)
-	if !ok {
-		return 0, ErrInvalid
+func (s *Signer) Verify(tok, artifactID string) (Claims, error) {
+	// The tag is the last field, so everything before it is the signed message
+	// whatever it contains. Adding a claim therefore changes what is parsed,
+	// never what is authenticated — and a base64url tag cannot contain the
+	// separator, so the cut is unambiguous.
+	i := strings.LastIndexByte(tok, '.')
+	if i < 0 {
+		return Claims{}, ErrInvalid
 	}
-	claims := owner + "." + exp
+	claims, sig := tok[:i], tok[i+1:]
 	if !hmac.Equal([]byte(sig), []byte(s.tag(artifactID, claims))) {
-		return 0, ErrInvalid
+		return Claims{}, ErrInvalid
 	}
 	// Parsed only after the MAC checks out, so nothing downstream ever acts on
 	// unauthenticated numbers.
+	owner, exp, anonymous, ok := splitClaims(claims)
+	if !ok {
+		return Claims{}, ErrInvalid
+	}
 	id, err := strconv.ParseInt(owner, 10, 64)
 	if err != nil {
-		return 0, ErrInvalid
+		return Claims{}, ErrInvalid
 	}
 	expUnix, err := strconv.ParseInt(exp, 10, 64)
 	if err != nil {
-		return 0, ErrInvalid
+		return Claims{}, ErrInvalid
 	}
 	if time.Now().After(time.Unix(expUnix, 0)) {
-		return 0, ErrExpired
+		return Claims{}, ErrExpired
 	}
-	return id, nil
+	return Claims{OwnerID: id, Anonymous: anonymous}, nil
 }
 
-// split cuts "owner.exp.tag" without allocating a slice for the parts.
-func split(tok string) (owner, exp, sig string, ok bool) {
-	i := strings.IndexByte(tok, '.')
-	if i < 0 {
-		return "", "", "", false
+// splitClaims cuts "owner.exp" or "owner.exp.a" into its fields. An unknown
+// trailing field is rejected rather than ignored: a signed message this version
+// cannot fully read is one it must not act on half of.
+func splitClaims(claims string) (owner, exp string, anonymous, ok bool) {
+	owner, rest, found := strings.Cut(claims, ".")
+	if !found {
+		return "", "", false, false
 	}
-	j := strings.IndexByte(tok[i+1:], '.')
-	if j < 0 {
-		return "", "", "", false
+	exp, extra, found := strings.Cut(rest, ".")
+	if !found {
+		return owner, exp, false, true
 	}
-	j += i + 1
-	return tok[:i], tok[i+1 : j], tok[j+1:], true
+	if extra != anonymousClaim {
+		return "", "", false, false
+	}
+	return owner, exp, true, true
 }
 
 // tag is the authenticator over (version, artifact, claims). The fields are

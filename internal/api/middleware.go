@@ -18,6 +18,12 @@ const ownerIDKey contextKey = "ownerID"
 // when it was an agent session rather than a person.
 const agentGrantKey contextKey = "agentGrant"
 
+// publicVisitorKey marks a request that authenticated as nobody and is being
+// served only because this instance publishes its library (av-wmp6). Handlers
+// branch on it to render a read-only page and to mint anonymous render tokens;
+// nothing downstream may read it as authority.
+const publicVisitorKey contextKey = "publicVisitor"
+
 const defaultOwnerID int64 = 1
 
 // authMiddleware authenticates an API request, says who made it, and — for the
@@ -44,10 +50,24 @@ const defaultOwnerID int64 = 1
 // it further to a single artifact *within* that owner. An agent session
 // reaches one artifact, and never another owner's anything.
 //
-// Requests carrying none of the three are rejected, unless the deployment
-// configured no token at all — in which case app auth is off, but an agent
-// credential is still scoped, because containment is not the same question as
-// authentication.
+// Requests carrying none of the three are rejected, with two exceptions, both
+// below the three credentials so neither can shadow one:
+//
+//   - Public mode (av-wmp6): a public instance answers a *read* of its
+//     published library to a request that resolved no credential. GET only, and
+//     only the routes publicReadable names — never a mutation, whatever the
+//     configuration says.
+//   - No token configured: app auth is off entirely. An agent credential is
+//     still scoped, because containment is not the same question as
+//     authentication.
+//
+// The public branch sits above that last one deliberately. Both let an
+// anonymous request through, but they disagree about *whose* library it reads:
+// the pass-through leaves the owner unresolved (ownerMiddleware's default,
+// owner 1) while public mode names an owner explicitly. On an instance that is
+// both open and public with PUBLIC_OWNER_ID set to anything but 1, the
+// pass-through's answer is the wrong library — so the branch that knows the
+// owner is asked first.
 func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if ownerID, ok := ro.sessionUser(r); ok {
@@ -83,12 +103,77 @@ func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		if ro.publicRead(r) {
+			ctx := context.WithValue(r.Context(), publicVisitorKey, true)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
 		if ro.cfg.AuthToken == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	})
+}
+
+// publicRead reports whether r is the one thing a public instance answers
+// without a credential: an anonymous read of the library it publishes.
+//
+// It is reached only after all three credentials have failed to resolve, so
+// "anonymous" here means "presented nothing this instance recognizes" — a
+// request holding a valid token or session took an earlier branch and is
+// attributed to whoever it named, public mode or not.
+func (ro *Router) publicRead(r *http.Request) bool {
+	return ro.cfg.Public.Enabled && publicReadable(r.Method, r.URL.EscapedPath())
+}
+
+// publicReadable is the entire reach of an anonymous visitor on a public
+// instance, written as a deny-by-default allowlist for the same reason
+// agentScopeAllows is: a route added to the API later must not become public
+// because nobody thought about it.
+//
+// It is exactly the library and one artifact in it:
+//
+//	GET /api/artifacts        — the published library
+//	GET /api/artifacts/{id}   — one artifact's metadata and source
+//
+// Method first, and only GET: no configuration makes a mutation anonymous, so
+// that check is the outermost one rather than a property of the paths listed.
+//
+// Everything deeper is refused, and the sub-resources are why the rule is a
+// prefix *exclusion* rather than a prefix match. `/state` is the owner's own
+// data — the thing publishing a library must not publish (the render surface
+// makes the same call for the same reason, av-wmp6). `/transcripts` is the
+// owner's conversations with an agent. `/widget` is source, not a tile; the
+// tile a public card shows comes from the render origin under its own token.
+// The rest of the API — collections, tags, shares, agent, the BYO provider key
+// — is never reached at all, and a public *page* needing tag names renders them
+// server-side rather than opening this door wider.
+func publicReadable(method, escapedPath string) bool {
+	if method != http.MethodGet {
+		return false
+	}
+	rest, ok := strings.CutPrefix(escapedPath, "/api/artifacts")
+	if !ok || (rest != "" && !strings.HasPrefix(rest, "/")) {
+		return false
+	}
+	// "" and "/" are the list route; "/{id}" is one artifact. A second
+	// separator means a sub-resource, which is not public.
+	return !strings.Contains(strings.TrimPrefix(rest, "/"), "/")
+}
+
+// publicVisitor reports whether this request was let through with no credential
+// because the instance is public (av-wmp6 AC#5). It is the branch a handler
+// takes to render a page with no edit controls, and to mint render tokens that
+// carry no principal.
+//
+// False is the safe answer and the default: a request nobody marked is treated
+// as an ordinary authenticated one, which is the reading that withholds rather
+// than publishes.
+func publicVisitor(ctx context.Context) bool {
+	v, _ := ctx.Value(publicVisitorKey).(bool)
+	return v
 }
 
 // bearerToken pulls the Authorization bearer value, or "" when absent.
@@ -190,13 +275,25 @@ func agentGrantFromCtx(ctx context.Context) *agentscope.Grant {
 // attribute to a session or an agent grant — token-authenticated API clients,
 // and every request on a single-user instance. It never overwrites an owner
 // already resolved upstream.
-func ownerMiddleware(next http.Handler) http.Handler {
+//
+// A public visitor (av-wmp6) is the one case where the default is not owner 1.
+// Owner scoping became a real query predicate in av-ep8k, so "the library" is
+// no longer a well-defined phrase on an instance that may hold several: a
+// public instance has to say which one it publishes, and PUBLIC_OWNER_ID is
+// that statement. Resolving it here rather than in authMiddleware keeps the two
+// questions in the two middlewares that already own them — whether the request
+// may proceed, and whose library it reads.
+func (ro *Router) ownerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := r.Context().Value(ownerIDKey).(int64); ok {
 			next.ServeHTTP(w, r)
 			return
 		}
-		ctx := context.WithValue(r.Context(), ownerIDKey, defaultOwnerID)
+		owner := defaultOwnerID
+		if publicVisitor(r.Context()) {
+			owner = ro.cfg.Public.OwnerID
+		}
+		ctx := context.WithValue(r.Context(), ownerIDKey, owner)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
