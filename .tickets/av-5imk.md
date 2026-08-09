@@ -2,7 +2,7 @@
 id: av-5imk
 status: in_progress
 deps: []
-links: [av-wmp6, av-rgp1, av-q30x, av-30rj]
+links: [av-wmp6, av-rgp1, av-q30x, av-30rj, av-c5aq, av-ep8k, av-syug]
 created: 2026-08-06T16:02:07Z
 type: bug
 priority: 1
