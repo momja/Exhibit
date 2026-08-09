@@ -249,4 +249,46 @@ func TestShareCreate(t *testing.T) {
 	share := shareResp["share"].(map[string]any)
 	assert.NotEmpty(t, share["id"])
 	assert.Equal(t, id, share["artifact_id"])
+	// A share has no lifetime of its own (av-8ipt): it is live until deleted,
+	// so the resource says nothing about expiry.
+	assert.NotContains(t, share, "expires_at")
+}
+
+// av-8ipt: share expiry is gone, and a request that still asks for one is told
+// so. Silently dropping the field would hand back a share that never expires
+// while the caller believed otherwise — the same class of defect as a stored
+// flag nothing enforces (av-20xv).
+func TestShareCreateRejectsExpiresAt(t *testing.T) {
+	r := newTestRouter(t)
+
+	body := map[string]any{"title": "Expiry Test", "body": "<html></html>", "network_allowlist": []string{}}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest("POST", "/api/artifacts", bytes.NewReader(b))
+	req.Header.Set("Authorization", authHeader())
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	id := resp["artifact"].(map[string]any)["id"].(string)
+
+	// Any mention of the key is refused, whatever the value carried — one rule
+	// with no sub-cases.
+	for name, value := range map[string]any{
+		"a timestamp": "2030-01-01T00:00:00Z",
+		"null":        nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			sb, _ := json.Marshal(map[string]any{
+				"artifact_id": id, "public": true, "expires_at": value,
+			})
+			req := httptest.NewRequest("POST", "/api/shares", bytes.NewReader(sb))
+			req.Header.Set("Authorization", authHeader())
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Contains(t, w.Body.String(), "expires_at is no longer supported")
+		})
+	}
 }

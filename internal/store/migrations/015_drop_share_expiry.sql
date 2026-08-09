@@ -1,0 +1,33 @@
+-- +goose Up
+-- av-8ipt: drop shares.expires_at — schema written ahead of the product.
+--
+-- The column has existed since 001 and was genuinely enforced (ServeShare
+-- answered 410 Gone past the deadline), so unlike shares.public it never lied.
+-- But nothing ever set it: no UI, no caller, no identified use case. Removal is
+-- free today precisely because every row's value is NULL; the moment anything
+-- sets one, dropping it stops being a schema question and becomes a data
+-- question. If a real expiry requirement appears it is one migration to add
+-- back, and it would then be designed against that requirement instead of
+-- retrofitted to a guess made before the product existed.
+--
+-- Consequence, stated plainly: a share is now permanent until revoked.
+-- DELETE /api/shares/:id is the way to revoke one.
+--
+-- Version numbering: 8 and 12 are occupied by Go migrations in
+-- migration_repair.go with no file in this directory; 013 is users/sessions and
+-- 014 re-keyed artifact_state. Reusing a version silently skips the migration
+-- forever on any database that took the first one — read migration_repair.go's
+-- header before adding another.
+--
+-- One statement, no table rebuild: ALTER TABLE ... DROP COLUMN landed in SQLite
+-- 3.35 and the pinned modernc.org/sqlite (v1.51.0) reports 3.53.1. The column
+-- is plain — no index, view, trigger, or constraint references it — so it meets
+-- DROP COLUMN's preconditions.
+ALTER TABLE shares DROP COLUMN expires_at;
+
+-- +goose Down
+-- The honest reverse, not an oversight: the column comes back empty. A dropped
+-- column's values are gone, and nothing outside this table recorded them. In
+-- practice that loses nothing, since every value was NULL when the column was
+-- dropped.
+ALTER TABLE shares ADD COLUMN expires_at DATETIME;
