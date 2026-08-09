@@ -126,19 +126,44 @@ is no registration form and no email anywhere in this.
 
 ![The login page](screenshots/av-q30x/01-login.png)
 
-**Create an account.** The `user` subcommands read the password from stdin
-rather than an argument, so it never lands in your shell history or a process
-list:
+**You already have an account.** A fresh instance creates one on first boot, so
+there is nothing to run before you can sign in:
+
+```
+username: admin
+password: changeme
+```
+
+> [!IMPORTANT]
+> Change it immediately. Until you do, anyone who can reach this instance can
+> sign in as its admin — and an instance on a public hostname is reachable from
+> the moment it boots. The server repeats this warning in its log on **every**
+> startup for as long as the default is still in place.
 
 ```bash
-docker compose run --rm app user add curator@example.com
-# Enter a password for curator@example.com, then press Enter and ctrl-D:
-# created curator@example.com (owner id 1) — the first account on an instance is its admin
-# restart the server so it starts requiring a login
+docker compose exec app /server user passwd admin
+# Enter a password for admin, then press Enter and ctrl-D:
+```
 
-docker compose run --rm app user add partner@example.com   # a second person
-docker compose run --rm app user list                      # who exists
-docker compose run --rm app user passwd curator@example.com  # forgot it
+**Add more people.** Same subcommand, one per person:
+
+```bash
+docker compose exec app /server user add partner@example.com
+docker compose exec app /server user list
+```
+
+The `user` subcommands read the password from **stdin rather than an argument**,
+so it never lands in your shell history or a process list. Run them
+interactively and type at the prompt — piping a password in (`echo … |`) works,
+but puts it straight back into your history, which is the thing this avoids.
+
+`exec` runs inside the container that is already up, which is why `/server` is
+spelled out: it replaces the command rather than appending to the image's
+entrypoint. If the instance is **not** running, use `run` instead — it starts a
+throwaway container and does append, so the binary is implied:
+
+```bash
+docker compose run --rm app user list
 ```
 
 The login name is the account's key. It is folded to lowercase and trimmed, so
@@ -146,9 +171,10 @@ The login name is the account's key. It is folded to lowercase and trimmed, so
 Anything works as a name; an email address is the convention because it is what
 the surrounding UI labels it as.
 
-Restart the server after the **first** account — that is what tells it the
-instance is no longer single-user and to start requiring a login. Later
-accounts need no restart.
+The seeded admin appears only when the instance has **no other way in**. If
+`OIDC_ISSUER` or the `LOGIN_USERNAME` pair is set you have already chosen how you
+sign in, and no default account is created — adding a guessable second door to a
+configured instance would be a backdoor, not a convenience.
 
 That is all. `/auth/login` now serves a login page, every gallery page redirects
 there until you sign in, and `/auth/logout` revokes the session server-side.
