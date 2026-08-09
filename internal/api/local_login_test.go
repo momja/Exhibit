@@ -172,7 +172,16 @@ func TestCredentialComparesWithBcrypt(t *testing.T) {
 	cred := newTestCredential(t, testUsername, testPassword)
 	assert.True(t, cred.Verify(testUsername, testPassword))
 	assert.False(t, cred.Verify(testUsername, testPassword+"!"))
-	assert.False(t, cred.Verify(strings.ToUpper(testUsername), testPassword))
+	assert.False(t, cred.Verify("someone-else", testPassword))
+
+	// Login names became case-insensitive in av-rzvf, when the name turned
+	// into a database key rather than a label on the only credential there
+	// was. Folding case in one place (auth.NormalizeLoginName) is what stops
+	// "Curator" and "curator" being two accounts, and it has to apply to the
+	// environment credential too, or the name it configures would not resolve
+	// to the row it names.
+	assert.True(t, cred.Verify(strings.ToUpper(testUsername), testPassword))
+	assert.True(t, cred.Verify("  "+testUsername+"\t", testPassword))
 }
 
 // A hash is required, not a password: an instance that accepted plaintext here
@@ -230,32 +239,54 @@ func TestLocalAndProviderLoginsProduceTheSameSession(t *testing.T) {
 }
 
 // A local login creates the users row the same way a provider identity does,
-// so owner_id works identically — and the row is keyed on a constant, so
-// renaming the login relabels the owner rather than orphaning the library.
-func TestLocalLoginCreatesTheUserRowAndSurvivesARename(t *testing.T) {
+// so owner_id works identically. The row is keyed on the login name (av-rzvf),
+// which is what lets an instance have more than one of them.
+func TestLocalLoginCreatesTheUserRow(t *testing.T) {
 	ro, st := newLocalLoginRouter(t)
 	runLocalLogin(t, ro)
 
 	user, err := st.GetUser(context.Background(), 1)
 	require.NoError(t, err)
-	assert.Equal(t, auth.LocalExternalID, user.ExternalID)
-	assert.Equal(t, testUsername, user.Email, "the username is the row's human-readable handle")
+	assert.Equal(t, auth.LocalExternalID(testUsername), user.ExternalID)
+	assert.Equal(t, testUsername, user.Email, "the login name is the row's human-readable handle")
 
 	// A second login reuses the row rather than minting owner 2.
 	runLocalLogin(t, ro)
 	_, err = st.GetUser(context.Background(), 2)
 	assert.ErrorIs(t, err, store.ErrNotFound)
+}
 
-	// The operator renames the login and restarts — same database, new
-	// LOGIN_USERNAME.
+// The semantics av-rzvf changed, asserted so the change is deliberate rather
+// than discovered. LOGIN_USERNAME used to be a label on the one local
+// credential, so renaming it relabelled the same owner. It is now the account's
+// key, so pointing it at a different name reaches a different account — which
+// is the same property that makes it break-glass: aim it at the name of the
+// account you are locked out of and you are back in *that* library.
+func TestEnvironmentCredentialNamesAnAccount(t *testing.T) {
+	ro, st := newLocalLoginRouter(t)
+	runLocalLogin(t, ro)
+
+	// Renamed and restarted: a second name is a second account, not a rename
+	// of the first.
 	ro.cfg.LocalCredential = newTestCredential(t, "archivist", testPassword)
 	w := submitLogin(t, ro, "archivist", testPassword, "")
 	require.Equal(t, http.StatusFound, w.Code)
-	user, err = st.GetUser(context.Background(), 1)
+
+	first, err := st.GetUser(context.Background(), 1)
 	require.NoError(t, err)
-	assert.Equal(t, "archivist", user.Email)
-	_, err = st.GetUser(context.Background(), 2)
-	assert.ErrorIs(t, err, store.ErrNotFound, "the library is not orphaned by a rename")
+	assert.Equal(t, testUsername, first.Email, "the original account is untouched")
+	second, err := st.GetUser(context.Background(), 2)
+	require.NoError(t, err)
+	assert.Equal(t, "archivist", second.Email)
+	assert.False(t, second.IsAdmin, "only the first account on an instance is the admin")
+
+	// Aimed back at the original name, it reaches the original library again.
+	ro.cfg.LocalCredential = newTestCredential(t, testUsername, "a-different-passphrase")
+	w = submitLogin(t, ro, testUsername, "a-different-passphrase", "")
+	require.Equal(t, http.StatusFound, w.Code)
+	session, err := st.GetSession(context.Background(), cookiesFrom(w)[sessionCookieName].Value)
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, session.UserID)
 }
 
 // The property av-30rj established, now for this path too: logout is a

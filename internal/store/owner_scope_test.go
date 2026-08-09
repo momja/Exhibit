@@ -371,6 +371,18 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"GetSession":            "looks up a bearer credential before any owner is known",
 		"DeleteSession":         "revocation by session id; the holder need not be resolved first",
 		"DeleteExpiredSessions": "a janitor over all rows, owned by no one",
+
+		// Local credentials (av-rzvf). The same reasoning one step further:
+		// these resolve or provision the identity an owner id *is*, so there
+		// is no owner to scope them by at the moment they are called. The two
+		// that act on an existing user are administration of the instance
+		// rather than access to a library — av-utap puts the authorization on
+		// that surface, where the acting admin is known.
+		"LookupLocalCredential": "resolves a login name to an owner; there is no owner yet",
+		"CreateLocalUser":       "creates an owner; taking one would assume the answer",
+		"SetLocalPassword":      "keyed by the user id it acts on; an instance-admin operation (av-utap)",
+		"CountLocalCredentials": "a property of the instance, owned by no one",
+		"ListUsers":             "the instance's user directory, not any one owner's library (av-utap)",
 	}
 
 	iface := reflect.TypeOf((*Store)(nil)).Elem()
