@@ -72,10 +72,13 @@ func NewCredential(username, passwordHash string) (*Credential, error) {
 //
 // bcrypt at the library's default cost: deliberately slow, salted per call (so
 // the same password hashes differently every time), and the conventional
-// choice the ticket named. The slowness is also the whole of the rate
+// choice the ticket named. The slowness *used* to be the whole of the rate
 // limiting — a guess costs the attacker the same tens of milliseconds it costs
-// us, which is what makes an unthrottled login endpoint tolerable for one
-// credential behind an operator's proxy.
+// us — which was tolerable for one credential and stopped being so once an
+// instance issues several (av-sz4e). The endpoint is throttled in its own right
+// now (av-t21v, internal/api/loginratelimit.go); what this cost still buys, and
+// no request-rate limit can, is that a *stolen hash* is expensive to attack
+// offline.
 func HashPassword(password string) (string, error) {
 	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

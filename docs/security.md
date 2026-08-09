@@ -300,12 +300,66 @@ ambient credential, and this one runs before any session exists, so the only
 thing a cross-site page could forge is a login it must already know the password
 to complete. Its post-login destination arrives in a form field rather than a
 query parameter, so it goes through the same `safeNext` and can still only be a
-path on this origin. The password is compared with bcrypt, whose cost is also
-the whole of the rate limiting — a guess costs the attacker the same tens of
-milliseconds it costs the server, which is what makes an unthrottled login
-endpoint tolerable for a single credential. An instance exposed to the open
-internet should still have a rate limit at the proxy, where the rest of that
-deployment's ingress policy already lives.
+path on this origin.
+
+**Guessing, as opposed to forging, is throttled** (av-t21v,
+`internal/api/loginratelimit.go`). bcrypt's cost used to be the whole of that
+answer — a guess costs the attacker the same tens of milliseconds it costs the
+server — and it was a fair one while an instance had exactly one credential.
+Issuing credentials for several people (av-sz4e) does not scale that attack, it
+changes its shape: credential stuffing sprays one likely password across N
+accounts, so a per-guess cost premised on thousands of guesses at one account
+buys almost nothing. The endpoint is now rate-limited in process, as middleware
+on the route rather than a check inside the handler, so that what a credential
+*is* remains the handler's question and how often it may be asked is not.
+
+Two token buckets, both of which must allow an attempt:
+
+| Key | Budget | Why it is not enough alone |
+|---|---|---|
+| Source address | 20 failures at once, then one back every 3 s | Shared by a household behind one NAT — and, behind the operator's reverse proxy, potentially by everyone — so it is the generous one; and a botnet rotates past it |
+| Username, case-folded | 10 failures at once, then one back every 30 s | Survives a botnet, since rotating addresses does not rotate the account being guessed — but the collateral lands on one named person |
+
+The address is read from the peer, which a client cannot forge. `X-Forwarded-For`
+is consulted only when the peer is itself loopback or private — plausibly the
+operator's own proxy — and only its rightmost entry, the hop that proxy
+appended; the leftmost entries are whatever the client sent and are exactly what
+an attacker would spoof for a fresh budget per request.
+
+Four properties are deliberate, and each is pinned by a test:
+
+- **Only failures are debited, and the check runs before the handler.** A
+  correct sign-in costs nothing and is never delayed by unrelated traffic's
+  failures. Signing in also returns that *username's* budget, so two typos are
+  not still held against the account tomorrow; the source's budget is not
+  refunded, or anyone holding one valid credential could top it up between
+  guesses at somebody else's.
+- **Nothing is disabled.** An emptied bucket refills on a clock, so the worst an
+  attacker can impose on a real user is a wait of one refill interval, with
+  nothing for an operator to un-lock. A failed-attempt counter that disabled an
+  identity would hand every attacker a denial of service against any name they
+  could guess — the throttle exists to slow attempts, never to disable a person.
+- **There is no instance-wide budget.** It would be the one key a single source
+  could use to shut the front door on everybody, which is a worse failure than
+  the brute force it would slow.
+- **Memory is bounded.** Both keys are attacker-controlled, so a map that only
+  grows is itself the denial of service. Each limiter holds at most 2×4096 live
+  keys (two generations, the older dropped whole on rotation), a lookup never
+  creates an entry — only a failure does — and a bucket refilled to full is
+  deleted rather than kept, so an honest instance's map is empty rather than
+  merely bounded.
+
+Nothing is persisted, deliberately: attempt counters do not earn a table. A
+restart forfeits at most a few minutes of budget, and an attacker able to
+restart the process has already won something larger.
+
+**The proxy still matters, now as the complement rather than the answer.** An
+in-process limiter is blindest to the case it is worst against — a distributed
+spray, many addresses and many accounts, one guess each — and it cannot refuse a
+request before the process has paid to read it. An instance on the open internet
+should keep a connection-rate or fail2ban policy at its ingress, where the rest
+of that deployment's ingress policy already lives. What has changed is that this
+is no longer the only thing between a stolen password list and the library.
 
 ### 1.5 What credential a page embeds: derived from the request
 
