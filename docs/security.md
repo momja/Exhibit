@@ -288,6 +288,58 @@ for its own reason rather than by the rule above:
   than logging the user out, and logout stays a link because that is the
   affordance people expect.
 
+### 1.5 What credential a page embeds: derived from the request
+
+The server-rendered pages are HTML. They sit outside the API's auth group, and
+their own JavaScript authenticates the calls they make — so every page render
+has to decide what credential to write into its bootstrap `<script>`. For as
+long as every page visitor *was* the operator, the answer was the process's
+`AUTH_TOKEN` and that was correct.
+
+Sessions (§1.4) and public mode ended that, and left a real defect behind
+(av-5imk). A logged-in user loaded a page and was handed the operator's
+full-authority service credential. Logging out deleted the session row — but not
+the token in page source they had already loaded. That token grants write
+authority over every artifact, every collection, the share table and the BYO
+provider key; it is not per-user, so it cannot be revoked for one person; it can
+only be rotated for everyone. **Logout did not revoke API access**, which is the
+one property opaque server-side sessions were chosen to provide.
+
+The credential is therefore derived from the **request**, in one place
+(`internal/api/pagecredential.go`), and nowhere else reads `cfg.AuthToken` for
+this purpose. Three cases:
+
+| Visitor | `TOKEN` | `READ_ONLY` | Why |
+|---|---|---|---|
+| Session-authenticated browser | *empty* | `false` | The cookie is already a per-user, server-side-revocable credential, and the browser attaches it to every same-origin fetch. `authMiddleware` checks the session before anything else, so the page's calls authenticate on it alone. An embedded bearer token would be a second, stronger credential that logout cannot take back. |
+| Anonymous visitor on a public instance | *empty* | `true` | There is no credential to give someone who presented none. The page refuses writes locally rather than sending them to be refused, so it degrades to read-only instead of erroring. |
+| No identity provider configured | the static token | `false` | A single-user instance issues no sessions, so the static token is the only credential its page JS can authenticate with — and its page visitor is by construction the operator who already holds it. Nothing changes for the self-hoster. |
+
+The third case is written as "no identity provider", deliberately not "no
+session". On an instance that *has* a provider, a page render that resolved no
+session is either a public visitor or a gap in `sessionGate`, and the service
+token is the right answer to neither. Falling back to it would turn every future
+hole in the gate into a credential leak rather than a `401`.
+
+Two supporting pieces follow from the same decision:
+
+- **One client spends it.** `web/gallery/api.js` exposes `apiFetch`; no page
+  script builds an `Authorization` header. The three cases are distinguished
+  once, so a call site cannot get them individually wrong.
+- **The SSE stream is the exception that proves it.** `EventSource` sets no
+  headers, so a token has to travel in the query string — `apiEventSource`
+  appends it only when the page was given one, and a session-authenticated
+  stream carries the cookie instead and no token in a URL at all. The stream
+  route accepts both (`authorizeEventStream`). Narrowing the query-string
+  credential itself is av-rgp1.
+
+Pinned by `internal/api/pagecredential_test.go`, which walks the app mux with
+`chi.Walk`, requires an exact-match row for every registered GET route, requests
+each one as a session-authenticated visitor, and asserts no response body
+contains the token. As with §1.4's walk, a newly added page route fails the suite
+until someone declares it — because the failure this prevents is silent: the page
+works perfectly while it leaks.
+
 ## 2. CSP: the allowlist is the wall
 
 Each artifact carries a set of per-origin decisions (`artifact_network_origins`,

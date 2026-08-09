@@ -293,6 +293,12 @@ Two credentials, checked in that order by one `chi` middleware:
   the only credential a single-user instance has. With no login configured this is
   exactly the check it has always been, with `owner_id` fixed at `1`.
 
+A server-rendered page embeds whichever of these the *request* earned, never the
+process's token unconditionally: with a session, none — the cookie authenticates
+the page's own fetches, and an embedded token would survive the logout that
+deletes the session; with no identity provider, the static token as before. See
+`security.md` §1.5.
+
 **Login is optional and always delegated (av-30rj).** Two supported ways to put one
 in front of an instance, and neither is more official than the other:
 

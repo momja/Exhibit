@@ -376,10 +376,16 @@ Server-rendered pages built with the stdlib `html/template`: the templates live 
 `internal/api/templates/` (committed source, `go:embed`-ed), their handlers and view
 models in `internal/api/gallery.go`. Each page's stylesheet and script are static
 assets authored in the `web/gallery/` workspace and served under `/assets/gallery/`;
-per-request values (API token, artifact id, allowlist, capability approvals) reach
-the page scripts through a small inline bootstrap `<script>` the templates render,
-with html/template's contextual escaping JSON-encoding them. Talks to the API
-like any other client. Hosts two islands of client JS: the **CodeMirror** source
+per-request values (the page's API credential, artifact id, allowlist, capability
+approvals) reach the page scripts through a small inline bootstrap `<script>` the
+templates render, with html/template's contextual escaping JSON-encoding them.
+Talks to the API like any other client — with the credential the *request* earned,
+never the process's: a session-authenticated browser is handed no token at all
+(its cookie already authenticates it, and an embedded token would outlive the
+logout that deletes the session), an anonymous visitor none plus a read-only flag,
+and only an instance with no identity provider embeds the static token it has
+always embedded. `pagecredential.go` decides that once and `web/gallery/api.js`
+spends it; `security.md` §1.5 is the full statement. Hosts two islands of client JS: the **CodeMirror** source
 editor (an esbuild-built, `go:embed`-served bundle) and the **renderer iframe**
 (which actually points at `RENDER_ORIGIN`). The gallery renders server-side,
 but search filters eagerly from the client: a debounced input refetches the

@@ -172,8 +172,11 @@ Go, plus `exhibit-mock` when `MOCK_LLM_URL` is set.
   `snippets`, the element descriptors the server fences as data),
   `POST …/abort`, `DELETE …`.
 - `GET /api/agent/sessions/:id/events` — SSE. EventSource can't set headers,
-  so this one route authenticates the same bearer token via `?token=`. It
-  accepts only the app's token: a session credential is not a page credential.
+  so this one route takes the app's bearer token via `?token=` — or, on an
+  instance with an identity provider, the session cookie the browser attaches
+  to a same-origin stream on its own, since such a page is deliberately handed
+  no token to pass (`security.md` §1.5). An agent session's own scoped
+  credential is accepted for neither: it is not a page credential.
 - `internal/agent` tracks streaming state (prompts sent mid-stream become Pi
   steering messages), keeps an event backlog for late subscribers, reaps idle
   sessions, and on every settled turn persists the full Pi message list to

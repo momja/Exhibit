@@ -129,7 +129,10 @@ docker compose up
   only, never on `RENDER_ORIGIN` — a cookie readable there would be readable by
   artifact code. It is marked `Secure` when `APP_ORIGIN` is `https://`.
 - `AUTH_TOKEN` keeps working for API and CLI clients, which have no browser to
-  log in with.
+  log in with. It stops being handed to browsers: once a provider is configured,
+  the gallery pages embed no bearer token at all and authenticate on the session
+  cookie, so logging out really does end that browser's API access
+  (`security.md` §1.5).
 
 > [!IMPORTANT]
 > A user row is created the first time an identity logs in, and user ids start
