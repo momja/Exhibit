@@ -293,13 +293,20 @@ Two credentials, checked in that order by one `chi` middleware:
   the only credential a single-user instance has. With no login configured this is
   exactly the check it has always been, with `owner_id` fixed at `1`.
 
-**Login is optional and always delegated (av-30rj).** Two supported ways to put one
-in front of an instance, and neither is more official than the other:
+**Login is optional (av-30rj, av-q30x).** Three supported ways to put one in front
+of an instance, and none is more official than the others:
 
 - **At the operator's reverse proxy.** Authelia, Tailscale, oauth2-proxy, or plain
   basic auth gate the request before it reaches the app. Nothing is configured in
   Exhibit — consistent with TLS and proxying already being the operator's (§12).
   Gate the *app* origin; the render origin serves shares to people with no account.
+- **A local credential**, via two env vars (`LOGIN_USERNAME`,
+  `LOGIN_PASSWORD_HASH`) — the path that needs nothing else running, and the
+  reason a self-hoster no longer has to stand up an identity server to close their
+  instance. `golang.org/x/crypto/bcrypt` is the only dependency it adds. The
+  operator supplies the hash (`server hash-password`) rather than a password the
+  service hashes at startup, because hashing a plaintext the environment already
+  holds beside it protects nothing.
 - **An OIDC provider**, via three env vars (`OIDC_ISSUER`, `OIDC_CLIENT_ID`,
   `OIDC_CLIENT_SECRET`). Authorization Code + PKCE, with every endpoint and signing
   key discovered from the issuer's `/.well-known/openid-configuration` — discovery
@@ -317,10 +324,14 @@ signed token outlives any decision to revoke it. `/auth/logout` deletes the row,
 the credential dies on the next request. Full rationale and the cookie's origin
 constraint: `architecture.md` §3.8.
 
-**Not built, deliberately:** local username/password login. Owning passwords means
-owning hashing, reset mail (so SMTP becomes a config requirement), verification,
-rate limiting and eventually MFA — a commitment neither of the two options above
-needs.
+The local credential ends at the same session, through the same call — it is a
+second login *path*, not a second session mechanism, and deliberately not an
+`IdentityProvider` implementation (that interface is redirect-based; a form post
+has no authority to redirect to and no code to exchange). What keeps it small
+enough to justify owning passwords at all is that the credential is set once at
+deploy: no registration, so no verification; no self-service, so no reset mail
+and no SMTP; one operator, so nobody to lock out. bcrypt's cost is also the rate
+limiting.
 
 ## 11. Future: Chrome extension
 

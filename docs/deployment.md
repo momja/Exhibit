@@ -42,7 +42,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 > Out of the box Exhibit is single-user: there is no login, and `AUTH_TOKEN` is
 > a single shared static token, not a real auth boundary. If you're exposing an
 > instance beyond your own machine, give it a login — see
-> [Logging in](#3-logging-in-optional) for the two supported ways — or be
+> [Logging in](#3-logging-in-optional) for the three supported ways — or be
 > comfortable with the consequences of running without one.
 
 | Variable | Default | Meaning |
@@ -56,7 +56,9 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
 | `PI_BIN` | `pi` | AI agent executable — unset/missing just disables that feature |
 | `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
-| `OIDC_ISSUER` | *(unset)* | Identity provider to delegate login to. Unset = single-user, no login |
+| `LOGIN_USERNAME` | *(unset)* | Username for Exhibit's own login. Set with `LOGIN_PASSWORD_HASH` to get a login with no identity server — see [§3.2](#32-log-in-with-a-username-and-password) |
+| `LOGIN_PASSWORD_HASH` | *(unset)* | The **bcrypt hash** of that password, not the password. Produce it with the `hash-password` subcommand (§3.2) |
+| `OIDC_ISSUER` | *(unset)* | Identity provider to delegate login to. Unset = no OIDC |
 | `OIDC_CLIENT_ID` | *(unset)* | Client id registered at that provider — required when `OIDC_ISSUER` is set |
 | `OIDC_CLIENT_SECRET` | *(unset)* | Client secret, if your provider issues one |
 | `PUBLIC_MODE_ENABLED` | `false` | Publishes this instance's library for reading without a credential. Accepts `true`/`1`/`yes`/`on`; anything unrecognized is read as off |
@@ -89,8 +91,10 @@ as you see it.
 
 ## 3. Logging in (optional)
 
-Two supported ways to put a login in front of an instance. Neither is more
-"official" than the other; pick whichever fits what you already run.
+Three supported ways to put a login in front of an instance. None is more
+"official" than the others; pick whichever fits what you already run. Setting
+none of them leaves the instance as it has always been: no login, no gate,
+`AUTH_TOKEN` and a single owner.
 
 ### 3.1 Authenticate at your proxy
 
@@ -104,12 +108,69 @@ instance stays a single-user library behind whatever door you put on it.
 Gate the **app origin**. The render origin serves artifacts and share links,
 which are meant to be openable by people who have no account.
 
-### 3.2 Delegate login to an OIDC provider
+### 3.2 Log in with a username and password
+
+The path that needs nothing else running. Two variables and the instance has a
+login page.
+
+![The login page](screenshots/av-q30x/01-login.png)
+
+First, hash the password. Exhibit takes a **bcrypt hash**, never the password
+itself, so run the binary's one subcommand and type the password when it asks:
+
+```bash
+docker compose run --rm app hash-password
+# Enter the password, then press Enter and ctrl-D:
+#
+# Set this as LOGIN_PASSWORD_HASH (with LOGIN_USERNAME):
+# $2a$10$N9qo8uLOickgx2ZMRZoMy...
+```
+
+It reads the password from stdin rather than an argument, so it never lands in
+your shell history or a process list. Then:
+
+```bash
+LOGIN_USERNAME=curator \
+LOGIN_PASSWORD_HASH='$2a$10$N9qo8uLOickgx2ZMRZoMy...' \
+APP_ORIGIN=https://app.example.com \
+docker compose up
+```
+
+Single-quote the hash: it contains `$`, which your shell will otherwise eat.
+
+- `/auth/login` now serves a login page, and every gallery page redirects there
+  until you sign in. `/auth/logout` revokes the session server-side.
+- The session is the same one §3.3 describes — the same cookie with the same
+  attributes, the same `sessions` row, the same expiry. There is one session
+  layer; a username and password is just a second way to reach it.
+- `AUTH_TOKEN` keeps working for API and CLI clients.
+- **Why a hash and not the password.** Hashing a plaintext that is sitting in
+  the process environment right beside it would protect nothing. Supplying the
+  hash means the password exists only in your head — the value in your
+  environment, your compose file, and `docker inspect` is useless anywhere
+  else. That matters more here than for `AUTH_TOKEN`, because a password is the
+  kind of secret people reuse across services.
+- Setting one variable of the pair without the other **fails at startup**,
+  rather than quietly leaving the instance with no login. So does a
+  `LOGIN_PASSWORD_HASH` that is not a bcrypt hash — which is what a pasted-in
+  plaintext password looks like.
+- There is no registration, no password reset and no email. One credential, set
+  at deploy; to change it, generate a new hash and restart. This is what keeps
+  the feature small enough to be worth having, and it is the reason it fits a
+  single-user library rather than a multi-user product.
+- Changing `LOGIN_USERNAME` later relabels the same owner rather than creating a
+  second one — your library is not orphaned by a rename.
+
+To combine it with §3.3, set both: the login page then offers the password form
+and a button through to your provider.
+
+### 3.3 Delegate login to an OIDC provider
 
 Set the three `OIDC_*` variables and Exhibit gains its own login: `/auth/login`
-sends the browser to your provider (Authorization Code + PKCE), `/auth/callback`
-exchanges the code once for a session of Exhibit's own, and `/auth/logout`
-revokes that session server-side.
+sends the browser to your provider (Authorization Code + PKCE — or offers the
+button that does, if §3.2 is configured too), `/auth/callback` exchanges the
+code once for a session of Exhibit's own, and `/auth/logout` revokes that
+session server-side.
 
 ```bash
 OIDC_ISSUER=https://auth.example.com/application/o/exhibit/ \
@@ -136,12 +197,12 @@ docker compose up
 > at 1 — the same id everything in an existing single-user library is already
 > filed under. So on an instance you are upgrading, **complete the first login
 > yourself** before letting anyone else in: that first identity adopts the
-> existing library.
+> existing library. The same is true of §3.2's credential, which is one identity
+> like any other.
 
-Exhibit deliberately has no username-and-password login of its own. Owning
-passwords means owning hashing, reset mail, verification, rate limiting and
-eventually MFA — a product commitment that buys nothing the two options above
-don't already cover.
+When both this and §3.2 are configured, `/auth/login` presents both and either
+lands the same kind of session. They are two identities, so they are two owners:
+sign in the way you intend to keep using before you fill the library.
 
 ## 4. No AI agent features
 

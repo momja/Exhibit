@@ -140,7 +140,7 @@ The only way data changes. Route groups:
 
 Middleware chain (via `chi`): request logging → auth → owner scoping (`owner_id`)
 → handler. Auth accepts two credentials, in that order of preference: a session
-cookie, when an identity provider is configured (§3.8), and otherwise the static
+cookie, when this instance has a login at all (§3.8), and otherwise the static
 bearer token — the API/CLI credential, and the only credential a single-user
 instance has. The owner is whatever the session resolved to, or `1`. Auth and
 ownership are *one layer* every mutating route passes through, which is what
@@ -535,10 +535,13 @@ See `docs/agent.md` for the full flow, including snippet mode (the render
 surface's element picker that feeds an element screenshot + descriptor back
 into the prompt as multimodal context).
 
-### 3.8 Identity provider seam (av-30rj)
+### 3.8 Login: two paths, one session layer (av-30rj, av-q30x)
 
-Login is optional and, when present, delegated. `internal/auth` holds the whole
-vendor surface, and it is two methods:
+Login is optional. When present it arrives by one of two paths — an identity
+provider, or a local username and password — and both end in the same call.
+
+**The provider seam.** `internal/auth` holds the whole vendor surface, and it is
+two methods:
 
 ```go
 type IdentityProvider interface {
@@ -583,15 +586,43 @@ all land in the same place.
   provider is a re-link of those rows rather than a migration. `email` is
   stored beside the subject precisely because subjects are provider-specific
   and are the wrong key to re-link on.
-- **Default is unchanged.** With `OIDC_ISSUER` unset there is no provider, the
-  `/auth/*` routes are never registered, the page gate is a pass-through, and
-  the static token with `owner_id` 1 behaves exactly as it always has. An
-  operator who would rather authenticate at their reverse proxy (Authelia,
-  Tailscale, basic auth) does so with nothing configured here — consistent with
-  TLS and proxying already being theirs (`deployment.md` §3).
-- **Not built, deliberately:** local username/password login. It would commit
-  the project to hashing, reset mail, verification, rate limiting and
-  eventually MFA; delegating or staying single-user covers the same ground.
+- **Default is unchanged.** With neither login configured there is no provider
+  and no credential, the `/auth/*` routes are never registered, the page gate is
+  a pass-through, and the static token with `owner_id` 1 behaves exactly as it
+  always has. An operator who would rather authenticate at their reverse proxy
+  (Authelia, Tailscale, basic auth) does so with nothing configured here —
+  consistent with TLS and proxying already being theirs (`deployment.md` §3).
+
+**The local credential (av-q30x)** is the second path, and the one that closes
+the gap the seam above left open: with no OIDC issuer configured there was no
+page gate *at all*, so securing a self-hosted library meant running an identity
+server or putting auth in the proxy. `LOGIN_USERNAME` + `LOGIN_PASSWORD_HASH`
+now arm the same gate.
+
+- **It is not an `IdentityProvider`, and must not become one.** That interface
+  is redirect-based: an external authority to send the browser to, and a code to
+  redeem. A form post has neither, and forcing it through would mean inventing a
+  self-redirect and a fake authorization code that exist only to satisfy a
+  shape. So the structure is one *session layer* with two *login paths*, which
+  is what "one session layer, not two" actually asked for.
+- **The convergence point is `startSession`** (`internal/api/auth.go`), the only
+  place a session is ever created. Both paths reach it holding an
+  `auth.Identity`; everything after it — the `users` row, the `sessions` row,
+  the cookie, `owner_id` — is identical and cannot tell them apart. The login
+  method is recorded in a log line and nowhere else.
+- **The credential is a bcrypt hash set at deploy**, never a plaintext the
+  service hashes for itself: hashing a value the process environment already
+  holds beside it protects nothing. One credential, no registration, no reset
+  flow, therefore no SMTP — the costs that made passwords a bad trade for a
+  multi-user product are the ones this scope does not pay. `users.external_id`
+  is the constant `local` rather than the username, so renaming the login
+  relabels the owner instead of orphaning the library.
+- **Routes.** `/auth/login` renders the login page when a credential is
+  configured and otherwise redirects straight to the provider — a page whose
+  only control is "continue" is a choice that does not exist. `POST /auth/local`
+  is the form target; `/auth/sso` is the provider redirect, split out so the
+  page has a button to point at when both paths exist. Each is registered only
+  when the instance can serve it.
 
 ## 4. Trust boundaries
 

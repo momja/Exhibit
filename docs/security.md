@@ -280,13 +280,32 @@ The login flow holds the only GET routes that do change state, and each is safe
 for its own reason rather than by the rule above:
 
 - `GET /auth/login` mints short-lived state/verifier cookies before any session
-  exists. Forging it starts a login the attacker cannot finish.
+  exists. Forging it starts a login the attacker cannot finish. (On an instance
+  with a local credential it renders the login page and mints nothing; it is
+  declared by its worse case.)
+- `GET /auth/sso` is that provider redirect split out, so the login page has
+  something to point its SSO button at when both login paths exist. Same
+  cookies, same reason.
 - `GET /auth/callback` **is** a cross-site top-level GET by construction — the
   provider redirects the browser to it — and carries its own forgery defence:
   the `state` it must match was parked in a cookie by this origin.
 - `GET /auth/logout` revokes a session. A forged request achieves nothing worse
   than logging the user out, and logout stays a link because that is the
   affordance people expect.
+
+`POST /auth/local` — the local credential's login (av-q30x) — is on an unsafe
+method and so is covered by condition 1 like any other mutation. It is worth
+stating that it needs nothing further: Lax protects requests that *carry* an
+ambient credential, and this one runs before any session exists, so the only
+thing a cross-site page could forge is a login it must already know the password
+to complete. Its post-login destination arrives in a form field rather than a
+query parameter, so it goes through the same `safeNext` and can still only be a
+path on this origin. The password is compared with bcrypt, whose cost is also
+the whole of the rate limiting — a guess costs the attacker the same tens of
+milliseconds it costs the server, which is what makes an unthrottled login
+endpoint tolerable for a single credential. An instance exposed to the open
+internet should still have a rate limit at the proxy, where the rest of that
+deployment's ingress policy already lives.
 
 ## 2. CSP: the allowlist is the wall
 
