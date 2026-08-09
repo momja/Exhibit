@@ -40,6 +40,13 @@
         "\\bnude(s|ity|ness)?\\b",
         "\\bsex(ual|y|ualize)?\\b",
         "\\bgore\\b"
+      ],
+      "offtopic": [
+        "\\b(recipe|recipes|cooking|cookbook|baking|lasagna|pizza|dinner|breakfast|lunch)\\b",
+        "\\b(weather|forecast|temperature|rain|snow) (today|tomorrow|outside|this week)\\b",
+        "\\bhoroscope|astrology\\b",
+        "\\blottery (numbers|results|winning)\\b",
+        "\\bcelebrity (gossip|news|drama)\\b"
       ]
     }
   },

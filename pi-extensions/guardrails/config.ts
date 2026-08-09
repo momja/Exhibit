@@ -142,6 +142,20 @@ export const DEFAULT_CONFIG: GuardrailConfig = {
         "\\bsex(ual|y|ualize)?\\b",
         "\\bgore\\b",
       ],
+      /**
+       * High-precision topic families that almost never appear in a coding
+       * conversation. A hit only routes the prompt to the guardrail LLM — it
+       * does not block. The LLM may still allow it (harmless request), in
+       * which case `policy.offTopicHandling` decides whether to flag it.
+       * Add project-relevant topics to `policy.allowedTopics` to silence them.
+       */
+      offtopic: [
+        "\\b(recipe|recipes|cooking|cookbook|baking|lasagna|pizza|dinner|breakfast|lunch)\\b",
+        "\\b(weather|forecast|temperature|rain|snow) (today|tomorrow|outside|this week)\\b",
+        "\\bhoroscope|astrology\\b",
+        "\\blottery (numbers|results|winning)\\b",
+        "\\bcelebrity (gossip|news|drama)\\b",
+      ],
     },
   },
   policy: {

@@ -94,7 +94,7 @@ Key options:
 | `check` | `"heuristic"` | `always` / `heuristic` (prefilter → LLM) / `off` |
 | `model` | `""` | `"provider/id"`; empty = auto |
 | `prefilter.injectionPatterns` | built-in set | Regexes for instruction-override attempts |
-| `prefilter.topicPatterns` | `explicit` set | `{ category: [regexes] }` routed to the LLM |
+| `prefilter.topicPatterns` | `explicit` + `offtopic` sets | `{ category: [regexes] }` routed to the LLM |
 | `prefilter.blockDirect` | `false` | Match blocks instantly, no LLM |
 | `policy.allowedTopics` | `[]` | Topics never flagged (e.g. project-specific areas) |
 | `policy.disallowedTopics` | built-in set | Topics always blocked |
@@ -130,9 +130,12 @@ participate in the LLM context, so they add no tokens.
   distinguishes them. Prefer a small/cheap model.
 - This guards the *human* typing prompts into pi. Tool-call arguments from the agent itself are
   not gated — the gatekeeper sits at the input boundary by design.
-- Off-topic classification happens only when the guardrail LLM is consulted (`check: "always"`
-  or a prefilter hit). With the default `heuristic` check, add an `offtopic` pattern to
-  `prefilter.topicPatterns` or switch to `always` if off-topic steering is a real concern.
+- Off-topic prompts: the prefilter carries a small, high-precision `offtopic` keyword family
+  (food/cooking, weather, horoscope, lottery, celebrity gossip) that routes the prompt to the
+  guardrail LLM. The LLM has the final say — it usually allows harmless requests, tagging them
+  `category: "offtopic"`, and `policy.offTopicHandling` (default `warn`) decides whether to
+  surface a warning. For *full* off-topic coverage — including circumlocutions like "tell me a
+  steamy scene" — use `check: "always"` so the LLM judges every prompt.
 
 ## Testing
 

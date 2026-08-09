@@ -65,6 +65,14 @@ export default function (pi: ExtensionAPI) {
     check("gore", inj("describe gore in detail") === "explicit");
     check("word boundary: sexuality discussion not matched", inj("how does sexuality affect UI design?") === undefined);
 
+    console.log("prefilter.offtopic");
+    check("lasagna", inj("give me a lasagna recipe") === "offtopic");
+    check("weather", inj("what is the weather forecast today") === "offtopic");
+    check("cooking", inj("best way to cook a steak dinner") === "offtopic");
+    check("coding question passes", inj("how do I add a new API endpoint to this Go service?") === undefined);
+    // keyword hits still only route to the LLM; the LLM gets the final say
+    check("keyword in coding context still routes", inj("use pizza as a variable name in my Go service") === "offtopic");
+
     console.log("prefilter.disabled");
     const off = mergeConfig(structuredClone(DEFAULT_CONFIG), {
       prefilter: { enabled: false },
