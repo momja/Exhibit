@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -15,16 +17,23 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-// The session layer (av-30rj, extended by av-q30x). Two login paths reach it:
+// The session layer (av-30rj, extended by av-q30x and av-rzvf). Two login
+// paths reach it:
 //
 //   - An identity provider, exchanged exactly once at /auth/callback.
-//   - A local username and password, checked at /auth/local.
+//   - A local login name and password, checked at /auth/local.
 //
 // They converge on startSession and diverge nowhere after it. Everything past
 // that point — the cookie, the per-request lookup, owner_id — knows only that
-// it holds an auth.Identity, which is why swapping providers touches one
+// it holds a *store.User, which is why swapping providers touches one
 // constructor in cmd/server, and why adding local credentials added a handler
 // rather than a second session mechanism.
+//
+// Since av-rzvf the local path resolves its credential against the users table
+// rather than against a single environment variable, so an instance can have
+// more than one local account. resolveLocalLogin below is the whole of that
+// change; nothing about the form, the bcrypt compare, the cookie or the CSRF
+// posture moved with it.
 //
 // The local credential is deliberately not an IdentityProvider; internal/auth's
 // local.go says why that interface does not fit a form post.
@@ -54,9 +63,17 @@ const DefaultSessionTTL = 30 * 24 * time.Hour
 // identityEnabled reports whether this instance delegates login to a provider.
 func (ro *Router) identityEnabled() bool { return ro.cfg.Identity != nil }
 
-// localLoginEnabled reports whether this instance has a username and password
-// of its own (av-q30x).
-func (ro *Router) localLoginEnabled() bool { return ro.cfg.LocalCredential != nil }
+// localLoginEnabled reports whether this instance has passwords of its own
+// (av-q30x, av-rzvf) — either the environment credential, or at least one
+// account already provisioned into the users table.
+//
+// Both count, because either alone is a complete answer. An operator may set
+// only LOGIN_USERNAME and never provision a second account; another may
+// provision accounts with the CLI and unset the environment pair afterwards.
+// Neither set is the single-user default, unchanged.
+func (ro *Router) localLoginEnabled() bool {
+	return ro.cfg.LocalCredential != nil || ro.cfg.LocalUsers
+}
 
 // loginEnabled reports whether this instance has *any* way for a person to log
 // in. It, not identityEnabled, is what arms the session gate: before av-q30x an
@@ -182,7 +199,16 @@ func (ro *Router) authCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ro.startSession(w, r, *identity, "oidc"); err != nil {
+	// The provider identity becomes a users row here — created on first
+	// login, its email refreshed on every later one. A local account is the
+	// same row with a password column filled in, which is what puts both
+	// kinds of user in one owner_id space (av-rzvf).
+	user, err := ro.cfg.Store.UpsertUser(r.Context(), identity.ExternalID, identity.Email)
+	if err != nil {
+		ro.failLogin(w, "could not resolve identity", slog.String("err", err.Error()))
+		return
+	}
+	if err := ro.startSession(w, r, user, "oidc"); err != nil {
 		ro.failLogin(w, "could not start session", slog.String("err", err.Error()))
 		return
 	}
@@ -215,14 +241,21 @@ func (ro *Router) authLocal(w http.ResponseWriter, r *http.Request) {
 	// One message for a wrong name and a wrong password, and nothing about
 	// either in the log line — a failed login is worth recording, the
 	// credential someone tried is not.
-	if !ro.cfg.LocalCredential.Verify(username, r.PostFormValue("password")) {
+	user, err := ro.resolveLocalLogin(r.Context(), username, r.PostFormValue("password"))
+	if err != nil {
+		slog.Error("resolve local login", slog.String("err", err.Error()))
+		ro.renderLogin(w, r, http.StatusInternalServerError, next, username,
+			"Could not check that login. Try again.")
+		return
+	}
+	if user == nil {
 		slog.Warn("local login failed", slog.String("remote_addr", r.RemoteAddr))
 		ro.renderLogin(w, r, http.StatusUnauthorized, next, username,
 			"That username and password don't match.")
 		return
 	}
 
-	if err := ro.startSession(w, r, ro.cfg.LocalCredential.Identity(), "local"); err != nil {
+	if err := ro.startSession(w, r, user, "local"); err != nil {
 		slog.Error("start local session", slog.String("err", err.Error()))
 		ro.renderLogin(w, r, http.StatusInternalServerError, next, username,
 			"Could not start a session. Try again.")
@@ -236,19 +269,56 @@ func (ro *Router) authLocal(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, dest, http.StatusFound)
 }
 
+// resolveLocalLogin answers "which account, if any, does this name and
+// password belong to?" — nil for no match, an error only when the lookup
+// itself failed.
+//
+// The precedence is the security decision in av-rzvf, and it runs one way
+// round on purpose:
+//
+//  1. The environment credential, when the submitted name is the one it is
+//     configured for. It is checked *first* so that no state in the database
+//     can shadow it — that is the whole of its break-glass value. Its account
+//     row is created on demand, which is also how it bootstraps the first
+//     admin on an empty instance.
+//  2. Otherwise the users table, by login name, against the stored hash.
+//
+// Read together: LOGIN_USERNAME names an account and LOGIN_PASSWORD_HASH is an
+// always-accepted password for it. An operator locked out of their own account
+// points the pair at their own login name and is back in it — not in some
+// separate rescue account holding none of their artifacts.
+//
+// Exactly one bcrypt compare happens per attempt, whichever branch is taken and
+// whether or not the name exists (auth.VerifyStoredPassword spends the compare
+// on an absent account too). Cost that varies with the input is how a login
+// endpoint tells an attacker which names are real.
+func (ro *Router) resolveLocalLogin(ctx context.Context, name, password string) (*store.User, error) {
+	if cred := ro.cfg.LocalCredential; cred != nil && cred.Names(name) {
+		if !cred.VerifyPassword(password) {
+			return nil, nil
+		}
+		identity := cred.Identity()
+		return ro.cfg.Store.UpsertUser(ctx, identity.ExternalID, identity.Email)
+	}
+	user, hash, err := ro.cfg.Store.LookupLocalCredential(ctx, auth.LocalExternalID(name))
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return nil, err
+	}
+	if !auth.VerifyStoredPassword(hash, password) {
+		return nil, nil
+	}
+	return user, nil
+}
+
 // startSession is where the two login paths meet, and the only place a session
 // is ever created.
 //
 // Whatever proved who the visitor is — a provider's token exchange or a
-// password — reaches here as an auth.Identity and produces the same users row,
-// the same sessions row, and the same cookie. `method` is for the log line
-// only; nothing downstream may branch on it, because a session that remembered
-// how it was created would be the beginning of a second session layer.
-func (ro *Router) startSession(w http.ResponseWriter, r *http.Request, identity auth.Identity, method string) error {
-	user, err := ro.cfg.Store.UpsertUser(r.Context(), identity.ExternalID, identity.Email)
-	if err != nil {
-		return err
-	}
+// password — reaches here as a resolved users row and produces the same
+// sessions row and the same cookie. `method` is for the log line only; nothing
+// downstream may branch on it, because a session that remembered how it was
+// created would be the beginning of a second session layer.
+func (ro *Router) startSession(w http.ResponseWriter, r *http.Request, user *store.User, method string) error {
 	sid, err := auth.NewSessionID()
 	if err != nil {
 		return err
