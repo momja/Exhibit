@@ -96,3 +96,15 @@ Blocked on the open question above. Provisional:
 6. A second provider can be configured without changes outside its constructor — demonstrated by a test double implementing `IdentityProvider`.
 7. Docs state the BYO reverse-proxy-auth path (Authelia, Tailscale, basic auth at the proxy) as a supported alternative, consistent with the "TLS/proxy is the operator's" stance.
 
+
+## Notes
+
+**2026-08-09T17:40:13Z**
+
+SUPERSEDED IN PART (2026-08-09) — see av-sz4e
+
+This ticket's 'Deliberately not building: local password auth as a first-class feature' no longer holds. Self-hosted multi-user is a supported story, and shipping a user backend is the norm for self-hosted software — Immich, Nextcloud and Vaultwarden all ship one *and* support OIDC, so BYO identity is the escape hatch rather than the only door.
+
+The reasoning here was not wrong, it was scoped to a model this project has now rejected. Every objection except one dissolves under operator-provisioned accounts with no email: an admin creating users removes registration and verification, an admin resetting passwords removes SMTP, and bcrypt was already shipped by av-q30x. Rate limiting survives and is in scope as av-t21v.
+
+**What remains true and load-bearing from this ticket:** the seam. The IdP is exchanged exactly once at /auth/callback for a session of ours; the vendor surface is two methods; no vendor SDK is in go.mod. A built-in user backend does not touch any of that — it is another login path converging on startSession, exactly as av-q30x's is. Nothing here needs undoing to build av-sz4e.

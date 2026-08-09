@@ -28,3 +28,17 @@ The immediate driver is account deletion — a user removed at the identity prov
 
 Administration of *other* users. The identity provider is the user directory (deployment.md §3.4); this epic is about a person acting on their own account, not an operator acting on someone else's.
 
+
+## Notes
+
+**2026-08-09T17:40:13Z**
+
+SCOPE BOUNDARY MOVED (2026-08-09) — administration now belongs to av-sz4e
+
+This epic excludes 'administration of other users' on the grounds that the identity provider is the user directory. That holds while there *is* a provider. av-sz4e ships a built-in user backend, so on those instances Exhibit is the directory and somebody has to create accounts and reset forgotten passwords.
+
+The division, so the two epics do not collide:
+- **av-g2dx (this one): a person acting on their own account.** Their settings page, their password change, their deletion, their sessions, their export.
+- **av-sz4e: an admin acting on the instance.** Creating users, disabling them, resetting someone else's password.
+
+They will likely share page furniture — the settings page av-qwld builds is the obvious host for both — but they must not share authority. A route that edits *someone else's* account is av-sz4e's and needs the admin check; a route that edits your own is this epic's and needs none beyond a session.
