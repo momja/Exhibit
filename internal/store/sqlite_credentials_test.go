@@ -161,11 +161,11 @@ func TestListUsersIsTheInstanceDirectory(t *testing.T) {
 }
 
 // The upgrade path. A database from before av-rzvf holds one local row keyed
-// on the constant 'local'; after 015 it must be keyed on its own name, so the
+// on the constant 'local'; after 016 it must be keyed on its own name, so the
 // operator's configured LOGIN_USERNAME still resolves to the library it
 // already owns instead of to a fresh empty account.
-func TestMigration015RekeysTheLocalRowAndPromotesTheFirstUser(t *testing.T) {
-	f, err := os.CreateTemp("", "test-mig015-*.db")
+func TestMigration016RekeysTheLocalRowAndPromotesTheFirstUser(t *testing.T) {
+	f, err := os.CreateTemp("", "test-mig016-*.db")
 	require.NoError(t, err)
 	f.Close()
 	t.Cleanup(func() { os.Remove(f.Name()) })
@@ -188,7 +188,7 @@ func TestMigration015RekeysTheLocalRowAndPromotesTheFirstUser(t *testing.T) {
 	                  VALUES (1, 'local', 'Curator'), (2, 'sub-1', 'sso@example.test')`)
 	require.NoError(t, err)
 
-	require.NoError(t, goose.UpTo(db, "migrations", 15))
+	require.NoError(t, goose.UpTo(db, "migrations", 16))
 
 	var externalID string
 	var isAdmin bool
