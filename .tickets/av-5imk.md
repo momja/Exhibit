@@ -2,7 +2,7 @@
 id: av-5imk
 status: open
 deps: []
-links: [av-wmp6, av-rgp1]
+links: [av-wmp6, av-rgp1, av-q30x, av-30rj]
 created: 2026-08-06T16:02:07Z
 type: bug
 priority: 1
@@ -39,3 +39,22 @@ Make it structural, in roughly this order:
 Worth noting while here: this is the same class of finding as av-rgp1 (the API bearer token in the SSE URL query string). Both are 'the operator's full-authority credential travelling somewhere it need not go'. If av-rgp1's fix introduces a narrower, request-scoped browser credential, that is very likely the same mechanism this ticket wants — check it before inventing a second one.
 
 Also worth checking: `rendertoken.Signer` (av-c5aq) already mints short-lived, narrowly-scoped credentials and av-wmp6 extended it with an anonymous claim that subtracts authority. The shape needed here — 'a browser credential that is not the service token' — may be a third caller of that helper rather than a new mechanism.
+
+**2026-08-09T04:05:59Z**
+
+ESCALATION (2026-08-08): this is a live defect in shipped auth, not only a public-mode trap
+
+The original description frames this as a trap awaiting the public-page tickets. It is broader than that, and it undermines the property av-30rj was built to deliver.
+
+Every page render passes `ro.cfg.AuthToken` **unconditionally** — gallery.go:105/118/146/182 and agentui.go:141 — with no reference to how the visitor authenticated. So on an instance with OIDC correctly configured and `sessionGate` correctly gating the pages:
+
+1. The user logs in through the provider and receives a session cookie.
+2. They load any page. That page hands their browser `AUTH_TOKEN` — the operator's full-authority service credential — in an inline bootstrap script.
+3. They log out. The session row is deleted, so the cookie is dead.
+4. **The service token is not.** It is in the page source they already loaded, in devtools, in anything that copied it. It grants full API authority over every artifact, every collection, the share table and the BYO provider key, and it cannot be revoked for one person — only rotated for everyone.
+
+So logout does not revoke API access. That is precisely the property av-30rj chose an opaque server-side session for in the first place ('a row can be deleted, so logout revokes immediately instead of at some TTL the server cannot influence' — 013_users_sessions.sql). The session layer keeps its promise; the page bootstrap breaks it.
+
+This raises the priority: it is not gated on the public-page work, and a multi-user or hosted deployment is unsafe until it is fixed. It should land with — or before — the epic reaches main.
+
+The fix does not change: emit a credential derived from the request, not from the process. For a session-authenticated browser the correct answer is likely **no token at all** — the cookie is already sent automatically with same-origin fetches, so the embedded bearer token is vestigial for browser clients generally, not just anonymous ones. Confirm the page JS paths work cookie-only before removing it (SSE via EventSource is the one to check — see av-rgp1, which is the same credential in a different wrong place).
