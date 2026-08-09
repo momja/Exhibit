@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -303,7 +304,10 @@ func userCommand(args []string) {
 		fmt.Fprint(os.Stderr, usage)
 		fatal("user", fmt.Errorf("needs a subcommand"))
 	}
-	logging.Configure(slog.LevelInfo)
+	// Warn, not the server's info: the operator asked one question and the
+	// answer is on stdout. A migration that has to run is still reported by
+	// failing, which is the only part of it they can act on.
+	logging.Configure(slog.LevelWarn)
 	dataDir := getenv("DATA_DIR", "./data")
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		fatal("create data dir", err)
@@ -345,18 +349,21 @@ func userCommand(args []string) {
 			fatal("user add", fmt.Errorf("needs a login name"))
 		}
 		user, err := st.CreateLocalUser(ctx, auth.LocalExternalID(name), name, hashFromStdin(name))
-		if err != nil {
+		if errors.Is(err, store.ErrDuplicateName) {
+			fatal("create user", fmt.Errorf("%q already has an account — `user passwd` changes its password", name))
+		} else if err != nil {
 			fatal("create user", err)
 		}
 		// Said out loud because it is the one thing about a new account that
 		// is not obvious from having typed the command, and because on an
 		// empty instance the first `user add` is what makes the admin.
-		role := "a regular user"
 		if user.IsAdmin {
-			role = "this instance's admin — the first account on an instance gets it"
+			fmt.Fprintf(os.Stderr, "created %s (owner id %d) — the first account on an instance is its admin\n",
+				user.Email, user.ID)
+			fmt.Fprintln(os.Stderr, "restart the server so it starts requiring a login")
+		} else {
+			fmt.Fprintf(os.Stderr, "created %s (owner id %d)\n", user.Email, user.ID)
 		}
-		fmt.Fprintf(os.Stderr, "created %s (owner id %d), %s\n", user.Email, user.ID, role)
-		fmt.Fprintln(os.Stderr, "restart the server if this was the first account, so it starts requiring a login")
 	case "passwd":
 		if name == "" {
 			fatal("user passwd", fmt.Errorf("needs a login name"))

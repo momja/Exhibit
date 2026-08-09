@@ -299,20 +299,24 @@ the page's own fetches, and an embedded token would survive the logout that
 deletes the session; with no identity provider, the static token as before. See
 `security.md` §1.5.
 
-**Login is optional (av-30rj, av-q30x).** Three supported ways to put one in front
-of an instance, and none is more official than the others:
+**Login is optional (av-30rj, av-q30x, av-rzvf).** Three supported ways to put one
+in front of an instance, and none is more official than the others:
 
 - **At the operator's reverse proxy.** Authelia, Tailscale, oauth2-proxy, or plain
   basic auth gate the request before it reaches the app. Nothing is configured in
   Exhibit — consistent with TLS and proxying already being the operator's (§12).
   Gate the *app* origin; the render origin serves shares to people with no account.
-- **A local credential**, via two env vars (`LOGIN_USERNAME`,
-  `LOGIN_PASSWORD_HASH`) — the path that needs nothing else running, and the
-  reason a self-hoster no longer has to stand up an identity server to close their
-  instance. `golang.org/x/crypto/bcrypt` is the only dependency it adds. The
-  operator supplies the hash (`server hash-password`) rather than a password the
-  service hashes at startup, because hashing a plaintext the environment already
-  holds beside it protects nothing.
+- **Exhibit's own accounts** — the path that needs nothing else running, and the
+  reason a self-hoster no longer has to stand up an identity server to close
+  their instance or to give a second person a library.
+  `golang.org/x/crypto/bcrypt` is the only dependency it adds. Accounts are rows
+  in `users` with a nullable `password_hash`, provisioned by the operator
+  (`server user add` / `user passwd`) rather than by self-registration, so there
+  is nothing to verify and no reset mail — and therefore no SMTP in the config
+  surface. `LOGIN_USERNAME` / `LOGIN_PASSWORD_HASH` remain as the bootstrap and
+  break-glass credential. Either way the operator supplies a bcrypt hash rather
+  than a password the service hashes for itself, because hashing a plaintext the
+  environment already holds beside it protects nothing.
 - **An OIDC provider**, via three env vars (`OIDC_ISSUER`, `OIDC_CLIENT_ID`,
   `OIDC_CLIENT_SECRET`). Authorization Code + PKCE, with every endpoint and signing
   key discovered from the issuer's `/.well-known/openid-configuration` — discovery
@@ -334,10 +338,11 @@ The local credential ends at the same session, through the same call — it is a
 second login *path*, not a second session mechanism, and deliberately not an
 `IdentityProvider` implementation (that interface is redirect-based; a form post
 has no authority to redirect to and no code to exchange). What keeps it small
-enough to justify owning passwords at all is that the credential is set once at
-deploy: no registration, so no verification; no self-service, so no reset mail
-and no SMTP; one operator, so nobody to lock out. bcrypt's cost is also the rate
-limiting.
+enough to justify owning passwords at all is that accounts are
+operator-provisioned: no self-registration, so nothing to verify; no
+self-service reset, so no reset mail and therefore no SMTP; and an admin who
+can always reset a forgotten password, so nobody is locked out. bcrypt's cost is
+also the rate limiting.
 
 ## 11. Future: Chrome extension
 
