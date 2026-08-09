@@ -60,8 +60,10 @@ func newIdentityTestRouter(t *testing.T, idp auth.IdentityProvider) (*Router, st
 // newLoginTestRouter builds a router with either login path configured, or
 // both. The two are independent knobs on purpose: an instance may have a
 // provider, a local credential, or one of each, and the session layer they
-// share must not be able to tell.
-func newLoginTestRouter(t *testing.T, idp auth.IdentityProvider, cred *auth.Credential) (*Router, store.Store) {
+// share must not be able to tell. opts adjust the rest of the Config; the
+// third knob — LocalUsers, whether accounts already exist in the users table
+// (av-rzvf) — is one of them.
+func newLoginTestRouter(t *testing.T, idp auth.IdentityProvider, cred *auth.Credential, opts ...func(*Config)) (*Router, store.Store) {
 	t.Helper()
 
 	f, err := os.CreateTemp("", "test-auth-*.db")
@@ -83,7 +85,7 @@ func newLoginTestRouter(t *testing.T, idp auth.IdentityProvider, cred *auth.Cred
 	box, err := secrets.Load("test-secret", "")
 	require.NoError(t, err)
 
-	return NewRouter(Config{
+	cfg := Config{
 		Store:           st,
 		Blob:            bl,
 		AppOrigin:       "https://app.test",
@@ -92,7 +94,11 @@ func newLoginTestRouter(t *testing.T, idp auth.IdentityProvider, cred *auth.Cred
 		Secrets:         box,
 		Identity:        idp,
 		LocalCredential: cred,
-	}), st
+	}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	return NewRouter(cfg), st
 }
 
 // cookiesFrom collects a response's Set-Cookie headers by name, keeping the

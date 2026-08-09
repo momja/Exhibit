@@ -281,22 +281,25 @@ func (ro *Router) authLocal(w http.ResponseWriter, r *http.Request) {
 //     can shadow it — that is the whole of its break-glass value. Its account
 //     row is created on demand, which is also how it bootstraps the first
 //     admin on an empty instance.
-//  2. Otherwise the users table, by login name, against the stored hash.
+//  2. Otherwise, or if that password did not match, the users table: by login
+//     name, against the stored hash.
 //
 // Read together: LOGIN_USERNAME names an account and LOGIN_PASSWORD_HASH is an
-// always-accepted password for it. An operator locked out of their own account
-// points the pair at their own login name and is back in it — not in some
-// separate rescue account holding none of their artifacts.
+// *additional* always-accepted password for it. An operator locked out of
+// their own account points the pair at their own login name and is back in it —
+// not in some separate rescue account holding none of their artifacts — and
+// the `user passwd` they then run takes effect immediately rather than at the
+// next restart, because the stored password was never displaced.
 //
-// Exactly one bcrypt compare happens per attempt, whichever branch is taken and
-// whether or not the name exists (auth.VerifyStoredPassword spends the compare
-// on an absent account too). Cost that varies with the input is how a login
-// endpoint tells an attacker which names are real.
+// One bcrypt compare happens per attempt, and it happens whether or not the
+// name exists (auth.VerifyStoredPassword spends the compare on an absent
+// account too). Cost that varies with the input is how a login endpoint tells
+// an attacker which names are real. The single exception is a failed attempt
+// against the one name the environment credential configures, which costs two —
+// that name is in the operator's own environment, not something an attacker
+// learns anything by probing for.
 func (ro *Router) resolveLocalLogin(ctx context.Context, name, password string) (*store.User, error) {
-	if cred := ro.cfg.LocalCredential; cred != nil && cred.Names(name) {
-		if !cred.VerifyPassword(password) {
-			return nil, nil
-		}
+	if cred := ro.cfg.LocalCredential; cred != nil && cred.Names(name) && cred.VerifyPassword(password) {
 		identity := cred.Identity()
 		return ro.cfg.Store.UpsertUser(ctx, identity.ExternalID, identity.Email)
 	}
