@@ -39,6 +39,15 @@ type Config struct {
 	// thing that changes, and swapping one provider for another changes
 	// nothing but which constructor filled this field.
 	Identity auth.IdentityProvider
+	// LocalCredential is the instance's own username and password (av-q30x),
+	// the second login path. Nil — the default — is the same single-user
+	// instance Identity's nil describes; set, it arms the same session gate
+	// and lands the same session, so an instance can be secured with one env
+	// var pair and no identity server anywhere.
+	//
+	// It is not an IdentityProvider and is not meant to become one: see
+	// internal/auth/local.go for why a form post does not fit a redirect seam.
+	LocalCredential *auth.Credential
 	// SessionTTL bounds how long a login lasts; zero means
 	// DefaultSessionTTL. Logout revokes sooner, server-side.
 	SessionTTL time.Duration

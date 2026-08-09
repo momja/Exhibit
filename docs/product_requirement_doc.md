@@ -183,16 +183,19 @@ shares(id, artifact_id, public, expires_at)          -- sharing as a row, §7
   does (404, never 403 — a permission error would confirm the row exists). The render
   and share paths are the two deliberate, explicitly named exceptions; see
   `architecture.md` §3.3.
-- **Optional login, always delegated:** an operator either authenticates at their own
-  reverse proxy (Authelia, Tailscale, basic auth) — Exhibit configures nothing for
-  that — or points `OIDC_ISSUER` at an identity provider. The provider is exchanged
-  once, at the callback, for a session of ours (opaque cookie, revocable
-  server-side); the same middleware seam resolves it to `owner_id`, so the API
-  contract is unchanged either way. The vendor surface is a two-method interface
+- **Optional login, three ways in:** an operator authenticates at their own reverse
+  proxy (Authelia, Tailscale, basic auth) — Exhibit configures nothing for that —
+  or sets a local username and password, or points `OIDC_ISSUER` at an identity
+  provider. The latter two are *login paths* onto one session layer: each ends by
+  creating the same opaque, server-side-revocable session cookie, and the same
+  middleware seam resolves it to `owner_id`, so the API contract is unchanged
+  whichever was used. The provider's vendor surface is a two-method interface
   (`architecture.md` §3.8) and no vendor SDK is a dependency.
-- **Deliberately not built:** local username/password login. Passwords drag in
-  hashing, reset mail, verification, rate limiting and eventually MFA — delegate, or
-  stay single-user.
+- **The local credential is deliberately minimal:** one username and password set
+  at deploy as a bcrypt hash. No registration, no reset flow, no SMTP, no MFA —
+  those are what make owning passwords expensive, and a credential set once by the
+  operator pays none of them. It exists because the alternative for one person with
+  one library on a public network was to stand up an identity server.
 
 ## 5. Cross-device artifact state (the storage shim)
 

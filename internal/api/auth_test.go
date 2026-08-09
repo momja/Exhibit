@@ -54,6 +54,15 @@ var _ auth.IdentityProvider = (*stubProvider)(nil)
 
 func newIdentityTestRouter(t *testing.T, idp auth.IdentityProvider) (*Router, store.Store) {
 	t.Helper()
+	return newLoginTestRouter(t, idp, nil)
+}
+
+// newLoginTestRouter builds a router with either login path configured, or
+// both. The two are independent knobs on purpose: an instance may have a
+// provider, a local credential, or one of each, and the session layer they
+// share must not be able to tell.
+func newLoginTestRouter(t *testing.T, idp auth.IdentityProvider, cred *auth.Credential) (*Router, store.Store) {
+	t.Helper()
 
 	f, err := os.CreateTemp("", "test-auth-*.db")
 	require.NoError(t, err)
@@ -75,13 +84,14 @@ func newIdentityTestRouter(t *testing.T, idp auth.IdentityProvider) (*Router, st
 	require.NoError(t, err)
 
 	return NewRouter(Config{
-		Store:        st,
-		Blob:         bl,
-		AppOrigin:    "https://app.test",
-		RenderOrigin: "https://render.test",
-		AuthToken:    "secret",
-		Secrets:      box,
-		Identity:     idp,
+		Store:           st,
+		Blob:            bl,
+		AppOrigin:       "https://app.test",
+		RenderOrigin:    "https://render.test",
+		AuthToken:       "secret",
+		Secrets:         box,
+		Identity:        idp,
+		LocalCredential: cred,
 	}), st
 }
 

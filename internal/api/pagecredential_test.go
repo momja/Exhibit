@@ -87,9 +87,14 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/collections/", path: "/api/collections"},
 	{route: "/api/tags/", path: "/api/tags"},
 
-	// The login flow, registered only when a provider is configured. Requested
+	// The login flow, registered only when a login is configured. Requested
 	// last, because logging out is one of them.
+	//
+	// /auth/login is the one page here that renders markup rather than
+	// redirecting (av-q30x gave it a form), so it is exactly the kind of route
+	// this walk exists for. /auth/sso only redirects to the provider.
 	{route: "/auth/login", path: "/auth/login"},
+	{route: "/auth/sso", path: "/auth/sso"},
 	{route: "/auth/callback", path: "/auth/callback"},
 	{route: "/auth/logout", path: "/auth/logout"},
 }

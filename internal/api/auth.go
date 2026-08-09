@@ -2,8 +2,11 @@ package api
 
 import (
 	"crypto/subtle"
+	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -12,15 +15,23 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-// The session layer (av-30rj). An identity provider is exchanged exactly once,
-// here at the callback, for a session this service owns. Everything after that
-// point — the cookie, the per-request lookup, owner_id — is provider-agnostic,
-// which is why swapping providers touches one constructor in cmd/server and
-// nothing in this file.
+// The session layer (av-30rj, extended by av-q30x). Two login paths reach it:
 //
-// When no provider is configured this whole surface is absent: the /auth routes
-// are never registered, the gate is a pass-through, and the static token plus
-// owner 1 behave exactly as they always have.
+//   - An identity provider, exchanged exactly once at /auth/callback.
+//   - A local username and password, checked at /auth/local.
+//
+// They converge on startSession and diverge nowhere after it. Everything past
+// that point — the cookie, the per-request lookup, owner_id — knows only that
+// it holds an auth.Identity, which is why swapping providers touches one
+// constructor in cmd/server, and why adding local credentials added a handler
+// rather than a second session mechanism.
+//
+// The local credential is deliberately not an IdentityProvider; internal/auth's
+// local.go says why that interface does not fit a form post.
+//
+// When neither is configured this whole surface is absent: the /auth routes are
+// never registered, the gate is a pass-through, and the static token plus owner
+// 1 behave exactly as they always have.
 const (
 	// sessionCookieName holds an opaque random session id, looked up on
 	// every request. It is deliberately not a signed token carrying claims:
@@ -41,8 +52,22 @@ const (
 const DefaultSessionTTL = 30 * 24 * time.Hour
 
 // identityEnabled reports whether this instance delegates login to a provider.
-// False is the default and means single-user: static token, owner 1.
 func (ro *Router) identityEnabled() bool { return ro.cfg.Identity != nil }
+
+// localLoginEnabled reports whether this instance has a username and password
+// of its own (av-q30x).
+func (ro *Router) localLoginEnabled() bool { return ro.cfg.LocalCredential != nil }
+
+// loginEnabled reports whether this instance has *any* way for a person to log
+// in. It, not identityEnabled, is what arms the session gate: before av-q30x an
+// instance with no OIDC issuer had no gate at all, so securing a self-hosted
+// library meant standing up an identity server or putting auth in the proxy.
+// A local credential is now a second answer, and the gate has to recognize it —
+// otherwise configuring a password would leave every page as open as before.
+//
+// False is still the default and still means single-user: static token, owner 1,
+// no gate.
+func (ro *Router) loginEnabled() bool { return ro.identityEnabled() || ro.localLoginEnabled() }
 
 func (ro *Router) sessionTTL() time.Duration {
 	if ro.cfg.SessionTTL > 0 {
@@ -51,15 +76,27 @@ func (ro *Router) sessionTTL() time.Duration {
 	return DefaultSessionTTL
 }
 
-// setupAuthRoutes registers the login flow, and only when a provider exists.
-// Registering them unconditionally would change what an unconfigured instance
-// answers at /auth/login — today the styled 404 page — for no benefit.
+// setupAuthRoutes registers the login flow, and only the parts this instance
+// can actually serve. Registering them unconditionally would change what an
+// unconfigured instance answers at /auth/login — today the styled 404 page —
+// for no benefit, and would offer a visitor an SSO button or a password form
+// leading nowhere.
 func (ro *Router) setupAuthRoutes(r chi.Router) {
-	if !ro.identityEnabled() {
+	if !ro.loginEnabled() {
 		return
 	}
+	// The single entry point, whatever is configured: the gate redirects here,
+	// and this decides whether that means a form or a trip to the provider.
 	r.Get("/auth/login", ro.authLogin)
-	r.Get("/auth/callback", ro.authCallback)
+	if ro.localLoginEnabled() {
+		r.Post("/auth/local", ro.authLocal)
+	}
+	if ro.identityEnabled() {
+		// Split out of /auth/login so the login page has something to point
+		// its "continue with SSO" button at when both paths exist.
+		r.Get("/auth/sso", ro.authStartSSO)
+		r.Get("/auth/callback", ro.authCallback)
+	}
 	// Logout accepts both verbs: a link is the obvious affordance, and
 	// revoking a session is not a destructive action a forged request could
 	// abuse for anything worse than an inconvenience.
@@ -67,9 +104,23 @@ func (ro *Router) setupAuthRoutes(r chi.Router) {
 	r.Post("/auth/logout", ro.authLogout)
 }
 
-// authLogin starts Authorization Code + PKCE: mint a state and a verifier,
-// park both in short-lived cookies, and hand the browser to the provider.
+// authLogin is where an unauthenticated visitor lands.
+//
+// With a local credential configured it renders the login page. With only a
+// provider it redirects straight there, which is both this route's original
+// behaviour and the right one: a page whose only control is "continue to the
+// provider" is a choice that does not exist, presented as one.
 func (ro *Router) authLogin(w http.ResponseWriter, r *http.Request) {
+	if !ro.localLoginEnabled() {
+		ro.authStartSSO(w, r)
+		return
+	}
+	ro.renderLogin(w, r, http.StatusOK, safeNext(r.URL.Query().Get("next")), "", "")
+}
+
+// authStartSSO starts Authorization Code + PKCE: mint a state and a verifier,
+// park both in short-lived cookies, and hand the browser to the provider.
+func (ro *Router) authStartSSO(w http.ResponseWriter, r *http.Request) {
 	state, err := auth.NewState()
 	if err != nil {
 		http.Error(w, "login unavailable", http.StatusInternalServerError)
@@ -131,28 +182,10 @@ func (ro *Router) authCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := ro.cfg.Store.UpsertUser(r.Context(), identity.ExternalID, identity.Email)
-	if err != nil {
-		ro.failLogin(w, "could not record identity", slog.String("err", err.Error()))
-		return
-	}
-
-	sid, err := auth.NewSessionID()
-	if err != nil {
-		ro.failLogin(w, "could not start session")
-		return
-	}
-	sess := &store.Session{
-		ID:        sid,
-		UserID:    user.ID,
-		ExpiresAt: time.Now().Add(ro.sessionTTL()),
-	}
-	if err := ro.cfg.Store.CreateSession(r.Context(), sess); err != nil {
+	if err := ro.startSession(w, r, *identity, "oidc"); err != nil {
 		ro.failLogin(w, "could not start session", slog.String("err", err.Error()))
 		return
 	}
-	ro.setCookie(w, sessionCookieName, sid, ro.sessionTTL())
-	slog.Info("login", slog.Int64("user_id", user.ID))
 
 	dest := "/"
 	if c, err := r.Cookie(nextCookieName); err == nil {
@@ -161,6 +194,76 @@ func (ro *Router) authCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Redirect(w, r, dest, http.StatusFound)
+}
+
+// authLocal is the local credential's whole login path: check a form post
+// against the one configured credential, and on success take the same last step
+// the provider callback takes.
+//
+// It has no CSRF defence of its own and needs none. The session cookie's
+// SameSite=Lax (av-ke2m) protects requests that *carry* a credential, and this
+// one runs before any session exists; the only thing a cross-site page could
+// forge here is a login it must already know the password to complete.
+func (ro *Router) authLocal(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		ro.renderLogin(w, r, http.StatusBadRequest, "", "", "Could not read that form. Try again.")
+		return
+	}
+	username := r.PostFormValue("username")
+	next := safeNext(r.PostFormValue("next"))
+
+	// One message for a wrong name and a wrong password, and nothing about
+	// either in the log line — a failed login is worth recording, the
+	// credential someone tried is not.
+	if !ro.cfg.LocalCredential.Verify(username, r.PostFormValue("password")) {
+		slog.Warn("local login failed", slog.String("remote_addr", r.RemoteAddr))
+		ro.renderLogin(w, r, http.StatusUnauthorized, next, username,
+			"That username and password don't match.")
+		return
+	}
+
+	if err := ro.startSession(w, r, ro.cfg.LocalCredential.Identity(), "local"); err != nil {
+		slog.Error("start local session", slog.String("err", err.Error()))
+		ro.renderLogin(w, r, http.StatusInternalServerError, next, username,
+			"Could not start a session. Try again.")
+		return
+	}
+
+	dest := "/"
+	if next != "" {
+		dest = next
+	}
+	http.Redirect(w, r, dest, http.StatusFound)
+}
+
+// startSession is where the two login paths meet, and the only place a session
+// is ever created.
+//
+// Whatever proved who the visitor is — a provider's token exchange or a
+// password — reaches here as an auth.Identity and produces the same users row,
+// the same sessions row, and the same cookie. `method` is for the log line
+// only; nothing downstream may branch on it, because a session that remembered
+// how it was created would be the beginning of a second session layer.
+func (ro *Router) startSession(w http.ResponseWriter, r *http.Request, identity auth.Identity, method string) error {
+	user, err := ro.cfg.Store.UpsertUser(r.Context(), identity.ExternalID, identity.Email)
+	if err != nil {
+		return err
+	}
+	sid, err := auth.NewSessionID()
+	if err != nil {
+		return err
+	}
+	sess := &store.Session{
+		ID:        sid,
+		UserID:    user.ID,
+		ExpiresAt: time.Now().Add(ro.sessionTTL()),
+	}
+	if err := ro.cfg.Store.CreateSession(r.Context(), sess); err != nil {
+		return err
+	}
+	ro.setCookie(w, sessionCookieName, sid, ro.sessionTTL())
+	slog.Info("login", slog.Int64("user_id", user.ID), slog.String("method", method))
+	return nil
 }
 
 // authLogout revokes the session server-side. Dropping the cookie alone would
@@ -176,6 +279,50 @@ func (ro *Router) authLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
+// loginPageData feeds the login page. Username and Error are echoed back into
+// the form so a failed attempt does not clear it; Username is whatever was
+// typed, so html/template's contextual escaping is what keeps it text.
+//
+// SSO/SSOHref are present only when a provider is *also* configured. The page
+// exists to offer a choice, and it must not offer one that does not exist.
+type loginPageData struct {
+	Favicon  template.URL
+	LogoSVG  template.HTML
+	Next     string
+	Username string
+	Error    string
+	SSO      bool
+	SSOHref  string
+}
+
+// renderLogin writes the login page. next must already have been through
+// safeNext — it is rendered into a hidden field and posted straight back.
+func (ro *Router) renderLogin(w http.ResponseWriter, r *http.Request, status int, next, username, errMsg string) {
+	data := loginPageData{
+		Favicon:  template.URL(exhibitLogoDataURI),
+		LogoSVG:  template.HTML(exhibitLogoSVG),
+		Next:     next,
+		Username: username,
+		Error:    errMsg,
+		SSO:      ro.identityEnabled(),
+		SSOHref:  "/auth/sso",
+	}
+	if data.SSO && next != "" {
+		data.SSOHref += "?next=" + url.QueryEscape(next)
+	}
+	page, err := renderPage("login", data)
+	if err != nil {
+		serverError(w, r, "login page render", err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// A submitted username is on this page; a shared or proxy cache holding it
+	// would hand the next visitor somebody else's half-filled form.
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	fmt.Fprint(w, page)
+}
+
 func (ro *Router) failLogin(w http.ResponseWriter, msg string, attrs ...slog.Attr) {
 	args := []any{slog.String("reason", msg)}
 	for _, a := range attrs {
@@ -188,8 +335,11 @@ func (ro *Router) failLogin(w http.ResponseWriter, msg string, attrs ...slog.Att
 // sessionUser resolves a request's session cookie to an owner id. A missing,
 // unknown, revoked, or expired session all answer the same way — not
 // authenticated — because that is the only distinction a caller acts on.
+//
+// An instance with no login configured issues no sessions, so it recognizes
+// none: a cookie presented there is somebody else's leftover, not a credential.
 func (ro *Router) sessionUser(r *http.Request) (int64, bool) {
-	if !ro.identityEnabled() {
+	if !ro.loginEnabled() {
 		return 0, false
 	}
 	c, err := r.Cookie(sessionCookieName)

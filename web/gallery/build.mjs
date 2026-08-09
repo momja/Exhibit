@@ -32,6 +32,10 @@ const files = [
   "edit.css", "edit.js", "state.js",
   "notfound.css", "notfound.js",
   "agent.css", "agent.js",
+  // The login page (av-q30x) is stylesheet-only: it deliberately ships no
+  // script, being the one page a not-yet-authenticated visitor has to be able
+  // to use.
+  "login.css",
 ];
 
 for (const f of files) {
