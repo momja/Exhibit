@@ -1,0 +1,58 @@
+{
+  "enabled": true,
+  "model": "",
+  "mode": "block",
+  "check": "heuristic",
+  "skipExtensionSources": true,
+  "skipRpcSources": false,
+  "skipSlashCommands": true,
+  "maxPromptChars": 4000,
+  "timeoutMs": 20000,
+  "failClosed": false,
+  "logAll": false,
+  "context": {
+    "recentMessages": 8,
+    "maxChars": 6000
+  },
+  "prefilter": {
+    "enabled": true,
+    "blockDirect": false,
+    "injectionPatterns": [
+      "ignore\\s+(all\\s+|any\\s+|the\\s+|your\\s+)?(previous|prior|earlier)?\\s*(instructions|prompts|messages|commands|rules)",
+      "disregard\\s+(all\\s+|any\\s+|the\\s+)?(previous|prior|earlier)?\\s*(instructions|prompts|messages|commands|rules)",
+      "forget\\s+(everything|all\\s+(previous|prior|earlier)|your\\s+instructions)",
+      "reveal\\s+(your|the)\\s+(system\\s+)?(prompt|instructions)",
+      "show\\s+(me\\s+)?(your|the)\\s+(system\\s+)?(prompt|instructions)",
+      "you\\s+are\\s+now\\s+(an?\\s+)?(unfiltered|uncensored|unaligned|free|jailbroken|evil)",
+      "act\\s+as\\s+(an?\\s+)?(unfiltered|uncensored|unaligned|free|jailbroken)\\s+(assistant|model|ai)",
+      "no\\s+(rules|restrictions|constraints|limits|boundaries)",
+      "override\\s+(your|the|all)\\s+(instructions|rules|prompt|guidelines|settings)",
+      "new\\s+system\\s+prompt",
+      "developer\\s+message\\s*:",
+      "\\[sysmsg\\]",
+      "ignore\\s+all\\s+prior\\s+context"
+    ],
+    "topicPatterns": {
+      "explicit": [
+        "\\bnsfw\\b",
+        "\\bporn(ography)?\\b",
+        "\\bexplicit\\s+(sexual|sex|content)\\b",
+        "\\bnude(s|ity|ness)?\\b",
+        "\\bsex(ual|y|ualize)?\\b",
+        "\\bgore\\b"
+      ]
+    }
+  },
+  "policy": {
+    "offTopicHandling": "warn",
+    "allowedTopics": [],
+    "disallowedTopics": [
+      "explicit sexual content or pornography",
+      "non-consensual sexual content",
+      "content that sexualizes minors",
+      "detailed instructions for illegal activity",
+      "harassment, stalking, or doxxing of individuals"
+    ],
+    "extraInstructions": "This assistant is a coding/software engineering agent. A prompt is off-topic only if it clearly abandons the user's project or programming work for something entirely unrelated; a general question asked in service of the work is fine."
+  }
+}
