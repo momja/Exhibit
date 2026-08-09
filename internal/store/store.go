@@ -95,11 +95,12 @@ type OriginDecision struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// Share is a link to an artifact. It has no lifetime of its own: a share lives
+// until its row is deleted (av-8ipt dropped the never-set expires_at column).
 type Share struct {
-	ID         string     `json:"id"`
-	ArtifactID string     `json:"artifact_id"`
-	Public     bool       `json:"public"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	ID         string `json:"id"`
+	ArtifactID string `json:"artifact_id"`
+	Public     bool   `json:"public"`
 }
 
 // AgentKey is an owner's BYO agent provider credential. KeyCiphertext is the

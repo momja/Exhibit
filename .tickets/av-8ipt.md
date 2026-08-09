@@ -1,6 +1,6 @@
 ---
 id: av-8ipt
-status: in_progress
+status: closed
 deps: []
 links: [av-20xv, av-6xjd]
 created: 2026-08-09T16:34:08Z
@@ -37,3 +37,13 @@ Rejected middle option: keeping the column while removing it from the API. That 
 Scope: drop the column (SQLite 3.35+ supports ALTER TABLE DROP COLUMN; confirm the pinned modernc.org/sqlite build does before assuming a table rebuild), drop the expiry check and its 410 path in `ServeShare`, drop the field from the create-share request and response, and update the PRD §4.4 schema sketch and architecture §7 which both name it.
 
 Note the contrast with av-20xv: `public` is a defect because it advertises an access control it does not implement, and needs a decision regardless. `expires_at` is merely unused. Different problems, and this one should not be bundled into that ticket.
+
+**2026-08-09T17:44:13Z**
+
+Done. Two implementation decisions worth recording:
+
+1. DROP COLUMN, not a table rebuild. The pinned modernc.org/sqlite v1.51.0 reports sqlite_version 3.53.1, well past the 3.35 that introduced ALTER TABLE ... DROP COLUMN, and shares.expires_at is referenced by no index, view, trigger, or constraint. Migration 015 is therefore one statement. Its Down re-adds the column empty, with a note in the file that dropped values are unrecoverable — the honest reverse, and lossless in fact because every value was NULL.
+
+2. POST /api/shares REJECTS expires_at with 400 rather than ignoring it. Silently discarding a field the caller set is the defect av-20xv exists to fix; a caller asking for a deadline would otherwise get a permanent link and no way to know. The check is a json.RawMessage tombstone field whose presence — any value, including null — is the error, so there is one rule with no sub-cases. Nothing in the repo sends the field, so nothing breaks.
+
+Migration 015 is covered both ways: staged at 014 with a dated share row, then migrated (column gone, both share rows intact, Down/Up round trip), and a fresh database asserted to land in the same schema.

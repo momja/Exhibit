@@ -702,7 +702,77 @@ func TestMigration012RepairsWidgetVersionCollision(t *testing.T) {
 // artifactHasColumn reports whether the artifacts table defines column name.
 func artifactHasColumn(t *testing.T, db *sql.DB, name string) bool {
 	t.Helper()
-	rows, err := db.Query(`PRAGMA table_info(artifacts)`)
+	return tableHasColumn(t, db, "artifacts", name)
+}
+
+// TestMigration015DropsShareExpiry stages a database at 014 — the schema every
+// deployed instance is on — with a share that carries an expiry, then applies
+// 015 and asserts the column is gone while the share itself survives. Expiry
+// was never set through any caller (av-8ipt), but a migration that would lose
+// rows if it had been is the one worth proving otherwise about.
+func TestMigration015DropsShareExpiry(t *testing.T) {
+	f, err := os.CreateTemp("", "test-mig-015-*.db")
+	require.NoError(t, err)
+	f.Close()
+	t.Cleanup(func() { os.Remove(f.Name()) })
+
+	db, err := sql.Open("sqlite", f.Name())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	db.SetMaxOpenConns(1)
+	_, err = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`)
+	require.NoError(t, err)
+
+	goose.SetBaseFS(migrationsFS)
+	require.NoError(t, goose.SetDialect("sqlite3"))
+	require.NoError(t, goose.UpTo(db, "migrations", 14))
+
+	_, err = db.Exec(`INSERT INTO artifacts (id, source_blob_id) VALUES ('a1','b1')`)
+	require.NoError(t, err)
+	_, err = db.Exec(
+		`INSERT INTO shares (id, artifact_id, public, expires_at)
+		 VALUES ('s-live','a1',1,NULL), ('s-dated','a1',1,'2020-01-01T00:00:00Z')`)
+	require.NoError(t, err, "expires_at is still a column at 014")
+
+	require.NoError(t, goose.UpTo(db, "migrations", 15))
+
+	assert.False(t, tableHasColumn(t, db, "shares", "expires_at"),
+		"015 must drop the column")
+
+	// Both shares are still here, including the one that had a date on it: the
+	// column went, the links did not.
+	var ids []string
+	rows, err := db.Query(`SELECT id FROM shares ORDER BY id`)
+	require.NoError(t, err)
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		require.NoError(t, rows.Scan(&id))
+		ids = append(ids, id)
+	}
+	require.NoError(t, rows.Err())
+	assert.Equal(t, []string{"s-dated", "s-live"}, ids)
+
+	// The Down migration restores the column (empty — the values are gone, as
+	// its comment says), so a rollback leaves a schema 014's code can read.
+	require.NoError(t, goose.DownTo(db, "migrations", 14))
+	assert.True(t, tableHasColumn(t, db, "shares", "expires_at"))
+	require.NoError(t, goose.UpTo(db, "migrations", 15))
+	assert.False(t, tableHasColumn(t, db, "shares", "expires_at"))
+}
+
+// TestFreshSchemaHasNoShareExpiry is the other half: a database created from
+// nothing goes through 001's CREATE TABLE and 015's drop, and must land in the
+// same place as a migrated one.
+func TestFreshSchemaHasNoShareExpiry(t *testing.T) {
+	s := newTestStore(t)
+	assert.False(t, tableHasColumn(t, s.db, "shares", "expires_at"))
+}
+
+// tableHasColumn reports whether table defines column name.
+func tableHasColumn(t *testing.T, db *sql.DB, table, name string) bool {
+	t.Helper()
+	rows, err := db.Query(fmt.Sprintf(`PRAGMA table_info(%q)`, table))
 	require.NoError(t, err)
 	defer rows.Close()
 	for rows.Next() {

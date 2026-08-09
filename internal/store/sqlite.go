@@ -886,14 +886,9 @@ func (s *SQLiteStore) CreateShare(ctx context.Context, ownerID int64, sh *Share)
 	if err := s.ownsArtifact(ctx, ownerID, sh.ArtifactID); err != nil {
 		return err
 	}
-	var expiresAt *string
-	if sh.ExpiresAt != nil {
-		str := sh.ExpiresAt.Format(time.RFC3339)
-		expiresAt = &str
-	}
 	_, err := s.db.ExecContext(ctx,
-		"INSERT INTO shares (id, artifact_id, public, expires_at) VALUES (?, ?, ?, ?)",
-		sh.ID, sh.ArtifactID, sh.Public, expiresAt)
+		"INSERT INTO shares (id, artifact_id, public) VALUES (?, ?, ?)",
+		sh.ID, sh.ArtifactID, sh.Public)
 	return err
 }
 
@@ -902,7 +897,7 @@ func (s *SQLiteStore) CreateShare(ctx context.Context, ownerID int64, sh *Share)
 // GetShareUnscoped instead, because there the row is the authorization.
 func (s *SQLiteStore) GetShare(ctx context.Context, ownerID int64, id string) (*Share, error) {
 	return s.getShareWhere(ctx,
-		`SELECT id, artifact_id, public, expires_at FROM shares
+		`SELECT id, artifact_id, public FROM shares
 		  WHERE id=? AND `+ownedArtifact, id, ownerID)
 }
 
@@ -910,15 +905,14 @@ func (s *SQLiteStore) GetShare(ctx context.Context, ownerID int64, id string) (*
 // interface comment. `grep Unscoped` is the audit.
 func (s *SQLiteStore) GetShareUnscoped(ctx context.Context, id string) (*Share, error) {
 	return s.getShareWhere(ctx,
-		"SELECT id, artifact_id, public, expires_at FROM shares WHERE id=?", id)
+		"SELECT id, artifact_id, public FROM shares WHERE id=?", id)
 }
 
 func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...any) (*Share, error) {
 	row := s.db.QueryRowContext(ctx, query, args...)
 	var sh Share
-	var expiresAt *string
 	var public int
-	err := row.Scan(&sh.ID, &sh.ArtifactID, &public, &expiresAt)
+	err := row.Scan(&sh.ID, &sh.ArtifactID, &public)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -926,10 +920,6 @@ func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...a
 		return nil, err
 	}
 	sh.Public = public == 1
-	if expiresAt != nil {
-		t, _ := time.Parse(time.RFC3339, *expiresAt)
-		sh.ExpiresAt = &t
-	}
 	return &sh, nil
 }
 
