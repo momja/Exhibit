@@ -252,6 +252,8 @@ GET    /s/:shareID                 View shared artifact (no auth)
 
 Share links resolve on the render origin, under the artifact's own CSP. No account needed to view a share.
 
+A share has no lifetime of its own: it is live from the moment it is minted until the row is deleted, and `DELETE /api/shares/:id` is how it ends. There is no expiry (av-8ipt removed a column nothing ever set), and a create request carrying `expires_at` is refused with `400` rather than quietly given a link that never expires.
+
 ## Render surface
 
 ```

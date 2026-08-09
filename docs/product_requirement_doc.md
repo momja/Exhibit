@@ -171,7 +171,8 @@ artifact_tags(artifact_id, tag_id)
 -- wrote it. One user across any number of devices is still one set of rows —
 -- that is §5.3's whole promise, and nothing here is keyed by device.
 artifact_state(artifact_id, user_id, key, value, updated_at)
-shares(id, artifact_id, public, expires_at)          -- sharing as a row, §7
+-- sharing as a row, §7. No expiry column: a share lives until it is deleted.
+shares(id, artifact_id, public)
 ```
 
 ### 4.5 Identity & auth
@@ -382,9 +383,14 @@ known.
 
 Sharing is a first-class resource, not an export-to-file action.
 
-- A share is a row: `shares(id, artifact_id, public, expires_at)`.
+- A share is a row: `shares(id, artifact_id, public)`.
 - Served at `GET /s/:shareId` with no auth, from the isolated render origin, under the
   artifact's own CSP allowlist.
+- **A share lives until it is deleted.** There is no expiring link: revocation is
+  deleting the row, and that is the only lifetime the product promises. An expiry
+  column existed unused from the first migration and was removed (av-8ipt) rather
+  than left as a dial nothing turns; if forgotten shares become a real problem, the
+  answer is to make what is shared visible in the library, not to add a timer.
 - A one-file self-contained `.html` export is **planned** (CSS/JS already inline) — the
   portable fallback for email/Slack/offline that needs no service at all. Tracked in
   build-order step 3.

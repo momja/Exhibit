@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/blob"
@@ -124,7 +123,9 @@ func (rd *Renderer) authorize(w http.ResponseWriter, r *http.Request, id string)
 	return a, viewer, true
 }
 
-// ServeShare serves an artifact via a share link.
+// ServeShare serves an artifact via a share link. The row's existence is the
+// whole lifetime: a share is live until it is deleted (av-8ipt), so revoking
+// one is DELETE /api/shares/:id and nothing here expires on a clock.
 func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareID")
 	// The share row is the authorization here (architecture §7), so this
@@ -136,10 +137,6 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	}
 	if sh == nil {
 		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	if sh.ExpiresAt != nil && sh.ExpiresAt.Before(time.Now()) {
-		http.Error(w, "share expired", http.StatusGone)
 		return
 	}
 

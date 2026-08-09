@@ -776,12 +776,20 @@ handler already resolved, so inlining state adds no third unscoped accessor.
 
 ## 7. Sharing
 
-A share is a row (`shares(id, artifact_id, public, expires_at)`), not an export action.
+A share is a row (`shares(id, artifact_id, public)`), not an export action.
 `GET /s/:shareId` resolves the row and serves the artifact **through the same read-only
 render surface** under the same per-artifact CSP — just without the app auth check,
 because the share row *is* the authorization. This reuse is why sharing is nearly free:
 it's the render path with a different front-door check. A one-file self-contained `.html`
 export remains as the service-independent fallback.
+
+The row's existence is the whole lifetime. A share is live until it is deleted;
+`DELETE /api/shares/:id` is the only way one ends, and `POST /api/shares` refuses an
+`expires_at` rather than accepting a deadline it will not honour. The column existed
+from migration 001 and was enforced, but nothing ever set it — no UI, no caller — so
+av-8ipt dropped it while doing so was still a schema change and not a data migration.
+A real expiry requirement would be one migration to add back, designed against that
+requirement instead of guessed at before the product existed.
 
 ## 8. Evolution seams (how the easy path becomes the serious path)
 

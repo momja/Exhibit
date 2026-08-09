@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -12,9 +11,17 @@ import (
 )
 
 type createShareRequest struct {
-	ArtifactID string     `json:"artifact_id"`
-	Public     bool       `json:"public"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	ArtifactID string `json:"artifact_id"`
+	Public     bool   `json:"public"`
+
+	// ExpiresAt is a tombstone, not a setting. Share expiry was removed in
+	// av-8ipt; this field exists only so a request that still asks for one is
+	// answered with a 400 instead of quietly getting a share that never
+	// expires. Accepting a field the server discards is precisely the defect
+	// av-20xv exists to fix, and re-creating it here to save four lines would
+	// be a poor trade. Typed as RawMessage because the value is never read —
+	// only its presence is.
+	ExpiresAt json.RawMessage `json:"expires_at"`
 }
 
 type createShareResponse struct {
@@ -30,6 +37,13 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ArtifactID == "" {
 		http.Error(w, "artifact_id is required", http.StatusBadRequest)
+		return
+	}
+	// Any mention of the key is an error, whatever its value — one rule with no
+	// sub-cases, and it says out loud that a share now lives until it is
+	// deleted. DELETE /api/shares/:id is how it ends.
+	if req.ExpiresAt != nil {
+		http.Error(w, "expires_at is no longer supported: shares live until deleted (DELETE /api/shares/:id)", http.StatusBadRequest)
 		return
 	}
 
@@ -53,7 +67,6 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 		ID:         uuid.New().String(),
 		ArtifactID: req.ArtifactID,
 		Public:     req.Public,
-		ExpiresAt:  req.ExpiresAt,
 	}
 
 	if err := ro.cfg.Store.CreateShare(r.Context(), ownerID, sh); err != nil {
