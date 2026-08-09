@@ -2,7 +2,7 @@
 id: av-30rj
 status: closed
 deps: [av-ep8k]
-links: [av-q30x, av-ke2m]
+links: [av-q30x, av-ke2m, av-5imk, av-wmp6, av-c5aq, av-ep8k, av-syug, av-g2dx, av-sz4e]
 created: 2026-08-05T04:50:17Z
 type: feature
 priority: 2
@@ -106,3 +106,12 @@ OSS-side seam shipped: auth.IdentityProvider (AuthURL/Exchange), generic OIDC vi
 The OPEN QUESTION is deliberately still open and untouched: where the hosted layer lives — (a) nested public module at hosted/, or (b) separate private repo importing the OSS module. Nothing in this branch presumes either. No hosted/ module was created and no vendor SDK is in go.mod, so both options remain equally cheap. Provisional AC 1-7 are met except the placement-dependent restructuring, which is (b)-only work.
 
 Migration numbering note: 012 was NOT free — versions 8 and 12 are occupied by Go migrations registered in internal/store/migration_repair.go with no file in migrations/. This ticket's migration is 013. Check that file, not just ls migrations/, before picking a number.
+**2026-08-09T17:40:13Z**
+
+SUPERSEDED IN PART (2026-08-09) — see av-sz4e
+
+This ticket's 'Deliberately not building: local password auth as a first-class feature' no longer holds. Self-hosted multi-user is a supported story, and shipping a user backend is the norm for self-hosted software — Immich, Nextcloud and Vaultwarden all ship one *and* support OIDC, so BYO identity is the escape hatch rather than the only door.
+
+The reasoning here was not wrong, it was scoped to a model this project has now rejected. Every objection except one dissolves under operator-provisioned accounts with no email: an admin creating users removes registration and verification, an admin resetting passwords removes SMTP, and bcrypt was already shipped by av-q30x. Rate limiting survives and is in scope as av-t21v.
+
+**What remains true and load-bearing from this ticket:** the seam. The IdP is exchanged exactly once at /auth/callback for a session of ours; the vendor surface is two methods; no vendor SDK is in go.mod. A built-in user backend does not touch any of that — it is another login path converging on startSession, exactly as av-q30x's is. Nothing here needs undoing to build av-sz4e.
