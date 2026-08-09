@@ -2,7 +2,7 @@
 id: av-g2dx
 status: open
 deps: []
-links: [av-q30x, av-30rj]
+links: [av-q30x, av-30rj, av-sz4e]
 created: 2026-08-09T17:26:41Z
 type: epic
 priority: 2
