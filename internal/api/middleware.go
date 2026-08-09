@@ -271,10 +271,11 @@ func agentGrantFromCtx(ctx context.Context) *agentscope.Grant {
 	return g
 }
 
-// ownerMiddleware supplies the owner for requests authMiddleware did not
-// attribute to a session or an agent grant — token-authenticated API clients,
-// and every request on a single-user instance. It never overwrites an owner
-// already resolved upstream.
+// ownerMiddleware supplies the owner for requests no upstream credential check
+// attributed to somebody — token-authenticated API clients, and every request
+// on a single-user instance. It never overwrites an owner already resolved
+// upstream, which is what lets it sit under both credential paths:
+// authMiddleware for the API group, sessionGate for the page group (av-syug).
 //
 // A public visitor (av-wmp6) is the one case where the default is not owner 1.
 // Owner scoping became a real query predicate in av-ep8k, so "the library" is
@@ -283,6 +284,10 @@ func agentGrantFromCtx(ctx context.Context) *agentscope.Grant {
 // that statement. Resolving it here rather than in authMiddleware keeps the two
 // questions in the two middlewares that already own them — whether the request
 // may proceed, and whose library it reads.
+//
+// Every route that reads library data runs this, so a handler that reaches
+// ownerIDFromCtx always finds an owner that was decided rather than assumed.
+// That is what let the helper below stop guessing.
 func (ro *Router) ownerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := r.Context().Value(ownerIDKey).(int64); ok {
@@ -298,11 +303,43 @@ func (ro *Router) ownerMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// noOwner is the owner id of a request nobody attributed. It matches no row —
+// owner ids are AUTOINCREMENT and start at 1 — so a scoped Store call made with
+// it returns the empty set rather than somebody's library.
+const noOwner int64 = 0
+
+// ownerIDFromCtx returns the owner this request was attributed to, and fails
+// closed when it was attributed to nobody (av-syug AC#6).
+//
+// It used to answer defaultOwnerID here, and that silence is the entire reason
+// the page routes shipped unscoped: `/` served owner 1's library to whoever
+// asked, with no error, no zero value and no failing test — just the wrong
+// shelf. The store layer had already made the opposite choice (ListArtifacts
+// treats an unset OwnerID as matching nothing, with a test pinning it); this
+// helper was the asymmetry.
+//
+// Failing closed is affordable because no caller depends on the guess any more.
+// Both credential paths resolve an owner explicitly — authMiddleware from the
+// session, agent grant or public-mode configuration, sessionGate from the
+// session cookie — and ownerMiddleware backstops both with the single-user
+// default, on the API group and the page group alike. A request that reaches a
+// handler without an owner is therefore a wiring defect, not a deployment
+// shape, and the two ways it can fail are not comparable: an empty library is
+// a visible bug its own operator reports, while the wrong library is an
+// invisible cross-tenant read its victim never learns about.
+//
+// The stricter forms were considered and rejected. Returning (int64, bool)
+// makes the omission a compile error, but at ~40 call sites that mostly answer
+// it identically it buys a mechanical `if !ok` that is copied rather than
+// thought about; the tripwire that actually catches a new unscoped page is the
+// route walk in pageowner_test.go, which fails on a route nobody declared.
+// Panicking would turn a wiring slip into an outage on a surface where the
+// degraded answer is already safe.
 func ownerIDFromCtx(ctx context.Context) int64 {
 	if v, ok := ctx.Value(ownerIDKey).(int64); ok {
 		return v
 	}
-	return defaultOwnerID
+	return noOwner
 }
 
 // publicPathPrefixes are the app-origin paths the login gate must never guard:
@@ -332,17 +369,31 @@ var publicPathPrefixes = []string{
 // no login to send anyone to, and its pages stay exactly as open as they have
 // always been.
 //
-// A request it admits on a session is marked as such, because the page render
-// downstream needs the same answer to decide which credential it may embed
-// (av-5imk, pagecredential.go) and the gate has already paid for the lookup.
+// A request it admits on a session carries two things downstream, and they are
+// complementary rather than alternatives:
+//
+//   - **Who it is** — the session's owner, in the context key every
+//     owner-scoped Store call reads through ownerIDFromCtx. The page routes sit
+//     outside the API's auth group (their JS authenticates separately), so this
+//     gate is the only place a page request meets its user; discarding the id
+//     here and propagating only the boolean is what served owner 1's library to
+//     everyone who logged in (av-syug). authMiddleware resolves the same value
+//     the same way for the API group.
+//   - **That it is** — the session-authed marker, which decides what credential
+//     the page may embed (av-5imk, pagecredential.go). The gate has already
+//     paid for the lookup, so the render downstream does not repeat it.
+//
+// One answers whose data the page shows, the other what authority it hands its
+// own scripts; neither substitutes for the other.
 func (ro *Router) sessionGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !ro.loginEnabled() || isPublicPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if _, ok := ro.sessionUser(r); ok {
-			next.ServeHTTP(w, r.WithContext(withSessionAuthed(r.Context())))
+		if ownerID, ok := ro.sessionUser(r); ok {
+			ctx := context.WithValue(withSessionAuthed(r.Context()), ownerIDKey, ownerID)
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 		// Only a top-level navigation can survive a trip to the provider.

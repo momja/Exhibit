@@ -88,11 +88,11 @@ func cacheBust(url string) string {
 
 func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
-	// The gallery pages sit outside the API's auth group (their token lives
-	// in the page bootstrap), so ownerIDFromCtx returns the default owner
-	// here rather than a middleware-supplied one. That is the same owner the
-	// API resolves today; when identity becomes real the pages inherit it
-	// from the same seam instead of from a literal 1.
+	// The gallery pages sit outside the API's auth group — their credential
+	// lives in the page bootstrap — but they are still owner-scoped: the page
+	// group runs ownerMiddleware under sessionGate, so this is the session's
+	// owner on an instance with a login and the single-user default without
+	// one (av-syug). It is never a guess; ownerIDFromCtx fails closed.
 	ownerID := ownerIDFromCtx(r.Context())
 	arts, err := ro.cfg.Store.ListArtifacts(r.Context(), store.ListOptions{OwnerID: ownerID, Query: q, Limit: 100})
 	if err != nil {

@@ -359,6 +359,69 @@ contains the token. As with §1.4's walk, a newly added page route fails the sui
 until someone declares it — because the failure this prevents is silent: the page
 works perfectly while it leaks.
 
+### 1.6 Whose library a page renders: the session's owner, on every page route
+
+§1.5 is about the credential a page *hands its scripts*. This is the adjacent
+question the same request has to answer: **whose data the page renders
+server-side.** The two are complementary, not alternatives — one decides what
+the page may do, the other what it may show — and the second is the more serious
+to get wrong, because a wrong library is served without anyone having to spend a
+credential at all.
+
+`owner_id` became a real query predicate on every API read in av-ep8k. The page
+routes did not get it (av-syug). They are registered outside the API's auth
+group, so they never ran `ownerMiddleware`; `sessionGate` resolved the visitor's
+user and propagated only the *boolean* §1.5 needed; and `ownerIDFromCtx` quietly
+answered `defaultOwnerID` for a request nobody had attributed. A user whose
+`owner_id` was 2 logged in, loaded `/`, and was served **owner 1's library** —
+and because `renderURLs` takes its principal from the same helper, that page's
+frame tokens named owner 1 too, so the render surface's `a.OwnerID == principal`
+check (§1.3) passed and owner 1's artifacts rendered inside user 2's gallery,
+bodies and inlined state included. Not exploitable while every owner was 1; live
+the instant a second user existed.
+
+The owner now reaches a page request the way the credential does — from the
+request, through middleware, in one place:
+
+| Where | Who resolves the owner | To what |
+|---|---|---|
+| API group (`/api/*`) | `authMiddleware` | the session's user, the agent grant's `OwnerID`, or `PUBLIC_OWNER_ID` for a public visitor; `ownerMiddleware` supplies the single-user default for a token-authenticated client |
+| Page group (`/`, `/new`, `/artifacts/…`, `/agent`, `/partials/*`) | `sessionGate` | the session's user — the same `sessionUser` lookup it already performed for §1.5, no longer discarded |
+| Page group, instance with no login | `ownerMiddleware` | the single-user default |
+
+`ownerMiddleware` never overwrites an owner resolved upstream, which is what
+lets it sit under both credential paths with no ordering rule to remember.
+Membership of the page group in `setupRoutes` is the declaration that a route is
+owner-scoped; a page route registered outside it gets no owner at all.
+
+**`ownerIDFromCtx` fails closed.** A request nobody attributed resolves to
+`noOwner` (0), which matches no row — owner ids start at 1 — so a scoped read
+made with it returns the empty set. That mirrors the choice the store layer had
+already made (`ListArtifacts` treats an unset `OwnerID` as matching nothing) and
+corrects the asymmetry that made this bug invisible: a plausible default
+produced no error, no zero value and no failing test, just the wrong shelf. It
+is affordable because nothing depends on the guess any more — every route that
+reads library data resolves an owner explicitly, so an unattributed request is a
+wiring defect rather than a deployment shape. The two failure modes are not
+comparable: an empty library is a visible bug its own operator reports, while
+the wrong library is an invisible cross-tenant read its victim never learns
+about. (Returning `(int64, bool)` would make the omission a compile error, but
+at ~40 call sites answering it identically it buys a mechanical `if !ok` that is
+copied rather than thought about; the enforcement that actually catches a new
+unscoped page is the route walk below.)
+
+Pinned by `internal/api/pageowner_test.go`, which walks the app mux like §1.4
+and §1.5 and requires an explicit row per registered GET route — either
+`ownerScoped`, or a stated reason it is not. Owner-scoped rows are then
+exercised against **two real owners**: as owner 2, each route must render owner
+2's own artifact (the non-vacuity control), must show no trace of owner 1's
+title, source or stored state, and every render URL it emits must carry a token
+that verifies to owner 2. Those URLs are then *followed to the render origin*,
+because the leak being prevented is content and state, not filenames. The same
+rows are walked again on a single-user instance, where `sessionGate` is a
+pass-through and the owner can only come from the page group — which is what
+makes group membership enforced rather than conventional.
+
 ## 2. CSP: the allowlist is the wall
 
 Each artifact carries a set of per-origin decisions (`artifact_network_origins`,

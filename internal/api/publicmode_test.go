@@ -285,10 +285,15 @@ func TestPublicVisitorIsMarkedInTheRequestContext(t *testing.T) {
 func TestPublicVisitorsRenderURLsCarryNoPrincipal(t *testing.T) {
 	r := newPublicModeRouter(t, PublicMode{Enabled: true, OwnerID: defaultOwnerID})
 
+	// Both requests are run through ownerMiddleware rather than hand-built,
+	// because that is what decides an owner: PUBLIC_OWNER_ID for a public
+	// visitor, the single-user default for anyone else. ownerIDFromCtx no
+	// longer guesses one for a context that never met the chain (av-syug), so
+	// a bare request would only assert that nobody is nobody.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	visitor := r.renderURLs(req.WithContext(
-		context.WithValue(req.Context(), publicVisitorKey, true)))
-	owner := r.renderURLs(req)
+	visitor := r.renderURLs(withOwnerResolved(r,
+		req.WithContext(context.WithValue(req.Context(), publicVisitorKey, true))))
+	owner := r.renderURLs(withOwnerResolved(r, req))
 
 	for name, u := range map[string]string{"artifact": visitor.artifact("abc"), "widget": visitor.widget("abc")} {
 		claims, err := r.tokens.Verify(tokenOf(t, u), "abc")
@@ -300,6 +305,16 @@ func TestPublicVisitorsRenderURLsCarryNoPrincipal(t *testing.T) {
 	claims, err := r.tokens.Verify(tokenOf(t, owner.artifact("abc")), "abc")
 	require.NoError(t, err)
 	assert.False(t, claims.Anonymous, "an ordinary render must still be rendered for its owner")
+}
+
+// withOwnerResolved runs req through ownerMiddleware and returns it as the
+// handler behind that middleware would receive it — with the owner decided.
+func withOwnerResolved(ro *Router, req *http.Request) *http.Request {
+	var resolved *http.Request
+	ro.ownerMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		resolved = r
+	})).ServeHTTP(httptest.NewRecorder(), req)
+	return resolved
 }
 
 // tokenOf pulls the render token back out of a minted URL.

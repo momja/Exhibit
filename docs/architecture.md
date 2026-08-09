@@ -385,7 +385,23 @@ never the process's: a session-authenticated browser is handed no token at all
 logout that deletes the session), an anonymous visitor none plus a read-only flag,
 and only an instance with no identity provider embeds the static token it has
 always embedded. `pagecredential.go` decides that once and `web/gallery/api.js`
-spends it; `security.md` §1.5 is the full statement. Hosts two islands of client JS: the **CodeMirror** source
+spends it; `security.md` §1.5 is the full statement.
+
+The pages also render library data *server-side*, so each needs the second half
+of what the API group's chain supplies: whose library this is. The page routes
+therefore sit in their own group under `ownerMiddleware` (av-syug), and the
+owner reaches them from `sessionGate` — the same lookup that marks a request
+session-authenticated for the credential decision above now also carries the
+session's `owner_id` in the request context, where `ownerIDFromCtx`, every
+scoped `Store` call and every minted render token read it. `ownerMiddleware`
+never overwrites an owner resolved upstream, so it composes with the gate
+without an ordering rule while still supplying the single-user default on an
+instance that issues no sessions. Membership of that group is the declaration
+that a route is owner-scoped: a page registered outside it resolves to no owner
+and reads an empty library, which is the deliberate fail-closed answer
+(`security.md` §1.6) and what `pageowner_test.go`'s route walk enforces.
+
+Hosts two islands of client JS: the **CodeMirror** source
 editor (an esbuild-built, `go:embed`-served bundle) and the **renderer iframe**
 (which actually points at `RENDER_ORIGIN`). The gallery renders server-side,
 but search filters eagerly from the client: a debounced input refetches the

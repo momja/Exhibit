@@ -113,16 +113,47 @@ func (ro *Router) setupRoutes() {
 	// (internal/api/auth.go).
 	ro.setupAuthRoutes(ro)
 
-	// Gallery UI — no auth header required (token embedded in page JS)
-	ro.Get("/", ro.galleryIndex)
-	ro.Get("/new", ro.galleryNew)
-	ro.Get("/artifacts/{artifactID}", ro.galleryDetail)
-	ro.Get("/artifacts/{artifactID}/edit", ro.galleryEdit)
-	// "Open in new tab": mints a fresh render token and redirects to
-	// RENDER_ORIGIN/a/:id (av-c5aq). Links go through here rather than
-	// carrying a token in the markup, which would be stale by the time
-	// anyone clicked it.
-	ro.Get("/artifacts/{artifactID}/open", ro.openArtifact)
+	// Server-rendered pages (av-syug). They carry no Authorization header —
+	// a page's own JS authenticates its API calls separately, see
+	// pagecredential.go — but they read the library server-side, so they need
+	// the one thing the API group's chain supplies beyond authentication:
+	// whose library this is.
+	//
+	// ownerMiddleware alone is what that takes. The credential is already
+	// resolved upstream by sessionGate, which puts the session's owner in the
+	// context and never reaches here for a visitor who has none (it redirects
+	// to /auth/login first); this group only backstops the instances that
+	// issue no sessions at all, where the answer is the single-user default.
+	//
+	// Membership of this group is also the declaration that a route is
+	// owner-scoped, which is what av-syug's route walk holds new page routes
+	// to: a page that renders artifacts belongs in here, not beside the
+	// static assets below.
+	ro.Group(func(r chi.Router) {
+		r.Use(ro.ownerMiddleware)
+
+		// Gallery UI
+		r.Get("/", ro.galleryIndex)
+		r.Get("/new", ro.galleryNew)
+		r.Get("/artifacts/{artifactID}", ro.galleryDetail)
+		r.Get("/artifacts/{artifactID}/edit", ro.galleryEdit)
+		// "Open in new tab": mints a fresh render token and redirects to
+		// RENDER_ORIGIN/a/:id (av-c5aq). Links go through here rather than
+		// carrying a token in the markup, which would be stale by the time
+		// anyone clicked it.
+		r.Get("/artifacts/{artifactID}/open", ro.openArtifact)
+
+		// Agent chat UI — token embedded in page JS, like the gallery.
+		r.Get("/agent", ro.agentPage)
+
+		// Server-rendered fragments, swapped into a live page by htmx
+		// (av-6m3e). They render the same template partials the full page
+		// render uses, and carry no authority the page they belong to
+		// doesn't already have — so they sit with the pages, outside the
+		// API's auth group and under the same owner resolution.
+		r.Get("/partials/agent-preview", ro.agentPreviewPartial)
+		r.Get("/partials/card-widget", ro.cardWidgetPartial)
+	})
 
 	// Embedded static assets (client JS islands, e.g. the CodeMirror editor)
 	ro.Handle("/assets/*", assetsHandler())
@@ -140,18 +171,12 @@ func (ro *Router) setupRoutes() {
 	// naming itself. See publicmode.go for that choice.
 	ro.Get("/api/settings/public", ro.publicSettings)
 
-	// Agent chat UI (token embedded in page JS, like the gallery) and the
-	// SSE event stream (EventSource can't set headers; the handler checks
-	// the same bearer token passed as ?token=).
-	ro.Get("/agent", ro.agentPage)
+	// The agent SSE event stream. EventSource can't set headers, so the
+	// handler checks the same bearer token passed as ?token= (or the session
+	// cookie) itself rather than going through the API's auth middleware. It
+	// resolves a session by id and streams its events; it reads nothing
+	// owner-scoped, which is why it stays out of the page group above.
 	ro.Get("/api/agent/sessions/{sessionID}/events", ro.agentEvents)
-
-	// Server-rendered fragments, swapped into a live page by htmx (av-6m3e).
-	// They render the same template partials the full page render uses, and
-	// carry no authority the page they belong to doesn't already have — so
-	// they sit with the page routes, outside the API's auth group.
-	ro.Get("/partials/agent-preview", ro.agentPreviewPartial)
-	ro.Get("/partials/card-widget", ro.cardWidgetPartial)
 
 	// Authenticated API routes
 	ro.Group(func(r chi.Router) {
