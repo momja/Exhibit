@@ -47,7 +47,24 @@ type Config struct {
 	//
 	// It is not an IdentityProvider and is not meant to become one: see
 	// internal/auth/local.go for why a form post does not fit a redirect seam.
+	//
+	// Since av-rzvf it is one account's password rather than the only one
+	// there is: accounts live in the users table, and this is the bootstrap
+	// and break-glass credential kept in the environment. cmd/server states
+	// the role; auth.go implements the precedence it depends on.
 	LocalCredential *auth.Credential
+	// LocalUsers reports whether the users table already holds an account
+	// with a password (av-rzvf) — the other thing that makes local login a
+	// real login path on this instance, and what keeps the gate armed for
+	// operator-provisioned accounts when no env credential is set.
+	//
+	// It is configuration read once at startup rather than a query on the
+	// request path: the gate consults it on every request including static
+	// assets, and the routes it decides are registered once at construction.
+	// The consequence is deliberate — provisioning the *first* account with
+	// the CLI on an already-running server takes a restart to arm the gate.
+	// Every later account is created on an instance whose gate is already up.
+	LocalUsers bool
 	// SessionTTL bounds how long a login lasts; zero means
 	// DefaultSessionTTL. Logout revokes sooner, server-side.
 	SessionTTL time.Duration
