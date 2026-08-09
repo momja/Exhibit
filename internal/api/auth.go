@@ -89,7 +89,11 @@ func (ro *Router) setupAuthRoutes(r chi.Router) {
 	// and this decides whether that means a form or a trip to the provider.
 	r.Get("/auth/login", ro.authLogin)
 	if ro.localLoginEnabled() {
-		r.Post("/auth/local", ro.authLocal)
+		// The only endpoint that answers a guessed credential, and so the only
+		// one that is throttled (av-t21v). It sits on the route rather than in
+		// the handler so that what a credential *is* and how often it may be
+		// asked stay separable — see loginratelimit.go.
+		r.With(ro.loginRateLimit).Post("/auth/local", ro.authLocal)
 	}
 	if ro.identityEnabled() {
 		// Split out of /auth/login so the login page has something to point
