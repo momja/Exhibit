@@ -12,12 +12,28 @@ import "time"
 // ExternalID is the provider's subject claim — unique per provider, and
 // meaningless across providers, which is exactly why Email is stored too: it
 // is the portable key that lets an instance recognize a returning person after
-// its IdP changes.
+// its IdP changes. For a local account (av-rzvf) there is no provider, so
+// ExternalID is derived from the login name instead — see auth.LocalExternalID.
+//
+// The stored password hash is deliberately *not* a field here. A User travels
+// widely — page view models, log attributes, future JSON — and the one caller
+// that needs the hash is the login path, which asks for it by name through
+// LookupLocalCredential. HasPassword carries the only thing every other caller
+// wants to know, which is whether this account can log in with a password at
+// all.
 type User struct {
 	ID         int64     `json:"id"`
 	ExternalID string    `json:"external_id"`
 	Email      string    `json:"email"`
 	CreatedAt  time.Time `json:"created_at"`
+	// IsAdmin marks the person who administers the instance. The first user
+	// on an instance gets it; see sqlite_users.go for why that is applied at
+	// insert time rather than checked by a caller.
+	IsAdmin bool `json:"is_admin"`
+	// HasPassword distinguishes a local account from an OIDC identity — the
+	// two live in this one table and differ only by which columns are
+	// populated, which is what keeps them in one owner_id space.
+	HasPassword bool `json:"has_password"`
 }
 
 // Session is one logged-in browser. Its ID is opaque random bytes handed to
