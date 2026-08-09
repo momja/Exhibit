@@ -1,0 +1,40 @@
+/* Login page stylesheet (av-q30x). Served from the app origin at
+ * /assets/gallery/login.css. Loads after tokens.css (design tokens) and
+ * components.css (.btn/.field), so only sign-in-specific rules live here.
+ *
+ * One centred card on the gallery's own ground, with the brand mark above it.
+ * There is no header: the header's controls all lead somewhere this visitor
+ * cannot go yet, and a chrome bar with nothing usable in it reads as a page
+ * that failed rather than a door.
+ */
+*{box-sizing:border-box;margin:0;padding:0}
+.login-page{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:var(--space-8)}
+
+/* min-width:0 so a long error message wraps inside the card instead of
+ * widening it past the max. */
+.login{width:100%;min-width:0;max-width:380px;background:var(--color-panel);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:32px var(--space-8) var(--space-8);display:flex;flex-direction:column;align-items:center}
+
+/* The mark is the same inline SVG the gallery header carries; the wrapper is
+ * what sizes it, since the SVG itself is drawn at its own intrinsic size. */
+.login-mark{display:flex;margin-bottom:var(--space-6)}
+.login-mark .logo{height:56px;width:auto;display:block}
+.login-title{font-size:22px;font-weight:600;letter-spacing:-.01em}
+.login-sub{margin-top:var(--space-2);font-size:14px;color:var(--color-muted)}
+
+/* Failed sign-in. Tinted rather than loud: getting a password wrong is an
+ * ordinary event, not an error state the page has to shout about. */
+.login-error{width:100%;margin-top:var(--space-7);padding:var(--space-4) var(--space-5);border:1px solid var(--color-danger);border-radius:var(--radius-md);background:#fdf3f3;color:var(--color-danger-hover);font-size:13px;display:flex;align-items:center;gap:var(--space-3)}
+.login-error i{font-size:16px;flex:0 0 auto}
+
+.login-form{width:100%;margin-top:var(--space-7);display:flex;flex-direction:column;gap:var(--space-3)}
+.login-label{font-size:13px;font-weight:500;color:var(--color-ink-soft)}
+/* The label of the second field needs air above it that the first does not. */
+.login-form .login-label+.field{margin-bottom:var(--space-3)}
+.login-submit{margin-top:var(--space-4);justify-content:center;padding:var(--space-4) 18px;font-size:15px}
+
+/* A rule with the word on it, drawn from two flexed pseudo-elements so it
+ * stays centred whatever the card's width. */
+.login-or{width:100%;margin:var(--space-7) 0 var(--space-6);display:flex;align-items:center;gap:var(--space-5);font-size:12px;color:var(--color-muted)}
+.login-or::before,.login-or::after{content:"";flex:1;height:1px;background:var(--color-hairline)}
+
+.login-sso{width:100%;justify-content:center;text-decoration:none;text-align:center}

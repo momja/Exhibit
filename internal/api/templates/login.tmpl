@@ -1,0 +1,62 @@
+{{/* Login page (av-q30x). Data: loginPageData (gallery.go).
+
+     Where an unauthenticated visitor lands once an instance has a login. It is
+     rendered only when a local credential is configured — with an identity
+     provider alone the gate redirects straight to the provider, because a page
+     whose only control is "continue" is a choice that does not exist.
+
+     Deliberately scriptless: no bootstrap block, no /assets/gallery/*.js. The
+     form posts itself, and this is the one page in the app that must work for
+     somebody who is not yet allowed to load anything else.
+
+     Username and Error are echoed back through html/template's contextual
+     escaping — Username is whatever was typed into the form, so it is
+     attacker-controlled text and must never be assembled into markup. */}}
+{{define "login"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in — Exhibit</title>
+<link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
+{{template "pwaHead"}}
+<link rel="stylesheet" href="/assets/phosphor/regular.css">
+<link rel="stylesheet" href="/assets/gallery/tokens.css">
+<link rel="stylesheet" href="/assets/gallery/components.css">
+<link rel="stylesheet" href="/assets/gallery/login.css">
+</head>
+<body class="login-page">
+<main class="login">
+  <div class="login-mark">{{.LogoSVG}}</div>
+  <h1 class="login-title">Exhibit</h1>
+  <p class="login-sub">Sign in to your library.</p>
+
+  {{if .Error}}
+  {{/* role=alert so the message is announced when the page reloads into it —
+       a failed sign-in is a page render here, not a live region update. */}}
+  <p class="login-error" role="alert"><i class="ph ph-warning-circle" aria-hidden="true"></i> {{.Error}}</p>
+  {{end}}
+
+  <form class="login-form" method="post" action="/auth/local">
+    {{/* Carried through the form rather than a cookie: this path has no round
+         trip to an external authority to survive, so there is nothing to park.
+         The value was already run through safeNext before it got here. */}}
+    <input type="hidden" name="next" value="{{.Next}}">
+    <label class="login-label" for="username">Username</label>
+    <input class="field" type="text" id="username" name="username" value="{{.Username}}"
+           autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required autofocus>
+    <label class="login-label" for="password">Password</label>
+    <input class="field" type="password" id="password" name="password"
+           autocomplete="current-password" required>
+    <button class="btn login-submit" type="submit"><i class="ph ph-sign-in"></i> Sign in</button>
+  </form>
+
+  {{if .SSO}}
+  <div class="login-or"><span>or</span></div>
+  {{/* A link, not a second form: /auth/sso is the provider redirect, and the
+       browser has to make a top-level navigation for the round trip to work. */}}
+  <a class="btn btn-sec login-sso" href="{{.SSOHref}}"><i class="ph ph-shield-check"></i> Continue with your identity provider</a>
+  {{end}}
+</main>
+</body>
+</html>{{end}}

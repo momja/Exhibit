@@ -107,11 +107,19 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/api/tags/"},
 
 	// The login flow: the only GET routes that change state, registered only
-	// when an identity provider is configured. Each is safe for its own
-	// reason, not by the rule above.
+	// when a login is configured. Each is safe for its own reason, not by the
+	// rule above.
+	//
+	// /auth/login mutates only on an instance with no local credential, where
+	// it redirects into the provider flow; with one it renders the login page
+	// and mints nothing (av-q30x). Declared by its worst case.
 	{route: "/auth/login", mutates: true,
 		why: "mints short-lived state/verifier cookies before any session exists; " +
 			"forging it starts a login the attacker cannot finish"},
+	{route: "/auth/sso", mutates: true,
+		why: "is /auth/login's provider redirect split out for the login page's SSO button, " +
+			"and mints the same pre-session state/verifier cookies — a forged one starts a " +
+			"login the attacker cannot finish"},
 	{route: "/auth/callback", mutates: true,
 		why: "is a cross-site top-level GET by construction — the provider redirects the " +
 			"browser to it — and carries its own forgery defence in the state cookie it must match"},
@@ -155,13 +163,16 @@ func TestNoAppOriginGETRouteMutates(t *testing.T) {
 		declared[row.route] = row
 	}
 
-	// Both configurations, because the /auth routes exist only in one of them
-	// and a route registered only in the other would otherwise never be walked.
+	// Every login configuration, because the /auth routes are registered
+	// per-path — the provider ones only with an issuer, /auth/local only with
+	// a credential (av-q30x) — and a route walked in none of them would slip
+	// past this test entirely.
 	plain := newTestRouter(t)
 	withIdentity, _ := newIdentityTestRouter(t, &stubProvider{})
+	withLocal, _ := newLocalLoginRouter(t)
 
 	seen := map[string]bool{}
-	for _, ro := range []*Router{plain, withIdentity} {
+	for _, ro := range []*Router{plain, withIdentity, withLocal} {
 		require.NoError(t, chi.Walk(ro.Mux, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 			// A route registered in both configurations is walked twice; one
 			// verdict per route is enough.

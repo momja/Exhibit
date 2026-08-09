@@ -319,16 +319,21 @@ var publicPathPrefixes = []string{
 	"/favicon",
 }
 
-// sessionGate protects the server-rendered pages once an identity provider is
-// configured, sending an unauthenticated visitor to the provider and back to
-// the page they asked for.
+// sessionGate protects the server-rendered pages once this instance has a
+// login, sending an unauthenticated visitor to /auth/login and back to the page
+// they asked for.
 //
-// With no provider configured it is a pass-through — an unconfigured instance
-// has no login to send anyone to, and its pages stay exactly as open as they
-// have always been.
+// "Has a login" means either configured path (av-q30x): an identity provider,
+// or a local credential. Keying it on the provider alone — as it was — meant a
+// self-hoster who set a username and password would still be serving every
+// gallery page to anyone who could reach the app origin.
+//
+// With neither configured it is a pass-through — an unconfigured instance has
+// no login to send anyone to, and its pages stay exactly as open as they have
+// always been.
 func (ro *Router) sessionGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !ro.identityEnabled() || isPublicPath(r.URL.Path) {
+		if !ro.loginEnabled() || isPublicPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
