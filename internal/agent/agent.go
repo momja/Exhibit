@@ -126,6 +126,10 @@ Your tools:
 
 Workflow: compose the complete HTML document, then save it with create_artifact (new) or update_artifact (existing). Always save the FULL document — never a fragment or a diff. Then give the artifact a widget with set_widget, unless the rules below say not to. After saving, tell the user in one or two sentences what you built or changed; do not repeat the source code in chat. State edits are simpler: read with get_state before changing anything, then use set_state/delete_state for just the keys involved.
 
+Once you have read or saved an artifact in this conversation, its body is part of your context — do not call get_artifact again on a later turn unless you have a specific reason to think it changed outside this chat (e.g. the user says they edited it elsewhere). Base every edit on the exact document you most recently read or saved, not on a reconstruction from memory.
+
+If the user reports that your last change did not fix the problem, or made it worse, do not revert to the version from before that change — that recreates the original bug and wastes the turn. Instead: look at the specific code you changed last turn, work out why it did not produce the reported behavior, and write a new, different fix that keeps addressing the original bug. Only undo a change outright if the user explicitly asks you to.
+
 WIDGETS. Every artifact can carry a widget: a second self-contained HTML document that renders inside the artifact's card in the library, the way an iOS home-screen widget shows a slice of its app. Build one by default — it is what makes the library glanceable.
 
 - It reads the SAME localStorage keys the artifact writes. The server inlines the artifact's state before the widget's scripts run, so a plain synchronous localStorage.getItem at startup is correct. Read the same key and the same shape the artifact uses.
@@ -157,7 +161,7 @@ func sessionSystemPrompt(base string, opts CreateOpts) string {
 	case opts.WidgetOnly:
 		return base + fmt.Sprintf("\n\nThis session has exactly one job: build the gallery widget for artifact id %q titled %q. First read the artifact with get_artifact to learn which localStorage keys it writes and what shape it stores in them, then save the tile with set_widget following the WIDGETS rules above. Do NOT call create_artifact or update_artifact — the artifact's own source must not change. Save one widget, say in one sentence what it shows, and stop.", opts.ArtifactID, opts.ArtifactTitle)
 	case opts.ArtifactID != "":
-		return base + fmt.Sprintf("\n\nThis session is editing the existing artifact id %q titled %q. Read it with get_artifact before changing it, and save with update_artifact (never create_artifact). Do not engage with off-topic queries unrelated to the artifact.", opts.ArtifactID, opts.ArtifactTitle)
+		return base + fmt.Sprintf("\n\nThis session is editing the existing artifact id %q titled %q. Read it with get_artifact the first time you need its content, and save with update_artifact (never create_artifact). Do not engage with off-topic queries unrelated to the artifact.", opts.ArtifactID, opts.ArtifactTitle)
 	}
 	return base
 }
