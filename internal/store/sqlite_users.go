@@ -42,12 +42,33 @@ func (s *SQLiteStore) UpsertUser(ctx context.Context, externalID, email string) 
 	}
 	// First login. DO NOTHING rather than a conflict error, so two logins
 	// racing on the same brand-new identity both resolve to the row below.
-	if _, err := s.db.ExecContext(ctx,
-		`INSERT INTO users (external_id, email) VALUES (?, ?)
-         ON CONFLICT(external_id) DO NOTHING`, externalID, email); err != nil {
+	if err := s.insertUser(ctx, externalID, email, nil); err != nil {
 		return nil, err
 	}
 	return s.getUserBy(ctx, "external_id=?", externalID)
+}
+
+// insertUser is the only statement in the system that creates a users row, and
+// therefore the only place the first-admin rule has to live (av-rzvf).
+//
+// `is_admin` is computed by the insert itself — NOT EXISTS over the table it is
+// inserting into — rather than by the caller reading a count and then writing.
+// A read-then-write would be two statements with a gap in the middle, and the
+// row that gap decides is the one that administers the instance. As one
+// statement it is atomic under SQLite's single writer, so two simultaneous
+// first logins produce exactly one admin whichever wins.
+//
+// The `WHERE true` is not decoration: SQLite's parser cannot tell an
+// ON CONFLICT clause from a join's ON clause after INSERT … SELECT, and a
+// trailing WHERE is the documented way to disambiguate.
+func (s *SQLiteStore) insertUser(ctx context.Context, externalID, email string, passwordHash *string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO users (external_id, email, password_hash, is_admin)
+         SELECT ?, ?, ?, NOT EXISTS (SELECT 1 FROM users)
+         WHERE true
+         ON CONFLICT(external_id) DO NOTHING`,
+		externalID, email, passwordHash)
+	return err
 }
 
 // GetUser looks a user up by the integer every other table calls owner_id.
@@ -55,12 +76,19 @@ func (s *SQLiteStore) GetUser(ctx context.Context, id int64) (*User, error) {
 	return s.getUserBy(ctx, "id=?", id)
 }
 
+// userColumns is the projection every user read shares. password_hash is
+// absent on purpose: it is selected by exactly one query, in
+// LookupLocalCredential, so there is no path by which the hash reaches a
+// caller that did not ask for it by name.
+const userColumns = `id, external_id, email, created_at, is_admin,
+                     password_hash IS NOT NULL`
+
 func (s *SQLiteStore) getUserBy(ctx context.Context, where string, arg any) (*User, error) {
 	var u User
 	var created any
 	err := s.db.QueryRowContext(ctx,
-		"SELECT id, external_id, email, created_at FROM users WHERE "+where, arg,
-	).Scan(&u.ID, &u.ExternalID, &u.Email, &created)
+		"SELECT "+userColumns+" FROM users WHERE "+where, arg,
+	).Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -69,6 +97,125 @@ func (s *SQLiteStore) getUserBy(ctx context.Context, where string, arg any) (*Us
 	}
 	u.CreatedAt = anyToTime(created)
 	return &u, nil
+}
+
+// --- Local credentials (av-rzvf) ---------------------------------------
+//
+// A local account is a users row with password_hash filled in. It is the same
+// row an OIDC identity gets and lives in the same owner_id space; the only
+// difference is which columns are populated. That is what keeps "this instance
+// issues its own credentials" from being a second user directory bolted beside
+// the first.
+//
+// The lookup key is the login name, normalized and folded into external_id as
+// `local:<name>` by auth.LocalExternalID. Reusing external_id's existing UNIQUE
+// constraint makes "one local account per name" a schema invariant, without
+// imposing uniqueness on email — which for an OIDC row is whatever the provider
+// last reported and is not ours to constrain.
+
+// LookupLocalCredential returns the account for a local login name together
+// with its stored bcrypt hash. ErrNotFound covers both "no such account" and
+// "that account has no password" (an OIDC identity), because the login path
+// acts on them identically and separating them here would only invite a caller
+// to leak the difference.
+//
+// The hash is returned rather than compared here: bcrypt is the auth package's
+// business, and a store that verified passwords would be a store that decides
+// authentication policy.
+func (s *SQLiteStore) LookupLocalCredential(ctx context.Context, externalID string) (*User, string, error) {
+	var u User
+	var created any
+	var hash sql.NullString
+	err := s.db.QueryRowContext(ctx,
+		"SELECT "+userColumns+", password_hash FROM users WHERE external_id=?", externalID,
+	).Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, "", ErrNotFound
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if !hash.Valid || hash.String == "" {
+		return nil, "", ErrNotFound
+	}
+	u.CreatedAt = anyToTime(created)
+	return &u, hash.String, nil
+}
+
+// CreateLocalUser provisions an account with a password. It is the CLI's
+// entry point today and the admin UI's later (av-utap).
+//
+// An existing external_id is a conflict rather than an overwrite: "add a user"
+// that silently resets an existing user's password is the kind of convenience
+// that loses somebody their library. SetLocalPassword is the deliberate way to
+// change one.
+func (s *SQLiteStore) CreateLocalUser(ctx context.Context, externalID, email, passwordHash string) (*User, error) {
+	switch {
+	case externalID == "":
+		return nil, errors.New("create local user: empty login name")
+	case passwordHash == "":
+		return nil, errors.New("create local user: empty password hash")
+	}
+	if _, err := s.getUserBy(ctx, "external_id=?", externalID); err == nil {
+		return nil, ErrDuplicateName
+	} else if !errors.Is(err, ErrNotFound) {
+		return nil, err
+	}
+	if err := s.insertUser(ctx, externalID, email, &passwordHash); err != nil {
+		return nil, err
+	}
+	return s.getUserBy(ctx, "external_id=?", externalID)
+}
+
+// SetLocalPassword replaces an account's password, or removes it when hash is
+// empty — which is how an account becomes SSO-only again without losing the
+// row, and therefore without losing the library that row owns.
+func (s *SQLiteStore) SetLocalPassword(ctx context.Context, userID int64, passwordHash string) error {
+	var value any
+	if passwordHash != "" {
+		value = passwordHash
+	}
+	res, err := s.db.ExecContext(ctx,
+		"UPDATE users SET password_hash=? WHERE id=?", value, userID)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// CountLocalCredentials reports how many accounts can log in with a password.
+// The server reads it once at startup to decide whether this instance has a
+// login at all — see api.Config.LocalUsers.
+func (s *SQLiteStore) CountLocalCredentials(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM users WHERE password_hash IS NOT NULL").Scan(&n)
+	return n, err
+}
+
+// ListUsers returns every account on the instance, oldest first — which is
+// also admin-first, since the first row is the one the first-admin rule
+// promoted.
+func (s *SQLiteStore) ListUsers(ctx context.Context) ([]*User, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+userColumns+" FROM users ORDER BY id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*User
+	for rows.Next() {
+		var u User
+		var created any
+		if err := rows.Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword); err != nil {
+			return nil, err
+		}
+		u.CreatedAt = anyToTime(created)
+		out = append(out, &u)
+	}
+	return out, rows.Err()
 }
 
 // CreateSession records a logged-in browser. The caller supplies the id — it
