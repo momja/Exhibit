@@ -138,9 +138,18 @@ func main() {
 	if err != nil {
 		fatal("count local accounts", err)
 	}
+	// An instance with no way in at all gets one (av-jviu), so a fresh
+	// deployment is usable without a CLI round-trip and a restart.
+	if localUsers == 0 && identity == nil && localCredential == nil {
+		if err := seedDefaultAdmin(context.Background(), st); err != nil {
+			fatal("create the default admin account", err)
+		}
+		localUsers = 1
+	}
 	if localUsers > 0 {
 		slog.Info("local accounts present", slog.Int64("count", localUsers))
 	}
+	warnIfDefaultPassword(context.Background(), st)
 	if identity != nil || localCredential != nil || localUsers > 0 {
 		if n, err := st.DeleteExpiredSessions(context.Background()); err != nil {
 			slog.Warn("prune expired sessions", slog.String("err", err.Error()))
@@ -204,6 +213,57 @@ func newIdentityProvider(ctx context.Context, appOrigin string) auth.IdentityPro
 	}
 	slog.Info("identity provider configured", slog.String("issuer", issuer))
 	return provider
+}
+
+// DefaultAdminName and DefaultAdminPassword are the account a fresh instance
+// gets so that it is usable the moment it boots, with no CLI round-trip and no
+// restart (av-jviu).
+//
+// The password is a documented constant, chosen deliberately over a generated
+// one for the sake of a shorter first five minutes. The cost is real and worth
+// stating plainly: between first boot and the operator changing it, anyone who
+// can reach the instance can sign in as its admin. That is why
+// warnIfDefaultPassword below nags on every startup rather than only on the
+// one that created the account — a warning scrolled past once is not a warning.
+const (
+	DefaultAdminName     = "admin"
+	DefaultAdminPassword = "changeme"
+)
+
+// seedDefaultAdmin creates that account. It runs only when the instance has no
+// local accounts *and* no other way in: an OIDC issuer or a LOGIN_USERNAME pair
+// each mean the operator has already chosen how they sign in, and quietly
+// adding a guessable second door to that would be a backdoor rather than a
+// convenience.
+func seedDefaultAdmin(ctx context.Context, st *store.SQLiteStore) error {
+	hash, err := auth.HashPassword(DefaultAdminPassword)
+	if err != nil {
+		return err
+	}
+	if _, err := st.CreateLocalUser(ctx, auth.LocalExternalID(DefaultAdminName), DefaultAdminName, hash); err != nil {
+		return err
+	}
+	slog.Info("created the default admin account",
+		slog.String("username", DefaultAdminName),
+		slog.String("password", DefaultAdminPassword),
+	)
+	return nil
+}
+
+// warnIfDefaultPassword complains, at every startup, for as long as the seeded
+// account still has its documented password. Costs one bcrypt compare per boot.
+func warnIfDefaultPassword(ctx context.Context, st *store.SQLiteStore) {
+	_, hash, err := st.LookupLocalCredential(ctx, auth.LocalExternalID(DefaultAdminName))
+	if err != nil || hash == "" {
+		return // no such account, or it has no password — nothing to warn about
+	}
+	if !auth.VerifyStoredPassword(hash, DefaultAdminPassword) {
+		return // changed, which is the whole point
+	}
+	slog.Warn("the admin account still has its default password — anyone who can reach this instance can sign in as its admin",
+		slog.String("username", DefaultAdminName),
+		slog.String("fix", "sign in and change it, or run: user passwd "+DefaultAdminName),
+	)
 }
 
 // newLocalCredential builds the environment credential, or returns nil when
