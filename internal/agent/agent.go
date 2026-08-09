@@ -157,7 +157,7 @@ func sessionSystemPrompt(base string, opts CreateOpts) string {
 	case opts.WidgetOnly:
 		return base + fmt.Sprintf("\n\nThis session has exactly one job: build the gallery widget for artifact id %q titled %q. First read the artifact with get_artifact to learn which localStorage keys it writes and what shape it stores in them, then save the tile with set_widget following the WIDGETS rules above. Do NOT call create_artifact or update_artifact — the artifact's own source must not change. Save one widget, say in one sentence what it shows, and stop.", opts.ArtifactID, opts.ArtifactTitle)
 	case opts.ArtifactID != "":
-		return base + fmt.Sprintf("\n\nThis session is editing the existing artifact id %q titled %q. Read it with get_artifact before changing it, and save with update_artifact (never create_artifact).", opts.ArtifactID, opts.ArtifactTitle)
+		return base + fmt.Sprintf("\n\nThis session is editing the existing artifact id %q titled %q. Read it with get_artifact before changing it, and save with update_artifact (never create_artifact). Do not engage with off-topic queries unrelated to the artifact.", opts.ArtifactID, opts.ArtifactTitle)
 	}
 	return base
 }
