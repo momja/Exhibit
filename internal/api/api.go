@@ -68,6 +68,11 @@ type Router struct {
 	// rather than passed around so a page render mints in memory, with no I/O
 	// per card.
 	tokens *rendertoken.Signer
+	// logins throttles failed local logins (av-t21v). In-process and in-memory
+	// on purpose: one binary and one SQLite file is this project's deployment
+	// contract, and attempt counters do not earn a table — see
+	// loginratelimit.go, which also holds the reasoning for what it keys on.
+	logins *loginLimiter
 }
 
 // NewRouter constructs the chi router with all routes registered.
@@ -76,6 +81,7 @@ func NewRouter(cfg Config) *Router {
 		Mux:    chi.NewRouter(),
 		cfg:    cfg,
 		tokens: renderSigner(cfg.Secrets),
+		logins: newLoginLimiter(nil),
 	}
 	r.setupRoutes()
 	return r
