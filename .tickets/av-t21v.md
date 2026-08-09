@@ -1,7 +1,7 @@
 ---
 id: av-t21v
-status: open
-deps: [av-rzvf]
+status: in_progress
+deps: []
 links: []
 created: 2026-08-09T17:39:50Z
 type: feature
@@ -18,3 +18,9 @@ That argument weakens once Exhibit issues credentials for several people. Creden
 
 This is the one item from av-30rj's original objection list that the operator-provisioned model does not dissolve, so it is in scope rather than deferred.
 
+
+## Notes
+
+**2026-08-09T17:44:31Z**
+
+Dependency on av-rzvf removed (2026-08-09): it was mine and it was not real. Rate limiting keys on the submitted username and the client, and guards POST /auth/local — which exists today against av-q30x's single env credential and will exist unchanged once credentials move into the users table. Nothing about the limiter's design depends on where the hash is stored, so it can be built and shipped before the schema work rather than behind it.

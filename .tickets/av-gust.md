@@ -4,7 +4,7 @@ status: open
 deps: []
 links: []
 created: 2026-08-09T16:18:19Z
-type: task
+type: bug
 priority: 1
 assignee: Max Omdal
 ---
@@ -16,3 +16,5 @@ This was tested by pasting a system prompt from a roleplaying site. The agent im
 
 Agents should be restricted to _only_ responding to direct inquiries about the artifact. This means questions to deal with the state,
 source code or glances are allowed. Everything else is blocked.
+
+When an agent is prompted with unrelated content, the agent should use a deterministic, canned response.
