@@ -102,7 +102,7 @@ func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 
 	tags, _ := ro.cfg.Store.ListTags(r.Context(), ownerID)
 
-	page, err := renderGalleryPage(arts, tags, q, ro.cfg.AuthToken, ro.renderURLs(r))
+	page, err := renderGalleryPage(arts, tags, q, ro.pageCredentials(r), ro.renderURLs(r))
 	if err != nil {
 		serverError(w, r, "gallery index render", err)
 		return
@@ -115,7 +115,7 @@ func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 // store: ingest is entirely a client-side conversation with POST
 // /api/artifacts, so the page needs only the API token its script posts with.
 func (ro *Router) galleryNew(w http.ResponseWriter, r *http.Request) {
-	page, err := renderNewPage(ro.cfg.AuthToken)
+	page, err := renderNewPage(ro.pageCredentials(r))
 	if err != nil {
 		serverError(w, r, "gallery new render", err)
 		return
@@ -143,7 +143,7 @@ func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	defer rc.Close()
 	src, _ := io.ReadAll(rc)
 
-	page, err := renderDetailPage(a, string(src), ro.renderURLs(r), ro.cfg.AuthToken)
+	page, err := renderDetailPage(a, string(src), ro.renderURLs(r), ro.pageCredentials(r))
 	if err != nil {
 		serverError(w, r, "gallery detail render", err)
 		return
@@ -179,7 +179,7 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	canGenerate, generateHint := ro.widgetGenerateAvailability(r)
-	page, err := renderEditPage(a, decisions, string(src), ro.widgetSource(r, a), ro.cfg.AuthToken, ro.renderURLs(r), canGenerate, generateHint)
+	page, err := renderEditPage(a, decisions, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint)
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
@@ -456,16 +456,16 @@ type galleryPageData struct {
 	// html/template rejects the data: scheme in URL contexts by default.
 	Favicon template.URL
 	// LogoSVG is the compiled-in brand mark (logo.go), trusted markup.
-	LogoSVG         template.HTML
-	Query           string
-	Cards           []galleryCard
-	Presets         []string
-	AddTagModal     addTagModalData
-	Token           string
+	LogoSVG     template.HTML
+	Query       string
+	Cards       []galleryCard
+	Presets     []string
+	AddTagModal addTagModalData
+	pageCredentials
 	DefaultTagColor string
 }
 
-func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token string, urls renderURLs) (string, error) {
+func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query string, creds pageCredentials, urls renderURLs) (string, error) {
 	cards := make([]galleryCard, len(arts))
 	for i, a := range arts {
 		cards[i] = galleryCard{
@@ -490,23 +490,24 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token s
 		Cards:           cards,
 		Presets:         color.Presets,
 		AddTagModal:     addTagModalData{Tags: tagViews(tags), Presets: color.Presets},
-		Token:           token,
+		pageCredentials: creds,
 		DefaultTagColor: store.DefaultTagColor,
 	})
 }
 
 // newPageData feeds the add-artifact page. It is deliberately thin: the page
 // creates artifacts through the API like any other client, so the only
-// per-request value it needs is the bearer token its script posts with.
+// per-request values it needs are the credential its script posts with and
+// whether it is allowed to post at all.
 type newPageData struct {
 	Favicon template.URL
-	Token   string
+	pageCredentials
 }
 
-func renderNewPage(token string) (string, error) {
+func renderNewPage(creds pageCredentials) (string, error) {
 	return renderPage("new", newPageData{
-		Favicon: template.URL(exhibitLogoDataURI),
-		Token:   token,
+		Favicon:         template.URL(exhibitLogoDataURI),
+		pageCredentials: creds,
 	})
 }
 
@@ -525,10 +526,10 @@ type detailPageData struct {
 	SourceURL  string
 	Src        string
 	Capability capabilityView
-	Token      string
+	pageCredentials
 }
 
-func renderDetailPage(a *store.Artifact, src string, urls renderURLs, token string) (string, error) {
+func renderDetailPage(a *store.Artifact, src string, urls renderURLs, creds pageCredentials) (string, error) {
 	allowlist := a.NetworkAllowlist
 	if allowlist == nil {
 		allowlist = []string{}
@@ -548,7 +549,7 @@ func renderDetailPage(a *store.Artifact, src string, urls renderURLs, token stri
 			ClipboardApproved: a.ClipboardApproved,
 			ShowManage:        true,
 		},
-		Token: token,
+		pageCredentials: creds,
 	})
 }
 
@@ -556,7 +557,7 @@ type editPageData struct {
 	ID    string
 	Title string
 	Src   string
-	Token string
+	pageCredentials
 	// An origin has three states here, not two (exhibit-x87): Allowlist holds
 	// the decision='allow' origins (the ones the render CSP is built from);
 	// Blocked holds the decision='block' origins — explicit "don't ask again"
@@ -585,7 +586,7 @@ type editPageData struct {
 	GenerateHint      string
 }
 
-func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, widgetSrc, token string, urls renderURLs, canGenerate bool, generateHint string) (string, error) {
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string) (string, error) {
 	allowlist, blocked := []string{}, []string{}
 	for _, d := range decisions {
 		switch d.Decision {
@@ -602,7 +603,7 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, wi
 		ID:                a.ID,
 		Title:             a.Title,
 		Src:               src,
-		Token:             token,
+		pageCredentials:   creds,
 		Allowlist:         allowlist,
 		Blocked:           blocked,
 		Unapproved:        unapproved,

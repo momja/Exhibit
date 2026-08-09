@@ -22,7 +22,9 @@ const files = [
   // tokens.css/components.css/components.js are the shared layer (av-xgik,
   // av-41se) and must be linked before the page sheets/scripts that build on
   // them.
-  "tokens.css", "components.css", "components.js",
+  // api.js joins them (av-5imk): it is the one credentialed API client every
+  // page script calls instead of building an Authorization header itself.
+  "tokens.css", "components.css", "components.js", "api.js",
   "index.css", "index.js",
   "new.css", "new.js",
   "detail.css", "detail.js",

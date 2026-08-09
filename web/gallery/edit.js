@@ -1,7 +1,8 @@
 /* Artifact edit page script. Served from the app origin at
  * /assets/gallery/edit.js. The page's inline bootstrap <script> defines the
  * per-request globals this file reads (and reassigns) before it loads:
- *   TOKEN             - API bearer token
+ *   TOKEN / READ_ONLY - this visitor's API credential, decided server-side
+ *                       per request (av-5imk); spent via api.js's apiFetch
  *   ID                - the artifact id
  *   allowlist         - approved network origins (mutable working copy)
  *   unapproved        - origins the current body references that carry no
@@ -190,9 +191,8 @@ async function save() {
   if (!body.trim()) { status.textContent = 'Body cannot be empty.'; return; }
   status.textContent = 'Saving…';
   document.getElementById('scan-result').style.display = 'none';
-  const resp = await fetch('/api/artifacts/' + ID, {
+  const resp = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
-    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
     body: JSON.stringify({
       title: title || 'Untitled',
       body,
@@ -249,9 +249,8 @@ async function approveOrigins() {
   // overwrite would drop origins the security panel approved that the new
   // body's footprint doesn't happen to reference.
   const merged = Array.from(new Set([...allowlist, ...selected]));
-  const r = await fetch('/api/artifacts/' + ID, {
+  const r = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
-    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
     body: JSON.stringify({network_allowlist: merged})
   });
   if (!r.ok) { status.textContent = '✗ Failed to update allowlist'; return; }
@@ -272,9 +271,8 @@ async function deleteArtifact() {
   const status = document.getElementById('status');
   status.textContent = 'Deleting…';
   try {
-    const resp = await fetch('/api/artifacts/' + ID, {
-      method: 'DELETE',
-      headers: {'Authorization':'Bearer '+TOKEN}
+    const resp = await apiFetch('/api/artifacts/' + ID, {
+      method: 'DELETE'
     });
     if (!resp.ok) {
       const txt = await resp.text().catch(() => '');
@@ -319,9 +317,8 @@ async function deleteArtifact() {
     if (!body) { status.textContent = 'Nothing to save — the source is empty.'; return; }
     status.textContent = 'Saving…';
     try {
-      const r = await fetch('/api/artifacts/' + ID + '/widget', {
+      const r = await apiFetch('/api/artifacts/' + ID + '/widget', {
         method: 'PUT',
-        headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
         body: JSON.stringify({body: body})
       });
       if (!r.ok) {
@@ -346,9 +343,8 @@ async function deleteArtifact() {
     if (!confirm('Remove this artifact’s widget? Its card falls back to the default tile.')) return;
     status.textContent = 'Removing…';
     try {
-      const r = await fetch('/api/artifacts/' + ID + '/widget', {
-        method: 'DELETE',
-        headers: {'Authorization':'Bearer '+TOKEN}
+      const r = await apiFetch('/api/artifacts/' + ID + '/widget', {
+        method: 'DELETE'
       });
       if (!r.ok) {
         status.textContent = '✗ ' + ((await r.text().catch(() => '')).trim() || r.statusText);
@@ -388,9 +384,8 @@ async function deleteArtifact() {
       }
 
       try {
-        const r = await fetch('/api/artifacts/' + ID + '/widget/generate', {
-          method: 'POST',
-          headers: {'Authorization':'Bearer '+TOKEN}
+        const r = await apiFetch('/api/artifacts/' + ID + '/widget/generate', {
+          method: 'POST'
         });
         if (!r.ok) {
           const data = await r.json().catch(() => ({}));
@@ -399,10 +394,10 @@ async function deleteArtifact() {
         }
         const sessionId = (await r.json()).session_id;
 
-        // EventSource cannot set headers, so this route takes the same bearer
-        // token as ?token= — the existing contract, not a new one.
-        events = new EventSource('/api/agent/sessions/' + encodeURIComponent(sessionId) +
-          '/events?token=' + encodeURIComponent(TOKEN));
+        // EventSource cannot set headers, so the credential (when this page
+        // was given one) travels in the query string; api.js owns that, and
+        // omits it entirely when the session cookie is what authenticates.
+        events = apiEventSource('/api/agent/sessions/' + encodeURIComponent(sessionId) + '/events');
         timer = setTimeout(function() {
           finish('✗ Timed out waiting for the agent. Try again, or write the widget by hand.');
         }, GENERATE_TIMEOUT_MS);
@@ -415,9 +410,7 @@ async function deleteArtifact() {
             // Pull the saved source back into the editor so the user can see
             // and edit what the agent wrote, not just its rendered tile.
             try {
-              const got = await fetch('/api/artifacts/' + ID + '/widget', {
-                headers: {'Authorization':'Bearer '+TOKEN}
-              });
+              const got = await apiFetch('/api/artifacts/' + ID + '/widget');
               if (got.ok) setSource('widget-src', (await got.json()).body || '');
             } catch (err) { /* the tile still rendered; the source can be re-read */ }
             setHasWidget(true);
@@ -427,8 +420,8 @@ async function deleteArtifact() {
               : '✓ Generated');
             // One-shot session: the work is done, so don't leave a subprocess
             // alive until the idle reaper gets to it.
-            fetch('/api/agent/sessions/' + encodeURIComponent(sessionId), {
-              method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN}
+            apiFetch('/api/agent/sessions/' + encodeURIComponent(sessionId), {
+              method: 'DELETE'
             }).catch(function(){});
             return;
           }

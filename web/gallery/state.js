@@ -1,7 +1,8 @@
 /* Artifact state inspector — the edit page's typed view of the state an
  * artifact wrote through localStorage (av-hg5f). Served from the app origin at
  * /assets/gallery/state.js, after edit.js, and reads the per-request globals
- * the page's inline bootstrap defines: TOKEN, ID, TITLE.
+ * the page's inline bootstrap defines: TOKEN/READ_ONLY (this visitor's API
+ * credential, spent through api.js's apiFetch — av-5imk), ID, TITLE.
  *
  * Two rules shape everything below.
  *
@@ -476,11 +477,8 @@
   // --- API --------------------------------------------------------------
 
   function api(method, path, body) {
-    const headers = { 'Authorization': 'Bearer ' + TOKEN };
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
-    return fetch(path, {
+    return apiFetch(path, {
       method,
-      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   }

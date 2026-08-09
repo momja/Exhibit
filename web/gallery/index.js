@@ -1,7 +1,8 @@
 /* Gallery index (library) page script. Served from the app origin at
  * /assets/gallery/index.js. The page's inline bootstrap <script> defines the
  * per-request globals this file reads before it loads:
- *   TOKEN             - API bearer token
+ *   TOKEN / READ_ONLY - this visitor's API credential, decided server-side
+ *                       per request (av-5imk); spent via api.js's apiFetch
  *   DEFAULT_TAG_COLOR - store.DefaultTagColor, the add-tag modal's preset
  */
 
@@ -87,9 +88,8 @@ async function detachTag(btn) {
   const pill = btn.closest('.tag-pill');
   btn.disabled = true;
   try {
-    const r = await fetch('/api/tags/' + encodeURIComponent(btn.dataset.tagId) + '/artifacts/' + encodeURIComponent(btn.dataset.artifactId), {
-      method: 'DELETE',
-      headers: {'Authorization':'Bearer '+TOKEN}
+    const r = await apiFetch('/api/tags/' + encodeURIComponent(btn.dataset.tagId) + '/artifacts/' + encodeURIComponent(btn.dataset.artifactId), {
+      method: 'DELETE'
     });
     if (r.ok) {
       pill.remove();
@@ -163,9 +163,8 @@ document.getElementById('tag-edit-save').addEventListener('click', async functio
   const name = document.getElementById('tag-edit-name').value.trim();
   const color = document.getElementById('tag-edit-color-hex').value.trim();
   if (!name) { setModalError('tag-edit', 'Name is required.'); return; }
-  const r = await fetch('/api/tags/' + encodeURIComponent(editingTagId), {
+  const r = await apiFetch('/api/tags/' + encodeURIComponent(editingTagId), {
     method: 'PATCH',
-    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
     body: JSON.stringify({name: name, color: color})
   });
   if (!r.ok) {
@@ -179,9 +178,8 @@ document.getElementById('tag-edit-save').addEventListener('click', async functio
 document.getElementById('tag-edit-delete').addEventListener('click', async function() {
   const name = document.getElementById('tag-edit-name').value;
   if (!confirm('Delete tag "' + name + '"? It will be removed from every artifact. This cannot be undone.')) return;
-  const r = await fetch('/api/tags/' + encodeURIComponent(editingTagId), {
-    method: 'DELETE',
-    headers: {'Authorization':'Bearer '+TOKEN}
+  const r = await apiFetch('/api/tags/' + encodeURIComponent(editingTagId), {
+    method: 'DELETE'
   });
   if (!r.ok) {
     const data = await r.json().catch(function() { return {}; });
@@ -233,9 +231,8 @@ document.getElementById('tag-add-confirm').addEventListener('click', async funct
     const name = document.getElementById('tag-add-name').value.trim();
     if (!name) { setModalError('tag-add', 'Name is required.'); return; }
     const color = document.getElementById('tag-add-color-hex').value.trim();
-    const created = await fetch('/api/tags', {
+    const created = await apiFetch('/api/tags', {
       method: 'POST',
-      headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
       body: JSON.stringify({name: name, color: color})
     });
     const data = await created.json().catch(function() { return {}; });
@@ -243,9 +240,8 @@ document.getElementById('tag-add-confirm').addEventListener('click', async funct
     tagId = data.id;
   }
 
-  const attached = await fetch('/api/tags/' + encodeURIComponent(tagId) + '/artifacts/' + encodeURIComponent(addingArtifactId), {
-    method: 'POST',
-    headers: {'Authorization':'Bearer '+TOKEN}
+  const attached = await apiFetch('/api/tags/' + encodeURIComponent(tagId) + '/artifacts/' + encodeURIComponent(addingArtifactId), {
+    method: 'POST'
   });
   if (!attached.ok) {
     const data = await attached.json().catch(function() { return {}; });

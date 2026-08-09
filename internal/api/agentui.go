@@ -19,7 +19,7 @@ import (
 // '&' by default, which is what keeps this safe to embed in a <script>
 // block despite the title coming from user-authored artifact data.
 type agentPageData struct {
-	Token        string
+	pageCredentials
 	ArtifactJSON template.JS
 	MockEnabled  bool
 	AgentEnabled bool
@@ -138,12 +138,12 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	page, err := renderPage("agent", agentPageData{
-		Token:        ro.cfg.AuthToken,
-		ArtifactJSON: template.JS(artifactJSON),
-		MockEnabled:  ro.cfg.MockEnabled,
-		AgentEnabled: ro.cfg.Agent != nil,
-		BackURL:      backURL,
-		Preview:      ro.newAgentPreviewData(r, artifact),
+		pageCredentials: ro.pageCredentials(r),
+		ArtifactJSON:    template.JS(artifactJSON),
+		MockEnabled:     ro.cfg.MockEnabled,
+		AgentEnabled:    ro.cfg.Agent != nil,
+		BackURL:         backURL,
+		Preview:         ro.newAgentPreviewData(r, artifact),
 	})
 	if err != nil {
 		serverError(w, r, "agent page render", err)

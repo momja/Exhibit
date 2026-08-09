@@ -1,7 +1,8 @@
 /* Agent chat surface script (Exh-jlbt). Served from the app origin at
  * /assets/gallery/agent.js. The page's inline bootstrap <script> defines the
  * per-request globals this file reads (and reassigns) before it loads:
- *   TOKEN         - API bearer token
+ *   TOKEN / READ_ONLY - this visitor's API credential, decided server-side
+ *                   per request (av-5imk); spent via api.js's apiFetch
  *   artifact      - {id,title} when opened in modify mode, else null (mutable)
  *
  * The preview pane's markup (title, links, iframe) is not built here: it is a
@@ -46,13 +47,6 @@ function addMsg(cls, text) {
   messagesEl.appendChild(m);
   messagesEl.scrollTop = messagesEl.scrollHeight;
   return m;
-}
-
-async function apiFetch(path, opts) {
-  opts = opts || {};
-  opts.headers = Object.assign({'Authorization':'Bearer '+TOKEN}, opts.headers || {});
-  if (opts.body) opts.headers['Content-Type'] = 'application/json';
-  return fetch(path, opts);
 }
 
 // --- API key management --------------------------------------------------
@@ -206,7 +200,9 @@ async function ensureSession() {
 }
 
 function connectEvents() {
-  eventSource = new EventSource('/api/agent/sessions/' + sessionId + '/events?token=' + encodeURIComponent(TOKEN));
+  // api.js credentials the stream: a query-string token on a single-user
+  // instance, and nothing at all when the session cookie authenticates it.
+  eventSource = apiEventSource('/api/agent/sessions/' + encodeURIComponent(sessionId) + '/events');
   eventSource.onmessage = (e) => {
     let ev;
     try { ev = JSON.parse(e.data); } catch { return; }

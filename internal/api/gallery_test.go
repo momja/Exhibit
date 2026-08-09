@@ -346,7 +346,7 @@ func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
 // without weakening the sandbox (allow-scripts stays, allow-same-origin omitted).
 func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Clip Tool", Tier: store.Tier1, CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), "tok")
+	page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
 	assert.NotContains(t, page, `allow="clipboard-read; clipboard-write"`,
@@ -370,7 +370,7 @@ func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Read Only Tool", Tier: store.Tier1,
 		CreatedAt: time.Now(), NetworkAllowlist: []string{"https://example.com"}}
-	page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), "tok")
+	page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
 	// No inline allowlist editor or add-origin control.
@@ -414,7 +414,7 @@ func TestEditPageShowsBlockedOriginsDistinctlyFromUndecided(t *testing.T) {
 	decisions := []store.OriginDecision{
 		{Origin: "https://blocked.example.com", Decision: store.DecisionBlock, Source: "runtime"},
 	}
-	page, err := renderEditPage(a, decisions, src, "", "tok", testRenderURLs("https://render.test"), true, "")
+	page, err := renderEditPage(a, decisions, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let blocked = ["https://blocked.example.com"];`,
@@ -437,7 +437,7 @@ func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
 	payload := `https://x"><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Edit XSS", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "", "tok", testRenderURLs("https://render.test"), true, "")
+	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `<code title="https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
@@ -455,7 +455,7 @@ func TestEditPageSurfacesUnapprovedOriginsWithoutSeedingAllowlist(t *testing.T) 
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "No auto-seed", Tier: store.Tier1,
 		CreatedAt: time.Now()}
 	src := `<script src="https://cdn.example.com/lib.js"></script>`
-	page, err := renderEditPage(a, nil, src, "", "tok", testRenderURLs("https://render.test"), true, "")
+	page, err := renderEditPage(a, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `data-origin="https://cdn.example.com"`)
@@ -475,7 +475,7 @@ func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 	payload := `https://evil</script><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Script Breakout", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "", "tok", testRenderURLs("https://render.test"), true, "")
+	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let allowlist = ["https://evil\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e"];`,

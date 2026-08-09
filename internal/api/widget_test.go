@@ -385,8 +385,11 @@ func TestWidgetGenerateTakesNoCallerPrompt(t *testing.T) {
 	// The POST carries no body at all — just the auth header.
 	assert.NotContains(t, src[i:i+400], "JSON.stringify")
 	// Progress rides the session's existing SSE route, not a new mechanism.
-	assert.Contains(t, src, "new EventSource('/api/agent/sessions/'")
+	// apiEventSource is that route credentialed for this visitor (av-5imk):
+	// a query-string token on a single-user instance, nothing at all when a
+	// session cookie is what authenticates the stream.
+	assert.Contains(t, src, "apiEventSource('/api/agent/sessions/'")
 	assert.Contains(t, src, "'exhibit_widget_saved'")
 	// A one-shot session is closed once it has done its job.
-	assert.Contains(t, src, "method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN}")
+	assert.Contains(t, src, "apiFetch('/api/agent/sessions/' + encodeURIComponent(sessionId), {")
 }

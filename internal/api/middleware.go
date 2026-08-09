@@ -326,6 +326,10 @@ var publicPathPrefixes = []string{
 // With no provider configured it is a pass-through — an unconfigured instance
 // has no login to send anyone to, and its pages stay exactly as open as they
 // have always been.
+//
+// A request it admits on a session is marked as such, because the page render
+// downstream needs the same answer to decide which credential it may embed
+// (av-5imk, pagecredential.go) and the gate has already paid for the lookup.
 func (ro *Router) sessionGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !ro.identityEnabled() || isPublicPath(r.URL.Path) {
@@ -333,7 +337,7 @@ func (ro *Router) sessionGate(next http.Handler) http.Handler {
 			return
 		}
 		if _, ok := ro.sessionUser(r); ok {
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(withSessionAuthed(r.Context())))
 			return
 		}
 		// Only a top-level navigation can survive a trip to the provider.

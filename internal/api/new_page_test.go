@@ -93,7 +93,7 @@ func TestNewPageKeepsApproveThenPatchFlow(t *testing.T) {
 	r := newTestRouter(t)
 	js := galleryAsset(t, r, "/assets/gallery/new.js")
 
-	assert.Contains(t, js, `await fetch('/api/artifacts', {`)
+	assert.Contains(t, js, `await apiFetch('/api/artifacts', {`)
 	assert.Contains(t, js, `function showApproval(id, footprint)`)
 	assert.Contains(t, js, `body: JSON.stringify({network_allowlist: selected})`)
 	// Done means gone: the page hands off to the artifact's own detail page.

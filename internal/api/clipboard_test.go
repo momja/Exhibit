@@ -69,7 +69,7 @@ func TestPatchClipboardApprovedRejectsNonBool(t *testing.T) {
 func TestDetailPageRendersClipboardBridge(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Copy <Tool>", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), "tok")
+	page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
 	// Host-side handler for the shim's clipboard messages, the result reply,
@@ -94,7 +94,7 @@ func TestDetailPageRendersClipboardBridge(t *testing.T) {
 
 	// An approved artifact renders with the approval baked in.
 	a.ClipboardApproved = true
-	page, err = renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), "tok")
+	page, err = renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 	assert.Contains(t, page, "let clipboardApproved = true;")
 }

@@ -50,6 +50,12 @@ func newTestRouter(t *testing.T) *Router {
 
 func authHeader() string { return "Bearer secret" }
 
+// testPageCreds is what a single-user instance's page render produces: the
+// static token, and not read-only. Unit tests that call a render*Page function
+// directly need one; which credential a *request* actually earns is decided by
+// Router.pageCredentials and pinned in pagecredential_test.go.
+var testPageCreds = pageCredentials{Token: "tok"}
+
 // testRenderURLs is the token-minting context a page render normally takes from
 // the request (av-c5aq). Unit tests that call a render*Page function directly
 // need one; the key is throwaway because those tests assert on markup, not on

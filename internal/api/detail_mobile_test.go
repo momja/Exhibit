@@ -18,7 +18,7 @@ import (
 // rather than any particular styling.
 func TestDetailPageCarriesMobileActionsSheet(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Sheet Tool", Tier: store.Tier1, CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), "tok")
+	page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `id="sheet-toggle"`, "the header needs the kebab that opens the sheet")

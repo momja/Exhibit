@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -320,19 +321,42 @@ func (ro *Router) agentSession(w http.ResponseWriter, r *http.Request) *agent.Se
 	return s
 }
 
+// authorizeEventStream authenticates the SSE route, which cannot use the API's
+// auth middleware because EventSource sets no headers.
+//
+// Two credentials, and which one a browser holds depends on the instance
+// (av-5imk):
+//
+//   - A **session cookie**, which the browser attaches to a same-origin
+//     EventSource on its own. This is what a page on an instance with an
+//     identity provider authenticates with — such a page is handed no bearer
+//     token at all, precisely so logout can revoke its access.
+//   - The **static token**, on a single-user instance whose page has no other
+//     credential. It travels as `?token=` because there is nowhere else for it
+//     to go; narrowing that is av-rgp1's subject, and this function is the one
+//     place it would be narrowed.
+//
+// With no token configured app auth is off entirely, matching authMiddleware.
+func (ro *Router) authorizeEventStream(r *http.Request) bool {
+	if _, ok := ro.sessionUser(r); ok {
+		return true
+	}
+	if ro.cfg.AuthToken == "" {
+		return true
+	}
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		token = bearerToken(r)
+	}
+	return subtle.ConstantTimeCompare([]byte(token), []byte(ro.cfg.AuthToken)) == 1
+}
+
 // agentEvents streams a session's Pi events to the browser as SSE. It sits
-// outside the auth-header middleware because EventSource cannot set headers;
-// it accepts the same bearer token via the ?token query parameter instead.
+// outside the auth-header middleware because EventSource cannot set headers.
 func (ro *Router) agentEvents(w http.ResponseWriter, r *http.Request) {
-	if ro.cfg.AuthToken != "" {
-		token := r.URL.Query().Get("token")
-		if auth := r.Header.Get("Authorization"); token == "" && strings.HasPrefix(auth, "Bearer ") {
-			token = strings.TrimPrefix(auth, "Bearer ")
-		}
-		if token != ro.cfg.AuthToken {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
+	if !ro.authorizeEventStream(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
 	}
 	s := ro.agentSession(w, r)
 	if s == nil {
