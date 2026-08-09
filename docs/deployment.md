@@ -42,8 +42,9 @@ Env vars, all optional except `AUTH_TOKEN`.
 > Out of the box Exhibit is single-user: there is no login, and `AUTH_TOKEN` is
 > a single shared static token, not a real auth boundary. If you're exposing an
 > instance beyond your own machine, give it a login — see
-> [Logging in](#3-logging-in-optional) for the three supported ways — or be
-> comfortable with the consequences of running without one.
+> [Logging in](#3-logging-in-optional) for the three supported ways, two of
+> which also give you more than one user — or be comfortable with the
+> consequences of running without one.
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
@@ -56,8 +57,8 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
 | `PI_BIN` | `pi` | AI agent executable — unset/missing just disables that feature |
 | `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
-| `LOGIN_USERNAME` | *(unset)* | Username for Exhibit's own login. Set with `LOGIN_PASSWORD_HASH` to get a login with no identity server — see [§3.2](#32-log-in-with-a-username-and-password) |
-| `LOGIN_PASSWORD_HASH` | *(unset)* | The **bcrypt hash** of that password, not the password. Produce it with the `hash-password` subcommand (§3.2) |
+| `LOGIN_USERNAME` | *(unset)* | Names an account for the bootstrap / break-glass login — how you get in on an empty instance, or after losing a password. Accounts themselves are created with the `user add` subcommand, not here; see [§3.2](#32-log-in-with-a-username-and-password) |
+| `LOGIN_PASSWORD_HASH` | *(unset)* | The **bcrypt hash** of that password, not the password. Produce it with the `hash-password` subcommand. Set with `LOGIN_USERNAME`; it stays accepted for that account for as long as both are set (§3.2) |
 | `OIDC_ISSUER` | *(unset)* | Identity provider to delegate login to. Unset = no OIDC |
 | `OIDC_CLIENT_ID` | *(unset)* | Client id registered at that provider — required when `OIDC_ISSUER` is set |
 | `OIDC_CLIENT_SECRET` | *(unset)* | Client secret, if your provider issues one |
@@ -96,12 +97,14 @@ Three supported ways to put a login in front of an instance. None is more
 none of them leaves the instance as it has always been: no login, no gate,
 `AUTH_TOKEN` and a single owner.
 
-Two of the three secure a **single-user** library. If you want several people
-with separate libraries, that is [§3.3](#33-delegate-login-to-an-oidc-provider)
-plus what [§3.4](#34-running-it-for-more-than-one-person) says about it —
-worth reading before you offer anyone an account, because the pieces Exhibit
-deliberately does not have (user administration, account deletion) are the ones
-that matter operationally.
+Proxy auth ([§3.1](#31-authenticate-at-your-proxy)) secures a **single-user**
+library — it is one door in front of one owner. The other two each give you as
+many people with separate libraries as you like: accounts Exhibit issues itself
+([§3.2](#32-log-in-with-a-username-and-password)) or identities from your
+provider ([§3.3](#33-delegate-login-to-an-oidc-provider)). Read
+[§3.4](#34-running-it-for-more-than-one-person) before you offer anyone an
+account either way — the pieces Exhibit does not have yet are the ones that
+matter operationally.
 
 ### 3.1 Authenticate at your proxy
 
@@ -117,13 +120,52 @@ which are meant to be openable by people who have no account.
 
 ### 3.2 Log in with a username and password
 
-The path that needs nothing else running. Two variables and the instance has a
-login page.
+The path that needs nothing else running. Accounts live in Exhibit's own
+database, so you can have one or several, and you create them yourself — there
+is no registration form and no email anywhere in this.
 
 ![The login page](screenshots/av-q30x/01-login.png)
 
-First, hash the password. Exhibit takes a **bcrypt hash**, never the password
-itself, so run the binary's one subcommand and type the password when it asks:
+**Create an account.** The `user` subcommands read the password from stdin
+rather than an argument, so it never lands in your shell history or a process
+list:
+
+```bash
+docker compose run --rm app user add curator@example.com
+# Enter a password for curator@example.com, then press Enter and ctrl-D:
+# created curator@example.com (owner id 1) — the first account on an instance is its admin
+# restart the server so it starts requiring a login
+
+docker compose run --rm app user add partner@example.com   # a second person
+docker compose run --rm app user list                      # who exists
+docker compose run --rm app user passwd curator@example.com  # forgot it
+```
+
+The login name is the account's key. It is folded to lowercase and trimmed, so
+`Curator@Example.com` and `curator@example.com` are one account, not two.
+Anything works as a name; an email address is the convention because it is what
+the surrounding UI labels it as.
+
+Restart the server after the **first** account — that is what tells it the
+instance is no longer single-user and to start requiring a login. Later
+accounts need no restart.
+
+That is all. `/auth/login` now serves a login page, every gallery page redirects
+there until you sign in, and `/auth/logout` revokes the session server-side.
+
+**The first account on an instance is its admin.** That is the same rule as
+§3.4's callout below, seen from the other side: user ids start at 1, which is
+the id everything in an existing single-user library is already filed under, so
+the first account adopts that library. Create yours first. (The admin flag is
+recorded now and is what the coming admin screen will check; today it grants
+nothing at runtime.)
+
+#### The bootstrap and break-glass credential
+
+`LOGIN_USERNAME` / `LOGIN_PASSWORD_HASH` still work, and are worth
+understanding rather than skipping: they are how you get in when the database
+cannot help you — an empty instance with no account yet, or an account whose
+password you have lost.
 
 ```bash
 docker compose run --rm app hash-password
@@ -133,11 +175,8 @@ docker compose run --rm app hash-password
 # $2a$10$N9qo8uLOickgx2ZMRZoMy...
 ```
 
-It reads the password from stdin rather than an argument, so it never lands in
-your shell history or a process list. Then:
-
 ```bash
-LOGIN_USERNAME=curator \
+LOGIN_USERNAME=curator@example.com \
 LOGIN_PASSWORD_HASH='$2a$10$N9qo8uLOickgx2ZMRZoMy...' \
 APP_ORIGIN=https://app.example.com \
 docker compose up
@@ -145,12 +184,25 @@ docker compose up
 
 Single-quote the hash: it contains `$`, which your shell will otherwise eat.
 
-- `/auth/login` now serves a login page, and every gallery page redirects there
-  until you sign in. `/auth/logout` revokes the session server-side.
-- The session is the same one §3.3 describes — the same cookie with the same
-  attributes, the same `sessions` row, the same expiry. There is one session
-  layer; a username and password is just a second way to reach it.
-- `AUTH_TOKEN` keeps working for API and CLI clients.
+- **It names an account.** `LOGIN_USERNAME` is a login name like any other, and
+  `LOGIN_PASSWORD_HASH` is an *additional* password accepted for it. On an empty
+  instance that creates the account (and by the rule above, makes it the admin).
+  On a populated one it lets you into the existing account of that name — your
+  own library, not a separate rescue account. The stored password keeps working
+  alongside it, so you can log in, run `user passwd`, and be back to normal
+  without another restart.
+- **It stays live for as long as it is set** — it does not stop working once
+  accounts exist. That is deliberate, and it is a trade: it means anyone who can
+  read your process environment can log in as that account, and disabling the
+  account in the database will not stop them. The alternative — expiring it at
+  the first account — would remove exactly the case it exists for, leaving a
+  locked-out operator with no way in short of editing SQLite by hand. It is also
+  a bypass you already grant: `AUTH_TOKEN` sits in the same environment and is
+  full access to every API route.
+- **Turn it off by unsetting both variables and restarting.** Accounts you
+  created with `user add` keep working, so this is a safe thing to do once
+  you are in. Startup logs a warning while it is enabled, so it cannot be left
+  on unnoticed.
 - **Why a hash and not the password.** Hashing a plaintext that is sitting in
   the process environment right beside it would protect nothing. Supplying the
   hash means the password exists only in your head — the value in your
@@ -161,12 +213,17 @@ Single-quote the hash: it contains `$`, which your shell will otherwise eat.
   rather than quietly leaving the instance with no login. So does a
   `LOGIN_PASSWORD_HASH` that is not a bcrypt hash — which is what a pasted-in
   plaintext password looks like.
-- There is no registration, no password reset and no email. One credential, set
-  at deploy; to change it, generate a new hash and restart. This is what keeps
-  the feature small enough to be worth having, and it is the reason it fits a
-  single-user library rather than a multi-user product.
-- Changing `LOGIN_USERNAME` later relabels the same owner rather than creating a
-  second one — your library is not orphaned by a rename.
+
+#### Either way
+
+- The session is the same one §3.3 describes — the same cookie with the same
+  attributes, the same `sessions` row, the same expiry. There is one session
+  layer; a username and password is just a second way to reach it.
+- `AUTH_TOKEN` keeps working for API and CLI clients.
+- There is no self-registration, no password reset flow and no email. You create
+  accounts and you reset passwords, from the CLI. That is what keeps this small
+  enough to be worth having: no SMTP to configure and nothing to verify, because
+  you vouched for the account by creating it.
 
 To combine it with §3.3, set both: the login page then offers the password form
 and a button through to your provider.
@@ -207,8 +264,9 @@ docker compose up
 > at 1 — the same id everything in an existing single-user library is already
 > filed under. So on an instance you are upgrading, **complete the first login
 > yourself** before letting anyone else in: that first identity adopts the
-> existing library. The same is true of §3.2's credential, which is one identity
-> like any other.
+> existing library, and is also the instance's admin. The same is true of §3.2's
+> accounts — the two kinds of user share one table and one id space, and
+> whichever arrives first is first.
 
 When both this and §3.2 are configured, `/auth/login` presents both and either
 lands the same kind of session. They are two identities, so they are two owners:
@@ -216,24 +274,28 @@ sign in the way you intend to keep using before you fill the library.
 
 ### 3.4 Running it for more than one person
 
-**Only §3.3 gives you multiple users.** The other two are one identity each:
-proxy auth (§3.1) puts a door in front of a single-user library, and the
-username and password (§3.2) is one credential, deliberately — there is no
-second `LOGIN_USERNAME`, and adding one would mean owning registration,
-password resets and the mail to send them.
+**Two of the three give you multiple users**, and they are not exclusive — an
+instance can run both at once, and a person who signs in each way is two
+accounts, not one. Proxy auth (§3.1) is the exception: it is one door in front
+of one library.
 
-So multi-user means OIDC, and the shape of it is:
+- **§3.2, accounts Exhibit issues.** You are the user directory. You create
+  accounts with `user add` and reset passwords with `user passwd`; there is no
+  self-registration, so there is nothing to verify and no mail to send. This is
+  the household and small-team path — nothing else to run.
+- **§3.3, identities from your provider.** Your provider is the user directory.
+  Granting someone access to the Exhibit application there is the whole of
+  provisioning; Exhibit only records that it has met them. This is the path for
+  people already running Authentik, Keycloak or similar.
 
-> **Your identity provider is the user directory. Exhibit is not.**
+Both write to the same `users` table and the same `owner_id` space. An account
+with a password and an identity without one are the same kind of row — that is
+what keeps them one directory rather than two, and it is why the first account
+of *either* kind is the instance's admin.
 
-Everything else follows. Exhibit has no registration form, no invite flow, no
-admin screen and no user list, because "who exists" and "who may sign in" are
-answered at the provider. Exhibit only records that it has met someone.
-
-**How people get accounts.** They don't, separately. A `users` row is written
-the first time an identity completes a login, and that person's library starts
-empty. Granting someone access to the Exhibit application at your provider is
-the whole of provisioning.
+**How people get accounts.** Either you run `user add`, or they complete their
+first login at your provider. In both cases a `users` row is written and that
+person's library starts empty.
 
 **What each person gets.** Their own library, isolated in the database rather
 than in the interface: listing, reading, editing, deleting, artifact state,
@@ -249,18 +311,21 @@ setting, so read them before offering accounts to anyone:
   only path from one library to another, and it is anonymous by design: anyone
   holding the link can open it, account or not. There is no "share with this
   user".
-- **No administration.** No user list, no way to sign someone out, no per-user
-  quotas or storage limits, no view of what another user holds.
+- **No administration screen.** `user list`, `user add` and `user passwd` at the
+  CLI are the whole of it. There is no way to sign someone out, disable an
+  account, set per-user quotas, or see what another user holds. The `is_admin`
+  flag is recorded on the first account but grants nothing at runtime yet.
 - **No account deletion, and this one has a sharp edge.** Removing someone at
-  your provider stops them signing in, but their artifacts remain in the
-  database under their owner id and there is no interface to reassign or delete
-  them. Recovering a departed user's library currently means SQL. Plan for that
-  before you depend on it.
+  your provider — or changing their password here — stops them signing in, but
+  their artifacts remain in the database under their owner id and there is no
+  interface to reassign or delete them. Recovering a departed user's library
+  currently means SQL. Plan for that before you depend on it.
 
 **Upgrading an existing single-user instance.** User ids start at 1, which is
-the id a single-user library is already filed under, so **complete the first
-login yourself**: that first identity adopts everything already there, and
-everyone after it starts empty. (Same caution as §3.3's callout, same reason.)
+the id a single-user library is already filed under, so the first account in
+adopts everything already there: **create your own account first, or complete
+the first login yourself**, before anyone else. Everyone after starts empty.
+(Same caution as §3.3's callout, same reason.)
 
 **Trying it before you commit to a provider.** Any spec-compliant one works, so
 you don't need a hosted service to see the flow end to end — Dex or Authentik in

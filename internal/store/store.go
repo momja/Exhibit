@@ -11,7 +11,10 @@ import (
 var (
 	// ErrNotFound means the row (or an owner-scoped row it references) does not exist.
 	ErrNotFound = errors.New("not found")
-	// ErrDuplicateName means a per-owner name uniqueness constraint was violated.
+	// ErrDuplicateName means a name uniqueness constraint was violated —
+	// per-owner for tags and collections, instance-wide for a local login
+	// name (av-rzvf), which has only one namespace because there is only one
+	// user directory.
 	ErrDuplicateName = errors.New("name already exists")
 )
 
@@ -286,4 +289,23 @@ type Store interface {
 	GetSession(ctx context.Context, id string) (*Session, error)
 	DeleteSession(ctx context.Context, id string) error
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
+
+	// --- Local credentials (av-rzvf) -----------------------------------
+	// A local account is a users row above with password_hash filled in, so
+	// these methods read and write the same rows in the same owner_id space
+	// as an OIDC identity — they are not a second directory. externalID is
+	// auth.LocalExternalID(name); the hash is bcrypt, produced and compared
+	// by internal/auth and only ever stored here.
+
+	// LookupLocalCredential returns an account and its stored hash, or
+	// ErrNotFound when the name is unknown *or* the account has no password.
+	LookupLocalCredential(ctx context.Context, externalID string) (*User, string, error)
+	// CreateLocalUser provisions an account, ErrDuplicateName if the name is
+	// taken. SetLocalPassword changes one, or removes it when hash is empty.
+	CreateLocalUser(ctx context.Context, externalID, email, passwordHash string) (*User, error)
+	SetLocalPassword(ctx context.Context, userID int64, passwordHash string) error
+	// CountLocalCredentials answers "does this instance have a login of its
+	// own?"; ListUsers is the instance's user directory, oldest first.
+	CountLocalCredentials(ctx context.Context) (int64, error)
+	ListUsers(ctx context.Context) ([]*User, error)
 }

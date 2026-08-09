@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -21,15 +22,13 @@ import (
 )
 
 func main() {
-	// One subcommand, and only because the credential it produces must be
-	// computed somewhere the password itself never becomes configuration
-	// (av-q30x). Everything else this binary does is driven by the environment.
+	// A small subcommand surface, and only for what must not be configuration:
+	// a password, which never becomes an environment variable (av-q30x), and
+	// the accounts an operator provisions before there is a UI to provision
+	// them from (av-rzvf). Everything else here is driven by the environment.
 	if len(os.Args) > 1 {
-		if os.Args[1] == "hash-password" {
-			hashPassword()
-			return
-		}
-		fatal("unknown argument", fmt.Errorf("%q — the only subcommand is `hash-password`", os.Args[1]))
+		runSubcommand(os.Args[1:])
+		return
 	}
 
 	dataDir := getenv("DATA_DIR", "./data")
@@ -131,10 +130,18 @@ func main() {
 	// touches — everything downstream is provider-agnostic.
 	identity := newIdentityProvider(context.Background(), appOrigin)
 	// The second login path (av-q30x), and the one that needs no identity
-	// server at all. Either, both, or neither may be configured; the session
-	// gate arms on either.
+	// server at all. Since av-rzvf its accounts live in the users table, so
+	// there are two independent reasons an instance has a local login: the
+	// environment credential below, and any account already provisioned.
 	localCredential := newLocalCredential()
-	if identity != nil || localCredential != nil {
+	localUsers, err := st.CountLocalCredentials(context.Background())
+	if err != nil {
+		fatal("count local accounts", err)
+	}
+	if localUsers > 0 {
+		slog.Info("local accounts present", slog.Int64("count", localUsers))
+	}
+	if identity != nil || localCredential != nil || localUsers > 0 {
 		if n, err := st.DeleteExpiredSessions(context.Background()); err != nil {
 			slog.Warn("prune expired sessions", slog.String("err", err.Error()))
 		} else if n > 0 {
@@ -154,6 +161,7 @@ func main() {
 		MockEnabled:      mockLLMURL != "",
 		Identity:         identity,
 		LocalCredential:  localCredential,
+		LocalUsers:       localUsers > 0,
 		Public:           publicMode,
 	})
 
@@ -198,9 +206,38 @@ func newIdentityProvider(ctx context.Context, appOrigin string) auth.IdentityPro
 	return provider
 }
 
-// newLocalCredential builds the instance's own username/password login from
-// the environment, or returns nil when neither variable is set — the
-// single-user default, unchanged.
+// newLocalCredential builds the environment credential, or returns nil when
+// neither variable is set — the single-user default, unchanged.
+//
+// Since av-rzvf accounts live in the users table, and this pair is retained as
+// **bootstrap and break-glass** rather than replaced. It names an account
+// (LOGIN_USERNAME) and supplies an always-accepted password for it
+// (LOGIN_PASSWORD_HASH): on an empty instance that creates the account, which
+// by the first-user rule is the admin; on a populated one it is the way back
+// into an account whose password has been lost. Vaultwarden's admin token
+// plays the same role for the same reason.
+//
+// DECISION — it stays live permanently while it is set, rather than expiring
+// once `users` is non-empty. The trade is real in both directions and was
+// taken deliberately:
+//
+//   - Permanent means a permanent bypass of the user table: anyone who can
+//     read the process environment can log in as that account, and disabling
+//     the account in the database does not stop them.
+//   - Expiring at the first account would remove exactly the case break-glass
+//     exists for. A credential that only works while there are no users is a
+//     bootstrap credential and nothing more; an operator who has locked
+//     themselves out sets it, restarts, and finds it inert — with no way in
+//     short of editing the database by hand.
+//
+// Permanent wins because the bypass it grants is one the operator already
+// has. AUTH_TOKEN sits in the same environment and is already full access to
+// every API route, so this adds no new class of exposure — while the recovery
+// it buys is otherwise unavailable. It is also opt-in and loud: unset is the
+// default and means no environment credential at all, and startup logs that
+// it is enabled so it cannot be left on unnoticed. An operator who wants the
+// bypass gone removes the two variables and restarts; their provisioned
+// accounts keep working, which is what makes that a safe thing to do.
 //
 // LOGIN_PASSWORD_HASH takes a **bcrypt hash, not a password**, and that is the
 // one piece of friction this feature deliberately keeps. Accepting a plaintext
@@ -225,22 +262,157 @@ func newLocalCredential() *auth.Credential {
 	if err != nil {
 		fatal("configure local login", err)
 	}
-	slog.Info("local login configured", slog.String("username", cred.Username()))
+	slog.Warn("environment login credential enabled — bootstrap and break-glass; "+
+		"it always accepts this password for this account, whatever the users table says",
+		slog.String("username", cred.Username()))
 	return cred
+}
+
+const usage = `subcommands:
+  hash-password          print a LOGIN_PASSWORD_HASH value for a password read from stdin
+  user list              list the accounts on this instance
+  user add <name>        provision an account, password read from stdin
+  user passwd <name>     change an account's password, read from stdin
+`
+
+// runSubcommand dispatches the operator-facing commands. They are subcommands
+// of the server binary rather than a second tool because they need the same
+// migrations, the same store, and the same hashing parameters — a separate
+// binary would have to be kept in agreement with all three.
+func runSubcommand(args []string) {
+	switch args[0] {
+	case "hash-password":
+		hashPassword()
+	case "user":
+		userCommand(args[1:])
+	default:
+		fmt.Fprint(os.Stderr, usage)
+		fatal("unknown argument", fmt.Errorf("%q", args[0]))
+	}
+}
+
+// userCommand provisions the accounts av-rzvf moved into the database. It is
+// the only way to create the second account on an instance until the admin UI
+// lands (av-utap), and it stays useful after: it is what an operator with shell
+// access has when nobody can log in.
+//
+// It opens the same database the server does, which runs migrations — so
+// running it against a fresh volume initializes the schema, and an account can
+// be provisioned before the server's first start.
+func userCommand(args []string) {
+	if len(args) == 0 {
+		fmt.Fprint(os.Stderr, usage)
+		fatal("user", fmt.Errorf("needs a subcommand"))
+	}
+	// Warn, not the server's info: the operator asked one question and the
+	// answer is on stdout. A migration that has to run is still reported by
+	// failing, which is the only part of it they can act on.
+	logging.Configure(slog.LevelWarn)
+	dataDir := getenv("DATA_DIR", "./data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		fatal("create data dir", err)
+	}
+	st, err := store.OpenSQLite(dataDir + "/app.db")
+	if err != nil {
+		fatal("open store", err)
+	}
+	defer func() { _ = st.Close() }()
+	ctx := context.Background()
+
+	name := ""
+	if len(args) > 1 {
+		name = auth.NormalizeLoginName(args[1])
+	}
+	switch args[0] {
+	case "list":
+		users, err := st.ListUsers(ctx)
+		if err != nil {
+			fatal("list users", err)
+		}
+		if len(users) == 0 {
+			fmt.Fprintln(os.Stderr, "no accounts yet — the first login on this instance becomes its admin")
+			return
+		}
+		for _, u := range users {
+			kind := "sso"
+			if u.HasPassword {
+				kind = "local"
+			}
+			role := "user"
+			if u.IsAdmin {
+				role = "admin"
+			}
+			fmt.Printf("%d\t%s\t%s\t%s\n", u.ID, u.Email, kind, role)
+		}
+	case "add":
+		if name == "" {
+			fatal("user add", fmt.Errorf("needs a login name"))
+		}
+		user, err := st.CreateLocalUser(ctx, auth.LocalExternalID(name), name, hashFromStdin(name))
+		if errors.Is(err, store.ErrDuplicateName) {
+			fatal("create user", fmt.Errorf("%q already has an account — `user passwd` changes its password", name))
+		} else if err != nil {
+			fatal("create user", err)
+		}
+		// Said out loud because it is the one thing about a new account that
+		// is not obvious from having typed the command, and because on an
+		// empty instance the first `user add` is what makes the admin.
+		if user.IsAdmin {
+			fmt.Fprintf(os.Stderr, "created %s (owner id %d) — the first account on an instance is its admin\n",
+				user.Email, user.ID)
+			fmt.Fprintln(os.Stderr, "restart the server so it starts requiring a login")
+		} else {
+			fmt.Fprintf(os.Stderr, "created %s (owner id %d)\n", user.Email, user.ID)
+		}
+	case "passwd":
+		if name == "" {
+			fatal("user passwd", fmt.Errorf("needs a login name"))
+		}
+		user, _, err := st.LookupLocalCredential(ctx, auth.LocalExternalID(name))
+		if err != nil {
+			fatal("find user", fmt.Errorf("%q has no local account — `user add` creates one", name))
+		}
+		if err := st.SetLocalPassword(ctx, user.ID, hashFromStdin(name)); err != nil {
+			fatal("set password", err)
+		}
+		fmt.Fprintf(os.Stderr, "password changed for %s\n", user.Email)
+	default:
+		fmt.Fprint(os.Stderr, usage)
+		fatal("user", fmt.Errorf("unknown subcommand %q", args[0]))
+	}
+}
+
+// hashFromStdin reads a password and returns its hash, so the plaintext lives
+// in one local variable and never reaches a store call, a log line, or an
+// error string.
+func hashFromStdin(who string) string {
+	hash, err := auth.HashPassword(readPassword("Enter a password for " + who + ", then press Enter and ctrl-D:"))
+	if err != nil {
+		fatal("hash password", err)
+	}
+	return hash
 }
 
 // hashPassword prints the LOGIN_PASSWORD_HASH value for a password read from
 // stdin.
 //
-// Stdin rather than an argument, so the password never lands in a shell
-// history, a process list, or this container's own argv:
-//
 //	docker compose run --rm app hash-password
 //
-// then type it and press ctrl-D. Everything printed to stderr is guidance; the
-// single line on stdout is the hash, so the command pipes cleanly.
+// Everything printed to stderr is guidance; the single line on stdout is the
+// hash, so the command pipes cleanly.
 func hashPassword() {
-	fmt.Fprintln(os.Stderr, "Enter the password, then press Enter and ctrl-D:")
+	hash, err := auth.HashPassword(readPassword("Enter the password, then press Enter and ctrl-D:"))
+	if err != nil {
+		fatal("hash password", err)
+	}
+	fmt.Fprintln(os.Stderr, "\nSet this as LOGIN_PASSWORD_HASH (with LOGIN_USERNAME):")
+	fmt.Println(hash)
+}
+
+// readPassword takes a password from stdin rather than an argument, so it never
+// lands in a shell history, a process list, or this container's own argv.
+func readPassword(prompt string) string {
+	fmt.Fprintln(os.Stderr, prompt)
 	// Read every line and take the first: a terminal sends the trailing
 	// newline, and a here-doc or an echo pipe may send more than one.
 	scanner := bufio.NewScanner(os.Stdin)
@@ -254,12 +426,7 @@ func hashPassword() {
 	if password == "" {
 		fatal("read password", fmt.Errorf("empty"))
 	}
-	hash, err := auth.HashPassword(password)
-	if err != nil {
-		fatal("hash password", err)
-	}
-	fmt.Fprintln(os.Stderr, "\nSet this as LOGIN_PASSWORD_HASH (with LOGIN_USERNAME):")
-	fmt.Println(hash)
+	return password
 }
 
 // fatal logs the error at error level and exits, mirroring log.Fatalf without

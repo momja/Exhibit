@@ -263,7 +263,8 @@ The seam between handlers and persistence. Handlers speak only to this interface
 
 ```
 Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
-        list/set/delete per-origin network decisions
+        list/set/delete per-origin network decisions;
+        users and sessions, including local credentials (§3.8)
 Blob:   put/get artifact bodies by id
 ```
 
@@ -557,10 +558,10 @@ See `docs/agent.md` for the full flow, including snippet mode (the render
 surface's element picker that feeds an element screenshot + descriptor back
 into the prompt as multimodal context).
 
-### 3.8 Login: two paths, one session layer (av-30rj, av-q30x)
+### 3.8 Login: two paths, one session layer (av-30rj, av-q30x, av-rzvf)
 
 Login is optional. When present it arrives by one of two paths — an identity
-provider, or a local username and password — and both end in the same call.
+provider, or a local login name and password — and both end in the same call.
 
 **The provider seam.** `internal/auth` holds the whole vendor surface, and it is
 two methods:
@@ -602,12 +603,18 @@ all land in the same place.
   `SameSite=Lax` is the CSRF control for every mutating route, and it holds only
   while no GET route mutates — `security.md` §1.4 states the posture and
   `internal/api/csrf_test.go` pins both halves of it.
-- **Schema:** `users(id, external_id, email, created_at)` and
-  `sessions(id, user_id, expires_at)`. `users.id` *is* `owner_id` — no table
-  outside `users` references a provider-specific identifier, so changing
-  provider is a re-link of those rows rather than a migration. `email` is
-  stored beside the subject precisely because subjects are provider-specific
-  and are the wrong key to re-link on.
+- **Schema:** `users(id, external_id, email, created_at, password_hash,
+  is_admin)` and `sessions(id, user_id, expires_at)`. `users.id` *is*
+  `owner_id` — no table outside `users` references a provider-specific
+  identifier, so changing provider is a re-link of those rows rather than a
+  migration. `email` is stored beside the subject precisely because subjects
+  are provider-specific and are the wrong key to re-link on. `password_hash`
+  is **nullable**, which is what puts both kinds of user in one table and one
+  owner id space: an identity a provider issued has none, a local account has
+  one, and they differ by which columns are populated rather than by living
+  apart. Two tables would have made "the same person has an SSO login and a
+  local one" an account-linking problem in the schema, before anyone had
+  decided it was a problem worth having.
 - **Default is unchanged.** With neither login configured there is no provider
   and no credential, the `/auth/*` routes are never registered, the page gate is
   a pass-through, and the static token with `owner_id` 1 behaves exactly as it
@@ -615,11 +622,12 @@ all land in the same place.
   (Authelia, Tailscale, basic auth) does so with nothing configured here —
   consistent with TLS and proxying already being theirs (`deployment.md` §3).
 
-**The local credential (av-q30x)** is the second path, and the one that closes
-the gap the seam above left open: with no OIDC issuer configured there was no
-page gate *at all*, so securing a self-hosted library meant running an identity
-server or putting auth in the proxy. `LOGIN_USERNAME` + `LOGIN_PASSWORD_HASH`
-now arm the same gate.
+**The local credential (av-q30x, av-rzvf)** is the second path, and the one
+that closes the gap the seam above left open: with no OIDC issuer configured
+there was no page gate *at all*, so securing a self-hosted library meant
+running an identity server or putting auth in the proxy. It began as one
+credential in the environment; av-rzvf moved the accounts into `users` so an
+instance can issue as many as it likes without one.
 
 - **It is not an `IdentityProvider`, and must not become one.** That interface
   is redirect-based: an external authority to send the browser to, and a code to
@@ -628,23 +636,46 @@ now arm the same gate.
   shape. So the structure is one *session layer* with two *login paths*, which
   is what "one session layer, not two" actually asked for.
 - **The convergence point is `startSession`** (`internal/api/auth.go`), the only
-  place a session is ever created. Both paths reach it holding an
-  `auth.Identity`; everything after it — the `users` row, the `sessions` row,
-  the cookie, `owner_id` — is identical and cannot tell them apart. The login
-  method is recorded in a log line and nowhere else.
-- **The credential is a bcrypt hash set at deploy**, never a plaintext the
-  service hashes for itself: hashing a value the process environment already
-  holds beside it protects nothing. One credential, no registration, no reset
-  flow, therefore no SMTP — the costs that made passwords a bad trade for a
-  multi-user product are the ones this scope does not pay. `users.external_id`
-  is the constant `local` rather than the username, so renaming the login
-  relabels the owner instead of orphaning the library.
-- **Routes.** `/auth/login` renders the login page when a credential is
-  configured and otherwise redirects straight to the provider — a page whose
-  only control is "continue" is a choice that does not exist. `POST /auth/local`
-  is the form target; `/auth/sso` is the provider redirect, split out so the
-  page has a button to point at when both paths exist. Each is registered only
-  when the instance can serve it.
+  place a session is ever created. Both paths reach it holding a resolved
+  `*store.User`; everything after it — the `sessions` row, the cookie,
+  `owner_id` — is identical and cannot tell them apart. The login method is
+  recorded in a log line and nowhere else.
+- **Credentials are bcrypt hashes, never plaintext the service hashes for
+  itself.** Accounts are provisioned by an operator (`user add` / `user passwd`
+  at the CLI today, av-utap's admin screen later), so there is no
+  self-registration to verify and no reset mail, and therefore no SMTP — the
+  costs that made passwords a bad trade for a multi-user product (av-30rj) are
+  the ones this shape does not pay. A local account's `users.external_id` is
+  `local:<normalized name>`, which reuses that column's existing UNIQUE
+  constraint to make "one account per login name" a schema invariant, without
+  constraining `email`, whose value on an OIDC row is whatever the provider last
+  reported.
+- **The first user on an instance is its admin**, applied inside the single
+  `INSERT` that creates every `users` row (`store.insertUser`, `is_admin =
+  NOT EXISTS (SELECT 1 FROM users)`). One statement rather than a count
+  followed by a write, because the gap between those two is exactly what
+  decides who administers the instance. It is also continuous rather than new:
+  user ids start at 1, the id a single-user library is already filed under, so
+  the first identity in has always adopted the existing library — which is why
+  `deployment.md` §3.4 tells operators to be first.
+- **`LOGIN_USERNAME` / `LOGIN_PASSWORD_HASH` are retained as bootstrap and
+  break-glass**, not replaced. The pair names an account and supplies an
+  additional accepted password for it: on an empty instance that creates the
+  first admin, on a populated one it is the way back into an account whose
+  password is lost. `resolveLocalLogin` checks it *before* the table so no
+  stored state can shadow it, and falls through to the table when it does not
+  match, so a password reset takes effect without a restart. It stays live for
+  as long as it is set — the reasoning for that, and the bypass it costs, is
+  recorded on `newLocalCredential` in `cmd/server/main.go`.
+- **Routes.** `/auth/login` renders the login page when a local login exists
+  and otherwise redirects straight to the provider — a page whose only control
+  is "continue" is a choice that does not exist. `POST /auth/local` is the form
+  target; `/auth/sso` is the provider redirect, split out so the page has a
+  button to point at when both paths exist. Each is registered only when the
+  instance can serve it, which is why "does this instance have local accounts?"
+  is read once at startup (`Config.LocalUsers`) rather than per request:
+  provisioning the *first* account with the CLI on a running server takes a
+  restart to arm the gate.
 
 ## 4. Trust boundaries
 
@@ -798,7 +829,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), queries are owner-scoped (§3.3), and `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub) — what remains is letting a non-owner reach a shared artifact at all (av-7k7b) |
+| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), and `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub) — what remains is administration of other accounts (av-utap) and letting a non-owner reach a shared artifact at all (av-7k7b) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | S3/MinIO impl behind same interface |
