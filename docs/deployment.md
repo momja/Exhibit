@@ -96,6 +96,13 @@ Three supported ways to put a login in front of an instance. None is more
 none of them leaves the instance as it has always been: no login, no gate,
 `AUTH_TOKEN` and a single owner.
 
+Two of the three secure a **single-user** library. If you want several people
+with separate libraries, that is [§3.3](#33-delegate-login-to-an-oidc-provider)
+plus what [§3.4](#34-running-it-for-more-than-one-person) says about it —
+worth reading before you offer anyone an account, because the pieces Exhibit
+deliberately does not have (user administration, account deletion) are the ones
+that matter operationally.
+
 ### 3.1 Authenticate at your proxy
 
 Exhibit already expects you to bring your own reverse proxy and TLS (§5), and
@@ -206,6 +213,60 @@ docker compose up
 When both this and §3.2 are configured, `/auth/login` presents both and either
 lands the same kind of session. They are two identities, so they are two owners:
 sign in the way you intend to keep using before you fill the library.
+
+### 3.4 Running it for more than one person
+
+**Only §3.3 gives you multiple users.** The other two are one identity each:
+proxy auth (§3.1) puts a door in front of a single-user library, and the
+username and password (§3.2) is one credential, deliberately — there is no
+second `LOGIN_USERNAME`, and adding one would mean owning registration,
+password resets and the mail to send them.
+
+So multi-user means OIDC, and the shape of it is:
+
+> **Your identity provider is the user directory. Exhibit is not.**
+
+Everything else follows. Exhibit has no registration form, no invite flow, no
+admin screen and no user list, because "who exists" and "who may sign in" are
+answered at the provider. Exhibit only records that it has met someone.
+
+**How people get accounts.** They don't, separately. A `users` row is written
+the first time an identity completes a login, and that person's library starts
+empty. Granting someone access to the Exhibit application at your provider is
+the whole of provisioning.
+
+**What each person gets.** Their own library, isolated in the database rather
+than in the interface: listing, reading, editing, deleting, artifact state,
+widgets, tags, collections and shares are all scoped to the owner behind the
+session. Another user's artifact id answers exactly as an id that never existed
+does — `404`, never `403` — so the API cannot be used to find out what other
+people have.
+
+**What multi-user does not include.** None of these are hidden behind a
+setting, so read them before offering accounts to anyone:
+
+- **No sharing between accounts.** A share link (§7 of `architecture.md`) is the
+  only path from one library to another, and it is anonymous by design: anyone
+  holding the link can open it, account or not. There is no "share with this
+  user".
+- **No administration.** No user list, no way to sign someone out, no per-user
+  quotas or storage limits, no view of what another user holds.
+- **No account deletion, and this one has a sharp edge.** Removing someone at
+  your provider stops them signing in, but their artifacts remain in the
+  database under their owner id and there is no interface to reassign or delete
+  them. Recovering a departed user's library currently means SQL. Plan for that
+  before you depend on it.
+
+**Upgrading an existing single-user instance.** User ids start at 1, which is
+the id a single-user library is already filed under, so **complete the first
+login yourself**: that first identity adopts everything already there, and
+everyone after it starts empty. (Same caution as §3.3's callout, same reason.)
+
+**Trying it before you commit to a provider.** Any spec-compliant one works, so
+you don't need a hosted service to see the flow end to end — Dex or Authentik in
+a container is enough. The entire contract is a discovery document, an authorize
+endpoint, a token endpoint and a JWKS URL; if a provider satisfies
+`/.well-known/openid-configuration`, Exhibit will talk to it.
 
 ## 4. No AI agent features
 
