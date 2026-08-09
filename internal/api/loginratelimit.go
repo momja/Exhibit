@@ -331,6 +331,9 @@ func (ro *Router) throttleLogin(w http.ResponseWriter, r *http.Request, wait tim
 }
 
 func humanSeconds(seconds int) string {
+	if seconds == 1 {
+		return "a second"
+	}
 	if seconds < 60 {
 		return fmt.Sprintf("%d seconds", seconds)
 	}
