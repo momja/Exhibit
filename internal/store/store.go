@@ -283,6 +283,11 @@ type Store interface {
 	// already calls owner_id.
 	UpsertUser(ctx context.Context, externalID, email string) (*User, error)
 	GetUser(ctx context.Context, id int64) (*User, error)
+	// GetUserByExternalID is the same row reached by the key a *person* is
+	// known by — a provider subject, or `local:<name>` — for callers holding
+	// a name rather than an owner id. Unlike LookupLocalCredential below, it
+	// does not treat "has no password" as "does not exist".
+	GetUserByExternalID(ctx context.Context, externalID string) (*User, error)
 
 	// CreateSession records a logged-in browser under a caller-supplied
 	// opaque id. GetSession returns ErrNotFound when that id is unknown *or*

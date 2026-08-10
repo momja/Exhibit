@@ -59,6 +59,12 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/artifacts/{artifactID}", path: "/artifacts/{id}"},
 	{route: "/artifacts/{artifactID}/edit", path: "/artifacts/{id}/edit"},
 	{route: "/artifacts/{artifactID}/open", path: "/artifacts/{id}/open"},
+	// The account list (av-utap). It carries a bootstrap like the other pages,
+	// and it is the one whose leak would matter most: its script resets other
+	// people's passwords, so a service token embedded beside the session
+	// cookie would be authority over the whole user directory that the
+	// admin's own logout could not take back.
+	{route: "/admin/users", path: "/admin/users"},
 
 	// htmx fragments: page markup by another name, so they are held to the
 	// same rule as the pages they are swapped into.
@@ -86,6 +92,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/agent/sessions/{sessionID}/events", path: "/api/agent/sessions/none/events"},
 	{route: "/api/collections/", path: "/api/collections"},
 	{route: "/api/tags/", path: "/api/tags"},
+	{route: "/api/admin/users/", path: "/api/admin/users"},
 
 	// The login flow, registered only when a login is configured. Requested
 	// last, because logging out is one of them.

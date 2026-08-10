@@ -76,6 +76,20 @@ func (s *SQLiteStore) GetUser(ctx context.Context, id int64) (*User, error) {
 	return s.getUserBy(ctx, "id=?", id)
 }
 
+// GetUserByExternalID looks a user up by the key a *person* is known by: the
+// provider's subject claim, or `local:<name>` for an account this instance
+// issued.
+//
+// LookupLocalCredential answers a similar-looking question and is deliberately
+// not this one: it returns ErrNotFound for an account with no password,
+// because the login path must not be able to tell an OIDC row from an absent
+// one. An operator asking "disable this account" needs the opposite — an
+// identity a provider issued has no password to remove and is precisely the
+// kind of account that has to be disable-able (av-utap, migration 017).
+func (s *SQLiteStore) GetUserByExternalID(ctx context.Context, externalID string) (*User, error) {
+	return s.getUserBy(ctx, "external_id=?", externalID)
+}
+
 // userColumns is the projection every user read shares. password_hash is
 // absent on purpose: it is selected by exactly one query, in
 // LookupLocalCredential, so there is no path by which the hash reaches a
@@ -256,7 +270,7 @@ func (s *SQLiteStore) SetUserDisabled(ctx context.Context, userID int64, disable
 	if n, err := res.RowsAffected(); err != nil {
 		return err
 	} else if n == 0 {
-		return s.refusedOrMissing(ctx, userID)
+		return refusedOrMissing(ctx, tx, userID)
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
 		return err
@@ -274,17 +288,34 @@ func (s *SQLiteStore) guardedUserUpdate(ctx context.Context, query string, userI
 	if n, err := res.RowsAffected(); err != nil {
 		return err
 	} else if n == 0 {
-		return s.refusedOrMissing(ctx, userID)
+		return refusedOrMissing(ctx, s.db, userID)
 	}
 	return nil
+}
+
+// rowQueryer is the one method refusedOrMissing needs, so it can be handed
+// either the pool or an open transaction.
+//
+// That is not a generalization for its own sake — it is the difference between
+// working and deadlocking. The pool is capped at one connection (SQLite is
+// single-writer, sqlite.go), so a *DB read issued while a transaction is still
+// open waits for a connection the transaction itself is holding, forever. The
+// caller inside a transaction must therefore ask that transaction.
+type rowQueryer interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
 // refusedOrMissing separates the two things a guarded update matching no row
 // can mean. Both are the caller's error to report; only one of them is worth
 // explaining to the person who asked.
-func (s *SQLiteStore) refusedOrMissing(ctx context.Context, userID int64) error {
-	if _, err := s.getUserBy(ctx, "id=?", userID); err != nil {
-		return err // ErrNotFound, or a real failure
+func refusedOrMissing(ctx context.Context, q rowQueryer, userID int64) error {
+	var exists bool
+	err := q.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM users WHERE id = ?)", userID).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrNotFound
 	}
 	return ErrLastAdmin
 }
