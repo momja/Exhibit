@@ -383,6 +383,18 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"SetLocalPassword":      "keyed by the user id it acts on; an instance-admin operation (av-utap)",
 		"CountLocalCredentials": "a property of the instance, owned by no one",
 		"ListUsers":             "the instance's user directory, not any one owner's library (av-utap)",
+
+		// Administration (av-utap). Listed rather than left to pass on the
+		// shape of their signature: the int64 two of them take is the
+		// *target* account, so the assertion below would wave them through
+		// for a reason that is not true of them. They are exempt on
+		// SetLocalPassword's grounds — an admin acting on the instance is not
+		// a reader of somebody's library, and the authorization for it lives
+		// on the route (adminOnly, internal/api/admin.go), where the acting
+		// admin is known and the target is not yet.
+		"GetUserByExternalID": "resolves a login name to an owner; there is no owner yet",
+		"SetUserAdmin":        "keyed by the user id it acts on; an instance-admin operation (av-utap)",
+		"SetUserDisabled":     "keyed by the user id it acts on; an instance-admin operation (av-utap)",
 	}
 
 	iface := reflect.TypeOf((*Store)(nil)).Elem()

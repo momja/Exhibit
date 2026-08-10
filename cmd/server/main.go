@@ -333,6 +333,8 @@ const usage = `subcommands:
   user list              list the accounts on this instance
   user add <name>        provision an account, password read from stdin
   user passwd <name>     change an account's password, read from stdin
+  user disable <name>    stop an account signing in, and sign it out everywhere
+  user enable <name>     let a disabled account sign in again
 `
 
 // runSubcommand dispatches the operator-facing commands. They are subcommands
@@ -402,7 +404,15 @@ func userCommand(args []string) {
 			if u.IsAdmin {
 				role = "admin"
 			}
-			fmt.Printf("%d\t%s\t%s\t%s\n", u.ID, u.Email, kind, role)
+			// The status column is the reason a disabled account does not
+			// simply vanish from this list: it is still an owner id holding a
+			// library, and the operator has to be able to see it to bring it
+			// back (av-utap).
+			state := "active"
+			if u.Disabled {
+				state = "disabled"
+			}
+			fmt.Printf("%d\t%s\t%s\t%s\t%s\n", u.ID, u.Email, kind, role, state)
 		}
 	case "add":
 		if name == "" {
@@ -436,10 +446,52 @@ func userCommand(args []string) {
 			fatal("set password", err)
 		}
 		fmt.Fprintf(os.Stderr, "password changed for %s\n", user.Email)
+	case "disable", "enable":
+		// The CLI half of av-utap's admin screen, and the half that still
+		// works when nobody can log in. It reaches the same store call the
+		// API handler does — so disabling from a shell revokes the account's
+		// live sessions exactly as disabling from the page does, and the
+		// last-admin refusal is the same refusal.
+		setUserDisabled(ctx, st, name, args[0] == "disable")
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		fatal("user", fmt.Errorf("unknown subcommand %q", args[0]))
 	}
+}
+
+// setUserDisabled switches an account off or back on by login name.
+//
+// It resolves the name through the users table rather than
+// LookupLocalCredential, because an account with no password is exactly one an
+// operator may need to disable: an identity a provider issued has no hash to
+// remove, which is why disabling is a column at all (migration 017).
+func setUserDisabled(ctx context.Context, st *store.SQLiteStore, name string, disabled bool) {
+	verb := "enable"
+	if disabled {
+		verb = "disable"
+	}
+	if name == "" {
+		fatal("user "+verb, fmt.Errorf("needs a login name"))
+	}
+	user, err := st.GetUserByExternalID(ctx, auth.LocalExternalID(name))
+	if errors.Is(err, store.ErrNotFound) {
+		fatal("find user", fmt.Errorf("%q has no account on this instance — `user list` shows the ones that do", name))
+	} else if err != nil {
+		fatal("find user", err)
+	}
+	switch err := st.SetUserDisabled(ctx, user.ID, disabled); {
+	case errors.Is(err, store.ErrLastAdmin):
+		fatal("user "+verb, fmt.Errorf(
+			"%q is the last admin who can still sign in — promote or enable another account first", name))
+	case err != nil:
+		fatal("user "+verb, err)
+	}
+	if disabled {
+		fmt.Fprintf(os.Stderr, "disabled %s — signed out everywhere, and no further sign-in. `user enable %s` undoes it.\n",
+			user.Email, name)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "enabled %s — they can sign in again with their existing password\n", user.Email)
 }
 
 // hashFromStdin reads a password and returns its hash, so the plaintext lives

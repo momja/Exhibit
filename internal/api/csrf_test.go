@@ -83,6 +83,11 @@ var appOriginGETRoutes = []getRoute{
 	// Mints a render token and redirects (av-c5aq). The token is an in-memory
 	// HMAC — nothing is stored, and the redirect target is a read too.
 	{route: "/artifacts/{artifactID}/open"},
+	// The account list (av-utap). A read: every change it offers is a POST or
+	// PATCH to /api/admin/users, which is exactly the split this list exists
+	// to keep — a "disable user" convenience GET would be forgeable by any
+	// page an admin visits.
+	{route: "/admin/users"},
 	{route: "/partials/agent-preview"},
 	{route: "/partials/card-widget"},
 	// Static assets, the manifest, the share redirect, and the instance's
@@ -105,6 +110,10 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/api/agent/sessions/{sessionID}/events"},
 	{route: "/api/collections/"},
 	{route: "/api/tags/"},
+	// The instance's account directory (av-utap), behind adminOnly. Listing
+	// accounts changes nothing; creating, disabling and resetting are the
+	// POST and PATCH on the same group.
+	{route: "/api/admin/users/"},
 
 	// The login flow: the only GET routes that change state, registered only
 	// when a login is configured. Each is safe for its own reason, not by the

@@ -89,6 +89,16 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	// set — but there is nothing here to assert.
 	{route: "/new", why: "renders no library data; ingest is a client-side conversation with the API"},
 
+	// Authority-scoped rather than owner-scoped, and the distinction is what
+	// av-utap is about. These read the instance's *account directory* — the
+	// same list whoever is looking — so there is no "somebody else's library"
+	// for them to leak, and an owner is the wrong question to ask of them.
+	// The question they do have to answer is the opposite one, that not
+	// everyone may see them at all; that is adminOnly's (internal/api/admin.go)
+	// and is pinned by admin_test.go.
+	{route: "/admin/users", why: "reads the instance's account directory, not a library — guarded by adminOnly (av-utap) rather than scoped by owner"},
+	{route: "/api/admin/users/", why: "same directory as JSON; API group plus adminOnly, covered by admin_test.go"},
+
 	// Static and instance-level surfaces: nothing per-visitor to scope.
 	{route: "/assets/*", why: "embedded static assets, identical for every visitor"},
 	{route: "/manifest.json", why: "static app manifest, identical for every visitor"},
