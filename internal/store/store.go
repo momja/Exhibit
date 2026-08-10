@@ -16,6 +16,11 @@ var (
 	// name (av-rzvf), which has only one namespace because there is only one
 	// user directory.
 	ErrDuplicateName = errors.New("name already exists")
+	// ErrLastAdmin means a change was refused because it would have left the
+	// instance with no enabled admin — nobody able to create an account,
+	// re-enable one, or reset a password (av-utap). It is a refusal, not a
+	// failure: nothing was written.
+	ErrLastAdmin = errors.New("the last enabled admin cannot be demoted or disabled")
 )
 
 type Tier int
@@ -308,4 +313,18 @@ type Store interface {
 	// own?"; ListUsers is the instance's user directory, oldest first.
 	CountLocalCredentials(ctx context.Context) (int64, error)
 	ListUsers(ctx context.Context) ([]*User, error)
+
+	// --- Administration (av-utap) --------------------------------------
+	// An admin acting on the *instance*, as distinct from a person acting on
+	// their own account (av-g2dx). Both refuse with ErrLastAdmin rather than
+	// leave the instance with no enabled admin, and both answer ErrNotFound
+	// for an id that does not exist.
+
+	// SetUserAdmin promotes (unguarded) or demotes (guarded) an account.
+	SetUserAdmin(ctx context.Context, userID int64, admin bool) error
+	// SetUserDisabled stops an account signing in — and, when disabling,
+	// deletes that user's sessions in the same transaction. Revoking the
+	// live sessions is part of the operation rather than a courtesy the
+	// caller adds: a disable a logged-in browser survives is not a disable.
+	SetUserDisabled(ctx context.Context, userID int64, disabled bool) error
 }

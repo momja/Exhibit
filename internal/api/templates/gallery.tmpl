@@ -21,6 +21,12 @@
        creation affordance is this primary button. The agent link it replaced
        isn't lost — the agent is the third creation route on /new, which is
        where creation now lives. */}}
+  {{/* Administration is a secondary control, and it appears only for an
+       admin (av-utap). The hiding is a courtesy to everyone else, not a
+       control: /admin/users carries its own adminOnly guard, so a visitor who
+       types the URL is refused there rather than admitted by a template that
+       forgot to hide a link. */}}
+  {{if .IsAdmin}}<a class="btn btn-sec" href="/admin/users"><i class="ph ph-users-three"></i> Accounts</a>{{end}}
   <a class="btn" href="/new"><i class="ph ph-plus"></i> Add artifact</a>
 </header>
 <main>

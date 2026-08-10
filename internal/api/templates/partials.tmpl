@@ -162,3 +162,17 @@
      ShowManage is false (the no-owner-session / share case). Data:
      capabilityView (gallery.go). */}}
 {{define "capabilityPopover"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved)}}<div class="capability-popover" id="capability-popover-{{.ArtifactID}}"><div class="capability-popover-header">Sandbox posture</div>{{if $sandboxed}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-shield-check"></i></span><span>Fully contained — no network, download, or clipboard access</span></div>{{else}}{{if .NetworkAllowlist}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-globe"></i></span><div><div class="capability-popover-label">Network — {{len .NetworkAllowlist}} origin{{if ne (len .NetworkAllowlist) 1}}s{{end}}</div><div class="capability-popover-origins">{{range .NetworkAllowlist}}<code>{{.}}</code>{{end}}</div></div></div>{{end}}{{if .DownloadsApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-download-simple"></i></span><span>Downloads — Can save files to your device</span></div>{{end}}{{if .ClipboardApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-clipboard"></i></span><span>Clipboard — Can read and write your clipboard</span></div>{{end}}{{end}}{{if .ShowManage}}<a class="capability-popover-manage" href="/artifacts/{{.ArtifactID}}/edit#security-panel">Manage in allowlist settings →</a>{{end}}</div>{{end}}
+
+{{/* settingsHeader is the sub-page header the account surfaces share: a back
+     link to the gallery and the page's own title, the same idiom new.tmpl and
+     detail.tmpl use. Data: the page title (a string).
+
+     It exists as a partial rather than inline markup because two pages will
+     wear it and they must not merge: this ticket's /admin/users (an admin
+     acting on the instance) and av-qwld's own-account settings page (a person
+     acting on themselves). Sharing the furniture is the point; sharing the
+     authority would be the bug — that lives on the route, in adminOnly. */}}
+{{define "settingsHeader"}}<header>
+  <a href="/">←<span class="back-label"> Gallery</span></a>
+  <h1>{{.}}</h1>
+</header>{{end}}

@@ -1,0 +1,99 @@
+{{/* Account administration (av-utap). Data: adminPageData (admin.go).
+
+     An admin acting on the *instance*: create an account, reset its password,
+     switch it off. A person acting on their own account is av-g2dx's surface
+     and will live at its own URL; the two share this page's furniture — the
+     settings shell below, the stylesheet, the header — and nothing else. The
+     authority is the route's (adminOnly), never the page's.
+
+     Every mutation goes through the JSON API like any other client, so this
+     template renders state and no forms that post to themselves. Login names
+     and email addresses are operator-supplied text and reach the markup as
+     template values, where html/template's contextual escaping keeps them
+     text. */}}
+{{define "admin"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Accounts — Exhibit</title>
+<link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
+{{template "pwaHead"}}
+<link rel="stylesheet" href="/assets/phosphor/regular.css">
+<link rel="stylesheet" href="/assets/gallery/tokens.css">
+<link rel="stylesheet" href="/assets/gallery/components.css">
+<link rel="stylesheet" href="/assets/gallery/settings.css">
+</head>
+<body>
+{{template "settingsHeader" "Accounts"}}
+<main class="settings">
+<div class="lede">
+  <h2>Who can sign in.</h2>
+  <p>You are this instance&#39;s user directory. Create accounts here, reset a forgotten password, and switch an account off when someone should no longer have access. There is no registration form and no email anywhere in this.</p>
+</div>
+
+<div class="card">
+  <h3 class="settings-h3">Accounts</h3>
+  <div class="settings-table-wrap">
+  <table class="settings-table">
+    <thead><tr><th>Account</th><th>Sign-in</th><th>Role</th><th>Status</th><th class="settings-actions-col">Actions</th></tr></thead>
+    <tbody>
+    {{range .Users}}
+    <tr data-user-id="{{.ID}}"{{if .Disabled}} class="is-disabled"{{end}}>
+      <td>
+        <span class="settings-name">{{.Name}}</span>
+        {{if eq .ID $.SelfID}}<span class="badge">you</span>{{end}}
+      </td>
+      {{/* An identity the provider issued has no password here to reset, so
+           the row says which kind it is rather than offering a control that
+           could not work. */}}
+      <td>{{if eq .Kind "local"}}<i class="ph ph-key" aria-hidden="true"></i> Password{{else}}<i class="ph ph-shield-check" aria-hidden="true"></i> Identity provider{{end}}</td>
+      <td>{{if .IsAdmin}}<span class="badge badge-admin">Admin</span>{{else}}Member{{end}}</td>
+      <td>{{if .Disabled}}<span class="badge badge-off">Disabled</span>{{else}}Active{{end}}</td>
+      <td class="settings-actions">
+        {{if eq .Kind "local"}}<button type="button" class="btn btn-sec btn-sm" data-action="password" data-user-id="{{.ID}}" data-user-name="{{.Name}}"><i class="ph ph-key"></i> Reset password</button>{{end}}
+        <button type="button" class="btn btn-sec btn-sm" data-action="role" data-user-id="{{.ID}}" data-user-name="{{.Name}}" data-admin="{{.IsAdmin}}">{{if .IsAdmin}}<i class="ph ph-arrow-down"></i> Demote{{else}}<i class="ph ph-arrow-up"></i> Make admin{{end}}</button>
+        {{if .Disabled}}<button type="button" class="btn btn-sec btn-sm" data-action="enable" data-user-id="{{.ID}}" data-user-name="{{.Name}}"><i class="ph ph-check"></i> Enable</button>{{else}}<button type="button" class="btn btn-danger btn-sm" data-action="disable" data-user-id="{{.ID}}" data-user-name="{{.Name}}"><i class="ph ph-prohibit"></i> Disable</button>{{end}}
+      </td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{/* Disabling is the destructive-looking control that is not destructive,
+       so the page says what it actually does — otherwise "disable" reads as
+       "prevent the next login" and the immediate sign-out is a surprise. */}}
+  <p class="muted text-sm settings-note">Disabling an account signs it out everywhere immediately and refuses any further sign-in. Nothing is deleted — its library stays where it is, and enabling the account restores access.</p>
+</div>
+
+<div class="card">
+  <h3 class="settings-h3">Add an account</h3>
+  <div class="settings-form">
+    <label class="settings-label" for="new-username">Login name</label>
+    <input class="field" type="text" id="new-username" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="partner@example.com">
+    <label class="settings-label" for="new-password">Password</label>
+    <input class="field" type="password" id="new-password" autocomplete="new-password" placeholder="At least 8 characters">
+    <label class="settings-check"><input type="checkbox" id="new-is-admin"> <span>Make this account an admin</span></label>
+    <div class="settings-foot">
+      <span class="muted text-sm">The person signs in with this name and password. Tell them out of band — nothing is emailed.</span>
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="create-user"><i class="ph ph-user-plus"></i> Create account</button>
+    </div>
+  </div>
+</div>
+
+<div id="admin-status" class="settings-status" hidden></div>
+</main>
+
+<script>
+const TOKEN = {{.Token}};
+{{/* Same contract as every other page (av-5imk, pagecredential.go): a
+     session-authenticated browser is handed no token because its cookie
+     already authenticates it. api.js is what spends the result. */ -}}
+const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
+const SELF_ID = {{.SelfID}};
+</script>
+<script src="/assets/gallery/api.js"></script>
+<script src="/assets/gallery/settings.js"></script>
+</body>
+</html>{{end}}

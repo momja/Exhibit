@@ -102,7 +102,7 @@ func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 
 	tags, _ := ro.cfg.Store.ListTags(r.Context(), ownerID)
 
-	page, err := renderGalleryPage(arts, tags, q, ro.pageCredentials(r), ro.renderURLs(r))
+	page, err := renderGalleryPage(arts, tags, q, ro.pageCredentials(r), ro.renderURLs(r), ro.adminRequest(r))
 	if err != nil {
 		serverError(w, r, "gallery index render", err)
 		return
@@ -463,9 +463,15 @@ type galleryPageData struct {
 	AddTagModal addTagModalData
 	pageCredentials
 	DefaultTagColor string
+	// IsAdmin reveals the header link to /admin/users (av-utap). It decides
+	// what the page *offers* and nothing else: the route carries its own
+	// adminOnly guard, so a visitor who reaches it by typing the URL is
+	// refused there rather than admitted by a template that forgot to hide a
+	// link. Hiding a control is a courtesy; the guard is the control.
+	IsAdmin bool
 }
 
-func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query string, creds pageCredentials, urls renderURLs) (string, error) {
+func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query string, creds pageCredentials, urls renderURLs, isAdmin bool) (string, error) {
 	cards := make([]galleryCard, len(arts))
 	for i, a := range arts {
 		cards[i] = galleryCard{
@@ -492,6 +498,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query string, 
 		AddTagModal:     addTagModalData{Tags: tagViews(tags), Presets: color.Presets},
 		pageCredentials: creds,
 		DefaultTagColor: store.DefaultTagColor,
+		IsAdmin:         isAdmin,
 	})
 }
 

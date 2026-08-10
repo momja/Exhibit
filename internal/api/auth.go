@@ -212,6 +212,15 @@ func (ro *Router) authCallback(w http.ResponseWriter, r *http.Request) {
 		ro.failLogin(w, "could not resolve identity", slog.String("err", err.Error()))
 		return
 	}
+	// A disabled account is refused here rather than at the provider, because
+	// the provider does not know about it: disabling is an Exhibit decision
+	// (av-utap) and this is the one point a provider identity becomes a
+	// session. The message names no account and no reason.
+	if user.Disabled {
+		slog.Warn("login refused: account disabled", slog.Int64("user_id", user.ID))
+		ro.failLogin(w, "this account cannot sign in")
+		return
+	}
 	if err := ro.startSession(w, r, user, "oidc"); err != nil {
 		ro.failLogin(w, "could not start session", slog.String("err", err.Error()))
 		return
@@ -302,19 +311,46 @@ func (ro *Router) authLocal(w http.ResponseWriter, r *http.Request) {
 // against the one name the environment credential configures, which costs two —
 // that name is in the operator's own environment, not something an attacker
 // learns anything by probing for.
+// A disabled account (av-utap) is refused on *both* branches, including the
+// environment credential's. That is the one place this function departs from
+// "no state in the database can shadow the break-glass credential", and it
+// departs deliberately: a disable a documented environment variable defeats is
+// not a disable, and the break-glass value survives intact because the last
+// enabled admin can never be disabled (store.ErrLastAdmin) — so there is always
+// an account for LOGIN_USERNAME to name.
 func (ro *Router) resolveLocalLogin(ctx context.Context, name, password string) (*store.User, error) {
 	if cred := ro.cfg.LocalCredential; cred != nil && cred.Names(name) && cred.VerifyPassword(password) {
 		identity := cred.Identity()
-		return ro.cfg.Store.UpsertUser(ctx, identity.ExternalID, identity.Email)
+		user, err := ro.cfg.Store.UpsertUser(ctx, identity.ExternalID, identity.Email)
+		if err != nil {
+			return nil, err
+		}
+		return enabledOrNil(user), nil
 	}
 	user, hash, err := ro.cfg.Store.LookupLocalCredential(ctx, auth.LocalExternalID(name))
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return nil, err
 	}
+	// The bcrypt compare runs first and unconditionally, so a disabled account
+	// costs a login attempt exactly what an enabled one does. Checking Disabled
+	// before spending it would make the endpoint answer faster for accounts an
+	// admin has turned off, which is a fact about the directory an attacker has
+	// no business timing out of it.
 	if !auth.VerifyStoredPassword(hash, password) {
 		return nil, nil
 	}
-	return user, nil
+	return enabledOrNil(user), nil
+}
+
+// enabledOrNil collapses "disabled account" into the same nil the login path
+// already means by "no match". The caller renders one message for every way a
+// sign-in can fail, so a person locked out learns that they are, and an
+// attacker learns nothing about which accounts exist or which are switched off.
+func enabledOrNil(u *store.User) *store.User {
+	if u == nil || u.Disabled {
+		return nil
+	}
+	return u
 }
 
 // startSession is where the two login paths meet, and the only place a session
