@@ -265,6 +265,7 @@ The seam between handlers and persistence. Handlers speak only to this interface
 Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
         list/set/delete per-origin network decisions;
         users and sessions, including local credentials (§3.8)
+        and the admin mutations over them (§3.8a)
 Blob:   put/get artifact bodies by id
 ```
 
@@ -641,8 +642,8 @@ instance can issue as many as it likes without one.
   `owner_id` — is identical and cannot tell them apart. The login method is
   recorded in a log line and nowhere else.
 - **Credentials are bcrypt hashes, never plaintext the service hashes for
-  itself.** Accounts are provisioned by an operator (`user add` / `user passwd`
-  at the CLI today, av-utap's admin screen later), so there is no
+  itself.** Accounts are provisioned by an admin (the account screen in §3.8a,
+  or `user add` / `user passwd` at the CLI), so there is no
   self-registration to verify and no reset mail, and therefore no SMTP — the
   costs that made passwords a bad trade for a multi-user product (av-30rj) are
   the ones this shape does not pay. A local account's `users.external_id` is
@@ -890,7 +891,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), and `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub) — what remains is administration of other accounts (av-utap) and letting a non-owner reach a shared artifact at all (av-7k7b) |
+| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap) — what remains is letting a non-owner reach a shared artifact at all (av-7k7b), and a person managing their own account (av-g2dx) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | S3/MinIO impl behind same interface |
