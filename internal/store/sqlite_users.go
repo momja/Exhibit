@@ -81,14 +81,14 @@ func (s *SQLiteStore) GetUser(ctx context.Context, id int64) (*User, error) {
 // LookupLocalCredential, so there is no path by which the hash reaches a
 // caller that did not ask for it by name.
 const userColumns = `id, external_id, email, created_at, is_admin,
-                     password_hash IS NOT NULL`
+                     password_hash IS NOT NULL, disabled_at IS NOT NULL`
 
 func (s *SQLiteStore) getUserBy(ctx context.Context, where string, arg any) (*User, error) {
 	var u User
 	var created any
 	err := s.db.QueryRowContext(ctx,
 		"SELECT "+userColumns+" FROM users WHERE "+where, arg,
-	).Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword)
+	).Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword, &u.Disabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -128,7 +128,7 @@ func (s *SQLiteStore) LookupLocalCredential(ctx context.Context, externalID stri
 	var hash sql.NullString
 	err := s.db.QueryRowContext(ctx,
 		"SELECT "+userColumns+", password_hash FROM users WHERE external_id=?", externalID,
-	).Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword, &hash)
+	).Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword, &u.Disabled, &hash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, "", ErrNotFound
 	}
@@ -186,9 +186,128 @@ func (s *SQLiteStore) SetLocalPassword(ctx context.Context, userID int64, passwo
 	return nil
 }
 
+// --- Administration (av-utap) ------------------------------------------
+//
+// Two mutators an admin reaches through, and one invariant they share: an
+// instance must always keep at least one *enabled* admin. The guard is written
+// into the UPDATE's WHERE clause rather than checked by the caller first,
+// because a read-then-write is two statements with a gap in the middle and the
+// row that gap decides is the one that can still administer the instance. As
+// one statement it is atomic under SQLite's single writer, so two admins
+// simultaneously demoting each other leave one standing whichever wins.
+//
+// A disabled admin does not satisfy the invariant — it cannot sign in, so it
+// is not a way back in. Both guards therefore look for another admin that is
+// `is_admin = 1 AND disabled_at IS NULL`.
+
+// lastEnabledAdminGuard is that predicate: "somebody other than ?1 can still
+// administer this instance". It is spelled once and shared, so the two
+// mutators below cannot drift into disagreeing about what an admin is.
+//
+// `is_admin = 0 OR …` makes a no-op allowed unconditionally: demoting an
+// account that is not an admin, or disabling one that is not, changes nothing
+// about who administers the instance and must not be refused as though it did.
+const lastEnabledAdminGuard = `(is_admin = 0 OR EXISTS (
+      SELECT 1 FROM users WHERE id <> ?1 AND is_admin = 1 AND disabled_at IS NULL))`
+
+// SetUserAdmin promotes or demotes an account.
+//
+// Promotion is unguarded — more admins is never the failure mode. Demotion
+// carries the guard: ErrLastAdmin rather than an instance nobody can
+// administer. ErrNotFound distinguishes "no such account" from "refused".
+func (s *SQLiteStore) SetUserAdmin(ctx context.Context, userID int64, admin bool) error {
+	if admin {
+		return s.exactlyOneRow(ctx, "UPDATE users SET is_admin = 1 WHERE id = ?1", userID)
+	}
+	return s.guardedUserUpdate(ctx,
+		"UPDATE users SET is_admin = 0 WHERE id = ?1 AND "+lastEnabledAdminGuard, userID)
+}
+
+// SetUserDisabled is the whole of "disable this account", and it is deliberately
+// two writes in one transaction.
+//
+// Refusing future logins is only half a disable: the sessions already issued
+// are what the person is actually using, and a `sessions` row outlives any
+// decision about the credential that minted it. av-30rj made sessions
+// server-side rows precisely so they can be deleted, so they are — here, beside
+// the column, in one transaction, rather than left to whichever caller
+// remembers. A caller that could disable without revoking would eventually be
+// written.
+//
+// Re-disabling is idempotent and preserves the original timestamp (COALESCE),
+// so "disable" is a state to assert rather than an event to fire — and a
+// duplicate click does not rewrite when it happened.
+func (s *SQLiteStore) SetUserDisabled(ctx context.Context, userID int64, disabled bool) error {
+	if !disabled {
+		return s.exactlyOneRow(ctx, "UPDATE users SET disabled_at = NULL WHERE id = ?1", userID)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }() // no-op once committed
+
+	res, err := tx.ExecContext(ctx,
+		`UPDATE users SET disabled_at = COALESCE(disabled_at, datetime('now'))
+           WHERE id = ?1 AND `+lastEnabledAdminGuard, userID)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return s.refusedOrMissing(ctx, userID)
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// guardedUserUpdate runs a statement whose WHERE carries lastEnabledAdminGuard
+// and turns "no rows changed" back into the reason for it.
+func (s *SQLiteStore) guardedUserUpdate(ctx context.Context, query string, userID int64) error {
+	res, err := s.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return s.refusedOrMissing(ctx, userID)
+	}
+	return nil
+}
+
+// refusedOrMissing separates the two things a guarded update matching no row
+// can mean. Both are the caller's error to report; only one of them is worth
+// explaining to the person who asked.
+func (s *SQLiteStore) refusedOrMissing(ctx context.Context, userID int64) error {
+	if _, err := s.getUserBy(ctx, "id=?", userID); err != nil {
+		return err // ErrNotFound, or a real failure
+	}
+	return ErrLastAdmin
+}
+
+func (s *SQLiteStore) exactlyOneRow(ctx context.Context, query string, args ...any) error {
+	res, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // CountLocalCredentials reports how many accounts can log in with a password.
 // The server reads it once at startup to decide whether this instance has a
 // login at all — see api.Config.LocalUsers.
+//
+// Disabled accounts are counted, deliberately. The question this answers is
+// "does this instance have a login gate?", not "can anyone get in right now" —
+// and an instance whose only local account is disabled must keep the gate up,
+// not drop it and serve the library to whoever asks.
 func (s *SQLiteStore) CountLocalCredentials(ctx context.Context) (int64, error) {
 	var n int64
 	err := s.db.QueryRowContext(ctx,
@@ -209,7 +328,7 @@ func (s *SQLiteStore) ListUsers(ctx context.Context) ([]*User, error) {
 	for rows.Next() {
 		var u User
 		var created any
-		if err := rows.Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword); err != nil {
+		if err := rows.Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword, &u.Disabled); err != nil {
 			return nil, err
 		}
 		u.CreatedAt = anyToTime(created)

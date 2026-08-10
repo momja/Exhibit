@@ -169,6 +169,14 @@ func (ro *Router) setupRoutes() {
 		// Agent chat UI — token embedded in page JS, like the gallery.
 		r.Get("/agent", ro.agentPage)
 
+		// The administration surface (av-utap). It sits in the page group
+		// like every other page — the group is what supplies an owner — and
+		// then behind adminOnly, because carrying an owner is not carrying
+		// authority. To anyone who is not an admin this route answers the
+		// same 404 an unrouted path does; admin.go says why that, and not a
+		// 403, is the right refusal.
+		r.With(ro.adminOnly).Get("/admin/users", ro.adminUsersPage)
+
 		// Server-rendered fragments, swapped into a live page by htmx
 		// (av-6m3e). They render the same template partials the full page
 		// render uses, and carry no authority the page they belong to
@@ -273,6 +281,22 @@ func (ro *Router) setupRoutes() {
 			r.Delete("/{tagID}", ro.deleteTag)
 			r.Post("/{tagID}/artifacts/{artifactID}", ro.addArtifactTag)
 			r.Delete("/{tagID}/artifacts/{artifactID}", ro.removeArtifactTag)
+		})
+
+		// Administration of other people's accounts (av-utap). Every route
+		// in here acts on somebody else, so the group carries adminOnly on
+		// top of the API group's own authentication — a session is not
+		// authorization for any of it. Routes a person performs on their
+		// *own* account are av-g2dx's and belong outside this group.
+		r.Route("/api/admin/users", func(r chi.Router) {
+			r.Use(ro.adminOnly)
+			r.Get("/", ro.listAdminUsers)
+			r.Post("/", ro.createAdminUser)
+			// One PATCH for password / disabled / is_admin, each optional:
+			// the fields are unrelated, and a route per verb would multiply
+			// the surface that has to be guarded without splitting anything
+			// that is actually separate.
+			r.Patch("/{userID}", ro.updateAdminUser)
 		})
 
 		r.Route("/api/shares", func(r chi.Router) {

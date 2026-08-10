@@ -34,6 +34,16 @@ type User struct {
 	// two live in this one table and differ only by which columns are
 	// populated, which is what keeps them in one owner_id space.
 	HasPassword bool `json:"has_password"`
+	// Disabled is an admin's "this account may not sign in" (av-utap),
+	// derived from a nullable `disabled_at` so it applies to an OIDC identity
+	// as readily as to a local one — migration 017 says why that mattered
+	// enough to earn a column.
+	//
+	// It is not the whole of the mechanism. Refusing a *login* only stops the
+	// next one; the sessions already issued are what a person is actually
+	// using, so SetUserDisabled deletes those rows in the same transaction.
+	// This field is the durable half, the deleted sessions the immediate one.
+	Disabled bool `json:"disabled"`
 }
 
 // Session is one logged-in browser. Its ID is opaque random bytes handed to
