@@ -95,3 +95,94 @@ func TestDeletingUserCascadesSessions(t *testing.T) {
 	_, err = s.GetSession(ctx, "sess")
 	assert.ErrorIs(t, err, ErrNotFound, "a user's sessions retire with the user")
 }
+
+// --- Administration (av-utap) ------------------------------------------
+
+// Disabling deletes the account's sessions in the same transaction that sets
+// the column. That is the half of "disable" a caller could most easily forget,
+// which is why it lives in the store rather than in whichever handler happens
+// to be calling — the API and the CLI both get it, and neither had to remember.
+func TestDisablingAUserDeletesTheirSessionsAndNobodyElses(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	admin, err := s.UpsertUser(ctx, "sub-admin", "admin@example.test")
+	require.NoError(t, err)
+	require.True(t, admin.IsAdmin)
+	member, err := s.UpsertUser(ctx, "sub-member", "member@example.test")
+	require.NoError(t, err)
+
+	expiry := time.Now().Add(time.Hour)
+	require.NoError(t, s.CreateSession(ctx, &Session{ID: "member-phone", UserID: member.ID, ExpiresAt: expiry}))
+	require.NoError(t, s.CreateSession(ctx, &Session{ID: "member-laptop", UserID: member.ID, ExpiresAt: expiry}))
+	require.NoError(t, s.CreateSession(ctx, &Session{ID: "admin-laptop", UserID: admin.ID, ExpiresAt: expiry}))
+
+	require.NoError(t, s.SetUserDisabled(ctx, member.ID, true))
+
+	for _, id := range []string{"member-phone", "member-laptop"} {
+		_, err := s.GetSession(ctx, id)
+		assert.ErrorIs(t, err, ErrNotFound,
+			"%s survived the disable — refusing the next login is only half of it, and the "+
+				"half that is not the credential the person is actually holding (av-utap)", id)
+	}
+	_, err = s.GetSession(ctx, "admin-laptop")
+	assert.NoError(t, err, "disabling one account must not sign out another")
+
+	assert.True(t, mustGetUser(t, s, member.ID).Disabled)
+
+	// Idempotent, and re-enabling restores the account without restoring the
+	// sessions — the person signs in again, which is the correct outcome.
+	require.NoError(t, s.SetUserDisabled(ctx, member.ID, true))
+	require.NoError(t, s.SetUserDisabled(ctx, member.ID, false))
+	assert.False(t, mustGetUser(t, s, member.ID).Disabled)
+
+	assert.ErrorIs(t, s.SetUserDisabled(ctx, 999, true), ErrNotFound)
+	assert.ErrorIs(t, s.SetUserDisabled(ctx, 999, false), ErrNotFound)
+}
+
+// The guard is in the UPDATE's WHERE clause rather than a read the caller makes
+// first, so "is there another admin?" and "write the change" cannot be
+// separated by anything. These are the four ways the instance could otherwise
+// have been locked out of itself.
+func TestTheInstanceKeepsAnAdminWhoCanSignIn(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	only, err := s.UpsertUser(ctx, "sub-only", "only@example.test")
+	require.NoError(t, err)
+	require.True(t, only.IsAdmin)
+
+	assert.ErrorIs(t, s.SetUserAdmin(ctx, only.ID, false), ErrLastAdmin)
+	assert.ErrorIs(t, s.SetUserDisabled(ctx, only.ID, true), ErrLastAdmin)
+	assert.True(t, mustGetUser(t, s, only.ID).IsAdmin, "a refusal writes nothing")
+	assert.False(t, mustGetUser(t, s, only.ID).Disabled)
+
+	// A second admin who cannot sign in is not a second admin. Counting one
+	// would let two individually-legal changes leave nobody able to administer
+	// the instance.
+	second, err := s.UpsertUser(ctx, "sub-second", "second@example.test")
+	require.NoError(t, err)
+	require.NoError(t, s.SetUserAdmin(ctx, second.ID, true))
+	require.NoError(t, s.SetUserDisabled(ctx, second.ID, true))
+	assert.ErrorIs(t, s.SetUserDisabled(ctx, only.ID, true), ErrLastAdmin)
+
+	// Enable them and the guard lifts, which is what makes it a guard rather
+	// than a prohibition.
+	require.NoError(t, s.SetUserDisabled(ctx, second.ID, false))
+	require.NoError(t, s.SetUserAdmin(ctx, only.ID, false))
+	assert.False(t, mustGetUser(t, s, only.ID).IsAdmin)
+
+	// Demoting somebody who is not an admin changes nothing about who
+	// administers the instance, so it is allowed even now that `only` is the
+	// one being counted against.
+	require.NoError(t, s.SetUserAdmin(ctx, only.ID, false))
+	assert.ErrorIs(t, s.SetUserAdmin(ctx, 999, false), ErrNotFound)
+	assert.ErrorIs(t, s.SetUserAdmin(ctx, 999, true), ErrNotFound)
+}
+
+func mustGetUser(t *testing.T, s *SQLiteStore, id int64) *User {
+	t.Helper()
+	u, err := s.GetUser(context.Background(), id)
+	require.NoError(t, err)
+	return u
+}
