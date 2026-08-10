@@ -677,6 +677,67 @@ instance can issue as many as it likes without one.
   provisioning the *first* account with the CLI on a running server takes a
   restart to arm the gate.
 
+### 3.8a Administration: one boundary, drawn on the route (av-utap)
+
+Once Exhibit issues credentials it *is* the user directory, so it has to answer
+"who creates accounts and resets forgotten passwords". Two surfaces sit on the
+same `users` rows and must not be confused:
+
+- **A person acting on their own account** (av-g2dx) — a session is the whole
+  authorization.
+- **An admin acting on the instance** (here) — creating someone else's account,
+  resetting someone else's password, switching an account off. A session is
+  emphatically *not* sufficient.
+
+They will share page furniture (the settings shell, the stylesheet, the header
+partial). The guarantee is that they never share authority, and it is
+structural: every route that reaches another account passes `adminOnly`
+(`internal/api/admin.go`), and none of them shares a handler with a route that
+does not.
+
+- **The guard answers `404`, not `403`,** and answers it *before* any handler
+  looks at the target. Two things fall out of that. To a non-admin the
+  administration surface does not exist. And a refusal cannot differ between
+  "you may not touch user 7" and "there is no user 7" — an admin acting on a
+  missing id gets the same 404 — so the refusal is not an enumeration oracle
+  over the instance's directory.
+- **Who is an admin,** in the order it is decided: never an agent-session
+  credential (steered by text Exhibit did not author) and never an anonymous
+  public visitor; yes for the static service token, which already carries full
+  authority over every API route; yes for a session whose account is an
+  *enabled* admin, looked up per request so a demotion takes effect on the next
+  one; and otherwise only on an instance with no login configured, which has one
+  user and no notion of anybody else to be.
+- **Disabling is a column, and revoking sessions is part of it.** Clearing
+  `password_hash` was the alternative and does not generalise: an identity a
+  provider issued has none to clear, and it is a first-class row in the same
+  table. So `users.disabled_at` is nullable, applies to both kinds of account,
+  and destroys nothing an admin may later want to restore. Refusing the next
+  login is only half of it — the credential a disabled person is actually
+  holding is the session already in their browser — so `Store.SetUserDisabled`
+  deletes that user's `sessions` rows in the same transaction rather than
+  leaving it to whichever caller remembers; the API and the CLI both inherit
+  that. Login is then refused on every path, including the `LOGIN_USERNAME`
+  break-glass pair: a disable a documented environment variable defeats is not
+  a disable.
+- **The instance cannot be locked out of itself.** Demoting or disabling the
+  last *enabled* admin is refused (`store.ErrLastAdmin`). The guard is a
+  predicate inside the `UPDATE`'s `WHERE` rather than a read the caller makes
+  first, for the same reason the first-admin rule lives inside its `INSERT`:
+  the gap between a check and a write is exactly what decides who can still
+  administer the instance. A disabled admin does not satisfy the predicate, so
+  the lockout cannot be reached in two individually-legal steps either.
+- **Not the login endpoint.** An admin setting a password *asserts* a
+  credential; `/auth/local` *guesses* one. Only the guess is rate-limited
+  (av-t21v), so an admin resetting several accounts in a row does not throttle
+  themselves out of their own instance.
+- **Routes.** `GET /admin/users` is the page — registered inside the page group,
+  so it carries an owner like every other page, *and* behind `adminOnly`,
+  because carrying an owner is not carrying authority. `GET`/`POST
+  /api/admin/users` and `PATCH /api/admin/users/{id}` are the JSON API its
+  controls call: the single write path (§3.1) is why the page has no form
+  handler of its own.
+
 ## 4. Trust boundaries
 
 Four boundaries, in decreasing trust:

@@ -145,7 +145,9 @@ docker compose exec app /server user passwd admin
 # Enter a password for admin, then press Enter and ctrl-D:
 ```
 
-**Add more people.** Same subcommand, one per person:
+**Add more people.** From the app, at **Accounts** in the gallery header — the
+screen an admin creates accounts, resets passwords and switches accounts off
+from (§3.5). Or at the CLI, one subcommand per person:
 
 ```bash
 docker compose exec app /server user add partner@example.com
@@ -182,9 +184,9 @@ there until you sign in, and `/auth/logout` revokes the session server-side.
 **The first account on an instance is its admin.** That is the same rule as
 §3.4's callout below, seen from the other side: user ids start at 1, which is
 the id everything in an existing single-user library is already filed under, so
-the first account adopts that library. Create yours first. (The admin flag is
-recorded now and is what the coming admin screen will check; today it grants
-nothing at runtime.)
+the first account adopts that library. Create yours first. The admin flag is
+what the **Accounts** screen checks (§3.5), so the first account is the one that
+can create the rest.
 
 #### The bootstrap and break-glass credential
 
@@ -306,9 +308,10 @@ accounts, not one. Proxy auth (§3.1) is the exception: it is one door in front
 of one library.
 
 - **§3.2, accounts Exhibit issues.** You are the user directory. You create
-  accounts with `user add` and reset passwords with `user passwd`; there is no
-  self-registration, so there is nothing to verify and no mail to send. This is
-  the household and small-team path — nothing else to run.
+  accounts and reset passwords from the **Accounts** screen (§3.5) or the `user`
+  subcommands; there is no self-registration, so there is nothing to verify and
+  no mail to send. This is the household and small-team path — nothing else to
+  run.
 - **§3.3, identities from your provider.** Your provider is the user directory.
   Granting someone access to the Exhibit application there is the whole of
   provisioning; Exhibit only records that it has met them. This is the path for
@@ -319,9 +322,9 @@ with a password and an identity without one are the same kind of row — that is
 what keeps them one directory rather than two, and it is why the first account
 of *either* kind is the instance's admin.
 
-**How people get accounts.** Either you run `user add`, or they complete their
-first login at your provider. In both cases a `users` row is written and that
-person's library starts empty.
+**How people get accounts.** Either an admin creates one (§3.5), or they
+complete their first login at your provider. In both cases a `users` row is
+written and that person's library starts empty.
 
 **What each person gets.** Their own library, isolated in the database rather
 than in the interface: listing, reading, editing, deleting, artifact state,
@@ -337,15 +340,18 @@ setting, so read them before offering accounts to anyone:
   only path from one library to another, and it is anonymous by design: anyone
   holding the link can open it, account or not. There is no "share with this
   user".
-- **No administration screen.** `user list`, `user add` and `user passwd` at the
-  CLI are the whole of it. There is no way to sign someone out, disable an
-  account, set per-user quotas, or see what another user holds. The `is_admin`
-  flag is recorded on the first account but grants nothing at runtime yet.
-- **No account deletion, and this one has a sharp edge.** Removing someone at
-  your provider — or changing their password here — stops them signing in, but
-  their artifacts remain in the database under their owner id and there is no
-  interface to reassign or delete them. Recovering a departed user's library
-  currently means SQL. Plan for that before you depend on it.
+- **No per-user quotas, and no window into anyone else's library.** An admin
+  administers *accounts* (§3.5) — who exists, who may sign in, who is an admin.
+  There is nothing that shows what another person holds, and nothing that limits
+  how much of it they hold.
+- **No account deletion, and this one has a sharp edge.** Disabling an account
+  (§3.5) stops the person signing in and signs them out at once, but their
+  artifacts remain in the database under their owner id and there is no
+  interface to reassign or delete them. Recovering or erasing a departed user's
+  library currently means SQL. Plan for that before you depend on it.
+- **No self-service.** Nobody can change their own password; an admin resets it
+  for them. That is the trade that keeps mail out of the product entirely — no
+  SMTP to configure, no reset links, nothing to verify.
 
 **Upgrading an existing single-user instance.** User ids start at 1, which is
 the id a single-user library is already filed under, so the first account in
@@ -358,6 +364,56 @@ you don't need a hosted service to see the flow end to end — Dex or Authentik 
 a container is enough. The entire contract is a discovery document, an authorize
 endpoint, a token endpoint and a JWKS URL; if a provider satisfies
 `/.well-known/openid-configuration`, Exhibit will talk to it.
+
+### 3.5 Managing accounts
+
+Once Exhibit issues credentials, Exhibit *is* the user directory — so somebody
+has to create accounts and reset the passwords people forget. That somebody is
+an admin, at **Accounts** in the gallery header (`/admin/users`). The link
+appears only for an admin, and the page refuses everyone else with the same
+`404` an address that does not exist gets.
+
+| Action | What it does |
+|---|---|
+| **Create account** | A login name and a password of at least 8 characters. Optionally an admin. Tell them the password out of band — nothing is emailed. |
+| **Reset password** | Sets a new one immediately. Only for accounts Exhibit issued; an identity from your provider has no password here to reset. |
+| **Make admin / Demote** | An admin may manage accounts. Everything else about the two is identical. |
+| **Disable / Enable** | Disable signs the account out **everywhere, at once**, and refuses any further sign-in. Nothing is deleted; enabling restores access with the same password. |
+
+**Password reset is by an admin, not by email.** That is the specific choice
+that keeps SMTP out of the product — no mail server to run, no reset links to
+expire, no addresses to verify. On a household or small-team instance the admin
+is reachable by other means anyway. It is what Immich does, for the same reason.
+
+**Disabling really is a sign-out.** Sessions are rows in the database rather
+than signed tokens, so disabling an account deletes them: the person's next
+request — on any device already signed in — lands back at the login page. That
+holds for an identity from your provider too, and it holds against the
+`LOGIN_USERNAME` break-glass pair, which is the one place a database value is
+otherwise allowed to be ignored.
+
+**You cannot lock the instance out of itself.** Demoting or disabling the last
+admin who can still sign in is refused. A disabled admin does not count as the
+one remaining, so you cannot get there in two steps either.
+
+The same operations exist at the CLI, which is what you have when nobody can
+sign in at all:
+
+```bash
+docker compose exec app /server user list
+docker compose exec app /server user add partner@example.com
+docker compose exec app /server user passwd partner@example.com
+docker compose exec app /server user disable partner@example.com
+docker compose exec app /server user enable partner@example.com
+```
+
+`user disable` revokes that account's sessions exactly as the screen does, and
+refuses the last admin for the same reason.
+
+**What is not here.** Nobody can manage their own account — no self-service
+password change, no "sign out my other devices", no account deletion. Those are
+a person acting on their own account rather than an admin acting on the
+instance, and they are a separate piece of work.
 
 ## 4. No AI agent features
 
