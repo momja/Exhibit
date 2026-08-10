@@ -440,7 +440,7 @@ request, through middleware, in one place:
 | Where | Who resolves the owner | To what |
 |---|---|---|
 | API group (`/api/*`) | `authMiddleware` | the session's user, the agent grant's `OwnerID`, or `PUBLIC_OWNER_ID` for a public visitor; `ownerMiddleware` supplies the single-user default for a token-authenticated client |
-| Page group (`/`, `/new`, `/artifacts/…`, `/agent`, `/partials/*`) | `sessionGate` | the session's user — the same `sessionUser` lookup it already performed for §1.5, no longer discarded |
+| Page group (`/`, `/new`, `/artifacts/…`, `/agent`, `/admin/users`, `/partials/*`) | `sessionGate` | the session's user — the same `sessionUser` lookup it already performed for §1.5, no longer discarded |
 | Page group, instance with no login | `ownerMiddleware` | the single-user default |
 
 `ownerMiddleware` never overwrites an owner resolved upstream, which is what
@@ -475,6 +475,47 @@ because the leak being prevented is content and state, not filenames. The same
 rows are walked again on a single-user instance, where `sessionGate` is a
 pass-through and the owner can only come from the page group — which is what
 makes group membership enforced rather than conventional.
+
+### 1.7 Whether a request may act on *another* account: `adminOnly`
+
+§1.6 answers "whose library" and stops there, which is the right answer for
+every route that reads a library. Administration (av-utap) is the one surface
+where it is not enough: creating an account, resetting somebody's password and
+disabling somebody's login are not reads of a library at all, so no amount of
+owner scoping constrains them. They need a *third* property, and it is the one
+none of the three route walks above tests.
+
+**A session is not authorization here.** That is the whole boundary. A person
+acting on their own account needs nothing more than a session (av-g2dx); an
+admin acting on the instance needs strictly more, and the two surfaces will
+share page furniture. So the check lives on the route — `adminOnly`
+(`internal/api/admin.go`) wraps the page and the whole `/api/admin/*` group, and
+no admin route shares a handler with a non-admin one. Getting this wrong in the
+obvious way, by hanging an admin control off a settings page guarded only by
+being logged in, lets any account reset the admin's password.
+
+- **It refuses with `404`, before looking at the target.** To a non-admin the
+  surface does not exist, and "you may not touch user 7" is byte-identical to
+  "there is no user 7" — an admin acting on a missing id gets the same 404 — so
+  a refusal cannot be used to enumerate the directory.
+- **Never an agent grant, never an anonymous public visitor.** Both are checked
+  first so no later branch can widen them. The service token *is* admin (it
+  already holds full authority over every API route); a session is admin only
+  while the account behind it is an enabled admin, re-read per request so a
+  demotion lands on the next one.
+- **Disabling revokes, it does not merely refuse.** `Store.SetUserDisabled`
+  deletes that user's `sessions` rows in the same transaction that sets the
+  column, so the sessions §1.4 made server-side rows are gone rather than
+  merely unrenewable. Login is then refused on every path, the `LOGIN_USERNAME`
+  break-glass pair included.
+- **The last enabled admin cannot be demoted or disabled**, guarded inside the
+  `UPDATE` rather than by a read beforehand, so nothing can slip between the
+  check and the write.
+
+Pinned by `internal/api/admin_test.go`, which drives every admin route with a
+real non-admin's real session and asserts the refusal is identical for an
+account that exists and one that does not, then uses a live cookie *after* a
+disable to prove the session really ended.
 
 ## 2. CSP: the allowlist is the wall
 
