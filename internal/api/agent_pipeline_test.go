@@ -243,7 +243,7 @@ func TestAgentSessionIgnoresHostileTitleAndStaysScoped(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &session))
 	require.Equal(t, targetID, session.ArtifactID)
-	t.Cleanup(func() { r.cfg.Agent.Close(session.ID) })
+	t.Cleanup(func() { r.cfg.Agent.Close(defaultOwnerID, session.ID) })
 
 	w = doJSON(t, r, "POST", "/api/agent/sessions/"+session.ID+"/prompt",
 		map[string]any{"message": "make the button green"})
@@ -299,7 +299,7 @@ func TestAgentSessionInlinesArtifactSource(t *testing.T) {
 		ID string `json:"id"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &session))
-	t.Cleanup(func() { r.cfg.Agent.Close(session.ID) })
+	t.Cleanup(func() { r.cfg.Agent.Close(defaultOwnerID, session.ID) })
 
 	w = doJSON(t, r, "POST", "/api/agent/sessions/"+session.ID+"/prompt",
 		map[string]any{"message": "make the button purple"})
@@ -336,9 +336,9 @@ func TestAgentSaveEventCarriesTheSessionsArtifact(t *testing.T) {
 		ID string `json:"id"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &session))
-	t.Cleanup(func() { r.cfg.Agent.Close(session.ID) })
+	t.Cleanup(func() { r.cfg.Agent.Close(defaultOwnerID, session.ID) })
 
-	events, unsubscribe := r.cfg.Agent.Get(session.ID).Subscribe()
+	events, unsubscribe := r.cfg.Agent.Get(defaultOwnerID, session.ID).Subscribe()
 	defer unsubscribe()
 
 	w = doJSON(t, r, "POST", "/api/agent/sessions/"+session.ID+"/prompt",

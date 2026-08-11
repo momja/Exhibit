@@ -511,6 +511,26 @@ absent the surface degrades to disabled; nothing else changes.
   half is sufficient alone: without the owner the session would be confined
   to an id that could belong to anyone, and without the path check it would
   hold ordinary full authority over its owner's whole library.
+- **The session itself belongs to an owner too.** Sessions live in an
+  in-memory registry rather than in SQLite, so they were the one piece of
+  per-owner state av-ep8k's query sweep could not reach: `Manager.Get` took an
+  id, and the four routes that resolve a session by it — `prompt`, `abort`,
+  `events`, and the `DELETE` that closes one — compared nothing, so any
+  authenticated user holding a session id could drive somebody else's agent.
+  The lookup now takes the owner as a *parameter* (`Manager.Get(ownerID, id)`),
+  for exactly the reason av-ep8k put the predicate inside the SQL rather than
+  in front of it: a check the caller performs is a check the next caller
+  forgets. Another owner's session is *not found* rather than refused — 404,
+  never 403, the same answer an id that was never issued gets (§3.3) — so the
+  routes are not an oracle over which sessions are live. The SSE route resolves
+  its own owner in `authorizeEventStream`, because `EventSource` sets no
+  headers and the route therefore sits outside the middleware pair; it returns
+  the owner those middlewares would have supplied and puts it on the request
+  context, so there is still one owner check for all four routes rather than
+  two that must be kept in step. What this closes is worse than a read: a
+  prompt sent to a stranger's session runs its tool calls on *that session's*
+  credential, so the injected instruction lands in the victim's artifact —
+  av-e0yj's containment defeated rather than evaded.
 - **Untrusted text stays out of the system role:** the artifact's source and
   title reach the model in a user-role message inside a nonce-fenced data
   block, never interpolated into the system prompt. The source is inlined at

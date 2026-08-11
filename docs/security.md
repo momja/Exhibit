@@ -753,6 +753,24 @@ download bridge is UX and the sandbox is the wall (§4).
   anything. Neither check substitutes for the other — without the owner, the
   scope names an id that could belong to anybody; without the path check, the
   session holds ordinary full authority over its own user's whole library.
+- **Who may drive the session is the third question, and it was missed.** The
+  credential above bounds what a session may *do*; this bounds who may *steer*
+  it. Sessions live in an in-memory registry rather than in SQLite, so they
+  were the one piece of per-owner state av-ep8k's query sweep could not cover:
+  `Manager.Get` took a session id and compared nothing, and any authenticated
+  user holding one could prompt, abort, watch or kill another owner's live
+  agent. Prompting is the sharp one — the tool calls that follow run on the
+  **victim's** scoped credential, so an injected instruction is written into
+  the victim's artifact, defeating the containment above rather than evading
+  it. The registry lookup now takes the owner as a parameter
+  (`Manager.Get(ownerID, id)`) rather than trusting each route to check, for
+  the same reason the predicate lives inside the store's SQL; and another
+  owner's session is **not found** — 404, byte-identical to an id that was
+  never issued, never 403 — so the routes are not an oracle over which sessions
+  are live. The SSE stream resolves the same owner itself, because
+  `EventSource` sets no headers and that route sits outside the middleware pair
+  every other one runs. Pinned by `internal/api/agent_session_owner_test.go`,
+  which drives a real `pi` session with a second real account's cookie.
 - A **modify** session is scoped at spawn to the artifact the user opened. A
   **create** session starts unbound and binds to the id its first create
   returns — bound from the row the create handler wrote, not from the tool

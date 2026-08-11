@@ -266,18 +266,47 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	return s, nil
 }
 
-// Get returns a live session or nil.
-func (m *Manager) Get(id string) *Session {
+// Get returns one of ownerID's live sessions, or nil.
+//
+// The owner is a *parameter* rather than something the caller compares
+// afterwards, for the reason av-ep8k made owner_id a predicate inside every
+// Store query instead of a pre-check in every handler: a predicate a caller can
+// forget is a predicate that gets forgotten. This registry is the one piece of
+// per-owner state in the service that SQL never sees, so it was the one place
+// av-ep8k's sweep could not reach — and it held a *live, credentialed* object,
+// which is worse than a row. A stranger holding a session id could steer
+// somebody else's agent, and the tool calls that followed ran on the victim's
+// own scoped credential (§5.1), writing into the victim's artifact.
+//
+// A session belonging to another owner is therefore not "found and refused", it
+// is simply not found: that is what lets the routes above answer a stranger
+// exactly as they answer a session id that was never issued, rather than
+// becoming an oracle over which ids are live.
+//
+// Owner 0 — a request nobody attributed (api.noOwner) — matches nothing here
+// for the same reason it matches no row: owner ids start at 1.
+func (m *Manager) Get(ownerID int64, id string) *Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.sessions[id]
+	s := m.sessions[id]
+	if s == nil || s.OwnerID != ownerID {
+		return nil
+	}
+	return s
 }
 
-// Close terminates a session's subprocess and forgets it.
-func (m *Manager) Close(id string) {
+// Close terminates one of ownerID's sessions and forgets it. Scoped for the
+// same reason Get is, and more sharply: closing kills a subprocess, so an
+// unscoped Close is a one-request denial of service against anybody whose
+// session id leaks. Another owner's id is a no-op.
+func (m *Manager) Close(ownerID int64, id string) {
 	m.mu.Lock()
 	s := m.sessions[id]
-	delete(m.sessions, id)
+	if s != nil && s.OwnerID == ownerID {
+		delete(m.sessions, id)
+	} else {
+		s = nil
+	}
 	m.mu.Unlock()
 	if s != nil {
 		s.kill()

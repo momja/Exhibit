@@ -106,7 +106,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 
 	// Owner-independent by design rather than by omission.
 	{route: "/s/{shareID}", why: "the share row is the authorization (architecture.md §7); it redirects to the render origin and reads no library"},
-	{route: "/api/agent/sessions/{sessionID}/events", why: "streams one agent session's events by id; reads nothing owner-scoped (agent session ownership is av-4bzn's subject)"},
+	{route: "/api/agent/sessions/{sessionID}/events", why: "streams one agent session's events by id and reads no library; it is owner-scoped, but by authorizeEventStream resolving the owner itself (EventSource sets no headers, so it cannot sit in a group that runs the middlewares) — pinned by agent_session_owner_test.go"},
 
 	// The authenticated API group, which runs authMiddleware +
 	// ownerMiddleware. Its owner scoping is av-ep8k's, pinned by

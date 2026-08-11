@@ -187,7 +187,7 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 	if err := s.Prompt(r.Context(), generateWidgetPrompt, nil, nil); err != nil {
 		// The session is useless without its prompt; don't leave the
 		// subprocess running until the idle reaper notices.
-		ro.cfg.Agent.Close(s.ID)
+		ro.cfg.Agent.Close(s.OwnerID, s.ID)
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}

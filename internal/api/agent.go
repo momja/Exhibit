@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -297,23 +298,50 @@ func (ro *Router) agentAbort(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// closeAgentSession ends a session early — the chat page calls it when the
+// visitor navigates away, rather than leaving the subprocess to the idle reaper.
+//
+// It resolves through agentSession like every other session route rather than
+// calling Close on the raw route param, which is what it used to do: a DELETE
+// is the one verb where an unscoped id costs a subprocess rather than a read.
+// The alternative shape — answer 204 unconditionally and close only what the
+// caller owns — is equally silent about whose session exists, but it would give
+// this route a refusal rule of its own; one rule for all four is worth more than
+// an idempotent DELETE to a caller (`resetSession` in agent.js) that discards
+// the status either way.
 func (ro *Router) closeAgentSession(w http.ResponseWriter, r *http.Request) {
-	if ro.cfg.Agent == nil {
-		writeError(w, http.StatusServiceUnavailable, "agent support is not enabled")
+	s := ro.agentSession(w, r)
+	if s == nil {
 		return
 	}
-	ro.cfg.Agent.Close(chi.URLParam(r, "sessionID"))
+	ro.cfg.Agent.Close(s.OwnerID, s.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// agentSession resolves the {sessionID} route param to a live session,
-// writing the error response itself when it can't.
+// agentSession resolves the {sessionID} route param to a live session *of this
+// request's owner*, writing the error response itself when it can't. Every
+// route that reaches a session by id goes through here, which is the whole
+// design: the registry is in memory, so nothing below this line filters by
+// owner on the caller's behalf the way the Store's SQL does (av-ep8k).
+//
+// A session belonging to somebody else answers exactly as an id that was never
+// issued — 404, never 403 — the same refusal the store contract (architecture
+// §3.3) and adminOnly (admin.go) make, and for the same reason: a permission
+// error would confirm the id is live, turning this route into a membership
+// oracle over session ids.
+//
+// The owner comes from ownerIDFromCtx, so the credential asymmetry is already
+// resolved upstream and identical to every other API route: a session cookie
+// names its user, the static token and a login-free instance fall through
+// ownerMiddleware to owner 1 — which is the owner a single-user instance's
+// sessions are created under, so nothing changes there — and an unattributed
+// request resolves to noOwner, which matches no session at all.
 func (ro *Router) agentSession(w http.ResponseWriter, r *http.Request) *agent.Session {
 	if ro.cfg.Agent == nil {
 		writeError(w, http.StatusServiceUnavailable, "agent support is not enabled")
 		return nil
 	}
-	s := ro.cfg.Agent.Get(chi.URLParam(r, "sessionID"))
+	s := ro.cfg.Agent.Get(ownerIDFromCtx(r.Context()), chi.URLParam(r, "sessionID"))
 	if s == nil {
 		writeError(w, http.StatusNotFound, "session not found (it may have been closed)")
 		return nil
@@ -321,8 +349,14 @@ func (ro *Router) agentSession(w http.ResponseWriter, r *http.Request) *agent.Se
 	return s
 }
 
-// authorizeEventStream authenticates the SSE route, which cannot use the API's
-// auth middleware because EventSource sets no headers.
+// authorizeEventStream authenticates the SSE route and says *who* it
+// authenticated, because this route cannot use the API's middleware pair:
+// EventSource sets no headers, so it is registered outside the group that runs
+// authMiddleware and ownerMiddleware and has to answer both of their questions
+// itself. It is deliberately the same two answers, resolved the same way — the
+// owner it returns is what the middlewares would have put on the context, and
+// agentEvents puts it there so agentSession's owner check is one implementation
+// for all four session routes rather than two that must be kept in step.
 //
 // Two credentials, and which one a browser holds depends on the instance
 // (av-5imk):
@@ -330,34 +364,46 @@ func (ro *Router) agentSession(w http.ResponseWriter, r *http.Request) *agent.Se
 //   - A **session cookie**, which the browser attaches to a same-origin
 //     EventSource on its own. This is what a page on an instance with an
 //     identity provider authenticates with — such a page is handed no bearer
-//     token at all, precisely so logout can revoke its access.
+//     token at all, precisely so logout can revoke its access. It names its
+//     user, exactly as it does in authMiddleware.
 //   - The **static token**, on a single-user instance whose page has no other
 //     credential. It travels as `?token=` because there is nowhere else for it
 //     to go; narrowing that is av-rgp1's subject, and this function is the one
-//     place it would be narrowed.
+//     place it would be narrowed. It resolves to defaultOwnerID, which is
+//     ownerMiddleware's answer for the same credential.
 //
-// With no token configured app auth is off entirely, matching authMiddleware.
-func (ro *Router) authorizeEventStream(r *http.Request) bool {
-	if _, ok := ro.sessionUser(r); ok {
-		return true
+// With no token configured app auth is off entirely, matching authMiddleware —
+// and such an instance still resolves defaultOwnerID rather than "anyone",
+// because auth being off is not the same statement as ownership being off.
+func (ro *Router) authorizeEventStream(r *http.Request) (int64, bool) {
+	if ownerID, ok := ro.sessionUser(r); ok {
+		return ownerID, true
 	}
 	if ro.cfg.AuthToken == "" {
-		return true
+		return defaultOwnerID, true
 	}
 	token := r.URL.Query().Get("token")
 	if token == "" {
 		token = bearerToken(r)
 	}
-	return subtle.ConstantTimeCompare([]byte(token), []byte(ro.cfg.AuthToken)) == 1
+	if subtle.ConstantTimeCompare([]byte(token), []byte(ro.cfg.AuthToken)) != 1 {
+		return noOwner, false
+	}
+	return defaultOwnerID, true
 }
 
 // agentEvents streams a session's Pi events to the browser as SSE. It sits
 // outside the auth-header middleware because EventSource cannot set headers.
 func (ro *Router) agentEvents(w http.ResponseWriter, r *http.Request) {
-	if !ro.authorizeEventStream(r) {
+	ownerID, ok := ro.authorizeEventStream(r)
+	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	// Stand in for ownerMiddleware, which this route does not run. Everything
+	// downstream — agentSession here, and any later handler that reads the
+	// owner — then sees the same context an API-group request would carry.
+	r = r.WithContext(context.WithValue(r.Context(), ownerIDKey, ownerID))
 	s := ro.agentSession(w, r)
 	if s == nil {
 		return
