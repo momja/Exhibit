@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
@@ -191,6 +192,41 @@ func (s *SQLiteStore) getArtifactWhere(ctx context.Context, query string, args .
 	return a, nil
 }
 
+// ftsMatchExpression turns a user's search box input into an FTS5 MATCH
+// expression that treats every character as literal text. Users type things
+// like `<script>` or `a:b`, all of which are FTS5 query *syntax* — passed
+// through raw they make SQLite return a syntax error instead of results.
+//
+// Each whitespace-separated token becomes a quoted phrase (inner quotes
+// doubled, per FTS5's string literal rules) with a trailing `*`, so
+// prefix matching still works exactly as it did for plain words. Tokens that
+// carry no indexable characters at all (`<`, `>`, `-` on their own) are
+// dropped: an empty phrase is itself a syntax error, and such a token could
+// never match anything anyway. An input that reduces to nothing yields "",
+// which callers read as "no search filter".
+func ftsMatchExpression(userQuery string) string {
+	var phrases []string
+	for _, token := range strings.Fields(userQuery) {
+		if !hasIndexableChar(token) {
+			continue
+		}
+		phrases = append(phrases, `"`+strings.ReplaceAll(token, `"`, `""`)+`"*`)
+	}
+	return strings.Join(phrases, " ")
+}
+
+// hasIndexableChar reports whether a token contains anything SQLite's default
+// unicode61 tokenizer would index — letters, digits, or other non-punctuation
+// symbols. Everything else is a separator that tokenizes away to nothing.
+func hasIndexableChar(token string) bool {
+	for _, r := range token {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error) {
 	limit := opts.Limit
 	if limit <= 0 {
@@ -207,13 +243,14 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 	// owner_id leads every variant: the listing is one owner's library, and
 	// the search index is deliberately filtered *after* the MATCH so an FTS5
 	// hit on someone else's artifact is dropped rather than counted.
-	if opts.Query != "" {
+	matchExpr := ftsMatchExpression(opts.Query)
+	if matchExpr != "" {
 		// Use a subquery to avoid ambiguous column names from the FTS5 JOIN.
 		// The FTS5 MATCH expression works on the table name in a subquery.
 		query = `SELECT ` + artifactColsA + ` FROM artifacts a
             WHERE a.owner_id = ?
             AND a.rowid IN (SELECT rowid FROM artifacts_fts WHERE artifacts_fts MATCH ?)`
-		args = append(args, opts.OwnerID, opts.Query+"*")
+		args = append(args, opts.OwnerID, matchExpr)
 	} else {
 		query = `SELECT ` + artifactColsA + ` FROM artifacts a WHERE a.owner_id = ?`
 		args = append(args, opts.OwnerID)

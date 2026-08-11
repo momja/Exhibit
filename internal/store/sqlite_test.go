@@ -72,6 +72,85 @@ func TestListArtifacts(t *testing.T) {
 	assert.Len(t, all, 3)
 }
 
+// TestFTSMatchExpression covers av-hic3 at the unit level: every token is
+// emitted as a quoted literal phrase with the prefix `*` preserved.
+func TestFTSMatchExpression(t *testing.T) {
+	cases := []struct {
+		name, in, want string
+	}{
+		{"single word", "chart", `"chart"*`},
+		{"multi word", "bar chart", `"bar"* "chart"*`},
+		{"extra whitespace", "  bar \t chart ", `"bar"* "chart"*`},
+		{"empty", "", ""},
+		{"whitespace only", "   ", ""},
+		{"punctuation only", "<> - ^", ""},
+		{"metacharacters kept literal", "<script>", `"<script>"*`},
+		{"inner quote doubled", `say"hi`, `"say""hi"*`},
+		{"bare quote dropped", `"`, ""},
+		{"colon and hyphen", "a:b -c", `"a:b"* "-c"*`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, ftsMatchExpression(tc.in))
+		})
+	}
+}
+
+// TestSearchQuerySyntaxCharacters is the regression for av-hic3: a query
+// carrying FTS5 metacharacters used to reach MATCH raw and fail with
+// "fts5: syntax error". It must now search literally and simply return
+// whatever matches — often nothing.
+func TestSearchQuerySyntaxCharacters(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{
+		ID: "s1", OwnerID: 1, Title: "Bar Chart Builder", SourceBlobID: "b1", Tier: Tier1,
+		SourceText: "renders a chart from pasted numbers",
+	}))
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{
+		ID: "s2", OwnerID: 1, Title: "Note Pad", SourceBlobID: "b2", Tier: Tier1,
+		SourceText: "scratch notes",
+	}))
+
+	// Each of these used to 500. None need to match anything; they must not error.
+	for _, q := range []string{
+		"<script>", `"`, `say"hi`, "(", ")", "a:b", "-foo", "^bar", "NEAR(", "*", "**",
+		`" OR 1=1 --`, "chart OR", "<>", "   ", "😀",
+	} {
+		_, err := s.ListArtifacts(ctx, ListOptions{Query: q})
+		require.NoErrorf(t, err, "query %q", q)
+	}
+
+	// A word wrapped in syntax characters still finds the artifact, because the
+	// tokenizer drops the punctuation inside the quoted phrase.
+	found, err := s.ListArtifacts(ctx, ListOptions{Query: "<chart>"})
+	require.NoError(t, err)
+	require.Len(t, found, 1)
+	assert.Equal(t, "s1", found[0].ID)
+
+	// Prefix search still works, for one token and for several.
+	found, err = s.ListArtifacts(ctx, ListOptions{Query: "cha"})
+	require.NoError(t, err)
+	require.Len(t, found, 1)
+	assert.Equal(t, "s1", found[0].ID)
+
+	found, err = s.ListArtifacts(ctx, ListOptions{Query: "bar cha"})
+	require.NoError(t, err)
+	require.Len(t, found, 1)
+	assert.Equal(t, "s1", found[0].ID)
+
+	// Multi-token search is still a conjunction: an unmatched token excludes.
+	found, err = s.ListArtifacts(ctx, ListOptions{Query: "bar notepad"})
+	require.NoError(t, err)
+	assert.Len(t, found, 0)
+
+	// A query of pure punctuation is no filter at all, not an error.
+	found, err = s.ListArtifacts(ctx, ListOptions{Query: "<>"})
+	require.NoError(t, err)
+	assert.Len(t, found, 2)
+}
+
 // TestSearchIndexesSourceAndTags exercises av-b6o9: the FTS index must match
 // on artifact source text and tag names, not just title. (Callers pass
 // ExtractSearchText output as SourceText, so these fixtures are the visible

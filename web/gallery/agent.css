@@ -36,7 +36,7 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .snippet-chip code{background:#dbe7fb;padding:1px 5px;border-radius:3px}
 .snippet-chip button{border:none;background:transparent;cursor:pointer;color:#567;display:inline-flex}
 .compose-row{display:flex;gap:8px;align-items:flex-end}
-#input{flex:1;resize:none;border:1px solid #ddd;border-radius:8px;padding:9px 11px;font-size:14px;font-family:inherit;outline:none;max-height:140px;min-height:40px}
+#input{flex:1;resize:none;border:1px solid #ddd;border-radius:8px;padding:9px 11px;font-size:var(--field-font-size);font-family:inherit;outline:none;max-height:140px;min-height:40px}
 #input:focus{border-color:var(--brand-blue)}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:var(--brand-blue);color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:500}
 .btn:hover{background:var(--brand-blue-hover)}
@@ -75,7 +75,7 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .modal h2{font-size:16px;font-weight:600}
 .modal p.note{font-size:12px;color:#777;margin-top:6px;line-height:1.5}
 .modal label{display:block;font-size:12px;color:#555;margin:12px 0 4px}
-.modal input,.modal select{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;background:#fff;color:#111}
+.modal input,.modal select{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:var(--field-font-size);outline:none;background:#fff;color:#111}
 .modal input:focus,.modal select:focus{border-color:var(--brand-blue)}
 .modal input:read-only{background:#f2f2f2;color:#555;cursor:default}
 .modal-error{color:#c00;font-size:12px;margin-top:10px}

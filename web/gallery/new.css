@@ -43,11 +43,11 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
  * with the lede above. */
 .ingest-label{display:block;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#7b828e;margin-bottom:var(--space-2)}
 .ingest-label-opt{font-weight:400;text-transform:none;letter-spacing:0;color:var(--color-faint)}
-.ingest-panel textarea{width:100%;height:320px;font-family:monospace;font-size:12px;border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-4);resize:vertical;outline:none}
+.ingest-panel textarea{width:100%;height:320px;font-family:monospace;font-size:var(--field-code-font-size);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-4);resize:vertical;outline:none}
 .ingest-panel textarea:focus{border-color:var(--brand-blue)}
 /* The mounted CodeMirror replaces the textarea in place, so it inherits the
  * same box the textarea drew. */
-.ingest-panel .cm-editor{height:320px;font-size:12px;border:1px solid var(--color-border);border-radius:var(--radius-md);overflow:hidden}
+.ingest-panel .cm-editor{height:320px;font-size:var(--field-code-font-size);border:1px solid var(--color-border);border-radius:var(--radius-md);overflow:hidden}
 .ingest-panel .cm-editor.cm-focused{outline:none;border-color:var(--brand-blue)}
 .ingest-panel .cm-scroller{overflow:auto}
 /* URL mode only — see new.js setMode for why it can never appear under
