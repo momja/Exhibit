@@ -83,7 +83,7 @@ func modePrompt(opts CreateOpts) string {
 	case opts.WidgetOnly:
 		return "\n\nThis session has exactly one job: build the gallery widget for its artifact. Its current source is in the data block below — read it to learn which localStorage keys it writes and what shape it stores in them, then save the tile with set_widget following the WIDGETS rules above. Do NOT call create_artifact or update_artifact — the artifact's own source must not change. Save one widget, say in one sentence what it shows, and stop."
 	case opts.ArtifactID != "":
-		return "\n\nThis session is editing an artifact that already exists. Its current source is in the data block below; save your changes with update_artifact (never create_artifact)."
+		return "\n\nThis session is editing an artifact that already exists. Its current source is in the data block below; save your changes with update_artifact (never create_artifact). Do not engage with off-topic queries unrelated to the artifact."
 	}
 	return ""
 }

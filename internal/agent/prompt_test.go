@@ -65,6 +65,10 @@ func TestEditSessionKeepsItsInstruction(t *testing.T) {
 
 	assert.Contains(t, prompt, "save your changes with update_artifact (never create_artifact)")
 	assert.NotContains(t, prompt, "exactly one job")
+	// The topic guardrail. It arrived on main while this paragraph was being
+	// moved out of agent.go and into modePrompt here, so it is exactly the kind
+	// of sentence a merge drops silently. Pinned so the next move cannot.
+	assert.Contains(t, prompt, "Do not engage with off-topic queries unrelated to the artifact.")
 }
 
 // A fresh create session gets the base prompt with no mode paragraph, and the
