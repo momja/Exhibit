@@ -285,8 +285,8 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 	req := func(ctx context.Context) *http.Request {
 		return httptest.NewRequest("GET", "/", nil).WithContext(ctx)
 	}
-	anonymous := context.WithValue(context.Background(), publicVisitorKey, true)
-	session := withSessionAuthed(context.Background())
+	anonymous := withPrincipal(context.Background(), Principal{Kind: PrincipalPublic, ReadOnly: true})
+	session := withPrincipal(context.Background(), Principal{Kind: PrincipalSession})
 
 	assert.Equal(t, pageCredentials{Token: pageCredentialToken},
 		single.pageCredentials(req(context.Background())),

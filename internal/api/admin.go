@@ -71,10 +71,15 @@ func (ro *Router) adminOnly(next http.Handler) http.Handler {
 	})
 }
 
-// adminRequest reports whether this request may act on the instance's accounts.
+// adminRequest reports whether this request may act on the instance's
+// accounts, purely as a function of the Principal the request's own gate
+// (authMiddleware or sessionGate) already resolved — it does not re-parse the
+// request for a session cookie or a bearer token itself (av-o5cf; it used to,
+// which is what let TestNeitherAgentSessionsNorPublicVisitorsAreAdmins matter:
+// a request could carry a real admin cookie and still be refused, because
+// context — not the cookie — is what this function has always answered from).
 //
-// The cases, in the order they are decided — the refusals first, so no later
-// branch can widen them:
+// The cases, one per PrincipalKind:
 //
 //  1. **An agent session credential is never an admin.** It is steered by text
 //     Exhibit did not author (av-e0yj). agentScopeAllows already refuses every
@@ -92,28 +97,33 @@ func (ro *Router) adminOnly(next http.Handler) http.Handler {
 //     is per-request rather than baked into the session at login, so an admin
 //     demoted or disabled while logged in stops being one on their next
 //     request — the same property that makes logout immediate.
-//  5. **Otherwise: only an instance with no login at all.** Such an instance
-//     has one user, who is the operator holding the token, and no notion of
-//     anyone else to be. It is the single-user default, where every page is
-//     already served to whoever can reach the origin; this changes nothing
-//     about that, and the API mutations behind the page still require the
-//     token.
+//  5. **PrincipalNone: only an instance with no login at all.** This is a
+//     property of the instance (ro.loginEnabled()), not of the Principal —
+//     PrincipalNone means "no credential resolved," which happens both for a
+//     fully open instance and, in principle, nowhere else, so the fallback
+//     stays an explicit instance check rather than a fifth Kind. Such an
+//     instance has one user, who is the operator holding the token, and no
+//     notion of anyone else to be. It is the single-user default, where every
+//     page is already served to whoever can reach the origin; this changes
+//     nothing about that, and the API mutations behind the page still require
+//     the token.
 func (ro *Router) adminRequest(r *http.Request) bool {
 	ctx := r.Context()
-	if agentGrantFromCtx(ctx) != nil || publicVisitor(ctx) {
+	p := principalFromCtx(ctx)
+	switch p.Kind {
+	case PrincipalAgentGrant, PrincipalPublic:
 		return false
-	}
-	if ro.hasServiceToken(r) {
+	case PrincipalServiceToken:
 		return true
-	}
-	if userID, ok := ro.sessionUser(r); ok {
-		u, err := ro.cfg.Store.GetUser(ctx, userID)
+	case PrincipalSession:
+		u, err := ro.cfg.Store.GetUser(ctx, p.OwnerID)
 		if err != nil || u == nil {
 			return false
 		}
 		return u.IsAdmin && !u.Disabled
+	default: // PrincipalNone
+		return !ro.loginEnabled()
 	}
-	return !ro.loginEnabled()
 }
 
 // --- the JSON API ------------------------------------------------------

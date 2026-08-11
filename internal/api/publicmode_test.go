@@ -286,13 +286,18 @@ func TestPublicVisitorsRenderURLsCarryNoPrincipal(t *testing.T) {
 	r := newPublicModeRouter(t, PublicMode{Enabled: true, OwnerID: defaultOwnerID})
 
 	// Both requests are run through ownerMiddleware rather than hand-built,
-	// because that is what decides an owner: PUBLIC_OWNER_ID for a public
-	// visitor, the single-user default for anyone else. ownerIDFromCtx no
-	// longer guesses one for a context that never met the chain (av-syug), so
-	// a bare request would only assert that nobody is nobody.
+	// because ownerIDFromCtx no longer guesses an owner for a context that
+	// never met the chain (av-syug) — a bare request would only assert that
+	// nobody is nobody. The visitor request's Principal mirrors exactly what
+	// authMiddleware's public branch constructs (av-o5cf: that branch now
+	// resolves the owner itself, rather than leaving it for ownerMiddleware
+	// to fill in from a bare "public" marker); ownerMiddleware runs here too,
+	// as it would for a real request, but is a no-op since the Principal
+	// already carries an owner.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	visitor := r.renderURLs(withOwnerResolved(r,
-		req.WithContext(context.WithValue(req.Context(), publicVisitorKey, true))))
+		req.WithContext(withPrincipal(req.Context(),
+			Principal{Kind: PrincipalPublic, OwnerID: r.cfg.Public.OwnerID, ReadOnly: true}))))
 	owner := r.renderURLs(withOwnerResolved(r, req))
 
 	for name, u := range map[string]string{"artifact": visitor.artifact("abc"), "widget": visitor.widget("abc")} {

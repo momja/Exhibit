@@ -1,6 +1,6 @@
 ---
 id: av-o5cf
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-08-11T06:20:48Z
@@ -34,3 +34,58 @@ Upcoming tickets (av-g2dx account settings, av-7k7b shared artifacts, and any fu
 - The dead publicVisitor branch in pagecredential.go either becomes reachable (if in scope) or stays clearly marked and unaffected by this refactor -- av-eu3v/av-epnt still own making it live.
 - No new 403s appear where a 404 was previously returned for cross-tenant access (av-ep8k's fail-closed contract is preserved by construction, not just by the new code happening to get it right).
 
+
+## Notes
+
+**2026-08-11T17:24:47Z**
+
+Implemented on feature/av-o5cf/consolidate-principal (branched off integration/multi-user,
+since the code this touches doesn't exist on main yet).
+
+New internal/api/principal.go: Principal{OwnerID, Kind, ReadOnly, Grant} + PrincipalKind
+enum (None/Session/ServiceToken/AgentGrant/Public), stored under one context key. All
+five chains now build or read this one value instead of independently re-deriving
+authority from the raw request:
+
+- authMiddleware and sessionGate each construct the full Principal (including OwnerID)
+  for every branch they resolve, rather than leaving pieces for ownerMiddleware to fill
+  in later. ownerMiddleware is now a pure backstop: single-user default if nothing
+  resolved one, no-op otherwise, no Kind-specific logic of its own.
+- adminRequest reads principalFromCtx(ctx).Kind instead of independently calling
+  hasServiceToken(r)/sessionUser(r)/agentGrantFromCtx(ctx) — it can no longer disagree
+  with what the request's own gate already decided. hasServiceToken (now unused) removed.
+- authorizeEventStream (SSE, can't run middleware) returns a Principal via the same
+  matchesServiceToken() authMiddleware uses. Bonus fix: this also closes a real
+  constant-time-compare gap — authMiddleware's token comparison was a plain `==`
+  while authorizeEventStream already used subtle.ConstantTimeCompare; both now share
+  matchesServiceToken.
+- pageCredentials/pageToken unchanged in logic, now backed by Principal via the
+  publicVisitor()/sessionAuthed() projections in principal.go instead of separate
+  ownerIDKey/agentGrantKey/publicVisitorKey/sessionAuthedKey context keys (all four
+  removed).
+- agentScopeAllows and publicReadable: extracted the one piece they genuinely shared
+  (the /api/artifacts prefix-parse) into artifactsSubPath(); left their differing
+  authorization policies separate rather than forcing one table over two different
+  questions.
+
+Deliberate deviation from the ticket's suggested shape: Principal does NOT carry
+IsAdmin as a field. Admin status needs a DB lookup (session -> user -> IsAdmin), and
+that lookup is intentionally per-request (not cached) so a demotion/disable takes
+effect on the very next request, not just the next login. Making IsAdmin a Principal
+field would mean either doing that lookup unconditionally on every request (real perf
+cost, only ~3 routes need it) or leaving it lazily-populated (defeats the point of a
+plain struct). adminRequest computes it on demand from Principal.OwnerID instead.
+
+Verification: go build/vet/test all green (internal/api suite: 26s, all tests
+including the pageowner_test.go route walk, publicmode_test.go, admin_test.go,
+agent SSE tests). gofmt clean. golangci-lint not available in this environment to
+run directly, but go vet found nothing and no dead code remains (grepped for the
+four removed context keys and hasServiceToken across the whole repo — zero hits).
+
+Two tests updated to construct a Principal directly instead of hand-writing the old
+context keys (TestNeitherAgentSessionsNorPublicVisitorsAreAdmins in admin_test.go,
+TestPublicVisitorsRenderURLsCarryNoPrincipal in publicmode_test.go) — same property
+asserted, new call shape, per the ticket's own acceptance criteria allowance for that.
+
+Not done (left for follow-up, matches the ticket's spirit but wasn't literally asked):
+did not touch av-eu3v/av-epnt's dormant public-page branch — still dormant, unaffected.
