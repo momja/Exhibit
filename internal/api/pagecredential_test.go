@@ -128,7 +128,7 @@ const pageCredentialToken = "operator-service-token-9f3c1a"
 // newPageCredentialRouter builds an instance with the distinctive token above,
 // optionally behind an identity provider, and returns it with one stored
 // artifact for the artifact-scoped routes to render.
-func newPageCredentialRouter(t *testing.T, idp auth.IdentityProvider) (*Router, string) {
+func newPageCredentialRouter(t *testing.T, idp auth.IdentityProvider, opts ...func(*Config)) (*Router, string) {
 	t.Helper()
 
 	f, err := os.CreateTemp("", "test-pagecred-*.db")
@@ -150,7 +150,7 @@ func newPageCredentialRouter(t *testing.T, idp auth.IdentityProvider) (*Router, 
 	box, err := secrets.Load("test-secret", "")
 	require.NoError(t, err)
 
-	ro := NewRouter(Config{
+	cfg := Config{
 		Store:        st,
 		Blob:         bl,
 		AppOrigin:    "https://app.test",
@@ -158,7 +158,11 @@ func newPageCredentialRouter(t *testing.T, idp auth.IdentityProvider) (*Router, 
 		AuthToken:    pageCredentialToken,
 		Secrets:      box,
 		Identity:     idp,
-	})
+	}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	ro := NewRouter(cfg)
 
 	// Ingest through the API with the static token, so the artifact exists
 	// however the pages are later authenticated.
@@ -305,6 +309,20 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 	assert.Equal(t, pageCredentials{},
 		withIdentity.pageCredentials(req(context.Background())),
 		"identity configured, no session resolved: withhold rather than fall back to the service token")
+
+	// The same middle case, reached the other way. An instance whose login is a
+	// local credential issues sessions exactly as a provider-backed one does, so
+	// a page render that resolved none is the same two possibilities and
+	// deserves the same answer. It did not get it while the test was spelled
+	// "is there an identity provider?" — and since av-jviu seeds an account on
+	// first boot, this is now the configuration a self-hoster actually runs.
+	withLocal, _ := newPageCredentialRouter(t, nil, func(c *Config) { c.LocalUsers = true })
+	assert.Equal(t, pageCredentials{},
+		withLocal.pageCredentials(req(context.Background())),
+		"local login configured, no session resolved: withhold, exactly as for a provider")
+	assert.Equal(t, pageCredentials{},
+		withLocal.pageCredentials(req(session)),
+		"local login, session-authenticated: the cookie is the credential")
 }
 
 // The SSE stream is the one API call a page cannot credential with a header —

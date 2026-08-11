@@ -160,8 +160,11 @@ func VerifyStoredPassword(hash, password string) bool {
 	if hash == "" {
 		// Spend the compare, then refuse unconditionally. The result is
 		// discarded rather than returned, so this stays a false answer even
-		// if somebody ever guesses the decoy's preimage.
-		bcrypt.CompareHashAndPassword([]byte(decoyPasswordHash), []byte(password))
+		// if somebody ever guesses the decoy's preimage. Discarded explicitly
+		// (`_ =`) because the whole point is the time it takes, not the answer —
+		// and errcheck is right that a silently dropped error otherwise reads
+		// as an oversight.
+		_ = bcrypt.CompareHashAndPassword([]byte(decoyPasswordHash), []byte(password))
 		return false
 	}
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil

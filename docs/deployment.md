@@ -126,8 +126,8 @@ is no registration form and no email anywhere in this.
 
 ![The login page](screenshots/av-q30x/01-login.png)
 
-**You already have an account.** A fresh instance creates one on first boot, so
-there is nothing to run before you can sign in:
+**You already have an account.** An instance with no other way in creates one on
+startup, so there is nothing to run before you can sign in:
 
 ```
 username: admin
@@ -139,6 +139,26 @@ password: changeme
 > sign in as its admin — and an instance on a public hostname is reachable from
 > the moment it boots. The server repeats this warning in its log on **every**
 > startup for as long as the default is still in place.
+
+> [!WARNING]
+> **This also happens when you upgrade an instance that never had a login.**
+> "No other way in" means no `OIDC_ISSUER`, no `LOGIN_USERNAME` pair, and no
+> account in the database — which is exactly the state of every single-user
+> library from before this feature existed. So the first boot on the new image
+> seeds `admin` / `changeme` and starts sending your gallery pages to
+> `/auth/login`, where they were previously open. Nothing is lost: the seeded
+> account is user 1, the id your library is already filed under, so it *is*
+> your library and your artifacts, state and shares are all still there.
+> Two things to know before you upgrade:
+>
+> - **Change the password in the same sitting.** Your instance is reachable now,
+>   and between that boot and your `user passwd` the default is the admin
+>   password.
+> - **If you authenticate at your proxy (§3.1), you now have a second login
+>   behind it** — one you did not ask for and whose password is public.
+>   Set `LOGIN_USERNAME`/`LOGIN_PASSWORD_HASH` to a credential of your own
+>   before upgrading and no account is seeded at all, or change the seeded
+>   password afterwards like anyone else. Either is fine; leaving it is not.
 
 ```bash
 docker compose exec app /server user passwd admin

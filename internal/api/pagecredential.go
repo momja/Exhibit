@@ -86,18 +86,28 @@ type pageCredentials struct {
 //     opens a page to anonymous readers inherits the answer instead of
 //     inventing one.
 //
-//  3. **No identity provider configured → the static token, as before.** A
-//     single-user instance issues no sessions, so the static token is the only
-//     credential its page JS can authenticate with, and its page visitor is by
+//  3. **No login configured at all → the static token, as before.** Such an
+//     instance issues no sessions, so the static token is the only credential
+//     its page JS can authenticate with, and its page visitor is by
 //     construction the operator who holds that token anyway. Nothing changes
 //     for the self-hoster; TestSingleUserPageStillCarriesTheStaticToken pins
 //     that.
 //
-// Case 3 is written as "no identity provider" rather than "no session",
-// deliberately. On an instance that *has* a provider, a page render that
-// resolved no session is either a public visitor or a hole in sessionGate —
-// and the token is not the right answer to either. Falling back to it would
-// make every future gap in the gate a credential leak instead of a 401.
+// Case 3 is written as "no login" rather than "no session", deliberately. On an
+// instance that *has* one, a page render that resolved no session is either a
+// public visitor or a hole in sessionGate — and the token is not the right
+// answer to either. Falling back to it would make every future gap in the gate
+// a credential leak instead of a 401.
+//
+// It asks loginEnabled, not identityEnabled. The argument above never had
+// anything to do with OIDC specifically — it is about whether this instance
+// issues sessions at all — but the test was spelled as the provider, which left
+// local-credential instances (av-q30x, av-rzvf) falling through to the token on
+// exactly the reasoning that says they should not. No page route could reach
+// that branch, because every one of them sits inside sessionGate's group; the
+// asymmetry was a latent one, and it is the *default* shape now that av-jviu
+// seeds an account on first boot. A defence that holds only for the
+// configuration nobody runs is not a defence.
 func (ro *Router) pageCredentials(r *http.Request) pageCredentials {
 	ctx := r.Context()
 	anonymous := publicVisitor(ctx)
@@ -108,7 +118,7 @@ func (ro *Router) pageCredentials(r *http.Request) pageCredentials {
 }
 
 func (ro *Router) pageToken(ctx context.Context, anonymous bool) string {
-	if sessionAuthed(ctx) || anonymous || ro.identityEnabled() {
+	if sessionAuthed(ctx) || anonymous || ro.loginEnabled() {
 		return ""
 	}
 	return ro.cfg.AuthToken

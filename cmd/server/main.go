@@ -235,6 +235,15 @@ const (
 // each mean the operator has already chosen how they sign in, and quietly
 // adding a guessable second door to that would be a backdoor rather than a
 // convenience.
+//
+// Worth being explicit that "no other way in" describes an *existing*
+// single-user instance as exactly as it describes an empty one, so this fires
+// on the first boot after an upgrade too. That is the intended behaviour and
+// not a side effect: the seeded row is user 1, the id such a library is already
+// filed under, so it adopts that library rather than starting an empty one
+// beside it. What it also does is put a login in front of pages that were open
+// the day before, which an operator upgrading deserves to be told rather than
+// to discover — deployment.md §3.2 carries that warning.
 func seedDefaultAdmin(ctx context.Context, st *store.SQLiteStore) error {
 	hash, err := auth.HashPassword(DefaultAdminPassword)
 	if err != nil {
