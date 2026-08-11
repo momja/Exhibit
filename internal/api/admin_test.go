@@ -189,22 +189,34 @@ func TestAdminRefusalDoesNotRevealWhetherTheAccountExists(t *testing.T) {
 // An agent session is steered by text Exhibit did not author (av-e0yj) and a
 // public visitor presented nothing at all; neither is an admin, and neither
 // becomes one by being let through some earlier gate.
+//
+// adminRequest reads the Principal its request's own gate already resolved
+// rather than re-parsing the request itself (av-o5cf), so what each case here
+// sets on context is exactly the Principal authMiddleware/sessionGate would
+// have produced — including the control case, which constructs the ordinary
+// session Principal rather than relying on adminRequest to notice the cookie
+// still attached to r. The cookie is left on r throughout regardless, and
+// deliberately unused by the agent/public cases, to show it carries no
+// authority once the context says otherwise.
 func TestNeitherAgentSessionsNorPublicVisitorsAreAdmins(t *testing.T) {
 	in := newAdminInstance(t)
 	r := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
 	r.AddCookie(in.adminCookie) // an admin's own cookie, deliberately
 
 	grant := &agentscope.Grant{}
-	withAgent := r.WithContext(context.WithValue(r.Context(), agentGrantKey, grant))
+	withAgent := r.WithContext(withPrincipal(r.Context(),
+		Principal{OwnerID: in.admin.ID, Kind: PrincipalAgentGrant, Grant: grant}))
 	assert.False(t, in.ro.adminRequest(withAgent),
 		"an agent session credential must never carry admin authority, whatever else the request holds")
 
-	withPublic := r.WithContext(context.WithValue(r.Context(), publicVisitorKey, true))
+	withPublic := r.WithContext(withPrincipal(r.Context(), Principal{Kind: PrincipalPublic, ReadOnly: true}))
 	assert.False(t, in.ro.adminRequest(withPublic),
 		"publishing a library says nothing about who administers the instance (av-wmp6)")
 
-	// The control: the same cookie, unmarked, is an admin.
-	assert.True(t, in.ro.adminRequest(r))
+	// The control: the same cookie, resolved as an ordinary session Principal
+	// (as sessionGate/authMiddleware would have done), is an admin.
+	withSession := r.WithContext(withPrincipal(r.Context(), Principal{OwnerID: in.admin.ID, Kind: PrincipalSession}))
+	assert.True(t, in.ro.adminRequest(withSession))
 }
 
 // The operator's static token is admin, because it is already full authority

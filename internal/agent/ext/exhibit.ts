@@ -175,8 +175,13 @@ export default function (pi: ExtensionAPI) {
 			const target = requireBoundArtifact();
 			const patch: Record<string, unknown> = { body: params.body };
 			if (params.title) patch.title = params.title;
-			// PATCH answers {artifact, network_footprint, footprint_changed} —
-			// the id and title live under .artifact (av-hrtv note).
+			// PATCH /api/artifacts/:id returns {artifact, network_footprint,
+			// footprint_changed} — the identity lives under `artifact`, never at
+			// the top level. Reading it from the top level yielded undefined, which
+			// silently suppressed the saved event and the preview refresh (av-l31x).
+			// The id itself comes from the session's bound artifact, never a tool
+			// parameter (av-hrtv note) — these tools take no artifact id, which is
+			// what stops a model from being talked into naming one (av-e0yj).
 			const r = await api("PATCH", "/api/artifacts/" + encodeURIComponent(target), patch);
 			const a = r.artifact || {};
 			const footprint: string[] = r.network_footprint || [];

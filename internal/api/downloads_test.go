@@ -70,7 +70,7 @@ func TestDetailPageSandboxStillOmitsAllowDownloads(t *testing.T) {
 	for _, approved := range []bool{false, true} {
 		a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Exporter", Tier: store.Tier1,
 			CreatedAt: time.Now(), DownloadsApproved: approved}
-		page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), testPageCreds)
+		page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 		require.NoError(t, err)
 
 		start := strings.Index(page, "<iframe")
@@ -89,7 +89,7 @@ func TestDetailPageSandboxStillOmitsAllowDownloads(t *testing.T) {
 func TestDetailPageRendersDownloadBridge(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "CSV <Exporter>", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), testPageCreds)
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
 	// Host-side message handler for the shim's download messages, and the
@@ -113,7 +113,7 @@ func TestDetailPageRendersDownloadBridge(t *testing.T) {
 
 	// An approved artifact renders with the approval baked in.
 	a.DownloadsApproved = true
-	page, err = renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), testPageCreds)
+	page, err = renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 	assert.Contains(t, page, "let downloadsApproved = true;")
 }

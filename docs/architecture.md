@@ -200,10 +200,33 @@ executable document with the correct security envelope:
   default.
 - Injects the **render preamble** as the first `<head>` script(s) — the **storage
   shim** with the artifact's state **inlined** into it so `getItem` is correct
-  synchronously, plus the download/clipboard **capability bridges** — then the
-  artifact body. (Umbrella/family taxonomy: `security.md` §4.)
+  synchronously, plus the download/clipboard **capability bridges** and the
+  `data:` fetch **compatibility shim** — then the artifact body. (Umbrella/family
+  taxonomy: `security.md` §4.)
+- The `data:` fetch shim (agaf-02xs) answers `fetch()` of a `data:` URL from a
+  Response built in the frame rather than letting it reach the network service.
+  WebKit refuses large `data:` fetches from an opaque-origin sandbox, so an
+  artifact that loads a multi-megabyte payload that way never boots in Safari
+  while working top-level. It grants nothing: a `data:` URL is inert content the
+  frame already holds, and decoding it locally is strictly less work than the
+  path it replaces. Framed-only, and **ordering-sensitive**: it must install
+  before any artifact script, since a wrapper only shadows `fetch` for callers
+  that run after it. Note the snapshot vendorer (§3.4a) injects a fetch wrapper
+  of its own into the artifact body, and that one deliberately decodes its
+  manifest entries itself rather than delegating a `data:` URI back to `fetch` —
+  so each is correct standing alone, and neither's behaviour is contingent on the
+  other having installed. What still needs this shim is every *other* `data:`
+  fetch in the frame: one the artifact's own code performs, or one a future
+  wrapper delegates.
 - Sets `Cache-Control: no-store` — the document is dynamic (inlined state + per-artifact
   CSP) and must never be served stale from a cache.
+- Is **gzip-compressed** when the client accepts it (av-f9b2). This is the surface where
+  compression earns the most: `no-store` means there is no cache to amortise a render
+  document across views, so every view pays its full size on the wire — and a snapshot
+  that vendored a large runtime asset (§3.4a) can be tens of megabytes of base64. The
+  trade is that compression is a per-request CPU cost here rather than a one-off, which
+  is why the level is mid-range rather than maximal. `text/event-stream` is excluded
+  from compression everywhere so the agent surface's SSE stream is never buffered.
 - Is loaded by the app's pages as the `src` of a sandboxed iframe
   (`<iframe src="RENDER_ORIGIN/a/:id" sandbox="allow-scripts">`) with **no**
   `allow-same-origin`. Capabilities the opaque-origin sandbox denies — downloads
@@ -322,6 +345,10 @@ carrying a principal is av-c5aq.
   *rendered* text (via `store.ExtractSearchText`: text nodes plus semantic
   attributes like `alt`/`placeholder`; markup, `<script>`, and `<style>` are
   dropped) so search matches what an artifact shows, not the code it's made of.
+  A search box query is **literal text, never FTS5 syntax** (av-hic3): each
+  whitespace-separated token is emitted as a quoted phrase with a trailing
+  `*`, so prefix matching is preserved while `<script>`, `a:b`, or a stray
+  quote search for themselves instead of failing the query.
 - **Bodies** → filesystem now, S3-compatible later — same `Blob` interface. An
   artifact's **widget** (av-fafu) is a body too, so it lives here as a second blob
   with only its id (`artifacts.widget_blob_id`, empty for "no widget") on the row.
@@ -358,11 +385,46 @@ promise even after the source site rots:
   `<script src>` → inline `<script>`; `<link rel=stylesheet>` → inline `<style>`.
 - **CSS inlining** recurses through `url()` and `@import` chains (each sheet re-based
   against its own URL), inlining as `data:` URIs with cycle and depth guards.
+- **Runtime-asset inlining** (av-ghvs) is a second pass over the markup-inlined
+  document, for the binary payloads a page fetches from JavaScript — a wasm module,
+  an Emscripten `.data` heap — which the markup walker by definition cannot see.
+  Without it those artifacts do not run at all, and *the allowlist cannot fix them*:
+  relocating a page to the render origin turns a fetch that was same-origin on the
+  source site into a cross-origin one, and same-origin fetches never needed CORS
+  headers, so source sites do not send them. The request is permitted by CSP; the
+  **read** is what the browser refuses. Vendoring removes the request. The pass takes
+  fetch-call literals from `<script>` text (via `scanner.FetchRefs`, the fetch half of
+  `scanner.LiteralRefs` — one definition, so the vendorer's view cannot drift from the
+  footprint's), keeps only binary-asset extensions
+  (`.wasm`/`.data`/`.bin`/`.mem`) so it never speculatively GETs an endpoint that
+  merely looks like a URL, and fetches through the same `Fetcher` under its own larger
+  per-asset cap (`MaxInlineAssetBytes`) — these payloads are a tool's reason to exist,
+  where an over-cap image only degrades a page that still works. ESM import refs are
+  deliberately left alone: native module loading never consults `window.fetch`, so a
+  vendored copy could never be served to the module loader — those origins belong to
+  the `script-src` allowlist, where the footprint reports them.
+  Substitution is by **interception, not source rewriting**: the bytes go into a
+  manifest keyed by absolute URL, and a small `window.fetch` wrapper injected at the
+  top of `<head>` consults it at call time. That survives minification, which a
+  literal rewrite could not. A runtime-constructed URL is served only when that same
+  absolute URL also appears as a literal fetch ref somewhere in the page — manifest
+  entries come from literals alone, so a URL assembled from parts the page never
+  spells out still reaches the network. The
+  manifest values are `data:` URIs so the synthetic response carries a real
+  `Content-Type` — `WebAssembly.instantiateStreaming` rejects anything that is not
+  exactly `application/wasm`. No CSP change is needed: `connect-src` already carries
+  `data:` unconditionally as a local, no-egress source, so a vendored artifact runs
+  with an empty allowlist. Because the page's original literal is left in place, the
+  scan still reports that origin; over-reporting fails safe (it asks about an origin
+  no longer contacted rather than staying silent about one that is).
 - **Partial failure is data, not an error.** Any reference that can't be inlined (404,
   over a limit, blocked address, runtime-constructed URL) keeps its original value and
   is recorded as a typed `FetchError`; the rest of the page is still vendored. The
   handler assembles these into the response's `snapshot` report (vendored URLs/bytes,
-  residual origins, per-asset failures) so the user always gets a usable artifact.
+  residual origins, per-asset failures) so the user always gets a usable artifact. An
+  over-cap runtime asset is the case this matters most for: the artifact is stored and
+  the reason is reported, instead of the user meeting a bare `TypeError` at render with
+  only an allowlist that cannot help.
 - **Fallback (`<base href>`).** Whether snapshot is off, failed, or left residual
   relatives, a URL ingest injects `<base href="<source-url>">` at the top of `<head>`
   so surviving relative references resolve against the source site rather than the
@@ -410,6 +472,18 @@ but search filters eagerly from the client: a debounced input refetches the
 same server-rendered gallery with the query and swaps only the grid, so the
 FTS5 search query stays authoritative without a full page reload. Filter,
 tag/collection management, and the allowlist editor are full-page server renders.
+
+**The detail page never embeds the artifact's source** (agaf-02xs). The code
+lives one click away on the edit page, in CodeMirror, which is the surface built
+for reading it; the detail page is the *running* artifact. That is a size
+invariant, not a preference: the page's weight must stay independent of the
+artifact's. A `<pre>` of the body made the page as large as the artifact plus the
+iframe that also loads it — 16.7 MB for a snapshot with a vendored wasm — and
+Safari simply stalls on a response that size, so the navigation never completes
+and the artifact "never loads". Chromium survives it, but under real memory
+pressure the same weight amplifies into a multi-gigabyte runaway. The rule for
+any future panel here: the detail page may show *facts about* an artifact, never
+the artifact's bytes.
 
 The edit page carries one further island, the **state inspector** (av-hg5f): a
 collapsible panel beside the security panel that reads the artifact's state rows

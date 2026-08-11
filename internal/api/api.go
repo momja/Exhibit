@@ -1,7 +1,15 @@
 package api
 
 import (
+	"bufio"
+	"compress/gzip"
+	"errors"
+	"io"
+	"net"
 	"net/http"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -92,6 +100,197 @@ type Router struct {
 	logins *loginLimiter
 }
 
+// compressibleTypes is the explicit set of response content types worth
+// compressing. It is spelled out rather than left to chi's default list for
+// two reasons: `text/event-stream` must never appear here — the agent surface
+// streams SSE and buffering it would stall the stream — and the types that
+// dominate our bytes (an artifact render document is `text/html`) should be a
+// visible, deliberate choice. Already-compressed payloads are absent on
+// purpose: gzipping a PNG, a woff2 or a wasm binary spends CPU to add bytes.
+var compressibleTypes = []string{
+	"text/html",
+	"text/css",
+	"text/plain",
+	"text/javascript",
+	"application/javascript",
+	"application/json",
+	"image/svg+xml",
+}
+
+// compressionLevel is deliberately mid-range. A render document is recomposed
+// and recompressed on every view (it carries inlined state and a per-artifact
+// CSP, so it cannot be cached), which makes compression CPU a per-request cost
+// rather than a one-off. Level 5 keeps nearly all of the size win for a
+// fraction of level 9's time.
+const compressionLevel = 5
+
+// gzipWriterPool reuses gzip.Writer instances across requests instead of
+// allocating one per compressed response.
+var gzipWriterPool = sync.Pool{
+	New: func() any {
+		zw, _ := gzip.NewWriterLevel(io.Discard, compressionLevel)
+		return zw
+	},
+}
+
+// compressor returns the response-compression middleware shared by the app and
+// render routers. gzip only: it is stdlib, every client supports it, and brotli
+// would mean a new dependency for a modest further gain.
+//
+// This is a small hand-rolled negotiator rather than chi's
+// middleware.Compress: that middleware matches Accept-Encoding with
+// strings.Contains, which does not parse quality values — "gzip;q=0" (the
+// header a client sends to explicitly refuse gzip) contains "gzip" as a
+// substring and so would be compressed anyway. Negotiating correctly needs
+// actual quality-value parsing (acceptsGzip below).
+func compressor() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !acceptsGzip(r.Header.Get("Accept-Encoding")) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			cw := &gzipResponseWriter{ResponseWriter: w}
+			defer cw.Close()
+			next.ServeHTTP(cw, r)
+		})
+	}
+}
+
+// acceptsGzip reports whether the given Accept-Encoding header value permits
+// a gzip response, per RFC 9110 §12.5.3: a coding is acceptable if it has an
+// explicit entry with q>0, or no explicit entry but a "*" entry with q>0;
+// it is unacceptable if its explicit entry has q=0, or "*;q=0" applies with
+// no more specific gzip entry. An empty header means the client sent no
+// Accept-Encoding at all, which this codebase treats as "don't compress"
+// rather than the identity-only default the RFC technically allows.
+func acceptsGzip(header string) bool {
+	if header == "" {
+		return false
+	}
+	var gzipQ, starQ float64 = -1, -1
+	for _, part := range strings.Split(header, ",") {
+		name, q := parseAcceptEncoding(part)
+		switch name {
+		case "gzip":
+			gzipQ = q
+		case "*":
+			starQ = q
+		}
+	}
+	if gzipQ >= 0 {
+		return gzipQ > 0
+	}
+	return starQ > 0
+}
+
+// parseAcceptEncoding splits one Accept-Encoding list element (e.g.
+// "gzip;q=0.5") into its lowercased coding name and quality value, which
+// defaults to 1 when absent or unparsable.
+func parseAcceptEncoding(part string) (name string, q float64) {
+	q = 1
+	fields := strings.Split(part, ";")
+	name = strings.ToLower(strings.TrimSpace(fields[0]))
+	for _, param := range fields[1:] {
+		val, ok := strings.CutPrefix(strings.TrimSpace(param), "q=")
+		if !ok {
+			continue
+		}
+		if parsed, err := strconv.ParseFloat(strings.TrimSpace(val), 64); err == nil {
+			q = parsed
+		}
+	}
+	return name, q
+}
+
+// gzipResponseWriter wraps an http.ResponseWriter, compressing the body with
+// gzip when the response's Content-Type is one of compressibleTypes.
+// Compressibility is only knowable once the handler sets Content-Type, so
+// the decision is made lazily in WriteHeader like chi's compressResponseWriter.
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	gz          *gzip.Writer
+	wroteHeader bool
+	compressing bool
+}
+
+func (cw *gzipResponseWriter) isCompressible() bool {
+	contentType, _, _ := strings.Cut(cw.Header().Get("Content-Type"), ";")
+	for _, t := range compressibleTypes {
+		if t == contentType {
+			return true
+		}
+	}
+	return false
+}
+
+func (cw *gzipResponseWriter) WriteHeader(code int) {
+	if cw.wroteHeader {
+		cw.ResponseWriter.WriteHeader(code)
+		return
+	}
+	cw.wroteHeader = true
+
+	if cw.Header().Get("Content-Encoding") == "" && cw.isCompressible() {
+		cw.compressing = true
+		zw := gzipWriterPool.Get().(*gzip.Writer)
+		zw.Reset(cw.ResponseWriter)
+		cw.gz = zw
+		cw.Header().Set("Content-Encoding", "gzip")
+		cw.Header().Add("Vary", "Accept-Encoding")
+		// The content-length after compression is unknown.
+		cw.Header().Del("Content-Length")
+	}
+	cw.ResponseWriter.WriteHeader(code)
+}
+
+func (cw *gzipResponseWriter) Write(p []byte) (int, error) {
+	if !cw.wroteHeader {
+		cw.WriteHeader(http.StatusOK)
+	}
+	if cw.compressing {
+		return cw.gz.Write(p)
+	}
+	return cw.ResponseWriter.Write(p)
+}
+
+// Flush satisfies http.Flusher so streaming handlers (e.g. the agent SSE
+// route) still function when passed through this writer, even though SSE's
+// content type is never in compressibleTypes and so is never actually
+// compressed.
+func (cw *gzipResponseWriter) Flush() {
+	if cw.compressing {
+		cw.gz.Flush()
+	}
+	if f, ok := cw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (cw *gzipResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := cw.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, errors.New("api: http.Hijacker is unavailable on the underlying ResponseWriter")
+}
+
+func (cw *gzipResponseWriter) Unwrap() http.ResponseWriter {
+	return cw.ResponseWriter
+}
+
+// Close flushes and returns the pooled gzip.Writer, if one was used. It must
+// run after the wrapped handler returns (the middleware defers it) so any
+// buffered tail bytes reach the client.
+func (cw *gzipResponseWriter) Close() error {
+	if !cw.compressing {
+		return nil
+	}
+	err := cw.gz.Close()
+	gzipWriterPool.Put(cw.gz)
+	cw.gz = nil
+	return err
+}
+
 // NewRouter constructs the chi router with all routes registered.
 func NewRouter(cfg Config) *Router {
 	r := &Router{
@@ -127,6 +326,7 @@ func (ro *Router) setupRoutes() {
 	// log still records the 500 status.
 	ro.Use(logging.RequestMiddleware)
 	ro.Use(middleware.Recoverer)
+	ro.Use(compressor())
 	// Login gate for the server-rendered pages (av-30rj). A pass-through
 	// unless an identity provider is configured, so a single-user instance
 	// is unaffected.
@@ -329,6 +529,10 @@ func (ro *Router) RenderHandler() http.Handler {
 	r := chi.NewRouter()
 	r.Use(logging.RequestMiddleware)
 	r.Use(middleware.Recoverer)
+	// This is the surface compression matters most on: a render document is
+	// composed per request and served no-store, so every view pays its full
+	// size over the wire with no cache to amortise it.
+	r.Use(compressor())
 	// Every response this mux emits — rendered document, 404 on a rejected
 	// token, unrouted path — withholds its Referer, because the URL that
 	// produced it carries a render token (av-nr0p).

@@ -28,6 +28,7 @@ safety" (§12).
 | Thumbnails | Headless Chromium worker (`chromedp`) — optional | client `html2canvas` |
 | Gallery UI | Server-rendered stdlib `html/template` + static CSS/JS assets (§9) | templ (codegen — rejected) |
 | Partial re-render | **htmx** — self-hosted / embedded on app origin, no CDN (§9) | hand-rolled fetch-and-swap helper |
+| Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
 | Agent harness | **Pi** (`pi --mode rpc` sidecar per session; TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | Login (optional) | Generic OIDC via discovery — `coreos/go-oidc/v3` + `golang.org/x/oauth2`, exchanged once for our own session (§10) | auth at the operator's proxy (also supported); vendor SDK (rejected) |
@@ -190,10 +191,20 @@ the outbound network footprint to show the user for approval.
 
 - Parse HTML with `golang.org/x/net/html` (a real tokenizer, never regex) to collect
   origins from `src`, `href`, `action`, `<link>`, and ESM import URLs.
-- For JS `fetch`/`XMLHttpRequest` targets, accept that full static analysis is
-  impossible — use a lightweight heuristic pass (string/AST scan via esbuild's parser for
-  literal URLs) and clearly treat anything it finds as a hint. Whatever it misses is
-  caught at runtime by the CSP allowlist + permission prompt.
+- For JS `fetch` targets, accept that full static analysis is impossible — as built,
+  `scanner.LiteralRefs` runs two regexes over the raw document for `fetch("…")` and
+  `import`/`from "…"` literals, and anything they find is a hint, not analysis. Only a
+  literal adjacent to the call is seen: a URL assembled at runtime is missed, as are
+  `XMLHttpRequest`, `new Worker`, and `WebSocket` targets. Whatever it misses is caught
+  at runtime by the CSP allowlist.
+- The snapshot vendorer's runtime-asset pass shares the fetch half of that definition
+  (`scanner.FetchRefs`), so the assets it inlines cannot drift from the fetch targets
+  the footprint reports; ESM import refs stay with the scanner only, because the
+  module loader never consults `window.fetch` and those origins are governed by
+  `script-src` instead. It compensates for the heuristic's blind spot differently:
+  rather than rewriting the literals it found, it installs a `fetch` wrapper that
+  matches on the resolved URL at call time — so a runtime-constructed URL is served
+  when that same absolute URL also appears as a literal fetch ref, and only then.
 
 Present the deduplicated origin list at the approval step; write approved origins as
 the artifact's `decision='allow'` rows in `artifact_network_origins`.
@@ -254,6 +265,28 @@ agent save (`architecture.md` §3.7, `docs/agent.md`); and the artifact edit
 page's widget panel, which swaps `/partials/card-widget` after a save so the
 tile refreshes without a reload that would drop the CodeMirror buffer beside it
 (`docs/widgets.md`).
+
+**Home-screen app shell (av-fdcx).** Every app-origin page head includes the shared
+`pwaHead` partial: the `manifest.json` link plus the `apple-*` tags iOS reads instead
+of the manifest's display mode. It is markup only — no script, and nothing that
+touches the viewport meta. None of it reaches the render origin: an artifact is a
+visitor-authored file and sets its own viewport, or doesn't.
+
+**Form fields are 16px on touch (av-3qmf).** iOS Safari zooms the page in whenever it
+focuses a field whose text is under 16px, and does not zoom back out on blur — the
+page is left wider than the screen, with the submit button beside the field pushed
+off it. The whole fix is in the type scale: `tokens.css` defines
+`--field-font-size` / `--field-code-font-size` (14px / 12px), a single
+`@media (pointer:coarse)` block raises both to 16px, and every input, select,
+textarea, and CodeMirror instance sizes itself from those tokens — plus an
+element-level floor in `components.css` for controls no rule names, since an unstyled
+input inherits the UA's ~13px. 16px is the exact threshold WebKit uses, so removing
+the *reason* for the zoom leaves zooming itself fully available: no
+`user-scalable=no`, no gesture handlers, no WCAG 1.4.4 exposure. The query is on
+pointer type rather than width, because a narrow desktop window has no on-screen
+keyboard and a landscape tablet is wide and still touched. The standing rule when
+adding a control: size it from the token, never a literal `px` — a hardcoded size
+opts it out of the bump silently, and the symptom only shows up on a phone.
 
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent

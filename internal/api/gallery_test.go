@@ -346,7 +346,7 @@ func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
 // without weakening the sandbox (allow-scripts stays, allow-same-origin omitted).
 func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Clip Tool", Tier: store.Tier1, CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), testPageCreds)
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
 	assert.NotContains(t, page, `allow="clipboard-read; clipboard-write"`,
@@ -370,7 +370,7 @@ func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Read Only Tool", Tier: store.Tier1,
 		CreatedAt: time.Now(), NetworkAllowlist: []string{"https://example.com"}}
-	page, err := renderDetailPage(a, "<p>src</p>", testRenderURLs("https://render.example.com"), testPageCreds)
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
 	// No inline allowlist editor or add-origin control.
