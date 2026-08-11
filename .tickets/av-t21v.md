@@ -1,7 +1,5 @@
 ---
 id: av-t21v
-status: in_progress
-deps: []
 status: closed
 deps: [av-rzvf]
 links: []

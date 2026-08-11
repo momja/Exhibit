@@ -190,6 +190,20 @@ func (ro *Router) matchesServiceToken(candidate string) bool {
 	return subtle.ConstantTimeCompare([]byte(candidate), []byte(ro.cfg.AuthToken)) == 1
 }
 
+// hasServiceToken reports whether r carries the operator's static token — the
+// full-authority API/CLI credential, and the only credential a single-user
+// instance has.
+//
+// It is one function rather than a comparison at each site because two places
+// now ask the question and they must agree: authMiddleware, to admit the
+// request at all, and adminRequest (admin.go), to decide it may act on the
+// instance's accounts. An empty AuthToken is app auth being off entirely, which
+// is emphatically not "every request holds the token" — that branch is handled
+// downstream, on its own terms.
+func (ro *Router) hasServiceToken(r *http.Request) bool {
+	return ro.cfg.AuthToken != "" && bearerToken(r) == ro.cfg.AuthToken
+}
+
 // bearerToken pulls the Authorization bearer value, or "" when absent.
 func bearerToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
