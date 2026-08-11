@@ -81,3 +81,27 @@ Note that a large asset cannot become "just a file" in any case; option 3 keeps 
 - A decision is recorded on whether to build the same-origin asset proxy (design option 3). If yes, it is filed as its own ticket with the SSRF/allowlist-enforcement requirements spelled out; if no, the limitation is recorded as a known constraint of URL ingest.
 - Regression coverage for whichever path is chosen: if the proxy is built, a test asserts a proxied fetch is refused for an origin absent from the artifact's allowlist; if only diagnosis ships, a test or fixture pins the documented behavior of `<base href>` + residual origins for a runtime-fetched asset.
 
+
+## Notes
+
+**2026-08-11T18:58:06Z**
+
+Verified workaround, and it changes the design picture: inlining the runtime-fetched asset as a `data:` URI WORKS today, with no code change.
+
+Test (local instance, same ingested artifact): replaced the single call
+
+    fetch('/build/wasm/pokeemerald.wasm', { cache: 'no-store' })
+
+with `fetch('data:application/wasm;base64,<12222529 bytes -> 16296708 base64 chars>')` and PATCHed it via `PATCH /api/artifacts/:id {body}`. Result in Chrome: the artifact boots, status line reads "running - 11.7 MiB wasm", canvas begins painting. Previously it died at `wasmModule` with TypeError.
+
+Why it works: the render CSP already carries `connect-src blob: data: ...` unconditionally (the no-egress bucket from av-x01o), so a `data:` fetch is permitted and, being same-document, has no CORS check at all.
+
+Facts this establishes:
+
+- `PATCH /api/artifacts/:id` accepted a 16.3 MB body with no size limit — there is no request-body cap on the write path. Worth knowing independently (possible DoS/quota concern; see av-4bzn for the adjacent unbounded-input theme).
+- The render surface served the resulting 16.3 MB document fine, but with `Cache-Control: no-store` it re-transfers all 16.3 MB on every view. Acceptable on localhost, poor over a network.
+- This artifact makes exactly ONE runtime network call - no Workers, no XHR, no other fetch - so a single inline fixed it completely. That will not generalize to artifacts with many or constructed URLs.
+
+Implication for design option 2 (vendor runtime-fetched assets): the mechanism is proven, so the blocker is purely the size caps (`MaxAssetBytes` 5 MiB, `MaxTotalBytes` 20 MiB in fetcher.go:42-44) plus the base64 ~33% inflation and the no-store re-transfer cost. If option 2 is pursued, it needs a policy on large-asset budgets and probably a cacheable delivery path, not just a cap bump.
+
+Also viable for users today without any exhibit change: re-host the asset on any origin that sends `Access-Control-Allow-Origin: *`, point the fetch at it, and allowlist that origin. Keeps the body small and the asset cacheable, at the cost of self-containment (and it re-introduces the live-linked dependency that PRD §9 rules out).
