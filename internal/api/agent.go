@@ -1,8 +1,6 @@
 package api
 
 import (
-	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -349,14 +347,13 @@ func (ro *Router) agentSession(w http.ResponseWriter, r *http.Request) *agent.Se
 	return s
 }
 
-// authorizeEventStream authenticates the SSE route and says *who* it
-// authenticated, because this route cannot use the API's middleware pair:
+// authorizeEventStream authenticates the SSE route and resolves the same
+// Principal authMiddleware would, because this route cannot run it:
 // EventSource sets no headers, so it is registered outside the group that runs
-// authMiddleware and ownerMiddleware and has to answer both of their questions
-// itself. It is deliberately the same two answers, resolved the same way — the
-// owner it returns is what the middlewares would have put on the context, and
-// agentEvents puts it there so agentSession's owner check is one implementation
-// for all four session routes rather than two that must be kept in step.
+// authMiddleware and ownerMiddleware and has to resolve their answer itself.
+// agentEvents stores the result on the context the same way ownerMiddleware
+// would, so agentSession's owner check is one implementation for all four
+// session routes rather than two that must be kept in step.
 //
 // Two credentials, and which one a browser holds depends on the instance
 // (av-5imk):
@@ -369,41 +366,43 @@ func (ro *Router) agentSession(w http.ResponseWriter, r *http.Request) *agent.Se
 //   - The **static token**, on a single-user instance whose page has no other
 //     credential. It travels as `?token=` because there is nowhere else for it
 //     to go; narrowing that is av-rgp1's subject, and this function is the one
-//     place it would be narrowed. It resolves to defaultOwnerID, which is
-//     ownerMiddleware's answer for the same credential.
+//     place it would be narrowed. Matched via matchesServiceToken — the same
+//     constant-time comparison authMiddleware now uses for its Authorization
+//     header, closing what used to be the one place these two paths disagreed
+//     (av-o5cf).
 //
 // With no token configured app auth is off entirely, matching authMiddleware —
 // and such an instance still resolves defaultOwnerID rather than "anyone",
 // because auth being off is not the same statement as ownership being off.
-func (ro *Router) authorizeEventStream(r *http.Request) (int64, bool) {
+func (ro *Router) authorizeEventStream(r *http.Request) (Principal, bool) {
 	if ownerID, ok := ro.sessionUser(r); ok {
-		return ownerID, true
+		return Principal{OwnerID: ownerID, Kind: PrincipalSession}, true
 	}
 	if ro.cfg.AuthToken == "" {
-		return defaultOwnerID, true
+		return Principal{OwnerID: defaultOwnerID, Kind: PrincipalNone}, true
 	}
 	token := r.URL.Query().Get("token")
 	if token == "" {
 		token = bearerToken(r)
 	}
-	if subtle.ConstantTimeCompare([]byte(token), []byte(ro.cfg.AuthToken)) != 1 {
-		return noOwner, false
+	if !ro.matchesServiceToken(token) {
+		return Principal{}, false
 	}
-	return defaultOwnerID, true
+	return Principal{OwnerID: defaultOwnerID, Kind: PrincipalServiceToken}, true
 }
 
 // agentEvents streams a session's Pi events to the browser as SSE. It sits
 // outside the auth-header middleware because EventSource cannot set headers.
 func (ro *Router) agentEvents(w http.ResponseWriter, r *http.Request) {
-	ownerID, ok := ro.authorizeEventStream(r)
+	p, ok := ro.authorizeEventStream(r)
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	// Stand in for ownerMiddleware, which this route does not run. Everything
 	// downstream — agentSession here, and any later handler that reads the
-	// owner — then sees the same context an API-group request would carry.
-	r = r.WithContext(context.WithValue(r.Context(), ownerIDKey, ownerID))
+	// owner — then sees the same Principal an API-group request would carry.
+	r = r.WithContext(withPrincipal(r.Context(), p))
 	s := ro.agentSession(w, r)
 	if s == nil {
 		return

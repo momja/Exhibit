@@ -25,25 +25,6 @@ import (
 	"net/http"
 )
 
-// sessionAuthedKey marks a request whose session cookie sessionGate already
-// resolved. It carries no authority of its own — it is a note that the lookup
-// happened and succeeded, so a page render does not repeat the query just to
-// learn what the gate it passed through already knows.
-const sessionAuthedKey contextKey = "sessionAuthed"
-
-// withSessionAuthed marks r as having arrived with a valid session cookie.
-func withSessionAuthed(ctx context.Context) context.Context {
-	return context.WithValue(ctx, sessionAuthedKey, true)
-}
-
-// sessionAuthed reports whether this request presented a session cookie that
-// resolved to a live session. False is the safe default: a request nobody
-// marked is treated as holding no session, which is the reading that withholds.
-func sessionAuthed(ctx context.Context) bool {
-	v, _ := ctx.Value(sessionAuthedKey).(bool)
-	return v
-}
-
 // pageCredentials is what a server-rendered page's bootstrap <script> tells the
 // page's own JavaScript about the authority it is running with. It is embedded
 // in each page's view model, so the templates read `.Token` and `.ReadOnly`
