@@ -1,6 +1,6 @@
 ---
 id: av-f9b2
-status: in_progress
+status: closed
 deps: []
 links: [av-ghvs]
 created: 2026-08-12T02:51:45Z
@@ -30,3 +30,34 @@ One wrinkle worth designing around: the render document is `Cache-Control: no-st
 **2026-08-15T19:32:19Z**
 
 Branch coordination: merge/av-ghvs-av-f9b2 exists only as a deploy vehicle for testing av-ghvs + av-f9b2 together; delete it once both land. It is not a PR.
+
+**2026-08-12T06:51:50Z**
+
+Added gzip via chi middleware.Compress on both the app and render routers.
+
+Measured on the real payload (the pokeemerald artifact with its 12 MB wasm vendored inline):
+  uncompressed  16,376,525 bytes
+  gzip           5,920,572 bytes   = 2.77x
+
+Compression CPU is ~340 ms per render on that document (0.048s -> 0.386s over loopback,
+so effectively all CPU). That is a per-request cost, not a one-off, because a render
+document is composed per request and served no-store — which is exactly why level 5 was
+chosen over 9.
+
+Deliberate choices:
+- Explicit content-type allowlist rather than chi's default list. text/event-stream MUST
+  stay out of it: the agent surface streams SSE and asserts http.Flusher (agent.go:301);
+  a buffering encoder would stall the stream. Already-compressed types (png, woff2, wasm)
+  are absent because gzipping them spends CPU to add bytes.
+- gzip only. Brotli would compress better but means a new dependency; stdlib gzip gets
+  the bulk of the win.
+- Middleware sits inside Recoverer so panic recovery stays outside the compressor.
+
+Tests (internal/api/compression_test.go): render document comes back gzip and round-trips
+to the same bytes, is under half the raw size, is uncompressed when the client does not
+advertise support, an SSE-shaped handler stays uncompressed AND still satisfies the
+http.Flusher assertion, and binary types are absent from the allowlist.
+
+Not addressed here: compression is recomputed per view. Compressing at rest and serving
+precompressed bytes would remove that CPU, and is the natural follow-up if it ever shows
+up in profiles.
