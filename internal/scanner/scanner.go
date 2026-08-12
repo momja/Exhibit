@@ -50,15 +50,8 @@ func scan(body string, base *url.URL) []string {
 	}
 
 	// Heuristic pass over the raw source for fetch/import literals
-	for _, m := range fetchPattern.FindAllStringSubmatch(body, -1) {
-		if len(m) > 1 {
-			add(m[1])
-		}
-	}
-	for _, m := range importPattern.FindAllStringSubmatch(body, -1) {
-		if len(m) > 1 {
-			add(m[1])
-		}
+	for _, ref := range LiteralRefs(body) {
+		add(ref)
 	}
 
 	origins := make([]string, 0, len(seen))
@@ -110,6 +103,32 @@ var fetchPattern = regexp.MustCompile(`fetch\(\s*['"]([^'"]+)['"]`)
 
 // importPattern matches ESM import URL literals.
 var importPattern = regexp.MustCompile(`(?:import|from)\s+['"]([^'"]+)['"]`)
+
+// LiteralRefs returns the raw references appearing as string literals in
+// fetch() and ESM import/from expressions, in source order, neither deduplicated
+// nor resolved. This is the same heuristic the footprint pass runs, exported so
+// the snapshot vendorer's runtime-asset pass can vendor exactly the references
+// the footprint would otherwise report as residual — one definition, so the two
+// views cannot drift.
+//
+// Like the footprint pass it is a heuristic, not analysis: only a literal
+// adjacent to the call is seen, so a URL built at runtime is missed here. That
+// is why the vendorer substitutes by intercepting fetch at call time rather than
+// by rewriting these literals.
+func LiteralRefs(body string) []string {
+	var refs []string
+	for _, m := range fetchPattern.FindAllStringSubmatch(body, -1) {
+		if len(m) > 1 {
+			refs = append(refs, m[1])
+		}
+	}
+	for _, m := range importPattern.FindAllStringSubmatch(body, -1) {
+		if len(m) > 1 {
+			refs = append(refs, m[1])
+		}
+	}
+	return refs
+}
 
 // resolveOrigin returns the scheme+host origin from a URL string. Absolute and
 // protocol-relative references are reduced to their origin directly (base has no
