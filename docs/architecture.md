@@ -219,6 +219,10 @@ Blob:   put/get artifact bodies by id
   *rendered* text (via `store.ExtractSearchText`: text nodes plus semantic
   attributes like `alt`/`placeholder`; markup, `<script>`, and `<style>` are
   dropped) so search matches what an artifact shows, not the code it's made of.
+  A search box query is **literal text, never FTS5 syntax** (av-hic3): each
+  whitespace-separated token is emitted as a quoted phrase with a trailing
+  `*`, so prefix matching is preserved while `<script>`, `a:b`, or a stray
+  quote search for themselves instead of failing the query.
 - **Bodies** → filesystem now, S3-compatible later — same `Blob` interface. An
   artifact's **widget** (av-fafu) is a body too, so it lives here as a second blob
   with only its id (`artifacts.widget_blob_id`, empty for "no widget") on the row.

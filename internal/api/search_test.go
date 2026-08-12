@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -53,6 +54,34 @@ func TestSearchMatchesSourceEndToEnd(t *testing.T) {
 	// common identifier would return every artifact.
 	found = listArtifactsQuery(t, r, "scriptOnlyToken99")
 	assert.Len(t, found, 0)
+}
+
+// TestSearchQuerySyntaxCharactersReturn200 covers av-hic3 at the HTTP surface
+// the bug was reported on: a gallery search containing FTS5 metacharacters
+// used to reach MATCH raw and answer 500 ("fts5: syntax error near ..."). The
+// query is literal text now, so these are ordinary searches that simply find
+// nothing.
+func TestSearchQuerySyntaxCharactersReturn200(t *testing.T) {
+	r := newTestRouter(t)
+
+	createArtifact(t, r, map[string]any{
+		"title":             "Bar Chart Builder",
+		"body":              "<p>renders a chart</p>",
+		"network_allowlist": []string{},
+	})
+
+	for _, q := range []string{"<script>", "%22", "(", ")", "a:b", "-foo", "^bar", "*"} {
+		req := httptest.NewRequest("GET", "/api/artifacts?q="+url.QueryEscape(q), nil)
+		req.Header.Set("Authorization", authHeader())
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equalf(t, http.StatusOK, w.Code, "query %q: %s", q, w.Body.String())
+	}
+
+	// Ordinary prefix search is unaffected.
+	found := listArtifactsQuery(t, r, "cha")
+	require.Len(t, found, 1)
+	assert.Equal(t, "Bar Chart Builder", found[0]["title"])
 }
 
 // TestArtifactJSONNeverLeaksSourceText guards the write-only contract on
