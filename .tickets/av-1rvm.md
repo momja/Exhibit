@@ -2,7 +2,7 @@
 id: av-1rvm
 status: open
 deps: []
-links: [av-y98v, av-p4hm]
+links: [av-y98v, av-p4hm, av-7jcq]
 created: 2026-08-03T03:51:10Z
 type: feature
 priority: 2

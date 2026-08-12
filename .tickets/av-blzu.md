@@ -57,3 +57,19 @@ addition to `shimTemplate` guarded on `window.parent === window`. Note the
 share path (no shim) needs its own equivalent surface, since it can't reuse the
 shim's banner — keep the two consistent in product copy.
 
+
+## Notes
+
+**2026-08-05T04:50:57Z**
+
+Design-notes refresh (2026-08-04) — the substance holds, the symbol references have rotted.
+
+The notes cite `serveArtifactDoc -> injectShim` and `shimTemplate`. Those names no longer exist. Current code, after av-8xxs's render-preamble taxonomy rewrite and av-fafu's widget work:
+
+- `internal/render/render.go: serveDoc(w, r, a, blobID string, widget bool)` is the single path for artifacts and widgets alike; `serveArtifactDoc` is now a thin wrapper that passes the artifact's own blob.
+- The injector is `injectPreamble(body, artifactID, appOrigin, state, widget)`.
+- The guard the story is about is still there and still unguarded-by-anything-else: `persistState` returns early on `if (window.parent === window)`. `localStorage` itself is replaced unconditionally, outside any framed check — which is exactly the mismatch that produces silent write loss top-level.
+
+One correction to "Three known load paths today", path 3: it says the share path's `localStorage` "throws SecurityError in the opaque sandbox". Shares are opened top-level, not framed (the app-origin `/s/:id` redirects to the render origin), so a top-level share document has a real origin where native `localStorage` works and persists. See the note added to av-7k7b. That makes the two static views *less* alike than this ticket assumes: the share path gets working device-local storage, while owner direct-open gets a shim whose writes vanish. Worth resolving in the product copy this story is meant to unify — "static view" is the right umbrella, but the two paths differ in whether the visitor's own changes survive a reload, and that is the thing a user will actually notice.
+
+Cheapest honest fix for path 2 may simply be to stop installing the localStorage shim when `window.parent === window` — the same rule sessionStorage already follows (spec §5.2) — so direct-open gets native, persistent, device-local storage instead of a silent no-op. That would leave the banner as a UX nicety rather than the only thing preventing data loss.

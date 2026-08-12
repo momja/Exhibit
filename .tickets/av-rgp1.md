@@ -1,8 +1,8 @@
 ---
 id: av-rgp1
-status: open
+status: in_progress
 deps: []
-links: []
+links: [av-wmp6, av-5imk]
 created: 2026-08-03T05:02:10Z
 type: bug
 priority: 2

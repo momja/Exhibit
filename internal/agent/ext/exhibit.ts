@@ -129,12 +129,16 @@ export default function (pi: ExtensionAPI) {
 		async execute(_id, params) {
 			const patch: Record<string, unknown> = { body: params.body };
 			if (params.title) patch.title = params.title;
-			const a = await api("PATCH", "/api/artifacts/" + encodeURIComponent(params.id), patch);
-			return ok(`Updated artifact ${a.id} ("${a.title}").`, {
+			// PATCH /api/artifacts/:id returns {artifact, network_footprint,
+			// footprint_changed} — the identity lives under `artifact`, never at
+			// the top level. Reading it from the top level yielded undefined, which
+			// silently suppressed the saved event and the preview refresh (av-l31x).
+			const r = await api("PATCH", "/api/artifacts/" + encodeURIComponent(params.id), patch);
+			return ok(`Updated artifact ${r.artifact.id} ("${r.artifact.title}").`, {
 				exhibit: "artifact_saved",
 				action: "updated",
-				artifactId: a.id,
-				title: a.title,
+				artifactId: r.artifact.id,
+				title: r.artifact.title,
 			});
 		},
 	});

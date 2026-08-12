@@ -710,27 +710,89 @@ func TestMigration008RepairsRenumberCollision(t *testing.T) {
 		`SELECT COUNT(*) FROM goose_db_version WHERE version_id=8 AND is_applied=1`).Scan(&repairApplied))
 	assert.Equal(t, 1, repairApplied, "v8 repair migration must run and be recorded")
 
-	hasCol := func(name string) bool {
-		rows, err := db.Query(`PRAGMA table_info(artifacts)`)
-		require.NoError(t, err)
-		defer rows.Close()
-		for rows.Next() {
-			var cid, nn, pk int
-			var n, ct string
-			var dflt sql.NullString
-			require.NoError(t, rows.Scan(&cid, &n, &ct, &nn, &dflt, &pk))
-			if n == name {
-				return true
-			}
-		}
-		return false
-	}
-	assert.True(t, hasCol("downloads_approved"),
+	assert.True(t, artifactHasColumn(t, db, "downloads_approved"),
 		"v8 repair must add the skipped downloads_approved column")
-	assert.True(t, hasCol("clipboard_approved"),
+	assert.True(t, artifactHasColumn(t, db, "clipboard_approved"),
 		"006 must add clipboard_approved even when 005 was skipped")
 
 	// The decisive check: the SELECT that failed at runtime must now succeed.
 	_, err = db.Exec(`SELECT downloads_approved FROM artifacts LIMIT 1`)
 	require.NoError(t, err)
+}
+
+// TestMigration012RepairsWidgetVersionCollision guards the second version
+// collision (av-9pm8). The deployed instance recorded goose version 11 on
+// 2026-07-25 for a migration adding artifacts.last_visit — a build that exists
+// nowhere in this repo. 011_widget.sql was authored six days later, so that
+// database reports "no migrations to run. current version: 11" while never
+// gaining widget_blob_id, and every gallery query dies on
+// "no such column: a.widget_blob_id".
+//
+// This stages that exact on-disk state — 001-010 applied, then a version-11
+// row plus the foreign last_visit column and no widget_blob_id — and asserts
+// OpenSQLite converges the schema through the guarded v12 repair. Opening
+// twice also pins the repair's idempotence: the second run must find the
+// column present and do nothing rather than fail on a duplicate column.
+func TestMigration012RepairsWidgetVersionCollision(t *testing.T) {
+	f, err := os.CreateTemp("", "test-mig-widget-collision-*.db")
+	require.NoError(t, err)
+	f.Close()
+	t.Cleanup(func() { os.Remove(f.Name()) })
+
+	db, err := sql.Open("sqlite", f.Name())
+	require.NoError(t, err)
+	db.SetMaxOpenConns(1)
+	_, err = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`)
+	require.NoError(t, err)
+
+	goose.SetBaseFS(migrationsFS)
+	require.NoError(t, goose.SetDialect("sqlite3"))
+	require.NoError(t, goose.UpTo(db, "migrations", 10))
+	_, err = db.Exec(`ALTER TABLE artifacts ADD COLUMN last_visit DATETIME`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO goose_db_version (version_id, is_applied) VALUES (11, 1)`)
+	require.NoError(t, err)
+	db.Close()
+
+	// Open twice: the first run repairs, the second must be a no-op.
+	for _, pass := range []string{"repair", "idempotent re-open"} {
+		st, err := OpenSQLite(f.Name())
+		require.NoError(t, err, pass)
+		require.NoError(t, st.Close())
+	}
+
+	db, err = sql.Open("sqlite", f.Name())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	var repairApplied int
+	require.NoError(t, db.QueryRow(
+		`SELECT COUNT(*) FROM goose_db_version WHERE version_id=12 AND is_applied=1`).Scan(&repairApplied))
+	assert.Equal(t, 1, repairApplied, "v12 repair migration must run and be recorded exactly once")
+
+	assert.True(t, artifactHasColumn(t, db, "widget_blob_id"),
+		"v12 repair must add the column 011 was skipped for")
+
+	// The decisive check: the gallery's own column list must now resolve.
+	_, err = db.Exec(`SELECT ` + artifactColsA + ` FROM artifacts a LIMIT 1`)
+	require.NoError(t, err)
+}
+
+// artifactHasColumn reports whether the artifacts table defines column name.
+func artifactHasColumn(t *testing.T, db *sql.DB, name string) bool {
+	t.Helper()
+	rows, err := db.Query(`PRAGMA table_info(artifacts)`)
+	require.NoError(t, err)
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notnull, pk int
+		var col, ctype string
+		var dflt sql.NullString
+		require.NoError(t, rows.Scan(&cid, &col, &ctype, &notnull, &dflt, &pk))
+		if col == name {
+			return true
+		}
+	}
+	require.NoError(t, rows.Err())
+	return false
 }

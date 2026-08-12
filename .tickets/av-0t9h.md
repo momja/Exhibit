@@ -1,6 +1,6 @@
 ---
 id: av-0t9h
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-07-06T22:54:19Z
@@ -42,3 +42,17 @@ Known CSP limitation to document in the allowlist editor help: per CSP3, path co
 - Allowlist editor UI accepts the new forms, surfaces validation errors, and documents the redirect caveat.
 - Unit tests cover entry validation (accept/reject matrix) and buildCSP normalization; scanner output remains exact origins only.
 
+
+## Notes
+
+**2026-08-05T04:17:31Z**
+
+Closed without implementing, per the reasoning developed in av-i7hd (PR #94).
+
+1. The validation half already shipped. av-0t9h bundled 'reject host/scheme wildcards' with 'accept path-scoped entries'. NormalizeOrigin now rejects any '*' in scheme or host at the single write path, so the gap this ticket opened to close is closed.
+
+2. What remains is no longer filling a gap but relaxing a shipped invariant. Migration 12 and the store's 'rows are normalized origins' invariant both depend on an allowlist entry being exactly scheme+host+port. Path scoping would need a second, tagged entry kind alongside it — not a loosening of NormalizeOrigin — which is a materially larger change than this ticket scoped.
+
+3. The security value is weak by CSP's own rules. Per CSP3, path components are ignored when matching a redirected request, so path scoping narrows the first hop only. This ticket's own design section already recorded that caveat. An allowlist UI that implies per-path approval while the browser enforces per-origin after one redirect is worse than an honest per-origin list.
+
+Reopen if a concrete artifact needs it; the design notes above stand as the starting point.
