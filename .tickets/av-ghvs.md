@@ -2,7 +2,7 @@
 id: av-ghvs
 status: in_progress
 deps: []
-links: [av-ombn, av-f9b2, av-lh4a, av-b17a, av-wu9d]
+links: [av-ombn, av-f9b2, av-lh4a, av-b17a, av-wu9d, av-dwe2]
 created: 2026-08-11T18:19:27Z
 type: bug
 priority: 1
