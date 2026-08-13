@@ -298,16 +298,49 @@ func TestBuildCSPFormActionMirrorsAllowlist(t *testing.T) {
 
 // Writes must go to the host frame via postMessage (pinned to the app origin),
 // not a cross-origin fetch — the sandboxed iframe's opaque origin can't call the
-// API, and the fetch approach was what CORS-blocked write-through.
+// API, and the fetch approach was what CORS-blocked write-through. The shim may
+// mention fetch (it shims data: URL fetches, av-02xs) but must never invoke it
+// with a URL — its only network-adjacent call is nativeFetch.apply passthrough.
 func TestShimWritesViaPostMessageNotFetch(t *testing.T) {
 	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
 	if !strings.Contains(doc, "window.parent.postMessage") {
 		t.Fatalf("shim should write via postMessage to the host frame: %s", doc)
 	}
-	if strings.Contains(doc, "fetch(") {
+	// A call with a URL literal would be the CORS-blocked API fetch; the data:
+	// shim only ever routes through nativeFetch.apply or constructs Responses.
+	if strings.Contains(doc, "fetch('") || strings.Contains(doc, `fetch("`) {
 		t.Fatalf("shim must not fetch the API directly (CORS-blocked from the sandbox): %s", doc)
 	}
 }
+
+// The framed preamble shims data: URL fetches into local Responses (WebKit
+// refuses large data: fetches from an opaque-origin sandbox) and carries the
+// opt-in canvas-leak mitigation behind the render_canvas_mitigation state key.
+// Widget renders omit the whole bridgeScript, so neither ships there.
+func TestShimFramedLocalFetchAndCanvasMitigation(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
+	if !strings.Contains(doc, "window.fetch = function(input, init)") {
+		t.Fatalf("framed shim must wrap fetch for data: URLs: %s", doc)
+	}
+	if !strings.Contains(doc, "new Response(bytes, {") {
+		t.Fatalf("framed shim must construct Responses from data: bytes: %s", doc)
+	}
+	if !strings.Contains(doc, "CANVAS_MITIGATION") || !strings.Contains(doc, "willReadFrequently: true") {
+		t.Fatalf("framed shim must carry the canvas-leak mitigation: %s", doc)
+	}
+	if !strings.Contains(doc, "render_canvas_mitigation") {
+		t.Fatalf("canvas mitigation must read the render_canvas_mitigation state key: %s", doc)
+	}
+
+	widgetDoc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true)
+	if strings.Contains(widgetDoc, "window.fetch = function(input, init)") {
+		t.Fatalf("widget renders must not carry the fetch shim: %s", widgetDoc)
+	}
+	if strings.Contains(widgetDoc, "CANVAS_MITIGATION") {
+		t.Fatalf("widget renders must not carry the canvas mitigation: %s", widgetDoc)
+	}
+}
+
 
 // The shim must inline state so the artifact's synchronous startup reads see it,
 // rather than fetching asynchronously (which the artifact's own init would race).

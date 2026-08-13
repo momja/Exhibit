@@ -242,7 +242,11 @@ func buildCSP(allowlist []string, appOrigin string) string {
 // memory for the life of the frame — and bridges the capabilities the sandbox
 // denies — downloads (the sandbox omits allow-downloads) and clipboard
 // read/write (opaque-origin permissions policy) — to the host frame, where
-// they run only after user approval.
+// they run only after user approval. Framed-only, it also (av-02xs) shims
+// fetch() of data: URLs into locally constructed Responses (WebKit refuses
+// large data: fetches from an opaque-origin sandbox — Safari artifacts never
+// boot) and carries the opt-in canvas-leak mitigation that keeps per-frame
+// putImageData canvases off the leaking accelerated/compositor path.
 //
 // WIDGET (av-fafu) narrows the same shim for a widget render. A widget is a
 // *view* of an artifact: it reads the artifact's state and shows one fact from
@@ -368,6 +372,72 @@ const bridgeScript = `
     try {
       Object.defineProperty(window, 'sessionStorage', { value: makeStorage({}, null), writable: false });
     } catch(e) {}
+
+    // ---- Local-scheme fetch shim (av-02xs) ----
+    // WebKit refuses (or flakily handles) fetch() of large data: URLs from an
+    // opaque-origin sandbox — pokeemerald-wasm loads its 12MB wasm as a data:
+    // URI and never boots in Safari's iframe while loading fine top-level. The
+    // bytes are already in the document, so route data: GETs to a locally
+    // constructed Response instead of the network service (mirrors
+    // dataURLToBlob's decode below: base64, else percent-decoded). Artifacts
+    // that wrap fetch themselves capture this wrapper, so the translation
+    // still applies when the artifact installs its own fetch shim.
+    var nativeFetch = window.fetch;
+    window.fetch = function(input, init) {
+      var url = typeof input === 'string' ? input : (input && input.url);
+      if (typeof url === 'string' && url.slice(0, 5) === 'data:') {
+        try {
+          var method = (init && init.method) || (input && input.method) || 'GET';
+          if (String(method).toUpperCase() === 'GET') {
+            var comma = url.indexOf(',');
+            if (comma > 0) {
+              var meta = url.slice(5, comma);
+              var data = url.slice(comma + 1);
+              var bytes;
+              if (/;base64$/i.test(meta)) {
+                var bin = atob(data);
+                bytes = new Uint8Array(bin.length);
+                for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+              } else {
+                bytes = new TextEncoder().encode(decodeURIComponent(data));
+              }
+              var mime = meta.replace(/;base64$/i, '') || 'text/plain';
+              return Promise.resolve(new Response(bytes, {
+                status: 200,
+                headers: { 'Content-Type': mime }
+              }));
+            }
+          }
+        } catch (e) { /* fall through to the real fetch */ }
+      }
+      return nativeFetch.apply(this, arguments);
+    };
+
+    // ---- Canvas leak mitigation (av-02xs, opt-in via render_canvas_mitigation) ----
+    // Chromium retains ~500KB/frame in the iframe renderer when an artifact
+    // putImageData()s a canvas every rAF inside the cross-origin OOP iframe
+    // (observed 5.8GB->9GB at 60fps on pokeemerald-wasm; JS heap flat; no-op'ing
+    // putImageData stops it). Two knobs, both opt-in per artifact because they
+    // change rendering characteristics:
+    //   - willReadFrequently forces the CPU-backed canvas path, avoiding the
+    //     accelerated resource churn that leaks.
+    //   - neutral CSS removes compositor-hostile canvas styling (pixelated
+    //     scaling, border-radius masks).
+    // Opt-in via the state key 'render_canvas_mitigation' ('1' or 'true').
+    var CANVAS_MITIGATION = (function() {
+      var v = cache['render_canvas_mitigation'];
+      return v === '1' || (v != null && String(v).toLowerCase() === 'true');
+    })();
+    if (CANVAS_MITIGATION) {
+      var nativeGetContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(type, attrs) {
+        if (type === '2d') attrs = Object.assign({}, attrs || {}, { willReadFrequently: true });
+        return nativeGetContext.call(this, type, attrs);
+      };
+      var mitigationStyle = document.createElement('style');
+      mitigationStyle.textContent = 'canvas{image-rendering:auto!important;border-radius:0!important}';
+      (document.head || document.documentElement).appendChild(mitigationStyle);
+    }
 
     // ---- Unsupported-capability diagnostic (av-yvtb) ----
     // Some browser capabilities cannot work inside this opaque-origin sandbox no
