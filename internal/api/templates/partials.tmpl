@@ -9,14 +9,20 @@
      page head (av-fdcx): the manifest link plus the apple-* home-screen tags
      iOS Safari reads instead of manifest.json's display mode. It is static
      — no per-page data — so every template includes it the same way:
-     {{template "pwaHead"}}. Never add this to the render surface's artifact
-     document (internal/render) — artifacts are visitor-authored files and
-     own their own <head> (architecture.md §1). */}}
+     {{template "pwaHead"}}. It must follow the page's own viewport meta,
+     which pwa.js (av-8zqr) rewrites when the page is running as a
+     home-screen app. The script is deliberately render-blocking rather than
+     deferred: it decides the page's zoom behaviour, so it has to settle
+     before first paint rather than after a pinchable frame or two. Never add
+     this to the render surface's artifact document (internal/render) —
+     artifacts are visitor-authored files and own their own <head>
+     (architecture.md §1). */}}
 {{define "pwaHead"}}<link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Exhibit">{{end}}
+<meta name="apple-mobile-web-app-title" content="Exhibit">
+<script src="/assets/gallery/pwa.js"></script>{{end}}
 
 {{/* tagPills renders an artifact's tags as small neutral pills, each led by a
      colored dot that carries the tag's color — like a 'Development' label with

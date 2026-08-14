@@ -254,6 +254,19 @@ page's widget panel, which swaps `/partials/card-widget` after a save so the
 tile refreshes without a reload that would drop the CodeMirror buffer beside it
 (`docs/widgets.md`).
 
+**Home-screen app shell (av-fdcx, av-8zqr).** Every app-origin page head includes
+the shared `pwaHead` partial: the `manifest.json` link, the `apple-*` tags iOS reads
+instead of the manifest's display mode, and `pwa.js`, a head-loaded script that
+disables pinch-to-zoom **only** when the page is running as a home-screen app
+(`navigator.standalone`, or `display-mode: standalone|fullscreen`). In a browser tab
+the script returns immediately and zoom is untouched — that distinction is the whole
+point of doing it in script rather than in the viewport meta, since a static
+`user-scalable=no` would fail WCAG 1.4.4 for ordinary tab visits (and iOS ignores it
+there anyway). Standalone, it both rewrites the viewport meta (Chrome's mechanism)
+and cancels WebKit's `gesturestart`/`gesturechange`/`gestureend` (the only thing that
+stops the pinch on iOS). None of this reaches the render origin: an artifact is a
+visitor-authored file and sets its own viewport, or doesn't.
+
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent
 icon vocabulary without re-deciding. Load it **self-hosted on the app origin, never from a
