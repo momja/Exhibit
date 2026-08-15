@@ -18,7 +18,7 @@ import (
 // rather than any particular styling.
 func TestDetailPageCarriesMobileActionsSheet(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Sheet Tool", Tier: store.Tier1, CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	page, err := renderDetailPage(a, "https://render.example.com", "tok")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `id="sheet-toggle"`, "the header needs the kebab that opens the sheet")
@@ -36,4 +36,20 @@ func TestDetailPageCarriesMobileActionsSheet(t *testing.T) {
 
 	js := galleryAsset(t, r, "/assets/gallery/detail.js")
 	assert.Contains(t, js, "function setSheetOpen(", "the kebab/scrim toggle lives in the page script")
+}
+
+// av-02xs: the detail page used to embed the artifact's full source body in a
+// <pre> panel — for a multi-MB artifact the page itself became multi-MB, and
+// Safari stalls on the response so the artifact "never loads". The panel was
+// never a feature (mobile CSS deliberately hid it; the Edit action is the way
+// to the code), so it is removed outright: the detail page must not carry the
+// body in any form, and the render handler must not read the blob.
+func TestDetailPageDoesNotEmbedSource(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Big Tool", Tier: store.Tier1, CreatedAt: time.Now()}
+	page, err := renderDetailPage(a, "https://render.example.com", "tok")
+	require.NoError(t, err)
+
+	assert.NotContains(t, page, "<pre>", "the source body must not appear in the detail page")
+	assert.NotContains(t, page, "load-source", "no source controls on the detail page")
+	assert.NotContains(t, page, "source-body", "no source pre on the detail page")
 }
