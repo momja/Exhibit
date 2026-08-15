@@ -1,8 +1,8 @@
 ---
 id: agaf-02xs
-status: in_progress
+status: closed
 deps: [av-ghvs]
-links: []
+links: [av-dwe2]
 created: 2026-08-13T18:31:03Z
 type: bug
 priority: 1

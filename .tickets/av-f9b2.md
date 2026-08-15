@@ -23,3 +23,9 @@ One wrinkle worth designing around: the render document is `Cache-Control: no-st
 - Measured before/after byte counts for a representative large artifact are recorded on the ticket.
 - Compression does not change the per-artifact CSP or any caching header semantics.
 
+
+## Notes
+
+**2026-08-15T19:32:19Z**
+
+Branch coordination: merge/av-ghvs-av-f9b2 exists only as a deploy vehicle for testing av-ghvs + av-f9b2 together; delete it once both land. It is not a PR.
