@@ -20,10 +20,11 @@
 <link rel="stylesheet" href="/assets/gallery/agent.css">
 <script src="/assets/htmx/htmx.min.js"></script>
 </head>
-<body>
+<body data-scale-reload-warn>
 <header>
   <a href="{{.BackURL}}">←<span class="lbl"> Back</span></a>
   <h1><i class="ph ph-robot"></i> Agent</h1>
+  {{template "textScale"}}
   <button class="key-btn" id="key-btn" onclick="openKeyModal()"><i class="ph ph-key"></i> <span id="key-btn-label">API key</span></button>
 </header>
 {{if not .AgentEnabled}}<div class="banner-err">Agent support is disabled: the <code>pi</code> binary was not found on this server.</div>{{end}}

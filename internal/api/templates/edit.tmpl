@@ -14,10 +14,12 @@
      the app origin like every other asset, never a CDN. */}}
 <script src="/assets/htmx/htmx.min.js"></script>
 </head>
-<body>
+<body data-scale-reload-warn>
 <header>
   <a href="/artifacts/{{.ID}}">← Back</a>
   <h1>Edit Artifact</h1>
+  <span class="spacer"></span>
+  {{template "textScale"}}
 </header>
 <main>
 <div class="edit-card">

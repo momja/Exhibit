@@ -1,20 +1,46 @@
-/* Home-screen (standalone) pinch-zoom guard (av-8zqr), loaded by the shared
+/* Home-screen (standalone) zoom behaviour (av-8zqr), loaded by the shared
  * pwaHead partial on every app-origin page.
  *
  * In a browser tab nothing here runs: pinch-to-zoom is a page-level
  * accessibility affordance and a tab is a page. Launched from the home screen
  * the same markup is an app shell, where a pinch is nearly always a stray
- * second finger on a scrolling card grid rather than a request to zoom — and
+ * second finger on a scrolling grid rather than a request to zoom — and
  * unlike a tab there is no visible browser chrome to make the resulting zoom
- * state obvious or easy to undo. So the guard is scoped to that display mode
- * alone.
+ * state obvious or easy to undo. So everything below is scoped to that
+ * display mode alone.
  *
- * Two mechanisms, because neither engine is covered by one:
- *   - the viewport meta gains maximum-scale=1,user-scalable=no, which is what
- *     Chrome honours in an installed PWA on Android;
- *   - gesturestart/gesturechange/gestureend are cancelled, because WebKit
- *     treats that meta as advisory and preventing its non-standard pinch
- *     events is what actually stops the zoom in an iOS home-screen launch.
+ * Two halves, and the second is what makes the first shippable:
+ *
+ *   1. The pinch is disabled — the viewport meta pins minimum/maximum scale
+ *      together (what Chrome honours in an installed PWA) and WebKit's
+ *      non-standard gesturestart/gesturechange/gestureend are cancelled,
+ *      which is the only thing that actually stops the zoom on iOS. The
+ *      earlier attempt (av-s9ti) had just the meta, which is why it never
+ *      worked there.
+ *   2. Text stays resizable to 200% through the textScale control the header
+ *      already carries, revealed here. Removing the pinch without replacing
+ *      it would fail WCAG 1.4.4 (Resize Text) — the objection that got
+ *      av-s9ti reverted — so the control is not a nicety attached to this
+ *      guard, it is the half that earns it.
+ *
+ * Both halves drive the *same* mechanism: the viewport meta's scale. Setting
+ * initial/minimum/maximum together shrinks the layout viewport, so the page
+ * lays out exactly as it would under browser zoom — text gets physically
+ * bigger and the narrower layout viewport re-evaluates the media queries, so
+ * the page *reflows* into its phone layout instead of growing sideways.
+ *
+ * Two things were measured before settling on it, both against a 390px mobile
+ * viewport in a standalone window:
+ *
+ *   - CSS `zoom: 2` on the root magnifies without reflowing — media queries
+ *     see the unchanged viewport, and the document grows to 791px inside a
+ *     390px screen. That is horizontal scrolling at large text, which fails
+ *     WCAG 1.4.10 while trying to satisfy 1.4.4. The meta scale holds
+ *     scrollWidth at the viewport instead.
+ *   - The scale is only honoured when it is in the meta *at parse time*.
+ *     Rewriting the tag afterwards updates the attribute and changes nothing
+ *     on screen. So a scale change is stored and applied by reloading, rather
+ *     than pretended at live.
  *
  * A pinch that lands inside a rendered artifact's iframe is not covered, and
  * deliberately so: that frame is another origin whose events never reach this
@@ -22,6 +48,12 @@
  * §1).
  */
 (function() {
+  /* 100% to 200% — the top step is WCAG 1.4.4's requirement, and the ones
+   * between it and 100% are what make the control usable rather than a
+   * toggle. */
+  var SCALES = [1, 1.25, 1.5, 1.75, 2];
+  var STORAGE_KEY = 'exhibit.text-scale';
+
   /* matchMedia must be called on window — a detached reference throws. */
   function displayMode(mode) {
     return typeof window.matchMedia === 'function' &&
@@ -34,20 +66,98 @@
     displayMode('fullscreen');
   if (!standalone) return;
 
-  /* Every app-origin page declares its viewport meta ahead of pwaHead, so the
-   * tag is already parsed by the time this script runs. */
-  var viewport = document.querySelector('meta[name="viewport"]');
-  if (viewport) {
-    viewport.setAttribute('content',
-      'width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no');
+  /* This is app-origin localStorage — the real one. The storage shim that
+   * backs artifact state (docs/architecture.md §6) lives in the render
+   * origin's sandbox and never sees this key. Private-mode browsers throw on
+   * access rather than returning null, so both directions are guarded. */
+  function readStoredIndex() {
+    try {
+      var i = SCALES.indexOf(parseFloat(window.localStorage.getItem(STORAGE_KEY)));
+      return i === -1 ? 0 : i;
+    } catch (e) {
+      return 0;
+    }
   }
 
-  /* preventDefault on the first gesture event is what cancels the pinch, so
-   * these are registered explicitly non-passive — a passive listener's
-   * preventDefault is a no-op. */
+  function store(scale) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, String(scale));
+    } catch (e) {
+      /* Preference is lost at reload; the scale still applies for this run. */
+    }
+  }
+
+  var index = readStoredIndex();
+
+  /* Pinning minimum = maximum = the chosen scale is what disables the pinch:
+   * there is no range left to zoom through, at any scale the control picks. */
+  function applyScale(scale) {
+    var viewport = document.querySelector('meta[name="viewport"]');
+    if (!viewport) return;
+    viewport.setAttribute('content',
+      'width=device-width,initial-scale=' + scale +
+      ',minimum-scale=' + scale + ',maximum-scale=' + scale +
+      ',user-scalable=no');
+  }
+
+  /* Runs while the head is parsing, so the stored scale is in place before
+   * first paint rather than after a visible reflow. */
+  applyScale(SCALES[index]);
+
+  /* preventDefault on the first gesture event is what cancels the pinch on
+   * WebKit, so these are registered explicitly non-passive — a passive
+   * listener's preventDefault is a no-op. */
   ['gesturestart', 'gesturechange', 'gestureend'].forEach(function(type) {
     document.addEventListener(type, function(e) {
       e.preventDefault();
     }, { passive: false });
   });
+
+  function wireControl() {
+    var control = document.querySelector('[data-text-scale]');
+    if (!control) return;
+    var value = control.querySelector('[data-text-scale-value]');
+    var buttons = control.querySelectorAll('[data-text-scale-step]');
+
+    function render() {
+      if (value) value.textContent = Math.round(SCALES[index] * 100) + '%';
+      buttons.forEach(function(button) {
+        var next = index + parseInt(button.getAttribute('data-text-scale-step'), 10);
+        button.disabled = next < 0 || next >= SCALES.length;
+      });
+    }
+
+    /* A scale only takes effect at parse time, so changing it means reloading.
+     * That is free on a page you are reading and destructive on one you are
+     * typing into — the edit buffer, a pasted body, an agent conversation —
+     * and no page tracks whether it is dirty. Rather than build that, the
+     * pages that can hold unsaved work declare it in their markup and get a
+     * confirm; the rest reload silently. Declining leaves everything exactly
+     * as it was, including the label, so the control never claims a size the
+     * page is not rendering at. */
+    var warnOnReload = document.body.hasAttribute('data-scale-reload-warn');
+
+    buttons.forEach(function(button) {
+      button.addEventListener('click', function() {
+        var next = index + parseInt(button.getAttribute('data-text-scale-step'), 10);
+        if (next < 0 || next >= SCALES.length) return;
+        if (warnOnReload &&
+            !window.confirm('Reloading to change the text size will discard unsaved changes on this page. Continue?')) {
+          return;
+        }
+        index = next;
+        store(SCALES[index]);
+        window.location.reload();
+      });
+    });
+
+    render();
+    control.hidden = false;   // hidden in the markup: tabs keep browser zoom
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wireControl);
+  } else {
+    wireControl();
+  }
 })();

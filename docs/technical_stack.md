@@ -262,10 +262,24 @@ disables pinch-to-zoom **only** when the page is running as a home-screen app
 the script returns immediately and zoom is untouched — that distinction is the whole
 point of doing it in script rather than in the viewport meta, since a static
 `user-scalable=no` would fail WCAG 1.4.4 for ordinary tab visits (and iOS ignores it
-there anyway). Standalone, it both rewrites the viewport meta (Chrome's mechanism)
-and cancels WebKit's `gesturestart`/`gesturechange`/`gestureend` (the only thing that
-stops the pinch on iOS). None of this reaches the render origin: an artifact is a
-visitor-authored file and sets its own viewport, or doesn't.
+there anyway). Standalone, it pins the viewport meta's minimum/maximum scale
+together (Chrome's mechanism) and cancels WebKit's
+`gesturestart`/`gesturechange`/`gestureend` (the only thing that stops the pinch on
+iOS).
+
+Taking the pinch away obliges the app to offer text resizing some other way, so the
+same script reveals the header's **text-size control** (the `textScale` partial,
+hidden in the markup and shown only here): 100–200% in five steps, persisted in
+app-origin `localStorage`. It moves the *same* viewport scale rather than CSS
+`zoom` — `zoom` magnifies without re-evaluating media queries, which turns large
+text into horizontal scrolling (measured: 791px of document inside a 390px screen at
+`zoom: 2`), while the meta scale shrinks the layout viewport so the page reflows.
+A scale only takes effect when it is in the meta at parse time, so changing it
+reloads; the pages that can hold unsaved work (`edit`, `new`, `agent`) declare
+`data-scale-reload-warn` and confirm first.
+
+None of this reaches the render origin: an artifact is a visitor-authored file and
+sets its own viewport, or doesn't.
 
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent

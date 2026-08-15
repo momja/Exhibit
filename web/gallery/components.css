@@ -130,3 +130,32 @@
 .muted{color:var(--color-muted)}
 .faint{color:var(--color-faint)}
 .text-sm{font-size:12px}
+
+/* --- text size control (av-8zqr) --------------------------------------- */
+/* Only ever visible in a home-screen launch, where pwa.js has taken pinch
+ * zoom away and this is the resize path in its place (WCAG 1.4.4). It stays
+ * compact because it sits in a phone-width header beside the page's own
+ * actions: two icon buttons around a percentage that doubles as the live
+ * region announcing each change. */
+.text-scale{display:inline-flex;align-items:center;gap:var(--space-1);padding:2px;border:1px solid var(--color-hairline);border-radius:var(--radius-pill);background:var(--color-panel)}
+.text-scale[hidden]{display:none}
+.text-scale-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:var(--radius-pill);background:transparent;color:var(--color-ink-soft);font-size:14px;cursor:pointer}
+.text-scale-btn:hover:not(:disabled){background:var(--color-ground);color:var(--color-ink)}
+.text-scale-btn:disabled{opacity:.35;cursor:default}
+.text-scale-value{min-width:38px;text-align:center;font-size:11px;font-variant-numeric:tabular-nums;color:var(--color-muted)}
+/* On a phone the header is one non-wrapping row with no slack — the gallery's
+ * fits 390px exactly — so the percentage collapses out and the control becomes
+ * two icons, the same way the back/add labels collapse on the other pages. It
+ * is clipped rather than display:none so it keeps announcing the new size to a
+ * screen reader; the visible feedback is the page itself changing size. */
+@media (max-width:640px){
+  .text-scale-value{position:absolute;width:1px;height:1px;min-width:0;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+  .text-scale{gap:0;padding:1px}
+  .text-scale-btn{width:24px;height:24px}
+  /* The control joins a header row that was already full, and the gallery's
+   * has no phone spacing of its own — so borrow the tighter gap/padding
+   * detail and agent already use there, or the primary button wraps to two
+   * lines. Scoped through :has() to headers that actually carry a visible
+   * control, which means a browser tab renders byte-identically to before. */
+  body:has(.text-scale:not([hidden])) header{gap:10px;padding-left:12px;padding-right:12px;flex-wrap:wrap}
+}

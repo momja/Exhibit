@@ -17,6 +17,16 @@
      this to the render surface's artifact document (internal/render) —
      artifacts are visitor-authored files and own their own <head>
      (architecture.md §1). */}}
+{{/* textScale is the installed app's text-resize control (av-8zqr). It ships
+     in every app-origin header but renders `hidden`, and only pwa.js reveals
+     it — in a browser tab the browser's own zoom is the resize path and a
+     second one would be clutter. In a home-screen launch there is no browser
+     zoom (pwa.js disables the pinch), so this is what keeps text reachable at
+     200%: WCAG 1.4.4 is met by the control, not by the gesture it replaces.
+     The buttons carry no handlers here; pwa.js binds them by data attribute
+     after it decides the page is standalone. */}}
+{{define "textScale"}}<div class="text-scale" role="group" aria-label="Text size" data-text-scale hidden><button type="button" class="text-scale-btn" data-text-scale-step="-1" aria-label="Smaller text"><i class="ph ph-minus"></i></button><span class="text-scale-value" data-text-scale-value aria-live="polite">100%</span><button type="button" class="text-scale-btn" data-text-scale-step="1" aria-label="Larger text"><i class="ph ph-plus"></i></button></div>{{end}}
+
 {{define "pwaHead"}}<link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
