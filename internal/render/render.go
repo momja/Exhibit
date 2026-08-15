@@ -243,10 +243,14 @@ func buildCSP(allowlist []string, appOrigin string) string {
 // denies — downloads (the sandbox omits allow-downloads) and clipboard
 // read/write (opaque-origin permissions policy) — to the host frame, where
 // they run only after user approval. Framed-only, it also (av-02xs) shims
-// fetch() of data: URLs into locally constructed Responses (WebKit refuses
-// large data: fetches from an opaque-origin sandbox — Safari artifacts never
-// boot) and carries the opt-in canvas-leak mitigation that keeps per-frame
-// putImageData canvases off the leaking accelerated/compositor path.
+// fetch() of data: URLs into locally constructed Responses — WebKit refuses
+// large data: fetches from an opaque-origin sandbox, which Safari artifacts
+// otherwise hang on.
+//
+// A canvas-leak mitigation (willReadFrequently + CSS overrides behind a state
+// flag) was trialed here in av-02xs deploy 1 and removed: it did NOT stop the
+// Chromium per-frame putImageData leak (verified live at 7.3GB->10GB with the
+// mitigation active), and it degraded pixel-art rendering for no benefit.
 //
 // WIDGET (av-fafu) narrows the same shim for a widget render. A widget is a
 // *view* of an artifact: it reads the artifact's state and shows one fact from
@@ -412,32 +416,6 @@ const bridgeScript = `
       }
       return nativeFetch.apply(this, arguments);
     };
-
-    // ---- Canvas leak mitigation (av-02xs, opt-in via render_canvas_mitigation) ----
-    // Chromium retains ~500KB/frame in the iframe renderer when an artifact
-    // putImageData()s a canvas every rAF inside the cross-origin OOP iframe
-    // (observed 5.8GB->9GB at 60fps on pokeemerald-wasm; JS heap flat; no-op'ing
-    // putImageData stops it). Two knobs, both opt-in per artifact because they
-    // change rendering characteristics:
-    //   - willReadFrequently forces the CPU-backed canvas path, avoiding the
-    //     accelerated resource churn that leaks.
-    //   - neutral CSS removes compositor-hostile canvas styling (pixelated
-    //     scaling, border-radius masks).
-    // Opt-in via the state key 'render_canvas_mitigation' ('1' or 'true').
-    var CANVAS_MITIGATION = (function() {
-      var v = cache['render_canvas_mitigation'];
-      return v === '1' || (v != null && String(v).toLowerCase() === 'true');
-    })();
-    if (CANVAS_MITIGATION) {
-      var nativeGetContext = HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext = function(type, attrs) {
-        if (type === '2d') attrs = Object.assign({}, attrs || {}, { willReadFrequently: true });
-        return nativeGetContext.call(this, type, attrs);
-      };
-      var mitigationStyle = document.createElement('style');
-      mitigationStyle.textContent = 'canvas{image-rendering:auto!important;border-radius:0!important}';
-      (document.head || document.documentElement).appendChild(mitigationStyle);
-    }
 
     // ---- Unsupported-capability diagnostic (av-yvtb) ----
     // Some browser capabilities cannot work inside this opaque-origin sandbox no

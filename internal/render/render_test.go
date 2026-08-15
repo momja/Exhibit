@@ -314,9 +314,10 @@ func TestShimWritesViaPostMessageNotFetch(t *testing.T) {
 }
 
 // The framed preamble shims data: URL fetches into local Responses (WebKit
-// refuses large data: fetches from an opaque-origin sandbox) and carries the
-// opt-in canvas-leak mitigation behind the render_canvas_mitigation state key.
-// Widget renders omit the whole bridgeScript, so neither ships there.
+// refuses large data: fetches from an opaque-origin sandbox). Widget renders
+// omit the whole bridgeScript, so it doesn't ship there. The canvas-leak
+// mitigation trialed in av-02xs was removed as ineffective — assert it stays
+// gone so it can't silently degrade artifact rendering again.
 func TestShimFramedLocalFetchAndCanvasMitigation(t *testing.T) {
 	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
 	if !strings.Contains(doc, "window.fetch = function(input, init)") {
@@ -325,19 +326,13 @@ func TestShimFramedLocalFetchAndCanvasMitigation(t *testing.T) {
 	if !strings.Contains(doc, "new Response(bytes, {") {
 		t.Fatalf("framed shim must construct Responses from data: bytes: %s", doc)
 	}
-	if !strings.Contains(doc, "CANVAS_MITIGATION") || !strings.Contains(doc, "willReadFrequently: true") {
-		t.Fatalf("framed shim must carry the canvas-leak mitigation: %s", doc)
-	}
-	if !strings.Contains(doc, "render_canvas_mitigation") {
-		t.Fatalf("canvas mitigation must read the render_canvas_mitigation state key: %s", doc)
+	if strings.Contains(doc, "willReadFrequently") || strings.Contains(doc, "CANVAS_MITIGATION") {
+		t.Fatalf("ineffective canvas mitigation must not ship in the shim: %s", doc)
 	}
 
 	widgetDoc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true)
 	if strings.Contains(widgetDoc, "window.fetch = function(input, init)") {
 		t.Fatalf("widget renders must not carry the fetch shim: %s", widgetDoc)
-	}
-	if strings.Contains(widgetDoc, "CANVAS_MITIGATION") {
-		t.Fatalf("widget renders must not carry the canvas mitigation: %s", widgetDoc)
 	}
 }
 
