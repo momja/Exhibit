@@ -14,7 +14,7 @@ tags: [ui, mobile, pwa, frontend]
 
 ~~Update the viewport meta tag on the app-origin page templates (gallery, detail, edit, new, notfound) to maximum-scale=1, user-scalable=no so the installed app doesn't rubber-band/zoom like a webpage.~~ **Reverted (PR #89 review):** `maximum-scale=1,user-scalable=no` fails WCAG 1.4.4 (Resize Text) — it blocks pinch-zoom for low-vision users with no alternate text-scaling affordance, and iOS 10+ ignores the directive anyway, so it doesn't even reliably deliver the no-pinch behavior it was meant to add. The viewport meta tag is left as `width=device-width,initial-scale=1` on all five app-origin templates. Do not touch the render surface's own document — artifacts are visitor-authored files and get to set (or not set) their own viewport; overriding it there would violate the 'it's just a file' ownership principle in architecture.md §1.
 
-**Superseded (av-8zqr):** the ask returned narrowed to a home-screen launch only, implemented as a runtime-gated script rather than a static meta change — a browser tab still pinch-zooms, which is what the revert was protecting. See [[av-8zqr]].
+**Superseded (av-8zqr):** the ask returned narrowed to a home-screen launch only, implemented as a runtime-gated script rather than a static meta change — a browser tab still pinch-zooms, which is what the revert was protecting. See [[av-8zqr]] — which was itself withdrawn before merge once the real cause turned out to be focus zoom on sub-16px fields ([[av-3qmf]]). Pinch-to-zoom is enabled everywhere, and now stays that way.
 
 ## Acceptance Criteria
 

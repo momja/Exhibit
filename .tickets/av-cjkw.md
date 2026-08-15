@@ -15,7 +15,7 @@ Make the app-origin gallery UI installable and feel native when added to a mobil
 
 **Revised (PR #89 review):** asks (1) and (2) shipped as scoped. Ask (3), pinch-to-zoom disabling, was reverted after review — `maximum-scale=1,user-scalable=no` fails WCAG 1.4.4 (Resize Text), removing pinch-zoom for low-vision users with no alternate text-scaling affordance, and iOS 10+ ignores the directive anyway so it never reliably delivered the intended behavior either. Pinch-to-zoom stays enabled on app-origin pages; see [[av-s9ti]].
 
-**Revised again ([[av-8zqr]]):** ask (3) returns, scoped to a *home-screen launch only* and gated at runtime rather than baked into the viewport meta. A browser tab is unaffected and still pinch-zooms — the case the revert existed to protect — while the installed app gets the native feel the epic asked for. The residual WCAG 1.4.4 trade-off inside the installed app is recorded on av-8zqr.
+**Revised again ([[av-3qmf]]):** ask (3) is closed for good, and not by doing it. Scoping the pinch-disable to a home-screen launch was attempted ([[av-8zqr]]) and withdrawn before merge, because the behaviour that actually prompted the ask was never the pinch: focusing a form field on iOS zooms the page in and leaves it there, because the fields were under 16px. av-3qmf fixes that in the type scale. Pinch-to-zoom stays enabled everywhere — there is nothing left for ask (3) to solve.
 
 ## Design
 

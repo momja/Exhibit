@@ -12,6 +12,8 @@ tags: [ui, mobile, pwa, frontend, a11y]
 ---
 # Disable pinch-to-zoom only when launched from the home screen
 
+**WITHDRAWN — not shipped. Superseded by [[av-3qmf]].** Everything below was built and then removed before merge. The reported problem turned out not to be the pinch gesture at all: focusing a form field on iOS zooms the page in and never zooms back out, stranding the button beside the field. That is caused by fields being under 16px, and av-3qmf fixes it in the type scale. With the real cause addressed there is no reason to take the pinch away from anyone, and no need for the text-size control this ticket had to add to compensate. Kept for the record — the measurements in it are still true, and the second half is a good account of what disabling zoom costs.
+
 Re-scoped return of [[av-s9ti]], which shipped and was then reverted in PR #89 review. The revert's objection was that a static `maximum-scale=1,user-scalable=no` in the viewport meta applies to *every* visit — including an ordinary Safari tab, where pinch-zoom is a page-level accessibility affordance (WCAG 1.4.4, Resize Text) — and that iOS 10+ ignores the directive there anyway, so it cost accessibility without buying the behavior.
 
 This ticket narrows the ask to the case that actually motivated it: the app *saved to the home screen*. In a browser tab nothing changes and pinch-zoom is untouched; only a standalone launch — where the shell reads as an app, a pinch is usually a stray second finger on a scrolling grid, and there is no visible browser chrome to make the zoomed state obvious or easy to undo — turns it off.

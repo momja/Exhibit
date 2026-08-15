@@ -23,8 +23,6 @@ const files = [
   // av-41se) and must be linked before the page sheets/scripts that build on
   // them.
   "tokens.css", "components.css", "components.js",
-  // pwa.js is head-loaded by every page (the pwaHead partial), not page-scoped.
-  "pwa.js",
   "index.css", "index.js",
   "new.css", "new.js",
   "detail.css", "detail.js",

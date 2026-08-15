@@ -254,34 +254,27 @@ page's widget panel, which swaps `/partials/card-widget` after a save so the
 tile refreshes without a reload that would drop the CodeMirror buffer beside it
 (`docs/widgets.md`).
 
-**Home-screen app shell (av-fdcx, av-8zqr).** Every app-origin page head includes
-the shared `pwaHead` partial: the `manifest.json` link, the `apple-*` tags iOS reads
-instead of the manifest's display mode, and `pwa.js`, a head-loaded script that
-disables pinch-to-zoom **only** when the page is running as a home-screen app
-(`navigator.standalone`, or `display-mode: standalone|fullscreen`). In a browser tab
-the script returns immediately and zoom is untouched — that distinction is the whole
-point of doing it in script rather than in the viewport meta, since a static
-`user-scalable=no` would fail WCAG 1.4.4 for ordinary tab visits (and iOS ignores it
-there anyway). Standalone, it pins the viewport meta's minimum/maximum scale
-together (Chrome's mechanism) and cancels WebKit's
-`gesturestart`/`gesturechange`/`gestureend` (the only thing that stops the pinch on
-iOS).
+**Home-screen app shell (av-fdcx).** Every app-origin page head includes the shared
+`pwaHead` partial: the `manifest.json` link plus the `apple-*` tags iOS reads instead
+of the manifest's display mode. It is markup only — no script, and nothing that
+touches the viewport meta. None of it reaches the render origin: an artifact is a
+visitor-authored file and sets its own viewport, or doesn't.
 
-Taking the pinch away obliges the app to offer text resizing some other way, so the
-same script reveals the header's **text-size control** (the `textScale` partial,
-hidden in the markup and shown only here): 100–200% in five steps, persisted in
-app-origin `localStorage`. It moves the *same* viewport scale rather than CSS
-`zoom`: the meta scale is the browser's own page zoom, so it magnifies and pans
-exactly as the pinch did and leaves layout untouched, while `zoom` also stretches
-the document (measured: 791px inside a 390px screen at `zoom: 2`) and scrolls the
-page sideways at every scale. Note what this therefore is not — it does not reflow;
-`width=device-width` holds the layout viewport at 390px on a 390px phone while only
-the visual viewport narrows. A scale only takes effect when it is in the meta at
-parse time, so changing it reloads; the pages that can hold unsaved work (`edit`,
-`new`, `agent`) declare `data-scale-reload-warn` and confirm first.
-
-None of this reaches the render origin: an artifact is a visitor-authored file and
-sets its own viewport, or doesn't.
+**Form fields are 16px on touch (av-3qmf).** iOS Safari zooms the page in whenever it
+focuses a field whose text is under 16px, and does not zoom back out on blur — the
+page is left wider than the screen, with the submit button beside the field pushed
+off it. The whole fix is in the type scale: `tokens.css` defines
+`--field-font-size` / `--field-code-font-size` (14px / 12px), a single
+`@media (pointer:coarse)` block raises both to 16px, and every input, select,
+textarea, and CodeMirror instance sizes itself from those tokens — plus an
+element-level floor in `components.css` for controls no rule names, since an unstyled
+input inherits the UA's ~13px. 16px is the exact threshold WebKit uses, so removing
+the *reason* for the zoom leaves zooming itself fully available: no
+`user-scalable=no`, no gesture handlers, no WCAG 1.4.4 exposure. The query is on
+pointer type rather than width, because a narrow desktop window has no on-screen
+keyboard and a landscape tablet is wide and still touched. A `px` size hardcoded on a
+control opts it out of the bump silently — visible only on a phone — so a test
+(`field_zoom_test.go`) fails the build if any stylesheet does it.
 
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent

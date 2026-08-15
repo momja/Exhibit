@@ -36,9 +36,9 @@ func TestManifestServesValidJSON(t *testing.T) {
 }
 
 // pwaHeadPages is every app-origin HTML page that must carry the shared
-// "pwaHead" partial, keyed by a readable name. It lives here so the two tests
-// that walk the app's pages — the home-screen tags (av-fdcx) and the
-// standalone zoom guard (av-8zqr) — can never drift to different page sets.
+// "pwaHead" partial, keyed by a readable name. Kept as one list so a test that
+// walks the app's pages cannot quietly cover a different set than the next one
+// to need it.
 func pwaHeadPages(artifactID string) map[string]string {
 	return map[string]string{
 		"gallery index": "/",
