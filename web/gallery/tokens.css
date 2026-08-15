@@ -46,6 +46,12 @@
 	--shadow-modal:0 4px 24px rgba(0,0,0,.25);
 	--overlay:rgba(0,0,0,.4);
 
+	/* Every form control sizes itself from one of these, never a literal px:
+	 * iOS zooms in on focusing a field under 16px and does not zoom back out
+	 * (av-3qmf). The -code- variant is the monospace fields. */
+	--field-font-size:14px;
+	--field-code-font-size:12px;
+
 	/* spacing scale */
 	--space-1:4px;
 	--space-2:6px;
@@ -61,4 +67,14 @@
 	--radius-md:6px;   /* inputs, buttons */
 	--radius-lg:10px;  /* cards, modals */
 	--radius-pill:999px;
+}
+
+/* 16px is the exact threshold WebKit uses, so this removes the reason for the
+ * zoom rather than disabling zooming. Keyed on pointer, not width: a narrow
+ * desktop window has no keyboard, a landscape tablet is wide and touched. */
+@media (pointer:coarse){
+	:root{
+		--field-font-size:16px;
+		--field-code-font-size:16px;
+	}
 }

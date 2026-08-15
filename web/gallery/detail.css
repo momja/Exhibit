@@ -38,7 +38,7 @@ pre{padding:16px;font-family:monospace;font-size:12px;line-height:1.5;white-spac
 .banner-action:hover{text-decoration:underline}
 .allowlist{padding:8px 20px;background:#fffbe6;border-bottom:1px solid #ffe58f;font-size:13px;flex-shrink:0}
 .allowlist code{background:#fff3;padding:1px 5px;border-radius:3px;font-size:12px}
-.allowlist input{border:1px solid #ddd;border-radius:4px;padding:3px 8px;font-size:12px;width:240px;margin:0 6px}
+.allowlist input{border:1px solid #ddd;border-radius:4px;padding:3px 8px;font-size:var(--field-font-size);width:240px;margin:0 6px}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100}
 .modal-overlay[hidden]{display:none}
 .modal{background:#fff;border-radius:10px;padding:20px;width:380px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,.25)}

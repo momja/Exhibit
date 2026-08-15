@@ -79,9 +79,13 @@
 .details-panel>.panel-body{margin-top:var(--space-5);padding-top:var(--space-5);border-top:1px solid var(--color-hairline)}
 
 /* --- controls --------------------------------------------------------- */
-.field{width:100%;padding:var(--space-3) var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:14px;outline:none;background:var(--color-panel);color:var(--color-ink)}
+/* Floor for controls no rule below names: an unstyled input inherits the UA's
+ * ~13.33px, under the zoom threshold just as surely as a chosen 14px. */
+input,select,textarea{font-size:var(--field-font-size)}
+
+.field{width:100%;padding:var(--space-3) var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
 .field:focus{border-color:var(--brand-blue)}
-.select{padding:7px var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:14px;outline:none;background:var(--color-panel);color:var(--color-ink)}
+.select{padding:7px var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
 .select:focus{border-color:var(--brand-blue)}
 
 /* --- security-posture primitives -------------------------------------- */
@@ -130,3 +134,4 @@
 .muted{color:var(--color-muted)}
 .faint{color:var(--color-faint)}
 .text-sm{font-size:12px}
+

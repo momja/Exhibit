@@ -15,6 +15,8 @@ Make the app-origin gallery UI installable and feel native when added to a mobil
 
 **Revised (PR #89 review):** asks (1) and (2) shipped as scoped. Ask (3), pinch-to-zoom disabling, was reverted after review — `maximum-scale=1,user-scalable=no` fails WCAG 1.4.4 (Resize Text), removing pinch-zoom for low-vision users with no alternate text-scaling affordance, and iOS 10+ ignores the directive anyway so it never reliably delivered the intended behavior either. Pinch-to-zoom stays enabled on app-origin pages; see [[av-s9ti]].
 
+**Revised again ([[av-3qmf]]):** ask (3) is closed for good, and not by doing it. Scoping the pinch-disable to a home-screen launch was attempted ([[av-8zqr]]) and withdrawn before merge, because the behaviour that actually prompted the ask was never the pinch: focusing a form field on iOS zooms the page in and leaves it there, because the fields were under 16px. av-3qmf fixes that in the type scale. Pinch-to-zoom stays enabled everywhere — there is nothing left for ask (3) to solve.
+
 ## Design
 
 Standard web PWA primitives, no framework: a manifest.json served from the app origin, PNG icons rendered at build time from the existing compiled-in SVG logo (internal/api/logo.go), apple-* meta tags for iOS (which does not read manifest.json display mode the way Android does). ~~and a viewport meta tag change (maximum-scale=1, user-scalable=no) applied only to the html/template pages under internal/api/templates/ that serve the app shell — never to the render surface's served artifact documents.~~ (reverted, see above). Icon generation should live in the existing Node/esbuild asset-build pipeline (docs/build_assets.md) alongside the Phosphor icon vendoring, not as a new build system.

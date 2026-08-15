@@ -254,6 +254,28 @@ page's widget panel, which swaps `/partials/card-widget` after a save so the
 tile refreshes without a reload that would drop the CodeMirror buffer beside it
 (`docs/widgets.md`).
 
+**Home-screen app shell (av-fdcx).** Every app-origin page head includes the shared
+`pwaHead` partial: the `manifest.json` link plus the `apple-*` tags iOS reads instead
+of the manifest's display mode. It is markup only — no script, and nothing that
+touches the viewport meta. None of it reaches the render origin: an artifact is a
+visitor-authored file and sets its own viewport, or doesn't.
+
+**Form fields are 16px on touch (av-3qmf).** iOS Safari zooms the page in whenever it
+focuses a field whose text is under 16px, and does not zoom back out on blur — the
+page is left wider than the screen, with the submit button beside the field pushed
+off it. The whole fix is in the type scale: `tokens.css` defines
+`--field-font-size` / `--field-code-font-size` (14px / 12px), a single
+`@media (pointer:coarse)` block raises both to 16px, and every input, select,
+textarea, and CodeMirror instance sizes itself from those tokens — plus an
+element-level floor in `components.css` for controls no rule names, since an unstyled
+input inherits the UA's ~13px. 16px is the exact threshold WebKit uses, so removing
+the *reason* for the zoom leaves zooming itself fully available: no
+`user-scalable=no`, no gesture handlers, no WCAG 1.4.4 exposure. The query is on
+pointer type rather than width, because a narrow desktop window has no on-screen
+keyboard and a landscape tablet is wide and still touched. The standing rule when
+adding a control: size it from the token, never a literal `px` — a hardcoded size
+opts it out of the bump silently, and the symptom only shows up on a phone.
+
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent
 icon vocabulary without re-deciding. Load it **self-hosted on the app origin, never from a

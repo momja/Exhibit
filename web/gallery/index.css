@@ -11,11 +11,15 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inl
 main{padding:24px;max-width:1200px;margin:0 auto}
 .search-row{display:flex;align-items:center;gap:8px;margin-bottom:20px;position:relative}
 .search-row .search-icon{position:absolute;left:10px;color:#aaa;font-size:16px;pointer-events:none}
-.search-row input{flex:1;padding:9px 12px 9px 34px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none}
+/* min-width:0: a flex item defaults to min-width:auto, and an input's intrinsic
+ * width is ~229px, so without this the box will not shrink in a narrow window. */
+.search-row input{flex:1;min-width:0;padding:9px 12px 9px 34px;border:1px solid #ddd;border-radius:6px;font-size:var(--field-font-size);outline:none}
 .search-row input:focus{border-color:var(--brand-blue)}
 .search-clear{flex:0 0 auto;align-self:stretch;font-size:14px}
 .search-clear[hidden]{display:none!important}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+/* min() inside the minmax: a bare 260px is a floor even when the container is
+ * narrower, pushing the grid past the viewport in a small window. */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:16px}
 .grid.grid-loading{opacity:.5;transition:opacity .1s ease}
 /* The .card surface (background/radius/padding/shadow) is components.css;
  * the gallery card adds its grid-item behavior and hover lift. */
@@ -85,7 +89,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .modal{background:#fff;border-radius:10px;padding:20px;width:320px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,.25)}
 .modal h2{font-size:16px;font-weight:600}
 .modal label{display:block;font-size:12px;color:#555;margin:12px 0 4px}
-.modal input[type=text],.modal select{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;background:#fff;color:#111}
+.modal input[type=text],.modal select{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:var(--field-font-size);outline:none;background:#fff;color:#111}
 .modal input[type=text]:focus,.modal select:focus{border-color:var(--brand-blue)}
 .color-presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
 .color-swatch{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}

@@ -35,6 +35,21 @@ func TestManifestServesValidJSON(t *testing.T) {
 	}
 }
 
+// pwaHeadPages is every app-origin HTML page that must carry the shared
+// "pwaHead" partial, keyed by a readable name. Kept as one list so a test that
+// walks the app's pages cannot quietly cover a different set than the next one
+// to need it.
+func pwaHeadPages(artifactID string) map[string]string {
+	return map[string]string{
+		"gallery index": "/",
+		"add artifact":  "/new",
+		"detail":        "/artifacts/" + artifactID,
+		"edit":          "/artifacts/" + artifactID + "/edit",
+		"agent":         "/agent",
+		"not found":     "/artifacts/does-not-exist",
+	}
+}
+
 // TestAppOriginPagesCarryPWAHeadTags is av-fdcx's AC2: every app-origin
 // page's <head> links the manifest and carries the apple-* home-screen
 // tags. It exercises the actual routes rather than the "pwaHead" partial in
@@ -43,15 +58,7 @@ func TestAppOriginPagesCarryPWAHeadTags(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "PWA head check")
 
-	pages := map[string]string{
-		"gallery index": "/",
-		"add artifact":  "/new",
-		"detail":        "/artifacts/" + id,
-		"edit":          "/artifacts/" + id + "/edit",
-		"not found":     "/artifacts/does-not-exist",
-	}
-
-	for name, path := range pages {
+	for name, path := range pwaHeadPages(id) {
 		t.Run(name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", path, nil)
 			w := httptest.NewRecorder()
