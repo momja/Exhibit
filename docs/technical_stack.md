@@ -271,12 +271,14 @@ Taking the pinch away obliges the app to offer text resizing some other way, so 
 same script reveals the header's **text-size control** (the `textScale` partial,
 hidden in the markup and shown only here): 100–200% in five steps, persisted in
 app-origin `localStorage`. It moves the *same* viewport scale rather than CSS
-`zoom` — `zoom` magnifies without re-evaluating media queries, which turns large
-text into horizontal scrolling (measured: 791px of document inside a 390px screen at
-`zoom: 2`), while the meta scale shrinks the layout viewport so the page reflows.
-A scale only takes effect when it is in the meta at parse time, so changing it
-reloads; the pages that can hold unsaved work (`edit`, `new`, `agent`) declare
-`data-scale-reload-warn` and confirm first.
+`zoom`: the meta scale is the browser's own page zoom, so it magnifies and pans
+exactly as the pinch did and leaves layout untouched, while `zoom` also stretches
+the document (measured: 791px inside a 390px screen at `zoom: 2`) and scrolls the
+page sideways at every scale. Note what this therefore is not — it does not reflow;
+`width=device-width` holds the layout viewport at 390px on a 390px phone while only
+the visual viewport narrows. A scale only takes effect when it is in the meta at
+parse time, so changing it reloads; the pages that can hold unsaved work (`edit`,
+`new`, `agent`) declare `data-scale-reload-warn` and confirm first.
 
 None of this reaches the render origin: an artifact is a visitor-authored file and
 sets its own viewport, or doesn't.

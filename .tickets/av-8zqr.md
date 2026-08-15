@@ -32,15 +32,17 @@ Review objected that removing the pinch without an alternative fails WCAG 1.4.4 
 
 It drives the same viewport-meta scale the guard already owns, and two measurements decided that:
 
-- **CSS `zoom` was rejected.** At `zoom: 2` on a 390px viewport the document grows to 791px inside a 390px screen — media queries never see a narrower viewport, so it magnifies without reflowing. That is horizontal scrolling at large text (WCAG 1.4.10) as the price of satisfying 1.4.4. The meta scale reflows instead: the layout viewport becomes 195px and the breakpoints re-evaluate.
+- **CSS `zoom` was rejected.** At `zoom: 2` on a 390px viewport the document itself grows to 791px inside a 390px screen, so the page scrolls sideways at every scale. The meta scale leaves layout alone and lets the browser magnify, so nothing overflows that did not overflow at 100%.
 - **The scale must be present at parse time.** Rewriting the meta afterwards updates the attribute and changes nothing on screen. So a change is stored and applied by reloading — which is why `edit`, `new`, and `agent` carry `data-scale-reload-warn` and get a confirm first: they can hold an editor buffer, a pasted body, or a conversation, and nothing in this app tracks dirty state.
 
-Measured on a 390×844 mobile viewport in a standalone window: stored 1 / 1.25 / 1.5 / 1.75 / 2 produce layout viewports of 390 / 312 / 260 / 223 / 195 and a matching `visualViewport.scale`, so 200% text is real. The header needed the control's space — it wraps and tightens below 640px only when the control is visible (`:has()`), so a browser tab renders exactly as before, and no width overflows that did not overflow already.
+Measured on a 390×844 mobile viewport in a standalone window: stored 1 / 1.25 / 1.5 / 1.75 / 2 give `visualViewport.scale` 1 / 1.25 / 1.5 / 1.75 / 2 and visual viewport widths 390 / 312 / 260 / 223 / 195, so 200% text is real. The header needed the control's space — it wraps and tightens below 640px only when the control is visible (`:has()`), so a browser tab renders exactly as before.
+
+**What this is, precisely (corrected):** it magnifies and pans, it does not reflow — `width=device-width` keeps the layout viewport at 390px at every scale and only the visual viewport narrows (at scale 2: `clientWidth` 390, `visualViewport.width` 195). That is the same thing the pinch did, which is the point; WCAG 1.4.4 asks that text reach 200% without losing content, not that the layout re-break. Reflowing would mean pinning a numeric `width=<device-width/scale>` and doing rotation-safe arithmetic on `screen.width` — a bigger, separate decision.
 
 **Residual limits, recorded deliberately:**
 
-- At 200% the layout viewport is 195px and the gallery pans horizontally. That floor is pre-existing — with the control hidden the page already stops reflowing at ~284px — so the control exposes it rather than causing it. Making the shell reflow that far is a responsive-design job, not this ticket's.
 - Verified in Chromium under mobile emulation only. iOS is the primary target and WebKit is the engine the gesture half exists for, so AC5's on-device check is what actually closes this.
+- Two narrow-window overflow floors were found and fixed while measuring this (`.grid`'s 260px track minimum, and the search `<input>`'s `min-width:auto` as a flex item). They are ordinary responsive bugs, reachable in any narrow window and unrelated to the zoom once it was understood as magnification.
 
 ## Acceptance Criteria
 

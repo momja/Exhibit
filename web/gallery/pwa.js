@@ -23,20 +23,24 @@
  *      av-s9ti reverted — so the control is not a nicety attached to this
  *      guard, it is the half that earns it.
  *
- * Both halves drive the *same* mechanism: the viewport meta's scale. Setting
- * initial/minimum/maximum together shrinks the layout viewport, so the page
- * lays out exactly as it would under browser zoom — text gets physically
- * bigger and the narrower layout viewport re-evaluates the media queries, so
- * the page *reflows* into its phone layout instead of growing sideways.
+ * Both halves drive the *same* mechanism: the viewport meta's scale. It is
+ * the browser's own page zoom — precisely what the pinch would have done —
+ * so text gets physically bigger and the reader pans. It does NOT reflow:
+ * `width=device-width` keeps the layout viewport at 390px on a 390px phone
+ * whatever the scale, and only the visual viewport narrows (measured at
+ * scale 2: documentElement.clientWidth 390, visualViewport.width 195).
+ * Reflowing instead would mean pinning a numeric `width=<device-width/scale>`,
+ * which trades the browser's device handling for arithmetic on `screen.width`
+ * that has to survive rotation — not obviously worth it, and not what the
+ * gesture being replaced did either.
  *
  * Two things were measured before settling on it, both against a 390px mobile
  * viewport in a standalone window:
  *
- *   - CSS `zoom: 2` on the root magnifies without reflowing — media queries
- *     see the unchanged viewport, and the document grows to 791px inside a
- *     390px screen. That is horizontal scrolling at large text, which fails
- *     WCAG 1.4.10 while trying to satisfy 1.4.4. The meta scale holds
- *     scrollWidth at the viewport instead.
+ *   - CSS `zoom: 2` on the root magnifies *and* stretches the document to
+ *     791px inside a 390px screen, so the page scrolls sideways at every
+ *     scale. The meta scale leaves layout untouched and lets the browser do
+ *     the magnifying, so nothing overflows that did not overflow at 100%.
  *   - The scale is only honoured when it is in the meta *at parse time*.
  *     Rewriting the tag afterwards updates the attribute and changes nothing
  *     on screen. So a scale change is stored and applied by reloading, rather
