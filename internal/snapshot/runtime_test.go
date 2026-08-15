@@ -74,10 +74,12 @@ func TestInlineRuntimeAssets(t *testing.T) {
 		assert.Contains(t, out, `fetch('/build/app.wasm')`)
 	})
 
-	t.Run("a runtime-constructed URL is still served by the interceptor", func(t *testing.T) {
-		// The literal here is only the path fragment the page concatenates; the
-		// manifest still carries the resolved URL, so the wrapper matches it at
-		// call time even though no literal was ever rewritten.
+	t.Run("a runtime-constructed call is served when its URL also appears as a literal fetch ref", func(t *testing.T) {
+		// The literal fetch below is what puts the URL in the manifest; the
+		// wrapper then matches the constructed call at run time because both
+		// resolve to the same absolute URL. The interception mechanism serves
+		// the constructed call — the manifest entry, not the call, is what a
+		// literal produced.
 		body := `<html><head><script>
 			fetch('/build/app.wasm');
 			var u = BASE + '/build/app.wasm';
@@ -86,6 +88,22 @@ func TestInlineRuntimeAssets(t *testing.T) {
 		out, errs := inlineRuntime(t, base, body, runtimeLimits())
 		require.Empty(t, errs)
 		assert.Contains(t, manifestOf(t, out), srv.URL+"/build/app.wasm")
+	})
+
+	t.Run("a constructed-only URL is not vendored (limitation, pinned)", func(t *testing.T) {
+		// The path fragment here sits beside fetch(u), not inside a fetch('...')
+		// literal, so no manifest entry is created and no wrapper is injected:
+		// the runtime-constructed request still reaches the network. This is the
+		// documented boundary of the heuristic — do not 'fix' it by widening the
+		// regex into something that speculatively GETs arbitrary paths.
+		body := `<html><head><script>
+			var u = BASE + '/build/app.wasm';
+			fetch(u);
+		</script></head><body></body></html>`
+		out, errs := inlineRuntime(t, base, body, runtimeLimits())
+		require.Empty(t, errs)
+		assert.NotContains(t, out, "var M =")
+		assert.Equal(t, body, out)
 	})
 
 	t.Run("forces application/wasm when the server sent no type", func(t *testing.T) {
@@ -158,11 +176,17 @@ func TestInlineRuntimeAssets(t *testing.T) {
 		assert.Len(t, manifestOf(t, out), 1)
 	})
 
-	t.Run("picks up ESM import literals", func(t *testing.T) {
+	t.Run("leaves ESM import literals to the allowlist", func(t *testing.T) {
+		// Native module loading never consults window.fetch, so a manifest entry
+		// keyed from an import literal could never be matched — vendoring it
+		// would spend budget on bytes nothing reads while the module loader
+		// still requests the original URL. Import-derived origins belong to the
+		// script-src allowlist, via the footprint pass.
 		body := `<html><head><script type="module">import x from '/from-import.bin';</script></head><body></body></html>`
 		out, errs := inlineRuntime(t, base, body, runtimeLimits())
 		require.Empty(t, errs)
-		assert.Contains(t, manifestOf(t, out), srv.URL+"/from-import.bin")
+		assert.NotContains(t, out, "var M =")
+		assert.Equal(t, body, out)
 	})
 }
 

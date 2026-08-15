@@ -82,12 +82,17 @@ type runtimeInliner struct {
 
 // walk visits every <script> and harvests the references in its text. Only
 // script text is considered, so a fetch( shown inside a <pre> code sample is
-// documentation rather than a dependency and is left alone.
+// documentation rather than a dependency and is left alone. Only fetch-call
+// literals are harvested (scanner.FetchRefs): the manifest is consulted by a
+// window.fetch wrapper, and native ESM module loading never goes through
+// window.fetch, so an import-derived entry could never be matched. Import
+// refs stay with the footprint pass, where they feed the script-src
+// allowlist instead.
 func (in *runtimeInliner) walk(n *html.Node) {
 	if n.Type == html.ElementNode && n.DataAtom == atom.Script {
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
 			if c.Type == html.TextNode {
-				for _, ref := range scanner.LiteralRefs(c.Data) {
+				for _, ref := range scanner.FetchRefs(c.Data) {
 					in.consider(ref)
 				}
 			}
