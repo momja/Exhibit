@@ -282,16 +282,23 @@ promise even after the source site rots:
   source site into a cross-origin one, and same-origin fetches never needed CORS
   headers, so source sites do not send them. The request is permitted by CSP; the
   **read** is what the browser refuses. Vendoring removes the request. The pass takes
-  literal refs from `<script>` text (via `scanner.LiteralRefs`, the same heuristic the
-  footprint uses, so the two cannot drift), keeps only binary-asset extensions
+  fetch-call literals from `<script>` text (via `scanner.FetchRefs`, the fetch half of
+  `scanner.LiteralRefs` — one definition, so the vendorer's view cannot drift from the
+  footprint's), keeps only binary-asset extensions
   (`.wasm`/`.data`/`.bin`/`.mem`) so it never speculatively GETs an endpoint that
   merely looks like a URL, and fetches through the same `Fetcher` under its own larger
   per-asset cap (`MaxInlineAssetBytes`) — these payloads are a tool's reason to exist,
-  where an over-cap image only degrades a page that still works.
+  where an over-cap image only degrades a page that still works. ESM import refs are
+  deliberately left alone: native module loading never consults `window.fetch`, so a
+  vendored copy could never be served to the module loader — those origins belong to
+  the `script-src` allowlist, where the footprint reports them.
   Substitution is by **interception, not source rewriting**: the bytes go into a
   manifest keyed by absolute URL, and a small `window.fetch` wrapper injected at the
-  top of `<head>` consults it at call time. That survives minification and catches
-  URLs the page assembles at runtime, neither of which a literal-rewrite could. The
+  top of `<head>` consults it at call time. That survives minification, which a
+  literal rewrite could not. A runtime-constructed URL is served only when that same
+  absolute URL also appears as a literal fetch ref somewhere in the page — manifest
+  entries come from literals alone, so a URL assembled from parts the page never
+  spells out still reaches the network. The
   manifest values are `data:` URIs so the synthetic response carries a real
   `Content-Type` — `WebAssembly.instantiateStreaming` rejects anything that is not
   exactly `application/wasm`. No CSP change is needed: `connect-src` already carries

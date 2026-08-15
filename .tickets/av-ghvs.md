@@ -70,14 +70,14 @@ Three candidate directions, not mutually exclusive. (1) is cheap and should land
 
 **2. Vendor runtime-fetched assets (partial, bounded).** Extend the vendorer past markup refs by reusing the scanner's literal-URL heuristic to catch string literals that look like asset paths, and inline them. Honest limits: this is a heuristic (`observe, don't predict` — architecture.md §1.4 — argues against leaning on it), it cannot see constructed URLs, and it does not help here anyway without a large bump to `MaxAssetBytes` (12 MiB for this one file). A 12 MiB `data:` URI is also base64-inflated to ~16 MiB in the stored body. Probably worth doing for small assets; it does not solve the wasm class.
 
-**3. Same-origin asset proxy (real fix, biggest commitment).** Have the render surface serve vendored-by-reference assets from the render origin — e.g. `RENDER_ORIGIN/a/:id/_asset?u=<allowlisted-url>` — so the artifact's fetch becomes same-origin and CORS never applies. This genuinely fixes the class, but it is a significant policy change: the server would fetch on the artifact's behalf, which puts egress back on the service (SSRF surface, bandwidth, caching) and weakens the "the browser is the enforcer" property in architecture.md §4. It would need the existing `internal/snapshot` SSRF guard and the per-artifact allowlist enforced server-side on every proxied URL. Do not build this without an explicit decision — it is arguably a scope change to the security model.
+**3. Same-origin asset proxy (real fix, biggest commitment).** Have the render surface serve vendored-by-reference assets from the render origin — e.g. `RENDER_ORIGIN/a/:id/_asset?u=<allowlisted-url>` — so the asset is answered by an origin Exhibit controls and CORS is no longer the third party's to refuse. Note the sandboxed frame has an opaque origin, so 'same-origin' semantics never apply inside it: even a render-origin request is cross-origin to the frame, and the proxy must send `Access-Control-Allow-Origin` itself (which it can, being the responder), gated by the per-artifact allowlist. This genuinely fixes the class, but it is a significant policy change: the server would fetch on the artifact's behalf, which puts egress back on the service (SSRF surface, bandwidth, caching) and weakens the "the browser is the enforcer" property in architecture.md §4. It would need the existing `internal/snapshot` SSRF guard and the per-artifact allowlist enforced server-side on every proxied URL. Do not build this without an explicit decision — it is arguably a scope change to the security model.
 
 Note that a large asset cannot become "just a file" in any case; option 3 keeps the artifact dependent on the live source site, which trades the §9 "no live-linked imports" non-goal against usability. That tension should be settled before building.
 
 ## Acceptance Criteria
 
 - The CORS failure mode is documented (docs/security.md or docs/api.md ingest section): relocating a page to the render origin turns its same-origin runtime fetches into cross-origin ones, which fail unless the source server sends CORS headers, and the network allowlist cannot influence this.
-- A user hitting this on a URL-ingested artifact is given an explanation that distinguishes "origin not allowlisted" (fixable, CSP) from "third party sends no CORS headers" (not fixable by the allowlist), rather than only a bare network error.
+- A user hitting this on a URL-ingested artifact is given an explanation that distinguishes "origin not allowlisted" (fixable, CSP) from "third party sends no CORS headers" (not fixable by the allowlist), rather than only a bare network error. The in-page fetch failure alone cannot make that distinction (a missing CORS header is indistinguishable from DNS/TLS/connection failures to page JS), so the diagnosis is recorded server-side: the snapshot pipeline already fetches each residual asset and can inspect its response headers directly, noting which origins sent no `Access-Control-Allow-Origin`. The user-facing message is driven by that recorded diagnosis, and a regression fixture pins it.
 - A decision is recorded on whether to build the same-origin asset proxy (design option 3). If yes, it is filed as its own ticket with the SSRF/allowlist-enforcement requirements spelled out; if no, the limitation is recorded as a known constraint of URL ingest.
 - Regression coverage for whichever path is chosen: if the proxy is built, a test asserts a proxied fetch is refused for an origin absent from the artifact's allowlist; if only diagnosis ships, a test or fixture pins the documented behavior of `<base href>` + residual origins for a runtime-fetched asset.
 
@@ -111,15 +111,21 @@ Also viable for users today without any exhibit change: re-host the asset on any
 Fixed by vendoring runtime-fetched binary assets into the artifact at snapshot ingest.
 
 Approach: a second pass (internal/snapshot/runtime.go, InlineRuntimeAssets) over the
-markup-inlined document. It takes literal refs from <script> text via the new exported
-scanner.LiteralRefs — the same heuristic the footprint pass uses, so the two views cannot
-drift — keeps only binary-asset extensions (.wasm/.data/.bin/.mem), and fetches through
-the existing bounded Fetcher so budgets, dedupe and the SSRF guard stay in one place.
+markup-inlined document. It takes fetch-call literals from <script> text via the new
+exported scanner.FetchRefs — the fetch half of scanner.LiteralRefs, so the vendorer's
+view cannot drift from the footprint's — keeps only binary-asset extensions
+(.wasm/.data/.bin/.mem), and fetches through the existing bounded Fetcher so budgets,
+dedupe and the SSRF guard stay in one place. ESM import refs are deliberately NOT
+vendored: native module loading bypasses window.fetch, so a manifest entry could never
+be served to the module loader; import-derived origins belong to the script-src
+allowlist via the footprint pass.
 
 Substitution is by interception rather than source rewriting: the bytes go into a manifest
 keyed by absolute URL plus a small window.fetch wrapper injected at the top of <head>.
-That survives minification and also catches URLs the page assembles at runtime, neither of
-which a literal rewrite could. Manifest values are data: URIs so the synthetic response
+That survives minification, which a literal rewrite could not. A runtime-constructed URL
+is served only when that same absolute URL also appears as a literal fetch ref somewhere
+in the page — manifest entries come from literals alone. Manifest values are data: URIs so
+the synthetic response
 carries a real Content-Type — WebAssembly.instantiateStreaming rejects anything that is
 not exactly application/wasm, and .wasm is forced because neither the origin server's
 header nor mime.TypeByExtension is guaranteed to supply it.

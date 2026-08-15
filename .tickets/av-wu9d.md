@@ -20,6 +20,6 @@ Minor related issue in the same block: when reading the previous blob fails the 
 ## Acceptance Criteria
 
 - The PATCH body path uses ScanWithBase with the artifact's SourceURL when it has one, matching ingest.
-- A failed read of the previous body is handled rather than silently producing an empty baseline.
+- A failed read of the previous body aborts the PATCH before the new body is written — or records an explicit "unknown comparison" while preserving the existing blob and approval state. Either way the current silent-empty-baseline behavior (which makes the diff trivially true and reports footprint_changed spuriously) is gone.
 - A test asserts an edit to a URL-ingested artifact reports the same footprint shape ingest did.
 

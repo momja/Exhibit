@@ -22,6 +22,6 @@ Two defects in `refetchArtifact` (internal/api/artifacts.go), both divergences f
 ## Acceptance Criteria
 
 - refetch runs the same snapshot pipeline as ingest, so a vendored artifact stays vendored across an update from source.
-- refetch never writes the allowlist; new origins surface as a footprint for explicit approval, matching create and PATCH.
+- refetch never writes the allowlist; new origins surface as a footprint for explicit approval, matching create and PATCH. The refetch response returns the same NetworkFootprint contract the create/PATCH paths return (rather than a bare artifact), so newly observed origins actually reach the approval flow's UI.
 - A test asserts a refetch of a snapshotted artifact leaves the allowlist untouched and re-vendors the body.
 
