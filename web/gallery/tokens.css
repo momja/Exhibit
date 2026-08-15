@@ -46,16 +46,9 @@
 	--shadow-modal:0 4px 24px rgba(0,0,0,.25);
 	--overlay:rgba(0,0,0,.4);
 
-	/* Form-control type size. Every input/select/textarea in the app sizes
-	 * itself from one of these two rather than a literal px value, because on
-	 * a touch device the number is not a design choice: iOS Safari zooms the
-	 * page in when it focuses a field whose text is under 16px, and it does
-	 * not zoom back out on blur. The page is then wider than the screen and
-	 * the submit button beside the field is off it. Sizing fields at 16px on
-	 * coarse pointers removes the reason for that zoom, which is why nothing
-	 * here disables zooming — the pinch stays available everywhere.
-	 * --field-code-font-size is the same rule for the monospace fields (the
-	 * source textarea, the CodeMirror editor), which are smaller by design. */
+	/* Every form control sizes itself from one of these, never a literal px:
+	 * iOS zooms in on focusing a field under 16px and does not zoom back out
+	 * (av-3qmf). The -code- variant is the monospace fields. */
 	--field-font-size:14px;
 	--field-code-font-size:12px;
 
@@ -76,14 +69,9 @@
 	--radius-pill:999px;
 }
 
-/* A coarse pointer means a finger, which means the on-screen keyboard and the
- * focus-zoom described above. 16px is the exact threshold iOS Safari uses, not
- * a rounded-up guess, so this is the whole fix — no viewport meta changes, no
- * gesture handlers, no zoom taken away from anyone.
- *
- * Scoped to the input modality rather than to a width: a narrow desktop window
- * has the same breakpoints but no keyboard popping up, and a tablet in
- * landscape is wide and still touched. */
+/* 16px is the exact threshold WebKit uses, so this removes the reason for the
+ * zoom rather than disabling zooming. Keyed on pointer, not width: a narrow
+ * desktop window has no keyboard, a landscape tablet is wide and touched. */
 @media (pointer:coarse){
 	:root{
 		--field-font-size:16px;
