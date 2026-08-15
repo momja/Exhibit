@@ -1,8 +1,8 @@
 ---
 id: av-ghvs
-status: in_progress
+status: closed
 deps: []
-links: [av-ombn, av-f9b2, av-lh4a, av-b17a, av-wu9d, av-dwe2]
+links: []
 created: 2026-08-11T18:19:27Z
 type: bug
 priority: 1
@@ -105,3 +105,52 @@ Facts this establishes:
 Implication for design option 2 (vendor runtime-fetched assets): the mechanism is proven, so the blocker is purely the size caps (`MaxAssetBytes` 5 MiB, `MaxTotalBytes` 20 MiB in fetcher.go:42-44) plus the base64 ~33% inflation and the no-store re-transfer cost. If option 2 is pursued, it needs a policy on large-asset budgets and probably a cacheable delivery path, not just a cap bump.
 
 Also viable for users today without any exhibit change: re-host the asset on any origin that sends `Access-Control-Allow-Origin: *`, point the fetch at it, and allowlist that origin. Keeps the body small and the asset cacheable, at the cost of self-containment (and it re-introduces the live-linked dependency that PRD §9 rules out).
+
+**2026-08-12T02:50:37Z**
+
+Fixed by vendoring runtime-fetched binary assets into the artifact at snapshot ingest.
+
+Approach: a second pass (internal/snapshot/runtime.go, InlineRuntimeAssets) over the
+markup-inlined document. It takes literal refs from <script> text via the new exported
+scanner.LiteralRefs — the same heuristic the footprint pass uses, so the two views cannot
+drift — keeps only binary-asset extensions (.wasm/.data/.bin/.mem), and fetches through
+the existing bounded Fetcher so budgets, dedupe and the SSRF guard stay in one place.
+
+Substitution is by interception rather than source rewriting: the bytes go into a manifest
+keyed by absolute URL plus a small window.fetch wrapper injected at the top of <head>.
+That survives minification and also catches URLs the page assembles at runtime, neither of
+which a literal rewrite could. Manifest values are data: URIs so the synthetic response
+carries a real Content-Type — WebAssembly.instantiateStreaming rejects anything that is
+not exactly application/wasm, and .wasm is forced because neither the origin server's
+header nor mime.TypeByExtension is guaranteed to supply it.
+
+Size caps: added Limits.MaxInlineAssetBytes (16 MiB) as a separate per-asset budget for
+this pass, reached via a new Fetcher.FetchWithCap, so a 12 MB wasm is admissible without
+letting a decorative image balloon to the same size. MaxTotalBytes raised 20 -> 48 MiB.
+A too-large verdict is now cache-aware of the cap it was judged under, so a small-cap
+failure cannot leak to a later large-cap fetch.
+
+No CSP change was needed: connect-src already carries data: unconditionally as a local,
+no-egress source (av-x01o's bucket rule), so a vendored artifact runs with an EMPTY
+allowlist.
+
+Verified end-to-end against the original repro, https://pokeemerald.com/:
+- vendored_bytes 12,266,964; the wasm appears in vendored_urls
+- allowlist [] and the generated CSP is "connect-src blob: data:" — no origins at all
+- in Chrome the artifact boots: status "running - 11.7 MiB wasm", canvas present,
+  fetch returns 12,222,529 bytes as application/wasm, WebAssembly.compile succeeds,
+  responseType "basic" (served from the inlined data: URI, not the network)
+Before the fix this died at wasmModule with TypeError: Failed to fetch.
+
+Over-cap assets are left untouched and reported as an ErrTooLarge failure, which the
+ingest panel already flags for attention (web/gallery/new.js) — the silent TypeError
+becomes an explained limitation with no new UI.
+
+Accepted wrinkle: the page's original fetch literal is left in place, so the scan still
+reports that origin even though the interceptor now satisfies it locally. Over-reporting
+fails safe; avoiding it would require the fragile source rewriting this deliberately
+avoids. Documented.
+
+Docs: architecture.md 3.4a, api.md, technical_stack.md 7, and security.md 3 — the last
+was stale, claiming vendoring was unbuilt and the bounded fetcher unwired, both false.
+Also repaired a mis-spliced parenthetical in PRD 8.1.

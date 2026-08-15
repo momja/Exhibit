@@ -259,11 +259,39 @@ promise even after the source site rots:
   `<script src>` → inline `<script>`; `<link rel=stylesheet>` → inline `<style>`.
 - **CSS inlining** recurses through `url()` and `@import` chains (each sheet re-based
   against its own URL), inlining as `data:` URIs with cycle and depth guards.
+- **Runtime-asset inlining** (av-ghvs) is a second pass over the markup-inlined
+  document, for the binary payloads a page fetches from JavaScript — a wasm module,
+  an Emscripten `.data` heap — which the markup walker by definition cannot see.
+  Without it those artifacts do not run at all, and *the allowlist cannot fix them*:
+  relocating a page to the render origin turns a fetch that was same-origin on the
+  source site into a cross-origin one, and same-origin fetches never needed CORS
+  headers, so source sites do not send them. The request is permitted by CSP; the
+  **read** is what the browser refuses. Vendoring removes the request. The pass takes
+  literal refs from `<script>` text (via `scanner.LiteralRefs`, the same heuristic the
+  footprint uses, so the two cannot drift), keeps only binary-asset extensions
+  (`.wasm`/`.data`/`.bin`/`.mem`) so it never speculatively GETs an endpoint that
+  merely looks like a URL, and fetches through the same `Fetcher` under its own larger
+  per-asset cap (`MaxInlineAssetBytes`) — these payloads are a tool's reason to exist,
+  where an over-cap image only degrades a page that still works.
+  Substitution is by **interception, not source rewriting**: the bytes go into a
+  manifest keyed by absolute URL, and a small `window.fetch` wrapper injected at the
+  top of `<head>` consults it at call time. That survives minification and catches
+  URLs the page assembles at runtime, neither of which a literal-rewrite could. The
+  manifest values are `data:` URIs so the synthetic response carries a real
+  `Content-Type` — `WebAssembly.instantiateStreaming` rejects anything that is not
+  exactly `application/wasm`. No CSP change is needed: `connect-src` already carries
+  `data:` unconditionally as a local, no-egress source, so a vendored artifact runs
+  with an empty allowlist. Because the page's original literal is left in place, the
+  scan still reports that origin; over-reporting fails safe (it asks about an origin
+  no longer contacted rather than staying silent about one that is).
 - **Partial failure is data, not an error.** Any reference that can't be inlined (404,
   over a limit, blocked address, runtime-constructed URL) keeps its original value and
   is recorded as a typed `FetchError`; the rest of the page is still vendored. The
   handler assembles these into the response's `snapshot` report (vendored URLs/bytes,
-  residual origins, per-asset failures) so the user always gets a usable artifact.
+  residual origins, per-asset failures) so the user always gets a usable artifact. An
+  over-cap runtime asset is the case this matters most for: the artifact is stored and
+  the reason is reported, instead of the user meeting a bare `TypeError` at render with
+  only an allowlist that cannot help.
 - **Fallback (`<base href>`).** Whether snapshot is off, failed, or left residual
   relatives, a URL ingest injects `<base href="<source-url>">` at the top of `<head>`
   so surviving relative references resolve against the source site rather than the
