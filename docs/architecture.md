@@ -159,8 +159,23 @@ executable document with the correct security envelope:
   default.
 - Injects the **render preamble** as the first `<head>` script(s) — the **storage
   shim** with the artifact's state **inlined** into it so `getItem` is correct
-  synchronously, plus the download/clipboard **capability bridges** — then the
-  artifact body. (Umbrella/family taxonomy: `security.md` §4.)
+  synchronously, plus the download/clipboard **capability bridges** and the
+  `data:` fetch **compatibility shim** — then the artifact body. (Umbrella/family
+  taxonomy: `security.md` §4.)
+- The `data:` fetch shim (agaf-02xs) answers `fetch()` of a `data:` URL from a
+  Response built in the frame rather than letting it reach the network service.
+  WebKit refuses large `data:` fetches from an opaque-origin sandbox, so an
+  artifact that loads a multi-megabyte payload that way never boots in Safari
+  while working top-level. It grants nothing: a `data:` URL is inert content the
+  frame already holds, and decoding it locally is strictly less work than the
+  path it replaces. Framed-only, and **ordering-critical**: a snapshot that
+  vendored a runtime-fetched asset (§3.4a) installs its *own* fetch wrapper in
+  the artifact body, and that wrapper answers the artifact's request with a
+  `data:` URI. Each wrapper captures whatever `window.fetch` is when it installs,
+  and the preamble goes in first — so the vendorer's wrapper captures this one
+  and the two chain (artifact request → manifest → local Response). Injecting the
+  preamble after the artifact's own scripts would invert that and silently return
+  Safari to the refused path.
 - Sets `Cache-Control: no-store` — the document is dynamic (inlined state + per-artifact
   CSP) and must never be served stale from a cache.
 - Is loaded by the app's pages as the `src` of a sandboxed iframe
@@ -317,6 +332,18 @@ but search filters eagerly from the client: a debounced input refetches the
 same server-rendered gallery with the query and swaps only the grid, so the
 FTS5 search query stays authoritative without a full page reload. Filter,
 tag/collection management, and the allowlist editor are full-page server renders.
+
+**The detail page never embeds the artifact's source** (agaf-02xs). The code
+lives one click away on the edit page, in CodeMirror, which is the surface built
+for reading it; the detail page is the *running* artifact. That is a size
+invariant, not a preference: the page's weight must stay independent of the
+artifact's. A `<pre>` of the body made the page as large as the artifact plus the
+iframe that also loads it — 16.7 MB for a snapshot with a vendored wasm — and
+Safari simply stalls on a response that size, so the navigation never completes
+and the artifact "never loads". Chromium survives it, but under real memory
+pressure the same weight amplifies into a multi-gigabyte runaway. The rule for
+any future panel here: the detail page may show *facts about* an artifact, never
+the artifact's bytes.
 
 The edit page carries one further island, the **state inspector** (av-hg5f): a
 collapsible panel beside the security panel that reads the artifact's state rows

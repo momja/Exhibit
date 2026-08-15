@@ -223,7 +223,7 @@ no automatic refresh.
 injected into the rendered frame as the first `<head>` script(s) — replacing
 browser globals before any artifact code runs — is the **render preamble**.
 Its pieces share a *delivery mechanism*, not a *purpose*, and by purpose they
-are three families:
+are four families:
 
 - **Storage adapter** (established name: *storage shim*) — intercepts a
   storage API (IndexedDB and `window.storage` deferred) and replaces its
@@ -236,6 +236,15 @@ are three families:
   first-use approval. Not persistence. This section.
 - **Polyfill** — reconstructs an API *absent* in this environment (e.g. File
   System Access pickers, deferred as av-70t9) atop available primitives.
+- **Compatibility shim** — re-implements an operation the browser nominally
+  supports but *refuses or mishandles* in this frame, using only bytes the frame
+  already holds. The `data:` fetch shim (agaf-02xs) is the one member: WebKit
+  refuses large `data:` fetches from an opaque-origin sandbox, so `fetch()` of a
+  `data:` URL is answered from a locally constructed Response. Distinguishing it
+  from the other three matters for review: it crosses no trust boundary, needs no
+  approval, and adds no authority — a `data:` URL is inert content already in the
+  document, and the shim reaches neither the host nor the network. A member of
+  this family that *did* need either would belong in one of the families above.
 
 The capability-registry work (av-u0vc) covers the **capability-bridge family
 only**; storage adapters and polyfills are orthogonal axes it does not touch.

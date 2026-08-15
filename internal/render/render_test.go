@@ -318,7 +318,7 @@ func TestShimWritesViaPostMessageNotFetch(t *testing.T) {
 // omit the whole bridgeScript, so it doesn't ship there. The canvas-leak
 // mitigation trialed in av-02xs was removed as ineffective — assert it stays
 // gone so it can't silently degrade artifact rendering again.
-func TestShimFramedLocalFetchAndCanvasMitigation(t *testing.T) {
+func TestShimFramedDataURLFetchWrapper(t *testing.T) {
 	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
 	if !strings.Contains(doc, "window.fetch = function(input, init)") {
 		t.Fatalf("framed shim must wrap fetch for data: URLs: %s", doc)
@@ -335,7 +335,6 @@ func TestShimFramedLocalFetchAndCanvasMitigation(t *testing.T) {
 		t.Fatalf("widget renders must not carry the fetch shim: %s", widgetDoc)
 	}
 }
-
 
 // The shim must inline state so the artifact's synchronous startup reads see it,
 // rather than fetching asynchronously (which the artifact's own init would race).
