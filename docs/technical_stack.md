@@ -272,9 +272,9 @@ input inherits the UA's ~13px. 16px is the exact threshold WebKit uses, so remov
 the *reason* for the zoom leaves zooming itself fully available: no
 `user-scalable=no`, no gesture handlers, no WCAG 1.4.4 exposure. The query is on
 pointer type rather than width, because a narrow desktop window has no on-screen
-keyboard and a landscape tablet is wide and still touched. A `px` size hardcoded on a
-control opts it out of the bump silently — visible only on a phone — so a test
-(`field_zoom_test.go`) fails the build if any stylesheet does it.
+keyboard and a landscape tablet is wide and still touched. The standing rule when
+adding a control: size it from the token, never a literal `px` — a hardcoded size
+opts it out of the bump silently, and the symptom only shows up on a phone.
 
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent

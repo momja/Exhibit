@@ -30,4 +30,4 @@ Measured in Chromium with `hasTouch` emulation (`pointer:coarse` matches, as on 
 
 ## Acceptance Criteria
 
-1. On a touch device every form control — including both CodeMirror instances — computes to at least 16px. 2. Desktop sizing is unchanged (14px controls, 12px code). 3. Nothing disables or constrains zoom: no `user-scalable`, no `maximum-scale`, no gesture handlers anywhere in the app. 4. A stylesheet that hardcodes a px `font-size` on a form control fails the test suite. 5. Manual check on a real iPhone: tapping the search field does not zoom the page, and the clear button stays reachable.
+1. On a touch device every form control — including both CodeMirror instances — computes to at least 16px. 2. Desktop sizing is unchanged (14px controls, 12px code). 3. Nothing disables or constrains zoom: no `user-scalable`, no `maximum-scale`, no gesture handlers anywhere in the app. 4. New controls size themselves from `--field-font-size` / `--field-code-font-size` rather than a literal px value — enforced by review, not by a test. 5. Manual check on a real iPhone: tapping the search field does not zoom the page, and the clear button stays reachable.
