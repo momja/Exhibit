@@ -20,6 +20,7 @@ The escape hatches are a tell that the interface has grown past its original sco
 ## Acceptance Criteria
 
 - Either: split Store into per-subsystem interfaces (e.g. UserStore, ArtifactStore, StateStore, AdminStore, ...) so callers like internal/render and internal/agent depend only on the slice they use, with the SQLite type composing/implementing all of them -- OR: write and land a working fake/in-memory Store implementation that justifies keeping one interface, with at least one real caller (e.g. a currently-slow store test suite) converted to use it to prove it's exercised.
+- Whatever option lands is enforceable, not just selected: if the split is chosen, internal/api stops injecting the monolithic Store through Config and depends on the narrow interface each caller needs (state.go's SetState access included); if the fake store is chosen, its supported contract is defined and a real caller is converted to exercise it. `go test ./...` passes on the result.
 - No behavior change; this is a structural refactor only.
 - GetArtifactUnscoped / GetShareUnscoped's placement is reconsidered as part of the split (either they land on a render-specific narrow interface, or a documented reason is recorded for why they stay general).
 

@@ -1,8 +1,8 @@
 ---
 id: av-ghvs
-status: in_progress
+status: closed
 deps: []
-links: [av-ombn, av-f9b2, av-lh4a, av-b17a, av-wu9d, av-dwe2]
+links: []
 created: 2026-08-11T18:19:27Z
 type: bug
 priority: 1
@@ -70,14 +70,14 @@ Three candidate directions, not mutually exclusive. (1) is cheap and should land
 
 **2. Vendor runtime-fetched assets (partial, bounded).** Extend the vendorer past markup refs by reusing the scanner's literal-URL heuristic to catch string literals that look like asset paths, and inline them. Honest limits: this is a heuristic (`observe, don't predict` — architecture.md §1.4 — argues against leaning on it), it cannot see constructed URLs, and it does not help here anyway without a large bump to `MaxAssetBytes` (12 MiB for this one file). A 12 MiB `data:` URI is also base64-inflated to ~16 MiB in the stored body. Probably worth doing for small assets; it does not solve the wasm class.
 
-**3. Same-origin asset proxy (real fix, biggest commitment).** Have the render surface serve vendored-by-reference assets from the render origin — e.g. `RENDER_ORIGIN/a/:id/_asset?u=<allowlisted-url>` — so the artifact's fetch becomes same-origin and CORS never applies. This genuinely fixes the class, but it is a significant policy change: the server would fetch on the artifact's behalf, which puts egress back on the service (SSRF surface, bandwidth, caching) and weakens the "the browser is the enforcer" property in architecture.md §4. It would need the existing `internal/snapshot` SSRF guard and the per-artifact allowlist enforced server-side on every proxied URL. Do not build this without an explicit decision — it is arguably a scope change to the security model.
+**3. Same-origin asset proxy (real fix, biggest commitment).** Have the render surface serve vendored-by-reference assets from the render origin — e.g. `RENDER_ORIGIN/a/:id/_asset?u=<allowlisted-url>` — so the asset is answered by an origin Exhibit controls and CORS is no longer the third party's to refuse. Note the sandboxed frame has an opaque origin, so 'same-origin' semantics never apply inside it: even a render-origin request is cross-origin to the frame, and the proxy must send `Access-Control-Allow-Origin` itself (which it can, being the responder), gated by the per-artifact allowlist. This genuinely fixes the class, but it is a significant policy change: the server would fetch on the artifact's behalf, which puts egress back on the service (SSRF surface, bandwidth, caching) and weakens the "the browser is the enforcer" property in architecture.md §4. It would need the existing `internal/snapshot` SSRF guard and the per-artifact allowlist enforced server-side on every proxied URL. Do not build this without an explicit decision — it is arguably a scope change to the security model.
 
 Note that a large asset cannot become "just a file" in any case; option 3 keeps the artifact dependent on the live source site, which trades the §9 "no live-linked imports" non-goal against usability. That tension should be settled before building.
 
 ## Acceptance Criteria
 
 - The CORS failure mode is documented (docs/security.md or docs/api.md ingest section): relocating a page to the render origin turns its same-origin runtime fetches into cross-origin ones, which fail unless the source server sends CORS headers, and the network allowlist cannot influence this.
-- A user hitting this on a URL-ingested artifact is given an explanation that distinguishes "origin not allowlisted" (fixable, CSP) from "third party sends no CORS headers" (not fixable by the allowlist), rather than only a bare network error.
+- A user hitting this on a URL-ingested artifact is given an explanation that distinguishes "origin not allowlisted" (fixable, CSP) from "third party sends no CORS headers" (not fixable by the allowlist), rather than only a bare network error. The in-page fetch failure alone cannot make that distinction (a missing CORS header is indistinguishable from DNS/TLS/connection failures to page JS), so the diagnosis is recorded server-side: the snapshot pipeline already fetches each residual asset and can inspect its response headers directly, noting which origins sent no `Access-Control-Allow-Origin`. The user-facing message is driven by that recorded diagnosis, and a regression fixture pins it.
 - A decision is recorded on whether to build the same-origin asset proxy (design option 3). If yes, it is filed as its own ticket with the SSRF/allowlist-enforcement requirements spelled out; if no, the limitation is recorded as a known constraint of URL ingest.
 - Regression coverage for whichever path is chosen: if the proxy is built, a test asserts a proxied fetch is refused for an origin absent from the artifact's allowlist; if only diagnosis ships, a test or fixture pins the documented behavior of `<base href>` + residual origins for a runtime-fetched asset.
 
@@ -105,3 +105,58 @@ Facts this establishes:
 Implication for design option 2 (vendor runtime-fetched assets): the mechanism is proven, so the blocker is purely the size caps (`MaxAssetBytes` 5 MiB, `MaxTotalBytes` 20 MiB in fetcher.go:42-44) plus the base64 ~33% inflation and the no-store re-transfer cost. If option 2 is pursued, it needs a policy on large-asset budgets and probably a cacheable delivery path, not just a cap bump.
 
 Also viable for users today without any exhibit change: re-host the asset on any origin that sends `Access-Control-Allow-Origin: *`, point the fetch at it, and allowlist that origin. Keeps the body small and the asset cacheable, at the cost of self-containment (and it re-introduces the live-linked dependency that PRD §9 rules out).
+
+**2026-08-12T02:50:37Z**
+
+Fixed by vendoring runtime-fetched binary assets into the artifact at snapshot ingest.
+
+Approach: a second pass (internal/snapshot/runtime.go, InlineRuntimeAssets) over the
+markup-inlined document. It takes fetch-call literals from <script> text via the new
+exported scanner.FetchRefs — the fetch half of scanner.LiteralRefs, so the vendorer's
+view cannot drift from the footprint's — keeps only binary-asset extensions
+(.wasm/.data/.bin/.mem), and fetches through the existing bounded Fetcher so budgets,
+dedupe and the SSRF guard stay in one place. ESM import refs are deliberately NOT
+vendored: native module loading bypasses window.fetch, so a manifest entry could never
+be served to the module loader; import-derived origins belong to the script-src
+allowlist via the footprint pass.
+
+Substitution is by interception rather than source rewriting: the bytes go into a manifest
+keyed by absolute URL plus a small window.fetch wrapper injected at the top of <head>.
+That survives minification, which a literal rewrite could not. A runtime-constructed URL
+is served only when that same absolute URL also appears as a literal fetch ref somewhere
+in the page — manifest entries come from literals alone. Manifest values are data: URIs so
+the synthetic response
+carries a real Content-Type — WebAssembly.instantiateStreaming rejects anything that is
+not exactly application/wasm, and .wasm is forced because neither the origin server's
+header nor mime.TypeByExtension is guaranteed to supply it.
+
+Size caps: added Limits.MaxInlineAssetBytes (16 MiB) as a separate per-asset budget for
+this pass, reached via a new Fetcher.FetchWithCap, so a 12 MB wasm is admissible without
+letting a decorative image balloon to the same size. MaxTotalBytes raised 20 -> 48 MiB.
+A too-large verdict is now cache-aware of the cap it was judged under, so a small-cap
+failure cannot leak to a later large-cap fetch.
+
+No CSP change was needed: connect-src already carries data: unconditionally as a local,
+no-egress source (av-x01o's bucket rule), so a vendored artifact runs with an EMPTY
+allowlist.
+
+Verified end-to-end against the original repro, https://pokeemerald.com/:
+- vendored_bytes 12,266,964; the wasm appears in vendored_urls
+- allowlist [] and the generated CSP is "connect-src blob: data:" — no origins at all
+- in Chrome the artifact boots: status "running - 11.7 MiB wasm", canvas present,
+  fetch returns 12,222,529 bytes as application/wasm, WebAssembly.compile succeeds,
+  responseType "basic" (served from the inlined data: URI, not the network)
+Before the fix this died at wasmModule with TypeError: Failed to fetch.
+
+Over-cap assets are left untouched and reported as an ErrTooLarge failure, which the
+ingest panel already flags for attention (web/gallery/new.js) — the silent TypeError
+becomes an explained limitation with no new UI.
+
+Accepted wrinkle: the page's original fetch literal is left in place, so the scan still
+reports that origin even though the interceptor now satisfies it locally. Over-reporting
+fails safe; avoiding it would require the fragile source rewriting this deliberately
+avoids. Documented.
+
+Docs: architecture.md 3.4a, api.md, technical_stack.md 7, and security.md 3 — the last
+was stale, claiming vendoring was unbuilt and the bounded fetcher unwired, both false.
+Also repaired a mis-spliced parenthetical in PRD 8.1.
