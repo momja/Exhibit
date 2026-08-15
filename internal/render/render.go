@@ -382,8 +382,8 @@ const bridgeScript = `
     // opaque-origin sandbox — pokeemerald-wasm loads its 12MB wasm as a data:
     // URI and never boots in Safari's iframe while loading fine top-level. The
     // bytes are already in the document, so route data: GETs to a locally
-    // constructed Response instead of the network service (mirrors
-    // dataURLToBlob's decode below: base64, else percent-decoded). Artifacts
+    // constructed Response instead of the network service (decoding shared with
+    // dataURLToBlob below: base64, else byte-level percent-decode). Artifacts
     // that wrap fetch themselves capture this wrapper, so the translation
     // still applies when the artifact installs its own fetch shim.
     var nativeFetch = window.fetch;
@@ -397,13 +397,15 @@ const bridgeScript = `
             if (comma > 0) {
               var meta = url.slice(5, comma);
               var data = url.slice(comma + 1);
+              var hash = data.indexOf('#');
+              if (hash >= 0) data = data.slice(0, hash);
               var bytes;
               if (/;base64$/i.test(meta)) {
                 var bin = atob(data);
                 bytes = new Uint8Array(bin.length);
                 for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
               } else {
-                bytes = new TextEncoder().encode(decodeURIComponent(data));
+                bytes = percentDecodeBytes(data);
               }
               var mime = meta.replace(/;base64$/i, '') || 'text/plain';
               return Promise.resolve(new Response(bytes, {
@@ -416,6 +418,34 @@ const bridgeScript = `
       }
       return nativeFetch.apply(this, arguments);
     };
+    // Percent-decodes a data: URL body byte-by-byte. decodeURIComponent is the
+    // wrong tool here: the body is bytes, not text — it throws on non-UTF-8
+    // sequences (e.g. %FF) and re-encodes bytes 0x80+ as multi-byte UTF-8, so
+    // a binary payload would be corrupted or abandoned to the very network
+    // service this shim exists to avoid. The URL spec's percent-decoding is
+    // byte-preserving, and raw non-ASCII characters (which the URL parser
+    // would have UTF-8 percent-encoded) are encoded the same way here.
+    function percentDecodeBytes(s) {
+      var out = [];
+      for (var i = 0; i < s.length; i++) {
+        var ch = s.charCodeAt(i);
+        if (ch === 37 /* % */ && i + 2 < s.length) {
+          var hex = s.slice(i + 1, i + 3);
+          if (/^[0-9a-f]{2}$/i.test(hex)) {
+            out.push(parseInt(hex, 16));
+            i += 2;
+            continue;
+          }
+        }
+        if (ch > 255) {
+          var enc = new TextEncoder().encode(String.fromCharCode(ch));
+          for (var j = 0; j < enc.length; j++) out.push(enc[j]);
+        } else {
+          out.push(ch);
+        }
+      }
+      return new Uint8Array(out);
+    }
 
     // ---- Unsupported-capability diagnostic (av-yvtb) ----
     // Some browser capabilities cannot work inside this opaque-origin sandbox no
@@ -523,6 +553,8 @@ const bridgeScript = `
       if (comma < 0) return null;
       var meta = href.slice(5, comma);
       var data = href.slice(comma + 1);
+      var hash = data.indexOf('#');
+      if (hash >= 0) data = data.slice(0, hash);
       var mime = meta.replace(/;base64$/i, '') || 'text/plain';
       try {
         if (/;base64$/i.test(meta)) {
@@ -531,7 +563,7 @@ const bridgeScript = `
           for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
           return new Blob([bytes], { type: mime });
         }
-        return new Blob([decodeURIComponent(data)], { type: mime });
+        return new Blob([percentDecodeBytes(data)], { type: mime });
       } catch (e) {
         return null;
       }

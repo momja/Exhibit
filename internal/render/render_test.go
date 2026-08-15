@@ -326,6 +326,15 @@ func TestShimFramedDataURLFetchWrapper(t *testing.T) {
 	if !strings.Contains(doc, "new Response(bytes, {") {
 		t.Fatalf("framed shim must construct Responses from data: bytes: %s", doc)
 	}
+	// The shim must decode payloads byte-by-byte (decodeURIComponent throws on
+	// non-UTF-8 sequences and corrupts bytes 0x80+) and must exclude any URL
+	// fragment from the body it constructs.
+	if !strings.Contains(doc, "function percentDecodeBytes") {
+		t.Fatalf("framed shim must byte-level percent-decode non-base64 payloads: %s", doc)
+	}
+	if !strings.Contains(doc, "data.indexOf('#')") {
+		t.Fatalf("framed shim must strip the fragment before decoding the payload: %s", doc)
+	}
 	if strings.Contains(doc, "willReadFrequently") || strings.Contains(doc, "CANVAS_MITIGATION") {
 		t.Fatalf("ineffective canvas mitigation must not ship in the shim: %s", doc)
 	}
