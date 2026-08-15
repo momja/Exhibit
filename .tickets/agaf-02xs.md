@@ -7,15 +7,27 @@ created: 2026-08-13T18:31:03Z
 type: bug
 priority: 1
 assignee: Max Omdal
-tags: [render, memory, chromium]
+tags: [render, gallery, memory, safari]
 ---
-# Canvas putImageData memory leak in sandboxed artifact iframes (Chromium)
+# Detail page embeds the full artifact source — Safari stalls on the multi-MB page; sandboxed data: fetches refused
 
-Artifacts that call ctx.putImageData() every frame (e.g. the pokeemerald-wasm game) leak ~500KB/frame in the iframe renderer's PartitionAlloc when embedded in Exhibit's sandboxed OOP iframe. Observed live: renderer grew 5.8GB->9.0GB at ~30MB/s at 60fps; JS heap flat at 54MB; 26,904 PartitionAlloc regions (tag 255) of ~128-384KB retained. Top-level renders and local sandboxed-iframe harnesses do NOT leak; only the real Exhibit context leaks. No-op'ing putImageData via CDP stopped growth instantly (flat at 1.69GB while game kept running). Fix approach: carry the mitigation in the render shim instead of the artifact - (1) fetch wrapper translating data: URL fetches into locally constructed Responses (fixes Safari never-loading, WebKit data: fetch flakiness in opaque sandbox), (2) HTMLCanvasElement.prototype.getContext wrapper forcing willReadFrequently:true on 2d contexts, (3) optional injected CSS with !important neutralizing image-rendering/border-radius on canvases, gated behind a per-artifact state flag so visuals of pixel-art artifacts are untouched by default.
+Two Safari/Chromium failures behind one artifact class (multi-MB bodies, e.g. snapshots with vendored wasm — pokeemerald-wasm at 16 MB):
+
+1. The detail page rendered the artifact's full source in a `<pre>` beside the iframe, making the page itself as large as the artifact (16.7 MB). Safari stalls on a response that size: the navigation never completes and the artifact "never loads" in the framed detail page (top-level works). Chromium survives it, but under real memory pressure the same weight amplifies into a multi-GB renderer runaway.
+2. WebKit refuses large `fetch()` of `data:` URLs from an opaque-origin sandbox, so the artifact's vendored wasm (12 MB `data:` URI) never booted in Safari's iframe even when the page did load.
+
+Shipped fix:
+- The detail page never embeds the source — the body lives on the edit page (CodeMirror); page weight is now independent of artifact size.
+- The render preamble gains a `data:` fetch **compatibility shim** answering `data:` GETs from locally constructed Responses (grants nothing: the bytes are already in the document).
+- The willReadFrequently/CSS canvas mitigation trialed for the leak half was removed as ineffective; the "leak" was concluded to be pressure amplification of the heavy page, not a per-frame leak. The notes below tell the full story.
 
 ## Acceptance Criteria
 
-With the flag enabled on an artifact, renderer footprint stays flat (no sustained growth) while the artifact runs at 60fps in the Exhibit iframe. With the flag disabled, behavior unchanged. Safari: artifact loads in the sandboxed iframe via the data: fetch wrapper.
+- Detail-page weight is independent of artifact size: the handler never reads the source blob, the page carries no `<pre>`/source controls (pinned by `TestDetailPageDoesNotEmbedSource`); measured 5.7 KB for the 16 MB snapshot.
+- Safari: the artifact boots in the sandboxed detail-page iframe — vendored `data:` assets load through the preamble's compatibility shim; Chromium unaffected.
+- The Chromium runaway is not reproducible after the source removal; no per-frame canvas leak is claimed.
+- The removed canvas mitigation stays out of the preamble (pinned by render tests).
+- The preamble's fetch wrapper installs before the vendorer's — the two only work composed (pinned by `TestPreambleFetchWrapperPrecedesArtifactScripts`).
 
 
 ## Notes
@@ -47,3 +59,7 @@ Correction: the detail-page source <pre> was never a feature (leftover from temp
 **2026-08-15T17:33:53Z**
 
 Merged bug/av-ghvs/inline-runtime-fetched-assets into this branch (merge cddbffc; only conflict was the ticket file, resolved to the fix branch's version). agaf-02xs now DEPENDS on av-ghvs. Redeployed agaf-02xs and verified end-to-end: POST /api/artifacts {url: pokeemerald.com, snapshot:true} now produces a self-contained artifact (12MB wasm inlined as data: URI + injected fetch shim; render doc 16.4MB), and the artifact boots at 60fps in the sandbox (status: 'running — 11.7 MiB wasm'). Snapshot ingest no longer fails for runtime-fetched wasm.
+
+**2026-08-15T20:36:08Z**
+
+Ticket top rewritten (user-approved) to match what shipped: title/description/acceptance criteria now describe the source-panel removal, the data: fetch compatibility shim, and the invariant that detail-page weight is independent of artifact size. The abandoned canvas-leak mitigation stays in the notes above as the investigation record; the branch name is historical and deliberately not renamed.
