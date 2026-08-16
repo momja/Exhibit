@@ -70,6 +70,17 @@ later disappears, and a fully vendored page collapses its network footprint
 toward `connect-src 'none'`. Fetching is bounded (per-asset and total size caps,
 an asset-count cap, timeouts, and an SSRF guard against non-public addresses).
 
+Binary payloads the page fetches **from JavaScript** at runtime — a wasm module,
+an Emscripten `.data` heap — are vendored too, under a larger per-asset cap. This
+is what makes such tools work at all: once relocated to the render origin, a
+fetch that was same-origin on the source site becomes cross-origin, and source
+sites do not send CORS headers for requests that never needed them. CSP permits
+the request; the browser refuses to *read* the response, so the failure looks
+like a network error that **approving the origin cannot fix**. Inlining removes
+the request. These assets are matched by extension (`.wasm`, `.data`, `.bin`,
+`.mem`) and served through an injected `fetch` wrapper, so a URL the page builds
+at runtime is still satisfied locally.
+
 `snapshot` requires `url`; requesting it on a pasted `body` is a `400`. Partial
 failure never aborts the ingest — assets that can't be inlined (404, over a
 limit, runtime-constructed URLs) keep their original reference (still resolvable

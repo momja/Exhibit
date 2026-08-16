@@ -187,26 +187,35 @@ Points of stance embedded in that policy:
 
 ## 3. Vendoring: snapshot on import, never live-linked
 
-URL ingest fetches the page **once** and stores its body as the artifact.
-**Vendoring (inlining) of relative external assets** (images, scripts,
-stylesheets, fonts) is tracked by the open `exhibit-lwb` epic
-(`exhibit-lwb.3`–`exhibit-lwb.6`); today the top-level document body is stored
-verbatim without inlining, so relative asset references still resolve against
-the source site.
+URL ingest fetches the page **once** and stores its body as the artifact. With
+`snapshot: true` the page's external assets are **vendored (inlined)** into that
+body: images, scripts, stylesheets and fonts, including nested CSS
+`@import`/`url()` chains, plus the binary payloads a page fetches from
+JavaScript at runtime (wasm modules and similar, av-ghvs). Anything that cannot
+be inlined keeps its original reference and is recorded as a typed failure, so
+partial vendoring still yields a usable artifact.
 
-**Bounded fetcher status:** `internal/snapshot` contains a completed bounded
-`Fetcher` component (`exhibit-lwb.2` closed) with per-asset and total size
-budgets, an asset-count cap, request timeouts, a redirect limit, and a
-**dial-time guard rejecting non-public addresses** (loopback, private ranges,
-link-local) to prevent SSRF. However, this bounded fetcher is **not yet wired
-into the ingest or refetch paths** (`exhibit-lwb.6` open). Until that wiring
-lands, `POST /api/artifacts` (URL branch) and `POST .../refetch` use a bare
-`http.Get` with a 10 MiB body cap and no SSRF guard. The bounded pipeline
-described here is the target state.
+**Vendoring is a security property, not only a durability one.** A fully
+vendored page collapses its own network footprint toward `connect-src 'none'` —
+there is nothing left for it to reach out to. It also removes a failure the
+allowlist cannot address: relocating a page to the render origin turns its
+same-origin runtime fetches into cross-origin ones, and because same-origin
+requests never needed CORS headers, source sites do not send them. CSP permits
+such a request while the browser refuses to read the response, so the artifact
+breaks in a way that approving the origin does nothing to fix.
+
+**Bounded fetcher:** all vendoring goes through one bounded `Fetcher` in
+`internal/snapshot`, with per-asset and total size budgets, an asset-count cap,
+request timeouts, a redirect limit, and a **dial-time guard rejecting non-public
+addresses** (loopback, private ranges, link-local) to prevent SSRF. The
+runtime-asset pass shares that fetcher, and so that budget and that guard, under
+its own larger per-asset cap. The **initial page fetch** is still the exception:
+`POST /api/artifacts` (URL branch) and `POST .../refetch` use a bare `http.Get`
+with a 10 MiB body cap and no SSRF guard. That gap is not yet closed.
 
 After ingest the stored copy never phones home. Updating it is an explicit user
-action (`POST /api/artifacts/:id/refetch`), which re-runs the same bounded
-pipeline. There are no live-linked imports and no automatic refresh.
+action (`POST /api/artifacts/:id/refetch`). There are no live-linked imports and
+no automatic refresh.
 
 ## 4. Local I/O defaults: clipboard and files
 
@@ -214,7 +223,7 @@ pipeline. There are no live-linked imports and no automatic refresh.
 injected into the rendered frame as the first `<head>` script(s) — replacing
 browser globals before any artifact code runs — is the **render preamble**.
 Its pieces share a *delivery mechanism*, not a *purpose*, and by purpose they
-are three families:
+are four families:
 
 - **Storage adapter** (established name: *storage shim*) — intercepts a
   storage API (IndexedDB and `window.storage` deferred) and replaces its
@@ -227,6 +236,15 @@ are three families:
   first-use approval. Not persistence. This section.
 - **Polyfill** — reconstructs an API *absent* in this environment (e.g. File
   System Access pickers, deferred as av-70t9) atop available primitives.
+- **Compatibility shim** — re-implements an operation the browser nominally
+  supports but *refuses or mishandles* in this frame, using only bytes the frame
+  already holds. The `data:` fetch shim (agaf-02xs) is the one member: WebKit
+  refuses large `data:` fetches from an opaque-origin sandbox, so `fetch()` of a
+  `data:` URL is answered from a locally constructed Response. Distinguishing it
+  from the other three matters for review: it crosses no trust boundary, needs no
+  approval, and adds no authority — a `data:` URL is inert content already in the
+  document, and the shim reaches neither the host nor the network. A member of
+  this family that *did* need either would belong in one of the families above.
 
 The capability-registry work (av-u0vc) covers the **capability-bridge family
 only**; storage adapters and polyfills are orthogonal axes it does not touch.
