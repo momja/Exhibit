@@ -521,6 +521,34 @@ func TestShimDownloadBridgeIsFramedOnly(t *testing.T) {
 	}
 }
 
+// The link navigation bridge (av-r0dk): the sandbox omits allow-popups, so a
+// target=_blank anchor is dropped and a plain anchor would navigate the iframe
+// itself. The shim intercepts external http(s) anchor activations and posts the
+// URL to the host, which owns approval and opens it in a new tab. Downloads
+// (blob:/data:) still win over navigation, and same-origin/hash/mailto/
+// javascript: links are left to their native behavior.
+func TestShimInstallsLinkNavigationBridge(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
+
+	if !strings.Contains(doc, "__avNavigate") {
+		t.Fatalf("shim missing the link navigation bridge message: %s", doc)
+	}
+	// The interception must distinguish navigation hrefs from download hrefs;
+	// downloads keep their own message and still win on click.
+	if !strings.Contains(doc, "isExternalLinkHref") {
+		t.Fatalf("shim missing the external-link predicate: %s", doc)
+	}
+	// The resolved URL is compared against location.origin so hash-only,
+	// relative, javascript:, and mailto: links are untouched.
+	if !strings.Contains(doc, "location.origin") {
+		t.Fatalf("shim must resolve against the document origin: %s", doc)
+	}
+	// The download bridge survives the addition.
+	if !strings.Contains(doc, "__avDownload") {
+		t.Fatalf("shim lost the download bridge: %s", doc)
+	}
+}
+
 // The module-worker interceptor (av-yvtb): Chrome refuses module-worker script
 // fetches for an opaque origin, so Worker({type:'module'}) silently hangs in the
 // sandbox. The preamble wraps the Worker constructor and, on the module-worker +

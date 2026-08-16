@@ -108,6 +108,7 @@ const SOURCE_URL = {{.SourceURL}};
      and a plain `= true;` keeps the bootstrap greppable. */ -}}
 let downloadsApproved = {{if .Capability.DownloadsApproved}}true{{else}}false{{end}};
 let clipboardApproved = {{if .Capability.ClipboardApproved}}true{{else}}false{{end}};
+let linksApproved = {{if .Capability.LinksApproved}}true{{else}}false{{end}};
 </script>
 <script src="/assets/gallery/components.js"></script>
 <script src="/assets/gallery/state-api.js"></script>

@@ -7,6 +7,7 @@
  *                        the Update-from-source button only renders when set)
  *   downloadsApproved  - persisted first-use download approval (mutable)
  *   clipboardApproved  - persisted first-use clipboard approval (mutable)
+ *   linksApproved      - persisted first-use external-link approval (mutable)
  */
 
 // Mobile actions sheet (av-g7n7): below 640px the toolbar is styled as a
@@ -295,6 +296,34 @@ document.getElementById('clip-allow').addEventListener('click', async function()
   document.getElementById('clip-modal').hidden = true;
   pendingClip = null;
   if (req) performClipboard(req);
+});
+
+// Link navigation bridge (av-r0dk): the sandboxed frame cannot open external
+// links itself — a target=_blank anchor is dropped without allow-popups, and a
+// plain anchor would replace the iframe with an external page that usually
+// refuses framing. The shim posts external link activations here; when approved
+// we open the URL in a new tab from the app origin (the click's transient
+// activation covers the postMessage roundtrip). Unapproved, we stash the
+// destination for the first-request confirmation (av-e3sj) and open nothing.
+let pendingLink = null;
+
+window.addEventListener('message', function(e) {
+  const d = e.data;
+  if (!d || d.__avNavigate !== true || d.artifactId !== ID) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || e.source !== frame.contentWindow) return;
+  let url;
+  try {
+    url = new URL(String(d.url));
+  } catch (err) {
+    return;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+  if (linksApproved) {
+    window.open(url.href, '_blank', 'noopener');
+    return;
+  }
+  pendingLink = { url: url.href, host: url.hostname };
 });
 
 // "Update from source" — only reachable from the toolbar button, which the
