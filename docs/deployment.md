@@ -364,14 +364,23 @@ setting, so read them before offering accounts to anyone:
   administers *accounts* (§3.5) — who exists, who may sign in, who is an admin.
   There is nothing that shows what another person holds, and nothing that limits
   how much of it they hold.
-- **No account deletion, and this one has a sharp edge.** Disabling an account
-  (§3.5) stops the person signing in and signs them out at once, but their
-  artifacts remain in the database under their owner id and there is no
-  interface to reassign or delete them. Recovering or erasing a departed user's
-  library currently means SQL. Plan for that before you depend on it.
-- **No self-service.** Nobody can change their own password; an admin resets it
-  for them. That is the trade that keeps mail out of the product entirely — no
-  SMTP to configure, no reset links, nothing to verify.
+- **Account deletion is the person's own, and nobody else's.** Anyone signed in
+  can erase their account and everything in it from `/profile` — rows and
+  artifact files both. What there is *no* interface for is doing it to somebody
+  else: an admin can disable an account (§3.5), which stops the person signing
+  in and signs them out at once, but their artifacts remain in the database
+  under their owner id with no way to reassign or delete them from the product.
+  Erasing a departed user's library still means SQL. Plan for that before you
+  depend on it.
+- **Deleting here does not delete the identity.** Exhibit erases what it holds;
+  it has no authority over the identity provider that issued the login. The same
+  person signing in again is a *new* account with an empty library, because
+  `users.external_id` is unique and the row is created at first login. The
+  confirmation on `/profile` says so, and anyone offering accounts to other
+  people should know it before they are asked.
+- **No self-service password change.** Nobody can change their own password; an
+  admin resets it for them. That is the trade that keeps mail out of the product
+  entirely — no SMTP to configure, no reset links, nothing to verify.
 
 **Upgrading an existing single-user instance.** User ids start at 1, which is
 the id a single-user library is already filed under, so the first account in
@@ -430,10 +439,15 @@ docker compose exec app /server user enable partner@example.com
 `user disable` revokes that account's sessions exactly as the screen does, and
 refuses the last admin for the same reason.
 
-**What is not here.** Nobody can manage their own account — no self-service
-password change, no "sign out my other devices", no account deletion. Those are
-a person acting on their own account rather than an admin acting on the
-instance, and they are a separate piece of work.
+**What is not here.** Managing your own account is `/profile`, not this CLI and
+not the admin screen: deleting your account and the library it owns lives there
+(and only there — nothing lets an admin delete somebody else's). Self-service
+password change and "sign out my other devices" do not exist yet on either
+surface.
+
+`/profile`'s deletion refuses the instance's last enabled admin, with the reason
+on the disabled control rather than as a surprise after the confirmation. If
+that account is the one you want gone, promote somebody else first.
 
 ## 4. No AI agent features
 

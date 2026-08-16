@@ -202,8 +202,6 @@ what keeps "last 30 days" demo data from ageing into an empty widget.
 - Shares (`/s/:shareID`) serve the artifact only; there is no shared widget.
 - The tile is a fixed 132 px tall. There is no small/medium/large family.
 - A widget does not re-render while its card is on screen (see above).
-- `Blob.Store` has no `Delete`, so removing a widget orphans its blob — the
-  same v1 behaviour as deleting an artifact.
 - **No size cap on a widget body** — an 8 MB widget is accepted and served
   verbatim, and a widget renders once per card. Tracked by `av-wrbu`, which
   covers the service's oversize/degenerate-input policy as a whole rather than

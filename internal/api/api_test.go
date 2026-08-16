@@ -18,6 +18,17 @@ import (
 
 func newTestRouter(t *testing.T) *Router {
 	t.Helper()
+	ro, _ := newTestRouterWithBlobDir(t)
+	return ro
+}
+
+// newTestRouterWithBlobDir is newTestRouter plus the directory its blob store
+// writes into. The deletion tests (av-7jcq) need it: proving an artifact's
+// bytes are gone means looking at the filesystem, and a test that only asks
+// blob.Store again would pass against an implementation that merely stopped
+// answering for a file it left in place.
+func newTestRouterWithBlobDir(t *testing.T) (*Router, string) {
+	t.Helper()
 
 	f, err := os.CreateTemp("", "test-api-*.db")
 	require.NoError(t, err)
@@ -45,7 +56,7 @@ func newTestRouter(t *testing.T) *Router {
 		RenderOrigin: "http://render.test",
 		AuthToken:    "secret",
 		Secrets:      box,
-	})
+	}), blobDir
 }
 
 func authHeader() string { return "Bearer secret" }

@@ -66,6 +66,11 @@ var appOriginGETRoutePaths = []pageRoute{
 	// cookie would be authority over the whole user directory that the
 	// admin's own logout could not take back.
 	{route: "/admin/users", path: "/admin/users"},
+	// A person's own account (av-qo05). It carries the same bootstrap, and
+	// the leak would be the mirror image of the one above: not authority over
+	// everyone else's account, but a credential over your own that outlives
+	// the logout you performed because you were worried about it.
+	{route: "/profile", path: "/profile"},
 
 	// htmx fragments: page markup by another name, so they are held to the
 	// same rule as the pages they are swapped into.

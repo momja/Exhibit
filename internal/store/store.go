@@ -341,4 +341,22 @@ type Store interface {
 	// live sessions is part of the operation rather than a courtesy the
 	// caller adds: a disable a logged-in browser survives is not a disable.
 	SetUserDisabled(ctx context.Context, userID int64, disabled bool) error
+
+	// --- A person's own account (av-4wyq, epic av-g2dx) -----------------
+	// The two above are an admin acting on somebody else. These two are an
+	// account acting on itself, and neither takes an id a request could
+	// supply — the caller passes the owner its own session already resolved.
+
+	// GetAccountSummary counts what deleting the account would destroy, so
+	// the confirmation can state it rather than gesture at it. Shares are
+	// counted because they are the consequence that lands on somebody else
+	// (see the type).
+	GetAccountSummary(ctx context.Context, userID int64) (AccountSummary, error)
+	// DeleteAccount erases the account and everything it owns, returning the
+	// blob ids whose bytes the caller must then remove — collected inside the
+	// same transaction, because after it commits nothing can name them again.
+	// ErrLastAdmin when the account is the instance's only enabled admin;
+	// ErrNotFound when there is no such account. sqlite_account.go says what
+	// it deletes and what the schema's cascades delete for it.
+	DeleteAccount(ctx context.Context, userID int64) ([]string, error)
 }
