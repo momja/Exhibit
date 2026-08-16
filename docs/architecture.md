@@ -511,7 +511,7 @@ flowchart TD
     lkQ -->|first attempt| lkPrompt{"host prompts<br/>(destination host)"}
     lkPrompt -->|approve| lkOK["PATCH links_approved &rarr;<br/>open in new tab"]
     lkPrompt -->|deny| lkNo["URL dropped;<br/>artifact keeps running"]
-    lk --> lkMiss["any vector the bridge misses &rarr;<br/>stays blocked (sandbox omits allow-popups)"]
+    lk --> lkMiss["popup vectors the bridge misses &rarr;<br/>stay sandbox-blocked (no allow-popups)"]
 ```
 
 Two properties fall out of the sandbox's opaque origin: reads are **inlined at render**
@@ -542,8 +542,11 @@ plain anchor would navigate the iframe itself; the link bridge intercepts anchor
 activations whose resolved URL is an external `http(s)` destination (after the
 download-href check, so `blob:`/`data:` still win) and posts only the URL to the
 host, which owns the first-use approval prompt and opens the URL in a new tab
-from the app origin. The bridge is UX, not enforcement: a direct `window.open` or
-form submission simply stays sandbox-blocked. There is no CSP/allowlist
+from the app origin. The bridge is UX, not enforcement: a direct `window.open`
+stays sandbox-blocked, while form submissions are not this bridge's to govern —
+the sandbox retains `allow-forms` and the per-artifact `form-action` policy
+(`'self'` plus the allowlist) already enforces the network allowlist for them.
+There is no CSP/allowlist
 interaction — the popup is its own top-level document governed by the target
 site's policy — and the bridge installs only when a host frame exists; top-level
 renders and shares navigate natively.

@@ -237,7 +237,7 @@ func tagViews(tags []*store.Tag) []tagView {
 // capabilityPopover (av-41se) partials render. It's shared verbatim by the
 // gallery card and the artifact detail/viewer page so the popover looks and
 // behaves identically in both places. ShowManage gates the popover's footer
-// "Manage in allowlist settings" link: true for both app-origin pages here.
+// "Manage security settings" link: true for both app-origin pages here.
 // The render surface (internal/render) — which serves /s/:shareID — never
 // composes gallery templates at all, so no caller there needs ShowManage;
 // the field exists so a caller without an owner session can render the same

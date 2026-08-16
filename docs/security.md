@@ -318,10 +318,13 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     artifact. Once approved the host opens the URL in a new tab from the app
     origin; the click's transient activation covers the postMessage roundtrip.
   - **The sandbox remains the wall.** Approval never adds `allow-popups` or
-    `allow-top-navigation`; vectors the bridge doesn't catch (a direct
-    `window.open`, form submissions) simply stay blocked by the browser. There
-    is no CSP/allowlist interaction: the popup is its own top-level document
-    governed by the target site's own policy.
+    `allow-top-navigation`; popup vectors the bridge doesn't catch (a direct
+    `window.open`) simply stay blocked by the browser. Form submissions are
+    not this bridge's to govern: the sandbox keeps `allow-forms`, and the
+    existing `form-action` policy (§2) — `'self'` plus the allowlist — already
+    enforces the network allowlist for them, exactly as before. There is no
+    CSP/allowlist interaction for the popup itself: it is its own top-level
+    document governed by the target site's own policy.
   - This adds gesture convenience, not capability: right-click → "Open link in
     new tab" already reaches the same URL from browser chrome, which the
     sandbox does not govern. Like downloads, the bridge installs only when a

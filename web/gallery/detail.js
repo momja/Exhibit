@@ -307,6 +307,7 @@ document.getElementById('clip-allow').addEventListener('click', async function()
 // first-request confirmation (av-e3sj), naming the destination host, and open
 // nothing until the user allows.
 let pendingLink = null;
+let linkAllowPending = false;
 
 window.addEventListener('message', function(e) {
   const d = e.data;
@@ -327,6 +328,9 @@ window.addEventListener('message', function(e) {
   pendingLink = { url: url.href, host: url.hostname };
   document.getElementById('link-host').textContent = url.hostname;
   document.getElementById('link-modal').hidden = false;
+  // Move focus into the dialog so keyboard users land on the decision rather
+  // than on whatever sat behind the overlay.
+  document.getElementById('link-block').focus();
 });
 
 // Persists the first-use grant, then lets the caller open the pending URL. The
@@ -341,8 +345,15 @@ async function setLinksApproved(approved) {
 // Denial just drops the destination and the artifact keeps running — nothing is
 // persisted, mirroring downloads (denial drops, approval persists).
 function closeLinkModal() {
+  // While an Allow request is in flight, dismissal must not invalidate the
+  // transaction: the allow handler re-verifies pendingLink is still the same
+  // link after the PATCH and skips opening if anything changed.
+  if (linkAllowPending) return;
   document.getElementById('link-modal').hidden = true;
   pendingLink = null;
+  // Hand focus back to the artifact so keyboard users return where they were.
+  const frame = document.querySelector('iframe');
+  if (frame) frame.focus();
 }
 
 document.getElementById('link-block').addEventListener('click', closeLinkModal);
@@ -354,7 +365,13 @@ document.addEventListener('keydown', function(e) {
 });
 document.getElementById('link-allow').addEventListener('click', async function() {
   const link = pendingLink;
-  if (!(await setLinksApproved(true))) return;
+  linkAllowPending = true;
+  const ok = await setLinksApproved(true);
+  linkAllowPending = false;
+  // Only settle the transaction if the pending destination is still the one
+  // the user approved — a dismissal or a newer link must not be overridden by
+  // opening this URL after the fact.
+  if (!ok || pendingLink !== link) return;
   closeLinkModal();
   if (link) window.open(link.url, '_blank', 'noopener');
 });

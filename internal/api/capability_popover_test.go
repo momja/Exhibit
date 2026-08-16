@@ -141,8 +141,19 @@ func TestCapabilityPopoverLinksRowPerFlag(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
+	// The glyph must appear in each of its two slots — the card's
+	// capability-cluster and the popover row — not merely once anywhere on the
+	// page.
+	glyph := `<span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span>`
 	assert.Contains(t, page, "External links — Can open links in new tabs")
-	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span>`)
+	assert.Contains(t, page, `<div class="capability-popover-row">`+glyph+`<span>External links — Can open links in new tabs</span></div>`)
+	clusterStart := strings.Index(page, "capability-cluster")
+	// Note: the cluster's aria-describedby attribute also contains the
+	// capability-popover-<id> substring, so anchor the popover boundary on its
+	// <div> tag, not the bare id prefix.
+	popoverStart := strings.Index(page, `<div class="capability-popover" id="`)
+	require.True(t, clusterStart >= 0 && popoverStart > clusterStart, "cluster must precede its popover")
+	assert.Contains(t, page[clusterStart:popoverStart], glyph, "capability-cluster must render the links glyph")
 	assert.NotContains(t, page, "Fully contained")
 }
 
@@ -157,14 +168,14 @@ func TestCapabilityPopoverManageLinkOnGalleryAndDetail(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), `<a class="capability-popover-manage" href="/artifacts/`+id+`/edit#security-panel">Manage in allowlist settings →</a>`)
+	assert.Contains(t, w.Body.String(), `<a class="capability-popover-manage" href="/artifacts/`+id+`/edit#security-panel">Manage security settings →</a>`)
 
 	req2 := httptest.NewRequest("GET", "/artifacts/"+id, nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusOK, w2.Code)
 	page2 := w2.Body.String()
-	assert.Contains(t, page2, `<a class="capability-popover-manage" href="/artifacts/`+id+`/edit#security-panel">Manage in allowlist settings →</a>`)
+	assert.Contains(t, page2, `<a class="capability-popover-manage" href="/artifacts/`+id+`/edit#security-panel">Manage security settings →</a>`)
 	// The viewer's cluster/popover is the same component, wired the same way.
 	assert.Contains(t, page2, `aria-describedby="capability-popover-`+id+`" data-capability-trigger`)
 }
@@ -214,12 +225,12 @@ func TestCapabilityPopoverManageLinkGatedByShowManage(t *testing.T) {
 
 	htmlShown, err := renderPartial(t, "capabilityCluster", shown)
 	require.NoError(t, err)
-	assert.Contains(t, htmlShown, `Manage in allowlist settings`)
+	assert.Contains(t, htmlShown, `Manage security settings`)
 	assert.Contains(t, htmlShown, `href="/artifacts/art-shown/edit#security-panel"`)
 
 	htmlHidden, err := renderPartial(t, "capabilityCluster", hidden)
 	require.NoError(t, err)
-	assert.NotContains(t, htmlHidden, `Manage in allowlist settings`)
+	assert.NotContains(t, htmlHidden, `Manage security settings`)
 	assert.NotContains(t, htmlHidden, `capability-popover-manage`)
 	// Everything else about the popover still renders — ShowManage gates
 	// only the footer link, not the rest of the "receipt".

@@ -489,10 +489,17 @@ const bridgeScript = `
       }
     };
 
+    // Normalizes an anchor's href to a string. An SVG <a> (which closest('a')
+    // also matches) exposes href as an SVGAnimatedString; reading its baseVal
+    // keeps SVG links on the same path as HTML anchors instead of letting them
+    // slip past the download and link checks.
+    var anchorHref = function(anchor) {
+      var href = anchor.href;
+      if (href && typeof href.baseVal === 'string') return href.baseVal;
+      return String(href || '');
+    };
+
     var isDownloadHref = function(href) {
-      // Coerce first: an SVG <a> (which closest('a') also matches) exposes href
-      // as an SVGAnimatedString, not a string, so a bare .slice would throw.
-      // Stringified it can't match blob:/data:, so SVG anchors are safely skipped.
       href = String(href);
       return href.slice(0, 5) === 'blob:' || href.slice(0, 5) === 'data:';
     };
@@ -501,7 +508,7 @@ const bridgeScript = `
     // boundary as transferred data, not a capability grant, and targetOrigin
     // stays pinned to the app origin like every other shim message.
     var bridgeDownload = function(anchor) {
-      var href = anchor.href;
+      var href = anchorHref(anchor);
       var blob = href.slice(0, 5) === 'data:' ? dataURLToBlob(href) : blobURLs[href];
       if (!blob) return;
       var filename = anchor.getAttribute('download') || 'download';
@@ -525,8 +532,9 @@ const bridgeScript = `
     // hands the URL to the host frame, which owns first-use approval and opens
     // it in a new tab. Only the URL crosses the boundary — a pointer to
     // content the artifact already displays, not a capability grant. Vectors
-    // it does not catch (window.open, form submits) simply stay sandbox-blocked;
-    // evading the bridge gains nothing.
+    // it does not catch (a direct window.open) simply stay sandbox-blocked;
+    // form submissions stay governed by the document's form-action policy,
+    // not this bridge — evading it gains nothing.
     var isExternalLinkHref = function(href) {
       href = String(href);
       if (href.slice(0, 7) !== 'http://' && href.slice(0, 8) !== 'https://') return false;
@@ -546,7 +554,7 @@ const bridgeScript = `
     document.addEventListener('click', function(e) {
       var anchor = e.target && e.target.closest ? e.target.closest('a') : null;
       if (!anchor) return;
-      var href = String(anchor.href || '');
+      var href = anchorHref(anchor);
       if (isDownloadHref(href)) {
         e.preventDefault();
         bridgeDownload(anchor);
