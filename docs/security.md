@@ -440,7 +440,7 @@ request, through middleware, in one place:
 | Where | Who resolves the owner | To what |
 |---|---|---|
 | API group (`/api/*`) | `authMiddleware` | the session's user, the agent grant's `OwnerID`, or `PUBLIC_OWNER_ID` for a public visitor; `ownerMiddleware` supplies the single-user default for a token-authenticated client |
-| Page group (`/`, `/new`, `/artifacts/…`, `/agent`, `/admin/users`, `/partials/*`) | `sessionGate` | the session's user — the same `sessionUser` lookup it already performed for §1.5, no longer discarded |
+| Page group (`/`, `/new`, `/artifacts/…`, `/agent`, `/admin/users`, `/profile`, `/partials/*`) | `sessionGate` | the session's user — the same `sessionUser` lookup it already performed for §1.5, no longer discarded |
 | Page group, instance with no login | `ownerMiddleware` | the single-user default |
 
 `ownerMiddleware` never overwrites an owner resolved upstream, which is what
@@ -486,10 +486,11 @@ owner scoping constrains them. They need a *third* property, and it is the one
 none of the three route walks above tests.
 
 **A session is not authorization here.** That is the whole boundary. A person
-acting on their own account needs nothing more than a session (av-g2dx); an
-admin acting on the instance needs strictly more, and the two surfaces will
-share page furniture. So the check lives on the route — `adminOnly`
-(`internal/api/admin.go`) wraps the page and the whole `/api/admin/*` group, and
+acting on their own account needs nothing more than a session (av-g2dx, now
+`/profile` — av-qo05); an admin acting on the instance needs strictly more, and
+the two surfaces share page furniture. So the check lives on the route —
+`adminOnly` (`internal/api/admin.go`) wraps the page and the whole
+`/api/admin/*` group, and
 no admin route shares a handler with a non-admin one. Getting this wrong in the
 obvious way, by hanging an admin control off a settings page guarded only by
 being logged in, lets any account reset the admin's password.

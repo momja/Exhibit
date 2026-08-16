@@ -833,6 +833,47 @@ does not.
   controls call: the single write path (§3.1) is why the page has no form
   handler of its own.
 
+### 3.8b Your own account: `/profile` (av-qo05)
+
+§3.8a's other half, and the pairing is what makes the boundary legible. The two
+pages read the same `users` rows and wear the same furniture — the settings
+shell, `settings.css`, the `settingsHeader` partial — and share no authority:
+`/admin/users` reaches *other* accounts and passes `adminOnly`, while `/profile`
+reaches exactly one, resolved from `ownerIDFromCtx` and never from the URL, so a
+session is the whole authorization. The route takes no id, which is why there is
+no second guard here to get wrong.
+
+- **The entry point is two icon-only header controls.** "Add artifact" shrank
+  from a labelled primary button to a square linking to `/new`, and a static
+  person icon beside it links here. Same box, same weight: the gallery header's
+  subject is the library below it, and a wide primary button made the header the
+  loudest thing on a page it is not about. Both carry an `aria-label` and a
+  `title`, since a glyph states nothing on its own; the admin link keeps its
+  label, because a third anonymous icon would say nothing at all. Static means
+  static — an anchor, no menu. What belongs on the page (deletion, the agent
+  key, sessions) each needs explanation or a confirmation beside it, and none of
+  that fits a menu item.
+- **Sections from the first one.** The page is `.card` blocks, though only
+  Account has content today, because the rest of av-g2dx — the BYO agent key,
+  active sessions, export — should land as an addition rather than a redesign.
+- **The display name has a fallback `admin.go` does not need.**
+  `newAdminUserView` is `Name: u.Email`, and `users.email` is NOT NULL
+  defaulting to the empty string (migration 013) — a portable second key beside
+  `external_id`, not something an identity provider guarantees. In a table an
+  empty one is a blank cell among many; here the name *is* the section. So
+  `/profile` falls back to the provider subject and labels it as what it is, and
+  states the sign-in route when there is not even that. The rule stays local to
+  this page: it exists because a name rendered alone must not be blank, which is
+  a property of the layout rather than of the row.
+- **The delete section ships before the deletion.** Erasing an account is
+  av-4wyq's, blocked on av-7jcq (`Blob.Store` has no `Delete`, so a delete today
+  would leave every artifact body on disk). This page owns the section that
+  hosts it — the danger-zone treatment, the statement that it is permanent, and
+  the statement that deleting here does not remove the identity from the
+  identity provider — and renders the control disabled with the reason attached
+  to it. A button that dropped the rows and left the files would be worse than
+  one that does nothing, because only the second is honest about it.
+
 ## 4. Trust boundaries
 
 Four boundaries, in decreasing trust:

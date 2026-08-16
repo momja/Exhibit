@@ -88,6 +88,12 @@ var appOriginGETRoutes = []getRoute{
 	// to keep — a "disable user" convenience GET would be forgeable by any
 	// page an admin visits.
 	{route: "/admin/users"},
+	// A person's own account (av-qo05). A read for the same reason: the one
+	// action it will host, deleting the account, is a mutation through the
+	// JSON API. A "delete my account" convenience GET would be forgeable by
+	// any page its owner visits, which is the worst thing on this instance to
+	// make forgeable.
+	{route: "/profile"},
 	{route: "/partials/agent-preview"},
 	{route: "/partials/card-widget"},
 	// Static assets, the manifest, the share redirect, and the instance's

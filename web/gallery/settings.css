@@ -57,6 +57,34 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
 .settings-foot{display:flex;align-items:center;gap:var(--space-5);margin-top:var(--space-6);flex-wrap:wrap}
 .settings-foot .muted{line-height:1.5;max-width:420px}
 
+/* --- account facts (/profile, av-qo05) --------------------------------- */
+/* The Account section is a short list of labelled facts rather than a table.
+ * There is exactly one row's worth of information here — a person reading
+ * about themselves, not an admin reading across a directory — and a table of
+ * one row is a table pretending. The labels reuse .settings-label's type so
+ * the two pages read as one surface. */
+.settings-facts{display:grid;grid-template-columns:auto 1fr;gap:var(--space-4) var(--space-7);align-items:baseline}
+.settings-facts dt{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#7b828e;white-space:nowrap}
+/* An email address or a provider subject can be long and carries no spaces to
+ * break at, so it wraps mid-string rather than widening the card past the
+ * viewport — the same reason .settings-name does. */
+.settings-facts dd{font-size:14px;color:var(--color-ink-soft);word-break:break-all}
+.settings-facts dd i{color:var(--color-muted);margin-right:var(--space-1)}
+
+/* --- danger zone (/profile, av-qo05) ----------------------------------- */
+/* An irreversible action has to look unlike the rest of the page before it is
+ * read, not after. The card keeps the shared .card surface and adds a
+ * danger-tinted edge and heading, so it is still one of the page's sections
+ * rather than a second component that happens to be red. */
+.card-danger{border:1px solid var(--color-danger);box-shadow:none}
+.settings-h3-danger{display:flex;align-items:center;gap:var(--space-3);color:var(--color-danger-hover)}
+.settings-danger-copy{font-size:13px;color:var(--color-ink-soft);line-height:1.55;max-width:620px}
+.settings-danger-copy+.settings-danger-copy{margin-top:var(--space-5)}
+/* The reason beside a disabled control shares the button's .settings-foot row
+ * and wraps under it on a narrow screen. A control that cannot act is useless
+ * without the sentence saying why, so the two travel together. */
+.settings-foot .btn:disabled+.muted{max-width:460px}
+
 /* --- status ------------------------------------------------------------ */
 /* One live region for every outcome on the page, success or refusal. The
  * refusals here are worth reading in full (the last-admin one explains what

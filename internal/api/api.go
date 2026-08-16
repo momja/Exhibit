@@ -377,6 +377,13 @@ func (ro *Router) setupRoutes() {
 		// 403, is the right refusal.
 		r.With(ro.adminOnly).Get("/admin/users", ro.adminUsersPage)
 
+		// A person's own account (av-qo05). The same page group and the same
+		// page furniture as the route above, and deliberately not the same
+		// guard: this handler reads ownerIDFromCtx and nothing else, so a
+		// session is the whole authorization. Registering the two beside each
+		// other is where that difference is visible.
+		r.Get("/profile", ro.profilePage)
+
 		// Server-rendered fragments, swapped into a live page by htmx
 		// (av-6m3e). They render the same template partials the full page
 		// render uses, and carry no authority the page they belong to

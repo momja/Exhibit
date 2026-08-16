@@ -1,0 +1,102 @@
+{{/* Your own account (av-qo05, epic av-g2dx). Data: profilePageData
+     (profile.go).
+
+     A person acting on themselves. It wears /admin/users' furniture — the
+     settings shell below, settings.css, the settingsHeader partial — and
+     shares none of its authority: that page passes adminOnly because it
+     reaches other accounts, this one reads only ownerIDFromCtx's.
+
+     Laid out as sections from the first one, though only Account has content
+     today. The BYO agent key, active sessions and export are the rest of
+     av-g2dx, and each should land as a new card rather than a rearrangement.
+
+     Login names, email addresses and provider subjects are all text this
+     instance did not author, and they reach the markup as template values
+     where html/template's contextual escaping keeps them text. */}}
+{{define "profile"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your account — Exhibit</title>
+<link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
+{{template "pwaHead"}}
+<link rel="stylesheet" href="/assets/phosphor/regular.css">
+<link rel="stylesheet" href="/assets/gallery/tokens.css">
+<link rel="stylesheet" href="/assets/gallery/components.css">
+<link rel="stylesheet" href="/assets/gallery/settings.css">
+</head>
+<body>
+{{template "settingsHeader" "Your account"}}
+<main class="settings">
+<div class="lede">
+  <h2>Your account.</h2>
+  <p>What this instance knows about you, and what you can do about it. Everything here acts on your account alone — never anyone else&#39;s.</p>
+</div>
+
+<div class="card">
+  <h3 class="settings-h3">Account</h3>
+  {{if .Account.SignedIn}}
+  <dl class="settings-facts">
+    <dt>Signed in as</dt>
+    {{/* An identity provider is not obliged to send an email, and users.email
+         is NOT NULL DEFAULT '' rather than guaranteed — so the name can be
+         the provider's subject claim instead, and when it is, the page says
+         so. An opaque identifier offered as "you" reads as a bug; the same
+         identifier labelled as what it is reads as an answer. */}}
+    <dd>{{if .Account.Name}}<span class="settings-name">{{.Account.Name}}</span>{{else}}<span class="muted">Signed in through your identity provider</span>{{end}}</dd>
+    <dt>Sign-in</dt>
+    <dd>{{if .Account.HasPassword}}<i class="ph ph-key" aria-hidden="true"></i> Password{{else}}<i class="ph ph-shield-check" aria-hidden="true"></i> Identity provider{{end}}</dd>
+  </dl>
+  {{if .Account.NameIsSubject}}<p class="muted text-sm settings-note">Your identity provider sent no email address for this account, so the name above is the subject identifier it does send. It is the string an administrator would use to find you.</p>{{end}}
+  {{if not .Account.HasPassword}}<p class="muted text-sm settings-note">Your identity provider owns this sign-in. There is no password here to change, and Exhibit cannot change one there.</p>{{end}}
+  {{else}}
+  {{/* No login is configured on this instance, so sessionGate is a
+       pass-through, ownerMiddleware supplied the single-user default, and
+       there is no users row behind it. Nothing is missing — that is the
+       self-hoster's default shape — so the page says what it is instead of
+       showing an account it made up. */}}
+  <p class="muted">This instance has no login configured, so there is no account to describe. Its library belongs to whoever can reach the origin, and the API is guarded by the service token alone.</p>
+  {{end}}
+</div>
+
+{{/* The danger zone. The section is this ticket's; the behaviour behind it is
+     av-4wyq's, and it is not ready — deleting an account has to erase the
+     artifact bodies from the blob store as well as the rows, and Blob.Store
+     still has no Delete (av-7jcq). So the control renders disabled with the
+     reason beside it. A button that deleted the rows and left the files would
+     be worse than one that does nothing, because only the second is honest
+     about it. */}}
+<div class="card card-danger">
+  <h3 class="settings-h3 settings-h3-danger"><i class="ph ph-warning-octagon" aria-hidden="true"></i> Delete account</h3>
+  <p class="settings-danger-copy">Deleting your account erases everything this instance holds for you: every artifact and its file, all saved state, your tags, collections and share links, any stored agent key and its transcripts, and the account itself. It is permanent — there is no undo, no trash, and no copy kept on this side.</p>
+  {{/* What deletion reaches stops at this instance, and which sentence says so
+       depends on where the sign-in lives. Telling someone with a password here
+       that their identity provider is unaffected would name a provider they do
+       not have. */}}
+  {{if .Account.SignedIn}}{{if .Account.HasPassword}}
+  <p class="settings-danger-copy">Your login name and password are this instance&#39;s alone, so they go with the account. Nothing outside it knows you had one.</p>
+  {{else}}
+  <p class="settings-danger-copy">It does not touch the identity you sign in with. Your account with your identity provider is theirs, not this instance&#39;s; deleting here only makes Exhibit stop recognising it.</p>
+  {{end}}{{end}}
+  <div class="settings-foot">
+    <button class="btn btn-danger" type="button" id="delete-account" disabled aria-describedby="delete-account-reason">
+      <i class="ph ph-trash" aria-hidden="true"></i> Delete account
+    </button>
+    <span class="muted text-sm" id="delete-account-reason">Not available yet. Deletion has to remove your artifact files from disk as well as their database rows, and it cannot do that yet — so it does nothing rather than half of it.</span>
+  </div>
+</div>
+</main>
+
+<script>
+const TOKEN = {{.Token}};
+{{/* The same per-request credential contract every other page carries
+     (av-5imk, pagecredential.go): a session-authenticated browser is handed
+     no token, because its cookie already authenticates it. Declared here
+     rather than left out because the one action this page will grow — the
+     deletion above — is a mutation that goes through the JSON API like any
+     other client, and it should inherit the answer rather than invent one. */ -}}
+const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
+</script>
+</body>
+</html>{{end}}

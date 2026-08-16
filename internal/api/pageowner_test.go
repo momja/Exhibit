@@ -113,6 +113,14 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/admin/users", why: "reads the instance's account directory, not a library — guarded by adminOnly (av-utap) rather than scoped by owner"},
 	{route: "/api/admin/users/", why: "same directory as JSON; API group plus adminOnly, covered by admin_test.go"},
 
+	// The other account surface (av-qo05). It reads exactly one users row and
+	// no library at all, so it is neither owner-scoped in this walk's sense
+	// nor exempt by accident: the row it names is ownerIDFromCtx's, and the
+	// route takes no id, so there is nothing to point it at somebody else
+	// with. That is what makes a bare session sufficient authorization for it
+	// where /admin/users needs adminOnly.
+	{route: "/profile", why: "reads the caller's own users row and no library data; the account it names comes from ownerIDFromCtx, never from the request, so there is no foreign id it could be aimed at"},
+
 	// Static and instance-level surfaces: nothing per-visitor to scope.
 	{route: "/assets/*", why: "embedded static assets, identical for every visitor"},
 	{route: "/manifest.json", why: "static app manifest, identical for every visitor"},
