@@ -288,16 +288,15 @@ func TestPublicVisitorsRenderURLsCarryNoPrincipal(t *testing.T) {
 	// Both requests are run through ownerMiddleware rather than hand-built,
 	// because ownerIDFromCtx no longer guesses an owner for a context that
 	// never met the chain (av-syug) — a bare request would only assert that
-	// nobody is nobody. The visitor request's Principal mirrors exactly what
-	// authMiddleware's public branch constructs (av-o5cf: that branch now
-	// resolves the owner itself, rather than leaving it for ownerMiddleware
-	// to fill in from a bare "public" marker); ownerMiddleware runs here too,
-	// as it would for a real request, but is a no-op since the Principal
-	// already carries an owner.
+	// nobody is nobody. The visitor request is run through the real
+	// authMiddleware too (same pattern as
+	// TestPublicVisitorIsMarkedInTheRequestContext), so this test exercises
+	// what authMiddleware's public branch actually constructs rather than a
+	// hand-built stand-in for it that could silently drift from it.
+	visitorReq := httptest.NewRequest(http.MethodGet, "/api/artifacts", nil)
+	visitor := r.renderURLs(withAuthResolved(r, visitorReq))
+
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	visitor := r.renderURLs(withOwnerResolved(r,
-		req.WithContext(withPrincipal(req.Context(),
-			Principal{Kind: PrincipalPublic, OwnerID: r.cfg.Public.OwnerID, ReadOnly: true}))))
 	owner := r.renderURLs(withOwnerResolved(r, req))
 
 	for name, u := range map[string]string{"artifact": visitor.artifact("abc"), "widget": visitor.widget("abc")} {
@@ -319,6 +318,18 @@ func withOwnerResolved(ro *Router, req *http.Request) *http.Request {
 	ro.ownerMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		resolved = r
 	})).ServeHTTP(httptest.NewRecorder(), req)
+	return resolved
+}
+
+// withAuthResolved runs req through the real authMiddleware and ownerMiddleware
+// chain and returns it as the handler behind them would receive it — with
+// whatever Principal that chain actually resolves, rather than one hand-built
+// to match it.
+func withAuthResolved(ro *Router, req *http.Request) *http.Request {
+	var resolved *http.Request
+	ro.authMiddleware(ro.ownerMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		resolved = r
+	}))).ServeHTTP(httptest.NewRecorder(), req)
 	return resolved
 }
 
@@ -351,7 +362,11 @@ func anon(t *testing.T, r *Router, method, path string, body []byte) *httptest.R
 func seedPublicArtifact(t *testing.T, r *Router, owner int64) string {
 	t.Helper()
 	ctx := context.Background()
-	id := fmt.Sprintf("artifact-of-owner-%d", owner)
+	// The "-fixture" suffix is not just decoration: it stops one owner's id
+	// being a string-prefix of another's (owner 1 vs owner 11), which would
+	// make assert.Contains/NotContains on the response body pass or fail for
+	// the wrong reason.
+	id := fmt.Sprintf("artifact-of-owner-%d-fixture", owner)
 	blobID := id + "-blob"
 	require.NoError(t, r.cfg.Blob.Put(ctx, blobID, strings.NewReader("<html><body>published</body></html>")))
 	require.NoError(t, r.cfg.Store.PutArtifact(ctx, &store.Artifact{
@@ -419,7 +434,7 @@ func TestPublicModeFromEnv(t *testing.T) {
 			want: PublicMode{OwnerID: defaultOwnerID},
 		},
 		{
-			name: "an unusable owner id falls back rather than failing the boot",
+			name: "an unusable owner id stays private rather than defaulting",
 			env:  map[string]string{envPublicOwnerID: "not-a-number"},
 			want: PublicMode{OwnerID: defaultOwnerID},
 		},
@@ -427,6 +442,22 @@ func TestPublicModeFromEnv(t *testing.T) {
 			name: "so does a nonsensical one",
 			env:  map[string]string{envPublicOwnerID: "0"},
 			want: PublicMode{OwnerID: defaultOwnerID},
+		},
+		{
+			name: "an unusable owner id refuses to enable public mode even when requested",
+			env: map[string]string{
+				envPublicModeEnabled: "true",
+				envPublicOwnerID:     "not-a-number",
+			},
+			want: PublicMode{Enabled: false, OwnerID: defaultOwnerID},
+		},
+		{
+			name: "a non-positive owner id refuses to enable public mode even when requested",
+			env: map[string]string{
+				envPublicModeEnabled: "true",
+				envPublicOwnerID:     "0",
+			},
+			want: PublicMode{Enabled: false, OwnerID: defaultOwnerID},
 		},
 	}
 

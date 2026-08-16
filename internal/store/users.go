@@ -46,12 +46,27 @@ type User struct {
 	Disabled bool `json:"disabled"`
 }
 
+// NewLocalUser is CreateLocalUser's argument: the three strings that name a
+// local account. A struct rather than three positional string parameters,
+// because ExternalID, Email, and PasswordHash are same-typed values in a row —
+// exactly the shape a caller can transpose without the compiler catching it.
+type NewLocalUser struct {
+	ExternalID   string
+	Email        string
+	PasswordHash string
+}
+
 // Session is one logged-in browser. Its ID is opaque random bytes handed to
 // the browser in a cookie and looked up here on every request — a row, not a
 // signed token, so deleting it revokes access on the next request instead of
 // whenever a token would have expired.
 type Session struct {
-	ID        string    `json:"id"`
+	// ID is the bearer credential itself — the exact value the cookie carries
+	// — so it is excluded from default JSON marshaling. Nothing today
+	// marshals a Session directly, but a Session reachable from a future admin
+	// endpoint or debug log line should not be one struct-literal accident
+	// away from writing session ids into a response or a log.
+	ID        string    `json:"-"`
 	UserID    int64     `json:"user_id"`
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`

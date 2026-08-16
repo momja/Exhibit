@@ -67,7 +67,10 @@
     var method = (opts.method || 'GET').toUpperCase();
     if (readOnly() && isWrite(method)) return Promise.resolve(refused());
     opts.headers = apiHeaders(opts.headers);
-    if (opts.body !== undefined && opts.body !== null && !opts.headers['Content-Type']) {
+    var hasContentType = Object.keys(opts.headers).some(function(k) {
+      return k.toLowerCase() === 'content-type';
+    });
+    if (opts.body !== undefined && opts.body !== null && !hasContentType) {
       opts.headers['Content-Type'] = 'application/json';
     }
     return fetch(path, opts);

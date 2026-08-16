@@ -35,10 +35,10 @@ func TestRenderInlinesOnlyTheTokenPrincipalsState(t *testing.T) {
 	}
 	// Same key, different viewer — plus a key only they hold, so a leak shows
 	// up whether the bug is "wrong row wins" or "every row is inlined".
-	if err := st.SetState(ctx, 1, "abc", otherViewer, "note", "SHOULD-NOT-APPEAR"); err != nil {
+	if err := st.SetState(ctx, 1, "abc", store.ViewerID(otherViewer), "note", "SHOULD-NOT-APPEAR"); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetState(ctx, 1, "abc", otherViewer, "theirs", "ALSO-SHOULD-NOT-APPEAR"); err != nil {
+	if err := st.SetState(ctx, 1, "abc", store.ViewerID(otherViewer), "theirs", "ALSO-SHOULD-NOT-APPEAR"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -63,7 +63,7 @@ func TestRenderInlinesNothingForAPrincipalWithNoState(t *testing.T) {
 	ctx := context.Background()
 
 	// Only the *other* viewer has state here; the token's principal (1) has none.
-	if err := st.SetState(ctx, 1, "abc", otherViewer, "note", "SHOULD-NOT-APPEAR"); err != nil {
+	if err := st.SetState(ctx, 1, "abc", store.ViewerID(otherViewer), "note", "SHOULD-NOT-APPEAR"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -88,7 +88,7 @@ func TestShareInlinesTheOwnersState(t *testing.T) {
 	if err := st.SetState(ctx, 1, "abc", 1, "note", "the owner's"); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetState(ctx, 1, "abc", otherViewer, "note", "SHOULD-NOT-APPEAR"); err != nil {
+	if err := st.SetState(ctx, 1, "abc", store.ViewerID(otherViewer), "note", "SHOULD-NOT-APPEAR"); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.CreateShare(ctx, 1, &store.Share{ID: "sh1", ArtifactID: "abc", Public: true}); err != nil {

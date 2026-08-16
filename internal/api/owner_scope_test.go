@@ -44,7 +44,7 @@ func seedForeignArtifact(t *testing.T, r *Router) string {
 		NetworkAllowlist: []string{"https://theirs.example.com"},
 		SourceText:       "distinctiveforeignterm",
 	}))
-	require.NoError(t, r.cfg.Store.SetState(ctx, otherOwner, id, otherOwner, "secret", "theirs"))
+	require.NoError(t, r.cfg.Store.SetState(ctx, store.OwnerID(otherOwner), id, store.ViewerID(otherOwner), "secret", "theirs"))
 	return id
 }
 
@@ -131,6 +131,9 @@ func TestArtifactRoutes404ForAnotherOwner(t *testing.T) {
 				"403 confirms the artifact exists — that is the membership oracle av-ep8k forbids")
 			assert.Equal(t, ghost.Code, got.Code,
 				"another owner's id must answer exactly like an id that does not exist")
+			assert.Equal(t, ghost.Body.String(), got.Body.String(),
+				"another owner's id must answer byte-for-byte like an id that does not exist, "+
+					"not just with the same status code")
 
 			// Every route here is one whose owned equivalent would not 404,
 			// so the shared answer must actually be 404 (transcripts is the
@@ -169,7 +172,7 @@ func TestForeignArtifactSurvivesTheRefusedWrites(t *testing.T) {
 		"the render CSP is built from this list; no other owner may widen it")
 	assert.NotEmpty(t, a.WidgetBlobID, "the widget must still be attached")
 
-	state, err := r.cfg.Store.GetState(ctx, otherOwner, foreignID, otherOwner)
+	state, err := r.cfg.Store.GetState(ctx, store.OwnerID(otherOwner), foreignID, store.ViewerID(otherOwner))
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"secret": "theirs"}, state)
 }
@@ -191,6 +194,11 @@ func TestTagAndCollectionAttachRoutes404AcrossOwners(t *testing.T) {
 		{"detach own artifact from foreign tag", "DELETE", "/api/tags/{tag}/artifacts/{ownArtifact}", false},
 		{"attach foreign artifact to own collection", "POST", "/api/artifacts/{artifact}/collections/{ownCollection}", true},
 		{"attach own artifact to foreign collection", "POST", "/api/collections/{collection}/artifacts/{ownArtifact}", false},
+		// No DELETE cases here: RemoveArtifactFromCollection is deliberately
+		// idempotent (denySilentNoop in store/owner_scope_test.go) like
+		// DeleteState/ClearState/DeleteOriginDecision, so a cross-owner
+		// detach 204s as a no-op rather than 404ing — consistent with (not a
+		// regression of) the 404-vs-403 contract this table checks.
 	}
 
 	for _, tc := range cases {

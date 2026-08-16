@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // av-q0ub, through the routes. The store tests fix the invariant; these fix
@@ -35,14 +37,14 @@ func TestStateRoutesNeverTouchAnotherViewersRows(t *testing.T) {
 		// The session's own row and the other viewer's row share a key, which
 		// is the collision the primary key has to admit.
 		putState(t, r, id, "draft", "the session's")
-		require.NoError(t, r.cfg.Store.SetState(ctx, defaultOwnerID, id, otherViewer, "draft", "not the session's"))
-		require.NoError(t, r.cfg.Store.SetState(ctx, defaultOwnerID, id, otherViewer, "private", "nor this"))
+		require.NoError(t, r.cfg.Store.SetState(ctx, store.OwnerID(defaultOwnerID), id, store.ViewerID(otherViewer), "draft", "not the session's"))
+		require.NoError(t, r.cfg.Store.SetState(ctx, store.OwnerID(defaultOwnerID), id, store.ViewerID(otherViewer), "private", "nor this"))
 		return r, id
 	}
 
 	assertForeignRowsIntact := func(t *testing.T, r *Router, id string) {
 		t.Helper()
-		foreign, err := r.cfg.Store.GetState(ctx, defaultOwnerID, id, otherViewer)
+		foreign, err := r.cfg.Store.GetState(ctx, store.OwnerID(defaultOwnerID), id, store.ViewerID(otherViewer))
 		require.NoError(t, err)
 		assert.Equal(t, map[string]string{
 			"draft":   "not the session's",

@@ -45,6 +45,9 @@ func (s *stubProvider) Exchange(_ context.Context, code, verifier string) (*auth
 	if s.err != nil {
 		return nil, s.err
 	}
+	if len(s.identities) == 0 {
+		return nil, errors.New("stubProvider: Exchange called with no identities configured")
+	}
 	id := s.identities[min(s.exchanges, len(s.identities)-1)]
 	s.exchanges++
 	return &id, nil
@@ -474,6 +477,7 @@ func TestCookiesFollowTheAppOriginScheme(t *testing.T) {
 func TestSafeNextRejectsOffOriginDestinations(t *testing.T) {
 	for _, bad := range []string{
 		"", "https://evil.test/", "//evil.test/", "/\\evil.test", "evil.test", "javascript:alert(1)",
+		"/\tevil.test", "/\t/evil.test", "/\nevil.test", "/\x00/evil.test", "/\\/evil.test",
 	} {
 		assert.Empty(t, safeNext(bad), bad)
 	}

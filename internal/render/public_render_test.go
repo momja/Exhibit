@@ -81,6 +81,18 @@ func TestAnonymousWidgetRenderInlinesNoState(t *testing.T) {
 	if strings.Contains(w.Body.String(), "MY-PRIVATE-RUNS") {
 		t.Fatalf("a public card's widget tile inlined the owner's state: %s", w.Body.String())
 	}
+
+	// The other side of the same assertion, so a test that passes because
+	// state inlining broke everywhere (for widgets too) would fail here.
+	owner := httptest.NewRecorder()
+	rd.ServeWidget(owner, rawRequest(
+		"/w/abc?"+rendertoken.Param+"="+testTokens.Mint("abc", 1), "abc"))
+	if owner.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", owner.Code, owner.Body.String())
+	}
+	if !strings.Contains(owner.Body.String(), "MY-PRIVATE-RUNS") {
+		t.Fatalf("the owner's own widget render must still inline their state: %s", owner.Body.String())
+	}
 }
 
 // The write side of the same fact. Mutating routes stay authenticated in public

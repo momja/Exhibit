@@ -17,7 +17,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/color"
 	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/scanner"
@@ -33,7 +32,12 @@ import (
 // is a property of the request, not of the process — which is what keeps this
 // correct once sessions replace the fixed owner id.
 type renderURLs struct {
-	origin  string
+	origin string
+	// signer must never be nil: mint dereferences it unconditionally on every
+	// call. NewRouter is the only production constructor and always populates
+	// it via renderSigner, which itself never returns nil (an ephemeral key
+	// stands in when no secrets Box is configured). A Router built any other
+	// way — direct struct literal, a future constructor — must preserve that.
 	signer  *rendertoken.Signer
 	ownerID int64
 	// anonymous mints tokens that render the owner's artifact for nobody: no
@@ -48,6 +52,9 @@ type renderURLs struct {
 	anonymous bool
 }
 
+// renderURLs relies on ro.tokens being non-nil (see the signer field's
+// comment); NewRouter guarantees that for every Router this package
+// constructs.
 func (ro *Router) renderURLs(r *http.Request) renderURLs {
 	return renderURLs{
 		origin:    ro.cfg.RenderOrigin,
@@ -125,7 +132,7 @@ func (ro *Router) galleryNew(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
 		serverError(w, r, "gallery detail lookup", err)
@@ -151,7 +158,7 @@ func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
@@ -203,13 +210,18 @@ func openURL(artifactID string) string {
 // breaking. It also keeps the token out of the page source, where a "copy link
 // address" would spread a credential.
 func (ro *Router) openArtifact(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	urls := ro.renderURLs(r)
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), urls.ownerID, id)
 	if err != nil {
 		serverError(w, r, "open artifact lookup", err)
 		return
 	}
+	// The owner check is belt to the query's braces: GetArtifact is already
+	// scoped to urls.ownerID (av-ep8k), so this can only fire if that scoping
+	// itself were ever wrong. Cheap, and it keeps the cross-tenant guarantee
+	// true even if a future call site's scoping regresses — the same
+	// defense-in-depth render.go's ServeArtifact keeps.
 	if a == nil || a.OwnerID != urls.ownerID {
 		ro.notFound(w, r)
 		return

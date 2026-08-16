@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/momja/Exhibit/internal/auth"
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,11 +38,11 @@ import (
 // against one registry.
 type agentOwnerHarness struct {
 	*piHarness
-	server        *httptest.Server
-	ownerCookie   *http.Cookie
-	intruderCooky *http.Cookie
-	sessionID     string
-	artifactID    string
+	server         *httptest.Server
+	ownerCookie    *http.Cookie
+	intruderCookie *http.Cookie
+	sessionID      string
+	artifactID     string
 }
 
 func newAgentOwnerHarness(t *testing.T) *agentOwnerHarness {
@@ -53,12 +54,14 @@ func newAgentOwnerHarness(t *testing.T) *agentOwnerHarness {
 	// The first account created lands on owner 1, which is where a session
 	// opened with the static token also lands — so this account is the session's
 	// owner and the intruder is a genuinely different one.
-	owner, err := r.cfg.Store.CreateLocalUser(ctx,
-		auth.LocalExternalID("owner"), "owner", testHash(t, "owner-long-passphrase"))
+	owner, err := r.cfg.Store.CreateLocalUser(ctx, store.NewLocalUser{
+		ExternalID: auth.LocalExternalID("owner"), Email: "owner", PasswordHash: testHash(t, "owner-long-passphrase"),
+	})
 	require.NoError(t, err)
 	require.Equal(t, defaultOwnerID, owner.ID)
-	intruder, err := r.cfg.Store.CreateLocalUser(ctx,
-		auth.LocalExternalID("intruder"), "intruder", testHash(t, "intruder-long-passphrase"))
+	intruder, err := r.cfg.Store.CreateLocalUser(ctx, store.NewLocalUser{
+		ExternalID: auth.LocalExternalID("intruder"), Email: "intruder", PasswordHash: testHash(t, "intruder-long-passphrase"),
+	})
 	require.NoError(t, err)
 	require.NotEqual(t, owner.ID, intruder.ID)
 
@@ -67,10 +70,10 @@ func newAgentOwnerHarness(t *testing.T) *agentOwnerHarness {
 	r.cfg.LocalUsers = true
 
 	out := &agentOwnerHarness{
-		piHarness:     h,
-		server:        httptest.NewServer(r),
-		ownerCookie:   sessionCookieFor(t, r.cfg.Store, owner.ID, "session-agent-owner"),
-		intruderCooky: sessionCookieFor(t, r.cfg.Store, intruder.ID, "session-agent-intruder"),
+		piHarness:      h,
+		server:         httptest.NewServer(r),
+		ownerCookie:    sessionCookieFor(t, r.cfg.Store, owner.ID, "session-agent-owner"),
+		intruderCookie: sessionCookieFor(t, r.cfg.Store, intruder.ID, "session-agent-intruder"),
 	}
 	t.Cleanup(out.server.Close)
 
@@ -152,7 +155,7 @@ func TestAgentSessionRoutesRefuseAnotherOwner(t *testing.T) {
 	// a refusal asserted after it would be the right status for the wrong
 	// reason.
 	t.Run("events", func(t *testing.T) {
-		assert.Equal(t, http.StatusNotFound, openEventStream(t, h, "", h.intruderCooky),
+		assert.Equal(t, http.StatusNotFound, openEventStream(t, h, "", h.intruderCookie),
 			"the SSE route authenticates outside the auth middleware (EventSource sets no headers), "+
 				"which is exactly why it has to resolve an owner of its own rather than settle for "+
 				"'this request is authenticated'")
@@ -167,7 +170,7 @@ func TestAgentSessionRoutesRefuseAnotherOwner(t *testing.T) {
 		{"close", http.MethodDelete, "", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			w := doAs(t, r, tc.method, h.path(tc.suffix), h.intruderCooky, tc.body)
+			w := doAs(t, r, tc.method, h.path(tc.suffix), h.intruderCookie, tc.body)
 			require.Equal(t, http.StatusNotFound, w.Code,
 				"%s %s let a second account act on owner %d's agent session. The session registry is "+
 					"in memory, so nothing filters it by owner on the handler's behalf the way the "+
@@ -176,7 +179,7 @@ func TestAgentSessionRoutesRefuseAnotherOwner(t *testing.T) {
 
 			// And the same answer as an id that never existed, byte for byte.
 			missing := doAs(t, r, tc.method,
-				"/api/agent/sessions/no-such-session-id"+tc.suffix, h.intruderCooky, tc.body)
+				"/api/agent/sessions/no-such-session-id"+tc.suffix, h.intruderCookie, tc.body)
 			assert.Equal(t, w.Code, missing.Code)
 			assert.Equal(t, w.Body.String(), missing.Body.String(),
 				"a refusal that differs from 'no such session' tells the caller the id is live")

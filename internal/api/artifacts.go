@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/snapshot"
@@ -345,7 +344,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ro *Router) getArtifact(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
@@ -377,7 +376,7 @@ func (ro *Router) getArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
 
 	var updates map[string]any
@@ -448,7 +447,15 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a, _ = ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
+	a, err = ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
+	if err != nil {
+		serverError(w, r, "reload artifact after update", err)
+		return
+	}
+	if a == nil {
+		serverError(w, r, "reload artifact after update", errors.New("artifact vanished after update"))
+		return
+	}
 
 	// Re-execute the network scan when the body actually changed (a diff
 	// against the previous version), and surface the footprint — and whether
@@ -509,7 +516,7 @@ func sameOrigins(a, b []string) bool {
 // destructive snapshot replace — not versioned, no history. The network
 // allowlist is re-scanned from the new content; the title is left untouched.
 func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
 
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
@@ -558,12 +565,20 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 
 	slog.InfoContext(r.Context(), "artifact refetched", slog.String("id", id), slog.Int("body_bytes", len(fetched)))
 
-	a, _ = ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
+	a, err = ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
+	if err != nil {
+		serverError(w, r, "reload artifact after refetch", err)
+		return
+	}
+	if a == nil {
+		serverError(w, r, "reload artifact after refetch", errors.New("artifact vanished after refetch"))
+		return
+	}
 	writeJSON(w, http.StatusOK, a)
 }
 
 func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
 
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)

@@ -30,6 +30,10 @@ type createShareResponse struct {
 }
 
 func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
+	if principalFromCtx(r.Context()).ReadOnly {
+		writeError(w, http.StatusForbidden, "read-only visitor may not mutate")
+		return
+	}
 	var req createShareRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
@@ -85,6 +89,10 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ro *Router) deleteShare(w http.ResponseWriter, r *http.Request) {
+	if principalFromCtx(r.Context()).ReadOnly {
+		writeError(w, http.StatusForbidden, "read-only visitor may not mutate")
+		return
+	}
 	id := chi.URLParam(r, "shareID")
 
 	ownerID := ownerIDFromCtx(r.Context())

@@ -241,7 +241,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// should be asked for.
 	var state map[string]string
 	if !viewer.Anonymous {
-		s, err := rd.cfg.Store.GetState(r.Context(), a.OwnerID, a.ID, viewer.OwnerID)
+		s, err := rd.cfg.Store.GetState(r.Context(), store.OwnerID(a.OwnerID), a.ID, store.ViewerID(viewer.OwnerID))
 		if err != nil {
 			slog.WarnContext(r.Context(), "render state read failed",
 				slog.String("artifact_id", a.ID), slog.String("err", err.Error()))

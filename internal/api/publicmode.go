@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -49,11 +50,25 @@ type PublicMode struct {
 // rather than in main — it is the whole of this configuration layer's
 // behaviour and the part worth testing.
 func PublicModeFromEnv() PublicMode {
+	enabled := envBool(envPublicModeEnabled)
+	ownerID, err := envOwnerID(envPublicOwnerID)
+	if err != nil {
+		// An owner id that was set but unparseable is a different situation
+		// from the default: the operator asked to publish a specific library
+		// and named it wrong. Guessing owner 1 here could publish the wrong
+		// person's artifacts, so this — unlike envBool's typo handling —
+		// fails closed rather than falling back.
+		if enabled {
+			slog.Error("public mode disabled: invalid owner id env var",
+				slog.String("var", envPublicOwnerID), slog.String("err", err.Error()))
+		}
+		enabled = false
+	}
 	return PublicMode{
-		Enabled:     envBool(envPublicModeEnabled),
+		Enabled:     enabled,
 		Name:        os.Getenv(envPublicInstanceName),
 		Description: os.Getenv(envPublicInstanceDescription),
-		OwnerID:     envOwnerID(envPublicOwnerID),
+		OwnerID:     ownerID,
 	}
 }
 
@@ -85,22 +100,20 @@ func envBool(key string) bool {
 }
 
 // envOwnerID reads an owner id, defaulting to the owner every single-user
-// library is already filed under. An unparseable value falls back to the same
-// default rather than failing the boot: the wrong library is a visible,
-// recoverable mistake, whereas an instance that will not start is not.
-func envOwnerID(key string) int64 {
+// library is already filed under when the variable is unset. A value that was
+// set but is unparseable or non-positive is reported as an error rather than
+// silently defaulted — PublicModeFromEnv turns that into "public mode stays
+// off" so a typo cannot publish the wrong owner's library.
+func envOwnerID(key string) (int64, error) {
 	raw := strings.TrimSpace(os.Getenv(key))
 	if raw == "" {
-		return defaultOwnerID
+		return defaultOwnerID, nil
 	}
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		slog.Warn("invalid owner id env var; using the default owner",
-			slog.String("var", key), slog.String("value", raw),
-			slog.Int64("owner_id", defaultOwnerID))
-		return defaultOwnerID
+		return defaultOwnerID, fmt.Errorf("invalid owner id %q for %s", raw, key)
 	}
-	return id
+	return id, nil
 }
 
 // publicSettingsResponse is what GET /api/settings/public answers with: the

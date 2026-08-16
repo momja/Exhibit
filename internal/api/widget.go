@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/momja/Exhibit/internal/scanner"
 )
@@ -45,7 +44,7 @@ type putWidgetRequest struct {
 // has no widget document, and callers (the edit page, the agent's get_widget)
 // need to tell "no widget" apart from "an empty one".
 func (ro *Router) getWidget(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
 		serverError(w, r, "get widget artifact lookup", err)
@@ -85,7 +84,7 @@ func (ro *Router) getWidget(w http.ResponseWriter, r *http.Request) {
 // render URL is stable across edits — the gallery card's iframe src never has
 // to change, and no blob is orphaned per revision.
 func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 
 	var req putWidgetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -159,7 +158,7 @@ const generateWidgetPrompt = "Build the gallery widget for this artifact."
 // route, not a second streaming mechanism, and the edit page's preview swap is
 // driven by the same event the chat surface uses.
 func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
 		serverError(w, r, "generate widget artifact lookup", err)
@@ -216,7 +215,7 @@ func (ro *Router) widgetGenerateAvailability(r *http.Request) (bool, string) {
 // The blob is left on disk, matching how DeleteArtifact orphans an artifact
 // body in v1 (Blob.Store has no Delete).
 func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {

@@ -40,7 +40,7 @@ func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 		NetworkAllowlist: []string{"https://seed.example.com"},
 		SourceText:       id + " seedsearchterm",
 	}))
-	require.NoError(t, s.SetState(ctx, owner, id, owner, "seed", "value"))
+	require.NoError(t, s.SetState(ctx, OwnerID(owner), id, ViewerID(owner), "seed", "value"))
 	require.NoError(t, s.SaveTranscript(ctx, owner, id, "session-"+id, `[{"role":"user"}]`))
 	require.NoError(t, s.CreateShare(ctx, owner, &Share{ID: "share-" + id, ArtifactID: id, Public: true}))
 	require.NoError(t, s.CreateTag(ctx, &Tag{ID: "tag-" + id, OwnerID: owner, Name: "tag-" + id}))
@@ -116,17 +116,17 @@ func ownerCases() []ownerCase {
 			return false, s.RemoveArtifactTag(ctx, o, id, "tag-"+id)
 		}},
 		{"GetState", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			st, err := s.GetState(ctx, o, id, o)
+			st, err := s.GetState(ctx, OwnerID(o), id, ViewerID(o))
 			return len(st) == 0, err
 		}},
 		{"SetState", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.SetState(ctx, o, id, o, "planted", "by the wrong owner")
+			return false, s.SetState(ctx, OwnerID(o), id, ViewerID(o), "planted", "by the wrong owner")
 		}},
 		{"DeleteState", denySilentNoop, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.DeleteState(ctx, o, id, o, "seed")
+			return false, s.DeleteState(ctx, OwnerID(o), id, ViewerID(o), "seed")
 		}},
 		{"ClearState", denySilentNoop, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.ClearState(ctx, o, id, o)
+			return false, s.ClearState(ctx, OwnerID(o), id, ViewerID(o))
 		}},
 		{"SaveTranscript", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			return false, s.SaveTranscript(ctx, o, id, "planted-session", `[{"role":"user"}]`)
@@ -230,7 +230,7 @@ func assertBobIntact(t *testing.T, s *SQLiteStore) {
 		assert.Equal(t, bob, tag.OwnerID, "no tag from another owner may be attached")
 	}
 
-	state, err := s.GetState(ctx, bob, "bobs", bob)
+	state, err := s.GetState(ctx, OwnerID(bob), "bobs", ViewerID(bob))
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"seed": "value"}, state,
 		"state must be neither erased nor planted into")
@@ -405,8 +405,13 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		}
 		ft := m.Type
 		require.Greater(t, ft.NumIn(), 1, "Store.%s takes no arguments beyond ctx", m.Name)
-		assert.Equal(t, reflect.TypeOf(int64(0)), ft.In(1),
-			"Store.%s must take the requesting ownerID as its first argument after ctx, "+
+		// OwnerID is int64 under a distinct name (the state methods use it so a
+		// transposed ownerID/userID argument fails to compile rather than
+		// silently reading or writing the wrong viewer's rows); either spelling
+		// satisfies "takes the requesting owner first".
+		got := ft.In(1)
+		assert.True(t, got == reflect.TypeOf(int64(0)) || got == reflect.TypeOf(OwnerID(0)),
+			"Store.%s must take the requesting ownerID (int64 or store.OwnerID) as its first argument after ctx, "+
 				"or be listed in this test's exemptions with a reason (av-ep8k AC#4)", m.Name)
 	}
 }

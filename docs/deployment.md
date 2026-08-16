@@ -129,7 +129,7 @@ is no registration form and no email anywhere in this.
 **You already have an account.** An instance with no other way in creates one on
 startup, so there is nothing to run before you can sign in:
 
-```
+```text
 username: admin
 password: changeme
 ```

@@ -34,8 +34,9 @@ func newAccountRouter(t *testing.T, cred *auth.Credential) (*Router, store.Store
 // actually takes rather than a fixture that resembles it.
 func addAccount(t *testing.T, st store.Store, name, password string) *store.User {
 	t.Helper()
-	user, err := st.CreateLocalUser(context.Background(),
-		auth.LocalExternalID(name), auth.NormalizeLoginName(name), testHash(t, password))
+	user, err := st.CreateLocalUser(context.Background(), store.NewLocalUser{
+		ExternalID: auth.LocalExternalID(name), Email: auth.NormalizeLoginName(name), PasswordHash: testHash(t, password),
+	})
 	require.NoError(t, err)
 	return user
 }

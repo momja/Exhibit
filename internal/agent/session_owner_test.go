@@ -1,10 +1,14 @@
 package agent
 
 import (
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/momja/Exhibit/internal/agentscope"
 )
 
 // The registry's owner predicate, on its own.
@@ -39,11 +43,19 @@ func TestManagerGetIsOwnerScoped(t *testing.T) {
 // unscoped id would be a one-request denial of service against anyone whose
 // session id leaked.
 func TestManagerCloseIgnoresAnotherOwnersSession(t *testing.T) {
-	m := &Manager{sessions: map[string]*Session{"s1": {ID: "s1", OwnerID: 1}}}
+	_, w, err := os.Pipe()
+	require.NoError(t, err)
+	defer w.Close()
+
+	m := &Manager{cfg: Config{Credentials: agentscope.NewRegistry()}}
+	m.sessions = map[string]*Session{"s1": {ID: "s1", OwnerID: 1, mgr: m, cmd: &exec.Cmd{}, stdin: w}}
 
 	m.Close(2, "s1")
 	assert.NotNil(t, m.Get(1, "s1"), "owner 2 closed owner 1's session")
 
 	m.Close(1, "never-issued")
 	assert.NotNil(t, m.Get(1, "s1"))
+
+	m.Close(1, "s1")
+	assert.Nil(t, m.Get(1, "s1"), "Close did not remove the matching session")
 }

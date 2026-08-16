@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -323,6 +324,16 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 	assert.Equal(t, pageCredentials{},
 		withLocal.pageCredentials(req(session)),
 		"local login, session-authenticated: the cookie is the credential")
+
+	// ReadOnly comes from the resolved Principal's own field, not from
+	// re-deriving "is this an anonymous public visitor" — a non-public,
+	// non-anonymous Principal that is nonetheless read-only (the shape a
+	// shared artifact's viewer will have, av-7k7b) must still come out
+	// read-only rather than being missed because it isn't PrincipalPublic.
+	readOnlySession := withPrincipal(context.Background(), Principal{Kind: PrincipalSession, ReadOnly: true})
+	assert.Equal(t, pageCredentials{ReadOnly: true},
+		withIdentity.pageCredentials(req(readOnlySession)),
+		"session-authenticated but read-only: no token (the cookie is the credential), and ReadOnly must still be honored")
 }
 
 // The SSE stream is the one API call a page cannot credential with a header —
@@ -355,6 +366,13 @@ func TestEventStreamAcceptsTheSessionCookie(t *testing.T) {
 	assert.NotEqual(t, http.StatusUnauthorized, w.Code)
 }
 
+// authorizationHeaderKeyRe matches "Authorization" used as an object/header
+// key, whichever quote style (or none, for a shorthand key) wraps it — a
+// literal 'Authorization' check would miss "Authorization" or `Authorization`.
+// Requiring the colon or comma that follows a key keeps it from flagging the
+// word appearing elsewhere (a comment, a longer identifier).
+var authorizationHeaderKeyRe = regexp.MustCompile(`Authorization['"` + "`" + `]?\s*[:,]`)
+
 // The page scripts must spend the credential through one function, because a
 // call site that builds its own Authorization header is exactly the defect
 // pageCredentials cannot prevent from the server side.
@@ -367,7 +385,7 @@ func TestPageScriptsUseTheSharedAPIClient(t *testing.T) {
 
 	for _, name := range []string{"index.js", "new.js", "detail.js", "edit.js", "agent.js", "state.js"} {
 		js := galleryAsset(t, ro, "/assets/gallery/"+name)
-		assert.NotContains(t, js, "'Authorization'",
+		assert.False(t, authorizationHeaderKeyRe.MatchString(js),
 			"%s builds its own Authorization header; call apiFetch instead, which knows which "+
 				"of the three credential cases this page render landed in (av-5imk)", name)
 		assert.NotContains(t, js, "new EventSource(",

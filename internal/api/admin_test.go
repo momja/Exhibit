@@ -67,11 +67,11 @@ func newAdminInstance(t *testing.T) adminInstance {
 	ro, st := newLoginTestRouter(t, nil, newTestCredential(t, "breakglass", goodPass))
 	ctx := context.Background()
 
-	admin, err := st.CreateLocalUser(ctx, auth.LocalExternalID(adminName), adminName, testHash(t, goodPass))
+	admin, err := st.CreateLocalUser(ctx, store.NewLocalUser{ExternalID: auth.LocalExternalID(adminName), Email: adminName, PasswordHash: testHash(t, goodPass)})
 	require.NoError(t, err)
 	require.True(t, admin.IsAdmin, "the first account on an instance is its admin (av-rzvf)")
 
-	member, err := st.CreateLocalUser(ctx, auth.LocalExternalID(memberName), memberName, testHash(t, goodPass))
+	member, err := st.CreateLocalUser(ctx, store.NewLocalUser{ExternalID: auth.LocalExternalID(memberName), Email: memberName, PasswordHash: testHash(t, goodPass)})
 	require.NoError(t, err)
 	require.False(t, member.IsAdmin)
 
@@ -217,6 +217,12 @@ func TestNeitherAgentSessionsNorPublicVisitorsAreAdmins(t *testing.T) {
 	// (as sessionGate/authMiddleware would have done), is an admin.
 	withSession := r.WithContext(withPrincipal(r.Context(), Principal{OwnerID: in.admin.ID, Kind: PrincipalSession}))
 	assert.True(t, in.ro.adminRequest(withSession))
+
+	// A PrincipalKind value nothing in this package issues must not fall
+	// through to PrincipalNone's !loginEnabled() answer — that would grant
+	// admin on a fully open instance to a value nobody chose.
+	withUnknown := r.WithContext(withPrincipal(r.Context(), Principal{OwnerID: in.admin.ID, Kind: PrincipalKind(99)}))
+	assert.False(t, in.ro.adminRequest(withUnknown))
 }
 
 // The operator's static token is admin, because it is already full authority
@@ -312,9 +318,9 @@ func TestDisablingBeatsTheEnvironmentCredential(t *testing.T) {
 	ro, st := newLoginTestRouter(t, nil, newTestCredential(t, memberName, goodPass))
 	ctx := context.Background()
 
-	_, err := st.CreateLocalUser(ctx, auth.LocalExternalID(adminName), adminName, testHash(t, goodPass))
+	_, err := st.CreateLocalUser(ctx, store.NewLocalUser{ExternalID: auth.LocalExternalID(adminName), Email: adminName, PasswordHash: testHash(t, goodPass)})
 	require.NoError(t, err)
-	member, err := st.CreateLocalUser(ctx, auth.LocalExternalID(memberName), memberName, testHash(t, goodPass))
+	member, err := st.CreateLocalUser(ctx, store.NewLocalUser{ExternalID: auth.LocalExternalID(memberName), Email: memberName, PasswordHash: testHash(t, goodPass)})
 	require.NoError(t, err)
 
 	// The env pair names this account and always accepts its password.

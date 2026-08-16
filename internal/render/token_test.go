@@ -35,11 +35,18 @@ func rawRequest(target, artifactID string) *http.Request {
 }
 
 // putSecondOwnerArtifact adds an artifact belonging to owner 2 to an existing
-// test store, so one Renderer can be asked for two tenants' documents.
-func putSecondOwnerArtifact(t *testing.T, st *store.SQLiteStore, id, body string) {
+// test store, so one Renderer can be asked for two tenants' documents. It
+// writes its own body through the Renderer's blob store rather than reusing
+// another artifact's blob id, so a cross-tenant leak would actually surface
+// this artifact's distinct content instead of trivially passing.
+func putSecondOwnerArtifact(t *testing.T, rd *Renderer, st *store.SQLiteStore, id, body string) {
 	t.Helper()
+	blobID := id + "-blob"
+	if err := rd.cfg.Blob.Put(context.Background(), blobID, strings.NewReader(body)); err != nil {
+		t.Fatal(err)
+	}
 	if err := st.PutArtifact(context.Background(), &store.Artifact{
-		ID: id, OwnerID: 2, Title: "theirs", SourceBlobID: "abc-blob", Tier: 1,
+		ID: id, OwnerID: 2, Title: "theirs", SourceBlobID: blobID, Tier: 1,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +86,7 @@ func TestRenderRoutesRejectRequestsWithoutAToken(t *testing.T) {
 // requester is, and that answer must not be another owner's artifact.
 func TestValidTokenDoesNotRenderAnotherOwnersArtifact(t *testing.T) {
 	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>MINE</body></html>")
-	putSecondOwnerArtifact(t, st, "theirs", "<html><head></head><body>THEIRS</body></html>")
+	putSecondOwnerArtifact(t, rd, st, "theirs", "<html><head></head><body>THEIRS</body></html>")
 
 	// Owner 1 holds a real token — minted for the very artifact they are
 	// asking for — but the artifact belongs to owner 2.

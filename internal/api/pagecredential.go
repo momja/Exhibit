@@ -93,8 +93,12 @@ func (ro *Router) pageCredentials(r *http.Request) pageCredentials {
 	ctx := r.Context()
 	anonymous := publicVisitor(ctx)
 	return pageCredentials{
-		Token:    ro.pageToken(ctx, anonymous),
-		ReadOnly: anonymous,
+		Token: ro.pageToken(ctx, anonymous),
+		// Derived from the resolved Principal, not recomputed from
+		// publicVisitor: ReadOnly is its own field precisely because a future
+		// principal (a shared artifact's viewer, av-7k7b) may be read-only
+		// without being anonymous, and this must not hardcode the two as one.
+		ReadOnly: principalFromCtx(ctx).ReadOnly,
 	}
 }
 

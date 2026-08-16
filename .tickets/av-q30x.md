@@ -69,7 +69,3 @@ REMAINING OPEN QUESTIONS, narrowed
 - Where the credential is set: env var at deploy is now clearly right for v1. A first-run setup page is friendlier but implies a writable settings surface this instance does not otherwise need, and the operator is already setting AUTH_TOKEN, EXHIBIT_SECRET and the OIDC_* vars the same way.
 - Session lifetime / remember-me: av-30rj already chose an expiry for sessions rows; inherit it rather than introducing a second policy.
 - CSRF: **answered, and separately ticketed as av-ke2m.** It shipped implicitly — SameSite=Lax is doing the work and is sufficient, but is neither documented nor pinned by a test. Do not re-solve it here.
-
-**2026-08-09T04:30:31Z**
-
--

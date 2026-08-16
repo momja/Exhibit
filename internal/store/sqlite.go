@@ -313,6 +313,24 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 	return results, nil
 }
 
+// updatableArtifactColumns is the allowlist UpdateArtifact checks its caller's
+// keys against. "network_allowlist" is deliberately absent: it never reaches
+// the generic loop below (handled and stripped first), so listing it here
+// would just be a second place that claim could be made and forgotten.
+// Everything else naming an artifacts column — id, owner_id, source_blob_id,
+// created_at, updated_at, tags_text (trigger-maintained) — is deliberately
+// excluded: an update map here is a handler-decoded PATCH body, so an
+// unvalidated key is a column the *caller* chose.
+var updatableArtifactColumns = map[string]bool{
+	"title":              true,
+	"tier":               true,
+	"source_url":         true,
+	"source_text":        true,
+	"widget_blob_id":     true,
+	"downloads_approved": true,
+	"clipboard_approved": true,
+}
+
 func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error {
 	if len(updates) == 0 {
 		return nil
@@ -338,6 +356,14 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id stri
 	setClauses := make([]string, 0, len(updates)+1)
 	args := make([]any, 0, len(updates)+2)
 	for k, v := range updates {
+		if !updatableArtifactColumns[k] {
+			// k becomes a bare SQL identifier below (k+"=?"), never a bound
+			// parameter, so an unvalidated key is a column the caller chose —
+			// up to and including owner_id or id. This map is a handler-decoded
+			// PATCH body (internal/api/artifacts.go), so that caller is
+			// whoever sent the request.
+			return fmt.Errorf("update artifact: %q is not an updatable column", k)
+		}
 		if k == "downloads_approved" || k == "clipboard_approved" {
 			// These columns are INTEGER 0/1; a non-bool here would store a value
 			// that later fails the bool scan and bricks reads of the artifact.
@@ -798,10 +824,10 @@ func (s *SQLiteStore) attachTags(ctx context.Context, arts []*Artifact) error {
 // addition to the owner predicate — the two are ANDed, never substituted for
 // one another.
 
-func (s *SQLiteStore) GetState(ctx context.Context, ownerID int64, artifactID string, userID int64) (map[string]string, error) {
+func (s *SQLiteStore) GetState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID) (map[string]string, error) {
 	rows, err := s.db.QueryContext(ctx,
 		"SELECT key, value FROM artifact_state WHERE artifact_id=? AND user_id=? AND "+ownedArtifact,
-		artifactID, userID, ownerID)
+		artifactID, int64(userID), int64(ownerID))
 	if err != nil {
 		return nil, err
 	}
@@ -817,25 +843,25 @@ func (s *SQLiteStore) GetState(ctx context.Context, ownerID int64, artifactID st
 	return state, rows.Err()
 }
 
-func (s *SQLiteStore) SetState(ctx context.Context, ownerID int64, artifactID string, userID int64, key, value string) error {
-	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
+func (s *SQLiteStore) SetState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID, key, value string) error {
+	if err := s.ownsArtifact(ctx, int64(ownerID), artifactID); err != nil {
 		return err
 	}
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO artifact_state (artifact_id, user_id, key, value, updated_at)
          VALUES (?, ?, ?, ?, datetime('now'))
          ON CONFLICT(artifact_id, user_id, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
-		artifactID, userID, key, value)
+		artifactID, int64(userID), key, value)
 	return err
 }
 
 // DeleteState removes one key's row for one viewer. A key that was never stored
 // is not an error: the row is gone either way, which is the only thing the
 // caller asked for.
-func (s *SQLiteStore) DeleteState(ctx context.Context, ownerID int64, artifactID string, userID int64, key string) error {
+func (s *SQLiteStore) DeleteState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID, key string) error {
 	_, err := s.db.ExecContext(ctx,
 		"DELETE FROM artifact_state WHERE artifact_id=? AND user_id=? AND key=? AND "+ownedArtifact,
-		artifactID, userID, key, ownerID)
+		artifactID, int64(userID), key, int64(ownerID))
 	return err
 }
 
@@ -844,10 +870,10 @@ func (s *SQLiteStore) DeleteState(ctx context.Context, ownerID int64, artifactID
 // untouched, and leaving any other viewer's rows alone. "Erase all my state" is
 // the operation the state inspector offers; erasing *someone else's* state is a
 // different, deliberate act that no route grants today.
-func (s *SQLiteStore) ClearState(ctx context.Context, ownerID int64, artifactID string, userID int64) error {
+func (s *SQLiteStore) ClearState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID) error {
 	_, err := s.db.ExecContext(ctx,
 		"DELETE FROM artifact_state WHERE artifact_id=? AND user_id=? AND "+ownedArtifact,
-		artifactID, userID, ownerID)
+		artifactID, int64(userID), int64(ownerID))
 	return err
 }
 

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // statePrincipals returns the two principals every state route needs: the
@@ -16,13 +16,13 @@ import (
 // writes only its own state — but they remain two questions. They diverge on
 // the render path (the token's principal against the artifact's owner) and will
 // diverge here the moment a non-owner may open a shared artifact (av-7k7b).
-func statePrincipals(r *http.Request) (ownerID, userID int64) {
-	session := ownerIDFromCtx(r.Context())
-	return session, session
+func statePrincipals(r *http.Request) (ownerID store.OwnerID, userID store.ViewerID) {
+	id := ownerIDFromCtx(r.Context())
+	return store.OwnerID(id), store.ViewerID(id)
 }
 
 func (ro *Router) getState(w http.ResponseWriter, r *http.Request) {
-	artifactID := chi.URLParam(r, "artifactID")
+	artifactID := urlParamID(r, "artifactID")
 
 	if !ro.artifactExists(w, r, artifactID, "get state") {
 		return
@@ -50,7 +50,7 @@ type setStateRequest struct {
 }
 
 func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
-	artifactID := chi.URLParam(r, "artifactID")
+	artifactID := urlParamID(r, "artifactID")
 
 	var req setStateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -103,7 +103,7 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 // deletes the empty-string key, absent erases everything. Testing the value
 // for "" would conflate them.
 func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
-	artifactID := chi.URLParam(r, "artifactID")
+	artifactID := urlParamID(r, "artifactID")
 
 	if !ro.artifactExists(w, r, artifactID, "delete state") {
 		return

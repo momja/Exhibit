@@ -99,6 +99,10 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if len(req.Messages) == 0 {
+		http.Error(w, "messages must not be empty", http.StatusBadRequest)
+		return
+	}
 	plan := decide(req.Messages)
 	log.Printf("turn: %d messages -> %s", len(req.Messages), plan.kind)
 	streamPlan(w, plan)
@@ -206,6 +210,13 @@ func decide(messages []chatMessage) turnPlan {
 	}
 }
 
+var (
+	setStateRe   = regexp.MustCompile(`(?i)set state (\S+) to (.+)`)
+	deleteKeyRe  = regexp.MustCompile(`(?i)delete state (\S+)`)
+	clearStateRe = regexp.MustCompile(`(?i)(clear|erase|wipe)( all)? state`)
+	readStateRe  = regexp.MustCompile(`(?i)(list|show|read) state`)
+)
+
 // decideStateCommand recognizes a handful of literal state-management
 // phrasings ("list state", "set state K to V", "delete state K", "clear all
 // state") and maps them to the matching get_state/set_state/delete_state
@@ -213,20 +224,20 @@ func decide(messages []chatMessage) turnPlan {
 // None of them names an artifact: the tools take no id, and the session's
 // credential decides which artifact they land on (av-e0yj).
 func decideStateCommand(userText string) (turnPlan, bool) {
-	if m := regexp.MustCompile(`(?i)set state (\S+) to (.+)`).FindStringSubmatch(userText); m != nil {
+	if m := setStateRe.FindStringSubmatch(userText); m != nil {
 		return turnPlan{
 			kind:     "tool",
 			toolName: "set_state",
 			toolArgs: map[string]string{"key": m[1], "value": strings.TrimSpace(m[2])},
 		}, true
 	}
-	if m := regexp.MustCompile(`(?i)delete state (\S+)`).FindStringSubmatch(userText); m != nil {
+	if m := deleteKeyRe.FindStringSubmatch(userText); m != nil {
 		return turnPlan{kind: "tool", toolName: "delete_state", toolArgs: map[string]string{"key": m[1]}}, true
 	}
-	if regexp.MustCompile(`(?i)(clear|erase|wipe)( all)? state`).MatchString(userText) {
+	if clearStateRe.MatchString(userText) {
 		return turnPlan{kind: "tool", toolName: "delete_state", toolArgs: map[string]string{}}, true
 	}
-	if regexp.MustCompile(`(?i)(list|show|read) state`).MatchString(userText) {
+	if readStateRe.MatchString(userText) {
 		return turnPlan{kind: "tool", toolName: "get_state", toolArgs: map[string]string{}}, true
 	}
 	return turnPlan{}, false
@@ -377,7 +388,7 @@ document.getElementById('submit-btn').addEventListener('click', function() {
 func streamPlan(w http.ResponseWriter, plan turnPlan) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
-	flusher := w.(http.Flusher)
+	flusher, _ := w.(http.Flusher)
 
 	send := func(delta map[string]any, finish any) {
 		chunk := map[string]any{
@@ -393,7 +404,9 @@ func streamPlan(w http.ResponseWriter, plan turnPlan) {
 		}
 		b, _ := json.Marshal(chunk)
 		fmt.Fprintf(w, "data: %s\n\n", b)
-		flusher.Flush()
+		if flusher != nil {
+			flusher.Flush()
+		}
 	}
 
 	switch plan.kind {

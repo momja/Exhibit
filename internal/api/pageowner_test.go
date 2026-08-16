@@ -57,6 +57,20 @@ type pageOwnerRoute struct {
 	ownerScoped bool
 	ownPath     string
 	foreignPath string
+	// scopedByHandler marks a route that IS owner-scoped but not by this
+	// walk's own mechanism (sessionGate + ownerMiddleware resolving the owner
+	// for a handler that trusts ownerIDFromCtx). Its handler resolves the
+	// owner itself instead — the SSE route is the one case, because
+	// EventSource sets no headers and so cannot sit behind either middleware.
+	// This is a distinct claim from "not owner-scoped at all" (why alone):
+	// the row still promises per-owner isolation, just proven by a different
+	// test, which coveredBy must name.
+	scopedByHandler bool
+	// coveredBy is the test file that pins ownership for a scopedByHandler
+	// row, since this walk cannot exercise it directly. Required exactly when
+	// scopedByHandler is true, so a handler-scoped exemption is a claim
+	// backed by a named test rather than an assertion nobody checks.
+	coveredBy string
 	// why is required of every row that claims exemption, so "not owner-scoped"
 	// is an argument someone made rather than a box left unticked.
 	why string
@@ -106,7 +120,8 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 
 	// Owner-independent by design rather than by omission.
 	{route: "/s/{shareID}", why: "the share row is the authorization (architecture.md §7); it redirects to the render origin and reads no library"},
-	{route: "/api/agent/sessions/{sessionID}/events", why: "streams one agent session's events by id and reads no library; it is owner-scoped, but by authorizeEventStream resolving the owner itself (EventSource sets no headers, so it cannot sit in a group that runs the middlewares) — pinned by agent_session_owner_test.go"},
+	{route: "/api/agent/sessions/{sessionID}/events", scopedByHandler: true, coveredBy: "agent_session_owner_test.go",
+		why: "streams one agent session's events by id; it is owner-scoped, but by authorizeEventStream resolving the owner itself (EventSource sets no headers, so it cannot sit in a group that runs the middlewares)"},
 
 	// The authenticated API group, which runs authMiddleware +
 	// ownerMiddleware. Its owner scoping is av-ep8k's, pinned by
@@ -201,7 +216,7 @@ func seedOwnedArtifact(t *testing.T, ro *Router, owner int64, id, title, bodyMar
 		SourceBlobID: blobID, WidgetBlobID: widgetBlobID,
 		Tier: store.Tier1, SourceText: bodyMarker,
 	}))
-	require.NoError(t, ro.cfg.Store.SetState(ctx, owner, id, owner, "note", stateMarker))
+	require.NoError(t, ro.cfg.Store.SetState(ctx, store.OwnerID(owner), id, store.ViewerID(owner), "note", stateMarker))
 	return id
 }
 
@@ -286,6 +301,10 @@ func TestEveryAppOriginGETRouteDeclaresItsOwnerScope(t *testing.T) {
 			require.NotEmpty(t, row.foreignPath, "%s: an owner-scoped row needs a path for another owner's artifact", row.route)
 		} else {
 			require.NotEmpty(t, row.why, "%s: a row claiming exemption has to say why", row.route)
+		}
+		if row.scopedByHandler {
+			require.False(t, row.ownerScoped, "%s: scopedByHandler is the alternative to this walk's own ownerScoped mechanism, not both", row.route)
+			require.NotEmpty(t, row.coveredBy, "%s: a handler-scoped row must name the test that actually pins its ownership check", row.route)
 		}
 		declared[row.route] = true
 	}

@@ -43,6 +43,11 @@ import (
 // instance.
 const minPasswordLength = 8
 
+// maxPasswordLength is bcrypt's own ceiling: auth.HashPassword rejects
+// anything longer with an error. Checked here so that error surfaces as the
+// same 400 the length floor does, rather than as a 500 from serverError.
+const maxPasswordLength = 72
+
 // --- authority ---------------------------------------------------------
 
 // adminOnly is the guard. It answers **404**, not 403, and the same 404
@@ -121,8 +126,13 @@ func (ro *Router) adminRequest(r *http.Request) bool {
 			return false
 		}
 		return u.IsAdmin && !u.Disabled
-	default: // PrincipalNone
+	case PrincipalNone:
 		return !ro.loginEnabled()
+	default:
+		// An unrecognized PrincipalKind is not "no credential" — falling
+		// through to the PrincipalNone case would grant admin on a fully
+		// open instance to a value nothing here issued. Refuse it.
+		return false
 	}
 }
 
@@ -195,6 +205,11 @@ func (ro *Router) createAdminUser(w http.ResponseWriter, r *http.Request) {
 			"a password of at least "+strconv.Itoa(minPasswordLength)+" characters is required")
 		return
 	}
+	if len(req.Password) > maxPasswordLength {
+		writeError(w, http.StatusBadRequest,
+			"a password of at most "+strconv.Itoa(maxPasswordLength)+" characters is required")
+		return
+	}
 	// The plaintext is hashed here and never travels further: no store call,
 	// log line or error string in this file takes a password.
 	hash, err := auth.HashPassword(req.Password)
@@ -202,7 +217,9 @@ func (ro *Router) createAdminUser(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "admin hash password", err)
 		return
 	}
-	user, err := ro.cfg.Store.CreateLocalUser(r.Context(), auth.LocalExternalID(name), name, hash)
+	user, err := ro.cfg.Store.CreateLocalUser(r.Context(), store.NewLocalUser{
+		ExternalID: auth.LocalExternalID(name), Email: name, PasswordHash: hash,
+	})
 	if errors.Is(err, store.ErrDuplicateName) {
 		writeError(w, http.StatusConflict, "that login name already has an account")
 		return
@@ -267,10 +284,36 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Role and disabled-state changes run first, ahead of the password reset.
+	// Both can be refused by the store (ErrLastAdmin), and running them before
+	// an otherwise-irreversible password write means that refusal leaves
+	// nothing else half-applied — a request that fails, fails before it has
+	// changed anything.
+	if req.IsAdmin != nil && *req.IsAdmin != target.IsAdmin {
+		if err := ro.cfg.Store.SetUserAdmin(r.Context(), id, *req.IsAdmin); err != nil {
+			ro.writeAdminChangeError(w, r, "admin set role", err)
+			return
+		}
+		slog.InfoContext(r.Context(), "admin changed an account's role",
+			slog.Int64("user_id", id), slog.Bool("is_admin", *req.IsAdmin))
+	}
+	if req.Disabled != nil && *req.Disabled != target.Disabled {
+		if err := ro.cfg.Store.SetUserDisabled(r.Context(), id, *req.Disabled); err != nil {
+			ro.writeAdminChangeError(w, r, "admin set disabled", err)
+			return
+		}
+		slog.InfoContext(r.Context(), "admin changed an account's sign-in state",
+			slog.Int64("user_id", id), slog.Bool("disabled", *req.Disabled))
+	}
 	if req.Password != nil {
 		if len(*req.Password) < minPasswordLength {
 			writeError(w, http.StatusBadRequest,
 				"a password of at least "+strconv.Itoa(minPasswordLength)+" characters is required")
+			return
+		}
+		if len(*req.Password) > maxPasswordLength {
+			writeError(w, http.StatusBadRequest,
+				"a password of at most "+strconv.Itoa(maxPasswordLength)+" characters is required")
 			return
 		}
 		hash, err := auth.HashPassword(*req.Password)
@@ -284,23 +327,12 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 		}
 		slog.InfoContext(r.Context(), "admin reset an account password", slog.Int64("user_id", id))
 	}
-	if req.IsAdmin != nil && *req.IsAdmin != target.IsAdmin {
-		if err := ro.cfg.Store.SetUserAdmin(r.Context(), id, *req.IsAdmin); err != nil {
-			ro.writeAdminChangeError(w, r, "admin set role", err)
-			return
-		}
-	}
-	if req.Disabled != nil && *req.Disabled != target.Disabled {
-		if err := ro.cfg.Store.SetUserDisabled(r.Context(), id, *req.Disabled); err != nil {
-			ro.writeAdminChangeError(w, r, "admin set disabled", err)
-			return
-		}
-		slog.InfoContext(r.Context(), "admin changed an account's sign-in state",
-			slog.Int64("user_id", id), slog.Bool("disabled", *req.Disabled))
-	}
 
 	updated, err := ro.cfg.Store.GetUser(r.Context(), id)
-	if err != nil || updated == nil {
+	if err == nil && updated == nil {
+		err = fmt.Errorf("user %d vanished after update", id)
+	}
+	if err != nil {
 		serverError(w, r, "admin reread user", err)
 		return
 	}

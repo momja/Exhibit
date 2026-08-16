@@ -513,7 +513,17 @@ func safeNext(next string) string {
 	if next == "" || !strings.HasPrefix(next, "/") {
 		return ""
 	}
-	if strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") {
+	// A control character or backslash inside the path is how a browser gets
+	// tricked into collapsing "/\t/evil.test" into a scheme-relative
+	// "//evil.test" after the checks below have already run — reject them
+	// outright rather than trust that url.Parse sees what the browser will.
+	for _, r := range next {
+		if r < 0x20 || r == 0x7f || r == '\\' {
+			return ""
+		}
+	}
+	u, err := url.Parse(next)
+	if err != nil || u.Scheme != "" || u.Host != "" {
 		return ""
 	}
 	return next

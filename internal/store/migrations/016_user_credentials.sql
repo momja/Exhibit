@@ -55,7 +55,13 @@ UPDATE users SET external_id = 'local:' || lower(trim(email))
 UPDATE users SET is_admin = 1 WHERE id = (SELECT min(id) FROM users);
 
 -- +goose Down
+-- Only one row can become 'local' without violating external_id's UNIQUE
+-- constraint. With more than one local account (possible once this migration
+-- has run and an operator added a second), picking a survivor at random would
+-- silently orphan the rest; restoring the oldest — the row this migration's Up
+-- direction re-keyed in the first place — is the least surprising of the
+-- available choices.
 UPDATE users SET external_id = 'local'
- WHERE external_id LIKE 'local:%';
+ WHERE id = (SELECT min(id) FROM users WHERE external_id LIKE 'local:%');
 ALTER TABLE users DROP COLUMN is_admin;
 ALTER TABLE users DROP COLUMN password_hash;

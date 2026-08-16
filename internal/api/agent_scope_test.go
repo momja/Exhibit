@@ -3,8 +3,10 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/momja/Exhibit/internal/agentscope"
@@ -279,4 +281,32 @@ func TestAgentScopeAllowsRejectsPathTricks(t *testing.T) {
 
 	// Escaped or not, the session's own id resolves to the same artifact.
 	assert.True(t, agentScopeAllows(scope, "GET", "/api/artifacts/%61%62%63"))
+}
+
+// TestPercentEncodedArtifactIDResolvesConsistently is the integration-level
+// counterpart to the %61%62%63 case above: agentScopeAllows deciding an
+// escaped id is authorized is only half the story if the handler that runs
+// next resolves a *different* id. chi routes off the request's raw
+// (percent-encoded) path, so chi.URLParam returns the still-encoded segment;
+// urlParamID decodes it so the store lookup agrees with what the scope check
+// already approved.
+func TestPercentEncodedArtifactIDResolvesConsistently(t *testing.T) {
+	r, reg := newScopedTestRouter(t)
+
+	id := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
+	grant, err := reg.Issue(1, id)
+	require.NoError(t, err)
+
+	var encoded strings.Builder
+	for i := 0; i < len(id); i++ {
+		fmt.Fprintf(&encoded, "%%%02X", id[i])
+	}
+
+	w := doWithToken(t, r, http.MethodGet, "/api/artifacts/"+encoded.String(), grant.Token(), nil)
+	require.Equal(t, http.StatusOK, w.Code,
+		"a percent-encoded id that decodes to the granted artifact must resolve, not 404: %s", w.Body.String())
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&got))
+	assert.Equal(t, id, got["id"])
 }

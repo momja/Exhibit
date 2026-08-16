@@ -37,6 +37,10 @@ type fakeIDP struct {
 	gotCode     string
 	// challenge the authorization request advertised, set by the test.
 	expectChallenge string
+	// nextIDToken, when set, is returned by /token instead of a freshly
+	// signed, well-formed token — how a test hands the exchange a token the
+	// verifier should reject.
+	nextIDToken string
 }
 
 func newFakeIDP(t *testing.T) *fakeIDP {
@@ -82,11 +86,15 @@ func newFakeIDP(t *testing.T) *fakeIDP {
 			http.Error(w, `{"error":"invalid_grant"}`, http.StatusBadRequest)
 			return
 		}
+		idToken := idp.nextIDToken
+		if idToken == "" {
+			idToken = idp.signIDToken(t)
+		}
 		writeJSON(w, map[string]any{
 			"access_token": "at",
 			"token_type":   "Bearer",
 			"expires_in":   3600,
-			"id_token":     idp.signIDToken(t),
+			"id_token":     idToken,
 		})
 	})
 
@@ -99,6 +107,14 @@ func newFakeIDP(t *testing.T) *fakeIDP {
 // library: the whole token is three base64url segments and one signature, and
 // keeping it inline makes what the verifier actually checks visible.
 func (f *fakeIDP) signIDToken(t *testing.T) string {
+	return f.signIDTokenCustom(t, f.key, nil)
+}
+
+// signIDTokenCustom mints a token with the given signing key and claim
+// overrides, so tests can hand the verifier a token it should reject: one
+// signed by a key absent from the published JWKS, or carrying a foreign
+// audience or an already-expired exp.
+func (f *fakeIDP) signIDTokenCustom(t *testing.T, key *rsa.PrivateKey, claimOverrides map[string]any) string {
 	t.Helper()
 	header := map[string]any{"alg": "RS256", "typ": "JWT", "kid": "test-key"}
 	now := time.Now()
@@ -110,6 +126,9 @@ func (f *fakeIDP) signIDToken(t *testing.T) string {
 		"iat":   now.Unix(),
 		"exp":   now.Add(time.Hour).Unix(),
 	}
+	for k, v := range claimOverrides {
+		claims[k] = v
+	}
 	segment := func(v any) string {
 		b, err := json.Marshal(v)
 		require.NoError(t, err)
@@ -117,7 +136,7 @@ func (f *fakeIDP) signIDToken(t *testing.T) string {
 	}
 	signing := segment(header) + "." + segment(claims)
 	sum := sha256.Sum256([]byte(signing))
-	sig, err := rsa.SignPKCS1v15(rand.Reader, f.key, crypto.SHA256, sum[:])
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
 	require.NoError(t, err)
 	return signing + "." + base64.RawURLEncoding.EncodeToString(sig)
 }
@@ -184,6 +203,65 @@ func TestOIDCProviderRejectsWrongVerifier(t *testing.T) {
 	require.NoError(t, err)
 	_, err = provider.Exchange(context.Background(), "code", other)
 	assert.Error(t, err, "a code redeemed with the wrong verifier must not yield an identity")
+}
+
+func TestOIDCProviderRejectsForeignAudience(t *testing.T) {
+	idp := newFakeIDP(t)
+	provider, err := NewOIDCProvider(context.Background(), OIDCConfig{
+		Issuer:      idp.server.URL,
+		ClientID:    idp.clientID,
+		RedirectURL: "https://app.test/auth/callback",
+	})
+	require.NoError(t, err)
+
+	verifier, err := NewVerifier()
+	require.NoError(t, err)
+	idp.expectChallenge = S256Challenge(verifier)
+	idp.nextIDToken = idp.signIDTokenCustom(t, idp.key, map[string]any{"aud": "some-other-client"})
+
+	_, err = provider.Exchange(context.Background(), "code", verifier)
+	assert.Error(t, err, "an id_token minted for a different client must not verify")
+}
+
+func TestOIDCProviderRejectsExpiredToken(t *testing.T) {
+	idp := newFakeIDP(t)
+	provider, err := NewOIDCProvider(context.Background(), OIDCConfig{
+		Issuer:      idp.server.URL,
+		ClientID:    idp.clientID,
+		RedirectURL: "https://app.test/auth/callback",
+	})
+	require.NoError(t, err)
+
+	verifier, err := NewVerifier()
+	require.NoError(t, err)
+	idp.expectChallenge = S256Challenge(verifier)
+	idp.nextIDToken = idp.signIDTokenCustom(t, idp.key, map[string]any{
+		"exp": time.Now().Add(-time.Hour).Unix(),
+	})
+
+	_, err = provider.Exchange(context.Background(), "code", verifier)
+	assert.Error(t, err, "an expired id_token must not verify")
+}
+
+func TestOIDCProviderRejectsUnknownSigningKey(t *testing.T) {
+	idp := newFakeIDP(t)
+	provider, err := NewOIDCProvider(context.Background(), OIDCConfig{
+		Issuer:      idp.server.URL,
+		ClientID:    idp.clientID,
+		RedirectURL: "https://app.test/auth/callback",
+	})
+	require.NoError(t, err)
+
+	verifier, err := NewVerifier()
+	require.NoError(t, err)
+	idp.expectChallenge = S256Challenge(verifier)
+
+	forgedKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	idp.nextIDToken = idp.signIDTokenCustom(t, forgedKey, nil)
+
+	_, err = provider.Exchange(context.Background(), "code", verifier)
+	assert.Error(t, err, "a token signed by a key absent from the published JWKS must not verify")
 }
 
 func TestOIDCProviderNeedsConfiguration(t *testing.T) {

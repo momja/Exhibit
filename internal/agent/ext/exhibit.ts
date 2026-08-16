@@ -212,7 +212,7 @@ export default function (pi: ExtensionAPI) {
 				`allowlist: [${(a.network_allowlist || []).join(", ")}]`;
 			return ok(fenced("current source of the artifact this session is editing", meta + "\n\n" + (a.body || "")), {
 				exhibit: "artifact_read",
-				artifactId: a.id,
+				artifactId: target,
 			});
 		},
 	});

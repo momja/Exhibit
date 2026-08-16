@@ -790,23 +790,10 @@ func artifactHasColumn(t *testing.T, db *sql.DB, name string) bool {
 // was never set through any caller (av-8ipt), but a migration that would lose
 // rows if it had been is the one worth proving otherwise about.
 func TestMigration015DropsShareExpiry(t *testing.T) {
-	f, err := os.CreateTemp("", "test-mig-015-*.db")
-	require.NoError(t, err)
-	f.Close()
-	t.Cleanup(func() { os.Remove(f.Name()) })
-
-	db, err := sql.Open("sqlite", f.Name())
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	db.SetMaxOpenConns(1)
-	_, err = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`)
-	require.NoError(t, err)
-
-	goose.SetBaseFS(migrationsFS)
-	require.NoError(t, goose.SetDialect("sqlite3"))
+	db := openMigrationTestDB(t)
 	require.NoError(t, goose.UpTo(db, "migrations", 14))
 
-	_, err = db.Exec(`INSERT INTO artifacts (id, source_blob_id) VALUES ('a1','b1')`)
+	_, err := db.Exec(`INSERT INTO artifacts (id, source_blob_id) VALUES ('a1','b1')`)
 	require.NoError(t, err)
 	_, err = db.Exec(
 		`INSERT INTO shares (id, artifact_id, public, expires_at)

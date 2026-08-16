@@ -811,7 +811,7 @@ Instructions and data sit in different places in the conversation.
 - The artifact's source, its title, and any snippet descriptor travel in a
   **user-role message**, inside a fenced block:
 
-  ```
+  ```text
   -----BEGIN EXHIBIT UNTRUSTED DATA <nonce>-----
   label: current source of the artifact this session is editing
   …

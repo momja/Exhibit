@@ -137,6 +137,13 @@ type keyedLimiter struct {
 }
 
 func newKeyedLimiter(limit rateLimit, capacity int, now func() time.Time) *keyedLimiter {
+	if limit.refill <= 0 {
+		// bucket.refill divides by this. A zero or negative value is a
+		// configuration mistake, not a value any caller passes on purpose —
+		// letting it through would silently turn the limiter into a no-op
+		// (every bucket reads as instantly full) rather than failing loudly.
+		panic("loginratelimit: rateLimit.refill must be positive")
+	}
 	return &keyedLimiter{
 		limit:    limit,
 		capacity: capacity,
@@ -188,6 +195,55 @@ func (l *keyedLimiter) penalise(key string) {
 		b.tokens--
 	} else {
 		b.tokens = 0
+	}
+	l.keep(key, b)
+}
+
+// reserve atomically checks and debits one token from key's budget in a
+// single locked operation. It exists because retryAfter (check) and penalise
+// (debit) used to be two separate calls straddling the handler: concurrent
+// attempts could all call retryAfter, all see budget, and all proceed before
+// any of them called penalise — the rate limit would then bound nothing under
+// concurrency, exactly the shape of a credential-stuffing burst. A zero
+// return means a token was taken and the caller owns a debit it must return
+// with refund if the attempt turns out not to be chargeable; a nonzero return
+// means no token was taken and the caller must not proceed.
+func (l *keyedLimiter) reserve(key string) time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := l.now()
+	b := l.lookup(key)
+	if b == nil {
+		b = &bucket{tokens: l.limit.burst, last: now}
+	} else {
+		b.refill(l.limit, now)
+	}
+	if b.tokens < 1 {
+		l.keep(key, b)
+		return time.Duration((1 - b.tokens) * float64(l.limit.refill))
+	}
+	b.tokens--
+	l.keep(key, b)
+	return 0
+}
+
+// refund returns one token reserve took, for a reservation that turned out
+// not to be chargeable. A bucket refunded back to full carries no
+// information and is dropped, the same idle-key reclaim retryAfter does.
+func (l *keyedLimiter) refund(key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	b := l.lookup(key)
+	if b == nil {
+		return
+	}
+	b.refill(l.limit, l.now())
+	b.tokens = math.Min(l.limit.burst, b.tokens+1)
+	if b.tokens >= l.limit.burst {
+		l.drop(key)
+		return
 	}
 	l.keep(key, b)
 }
@@ -286,11 +342,25 @@ func (ro *Router) loginRateLimit(next http.Handler) http.Handler {
 		ipKey := clientIP(r)
 		userKey := usernameKey(username)
 
-		// Both budgets must allow the attempt; the longer wait is the one
-		// reported, since satisfying the shorter one would still be refused.
-		wait := max(ro.logins.ip.retryAfter(ipKey), ro.logins.user.retryAfter(userKey))
-		if wait > 0 {
+		// reserve, not retryAfter+penalise: check and debit happen in one
+		// locked operation, or concurrent attempts can all observe the same
+		// remaining budget and all proceed before any of them is charged —
+		// under concurrency the limit would then bound nothing, which is
+		// exactly the shape of a credential-stuffing burst.
+		ipWait := ro.logins.ip.reserve(ipKey)
+		if ipWait > 0 {
+			// Report the longer of the two waits — satisfying only the
+			// shorter one would still be refused — without spending a
+			// username reservation the address budget can't currently
+			// afford anyway.
+			wait := max(ipWait, ro.logins.user.retryAfter(userKey))
 			ro.throttleLogin(w, r, wait, username)
+			return
+		}
+		userWait := ro.logins.user.reserve(userKey)
+		if userWait > 0 {
+			ro.logins.ip.refund(ipKey)
+			ro.throttleLogin(w, r, userWait, username)
 			return
 		}
 
@@ -299,14 +369,23 @@ func (ro *Router) loginRateLimit(next http.Handler) http.Handler {
 
 		switch {
 		case rec.status == http.StatusUnauthorized:
-			ro.logins.ip.penalise(ipKey)
-			ro.logins.user.penalise(userKey)
+			// Both reservations are exactly the charge a failed guess owes;
+			// nothing to return.
 		case rec.status >= 300 && rec.status < 400:
-			// Signed in. The username's budget is returned because this
-			// request proved the identity owns it; the address's is not,
-			// because otherwise anyone holding one valid credential could
-			// refill their source budget between guesses at somebody else's.
+			// Signed in. The address's reservation was only ever a
+			// concurrency guard for this one request, not a lasting charge —
+			// a successful attempt still costs the address budget nothing,
+			// same as before. The username's is returned in full because
+			// this request proved the identity owns it; otherwise anyone
+			// holding one valid credential could refill their own budget
+			// between guesses at somebody else's.
+			ro.logins.ip.refund(ipKey)
 			ro.logins.user.forget(userKey)
+		default:
+			// A 5xx (or anything else): our fault, not a guess. Charged
+			// nothing, same as before.
+			ro.logins.ip.refund(ipKey)
+			ro.logins.user.refund(userKey)
 		}
 	})
 }

@@ -25,11 +25,18 @@ func TestIssuedTokensAreDistinctAndResolveToTheirScope(t *testing.T) {
 
 func TestUnknownAndEmptyTokensResolveToNothing(t *testing.T) {
 	reg := NewRegistry()
-	_, err := reg.Issue(1, "artifact-a")
+	g, err := reg.Issue(1, "artifact-a")
 	require.NoError(t, err)
 
 	assert.Nil(t, reg.Resolve(""))
 	assert.Nil(t, reg.Resolve("exagent_not-a-real-token"))
+
+	// Same length as a real issued token, differing content — exercises the
+	// constant-time compare path rather than the length-mismatch short-circuit.
+	sameLength := "exagent_" + strings.Repeat("0", len(g.Token())-len("exagent_"))
+	require.Len(t, sameLength, len(g.Token()))
+	require.NotEqual(t, g.Token(), sameLength)
+	assert.Nil(t, reg.Resolve(sameLength))
 }
 
 // A create-mode grant binds once. The scope only ever narrows, so a session

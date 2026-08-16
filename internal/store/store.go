@@ -121,6 +121,15 @@ type AgentKey struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// OwnerID and ViewerID name the two principals the state methods below take.
+// Both hold a users.id value and are numerically interchangeable as plain
+// int64, which is exactly what let a caller transpose them and still
+// compile despite the doc comment's claim otherwise. Distinct types close
+// that gap: passing one where the other belongs is now a compile error, not
+// a silent cross-tenant read.
+type OwnerID int64
+type ViewerID int64
+
 type ListOptions struct {
 	// OwnerID scopes the listing to one owner. It is not optional: the zero
 	// value matches no owner, so a caller that forgets it gets an empty list
@@ -240,10 +249,10 @@ type Store interface {
 	// saw. Neither scoping changes that: another owner's artifact, and another
 	// viewer's rows, hold nothing *this* caller can remove, so the deletes
 	// stay silent no-ops there too and those rows survive untouched.
-	GetState(ctx context.Context, ownerID int64, artifactID string, userID int64) (map[string]string, error)
-	SetState(ctx context.Context, ownerID int64, artifactID string, userID int64, key, value string) error
-	DeleteState(ctx context.Context, ownerID int64, artifactID string, userID int64, key string) error
-	ClearState(ctx context.Context, ownerID int64, artifactID string, userID int64) error
+	GetState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID) (map[string]string, error)
+	SetState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID, key, value string) error
+	DeleteState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID, key string) error
+	ClearState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID) error
 
 	// Agent (Exh-yvhp). SetAgentKey upserts the owner's single configured
 	// provider key; GetAgentKey returns nil when none is set.
@@ -312,7 +321,7 @@ type Store interface {
 	LookupLocalCredential(ctx context.Context, externalID string) (*User, string, error)
 	// CreateLocalUser provisions an account, ErrDuplicateName if the name is
 	// taken. SetLocalPassword changes one, or removes it when hash is empty.
-	CreateLocalUser(ctx context.Context, externalID, email, passwordHash string) (*User, error)
+	CreateLocalUser(ctx context.Context, u NewLocalUser) (*User, error)
 	SetLocalPassword(ctx context.Context, userID int64, passwordHash string) error
 	// CountLocalCredentials answers "does this instance have a login of its
 	// own?"; ListUsers is the instance's user directory, oldest first.

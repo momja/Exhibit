@@ -174,7 +174,11 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 // beside it, and the session fences both as data rather than as instructions.
 //
 // A read failure is not fatal — the agent can still call get_artifact — so
-// this returns "" and logs rather than failing the session.
+// this returns "" and logs rather than failing the session. An oversized body
+// is treated the same way: get_artifact is the fallback for a body too large
+// to inline.
+const maxInlinedArtifactSourceBytes = 10 << 20 // 10 MiB
+
 func (ro *Router) inlinedArtifactSource(r *http.Request, a *store.Artifact) string {
 	rc, err := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
 	if err != nil {
@@ -183,10 +187,13 @@ func (ro *Router) inlinedArtifactSource(r *http.Request, a *store.Artifact) stri
 		return ""
 	}
 	defer rc.Close()
-	body, err := io.ReadAll(rc)
+	body, err := io.ReadAll(io.LimitReader(rc, maxInlinedArtifactSourceBytes+1))
 	if err != nil {
 		slog.WarnContext(r.Context(), "agent session opened without inlined body",
 			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
+		return ""
+	}
+	if len(body) > maxInlinedArtifactSourceBytes {
 		return ""
 	}
 	return string(body)
@@ -270,12 +277,16 @@ func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
 		}
 		images = append(images, agent.ImageContent{Type: "image", Data: im.Data, MimeType: mt})
 	}
-	data := make([]agent.DataBlock, 0, len(req.Snippets))
-	for i, descriptor := range req.Snippets {
+	descriptors := make([]string, 0, len(req.Snippets))
+	for _, descriptor := range req.Snippets {
 		if strings.TrimSpace(descriptor) == "" {
 			continue
 		}
-		data = append(data, agent.SnippetBlock(i, len(req.Snippets), descriptor))
+		descriptors = append(descriptors, descriptor)
+	}
+	data := make([]agent.DataBlock, 0, len(descriptors))
+	for i, descriptor := range descriptors {
+		data = append(data, agent.SnippetBlock(i, len(descriptors), descriptor))
 	}
 	if err := s.Prompt(r.Context(), req.Message, images, data); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
@@ -452,7 +463,7 @@ func (ro *Router) agentEvents(w http.ResponseWriter, r *http.Request) {
 // listTranscripts returns the agent conversations persisted with an artifact
 // (colophon provenance, av-q3wo).
 func (ro *Router) listTranscripts(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	ts, err := ro.cfg.Store.ListTranscripts(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
 		serverError(w, r, "list transcripts", err)

@@ -144,7 +144,7 @@ func composePrompt(nonce, message string, blocks []DataBlock) string {
 		b.WriteString("\n\n")
 		b.WriteString(beginFence(nonce))
 		b.WriteString("\nlabel: ")
-		b.WriteString(strings.ReplaceAll(blk.Label, "\n", " "))
+		b.WriteString(redactFenceID(strings.ReplaceAll(blk.Label, "\n", " "), nonce))
 		b.WriteString("\n\n")
 		b.WriteString(redactFenceID(blk.Content, nonce))
 		b.WriteString("\n")

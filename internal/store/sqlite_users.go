@@ -163,41 +163,60 @@ func (s *SQLiteStore) LookupLocalCredential(ctx context.Context, externalID stri
 // that silently resets an existing user's password is the kind of convenience
 // that loses somebody their library. SetLocalPassword is the deliberate way to
 // change one.
-func (s *SQLiteStore) CreateLocalUser(ctx context.Context, externalID, email, passwordHash string) (*User, error) {
+func (s *SQLiteStore) CreateLocalUser(ctx context.Context, u NewLocalUser) (*User, error) {
 	switch {
-	case externalID == "":
+	case u.ExternalID == "":
 		return nil, errors.New("create local user: empty login name")
-	case passwordHash == "":
+	case u.PasswordHash == "":
 		return nil, errors.New("create local user: empty password hash")
 	}
-	if _, err := s.getUserBy(ctx, "external_id=?", externalID); err == nil {
+	if _, err := s.getUserBy(ctx, "external_id=?", u.ExternalID); err == nil {
 		return nil, ErrDuplicateName
 	} else if !errors.Is(err, ErrNotFound) {
 		return nil, err
 	}
-	if err := s.insertUser(ctx, externalID, email, &passwordHash); err != nil {
+	if err := s.insertUser(ctx, u.ExternalID, u.Email, &u.PasswordHash); err != nil {
 		return nil, err
 	}
-	return s.getUserBy(ctx, "external_id=?", externalID)
+	return s.getUserBy(ctx, "external_id=?", u.ExternalID)
 }
 
 // SetLocalPassword replaces an account's password, or removes it when hash is
 // empty — which is how an account becomes SSO-only again without losing the
 // row, and therefore without losing the library that row owns.
+//
+// It revokes the account's sessions in the same transaction, on the same
+// reasoning SetUserDisabled documents: a credential change that left an
+// already-issued session alone would not actually lock out whoever was using
+// it — the old password's holder either way, or an attacker holding a stolen
+// cookie the reset was meant to answer. Setting and clearing the hash both
+// take this path, since either is "this account's credential just changed".
 func (s *SQLiteStore) SetLocalPassword(ctx context.Context, userID int64, passwordHash string) error {
 	var value any
 	if passwordHash != "" {
 		value = passwordHash
 	}
-	res, err := s.db.ExecContext(ctx,
-		"UPDATE users SET password_hash=? WHERE id=?", value, userID)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	if n, err := res.RowsAffected(); err == nil && n == 0 {
+	defer func() { _ = tx.Rollback() }() // no-op once committed
+
+	res, err := tx.ExecContext(ctx, "UPDATE users SET password_hash=? WHERE id=?", value, userID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	if _, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // --- Administration (av-utap) ------------------------------------------

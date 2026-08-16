@@ -24,9 +24,9 @@ func TestLocalAccountsAreUsersRows(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	alice, err := s.CreateLocalUser(ctx, aliceID, "alice@example.test", aliceHash)
+	alice, err := s.CreateLocalUser(ctx, NewLocalUser{ExternalID: aliceID, Email: "alice@example.test", PasswordHash: aliceHash})
 	require.NoError(t, err)
-	bob, err := s.CreateLocalUser(ctx, bobID, "bob@example.test", bobHash)
+	bob, err := s.CreateLocalUser(ctx, NewLocalUser{ExternalID: bobID, Email: "bob@example.test", PasswordHash: bobHash})
 	require.NoError(t, err)
 
 	// Two accounts, two owner ids, in the same space UpsertUser hands out.
@@ -60,10 +60,10 @@ func TestCreateLocalUserRefusesATakenName(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	_, err := s.CreateLocalUser(ctx, aliceID, "alice@example.test", aliceHash)
+	_, err := s.CreateLocalUser(ctx, NewLocalUser{ExternalID: aliceID, Email: "alice@example.test", PasswordHash: aliceHash})
 	require.NoError(t, err)
 
-	_, err = s.CreateLocalUser(ctx, aliceID, "alice@example.test", bobHash)
+	_, err = s.CreateLocalUser(ctx, NewLocalUser{ExternalID: aliceID, Email: "alice@example.test", PasswordHash: bobHash})
 	assert.ErrorIs(t, err, ErrDuplicateName)
 
 	// The original password is untouched.
@@ -75,7 +75,7 @@ func TestCreateLocalUserRefusesATakenName(t *testing.T) {
 	// shadowed by a local account either.
 	_, err = s.UpsertUser(ctx, "sub-1", "sso@example.test")
 	require.NoError(t, err)
-	_, err = s.CreateLocalUser(ctx, "sub-1", "sso@example.test", aliceHash)
+	_, err = s.CreateLocalUser(ctx, NewLocalUser{ExternalID: "sub-1", Email: "sso@example.test", PasswordHash: aliceHash})
 	assert.ErrorIs(t, err, ErrDuplicateName)
 }
 
@@ -86,7 +86,7 @@ func TestSetLocalPasswordKeepsTheAccount(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	alice, err := s.CreateLocalUser(ctx, aliceID, "alice@example.test", aliceHash)
+	alice, err := s.CreateLocalUser(ctx, NewLocalUser{ExternalID: aliceID, Email: "alice@example.test", PasswordHash: aliceHash})
 	require.NoError(t, err)
 
 	require.NoError(t, s.SetLocalPassword(ctx, alice.ID, bobHash))
@@ -113,7 +113,7 @@ func TestFirstUserIsAdminWhicheverPathCreatesIt(t *testing.T) {
 	t.Run("a provisioned account first", func(t *testing.T) {
 		s := newTestStore(t)
 		ctx := context.Background()
-		first, err := s.CreateLocalUser(ctx, aliceID, "alice@example.test", aliceHash)
+		first, err := s.CreateLocalUser(ctx, NewLocalUser{ExternalID: aliceID, Email: "alice@example.test", PasswordHash: aliceHash})
 		require.NoError(t, err)
 		second, err := s.UpsertUser(ctx, "sub-1", "sso@example.test")
 		require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestFirstUserIsAdminWhicheverPathCreatesIt(t *testing.T) {
 		ctx := context.Background()
 		first, err := s.UpsertUser(ctx, "sub-1", "sso@example.test")
 		require.NoError(t, err)
-		second, err := s.CreateLocalUser(ctx, aliceID, "alice@example.test", aliceHash)
+		second, err := s.CreateLocalUser(ctx, NewLocalUser{ExternalID: aliceID, Email: "alice@example.test", PasswordHash: aliceHash})
 		require.NoError(t, err)
 		assert.True(t, first.IsAdmin)
 		assert.False(t, second.IsAdmin)
@@ -146,7 +146,7 @@ func TestListUsersIsTheInstanceDirectory(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, users)
 
-	_, err = s.CreateLocalUser(ctx, aliceID, "alice@example.test", aliceHash)
+	_, err = s.CreateLocalUser(ctx, NewLocalUser{ExternalID: aliceID, Email: "alice@example.test", PasswordHash: aliceHash})
 	require.NoError(t, err)
 	_, err = s.UpsertUser(ctx, "sub-1", "sso@example.test")
 	require.NoError(t, err)
@@ -160,12 +160,13 @@ func TestListUsersIsTheInstanceDirectory(t *testing.T) {
 	assert.False(t, users[1].HasPassword)
 }
 
-// The upgrade path. A database from before av-rzvf holds one local row keyed
-// on the constant 'local'; after 016 it must be keyed on its own name, so the
-// operator's configured LOGIN_USERNAME still resolves to the library it
-// already owns instead of to a fresh empty account.
-func TestMigration016RekeysTheLocalRowAndPromotesTheFirstUser(t *testing.T) {
-	f, err := os.CreateTemp("", "test-mig016-*.db")
+// openMigrationTestDB opens a temp SQLite file, applies the pragmas every
+// migration test needs, and points goose at this package's embedded
+// migrations — the setup every "step through migrations and inspect the
+// schema at some version" test otherwise repeats by hand.
+func openMigrationTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	f, err := os.CreateTemp("", "test-mig-*.db")
 	require.NoError(t, err)
 	f.Close()
 	t.Cleanup(func() { os.Remove(f.Name()) })
@@ -180,11 +181,20 @@ func TestMigration016RekeysTheLocalRowAndPromotesTheFirstUser(t *testing.T) {
 	registerRepairMigrations()
 	goose.SetBaseFS(migrationsFS)
 	require.NoError(t, goose.SetDialect("sqlite3"))
+	return db
+}
+
+// The upgrade path. A database from before av-rzvf holds one local row keyed
+// on the constant 'local'; after 016 it must be keyed on its own name, so the
+// operator's configured LOGIN_USERNAME still resolves to the library it
+// already owns instead of to a fresh empty account.
+func TestMigration016RekeysTheLocalRowAndPromotesTheFirstUser(t *testing.T) {
+	db := openMigrationTestDB(t)
 	require.NoError(t, goose.UpTo(db, "migrations", 14))
 
 	// An instance as av-q30x left it: the local credential's row, and an SSO
 	// identity that logged in afterwards.
-	_, err = db.Exec(`INSERT INTO users (id, external_id, email)
+	_, err := db.Exec(`INSERT INTO users (id, external_id, email)
 	                  VALUES (1, 'local', 'Curator'), (2, 'sub-1', 'sso@example.test')`)
 	require.NoError(t, err)
 

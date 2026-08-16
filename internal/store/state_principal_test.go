@@ -136,31 +136,31 @@ func TestStateOfTwoViewersOnOneArtifactStaysSeparate(t *testing.T) {
 	// Both write the same key. Authorization is the owner's either way — the
 	// artifact is the owner's — but selection differs, which is the whole point
 	// of the two parameters.
-	require.NoError(t, s.SetState(ctx, owner, "shared", owner, "draft", "the owner's"))
-	require.NoError(t, s.SetState(ctx, owner, "shared", guest, "draft", "the guest's"))
+	require.NoError(t, s.SetState(ctx, OwnerID(owner), "shared", ViewerID(owner), "draft", "the owner's"))
+	require.NoError(t, s.SetState(ctx, OwnerID(owner), "shared", ViewerID(guest), "draft", "the guest's"))
 
-	ownerState, err := s.GetState(ctx, owner, "shared", owner)
+	ownerState, err := s.GetState(ctx, OwnerID(owner), "shared", ViewerID(owner))
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"draft": "the owner's"}, ownerState,
 		"a read must return one viewer's rows, never the union")
 
-	guestState, err := s.GetState(ctx, owner, "shared", guest)
+	guestState, err := s.GetState(ctx, OwnerID(owner), "shared", ViewerID(guest))
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"draft": "the guest's"}, guestState)
 
 	// A delete is scoped the same way: it removes the caller's row and leaves
 	// the other viewer's identically-keyed row alone.
-	require.NoError(t, s.DeleteState(ctx, owner, "shared", owner, "draft"))
-	guestState, err = s.GetState(ctx, owner, "shared", guest)
+	require.NoError(t, s.DeleteState(ctx, OwnerID(owner), "shared", ViewerID(owner), "draft"))
+	guestState, err = s.GetState(ctx, OwnerID(owner), "shared", ViewerID(guest))
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"draft": "the guest's"}, guestState,
 		"deleting one viewer's key must not delete another's")
 
 	// So is erase-all. "Erase my state" is the operation the state inspector
 	// offers; erasing someone else's is a different act no route grants.
-	require.NoError(t, s.SetState(ctx, owner, "shared", owner, "draft", "again"))
-	require.NoError(t, s.ClearState(ctx, owner, "shared", owner))
-	guestState, err = s.GetState(ctx, owner, "shared", guest)
+	require.NoError(t, s.SetState(ctx, OwnerID(owner), "shared", ViewerID(owner), "draft", "again"))
+	require.NoError(t, s.ClearState(ctx, OwnerID(owner), "shared", ViewerID(owner)))
+	guestState, err = s.GetState(ctx, OwnerID(owner), "shared", ViewerID(guest))
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"draft": "the guest's"}, guestState,
 		"ClearState must erase the caller's rows, not the artifact's")
@@ -179,18 +179,18 @@ func TestOneUserOnTwoDevicesSharesOneSetOfRows(t *testing.T) {
 		ID: "tracker", OwnerID: me, SourceBlobID: "b1", Tier: Tier1}))
 
 	// iPhone writes.
-	require.NoError(t, s.SetState(ctx, me, "tracker", me, "runs", `[{"km":5}]`))
+	require.NoError(t, s.SetState(ctx, OwnerID(me), "tracker", ViewerID(me), "runs", `[{"km":5}]`))
 
 	// Mac reads it back — same principal, separate call, no device identifier
 	// anywhere in the signature.
-	fromMac, err := s.GetState(ctx, me, "tracker", me)
+	fromMac, err := s.GetState(ctx, OwnerID(me), "tracker", ViewerID(me))
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"runs": `[{"km":5}]`}, fromMac,
 		"a second device must read the first device's write")
 
 	// Mac writes back; iPhone sees the update, not a second row.
-	require.NoError(t, s.SetState(ctx, me, "tracker", me, "runs", `[{"km":5},{"km":8}]`))
-	fromPhone, err := s.GetState(ctx, me, "tracker", me)
+	require.NoError(t, s.SetState(ctx, OwnerID(me), "tracker", ViewerID(me), "runs", `[{"km":5},{"km":8}]`))
+	fromPhone, err := s.GetState(ctx, OwnerID(me), "tracker", ViewerID(me))
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"runs": `[{"km":5},{"km":8}]`}, fromPhone,
 		"last write wins over one row, not per-device forks")
@@ -220,9 +220,9 @@ func TestDeletingAUserRemovesTheirStateRows(t *testing.T) {
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{
 		ID: "guests-own", OwnerID: guest.ID, SourceBlobID: "b2", Tier: Tier1}))
 
-	require.NoError(t, s.SetState(ctx, host.ID, "hosted", host.ID, "k", "host's own"))
-	require.NoError(t, s.SetState(ctx, host.ID, "hosted", guest.ID, "k", "guest, visiting"))
-	require.NoError(t, s.SetState(ctx, guest.ID, "guests-own", guest.ID, "k", "guest at home"))
+	require.NoError(t, s.SetState(ctx, OwnerID(host.ID), "hosted", ViewerID(host.ID), "k", "host's own"))
+	require.NoError(t, s.SetState(ctx, OwnerID(host.ID), "hosted", ViewerID(guest.ID), "k", "guest, visiting"))
+	require.NoError(t, s.SetState(ctx, OwnerID(guest.ID), "guests-own", ViewerID(guest.ID), "k", "guest at home"))
 
 	// There is no DeleteUser on the Store yet; account deletion will add one.
 	// The cascade is a property of the schema, so it is asserted against the
@@ -236,7 +236,7 @@ func TestDeletingAUserRemovesTheirStateRows(t *testing.T) {
 	assert.Zero(t, remaining,
 		"deleting a user must drop their state rows, including those on another owner's artifact")
 
-	survived, err := s.GetState(ctx, host.ID, "hosted", host.ID)
+	survived, err := s.GetState(ctx, OwnerID(host.ID), "hosted", ViewerID(host.ID))
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"k": "host's own"}, survived,
 		"no other viewer's state may be collateral damage")

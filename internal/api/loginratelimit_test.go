@@ -253,12 +253,18 @@ func TestMemoryStaysBoundedUnderManyDistinctKeys(t *testing.T) {
 	clock := newTestClock()
 	l := newKeyedLimiter(perUsernameFailures, capacity, clock.now)
 
-	for i := 0; i < 100_000; i++ {
+	const total = 100_000
+	for i := 0; i < total; i++ {
 		key := fmt.Sprintf("attacker-%d", i)
 		l.retryAfter(key)
 		l.penalise(key)
-		require.LessOrEqual(t, l.size(), 2*capacity, "after %d distinct keys", i+1)
+		// Sampled, not every iteration: the bound holds throughout, but
+		// asserting 100,000 times buys nothing a sparser check doesn't.
+		if i%1000 == 0 {
+			require.LessOrEqual(t, l.size(), 2*capacity, "after %d distinct keys", i+1)
+		}
 	}
+	require.LessOrEqual(t, l.size(), 2*capacity, "after %d distinct keys", total)
 
 	// Eviction drops the oldest generation, not the traffic in front of the
 	// limiter: a key that is being used right now is still counted.

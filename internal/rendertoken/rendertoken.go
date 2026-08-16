@@ -147,6 +147,13 @@ func (s *Signer) MintAnonymousFor(artifactID string, ownerID int64, d time.Durat
 }
 
 func (s *Signer) mint(artifactID string, c Claims, d time.Duration) string {
+	// A positive request can never outlive TTL — that ceiling is the whole
+	// security property this package documents (see the package comment). A
+	// non-positive d is left alone: tests rely on it to mint an
+	// already-expired token.
+	if d > TTL {
+		d = TTL
+	}
 	claims := fmt.Sprintf("%d.%d", c.OwnerID, time.Now().Add(d).Unix())
 	if c.Anonymous {
 		claims += "." + anonymousClaim

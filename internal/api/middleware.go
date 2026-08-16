@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/agentscope"
 )
 
@@ -207,10 +208,12 @@ func (ro *Router) hasServiceToken(r *http.Request) bool {
 // bearerToken pulls the Authorization bearer value, or "" when absent.
 func bearerToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
-	if !strings.HasPrefix(auth, "Bearer ") {
+	// The auth-scheme token is case-insensitive per RFC 7235 §2.1; several
+	// HTTP client libraries send "bearer" rather than "Bearer".
+	if len(auth) < 7 || !strings.EqualFold(auth[:7], "Bearer ") {
 		return ""
 	}
-	return strings.TrimPrefix(auth, "Bearer ")
+	return auth[7:]
 }
 
 func (ro *Router) resolveAgentGrant(token string) *agentscope.Grant {
@@ -254,6 +257,23 @@ var agentSubResources = map[string][]string{
 // This is the per-*artifact* half of the boundary only. The per-*owner* half
 // is the grant's OwnerID flowing into ownerIDFromCtx and from there into the
 // owner-scoped Store methods (av-ep8k); neither half is sufficient alone.
+// urlParamID returns the decoded path parameter named key, so store lookups
+// resolve the same canonical id that agentScopeAllows already authorized.
+// chi routes off the escaped path (RoutePath falls back to r.URL.RawPath),
+// so chi.URLParam returns the raw, still-percent-encoded segment — exactly
+// what agentScopeAllows unescapes before comparing against scope.ArtifactID.
+// A caller that skipped this and used chi.URLParam directly could authorize
+// against one decoding of an id and look up another. A malformed escape is
+// returned unchanged: it won't match any stored id, so the lookup fails
+// closed as a 404 rather than erroring.
+func urlParamID(r *http.Request, key string) string {
+	raw := chi.URLParam(r, key)
+	if decoded, err := url.PathUnescape(raw); err == nil {
+		return decoded
+	}
+	return raw
+}
+
 func agentScopeAllows(scope agentscope.Scope, method, escapedPath string) bool {
 	rest, ok := artifactsSubPath(escapedPath)
 	if !ok {
@@ -388,8 +408,8 @@ func (ro *Router) sessionGate(next http.Handler) http.Handler {
 			return
 		}
 		dest := "/auth/login"
-		if next := safeNext(r.URL.RequestURI()); next != "" {
-			dest += "?next=" + url.QueryEscape(next)
+		if returnTo := safeNext(r.URL.RequestURI()); returnTo != "" {
+			dest += "?next=" + url.QueryEscape(returnTo)
 		}
 		http.Redirect(w, r, dest, http.StatusFound)
 	})

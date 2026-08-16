@@ -249,7 +249,9 @@ func seedDefaultAdmin(ctx context.Context, st *store.SQLiteStore) error {
 	if err != nil {
 		return err
 	}
-	if _, err := st.CreateLocalUser(ctx, auth.LocalExternalID(DefaultAdminName), DefaultAdminName, hash); err != nil {
+	if _, err := st.CreateLocalUser(ctx, store.NewLocalUser{
+		ExternalID: auth.LocalExternalID(DefaultAdminName), Email: DefaultAdminName, PasswordHash: hash,
+	}); err != nil {
 		return err
 	}
 	slog.Info("created the default admin account",
@@ -427,7 +429,9 @@ func userCommand(args []string) {
 		if name == "" {
 			fatal("user add", fmt.Errorf("needs a login name"))
 		}
-		user, err := st.CreateLocalUser(ctx, auth.LocalExternalID(name), name, hashFromStdin(name))
+		user, err := st.CreateLocalUser(ctx, store.NewLocalUser{
+			ExternalID: auth.LocalExternalID(name), Email: name, PasswordHash: hashFromStdin(name),
+		})
 		if errors.Is(err, store.ErrDuplicateName) {
 			fatal("create user", fmt.Errorf("%q already has an account — `user passwd` changes its password", name))
 		} else if err != nil {

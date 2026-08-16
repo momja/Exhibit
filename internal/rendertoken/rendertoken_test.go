@@ -183,3 +183,46 @@ func TestTTLStaysShort(t *testing.T) {
 		t.Fatalf("render token TTL grew to %v; the scope is meant to stay narrow", TTL)
 	}
 }
+
+// A caller asking for longer than TTL still gets a token that expires no
+// later than TTL — the ceiling is enforced at mint, not left to caller
+// discipline. Non-positive durations (needed to mint an already-expired
+// token for TestExpiredTokenIsRejected-style tests) are left untouched.
+func TestMintForCapsRequestedDurationAtTTL(t *testing.T) {
+	s := NewRandomSigner()
+
+	before := time.Now()
+	tok := s.MintFor("artifact-1", 1, 100*time.Hour)
+	claims, err := s.Verify(tok, "artifact-1")
+	if err != nil {
+		t.Fatalf("unexpected verify error: %v", err)
+	}
+	_ = claims
+
+	i := strings.LastIndexByte(tok, '.')
+	exp := parseExpiry(t, tok[:i])
+	if exp.After(before.Add(TTL + time.Second)) {
+		t.Fatalf("token requested for 100h expires at %v, more than TTL past mint", exp)
+	}
+
+	// Non-positive still yields an already-expired token.
+	expired := s.MintFor("artifact-1", 1, -time.Minute)
+	if _, err := s.Verify(expired, "artifact-1"); !errors.Is(err, ErrExpired) {
+		t.Fatalf("expected ErrExpired for a non-positive duration, got %v", err)
+	}
+}
+
+// parseExpiry pulls the exp field out of an unverified claims string, purely
+// to check the mint-time ceiling in TestMintForCapsRequestedDurationAtTTL.
+func parseExpiry(t *testing.T, claims string) time.Time {
+	t.Helper()
+	_, exp, _, ok := splitClaims(claims)
+	if !ok {
+		t.Fatalf("malformed claims: %q", claims)
+	}
+	expUnix, err := strconv.ParseInt(exp, 10, 64)
+	if err != nil {
+		t.Fatalf("malformed exp: %v", err)
+	}
+	return time.Unix(expUnix, 0)
+}

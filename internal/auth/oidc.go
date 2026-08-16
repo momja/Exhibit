@@ -82,6 +82,16 @@ func (p *OIDCProvider) AuthURL(state, verifier string) string {
 
 // Exchange redeems the callback's code for an identity. This is the only
 // place in the system that talks to the provider, and it runs once per login.
+//
+// No nonce is generated or checked against the id_token's nonce claim. The
+// spec requires one for the implicit flow, where a bare ID token can be
+// replayed with no proof of possession; here the code itself is single-use
+// and redeemable only by whoever holds the PKCE verifier this instance
+// generated for that specific login attempt (never exposed to the browser),
+// and state is checked by the caller against what it stored before
+// redirecting. Between them, code + PKCE + state already bind the returned
+// identity to this one login attempt, which is what nonce would otherwise be
+// proving.
 func (p *OIDCProvider) Exchange(ctx context.Context, code, verifier string) (*Identity, error) {
 	token, err := p.oauth.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
