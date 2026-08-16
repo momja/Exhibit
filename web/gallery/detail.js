@@ -303,8 +303,9 @@ document.getElementById('clip-allow').addEventListener('click', async function()
 // plain anchor would replace the iframe with an external page that usually
 // refuses framing. The shim posts external link activations here; when approved
 // we open the URL in a new tab from the app origin (the click's transient
-// activation covers the postMessage roundtrip). Unapproved, we stash the
-// destination for the first-request confirmation (av-e3sj) and open nothing.
+// activation covers the postMessage roundtrip). Unapproved, we show the
+// first-request confirmation (av-e3sj), naming the destination host, and open
+// nothing until the user allows.
 let pendingLink = null;
 
 window.addEventListener('message', function(e) {
@@ -324,6 +325,38 @@ window.addEventListener('message', function(e) {
     return;
   }
   pendingLink = { url: url.href, host: url.hostname };
+  document.getElementById('link-host').textContent = url.hostname;
+  document.getElementById('link-modal').hidden = false;
+});
+
+// Persists the first-use grant, then lets the caller open the pending URL. The
+// viewer is read-only (av-hwx2) — like downloads/clipboard, it only grants on
+// the artifact's first attempt; the revoke control lives on the Edit page.
+async function setLinksApproved(approved) {
+  if (!(await setCapabilityApproved('links_approved', approved, 'link'))) return false;
+  linksApproved = approved;
+  return true;
+}
+
+// Denial just drops the destination and the artifact keeps running — nothing is
+// persisted, mirroring downloads (denial drops, approval persists).
+function closeLinkModal() {
+  document.getElementById('link-modal').hidden = true;
+  pendingLink = null;
+}
+
+document.getElementById('link-block').addEventListener('click', closeLinkModal);
+document.getElementById('link-modal').addEventListener('click', function(e) {
+  if (e.target.id === 'link-modal') closeLinkModal();
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && !document.getElementById('link-modal').hidden) closeLinkModal();
+});
+document.getElementById('link-allow').addEventListener('click', async function() {
+  const link = pendingLink;
+  if (!(await setLinksApproved(true))) return;
+  closeLinkModal();
+  if (link) window.open(link.url, '_blank', 'noopener');
 });
 
 // "Update from source" — only reachable from the toolbar button, which the

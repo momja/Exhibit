@@ -113,3 +113,35 @@ func TestDetailPageRendersLinkBridge(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, page, "let linksApproved = true;")
 }
+
+// The first-request confirmation (av-e3sj) renders the approved copy verbatim,
+// names the destination host, and the host logic opens the pending URL only
+// after the grant persists. Denial drops the destination with nothing persisted
+// — mirroring downloads (denial drops, approval persists).
+func TestDetailPageRendersLinkConfirmationModal(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Link Collector", Tier: store.Tier1,
+		CreatedAt: time.Now()}
+	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	require.NoError(t, err)
+
+	// The modal mirrors dl-modal/clip-modal: an accessible dialog, the approved
+	// copy verbatim, and a hostname span detail.js fills from the pending link.
+	assert.Contains(t, page, `<div id="link-modal" class="modal-overlay" hidden>`)
+	assert.Contains(t, page, `role="dialog"`)
+	assert.Contains(t, page, `aria-modal="true"`)
+	assert.Contains(t, page, `aria-labelledby="link-title"`)
+	assert.Contains(t, page, `<h2 id="link-title">Allow opening links?</h2>`)
+	assert.Contains(t, page,
+		`You are opening a link to <code id="link-host">example.com</code>. Exhibit cannot verify the safety of external sites. Make sure you trust this destination before allowing links. You can revoke this at any time from the toolbar.`)
+	assert.Contains(t, page, `id="link-allow"`)
+	assert.Contains(t, page, `id="link-block"`)
+
+	// The host logic fills the hostname, shows the modal on an unapproved link,
+	// and opens the pending URL only after the grant persists server-side.
+	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(detailJS), `document.getElementById('link-host').textContent = url.hostname`)
+	assert.Contains(t, string(detailJS), `document.getElementById('link-modal').hidden = false`)
+	assert.Contains(t, string(detailJS), `setCapabilityApproved('links_approved', approved, 'link')`)
+	assert.Contains(t, string(detailJS), `window.open(link.url, '_blank', 'noopener')`)
+}
