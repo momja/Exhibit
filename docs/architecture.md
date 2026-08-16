@@ -179,6 +179,13 @@ executable document with the correct security envelope:
   wrapper delegates.
 - Sets `Cache-Control: no-store` — the document is dynamic (inlined state + per-artifact
   CSP) and must never be served stale from a cache.
+- Is **gzip-compressed** when the client accepts it (av-f9b2). This is the surface where
+  compression earns the most: `no-store` means there is no cache to amortise a render
+  document across views, so every view pays its full size on the wire — and a snapshot
+  that vendored a large runtime asset (§3.4a) can be tens of megabytes of base64. The
+  trade is that compression is a per-request CPU cost here rather than a one-off, which
+  is why the level is mid-range rather than maximal. `text/event-stream` is excluded
+  from compression everywhere so the agent surface's SSE stream is never buffered.
 - Is loaded by the app's pages as the `src` of a sandboxed iframe
   (`<iframe src="RENDER_ORIGIN/a/:id" sandbox="allow-scripts">`) with **no**
   `allow-same-origin`. Capabilities the opaque-origin sandbox denies — downloads
