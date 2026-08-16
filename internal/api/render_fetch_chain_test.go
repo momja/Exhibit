@@ -1,30 +1,27 @@
 package api
 
-// The render preamble and the snapshot vendorer BOTH wrap window.fetch, and the
-// two fixes only work composed:
+// The render preamble and the snapshot vendorer BOTH wrap window.fetch, and each
+// wrapper captures whatever window.fetch is at its own install time — so the
+// order they install in is part of the contract between them.
 //
-//   - av-ghvs (the vendorer) inlines a runtime-fetched asset as a data: URI and
-//     injects a manifest + fetch wrapper at the top of the artifact's <head>, so
-//     the artifact's original request is answered locally instead of cross-origin.
-//   - agaf-02xs (the preamble) wraps fetch to answer data: URLs from locally
-//     constructed Responses, because WebKit refuses large data: fetches from an
+//   - agaf-02xs (the preamble) answers data: URLs from locally constructed
+//     Responses, because WebKit refuses large data: fetches from an
 //     opaque-origin sandbox.
+//   - av-ghvs (the vendorer) inlines a runtime-fetched asset and injects a
+//     manifest + fetch wrapper at the top of the artifact's <head>.
 //
-// So the vendorer routes the request to a data: URI, and the preamble is what
-// makes that data: URI work in Safari's iframe. Neither is sufficient alone.
+// The vendorer's wrapper decodes its own manifest entries rather than re-issuing
+// fetch() against the data: URI, so it does not *depend* on the preamble — that
+// is deliberate, and `TestInlineRuntimeAssetsDecodesLocallyNotViaFetch` pins it.
+// What still depends on order is every other data: fetch in the frame: one the
+// artifact's own code performs, or one a future wrapper delegates. Those reach
+// the preamble's shim only if it installed first.
 //
-// Their composition depends entirely on install order. Each wrapper captures
-// whatever window.fetch is at its own install time, and injectPreamble inserts
-// the preamble immediately after <head> — ahead of the manifest the vendorer put
-// there at ingest. That ordering makes the chain
-//
-//	artifact fetch -> manifest (matches, hands over a data: URI)
-//	               -> preamble (decodes it to a local Response)
-//
-// Invert it and the manifest would capture the *native* fetch, quietly sending
-// the data: URI back to the path WebKit refuses: Safari breaks again, with no
-// test failing and nothing visible in Chromium. Nothing else pins this, so pin
-// it here.
+// injectPreamble inserts the preamble immediately after <head>, ahead of
+// anything the artifact body carries. Move it later and the preamble stops
+// shadowing native fetch for scripts that ran before it — Safari regresses on
+// exactly the payloads that motivated the shim, with nothing visible in
+// Chromium and no other test failing. Pin the order here.
 
 import (
 	"net/http"

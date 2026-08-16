@@ -168,14 +168,15 @@ executable document with the correct security envelope:
   artifact that loads a multi-megabyte payload that way never boots in Safari
   while working top-level. It grants nothing: a `data:` URL is inert content the
   frame already holds, and decoding it locally is strictly less work than the
-  path it replaces. Framed-only, and **ordering-critical**: a snapshot that
-  vendored a runtime-fetched asset (§3.4a) installs its *own* fetch wrapper in
-  the artifact body, and that wrapper answers the artifact's request with a
-  `data:` URI. Each wrapper captures whatever `window.fetch` is when it installs,
-  and the preamble goes in first — so the vendorer's wrapper captures this one
-  and the two chain (artifact request → manifest → local Response). Injecting the
-  preamble after the artifact's own scripts would invert that and silently return
-  Safari to the refused path.
+  path it replaces. Framed-only, and **ordering-sensitive**: it must install
+  before any artifact script, since a wrapper only shadows `fetch` for callers
+  that run after it. Note the snapshot vendorer (§3.4a) injects a fetch wrapper
+  of its own into the artifact body, and that one deliberately decodes its
+  manifest entries itself rather than delegating a `data:` URI back to `fetch` —
+  so each is correct standing alone, and neither's behaviour is contingent on the
+  other having installed. What still needs this shim is every *other* `data:`
+  fetch in the frame: one the artifact's own code performs, or one a future
+  wrapper delegates.
 - Sets `Cache-Control: no-store` — the document is dynamic (inlined state + per-artifact
   CSP) and must never be served stale from a cache.
 - Is loaded by the app's pages as the `src` of a sandboxed iframe

@@ -291,3 +291,22 @@ func TestFetchWithCapOverridesPerAssetLimit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, payload, asset.Body)
 }
+
+// The wrapper must answer a matched request from bytes it decodes itself, not by
+// re-issuing fetch() against the data: URI. Delegating would push a
+// multi-megabyte data: URL through the network service, which an opaque-origin
+// sandbox refuses in WebKit — and would make this wrapper's correctness depend
+// on some other injected script installing a data: shim first.
+func TestInlineRuntimeAssetsDecodesLocallyNotViaFetch(t *testing.T) {
+	srv := assetOrigin(t, map[string]testAsset{
+		"/a.wasm": {contentType: "application/wasm", body: []byte("\x00asm")},
+	})
+	body := `<html><head><script>fetch('/a.wasm')</script></head><body></body></html>`
+	out, errs := inlineRuntime(t, srv.URL+"/index.html", body, runtimeLimits())
+	require.Empty(t, errs)
+
+	assert.Contains(t, out, "responseFromDataURI", "must decode the manifest entry itself")
+	assert.Contains(t, out, "new Response(body,", "must construct the Response locally")
+	assert.NotContains(t, out, "nativeFetch(M[resolved])",
+		"must not delegate a data: URI back to fetch — that is the call WebKit refuses in a sandbox")
+}

@@ -158,12 +158,41 @@ func (in *runtimeInliner) injectManifest(doc *html.Node) {
 // anything it does not recognise — a non-GET, an unparseable input, a URL not in
 // the manifest — falls through to the real fetch untouched, so installing it can
 // only add behaviour, never remove any.
+//
+// A matched request is answered by decoding the manifest entry here rather than
+// by re-issuing fetch() against the data: URI. Delegating would hand a
+// multi-megabyte data: URL to the network service for it to parse and
+// materialize, which is both wasteful (the bytes are already in this document)
+// and, in an opaque-origin sandbox, the exact operation WebKit refuses for large
+// payloads — the render preamble carries its own data: shim for that reason
+// (agaf-02xs). Decoding locally makes this wrapper correct on its own, rather
+// than correct only while some other injected script happens to install first.
 func manifestScript(manifestJSON string) string {
 	return `
 (function () {
   var M = ` + manifestJSON + `;
   var nativeFetch = window.fetch;
   if (typeof nativeFetch !== 'function') return;
+
+  // Decode a data: URI into a Response. Returns null for anything unexpected so
+  // the caller can fall back rather than fail.
+  function responseFromDataURI(uri) {
+    var comma = uri.indexOf(',');
+    if (comma < 0) return null;
+    var meta = uri.slice(5, comma);
+    var payload = uri.slice(comma + 1);
+    var body;
+    if (/;base64$/i.test(meta)) {
+      var bin = atob(payload);
+      body = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) body[i] = bin.charCodeAt(i);
+    } else {
+      body = new TextEncoder().encode(decodeURIComponent(payload));
+    }
+    var mime = meta.replace(/;base64$/i, '') || 'text/plain';
+    return new Response(body, { status: 200, headers: { 'Content-Type': mime } });
+  }
+
   window.fetch = function (input, init) {
     try {
       // Only GET is served from the manifest: a POST to the same URL is a
@@ -173,9 +202,10 @@ func manifestScript(manifestJSON string) string {
         var raw = typeof input === 'string' ? input : (input && input.url) || String(input);
         var resolved = new URL(raw, document.baseURI).href;
         if (Object.prototype.hasOwnProperty.call(M, resolved)) {
-          // The value is a data: URI, so this never touches the network and the
-          // response carries the asset's real Content-Type.
-          return nativeFetch(M[resolved]);
+          // Built here, from bytes already in the document: no network service,
+          // and the response carries the asset's real Content-Type.
+          var res = responseFromDataURI(M[resolved]);
+          if (res) return Promise.resolve(res);
         }
       }
     } catch (e) { /* fall through to the real fetch */ }
