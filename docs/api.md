@@ -20,7 +20,10 @@ PATCH  /api/artifacts/:id          Update title, body, network_allowlist, etc.
                                    replaces the artifact's allow decisions and leaves
                                    any blocked origins untouched)
 POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts)
-DELETE /api/artifacts/:id          Delete artifact and associated rows (blob body is orphaned in v1)
+DELETE /api/artifacts/:id          Delete artifact, its associated rows, and its blobs
+                                   (body + widget). 500 if a blob could not be removed:
+                                   the row is already gone, but a delete that left bytes
+                                   on disk must not report success
 ```
 
 **Ingest flow** — two steps by design:
@@ -264,6 +267,18 @@ GET    /s/:shareID                 View shared artifact (no auth)
 Share links resolve on the render origin, under the artifact's own CSP. No account needed to view a share.
 
 A share has no lifetime of its own: it is live from the moment it is minted until the row is deleted, and `DELETE /api/shares/:id` is how it ends. There is no expiry (av-8ipt removed a column nothing ever set), and a create request carrying `expires_at` is refused with `400` rather than quietly given a link that never expires.
+
+## Your own account
+
+```
+DELETE /api/account                {"confirm":"delete my library"}   → 204
+```
+
+Erases the caller's account and everything this instance holds for it: every artifact and its file (bytes, not only rows), all saved state, tags, collections, share links, the stored agent key and its transcripts, and the `users` row itself. It is permanent — there is no soft delete, no trash and no snapshot — and it revokes every share link over that library at once, for holders who have no account here and are not notified.
+
+The route takes **no id**. It acts on the account the request's own session resolved to and cannot name another, which is why a session is the whole authorization for it; `/api/admin/*` is where acting on somebody else lives. A request carrying the service token instead of a session is answered `404`: that credential is not a person, and would otherwise resolve to the single-user default owner. The exact `confirm` phrase is required (`400` otherwise), and the instance's last enabled admin is refused (`409`) — promote somebody else first.
+
+Deleting here cannot touch the identity provider that issued the login. The same person signing in again gets a **new, empty** account, because `external_id` is unique and the row is created at first login.
 
 ## Render surface
 

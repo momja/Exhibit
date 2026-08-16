@@ -100,8 +100,17 @@ The only way data changes. Route groups:
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
   `source_url` and replaces the stored body. A snapshot, not a versioned update.
 - `DELETE /api/artifacts/:id` — deletes the artifact and associated rows (tags,
-  collections, shares, state cascade via FK). The blob body on the filesystem is
-  orphaned in v1 (`Blob.Store` has no `Delete` method).
+  collections, shares, state cascade via FK) **and its bytes**: the body blob,
+  and the widget blob when it has one (av-7jcq). The order is row first, then
+  bytes, because the two failure modes are not equally bad — a failed *row*
+  delete after the bytes are gone leaves a live artifact whose only copy of
+  itself no longer exists, which nothing on the instance can repair; a failed
+  *blob* delete after the row is gone leaves unreferenced bytes an operator can
+  sweep. The blob failure still surfaces as a 500 rather than a silent 204: a
+  deletion that left the file on disk must not claim otherwise.
+  `DELETE /api/artifacts/:id/widget` removes the detached widget's blob the
+  same way, in the same order — detaching is the only exit a widget blob has,
+  since the id is otherwise reused for the artifact's life.
 - `GET/PUT /api/artifacts/:id/state`, `DELETE /api/artifacts/:id/state[/:key]` — the
   artifact's state rows (§6). Reads are normally satisfied by render-time inlining, not
   this route; `PUT` is called by the **host frame** on the storage shim's behalf (the
@@ -123,6 +132,17 @@ The only way data changes. Route groups:
   at render, so this explains a blank tile rather than gating one, and (as
   everywhere) never seeds the allowlist. See `widgets.md`.
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
+- `DELETE /api/account` — erases the **caller's own** account and the library it
+  owns (av-4wyq). It takes no id, from the path or the body, and that is the
+  whole authorization argument: `/api/admin/users` is where acting on somebody
+  else lives, behind `adminOnly`, and this route cannot name another account, so
+  a session is sufficient for it. It requires a *session* specifically — the
+  service token is not a person, and would resolve to the single-user default
+  owner. The body must carry the typed confirmation phrase, checked here as well
+  as in the page, because a client-side interlock is a courtesy to whoever is
+  clicking and never a control. `Store.DeleteAccount` returns the blob ids whose
+  rows it removed and the handler then deletes those bytes (§3.3, av-7jcq); the
+  instance's last enabled admin is refused (`ErrLastAdmin`).
 - collection/tag CRUD.
 - `GET /api/settings/public` — the instance's own name and description
   (av-4ac9). The one route in the `/api` namespace registered *outside* the
@@ -289,8 +309,17 @@ Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
         list/set/delete per-origin network decisions;
         users and sessions, including local credentials (§3.8)
         and the admin mutations over them (§3.8a)
-Blob:   put/get artifact bodies by id
+Blob:   put/get/delete artifact bodies by id
 ```
+
+`Blob.Delete` is **idempotent** by contract (av-7jcq): an id that was never
+stored is success, not an error. That is the contract the object-store backend
+this interface exists for already has — S3's `DeleteObject` answers success for
+a missing key — so defining it the other way would make the S3 implementation
+synthesize a failure with a `HEAD` before every delete, to honour a distinction
+no caller wants. `FSStore` swallows `os.ErrNotExist` to conform; every other
+error surfaces, because a delete that claims to have removed the bytes must
+have.
 
 **Owner scoping is in the queries** (av-ep8k). Every Store method that names an
 artifact takes the requesting `owner_id` and filters on it in SQL — the
@@ -865,14 +894,40 @@ no second guard here to get wrong.
   states the sign-in route when there is not even that. The rule stays local to
   this page: it exists because a name rendered alone must not be blank, which is
   a property of the layout rather than of the row.
-- **The delete section ships before the deletion.** Erasing an account is
-  av-4wyq's, blocked on av-7jcq (`Blob.Store` has no `Delete`, so a delete today
-  would leave every artifact body on disk). This page owns the section that
-  hosts it — the danger-zone treatment, the statement that it is permanent, and
-  the statement that deleting here does not remove the identity from the
-  identity provider — and renders the control disabled with the reason attached
-  to it. A button that dropped the rows and left the files would be worse than
-  one that does nothing, because only the second is honest about it.
+- **Deleting the library (av-4wyq).** The page's danger zone erases the account
+  and everything this instance holds for it, through `DELETE /api/account`
+  (§3.1) and `Store.DeleteAccount` (§3.3). Four things about it are decisions
+  rather than details:
+  - **The copy is the feature.** Deleting here cannot touch the identity
+    provider that issued the login, and because `users.external_id` is UNIQUE
+    and the row is created just-in-time at login, the same person signing in
+    again lands in a **new, empty** account. The confirmation says both halves
+    outright. Someone who deletes, finds their login still works and concludes
+    nothing happened is worse off than someone who never had the button — which
+    is why the section distinguishes a local account (whose login goes with it)
+    from an identity-provider one, and says the second sentence only to the
+    people it is true of.
+  - **The live share count is stated up front.** A share is a capability URL
+    somebody else may be holding, with no account here and no way to be told it
+    stopped working; deletion revokes every one at once. That is the right
+    behaviour — the alternative is links into a library that no longer exists —
+    but it is the one consequence that lands on a third party, so the number is
+    surfaced instead of discovered.
+  - **Two steps, the second a typed phrase** (`delete my library` — the *act*,
+    not the account name, which may be an opaque provider subject nobody can
+    retype). There is no soft delete, no trash and no snapshot, so a mis-tap
+    must not be able to reach it. Both steps render server-side and `profile.js`
+    only reveals the second; the server requires the same phrase whether or not
+    that script ever ran.
+  - **Blocked states render as a reason, not a missing button.** The instance's
+    last enabled admin cannot delete itself (the store would refuse anyway, and
+    learning that *after* typing a confirmation phrase is a worse way to learn
+    it), and an instance with no login configured has no account to act on.
+  Erasure is rows *and* bytes: `DeleteAccount` collects the blob ids inside its
+  transaction and the handler removes those files (av-7jcq). Which tables it
+  deletes and which the schema's cascades and migration 014's `users` trigger
+  delete for it is written down in `sqlite_account.go` and walked by a tripwire
+  test — a table added without a decision about account deletion fails the suite.
 
 ## 4. Trust boundaries
 

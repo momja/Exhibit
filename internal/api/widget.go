@@ -211,9 +211,15 @@ func (ro *Router) widgetGenerateAvailability(r *http.Request) (bool, string) {
 	return true, ""
 }
 
-// deleteWidget detaches the widget; the card falls back to the default tile.
-// The blob is left on disk, matching how DeleteArtifact orphans an artifact
-// body in v1 (Blob.Store has no Delete).
+// deleteWidget detaches the widget and removes its bytes; the card falls back
+// to the default tile.
+//
+// Same order as deleteArtifact, for the same reason (artifacts.go,
+// deleteArtifactBlobs): clear the column first, so a failure at the second
+// step leaves an unreferenced file rather than a card pointing at a body that
+// is gone. Detaching is the only exit a widget blob has — the id is otherwise
+// reused for the life of the artifact — so once the column is empty nothing
+// can name these bytes again.
 func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
@@ -232,6 +238,10 @@ func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.InfoContext(r.Context(), "widget removed", slog.String("artifact_id", id))
+		if err := ro.cfg.Blob.Delete(r.Context(), a.WidgetBlobID); err != nil {
+			serverError(w, r, "delete widget blob", err)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -31,10 +31,12 @@ const files = [
   "state-api.js",
   "edit.css", "edit.js", "state.js",
   "notfound.css", "notfound.js",
-  // The account-settings surfaces: av-utap's /admin/users today, av-qwld's
-  // own-account page later. Named for the surface rather than for either
-  // page, because the shell is what the two share.
-  "settings.css", "settings.js",
+  // The account-settings surfaces: av-utap's /admin/users and av-qo05's
+  // /profile. settings.css is named for the surface rather than for either
+  // page, because the shell is what the two share — but the scripts are one
+  // per page, since settings.js drives the admin table /profile does not
+  // have and profile.js (av-4wyq) drives a deletion /admin/users must not.
+  "settings.css", "settings.js", "profile.js",
   "agent.css", "agent.js",
   // The login page (av-q30x) is stylesheet-only: it deliberately ships no
   // script, being the one page a not-yet-authenticated visitor has to be able

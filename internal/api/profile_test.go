@@ -84,7 +84,7 @@ func TestProfileNamesALocalAccount(t *testing.T) {
 	// Nor does the danger zone tell someone with a password here that their
 	// identity provider is unaffected — they do not have one.
 	assert.NotContains(t, page, "your identity provider is theirs")
-	assert.Contains(t, page, "Your login name and password are this instance")
+	assert.NotContains(t, page, "sign in with your identity provider")
 }
 
 // The correction this ticket was reopened for. admin.go's rule is `u.Email`
@@ -119,25 +119,47 @@ func TestProfileNameIsNeverBlank(t *testing.T) {
 	assert.Empty(t, name, "with neither column the template states the sign-in route instead")
 }
 
-// The delete section is this ticket's; the deletion is av-4wyq's and is
-// blocked on av-7jcq (Blob.Store has no Delete). Until then the control is
-// present, disabled, and says why — a button that removed the rows and left
-// the artifact files on disk would be worse than one that does nothing.
-func TestProfileDeleteControlIsDisabledWithItsReasonVisible(t *testing.T) {
-	page := newProfileInstance(t, "sub-1", "person@example.test").page(t)
+// The delete section is this ticket's; the deletion behind it is av-4wyq's,
+// which turned the control on once Blob.Store could remove the artifact files
+// as well as their rows (av-7jcq). What this ticket still owns is the
+// section's *framing* — that the act is permanent, and that it stops at this
+// instance rather than reaching the identity provider — so those assertions
+// survive the control becoming live. The deletion's own behaviour, its
+// confirmation step and its refusals live in profile_delete_test.go.
+//
+// The account under test is the instance's second, ordinary member. The first
+// is its only admin, which cannot delete itself and renders the control
+// disabled for a reason of its own — a real state of this page, tested there,
+// but not the one this test is about.
+func TestProfileDeleteControlIsLiveAndSaysWhatItReaches(t *testing.T) {
+	in := newProfileInstance(t, "sub-admin", "admin@example.test")
+	member, err := in.st.UpsertUser(context.Background(), "sub-member", "member@example.test")
+	require.NoError(t, err)
+	require.False(t, member.IsAdmin)
+
+	req := httptest.NewRequest(http.MethodGet, "/profile", nil)
+	req.AddCookie(sessionCookieFor(t, in.st, member.ID, "session-member"))
+	w := httptest.NewRecorder()
+	in.ro.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	page := w.Body.String()
 
 	assert.Contains(t, page, `id="delete-account"`)
-	assert.Contains(t, page, "disabled")
-	assert.Contains(t, page, `aria-describedby="delete-account-reason"`,
-		"the reason must be attached to the control, not merely printed near it")
-	assert.Contains(t, page, "Not available yet")
+	assert.NotContains(t, page, `id="delete-account" disabled`,
+		"av-4wyq is the ticket that enables this control; a disabled one means a blocking reason came back")
+	assert.NotContains(t, page, "Not available yet", "the limitation that reason described is gone")
+	assert.Contains(t, page, `aria-controls="delete-confirm"`,
+		"the control opens the confirmation step, and says so to a screen reader rather than only visually")
 	assert.Contains(t, page, "permanent")
 	assert.Contains(t, page, "identity provider",
 		"the section must say that deleting here does not delete the identity at the provider")
 
-	// Nothing on the page can start a deletion, by any route.
-	assert.NotContains(t, page, "DELETE")
-	assert.NotContains(t, page, "/api/account")
+	// The control opens a step; it does not delete. The markup behind it is
+	// inert until profile.js reveals it, and the request itself is the
+	// script's to make — there is no form here and no link that a stray click,
+	// a prefetch or a crawler could follow into an irreversible act.
+	assert.Contains(t, page, `id="delete-confirm" hidden`)
+	assert.NotContains(t, page, "<form")
 }
 
 // A session is the whole authorization: no admin role, and no session means no

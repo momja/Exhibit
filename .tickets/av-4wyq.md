@@ -1,8 +1,8 @@
 ---
 id: av-4wyq
-status: open
-deps: [av-7jcq, av-qwld]
-links: []
+status: closed
+deps: [av-7jcq, av-qo05]
+links: [av-qwld, av-utap, av-qo05]
 created: 2026-08-09T17:26:41Z
 type: feature
 priority: 2

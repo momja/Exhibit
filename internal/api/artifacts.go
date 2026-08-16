@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/snapshot"
 	"github.com/momja/Exhibit/internal/store"
@@ -598,5 +600,62 @@ func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 
 	slog.InfoContext(r.Context(), "artifact deleted", slog.String("id", id))
 
+	// The row is gone; now the bytes (av-7jcq). A 500 here reports a delete
+	// that only half happened — the artifact has left the library but its file
+	// is still on disk — and that is the honest status even though retrying
+	// the request now 404s. The error log names the blob ids, which is the
+	// part an operator can act on; the alternative, 204 plus a log line, is
+	// precisely the silent success this ticket exists to remove.
+	if err := deleteArtifactBlobs(r.Context(), ro.cfg.Blob, a); err != nil {
+		serverError(w, r, "delete artifact blobs", err)
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// artifactBlobIDs is every blob an artifact owns: its body, plus its widget
+// when it has one.
+//
+// Two is the whole list, not the newest of a series. Both ids are minted once
+// and rewritten in place — an edit PUTs the new body back into
+// a.SourceBlobID, a refetch does the same, and a widget save reuses
+// a.WidgetBlobID so the tile's render URL stays stable across edits
+// (widget.go) — so no earlier version of either is left behind to find.
+func artifactBlobIDs(a *store.Artifact) []string {
+	ids := []string{a.SourceBlobID}
+	if a.WidgetBlobID != "" {
+		ids = append(ids, a.WidgetBlobID)
+	}
+	return ids
+}
+
+// deleteArtifactBlobs removes the bodies an artifact owned. Call it *after*
+// the row is gone.
+//
+// That ordering is the decision, and it turns on an asymmetry between the two
+// failure modes:
+//
+//   - Bytes first, and a failing row delete leaves a live artifact pointing at
+//     a body that no longer exists. It renders an error forever and nothing on
+//     the instance can repair it, because the blob was the only copy.
+//   - Row first, and a failing blob delete leaves bytes nobody references.
+//     That is exactly the state the product shipped in before av-7jcq, it
+//     breaks no row, and an operator can sweep it using the ids the caller's
+//     error log names.
+//
+// Prefer the recoverable failure: the row goes first. The blob failure is
+// still returned rather than swallowed — a deletion that left the bytes on
+// disk must not report success.
+//
+// Every id is attempted before the first error is returned, so one unremovable
+// file cannot strand the artifact's other body.
+func deleteArtifactBlobs(ctx context.Context, blobs blob.Store, a *store.Artifact) error {
+	var firstErr error
+	for _, id := range artifactBlobIDs(a) {
+		if err := blobs.Delete(ctx, id); err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("blob %s: %w", id, err)
+		}
+	}
+	return firstErr
 }

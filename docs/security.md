@@ -495,6 +495,19 @@ no admin route shares a handler with a non-admin one. Getting this wrong in the
 obvious way, by hanging an admin control off a settings page guarded only by
 being logged in, lets any account reset the admin's password.
 
+**The most destructive route on the instance is not one of them.** `DELETE
+/api/account` (av-4wyq) erases an account and the library it owns, and a plain
+session is the whole of its authorization — because it takes **no id**, from the
+path or the body, and can therefore only ever reach the account the session
+already resolved to. That is the same argument `/profile` makes, applied to a
+mutation: a route that cannot name a target needs no check that the target is
+yours. It is registered outside the `/api/admin/*` group deliberately, so the
+distinction is visible where the routes are, and it requires a *session*
+specifically — the service token is not a person, and would resolve to the
+single-user default owner's library. Its confirmation phrase is re-checked
+server-side, but that is interlock rather than authorization: it guards against
+a mis-tap, not against a caller who should not be here.
+
 - **It refuses with `404`, before looking at the target.** To a non-admin the
   surface does not exist, and "you may not touch user 7" is byte-identical to
   "there is no user 7" — an admin acting on a missing id gets the same 404 — so
