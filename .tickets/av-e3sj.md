@@ -18,7 +18,7 @@ First-request confirmation for the link bridge (epic av-mdc5; the child backend 
 
 > You are opening a link to a site shown here. Exhibit cannot verify the safety of external sites. Make sure you trust this destination before allowing links. You can revoke this at any time from the toolbar.
 
-Rendered as: You are opening a link to <code id="link-host">example.com</code>. Exhibit cannot verify the safety of external sites. Make sure you trust this destination before allowing links. You can revoke this at any time from the toolbar. The destination hostname is filled from pendingLink.hostname. Buttons Block / Allow links (Phosphor icon).
+Rendered as: You are opening a link to <code id="link-host">example.com</code>. Exhibit cannot verify the safety of external sites. Make sure you trust this destination before allowing links. You can revoke this at any time from the toolbar. The destination hostname is filled from the pendingLink hook the backend ticket ships (named exactly pendingLink). Buttons Block / Allow links (Phosphor icon).
 
 **Host logic** (web/gallery/detail.js): on __avNavigate when !linksApproved → populate #link-host, show the modal, keep the pending URL; Allow → setCapabilityApproved('links_approved', true, 'links') then window.open(pendingUrl, '_blank', 'noopener'); Block / Escape / overlay click → drop the URL, artifact keeps running. Denial persists nothing (mirrors downloads: denial drops, approval persists). Subsequent links open without a prompt — the grant is per-artifact, which is what "before allowing links" states.
 
