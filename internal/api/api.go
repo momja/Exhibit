@@ -506,6 +506,14 @@ func (ro *Router) setupRoutes() {
 			r.Patch("/{userID}", ro.updateAdminUser)
 		})
 
+		// The caller's own account (av-4wyq, epic av-g2dx). Deliberately not
+		// inside the group above: that one acts on *other* accounts and
+		// carries adminOnly for it, while this route cannot name an account
+		// at all — it takes no id, from path or body, and erases whatever the
+		// request's own session resolved to. That is the whole authority
+		// argument, and registering the two apart is where it is visible.
+		r.Delete("/api/account", ro.deleteAccount)
+
 		r.Route("/api/shares", func(r chi.Router) {
 			r.Post("/", ro.createShare)
 			r.Delete("/{shareID}", ro.deleteShare)

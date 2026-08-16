@@ -12,10 +12,14 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -45,6 +49,31 @@ type profileAccount struct {
 	// identity provider" — the same distinction admin.tmpl's Sign-in column
 	// draws, and the one that decides what this page could ever do for them.
 	HasPassword bool
+	// Artifacts and Shares are what deletion would destroy, counted and
+	// phrased server-side (av-4wyq). Shares carry the weight of the pair: an
+	// artifact is the person's own, but a share is a URL somebody *else* may
+	// be holding, with no account on this instance and no way to be told it
+	// stopped working.
+	Artifacts string
+	Shares    string
+	// ArtifactCount and ShareCount are the same two numbers unphrased, so the
+	// template can decide whether a clause applies at all rather than
+	// rendering it with a zero in it. "No share links will break" is noise on
+	// an account that never made one, and a confirmation built around "your no
+	// artifacts" is how a confirmation stops being read.
+	ArtifactCount int64
+	ShareCount    int64
+	// DeleteBlocked is why this account cannot be deleted, or empty when it
+	// can. It is a reason rather than a boolean because a control that cannot
+	// act is useless without the sentence saying why — the same rule the
+	// widget-generate button follows — and because the two cases that block
+	// it are blocked for entirely different reasons.
+	//
+	// Rendering the control disabled is also the honest ordering: the store
+	// would refuse the last enabled admin anyway (ErrLastAdmin), and letting
+	// that refusal arrive *after* someone typed a confirmation phrase for an
+	// irreversible act is a worse way to learn it.
+	DeleteBlocked string
 }
 
 // profileName resolves the one name this page can put on the account.
@@ -113,6 +142,18 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 		acct.SignedIn = true
 		acct.Name, acct.NameIsSubject = profileName(u)
 		acct.HasPassword = u.HasPassword
+		if err := ro.fillDeleteSection(ctx, u, &acct); err != nil {
+			serverError(w, r, "profile delete section", err)
+			return
+		}
+	}
+	if !acct.SignedIn {
+		// No login configured, so there is no `users` row and nothing for
+		// deletion to act on. The section still renders — it is where the
+		// action lives whichever shape the instance has — with the control
+		// off and the reason attached, exactly as the last-admin case does.
+		acct.DeleteBlocked = "This instance has no login configured, so there is no account to delete. " +
+			"Its library belongs to whoever can reach the origin; removing it is the operator's to do on the host."
 	}
 
 	page, err := renderPage("profile", profilePageData{
@@ -129,4 +170,185 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 	// the same reason /admin/users is not.
 	w.Header().Set("Cache-Control", "no-store")
 	fmt.Fprint(w, page)
+}
+
+// --- deleting the account (av-4wyq) ------------------------------------
+//
+// The section's copy is the hardest part of this feature, and it is load-
+// bearing rather than decorative. Deleting here erases what Exhibit holds; it
+// does not remove anyone from the identity provider that issued their login,
+// which Exhibit has no authority over (deployment.md §3.4). Because
+// `users.external_id` is UNIQUE and `UpsertUser` creates the row just in time,
+// the same person signing in again gets a **new** owner id and an empty
+// library. The confirmation says that outright. Getting it wrong is worse than
+// not shipping: someone deletes, finds their login still works, and reasonably
+// concludes nothing happened.
+
+// deleteAccountConfirmation is the phrase the confirmation requires to be
+// typed, and the API requires to be sent.
+//
+// A typed phrase rather than a second button, because a click can be a
+// mis-tap and this operation has no undo anywhere near it (there is no soft
+// delete, no trash, and no snapshot — av-1rvm covers state durability
+// separately). It is checked server-side as well as in the page for the usual
+// reason: the page is a client, and a client-side interlock is a courtesy to
+// whoever is clicking, never a control.
+//
+// The phrase is the *act*, not the account's name. GitHub's convention is to
+// type the resource name, but here the name can be a provider subject — an
+// opaque UUID nobody can retype — and the sentence "delete my library" carries
+// the correction this whole section exists to make: what goes is the library,
+// not the identity.
+const deleteAccountConfirmation = "delete my library"
+
+type deleteAccountRequest struct {
+	Confirm string `json:"confirm"`
+}
+
+// deleteAccount erases the caller's own account and everything in it.
+//
+// It takes **no id**, from the path or the body, and that is the entire
+// authorization argument — the same one profilePage makes. `/api/admin/users`
+// is where acting on somebody else lives, behind adminOnly; this route cannot
+// name another account, so a session is sufficient for it and there is no
+// second guard to get right. It is registered outside that group deliberately.
+//
+// It also requires a *session* specifically. The service token reaches every
+// other route on the instance, but "delete my account" has no meaning for a
+// credential that is not a person: it would resolve to the single-user default
+// owner and erase whatever library happened to be sitting there. An operator
+// who means that has the CLI and the host.
+func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if !sessionAuthed(ctx) {
+		writeError(w, http.StatusNotFound,
+			"account deletion acts on the signed-in account, and this request has none")
+		return
+	}
+	// Redundant today — the only read-only principal is the anonymous public
+	// visitor, which is not a session and was refused above — but every
+	// mutating handler in this package asks, and the most destructive one is
+	// the wrong place to be the exception. av-7k7b's read-only *session* is
+	// the case that would make it load-bearing.
+	if principalFromCtx(ctx).ReadOnly {
+		writeError(w, http.StatusForbidden, "read-only visitor may not mutate")
+		return
+	}
+
+	var req deleteAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		return
+	}
+	if req.Confirm != deleteAccountConfirmation {
+		writeError(w, http.StatusBadRequest,
+			`this is irreversible: send {"confirm": "`+deleteAccountConfirmation+`"} to proceed`)
+		return
+	}
+
+	ownerID := ownerIDFromCtx(ctx)
+	blobIDs, err := ro.cfg.Store.DeleteAccount(ctx, ownerID)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "no such account")
+		return
+	case errors.Is(err, store.ErrLastAdmin):
+		writeError(w, http.StatusConflict,
+			"this is the only account that can administer this instance. "+
+				"Make another account an admin first, then delete this one.")
+		return
+	case err != nil:
+		serverError(w, r, "delete account", err)
+		return
+	}
+
+	// The rows are gone, which took the sessions with them (ON DELETE CASCADE
+	// on sessions.user_id) — so the browser is already signed out server-side.
+	// Clearing the cookie stops it presenting a credential no row backs.
+	ro.clearCookie(w, sessionCookieName)
+
+	slog.InfoContext(ctx, "account deleted",
+		slog.Int64("user_id", ownerID), slog.Int("blobs", len(blobIDs)))
+
+	// Then the bytes, in the same row-first order and for the same reason as
+	// deleteArtifactBlobs (artifacts.go). A 500 here reports an erasure that
+	// only half happened: the account is gone and cannot be retried, but some
+	// artifact bodies are still on the volume, and that is exactly the thing a
+	// person deleting their library must not be told succeeded.
+	var firstErr error
+	for _, id := range blobIDs {
+		if err := ro.cfg.Blob.Delete(ctx, id); err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("blob %s: %w", id, err)
+		}
+	}
+	if firstErr != nil {
+		serverError(w, r, "delete account blobs", firstErr)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// fillDeleteSection populates what the danger zone states before anyone
+// commits to it: how much is about to go, and whether it may go at all.
+func (ro *Router) fillDeleteSection(ctx context.Context, u *store.User, acct *profileAccount) error {
+	sum, err := ro.cfg.Store.GetAccountSummary(ctx, u.ID)
+	if err != nil {
+		return err
+	}
+	acct.Artifacts = countPhrase(sum.Artifacts, "artifact", "artifacts")
+	acct.Shares = countPhrase(sum.Shares, "share link", "share links")
+	acct.ArtifactCount = sum.Artifacts
+	acct.ShareCount = sum.Shares
+
+	last, err := ro.isLastEnabledAdmin(ctx, u)
+	if err != nil {
+		return err
+	}
+	if last {
+		acct.DeleteBlocked = "You are the only account that can administer this instance. " +
+			"Deleting it would leave nobody able to create an account, re-enable one, or reset a password — " +
+			"and no account left to promote. Make someone else an admin first."
+	}
+	return nil
+}
+
+// isLastEnabledAdmin reports whether u is the only account that can still
+// administer this instance — the condition the store refuses a deletion on.
+//
+// Read here from ListUsers rather than asked of the store as its own count,
+// because the store already answers it where it matters: the guard is inside
+// DeleteAccount's WHERE clause, atomic under SQLite's single writer. This is
+// the page telling someone in advance, and a page's answer is a snapshot
+// whatever query produces it. A second store method would look authoritative
+// and would not be.
+func (ro *Router) isLastEnabledAdmin(ctx context.Context, u *store.User) (bool, error) {
+	if !u.IsAdmin || u.Disabled {
+		return false, nil
+	}
+	users, err := ro.cfg.Store.ListUsers(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, other := range users {
+		if other.ID != u.ID && other.IsAdmin && !other.Disabled {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// countPhrase renders a count with its noun, so the template states a quantity
+// rather than assembling one. "No artifacts" instead of "0 artifacts": the
+// sentence is read by someone deciding whether to go through with this, and
+// zero deserves a word rather than a digit.
+func countPhrase(n int64, singular, plural string) string {
+	switch n {
+	case 0:
+		return "no " + plural
+	case 1:
+		return "1 " + singular
+	default:
+		return strconv.FormatInt(n, 10) + " " + plural
+	}
 }

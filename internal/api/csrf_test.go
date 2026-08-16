@@ -89,10 +89,11 @@ var appOriginGETRoutes = []getRoute{
 	// page an admin visits.
 	{route: "/admin/users"},
 	// A person's own account (av-qo05). A read for the same reason: the one
-	// action it will host, deleting the account, is a mutation through the
-	// JSON API. A "delete my account" convenience GET would be forgeable by
-	// any page its owner visits, which is the worst thing on this instance to
-	// make forgeable.
+	// action it hosts, deleting the account (av-4wyq), is a mutation through
+	// the JSON API — `DELETE /api/account`, an unsafe method this list does
+	// not cover and Lax withholds the cookie from. A "delete my account"
+	// convenience GET would be forgeable by any page its owner visits, which
+	// is the worst thing on this instance to make forgeable.
 	{route: "/profile"},
 	{route: "/partials/agent-preview"},
 	{route: "/partials/card-widget"},

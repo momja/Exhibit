@@ -60,31 +60,86 @@
   {{end}}
 </div>
 
-{{/* The danger zone. The section is this ticket's; the behaviour behind it is
-     av-4wyq's, and it is not ready — deleting an account has to erase the
-     artifact bodies from the blob store as well as the rows, and Blob.Store
-     still has no Delete (av-7jcq). So the control renders disabled with the
-     reason beside it. A button that deleted the rows and left the files would
-     be worse than one that does nothing, because only the second is honest
-     about it. */}}
+{{/* The danger zone (section: av-qo05; the deletion behind it: av-4wyq).
+
+     The copy is the hard part and it is load-bearing. Deleting here erases
+     what Exhibit holds and cannot touch the identity provider that issued the
+     login — and because users.external_id is UNIQUE and the row is created
+     just-in-time at login, the same person signing in again lands in a new,
+     empty account. The confirmation says that outright: someone who deletes,
+     finds their login still works and concludes nothing happened is worse off
+     than someone who never had the button at all.
+
+     Two steps rather than one. The first states what goes, including how many
+     share links other people hold that stop working; the second asks for a
+     typed phrase. A click can be a mis-tap, and there is no undo anywhere near
+     this — no soft delete, no trash, no snapshot (av-1rvm covers state
+     durability separately).
+
+     Both steps render server-side, revealed by profile.js rather than built by
+     it. These are the most important sentences on the page, and a component
+     with exactly one definition, in a template, is this project's rule for
+     precisely that reason. */}}
 <div class="card card-danger">
   <h3 class="settings-h3 settings-h3-danger"><i class="ph ph-warning-octagon" aria-hidden="true"></i> Delete account</h3>
   <p class="settings-danger-copy">Deleting your account erases everything this instance holds for you: every artifact and its file, all saved state, your tags, collections and share links, any stored agent key and its transcripts, and the account itself. It is permanent — there is no undo, no trash, and no copy kept on this side.</p>
+  {{if .Account.SignedIn}}
+  {{/* Counted rather than gestured at, and shares first among equals: an
+       artifact is your own, but a share link is a URL somebody else may be
+       holding, with no account here and no way to be told it stopped
+       working. */}}
+  <p class="settings-danger-copy">This account holds <strong>{{.Account.Artifacts}}</strong>.{{if .Account.ShareCount}} Deleting it breaks <strong>{{.Account.Shares}}</strong> that other people may be holding. Nobody is notified.{{end}}</p>
+  <p class="settings-danger-copy">There is no export yet, so anything you want to keep has to be saved out of the library before you do this.</p>
   {{/* What deletion reaches stops at this instance, and which sentence says so
        depends on where the sign-in lives. Telling someone with a password here
        that their identity provider is unaffected would name a provider they do
        not have. */}}
-  {{if .Account.SignedIn}}{{if .Account.HasPassword}}
+  {{if .Account.HasPassword}}
   <p class="settings-danger-copy">Your login name and password are this instance&#39;s alone, so they go with the account. Nothing outside it knows you had one.</p>
   {{else}}
-  <p class="settings-danger-copy">It does not touch the identity you sign in with. Your account with your identity provider is theirs, not this instance&#39;s; deleting here only makes Exhibit stop recognising it.</p>
-  {{end}}{{end}}
+  <p class="settings-danger-copy">It does not touch the identity you sign in with. Your account with your identity provider is theirs, not this instance&#39;s; deleting here only makes Exhibit stop recognising it. <strong>You will still be able to sign in</strong> — and when you do, Exhibit will treat you as somebody new and give you an empty account.</p>
+  {{end}}
+  {{end}}
   <div class="settings-foot">
+    {{if .Account.DeleteBlocked}}
     <button class="btn btn-danger" type="button" id="delete-account" disabled aria-describedby="delete-account-reason">
       <i class="ph ph-trash" aria-hidden="true"></i> Delete account
     </button>
-    <span class="muted text-sm" id="delete-account-reason">Not available yet. Deletion has to remove your artifact files from disk as well as their database rows, and it cannot do that yet — so it does nothing rather than half of it.</span>
+    <span class="muted text-sm" id="delete-account-reason">{{.Account.DeleteBlocked}}</span>
+    {{else}}
+    <button class="btn btn-danger" type="button" id="delete-account" aria-expanded="false" aria-controls="delete-confirm">
+      <i class="ph ph-trash" aria-hidden="true"></i> Delete account
+    </button>
+    {{end}}
   </div>
+
+  {{if not .Account.DeleteBlocked}}
+  <div class="settings-confirm" id="delete-confirm" hidden>
+    {{/* Assembled from clauses that are each conditional on their own count,
+         because a sentence built around "your no artifacts" is how a
+         confirmation stops being read. */}}
+    <p class="settings-danger-copy"><strong>This cannot be undone.</strong> Everything this instance holds for you is erased from this server{{if .Account.ArtifactCount}} — including {{.Account.Artifacts}} and everything saved inside{{end}}.{{if .Account.ShareCount}} {{.Account.Shares}} will stop working for whoever is holding them.{{end}}</p>
+    {{if .Account.HasPassword}}
+    <p class="settings-danger-copy">Your login here goes with the account, so signing in again will not be possible until somebody creates you a new one.</p>
+    {{else}}
+    <p class="settings-danger-copy">Signing in again will still work, because your identity provider still knows you. Exhibit will not: you will arrive as a new account, with an empty library.</p>
+    {{end}}
+    <label class="settings-label" for="delete-phrase">Type <code>delete my library</code> to confirm</label>
+    <input class="field settings-confirm-field" type="text" id="delete-phrase" autocomplete="off"
+           autocapitalize="none" spellcheck="false" placeholder="delete my library">
+    <div class="settings-foot">
+      <button class="btn btn-danger" type="button" id="delete-confirm-go" disabled>
+        <i class="ph ph-trash" aria-hidden="true"></i> Delete my library permanently
+      </button>
+      <button class="btn" type="button" id="delete-cancel">Cancel</button>
+    </div>
+  </div>
+  {{end}}
+  {{/* One live region for the outcome, the same idiom /admin/users uses. The
+       refusals worth reading in full are the ones this page can still get
+       after the button was enabled — the last-admin race, above all — so it is
+       a block of text rather than a toast that leaves. */}}
+  <div class="settings-status" id="profile-status" role="status" aria-live="polite" hidden></div>
 </div>
 </main>
 
@@ -92,11 +147,12 @@
 const TOKEN = {{.Token}};
 {{/* The same per-request credential contract every other page carries
      (av-5imk, pagecredential.go): a session-authenticated browser is handed
-     no token, because its cookie already authenticates it. Declared here
-     rather than left out because the one action this page will grow — the
-     deletion above — is a mutation that goes through the JSON API like any
-     other client, and it should inherit the answer rather than invent one. */ -}}
+     no token, because its cookie already authenticates it. The deletion above
+     is a mutation through the JSON API like any other client's, so it spends
+     this rather than inventing a credential of its own. */ -}}
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 </script>
+<script src="/assets/gallery/api.js"></script>
+<script src="/assets/gallery/profile.js"></script>
 </body>
 </html>{{end}}
