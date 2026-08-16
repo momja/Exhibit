@@ -92,6 +92,7 @@ av-qwld ("User settings page — the surface itself") is the abstract version of
 - Rendered on a phone-width viewport, the two header icons and the search row below them do not overlap or wrap awkwardly; any field on /profile sizes from the --field-font-size token (av-3qmf).
 - A screenshot of the new header and the /profile page is captured with shot-scraper and kept out of git (scratchpad only).
 
+<<<<<<< HEAD
 
 ## Notes
 
@@ -104,3 +105,5 @@ The body says 'resolve one display name the same way admin.go already does'. Hav
 Consequence: for an SSO identity with no email, admin.go renders one blank cell in a list of rows, which is cosmetic. /profile renders its Account section empty, because that name IS the section. This page needs a fallback admin.go never needed — fall back to external_id, or state the sign-in route ('Signed in via your identity provider') when there is no better name. Decide it here and, if it generalises, let admin.go adopt it rather than the reverse.
 
 Also confirmed, so the implementer does not go looking: Store.GetUser(ctx, id) already exists (internal/store/store.go:294). This story needs no store work and no shared-helper extraction.
+=======
+>>>>>>> efa8713 (tk: av-qo05 — profile page entry point and account surface at /profile)
