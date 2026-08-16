@@ -56,7 +56,7 @@
        there is no users row behind it. Nothing is missing — that is the
        self-hoster's default shape — so the page says what it is instead of
        showing an account it made up. */}}
-  <p class="muted">This instance has no login configured, so there is no account to describe. Its library belongs to whoever can reach the origin, and the API is guarded by the service token alone.</p>
+  <p class="muted">This instance has no login configured, so there is no account to describe. Its  belongs to whoever can reach the origin, and the API is guarded by the service token alone.</p>
   {{end}}
 </div>
 
@@ -82,22 +82,20 @@
      precisely that reason. */}}
 <div class="card card-danger">
   <h3 class="settings-h3 settings-h3-danger"><i class="ph ph-warning-octagon" aria-hidden="true"></i> Delete account</h3>
-  <p class="settings-danger-copy">Deleting your account erases everything this instance holds for you: every artifact and its file, all saved state, your tags, collections and share links, any stored agent key and its transcripts, and the account itself. It is permanent — there is no undo, no trash, and no copy kept on this side.</p>
+  <p class="settings-danger-copy">Deleting your account erases everything you've created, including shared artifacts. Every artifact and its file, and all other account data. It is permanent. There is no undo, no trash, and no copy kept on this side.</p>
   {{if .Account.SignedIn}}
   {{/* Counted rather than gestured at, and shares first among equals: an
        artifact is your own, but a share link is a URL somebody else may be
        holding, with no account here and no way to be told it stopped
        working. */}}
-  <p class="settings-danger-copy">This account holds <strong>{{.Account.Artifacts}}</strong>.{{if .Account.ShareCount}} Deleting it breaks <strong>{{.Account.Shares}}</strong> that other people may be holding. Nobody is notified.{{end}}</p>
-  <p class="settings-danger-copy">There is no export yet, so anything you want to keep has to be saved out of the library before you do this.</p>
+  <p class="settings-danger-copy">This account holds <strong>{{.Account.Artifacts}}</strong>.{{if .Account.ShareCount}} Deleting it breaks <strong>{{.Account.Shares}}</strong> that other people may be holding.{{end}}</p>
   {{/* What deletion reaches stops at this instance, and which sentence says so
        depends on where the sign-in lives. Telling someone with a password here
        that their identity provider is unaffected would name a provider they do
        not have. */}}
   {{if .Account.HasPassword}}
-  <p class="settings-danger-copy">Your login name and password are this instance&#39;s alone, so they go with the account. Nothing outside it knows you had one.</p>
   {{else}}
-  <p class="settings-danger-copy">It does not touch the identity you sign in with. Your account with your identity provider is theirs, not this instance&#39;s; deleting here only makes Exhibit stop recognising it. <strong>You will still be able to sign in</strong> — and when you do, Exhibit will treat you as somebody new and give you an empty account.</p>
+  <p class="settings-danger-copy">Next time you sign in with your identity provider, you will be treated as a new user.</p>
   {{end}}
   {{end}}
   <div class="settings-foot">
@@ -118,18 +116,18 @@
     {{/* Assembled from clauses that are each conditional on their own count,
          because a sentence built around "your no artifacts" is how a
          confirmation stops being read. */}}
-    <p class="settings-danger-copy"><strong>This cannot be undone.</strong> Everything this instance holds for you is erased from this server{{if .Account.ArtifactCount}} — including {{.Account.Artifacts}} and everything saved inside{{end}}.{{if .Account.ShareCount}} {{.Account.Shares}} will stop working for whoever is holding them.{{end}}</p>
+    <p class="settings-danger-copy"><strong>This cannot be undone.</strong> Everything created or owned by you is permanently inaccessible{{if .Account.ArtifactCount}} including {{.Account.Artifacts}} and everything saved inside{{end}}.{{if .Account.ShareCount}} {{.Account.Shares}} will stop working for whoever is holding them.{{end}}</p>
     {{if .Account.HasPassword}}
-    <p class="settings-danger-copy">Your login here goes with the account, so signing in again will not be possible until somebody creates you a new one.</p>
+    <p class="settings-danger-copy">If you revisit this site, you will be treated as a new user.</p>
     {{else}}
-    <p class="settings-danger-copy">Signing in again will still work, because your identity provider still knows you. Exhibit will not: you will arrive as a new account, with an empty library.</p>
+    <p class="settings-danger-copy">Signing in again will still work via your identity provider. You will arrive at a new account, with an empty gallery.</p>
     {{end}}
-    <label class="settings-label" for="delete-phrase">Type <code>delete my library</code> to confirm</label>
+    <label class="settings-label" for="delete-phrase">Type <code>delete my gallery</code> to confirm</label>
     <input class="field settings-confirm-field" type="text" id="delete-phrase" autocomplete="off"
-           autocapitalize="none" spellcheck="false" placeholder="delete my library">
+           autocapitalize="none" spellcheck="false" placeholder="delete my gallery">
     <div class="settings-foot">
       <button class="btn btn-danger" type="button" id="delete-confirm-go" disabled>
-        <i class="ph ph-trash" aria-hidden="true"></i> Delete my library permanently
+        <i class="ph ph-trash" aria-hidden="true"></i> Delete my gallery permanently
       </button>
       <button class="btn" type="button" id="delete-cancel">Cancel</button>
     </div>
