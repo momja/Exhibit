@@ -14,6 +14,7 @@
  *                        touch are never cleared by Save (exhibit-x87).
  *   downloadsApproved - persisted first-use download approval (mutable)
  *   clipboardApproved - persisted first-use clipboard approval (mutable)
+ *   linksApproved     - persisted first-use external-link approval (mutable)
  */
 
 // --- CodeMirror islands ----------------------------------------------------
@@ -78,12 +79,17 @@ mountEditorWhenOpen('widget-panel', 'widget-src');
 
 document.getElementById('dl-select').value = String(downloadsApproved);
 document.getElementById('clip-select').value = String(clipboardApproved);
+document.getElementById('link-select').value = String(linksApproved);
 document.getElementById('dl-select').addEventListener('change', function(e) {
   downloadsApproved = e.target.value === 'true';
   renderSecurityPanel();
 });
 document.getElementById('clip-select').addEventListener('change', function(e) {
   clipboardApproved = e.target.value === 'true';
+  renderSecurityPanel();
+});
+document.getElementById('link-select').addEventListener('change', function(e) {
+  linksApproved = e.target.value === 'true';
   renderSecurityPanel();
 });
 
@@ -179,7 +185,8 @@ function renderSecurityPanel() {
   document.getElementById('security-summary-text').textContent =
     allowlist.length + (allowlist.length === 1 ? ' origin' : ' origins') +
     ' · downloads: ' + (downloadsApproved ? 'always allow' : 'ask first') +
-    ' · clipboard: ' + (clipboardApproved ? 'always allow' : 'ask first');
+    ' · clipboard: ' + (clipboardApproved ? 'always allow' : 'ask first') +
+    ' · links: ' + (linksApproved ? 'always allow' : 'ask first');
 }
 renderSecurityPanel();
 
@@ -198,7 +205,8 @@ async function save() {
       body,
       network_allowlist: allowlist,
       downloads_approved: downloadsApproved,
-      clipboard_approved: clipboardApproved
+      clipboard_approved: clipboardApproved,
+      links_approved: linksApproved
     })
   });
   const data = await resp.json().catch(() => ({}));

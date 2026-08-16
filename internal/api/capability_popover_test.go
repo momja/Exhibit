@@ -48,7 +48,7 @@ func TestCapabilityPopoverSandboxedShowsFullyContained(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	page := w.Body.String()
 
-	assert.Contains(t, page, "Fully contained — no network, download, or clipboard access")
+	assert.Contains(t, page, "Fully contained — no network, download, clipboard, or external link access")
 	assert.NotContains(t, page, "capability-popover-label")
 	assert.NotContains(t, page, "capability-popover-origins")
 }
@@ -122,6 +122,28 @@ func TestCapabilityPopoverDownloadsAndClipboardRowsPerFlag(t *testing.T) {
 
 	assert.Contains(t, page2, "Downloads — Can save files to your device")
 	assert.Contains(t, page2, "Clipboard — Can read and write your clipboard")
+}
+
+// av-d2xf: the external-links grant appears as its own popover row and cluster
+// glyph, and a links-only grant must never collapse to the "Fully contained"
+// reassurance row.
+func TestCapabilityPopoverLinksRowPerFlag(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Linky")
+	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+		"links_approved": true,
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req)
+	require.Equal(t, http.StatusOK, w2.Code)
+	page := w2.Body.String()
+
+	assert.Contains(t, page, "External links — Can open links in new tabs")
+	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span>`)
+	assert.NotContains(t, page, "Fully contained")
 }
 
 // The footer Manage link points at the artifact's Edit page security section
