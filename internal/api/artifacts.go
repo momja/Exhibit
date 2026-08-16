@@ -169,6 +169,17 @@ func snapshotBody(ctx context.Context, pageURL, body string) (string, *snapshotR
 		report.Error = err.Error()
 		return body, report
 	}
+	// Second pass, on the same fetcher so both share one budget, one dedupe
+	// cache and one Vendored() total: fold in the binary payloads the page
+	// fetches from JavaScript, which the markup walker above cannot see. A
+	// transform error here is not fatal either — keep the markup-vendored
+	// document and report the runtime failures alongside it.
+	if runtimeOut, runtimeErrs, rerr := snapshot.InlineRuntimeAssets(ctx, f, out); rerr == nil {
+		out = runtimeOut
+		fetchErrs = append(fetchErrs, runtimeErrs...)
+	} else {
+		report.Error = rerr.Error()
+	}
 	report.Applied = true
 	report.VendoredURLs, report.VendoredBytes = f.Vendored()
 	for _, fe := range fetchErrs {

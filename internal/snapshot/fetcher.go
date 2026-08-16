@@ -29,21 +29,30 @@ import (
 // hang ingest. A zero value disables that individual limit; use
 // DefaultLimits for the standard budget.
 type Limits struct {
-	MaxAssetBytes int64         // per-asset size cap
-	MaxTotalBytes int64         // cumulative cap across all fetched assets
-	MaxAssets     int           // cap on distinct URLs fetched over the network
-	Timeout       time.Duration // per-fetch timeout, covering connect through body read
-	MaxRedirects  int           // redirect hops allowed per fetch (0 = Go's default of 10)
+	MaxAssetBytes       int64         // per-asset size cap for markup-referenced assets
+	MaxInlineAssetBytes int64         // per-asset size cap for the runtime-asset pass
+	MaxTotalBytes       int64         // cumulative cap across all fetched assets
+	MaxAssets           int           // cap on distinct URLs fetched over the network
+	Timeout             time.Duration // per-fetch timeout, covering connect through body read
+	MaxRedirects        int           // redirect hops allowed per fetch (0 = Go's default of 10)
 }
 
 // DefaultLimits returns the standard budget for snapshotting one artifact.
+//
+// The runtime-asset pass gets its own, larger per-asset cap: the payloads it
+// vendors are a tool's reason to exist (a wasm module is routinely 10-20 MiB),
+// and without them the artifact does not run at all, whereas an over-cap image
+// only degrades a page that still works. Raising MaxAssetBytes to suit them
+// would let a single decorative image balloon just as far, so the two stay
+// separate. MaxTotalBytes still bounds the sum of both.
 func DefaultLimits() Limits {
 	return Limits{
-		MaxAssetBytes: 5 << 20,  // 5 MiB
-		MaxTotalBytes: 20 << 20, // 20 MiB — a snapshot must stay "just a file"
-		MaxAssets:     100,
-		Timeout:       10 * time.Second,
-		MaxRedirects:  5,
+		MaxAssetBytes:       5 << 20,  // 5 MiB
+		MaxInlineAssetBytes: 16 << 20, // 16 MiB — one runtime payload, base64 to ~21 MiB in the body
+		MaxTotalBytes:       48 << 20, // 48 MiB — a snapshot must stay "just a file"
+		MaxAssets:           100,
+		Timeout:             10 * time.Second,
+		MaxRedirects:        5,
 	}
 }
 
@@ -111,6 +120,10 @@ type Fetcher struct {
 type cached struct {
 	asset *Asset
 	err   *FetchError
+	// capBytes is the per-asset cap in force when err was recorded. A
+	// too-large verdict is a judgement about the cap, not about the URL, so a
+	// later call under a bigger cap must re-fetch rather than inherit it.
+	capBytes int64
 }
 
 // NewFetcher returns a Fetcher resolving against baseURL (the imported
@@ -222,13 +235,21 @@ func (f *Fetcher) resolve(ref string) (*url.URL, *FetchError) {
 // continuing with the remaining assets. Identical resolved URLs are fetched
 // once and served from cache afterwards.
 func (f *Fetcher) Fetch(ctx context.Context, ref string) (*Asset, error) {
+	return f.FetchWithCap(ctx, ref, f.limits.MaxAssetBytes)
+}
+
+// FetchWithCap is Fetch with maxAssetBytes standing in for Limits.MaxAssetBytes
+// for this one reference. Every other budget — total bytes, asset count, the
+// timeout, the redirect limit and the SSRF guard — is the fetcher's and stays
+// shared, so a caller can admit one larger payload without widening the run.
+func (f *Fetcher) FetchWithCap(ctx context.Context, ref string, maxAssetBytes int64) (*Asset, error) {
 	target, ferr := f.resolve(ref)
 	if ferr != nil {
 		return nil, ferr
 	}
 	targetURL := target.String()
 
-	if c, ok := f.cache[targetURL]; ok {
+	if c, ok := f.cache[targetURL]; ok && !c.staleFor(maxAssetBytes) {
 		if c.err != nil {
 			e := *c.err
 			e.Ref = ref // report the caller's own reference, not the first one seen
@@ -248,10 +269,10 @@ func (f *Fetcher) Fetch(ctx context.Context, ref string) (*Asset, error) {
 	}
 
 	f.fetched++
-	asset, ferr := f.doFetch(ctx, ref, target)
+	asset, ferr := f.doFetch(ctx, ref, target, maxAssetBytes)
 	if ferr != nil {
 		if ferr.Kind != ErrBudget {
-			f.cache[targetURL] = cached{err: ferr}
+			f.cache[targetURL] = cached{err: ferr, capBytes: maxAssetBytes}
 		}
 		slog.DebugContext(ctx, "snapshot asset fetch failed",
 			slog.String("ref", ref), slog.String("url", targetURL),
@@ -269,7 +290,14 @@ func (f *Fetcher) Fetch(ctx context.Context, ref string) (*Asset, error) {
 	return asset, nil
 }
 
-func (f *Fetcher) doFetch(ctx context.Context, ref string, target *url.URL) (*Asset, *FetchError) {
+// staleFor reports whether a cached entry must not be reused under a new
+// per-asset cap: only a too-large verdict is cap-dependent, and only a larger
+// cap can change it.
+func (c cached) staleFor(maxAssetBytes int64) bool {
+	return c.err != nil && c.err.Kind == ErrTooLarge && maxAssetBytes > c.capBytes
+}
+
+func (f *Fetcher) doFetch(ctx context.Context, ref string, target *url.URL, maxAssetBytes int64) (*Asset, *FetchError) {
 	fail := func(kind ErrorKind, err error) (*Asset, *FetchError) {
 		return nil, &FetchError{Ref: ref, URL: target.String(), Kind: kind, Err: err}
 	}
@@ -301,20 +329,20 @@ func (f *Fetcher) doFetch(ctx context.Context, ref string, target *url.URL) (*As
 	if resp.StatusCode != http.StatusOK {
 		return fail(ErrHTTPStatus, fmt.Errorf("unexpected status %s", resp.Status))
 	}
-	if f.limits.MaxAssetBytes > 0 && resp.ContentLength > f.limits.MaxAssetBytes {
-		return fail(ErrTooLarge, fmt.Errorf("declared size %d exceeds per-asset limit %d", resp.ContentLength, f.limits.MaxAssetBytes))
+	if maxAssetBytes > 0 && resp.ContentLength > maxAssetBytes {
+		return fail(ErrTooLarge, fmt.Errorf("declared size %d exceeds per-asset limit %d", resp.ContentLength, maxAssetBytes))
 	}
 
 	reader := io.Reader(resp.Body)
-	if f.limits.MaxAssetBytes > 0 {
-		reader = io.LimitReader(reader, f.limits.MaxAssetBytes+1)
+	if maxAssetBytes > 0 {
+		reader = io.LimitReader(reader, maxAssetBytes+1)
 	}
 	body, err := io.ReadAll(reader)
 	if err != nil {
 		return fail(ErrNetwork, err)
 	}
-	if f.limits.MaxAssetBytes > 0 && int64(len(body)) > f.limits.MaxAssetBytes {
-		return fail(ErrTooLarge, fmt.Errorf("asset exceeds per-asset limit %d", f.limits.MaxAssetBytes))
+	if maxAssetBytes > 0 && int64(len(body)) > maxAssetBytes {
+		return fail(ErrTooLarge, fmt.Errorf("asset exceeds per-asset limit %d", maxAssetBytes))
 	}
 	if f.limits.MaxTotalBytes > 0 && f.totalBytes+int64(len(body)) > f.limits.MaxTotalBytes {
 		return fail(ErrBudget, fmt.Errorf("total byte budget %d exhausted", f.limits.MaxTotalBytes))

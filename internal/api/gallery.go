@@ -66,15 +66,13 @@ func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 		ro.notFound(w, r)
 		return
 	}
-	rc, err := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
-	if err != nil {
-		serverError(w, r, "gallery detail blob", err)
-		return
-	}
-	defer rc.Close()
-	src, _ := io.ReadAll(rc)
 
-	page, err := renderDetailPage(a, string(src), ro.cfg.RenderOrigin, ro.cfg.AuthToken)
+	// The artifact body is deliberately NOT read here (av-02xs): the detail
+	// page must never embed the source — for a multi-MB artifact that made
+	// this page itself multi-MB and Safari stalls on the response, so the
+	// artifact "never loads". The edit page is where the body is viewed and
+	// edited.
+	page, err := renderDetailPage(a, ro.cfg.RenderOrigin, ro.cfg.AuthToken)
 	if err != nil {
 		serverError(w, r, "gallery detail render", err)
 		return
@@ -411,12 +409,11 @@ type detailPageData struct {
 	Created      string
 	RenderOrigin string
 	SourceURL    string
-	Src          string
 	Capability   capabilityView
 	Token        string
 }
 
-func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (string, error) {
+func renderDetailPage(a *store.Artifact, renderOrigin, token string) (string, error) {
 	allowlist := a.NetworkAllowlist
 	if allowlist == nil {
 		allowlist = []string{}
@@ -427,7 +424,6 @@ func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (strin
 		Created:      a.CreatedAt.Format("Jan 2, 2006 15:04"),
 		RenderOrigin: renderOrigin,
 		SourceURL:    a.SourceURL,
-		Src:          src,
 		Capability: capabilityView{
 			ArtifactID:        a.ID,
 			NetworkAllowlist:  allowlist,

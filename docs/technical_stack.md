@@ -189,10 +189,20 @@ the outbound network footprint to show the user for approval.
 
 - Parse HTML with `golang.org/x/net/html` (a real tokenizer, never regex) to collect
   origins from `src`, `href`, `action`, `<link>`, and ESM import URLs.
-- For JS `fetch`/`XMLHttpRequest` targets, accept that full static analysis is
-  impossible — use a lightweight heuristic pass (string/AST scan via esbuild's parser for
-  literal URLs) and clearly treat anything it finds as a hint. Whatever it misses is
-  caught at runtime by the CSP allowlist + permission prompt.
+- For JS `fetch` targets, accept that full static analysis is impossible — as built,
+  `scanner.LiteralRefs` runs two regexes over the raw document for `fetch("…")` and
+  `import`/`from "…"` literals, and anything they find is a hint, not analysis. Only a
+  literal adjacent to the call is seen: a URL assembled at runtime is missed, as are
+  `XMLHttpRequest`, `new Worker`, and `WebSocket` targets. Whatever it misses is caught
+  at runtime by the CSP allowlist.
+- The snapshot vendorer's runtime-asset pass shares the fetch half of that definition
+  (`scanner.FetchRefs`), so the assets it inlines cannot drift from the fetch targets
+  the footprint reports; ESM import refs stay with the scanner only, because the
+  module loader never consults `window.fetch` and those origins are governed by
+  `script-src` instead. It compensates for the heuristic's blind spot differently:
+  rather than rewriting the literals it found, it installs a `fetch` wrapper that
+  matches on the resolved URL at call time — so a runtime-constructed URL is served
+  when that same absolute URL also appears as a literal fetch ref, and only then.
 
 Present the deduplicated origin list at the approval step; write approved origins as
 the artifact's `decision='allow'` rows in `artifact_network_origins`.

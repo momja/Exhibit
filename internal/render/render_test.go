@@ -298,14 +298,50 @@ func TestBuildCSPFormActionMirrorsAllowlist(t *testing.T) {
 
 // Writes must go to the host frame via postMessage (pinned to the app origin),
 // not a cross-origin fetch — the sandboxed iframe's opaque origin can't call the
-// API, and the fetch approach was what CORS-blocked write-through.
+// API, and the fetch approach was what CORS-blocked write-through. The shim may
+// mention fetch (it shims data: URL fetches, av-02xs) but must never invoke it
+// with a URL — its only network-adjacent call is nativeFetch.apply passthrough.
 func TestShimWritesViaPostMessageNotFetch(t *testing.T) {
 	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
 	if !strings.Contains(doc, "window.parent.postMessage") {
 		t.Fatalf("shim should write via postMessage to the host frame: %s", doc)
 	}
-	if strings.Contains(doc, "fetch(") {
+	// A call with a URL literal would be the CORS-blocked API fetch; the data:
+	// shim only ever routes through nativeFetch.apply or constructs Responses.
+	if strings.Contains(doc, "fetch('") || strings.Contains(doc, `fetch("`) {
 		t.Fatalf("shim must not fetch the API directly (CORS-blocked from the sandbox): %s", doc)
+	}
+}
+
+// The framed preamble shims data: URL fetches into local Responses (WebKit
+// refuses large data: fetches from an opaque-origin sandbox). Widget renders
+// omit the whole bridgeScript, so it doesn't ship there. The canvas-leak
+// mitigation trialed in av-02xs was removed as ineffective — assert it stays
+// gone so it can't silently degrade artifact rendering again.
+func TestShimFramedDataURLFetchWrapper(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
+	if !strings.Contains(doc, "window.fetch = function(input, init)") {
+		t.Fatalf("framed shim must wrap fetch for data: URLs: %s", doc)
+	}
+	if !strings.Contains(doc, "new Response(bytes, {") {
+		t.Fatalf("framed shim must construct Responses from data: bytes: %s", doc)
+	}
+	// The shim must decode payloads byte-by-byte (decodeURIComponent throws on
+	// non-UTF-8 sequences and corrupts bytes 0x80+) and must exclude any URL
+	// fragment from the body it constructs.
+	if !strings.Contains(doc, "function percentDecodeBytes") {
+		t.Fatalf("framed shim must byte-level percent-decode non-base64 payloads: %s", doc)
+	}
+	if !strings.Contains(doc, "data.indexOf('#')") {
+		t.Fatalf("framed shim must strip the fragment before decoding the payload: %s", doc)
+	}
+	if strings.Contains(doc, "willReadFrequently") || strings.Contains(doc, "CANVAS_MITIGATION") {
+		t.Fatalf("ineffective canvas mitigation must not ship in the shim: %s", doc)
+	}
+
+	widgetDoc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true)
+	if strings.Contains(widgetDoc, "window.fetch = function(input, init)") {
+		t.Fatalf("widget renders must not carry the fetch shim: %s", widgetDoc)
 	}
 }
 

@@ -50,15 +50,8 @@ func scan(body string, base *url.URL) []string {
 	}
 
 	// Heuristic pass over the raw source for fetch/import literals
-	for _, m := range fetchPattern.FindAllStringSubmatch(body, -1) {
-		if len(m) > 1 {
-			add(m[1])
-		}
-	}
-	for _, m := range importPattern.FindAllStringSubmatch(body, -1) {
-		if len(m) > 1 {
-			add(m[1])
-		}
+	for _, ref := range LiteralRefs(body) {
+		add(ref)
 	}
 
 	origins := make([]string, 0, len(seen))
@@ -110,6 +103,50 @@ var fetchPattern = regexp.MustCompile(`fetch\(\s*['"]([^'"]+)['"]`)
 
 // importPattern matches ESM import URL literals.
 var importPattern = regexp.MustCompile(`(?:import|from)\s+['"]([^'"]+)['"]`)
+
+// FetchRefs returns the raw references appearing as string literals directly
+// inside fetch() calls, in source order, neither deduplicated nor resolved.
+// This is the subset of LiteralRefs the snapshot vendorer's runtime-asset pass
+// can serve: its substitution mechanism is a window.fetch wrapper, so it can
+// only intercept requests made through fetch.
+func FetchRefs(body string) []string {
+	var refs []string
+	for _, m := range fetchPattern.FindAllStringSubmatch(body, -1) {
+		if len(m) > 1 {
+			refs = append(refs, m[1])
+		}
+	}
+	return refs
+}
+
+// ImportRefs returns the raw references appearing as string literals in ESM
+// import/export-from expressions, in source order, neither deduplicated nor
+// resolved. The vendorer deliberately does NOT use these: native module
+// loading never consults window.fetch, so a manifest entry keyed for it would
+// never be matched — import-derived origins are governed by the script-src
+// allowlist, not by vendoring.
+func ImportRefs(body string) []string {
+	var refs []string
+	for _, m := range importPattern.FindAllStringSubmatch(body, -1) {
+		if len(m) > 1 {
+			refs = append(refs, m[1])
+		}
+	}
+	return refs
+}
+
+// LiteralRefs returns FetchRefs + ImportRefs: the raw references appearing as
+// string literals in fetch() and ESM import/from expressions, in source order,
+// neither deduplicated nor resolved. This is what the footprint pass runs, so
+// it sees everything the page may load; the vendorer's runtime-asset pass uses
+// only FetchRefs, because imports are beyond what a fetch wrapper can serve.
+// Like the footprint pass it is a heuristic, not analysis: only a literal
+// adjacent to the call is seen, so a URL built at runtime is missed here. That
+// is why the vendorer substitutes by intercepting fetch at call time rather than
+// by rewriting these literals.
+func LiteralRefs(body string) []string {
+	return append(FetchRefs(body), ImportRefs(body)...)
+}
 
 // resolveOrigin returns the scheme+host origin from a URL string. Absolute and
 // protocol-relative references are reduced to their origin directly (base has no
