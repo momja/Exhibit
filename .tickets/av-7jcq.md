@@ -19,4 +19,3 @@ So no deletion path in the product actually removes an artifact's bytes. `DELETE
 Accepted for a single-user instance deleting their own artifact is one thing. It stops being acceptable the moment 'delete my account' exists: a deletion that leaves every artifact body on disk is not deletion in any sense a user would recognise, and on a hosted instance it is the kind of claim that has legal weight.
 
 This is the prerequisite for account deletion, not a follow-up to it.
-
