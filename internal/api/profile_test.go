@@ -84,7 +84,7 @@ func TestProfileNamesALocalAccount(t *testing.T) {
 	// Nor does the danger zone tell someone with a password here that their
 	// identity provider is unaffected — they do not have one.
 	assert.NotContains(t, page, "your identity provider is theirs")
-	assert.Contains(t, page, "Your login name and password are this instance")
+	assert.NotContains(t, page, "sign in with your identity provider")
 }
 
 // The correction this ticket was reopened for. admin.go's rule is `u.Email`

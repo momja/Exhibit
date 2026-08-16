@@ -56,7 +56,7 @@
        there is no users row behind it. Nothing is missing — that is the
        self-hoster's default shape — so the page says what it is instead of
        showing an account it made up. */}}
-  <p class="muted">This instance has no login configured, so there is no account to describe. Its  belongs to whoever can reach the origin, and the API is guarded by the service token alone.</p>
+  <p class="muted">This instance has no login configured, so there is no account to describe. Its library belongs to whoever can reach the origin, and the API is guarded by the service token alone.</p>
   {{end}}
 </div>
 
@@ -93,8 +93,7 @@
        depends on where the sign-in lives. Telling someone with a password here
        that their identity provider is unaffected would name a provider they do
        not have. */}}
-  {{if .Account.HasPassword}}
-  {{else}}
+  {{if not .Account.HasPassword}}
   <p class="settings-danger-copy">Next time you sign in with your identity provider, you will be treated as a new user.</p>
   {{end}}
   {{end}}
@@ -120,14 +119,14 @@
     {{if .Account.HasPassword}}
     <p class="settings-danger-copy">If you revisit this site, you will be treated as a new user.</p>
     {{else}}
-    <p class="settings-danger-copy">Signing in again will still work via your identity provider. You will arrive at a new account, with an empty gallery.</p>
+    <p class="settings-danger-copy">Signing in again will still work via your identity provider. You will arrive at a new account, with an empty library.</p>
     {{end}}
-    <label class="settings-label" for="delete-phrase">Type <code>delete my gallery</code> to confirm</label>
+    <label class="settings-label" for="delete-phrase">Type <code>delete my library</code> to confirm</label>
     <input class="field settings-confirm-field" type="text" id="delete-phrase" autocomplete="off"
-           autocapitalize="none" spellcheck="false" placeholder="delete my gallery">
+           autocapitalize="none" spellcheck="false" placeholder="delete my library">
     <div class="settings-foot">
       <button class="btn btn-danger" type="button" id="delete-confirm-go" disabled>
-        <i class="ph ph-trash" aria-hidden="true"></i> Delete my gallery permanently
+        <i class="ph ph-trash" aria-hidden="true"></i> Delete my library permanently
       </button>
       <button class="btn" type="button" id="delete-cancel">Cancel</button>
     </div>

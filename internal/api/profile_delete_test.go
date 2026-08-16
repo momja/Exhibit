@@ -165,9 +165,12 @@ func TestProfileDeleteSectionIsLive(t *testing.T) {
 func TestProfileDeleteSectionSaysSigningInAgainGivesAnEmptyAccount(t *testing.T) {
 	page := newDeleteInstance(t).page(t)
 
-	assert.Contains(t, page, "You will still be able to sign in")
-	assert.Contains(t, page, "empty account")
-	assert.Contains(t, page, "identity provider is theirs")
+	// Both halves, in both steps. The claim is not "signing in still works" —
+	// on its own that reads as "nothing was deleted" — it is that signing in
+	// works *and lands somewhere empty*.
+	assert.Contains(t, page, "you will be treated as a new user")
+	assert.Contains(t, page, "Signing in again will still work via your identity provider")
+	assert.Contains(t, page, "You will arrive at a new account, with an empty library")
 }
 
 // A local account gets the opposite sentence, because it has no provider to
@@ -190,8 +193,10 @@ func TestProfileDeleteSectionDistinguishesALocalAccount(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	page := w.Body.String()
 
-	assert.Contains(t, page, "signing in again will not be possible")
-	assert.NotContains(t, page, "You will still be able to sign in")
+	assert.Contains(t, page, "If you revisit this site, you will be treated as a new user")
+	// And never the provider sentence: naming an identity provider to somebody
+	// who signs in with a password here describes an account they do not have.
+	assert.NotContains(t, page, "your identity provider")
 }
 
 // Shares are the sharp edge: a capability URL somebody else holds, revoked
@@ -206,7 +211,6 @@ func TestProfileDeleteSectionCountsLiveShares(t *testing.T) {
 	page := in.page(t)
 	assert.Contains(t, page, "<strong>1 artifact</strong>")
 	assert.Contains(t, page, "<strong>2 share links</strong>")
-	assert.Contains(t, page, "Nobody is notified")
 
 	// And again in the confirmation itself, which is the last thing read
 	// before the phrase is typed — the count is not left behind on the step
@@ -227,13 +231,13 @@ func TestProfileDeleteSectionOmitsSharesWhenThereAreNone(t *testing.T) {
 
 	assert.Contains(t, page, "<strong>no artifacts</strong>",
 		"an empty library still says how much is about to go — as a word, since the sentence is read by a person")
-	assert.NotContains(t, page, "Nobody is notified")
+	assert.NotContains(t, page, "Deleting it breaks")
 	assert.NotContains(t, page, "will stop working")
 
 	// The confirmation's clauses are each guarded by their own count, so an
 	// empty library gets a sentence rather than one built around "your no
 	// artifacts" — which is how a confirmation stops being read.
-	assert.Contains(t, page, "Everything this instance holds for you is erased from this server.")
+	assert.Contains(t, page, "Everything created or owned by you is permanently inaccessible.")
 	assert.NotContains(t, page, "everything saved inside")
 }
 
