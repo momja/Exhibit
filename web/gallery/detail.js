@@ -7,6 +7,7 @@
  *                        the Update-from-source button only renders when set)
  *   downloadsApproved  - persisted first-use download approval (mutable)
  *   clipboardApproved  - persisted first-use clipboard approval (mutable)
+ *   linksApproved      - persisted first-use external-link approval (mutable)
  */
 
 // Mobile actions sheet (av-g7n7): below 640px the toolbar is styled as a
@@ -295,6 +296,84 @@ document.getElementById('clip-allow').addEventListener('click', async function()
   document.getElementById('clip-modal').hidden = true;
   pendingClip = null;
   if (req) performClipboard(req);
+});
+
+// Link navigation bridge (av-r0dk): the sandboxed frame cannot open external
+// links itself — a target=_blank anchor is dropped without allow-popups, and a
+// plain anchor would replace the iframe with an external page that usually
+// refuses framing. The shim posts external link activations here; when approved
+// we open the URL in a new tab from the app origin (the click's transient
+// activation covers the postMessage roundtrip). Unapproved, we show the
+// first-request confirmation (av-e3sj), naming the destination host, and open
+// nothing until the user allows.
+let pendingLink = null;
+let linkAllowPending = false;
+
+window.addEventListener('message', function(e) {
+  const d = e.data;
+  if (!d || d.__avNavigate !== true || d.artifactId !== ID) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || e.source !== frame.contentWindow) return;
+  let url;
+  try {
+    url = new URL(String(d.url));
+  } catch (err) {
+    return;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+  if (linksApproved) {
+    window.open(url.href, '_blank', 'noopener');
+    return;
+  }
+  pendingLink = { url: url.href, host: url.hostname };
+  document.getElementById('link-host').textContent = url.hostname;
+  document.getElementById('link-modal').hidden = false;
+  // Move focus into the dialog so keyboard users land on the decision rather
+  // than on whatever sat behind the overlay.
+  document.getElementById('link-block').focus();
+});
+
+// Persists the first-use grant, then lets the caller open the pending URL. The
+// viewer is read-only (av-hwx2) — like downloads/clipboard, it only grants on
+// the artifact's first attempt; the revoke control lives on the Edit page.
+async function setLinksApproved(approved) {
+  if (!(await setCapabilityApproved('links_approved', approved, 'link'))) return false;
+  linksApproved = approved;
+  return true;
+}
+
+// Denial just drops the destination and the artifact keeps running — nothing is
+// persisted, mirroring downloads (denial drops, approval persists).
+function closeLinkModal() {
+  // While an Allow request is in flight, dismissal must not invalidate the
+  // transaction: the allow handler re-verifies pendingLink is still the same
+  // link after the PATCH and skips opening if anything changed.
+  if (linkAllowPending) return;
+  document.getElementById('link-modal').hidden = true;
+  pendingLink = null;
+  // Hand focus back to the artifact so keyboard users return where they were.
+  const frame = document.querySelector('iframe');
+  if (frame) frame.focus();
+}
+
+document.getElementById('link-block').addEventListener('click', closeLinkModal);
+document.getElementById('link-modal').addEventListener('click', function(e) {
+  if (e.target.id === 'link-modal') closeLinkModal();
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && !document.getElementById('link-modal').hidden) closeLinkModal();
+});
+document.getElementById('link-allow').addEventListener('click', async function() {
+  const link = pendingLink;
+  linkAllowPending = true;
+  const ok = await setLinksApproved(true);
+  linkAllowPending = false;
+  // Only settle the transaction if the pending destination is still the one
+  // the user approved — a dismissal or a newer link must not be overridden by
+  // opening this URL after the fact.
+  if (!ok || pendingLink !== link) return;
+  closeLinkModal();
+  if (link) window.open(link.url, '_blank', 'noopener');
 });
 
 // "Update from source" — only reachable from the toolbar button, which the

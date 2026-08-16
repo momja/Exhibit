@@ -573,6 +573,15 @@ flowchart TD
     cbPrompt -->|approve| cbOK["PATCH clipboard_approved &rarr;<br/>op &rarr; result"]
     cbPrompt -->|deny| cbNo["Promise rejects (NotAllowedError)"]
     cb --> cbNative["native Ctrl/Cmd+V paste &rarr;<br/>browser event, unaffected"]
+
+    load --> lk["external http(s) anchor<br/>clicked (target=_blank or plain)"]
+    lk --> lkInt["link bridge intercepts;<br/>postMessage URL to host"]
+    lkInt --> lkQ{"already approved?"}
+    lkQ -->|yes| lkGo["host opens the URL in a new tab<br/>from the app origin"]
+    lkQ -->|first attempt| lkPrompt{"host prompts<br/>(destination host)"}
+    lkPrompt -->|approve| lkOK["PATCH links_approved &rarr;<br/>open in new tab"]
+    lkPrompt -->|deny| lkNo["URL dropped;<br/>artifact keeps running"]
+    lk --> lkMiss["popup vectors the bridge misses &rarr;<br/>stay sandbox-blocked (no allow-popups)"]
 ```
 
 Two properties fall out of the sandbox's opaque origin: reads are **inlined at render**
@@ -596,6 +605,21 @@ id so the returned Promise settles with the host's answer; a denial rejects with
 a `NotAllowedError` the artifact handles like any blocked clipboard call. Native
 keyboard paste is a browser event, not an API call, so it is never bridged. See
 `security.md` §4 for the full policy.
+
+External-link navigation rides the same bridge (`links_approved`). The sandbox
+deliberately omits `allow-popups`, so a `target="_blank"` anchor is dropped and a
+plain anchor would navigate the iframe itself; the link bridge intercepts anchor
+activations whose resolved URL is an external `http(s)` destination (after the
+download-href check, so `blob:`/`data:` still win) and posts only the URL to the
+host, which owns the first-use approval prompt and opens the URL in a new tab
+from the app origin. The bridge is UX, not enforcement: a direct `window.open`
+stays sandbox-blocked, while form submissions are not this bridge's to govern —
+the sandbox retains `allow-forms` and the per-artifact `form-action` policy
+(`'self'` plus the allowlist) already enforces the network allowlist for them.
+There is no CSP/allowlist
+interaction — the popup is its own top-level document governed by the target
+site's policy — and the bridge installs only when a host frame exists; top-level
+renders and shares navigate natively.
 
 The state endpoints are why cross-device "just works": all state lives server-side, so a
 second device inlines the same state at render. No replication required for this (§8 distinguishes

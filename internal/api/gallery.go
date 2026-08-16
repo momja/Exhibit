@@ -235,7 +235,7 @@ func tagViews(tags []*store.Tag) []tagView {
 // capabilityPopover (av-41se) partials render. It's shared verbatim by the
 // gallery card and the artifact detail/viewer page so the popover looks and
 // behaves identically in both places. ShowManage gates the popover's footer
-// "Manage in allowlist settings" link: true for both app-origin pages here.
+// "Manage security settings" link: true for both app-origin pages here.
 // The render surface (internal/render) — which serves /s/:shareID — never
 // composes gallery templates at all, so no caller there needs ShowManage;
 // the field exists so a caller without an owner session can render the same
@@ -246,6 +246,7 @@ type capabilityView struct {
 	NetworkAllowlist  []string
 	DownloadsApproved bool
 	ClipboardApproved bool
+	LinksApproved     bool
 	ShowManage        bool
 }
 
@@ -371,6 +372,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token, 
 				NetworkAllowlist:  a.NetworkAllowlist,
 				DownloadsApproved: a.DownloadsApproved,
 				ClipboardApproved: a.ClipboardApproved,
+				LinksApproved:     a.LinksApproved,
 				ShowManage:        true,
 			},
 			Widget: newWidgetView(a, renderOrigin),
@@ -429,6 +431,7 @@ func renderDetailPage(a *store.Artifact, renderOrigin, token string) (string, er
 			NetworkAllowlist:  allowlist,
 			DownloadsApproved: a.DownloadsApproved,
 			ClipboardApproved: a.ClipboardApproved,
+			LinksApproved:     a.LinksApproved,
 			ShowManage:        true,
 		},
 		Token: token,
@@ -455,6 +458,7 @@ type editPageData struct {
 	Unapproved        []string
 	DownloadsApproved bool
 	ClipboardApproved bool
+	LinksApproved     bool
 	// The gallery widget (av-fafu): its source for the editor, and the same
 	// tile view the library renders for the live preview beside it. WidgetSrc
 	// is "" when the artifact has no widget, which is also when Widget renders
@@ -495,6 +499,7 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, wi
 		GenerateHint:      generateHint,
 		DownloadsApproved: a.DownloadsApproved,
 		ClipboardApproved: a.ClipboardApproved,
+		LinksApproved:     a.LinksApproved,
 	})
 }
 

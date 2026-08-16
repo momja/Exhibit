@@ -318,6 +318,35 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     explicitly navigated to the tool, and the per-artifact CSP still applies
     via the response header. Share pages get no bridge: opened top-level they
     behave the same way; there is no authenticated host to mediate for them.
+- **External links** — the sandbox omits `allow-popups`, so a `target="_blank"`
+  anchor is dropped on click and a plain anchor would navigate the iframe
+  itself, replacing the artifact with an external page that usually refuses
+  framing (`X-Frame-Options`/`frame-ancestors`). External-link navigation is
+  therefore **mediated by the host frame with first-use approval**, the third
+  sibling of the download and clipboard bridges:
+  - The link bridge intercepts anchor activations whose resolved URL is an
+    external `http(s)` destination (capture phase, after the download-href
+    check so `blob:`/`data:` still win) and posts only the URL to the host,
+    pinned to the app origin. Only the URL crosses the boundary — a pointer to
+    content the artifact already displays, not a capability grant.
+  - On the artifact's **first** external-link click the host prompts, naming
+    the destination. Approval is persisted server-side (`links_approved`,
+    PATCHed through the API), survives reloads and devices, and is revocable
+    from the toolbar. Denial drops the navigation without breaking the
+    artifact. Once approved the host opens the URL in a new tab from the app
+    origin; the click's transient activation covers the postMessage roundtrip.
+  - **The sandbox remains the wall.** Approval never adds `allow-popups` or
+    `allow-top-navigation`; popup vectors the bridge doesn't catch (a direct
+    `window.open`) simply stay blocked by the browser. Form submissions are
+    not this bridge's to govern: the sandbox keeps `allow-forms`, and the
+    existing `form-action` policy (§2) — `'self'` plus the allowlist — already
+    enforces the network allowlist for them, exactly as before. There is no
+    CSP/allowlist interaction for the popup itself: it is its own top-level
+    document governed by the target site's own policy.
+  - This adds gesture convenience, not capability: right-click → "Open link in
+    new tab" already reaches the same URL from browser chrome, which the
+    sandbox does not govern. Like downloads, the bridge installs only when a
+    host frame exists; top-level renders and share pages navigate natively.
 
 ## 5. Residual risk
 
