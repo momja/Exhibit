@@ -248,6 +248,7 @@ type capabilityView struct {
 	NetworkAllowlist  []string
 	DownloadsApproved bool
 	ClipboardApproved bool
+	LinksApproved     bool
 	ShowManage        bool
 }
 
@@ -433,6 +434,7 @@ func renderDetailPage(a *store.Artifact, src, renderOrigin, token string) (strin
 			NetworkAllowlist:  allowlist,
 			DownloadsApproved: a.DownloadsApproved,
 			ClipboardApproved: a.ClipboardApproved,
+			LinksApproved:     a.LinksApproved,
 			ShowManage:        true,
 		},
 		Token: token,

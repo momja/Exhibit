@@ -516,14 +516,47 @@ const bridgeScript = `
       reader.readAsArrayBuffer(blob);
     };
 
+    // ---- Link navigation bridge (av-r0dk) ----
+    // The sandbox omits allow-popups, so a target=_blank anchor is dropped on
+    // click and a plain anchor would navigate this iframe itself, replacing
+    // the artifact with an external page that usually refuses framing
+    // (X-Frame-Options / frame-ancestors). The bridge intercepts anchor
+    // activations whose resolved URL is an external http(s) destination and
+    // hands the URL to the host frame, which owns first-use approval and opens
+    // it in a new tab. Only the URL crosses the boundary — a pointer to
+    // content the artifact already displays, not a capability grant. Vectors
+    // it does not catch (window.open, form submits) simply stay sandbox-blocked;
+    // evading the bridge gains nothing.
+    var isExternalLinkHref = function(href) {
+      href = String(href);
+      if (href.slice(0, 7) !== 'http://' && href.slice(0, 8) !== 'https://') return false;
+      try {
+        // location.origin still reports the document's tuple origin inside the
+        // opaque-origin sandbox (unlike self.origin, which serializes to
+        // 'null'), so it is the right comparator against the resolved link URL.
+        return new URL(href).origin !== location.origin;
+      } catch (e) {
+        return false;
+      }
+    };
+
     // Capture phase sees the click before the artifact's own handlers — for
     // user clicks and programmatic click() on in-document anchors alike —
     // without suppressing them (preventDefault only, no stopPropagation).
     document.addEventListener('click', function(e) {
       var anchor = e.target && e.target.closest ? e.target.closest('a') : null;
-      if (!anchor || !isDownloadHref(anchor.href || '')) return;
-      e.preventDefault();
-      bridgeDownload(anchor);
+      if (!anchor) return;
+      var href = String(anchor.href || '');
+      if (isDownloadHref(href)) {
+        e.preventDefault();
+        bridgeDownload(anchor);
+        return;
+      }
+      if (isExternalLinkHref(href)) {
+        e.preventDefault();
+        window.parent.postMessage({ __avNavigate: true, artifactId: ARTIFACT_ID, url: href }, API_ORIGIN);
+        return;
+      }
     }, true);
 
     // Detached anchors (createElement -> click() without appendChild — the
