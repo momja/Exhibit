@@ -100,8 +100,17 @@ The only way data changes. Route groups:
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
   `source_url` and replaces the stored body. A snapshot, not a versioned update.
 - `DELETE /api/artifacts/:id` — deletes the artifact and associated rows (tags,
-  collections, shares, state cascade via FK). The blob body on the filesystem is
-  orphaned in v1 (`Blob.Store` has no `Delete` method).
+  collections, shares, state cascade via FK) **and its bytes**: the body blob,
+  and the widget blob when it has one (av-7jcq). The order is row first, then
+  bytes, because the two failure modes are not equally bad — a failed *row*
+  delete after the bytes are gone leaves a live artifact whose only copy of
+  itself no longer exists, which nothing on the instance can repair; a failed
+  *blob* delete after the row is gone leaves unreferenced bytes an operator can
+  sweep. The blob failure still surfaces as a 500 rather than a silent 204: a
+  deletion that left the file on disk must not claim otherwise.
+  `DELETE /api/artifacts/:id/widget` removes the detached widget's blob the
+  same way, in the same order — detaching is the only exit a widget blob has,
+  since the id is otherwise reused for the artifact's life.
 - `GET/PUT /api/artifacts/:id/state`, `DELETE /api/artifacts/:id/state[/:key]` — the
   artifact's state rows (§6). Reads are normally satisfied by render-time inlining, not
   this route; `PUT` is called by the **host frame** on the storage shim's behalf (the
@@ -289,8 +298,17 @@ Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
         list/set/delete per-origin network decisions;
         users and sessions, including local credentials (§3.8)
         and the admin mutations over them (§3.8a)
-Blob:   put/get artifact bodies by id
+Blob:   put/get/delete artifact bodies by id
 ```
+
+`Blob.Delete` is **idempotent** by contract (av-7jcq): an id that was never
+stored is success, not an error. That is the contract the object-store backend
+this interface exists for already has — S3's `DeleteObject` answers success for
+a missing key — so defining it the other way would make the S3 implementation
+synthesize a failure with a `HEAD` before every delete, to honour a distinction
+no caller wants. `FSStore` swallows `os.ErrNotExist` to conform; every other
+error surfaces, because a delete that claims to have removed the bytes must
+have.
 
 **Owner scoping is in the queries** (av-ep8k). Every Store method that names an
 artifact takes the requesting `owner_id` and filters on it in SQL — the

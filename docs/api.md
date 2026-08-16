@@ -20,7 +20,10 @@ PATCH  /api/artifacts/:id          Update title, body, network_allowlist, etc.
                                    replaces the artifact's allow decisions and leaves
                                    any blocked origins untouched)
 POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts)
-DELETE /api/artifacts/:id          Delete artifact and associated rows (blob body is orphaned in v1)
+DELETE /api/artifacts/:id          Delete artifact, its associated rows, and its blobs
+                                   (body + widget). 500 if a blob could not be removed:
+                                   the row is already gone, but a delete that left bytes
+                                   on disk must not report success
 ```
 
 **Ingest flow** — two steps by design:
