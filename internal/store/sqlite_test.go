@@ -118,35 +118,35 @@ func TestSearchQuerySyntaxCharacters(t *testing.T) {
 		"<script>", `"`, `say"hi`, "(", ")", "a:b", "-foo", "^bar", "NEAR(", "*", "**",
 		`" OR 1=1 --`, "chart OR", "<>", "   ", "😀",
 	} {
-		_, err := s.ListArtifacts(ctx, ListOptions{Query: q})
+		_, err := s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: q})
 		require.NoErrorf(t, err, "query %q", q)
 	}
 
 	// A word wrapped in syntax characters still finds the artifact, because the
 	// tokenizer drops the punctuation inside the quoted phrase.
-	found, err := s.ListArtifacts(ctx, ListOptions{Query: "<chart>"})
+	found, err := s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "<chart>"})
 	require.NoError(t, err)
 	require.Len(t, found, 1)
 	assert.Equal(t, "s1", found[0].ID)
 
 	// Prefix search still works, for one token and for several.
-	found, err = s.ListArtifacts(ctx, ListOptions{Query: "cha"})
+	found, err = s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "cha"})
 	require.NoError(t, err)
 	require.Len(t, found, 1)
 	assert.Equal(t, "s1", found[0].ID)
 
-	found, err = s.ListArtifacts(ctx, ListOptions{Query: "bar cha"})
+	found, err = s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "bar cha"})
 	require.NoError(t, err)
 	require.Len(t, found, 1)
 	assert.Equal(t, "s1", found[0].ID)
 
 	// Multi-token search is still a conjunction: an unmatched token excludes.
-	found, err = s.ListArtifacts(ctx, ListOptions{Query: "bar notepad"})
+	found, err = s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "bar notepad"})
 	require.NoError(t, err)
 	assert.Len(t, found, 0)
 
 	// A query of pure punctuation is no filter at all, not an error.
-	found, err = s.ListArtifacts(ctx, ListOptions{Query: "<>"})
+	found, err = s.ListArtifacts(ctx, ListOptions{OwnerID: 1, Query: "<>"})
 	require.NoError(t, err)
 	assert.Len(t, found, 2)
 }

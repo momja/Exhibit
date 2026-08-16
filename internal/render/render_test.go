@@ -319,7 +319,7 @@ func TestShimWritesViaPostMessageNotFetch(t *testing.T) {
 // mitigation trialed in av-02xs was removed as ineffective — assert it stays
 // gone so it can't silently degrade artifact rendering again.
 func TestShimFramedDataURLFetchWrapper(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
 	if !strings.Contains(doc, "window.fetch = function(input, init)") {
 		t.Fatalf("framed shim must wrap fetch for data: URLs: %s", doc)
 	}
@@ -339,7 +339,7 @@ func TestShimFramedDataURLFetchWrapper(t *testing.T) {
 		t.Fatalf("ineffective canvas mitigation must not ship in the shim: %s", doc)
 	}
 
-	widgetDoc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true)
+	widgetDoc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true, false)
 	if strings.Contains(widgetDoc, "window.fetch = function(input, init)") {
 		t.Fatalf("widget renders must not carry the fetch shim: %s", widgetDoc)
 	}
