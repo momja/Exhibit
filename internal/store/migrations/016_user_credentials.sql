@@ -61,7 +61,14 @@ UPDATE users SET is_admin = 1 WHERE id = (SELECT min(id) FROM users);
 -- silently orphan the rest; restoring the oldest — the row this migration's Up
 -- direction re-keyed in the first place — is the least surprising of the
 -- available choices.
+--
+-- The NOT EXISTS guard covers a legacy row Up's re-key (above) never touched:
+-- a pre-migration local user with an empty email keeps external_id = 'local'
+-- through Up, since that UPDATE only re-keys rows with a non-empty email. If
+-- such a row is still 'local', promoting another row to the same value would
+-- hit the same UNIQUE constraint this comment already exists to avoid.
 UPDATE users SET external_id = 'local'
- WHERE id = (SELECT min(id) FROM users WHERE external_id LIKE 'local:%');
+ WHERE id = (SELECT min(id) FROM users WHERE external_id LIKE 'local:%')
+   AND NOT EXISTS (SELECT 1 FROM users WHERE external_id = 'local');
 ALTER TABLE users DROP COLUMN is_admin;
 ALTER TABLE users DROP COLUMN password_hash;
