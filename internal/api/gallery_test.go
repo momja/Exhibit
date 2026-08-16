@@ -483,3 +483,27 @@ func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 	assert.NotContains(t, page, `</script><img src=x onerror=alert(1)>`,
 		"an origin must never terminate the inline script block early")
 }
+
+// av-d2xf: the edit page exposes the links_approved grant exactly like
+// downloads/clipboard — a three-state select the page script PATCHes through
+// the single write path, plus a bootstrap flag for the persisted state.
+func TestEditPageShowsLinksCapabilitySelect(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Links", Tier: store.Tier1,
+		CreatedAt: time.Now(), LinksApproved: true}
+	page, err := renderEditPage(a, nil, "<p>src</p>", "", "tok", "https://render.test", true, "")
+	require.NoError(t, err)
+
+	assert.Contains(t, page, `<span class="spacer">External links</span>`)
+	assert.Contains(t, page, `id="link-select"`)
+	assert.Contains(t, page, "let linksApproved = true;")
+
+	a.LinksApproved = false
+	page, err = renderEditPage(a, nil, "<p>src</p>", "", "tok", "https://render.test", true, "")
+	require.NoError(t, err)
+	assert.Contains(t, page, "let linksApproved = false;")
+
+	// The save path PATCHes links_approved alongside the other grants.
+	editJS, err := embeddedAssets.ReadFile("assets/gallery/edit.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(editJS), "links_approved")
+}

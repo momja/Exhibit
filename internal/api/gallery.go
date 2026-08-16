@@ -374,6 +374,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query, token, 
 				NetworkAllowlist:  a.NetworkAllowlist,
 				DownloadsApproved: a.DownloadsApproved,
 				ClipboardApproved: a.ClipboardApproved,
+				LinksApproved:     a.LinksApproved,
 				ShowManage:        true,
 			},
 			Widget: newWidgetView(a, renderOrigin),
@@ -461,6 +462,7 @@ type editPageData struct {
 	Unapproved        []string
 	DownloadsApproved bool
 	ClipboardApproved bool
+	LinksApproved     bool
 	// The gallery widget (av-fafu): its source for the editor, and the same
 	// tile view the library renders for the live preview beside it. WidgetSrc
 	// is "" when the artifact has no widget, which is also when Widget renders
@@ -501,6 +503,7 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, wi
 		GenerateHint:      generateHint,
 		DownloadsApproved: a.DownloadsApproved,
 		ClipboardApproved: a.ClipboardApproved,
+		LinksApproved:     a.LinksApproved,
 	})
 }
 
