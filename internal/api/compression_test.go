@@ -161,3 +161,64 @@ func TestGalleryPageIsCompressed(t *testing.T) {
 	assert.Equal(t, "gzip", enc)
 	assert.Contains(t, strings.ToLower(body), "<html")
 }
+
+// acceptsGzip is the negotiation the whole compressor turns on, so it gets
+// its own table rather than relying only on end-to-end requests: chi's
+// middleware.Compress matched Accept-Encoding with strings.Contains, which
+// cannot tell "gzip;q=0" (explicitly refused) from bare "gzip".
+func TestAcceptsGzip(t *testing.T) {
+	cases := []struct {
+		header string
+		want   bool
+	}{
+		{"", false},
+		{"gzip", true},
+		{"GZIP", true},
+		{"gzip;q=0", false},
+		{"gzip;q=0.0", false},
+		{"gzip;q=0.001", true},
+		{"gzip;q=1.0", true},
+		{"deflate", false},
+		{"deflate, br", false},
+		{"*", true},
+		{"*;q=0", false},
+		{"identity", false},
+		{"gzip;q=0, *;q=1", false},
+		{"*;q=0, gzip;q=0.5", true},
+		{"deflate;q=1, gzip;q=0.3", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.header, func(t *testing.T) {
+			assert.Equal(t, tc.want, acceptsGzip(tc.header))
+		})
+	}
+}
+
+// A client that explicitly refuses gzip (q=0) must be served uncompressed —
+// the bug this regression pins is a substring match treating "gzip;q=0" as
+// if it were "gzip".
+func TestGzipQZeroIsNotCompressed(t *testing.T) {
+	r := newTestRouter(t)
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Accept-Encoding", "gzip;q=0, deflate")
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Empty(t, w.Header().Get("Content-Encoding"), "gzip;q=0 must be honored as \"not acceptable\"")
+}
+
+// The compressor is gzip-only by design (technical_stack.md §1) — a client
+// offering only deflate must not be compressed with it.
+func TestDeflateOnlyIsNotCompressed(t *testing.T) {
+	r := newTestRouter(t)
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Accept-Encoding", "deflate")
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Empty(t, w.Header().Get("Content-Encoding"), "gzip-only negotiation must not fall back to deflate")
+}
