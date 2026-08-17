@@ -467,6 +467,12 @@ func (ro *Router) setupRoutes() {
 				// case no rule can decide — a payload whose feature they
 				// edited away — and it takes the asset id as a path segment
 				// because that id is ours and opaque, unlike a state key.
+				// A single self-contained file (av-vnkt): the artifact with
+				// its out-of-line assets folded back in, depending on no
+				// origin, no token, and no running instance. This is where
+				// the "it's just a file" promise is kept now that payloads
+				// live outside the body.
+				r.Get("/export", ro.exportArtifact)
 				r.Get("/assets", ro.listAssets)
 				r.Delete("/assets/{assetID}", ro.deleteAsset)
 				// The artifact's gallery-card widget (av-fafu) — a second

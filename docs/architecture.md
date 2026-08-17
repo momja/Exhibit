@@ -127,6 +127,18 @@ The only way data changes. Route groups:
   rows (av-q0ub): the session supplies both principals §3.3 describes, so a read
   never returns the union of every viewer's state and "erase all" means *mine*,
   not the artifact's.
+- `GET /api/artifacts/:id/export` — the artifact as **one self-contained file**
+  (av-vnkt), with every out-of-line asset folded back in as a `data:` URI. It is
+  the enforcement point for the invariant those assets created: *the URL form is
+  an internal storage and transport representation; the file is the canonical
+  artifact, and it is materialized at every boundary where the artifact leaves
+  the service.* A single file has nowhere else to put bytes, so `data:` and its
+  ~1.33x are the price of the format — paid once, here, rather than on every
+  render as the old inlining did. `internal/export` holds it as a package rather
+  than a handler method because the static build (Exh-avau) is the other caller
+  and must make the same decision the same way. A read of an asset that fails
+  fails the whole export: better that than a file which claims to be portable
+  while pointing at a URL that dies with the instance.
 - `GET /api/artifacts/:id/assets`, `DELETE /api/artifacts/:id/assets/:assetID` —
   the artifact's out-of-line payloads (av-20fk), metadata only and never bytes.
   Read-and-delete by design: assets are produced by the ingest vendorer and by
