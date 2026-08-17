@@ -1,6 +1,6 @@
 ---
 id: av-oz40
-status: open
+status: in_progress
 deps: [av-20fk]
 links: [av-vnkt]
 created: 2026-08-17T06:01:07Z
