@@ -86,6 +86,10 @@ var accountTables = map[string]accountTable{
 		"SELECT COUNT(*) FROM artifact_network_origins WHERE artifact_id = '" + deletedArtifact + "'"},
 	"agent_transcripts": {reachCascade, "cascades from artifacts(id)",
 		"SELECT COUNT(*) FROM agent_transcripts WHERE artifact_id = '" + deletedArtifact + "'"},
+	"artifact_assets": {reachCascade,
+		"cascades from artifacts(id) — and DeleteArtifact reads the blob ids out first, " +
+			"because once these rows are gone nothing names those bytes (av-20fk)",
+		"SELECT COUNT(*) FROM artifact_assets WHERE artifact_id = '" + deletedArtifact + "'"},
 	"shares": {reachCascade,
 		"cascades from artifacts(id) — which is what revokes every capability URL at once",
 		"SELECT COUNT(*) FROM shares WHERE artifact_id = '" + deletedArtifact + "'"},
@@ -232,6 +236,18 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	// blob_sizes residue is asserted against rows that were really there.
 	require.NoError(t, s.RecordBlobSize(ctx, "member-body", 4096))
 	require.NoError(t, s.RecordBlobSize(ctx, "member-widget", 512))
+
+	// One out-of-line asset (av-20fk), so deleting the account is proved to
+	// take the rows that name this person's vendored payloads with it.
+	_, err = s.ReplaceArtifactAssets(ctx, member.ID, deletedArtifact, "member-generation",
+		[]ArtifactAsset{{
+			ID:          "member-asset",
+			SourceURL:   "https://cdn.example.test/app.wasm",
+			BlobID:      "member-asset-blob",
+			ContentType: "application/wasm",
+			SizeBytes:   4,
+		}})
+	require.NoError(t, err)
 
 	return accountFixture{s: s, admin: admin, member: member}
 }

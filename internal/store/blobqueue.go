@@ -53,12 +53,19 @@ type BlobDeleter interface {
 
 // blobReferenceCount counts the rows that still name a blob id. It is the
 // refcount the enqueue is conditional on, and the one query to extend when a
-// future table starts referencing blobs (av-20fk's out-of-line assets are the
-// next): a column left out here is a blob deleted while something still points
-// at it.
+// future table starts referencing blobs: a column left out here is a blob
+// deleted while something still points at it.
+//
+// Two tables name blobs today — an artifact's own body and widget, and the
+// out-of-line assets of av-20fk. Assets are the reason the count cannot be
+// skipped: they are content-addressed per owner, so one library's two
+// artifacts that both load the same ffmpeg.wasm share a single blob, and an
+// unconditional enqueue on deleting either would strip the payload out of the
+// survivor.
 const blobReferenceCount = `
-    SELECT COUNT(*) FROM artifacts
-     WHERE source_blob_id = ?1 OR widget_blob_id = ?1`
+    SELECT (SELECT COUNT(*) FROM artifacts
+             WHERE source_blob_id = ?1 OR widget_blob_id = ?1)
+         + (SELECT COUNT(*) FROM artifact_assets WHERE blob_id = ?1)`
 
 // enqueueUnreferencedBlobs records the intent to delete each of ids whose last
 // reference has just gone, and returns the subset it enqueued.

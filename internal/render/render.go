@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -214,7 +215,27 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		return
 	}
 
-	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin)
+	// Out-of-line assets (av-20fk). The manifest redirects the page's own
+	// fetch of each vendored payload to this artifact's asset route, and the
+	// CSP gains that path so the redirected fetch is permitted. Read failure
+	// is not fatal: the artifact renders, and its fetch reaches the network
+	// exactly as it would have before any of this existed.
+	assets, err := rd.cfg.Store.ArtifactAssetsUnscoped(r.Context(), a.ID)
+	if err != nil {
+		slog.WarnContext(r.Context(), "render asset read failed",
+			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
+		assets = nil
+	}
+	manifest := make(map[string]string, len(assets))
+	for _, as := range assets {
+		manifest[as.SourceURL] = rd.assetBaseURL(a.ID) + as.ID
+	}
+	assetBase := ""
+	if len(manifest) > 0 {
+		assetBase = rd.assetBaseURL(a.ID)
+	}
+
+	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin, assetBase)
 	w.Header().Set("Content-Security-Policy", csp)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// The render doc is dynamic: it inlines the artifact's live state and the
@@ -250,7 +271,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		state = s
 	}
 
-	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, widget, viewer.Anonymous)
+	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, widget, viewer.Anonymous, manifest)
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
 		slog.Int64("principal", viewer.OwnerID),
@@ -317,7 +338,21 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 //     otherwise govern. form-action is pinned to 'self' even with an empty
 //     allowlist: a form with no/empty action submits to the current document (the
 //     render URL itself), which is zero-egress and needs no approval.
-func buildCSP(allowlist []string, appOrigin string) string {
+//   - connect-src additionally carries this artifact's own asset path when it
+//     has out-of-line assets (av-20fk) — a *system* source, not an allowlist
+//     entry. Those bytes used to sit in the document as data: URIs, which cost
+//     no approval; moving them one hop away changed the addressing and nothing
+//     else. The question the two-bucket rule actually asks — can the artifact
+//     reach content the user did not approve, or send anything to a third
+//     party — has the same answer either way: no. It is therefore never
+//     written to artifact_network_origins and never appears in the allowlist
+//     editor, so a fully vendored wasm artifact keeps an empty footprint and
+//     there is no row a user can revoke to break their own artifact. The
+//     source is path-scoped to the artifact's own id, so it grants no reach
+//     over any other artifact's assets — and the route it names must never
+//     redirect, because CSP drops path matching across a redirect and would
+//     turn this scoped grant into a silent failure.
+func buildCSP(allowlist []string, appOrigin, assetBase string) string {
 	origins := strings.Join(allowlist, " ")
 
 	// withOrigins appends the approved (network-reaching) origins to a directive's
@@ -329,6 +364,13 @@ func buildCSP(allowlist []string, appOrigin string) string {
 		return directive + " " + origins
 	}
 
+	// Only emitted when the artifact actually has assets, so an artifact
+	// without them keeps a byte-identical policy to before this existed.
+	connect := "connect-src blob: data:"
+	if assetBase != "" {
+		connect += " " + assetBase
+	}
+
 	return strings.Join([]string{
 		"default-src 'none'",
 		withOrigins("script-src 'unsafe-inline' 'unsafe-eval' blob: data:"),
@@ -337,10 +379,138 @@ func buildCSP(allowlist []string, appOrigin string) string {
 		withOrigins("img-src data:"),
 		withOrigins("font-src data:"),
 		withOrigins("media-src blob:"),
-		withOrigins("connect-src blob: data:"),
+		withOrigins(connect),
 		withOrigins("form-action 'self'"),
 		"frame-ancestors " + appOrigin,
 	}, "; ")
+}
+
+// assetBaseURL is the path-scoped CSP source and URL prefix for one artifact's
+// out-of-line assets. The trailing slash is what makes it a path *prefix* in a
+// CSP source expression rather than an exact-file match.
+func (rd *Renderer) assetBaseURL(artifactID string) string {
+	return rd.cfg.RenderOrigin + "/a/" + artifactID + "/assets/"
+}
+
+// assetManifestScript redirects the page's own fetches of vendored payloads to
+// this artifact's asset route.
+//
+// Substitution is by interception rather than by rewriting the artifact's
+// source, and the manifest is injected here rather than stored in the body.
+// Both choices are load-bearing:
+//
+//   - Interception survives minification, alternate quoting, and a URL the
+//     page assembles at run time, none of which a literal rewrite of the
+//     source could follow. It matches on the *resolved* URL at call time.
+//   - Injecting at render means an agent rewriting the whole document — the
+//     normal operation in the preview loop — cannot break asset loading,
+//     because there is nothing in the document to break. The stored body keeps
+//     the literals it was ingested with, and the assets table is the single
+//     source of truth rather than being copied into every stored body.
+//
+// It is deliberately tiny and total: anything it does not recognise — a
+// non-GET, an unparseable input, a URL not in the manifest — falls through to
+// the real fetch untouched, so installing it can only add behaviour.
+//
+// A matched request is re-issued against the asset URL rather than answered
+// locally. That is what buys the cache: the asset route is immutable and
+// long-lived, so the second view of an artifact (and every iteration of the
+// agent preview loop, which reloads this frame on each save) does not
+// re-transfer the payload — while the render document around it stays
+// no-store, as it must.
+func assetManifestScript(manifest map[string]string) string {
+	if len(manifest) == 0 {
+		return ""
+	}
+	// json.Marshal escapes <, > and & to their \u00NN forms, so no manifest
+	// value can terminate the enclosing <script> element.
+	payload, err := json.Marshal(manifest)
+	if err != nil {
+		return ""
+	}
+	return `<script>
+(function () {
+  var M = ` + string(payload) + `;
+  var nativeFetch = window.fetch;
+  if (typeof nativeFetch !== 'function') return;
+
+  window.fetch = function (input, init) {
+    try {
+      // Only GET is served from the manifest: a POST to the same URL is a
+      // different request and must reach the network.
+      var method = (init && init.method) || (input && input.method) || 'GET';
+      if (String(method).toUpperCase() === 'GET') {
+        var raw = typeof input === 'string' ? input : (input && input.url) || String(input);
+        var resolved = new URL(raw, document.baseURI).href;
+        if (Object.prototype.hasOwnProperty.call(M, resolved)) {
+          // The response carries the asset's real Content-Type from our own
+          // route — WebAssembly.instantiateStreaming rejects anything that is
+          // not exactly application/wasm.
+          return nativeFetch(M[resolved], init);
+        }
+      }
+    } catch (e) { /* fall through to the real fetch */ }
+    return nativeFetch(input, init);
+  };
+})();
+</script>`
+}
+
+// ServeAsset serves one out-of-line asset (av-20fk).
+//
+// This is the only route on the render surface without a render token, and the
+// only one that is not Cache-Control: no-store. Both follow from the same
+// fact: it serves immutable bytes and nothing else — no state, no policy, no
+// document. A short-lived token here would change the URL on every render and
+// destroy the cross-view caching that is half the reason these payloads left
+// the body in the first place, so the credential is the asset id itself: 128
+// random bits, reachable only by someone who already knows the artifact id
+// too, and the row is looked up under that artifact so one artifact can never
+// address another's bytes.
+//
+// It must never redirect. The CSP source that permits this fetch is
+// path-scoped, and CSP drops path matching across a redirect — a redirect here
+// would turn a working grant into a silent block.
+func (rd *Renderer) ServeAsset(w http.ResponseWriter, r *http.Request) {
+	artifactID := chi.URLParam(r, "artifactID")
+	assetID := chi.URLParam(r, "assetID")
+
+	asset, err := rd.cfg.Store.GetArtifactAssetUnscoped(r.Context(), artifactID, assetID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if asset == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	rc, err := rd.cfg.Blob.Get(r.Context(), asset.BlobID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	defer rc.Close()
+
+	// The frame that fetches this is sandboxed without allow-same-origin, so
+	// its Origin is the opaque "null" — which only `*` matches. Credentials
+	// are never sent with it, and there are none to send: the bytes are
+	// authorized by the unguessable id in the path, not by a session.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", asset.ContentType)
+	w.Header().Set("Content-Length", strconv.FormatInt(asset.SizeBytes, 10))
+	// Immutable and content-addressed: the bytes behind an asset id never
+	// change, because a changed payload is a new asset in a new generation.
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	// The bytes are opaque binaries, but say so rather than let a browser
+	// decide for itself what a payload might be.
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	if _, err := io.Copy(w, rc); err != nil {
+		slog.WarnContext(r.Context(), "asset write failed",
+			slog.String("artifact_id", artifactID), slog.String("asset_id", assetID),
+			slog.String("err", err.Error()))
+	}
 }
 
 // shimScript is the shim injected before any artifact scripts run. It
@@ -1115,7 +1285,7 @@ const widgetHealthScript = `<script>
 // anonymous marks a render for a viewer with no identity (av-wmp6). Callers
 // pass a nil state with it — there is no principal to have any — and the shim
 // stops writing through, so the frame's storage lives and dies with the frame.
-func injectPreamble(body, artifactID, appOrigin string, state map[string]string, widget, anonymous bool) string {
+func injectPreamble(body, artifactID, appOrigin string, state map[string]string, widget, anonymous bool, assetManifest map[string]string) string {
 	if state == nil {
 		state = map[string]string{}
 	}
@@ -1142,6 +1312,17 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 		// renders and share views.
 		shim += "\n" + snippetScript(appOrigin)
 	}
+
+	// The out-of-line asset manifest (av-20fk), last in the preamble so it
+	// wraps the fetch the data: shim above already installed and is therefore
+	// the outermost wrapper — and, like every wrapper here, it only shadows
+	// fetch for callers that run after it, which is why the whole preamble
+	// goes in before any artifact script.
+	//
+	// Widget renders get it too. The WIDGET narrowing exists to drop
+	// *authority* — the capability bridges — and resolving an artifact's own
+	// payload grants none.
+	shim += "\n" + assetManifestScript(assetManifest)
 
 	// Try to inject after <head>
 	idx := strings.Index(strings.ToLower(body), "<head>")

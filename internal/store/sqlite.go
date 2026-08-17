@@ -674,11 +674,17 @@ func (s *SQLiteStore) DeleteArtifact(ctx context.Context, ownerID int64, id stri
 	if err != nil {
 		return nil, err
 	}
+	// Read before the delete: ON DELETE CASCADE takes the asset rows with the
+	// artifact, and once they are gone nothing names those blobs (av-20fk).
+	assetBlobs, err := assetBlobIDs(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := tx.ExecContext(ctx,
 		"DELETE FROM artifacts WHERE id=? AND owner_id=?", id, ownerID); err != nil {
 		return nil, err
 	}
-	queued, err := enqueueUnreferencedBlobs(ctx, tx, body, widget)
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, append([]string{body, widget}, assetBlobs...)...)
 	if err != nil {
 		return nil, err
 	}

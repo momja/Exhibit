@@ -376,6 +376,16 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"GetArtifactUnscoped": "deliberate render/share exception (av-c5aq)",
 		"GetShareUnscoped":    "deliberate share exception (architecture §7)",
 
+		// Out-of-line assets (av-20fk). Both are render-path reads, and the
+		// render path serves shares to people with no account — there is no
+		// owner to scope by, the same exception GetArtifactUnscoped carries.
+		// Neither widens what a render already exposes: these are exactly the
+		// bytes the served document is about to fetch, and the asset lookup
+		// still requires the artifact id, so one artifact cannot address
+		// another's bytes.
+		"ArtifactAssetsUnscoped":   "deliberate render/share exception (av-20fk)",
+		"GetArtifactAssetUnscoped": "deliberate render/share exception (av-20fk)",
+
 		// The blob deletion queue (av-8gyd). A blob id is written here only by
 		// the transaction that deleted the last row naming it — which is also
 		// the last record of whose it was. There is no owner left to scope by,

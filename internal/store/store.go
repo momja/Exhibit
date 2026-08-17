@@ -200,6 +200,26 @@ type Store interface {
 	DeleteArtifact(ctx context.Context, ownerID int64, id string) ([]string, error)
 	DeleteWidget(ctx context.Context, ownerID int64, artifactID string) ([]string, error)
 
+	// Out-of-line assets (av-20fk): the binary payloads a page fetches at run
+	// time, stored as blobs of their own rather than base64 inside the body.
+	//
+	// ReplaceArtifactAssets installs one ingest's or refetch's worth as the
+	// artifact's current generation and retires the previous set, returning
+	// what it queued for deletion. Replacing rather than appending is what
+	// stops a repeated refetch accumulating a full set every time.
+	//
+	// The two Unscoped reads are the render surface's, and carry the same
+	// exception GetArtifactUnscoped does: a share serves an artifact to
+	// someone with no account, so there is no owner to scope by. Neither
+	// exposes more than the render already does — they are the bytes the
+	// served document is about to fetch — and the asset lookup still takes
+	// the artifact id, so one artifact cannot address another's.
+	ReplaceArtifactAssets(ctx context.Context, ownerID int64, artifactID, generationID string, assets []ArtifactAsset) ([]string, error)
+	ListArtifactAssets(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactAsset, error)
+	ArtifactAssetsUnscoped(ctx context.Context, artifactID string) ([]ArtifactAsset, error)
+	GetArtifactAssetUnscoped(ctx context.Context, artifactID, assetID string) (*ArtifactAsset, error)
+	DeleteArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) ([]string, error)
+
 	// The blob deletion queue (av-8gyd). Rows and bytes live in two stores
 	// that cannot commit together, so the *intent* to remove the bytes is
 	// recorded in the transaction that removed the rows, and these three

@@ -2,7 +2,6 @@ package snapshot
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/url"
@@ -15,8 +14,18 @@ import (
 	"github.com/momja/Exhibit/internal/scanner"
 )
 
-// InlineRuntimeAssets vendors the binary payloads a page fetches from
-// JavaScript at run time, which the markup walker cannot see.
+// RuntimeAsset is one binary payload vendored out of a page, on its way to a
+// blob of its own. It carries the absolute URL the page will ask for at run
+// time, because that URL — not the bytes, and not any name derived from them —
+// is what the render surface's manifest is keyed by.
+type RuntimeAsset struct {
+	SourceURL   string // resolved absolute URL the page fetches
+	ContentType string // corrected where the source server was vague (see assetContentType)
+	Body        []byte
+}
+
+// CollectRuntimeAssets fetches the binary payloads a page loads from
+// JavaScript, which the markup walker by definition cannot see.
 //
 // The problem it solves is origin relocation. A page served from its own site
 // fetches `/app.wasm` same-origin, and same-origin requests need no CORS
@@ -24,41 +33,36 @@ import (
 // render origin (and, inside the sandbox, to an opaque origin) that same fetch
 // becomes cross-origin and the browser refuses to read the response. The
 // allowlist cannot fix it: the request is permitted, the *read* is what fails.
-// Vendoring the bytes removes the request entirely.
 //
-// Substitution is by interception, not by rewriting the JS. A literal in the
-// source is a fragile thing to edit — minified, alt-quoted, recurring in
-// unrelated contexts, or never present because the URL is assembled at run
-// time. Instead the vendored bytes go into a manifest keyed by absolute URL and
-// a small wrapper around window.fetch consults it at call time, which also
-// catches URLs the page builds itself. The manifest values are data: URIs, so
-// the synthetic response carries a real Content-Type — WebAssembly's streaming
-// entry points reject anything that is not exactly application/wasm.
+// It collects; it does not transform. The document comes back untouched, and
+// the returned assets are stored as blobs of their own (av-20fk), with the
+// render surface injecting the manifest that redirects each fetch. Two things
+// follow from moving the substitution to render time, and both are the reason
+// for it:
 //
-// It mirrors InlineHTMLAssets' contract: a non-nil error means only that the
-// document could not be parsed or re-rendered, while per-asset problems come
-// back as []*FetchError and leave their reference untouched, so an asset that
-// could not be vendored still surfaces in the footprint (and, over the cap,
-// as an explained failure rather than a silent TypeError at render).
-func InlineRuntimeAssets(ctx context.Context, f *Fetcher, body string) (string, []*FetchError, error) {
+//   - the stored body keeps its original fetch literals, so an agent rewriting
+//     the whole document — the normal operation in the preview loop — cannot
+//     break asset loading, because there is nothing in the body to break;
+//   - the assets are the single source of truth, rather than being copied into
+//     every stored body as ~1.33x base64.
+//
+// It mirrors InlineHTMLAssets' contract on failure: a non-nil error means the
+// document could not be parsed, while per-asset problems come back as
+// []*FetchError and leave the page's reference untouched — so an asset that
+// could not be vendored still surfaces in the footprint (and, over the cap, as
+// an explained failure rather than a silent TypeError at render).
+func CollectRuntimeAssets(ctx context.Context, f *Fetcher, body string) ([]RuntimeAsset, []*FetchError, error) {
 	doc, err := html.Parse(strings.NewReader(body))
 	if err != nil {
-		return body, nil, err
+		return nil, nil, err
 	}
 
-	in := &runtimeInliner{ctx: ctx, f: f, manifest: map[string]string{}, seen: map[string]bool{}}
-	in.walk(doc)
-	if len(in.manifest) == 0 {
-		return body, in.errs, nil
+	c := &runtimeCollector{ctx: ctx, f: f, seen: map[string]bool{}}
+	c.walk(doc)
+	if len(c.assets) > 0 {
+		slog.DebugContext(ctx, "snapshot runtime assets collected", slog.Int("assets", len(c.assets)))
 	}
-	in.injectManifest(doc)
-
-	var buf strings.Builder
-	if err := html.Render(&buf, doc); err != nil {
-		return body, in.errs, err
-	}
-	slog.DebugContext(ctx, "snapshot runtime assets inlined", slog.Int("assets", len(in.manifest)))
-	return buf.String(), in.errs, nil
+	return c.assets, c.errs, nil
 }
 
 // inlineExtensions are the path extensions the runtime pass will vendor.
@@ -72,147 +76,71 @@ var inlineExtensions = map[string]bool{
 	".mem":  true,
 }
 
-type runtimeInliner struct {
-	ctx      context.Context
-	f        *Fetcher
-	manifest map[string]string // absolute URL -> data: URI
-	seen     map[string]bool   // absolute URLs already attempted, successfully or not
-	errs     []*FetchError
+type runtimeCollector struct {
+	ctx    context.Context
+	f      *Fetcher
+	seen   map[string]bool // absolute URLs already attempted, successfully or not
+	assets []RuntimeAsset
+	errs   []*FetchError
 }
 
 // walk visits every <script> and harvests the references in its text. Only
 // script text is considered, so a fetch( shown inside a <pre> code sample is
 // documentation rather than a dependency and is left alone. Only fetch-call
-// literals are harvested (scanner.FetchRefs): the manifest is consulted by a
-// window.fetch wrapper, and native ESM module loading never goes through
-// window.fetch, so an import-derived entry could never be matched. Import
-// refs stay with the footprint pass, where they feed the script-src
+// literals are harvested (scanner.FetchRefs): the manifest these assets feed is
+// consulted by a window.fetch wrapper, and native ESM module loading never goes
+// through window.fetch, so an import-derived entry could never be matched.
+// Import refs stay with the footprint pass, where they feed the script-src
 // allowlist instead.
-func (in *runtimeInliner) walk(n *html.Node) {
+func (c *runtimeCollector) walk(n *html.Node) {
 	if n.Type == html.ElementNode && n.DataAtom == atom.Script {
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if c.Type == html.TextNode {
-				for _, ref := range scanner.FetchRefs(c.Data) {
-					in.consider(ref)
+		for ch := n.FirstChild; ch != nil; ch = ch.NextSibling {
+			if ch.Type == html.TextNode {
+				for _, ref := range scanner.FetchRefs(ch.Data) {
+					c.consider(ref)
 				}
 			}
 		}
 	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		in.walk(c)
+	for ch := n.FirstChild; ch != nil; ch = ch.NextSibling {
+		c.walk(ch)
 	}
 }
 
 // consider vendors one reference if it is fetchable, carries an inlinable
 // extension, and fits the budget.
-func (in *runtimeInliner) consider(ref string) {
+func (c *runtimeCollector) consider(ref string) {
 	if !fetchable(ref) || !inlinableExt(ref) {
 		return
 	}
-	abs, err := in.f.Resolve(ref)
+	abs, err := c.f.Resolve(ref)
 	if err != nil {
-		in.record(err)
+		c.record(err)
 		return
 	}
-	if in.seen[abs] {
+	if c.seen[abs] {
 		return
 	}
-	in.seen[abs] = true
+	c.seen[abs] = true
 
-	asset, err := in.f.FetchWithCap(in.ctx, ref, in.f.limits.MaxInlineAssetBytes)
+	asset, err := c.f.FetchWithCap(c.ctx, ref, c.f.limits.MaxInlineAssetBytes)
 	if err != nil {
-		in.record(err)
+		c.record(err)
 		return
 	}
-	in.manifest[abs] = runtimeDataURI(asset, abs)
+	c.assets = append(c.assets, RuntimeAsset{
+		SourceURL:   abs,
+		ContentType: assetContentType(asset, abs),
+		Body:        asset.Body,
+	})
 }
 
 // record appends a fetch failure to the run's residual list.
-func (in *runtimeInliner) record(err error) {
+func (c *runtimeCollector) record(err error) {
 	var fe *FetchError
 	if errors.As(err, &fe) {
-		in.errs = append(in.errs, fe)
+		c.errs = append(c.errs, fe)
 	}
-}
-
-// injectManifest prepends the manifest and the fetch wrapper to <head> so they
-// install before any of the page's own scripts run. html.Parse always
-// synthesizes a <head>, so the lookup cannot fail on a parsed document.
-func (in *runtimeInliner) injectManifest(doc *html.Node) {
-	head := findElement(doc, atom.Head)
-	if head == nil {
-		return
-	}
-	// json.Marshal escapes <, > and & to their \u00NN forms, so no manifest
-	// value can terminate the enclosing <script> element.
-	payload, err := json.Marshal(in.manifest)
-	if err != nil {
-		return
-	}
-	script := &html.Node{Type: html.ElementNode, Data: "script", DataAtom: atom.Script}
-	setText(script, manifestScript(string(payload)))
-	head.InsertBefore(script, head.FirstChild)
-}
-
-// manifestScript renders the interceptor. It is deliberately tiny and total:
-// anything it does not recognise — a non-GET, an unparseable input, a URL not in
-// the manifest — falls through to the real fetch untouched, so installing it can
-// only add behaviour, never remove any.
-//
-// A matched request is answered by decoding the manifest entry here rather than
-// by re-issuing fetch() against the data: URI. Delegating would hand a
-// multi-megabyte data: URL to the network service for it to parse and
-// materialize, which is both wasteful (the bytes are already in this document)
-// and, in an opaque-origin sandbox, the exact operation WebKit refuses for large
-// payloads — the render preamble carries its own data: shim for that reason
-// (agaf-02xs). Decoding locally makes this wrapper correct on its own, rather
-// than correct only while some other injected script happens to install first.
-func manifestScript(manifestJSON string) string {
-	return `
-(function () {
-  var M = ` + manifestJSON + `;
-  var nativeFetch = window.fetch;
-  if (typeof nativeFetch !== 'function') return;
-
-  // Decode a data: URI into a Response. Returns null for anything unexpected so
-  // the caller can fall back rather than fail.
-  function responseFromDataURI(uri) {
-    var comma = uri.indexOf(',');
-    if (comma < 0) return null;
-    var meta = uri.slice(5, comma);
-    var payload = uri.slice(comma + 1);
-    var body;
-    if (/;base64$/i.test(meta)) {
-      var bin = atob(payload);
-      body = new Uint8Array(bin.length);
-      for (var i = 0; i < bin.length; i++) body[i] = bin.charCodeAt(i);
-    } else {
-      body = new TextEncoder().encode(decodeURIComponent(payload));
-    }
-    var mime = meta.replace(/;base64$/i, '') || 'text/plain';
-    return new Response(body, { status: 200, headers: { 'Content-Type': mime } });
-  }
-
-  window.fetch = function (input, init) {
-    try {
-      // Only GET is served from the manifest: a POST to the same URL is a
-      // different request and must reach the network.
-      var method = (init && init.method) || (input && input.method) || 'GET';
-      if (String(method).toUpperCase() === 'GET') {
-        var raw = typeof input === 'string' ? input : (input && input.url) || String(input);
-        var resolved = new URL(raw, document.baseURI).href;
-        if (Object.prototype.hasOwnProperty.call(M, resolved)) {
-          // Built here, from bytes already in the document: no network service,
-          // and the response carries the asset's real Content-Type.
-          var res = responseFromDataURI(M[resolved]);
-          if (res) return Promise.resolve(res);
-        }
-      }
-    } catch (e) { /* fall through to the real fetch */ }
-    return nativeFetch(input, init);
-  };
-})();
-`
 }
 
 // inlinableExt reports whether a reference's path ends in an extension the
@@ -226,29 +154,20 @@ func inlinableExt(ref string) bool {
 	return inlineExtensions[strings.ToLower(path.Ext(u.Path))]
 }
 
-// runtimeDataURI encodes a vendored asset, forcing application/wasm for .wasm.
-// WebAssembly.instantiateStreaming rejects any response whose type is not
+// assetContentType settles the type the render surface will serve these bytes
+// under, forcing application/wasm for .wasm.
+//
+// WebAssembly's streaming entry points reject any response whose type is not
 // exactly that, and neither the origin server's header nor mime.TypeByExtension
 // is guaranteed to supply it — an octet-stream fallback would load the bytes and
-// still fail to instantiate.
-func runtimeDataURI(asset *Asset, absURL string) string {
+// still fail to instantiate. Deciding it here rather than at serve time means
+// the stored row is already correct and the render path has no special cases.
+func assetContentType(asset *Asset, absURL string) string {
 	if u, err := url.Parse(absURL); err == nil && strings.EqualFold(path.Ext(u.Path), ".wasm") {
-		forced := *asset
-		forced.ContentType = "application/wasm"
-		return dataURI(&forced)
+		return "application/wasm"
 	}
-	return dataURI(asset)
-}
-
-// findElement returns the first element with the given tag in document order.
-func findElement(n *html.Node, a atom.Atom) *html.Node {
-	if n.Type == html.ElementNode && n.DataAtom == a {
-		return n
+	if asset.ContentType != "" {
+		return asset.ContentType
 	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		if found := findElement(c, a); found != nil {
-			return found
-		}
-	}
-	return nil
+	return "application/octet-stream"
 }

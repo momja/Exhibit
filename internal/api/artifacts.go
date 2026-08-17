@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -175,25 +176,32 @@ var newSnapshotFetcher = func(pageURL string) (*snapshot.Fetcher, error) {
 // per-asset failures are recorded in the report with the rest of the page
 // still vendored. ResidualOrigins is left for the caller, which computes it
 // from the final document.
-func snapshotBody(ctx context.Context, pageURL, body string) (string, *snapshotReport) {
+// The runtime payloads it collected come back separately: they are stored as
+// blobs of their own once the artifact row exists, not folded into the body.
+func snapshotBody(ctx context.Context, pageURL, body string) (string, []snapshot.RuntimeAsset, *snapshotReport) {
+	var assets []snapshot.RuntimeAsset
 	report := &snapshotReport{VendoredURLs: []string{}}
 	f, err := newSnapshotFetcher(pageURL)
 	if err != nil {
 		report.Error = err.Error()
-		return body, report
+		return body, nil, report
 	}
 	out, fetchErrs, err := snapshot.InlineHTMLAssets(ctx, f, body)
 	if err != nil {
 		report.Error = err.Error()
-		return body, report
+		return body, nil, report
 	}
 	// Second pass, on the same fetcher so both share one budget, one dedupe
-	// cache and one Vendored() total: fold in the binary payloads the page
-	// fetches from JavaScript, which the markup walker above cannot see. A
-	// transform error here is not fatal either — keep the markup-vendored
-	// document and report the runtime failures alongside it.
-	if runtimeOut, runtimeErrs, rerr := snapshot.InlineRuntimeAssets(ctx, f, out); rerr == nil {
-		out = runtimeOut
+	// cache and one Vendored() total: collect the binary payloads the page
+	// fetches from JavaScript, which the markup walker above cannot see.
+	//
+	// Unlike the markup pass this one does not touch the document (av-20fk).
+	// The payloads become blobs of their own and the render surface injects
+	// the manifest that redirects the fetch, so the stored body keeps the
+	// literals it was ingested with. A transform error here is not fatal
+	// either — keep the markup-vendored document and report the failures.
+	if collected, runtimeErrs, rerr := snapshot.CollectRuntimeAssets(ctx, f, out); rerr == nil {
+		assets = collected
 		fetchErrs = append(fetchErrs, runtimeErrs...)
 	} else {
 		report.Error = rerr.Error()
@@ -207,7 +215,55 @@ func snapshotBody(ctx context.Context, pageURL, body string) (string, *snapshotR
 		}
 		report.Failures = append(report.Failures, fail)
 	}
-	return out, report
+	return out, assets, report
+}
+
+// persistRuntimeAssets stores each collected payload as its own blob and makes
+// them the artifact's current asset generation, draining whatever the previous
+// generation left behind.
+//
+// It runs after the artifact row exists, because an asset row references it.
+// A failure here is reported but never fails the ingest: the artifact is
+// already stored and usable, and an asset that did not land shows up the same
+// way an un-vendored one always has — the page's own fetch reaches the network
+// and the allowlist governs it.
+func (ro *Router) persistRuntimeAssets(ctx context.Context, ownerID int64, artifactID string, collected []snapshot.RuntimeAsset) error {
+	if len(collected) == 0 {
+		return nil
+	}
+	generationID, err := store.NewGenerationID()
+	if err != nil {
+		return err
+	}
+
+	rows := make([]store.ArtifactAsset, 0, len(collected))
+	for _, c := range collected {
+		assetID, err := store.NewAssetID()
+		if err != nil {
+			return err
+		}
+		// Content-addressed per owner, so one library that loads the same
+		// wasm from two artifacts stores it once — and so deleting one
+		// owner's account can never reach another's bytes.
+		blobID := store.AssetBlobID(ownerID, c.Body)
+		if err := ro.cfg.Blob.Put(ctx, blobID, bytes.NewReader(c.Body)); err != nil {
+			return fmt.Errorf("store asset %s: %w", c.SourceURL, err)
+		}
+		rows = append(rows, store.ArtifactAsset{
+			ID:          assetID,
+			SourceURL:   c.SourceURL,
+			BlobID:      blobID,
+			ContentType: c.ContentType,
+			SizeBytes:   int64(len(c.Body)),
+		})
+	}
+
+	queued, err := ro.cfg.Store.ReplaceArtifactAssets(ctx, ownerID, artifactID, generationID, rows)
+	if err != nil {
+		return err
+	}
+	ro.reclaimBlobs(ctx, queued)
+	return nil
 }
 
 func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
@@ -254,8 +310,9 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var snapReport *snapshotReport
+	var runtimeAssets []snapshot.RuntimeAsset
 	if req.Snapshot {
-		req.Body, snapReport = snapshotBody(r.Context(), req.URL, req.Body)
+		req.Body, runtimeAssets, snapReport = snapshotBody(r.Context(), req.URL, req.Body)
 	}
 
 	// Scan for network footprint. A URL ingest resolves relative references
@@ -325,6 +382,19 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	if err := ro.cfg.Store.PutArtifact(r.Context(), a); err != nil {
 		serverError(w, r, "store artifact", err)
 		return
+	}
+
+	// Assets go after the row they reference. Never fatal (av-20fk): a
+	// payload that did not land leaves the page's own fetch to reach the
+	// network, which is exactly where it was before any of this existed.
+	if err := ro.persistRuntimeAssets(r.Context(), ownerID, id, runtimeAssets); err != nil {
+		slog.WarnContext(r.Context(), "store runtime assets",
+			slog.String("artifact_id", id), slog.String("err", err.Error()))
+		if snapReport != nil {
+			snapReport.Failures = append(snapReport.Failures, snapshotFailure{
+				Kind: "asset_store", Detail: err.Error(),
+			})
+		}
 	}
 
 	// A create-mode agent session binds here, to the id this handler just

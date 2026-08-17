@@ -582,6 +582,12 @@ func (ro *Router) RenderHandler() http.Handler {
 
 	// Serve a rendered artifact by id
 	r.Get("/a/{artifactID}", renderer.ServeArtifact)
+	// One of the artifact's out-of-line assets (av-20fk). Registered before
+	// the document route reads as more specific, and chi routes it that way
+	// regardless. Deliberately un-tokened and cacheable — see ServeAsset for
+	// why those two go together — and it must never redirect, because the CSP
+	// source permitting it is path-scoped.
+	r.Get("/a/{artifactID}/assets/{assetID}", renderer.ServeAsset)
 	// Serve an artifact's gallery-card widget (av-fafu) — same origin, same
 	// per-artifact CSP, narrower preamble.
 	r.Get("/w/{artifactID}", renderer.ServeWidget)
