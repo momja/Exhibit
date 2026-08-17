@@ -2,7 +2,7 @@
 id: av-20fk
 status: open
 deps: []
-links: [av-vnkt, av-ghvs, av-c5aq]
+links: [av-vnkt, av-ghvs, av-c5aq, av-8gyd]
 created: 2026-08-17T03:24:22Z
 type: feature
 priority: 1
@@ -71,6 +71,13 @@ Two constraints fall out: **the asset route must never redirect** (CSP drops pat
 | Does the current body still fetch this URL? | **No** — needs JS analysis | **Never** GC on this basis |
 
 **Generations.** Each ingest or refetch that produces assets mints a generation id; asset rows carry it. Render injects only the current generation's manifest. When a new generation supersedes an old one the old *set* becomes deletable as a unit — the body it belonged to has been replaced too, so nothing can still reference it. This is what keeps [[av-b17a]]'s refetch path from accumulating a full asset set per refetch, forever. An ordinary body PATCH does **not** mint a generation and does not touch assets: the body may still fetch them, and we cannot know otherwise.
+
+**When it runs: inline, in the operation that supersedes.** There is no scheduler and no background reclaim. The transaction that mints a new generation is the one thing that knows exactly what it superseded, so it does the delete — rows inside the transaction, blobs unlinked after commit (that order, so a crash leaves unreferenced bytes rather than rows pointing at bytes that are gone). Artifact deletion, account deletion, and a user deleting an asset from the edit panel follow the same inline pattern. The only cost is I/O on a request that is already doing network fetches.
+
+Two consequences to accept deliberately:
+
+- **An in-flight render can 404.** A view opened seconds before a refetch may request an asset that was just deleted. It is already displaying a superseded body; a reload fixes it. A grace period would close that window, but at the price of a `superseded_at` column and a background tick — a whole mechanism for a few seconds of exposure. If refetch ever wants to be undoable ([[av-b17a]], [[av-3pq6]]), that grace period is where it attaches, and it should be added for *that* reason rather than this one.
+- **A crash between commit and unlink leaks blobs.** This is precisely the window [[av-8gyd]] exists to close, and is why the sweep is a backstop rather than the primary reclaim path.
 
 **An asset panel on the edit page** handles the case generations cannot: the user removed the feature that used a 14 MB payload, and wants the space back. It lists each asset — source URL, size, content type — with a delete control, and the artifact's total. It is the same shape as the state inspector beside it (av-hg5f): show what is stored, let the owner remove it, on the surface built for that. This is what "the user has full control over their artifacts" (PRD §1) requires once artifacts carry bytes they cannot see. Splittable into a child ticket if this one gets too large, but not droppable — without it the design ships storage a user can neither see nor reclaim.
 

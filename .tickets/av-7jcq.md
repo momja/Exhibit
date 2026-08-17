@@ -2,7 +2,7 @@
 id: av-7jcq
 status: closed
 deps: []
-links: [av-1rvm]
+links: [av-1rvm, av-8gyd]
 created: 2026-08-09T17:26:41Z
 type: bug
 priority: 2
