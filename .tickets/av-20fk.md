@@ -34,7 +34,7 @@ Move each vendored runtime payload into its own blob, addressed by URL, and leav
 
 Images, fonts, stylesheets, and scripts keep being inlined as `data:` URIs. The split is forced rather than chosen: an `<img src>` is not loaded through `window.fetch`, so there is no wrapper to hook, and externalizing it means writing a render-origin URL into the stored body — which destroys the property this ticket depends on, that the body keeps its original literals and an agent rewrite cannot break asset loading. Doing that rewrite at render time instead would mean parsing and re-rendering the whole document on every request.
 
-The size problem is real for the markup pass too (a 48 MiB total budget, images base64ing to ~1.33×), just neither as acute nor as cheap to fix — and the runtime payload is the one that actually blocks the agent today. Extending is a follow-up if body sizes justify it.
+The markup pass has the same problem and is tracked separately as [[av-oz40]]. It is not the lesser case it first appears: the per-asset cap is smaller (5 MiB) but nothing limits how *many* assets it inlines short of the 48 MiB total, so an image-heavy page can put more base64 into an agent's context than a single wasm payload does. It is split out because it needs the other substitution mechanism — markup references are rewritten at ingest rather than intercepted, since nothing loads an `<img src>` through `window.fetch` — while sharing this ticket's table, route, CSP argument, lifecycle, and export path.
 
 **Naming, because "asset" is already taken.** The codebase uses it in the pass-1 sense (`InlineHTMLAssets`, `MaxAssetBytes`, the `Asset` struct). Define the new table as holding **any out-of-line asset**, with the runtime pass as its only producer today. Then the broad name is accurate rather than misleading, and extending to markup assets later adds a producer instead of migrating a schema.
 
@@ -198,3 +198,7 @@ Corrected the rationale for refusing scan-based GC. The earlier framing (a runti
 **2026-08-17T05:53:49Z**
 
 Scoped explicitly: this covers the runtime pass only (.wasm/.data/.bin/.mem). Markup-referenced assets (images, fonts, CSS, scripts) stay inlined as data: URIs, because they are not loaded through window.fetch — there is no wrapper to hook, so externalizing them requires writing render-origin URLs into the stored body, which is exactly the property this ticket protects. Also flagged that 'asset' collides with the existing pass-1 meaning in the codebase; the table should be defined as any out-of-line asset with the runtime pass as its only current producer.
+
+**2026-08-17T06:01:22Z**
+
+Split out av-oz40 for the markup pass (images/fonts/CSS/scripts). Correcting the earlier scoping note: that pass is not less acute for the agent — it has no cap on asset count short of the 48 MiB total, so an image-heavy page can exceed a single wasm payload. It needs rewriting rather than interception, which is why it is a sibling rather than part of this ticket.
