@@ -55,14 +55,21 @@ import (
 // Version 13 needs more than a column, and it is the one case that column
 // repairs cannot reach: what the collided database is missing is two tables
 // every later migration builds on, and goose runs in ascending order, so no
-// migration numbered above 13 can supply them in time. The repair is therefore
-// to the *ledger*, before goose runs at all (repairLedger below): the
-// version-13 row in such a database records a migration that is now version 18,
-// so it is deleted and 013_users_sessions.sql is left to run normally. Its
-// partner is the guarded repair at version 18 — the collided database already
-// carries artifacts.links_approved from that same version-13 run, so the bare
-// ALTER that used to live in 018_links_approved.sql would fail the moment
-// migrations got that far.
+// migration numbered above 13 can supply them in time. So this repair runs
+// before goose does, and it *rewinds* rather than patches — see
+// rewindReusedVersion13 below.
+//
+// RULE — repairs heal damaged databases; they never define schema. A repair
+// that a fresh install depends on is a migration wearing the wrong name, and
+// the whole set stops being deletable: the file could never retire, because
+// retiring it would break installs that were never damaged. Concretely, the
+// version-13 repair could have been much shorter if 018_links_approved.sql
+// became a *guarded* ADD COLUMN like the two above — the collided database
+// already carries that column, so the plain ALTER fails on it. That guard is
+// what this rule rejects: every fresh database would then get links_approved
+// from a file named "repair". Rewinding keeps 018 an ordinary migration, and
+// keeps the invariant that a database with no history to fix never executes a
+// line of this file.
 
 // columnRepair is one guarded ADD COLUMN: at goose version Version, ensure
 // Table has Column, adding it with AddStatement when it does not.
@@ -93,61 +100,122 @@ var columnRepairs = []columnRepair{
 		Column:       "widget_blob_id",
 		AddStatement: `ALTER TABLE artifacts ADD COLUMN widget_blob_id TEXT NOT NULL DEFAULT ''`,
 	},
-	{
-		// Not a repair for a *skipped* migration: this is 018_links_approved.sql
-		// itself, made guarded. The column arrives twice over — under version 13
-		// on any database that ran the pre-merge numbering, and under version 18
-		// everywhere else — and only the guard lets one file serve both.
-		Version:      18,
-		Source:       "018_repair_links_approved.go",
-		Table:        "artifacts",
-		Column:       "links_approved",
-		AddStatement: `ALTER TABLE artifacts ADD COLUMN links_approved INTEGER NOT NULL DEFAULT 0`,
-	},
 }
 
 // usersSessionsVersion is the version 013_users_sessions.sql carries, and the
 // version the pre-merge 013_links_approved.sql carried before it.
 const usersSessionsVersion = 13
 
-// repairLedger deletes a version-13 ledger row that records the *other*
-// migration once numbered 13, so 013_users_sessions.sql can run.
+// linksApprovedStash holds the approvals rewindReusedVersion13 takes out of
+// artifacts, until restoreRewoundApprovals puts them back. Its existence is
+// also the marker that a rewind is half-finished, which is why it is a table
+// and not a slice in memory: a crash between the two steps must not lose the
+// user's approvals, and the next startup can simply finish the job.
+const linksApprovedStash = "repair_links_approved_stash"
+
+// rewindReusedVersion13 returns a database that applied the pre-merge version
+// 13 to the state it would have been in had that version never been reused, so
+// that the ordinary migration sequence can carry it forward from there.
 //
 // The condition identifies the collision exactly rather than guessing at it: a
 // database whose ledger says 13 is applied but which has no `users` table did
 // not run 013_users_sessions.sql, because that is the only thing that file
 // does. Nothing else in the schema can produce that pair.
 //
-// It runs before goose, and it is code rather than a one-off UPDATE typed on
-// the affected host, for the same reason the column repairs are: a database
-// restored from a backup taken before the fix arrives in the collided state
-// again, and would need somebody to remember why.
-func repairLedger(ctx context.Context, db *sql.DB) error {
+// Rewinding means undoing what the *other* version 13 did — dropping
+// artifacts.links_approved, holding its values aside — and then deleting the
+// ledger row. 013_users_sessions.sql then applies, and so does every migration
+// after it including the ordinary 018_links_approved.sql, which re-adds the
+// column that 018 has always owned. The alternative was to make 018 skip a
+// column that already exists, and that would have put a piece of the schema in
+// this file forever (see the RULE above).
+//
+// It is code rather than a one-off UPDATE typed on the affected host for the
+// same reason the column repairs are: a database restored from a backup taken
+// before the fix arrives in the collided state again, and would need somebody
+// to remember why.
+func rewindReusedVersion13(ctx context.Context, db *sql.DB) error {
+	collided, err := hasReusedVersion13(ctx, db)
+	if err != nil || !collided {
+		return err
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op once committed
+
+	// A database that recorded version 13 for something else again — the
+	// last_visit build in the header is precedent that such a thing exists —
+	// has no column to rewind, and only its ledger row is in the way.
+	present, err := hasColumn(ctx, tx, "artifacts", "links_approved")
+	if err != nil {
+		return err
+	}
+	if present {
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %q AS
+			 SELECT id, links_approved FROM artifacts WHERE links_approved <> 0`,
+			linksApprovedStash)); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`ALTER TABLE artifacts DROP COLUMN links_approved`); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM goose_db_version WHERE version_id = ?`, usersSessionsVersion); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	slog.Warn("rewound the reused migration version 13: it recorded the renumbered links_approved "+
+		"migration, so users/sessions never ran; migrations 013 onward will apply now",
+		slog.Int("version", usersSessionsVersion), slog.Bool("links_approved_stashed", present))
+	return nil
+}
+
+// hasReusedVersion13 reports whether this database applied the pre-merge
+// migration numbered 13 instead of 013_users_sessions.sql.
+func hasReusedVersion13(ctx context.Context, db *sql.DB) (bool, error) {
 	ledger, err := hasTable(ctx, db, "goose_db_version")
 	if err != nil || !ledger {
-		return err // a fresh database has no ledger and nothing to repair
+		return false, err // a fresh database has no ledger and nothing to rewind
 	}
 	var recorded int
 	if err := db.QueryRowContext(ctx,
 		`SELECT count(*) FROM goose_db_version WHERE version_id = ?`,
 		usersSessionsVersion).Scan(&recorded); err != nil {
-		return err
+		return false, err
 	}
 	if recorded == 0 {
-		return nil
+		return false, nil
 	}
 	users, err := hasTable(ctx, db, "users")
-	if err != nil || users {
+	return !users, err
+}
+
+// restoreRewoundApprovals puts the stashed approvals back after the migrations
+// have re-added the column, and runs on every startup because the stash is also
+// how a rewind interrupted halfway announces itself.
+func restoreRewoundApprovals(ctx context.Context, db *sql.DB) error {
+	stashed, err := hasTable(ctx, db, linksApprovedStash)
+	if err != nil || !stashed {
 		return err
 	}
-	if _, err := db.ExecContext(ctx,
-		`DELETE FROM goose_db_version WHERE version_id = ?`,
-		usersSessionsVersion); err != nil {
+	if _, err := db.ExecContext(ctx, fmt.Sprintf(
+		`UPDATE artifacts
+		    SET links_approved = (SELECT s.links_approved FROM %q s WHERE s.id = artifacts.id)
+		  WHERE id IN (SELECT id FROM %q)`,
+		linksApprovedStash, linksApprovedStash)); err != nil {
 		return err
 	}
-	slog.Warn("repaired migration ledger: version 13 recorded the renumbered links_approved migration, "+
-		"so users/sessions never ran; the row is cleared and 013_users_sessions.sql will apply now",
-		slog.Int("version", usersSessionsVersion))
+	if _, err := db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE %q`, linksApprovedStash)); err != nil {
+		return err
+	}
+	slog.Warn("restored the link approvals held aside by the version-13 rewind")
 	return nil
 }
 

@@ -42,9 +42,13 @@ func OpenSQLite(path string) (*SQLiteStore, error) {
 }
 
 func (s *SQLiteStore) migrate() error {
-	registerRepairMigrations() // guarded, idempotent repairs for the version collisions at 5, 11 and 18
-	if err := repairLedger(context.Background(), s.db); err != nil {
-		return fmt.Errorf("ledger: %w", err)
+	// Three databases exist in the wild whose ledger disagrees with this
+	// repo's numbering; migration_repair.go says which and why. All of it is a
+	// no-op on a database with no such history — nothing below defines schema.
+	ctx := context.Background()
+	registerRepairMigrations() // guarded, idempotent repairs for the version collisions at 5 and 11
+	if err := rewindReusedVersion13(ctx, s.db); err != nil {
+		return fmt.Errorf("rewind version 13: %w", err)
 	}
 	goose.SetBaseFS(migrationsFS)
 	if err := goose.SetDialect("sqlite3"); err != nil {
@@ -53,6 +57,9 @@ func (s *SQLiteStore) migrate() error {
 	start := time.Now()
 	if err := goose.Up(s.db, "migrations"); err != nil {
 		return err
+	}
+	if err := restoreRewoundApprovals(ctx, s.db); err != nil {
+		return fmt.Errorf("restore rewound approvals: %w", err)
 	}
 	slog.Info("sqlite migrations applied", slog.Duration("duration", time.Since(start)))
 	return nil

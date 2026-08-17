@@ -41,11 +41,11 @@ func currentVersion(t *testing.T, s *SQLiteStore) int64 {
 	return v
 }
 
-// The state production reached: version 13 was 013_links_approved.sql when it
-// migrated, so the ledger says 13 while users/sessions have never existed.
-// Opening the store must repair the ledger, run the real 013, and leave the
-// links_approved values that version-13 row was recording.
-func TestMigration13CollisionRepairsLedger(t *testing.T) {
+// collidedDatabase is the state production reached: version 13 was
+// 013_links_approved.sql when it migrated, so the ledger says 13 while
+// users/sessions have never existed.
+func collidedDatabase(t *testing.T) string {
+	t.Helper()
 	path := newMigratedTo(t, 12)
 
 	db, err := sql.Open("sqlite", path)
@@ -60,7 +60,18 @@ func TestMigration13CollisionRepairsLedger(t *testing.T) {
 		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, tier, links_approved)
 		 VALUES ('approved', 1, 'Approved', 'blob-approved', 1, 1)`)
 	require.NoError(t, err)
+	_, err = db.Exec(
+		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, tier, links_approved)
+		 VALUES ('unapproved', 1, 'Unapproved', 'blob-unapproved', 1, 0)`)
+	require.NoError(t, err)
 	require.NoError(t, db.Close())
+	return path
+}
+
+// Opening the store must rewind the reused version, run the real 013, and end
+// with the approvals that version-13 row was recording.
+func TestMigration13CollisionRewindsAndRestores(t *testing.T) {
+	path := collidedDatabase(t)
 
 	s, err := OpenSQLite(path)
 	require.NoError(t, err, "the collided database must migrate to head")
@@ -74,12 +85,19 @@ func TestMigration13CollisionRepairsLedger(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, sessions)
 
-	// The column the version-13 row was really recording keeps its value: the
-	// guarded repair at 18 sees it present and adds nothing.
-	var approved int
+	// The column the version-13 row was really recording is dropped and re-added
+	// by the ordinary 018, and its values come back from the stash.
+	var approved, unapproved int
 	require.NoError(t, s.db.QueryRowContext(ctx,
 		`SELECT links_approved FROM artifacts WHERE id = 'approved'`).Scan(&approved))
-	assert.Equal(t, 1, approved, "an existing approval survives the repair")
+	assert.Equal(t, 1, approved, "an existing approval survives the rewind")
+	require.NoError(t, s.db.QueryRowContext(ctx,
+		`SELECT links_approved FROM artifacts WHERE id = 'unapproved'`).Scan(&unapproved))
+	assert.Equal(t, 0, unapproved, "and nothing else is approved on its way through")
+
+	stashed, err := hasTable(ctx, s.db, linksApprovedStash)
+	require.NoError(t, err)
+	assert.False(t, stashed, "the stash is dropped once the approvals are back")
 
 	// State was re-keyed by 014, whose trigger is what failed before the fix.
 	trigger, err := hasTrigger(ctx, s.db, "artifact_state_user_delete")
@@ -87,9 +105,57 @@ func TestMigration13CollisionRepairsLedger(t *testing.T) {
 	assert.True(t, trigger)
 }
 
+// Re-opening a rewound database must not rewind it a second time: after the
+// first open its version-13 row is the real users/sessions migration.
+func TestMigration13RewindHappensOnce(t *testing.T) {
+	path := collidedDatabase(t)
+
+	first, err := OpenSQLite(path)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	s, err := OpenSQLite(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { s.Close() })
+
+	collided, err := hasReusedVersion13(context.Background(), s.db)
+	require.NoError(t, err)
+	assert.False(t, collided, "the second open sees an ordinary database")
+	assert.Equal(t, int64(18), currentVersion(t, s))
+
+	var approved int
+	require.NoError(t, s.db.QueryRow(
+		`SELECT links_approved FROM artifacts WHERE id = 'approved'`).Scan(&approved))
+	assert.Equal(t, 1, approved)
+}
+
+// A crash between the rewind and the restore leaves the stash behind, which is
+// why it is a table: the next startup finishes the job.
+func TestMigration13RewindResumesAfterCrash(t *testing.T) {
+	path := collidedDatabase(t)
+
+	db, err := sql.Open("sqlite", path)
+	require.NoError(t, err)
+	db.SetMaxOpenConns(1)
+	require.NoError(t, rewindReusedVersion13(context.Background(), db))
+	stashed, err := hasTable(context.Background(), db, linksApprovedStash)
+	require.NoError(t, err)
+	require.True(t, stashed, "the approvals are held aside at this point")
+	require.NoError(t, db.Close()) // the process dies here, before goose runs
+
+	s, err := OpenSQLite(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { s.Close() })
+
+	var approved int
+	require.NoError(t, s.db.QueryRow(
+		`SELECT links_approved FROM artifacts WHERE id = 'approved'`).Scan(&approved))
+	assert.Equal(t, 1, approved, "the interrupted rewind is completed, not lost")
+}
+
 // A database on the post-merge numbering (users/sessions already at 13) is not
-// collided, so the repair must leave its ledger alone and re-run nothing.
-func TestMigration13RepairSkipsPostMergeDatabases(t *testing.T) {
+// collided, so nothing may touch its ledger or re-run against it.
+func TestMigration13RewindSkipsPostMergeDatabases(t *testing.T) {
 	path := newMigratedTo(t, 16)
 
 	s, err := OpenSQLite(path)
@@ -105,11 +171,13 @@ func TestMigration13RepairSkipsPostMergeDatabases(t *testing.T) {
 
 	present, err := hasColumnDB(ctx, s.db, "artifacts", "links_approved")
 	require.NoError(t, err)
-	assert.True(t, present, "the guarded repair at 18 adds the column it never had")
+	assert.True(t, present, "018 adds the column this database never had")
 }
 
 // A database that predates the collision entirely, and a fresh one, both reach
-// head with links_approved — the ordinary path through the same repair.
+// head with links_approved — from 018_links_approved.sql, with no repair
+// involved. The rule this pins: repairs heal damaged databases and never
+// define schema, so an install with no history to fix depends on none of them.
 func TestMigrationsReachHeadWithoutCollision(t *testing.T) {
 	for name, path := range map[string]string{
 		"pre-collision": newMigratedTo(t, 12),
