@@ -127,6 +127,12 @@ The only way data changes. Route groups:
   rows (av-q0ub): the session supplies both principals §3.3 describes, so a read
   never returns the union of every viewer's state and "erase all" means *mine*,
   not the artifact's.
+- `GET /api/artifacts/:id/assets`, `DELETE /api/artifacts/:id/assets/:assetID` —
+  the artifact's out-of-line payloads (av-20fk), metadata only and never bytes.
+  Read-and-delete by design: assets are produced by the ingest vendorer and by
+  nothing else, so a create or update here would be a second way to put arbitrary
+  content behind an artifact's render URL. The delete is the owner's escape hatch
+  for the one case no rule decides — a payload whose feature they edited away.
 - `GET/PUT/DELETE /api/artifacts/:id/widget` — the artifact's gallery-card widget
   (av-fafu). A second document stored beside the artifact's body and hung off the
   artifact rather than made a resource of its own, because it has no identity, no
@@ -227,7 +233,16 @@ executable document with the correct security envelope:
   `<video>`/`<audio>` element can play back a file the artifact loaded locally via
   `<input type=file>` + `URL.createObjectURL`, and `script-src`/`worker-src` always
   carry `blob:`/`data:` so a script or Worker the artifact builds at runtime (the
-  standard ffmpeg.wasm pattern) executes. `worker-src` is spelled out rather than
+  standard ffmpeg.wasm pattern) executes. One source is neither of those two buckets and is
+  called out for it: an artifact's **own asset path** in `connect-src` (av-20fk)
+  is a *system* source, added by the render surface and never by approval. Those
+  are the same bytes that used to sit in the document as `data:` URIs and cost no
+  approval; only the addressing changed, so the question the bucket rule actually
+  asks — can the artifact reach content the user did not approve, or send
+  anything to a third party — has the same answer either way. It is never written
+  to `artifact_network_origins` and never appears in the allowlist editor, so a
+  fully vendored wasm artifact keeps an empty footprint and there is no row a user
+  can revoke to break their own artifact. `worker-src` is spelled out rather than
   left to fall back to `script-src` because its absence fails *silently* — the
   `Worker` constructor succeeds, nothing is logged, and the worker body simply never
   runs (av-x01o). Loading a script, worker, stylesheet, image, font, or media file
@@ -236,9 +251,9 @@ executable document with the correct security envelope:
   default.
 - Injects the **render preamble** as the first `<head>` script(s) — the **storage
   shim** with the artifact's state **inlined** into it so `getItem` is correct
-  synchronously, plus the download/clipboard **capability bridges** and the
-  `data:` fetch **compatibility shim** — then the artifact body. (Umbrella/family
-  taxonomy: `security.md` §4.)
+  synchronously, plus the download/clipboard **capability bridges**, the
+  `data:` fetch **compatibility shim**, and the **out-of-line asset manifest**
+  — then the artifact body. (Umbrella/family taxonomy: `security.md` §4.)
 - The `data:` fetch shim (agaf-02xs) answers `fetch()` of a `data:` URL from a
   Response built in the frame rather than letting it reach the network service.
   WebKit refuses large `data:` fetches from an opaque-origin sandbox, so an
@@ -247,15 +262,33 @@ executable document with the correct security envelope:
   frame already holds, and decoding it locally is strictly less work than the
   path it replaces. Framed-only, and **ordering-sensitive**: it must install
   before any artifact script, since a wrapper only shadows `fetch` for callers
-  that run after it. Note the snapshot vendorer (§3.4a) injects a fetch wrapper
-  of its own into the artifact body, and that one deliberately decodes its
-  manifest entries itself rather than delegating a `data:` URI back to `fetch` —
-  so each is correct standing alone, and neither's behaviour is contingent on the
-  other having installed. What still needs this shim is every *other* `data:`
-  fetch in the frame: one the artifact's own code performs, or one a future
-  wrapper delegates.
+  that run after it. It is one of two `fetch` wrappers the preamble installs —
+  the asset manifest below is the other — and their order is now explicit rather
+  than incidental: the manifest installs last and therefore wraps this one. What
+  needs this shim is every `data:` fetch in the frame the manifest does not
+  answer: one the artifact's own code performs, or one a future wrapper delegates.
+- The **out-of-line asset manifest** (av-20fk) redirects the page's own `fetch`
+  of each vendored payload to that artifact's asset route, matching on the
+  *resolved* URL at call time so it survives minification and catches URLs the
+  page assembles itself. It is injected here rather than stored in the body,
+  which is what makes an agent's wholesale body rewrite unable to break asset
+  loading, and what keeps `artifact_assets` the single source of truth. Widget
+  renders get it too: the `WIDGET` narrowing exists to drop *authority* — the
+  capability bridges — and resolving an artifact's own bytes grants none.
 - Sets `Cache-Control: no-store` — the document is dynamic (inlined state + per-artifact
   CSP) and must never be served stale from a cache.
+- Serves one out-of-line asset at `/a/:id/assets/:assetID` (av-20fk). This is the
+  single exception to both rules above it: **no render token, and not `no-store`**.
+  Both follow from the same fact — it serves immutable bytes and nothing else, no
+  state and no policy — and they are linked, because a short-lived token in the URL
+  would change it on every render and destroy exactly the cross-view caching that
+  moving these payloads out of the body was for. The credential is the asset id:
+  128 random bits, reachable only by someone who already knows the artifact id too,
+  and looked up *under* that artifact so one artifact can never address another's
+  bytes. It answers `Access-Control-Allow-Origin: *` (the sandbox's opaque origin
+  sends `Origin: null`, which nothing else matches) with the payload's real
+  `Content-Type`, and it **must never redirect** — the CSP source permitting it is
+  path-scoped, and CSP drops path matching across a redirect.
 - Is **gzip-compressed** when the client accepts it (av-f9b2). This is the surface where
   compression earns the most: `no-store` means there is no cache to amortise a render
   document across views, so every view pays its full size on the wire — and a snapshot
@@ -404,6 +437,17 @@ carrying a principal is av-c5aq.
   whitespace-separated token is emitted as a quoted phrase with a trailing
   `*`, so prefix matching is preserved while `<script>`, `a:b`, or a stray
   quote search for themselves instead of failing the query.
+- **Out-of-line assets** → `artifact_assets`, one row per vendored payload
+  (av-20fk), with the bytes in the blob store. Content-addressed **per owner,
+  never globally**: dedup inside a library is free, but sharing bytes across
+  owners would let deleting one account strip a payload out of another's
+  artifact unless the refcount were exactly right in every delete path forever.
+  Deletability appeals only to what was recorded — the artifact went, a
+  generation was superseded, or the owner asked — and **never** to whether the
+  body still contains a matching `fetch` literal: the render manifest matches
+  resolved URLs at call time, so a rewritten body can consume an asset whose
+  literal is long gone. Enqueuing a blob for deletion is refcounted inside the
+  removing transaction for the same reason sharing exists.
 - **Bodies** → **filesystem or an S3-compatible bucket, selected by
   configuration** (av-52ll). Both implement the same three methods and nothing
   above the interface can tell which is behind it — that substitutability *is*
@@ -613,20 +657,25 @@ promise even after the source site rots:
   deliberately left alone: native module loading never consults `window.fetch`, so a
   vendored copy could never be served to the module loader — those origins belong to
   the `script-src` allowlist, where the footprint reports them.
-  Substitution is by **interception, not source rewriting**: the bytes go into a
-  manifest keyed by absolute URL, and a small `window.fetch` wrapper injected at the
-  top of `<head>` consults it at call time. That survives minification, which a
-  literal rewrite could not. A runtime-constructed URL is served only when that same
-  absolute URL also appears as a literal fetch ref somewhere in the page — manifest
-  entries come from literals alone, so a URL assembled from parts the page never
-  spells out still reaches the network. The
-  manifest values are `data:` URIs so the synthetic response carries a real
-  `Content-Type` — `WebAssembly.instantiateStreaming` rejects anything that is not
-  exactly `application/wasm`. No CSP change is needed: `connect-src` already carries
-  `data:` unconditionally as a local, no-egress source, so a vendored artifact runs
-  with an empty allowlist. Because the page's original literal is left in place, the
-  scan still reports that origin; over-reporting fails safe (it asks about an origin
-  no longer contacted rather than staying silent about one that is).
+  The pass **collects; it does not transform** (av-20fk). Each payload becomes a
+  blob of its own, recorded in `artifact_assets`, and the stored body keeps the
+  fetch literals it was ingested with — there is no ingest-time body transform at
+  all. Substitution moved to render time (§3.2), and two properties follow that
+  are the reason for it: an agent rewriting the whole document — the normal
+  operation in the preview loop — cannot break asset loading, because there is
+  nothing in the body to break; and the assets table is the single source of
+  truth rather than being copied into every stored body as ~1.33x base64.
+  The alternative had put a 16 MiB payload into the agent's context as ~21 MB on
+  every read *and* every write, made the edit page slow, and — since the render
+  document is necessarily `no-store` — re-transferred it on every single view.
+  Substitution remains by **interception, not source rewriting**, wherever it
+  happens: a runtime-constructed URL is served only when that same absolute URL
+  also appears as a literal fetch ref somewhere in the page, since assets come
+  from literals alone. Note the direction of that limit — it constrains what is
+  *collected*, not what is *consumed*, which is why a vanished literal can never
+  authorise deleting an asset (§3.3). Because the page's original literal is left
+  in place, the scan still reports that origin; over-reporting fails safe (it asks
+  about an origin no longer contacted rather than staying silent about one that is).
 - **Partial failure is data, not an error.** Any reference that can't be inlined (404,
   over a limit, blocked address, runtime-constructed URL) keeps its original value and
   is recorded as a typed `FetchError`; the rest of the page is still vendored. The

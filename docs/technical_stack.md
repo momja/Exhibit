@@ -133,7 +133,9 @@ Renderer construction:
   `script-src`: when it is missing the worker fails silently, constructing fine but
   never executing its body.
 - Inject the **render preamble** — the **storage shim** (§6 here) with the artifact's
-  current state inlined — into `<head>` *before* any artifact script runs.
+  current state inlined, plus the out-of-line **asset manifest** (av-20fk) that
+  redirects the page's own `fetch` of a vendored payload to that artifact's asset
+  route — into `<head>` *before* any artifact script runs.
   Serve the document `Cache-Control:
   no-store` — it's dynamic (inlined state + per-artifact CSP) and must not be cached.
 
@@ -222,13 +224,17 @@ the outbound network footprint to show the user for approval.
   `XMLHttpRequest`, `new Worker`, and `WebSocket` targets. Whatever it misses is caught
   at runtime by the CSP allowlist.
 - The snapshot vendorer's runtime-asset pass shares the fetch half of that definition
-  (`scanner.FetchRefs`), so the assets it inlines cannot drift from the fetch targets
+  (`scanner.FetchRefs`), so the payloads it vendors cannot drift from the fetch targets
   the footprint reports; ESM import refs stay with the scanner only, because the
   module loader never consults `window.fetch` and those origins are governed by
   `script-src` instead. It compensates for the heuristic's blind spot differently:
-  rather than rewriting the literals it found, it installs a `fetch` wrapper that
-  matches on the resolved URL at call time — so a runtime-constructed URL is served
-  when that same absolute URL also appears as a literal fetch ref, and only then.
+  rather than rewriting the literals it found, the render surface installs a `fetch`
+  wrapper that matches on the resolved URL at call time — so a runtime-constructed URL
+  is served when that same absolute URL also appears as a literal fetch ref, and only
+  then. Since av-20fk the payloads themselves live outside the artifact body, as blobs
+  served from a per-artifact, immutable, cacheable route; the body keeps the literals
+  it was ingested with, so nothing an agent does to the document can break the
+  redirect.
 
 Present the deduplicated origin list at the approval step; write approved origins as
 the artifact's `decision='allow'` rows in `artifact_network_origins`.
