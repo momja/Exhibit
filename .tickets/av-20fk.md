@@ -62,6 +62,20 @@ Two constraints fall out: **the asset route must never redirect** (CSP drops pat
 
 **Storage.** Assets are blobs in the existing `Blob` store, so the operator's backup story (Litestream + the blob dir) is unchanged. Content-addressed **per owner, never globally**: dedup within one library only. Global dedup makes account deletion able to strip bytes out of another owner's artifact unless refcounting is exactly right in the delete path; per-owner addressing removes that failure mode by construction, costs duplicate storage only on multi-user instances, and costs nothing on a single-user self-host. Assets are deleted with their artifact via `Blob.Delete` (av-7jcq).
 
+**Lifecycle: what makes an asset deletable.** Moving the manifest out of the body means the body is never consulted to build it, so nothing in the body answers "is this asset still referenced". Nothing can be allowed to: a scan for surviving `fetch` literals is exactly the static analysis this architecture refuses to trust (`scanner.LiteralRefs` is a hint, not analysis), and a runtime-constructed URL never appears as a literal — so a scan-based GC deletes assets that are still in use. Data loss is a worse outcome than leaked bytes, so the rule is that **only decidable questions may authorize a delete**:
+
+| Question | Decidable? | Use |
+|---|---|---|
+| Is there an asset row pointing at this blob? | Yes — rows and blobs are both ours | Operator-level orphan sweep |
+| Was this row created by a superseded ingest? | Yes — generations are recorded | Automatic GC |
+| Does the current body still fetch this URL? | **No** — needs JS analysis | **Never** GC on this basis |
+
+**Generations.** Each ingest or refetch that produces assets mints a generation id; asset rows carry it. Render injects only the current generation's manifest. When a new generation supersedes an old one the old *set* becomes deletable as a unit — the body it belonged to has been replaced too, so nothing can still reference it. This is what keeps [[av-b17a]]'s refetch path from accumulating a full asset set per refetch, forever. An ordinary body PATCH does **not** mint a generation and does not touch assets: the body may still fetch them, and we cannot know otherwise.
+
+**An asset panel on the edit page** handles the case generations cannot: the user removed the feature that used a 14 MB payload, and wants the space back. It lists each asset — source URL, size, content type — with a delete control, and the artifact's total. It is the same shape as the state inspector beside it (av-hg5f): show what is stored, let the owner remove it, on the surface built for that. This is what "the user has full control over their artifacts" (PRD §1) requires once artifacts carry bytes they cannot see. Splittable into a child ticket if this one gets too large, but not droppable — without it the design ships storage a user can neither see nor reclaim.
+
+**Rejected: GC by render observation.** Having the manifest wrapper report which assets it actually served, and reaping the unused, superficially matches "observe, don't predict" (architecture.md §1.4). It does not: that principle is about refusing to predict behaviour in order to *gate policy*, whereas this would use observation to authorize *destruction*, where being wrong is unrecoverable. An artifact nobody has opened this month is not an artifact whose assets are unused, and distinguishing the two needs per-artifact render counting. It also adds a reporting channel out of the sandbox for no other reason.
+
 **Agent surface.** `get_artifact` returns the body — now small, and now the *original* page source with no injected machinery in it — plus asset metadata in its meta block: id, source URL, size, content type, no bytes. The agent needs to know an asset exists so it understands why a bare `fetch('/app.wasm')` in the source it is reading actually resolves; it has no use for the bytes. With the manifest render-injected, the agent has nothing it *can* break here, which is what makes the preview loop safe to iterate in.
 
 **Out of scope, deliberately:**
@@ -82,6 +96,9 @@ Two constraints fall out: **the asset route must never redirect** (CSP drops pat
 - **An agent that replaces the body wholesale — including one that emits a document with no `<head>` — leaves the artifact still loading its assets.** This is the preview-loop guarantee that render-time injection buys, and the reason it is worth doing.
 - Re-rendering after an agent save re-fetches the render document but **not** the asset: the cache-busting stamp is on the document URL, and the assetID is stable across body rewrites.
 - Deleting an artifact deletes its assets. Deleting one owner's account leaves another owner's artifacts renderable, asserted by a test.
+- A refetch that produces a new asset set leaves the superseded set deletable and deletes it; repeated refetches do not accumulate asset sets.
+- An ordinary body PATCH never deletes an asset, **including one whose fetch literal no longer appears in the body** — pinned by a test, because this is the case a future "helpful" cleanup would get wrong.
+- The edit page lists the artifact's assets with source URL, size, and content type, plus a total, and can delete one.
 - Artifacts already carrying inlined `data:` payloads continue to render unchanged.
 
 
@@ -90,3 +107,7 @@ Two constraints fall out: **the asset route must never redirect** (CSP drops pat
 **2026-08-17T03:33:01Z**
 
 Design amended: assets are recorded at ingest but the manifest is injected at render time, in the preamble, rather than written into the stored body. Motivated by the agent preview loop — a wholesale body rewrite can no longer break asset loading. Also makes the assets table the single source of truth, collapses the two independent fetch wrappers architecture.md 3.2 documents as separate, and makes av-vnkt's export symmetric with render.
+
+**2026-08-17T03:35:52Z**
+
+Added asset lifecycle. Orphaning is real: with the manifest render-injected, the body never answers 'is this asset referenced', and it must not be asked to — scanning for surviving fetch literals would delete assets behind runtime-constructed URLs. GC only on decidable questions: superseded ingest generations (automatic) and blob-with-no-row (operator sweep). User-visible asset panel on the edit page for intentional reclaim. Rejected GC-by-render-observation.
