@@ -25,6 +25,19 @@ Inlining was chosen for a narrow reason: CORS (av-ghvs). A page served from its 
 
 Move each vendored runtime payload into its own blob, addressed by URL, and leave the artifact body a small, valid HTML file.
 
+**Scope: the runtime pass only — `.wasm`, `.data`, `.bin`, `.mem`.** The vendorer has two passes and this ticket touches one of them.
+
+| Pass | Handles | Per-asset cap | Substitutes by |
+|---|---|---|---|
+| `InlineHTMLAssets` + CSS | `<img>`, `srcset`, icon `<link>`, `<script src>`, `url()`, `@import` | `MaxAssetBytes`, 5 MiB | rewriting the markup |
+| `InlineRuntimeAssets` | fetch literals with binary extensions | `MaxInlineAssetBytes`, 16 MiB | manifest + `fetch` interception |
+
+Images, fonts, stylesheets, and scripts keep being inlined as `data:` URIs. The split is forced rather than chosen: an `<img src>` is not loaded through `window.fetch`, so there is no wrapper to hook, and externalizing it means writing a render-origin URL into the stored body — which destroys the property this ticket depends on, that the body keeps its original literals and an agent rewrite cannot break asset loading. Doing that rewrite at render time instead would mean parsing and re-rendering the whole document on every request.
+
+The size problem is real for the markup pass too (a 48 MiB total budget, images base64ing to ~1.33×), just neither as acute nor as cheap to fix — and the runtime payload is the one that actually blocks the agent today. Extending is a follow-up if body sizes justify it.
+
+**Naming, because "asset" is already taken.** The codebase uses it in the pass-1 sense (`InlineHTMLAssets`, `MaxAssetBytes`, the `Asset` struct). Define the new table as holding **any out-of-line asset**, with the runtime pass as its only producer today. Then the broad name is accurate rather than misleading, and extending to markup assets later adds a producer instead of migrating a schema.
+
 **Ingest records assets; it no longer rewrites the body.** `InlineRuntimeAssets` (`internal/snapshot/runtime.go`) keeps its discovery half — walk `<script>` text, take fetch-call literals via `scanner.FetchRefs`, keep binary-asset extensions, fetch through the bounded `Fetcher` — and drops its injection half entirely. Each payload is stored as its own blob with a row recording (artifact, absolute source URL, assetID, size, content type). **The stored body keeps its original fetch literals, unmodified.**
 
 That is the shape change from the first draft of this ticket: there is no ingest-time body transform at all, so the vendoring machinery becomes entirely render-time.
@@ -181,3 +194,7 @@ Clarified two things that were load-bearing but only implied. (1) Generation del
 **2026-08-17T05:48:58Z**
 
 Corrected the rationale for refusing scan-based GC. The earlier framing (a runtime-constructed URL might hide an asset from the scan) was wrong: manifest entries come only from scanner.FetchRefs literals, so every asset originates from a literal and creation is fully covered. The real gap is consumption — the wrapper matches resolved URLs at call time, so a rewritten body can consume an asset whose original literal is gone. The broader reason stands regardless: scan GC is unnecessary, and being wrong destroys an unrecoverable payload. Added the scan back as a non-authoritative advisory in the asset panel.
+
+**2026-08-17T05:53:49Z**
+
+Scoped explicitly: this covers the runtime pass only (.wasm/.data/.bin/.mem). Markup-referenced assets (images, fonts, CSS, scripts) stay inlined as data: URIs, because they are not loaded through window.fetch — there is no wrapper to hook, so externalizing them requires writing render-origin URLs into the stored body, which is exactly the property this ticket protects. Also flagged that 'asset' collides with the existing pass-1 meaning in the codebase; the table should be defined as any out-of-line asset with the runtime pass as its only current producer.
