@@ -86,6 +86,13 @@
             <option value="true">Always allow</option>
           </select>
         </label>
+        <label class="row">
+          <span class="spacer">External links</span>
+          <select id="link-select" class="select">
+            <option value="false">Ask first</option>
+            <option value="true">Always allow</option>
+          </select>
+        </label>
       </div>
     </div>
   </details>
@@ -205,6 +212,7 @@ let blocked = {{.Blocked}};
      booleans with spaces, and a plain `= true;` keeps this greppable. */ -}}
 let downloadsApproved = {{if .DownloadsApproved}}true{{else}}false{{end}};
 let clipboardApproved = {{if .ClipboardApproved}}true{{else}}false{{end}};
+let linksApproved = {{if .LinksApproved}}true{{else}}false{{end}};
 </script>
 <script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/edit.js"></script>

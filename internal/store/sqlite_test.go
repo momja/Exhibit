@@ -653,6 +653,34 @@ func TestClipboardApproved(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// links_approved is the link navigation bridge's first-use approval (av-r0dk):
+// the third capability-bridge sibling, same default-false, round-trip, flip,
+// and non-bool rejection as downloads/clipboard, independent of both.
+func TestLinksApproved(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "lk-1", OwnerID: 1, SourceBlobID: "b1"}))
+	got, err := s.GetArtifact(ctx, 1, "lk-1")
+	require.NoError(t, err)
+	assert.False(t, got.LinksApproved, "new artifacts must not be pre-approved for external links")
+
+	require.NoError(t, s.UpdateArtifact(ctx, 1, "lk-1", map[string]any{"links_approved": true}))
+	got, err = s.GetArtifact(ctx, 1, "lk-1")
+	require.NoError(t, err)
+	assert.True(t, got.LinksApproved)
+	assert.False(t, got.DownloadsApproved, "links approval must not leak into downloads")
+	assert.False(t, got.ClipboardApproved, "links approval must not leak into clipboard")
+
+	require.NoError(t, s.UpdateArtifact(ctx, 1, "lk-1", map[string]any{"links_approved": false}))
+	got, err = s.GetArtifact(ctx, 1, "lk-1")
+	require.NoError(t, err)
+	assert.False(t, got.LinksApproved)
+
+	err = s.UpdateArtifact(ctx, 1, "lk-1", map[string]any{"links_approved": "yes"})
+	assert.Error(t, err)
+}
+
 // TestMigration008RepairsRenumberCollision guards against the version-5 reuse
 // introduced when 005_agent.sql was renumbered to 007 (commit 1162b17) and
 // version 5 was reassigned to 005_downloads_approved.sql. goose records

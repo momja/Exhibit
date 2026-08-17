@@ -15,6 +15,7 @@
  *                        touch are never cleared by Save (exhibit-x87).
  *   downloadsApproved - persisted first-use download approval (mutable)
  *   clipboardApproved - persisted first-use clipboard approval (mutable)
+ *   linksApproved     - persisted first-use external-link approval (mutable)
  */
 
 // --- CodeMirror islands ----------------------------------------------------
@@ -77,14 +78,25 @@ mountEditorWhenOpen('widget-panel', 'widget-src');
 // Save button fires the single PATCH below. This mirrors the panel's own
 // posture summary, which is also derived from these working copies.
 
+let linksApprovedDirty = false; // see the link-select change handler below
+
 document.getElementById('dl-select').value = String(downloadsApproved);
 document.getElementById('clip-select').value = String(clipboardApproved);
+document.getElementById('link-select').value = String(linksApproved);
 document.getElementById('dl-select').addEventListener('change', function(e) {
   downloadsApproved = e.target.value === 'true';
   renderSecurityPanel();
 });
 document.getElementById('clip-select').addEventListener('change', function(e) {
   clipboardApproved = e.target.value === 'true';
+  renderSecurityPanel();
+});
+document.getElementById('link-select').addEventListener('change', function(e) {
+  linksApproved = e.target.value === 'true';
+  // Mark the grant dirty so save() includes it: the value loaded at page load
+  // goes stale the moment the host approves a link in another tab, and an
+  // unconditional write would silently overwrite that newer approval.
+  linksApprovedDirty = true;
   renderSecurityPanel();
 });
 
@@ -180,7 +192,8 @@ function renderSecurityPanel() {
   document.getElementById('security-summary-text').textContent =
     allowlist.length + (allowlist.length === 1 ? ' origin' : ' origins') +
     ' · downloads: ' + (downloadsApproved ? 'always allow' : 'ask first') +
-    ' · clipboard: ' + (clipboardApproved ? 'always allow' : 'ask first');
+    ' · clipboard: ' + (clipboardApproved ? 'always allow' : 'ask first') +
+    ' · links: ' + (linksApproved ? 'always allow' : 'ask first');
 }
 renderSecurityPanel();
 
@@ -191,15 +204,21 @@ async function save() {
   if (!body.trim()) { status.textContent = 'Body cannot be empty.'; return; }
   status.textContent = 'Saving…';
   document.getElementById('scan-result').style.display = 'none';
+  const payload = {
+    title: title || 'Untitled',
+    body,
+    network_allowlist: allowlist,
+    downloads_approved: downloadsApproved,
+    clipboard_approved: clipboardApproved
+  };
+  // links_approved ships only when the select was actually changed (see its
+  // change handler above): the bootstrap value is stale if the host granted
+  // a link in another tab, and an unconditional write would revoke that
+  // newer grant on an unrelated save.
+  if (linksApprovedDirty) payload.links_approved = linksApproved;
   const resp = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
-    body: JSON.stringify({
-      title: title || 'Untitled',
-      body,
-      network_allowlist: allowlist,
-      downloads_approved: downloadsApproved,
-      clipboard_approved: clipboardApproved
-    })
+    body: JSON.stringify(payload)
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {

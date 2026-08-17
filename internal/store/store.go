@@ -52,6 +52,11 @@ type Artifact struct {
 	// ClipboardApproved is the same first-use approval for the clipboard
 	// bridge (navigator.clipboard read/write proxied through the host).
 	ClipboardApproved bool `json:"clipboard_approved"`
+	// LinksApproved is the same first-use approval for the link navigation
+	// bridge (av-r0dk): external anchor activations proxied through the host
+	// frame and opened in a new tab. False means the host prompts on the
+	// artifact's first external-link click.
+	LinksApproved bool `json:"links_approved"`
 	// WidgetBlobID is the blob holding this artifact's widget — the small,
 	// informative document its gallery card renders (av-fafu). Empty means the
 	// artifact has no widget and its card falls back to the default tile. The

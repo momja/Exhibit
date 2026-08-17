@@ -98,6 +98,18 @@
     </div>
   </div>
 </div>
+
+<div id="link-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="link-title">
+    <h2 id="link-title">Allow opening links?</h2>
+    <p>You are opening a link to <code id="link-host">example.com</code>. Exhibit cannot verify the safety of external sites. Make sure you trust this destination before allowing links. You can revoke this at any time from the toolbar.</p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="link-block">Block</button>
+      <button type="button" class="btn" id="link-allow"><i class="ph ph-arrow-square-out"></i> Allow links</button>
+    </div>
+  </div>
+</div>
 <script>
 const TOKEN = {{.Token}};
 {{/* READ_ONLY and TOKEN are one decision, made server-side per request
@@ -116,6 +128,7 @@ const SOURCE_URL = {{.SourceURL}};
      and a plain `= true;` keeps the bootstrap greppable. */ -}}
 let downloadsApproved = {{if .Capability.DownloadsApproved}}true{{else}}false{{end}};
 let clipboardApproved = {{if .Capability.ClipboardApproved}}true{{else}}false{{end}};
+let linksApproved = {{if .Capability.LinksApproved}}true{{else}}false{{end}};
 </script>
 <script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/components.js"></script>
