@@ -28,3 +28,9 @@ Keep prior versions of an artifact's source body instead of destructively overwr
 - Deleting an artifact deletes its versions and their blobs (extends the existing delete path).
 - PRD §8.1 updated to distinguish internal version history from one-time external vendoring.
 
+
+## Notes
+
+**2026-08-17T04:44:04Z**
+
+av-20fk (out-of-line asset blobs) makes this ticket's keep-all-versions retention cheaper, not costlier: the multi-MB vendored snapshot body this section worries about becomes small text, with the binary payload in a separate asset generation shared across every version that references it. Generations are minted only by ingest/refetch, never by an edit, and are content-addressed — so an unchanged refetch mints none. Retention rule to adopt there: keep any generation a retained version references. No pruning policy needed on either side for now.

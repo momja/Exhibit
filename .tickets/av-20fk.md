@@ -81,7 +81,9 @@ Two consequences to accept deliberately:
 
 **Versioning changes the rule, and the link must be recorded now.** If artifact source gains version history ([[av-3pq6]]), a retained old version still fetches its old assets, so "superseded" stops meaning "dead". The rule becomes: *an asset generation is deletable when no retained version references it.* That stays decidable — it is a count over recorded generations, not an inference about code — but only if each body version records the generation it uses. Record that link when generations are introduced here, even though nothing reads it yet; retrofitting it later means guessing which assets belonged to versions written before the column existed, and there is no way to guess correctly.
 
-The storage consequence is inherent rather than a flaw: retain every version of a wasm tool and you retain every payload. Version retention is the release valve — pruning old versions is what frees the generations behind them.
+**This needs no pruning policy, because generations are rare.** A generation is minted by ingest and refetch only — a body edit does not produce one. Fifty edits give fifty body versions and one generation. Content-address the generation on top of that, so a refetch returning identical bytes reuses the existing one rather than minting a duplicate, and growth is bounded by how often the upstream binary genuinely changes. That is the same mitigation [[av-3pq6]] already specifies for version bodies, applied to generations.
+
+Note the direction of the interaction: this ticket makes [[av-3pq6]]'s "keep all versions" *cheaper*. Its retention section worries specifically that vendored snapshot bodies can be multi-MB; after this change they are small text, and the payload lives in one generation shared by every version referencing it. So keep all versions, keep any generation a retained version references, and add a bytes budget only if it ever hurts in practice — which is av-3pq6's stated position already. The asset panel covers the exception.
 
 **An asset panel on the edit page** handles the case generations cannot: the user removed the feature that used a 14 MB payload, and wants the space back. It lists each asset — source URL, size, content type — with a delete control, and the artifact's total. It is the same shape as the state inspector beside it (av-hg5f): show what is stored, let the owner remove it, on the surface built for that. This is what "the user has full control over their artifacts" (PRD §1) requires once artifacts carry bytes they cannot see. Splittable into a child ticket if this one gets too large, but not droppable — without it the design ships storage a user can neither see nor reclaim.
 
@@ -127,3 +129,7 @@ Added asset lifecycle. Orphaning is real: with the manifest render-injected, the
 **2026-08-17T04:39:45Z**
 
 Versioning (av-3pq6) changes the GC rule from 'superseded' to 'no retained version references this generation' — still decidable, but only if body versions record their generation. Record that link now; it cannot be reconstructed later.
+
+**2026-08-17T04:44:04Z**
+
+No automatic pruning policy: generations are minted only by ingest/refetch (never by edits) and content-addressed, so growth is bounded by real upstream changes. Manual asset panel covers the rest. Full-scan reclamation dropped from av-8gyd — deletion queue only.
