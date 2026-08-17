@@ -1,6 +1,6 @@
 ---
 id: av-20fk
-status: open
+status: in_progress
 deps: []
 links: [av-vnkt, av-ghvs, av-c5aq, av-8gyd, av-3pq6]
 created: 2026-08-17T03:24:22Z
