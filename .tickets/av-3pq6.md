@@ -2,7 +2,7 @@
 id: av-3pq6
 status: open
 deps: [av-3tib]
-links: [exhibit-lwb]
+links: [exhibit-lwb, av-20fk]
 created: 2026-07-06T22:01:58Z
 type: task
 priority: 2

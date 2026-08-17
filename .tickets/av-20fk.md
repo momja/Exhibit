@@ -2,7 +2,7 @@
 id: av-20fk
 status: open
 deps: []
-links: [av-vnkt, av-ghvs, av-c5aq, av-8gyd]
+links: [av-vnkt, av-ghvs, av-c5aq, av-8gyd, av-3pq6]
 created: 2026-08-17T03:24:22Z
 type: feature
 priority: 1
@@ -77,7 +77,11 @@ Two constraints fall out: **the asset route must never redirect** (CSP drops pat
 Two consequences to accept deliberately:
 
 - **An in-flight render can 404.** A view opened seconds before a refetch may request an asset that was just deleted. It is already displaying a superseded body; a reload fixes it. A grace period would close that window, but at the price of a `superseded_at` column and a background tick — a whole mechanism for a few seconds of exposure. If refetch ever wants to be undoable ([[av-b17a]], [[av-3pq6]]), that grace period is where it attaches, and it should be added for *that* reason rather than this one.
-- **A crash between commit and unlink leaks blobs.** This is precisely the window [[av-8gyd]] exists to close, and is why the sweep is a backstop rather than the primary reclaim path.
+- **A crash between commit and unlink leaks blobs.** [[av-8gyd]] closes this with a deletion queue: the same transaction that drops the rows records the blob ids as pending, and the queue is drained at startup. No scan, no manual step, and a drainer bug can only touch bytes something already condemned.
+
+**Versioning changes the rule, and the link must be recorded now.** If artifact source gains version history ([[av-3pq6]]), a retained old version still fetches its old assets, so "superseded" stops meaning "dead". The rule becomes: *an asset generation is deletable when no retained version references it.* That stays decidable — it is a count over recorded generations, not an inference about code — but only if each body version records the generation it uses. Record that link when generations are introduced here, even though nothing reads it yet; retrofitting it later means guessing which assets belonged to versions written before the column existed, and there is no way to guess correctly.
+
+The storage consequence is inherent rather than a flaw: retain every version of a wasm tool and you retain every payload. Version retention is the release valve — pruning old versions is what frees the generations behind them.
 
 **An asset panel on the edit page** handles the case generations cannot: the user removed the feature that used a 14 MB payload, and wants the space back. It lists each asset — source URL, size, content type — with a delete control, and the artifact's total. It is the same shape as the state inspector beside it (av-hg5f): show what is stored, let the owner remove it, on the surface built for that. This is what "the user has full control over their artifacts" (PRD §1) requires once artifacts carry bytes they cannot see. Splittable into a child ticket if this one gets too large, but not droppable — without it the design ships storage a user can neither see nor reclaim.
 
@@ -106,6 +110,7 @@ Two consequences to accept deliberately:
 - A refetch that produces a new asset set leaves the superseded set deletable and deletes it; repeated refetches do not accumulate asset sets.
 - An ordinary body PATCH never deletes an asset, **including one whose fetch literal no longer appears in the body** — pinned by a test, because this is the case a future "helpful" cleanup would get wrong.
 - The edit page lists the artifact's assets with source URL, size, and content type, plus a total, and can delete one.
+- Each asset row records the generation that created it, and the schema can express which body version a generation belongs to — even though version history ([[av-3pq6]]) does not exist yet and nothing reads the link.
 - Artifacts already carrying inlined `data:` payloads continue to render unchanged.
 
 
@@ -118,3 +123,7 @@ Design amended: assets are recorded at ingest but the manifest is injected at re
 **2026-08-17T03:35:52Z**
 
 Added asset lifecycle. Orphaning is real: with the manifest render-injected, the body never answers 'is this asset referenced', and it must not be asked to — scanning for surviving fetch literals would delete assets behind runtime-constructed URLs. GC only on decidable questions: superseded ingest generations (automatic) and blob-with-no-row (operator sweep). User-visible asset panel on the edit page for intentional reclaim. Rejected GC-by-render-observation.
+
+**2026-08-17T04:39:45Z**
+
+Versioning (av-3pq6) changes the GC rule from 'superseded' to 'no retained version references this generation' — still decidable, but only if body versions record their generation. Record that link now; it cannot be reconstructed later.
