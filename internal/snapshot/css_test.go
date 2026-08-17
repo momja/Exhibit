@@ -80,7 +80,7 @@ func TestInlineCSSURLForms(t *testing.T) {
 	}, "\n")
 
 	f := testFetcher(t, srv.URL+"/css/style.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/css/style.css", css)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/css/style.css", css, nil)
 
 	require.Empty(t, errs)
 	want := `url("` + pngDataURI(img) + `")`
@@ -108,7 +108,7 @@ func TestInlineCSSSkipsNonNetworkRefs(t *testing.T) {
 	}, "\n")
 
 	f := testFetcher(t, srv.URL+"/style.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/style.css", css)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/style.css", css, nil)
 
 	assert.Equal(t, css, out, "non-network refs must pass through unchanged")
 	assert.Empty(t, errs)
@@ -134,7 +134,7 @@ func TestInlineCSSNestedImportRebase(t *testing.T) {
 	outer := "@import url(sub/b.css);\nbody { background: url(bg.png); }"
 
 	f := testFetcher(t, srv.URL+"/a/main.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/a/main.css", outer)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/a/main.css", outer, nil)
 
 	require.Empty(t, errs)
 	assert.NotContains(t, out, "@import", "the @import must be folded away")
@@ -158,7 +158,7 @@ func TestInlineCSSImportStringAndMedia(t *testing.T) {
 
 	css := `@import "print.css" print and (min-width: 400px);`
 	f := testFetcher(t, srv.URL+"/main.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/main.css", css)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/main.css", css, nil)
 
 	require.Empty(t, errs)
 	assert.Contains(t, out, "@media print and (min-width: 400px) {", "media query preserved as @media wrapper")
@@ -187,7 +187,7 @@ func TestInlineCSSFailuresLeftVerbatim(t *testing.T) {
 	limits := DefaultLimits()
 	limits.MaxAssetBytes = 1024
 	f := testFetcher(t, srv.URL+"/style.css", limits)
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/style.css", css)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/style.css", css, nil)
 
 	assert.Contains(t, out, `url("`+pngDataURI(good)+`")`, "good asset inlined")
 	assert.Contains(t, out, "url(big.png)", "over-limit asset left verbatim")
@@ -218,7 +218,7 @@ func TestInlineCSSSelfImportTerminates(t *testing.T) {
 	// The body passed in is self.css's own content, based at self.css.
 	body := "@import url(self.css);\nbody { background: url(x.png); }"
 	f := testFetcher(t, srv.URL+"/self.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/self.css", body)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/self.css", body, nil)
 
 	// Terminates. The self-import is a no-op back-edge (never fetched), the
 	// real asset still inlines.
@@ -237,7 +237,7 @@ func TestInlineCSSMutualImportCycleTerminates(t *testing.T) {
 
 	a := "@import url(b.css);\n.a { color: red; }"
 	f := testFetcher(t, srv.URL+"/a.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/a.css", a)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/a.css", a, nil)
 
 	assert.Contains(t, out, ".b { color: blue; }", "b.css folded into a")
 	assert.Contains(t, out, ".a { color: red; }")
@@ -260,7 +260,7 @@ func TestInlineCSSImportDepthCap(t *testing.T) {
 
 	root := "@import url(s1.css);"
 	f := testFetcher(t, srv.URL+"/root.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/root.css", root)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/root.css", root, nil)
 
 	require.Len(t, errs, 1)
 	assert.Equal(t, ErrBudget, errs[0].Kind, "the over-cap import is reported as budget-exhausted")
@@ -275,7 +275,7 @@ func TestInlineCSSImportDepthCap(t *testing.T) {
 func TestInlineCSSIdentityWhenNoRefs(t *testing.T) {
 	css := "body { color: red; margin: 0; }"
 	f := testFetcher(t, "https://example.com/style.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, "https://example.com/style.css", css)
+	out, errs := InlineCSS(context.Background(), f, "https://example.com/style.css", css, nil)
 	assert.Equal(t, css, out)
 	assert.Nil(t, errs)
 }

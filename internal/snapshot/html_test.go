@@ -46,7 +46,7 @@ func b64(b []byte) string { return base64.StdEncoding.EncodeToString(b) }
 func inline(t *testing.T, base, body string, limits Limits) (string, []*FetchError) {
 	t.Helper()
 	f := testFetcher(t, base, limits)
-	out, errs, err := InlineHTMLAssets(context.Background(), f, body)
+	out, errs, err := InlineHTMLAssets(context.Background(), f, body, nil)
 	require.NoError(t, err)
 	return out, errs
 }
@@ -201,7 +201,7 @@ func TestInlineHTMLAssetsParseError(t *testing.T) {
 	// html.Parse is extremely lenient and effectively never errors on string
 	// input, so a normal document round-trips cleanly and returns no error.
 	f := testFetcher(t, "https://example.com/page.html", DefaultLimits())
-	out, errs, err := InlineHTMLAssets(context.Background(), f, "<html><body>plain</body></html>")
+	out, errs, err := InlineHTMLAssets(context.Background(), f, "<html><body>plain</body></html>", nil)
 	require.NoError(t, err)
 	require.Empty(t, errs)
 	assert.Contains(t, out, "plain")

@@ -22,6 +22,12 @@ type RuntimeAsset struct {
 	SourceURL   string // resolved absolute URL the page fetches
 	ContentType string // corrected where the source server was vague (see assetContentType)
 	Body        []byte
+
+	// AssetID is set only by the markup pass (av-oz40), which must know the
+	// id while it is still rewriting the document — the URL it writes into an
+	// <img src> contains it. The runtime pass leaves it empty and takes an id
+	// at storage time, because nothing in the document names those by id.
+	AssetID string
 }
 
 // CollectRuntimeAssets fetches the binary payloads a page loads from

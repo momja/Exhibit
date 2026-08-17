@@ -637,6 +637,16 @@ promise even after the source site rots:
 - **HTML inlining** walks the parsed tree and folds each fetchable reference into the
   document: `<img>`/`<source>` (and `srcset`), icon `<link>`s → `data:` URIs;
   `<script src>` → inline `<script>`; `<link rel=stylesheet>` → inline `<style>`.
+  Above `snapshot.InlineDataURIMaxBytes` the asset instead becomes an out-of-line
+  blob and the reference is rewritten to its asset URL (av-oz40). It is a
+  threshold rather than a rule because both directions have a real cost: inlining
+  is paid at ~1.33x in every place the body travels, while externalizing a
+  200-byte favicon buys a second HTTP request for nothing. Unlike the runtime
+  pass this one *rewrites the document*, and must: an `<img src>` is not loaded
+  through `window.fetch`, so there is nothing to intercept at render. That is
+  safe here in a way it would not have been there — the URL *is* the reference,
+  so an agent preserves it like any attribute, where the runtime pass's injected
+  script could plausibly be dropped as noise.
 - **CSS inlining** recurses through `url()` and `@import` chains (each sheet re-based
   against its own URL), inlining as `data:` URIs with cycle and depth guards.
 - **Runtime-asset inlining** (av-ghvs) is a second pass over the markup-inlined

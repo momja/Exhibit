@@ -40,13 +40,16 @@ import (
 //
 // A non-nil error is returned only for an unrecoverable parse or serialization
 // failure; per-asset failures come back in the slice, never as the error.
-func InlineHTMLAssets(ctx context.Context, f *Fetcher, body string) (string, []*FetchError, error) {
+// sink, when non-nil, receives assets too large to be worth inlining and
+// returns the URL to reference them by instead (av-oz40); pass nil to inline
+// everything, which is what this function did before out-of-line assets existed.
+func InlineHTMLAssets(ctx context.Context, f *Fetcher, body string, sink AssetSink) (string, []*FetchError, error) {
 	doc, err := html.Parse(strings.NewReader(body))
 	if err != nil {
 		return "", nil, err
 	}
 
-	in := &inliner{ctx: ctx, f: f, docBase: documentBase(f)}
+	in := &inliner{ctx: ctx, f: f, docBase: documentBase(f), sink: sink}
 	in.walk(doc)
 
 	var buf bytes.Buffer
@@ -63,6 +66,7 @@ type inliner struct {
 	ctx     context.Context
 	f       *Fetcher
 	docBase string
+	sink    AssetSink
 	errs    []*FetchError
 }
 
@@ -185,7 +189,7 @@ func (in *inliner) inlineLink(n *html.Node) {
 			return
 		}
 		// A fetched sheet re-bases against its own absolute URL, not the doc.
-		css, errs := InlineCSS(in.ctx, in.f, asset.URL, string(asset.Body))
+		css, errs := InlineCSS(in.ctx, in.f, asset.URL, string(asset.Body), in.sink)
 		in.errs = append(in.errs, errs...)
 		n.Data = "style"
 		n.DataAtom = atom.Style
@@ -209,7 +213,7 @@ func (in *inliner) inlineStyleElement(n *html.Node) {
 	if css == "" {
 		return
 	}
-	out, errs := InlineCSS(in.ctx, in.f, in.docBase, css)
+	out, errs := InlineCSS(in.ctx, in.f, in.docBase, css, in.sink)
 	in.errs = append(in.errs, errs...)
 	setText(n, out)
 }
@@ -222,7 +226,7 @@ func (in *inliner) inlineStyleAttr(n *html.Node) {
 		if a.Namespace != "" || a.Key != "style" || a.Val == "" {
 			continue
 		}
-		out, errs := InlineCSS(in.ctx, in.f, in.docBase, a.Val)
+		out, errs := InlineCSS(in.ctx, in.f, in.docBase, a.Val, in.sink)
 		in.errs = append(in.errs, errs...)
 		a.Val = out
 	}
@@ -240,7 +244,7 @@ func (in *inliner) toDataURI(ref string) (string, bool) {
 		in.record(err)
 		return "", false
 	}
-	return dataURI(asset), true
+	return place(in.sink, asset), true
 }
 
 // record appends a fetch failure to the run's residual list.

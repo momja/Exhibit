@@ -366,20 +366,30 @@ func buildCSP(allowlist []string, appOrigin, assetBase string) string {
 
 	// Only emitted when the artifact actually has assets, so an artifact
 	// without them keeps a byte-identical policy to before this existed.
-	connect := "connect-src blob: data:"
-	if assetBase != "" {
-		connect += " " + assetBase
+	//
+	// It reaches every directive an asset can load under, not just connect-src:
+	// the runtime pass's payloads arrive by fetch, but markup assets (av-oz40)
+	// are loaded by the element referencing them — an <img> under img-src, an
+	// @font-face under font-src, a vendored stylesheet under style-src. A
+	// directive left out here fails exactly the way a missing worker-src does:
+	// the element simply never loads, with the artifact looking broken for a
+	// reason the allowlist editor cannot explain.
+	withAssets := func(directive string) string {
+		if assetBase == "" {
+			return directive
+		}
+		return directive + " " + assetBase
 	}
 
 	return strings.Join([]string{
 		"default-src 'none'",
-		withOrigins("script-src 'unsafe-inline' 'unsafe-eval' blob: data:"),
+		withOrigins(withAssets("script-src 'unsafe-inline' 'unsafe-eval' blob: data:")),
 		withOrigins("worker-src blob: data:"),
-		withOrigins("style-src 'unsafe-inline'"),
-		withOrigins("img-src data:"),
-		withOrigins("font-src data:"),
-		withOrigins("media-src blob:"),
-		withOrigins(connect),
+		withOrigins(withAssets("style-src 'unsafe-inline'")),
+		withOrigins(withAssets("img-src data:")),
+		withOrigins(withAssets("font-src data:")),
+		withOrigins(withAssets("media-src blob:")),
+		withOrigins(withAssets("connect-src blob: data:")),
 		withOrigins("form-action 'self'"),
 		"frame-ancestors " + appOrigin,
 	}, "; ")

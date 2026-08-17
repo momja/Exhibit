@@ -176,9 +176,13 @@ var newSnapshotFetcher = func(pageURL string) (*snapshot.Fetcher, error) {
 // per-asset failures are recorded in the report with the rest of the page
 // still vendored. ResidualOrigins is left for the caller, which computes it
 // from the final document.
-// The runtime payloads it collected come back separately: they are stored as
-// blobs of their own once the artifact row exists, not folded into the body.
-func snapshotBody(ctx context.Context, pageURL, body string) (string, []snapshot.RuntimeAsset, *snapshotReport) {
+// Vendored payloads come back separately, to be stored as blobs of their own
+// once the artifact row exists rather than folded into the body. They arrive by
+// two routes, because the two passes cannot substitute the same way: the markup
+// walker rewrites its references through `sink` as it goes (an <img src> is not
+// fetch-loaded, so there is nothing to intercept), while the runtime pass leaves
+// the document untouched and is redirected at render.
+func snapshotBody(ctx context.Context, pageURL, body string, sink snapshot.AssetSink) (string, []snapshot.RuntimeAsset, *snapshotReport) {
 	var assets []snapshot.RuntimeAsset
 	report := &snapshotReport{VendoredURLs: []string{}}
 	f, err := newSnapshotFetcher(pageURL)
@@ -186,7 +190,7 @@ func snapshotBody(ctx context.Context, pageURL, body string) (string, []snapshot
 		report.Error = err.Error()
 		return body, nil, report
 	}
-	out, fetchErrs, err := snapshot.InlineHTMLAssets(ctx, f, body)
+	out, fetchErrs, err := snapshot.InlineHTMLAssets(ctx, f, body, sink)
 	if err != nil {
 		report.Error = err.Error()
 		return body, nil, report
@@ -238,9 +242,15 @@ func (ro *Router) persistRuntimeAssets(ctx context.Context, ownerID int64, artif
 
 	rows := make([]store.ArtifactAsset, 0, len(collected))
 	for _, c := range collected {
-		assetID, err := store.NewAssetID()
-		if err != nil {
-			return err
+		// The markup pass already minted one, because the URL it wrote into
+		// the document contains it; the runtime pass takes one here.
+		assetID := c.AssetID
+		if assetID == "" {
+			minted, err := store.NewAssetID()
+			if err != nil {
+				return err
+			}
+			assetID = minted
 		}
 		// Content-addressed per owner, so one library that loads the same
 		// wasm from two artifacts stores it once — and so deleting one
@@ -309,10 +319,18 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		req.Tier = store.Tier1
 	}
 
+	// The artifact id is minted here rather than after the transform, because
+	// the markup pass rewrites references to their final asset URLs as it
+	// walks — and those URLs contain this id. Nothing is persisted under it
+	// until PutArtifact below, so an ingest that fails leaves nothing behind.
+	ownerID := ownerIDFromCtx(r.Context())
+	id := uuid.New().String()
+
 	var snapReport *snapshotReport
 	var runtimeAssets []snapshot.RuntimeAsset
+	collector := newAssetCollector(ro.cfg.RenderOrigin, id)
 	if req.Snapshot {
-		req.Body, runtimeAssets, snapReport = snapshotBody(r.Context(), req.URL, req.Body)
+		req.Body, runtimeAssets, snapReport = snapshotBody(r.Context(), req.URL, req.Body, collector.sink)
 	}
 
 	// Scan for network footprint. A URL ingest resolves relative references
@@ -336,8 +354,6 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		snapReport.ResidualOrigins = footprint
 	}
 
-	ownerID := ownerIDFromCtx(r.Context())
-	id := uuid.New().String()
 	blobID := uuid.New().String()
 
 	// Store the artifact body
@@ -387,7 +403,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	// Assets go after the row they reference. Never fatal (av-20fk): a
 	// payload that did not land leaves the page's own fetch to reach the
 	// network, which is exactly where it was before any of this existed.
-	if err := ro.persistRuntimeAssets(r.Context(), ownerID, id, runtimeAssets); err != nil {
+	if err := ro.persistRuntimeAssets(r.Context(), ownerID, id, collector.merge(runtimeAssets)); err != nil {
 		slog.WarnContext(r.Context(), "store runtime assets",
 			slog.String("artifact_id", id), slog.String("err", err.Error()))
 		if snapReport != nil {
