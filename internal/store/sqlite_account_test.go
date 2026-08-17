@@ -108,6 +108,16 @@ var accountTables = map[string]accountTable{
 	"artifacts_fts_config":  {reachNone, "fts5 internal storage for artifacts_fts", ""},
 
 	"goose_db_version": {reachNone, "the migration ledger — a property of the database, not of a person", ""},
+
+	// DeleteAccount writes here, and the reach is still `none`: a blob id
+	// reaches this table only in the transaction that deleted the last row
+	// naming it, which was also the last record of whose it was. What survives
+	// the deletion is an id belonging to nobody, condemned in writing — and it
+	// survives only until the caller's drain, or failing that the next
+	// startup's, removes the bytes and the row (av-8gyd, blobqueue.go). An
+	// account deletion that left this table empty would be the actual leak.
+	"pending_blob_deletions": {reachNone,
+		"ids of bytes already condemned, written as the rows naming them were deleted; the drain retires them", ""},
 }
 
 // schemaTables is every table the live database reports, which is the only

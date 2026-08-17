@@ -106,9 +106,11 @@ The only way data changes. Route groups:
   bytes, because the two failure modes are not equally bad — a failed *row*
   delete after the bytes are gone leaves a live artifact whose only copy of
   itself no longer exists, which nothing on the instance can repair; a failed
-  *blob* delete after the row is gone leaves unreferenced bytes an operator can
-  sweep. The blob failure still surfaces as a 500 rather than a silent 204: a
-  deletion that left the file on disk must not claim otherwise.
+  *blob* delete after the row is gone leaves unreferenced bytes, which breaks
+  no row. The blob failure still surfaces as a 500 rather than a silent 204: a
+  deletion that left the file on disk must not claim otherwise. What it no
+  longer means is a permanent leak — the store queued those ids in the delete's
+  own transaction (§3.3a), so the drain is retried until it succeeds.
   `DELETE /api/artifacts/:id/widget` removes the detached widget's blob the
   same way, in the same order — detaching is the only exit a widget blob has,
   since the id is otherwise reused for the artifact's life.
@@ -141,8 +143,8 @@ The only way data changes. Route groups:
   service token is not a person, and would resolve to the single-user default
   owner. The body must carry the typed confirmation phrase, checked here as well
   as in the page, because a client-side interlock is a courtesy to whoever is
-  clicking and never a control. `Store.DeleteAccount` returns the blob ids whose
-  rows it removed and the handler then deletes those bytes (§3.3, av-7jcq); the
+  clicking and never a control. `Store.DeleteAccount` queues the blob ids whose
+  rows it removed and the handler then deletes those bytes (§3.3a, av-7jcq); the
   instance's last enabled admin is refused (`ErrLastAdmin`).
 - collection/tag CRUD.
 - `GET /api/settings/public` — the instance's own name and description
@@ -323,7 +325,8 @@ Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
         list/set/delete per-origin network decisions;
         users and sessions, including local credentials (§3.8),
         the admin mutations over them (§3.8a)
-        and the per-owner entitlements they carry (§3.8c)
+        and the per-owner entitlements they carry (§3.8c);
+        the blob deletion queue (§3.3a)
 Blob:   put/get/delete artifact bodies by id
 ```
 
@@ -515,10 +518,56 @@ carrying a principal is av-c5aq.
 
   Nothing here refuses anything. The number is read by `/profile` and the CLI
   and by nothing that can say no; limits over it are av-10bw.
+- **Condemned blob ids** → `pending_blob_deletions`, the deletion queue (§3.3a).
 
 Because handlers never touch SQLite or the filesystem directly, swapping the metadata
 engine (libSQL/Turso) is a backend implementation change behind a stable interface —
 and the blob backend already is one.
+
+### 3.3a Blob deletion queue (av-8gyd)
+
+Rows and bytes live in two stores that cannot commit together, and the row has
+to go first (above). That leaves a window in which a crash used to leak a file
+permanently, with nothing able to name it afterwards. The fix is not to go
+looking for strays later — the deleting code already knows which blobs it meant
+to remove, so it writes that down:
+
+- The transaction that removes an artifact, or detaches a widget, or erases an
+  account also inserts those blob ids into `pending_blob_deletions`. One
+  transaction, so the intent is recorded exactly when the last reference
+  disappears — which is also the last moment anything could name them.
+- **The enqueue is conditional on a refcount taken in that same transaction**:
+  drop the row, count the rows still referencing that blob id, enqueue only on
+  zero. Two artifacts in one library can legitimately share a blob, so an
+  unconditional enqueue would strip the payload out of the survivor; doing the
+  count inside the transaction is what makes the decision race-free. The count
+  is one query (`internal/store/blobqueue.go`), which is the place a future
+  blob-referencing table has to be added to.
+- After the commit the caller deletes the files, then their queue rows. A crash
+  anywhere leaves the queue rows in place, and `Blob.Delete` is idempotent for
+  a missing id (av-7jcq), so repeating the work costs nothing and needs no
+  compensating existence check.
+
+What the commit makes durable is therefore the *intent*, not the outcome, and
+everything after it is a retry of the same idempotent work — so there is no
+state a crash can leave that a later drain cannot finish.
+
+**When the drain runs.** Synchronously after a delete, for only the ids that
+operation enqueued (bounded and fast, so no request ever walks a backlog), and
+over the whole queue at startup, which is where crash leftovers are reclaimed —
+a crashed process gets restarted, so the restart is the natural pairing. No
+ticker, no worker pool, no scheduler; the queue is a plain table in the same
+database because sharing a transaction with the row delete *is* the mechanism,
+and an external queue would reintroduce the two-store atomicity problem one
+layer up.
+
+**No full scan, anywhere.** A reconciler that walks the blob store and infers
+deletability from a missing reference is the wrong shape: a bug in the
+inference deletes live artifacts, and its cost grows with the library. The
+queue inverts both — it holds only ids something already decided to delete, so
+a bug in the drain can reach nothing but condemned bytes, and it costs nothing
+when idle because it is normally empty. Reclamation is automatic and invisible:
+there is no operator command, and nothing to run by hand.
 
 ### 3.4 Ingest scanner
 
@@ -1101,7 +1150,9 @@ no second guard here to get wrong.
     learning that *after* typing a confirmation phrase is a worse way to learn
     it), and an instance with no login configured has no account to act on.
   Erasure is rows *and* bytes: `DeleteAccount` collects the blob ids inside its
-  transaction and the handler removes those files (av-7jcq). Which tables it
+  transaction and queues them there too, so the handler removing those files is
+  work the next startup repeats if this process does not finish it (§3.3a).
+  Which tables it
   deletes and which the schema's cascades and migration 014's `users` trigger
   delete for it is written down in `sqlite_account.go` and walked by a tripwire
   test — a table added without a decision about account deletion fails the suite.

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/origin"
 	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/snapshot"
@@ -637,30 +635,27 @@ func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
 
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
+	// No pre-read to establish that the artifact exists: the delete itself
+	// answers ErrNotFound (as 404) for an id this owner cannot see, and the
+	// blob ids the handler needs come back from the same call rather than from
+	// a row it looked up beforehand — which is also what keeps them consistent
+	// with what the transaction actually removed.
+	queued, err := ro.cfg.Store.DeleteArtifact(r.Context(), ownerID, id)
 	if err != nil {
-		serverError(w, r, "get artifact for delete", err)
-		return
-	}
-	if a == nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-
-	if err := ro.cfg.Store.DeleteArtifact(r.Context(), ownerID, id); err != nil {
 		writeArtifactError(w, r, "delete artifact", err)
 		return
 	}
 
 	slog.InfoContext(r.Context(), "artifact deleted", slog.String("id", id))
 
-	// The row is gone; now the bytes (av-7jcq). A 500 here reports a delete
-	// that only half happened — the artifact has left the library but its file
-	// is still on disk — and that is the honest status even though retrying
-	// the request now 404s. The error log names the blob ids, which is the
-	// part an operator can act on; the alternative, 204 plus a log line, is
-	// precisely the silent success this ticket exists to remove.
-	if err := deleteArtifactBlobs(r.Context(), ro.cfg.Store, ro.cfg.Blob, a); err != nil {
+	// The rows are gone and the bytes are condemned in writing; now remove
+	// them (av-8gyd). A 500 here reports a delete that only half happened —
+	// the artifact has left the library but its file is still on disk — and
+	// that is the honest status even though retrying the request now 404s.
+	// What it no longer reports is a *permanent* leak: the queue row survives
+	// the failure, so the next startup finishes the job whether or not anybody
+	// reads the log.
+	if err := ro.reclaimBlobs(r.Context(), queued); err != nil {
 		serverError(w, r, "delete artifact blobs", err)
 		return
 	}
@@ -668,51 +663,9 @@ func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// artifactBlobIDs is every blob an artifact owns: its body, plus its widget
-// when it has one.
-//
-// Two is the whole list, not the newest of a series. Both ids are minted once
-// and rewritten in place — an edit PUTs the new body back into
-// a.SourceBlobID, a refetch does the same, and a widget save reuses
-// a.WidgetBlobID so the tile's render URL stays stable across edits
-// (widget.go) — so no earlier version of either is left behind to find.
-func artifactBlobIDs(a *store.Artifact) []string {
-	ids := []string{a.SourceBlobID}
-	if a.WidgetBlobID != "" {
-		ids = append(ids, a.WidgetBlobID)
-	}
-	return ids
-}
-
-// deleteBlobs removes a list of blobs, attempting every id even if one fails.
-//
-// The first error encountered is wrapped with the blob id and returned; all
-// other ids are still attempted, so one unremovable file cannot strand the
-// rest. This is the shared deletion logic profile.go and artifacts.go both
-// need: attempt everything, wrap the first failure as "blob %s: %w", return
-// that first error.
-func deleteBlobs(ctx context.Context, st store.Store, blobs blob.Store, ids []string) error {
-	var firstErr error
-	for _, id := range ids {
-		if err := blobs.Delete(ctx, id); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("blob %s: %w", id, err)
-		}
-	}
-	// And the recorded lengths, which are rows rather than bytes (av-fw1b).
-	// Attempted even when a byte delete failed, because the two answer
-	// different questions and the size row is the one that is *inert* while it
-	// lasts: it is charged to nobody once no row references its blob, so
-	// leaving it is untidiness, not a wrong number. That is also why its
-	// failure never displaces an earlier one — the byte that stayed on disk is
-	// the more important half of this report.
-	if err := st.ForgetBlobSizes(ctx, ids); err != nil {
-		slog.WarnContext(ctx, "forget blob sizes", slog.String("err", err.Error()))
-	}
-	return firstErr
-}
-
-// deleteArtifactBlobs removes the bodies an artifact owned. Call it *after*
-// the row is gone.
+// reclaimBlobs removes the bytes of the ids a delete operation just queued,
+// and retires their queue rows. Call it *after* the transaction that condemned
+// them committed.
 //
 // That ordering is the decision, and it turns on an asymmetry between the two
 // failure modes:
@@ -720,17 +673,21 @@ func deleteBlobs(ctx context.Context, st store.Store, blobs blob.Store, ids []st
 //   - Bytes first, and a failing row delete leaves a live artifact pointing at
 //     a body that no longer exists. It renders an error forever and nothing on
 //     the instance can repair it, because the blob was the only copy.
-//   - Row first, and a failing blob delete leaves bytes nobody references.
-//     That is exactly the state the product shipped in before av-7jcq, it
-//     breaks no row, and an operator can sweep it using the ids the caller's
-//     error log names.
+//   - Rows first, and a failing blob delete leaves bytes nobody references.
+//     That breaks no row, and since av-8gyd it is not even a leak: the ids sit
+//     in pending_blob_deletions until a drain succeeds.
 //
-// Prefer the recoverable failure: the row goes first. The blob failure is
-// still returned rather than swallowed — a deletion that left the bytes on
-// disk must not report success.
+// Prefer the recoverable failure: the rows go first. The blob failure is still
+// returned rather than swallowed — a deletion that left the bytes on disk must
+// not report success.
 //
-// Every id is attempted before the first error is returned, so one unremovable
-// file cannot strand the artifact's other body.
-func deleteArtifactBlobs(ctx context.Context, st store.Store, blobs blob.Store, a *store.Artifact) error {
-	return deleteBlobs(ctx, st, blobs, artifactBlobIDs(a))
+// Only this operation's own ids are passed, never the whole queue, so no
+// request ever walks a backlog; the backlog is the startup drain's job
+// (cmd/server/main.go).
+func (ro *Router) reclaimBlobs(ctx context.Context, queued []string) error {
+	if len(queued) == 0 {
+		return nil
+	}
+	_, err := ro.cfg.Store.DrainBlobDeletions(ctx, ro.cfg.Blob, queued)
+	return err
 }

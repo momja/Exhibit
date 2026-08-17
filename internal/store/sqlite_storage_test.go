@@ -112,7 +112,8 @@ func TestSharedBlobIsChargedInFullToEachOwnerAndOnceWithinOne(t *testing.T) {
 
 	// And the stability half of the claim: owner 2 deleting their copy leaves
 	// owner 1's total exactly where it was.
-	require.NoError(t, s.DeleteArtifact(context.Background(), 2, "theirs"))
+	_, err := s.DeleteArtifact(context.Background(), 2, "theirs")
+	require.NoError(t, err)
 	assert.Equal(t, int64(5000), usage(t, s, 1))
 	assert.Zero(t, usage(t, s, 2))
 }
@@ -125,19 +126,21 @@ func TestDeletingAnArtifactDropsItsBytes(t *testing.T) {
 	putSized(t, s, "a1", 1, "a1-body", 1000, "a1-widget", 200)
 	putSized(t, s, "a2", 1, "a2-body", 40, "", 0)
 
-	require.NoError(t, s.DeleteArtifact(ctx, 1, "a1"))
+	_, err := s.DeleteArtifact(ctx, 1, "a1")
+	require.NoError(t, err)
 	assert.Equal(t, int64(40), usage(t, s, 1), "both of the artifact's blobs stop counting")
 }
 
-// Detaching a widget is the same story one column down: SetWidgetBlobID("")
-// removes the reference, so the tile's bytes stop being charged even though
-// the artifact stays.
+// Detaching a widget is the same story one column down: DeleteWidget removes
+// the reference, so the tile's bytes stop being charged even though the
+// artifact stays.
 func TestDetachingAWidgetDropsItsBytes(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	putSized(t, s, "a1", 1, "a1-body", 1000, "a1-widget", 200)
 
-	require.NoError(t, s.SetWidgetBlobID(ctx, 1, "a1", ""))
+	_, err := s.DeleteWidget(ctx, 1, "a1")
+	require.NoError(t, err)
 	assert.Equal(t, int64(1000), usage(t, s, 1))
 }
 
@@ -153,8 +156,10 @@ func TestForgetBlobSizesKeepsStillReferencedLengths(t *testing.T) {
 	putSized(t, s, "solo", 1, "solo-body", 70, "", 0)
 
 	// Owner 1 deletes both of theirs and asks for every id to be forgotten.
-	require.NoError(t, s.DeleteArtifact(ctx, 1, "mine"))
-	require.NoError(t, s.DeleteArtifact(ctx, 1, "solo"))
+	_, err := s.DeleteArtifact(ctx, 1, "mine")
+	require.NoError(t, err)
+	_, err = s.DeleteArtifact(ctx, 1, "solo")
+	require.NoError(t, err)
 	require.NoError(t, s.ForgetBlobSizes(ctx, []string{shared, "solo-body"}))
 
 	assert.Equal(t, int64(5000), usage(t, s, 2), "the shared length survives, because owner 2 still references it")

@@ -103,10 +103,11 @@ func TestDeleteAccountTakesStorageToZero(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(len(body)+len(tile)), used)
 
-	// What the route does, in its order: rows first, then the bytes.
-	blobIDs, err := r.cfg.Store.DeleteAccount(ctx, member.ID)
+	// What the route does, in its order: rows first, then the bytes the
+	// deleting transaction queued (av-8gyd).
+	queued, err := r.cfg.Store.DeleteAccount(ctx, member.ID)
 	require.NoError(t, err)
-	require.NoError(t, deleteBlobs(ctx, r.cfg.Store, r.cfg.Blob, blobIDs))
+	require.NoError(t, r.reclaimBlobs(ctx, queued))
 
 	used, err = r.cfg.Store.StorageUsage(ctx, member.ID)
 	require.NoError(t, err)

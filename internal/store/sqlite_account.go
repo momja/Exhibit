@@ -54,7 +54,7 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 }
 
 // DeleteAccount erases everything this instance holds for userID and returns
-// the blob ids whose bytes the caller must now remove.
+// the blob ids it queued for deletion, for the caller to drain.
 //
 // # Why it returns blob ids rather than deleting them
 //
@@ -64,10 +64,13 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 // blobs" call and this one would have its row deleted here and its bytes
 // missed, and there is no later reader that could ever find them again.
 //
-// The caller deletes the bytes after this returns, which is the same row-first
-// order deleteArtifactBlobs takes and for the same reason: bytes-first risks a
-// live row pointing at a body that no longer exists, and only that failure is
-// unrepairable.
+// The caller drains them after this returns, which is the same row-first order
+// DeleteArtifact takes and for the same reason: bytes-first risks a live row
+// pointing at a body that no longer exists, and only that failure is
+// unrepairable. What makes the window safe is that the returned ids are also
+// written to pending_blob_deletions in this transaction (av-8gyd), so a crash
+// before the caller drains leaves the work for the next startup rather than
+// leaking the files.
 //
 // # What it deletes, and what deletes itself
 //
@@ -145,6 +148,17 @@ func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string
 		}
 	}
 
+	// Every row that named those blobs is gone, so the refcount each id is
+	// judged against is final: enqueue the ones nothing references any more
+	// (av-8gyd). It happens inside this transaction for the same reason
+	// collecting the ids did — after the commit nothing in the database can
+	// name them, so a crash before the files are unlinked would leak them with
+	// no way left to find them.
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, blobIDs...)
+	if err != nil {
+		return nil, err
+	}
+
 	// The lengths recorded for those blobs, last, once every row that could
 	// have referenced them is gone — forgetBlobSizesTx keeps any id another
 	// owner still references, which is the whole reason it is a reference
@@ -157,7 +171,7 @@ func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return blobIDs, nil
+	return queued, nil
 }
 
 // artifactBlobIDs is every blob id an owner's artifacts name: the body of each,

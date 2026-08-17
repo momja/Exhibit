@@ -80,7 +80,15 @@ func ownerCases() []ownerCase {
 			return false, s.UpdateArtifact(ctx, o, id, map[string]any{"network_allowlist": []string{"https://evil.example.com"}})
 		}},
 		{"DeleteArtifact", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.DeleteArtifact(ctx, o, id)
+			_, err := s.DeleteArtifact(ctx, o, id)
+			return false, err
+		}},
+		{"SetWidgetBlobID", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			return false, s.SetWidgetBlobID(ctx, o, id, "widget-blob-"+id)
+		}},
+		{"DeleteWidget", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, err := s.DeleteWidget(ctx, o, id)
+			return false, err
 		}},
 		{"ListOriginDecisions", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			d, err := s.ListOriginDecisions(ctx, o, id)
@@ -367,6 +375,15 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"SetAgentKey":         "carries the owner in AgentKey.OwnerID",
 		"GetArtifactUnscoped": "deliberate render/share exception (av-c5aq)",
 		"GetShareUnscoped":    "deliberate share exception (architecture §7)",
+
+		// The blob deletion queue (av-8gyd). A blob id is written here only by
+		// the transaction that deleted the last row naming it — which is also
+		// the last record of whose it was. There is no owner left to scope by,
+		// and nothing to leak: the queue holds ids of bytes already condemned,
+		// never a way to reach a live artifact.
+		"PendingBlobDeletions":  "queued ids outlive the rows that owned them; there is no owner left",
+		"DrainBlobDeletions":    "removes bytes already condemned; the ids come from the caller's own delete",
+		"DrainAllBlobDeletions": "a janitor over the whole queue, owned by no one",
 
 		// Identity and sessions (av-30rj). These methods *establish* who the
 		// owner is; they cannot take one as input without assuming the answer

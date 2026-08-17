@@ -192,7 +192,28 @@ type Store interface {
 	// because widget_blob_id is not caller-writable: the generic update map is
 	// a decoded PATCH body, and this id is minted server-side.
 	SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error
-	DeleteArtifact(ctx context.Context, ownerID int64, id string) error
+	// DeleteArtifact removes the artifact and returns the blob ids it queued
+	// for deletion; DeleteWidget does the same for the widget an artifact
+	// detaches. Both enqueue inside the transaction that dropped the
+	// reference, and only for a blob no remaining row names (blobqueue.go).
+	// The caller hands what comes back to DrainBlobDeletions.
+	DeleteArtifact(ctx context.Context, ownerID int64, id string) ([]string, error)
+	DeleteWidget(ctx context.Context, ownerID int64, artifactID string) ([]string, error)
+
+	// The blob deletion queue (av-8gyd). Rows and bytes live in two stores
+	// that cannot commit together, so the *intent* to remove the bytes is
+	// recorded in the transaction that removed the rows, and these three
+	// finish the job: drain what one operation just enqueued (synchronously,
+	// after it) or drain the whole queue at startup, which is where a crashed
+	// process's leftovers are reclaimed. Draining is idempotent, so repeating
+	// one costs nothing.
+	//
+	// None of the three takes an owner, and none can: a blob id reaches the
+	// queue only once the last row naming it — and with it the last record of
+	// whose it was — has been deleted.
+	PendingBlobDeletions(ctx context.Context) ([]string, error)
+	DrainBlobDeletions(ctx context.Context, blobs BlobDeleter, ids []string) (int, error)
+	DrainAllBlobDeletions(ctx context.Context, blobs BlobDeleter) (int, error)
 
 	// Network origin decisions (exhibit-x87). ListOriginDecisions returns
 	// every decision for an artifact, allow and block alike, ordered by
@@ -412,8 +433,8 @@ type Store interface {
 	// (see the type).
 	GetAccountSummary(ctx context.Context, userID int64) (AccountSummary, error)
 	// DeleteAccount erases the account and everything it owns, returning the
-	// blob ids whose bytes the caller must then remove — collected inside the
-	// same transaction, because after it commits nothing can name them again.
+	// blob ids it queued for deletion — collected and enqueued inside the same
+	// transaction, because after it commits nothing can name them again.
 	// ErrLastAdmin when the account is the instance's only enabled admin;
 	// ErrNotFound when there is no such account. sqlite_account.go says what
 	// it deletes and what the schema's cascades delete for it.

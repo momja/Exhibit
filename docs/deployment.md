@@ -775,6 +775,16 @@ length the bytes actually have. A blob it cannot read keeps the length already
 recorded for it and is reported on the line, so a backend hiccup cannot
 silently shrink somebody's total.
 
+### 8.1 Reclaiming what was deleted
+
+Nothing to do. Deleting an artifact — or a widget, or a whole account — removes
+its bytes from the data volume as part of the request, and any file a crash
+left behind is removed by the next startup: the ids are written to the database
+by the same transaction that deleted the rows, so the intent to delete them
+outlives the process. There is no sweep to schedule and no reclaim command to
+run. A `reclaimed queued blob deletions` line in the startup log just means the
+previous run ended mid-delete.
+
 ## 9. What each account is allowed
 
 Every account carries an **entitlement**: a plan label, a storage limit, and an
