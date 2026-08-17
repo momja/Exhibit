@@ -163,6 +163,7 @@ Splittable into a child ticket if this one gets too large, but not droppable —
 - Deletability of a generation is answered by a count over recorded generation ids, never by inspecting body content — asserted by a test in which the body's fetch literal is gone but the generation is still referenced, and the asset survives.
 - Each asset row records the generation that created it, and the schema can express which body version a generation belongs to — even though version history ([[av-3pq6]]) does not exist yet and nothing reads the link.
 - Artifacts already carrying inlined `data:` payloads continue to render unchanged.
+- `architecture.md` §3.4a is rewritten: the runtime pass records assets rather than inlining them, and the manifest moves into the render preamble described in §3.2 — where it also replaces the note explaining the two independent `fetch` wrappers. §3.1 gains the asset route, §3.3 the assets table. `technical_stack.md` §4 and §7 follow.
 
 
 ## Notes

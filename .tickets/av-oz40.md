@@ -48,4 +48,5 @@ Rewriting is safe here in a way it would not have been for the runtime pass. av-
 - The emitted CSP carries the per-artifact asset path in `img-src`, `font-src`, `media-src`, `style-src`, and `script-src`; `artifact_network_origins` gains no row.
 - Export ([[av-vnkt]]) produces a single file that opens from `file://` with the service stopped, with images intact and no reference to `RENDER_ORIGIN`.
 - Artifacts already carrying inlined `data:` URIs continue to render unchanged.
+- `architecture.md` §3.4a records the second substitution mechanism (rewrite at ingest) beside the first (fetch interception), and the CSP directive list in §3.2 is updated.
 
