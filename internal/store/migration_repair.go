@@ -3,7 +3,9 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/pressly/goose/v3"
@@ -13,7 +15,7 @@ import (
 // once applied is "already applied" forever, whatever file carries that number
 // afterwards — so if two different migrations are ever numbered the same, the
 // second one is silently skipped on every database that took the first. It has
-// happened twice here:
+// happened three times here:
 //
 //   - version 5. 005_agent.sql was renumbered to 007 (commit 1162b17) and
 //     version 5 reassigned to 005_downloads_approved.sql. Databases that ran
@@ -28,7 +30,15 @@ import (
 //     2026-07-31, so that database skips it and never gets widget_blob_id.
 //     Symptom: "no such column: a.widget_blob_id".
 //
-// The repair for both is a guarded, idempotent ADD COLUMN registered as a Go
+//   - version 13. 013_links_approved.sql (av-r0dk) landed on main and was
+//     applied to the deployed instance on 2026-08-16; merging the multi-user
+//     integration branch hours later renumbered that file to 018 and gave 13
+//     to 013_users_sessions.sql. A database that took the first 13 therefore
+//     skips users/sessions forever, and the very next migration — 014, whose
+//     trigger fires on DELETE FROM users — cannot even be created.
+//     Symptom: "no such table: main.users", at startup, before the store opens.
+//
+// The repair for the first two is a guarded, idempotent ADD COLUMN registered as a Go
 // migration at a version no migration has ever used. Renumbering the skipped
 // file instead would just repeat the original mistake in the other direction:
 // databases that *did* apply it under its current number would skip the
@@ -41,6 +51,18 @@ import (
 // globally so goose collects them alongside the embedded .sql migrations
 // (collectGoMigrations supports registered Go migrations with no matching .go
 // file in the embed FS).
+//
+// Version 13 needs more than a column, and it is the one case that column
+// repairs cannot reach: what the collided database is missing is two tables
+// every later migration builds on, and goose runs in ascending order, so no
+// migration numbered above 13 can supply them in time. The repair is therefore
+// to the *ledger*, before goose runs at all (repairLedger below): the
+// version-13 row in such a database records a migration that is now version 18,
+// so it is deleted and 013_users_sessions.sql is left to run normally. Its
+// partner is the guarded repair at version 18 — the collided database already
+// carries artifacts.links_approved from that same version-13 run, so the bare
+// ALTER that used to live in 018_links_approved.sql would fail the moment
+// migrations got that far.
 
 // columnRepair is one guarded ADD COLUMN: at goose version Version, ensure
 // Table has Column, adding it with AddStatement when it does not.
@@ -71,6 +93,76 @@ var columnRepairs = []columnRepair{
 		Column:       "widget_blob_id",
 		AddStatement: `ALTER TABLE artifacts ADD COLUMN widget_blob_id TEXT NOT NULL DEFAULT ''`,
 	},
+	{
+		// Not a repair for a *skipped* migration: this is 018_links_approved.sql
+		// itself, made guarded. The column arrives twice over — under version 13
+		// on any database that ran the pre-merge numbering, and under version 18
+		// everywhere else — and only the guard lets one file serve both.
+		Version:      18,
+		Source:       "018_repair_links_approved.go",
+		Table:        "artifacts",
+		Column:       "links_approved",
+		AddStatement: `ALTER TABLE artifacts ADD COLUMN links_approved INTEGER NOT NULL DEFAULT 0`,
+	},
+}
+
+// usersSessionsVersion is the version 013_users_sessions.sql carries, and the
+// version the pre-merge 013_links_approved.sql carried before it.
+const usersSessionsVersion = 13
+
+// repairLedger deletes a version-13 ledger row that records the *other*
+// migration once numbered 13, so 013_users_sessions.sql can run.
+//
+// The condition identifies the collision exactly rather than guessing at it: a
+// database whose ledger says 13 is applied but which has no `users` table did
+// not run 013_users_sessions.sql, because that is the only thing that file
+// does. Nothing else in the schema can produce that pair.
+//
+// It runs before goose, and it is code rather than a one-off UPDATE typed on
+// the affected host, for the same reason the column repairs are: a database
+// restored from a backup taken before the fix arrives in the collided state
+// again, and would need somebody to remember why.
+func repairLedger(ctx context.Context, db *sql.DB) error {
+	ledger, err := hasTable(ctx, db, "goose_db_version")
+	if err != nil || !ledger {
+		return err // a fresh database has no ledger and nothing to repair
+	}
+	var recorded int
+	if err := db.QueryRowContext(ctx,
+		`SELECT count(*) FROM goose_db_version WHERE version_id = ?`,
+		usersSessionsVersion).Scan(&recorded); err != nil {
+		return err
+	}
+	if recorded == 0 {
+		return nil
+	}
+	users, err := hasTable(ctx, db, "users")
+	if err != nil || users {
+		return err
+	}
+	if _, err := db.ExecContext(ctx,
+		`DELETE FROM goose_db_version WHERE version_id = ?`,
+		usersSessionsVersion); err != nil {
+		return err
+	}
+	slog.Warn("repaired migration ledger: version 13 recorded the renumbered links_approved migration, "+
+		"so users/sessions never ran; the row is cleared and 013_users_sessions.sql will apply now",
+		slog.Int("version", usersSessionsVersion))
+	return nil
+}
+
+// hasTable reports whether the database defines table (a table or a view).
+func hasTable(ctx context.Context, db *sql.DB, table string) (bool, error) {
+	var name string
+	err := db.QueryRowContext(ctx,
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 var registerRepairsOnce sync.Once

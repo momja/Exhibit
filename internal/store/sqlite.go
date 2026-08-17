@@ -42,7 +42,10 @@ func OpenSQLite(path string) (*SQLiteStore, error) {
 }
 
 func (s *SQLiteStore) migrate() error {
-	registerRepairMigrations() // guarded, idempotent repairs for the version collisions at 5 and 11
+	registerRepairMigrations() // guarded, idempotent repairs for the version collisions at 5, 11 and 18
+	if err := repairLedger(context.Background(), s.db); err != nil {
+		return fmt.Errorf("ledger: %w", err)
+	}
 	goose.SetBaseFS(migrationsFS)
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		return err
