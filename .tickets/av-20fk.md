@@ -64,11 +64,22 @@ Two constraints fall out: **the asset route must never redirect** (CSP drops pat
 
 **Lifecycle: what makes an asset deletable.** Moving the manifest out of the body means the body is never consulted to build it, so nothing in the body answers "is this asset still referenced". Nothing can be allowed to: a scan for surviving `fetch` literals is exactly the static analysis this architecture refuses to trust (`scanner.LiteralRefs` is a hint, not analysis), and a runtime-constructed URL never appears as a literal — so a scan-based GC deletes assets that are still in use. Data loss is a worse outcome than leaked bytes, so the rule is that **only decidable questions may authorize a delete**:
 
-| Question | Decidable? | Use |
-|---|---|---|
-| Is there an asset row pointing at this blob? | Yes — rows and blobs are both ours | Operator-level orphan sweep |
-| Was this row created by a superseded ingest? | Yes — generations are recorded | Automatic GC |
-| Does the current body still fetch this URL? | **No** — needs JS analysis | **Never** GC on this basis |
+These are **two questions, not one**, and conflating them is the easiest way to get this wrong.
+
+**Is the asset row deletable?** Three cases say yes; a fourth is permanently undecidable.
+
+| Case | Deletable? |
+|---|---|
+| The artifact is deleted | Yes — certain |
+| A newer generation supersedes this one, and no retained version references the old one | Yes — generations are recorded |
+| The user deletes it in the edit page's asset panel | Yes — explicit |
+| The body no longer fetches it, but none of the above applies | **Never concluded** — the URL may be constructed at run time |
+
+The last row is a leak accepted on purpose. The asset panel is how a human resolves it, because a human can know what the code does and this system cannot.
+
+**Is the blob deletable?** Exactly when **no row references it** — not when *a* row was deleted, but when the *last* one was. So enqueueing for deletion ([[av-8gyd]]) is conditional and happens inside the same transaction: drop the row, count remaining rows for that blob id, enqueue only on zero.
+
+This is load-bearing rather than defensive. Per-owner content addressing means two artifacts in one library legitimately share a blob, so an unconditional enqueue on artifact deletion would silently strip the payload out of the surviving artifact.
 
 **Generations.** Each ingest or refetch that produces assets mints a generation id; asset rows carry it. Render injects only the current generation's manifest. When a new generation supersedes an old one the old *set* becomes deletable as a unit — the body it belonged to has been replaced too, so nothing can still reference it. This is what keeps [[av-b17a]]'s refetch path from accumulating a full asset set per refetch, forever. An ordinary body PATCH does **not** mint a generation and does not touch assets: the body may still fetch them, and we cannot know otherwise.
 
@@ -109,6 +120,7 @@ Note the direction of the interaction: this ticket makes [[av-3pq6]]'s "keep all
 - **An agent that replaces the body wholesale — including one that emits a document with no `<head>` — leaves the artifact still loading its assets.** This is the preview-loop guarantee that render-time injection buys, and the reason it is worth doing.
 - Re-rendering after an agent save re-fetches the render document but **not** the asset: the cache-busting stamp is on the document URL, and the assetID is stable across body rewrites.
 - Deleting an artifact deletes its assets. Deleting one owner's account leaves another owner's artifacts renderable, asserted by a test.
+- **Two artifacts in one library sharing a blob:** deleting one leaves the other rendering, with its bytes intact. The blob is enqueued for deletion only when the last referencing row goes. This is the test that catches an unconditional enqueue.
 - A refetch that produces a new asset set leaves the superseded set deletable and deletes it; repeated refetches do not accumulate asset sets.
 - An ordinary body PATCH never deletes an asset, **including one whose fetch literal no longer appears in the body** — pinned by a test, because this is the case a future "helpful" cleanup would get wrong.
 - The edit page lists the artifact's assets with source URL, size, and content type, plus a total, and can delete one.
@@ -133,3 +145,7 @@ Versioning (av-3pq6) changes the GC rule from 'superseded' to 'no retained versi
 **2026-08-17T04:44:04Z**
 
 No automatic pruning policy: generations are minted only by ingest/refetch (never by edits) and content-addressed, so growth is bounded by real upstream changes. Manual asset panel covers the rest. Full-scan reclamation dropped from av-8gyd — deletion queue only.
+
+**2026-08-17T05:39:26Z**
+
+Clarified deletability as two separate questions: (1) is the ROW deletable — artifact deleted / generation superseded with no retained version / explicit user delete, and never 'the body stopped fetching it'; (2) is the BLOB deletable — only when the last referencing row is gone, refcounted inside the delete transaction. Shared blobs between two artifacts of one owner made this load-bearing.

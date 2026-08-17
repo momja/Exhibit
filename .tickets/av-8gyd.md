@@ -22,6 +22,7 @@ The fix is not to go looking for strays later. The deleting code already knows e
 **A deletion queue.** Deleting bytes spans two stores (rows in SQLite, files on disk) and cannot be atomic, so make the *intent* durable rather than trying to detect the failure afterwards:
 
 - The transaction that removes an artifact, an asset generation, or a widget also inserts those blob ids into `pending_blob_deletions(blob_id, created_at)`. One transaction, so the intent is recorded exactly when the last reference disappears.
+- **Enqueue is conditional on a refcount, evaluated in that same transaction:** drop the row, count the rows still referencing that blob id, enqueue only on zero. Per-owner content addressing ([[av-20fk]]) means two artifacts in one library legitimately share a blob, so an unconditional enqueue would strip the payload out of the surviving artifact. Doing the count inside the transaction is what makes it race-free.
 - After commit, delete the files, then delete their queue rows.
 - A crash anywhere leaves the queue rows in place. Drain at startup and after each delete operation. `blob.Store.Delete` is already idempotent for a missing id ([[av-7jcq]]), so re-running costs nothing and needs no compensating check.
 
@@ -51,6 +52,10 @@ flowchart TD
 
 The shape to read off it: the only irreversible step is the commit, and what the commit makes durable is the *intent*, not the outcome. Everything after it is a retry of the same idempotent work, so there is no state a crash can leave that the next startup cannot finish. The two crash edges converge on one state — a surviving queue row — because that is the only state a crash can produce.
 
+**Stack: nothing new.** `pending_blob_deletions` is a table in the same SQLite database, added by a goose migration and reached through the existing `Store` interface; the drain is an ordinary Go function. This is a constraint, not an aesthetic preference — the mechanism *is* that the enqueue shares a transaction with the row deletion, so moving the queue to Redis, NATS, or a job library would reintroduce the two-store atomicity problem the queue exists to solve, one layer up. No ticker, no worker pool, no scheduler.
+
+**When the drain runs.** Synchronously after a delete, for only the ids that operation enqueued — bounded and fast, so no request ever walks a backlog. And over the whole queue at startup, which is where crash leftovers are reclaimed; a crashed process gets restarted, so the restart is the natural pairing.
+
 **No full scan, anywhere in the product.** A reconciler that walks the blob store and *infers* deletability from a missing reference is the wrong shape: a bug in the inference — a table it forgot to join, a query returning nothing under load — deletes live artifacts, and its cost grows with the library. The queue inverts that. It contains only ids something already decided to delete, so a bug in the drainer can reach nothing but condemned bytes, and it costs nothing when idle because it is normally empty.
 
 **Historical orphans are an operations task, not a product feature.** [[av-7jcq]] added `Delete` without backfilling, so artifacts deleted before it shipped left bodies on disk in existing deployments. That is a one-off on a known volume, handled with a throwaway script against production if it is ever worth the space — not a command shipped in the binary forever to solve a problem that happened once. Asset blobs have no equivalent backlog: [[av-20fk]] is unreleased, so the queue is in place before the first asset blob is ever written.
@@ -61,6 +66,7 @@ The shape to read off it: the only irreversible step is the commit, and what the
 - Killing the process between the delete transaction and the file unlink leaves the blob ids queued, and the next startup removes the files. Asserted by a test simulating the crash, since this is the only reason the queue exists.
 - Draining twice is harmless, and a queued id whose file is already gone drains successfully.
 - The queue never contains a blob id still referenced by a live row — asserted directly, as it is the property that makes automatic draining safe.
+- Deleting one of two artifacts that share a blob enqueues nothing; deleting the second enqueues it once. The surviving artifact renders throughout.
 - Docs describe it as automatic and invisible; there is no operator command to run.
 
 ## Notes
@@ -68,3 +74,7 @@ The shape to read off it: the only irreversible step is the commit, and what the
 **2026-08-17T04:43:45Z**
 
 Dropped the full-scan sweep entirely — no reconciler in the product. The queue is the whole mechanism. Pre-av-7jcq orphaned bodies are a one-off ops script against prod, not a shipped command; asset blobs have no backlog since av-20fk is unreleased.
+
+**2026-08-17T05:39:26Z**
+
+Stack: plain SQLite table + goose migration + Store interface; drain is a Go function called after each delete (own ids only) and at startup (whole queue). An external queue would break the design — sharing a transaction with the row delete IS the mechanism. Also added the missing refcount condition: enqueue only when the last referencing row goes, counted in the same transaction, since per-owner content addressing lets two artifacts share a blob.
