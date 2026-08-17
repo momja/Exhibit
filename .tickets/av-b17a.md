@@ -2,7 +2,7 @@
 id: av-b17a
 status: open
 deps: []
-links: [av-ghvs]
+links: [av-ghvs, av-reo3]
 created: 2026-08-12T02:51:46Z
 type: bug
 priority: 1
