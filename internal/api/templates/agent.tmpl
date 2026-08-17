@@ -89,8 +89,18 @@
 </div>
 <script>
 const TOKEN = {{.Token}};
+{{/* READ_ONLY and TOKEN are one decision, made server-side per request
+     (av-5imk, pagecredential.go): a session-authenticated browser gets no
+     token because its cookie already authenticates it, an anonymous visitor
+     gets no token and READ_ONLY, and a single-user instance with no identity
+     provider gets the static token it has always had. api.js is what spends
+     the result — page scripts never build an Authorization header. Literal
+     template text for the boolean, matching the other bootstrap flags:
+     html/template's JS escaper pads a {{value}} boolean with spaces. */ -}}
+const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 </script>
+<script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/state-api.js"></script>
 {{/* components.js carries the widget-tile health watcher (av-fafu); the
      preview pane renders a tile, so it needs it like the gallery does. */}}

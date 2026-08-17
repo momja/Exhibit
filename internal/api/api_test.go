@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/secrets"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -16,6 +17,17 @@ import (
 )
 
 func newTestRouter(t *testing.T) *Router {
+	t.Helper()
+	ro, _ := newTestRouterWithBlobDir(t)
+	return ro
+}
+
+// newTestRouterWithBlobDir is newTestRouter plus the directory its blob store
+// writes into. The deletion tests (av-7jcq) need it: proving an artifact's
+// bytes are gone means looking at the filesystem, and a test that only asks
+// blob.Store again would pass against an implementation that merely stopped
+// answering for a file it left in place.
+func newTestRouterWithBlobDir(t *testing.T) (*Router, string) {
 	t.Helper()
 
 	f, err := os.CreateTemp("", "test-api-*.db")
@@ -44,10 +56,24 @@ func newTestRouter(t *testing.T) *Router {
 		RenderOrigin: "http://render.test",
 		AuthToken:    "secret",
 		Secrets:      box,
-	})
+	}), blobDir
 }
 
 func authHeader() string { return "Bearer secret" }
+
+// testPageCreds is what a single-user instance's page render produces: the
+// static token, and not read-only. Unit tests that call a render*Page function
+// directly need one; which credential a *request* actually earns is decided by
+// Router.pageCredentials and pinned in pagecredential_test.go.
+var testPageCreds = pageCredentials{Token: "tok"}
+
+// testRenderURLs is the token-minting context a page render normally takes from
+// the request (av-c5aq). Unit tests that call a render*Page function directly
+// need one; the key is throwaway because those tests assert on markup, not on
+// what the render surface will later accept.
+func testRenderURLs(origin string) renderURLs {
+	return renderURLs{origin: origin, signer: rendertoken.NewRandomSigner(), ownerID: defaultOwnerID}
+}
 
 func TestAuthMiddleware(t *testing.T) {
 	r := newTestRouter(t)
@@ -234,4 +260,46 @@ func TestShareCreate(t *testing.T) {
 	share := shareResp["share"].(map[string]any)
 	assert.NotEmpty(t, share["id"])
 	assert.Equal(t, id, share["artifact_id"])
+	// A share has no lifetime of its own (av-8ipt): it is live until deleted,
+	// so the resource says nothing about expiry.
+	assert.NotContains(t, share, "expires_at")
+}
+
+// av-8ipt: share expiry is gone, and a request that still asks for one is told
+// so. Silently dropping the field would hand back a share that never expires
+// while the caller believed otherwise — the same class of defect as a stored
+// flag nothing enforces (av-20xv).
+func TestShareCreateRejectsExpiresAt(t *testing.T) {
+	r := newTestRouter(t)
+
+	body := map[string]any{"title": "Expiry Test", "body": "<html></html>", "network_allowlist": []string{}}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest("POST", "/api/artifacts", bytes.NewReader(b))
+	req.Header.Set("Authorization", authHeader())
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	id := resp["artifact"].(map[string]any)["id"].(string)
+
+	// Any mention of the key is refused, whatever the value carried — one rule
+	// with no sub-cases.
+	for name, value := range map[string]any{
+		"a timestamp": "2030-01-01T00:00:00Z",
+		"null":        nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			sb, _ := json.Marshal(map[string]any{
+				"artifact_id": id, "public": true, "expires_at": value,
+			})
+			req := httptest.NewRequest("POST", "/api/shares", bytes.NewReader(sb))
+			req.Header.Set("Authorization", authHeader())
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Contains(t, w.Body.String(), "expires_at is no longer supported")
+		})
+	}
 }

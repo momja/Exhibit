@@ -1,6 +1,6 @@
 ---
 id: av-sz4e
-status: open
+status: closed
 deps: []
 links: [av-q30x, av-30rj, av-g2dx]
 created: 2026-08-09T17:39:50Z

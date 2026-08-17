@@ -147,7 +147,7 @@ is painful:
 
 ```sql
 artifacts(
-  id, owner_id,            -- owner_id hardcoded to 1 for now
+  id, owner_id,            -- resolves to 1 for now, but every query filters on it
   title, source_blob_id,
   source_url,              -- set when ingested by URL; enables re-fetch (§8.1)
   tier,                    -- 1 | 2
@@ -166,16 +166,37 @@ collections(id, owner_id, name)
 artifact_collections(artifact_id, collection_id)
 tags(id, owner_id, name, color)  -- name unique per owner
 artifact_tags(artifact_id, tag_id)
-artifact_state(artifact_id, key, value, updated_at)  -- the storage shim, §5
-shares(id, artifact_id, public, expires_at)          -- sharing as a row, §7
+-- the storage shim, §5. user_id is the *viewer*, deliberately not owner_id: on
+-- a shared artifact they are different people, and state belongs to whoever
+-- wrote it. One user across any number of devices is still one set of rows —
+-- that is §5.3's whole promise, and nothing here is keyed by device.
+artifact_state(artifact_id, user_id, key, value, updated_at)
+-- sharing as a row, §7. No expiry column: a share lives until it is deleted.
+shares(id, artifact_id, public)
 ```
 
-### 4.5 Identity & auth (staged)
+### 4.5 Identity & auth
 
-- **Now:** a single static token checked by middleware on every API call. `owner_id`
-  always `1`.
-- **Later:** real users behind the same middleware seam (a device-code/OAuth flow added
-  without changing the underlying API contract).
+- **Default:** a single static token checked by middleware on every API call.
+  `owner_id` is `1`, and an instance configured this way is single-user. The owner is
+  a *real predicate*, not a dormant column: every store query that names an artifact
+  filters on it, and one owner's id reads back to another exactly as a nonexistent id
+  does (404, never 403 — a permission error would confirm the row exists). The render
+  and share paths are the two deliberate, explicitly named exceptions; see
+  `architecture.md` §3.3.
+- **Optional login, three ways in:** an operator authenticates at their own reverse
+  proxy (Authelia, Tailscale, basic auth) — Exhibit configures nothing for that —
+  or sets a local username and password, or points `OIDC_ISSUER` at an identity
+  provider. The latter two are *login paths* onto one session layer: each ends by
+  creating the same opaque, server-side-revocable session cookie, and the same
+  middleware seam resolves it to `owner_id`, so the API contract is unchanged
+  whichever was used. The provider's vendor surface is a two-method interface
+  (`architecture.md` §3.8) and no vendor SDK is a dependency.
+- **The local credential is deliberately minimal:** one username and password set
+  at deploy as a bcrypt hash. No registration, no reset flow, no SMTP, no MFA —
+  those are what make owning passwords expensive, and a credential set once by the
+  operator pays none of them. It exists because the alternative for one person with
+  one library on a public network was to stand up an identity server.
 
 ## 5. Cross-device artifact state (the storage shim)
 
@@ -362,9 +383,14 @@ known.
 
 Sharing is a first-class resource, not an export-to-file action.
 
-- A share is a row: `shares(id, artifact_id, public, expires_at)`.
+- A share is a row: `shares(id, artifact_id, public)`.
 - Served at `GET /s/:shareId` with no auth, from the isolated render origin, under the
   artifact's own CSP allowlist.
+- **A share lives until it is deleted.** There is no expiring link: revocation is
+  deleting the row, and that is the only lifetime the product promises. An expiry
+  column existed unused from the first migration and was removed (av-8ipt) rather
+  than left as a dial nothing turns; if forgotten shares become a real problem, the
+  answer is to make what is shared visible in the library, not to add a timer.
 - A one-file self-contained `.html` export is **planned** (CSS/JS already inline) — the
   portable fallback for email/Slack/offline that needs no service at all. Tracked in
   build-order step 3.

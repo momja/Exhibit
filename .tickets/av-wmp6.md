@@ -1,6 +1,6 @@
 ---
 id: av-wmp6
-status: in_progress
+status: closed
 deps: [av-4ac9, av-ep8k]
 links: [av-7k7b, av-q0ub, av-5imk, av-rgp1, av-v991, av-wrbu, av-30rj, av-c5aq, av-ep8k, av-syug]
 created: 2026-07-09T06:04:24Z
@@ -68,3 +68,17 @@ This overlaps av-7k7b directly (read-only publish with the storage shim disabled
 SECOND-ORDER: writes silently vanish for anonymous visitors
 
 Mutating routes stay auth-gated in public mode (AC#3), which is right. But the storage shim's write-through path is `setItem` → postMessage → host frame → `PUT /api/artifacts/:id/state`, and the host's fetch ends in `.catch(function(){})`. An anonymous visitor's write will 401 and be swallowed: the value is in the in-memory cache so the tool looks like it worked, and it is gone on reload. Decide whether public mode should tell the visitor their changes are not being saved, or whether the shim should not persist at all for anonymous renders (which is option (a) above, from the write side). Either way it should be a decision, not an accident.
+
+**2026-08-06T15:59:04Z**
+
+RESOLVED on the feature branch (av-wmp6 implementation).
+
+State exposure — option (a): an anonymous public render inlines NO state, and its shim persists none. This is a DEFAULT CHOSEN IN CODE, not a product decision that was made; a state-driven widget tile will render its empty state on a public gallery. If per-artifact opt-in (option c) is wanted, that needs a column and a new ticket.
+
+Mechanism: rendertoken gains an optional trailing `a` claim (`<owner>.<expiry>.a.<tag>`), inside the MAC because it subtracts authority. `Verify` now returns `Claims{OwnerID, Anonymous}`. `renderURLs` mints the anonymous flavour whenever the request is marked a public visitor, so any page that later serves public visitors inherits statelessness rather than having to remember it.
+
+Second-order (writes vanishing silently): fixed in the render preamble, not the host frame. `ANONYMOUS` short-circuits `persistState`, so the frame never posts a write the API would 401 into a swallowed `.catch`. One fact about one document, both halves in one template.
+
+Routes opened: GET /api/artifacts and GET /api/artifacts/:id only, resolved to PUBLIC_OWNER_ID by ownerMiddleware. /state, /widget, /transcripts, collections, tags, shares and agent routes all stay authenticated, as does every mutating method.
+
+Still open for the frontend tickets (av-eu3v/av-epnt/av-n8v5): the gallery PAGE routes sit outside the auth group and embed AUTH_TOKEN in their bootstrap script. Nothing marks a page request as a public visitor today (correctly — without an identity provider the operator and a visitor are indistinguishable there), so no page is anonymous-readable yet. Whoever builds the public page must both set the public-visitor mark AND stop emitting the token.

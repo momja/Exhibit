@@ -1,6 +1,6 @@
 ---
 id: av-4ac9
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-07-09T06:04:16Z
@@ -18,3 +18,13 @@ Add configuration layer for public instance mode: PUBLIC_MODE_ENABLED (bool), PU
 
 1. PUBLIC_MODE_ENABLED env var is read at startup and accessible to handlers. 2. PUBLIC_INSTANCE_NAME and PUBLIC_INSTANCE_DESCRIPTION are read and stored/accessible. 3. GET /api/settings/public returns {name, description} (empty strings if unset). 4. When public mode is off, existing auth behavior is unchanged. 5. Config is available to the Go gallery renderer without requiring a database round-trip if env-based.
 
+
+## Notes
+
+**2026-08-06T05:24:31Z**
+
+Added a fifth knob the ticket did not name: PUBLIC_OWNER_ID (int, default 1).
+
+This ticket predates av-ep8k, which made owner_id a real query predicate — every artifact read now filters on an owner. 'The library' is therefore no longer a well-defined phrase on an instance that may hold several, and a public instance has to say whose library it publishes. Naming the owner is config, which is exactly this ticket's job; resolving an unauthenticated request TO that owner is av-wmp6's, and is deliberately not implemented here. av-wmp6 inherits a named owner rather than having to invent one.
+
+Also decided here: GET /api/settings/public 404s when public mode is off, rather than returning empty strings. An instance that has not opted into being public should not name itself to an unauthenticated stranger, and 200-with-empty-strings is already the meaningful answer for 'public, but the operator set no name' — reusing it for 'not public' would collapse two states into one body.

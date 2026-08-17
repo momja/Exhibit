@@ -1,8 +1,8 @@
 ---
 id: av-e0yj
-status: in_progress
+status: closed
 deps: []
-links: [av-hrtv, Exh-k75k, av-c5aq, av-ep8k]
+links: [av-hrtv, Exh-k75k]
 created: 2026-08-03T05:01:16Z
 type: bug
 priority: 1

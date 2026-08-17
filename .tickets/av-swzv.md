@@ -1,6 +1,6 @@
 ---
 id: av-swzv
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-08-05T04:48:32Z

@@ -17,11 +17,34 @@
   {{.LogoSVG}}
   <h1>Exhibit</h1>
   <span class="spacer"></span>
-  {{/* Ingest moved to its own page (av-qo0j), so the library's single
-       creation affordance is this primary button. The agent link it replaced
-       isn't lost — the agent is the third creation route on /new, which is
-       where creation now lives. */}}
-  <a class="btn" href="/new"><i class="ph ph-plus"></i> Add artifact</a>
+  {{/* Administration is a secondary control, and it appears only for an
+       admin (av-utap). The hiding is a courtesy to everyone else, not a
+       control: /admin/users carries its own adminOnly guard, so a visitor who
+       types the URL is refused there rather than admitted by a template that
+       forgot to hide a link.
+
+       It keeps its label while the two controls after it lose theirs. Being
+       conditional and rare is exactly why: collapsing it to a third anonymous
+       glyph would leave a row of icons that says nothing. */}}
+  {{if .IsAdmin}}<a class="btn btn-sec" href="/admin/users"><i class="ph ph-users-three"></i> Accounts</a>{{end}}
+  {{/* Two icon-only peers (av-qo05) — same box, same weight, so neither reads
+       as the "real" one. The header's subject is the library below it, and a
+       wide primary button made the header the loudest thing on a page it is
+       not about. Add artifact is still the library's one creation route —
+       ingest lives at /new (av-qo0j), the agent included — it just stops
+       shouting.
+
+       Dropping the visible label costs discoverability, so each carries an
+       aria-label (the accessible name, for screen readers and voice control)
+       and a title (the pointer tooltip, for everyone else). The empty-library
+       state below still spells the affordance out in words, which is where
+       someone arriving with nothing on the shelf learns it. */}}
+  <a class="btn btn-sec icon-btn" href="/new" aria-label="Add artifact" title="Add artifact"><i class="ph ph-plus" aria-hidden="true"></i></a>
+  {{/* Static means static: an anchor to a page, no menu and no JS. What
+       belongs on that page — deletion, the agent key, active sessions — each
+       needs explanation or a confirmation beside it, and none of that fits a
+       menu item. */}}
+  <a class="btn btn-sec icon-btn" href="/profile" aria-label="Your account" title="Your account"><i class="ph ph-user-circle" aria-hidden="true"></i></a>
 </header>
 <main>
 {{/* Search leads the page: with the upload card gone, the library opens on
@@ -64,8 +87,18 @@
      form's source field, which moved to /new with it. */}}
 <script>
 const TOKEN = {{.Token}};
+{{/* READ_ONLY and TOKEN are one decision, made server-side per request
+     (av-5imk, pagecredential.go): a session-authenticated browser gets no
+     token because its cookie already authenticates it, an anonymous visitor
+     gets no token and READ_ONLY, and a single-user instance with no identity
+     provider gets the static token it has always had. api.js is what spends
+     the result — page scripts never build an Authorization header. Literal
+     template text for the boolean, matching the other bootstrap flags:
+     html/template's JS escaper pads a {{value}} boolean with spaces. */ -}}
+const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const DEFAULT_TAG_COLOR = {{.DefaultTagColor}};
 </script>
+<script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/components.js"></script>
 <script src="/assets/gallery/index.js"></script>
 </body>

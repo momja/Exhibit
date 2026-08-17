@@ -11,8 +11,16 @@ import (
 var (
 	// ErrNotFound means the row (or an owner-scoped row it references) does not exist.
 	ErrNotFound = errors.New("not found")
-	// ErrDuplicateName means a per-owner name uniqueness constraint was violated.
+	// ErrDuplicateName means a name uniqueness constraint was violated —
+	// per-owner for tags and collections, instance-wide for a local login
+	// name (av-rzvf), which has only one namespace because there is only one
+	// user directory.
 	ErrDuplicateName = errors.New("name already exists")
+	// ErrLastAdmin means a change was refused because it would have left the
+	// instance with no enabled admin — nobody able to create an account,
+	// re-enable one, or reset a password (av-utap). It is a refusal, not a
+	// failure: nothing was written.
+	ErrLastAdmin = errors.New("the last enabled admin cannot be demoted or disabled")
 )
 
 type Tier int
@@ -100,11 +108,12 @@ type OriginDecision struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// Share is a link to an artifact. It has no lifetime of its own: a share lives
+// until its row is deleted (av-8ipt dropped the never-set expires_at column).
 type Share struct {
-	ID         string     `json:"id"`
-	ArtifactID string     `json:"artifact_id"`
-	Public     bool       `json:"public"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	ID         string `json:"id"`
+	ArtifactID string `json:"artifact_id"`
+	Public     bool   `json:"public"`
 }
 
 // AgentKey is an owner's BYO agent provider credential. KeyCiphertext is the
@@ -117,7 +126,20 @@ type AgentKey struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// OwnerID and ViewerID name the two principals the state methods below take.
+// Both hold a users.id value and are numerically interchangeable as plain
+// int64, which is exactly what let a caller transpose them and still
+// compile despite the doc comment's claim otherwise. Distinct types close
+// that gap: passing one where the other belongs is now a compile error, not
+// a silent cross-tenant read.
+type OwnerID int64
+type ViewerID int64
+
 type ListOptions struct {
+	// OwnerID scopes the listing to one owner. It is not optional: the zero
+	// value matches no owner, so a caller that forgets it gets an empty list
+	// rather than everyone's library.
+	OwnerID     int64
 	Query       string
 	Tags        []string
 	Collections []string
@@ -125,13 +147,42 @@ type ListOptions struct {
 	Offset      int
 }
 
+// Store is the seam between handlers and persistence (architecture §3.3).
+//
+// # Owner scoping (av-ep8k)
+//
+// Every method that names an artifact takes the requesting owner and filters
+// on it *in SQL* — for the artifact-child tables (state, origin decisions,
+// transcripts, shares, collection membership) through the owner-scoped EXISTS
+// subquery the tag joins use. Ownership is therefore a property of the query,
+// not a pre-check a future caller can forget to perform.
+//
+// The invariant these methods hold: **another owner's id is indistinguishable
+// from an id that does not exist.** A cross-tenant read returns the same
+// (nil, nil) a missing row does; a cross-tenant write returns ErrNotFound.
+// Neither ever returns a permission error, because "you may not touch this"
+// confirms the row exists and turns the API into a membership oracle over
+// artifact ids.
+//
+// The two Unscoped accessors are the deliberate, greppable exceptions — see
+// their doc comments.
 type Store interface {
-	// Artifacts
+	// Artifacts. PutArtifact takes the owner from a.OwnerID.
 	PutArtifact(ctx context.Context, a *Artifact) error
-	GetArtifact(ctx context.Context, id string) (*Artifact, error)
+	// GetArtifact returns (nil, nil) when the artifact does not exist *or*
+	// belongs to another owner — the two cases are deliberately identical
+	// (see the type comment). Handlers turn nil into 404.
+	GetArtifact(ctx context.Context, ownerID int64, id string) (*Artifact, error)
+	// GetArtifactUnscoped resolves an artifact with no owner check. It exists
+	// for the render surface and the share path, which have no session and no
+	// owner in context: on RENDER_ORIGIN authorization is the signed render
+	// token (av-c5aq) or the share row itself (architecture §7), not an owner
+	// comparison. The name is long and explicit so `grep Unscoped` enumerates
+	// the entire un-owner-scoped read surface.
+	GetArtifactUnscoped(ctx context.Context, id string) (*Artifact, error)
 	ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error)
-	UpdateArtifact(ctx context.Context, id string, updates map[string]any) error
-	DeleteArtifact(ctx context.Context, id string) error
+	UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error
+	DeleteArtifact(ctx context.Context, ownerID int64, id string) error
 
 	// Network origin decisions (exhibit-x87). ListOriginDecisions returns
 	// every decision for an artifact, allow and block alike, ordered by
@@ -143,17 +194,22 @@ type Store interface {
 	// rows, deliberately leaving block rows untouched so a caller that only
 	// knows the allowlist (the edit page's single PATCH) can never silently
 	// clear a "don't ask again" decision.
-	ListOriginDecisions(ctx context.Context, artifactID string) ([]OriginDecision, error)
-	AllowedOrigins(ctx context.Context, artifactID string) ([]string, error)
-	SetOriginDecision(ctx context.Context, artifactID, origin, decision, source string) error
-	DeleteOriginDecision(ctx context.Context, artifactID, origin string) error
-	ReplaceAllowedOrigins(ctx context.Context, artifactID string, origins []string, source string) error
+	//
+	// All five are owner-scoped on the artifact: another owner's artifact has
+	// no decisions to read and cannot be written to (ErrNotFound).
+	ListOriginDecisions(ctx context.Context, ownerID int64, artifactID string) ([]OriginDecision, error)
+	AllowedOrigins(ctx context.Context, ownerID int64, artifactID string) ([]string, error)
+	SetOriginDecision(ctx context.Context, ownerID int64, artifactID, origin, decision, source string) error
+	DeleteOriginDecision(ctx context.Context, ownerID int64, artifactID, origin string) error
+	ReplaceAllowedOrigins(ctx context.Context, ownerID int64, artifactID string, origins []string, source string) error
 
-	// Collections
+	// Collections. The membership writes require both the artifact and the
+	// collection to belong to ownerID, so a shared id can never link one
+	// owner's artifact into another's shelf.
 	CreateCollection(ctx context.Context, c *Collection) error
 	ListCollections(ctx context.Context, ownerID int64) ([]*Collection, error)
-	AddArtifactToCollection(ctx context.Context, artifactID, collectionID string) error
-	RemoveArtifactFromCollection(ctx context.Context, artifactID, collectionID string) error
+	AddArtifactToCollection(ctx context.Context, ownerID int64, artifactID, collectionID string) error
+	RemoveArtifactFromCollection(ctx context.Context, ownerID int64, artifactID, collectionID string) error
 
 	// Tags. All mutations are owner-scoped: rows belonging to another owner
 	// are treated as nonexistent (ErrNotFound). Tag names are unique per
@@ -171,16 +227,37 @@ type Store interface {
 	// pairing did not exist.
 	RemoveArtifactTag(ctx context.Context, ownerID int64, artifactID, tagID string) error
 
-	// State. DeleteState and ClearState are deliberately idempotent — the
-	// caller's intent is "this key must not exist" / "no state must remain",
+	// State. These methods take TWO principals, because they answer two
+	// different questions (av-q0ub):
+	//
+	//   ownerID — may this caller reach this artifact at all? Authorization,
+	//             enforced as the same owner-scoped EXISTS predicate every
+	//             other artifact-child method here uses, so a foreign artifact
+	//             id stays indistinguishable from one that does not exist.
+	//   userID  — whose rows? Selection: the viewer the state belongs to,
+	//             stored as artifact_state.user_id. It comes from the signed
+	//             render token on the render path (av-c5aq) and from the
+	//             session on the API path (av-30rj).
+	//
+	// Today every caller passes the same value for both, because the only
+	// principal that can reach an artifact is its owner. They diverge the
+	// moment a non-owner may view a shared artifact (av-7k7b) — which is why
+	// they are two parameters rather than one, and why artifactID sits between
+	// them: transposing the two is then a compile error rather than a
+	// cross-tenant read.
+	//
+	// DeleteState and ClearState are deliberately idempotent — the caller's
+	// intent is "this key must not exist" / "no state of mine must remain",
 	// which a missing row already satisfies. That matters because their
 	// callers (the state inspector's delete, and the storage shim's
 	// removeItem/clear write-through) routinely fire on keys the server never
-	// saw.
-	GetState(ctx context.Context, artifactID string) (map[string]string, error)
-	SetState(ctx context.Context, artifactID, key, value string) error
-	DeleteState(ctx context.Context, artifactID, key string) error
-	ClearState(ctx context.Context, artifactID string) error
+	// saw. Neither scoping changes that: another owner's artifact, and another
+	// viewer's rows, hold nothing *this* caller can remove, so the deletes
+	// stay silent no-ops there too and those rows survive untouched.
+	GetState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID) (map[string]string, error)
+	SetState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID, key, value string) error
+	DeleteState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID, key string) error
+	ClearState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID) error
 
 	// Agent (Exh-yvhp). SetAgentKey upserts the owner's single configured
 	// provider key; GetAgentKey returns nil when none is set.
@@ -189,15 +266,102 @@ type Store interface {
 	DeleteAgentKey(ctx context.Context, ownerID int64) error
 	// SaveTranscript upserts the agent conversation that produced an
 	// artifact (messagesJSON is the Pi session's message list).
-	SaveTranscript(ctx context.Context, artifactID, sessionID, messagesJSON string) error
+	SaveTranscript(ctx context.Context, ownerID int64, artifactID, sessionID, messagesJSON string) error
 	// ListTranscripts returns messagesJSON per session for an artifact.
-	ListTranscripts(ctx context.Context, artifactID string) (map[string]string, error)
+	ListTranscripts(ctx context.Context, ownerID int64, artifactID string) (map[string]string, error)
 
-	// Shares
-	CreateShare(ctx context.Context, s *Share) error
-	GetShare(ctx context.Context, id string) (*Share, error)
-	DeleteShare(ctx context.Context, id string) error
+	// Shares. A share is minted and revoked by the artifact's owner, so those
+	// two are owner-scoped; resolving one to serve it is not (below).
+	CreateShare(ctx context.Context, ownerID int64, s *Share) error
+	GetShare(ctx context.Context, ownerID int64, id string) (*Share, error)
+	// GetShareUnscoped resolves a share row with no owner check — the second
+	// deliberate exception. `GET /s/:id` is answered for anyone holding the
+	// link, because the share row *is* the authorization (architecture §7);
+	// there is no owner to compare against by design.
+	GetShareUnscoped(ctx context.Context, id string) (*Share, error)
+	DeleteShare(ctx context.Context, ownerID int64, id string) error
 
 	// Lifecycle
 	Close() error
+
+	// --- Identity and sessions (av-30rj) -------------------------------
+	// The identity provider is a login-time concern only: it is exchanged
+	// once, at the callback, for a session row here. Everything below is
+	// ours and identical whichever provider issued the identity, which is
+	// what keeps a provider swap confined to one constructor. Types live in
+	// users.go, the SQLite implementation in sqlite_users.go.
+
+	// UpsertUser returns the user for a provider identity, creating the row
+	// just-in-time on first login and refreshing the stored email on every
+	// later one. The returned ID is the integer the rest of the schema
+	// already calls owner_id.
+	UpsertUser(ctx context.Context, externalID, email string) (*User, error)
+	GetUser(ctx context.Context, id int64) (*User, error)
+	// GetUserByExternalID is the same row reached by the key a *person* is
+	// known by — a provider subject, or `local:<name>` — for callers holding
+	// a name rather than an owner id. Unlike LookupLocalCredential below, it
+	// does not treat "has no password" as "does not exist".
+	GetUserByExternalID(ctx context.Context, externalID string) (*User, error)
+
+	// CreateSession records a logged-in browser under a caller-supplied
+	// opaque id. GetSession returns ErrNotFound when that id is unknown *or*
+	// expired — a revoked session and a lapsed one are the same answer to
+	// the only question a caller asks. DeleteSession is the revocation, and
+	// is idempotent. DeleteExpiredSessions is a janitor; nothing depends on
+	// it having run.
+	CreateSession(ctx context.Context, s *Session) error
+	GetSession(ctx context.Context, id string) (*Session, error)
+	DeleteSession(ctx context.Context, id string) error
+	DeleteExpiredSessions(ctx context.Context) (int64, error)
+
+	// --- Local credentials (av-rzvf) -----------------------------------
+	// A local account is a users row above with password_hash filled in, so
+	// these methods read and write the same rows in the same owner_id space
+	// as an OIDC identity — they are not a second directory. externalID is
+	// auth.LocalExternalID(name); the hash is bcrypt, produced and compared
+	// by internal/auth and only ever stored here.
+
+	// LookupLocalCredential returns an account and its stored hash, or
+	// ErrNotFound when the name is unknown *or* the account has no password.
+	LookupLocalCredential(ctx context.Context, externalID string) (*User, string, error)
+	// CreateLocalUser provisions an account, ErrDuplicateName if the name is
+	// taken. SetLocalPassword changes one, or removes it when hash is empty.
+	CreateLocalUser(ctx context.Context, u NewLocalUser) (*User, error)
+	SetLocalPassword(ctx context.Context, userID int64, passwordHash string) error
+	// CountLocalCredentials answers "does this instance have a login of its
+	// own?"; ListUsers is the instance's user directory, oldest first.
+	CountLocalCredentials(ctx context.Context) (int64, error)
+	ListUsers(ctx context.Context) ([]*User, error)
+
+	// --- Administration (av-utap) --------------------------------------
+	// An admin acting on the *instance*, as distinct from a person acting on
+	// their own account (av-g2dx). Both refuse with ErrLastAdmin rather than
+	// leave the instance with no enabled admin, and both answer ErrNotFound
+	// for an id that does not exist.
+
+	// SetUserAdmin promotes (unguarded) or demotes (guarded) an account.
+	SetUserAdmin(ctx context.Context, userID int64, admin bool) error
+	// SetUserDisabled stops an account signing in — and, when disabling,
+	// deletes that user's sessions in the same transaction. Revoking the
+	// live sessions is part of the operation rather than a courtesy the
+	// caller adds: a disable a logged-in browser survives is not a disable.
+	SetUserDisabled(ctx context.Context, userID int64, disabled bool) error
+
+	// --- A person's own account (av-4wyq, epic av-g2dx) -----------------
+	// The two above are an admin acting on somebody else. These two are an
+	// account acting on itself, and neither takes an id a request could
+	// supply — the caller passes the owner its own session already resolved.
+
+	// GetAccountSummary counts what deleting the account would destroy, so
+	// the confirmation can state it rather than gesture at it. Shares are
+	// counted because they are the consequence that lands on somebody else
+	// (see the type).
+	GetAccountSummary(ctx context.Context, userID int64) (AccountSummary, error)
+	// DeleteAccount erases the account and everything it owns, returning the
+	// blob ids whose bytes the caller must then remove — collected inside the
+	// same transaction, because after it commits nothing can name them again.
+	// ErrLastAdmin when the account is the instance's only enabled admin;
+	// ErrNotFound when there is no such account. sqlite_account.go says what
+	// it deletes and what the schema's cascades delete for it.
+	DeleteAccount(ctx context.Context, userID int64) ([]string, error)
 }

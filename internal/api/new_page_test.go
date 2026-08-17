@@ -93,7 +93,7 @@ func TestNewPageKeepsApproveThenPatchFlow(t *testing.T) {
 	r := newTestRouter(t)
 	js := galleryAsset(t, r, "/assets/gallery/new.js")
 
-	assert.Contains(t, js, `await fetch('/api/artifacts', {`)
+	assert.Contains(t, js, `await apiFetch('/api/artifacts', {`)
 	assert.Contains(t, js, `function showApproval(id, footprint)`)
 	assert.Contains(t, js, `body: JSON.stringify({network_allowlist: selected})`)
 	// Done means gone: the page hands off to the artifact's own detail page.
@@ -102,8 +102,10 @@ func TestNewPageKeepsApproveThenPatchFlow(t *testing.T) {
 }
 
 // av-qo0j: the library index is a library again. Every id the ingest form
-// owned is gone from it, and the header's Agent link is replaced by a primary
-// button pointing at the page that now owns creation.
+// owned is gone from it, and the header's Agent link is replaced by a control
+// pointing at the page that now owns creation. (av-qo05 later shrank that
+// control to an icon; the claim below is about where it points and what it is
+// called, not what it looks like.)
 func TestGalleryIndexHasNoIngestMarkup(t *testing.T) {
 	r := newTestRouter(t)
 	page := getPage(t, r, "/")
@@ -115,7 +117,7 @@ func TestGalleryIndexHasNoIngestMarkup(t *testing.T) {
 	assert.NotContains(t, page, `setMode(`)
 	assert.NotContains(t, page, `ingest()`)
 
-	assert.Contains(t, page, `<a class="btn" href="/new"><i class="ph ph-plus"></i> Add artifact</a>`)
+	assert.Contains(t, page, `href="/new" aria-label="Add artifact" title="Add artifact"`)
 	assert.NotContains(t, page, `<a href="/agent">`)
 
 	// The ingest stylesheet went with it.

@@ -1,7 +1,8 @@
 /* Add-artifact (ingest) page script. Served from the app origin at
  * /assets/gallery/new.js. The page's inline bootstrap <script> defines the
  * per-request global this file reads before it loads:
- *   TOKEN - API bearer token
+ *   TOKEN / READ_ONLY - this visitor's API credential, decided server-side
+ *                       per request (av-5imk); spent via api.js's apiFetch
  *
  * This is the ingest half of what used to be the gallery index script
  * (av-qo0j); the library page kept search, tags and modals. Ingest behavior is
@@ -61,9 +62,8 @@ async function ingest() {
     payload = {title: title || 'Untitled', body, network_allowlist: []};
   }
 
-  const resp = await fetch('/api/artifacts', {
+  const resp = await apiFetch('/api/artifacts', {
     method: 'POST',
-    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
     body: JSON.stringify(payload)
   });
   const data = await resp.json();
@@ -171,9 +171,8 @@ async function approveOrigins(id) {
   const selected = Array.from(document.querySelectorAll('.al-origin:checked')).map(c => c.value);
   const status = document.getElementById('status');
   status.textContent = 'Applying…';
-  const r = await fetch('/api/artifacts/' + id, {
+  const r = await apiFetch('/api/artifacts/' + id, {
     method: 'PATCH',
-    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
     body: JSON.stringify({network_allowlist: selected})
   });
   if (!r.ok) { status.textContent = '✗ Failed to update allowlist'; return; }

@@ -100,8 +100,17 @@ The only way data changes. Route groups:
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
   `source_url` and replaces the stored body. A snapshot, not a versioned update.
 - `DELETE /api/artifacts/:id` — deletes the artifact and associated rows (tags,
-  collections, shares, state cascade via FK). The blob body on the filesystem is
-  orphaned in v1 (`Blob.Store` has no `Delete` method).
+  collections, shares, state cascade via FK) **and its bytes**: the body blob,
+  and the widget blob when it has one (av-7jcq). The order is row first, then
+  bytes, because the two failure modes are not equally bad — a failed *row*
+  delete after the bytes are gone leaves a live artifact whose only copy of
+  itself no longer exists, which nothing on the instance can repair; a failed
+  *blob* delete after the row is gone leaves unreferenced bytes an operator can
+  sweep. The blob failure still surfaces as a 500 rather than a silent 204: a
+  deletion that left the file on disk must not claim otherwise.
+  `DELETE /api/artifacts/:id/widget` removes the detached widget's blob the
+  same way, in the same order — detaching is the only exit a widget blob has,
+  since the id is otherwise reused for the artifact's life.
 - `GET/PUT /api/artifacts/:id/state`, `DELETE /api/artifacts/:id/state[/:key]` — the
   artifact's state rows (§6). Reads are normally satisfied by render-time inlining, not
   this route; `PUT` is called by the **host frame** on the storage shim's behalf (the
@@ -111,7 +120,10 @@ The only way data changes. Route groups:
   is one percent-encoded path segment, since state keys are arbitrary artifact-chosen
   text. Erasing all state touches state alone: body, origin decisions, and capability
   approvals survive. All of them are authenticated like every other route here — the
-  inspector adds no second write path.
+  inspector adds no second write path. Every one is scoped to the session's own
+  rows (av-q0ub): the session supplies both principals §3.3 describes, so a read
+  never returns the union of every viewer's state and "erase all" means *mine*,
+  not the artifact's.
 - `GET/PUT/DELETE /api/artifacts/:id/widget` — the artifact's gallery-card widget
   (av-fafu). A second document stored beside the artifact's body and hung off the
   artifact rather than made a resource of its own, because it has no identity, no
@@ -120,12 +132,61 @@ The only way data changes. Route groups:
   at render, so this explains a blank tile rather than gating one, and (as
   everywhere) never seeds the allowlist. See `widgets.md`.
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
+- `DELETE /api/account` — erases the **caller's own** account and the library it
+  owns (av-4wyq). It takes no id, from the path or the body, and that is the
+  whole authorization argument: `/api/admin/users` is where acting on somebody
+  else lives, behind `adminOnly`, and this route cannot name another account, so
+  a session is sufficient for it. It requires a *session* specifically — the
+  service token is not a person, and would resolve to the single-user default
+  owner. The body must carry the typed confirmation phrase, checked here as well
+  as in the page, because a client-side interlock is a courtesy to whoever is
+  clicking and never a control. `Store.DeleteAccount` returns the blob ids whose
+  rows it removed and the handler then deletes those bytes (§3.3, av-7jcq); the
+  instance's last enabled admin is refused (`ErrLastAdmin`).
 - collection/tag CRUD.
+- `GET /api/settings/public` — the instance's own name and description
+  (av-4ac9). The one route in the `/api` namespace registered *outside* the
+  authenticated group, because a visitor with no credential is exactly who
+  needs it. The values are environment configuration carried on `api.Config`
+  (`PUBLIC_MODE_ENABLED`, `PUBLIC_INSTANCE_NAME`,
+  `PUBLIC_INSTANCE_DESCRIPTION`, `PUBLIC_OWNER_ID`) rather than a settings
+  table, since the server-rendered gallery reads them on every page render and
+  a table would buy nothing but a round trip. `PUBLIC_OWNER_ID` exists because
+  owner scoping is a real predicate (below): an instance that publishes a
+  library has to name whose. An instance with public mode off answers this
+  route `404` — indistinguishable from one that never had it, and unambiguous
+  for the caller, since 200-with-empty-strings already means "public, but
+  unnamed".
 
-Middleware chain (via `chi`): request logging → auth (static token now, sessions later)
-→ owner scoping (`owner_id`, fixed to 1 now) → handler. Auth and ownership are *one
-layer* every mutating route passes through, which is what makes multi-user a
-middleware-and-data change rather than a rewrite.
+Middleware chain (via `chi`): request logging → auth → owner scoping (`owner_id`)
+→ handler. Auth accepts two credentials, in that order of preference: a session
+cookie, when this instance has a login at all (§3.8), and otherwise the static
+bearer token — the API/CLI credential, and the only credential a single-user
+instance has. The owner is whatever the session resolved to, or `1`. Auth and
+ownership are *one layer* every mutating route passes through, which is what
+makes multi-user a middleware-and-data change rather than a rewrite.
+
+**Public mode (av-wmp6)** is the one case where a request with no credential
+gets past that layer, and it is deliberately narrow. When `PUBLIC_MODE_ENABLED`
+is on, a request that resolved *no* credential may proceed if it is a `GET` of
+`/api/artifacts` or `/api/artifacts/:id` — the published library and one
+artifact in it — and nothing else. Every mutating method stays authenticated
+whatever the configuration says, and so does every other read: `/state` is the
+owner's data, `/transcripts` their conversations, and collections, tags,
+shares, and the agent routes are never reached. The list is a deny-by-default
+allowlist for the same reason the agent's is: a route added later must not
+become public because nobody thought about it. Owner resolution follows in the
+next middleware, which reads such a request as `PUBLIC_OWNER_ID` rather than
+the default owner — since av-ep8k made owner a real predicate, "the library"
+needs a named owner to mean anything. The pass is also recorded on the request
+context, which is how a page render knows to suppress edit controls and to mint
+render tokens that carry no principal (§3.2).
+
+The owner the middleware supplies is a **real query predicate**, not a value the
+store ignores (av-ep8k): handlers pass it into every Store method that names an
+artifact, and those filter on it in SQL (§3.3). So the remaining step toward
+multi-user is the middleware resolving a *different* owner — not an audit of
+which queries forgot to scope.
 
 ### 3.2 Render surface
 
@@ -211,6 +272,30 @@ executable document with the correct security envelope:
   widget 404s here; its card renders the default tile instead (§3.5). See
   `widgets.md`.
 
+- Requires a **signed render token** on `/a/:id` and `/w/:id` (av-c5aq): an
+  HMAC-SHA256 credential scoped to one `(artifact, owner)` pair with a
+  ten-minute TTL, minted by the app origin into every frame `src` it emits and
+  verified here statelessly. It is how this surface acquires a principal — the
+  answer to "whose state should be inlined" — without a session, which it
+  deliberately cannot have: a top-level `/a/:id` is a real-origin document with
+  the artifact's own script in it, so any cookie readable there is readable by
+  the artifact. Links a visitor may click much later carry no token and go
+  through the app origin's `/artifacts/:id/open`, which mints on redirect.
+  `/s/:shareID` takes no token — the share row is the authorization (§7). Full
+  rationale: `security.md` §1.3.
+
+- Renders **for nobody** when the token says so (av-wmp6). A token carries an
+  optional `anonymous` claim, and a document rendered under one inlines *no*
+  state and installs a shim that writes none — the artifact boots empty and its
+  storage dies with the frame. That is what a public instance's unauthenticated
+  visitor gets: publishing a library must not publish what is inside the tools,
+  or a run tracker's widget would put the owner's runs on the gallery grid
+  without so much as a click. The claim is inside the MAC precisely because it
+  *subtracts* authority — as a query parameter the viewer could drop it. Note
+  the deliberate asymmetry with `/s/:shareID`, which still inlines the owner's
+  state: a share is a decision its owner made about one artifact, where public
+  mode flips a whole library with one environment variable.
+
 The render surface never mutates anything. It reads (including state, to inline it), wraps,
 and serves. This read-only property is what makes it safe to expose under the no-auth share
 path (§7).
@@ -221,11 +306,58 @@ The seam between handlers and persistence. Handlers speak only to this interface
 
 ```
 Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
-        list/set/delete per-origin network decisions
-Blob:   put/get artifact bodies by id
+        list/set/delete per-origin network decisions;
+        users and sessions, including local credentials (§3.8)
+        and the admin mutations over them (§3.8a)
+Blob:   put/get/delete artifact bodies by id
 ```
 
+`Blob.Delete` is **idempotent** by contract (av-7jcq): an id that was never
+stored is success, not an error. That is the contract the object-store backend
+this interface exists for already has — S3's `DeleteObject` answers success for
+a missing key — so defining it the other way would make the S3 implementation
+synthesize a failure with a `HEAD` before every delete, to honour a distinction
+no caller wants. `FSStore` swallows `os.ErrNotExist` to conform; every other
+error surfaces, because a delete that claims to have removed the bytes must
+have.
+
+**Owner scoping is in the queries** (av-ep8k). Every Store method that names an
+artifact takes the requesting `owner_id` and filters on it in SQL — the
+artifact-child tables (state, origin decisions, transcripts, shares, collection
+and tag membership) through the same owner-scoped `EXISTS` subquery the tag
+joins use. Ownership is therefore a property of the statement rather than a
+handler-level pre-check a later caller can forget.
+
+The contract those queries hold: **another owner's id is indistinguishable from
+an id that does not exist.** A cross-tenant read returns what a missing row
+returns; a cross-tenant write returns `ErrNotFound`, which handlers render as
+404. Never a 403 — a permission error would confirm the row exists and make the
+artifact routes a membership oracle over ids.
+
+Exactly two accessors opt out, and are named to say so: `GetArtifactUnscoped`
+and `GetShareUnscoped`. They serve the render surface, which has no session and
+no owner in context, and the share path, which is owner-independent by design
+because the share row *is* the authorization (§7). `grep Unscoped` is the whole
+audit of the un-owner-scoped read surface — a test enforces that the call sites
+stay inside `internal/render`, and closing the render gap with a signed token
+carrying a principal is av-c5aq.
+
 - **Metadata, collections, tags, shares, state** → SQLite (one file, WAL mode).
+- **Artifact state** → `artifact_state`, keyed by `(artifact_id, user_id, key)`
+  (av-q0ub). `user_id` is the **viewer**, deliberately not named `owner_id`,
+  because on a shared artifact they are different people. So the four state
+  methods take *two* principals and they answer different questions:
+  `ownerID` authorizes reaching the artifact (the same owner-scoped `EXISTS`
+  predicate every other artifact-child method uses), and `userID` selects whose
+  rows. They hold the same value at every call site today and will not once a
+  non-owner may open a shared artifact (av-7k7b), which is why they are two
+  parameters — with `artifactID` between them, so transposing the two is a
+  compile error rather than a cross-tenant read. Nothing is keyed by device:
+  one user on any number of devices is one set of rows, which is the entire
+  point of storing state server-side (§6). Two cascades retire a row — with its
+  artifact (FK), and with its viewer (a trigger on `users` DELETE; a real FK
+  would demand a `users` row for owner 1, which the static-token single-user
+  mode does not have).
 - **Network origin decisions** → `artifact_network_origins`, one row per
   (artifact, origin) — the primary key is what makes "one decision per origin" a
   schema invariant rather than a convention, and `ON DELETE CASCADE` retires the
@@ -337,10 +469,32 @@ Server-rendered pages built with the stdlib `html/template`: the templates live 
 `internal/api/templates/` (committed source, `go:embed`-ed), their handlers and view
 models in `internal/api/gallery.go`. Each page's stylesheet and script are static
 assets authored in the `web/gallery/` workspace and served under `/assets/gallery/`;
-per-request values (API token, artifact id, allowlist, capability approvals) reach
-the page scripts through a small inline bootstrap `<script>` the templates render,
-with html/template's contextual escaping JSON-encoding them. Talks to the API
-like any other client. Hosts two islands of client JS: the **CodeMirror** source
+per-request values (the page's API credential, artifact id, allowlist, capability
+approvals) reach the page scripts through a small inline bootstrap `<script>` the
+templates render, with html/template's contextual escaping JSON-encoding them.
+Talks to the API like any other client — with the credential the *request* earned,
+never the process's: a session-authenticated browser is handed no token at all
+(its cookie already authenticates it, and an embedded token would outlive the
+logout that deletes the session), an anonymous visitor none plus a read-only flag,
+and only an instance with no identity provider embeds the static token it has
+always embedded. `pagecredential.go` decides that once and `web/gallery/api.js`
+spends it; `security.md` §1.5 is the full statement.
+
+The pages also render library data *server-side*, so each needs the second half
+of what the API group's chain supplies: whose library this is. The page routes
+therefore sit in their own group under `ownerMiddleware` (av-syug), and the
+owner reaches them from `sessionGate` — the same lookup that marks a request
+session-authenticated for the credential decision above now also carries the
+session's `owner_id` in the request context, where `ownerIDFromCtx`, every
+scoped `Store` call and every minted render token read it. `ownerMiddleware`
+never overwrites an owner resolved upstream, so it composes with the gate
+without an ordering rule while still supplying the single-user default on an
+instance that issues no sessions. Membership of that group is the declaration
+that a route is owner-scoped: a page registered outside it resolves to no owner
+and reads an empty library, which is the deliberate fail-closed answer
+(`security.md` §1.6) and what `pageowner_test.go`'s route walk enforces.
+
+Hosts two islands of client JS: the **CodeMirror** source
 editor (an esbuild-built, `go:embed`-served bundle) and the **renderer iframe**
 (which actually points at `RENDER_ORIGIN`). The gallery renders server-side,
 but search filters eagerly from the client: a debounced input refetches the
@@ -440,11 +594,50 @@ absent the surface degrades to disabled; nothing else changes.
   `create_artifact` / `update_artifact` / `get_artifact` tools, plus
   `get_state` / `set_state` / `delete_state` for the artifact's stored state
   (av-lvi1) and `set_widget` / `get_widget` for the artifact's gallery-card
-  widget (av-fafu), call back into the exhibit HTTP API with the service
-  token — the same routes and Store methods the edit page's state inspector
-  (§3.5) uses, so the agent gains no reach a browser client with the token
-  doesn't already have. Agent output is scanned like any ingest and its
-  footprint is never auto-approved.
+  widget (av-fafu), call back into the exhibit HTTP API — the same routes and
+  Store methods the edit page's state inspector (§3.5) uses. Agent output is
+  scanned like any ingest and its footprint is never auto-approved.
+- **Scoped credential, not the service token (av-e0yj):** each session
+  authenticates with a token minted by `internal/agentscope` that resolves to
+  (owner, artifact). `authMiddleware` refuses anything outside that scope with
+  a 403 before a handler runs — a deny-by-default allowlist of
+  `POST /api/artifacts` while unbound, plus `GET`/`PATCH` on the session's own
+  artifact and the `state`/`widget` sub-resources its own tools call on that
+  same artifact. A create binds the credential to the id the handler just
+  wrote, so the binding is not something model output can shape. None of the
+  tools takes an artifact id.
+
+  The scope composes with — it does not replace — the owner scoping of
+  av-ep8k. The grant's owner becomes the request's `ownerID`, so every
+  owner-scoped Store call is bounded by it exactly as for a browser client;
+  the path check then narrows that owner's library to one artifact. Neither
+  half is sufficient alone: without the owner the session would be confined
+  to an id that could belong to anyone, and without the path check it would
+  hold ordinary full authority over its owner's whole library.
+- **The session itself belongs to an owner too.** Sessions live in an
+  in-memory registry rather than in SQLite, so they were the one piece of
+  per-owner state av-ep8k's query sweep could not reach: `Manager.Get` took an
+  id, and the four routes that resolve a session by it — `prompt`, `abort`,
+  `events`, and the `DELETE` that closes one — compared nothing, so any
+  authenticated user holding a session id could drive somebody else's agent.
+  The lookup now takes the owner as a *parameter* (`Manager.Get(ownerID, id)`),
+  for exactly the reason av-ep8k put the predicate inside the SQL rather than
+  in front of it: a check the caller performs is a check the next caller
+  forgets. Another owner's session is *not found* rather than refused — 404,
+  never 403, the same answer an id that was never issued gets (§3.3) — so the
+  routes are not an oracle over which sessions are live. The SSE route resolves
+  its own owner in `authorizeEventStream`, because `EventSource` sets no
+  headers and the route therefore sits outside the middleware pair; it returns
+  the owner those middlewares would have supplied and puts it on the request
+  context, so there is still one owner check for all four routes rather than
+  two that must be kept in step. What this closes is worse than a read: a
+  prompt sent to a stranger's session runs its tool calls on *that session's*
+  credential, so the injected instruction lands in the victim's artifact —
+  av-e0yj's containment defeated rather than evaded.
+- **Untrusted text stays out of the system role:** the artifact's source and
+  title reach the model in a user-role message inside a nonce-fenced data
+  block, never interpolated into the system prompt. The source is inlined at
+  session start, so a modify session spends no tool call on the first read.
 - **BYO key, sealed at rest:** the user's provider key is stored AES-256-GCM
   encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
   handed to the subprocess only through its (minimal, built-from-scratch)
@@ -475,12 +668,266 @@ absent the surface degrades to disabled; nothing else changes.
   and no second streaming path. The request deliberately does not block on the
   turn: holding it open would make a slow model indistinguishable from a hang.
 - **Trust note:** the sidecar is a subprocess of the service executing
-  LLM-directed tool calls, but its reach is bounded to the same authenticated
-  API surface any client has — it holds no datastore access of its own.
+  LLM-directed tool calls, and unlike every other API client it is steered by
+  text the service did not author — artifact bodies and titles arrive verbatim
+  from URL ingest. Its reach is therefore deliberately *narrower* than a normal
+  client's: read and rewrite one artifact — its source, its state, its widget —
+  and nothing else in the library. It holds no datastore
+  access of its own and no credential that outlives its process. What that does
+  not buy: injected content can still write a bad body into the artifact the
+  user opened — bounded, visible in the preview and transcript, and stated
+  plainly in `security.md` §5.3.
 
 See `docs/agent.md` for the full flow, including snippet mode (the render
 surface's element picker that feeds an element screenshot + descriptor back
 into the prompt as multimodal context).
+
+### 3.8 Login: two paths, one session layer (av-30rj, av-q30x, av-rzvf)
+
+Login is optional. When present it arrives by one of two paths — an identity
+provider, or a local login name and password — and both end in the same call.
+
+**The provider seam.** `internal/auth` holds the whole vendor surface, and it is
+two methods:
+
+```go
+type IdentityProvider interface {
+    AuthURL(state, verifier string) string
+    Exchange(ctx context.Context, code, verifier string) (*Identity, error)
+}
+type Identity struct{ ExternalID, Email string }
+```
+
+It is that small because **the provider is a login-time concern only**. The
+browser goes to the provider, comes back to `/auth/callback` with a code, and
+that code is exchanged exactly once for a session this service owns. From then
+on a request is authenticated by looking up its own session row — no provider
+call on the request path, and no provider-specific value anywhere downstream.
+
+The alternative shape — verifying a provider-signed token on every request —
+is the API-token pattern and is wrong here twice over: it puts a network check
+in the request path, and it makes logout impossible, because a signed token
+stays valid until its TTL whatever the user or the provider later decides.
+Owning the session fixes both, which is why Grafana, Gitea, Outline and Immich
+all land in the same place.
+
+- **The generic provider is the only one shipped.** `auth.OIDCProvider` does
+  Authorization Code + PKCE against any issuer, discovering endpoints and keys
+  from `/.well-known/openid-configuration` — discovery is what makes "any OIDC
+  provider" a matter of configuration rather than of code. Libraries are
+  `coreos/go-oidc/v3` + `golang.org/x/oauth2`, both generic; no vendor SDK
+  appears in `go.mod`. A second provider is a constructor and a
+  `var _ IdentityProvider` assertion, nothing else.
+- **Session:** an opaque random id in an `HttpOnly`, `SameSite=Lax`,
+  app-origin-only cookie, looked up per request against `sessions`. Never on
+  `RENDER_ORIGIN`: a top-level `/a/:id` is a real-origin document running the
+  artifact's own script, so a cookie readable there is readable by the artifact.
+  `Secure` follows `APP_ORIGIN`'s scheme, since a `Secure` cookie on a
+  plain-HTTP instance is silently dropped and makes login impossible.
+  `SameSite=Lax` is the CSRF control for every mutating route, and it holds only
+  while no GET route mutates — `security.md` §1.4 states the posture and
+  `internal/api/csrf_test.go` pins both halves of it.
+- **Schema:** `users(id, external_id, email, created_at, password_hash,
+  is_admin)` and `sessions(id, user_id, expires_at)`. `users.id` *is*
+  `owner_id` — no table outside `users` references a provider-specific
+  identifier, so changing provider is a re-link of those rows rather than a
+  migration. `email` is stored beside the subject precisely because subjects
+  are provider-specific and are the wrong key to re-link on. `password_hash`
+  is **nullable**, which is what puts both kinds of user in one table and one
+  owner id space: an identity a provider issued has none, a local account has
+  one, and they differ by which columns are populated rather than by living
+  apart. Two tables would have made "the same person has an SSO login and a
+  local one" an account-linking problem in the schema, before anyone had
+  decided it was a problem worth having.
+- **Default is unchanged.** With neither login configured there is no provider
+  and no credential, the `/auth/*` routes are never registered, the page gate is
+  a pass-through, and the static token with `owner_id` 1 behaves exactly as it
+  always has. An operator who would rather authenticate at their reverse proxy
+  (Authelia, Tailscale, basic auth) does so with nothing configured here —
+  consistent with TLS and proxying already being theirs (`deployment.md` §3).
+
+**The local credential (av-q30x, av-rzvf)** is the second path, and the one
+that closes the gap the seam above left open: with no OIDC issuer configured
+there was no page gate *at all*, so securing a self-hosted library meant
+running an identity server or putting auth in the proxy. It began as one
+credential in the environment; av-rzvf moved the accounts into `users` so an
+instance can issue as many as it likes without one.
+
+- **It is not an `IdentityProvider`, and must not become one.** That interface
+  is redirect-based: an external authority to send the browser to, and a code to
+  redeem. A form post has neither, and forcing it through would mean inventing a
+  self-redirect and a fake authorization code that exist only to satisfy a
+  shape. So the structure is one *session layer* with two *login paths*, which
+  is what "one session layer, not two" actually asked for.
+- **The convergence point is `startSession`** (`internal/api/auth.go`), the only
+  place a session is ever created. Both paths reach it holding a resolved
+  `*store.User`; everything after it — the `sessions` row, the cookie,
+  `owner_id` — is identical and cannot tell them apart. The login method is
+  recorded in a log line and nowhere else.
+- **Credentials are bcrypt hashes, never plaintext the service hashes for
+  itself.** Accounts are provisioned by an admin (the account screen in §3.8a,
+  or `user add` / `user passwd` at the CLI), so there is no
+  self-registration to verify and no reset mail, and therefore no SMTP — the
+  costs that made passwords a bad trade for a multi-user product (av-30rj) are
+  the ones this shape does not pay. A local account's `users.external_id` is
+  `local:<normalized name>`, which reuses that column's existing UNIQUE
+  constraint to make "one account per login name" a schema invariant, without
+  constraining `email`, whose value on an OIDC row is whatever the provider last
+  reported.
+- **The first user on an instance is its admin**, applied inside the single
+  `INSERT` that creates every `users` row (`store.insertUser`, `is_admin =
+  NOT EXISTS (SELECT 1 FROM users)`). One statement rather than a count
+  followed by a write, because the gap between those two is exactly what
+  decides who administers the instance. It is also continuous rather than new:
+  user ids start at 1, the id a single-user library is already filed under, so
+  the first identity in has always adopted the existing library — which is why
+  `deployment.md` §3.4 tells operators to be first.
+- **`LOGIN_USERNAME` / `LOGIN_PASSWORD_HASH` are retained as bootstrap and
+  break-glass**, not replaced. The pair names an account and supplies an
+  additional accepted password for it: on an empty instance that creates the
+  first admin, on a populated one it is the way back into an account whose
+  password is lost. `resolveLocalLogin` checks it *before* the table so no
+  stored state can shadow it, and falls through to the table when it does not
+  match, so a password reset takes effect without a restart. It stays live for
+  as long as it is set — the reasoning for that, and the bypass it costs, is
+  recorded on `newLocalCredential` in `cmd/server/main.go`.
+- **Routes.** `/auth/login` renders the login page when a local login exists
+  and otherwise redirects straight to the provider — a page whose only control
+  is "continue" is a choice that does not exist. `POST /auth/local` is the form
+  target; `/auth/sso` is the provider redirect, split out so the page has a
+  button to point at when both paths exist. Each is registered only when the
+  instance can serve it, which is why "does this instance have local accounts?"
+  is read once at startup (`Config.LocalUsers`) rather than per request:
+  provisioning the *first* account with the CLI on a running server takes a
+  restart to arm the gate.
+
+### 3.8a Administration: one boundary, drawn on the route (av-utap)
+
+Once Exhibit issues credentials it *is* the user directory, so it has to answer
+"who creates accounts and resets forgotten passwords". Two surfaces sit on the
+same `users` rows and must not be confused:
+
+- **A person acting on their own account** (av-g2dx) — a session is the whole
+  authorization.
+- **An admin acting on the instance** (here) — creating someone else's account,
+  resetting someone else's password, switching an account off. A session is
+  emphatically *not* sufficient.
+
+They will share page furniture (the settings shell, the stylesheet, the header
+partial). The guarantee is that they never share authority, and it is
+structural: every route that reaches another account passes `adminOnly`
+(`internal/api/admin.go`), and none of them shares a handler with a route that
+does not.
+
+- **The guard answers `404`, not `403`,** and answers it *before* any handler
+  looks at the target. Two things fall out of that. To a non-admin the
+  administration surface does not exist. And a refusal cannot differ between
+  "you may not touch user 7" and "there is no user 7" — an admin acting on a
+  missing id gets the same 404 — so the refusal is not an enumeration oracle
+  over the instance's directory.
+- **Who is an admin,** in the order it is decided: never an agent-session
+  credential (steered by text Exhibit did not author) and never an anonymous
+  public visitor; yes for the static service token, which already carries full
+  authority over every API route; yes for a session whose account is an
+  *enabled* admin, looked up per request so a demotion takes effect on the next
+  one; and otherwise only on an instance with no login configured, which has one
+  user and no notion of anybody else to be.
+- **Disabling is a column, and revoking sessions is part of it.** Clearing
+  `password_hash` was the alternative and does not generalise: an identity a
+  provider issued has none to clear, and it is a first-class row in the same
+  table. So `users.disabled_at` is nullable, applies to both kinds of account,
+  and destroys nothing an admin may later want to restore. Refusing the next
+  login is only half of it — the credential a disabled person is actually
+  holding is the session already in their browser — so `Store.SetUserDisabled`
+  deletes that user's `sessions` rows in the same transaction rather than
+  leaving it to whichever caller remembers; the API and the CLI both inherit
+  that. Login is then refused on every path, including the `LOGIN_USERNAME`
+  break-glass pair: a disable a documented environment variable defeats is not
+  a disable.
+- **The instance cannot be locked out of itself.** Demoting or disabling the
+  last *enabled* admin is refused (`store.ErrLastAdmin`). The guard is a
+  predicate inside the `UPDATE`'s `WHERE` rather than a read the caller makes
+  first, for the same reason the first-admin rule lives inside its `INSERT`:
+  the gap between a check and a write is exactly what decides who can still
+  administer the instance. A disabled admin does not satisfy the predicate, so
+  the lockout cannot be reached in two individually-legal steps either.
+- **Not the login endpoint.** An admin setting a password *asserts* a
+  credential; `/auth/local` *guesses* one. Only the guess is rate-limited
+  (av-t21v), so an admin resetting several accounts in a row does not throttle
+  themselves out of their own instance.
+- **Routes.** `GET /admin/users` is the page — registered inside the page group,
+  so it carries an owner like every other page, *and* behind `adminOnly`,
+  because carrying an owner is not carrying authority. `GET`/`POST
+  /api/admin/users` and `PATCH /api/admin/users/{id}` are the JSON API its
+  controls call: the single write path (§3.1) is why the page has no form
+  handler of its own.
+
+### 3.8b Your own account: `/profile` (av-qo05)
+
+§3.8a's other half, and the pairing is what makes the boundary legible. The two
+pages read the same `users` rows and wear the same furniture — the settings
+shell, `settings.css`, the `settingsHeader` partial — and share no authority:
+`/admin/users` reaches *other* accounts and passes `adminOnly`, while `/profile`
+reaches exactly one, resolved from `ownerIDFromCtx` and never from the URL, so a
+session is the whole authorization. The route takes no id, which is why there is
+no second guard here to get wrong.
+
+- **The entry point is two icon-only header controls.** "Add artifact" shrank
+  from a labelled primary button to a square linking to `/new`, and a static
+  person icon beside it links here. Same box, same weight: the gallery header's
+  subject is the library below it, and a wide primary button made the header the
+  loudest thing on a page it is not about. Both carry an `aria-label` and a
+  `title`, since a glyph states nothing on its own; the admin link keeps its
+  label, because a third anonymous icon would say nothing at all. Static means
+  static — an anchor, no menu. What belongs on the page (deletion, the agent
+  key, sessions) each needs explanation or a confirmation beside it, and none of
+  that fits a menu item.
+- **Sections from the first one.** The page is `.card` blocks, though only
+  Account has content today, because the rest of av-g2dx — the BYO agent key,
+  active sessions, export — should land as an addition rather than a redesign.
+- **The display name has a fallback `admin.go` does not need.**
+  `newAdminUserView` is `Name: u.Email`, and `users.email` is NOT NULL
+  defaulting to the empty string (migration 013) — a portable second key beside
+  `external_id`, not something an identity provider guarantees. In a table an
+  empty one is a blank cell among many; here the name *is* the section. So
+  `/profile` falls back to the provider subject and labels it as what it is, and
+  states the sign-in route when there is not even that. The rule stays local to
+  this page: it exists because a name rendered alone must not be blank, which is
+  a property of the layout rather than of the row.
+- **Deleting the library (av-4wyq).** The page's danger zone erases the account
+  and everything this instance holds for it, through `DELETE /api/account`
+  (§3.1) and `Store.DeleteAccount` (§3.3). Four things about it are decisions
+  rather than details:
+  - **The copy is the feature.** Deleting here cannot touch the identity
+    provider that issued the login, and because `users.external_id` is UNIQUE
+    and the row is created just-in-time at login, the same person signing in
+    again lands in a **new, empty** account. The confirmation says both halves
+    outright. Someone who deletes, finds their login still works and concludes
+    nothing happened is worse off than someone who never had the button — which
+    is why the section distinguishes a local account (whose login goes with it)
+    from an identity-provider one, and says the second sentence only to the
+    people it is true of.
+  - **The live share count is stated up front.** A share is a capability URL
+    somebody else may be holding, with no account here and no way to be told it
+    stopped working; deletion revokes every one at once. That is the right
+    behaviour — the alternative is links into a library that no longer exists —
+    but it is the one consequence that lands on a third party, so the number is
+    surfaced instead of discovered.
+  - **Two steps, the second a typed phrase** (`delete my library` — the *act*,
+    not the account name, which may be an opaque provider subject nobody can
+    retype). There is no soft delete, no trash and no snapshot, so a mis-tap
+    must not be able to reach it. Both steps render server-side and `profile.js`
+    only reveals the second; the server requires the same phrase whether or not
+    that script ever ran.
+  - **Blocked states render as a reason, not a missing button.** The instance's
+    last enabled admin cannot delete itself (the store would refuse anyway, and
+    learning that *after* typing a confirmation phrase is a worse way to learn
+    it), and an instance with no login configured has no account to act on.
+  Erasure is rows *and* bytes: `DeleteAccount` collects the blob ids inside its
+  transaction and the handler removes those files (av-7jcq). Which tables it
+  deletes and which the schema's cascades and migration 014's `users` trigger
+  delete for it is written down in `sqlite_account.go` and walked by a tripwire
+  test — a table added without a decision about account deletion fails the suite.
 
 ## 4. Trust boundaries
 
@@ -623,16 +1070,33 @@ renders and shares navigate natively.
 
 The state endpoints are why cross-device "just works": all state lives server-side, so a
 second device inlines the same state at render. No replication required for this (§8 distinguishes
-it from server durability).
+it from server durability). A device is not a principal — `artifact_state` is keyed by
+viewer, never by device (§3.3) — so one person's phone and laptop read and write
+the same rows by construction, and the phone's `setItem` is simply what the
+laptop's next render inlines.
+
+Which viewer's rows those are is decided once, at the top of the render: the
+**principal** carried by the signed render token (av-c5aq), or the artifact's own
+owner on a share, since a share publishes the artifact *as its owner sees it*
+(§7). The authorization for that read still comes from the artifact row this
+handler already resolved, so inlining state adds no third unscoped accessor.
 
 ## 7. Sharing
 
-A share is a row (`shares(id, artifact_id, public, expires_at)`), not an export action.
+A share is a row (`shares(id, artifact_id, public)`), not an export action.
 `GET /s/:shareId` resolves the row and serves the artifact **through the same read-only
 render surface** under the same per-artifact CSP — just without the app auth check,
 because the share row *is* the authorization. This reuse is why sharing is nearly free:
 it's the render path with a different front-door check. A one-file self-contained `.html`
 export remains as the service-independent fallback.
+
+The row's existence is the whole lifetime. A share is live until it is deleted;
+`DELETE /api/shares/:id` is the only way one ends, and `POST /api/shares` refuses an
+`expires_at` rather than accepting a deadline it will not honour. The column existed
+from migration 001 and was enforced, but nothing ever set it — no UI, no caller — so
+av-8ipt dropped it while doing so was still a schema change and not a data migration.
+A real expiry requirement would be one migration to add back, designed against that
+requirement instead of guessed at before the product existed.
 
 ## 8. Evolution seams (how the easy path becomes the serious path)
 
@@ -641,7 +1105,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | real sessions; scope queries by owner |
+| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap) — what remains is letting a non-owner reach a shared artifact at all (av-7k7b), and a person managing their own account (av-g2dx) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | S3/MinIO impl behind same interface |

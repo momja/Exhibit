@@ -6,6 +6,8 @@ path). This document is the concrete HTTP API: every route, its auth, and the
 ingest, state, sharing, and render flows a client uses.
 
 All routes require `Authorization: Bearer <token>` except public share links.
+An agent session's own bearer token is accepted too, but only within its scope
+(see Agent, below).
 
 ## Artifacts
 
@@ -18,7 +20,10 @@ PATCH  /api/artifacts/:id          Update title, body, network_allowlist, etc.
                                    replaces the artifact's allow decisions and leaves
                                    any blocked origins untouched)
 POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts)
-DELETE /api/artifacts/:id          Delete artifact and associated rows (blob body is orphaned in v1)
+DELETE /api/artifacts/:id          Delete artifact, its associated rows, and its blobs
+                                   (body + widget). 500 if a blob could not be removed:
+                                   the row is already gone, but a delete that left bytes
+                                   on disk must not report success
 ```
 
 **Ingest flow** — two steps by design:
@@ -115,8 +120,15 @@ snapshotted artifact stays network-inert until you approve its residual origins.
 GET    /api/artifacts/:id/state       Get all state key-value pairs
 PUT    /api/artifacts/:id/state         Set one key {"key":"...","value":"..."}
 DELETE /api/artifacts/:id/state?key=K   Remove one key's row
-DELETE /api/artifacts/:id/state         Erase every state row for the artifact
+DELETE /api/artifacts/:id/state         Erase every state row you hold on the artifact
 ```
+
+State rows are keyed by `(artifact, viewer, key)` (av-q0ub), and every route
+here addresses **your own** rows: a `GET` returns your state, not the union of
+every viewer's, and the second `DELETE` erases yours, not the artifact's.
+"Viewer" is the authenticated session — one person across any number of devices,
+which is what makes the sync below work; there is nothing device-shaped in the
+request.
 
 These routes back `localStorage` only. The storage shim intercepts it in the iframe: reads are served from state **inlined into the shim at render time** (so `getItem` is correct synchronously); writes are **`postMessage`-ed to the host frame**, which performs the authenticated `PUT` above (the sandboxed iframe has an opaque origin and can't call the API itself). No artifact changes needed — any tool that uses `localStorage` gets cross-device sync automatically.
 
@@ -220,8 +232,8 @@ DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 PUT    /api/agent/key                        Store provider API key {"provider","model","api_key"} (encrypted at rest)
 GET    /api/agent/key                        Key status (masked hint only — the key is never returned)
 DELETE /api/agent/key                        Remove the stored key
-POST   /api/agent/sessions                   Start a session {"artifact_id"?: bind to an existing artifact}
-POST   /api/agent/sessions/:id/prompt        Send a prompt {"message", "images"?: [{data, mime_type}]}
+POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact}
+POST   /api/agent/sessions/:id/prompt        Send a prompt {"message", "images"?: [{data, mime_type}], "snippets"?: [descriptor]}
 POST   /api/agent/sessions/:id/abort         Abort the current run
 DELETE /api/agent/sessions/:id               End the session
 GET    /api/agent/sessions/:id/events        SSE event stream (?token= auth — EventSource can't set headers)
@@ -231,7 +243,15 @@ GET    /api/artifacts/:id/transcripts        Agent conversations persisted with 
 Each session spawns a [Pi](https://github.com/badlogic/pi-mono) sidecar
 (`pi --mode rpc`) whose only tools call back into this API, so agent output
 enters the library through the same ingest path (scan + explicit allowlist
-approval) as everything else. The chat UI lives at `/agent`
+approval) as everything else. The sidecar authenticates with a **per-session
+credential scoped to one artifact**, not the service token: it may
+`POST /api/artifacts` until it binds, then `GET`/`PATCH` that artifact and
+`GET`/`PUT`/`DELETE` its `state` and `widget` sub-resources — one entry per
+tool it has — and every other route answers 403. Its owner comes from the
+same credential, so the owner-scoped store calls bound it to one tenant on top
+of that. `snippets` entries are element descriptors
+captured inside the artifact — untrusted text the server fences as data rather
+than splicing into `message`. See `docs/security.md` §5. The chat UI lives at `/agent`
 (`/agent?artifact=<id>` to modify an existing artifact); snippet mode
 (Ctrl+Shift+S) lets you click an element in the live preview and attach its
 screenshot + selector to your next prompt. See [docs/agent.md](./docs/agent.md).
@@ -245,6 +265,20 @@ GET    /s/:shareID                 View shared artifact (no auth)
 ```
 
 Share links resolve on the render origin, under the artifact's own CSP. No account needed to view a share.
+
+A share has no lifetime of its own: it is live from the moment it is minted until the row is deleted, and `DELETE /api/shares/:id` is how it ends. There is no expiry (av-8ipt removed a column nothing ever set), and a create request carrying `expires_at` is refused with `400` rather than quietly given a link that never expires.
+
+## Your own account
+
+```
+DELETE /api/account                {"confirm":"delete my library"}   → 204
+```
+
+Erases the caller's account and everything this instance holds for it: every artifact and its file (bytes, not only rows), all saved state, tags, collections, share links, the stored agent key and its transcripts, and the `users` row itself. It is permanent — there is no soft delete, no trash and no snapshot — and it revokes every share link over that library at once, for holders who have no account here and are not notified.
+
+The route takes **no id**. It acts on the account the request's own session resolved to and cannot name another, which is why a session is the whole authorization for it; `/api/admin/*` is where acting on somebody else lives. A request carrying the service token instead of a session is answered `404`: that credential is not a person, and would otherwise resolve to the single-user default owner. The exact `confirm` phrase is required (`400` otherwise), and the instance's last enabled admin is refused (`409`) — promote somebody else first.
+
+Deleting here cannot touch the identity provider that issued the login. The same person signing in again gets a **new, empty** account, because `external_id` is unique and the row is created at first login.
 
 ## Render surface
 

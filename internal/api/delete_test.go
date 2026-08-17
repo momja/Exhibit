@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -76,7 +77,7 @@ func TestDeleteArtifactCascadesState(t *testing.T) {
 
 	// The cascade removed all rows referencing the artifact, including its state.
 	// Query the store directly — the artifact row is gone, so no state can remain.
-	got, err := r.cfg.Store.GetState(req.Context(), id)
+	got, err := r.cfg.Store.GetState(req.Context(), store.OwnerID(defaultOwnerID), id, store.ViewerID(defaultOwnerID))
 	require.NoError(t, err)
 	assert.Empty(t, got, "shim state should be removed by ON DELETE CASCADE")
 }

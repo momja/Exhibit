@@ -16,6 +16,26 @@
 .btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:var(--color-panel)}
 .btn-danger{background:var(--color-danger);color:var(--color-panel);border:none}
 .btn-danger:hover{background:var(--color-danger-hover)}
+/* Square, label-less .btn — the gallery header's "Add artifact" and profile
+ * controls (av-qo05). A modifier rather than a page rule because it is the
+ * .btn family's fourth member: it changes the box and nothing else, so it
+ * composes with .btn-sec and .btn-danger the way the others do. The side is a
+ * labelled .btn's own height, which is what makes an icon-only control a peer
+ * of one beside it rather than a smaller afterthought, and a comfortable tap
+ * target on a phone. The glyph runs a little larger than body text because it
+ * is now carrying the whole meaning; the words live in aria-label/title. */
+.icon-btn{width:36px;height:36px;padding:0;justify-content:center;flex:0 0 auto;font-size:17px}
+.icon-btn i{line-height:1}
+/* A control that is present but cannot act — /profile's delete button until
+ * av-4wyq lands. It stays legible rather than ghosted, because the reason
+ * beside it is the point and an unreadable control just sends the reader
+ * looking for the enabled one that does not exist. The hover rule is what
+ * keeps a disabled button from lighting up under the pointer as though it
+ * would do something. */
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn:disabled:hover{background:var(--brand-blue)}
+.btn-sec:disabled:hover{background:var(--color-panel);border-color:var(--color-border);color:var(--color-ink-soft)}
+.btn-danger:disabled:hover{background:var(--color-danger)}
 
 /* --- surfaces --------------------------------------------------------- */
 .card{background:var(--color-panel);border-radius:var(--radius-lg);padding:var(--space-6);box-shadow:var(--shadow-card)}

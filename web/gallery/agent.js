@@ -1,7 +1,8 @@
 /* Agent chat surface script (Exh-jlbt). Served from the app origin at
  * /assets/gallery/agent.js. The page's inline bootstrap <script> defines the
  * per-request globals this file reads (and reassigns) before it loads:
- *   TOKEN         - API bearer token
+ *   TOKEN / READ_ONLY - this visitor's API credential, decided server-side
+ *                   per request (av-5imk); spent via api.js's apiFetch
  *   artifact      - {id,title} when opened in modify mode, else null (mutable)
  *
  * The preview pane's markup (title, links, iframe) is not built here: it is a
@@ -46,13 +47,6 @@ function addMsg(cls, text) {
   messagesEl.appendChild(m);
   messagesEl.scrollTop = messagesEl.scrollHeight;
   return m;
-}
-
-async function apiFetch(path, opts) {
-  opts = opts || {};
-  opts.headers = Object.assign({'Authorization':'Bearer '+TOKEN}, opts.headers || {});
-  if (opts.body) opts.headers['Content-Type'] = 'application/json';
-  return fetch(path, opts);
 }
 
 // --- API key management --------------------------------------------------
@@ -206,7 +200,9 @@ async function ensureSession() {
 }
 
 function connectEvents() {
-  eventSource = new EventSource('/api/agent/sessions/' + sessionId + '/events?token=' + encodeURIComponent(TOKEN));
+  // api.js credentials the stream: a query-string token on a single-user
+  // instance, and nothing at all when the session cookie authenticates it.
+  eventSource = apiEventSource('/api/agent/sessions/' + encodeURIComponent(sessionId) + '/events');
   eventSource.onmessage = (e) => {
     let ev;
     try { ev = JSON.parse(e.data); } catch { return; }
@@ -370,11 +366,11 @@ async function send() {
   if (!(await ensureSession())) return;
 
   const images = pendingSnippets.filter(s => s.image).map(s => ({data: s.image.data, mime_type: s.image.mimeType}));
-  let message = text;
-  pendingSnippets.forEach((s, i) => {
-    message += '\n\n[Snippet ' + (i + 1) + '] The user selected this element in the current artifact' +
-      (s.image ? ' (screenshot attached)' : '') + ':\n' + describeSnippet(s.descriptor);
-  });
+  // A snippet descriptor carries the picked element's outerHTML — artifact
+  // content, i.e. untrusted. It travels as its own field so the server can
+  // fence it as data (av-e0yj); splicing it into `message` here would hand it
+  // to the model as part of the user's instruction.
+  const snippets = pendingSnippets.map(s => describeSnippet(s.descriptor));
 
   const bubble = addMsg('user', text);
   pendingSnippets.forEach(s => {
@@ -391,7 +387,7 @@ async function send() {
 
   const r = await apiFetch('/api/agent/sessions/' + sessionId + '/prompt', {
     method: 'POST',
-    body: JSON.stringify({message, images})
+    body: JSON.stringify({message: text, images, snippets})
   });
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));

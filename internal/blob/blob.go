@@ -2,15 +2,45 @@ package blob
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Store interface {
 	Put(ctx context.Context, id string, r io.Reader) error
 	Get(ctx context.Context, id string) (io.ReadCloser, error)
+	// Delete removes the bytes stored under id (av-7jcq).
+	//
+	// The contract is **idempotent**: an id that was never stored, or that a
+	// previous partially-failed delete already removed, is success. Only a
+	// delete that genuinely could not happen — a permission error, a failing
+	// disk, a refused API call — returns an error, so a caller may read a nil
+	// return as "these bytes are not here any more" without first having to
+	// establish whether they ever were.
+	//
+	// Two reasons it is defined that way rather than "missing is an error":
+	//
+	//  1. It is the contract the *other* backend already has. This interface
+	//     is the seam an S3/MinIO implementation drops in behind
+	//     (architecture §3.3), and S3's DeleteObject answers success for a key
+	//     that does not exist. Making missing an error here would force the
+	//     object-store backend to synthesize a failure — a HEAD before every
+	//     delete, racy and paid on every call — purely to honour a distinction
+	//     no caller wants.
+	//  2. Every caller's intent is "these bytes must not exist", which a
+	//     missing blob already satisfies. That is the same reasoning
+	//     store.DeleteState and ClearState are idempotent for, and the
+	//     alternative gives each caller an errors.Is(…, fs.ErrNotExist) branch
+	//     whose body means "fine".
+	//
+	// An implementation must not leak its backend's own missing-key error;
+	// FSStore below swallows os.ErrNotExist rather than passing it up.
+	Delete(ctx context.Context, id string) error
 }
 
 type FSStore struct {
@@ -24,7 +54,25 @@ func NewFSStore(dir string) (*FSStore, error) {
 	return &FSStore{dir: dir}, nil
 }
 
+// validateBlobID ensures a blob id contains no path traversal components.
+// Blob IDs are server-generated UUIDs, but this validation defends against
+// any attempt to use a client-supplied value as a blob id in filesystem
+// operations.
+func validateBlobID(id string) error {
+	if id == "" {
+		return fmt.Errorf("blob id cannot be empty")
+	}
+	// Reject path traversal components and absolute paths.
+	if strings.Contains(id, "..") || strings.Contains(id, "/") || strings.Contains(id, "\\") {
+		return fmt.Errorf("invalid blob id: %q contains path separators or traversal components", id)
+	}
+	return nil
+}
+
 func (s *FSStore) Put(ctx context.Context, id string, r io.Reader) error {
+	if err := validateBlobID(id); err != nil {
+		return err
+	}
 	path := filepath.Join(s.dir, id)
 	f, err := os.Create(path)
 	if err != nil {
@@ -45,9 +93,30 @@ func (s *FSStore) Put(ctx context.Context, id string, r io.Reader) error {
 }
 
 func (s *FSStore) Get(ctx context.Context, id string) (io.ReadCloser, error) {
+	if err := validateBlobID(id); err != nil {
+		return nil, err
+	}
 	rc, err := os.Open(filepath.Join(s.dir, id))
 	if err == nil {
 		slog.DebugContext(ctx, "blob opened", slog.String("id", id))
 	}
 	return rc, err
+}
+
+// Delete removes the file holding this blob, honouring Store.Delete's
+// idempotent contract: os.Remove reports ErrNotExist for a path that is not
+// there and this is where that is absorbed, so the distinction never reaches a
+// caller. Anything else — a read-only volume, a permission problem — is a real
+// failure and surfaces, because the whole point of this method is that a
+// deletion which claims to have removed the bytes did.
+func (s *FSStore) Delete(ctx context.Context, id string) error {
+	if err := validateBlobID(id); err != nil {
+		return err
+	}
+	err := os.Remove(filepath.Join(s.dir, id))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	slog.DebugContext(ctx, "blob deleted", slog.String("id", id))
+	return nil
 }

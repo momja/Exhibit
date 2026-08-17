@@ -25,7 +25,10 @@ home-screen widget shows a slice of its app.
   server-persisted state into the widget exactly as it does for the artifact,
   so a plain synchronous `localStorage.getItem` at startup is correct. The
   widget reads the same keys the tool writes. Because state lives on the
-  server, the tile shows the same numbers on every device.
+  server, the tile shows the same numbers on every device — and, since state is
+  keyed by viewer (av-q0ub), it shows *the viewer's* numbers: the tile and the
+  tool it sits above are looking at one set of rows, selected by the same
+  render-token principal.
 - **Read-only.** `setItem` updates the widget's own in-memory cache and stops
   there — the write-through to the host frame is short-circuited. A tile cannot
   change the library it is displayed in.
@@ -199,8 +202,6 @@ what keeps "last 30 days" demo data from ageing into an empty widget.
 - Shares (`/s/:shareID`) serve the artifact only; there is no shared widget.
 - The tile is a fixed 132 px tall. There is no small/medium/large family.
 - A widget does not re-render while its card is on screen (see above).
-- `Blob.Store` has no `Delete`, so removing a widget orphans its blob — the
-  same v1 behaviour as deleting an artifact.
 - **No size cap on a widget body** — an 8 MB widget is accepted and served
   verbatim, and a widget renders once per card. Tracked by `av-wrbu`, which
   covers the service's oversize/degenerate-input policy as a whole rather than

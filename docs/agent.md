@@ -29,19 +29,74 @@ The single write path is preserved: the agent's only tools are
 (av-lvi1), and `set_widget` / `get_widget` for the artifact's gallery tile
 (av-fafu) — all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
 materialized to the data dir at startup) that calls back into the exhibit HTTP
-API with the service token. Agent output is scanned like any other ingest;
-scanned origins are **never** auto-approved — the chat UI tells the user when
-a saved artifact has a network footprint awaiting approval.
+API. Agent output is scanned like any other ingest; scanned origins are
+**never** auto-approved — the chat UI tells the user when a saved artifact has
+a network footprint awaiting approval.
+
+## Scope: one session, one artifact
+
+A session reaches exactly one artifact, and that is enforced twice — once for
+ergonomics, once for real. `security.md` §5 is the full statement; the shape:
+
+- **No tool takes an artifact id.** `create_artifact(title, body)`,
+  `update_artifact(body[, title])`, `get_artifact()`, `get_state()`,
+  `set_state(key, value)`, `delete_state([key])`, `set_widget(body)`,
+  `get_widget()`. A tool with no id parameter cannot be talked into a
+  different target, which matters because artifact bodies and titles are
+  untrusted text that reaches the model's context. The extension resolves the
+  target from `EXHIBIT_ARTIFACT_ID`, or from the API's response to the first
+  create.
+- **The API refuses anything outside the scope.** The sidecar authenticates
+  with a per-session credential (`internal/agentscope`) that resolves to
+  (owner, artifact), not the service token. `authMiddleware` allows exactly
+  `POST /api/artifacts` while unbound, plus `GET`/`PATCH` on the session's own
+  artifact and the `state` / `widget` sub-resources of that same artifact —
+  one allowlist entry per tool above. Every other route — the BYO provider
+  key, shares, deletes, tags, collections, transcripts, `widget/generate`, and
+  every other artifact in the library — is a 403 before any handler runs.
+- **This is the per-artifact half only.** The credential's owner becomes the
+  request's `ownerID`, so the owner-scoped Store methods (av-ep8k) bound it to
+  one tenant exactly as they bound a browser client. The path check then
+  narrows that tenant's library to one artifact. Neither half stands alone:
+  the owner check without the path check leaves a session with ordinary full
+  authority over its user's library, and the path check without the owner
+  check confines it to an id that could belong to anybody.
+- **Create mode binds server-side.** `POST /api/artifacts` binds the
+  credential to the id it just wrote. The binding never comes from a tool
+  result, which model-supplied arguments shape. It is also where the session's
+  own notion of "my artifact" comes from — the preview pane, the transcript,
+  and every synthetic `exhibit_*` event read `Session.ArtifactID()`, which is
+  the grant, not the tool result.
+- The credential is revoked when the subprocess exits.
+
+## Session context: instructions and data are separate
+
+- The **system prompt** is entirely server-authored (`internal/agent/prompt.go`).
+  No artifact title, body, or id is interpolated into it.
+- The artifact's **current source is inlined** into the session's opening
+  user-role message, so a modify session does not spend a tool call reading
+  what the server was already holding. `get_artifact` stays registered for the
+  re-read after the agent's own save or a concurrent human edit.
+- The source, the title, and any snippet descriptor arrive inside a fenced
+  block whose delimiter carries a **per-session random nonce**
+  (`-----BEGIN EXHIBIT UNTRUSTED DATA <nonce>-----`), so injected text cannot
+  close the fence and pose as an instruction. The system prompt states the
+  contract; the nonce is redacted from block content. `get_artifact` and
+  `get_widget` return their bodies through the same fence.
+- Snippet descriptors reach the API as their own `snippets` field on the
+  prompt request, not concatenated into `message` — page JS never composes the
+  envelope, and never needs the nonce.
+
+## Artifact state (av-lvi1)
 
 The state tools hit the same authenticated `GET/PUT/DELETE
-/api/artifacts/:id/state[/:key]` routes as the edit page's state inspector
+/api/artifacts/:id/state` routes as the edit page's state inspector
 (av-hg5f) — no second write path, no store access of its own. Values are
 opaque strings and the system prompt tells the model to treat an untouched
 value as fixed text to reproduce byte-for-byte, since a value the user didn't
 ask to change silently reformatting (JSON key order, spacing, `1.0` vs `1`)
 would be a defect the API has no way to catch — it never inspects the string
-it's asked to store. A `set_state`/`delete_state` call marks the session's
-bound artifact — same as a save — and emits a synthetic
+it's asked to store. A `set_state`/`delete_state` call emits a synthetic
 `exhibit_state_changed` event so the chat UI re-renders the preview through
 the same htmx fragment swap `exhibit_artifact_saved` drives (below): state is
 inlined into the document at render time, so the pane would otherwise stay
@@ -49,12 +104,12 @@ stale after an edit.
 
 ## Widgets (av-fafu)
 
-`set_widget(id, body)` saves the artifact's gallery tile — the small
-informative document its library card renders (`widgets.md`). The system prompt
-carries the tile's whole contract (reads the artifact's state synchronously,
-cannot write it, never interactive, one fact large, ~272×132 fluid, always an
-empty state, static-with-no-script for a stateless tool), so the agent builds
-one by default and a tool arrives in the library with a face.
+`set_widget(body)` saves the artifact's gallery tile — the small informative
+document its library card renders (`widgets.md`). The system prompt carries the
+tile's whole contract (reads the artifact's state synchronously, cannot write
+it, never interactive, one fact large, ~272×132 fluid, always an empty state,
+static-with-no-script for a stateless tool), so the agent builds one by default
+and a tool arrives in the library with a face.
 
 A widget save emits `exhibit_widget_saved` rather than reusing
 `exhibit_artifact_saved`: the artifact body didn't change, only the tile beside
@@ -73,10 +128,11 @@ same SSE route the chat uses and waits for `exhibit_widget_saved`, so the whole
 feature adds a route and no streaming machinery.
 
 `WidgetOnly` exists because the ordinary modify-an-artifact scoping tells the
-model to "save with `update_artifact`" — exactly what a generate-the-tile
-session must never do. The two are mutually exclusive branches of
-`sessionSystemPrompt` for that reason, and `cmd/mockllm` plays the widget
-branch so the path is covered end to end.
+model to save with `update_artifact` — exactly what a generate-the-tile session
+must never do. The two are mutually exclusive branches of `modePrompt`
+(`internal/agent/prompt.go`) for that reason, and `internal/mockllm` plays the
+widget branch so the path is covered end to end. Note the button's route is
+*not* reachable by an agent credential: a session cannot start another session.
 
 ## BYO API key (encrypted at rest)
 
@@ -94,16 +150,33 @@ branch so the path is covered end to end.
   otherwise take precedence over the BYO key and silently bill the operator's
   account.
 
+The same env carries the exhibit-side contract, and nothing broader than the
+session needs:
+
+| Var | Value |
+|-----|-------|
+| `EXHIBIT_API_URL` | app origin the tools call back into |
+| `EXHIBIT_TOKEN` | the session's **scoped** credential — not the service token |
+| `EXHIBIT_ARTIFACT_ID` | the session's artifact (empty in create mode) |
+| `EXHIBIT_DATA_NONCE` | fence id for untrusted tool output |
+| `EXHIBIT_SESSION_ID` | this session's id |
+
 Supported providers: Anthropic, OpenAI, Google Gemini, OpenRouter, OpenCode
 Go, plus `exhibit-mock` when `MOCK_LLM_URL` is set.
 
 ## Sessions, streaming, transcripts
 
-- `POST /api/agent/sessions` (optional `artifact_id` binds the session to an
-  existing artifact for modify mode), `POST …/prompt` (message + optional
-  base64 images), `POST …/abort`, `DELETE …`.
+- `POST /api/agent/sessions` (optional `artifact_id` scopes the session to an
+  existing artifact for modify mode, and inlines its source into the opening
+  message), `POST …/prompt` (`message` + optional base64 `images` + optional
+  `snippets`, the element descriptors the server fences as data),
+  `POST …/abort`, `DELETE …`.
 - `GET /api/agent/sessions/:id/events` — SSE. EventSource can't set headers,
-  so this one route authenticates the same bearer token via `?token=`.
+  so this one route takes the app's bearer token via `?token=` — or, on an
+  instance with an identity provider, the session cookie the browser attaches
+  to a same-origin stream on its own, since such a page is deliberately handed
+  no token to pass (`security.md` §1.5). An agent session's own scoped
+  credential is accepted for neither: it is not a page credential.
 - `internal/agent` tracks streaming state (prompts sent mid-stream become Pi
   steering messages), keeps an event backlog for late subscribers, reaps idle
   sessions, and on every settled turn persists the full Pi message list to
@@ -111,8 +184,10 @@ Go, plus `exhibit-mock` when `MOCK_LLM_URL` is set.
   (`GET /api/artifacts/:id/transcripts`), the foundation for future remixing.
 - When a save-tool call succeeds, the session emits a synthetic
   `exhibit_artifact_saved` event; a `set_state`/`delete_state` call emits the
-  analogous `exhibit_state_changed` event. The chat UI uses either to
-  re-render the live preview (see below).
+  analogous `exhibit_state_changed` event, and `set_widget` the
+  `exhibit_widget_saved` one. All three name the session's own artifact, read
+  from the credential's scope rather than from the tool result. The chat UI
+  uses any of them to re-render the live preview (see below).
 
 ## Chat UI
 
@@ -181,12 +256,17 @@ capture leaves the sandbox only as data posted to that host.
 | `EXHIBIT_SECRET` | optional server secret for key encryption (else `data/secret.key` is generated) |
 | `MOCK_LLM_URL` | dev/test only: enables the `exhibit-mock` provider pointing at `cmd/mockllm` |
 
-`cmd/mockllm` is a deterministic OpenAI-compatible server (scripted
-create → read → update tool calls, color transforms, snippet acknowledgment,
-plus a handful of literal state commands — "list state", "set state K to V",
-"delete state K", "clear all state" — mapped to the matching state tool call)
-so the whole pipeline is testable end to end without real provider
-credentials; the exhibit extension registers it as a Pi custom provider only
+`internal/mockllm` is a deterministic OpenAI-compatible chat-completions
+handler — scripted create / update / re-read tool calls, color transforms,
+snippet acknowledgment, a handful of literal state commands ("list state",
+"set state K to V", "delete state K", "clear all state") mapped to the
+matching state tool call, the widget-only branch, and a scripted *injected*
+model that obeys an "also update artifact &lt;id&gt;" planted in untrusted data —
+so the whole pipeline is testable without real provider credentials.
+`cmd/mockllm` serves it as a standalone process for driving the surface by
+hand; Go tests mount `mockllm.Handler()` on an httptest server and spawn a
+real pi sidecar against it (`internal/api/agent_pipeline_test.go`, skipped
+when `pi` is not installed). The exhibit extension registers the provider only
 when `MOCK_LLM_URL` is set.
 
 ## Extraction plan (epic `Exh-i0ll`)
@@ -210,14 +290,17 @@ UI. Steps, in order:
    render iframes with both working).
 3. **Extraction** (`Exh-k75k`): move `internal/agent` (sessions, pi sidecar,
    `ext/exhibit.ts`), `internal/secrets` + the `agent_keys` storage, the
-   `/agent` chat UI, the agent API routes, and `cmd/mockllm` into the new
-   repo. Config: `EXHIBIT_URL` + `EXHIBIT_TOKEN`, `PI_BIN`, its own port and
-   secret. The browser talks only to the agent service, which **proxies**
-   every Exhibit read/write through the API with its token — no CORS opened
-   on Exhibit, no token in page JS. Then delete the agent code from Exhibit
-   core.
+   `/agent` chat UI, the agent API routes, and `internal/mockllm` +
+   `cmd/mockllm` into the new repo. Config: `EXHIBIT_URL` + `EXHIBIT_TOKEN`,
+   `PI_BIN`, its own port and secret. The browser talks only to the agent
+   service, which **proxies** every Exhibit read/write through the API — no
+   CORS opened on Exhibit, no token in page JS. Then delete the agent code
+   from Exhibit core.
 
 What stays in Exhibit, because it is genuinely core: the
+`internal/agentscope` registry and the scope check in `authMiddleware`
+(authorization is Exhibit's to keep, so an extracted agent service would
+obtain a session credential from Exhibit rather than mint one), the
 `agent_transcripts` table and its endpoints (artifact provenance belongs to
 the artifact), and the snippet picker (`internal/render/snippet.go` — a
 render-surface capability any embedding host can drive, not agent code).

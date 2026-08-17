@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/momja/Exhibit/internal/scanner"
 )
@@ -45,8 +44,8 @@ type putWidgetRequest struct {
 // has no widget document, and callers (the edit page, the agent's get_widget)
 // need to tell "no widget" apart from "an empty one".
 func (ro *Router) getWidget(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	id := urlParamID(r, "artifactID")
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
 		serverError(w, r, "get widget artifact lookup", err)
 		return
@@ -85,7 +84,7 @@ func (ro *Router) getWidget(w http.ResponseWriter, r *http.Request) {
 // render URL is stable across edits — the gallery card's iframe src never has
 // to change, and no blob is orphaned per revision.
 func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 
 	var req putWidgetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -97,7 +96,8 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	ownerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "put widget artifact lookup", err)
 		return
@@ -116,8 +116,8 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.WidgetBlobID == "" {
-		if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, map[string]any{"widget_blob_id": blobID}); err != nil {
-			serverError(w, r, "attach widget", err)
+		if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, map[string]any{"widget_blob_id": blobID}); err != nil {
+			writeArtifactError(w, r, "attach widget", err)
 			return
 		}
 	}
@@ -158,8 +158,8 @@ const generateWidgetPrompt = "Build the gallery widget for this artifact."
 // route, not a second streaming mechanism, and the edit page's preview swap is
 // driven by the same event the chat surface uses.
 func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	id := urlParamID(r, "artifactID")
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
 		serverError(w, r, "generate widget artifact lookup", err)
 		return
@@ -175,6 +175,7 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 	}
 	opts.ArtifactID = id
 	opts.ArtifactTitle = a.Title
+	opts.ArtifactBody = ro.inlinedArtifactSource(r, a)
 	opts.WidgetOnly = true
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)
@@ -182,10 +183,10 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "create widget agent session", err)
 		return
 	}
-	if err := s.Prompt(r.Context(), generateWidgetPrompt, nil); err != nil {
+	if err := s.Prompt(r.Context(), generateWidgetPrompt, nil, nil); err != nil {
 		// The session is useless without its prompt; don't leave the
 		// subprocess running until the idle reaper notices.
-		ro.cfg.Agent.Close(s.ID)
+		ro.cfg.Agent.Close(s.OwnerID, s.ID)
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -210,12 +211,19 @@ func (ro *Router) widgetGenerateAvailability(r *http.Request) (bool, string) {
 	return true, ""
 }
 
-// deleteWidget detaches the widget; the card falls back to the default tile.
-// The blob is left on disk, matching how DeleteArtifact orphans an artifact
-// body in v1 (Blob.Store has no Delete).
+// deleteWidget detaches the widget and removes its bytes; the card falls back
+// to the default tile.
+//
+// Same order as deleteArtifact, for the same reason (artifacts.go,
+// deleteArtifactBlobs): clear the column first, so a failure at the second
+// step leaves an unreferenced file rather than a card pointing at a body that
+// is gone. Detaching is the only exit a widget blob has — the id is otherwise
+// reused for the life of the artifact — so once the column is empty nothing
+// can name these bytes again.
 func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	id := urlParamID(r, "artifactID")
+	ownerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "delete widget artifact lookup", err)
 		return
@@ -225,11 +233,15 @@ func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.WidgetBlobID != "" {
-		if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, map[string]any{"widget_blob_id": ""}); err != nil {
-			serverError(w, r, "detach widget", err)
+		if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, map[string]any{"widget_blob_id": ""}); err != nil {
+			writeArtifactError(w, r, "detach widget", err)
 			return
 		}
 		slog.InfoContext(r.Context(), "widget removed", slog.String("artifact_id", id))
+		if err := ro.cfg.Blob.Delete(r.Context(), a.WidgetBlobID); err != nil {
+			serverError(w, r, "delete widget blob", err)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

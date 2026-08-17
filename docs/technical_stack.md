@@ -29,8 +29,9 @@ safety" (§12).
 | Gallery UI | Server-rendered stdlib `html/template` + static CSS/JS assets (§9) | templ (codegen — rejected) |
 | Partial re-render | **htmx** — self-hosted / embedded on app origin, no CDN (§9) | hand-rolled fetch-and-swap helper |
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
-| Agent harness | **Pi** (`pi --mode rpc` sidecar per session; TS tools extension; keys AES-GCM at rest; `cmd/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
+| Agent harness | **Pi** (`pi --mode rpc` sidecar per session; TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
+| Login (optional) | Generic OIDC via discovery — `coreos/go-oidc/v3` + `golang.org/x/oauth2`, exchanged once for our own session (§10) | auth at the operator's proxy (also supported); vendor SDK (rejected) |
 | TLS / proxy | **Operator's choice** — app serves plain HTTP, takes origin config | (not shipped) |
 | Backup/replication | Litestream sidecar (Compose profile) | Turso/libSQL (HA) |
 
@@ -317,11 +318,64 @@ Either path, the rule is fixed: **Phosphor Icons, self-hosted, no external icon 
 
 ## 10. Auth
 
-- **Now:** a single static bearer token checked by `chi` middleware; `owner_id` fixed at
-  `1`. Sufficient for single-user/self-host.
-- **Later:** signed-cookie sessions (or a small library equivalent) behind the same
-  middleware seam, plus a login flow — no change to the API contract or data model
-  because `owner_id` and the auth boundary already exist.
+Two credentials, checked in that order by one `chi` middleware:
+
+- **A session cookie**, when the deployment has a login (below). Browser requests
+  carry it automatically, and the session is looked up per request.
+- **A static bearer token** (`AUTH_TOKEN`) otherwise — the API/CLI credential, and
+  the only credential a single-user instance has. With no login configured this is
+  exactly the check it has always been, with `owner_id` fixed at `1`.
+
+A server-rendered page embeds whichever of these the *request* earned, never the
+process's token unconditionally: with a session, none — the cookie authenticates
+the page's own fetches, and an embedded token would survive the logout that
+deletes the session; with no identity provider, the static token as before. See
+`security.md` §1.5.
+
+**Login is optional (av-30rj, av-q30x, av-rzvf).** Three supported ways to put one
+in front of an instance, and none is more official than the others:
+
+- **At the operator's reverse proxy.** Authelia, Tailscale, oauth2-proxy, or plain
+  basic auth gate the request before it reaches the app. Nothing is configured in
+  Exhibit — consistent with TLS and proxying already being the operator's (§12).
+  Gate the *app* origin; the render origin serves shares to people with no account.
+- **Exhibit's own accounts** — the path that needs nothing else running, and the
+  reason a self-hoster no longer has to stand up an identity server to close
+  their instance or to give a second person a library.
+  `golang.org/x/crypto/bcrypt` is the only dependency it adds. Accounts are rows
+  in `users` with a nullable `password_hash`, provisioned by the operator
+  (`server user add` / `user passwd`) rather than by self-registration, so there
+  is nothing to verify and no reset mail — and therefore no SMTP in the config
+  surface. `LOGIN_USERNAME` / `LOGIN_PASSWORD_HASH` remain as the bootstrap and
+  break-glass credential. Either way the operator supplies a bcrypt hash rather
+  than a password the service hashes for itself, because hashing a plaintext the
+  environment already holds beside it protects nothing.
+- **An OIDC provider**, via three env vars (`OIDC_ISSUER`, `OIDC_CLIENT_ID`,
+  `OIDC_CLIENT_SECRET`). Authorization Code + PKCE, with every endpoint and signing
+  key discovered from the issuer's `/.well-known/openid-configuration` — discovery
+  is what makes "any provider" configuration rather than code. Libraries are
+  `coreos/go-oidc/v3` + `golang.org/x/oauth2`, the conventional Go pairing and both
+  generic; **no vendor SDK is in `go.mod`**, and a different provider is a
+  constructor implementing `auth.IdentityProvider`'s two methods.
+
+The provider is exchanged **exactly once**, at `/auth/callback`, for a session of
+our own: an opaque random id in an `HttpOnly`, `SameSite=Lax`, app-origin-only
+cookie, looked up per request against a `sessions` row. Per-request verification of
+a provider-signed token is the API-token pattern and the wrong default here — it
+puts a network check in the request path and makes logout impossible, since a
+signed token outlives any decision to revoke it. `/auth/logout` deletes the row, so
+the credential dies on the next request. Full rationale and the cookie's origin
+constraint: `architecture.md` §3.8.
+
+The local credential ends at the same session, through the same call — it is a
+second login *path*, not a second session mechanism, and deliberately not an
+`IdentityProvider` implementation (that interface is redirect-based; a form post
+has no authority to redirect to and no code to exchange). What keeps it small
+enough to justify owning passwords at all is that accounts are
+operator-provisioned: no self-registration, so nothing to verify; no
+self-service reset, so no reset mail and therefore no SMTP; and an admin who
+can always reset a forgotten password, so nobody is locked out. bcrypt's cost is
+also the rate limiting.
 
 ## 11. Future: Chrome extension
 

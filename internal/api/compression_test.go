@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -50,7 +51,9 @@ func TestRenderDocumentIsCompressed(t *testing.T) {
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
 	renderRouter := r.RenderHandler()
-	enc, got, code := gzipGet(t, renderRouter, "/a/"+resp.Artifact.ID)
+	tok := r.tokens.Mint(resp.Artifact.ID, defaultOwnerID)
+	renderPath := "/a/" + resp.Artifact.ID + "?" + rendertoken.Param + "=" + tok
+	enc, got, code := gzipGet(t, renderRouter, renderPath)
 	require.Equal(t, http.StatusOK, code)
 	assert.Equal(t, "gzip", enc, "render documents must be compressed")
 	// Round-trips to the real document, not a truncated or corrupted stream.
@@ -58,13 +61,13 @@ func TestRenderDocumentIsCompressed(t *testing.T) {
 	assert.Contains(t, got, "<title>Compressible</title>")
 
 	// And the compressed transfer is materially smaller than the raw document.
-	req := httptest.NewRequest("GET", "/a/"+resp.Artifact.ID, nil)
+	req := httptest.NewRequest("GET", renderPath, nil)
 	plain := httptest.NewRecorder()
 	renderRouter.ServeHTTP(plain, req)
 	require.Equal(t, http.StatusOK, plain.Code)
 	assert.Empty(t, plain.Header().Get("Content-Encoding"), "no encoding when the client does not ask")
 
-	compressedReq := httptest.NewRequest("GET", "/a/"+resp.Artifact.ID, nil)
+	compressedReq := httptest.NewRequest("GET", renderPath, nil)
 	compressedReq.Header.Set("Accept-Encoding", "gzip")
 	compressed := httptest.NewRecorder()
 	renderRouter.ServeHTTP(compressed, compressedReq)
@@ -97,7 +100,8 @@ func TestNegotiatedResponsesCarryVary(t *testing.T) {
 					"title": "vary", "body": "<html><body>" + strings.Repeat("x", 2048) + "</body></html>",
 				})
 				require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-				path = "/a/" + resp.Artifact.ID
+				tok := r.tokens.Mint(resp.Artifact.ID, defaultOwnerID)
+				path = "/a/" + resp.Artifact.ID + "?" + rendertoken.Param + "=" + tok
 			}
 
 			req := httptest.NewRequest("GET", path, nil)

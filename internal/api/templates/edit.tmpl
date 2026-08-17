@@ -191,6 +191,15 @@
 <script src="/assets/editor.js"></script>
 <script>
 const TOKEN = {{.Token}};
+{{/* READ_ONLY and TOKEN are one decision, made server-side per request
+     (av-5imk, pagecredential.go): a session-authenticated browser gets no
+     token because its cookie already authenticates it, an anonymous visitor
+     gets no token and READ_ONLY, and a single-user instance with no identity
+     provider gets the static token it has always had. api.js is what spends
+     the result — page scripts never build an Authorization header. Literal
+     template text for the boolean, matching the other bootstrap flags:
+     html/template's JS escaper pads a {{value}} boolean with spaces. */ -}}
+const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const ID = {{.ID}};
 {{/* The persisted title, not the (editable) title field: the erase-all
      confirmation must name the artifact the server will actually wipe. */ -}}
@@ -205,6 +214,7 @@ let downloadsApproved = {{if .DownloadsApproved}}true{{else}}false{{end}};
 let clipboardApproved = {{if .ClipboardApproved}}true{{else}}false{{end}};
 let linksApproved = {{if .LinksApproved}}true{{else}}false{{end}};
 </script>
+<script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/edit.js"></script>
 <script src="/assets/gallery/state-api.js"></script>
 <script src="/assets/gallery/state.js"></script>

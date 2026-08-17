@@ -71,7 +71,7 @@ func TestDetailPageSandboxStillOmitsNavigationTokens(t *testing.T) {
 	for _, approved := range []bool{false, true} {
 		a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Exporter", Tier: store.Tier1,
 			CreatedAt: time.Now(), LinksApproved: approved}
-		page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+		page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 		require.NoError(t, err)
 
 		start := strings.Index(page, "<iframe")
@@ -92,7 +92,7 @@ func TestDetailPageSandboxStillOmitsNavigationTokens(t *testing.T) {
 func TestDetailPageRendersLinkBridge(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Link Collector", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
 	// Host-side message handler for the shim's navigation messages, plus the
@@ -109,7 +109,7 @@ func TestDetailPageRendersLinkBridge(t *testing.T) {
 
 	// An approved artifact renders with the approval baked in.
 	a.LinksApproved = true
-	page, err = renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	page, err = renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 	assert.Contains(t, page, "let linksApproved = true;")
 }
@@ -121,7 +121,7 @@ func TestDetailPageRendersLinkBridge(t *testing.T) {
 func TestDetailPageRendersLinkConfirmationModal(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Link Collector", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, "<p>src</p>", "https://render.example.com", "tok")
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
 	// The modal mirrors dl-modal/clip-modal: an accessible dialog, the approved

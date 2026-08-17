@@ -29,6 +29,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -51,7 +52,8 @@ func TestPreambleFetchWrapperPrecedesArtifactScripts(t *testing.T) {
 	w, resp := postArtifact(t, r, map[string]any{"title": "vendored", "body": body})
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
-	req := httptest.NewRequest("GET", "/a/"+resp.Artifact.ID, nil)
+	tok := r.tokens.Mint(resp.Artifact.ID, defaultOwnerID)
+	req := httptest.NewRequest("GET", "/a/"+resp.Artifact.ID+"?"+rendertoken.Param+"="+tok, nil)
 	rec := httptest.NewRecorder()
 	r.RenderHandler().ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)

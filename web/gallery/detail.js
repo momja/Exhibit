@@ -1,7 +1,8 @@
 /* Artifact detail (viewer) page script. Served from the app origin at
  * /assets/gallery/detail.js. The page's inline bootstrap <script> defines the
  * per-request globals this file reads (and reassigns) before it loads:
- *   TOKEN              - API bearer token
+ *   TOKEN / READ_ONLY  - this visitor's API credential, decided server-side
+ *                        per request (av-5imk); spent via api.js's apiFetch
  *   ID                 - the artifact id
  *   SOURCE_URL         - source URL for URL-ingested artifacts ('' otherwise;
  *                        the Update-from-source button only renders when set)
@@ -54,19 +55,18 @@ window.addEventListener('message', function(e) {
   // definition — the ".." path-traversal bug (av-hh1o) had to be fixed in
   // three copies of it.
   if (d.op === 'clear') {
-    fetch(window.ExhibitState.deleteURL(ID), {
-      method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN}
+    apiFetch(window.ExhibitState.deleteURL(ID), {
+      method: 'DELETE'
     }).catch(function(){});
   } else if (d.op === 'delete') {
-    fetch(window.ExhibitState.deleteURL(ID, d.key), {
-      method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN}
+    apiFetch(window.ExhibitState.deleteURL(ID, d.key), {
+      method: 'DELETE'
     }).catch(function(){});
   } else if (d.op === 'set' || d.op === undefined) {
     // Only a recognized write reaches the API. An unknown op used to fall
     // through to this branch, so a future typo would silently become a write.
-    fetch(window.ExhibitState.url(ID), {
+    apiFetch(window.ExhibitState.url(ID), {
       method: 'PUT',
-      headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
       body: JSON.stringify({ key: d.key, value: d.value })
     }).catch(function(){});
   }
@@ -188,9 +188,8 @@ function triggerDownload(dl) {
 // av-hwx2) — this only grants on the artifact's first attempt.
 async function setCapabilityApproved(field, approved, label) {
   const st = document.getElementById('al-status');
-  const r = await fetch('/api/artifacts/' + ID, {
+  const r = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
-    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
     body: JSON.stringify({[field]: approved})
   }).catch(function() { return null; });
   if (!r || !r.ok) { st.textContent = '✗ Failed to update ' + label + ' permission'; return false; }
@@ -388,9 +387,8 @@ async function refetchSource() {
   const st = document.getElementById('al-status');
   st.textContent = 'Fetching…';
   try {
-    const r = await fetch('/api/artifacts/' + ID + '/refetch', {
-      method: 'POST',
-      headers: {'Authorization':'Bearer '+TOKEN}
+    const r = await apiFetch('/api/artifacts/' + ID + '/refetch', {
+      method: 'POST'
     });
     if (!r.ok) {
       const txt = await r.text().catch(() => '');

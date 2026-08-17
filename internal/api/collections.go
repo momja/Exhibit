@@ -56,10 +56,11 @@ func (ro *Router) createCollection(w http.ResponseWriter, r *http.Request) {
 
 func (ro *Router) addArtifactToCollection(w http.ResponseWriter, r *http.Request) {
 	collectionID := chi.URLParam(r, "collectionID")
-	artifactID := chi.URLParam(r, "artifactID")
+	artifactID := urlParamID(r, "artifactID")
 
-	if err := ro.cfg.Store.AddArtifactToCollection(r.Context(), artifactID, collectionID); err != nil {
-		serverError(w, r, "add artifact to collection", err)
+	ownerID := ownerIDFromCtx(r.Context())
+	if err := ro.cfg.Store.AddArtifactToCollection(r.Context(), ownerID, artifactID, collectionID); err != nil {
+		writeArtifactError(w, r, "add artifact to collection", err)
 		return
 	}
 
@@ -70,10 +71,11 @@ func (ro *Router) addArtifactToCollection(w http.ResponseWriter, r *http.Request
 
 func (ro *Router) removeArtifactFromCollection(w http.ResponseWriter, r *http.Request) {
 	collectionID := chi.URLParam(r, "collectionID")
-	artifactID := chi.URLParam(r, "artifactID")
+	artifactID := urlParamID(r, "artifactID")
 
-	if err := ro.cfg.Store.RemoveArtifactFromCollection(r.Context(), artifactID, collectionID); err != nil {
-		serverError(w, r, "remove artifact from collection", err)
+	ownerID := ownerIDFromCtx(r.Context())
+	if err := ro.cfg.Store.RemoveArtifactFromCollection(r.Context(), ownerID, artifactID, collectionID); err != nil {
+		writeArtifactError(w, r, "remove artifact from collection", err)
 		return
 	}
 
@@ -189,7 +191,7 @@ func (ro *Router) deleteTag(w http.ResponseWriter, r *http.Request) {
 
 func (ro *Router) addArtifactTag(w http.ResponseWriter, r *http.Request) {
 	tagID := chi.URLParam(r, "tagID")
-	artifactID := chi.URLParam(r, "artifactID")
+	artifactID := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
 
 	if err := ro.cfg.Store.AddArtifactTag(r.Context(), ownerID, artifactID, tagID); err != nil {
@@ -204,7 +206,7 @@ func (ro *Router) addArtifactTag(w http.ResponseWriter, r *http.Request) {
 
 func (ro *Router) removeArtifactTag(w http.ResponseWriter, r *http.Request) {
 	tagID := chi.URLParam(r, "tagID")
-	artifactID := chi.URLParam(r, "artifactID")
+	artifactID := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
 
 	if err := ro.cfg.Store.RemoveArtifactTag(r.Context(), ownerID, artifactID, tagID); err != nil {

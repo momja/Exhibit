@@ -10,13 +10,17 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/agentscope"
+	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/logging"
 	"github.com/momja/Exhibit/internal/render"
+	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/secrets"
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -30,15 +34,70 @@ type Config struct {
 	AuthToken    string
 	// Agent chat support (Exh-yvhp). Agent is nil when the pi harness is
 	// unavailable; Secrets seals the BYO provider keys at rest.
-	Agent       *agent.Manager
-	Secrets     *secrets.Box
-	MockEnabled bool
+	// AgentCredentials resolves the per-session scoped tokens agent sidecars
+	// authenticate with (av-e0yj) — the same registry the manager issues
+	// from. Nil means no agent credential is accepted at all.
+	Agent            *agent.Manager
+	AgentCredentials *agentscope.Registry
+	Secrets          *secrets.Box
+	MockEnabled      bool
+	// Identity delegates login to an identity provider (av-30rj). Nil — the
+	// default — is a single-user instance: no /auth routes, no login gate,
+	// the static token and owner 1 exactly as before. Non-nil is the only
+	// thing that changes, and swapping one provider for another changes
+	// nothing but which constructor filled this field.
+	Identity auth.IdentityProvider
+	// LocalCredential is the instance's own username and password (av-q30x),
+	// the second login path. Nil — the default — is the same single-user
+	// instance Identity's nil describes; set, it arms the same session gate
+	// and lands the same session, so an instance can be secured with one env
+	// var pair and no identity server anywhere.
+	//
+	// It is not an IdentityProvider and is not meant to become one: see
+	// internal/auth/local.go for why a form post does not fit a redirect seam.
+	//
+	// Since av-rzvf it is one account's password rather than the only one
+	// there is: accounts live in the users table, and this is the bootstrap
+	// and break-glass credential kept in the environment. cmd/server states
+	// the role; auth.go implements the precedence it depends on.
+	LocalCredential *auth.Credential
+	// LocalUsers reports whether the users table already holds an account
+	// with a password (av-rzvf) — the other thing that makes local login a
+	// real login path on this instance, and what keeps the gate armed for
+	// operator-provisioned accounts when no env credential is set.
+	//
+	// It is configuration read once at startup rather than a query on the
+	// request path: the gate consults it on every request including static
+	// assets, and the routes it decides are registered once at construction.
+	// The consequence is deliberate — provisioning the *first* account with
+	// the CLI on an already-running server takes a restart to arm the gate.
+	// Every later account is created on an instance whose gate is already up.
+	LocalUsers bool
+	// SessionTTL bounds how long a login lasts; zero means
+	// DefaultSessionTTL. Logout revokes sooner, server-side.
+	SessionTTL time.Duration
+	// Public opts the instance into serving a read-only gallery to anonymous
+	// visitors (av-4ac9). The zero value — a private instance — is the
+	// default, and carrying the configuration here rather than in a table is
+	// what lets the server-rendered gallery consult it with no per-request
+	// database round trip. See publicmode.go.
+	Public PublicMode
 }
 
 // Router wraps chi.Mux and holds the config.
 type Router struct {
 	*chi.Mux
 	cfg Config
+	// tokens signs the render-origin credentials this surface mints for every
+	// frame and link it points at RENDER_ORIGIN (av-c5aq). Held on the Router
+	// rather than passed around so a page render mints in memory, with no I/O
+	// per card.
+	tokens *rendertoken.Signer
+	// logins throttles failed local logins (av-t21v). In-process and in-memory
+	// on purpose: one binary and one SQLite file is this project's deployment
+	// contract, and attempt counters do not earn a table — see
+	// loginratelimit.go, which also holds the reasoning for what it keys on.
+	logins *loginLimiter
 }
 
 // compressibleTypes is the explicit set of response content types worth
@@ -235,11 +294,30 @@ func (cw *gzipResponseWriter) Close() error {
 // NewRouter constructs the chi router with all routes registered.
 func NewRouter(cfg Config) *Router {
 	r := &Router{
-		Mux: chi.NewRouter(),
-		cfg: cfg,
+		Mux:    chi.NewRouter(),
+		cfg:    cfg,
+		tokens: renderSigner(cfg.Secrets),
+		logins: newLoginLimiter(nil),
 	}
 	r.setupRoutes()
 	return r
+}
+
+// renderSigner derives the render-token signing key from the same server secret
+// that seals agent provider keys, domain-separated so the two never share key
+// material. Deriving rather than configuring keeps the operator's contract at
+// one secret (EXHIBIT_SECRET or the generated data/secret.key).
+//
+// With no Box at all — a process constructed without secrets, which in practice
+// means a test — an ephemeral key is generated instead. Tokens then work end to
+// end but do not survive a restart, which is the strict answer; the permissive
+// one would be an unauthenticated render origin.
+func renderSigner(box *secrets.Box) *rendertoken.Signer {
+	if box == nil {
+		return rendertoken.NewRandomSigner()
+	}
+	key := box.DeriveKey(rendertoken.KeyPurpose)
+	return rendertoken.NewSigner(key)
 }
 
 func (ro *Router) setupRoutes() {
@@ -249,12 +327,71 @@ func (ro *Router) setupRoutes() {
 	ro.Use(logging.RequestMiddleware)
 	ro.Use(middleware.Recoverer)
 	ro.Use(compressor())
+	// Login gate for the server-rendered pages (av-30rj). A pass-through
+	// unless an identity provider is configured, so a single-user instance
+	// is unaffected.
+	ro.Use(ro.sessionGate)
 
-	// Gallery UI — no auth header required (token embedded in page JS)
-	ro.Get("/", ro.galleryIndex)
-	ro.Get("/new", ro.galleryNew)
-	ro.Get("/artifacts/{artifactID}", ro.galleryDetail)
-	ro.Get("/artifacts/{artifactID}/edit", ro.galleryEdit)
+	// The login flow — registered only when a provider is configured
+	// (internal/api/auth.go).
+	ro.setupAuthRoutes(ro)
+
+	// Server-rendered pages (av-syug). They carry no Authorization header —
+	// a page's own JS authenticates its API calls separately, see
+	// pagecredential.go — but they read the library server-side, so they need
+	// the one thing the API group's chain supplies beyond authentication:
+	// whose library this is.
+	//
+	// ownerMiddleware alone is what that takes. The credential is already
+	// resolved upstream by sessionGate, which puts the session's owner in the
+	// context and never reaches here for a visitor who has none (it redirects
+	// to /auth/login first); this group only backstops the instances that
+	// issue no sessions at all, where the answer is the single-user default.
+	//
+	// Membership of this group is also the declaration that a route is
+	// owner-scoped, which is what av-syug's route walk holds new page routes
+	// to: a page that renders artifacts belongs in here, not beside the
+	// static assets below.
+	ro.Group(func(r chi.Router) {
+		r.Use(ro.ownerMiddleware)
+
+		// Gallery UI
+		r.Get("/", ro.galleryIndex)
+		r.Get("/new", ro.galleryNew)
+		r.Get("/artifacts/{artifactID}", ro.galleryDetail)
+		r.Get("/artifacts/{artifactID}/edit", ro.galleryEdit)
+		// "Open in new tab": mints a fresh render token and redirects to
+		// RENDER_ORIGIN/a/:id (av-c5aq). Links go through here rather than
+		// carrying a token in the markup, which would be stale by the time
+		// anyone clicked it.
+		r.Get("/artifacts/{artifactID}/open", ro.openArtifact)
+
+		// Agent chat UI — token embedded in page JS, like the gallery.
+		r.Get("/agent", ro.agentPage)
+
+		// The administration surface (av-utap). It sits in the page group
+		// like every other page — the group is what supplies an owner — and
+		// then behind adminOnly, because carrying an owner is not carrying
+		// authority. To anyone who is not an admin this route answers the
+		// same 404 an unrouted path does; admin.go says why that, and not a
+		// 403, is the right refusal.
+		r.With(ro.adminOnly).Get("/admin/users", ro.adminUsersPage)
+
+		// A person's own account (av-qo05). The same page group and the same
+		// page furniture as the route above, and deliberately not the same
+		// guard: this handler reads ownerIDFromCtx and nothing else, so a
+		// session is the whole authorization. Registering the two beside each
+		// other is where that difference is visible.
+		r.Get("/profile", ro.profilePage)
+
+		// Server-rendered fragments, swapped into a live page by htmx
+		// (av-6m3e). They render the same template partials the full page
+		// render uses, and carry no authority the page they belong to
+		// doesn't already have — so they sit with the pages, outside the
+		// API's auth group and under the same owner resolution.
+		r.Get("/partials/agent-preview", ro.agentPreviewPartial)
+		r.Get("/partials/card-widget", ro.cardWidgetPartial)
+	})
 
 	// Embedded static assets (client JS islands, e.g. the CodeMirror editor)
 	ro.Handle("/assets/*", assetsHandler())
@@ -266,23 +403,23 @@ func (ro *Router) setupRoutes() {
 	// Public share route — no auth required
 	ro.Get("/s/{shareID}", ro.serveShare)
 
-	// Agent chat UI (token embedded in page JS, like the gallery) and the
-	// SSE event stream (EventSource can't set headers; the handler checks
-	// the same bearer token passed as ?token=).
-	ro.Get("/agent", ro.agentPage)
-	ro.Get("/api/agent/sessions/{sessionID}/events", ro.agentEvents)
+	// The instance's public identity (av-4ac9). Registered here, outside the
+	// authenticated API group, because a visitor with no credential is
+	// precisely who needs it; a private instance answers 404 rather than
+	// naming itself. See publicmode.go for that choice.
+	ro.Get("/api/settings/public", ro.publicSettings)
 
-	// Server-rendered fragments, swapped into a live page by htmx (av-6m3e).
-	// They render the same template partials the full page render uses, and
-	// carry no authority the page they belong to doesn't already have — so
-	// they sit with the page routes, outside the API's auth group.
-	ro.Get("/partials/agent-preview", ro.agentPreviewPartial)
-	ro.Get("/partials/card-widget", ro.cardWidgetPartial)
+	// The agent SSE event stream. EventSource can't set headers, so the
+	// handler checks the same bearer token passed as ?token= (or the session
+	// cookie) itself rather than going through the API's auth middleware. It
+	// resolves a session by id and streams its events; it reads nothing
+	// owner-scoped, which is why it stays out of the page group above.
+	ro.Get("/api/agent/sessions/{sessionID}/events", ro.agentEvents)
 
 	// Authenticated API routes
 	ro.Group(func(r chi.Router) {
-		r.Use(authMiddleware(ro.cfg.AuthToken))
-		r.Use(ownerMiddleware)
+		r.Use(ro.authMiddleware)
+		r.Use(ro.ownerMiddleware)
 
 		r.Route("/api/artifacts", func(r chi.Router) {
 			r.Get("/", ro.listArtifacts)
@@ -353,6 +490,30 @@ func (ro *Router) setupRoutes() {
 			r.Delete("/{tagID}/artifacts/{artifactID}", ro.removeArtifactTag)
 		})
 
+		// Administration of other people's accounts (av-utap). Every route
+		// in here acts on somebody else, so the group carries adminOnly on
+		// top of the API group's own authentication — a session is not
+		// authorization for any of it. Routes a person performs on their
+		// *own* account are av-g2dx's and belong outside this group.
+		r.Route("/api/admin/users", func(r chi.Router) {
+			r.Use(ro.adminOnly)
+			r.Get("/", ro.listAdminUsers)
+			r.Post("/", ro.createAdminUser)
+			// One PATCH for password / disabled / is_admin, each optional:
+			// the fields are unrelated, and a route per verb would multiply
+			// the surface that has to be guarded without splitting anything
+			// that is actually separate.
+			r.Patch("/{userID}", ro.updateAdminUser)
+		})
+
+		// The caller's own account (av-4wyq, epic av-g2dx). Deliberately not
+		// inside the group above: that one acts on *other* accounts and
+		// carries adminOnly for it, while this route cannot name an account
+		// at all — it takes no id, from path or body, and erases whatever the
+		// request's own session resolved to. That is the whole authority
+		// argument, and registering the two apart is where it is visible.
+		r.Delete("/api/account", ro.deleteAccount)
+
 		r.Route("/api/shares", func(r chi.Router) {
 			r.Post("/", ro.createShare)
 			r.Delete("/{shareID}", ro.deleteShare)
@@ -375,6 +536,9 @@ func (ro *Router) RenderHandler() http.Handler {
 		Blob:         ro.cfg.Blob,
 		AppOrigin:    ro.cfg.AppOrigin,
 		RenderOrigin: ro.cfg.RenderOrigin,
+		// The same Signer the app surface mints with: one process, one key,
+		// stateless verification — no shared table, no round trip.
+		Tokens: ro.tokens,
 	})
 
 	r := chi.NewRouter()
@@ -384,6 +548,10 @@ func (ro *Router) RenderHandler() http.Handler {
 	// composed per request and served no-store, so every view pays its full
 	// size over the wire with no cache to amortise it.
 	r.Use(compressor())
+	// Every response this mux emits — rendered document, 404 on a rejected
+	// token, unrouted path — withholds its Referer, because the URL that
+	// produced it carries a render token (av-nr0p).
+	r.Use(render.NoReferrer)
 
 	// Serve a rendered artifact by id
 	r.Get("/a/{artifactID}", renderer.ServeArtifact)

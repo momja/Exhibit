@@ -1,6 +1,6 @@
 ---
 id: av-syug
-status: in_progress
+status: closed
 deps: []
 links: [av-wmp6, av-30rj, av-c5aq, av-5imk, av-ep8k]
 created: 2026-08-09T04:31:48Z

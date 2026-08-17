@@ -155,8 +155,10 @@ func TestGalleryCardRendersWidgetOrDefaultTile(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	page := w.Body.String()
 
-	assert.Contains(t, page, `src="http://render.test/w/`+withWidget+`"`)
-	assert.NotContains(t, page, `src="http://render.test/w/`+plain+`"`)
+	// The tile frame carries a render token minted during this page render
+	// (av-c5aq): one HMAC per card, no round trip per card.
+	assert.Contains(t, page, `src="http://render.test/w/`+withWidget+`?t=`)
+	assert.NotContains(t, page, `http://render.test/w/`+plain)
 	// "Mortgage Calculator" -> MC on the default tile.
 	assert.Contains(t, page, `<span class="card-widget-monogram">MC</span>`)
 	// "Run Log" -> RL, present even though that card HAS a widget: the default
@@ -208,7 +210,8 @@ func TestCardWidgetPartialRendersStampedFrame(t *testing.T) {
 
 	frag := w.Body.String()
 	assert.True(t, strings.HasPrefix(frag, `<div class="card-widget has-frame">`), frag)
-	assert.Contains(t, frag, "http://render.test/w/"+id+"?r=")
+	assert.Contains(t, frag, "http://render.test/w/"+id+"?t=")
+	assert.Contains(t, frag, "&amp;r=")
 	// The monogram ships under the frame so the health watcher's fallback is
 	// just a class flip, with no markup for page JS to build.
 	assert.Contains(t, frag, `class="card-widget-monogram"`)
@@ -382,8 +385,11 @@ func TestWidgetGenerateTakesNoCallerPrompt(t *testing.T) {
 	// The POST carries no body at all — just the auth header.
 	assert.NotContains(t, src[i:i+400], "JSON.stringify")
 	// Progress rides the session's existing SSE route, not a new mechanism.
-	assert.Contains(t, src, "new EventSource('/api/agent/sessions/'")
+	// apiEventSource is that route credentialed for this visitor (av-5imk):
+	// a query-string token on a single-user instance, nothing at all when a
+	// session cookie is what authenticates the stream.
+	assert.Contains(t, src, "apiEventSource('/api/agent/sessions/'")
 	assert.Contains(t, src, "'exhibit_widget_saved'")
 	// A one-shot session is closed once it has done its job.
-	assert.Contains(t, src, "method: 'DELETE', headers: {'Authorization':'Bearer '+TOKEN}")
+	assert.Contains(t, src, "apiFetch('/api/agent/sessions/' + encodeURIComponent(sessionId), {")
 }

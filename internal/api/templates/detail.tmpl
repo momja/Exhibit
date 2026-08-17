@@ -26,7 +26,7 @@
   {{/* Sheet-only chrome (grab handle + title/date): display:none on desktop,
        where the toolbar is an inline row that needs no header of its own. */}}
   <div class="sheet-head"><span class="sheet-grip"></span><span class="sheet-title">{{.Title}}</span><span class="muted text-sm">{{.Created}}</span></div>
-  <a href="{{.RenderOrigin}}/a/{{.ID}}" target="_blank">Open in new tab ↗</a>
+  <a href="{{.OpenURL}}" target="_blank">Open in new tab ↗</a>
   <span class="toolbar-sep">|</span>
   <a href="/artifacts/{{.ID}}/edit"><i class="ph ph-pencil-simple"></i> Edit</a>
   <span class="toolbar-sep">|</span>
@@ -62,7 +62,7 @@
       <p id="capability-warning-detail"></p>
     </details>
   </div>
-  <a class="banner-action" href="{{.RenderOrigin}}/a/{{.ID}}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</a>
+  <a class="banner-action" href="{{.OpenURL}}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</a>
 </div>
 <div class="panels">
   {{/* No allow="clipboard-*" delegation: the frame's opaque origin matches no
@@ -70,7 +70,7 @@
        Clipboard read/write is instead proxied through the host via the shim's
        capability bridge, gated by per-artifact first-use approval. Native
        keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. */}}
-  <iframe src="{{.RenderOrigin}}/a/{{.ID}}" sandbox="allow-scripts allow-forms" loading="lazy"></iframe>
+  <iframe src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy"></iframe>
 </div>
 
 <div id="dl-modal" class="modal-overlay" hidden>
@@ -112,6 +112,15 @@
 </div>
 <script>
 const TOKEN = {{.Token}};
+{{/* READ_ONLY and TOKEN are one decision, made server-side per request
+     (av-5imk, pagecredential.go): a session-authenticated browser gets no
+     token because its cookie already authenticates it, an anonymous visitor
+     gets no token and READ_ONLY, and a single-user instance with no identity
+     provider gets the static token it has always had. api.js is what spends
+     the result — page scripts never build an Authorization header. Literal
+     template text for the boolean, matching the other bootstrap flags:
+     html/template's JS escaper pads a {{value}} boolean with spaces. */ -}}
+const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const ID = {{.ID}};
 const SOURCE_URL = {{.SourceURL}};
 {{/* The booleans are emitted as literal template text rather than {{value}}
@@ -121,6 +130,7 @@ let downloadsApproved = {{if .Capability.DownloadsApproved}}true{{else}}false{{e
 let clipboardApproved = {{if .Capability.ClipboardApproved}}true{{else}}false{{end}};
 let linksApproved = {{if .Capability.LinksApproved}}true{{else}}false{{end}};
 </script>
+<script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/components.js"></script>
 <script src="/assets/gallery/state-api.js"></script>
 <script src="/assets/gallery/detail.js"></script>

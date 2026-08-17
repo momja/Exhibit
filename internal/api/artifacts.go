@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/snapshot"
 	"github.com/momja/Exhibit/internal/store"
@@ -43,12 +45,25 @@ func serverError(w http.ResponseWriter, r *http.Request, label string, err error
 	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
+// writeArtifactError maps a store error from an artifact mutation to a
+// response. ErrNotFound becomes 404, never 403: the store reports an id
+// outside the caller's library exactly as it reports one that doesn't exist,
+// and the handler must not undo that by answering differently (av-ep8k).
+func writeArtifactError(w http.ResponseWriter, r *http.Request, label string, err error) {
+	if errors.Is(err, store.ErrNotFound) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	serverError(w, r, label, err)
+}
+
 func (ro *Router) listArtifacts(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	opts := store.ListOptions{
-		Query:  q.Get("q"),
-		Offset: 0,
-		Limit:  50,
+		OwnerID: ownerIDFromCtx(r.Context()),
+		Query:   q.Get("q"),
+		Offset:  0,
+		Limit:   50,
 	}
 	if l := q.Get("limit"); l != "" {
 		if n, err := strconv.Atoi(l); err == nil {
@@ -302,6 +317,16 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A create-mode agent session binds here, to the id this handler just
+	// wrote (av-e0yj). Binding from the row rather than from the tool result
+	// the model sees is what makes the scope unforgeable; from here the
+	// session's credential reaches this artifact and nothing else.
+	if g := agentGrantFromCtx(r.Context()); g != nil {
+		g.BindArtifact(id)
+		slog.InfoContext(r.Context(), "agent session bound to the artifact it created",
+			slog.String("artifact_id", id))
+	}
+
 	slog.DebugContext(r.Context(), "artifact created",
 		slog.String("id", id),
 		slog.String("title", req.Title),
@@ -321,8 +346,9 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ro *Router) getArtifact(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	id := urlParamID(r, "artifactID")
+	ownerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "get artifact", err)
 		return
@@ -352,7 +378,8 @@ func (ro *Router) getArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
+	ownerID := ownerIDFromCtx(r.Context())
 
 	var updates map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
@@ -373,8 +400,10 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Verify artifact exists
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	// Verify the artifact exists *in this owner's library*. Another owner's
+	// id reads back as nil here, exactly like an unknown one, so the 404
+	// below reveals nothing about which ids exist (av-ep8k).
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "get artifact for update", err)
 		return
@@ -416,12 +445,20 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		delete(updates, "body")
 	}
 
-	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, updates); err != nil {
-		serverError(w, r, "update artifact", err)
+	if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, updates); err != nil {
+		writeArtifactError(w, r, "update artifact", err)
 		return
 	}
 
-	a, _ = ro.cfg.Store.GetArtifact(r.Context(), id)
+	a, err = ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
+	if err != nil {
+		serverError(w, r, "reload artifact after update", err)
+		return
+	}
+	if a == nil {
+		serverError(w, r, "reload artifact after update", errors.New("artifact vanished after update"))
+		return
+	}
 
 	// Re-execute the network scan when the body actually changed (a diff
 	// against the previous version), and surface the footprint — and whether
@@ -482,9 +519,10 @@ func sameOrigins(a, b []string) bool {
 // destructive snapshot replace — not versioned, no history. The network
 // allowlist is re-scanned from the new content; the title is left untouched.
 func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
+	ownerID := ownerIDFromCtx(r.Context())
 
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "get artifact for refetch", err)
 		return
@@ -523,21 +561,30 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 		"network_allowlist": scanner.Scan(string(fetched)),
 		"source_text":       store.ExtractSearchText(string(fetched)),
 	}
-	if err := ro.cfg.Store.UpdateArtifact(r.Context(), id, updates); err != nil {
-		serverError(w, r, "refetch update artifact", err)
+	if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, updates); err != nil {
+		writeArtifactError(w, r, "refetch update artifact", err)
 		return
 	}
 
 	slog.InfoContext(r.Context(), "artifact refetched", slog.String("id", id), slog.Int("body_bytes", len(fetched)))
 
-	a, _ = ro.cfg.Store.GetArtifact(r.Context(), id)
+	a, err = ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
+	if err != nil {
+		serverError(w, r, "reload artifact after refetch", err)
+		return
+	}
+	if a == nil {
+		serverError(w, r, "reload artifact after refetch", errors.New("artifact vanished after refetch"))
+		return
+	}
 	writeJSON(w, http.StatusOK, a)
 }
 
 func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
+	ownerID := ownerIDFromCtx(r.Context())
 
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), id)
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
 		serverError(w, r, "get artifact for delete", err)
 		return
@@ -547,12 +594,80 @@ func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ro.cfg.Store.DeleteArtifact(r.Context(), id); err != nil {
-		serverError(w, r, "delete artifact", err)
+	if err := ro.cfg.Store.DeleteArtifact(r.Context(), ownerID, id); err != nil {
+		writeArtifactError(w, r, "delete artifact", err)
 		return
 	}
 
 	slog.InfoContext(r.Context(), "artifact deleted", slog.String("id", id))
 
+	// The row is gone; now the bytes (av-7jcq). A 500 here reports a delete
+	// that only half happened — the artifact has left the library but its file
+	// is still on disk — and that is the honest status even though retrying
+	// the request now 404s. The error log names the blob ids, which is the
+	// part an operator can act on; the alternative, 204 plus a log line, is
+	// precisely the silent success this ticket exists to remove.
+	if err := deleteArtifactBlobs(r.Context(), ro.cfg.Blob, a); err != nil {
+		serverError(w, r, "delete artifact blobs", err)
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// artifactBlobIDs is every blob an artifact owns: its body, plus its widget
+// when it has one.
+//
+// Two is the whole list, not the newest of a series. Both ids are minted once
+// and rewritten in place — an edit PUTs the new body back into
+// a.SourceBlobID, a refetch does the same, and a widget save reuses
+// a.WidgetBlobID so the tile's render URL stays stable across edits
+// (widget.go) — so no earlier version of either is left behind to find.
+func artifactBlobIDs(a *store.Artifact) []string {
+	ids := []string{a.SourceBlobID}
+	if a.WidgetBlobID != "" {
+		ids = append(ids, a.WidgetBlobID)
+	}
+	return ids
+}
+
+// deleteBlobs removes a list of blobs, attempting every id even if one fails.
+//
+// The first error encountered is wrapped with the blob id and returned; all
+// other ids are still attempted, so one unremovable file cannot strand the
+// rest. This is the shared deletion logic profile.go and artifacts.go both
+// need: attempt everything, wrap the first failure as "blob %s: %w", return
+// that first error.
+func deleteBlobs(ctx context.Context, blobs blob.Store, ids []string) error {
+	var firstErr error
+	for _, id := range ids {
+		if err := blobs.Delete(ctx, id); err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("blob %s: %w", id, err)
+		}
+	}
+	return firstErr
+}
+
+// deleteArtifactBlobs removes the bodies an artifact owned. Call it *after*
+// the row is gone.
+//
+// That ordering is the decision, and it turns on an asymmetry between the two
+// failure modes:
+//
+//   - Bytes first, and a failing row delete leaves a live artifact pointing at
+//     a body that no longer exists. It renders an error forever and nothing on
+//     the instance can repair it, because the blob was the only copy.
+//   - Row first, and a failing blob delete leaves bytes nobody references.
+//     That is exactly the state the product shipped in before av-7jcq, it
+//     breaks no row, and an operator can sweep it using the ids the caller's
+//     error log names.
+//
+// Prefer the recoverable failure: the row goes first. The blob failure is
+// still returned rather than swallowed — a deletion that left the bytes on
+// disk must not report success.
+//
+// Every id is attempted before the first error is returned, so one unremovable
+// file cannot strand the artifact's other body.
+func deleteArtifactBlobs(ctx context.Context, blobs blob.Store, a *store.Artifact) error {
+	return deleteBlobs(ctx, blobs, artifactBlobIDs(a))
 }

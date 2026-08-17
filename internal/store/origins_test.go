@@ -42,17 +42,17 @@ func TestMigration009BackfillsLegacyAllowlist(t *testing.T) {
 	t.Cleanup(func() { s.Close() })
 
 	ctx := context.Background()
-	allowed, err := s.AllowedOrigins(ctx, "legacy")
+	allowed, err := s.AllowedOrigins(ctx, 1, "legacy")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"https://a.example.com", "https://b.example.com"}, allowed)
 
-	decisions, err := s.ListOriginDecisions(ctx, "legacy")
+	decisions, err := s.ListOriginDecisions(ctx, 1, "legacy")
 	require.NoError(t, err)
 	require.Len(t, decisions, 2)
 	assert.Equal(t, "legacy", decisions[0].Source, "backfilled rows record where they came from")
 
 	// The column itself is gone — decisions are the only source of truth now.
-	got, err := s.GetArtifact(ctx, "legacy")
+	got, err := s.GetArtifact(ctx, 1, "legacy")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"https://a.example.com", "https://b.example.com"}, got.NetworkAllowlist)
 }
@@ -71,18 +71,18 @@ func TestAllowedOriginsIgnoresBlockDecisions(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	putTestArtifact(t, s, "a1", []string{"https://ok.example.com"})
-	require.NoError(t, s.SetOriginDecision(ctx, "a1", "https://nope.example.com", DecisionBlock, "runtime"))
+	require.NoError(t, s.SetOriginDecision(ctx, 1, "a1", "https://nope.example.com", DecisionBlock, "runtime"))
 
-	allowed, err := s.AllowedOrigins(ctx, "a1")
+	allowed, err := s.AllowedOrigins(ctx, 1, "a1")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"https://ok.example.com"}, allowed)
 
 	// The hydrated artifact — what render.buildCSP reads — matches.
-	got, err := s.GetArtifact(ctx, "a1")
+	got, err := s.GetArtifact(ctx, 1, "a1")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"https://ok.example.com"}, got.NetworkAllowlist)
 
-	decisions, err := s.ListOriginDecisions(ctx, "a1")
+	decisions, err := s.ListOriginDecisions(ctx, 1, "a1")
 	require.NoError(t, err)
 	assert.Len(t, decisions, 2, "both decisions are stored; only allow reaches the CSP")
 }
@@ -94,25 +94,25 @@ func TestSetOriginDecisionUpsertsAndDeletes(t *testing.T) {
 	ctx := context.Background()
 	putTestArtifact(t, s, "a1", nil)
 
-	require.NoError(t, s.SetOriginDecision(ctx, "a1", "https://x.example.com", DecisionAllow, "user"))
-	require.NoError(t, s.SetOriginDecision(ctx, "a1", "https://x.example.com", DecisionBlock, "runtime"))
+	require.NoError(t, s.SetOriginDecision(ctx, 1, "a1", "https://x.example.com", DecisionAllow, "user"))
+	require.NoError(t, s.SetOriginDecision(ctx, 1, "a1", "https://x.example.com", DecisionBlock, "runtime"))
 
-	decisions, err := s.ListOriginDecisions(ctx, "a1")
+	decisions, err := s.ListOriginDecisions(ctx, 1, "a1")
 	require.NoError(t, err)
 	require.Len(t, decisions, 1, "an origin can hold only one decision")
 	assert.Equal(t, DecisionBlock, decisions[0].Decision)
 	assert.Equal(t, "runtime", decisions[0].Source)
 
-	allowed, err := s.AllowedOrigins(ctx, "a1")
+	allowed, err := s.AllowedOrigins(ctx, 1, "a1")
 	require.NoError(t, err)
 	assert.Empty(t, allowed, "flipping allow→block must revoke the CSP grant")
 
-	require.NoError(t, s.DeleteOriginDecision(ctx, "a1", "https://x.example.com"))
-	decisions, err = s.ListOriginDecisions(ctx, "a1")
+	require.NoError(t, s.DeleteOriginDecision(ctx, 1, "a1", "https://x.example.com"))
+	decisions, err = s.ListOriginDecisions(ctx, 1, "a1")
 	require.NoError(t, err)
 	assert.Empty(t, decisions)
 
-	assert.Error(t, s.SetOriginDecision(ctx, "a1", "https://x.example.com", "maybe", "user"),
+	assert.Error(t, s.SetOriginDecision(ctx, 1, "a1", "https://x.example.com", "maybe", "user"),
 		"only allow/block are valid decisions")
 }
 
@@ -123,15 +123,15 @@ func TestReplaceAllowedOriginsPreservesBlockRows(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	putTestArtifact(t, s, "a1", []string{"https://old.example.com"})
-	require.NoError(t, s.SetOriginDecision(ctx, "a1", "https://blocked.example.com", DecisionBlock, "runtime"))
+	require.NoError(t, s.SetOriginDecision(ctx, 1, "a1", "https://blocked.example.com", DecisionBlock, "runtime"))
 
-	require.NoError(t, s.ReplaceAllowedOrigins(ctx, "a1", []string{"https://new.example.com"}, "user"))
+	require.NoError(t, s.ReplaceAllowedOrigins(ctx, 1, "a1", []string{"https://new.example.com"}, "user"))
 
-	allowed, err := s.AllowedOrigins(ctx, "a1")
+	allowed, err := s.AllowedOrigins(ctx, 1, "a1")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"https://new.example.com"}, allowed, "replaced allow set")
 
-	decisions, err := s.ListOriginDecisions(ctx, "a1")
+	decisions, err := s.ListOriginDecisions(ctx, 1, "a1")
 	require.NoError(t, err)
 	require.Len(t, decisions, 2)
 	assert.Equal(t, "https://blocked.example.com", decisions[0].Origin)
@@ -143,11 +143,11 @@ func TestReplaceAllowedOriginsOverridesABlockOnTheSameOrigin(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	putTestArtifact(t, s, "a1", nil)
-	require.NoError(t, s.SetOriginDecision(ctx, "a1", "https://x.example.com", DecisionBlock, "runtime"))
+	require.NoError(t, s.SetOriginDecision(ctx, 1, "a1", "https://x.example.com", DecisionBlock, "runtime"))
 
-	require.NoError(t, s.ReplaceAllowedOrigins(ctx, "a1", []string{"https://x.example.com"}, "user"))
+	require.NoError(t, s.ReplaceAllowedOrigins(ctx, 1, "a1", []string{"https://x.example.com"}, "user"))
 
-	decisions, err := s.ListOriginDecisions(ctx, "a1")
+	decisions, err := s.ListOriginDecisions(ctx, 1, "a1")
 	require.NoError(t, err)
 	require.Len(t, decisions, 1, "the upsert flips the decision instead of adding a row")
 	assert.Equal(t, DecisionAllow, decisions[0].Decision)
@@ -158,9 +158,9 @@ func TestOriginDecisionsCascadeOnArtifactDelete(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	putTestArtifact(t, s, "a1", []string{"https://ok.example.com"})
-	require.NoError(t, s.SetOriginDecision(ctx, "a1", "https://nope.example.com", DecisionBlock, "runtime"))
+	require.NoError(t, s.SetOriginDecision(ctx, 1, "a1", "https://nope.example.com", DecisionBlock, "runtime"))
 
-	require.NoError(t, s.DeleteArtifact(ctx, "a1"))
+	require.NoError(t, s.DeleteArtifact(ctx, 1, "a1"))
 
 	var count int
 	require.NoError(t, s.db.QueryRowContext(ctx,

@@ -18,7 +18,7 @@ import (
 // rather than any particular styling.
 func TestDetailPageCarriesMobileActionsSheet(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Sheet Tool", Tier: store.Tier1, CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, "https://render.example.com", "tok")
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `id="sheet-toggle"`, "the header needs the kebab that opens the sheet")
@@ -46,7 +46,7 @@ func TestDetailPageCarriesMobileActionsSheet(t *testing.T) {
 // body in any form, and the render handler must not read the blob.
 func TestDetailPageDoesNotEmbedSource(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Big Tool", Tier: store.Tier1, CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, "https://render.example.com", "tok")
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
 	assert.NotContains(t, page, "<pre>", "the source body must not appear in the detail page")
