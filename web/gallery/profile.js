@@ -86,20 +86,28 @@
     go.disabled = true;
     say('Deleting your account…', false);
 
-    const r = await apiFetch('/api/account', {
-      method: 'DELETE',
-      body: JSON.stringify({confirm: CONFIRM_PHRASE})
-    });
-    if (!r.ok) {
-      say(await failureText(r), true);
+    try {
+      const r = await apiFetch('/api/account', {
+        method: 'DELETE',
+        body: JSON.stringify({confirm: CONFIRM_PHRASE})
+      });
+      if (!r.ok) {
+        say(await failureText(r), true);
+        go.disabled = false;
+        return;
+      }
+      // The account is gone and its sessions with it, so there is no page on
+      // this instance left to return to. Sending the browser to the root lets
+      // whatever this instance does with an unauthenticated visitor happen —
+      // the login page, or the public library — rather than this script
+      // deciding on its behalf.
+      window.location.href = '/';
+    } catch (err) {
+      // Network error or other fetch failure. The request may or may not have
+      // reached the server, so the outcome is unknown. Instruct the person to
+      // reload rather than retry, since retrying an unknown state is unsafe.
+      say('Network error. The outcome is unknown — reload the page to check whether the account was deleted. Do not retry.', true);
       go.disabled = false;
-      return;
     }
-    // The account is gone and its sessions with it, so there is no page on
-    // this instance left to return to. Sending the browser to the root lets
-    // whatever this instance does with an unauthenticated visitor happen —
-    // the login page, or the public library — rather than this script
-    // deciding on its behalf.
-    window.location.href = '/';
   });
 })();

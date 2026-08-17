@@ -631,6 +631,23 @@ func artifactBlobIDs(a *store.Artifact) []string {
 	return ids
 }
 
+// deleteBlobs removes a list of blobs, attempting every id even if one fails.
+//
+// The first error encountered is wrapped with the blob id and returned; all
+// other ids are still attempted, so one unremovable file cannot strand the
+// rest. This is the shared deletion logic profile.go and artifacts.go both
+// need: attempt everything, wrap the first failure as "blob %s: %w", return
+// that first error.
+func deleteBlobs(ctx context.Context, blobs blob.Store, ids []string) error {
+	var firstErr error
+	for _, id := range ids {
+		if err := blobs.Delete(ctx, id); err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("blob %s: %w", id, err)
+		}
+	}
+	return firstErr
+}
+
 // deleteArtifactBlobs removes the bodies an artifact owned. Call it *after*
 // the row is gone.
 //
@@ -652,11 +669,5 @@ func artifactBlobIDs(a *store.Artifact) []string {
 // Every id is attempted before the first error is returned, so one unremovable
 // file cannot strand the artifact's other body.
 func deleteArtifactBlobs(ctx context.Context, blobs blob.Store, a *store.Artifact) error {
-	var firstErr error
-	for _, id := range artifactBlobIDs(a) {
-		if err := blobs.Delete(ctx, id); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("blob %s: %w", id, err)
-		}
-	}
-	return firstErr
+	return deleteBlobs(ctx, blobs, artifactBlobIDs(a))
 }

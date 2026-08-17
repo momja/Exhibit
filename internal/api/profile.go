@@ -275,14 +275,8 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	// only half happened: the account is gone and cannot be retried, but some
 	// artifact bodies are still on the volume, and that is exactly the thing a
 	// person deleting their library must not be told succeeded.
-	var firstErr error
-	for _, id := range blobIDs {
-		if err := ro.cfg.Blob.Delete(ctx, id); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("blob %s: %w", id, err)
-		}
-	}
-	if firstErr != nil {
-		serverError(w, r, "delete account blobs", firstErr)
+	if err := deleteBlobs(ctx, ro.cfg.Blob, blobIDs); err != nil {
+		serverError(w, r, "delete account blobs", err)
 		return
 	}
 

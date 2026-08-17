@@ -318,15 +318,16 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 // the generic loop below (handled and stripped first), so listing it here
 // would just be a second place that claim could be made and forgotten.
 // Everything else naming an artifacts column — id, owner_id, source_blob_id,
-// created_at, updated_at, tags_text (trigger-maintained) — is deliberately
-// excluded: an update map here is a handler-decoded PATCH body, so an
-// unvalidated key is a column the *caller* chose.
+// widget_blob_id, created_at, updated_at, tags_text (trigger-maintained) — is
+// deliberately excluded: an update map here is a handler-decoded PATCH body, so
+// an unvalidated key is a column the *caller* chose. widget_blob_id is excluded
+// because it is set only by the widget PUT handler with a server-generated UUID,
+// never by a generic PATCH.
 var updatableArtifactColumns = map[string]bool{
 	"title":              true,
 	"tier":               true,
 	"source_url":         true,
 	"source_text":        true,
-	"widget_blob_id":     true,
 	"downloads_approved": true,
 	"clipboard_approved": true,
 	"links_approved":     true,

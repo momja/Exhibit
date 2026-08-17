@@ -3,10 +3,12 @@ package blob
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Store interface {
@@ -52,7 +54,25 @@ func NewFSStore(dir string) (*FSStore, error) {
 	return &FSStore{dir: dir}, nil
 }
 
+// validateBlobID ensures a blob id contains no path traversal components.
+// Blob IDs are server-generated UUIDs, but this validation defends against
+// any attempt to use a client-supplied value as a blob id in filesystem
+// operations.
+func validateBlobID(id string) error {
+	if id == "" {
+		return fmt.Errorf("blob id cannot be empty")
+	}
+	// Reject path traversal components and absolute paths.
+	if strings.Contains(id, "..") || strings.Contains(id, "/") || strings.Contains(id, "\\") {
+		return fmt.Errorf("invalid blob id: %q contains path separators or traversal components", id)
+	}
+	return nil
+}
+
 func (s *FSStore) Put(ctx context.Context, id string, r io.Reader) error {
+	if err := validateBlobID(id); err != nil {
+		return err
+	}
 	path := filepath.Join(s.dir, id)
 	f, err := os.Create(path)
 	if err != nil {
@@ -73,6 +93,9 @@ func (s *FSStore) Put(ctx context.Context, id string, r io.Reader) error {
 }
 
 func (s *FSStore) Get(ctx context.Context, id string) (io.ReadCloser, error) {
+	if err := validateBlobID(id); err != nil {
+		return nil, err
+	}
 	rc, err := os.Open(filepath.Join(s.dir, id))
 	if err == nil {
 		slog.DebugContext(ctx, "blob opened", slog.String("id", id))
@@ -87,6 +110,9 @@ func (s *FSStore) Get(ctx context.Context, id string) (io.ReadCloser, error) {
 // failure and surfaces, because the whole point of this method is that a
 // deletion which claims to have removed the bytes did.
 func (s *FSStore) Delete(ctx context.Context, id string) error {
+	if err := validateBlobID(id); err != nil {
+		return err
+	}
 	err := os.Remove(filepath.Join(s.dir, id))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
