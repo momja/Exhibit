@@ -62,7 +62,13 @@ Two constraints fall out: **the asset route must never redirect** (CSP drops pat
 
 **Storage.** Assets are blobs in the existing `Blob` store, so the operator's backup story (Litestream + the blob dir) is unchanged. Content-addressed **per owner, never globally**: dedup within one library only. Global dedup makes account deletion able to strip bytes out of another owner's artifact unless refcounting is exactly right in the delete path; per-owner addressing removes that failure mode by construction, costs duplicate storage only on multi-user instances, and costs nothing on a single-user self-host. Assets are deleted with their artifact via `Blob.Delete` (av-7jcq).
 
-**Lifecycle: what makes an asset deletable.** Moving the manifest out of the body means the body is never consulted to build it, so nothing in the body answers "is this asset still referenced". Nothing can be allowed to: a scan for surviving `fetch` literals is exactly the static analysis this architecture refuses to trust (`scanner.LiteralRefs` is a hint, not analysis), and a runtime-constructed URL never appears as a literal — so a scan-based GC deletes assets that are still in use. Data loss is a worse outcome than leaked bytes, so the rule is that **only decidable questions may authorize a delete**:
+**Lifecycle: what makes an asset deletable.** Moving the manifest out of the body means the body is never consulted to build it, so nothing in the body answers "is this asset still referenced".
+
+Be precise about why a body scan cannot answer it either, because the obvious argument is wrong. Every asset *originates* from a literal — manifest entries come from `scanner.FetchRefs` alone — so there is no such thing as an asset vendored behind a URL the scan could not see. Creation is fully covered.
+
+The gap is in **consumption**. The wrapper matches at call time on the resolved URL (`new URL(raw, document.baseURI).href`), not on the call site, so an asset vendored from `fetch("/app.wasm")` is still served to a later body calling `fetch(base + "/" + name + ".wasm")` that resolves to the same URL. Agent rewrites and ordinary refactors do exactly that. A scan showing the literal is gone therefore does not show that nothing fetches it.
+
+That is the narrow reason. The broad one is that a scan-based GC is not needed: the three decidable cases below cover the real churn, what remains is one narrow case (a feature edited out of a kept artifact), the leak is bounded, and getting it wrong silently destroys a payload whose source site may have rotted — unrecoverable for a pasted artifact. Reclaiming occasional megabytes is not worth that trade at any level of scan accuracy. So **only decidable questions may authorize a delete**:
 
 These are **two questions, not one**, and conflating them is the easiest way to get this wrong.
 
@@ -73,7 +79,7 @@ These are **two questions, not one**, and conflating them is the easiest way to 
 | The artifact is deleted | Yes — certain |
 | A newer generation supersedes this one, and no retained version references the old one | Yes — generations are recorded |
 | The user deletes it in the edit page's asset panel | Yes — explicit |
-| The body no longer fetches it, but none of the above applies | **Never concluded** — the URL may be constructed at run time |
+| The body no longer fetches it, but none of the above applies | **Never concluded** — a vanished literal does not mean a vanished fetch |
 
 The last row is a leak accepted on purpose. The asset panel (below) is how a human resolves it, because a human can know what the code does and this system cannot.
 
@@ -105,6 +111,8 @@ Note the direction of the interaction: this ticket makes [[av-3pq6]]'s "keep all
 **The asset panel** handles the case generations cannot: the user removed the feature that used a 14 MB payload and wants the space back. Only they can know that, so the panel is where they say it.
 
 A collapsible panel on the artifact **edit** page, beside the security panel and the state inspector, and modelled on the latter (av-hg5f): the shell renders server-side and the contents are fetched on first open, since asset metadata is cold data the rest of the page never needs. It lists each asset — **source URL**, size, content type — plus the artifact's total, with a delete control per row. Deleting calls an authenticated API route that drops the row and, if that was the last reference, enqueues the blob ([[av-8gyd]]).
+
+**The scan earns a place here as an advisory.** Flag an asset whose source URL no longer appears as a literal in the current body — "no reference found in the current source". It cannot authorize a delete (see above), but it is a genuinely useful starting point for the judgement the panel exists to support, and it is the scan doing what it already does everywhere else in this system: transparency, not enforcement (PRD §6.2). Word it as an observation, never as a recommendation.
 
 Two things it must get right, because this is the one control here that can break a working artifact:
 
@@ -169,3 +177,7 @@ Clarified deletability as two separate questions: (1) is the ROW deletable — a
 **2026-08-17T05:45:50Z**
 
 Clarified two things that were load-bearing but only implied. (1) Generation deletability is a count over recorded generation ids — a claim about the document's lifetime (no retained body came with these assets, so nothing can fetch them) rather than about its contents, which is why it is decidable where 'does the JS still fetch this URL' is not. (2) Defined the asset panel concretely: edit page, beside the state inspector, lazy-loaded, source URL as the primary column since it is what a user matches against their code, and refetch as the stated recovery for URL-ingested artifacts.
+
+**2026-08-17T05:48:58Z**
+
+Corrected the rationale for refusing scan-based GC. The earlier framing (a runtime-constructed URL might hide an asset from the scan) was wrong: manifest entries come only from scanner.FetchRefs literals, so every asset originates from a literal and creation is fully covered. The real gap is consumption — the wrapper matches resolved URLs at call time, so a rewritten body can consume an asset whose original literal is gone. The broader reason stands regardless: scan GC is unnecessary, and being wrong destroys an unrecoverable payload. Added the scan back as a non-authoritative advisory in the asset panel.
