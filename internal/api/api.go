@@ -461,6 +461,14 @@ func (ro *Router) setupRoutes() {
 				r.Get("/state", ro.getState)
 				r.Put("/state", ro.setState)
 				r.Delete("/state", ro.deleteState)
+				// Out-of-line assets (av-20fk). Read-and-delete only: they
+				// are written by ingest, never by a client, so there is no
+				// PUT. The delete is the owner's escape hatch for the one
+				// case no rule can decide — a payload whose feature they
+				// edited away — and it takes the asset id as a path segment
+				// because that id is ours and opaque, unlike a state key.
+				r.Get("/assets", ro.listAssets)
+				r.Delete("/assets/{assetID}", ro.deleteAsset)
 				// The artifact's gallery-card widget (av-fafu) — a second
 				// document under the artifact's own security envelope, so it
 				// hangs off the artifact rather than being a resource of its

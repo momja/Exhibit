@@ -232,9 +232,10 @@ func artifactField(t *testing.T, r *Router, id, field string) string {
 	return string(raw[field])
 }
 
-// The edit page presents its three sections — security, artifact source,
-// gallery widget — as peer .details-panel sections sharing one caret partial,
-// with only the artifact source open (that being what "Edit" means).
+// The edit page presents its sections — security, state, stored assets,
+// artifact source, gallery widget — as peer .details-panel sections sharing one
+// caret partial, with only the artifact source open (that being what "Edit"
+// means).
 func TestEditPageSectionsAreSymmetricPanels(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Run Log")
@@ -249,14 +250,15 @@ func TestEditPageSectionsAreSymmetricPanels(t *testing.T) {
 	for _, panel := range []string{
 		`<details class="details-panel" id="security-panel">`,
 		`<details class="details-panel" id="state-panel">`,
+		`<details class="details-panel" id="assets-panel">`,
 		`<details class="details-panel" id="source-panel" open>`,
 		`<details class="details-panel" id="widget-panel">`,
 	} {
 		assert.Contains(t, page, panel)
 	}
 	// One caret definition, rendered by every summary (panelCaret partial) —
-	// security, state (av-hg5f), source, and widget.
-	assert.Equal(t, 4, strings.Count(page, `class="ph ph-caret-right details-caret details-caret-closed"`))
+	// security, state (av-hg5f), assets (av-20fk), source, and widget.
+	assert.Equal(t, 5, strings.Count(page, `class="ph ph-caret-right details-caret details-caret-closed"`))
 	// Both source fields are real textareas the editor island mounts over, so
 	// the widget source is not a second-class field.
 	assert.Contains(t, page, `<textarea id="body">`)

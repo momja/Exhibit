@@ -122,3 +122,23 @@ input.state-input{max-width:340px}
   .btn-row button,.btn-row a{width:100%}
   .btn-row a button{width:100%}
 }
+
+/* Out-of-line asset panel (av-20fk). One row per stored payload: the address
+ * the artifact fetches, its size and type, and the control that removes it.
+ * The URL takes the flexible column because it is the field a person decides
+ * on — deleting an asset still in use breaks the artifact, and matching this
+ * against the source is how they tell. */
+.asset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.asset-row:last-child { border-bottom: 0; }
+.asset-url {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.asset-meta { flex: 0 0 auto; white-space: nowrap; }
