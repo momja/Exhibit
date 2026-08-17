@@ -75,7 +75,13 @@ These are **two questions, not one**, and conflating them is the easiest way to 
 | The user deletes it in the edit page's asset panel | Yes — explicit |
 | The body no longer fetches it, but none of the above applies | **Never concluded** — the URL may be constructed at run time |
 
-The last row is a leak accepted on purpose. The asset panel is how a human resolves it, because a human can know what the code does and this system cannot.
+The last row is a leak accepted on purpose. The asset panel (below) is how a human resolves it, because a human can know what the code does and this system cannot.
+
+**Why the second row is decidable and the fourth is not.** Both look like "is this still used?", but they ask different questions, and only one is about data we wrote down.
+
+Every asset row carries a `generation_id`, and every body version records the generation it was created with — written at creation, when it is known with certainty. So the check is a lookup: `SELECT COUNT(*) FROM artifact_versions WHERE generation_id = ?`. Before version history exists ([[av-3pq6]]) the population is one and the check degenerates to "is this the current generation".
+
+The claim that count supports is deliberately weak: *no retained body is associated with this generation.* It is a statement about the document's **lifetime**, not its contents — when no stored body came with those assets, nothing can fetch them regardless of what any code said, because there is no such document left to run. The fourth row asks about a body we are *keeping*, so answering it means interpreting JavaScript we did not write, where a URL may be assembled from parts, from config, or from another response. One reads our own bookkeeping; the other reads user content. Only the first may authorize a delete.
 
 **Is the blob deletable?** Exactly when **no row references it** — not when *a* row was deleted, but when the *last* one was. So enqueueing for deletion ([[av-8gyd]]) is conditional and happens inside the same transaction: drop the row, count remaining rows for that blob id, enqueue only on zero.
 
@@ -96,7 +102,16 @@ Two consequences to accept deliberately:
 
 Note the direction of the interaction: this ticket makes [[av-3pq6]]'s "keep all versions" *cheaper*. Its retention section worries specifically that vendored snapshot bodies can be multi-MB; after this change they are small text, and the payload lives in one generation shared by every version referencing it. So keep all versions, keep any generation a retained version references, and add a bytes budget only if it ever hurts in practice — which is av-3pq6's stated position already. The asset panel covers the exception.
 
-**An asset panel on the edit page** handles the case generations cannot: the user removed the feature that used a 14 MB payload, and wants the space back. It lists each asset — source URL, size, content type — with a delete control, and the artifact's total. It is the same shape as the state inspector beside it (av-hg5f): show what is stored, let the owner remove it, on the surface built for that. This is what "the user has full control over their artifacts" (PRD §1) requires once artifacts carry bytes they cannot see. Splittable into a child ticket if this one gets too large, but not droppable — without it the design ships storage a user can neither see nor reclaim.
+**The asset panel** handles the case generations cannot: the user removed the feature that used a 14 MB payload and wants the space back. Only they can know that, so the panel is where they say it.
+
+A collapsible panel on the artifact **edit** page, beside the security panel and the state inspector, and modelled on the latter (av-hg5f): the shell renders server-side and the contents are fetched on first open, since asset metadata is cold data the rest of the page never needs. It lists each asset — **source URL**, size, content type — plus the artifact's total, with a delete control per row. Deleting calls an authenticated API route that drops the row and, if that was the last reference, enqueues the blob ([[av-8gyd]]).
+
+Two things it must get right, because this is the one control here that can break a working artifact:
+
+- **Deleting an asset still in use breaks the artifact at render** — the fetch leaves the manifest, reaches the network, and fails. The source URL is therefore the primary column, not a detail: it is what the user matches against their own code to decide. Not a confirmation dialog's job; the row itself has to carry enough to decide.
+- **Say what the recovery is.** For a URL-ingested artifact a refetch re-vendors the assets, so a mistake is undoable. For a pasted artifact it is not, and the panel should not imply otherwise.
+
+Splittable into a child ticket if this one gets too large, but not droppable — without it the design ships storage a user can neither see nor reclaim.
 
 **Rejected: GC by render observation.** Having the manifest wrapper report which assets it actually served, and reaping the unused, superficially matches "observe, don't predict" (architecture.md §1.4). It does not: that principle is about refusing to predict behaviour in order to *gate policy*, whereas this would use observation to authorize *destruction*, where being wrong is unrecoverable. An artifact nobody has opened this month is not an artifact whose assets are unused, and distinguishing the two needs per-artifact render counting. It also adds a reporting channel out of the sandbox for no other reason.
 
@@ -123,7 +138,8 @@ Note the direction of the interaction: this ticket makes [[av-3pq6]]'s "keep all
 - **Two artifacts in one library sharing a blob:** deleting one leaves the other rendering, with its bytes intact. The blob is enqueued for deletion only when the last referencing row goes. This is the test that catches an unconditional enqueue.
 - A refetch that produces a new asset set leaves the superseded set deletable and deletes it; repeated refetches do not accumulate asset sets.
 - An ordinary body PATCH never deletes an asset, **including one whose fetch literal no longer appears in the body** — pinned by a test, because this is the case a future "helpful" cleanup would get wrong.
-- The edit page lists the artifact's assets with source URL, size, and content type, plus a total, and can delete one.
+- The edit page's asset panel lists each asset with its source URL, size, and content type, plus the artifact's total; its contents load on first open, not with the page. Deleting a row removes the asset, and the artifact still renders when the deleted asset was genuinely unused.
+- Deletability of a generation is answered by a count over recorded generation ids, never by inspecting body content — asserted by a test in which the body's fetch literal is gone but the generation is still referenced, and the asset survives.
 - Each asset row records the generation that created it, and the schema can express which body version a generation belongs to — even though version history ([[av-3pq6]]) does not exist yet and nothing reads the link.
 - Artifacts already carrying inlined `data:` payloads continue to render unchanged.
 
@@ -149,3 +165,7 @@ No automatic pruning policy: generations are minted only by ingest/refetch (neve
 **2026-08-17T05:39:26Z**
 
 Clarified deletability as two separate questions: (1) is the ROW deletable — artifact deleted / generation superseded with no retained version / explicit user delete, and never 'the body stopped fetching it'; (2) is the BLOB deletable — only when the last referencing row is gone, refcounted inside the delete transaction. Shared blobs between two artifacts of one owner made this load-bearing.
+
+**2026-08-17T05:45:50Z**
+
+Clarified two things that were load-bearing but only implied. (1) Generation deletability is a count over recorded generation ids — a claim about the document's lifetime (no retained body came with these assets, so nothing can fetch them) rather than about its contents, which is why it is decidable where 'does the JS still fetch this URL' is not. (2) Defined the asset panel concretely: edit page, beside the state inspector, lazy-loaded, source URL as the primary column since it is what a user matches against their code, and refetch as the stated recovery for URL-ingested artifacts.
