@@ -1,6 +1,6 @@
 ---
 id: av-hci9
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-08-17T03:26:03Z
@@ -29,3 +29,9 @@ Renumbering is deliberately not the fix: it is what migration_repair.go's header
 3. A database already carrying the post-merge numbering (ledger through 16, users present) migrates to head without re-running anything.
 4. Production (aphrodite artifact_viewer-app-1) starts and serves.
 
+
+## Notes
+
+**2026-08-17T03:34:56Z**
+
+Deployed to production from this branch (ansible -e source_dir=<worktree>). Ledger repair fired: version 13 row cleared, 013-018 applied, ledger now 0-18. 43 artifacts, 25 state rows, 1 links_approved preserved. Pre-migration copy of the DB kept in the volume as /data/app.db.pre-av-hci9.
