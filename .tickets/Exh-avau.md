@@ -2,7 +2,7 @@
 id: Exh-avau
 status: open
 deps: [epi-q0u2]
-links: [av-ec0t]
+links: [av-ec0t, av-vnkt]
 created: 2026-07-10T06:17:35Z
 type: epic
 priority: 2
