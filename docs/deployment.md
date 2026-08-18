@@ -57,6 +57,9 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
 | `PI_BIN` | `pi` | AI agent executable — unset/missing just disables that feature |
 | `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
+| `AGENT_API_KEY` | *(unset)* | The instance's **own** provider key for the AI agent. Unset = bring-your-own-key, the default and what every existing instance does. Set = platform mode; read [§4.1](#41-letting-the-instance-supply-the-agent-key-platform-mode) before you set it |
+| `AGENT_PROVIDER` | *(unset)* | Which provider `AGENT_API_KEY` belongs to — `anthropic`, `openai`, `google`, `openrouter`, `opencode-go`. **Required** when the key is set; missing or unrecognized is a startup failure, not a surprise at the first session |
+| `AGENT_MODEL` | *(unset)* | Model for platform-mode sessions. Optional — empty leaves it to the provider's default. Your choice, and never shown to users |
 | `LOGIN_USERNAME` | *(unset)* | Names an account for the bootstrap / break-glass login — how you get in on an empty instance, or after losing a password. Accounts themselves are created with the `user add` subcommand, not here; see [§3.2](#32-log-in-with-a-username-and-password) |
 | `LOGIN_PASSWORD_HASH` | *(unset)* | The **bcrypt hash** of that password, not the password. Produce it with the `hash-password` subcommand. Set with `LOGIN_USERNAME`; it stays accepted for that account for as long as both are set (§3.2) |
 | `OIDC_ISSUER` | *(unset)* | Identity provider to delegate login to. Unset = no OIDC |
@@ -449,7 +452,49 @@ surface.
 on the disabled control rather than as a surprise after the confirmation. If
 that account is the one you want gone, promote somebody else first.
 
-## 4. No AI agent features
+## 4. AI agent (optional)
+
+Nothing to configure for the default: if `pi` is on `PATH` the agent surface
+works, and each user brings their own provider key, entered in the UI and
+encrypted at rest under `EXHIBIT_SECRET`. That is the right shape for a
+self-hosted library, where the operator is the user and the key is theirs.
+
+### 4.1 Letting the instance supply the agent key (platform mode)
+
+Set `AGENT_API_KEY` and `AGENT_PROVIDER` and the instance runs *every* agent
+session on that one credential:
+
+```bash
+AGENT_API_KEY=sk-ant-...        # your provider key
+AGENT_PROVIDER=anthropic        # required; unknown values fail at startup
+AGENT_MODEL=claude-sonnet-4-5   # optional
+```
+
+This is for a deployment where the people using it are not the people paying
+for it. Nobody is asked for a key, because there is nowhere to put one: the
+key screen is gone, the per-owner key API answers `404`, and neither the
+provider nor the model is reported anywhere — not in a response, not in the
+page, not in the agent's event stream. If you want to *choose* your model, do
+not use this mode; bring your own key, which gives you that choice in full.
+
+Existing per-user keys are left alone: they are not read while platform mode is
+on, not deleted, and unsetting the variable restores each user's own key exactly
+as it was.
+
+> [!WARNING]
+> **There is no spend cap.** Every agent session bills your provider account,
+> and Exhibit currently measures nothing: it cannot attribute a session's cost
+> to a user, and it cannot stop one that runs away. Usage billing meters after
+> the fact, so a bad day is money already spent.
+>
+> Only enable this on an instance whose users you control. Do not put it in
+> front of open signups, or behind a public-mode gallery, until per-owner
+> metering and budgets exist.
+
+The startup log repeats this warning so the instance says it out loud every
+time it boots.
+
+### 4.2 No AI agent features
 
 Nothing to configure — if `pi` isn't on `PATH`, the agent surface disables itself
 automatically. To shrink the image too, drop the AI stuff at build time by

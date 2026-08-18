@@ -140,17 +140,29 @@ type createAgentSessionRequest struct {
 	ArtifactID string `json:"artifact_id"`
 }
 
-// agentSessionOpts builds the CreateOpts for a new session from the owner's
-// stored provider key, writing the error response itself when the agent is
-// unavailable or no usable key is configured. Both session creators — the chat
-// surface and the widget generator (av-fafu) — go through it, so the key is
-// decrypted in exactly one place.
+// agentSessionOpts builds the CreateOpts for a new session from whichever
+// credential this instance runs on — the platform key when it has one
+// (av-siqf), the owner's stored key otherwise — writing the error response
+// itself when the agent is unavailable or no usable key is configured. Both
+// session creators — the chat surface and the widget generator (av-fafu) — go
+// through it, so a key is resolved in exactly one place.
+//
+// Availability stays a separate signal from the credential: a missing pi
+// binary is a 503 in either mode, decided before either key is looked at.
 func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agent.CreateOpts, bool) {
 	if ro.cfg.Agent == nil {
 		writeError(w, http.StatusServiceUnavailable, "agent support is not enabled (pi binary not found)")
 		return agent.CreateOpts{}, false
 	}
 	ownerID := ownerIDFromCtx(r.Context())
+	// Platform mode (av-siqf): the instance's own credential, resolved here
+	// so both session creators inherit it and the two cannot drift apart on
+	// which key they run. The store is not consulted at all — an owner who
+	// once entered a key keeps that row untouched, and turning the variable
+	// off restores their BYOK session with it.
+	if pk := ro.cfg.PlatformAgentKey; pk != nil {
+		return agent.CreateOpts{OwnerID: ownerID, Provider: pk.Provider, Model: pk.Model, APIKey: pk.APIKey}, true
+	}
 	k, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerID)
 	if err != nil {
 		serverError(w, r, "get agent key", err)
@@ -229,12 +241,18 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "create agent session", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{
+	resp := map[string]any{
 		"id":          s.ID,
 		"artifact_id": s.ArtifactID(),
-		"provider":    opts.Provider,
-		"model":       opts.Model,
-	})
+	}
+	// Which model answered is the caller's own business on a BYOK instance —
+	// they configured it — and none of it in platform mode, where the
+	// credential is the instance's (av-siqf). Page JS reads neither field.
+	if ro.cfg.PlatformAgentKey == nil {
+		resp["provider"] = opts.Provider
+		resp["model"] = opts.Model
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 // agentPromptRequest keeps the user's words and the untrusted material apart

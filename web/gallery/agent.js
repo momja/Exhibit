@@ -50,7 +50,21 @@ function addMsg(cls, text) {
 }
 
 // --- API key management --------------------------------------------------
+// All of it is BYOK-only (av-siqf). In platform mode the instance supplies the
+// credential, the key markup is absent from the page rather than hidden, and
+// the key route does not exist — so every entry point below returns early
+// instead of reaching for elements that aren't there. refreshKeyStatus reports
+// "configured", because from this page's point of view a key is: boot must not
+// prompt for one nobody can enter.
 async function refreshKeyStatus() {
+  if (!BYOK) {
+    // The instance holds the credential, so a key *is* configured as far as
+    // this page is concerned. Saying so here is what keeps send() from
+    // stopping at its own key check on the way to a session nobody has to
+    // configure.
+    keyConfigured = true;
+    return true;
+  }
   const r = await apiFetch('/api/agent/key');
   const d = await r.json();
   keyConfigured = !!d.configured;
@@ -111,6 +125,7 @@ function clearMaskedKey(secret) {
 }
 
 function openKeyModal() {
+  if (!BYOK) return;
   document.getElementById('key-error').hidden = true;
   const secret = document.getElementById('key-secret');
   if (keyConfigured) { showMaskedKey(secret); } else { clearMaskedKey(secret); }
@@ -125,6 +140,7 @@ function closeKeyModal() { document.getElementById('key-modal').hidden = true; }
 // (keyConfigured), never from whatever was left in the field.
 (function () {
   const secret = document.getElementById('key-secret');
+  if (!secret) return;   // platform mode: there is no key field to guard
   secret.addEventListener('keydown', (e) => {
     if (secret.dataset.masked !== 'true') return;
     if (e.key === 'Backspace' || e.key === 'Delete') {

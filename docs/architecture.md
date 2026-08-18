@@ -642,6 +642,26 @@ absent the surface degrades to disabled; nothing else changes.
   encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
   handed to the subprocess only through its (minimal, built-from-scratch)
   environment. Reads return masked hints; page JS never sees the key again.
+- **Or the instance's own key (av-siqf).** `AGENT_API_KEY` puts the instance
+  in *platform mode*: `agentSessionOpts` — already the single place a key is
+  resolved, and therefore the only place this appears — returns the platform
+  credential without consulting `agent_keys` at all, so an owner's stored key
+  is neither read nor deleted and unsetting the variable restores it intact.
+  One variable chooses between two modes rather than a per-owner key
+  overriding an instance-wide fallback, which would silently mix billing
+  models and still leave a key field on a surface whose point is that nobody
+  needs one. In this mode nothing reports the credential *or what it is*: the
+  key route `404`s, and the page renders no key control, no provider select
+  and no model input. That last part is a claim about Pi's protocol rather
+  than about a handler — every assistant message Pi emits carries
+  `api`/`provider`/`model`, and both seams that publish it (the SSE broadcast
+  and the persisted transcript) are verbatim passthroughs — so platform mode
+  strips those three fields from Pi's message envelopes at both
+  (`internal/agent/redact.go`), keeping the `usage` block beside them, which
+  names no model and is what metering will read. Availability stays a
+  separate signal: no `pi` binary is still a 503 in either mode. **No spend
+  cap exists** — nothing reads token usage off the stream — so this belongs
+  on a controlled instance until av-hyo6 lands; the startup log says so.
 - **Streaming:** the service fans Pi's event stream out to the browser via
   SSE (`/api/agent/sessions/:id/events`); prompts arriving mid-run become Pi
   steering messages. Transcripts are persisted per artifact
