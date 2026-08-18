@@ -135,15 +135,28 @@ const linksApprovedStash = "repair_links_approved_stash"
 // before the fix arrives in the collided state again, and would need somebody
 // to remember why.
 func rewindReusedVersion13(ctx context.Context, db *sql.DB) error {
-	collided, err := hasReusedVersion13(ctx, db)
-	if err != nil || !collided {
-		return err
-	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op once committed
+
+	// The collision is detected through the same transaction that acts on it,
+	// never ahead of it. Two processes can open one database file — a restart
+	// overlapping the old container, or the `user` CLI run against a starting
+	// server — and both would observe the collision at the same moment. Reading
+	// the predicate outside the transaction lets the slower one act on that
+	// observation *after* the faster one finished, deleting the version-13 row
+	// 013_users_sessions.sql has since recorded and dropping the column 018 has
+	// since re-added: a repaired database put straight back into the broken
+	// state, minus the stash. Inside the transaction the slower one either sees
+	// the repaired database and does nothing, or its write meets the other's
+	// commit and the rewind is refused with an error. Neither outcome is
+	// destructive, which is the whole property being bought here.
+	collided, err := hasReusedVersion13(ctx, tx)
+	if err != nil || !collided {
+		return err
+	}
 
 	// A database that recorded version 13 for something else again — the
 	// last_visit build in the header is precedent that such a thing exists —
@@ -179,13 +192,13 @@ func rewindReusedVersion13(ctx context.Context, db *sql.DB) error {
 
 // hasReusedVersion13 reports whether this database applied the pre-merge
 // migration numbered 13 instead of 013_users_sessions.sql.
-func hasReusedVersion13(ctx context.Context, db *sql.DB) (bool, error) {
-	ledger, err := hasTable(ctx, db, "goose_db_version")
+func hasReusedVersion13(ctx context.Context, q rowQuerier) (bool, error) {
+	ledger, err := hasTable(ctx, q, "goose_db_version")
 	if err != nil || !ledger {
 		return false, err // a fresh database has no ledger and nothing to rewind
 	}
 	var recorded int
-	if err := db.QueryRowContext(ctx,
+	if err := q.QueryRowContext(ctx,
 		`SELECT count(*) FROM goose_db_version WHERE version_id = ?`,
 		usersSessionsVersion).Scan(&recorded); err != nil {
 		return false, err
@@ -193,7 +206,7 @@ func hasReusedVersion13(ctx context.Context, db *sql.DB) (bool, error) {
 	if recorded == 0 {
 		return false, nil
 	}
-	users, err := hasTable(ctx, db, "users")
+	users, err := hasTable(ctx, q, "users")
 	return !users, err
 }
 
@@ -219,10 +232,17 @@ func restoreRewoundApprovals(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+// rowQuerier is the single-row read both *sql.DB and *sql.Tx provide, so a
+// check can be made either on its own or inside the transaction that acts on
+// its answer. rewindReusedVersion13 needs the latter; see the note there.
+type rowQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // hasTable reports whether the database defines table (a table or a view).
-func hasTable(ctx context.Context, db *sql.DB, table string) (bool, error) {
+func hasTable(ctx context.Context, q rowQuerier, table string) (bool, error) {
 	var name string
-	err := db.QueryRowContext(ctx,
+	err := q.QueryRowContext(ctx,
 		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

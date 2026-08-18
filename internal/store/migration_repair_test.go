@@ -223,3 +223,88 @@ func hasTrigger(ctx context.Context, db *sql.DB, name string) (bool, error) {
 	}
 	return err == nil, err
 }
+
+// One database file can be opened by two processes at once — a restart that
+// overlaps the container it replaces, or the `user` CLI run against a starting
+// server. Both would see the collision. The one that acts second must find the
+// repaired database and leave it alone; deleting the version-13 row the winner's
+// 013_users_sessions.sql just recorded would put the database straight back into
+// the state this whole file exists to undo.
+func TestMigration13RewindIsANoOpOnARepairedDatabase(t *testing.T) {
+	path := collidedDatabase(t)
+
+	// The connection the loser is holding: opened while the database is still
+	// collided, and still open after the winner has finished with it.
+	loser, err := sql.Open("sqlite", path)
+	require.NoError(t, err)
+	loser.SetMaxOpenConns(1)
+	t.Cleanup(func() { loser.Close() })
+	collided, err := hasReusedVersion13(context.Background(), loser)
+	require.NoError(t, err)
+	require.True(t, collided, "the loser observes the collision before the winner acts")
+
+	winner, err := OpenSQLite(path)
+	require.NoError(t, err)
+	require.NoError(t, winner.Close())
+
+	require.NoError(t, rewindReusedVersion13(context.Background(), loser),
+		"the rewind re-reads the database it is about to act on")
+
+	s, err := OpenSQLite(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { s.Close() })
+
+	ctx := context.Background()
+	users, err := hasTable(ctx, s.db, "users")
+	require.NoError(t, err)
+	assert.True(t, users, "the repaired schema survives")
+	var recorded int
+	require.NoError(t, s.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM goose_db_version WHERE version_id = ?`, usersSessionsVersion).Scan(&recorded))
+	assert.Equal(t, 1, recorded, "and so does the genuine version-13 row")
+	var approved int
+	require.NoError(t, s.db.QueryRowContext(ctx,
+		`SELECT links_approved FROM artifacts WHERE id = 'approved'`).Scan(&approved))
+	assert.Equal(t, 1, approved)
+}
+
+// The same collision, raced for real over independent connections. Whoever wins,
+// and whether or not the loser's write is refused outright, the file must be a
+// correctly migrated database once the dust settles.
+func TestMigration13RewindSurvivesConcurrentRepairs(t *testing.T) {
+	path := collidedDatabase(t)
+
+	other, err := sql.Open("sqlite", path)
+	require.NoError(t, err)
+	other.SetMaxOpenConns(1)
+	t.Cleanup(func() { other.Close() })
+
+	start := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		<-start
+		// A refusal is an acceptable outcome here; a partial rewind is not.
+		_ = rewindReusedVersion13(context.Background(), other)
+	}()
+
+	close(start)
+	winner, err := OpenSQLite(path)
+	<-done
+	if err == nil {
+		require.NoError(t, winner.Close())
+	}
+
+	s, err := OpenSQLite(path)
+	require.NoError(t, err, "the raced database still migrates to head")
+	t.Cleanup(func() { s.Close() })
+
+	users, err := hasTable(context.Background(), s.db, "users")
+	require.NoError(t, err)
+	assert.True(t, users)
+	assert.Equal(t, int64(18), currentVersion(t, s))
+	var approved int
+	require.NoError(t, s.db.QueryRowContext(context.Background(),
+		`SELECT links_approved FROM artifacts WHERE id = 'approved'`).Scan(&approved))
+	assert.Equal(t, 1, approved, "the approval is not lost to the race")
+}
