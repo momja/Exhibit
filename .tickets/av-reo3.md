@@ -9,41 +9,43 @@ priority: 0
 assignee: Max Omdal
 tags: [ingest, refetch, data-loss]
 ---
-# Refetch destroys an artifact when the source site is gone but still answers
+# Refetch overwrites an artifact in place, with no way back
 
-`POST /api/artifacts/:id/refetch` overwrites an artifact's stored body with whatever the source URL returns, and checks only whether the HTTP *call* errored — never what came back. `internal/api/artifacts.go` contains no `resp.StatusCode` check on either fetch path.
+`POST /api/artifacts/:id/refetch` replaces an artifact's stored body with whatever the source URL returns. Two distinct problems, and only the second is about content.
 
-So a site that has gone away but still answers replaces a working artifact with garbage:
+**1. It treats any response as the page.** `internal/api/artifacts.go` contains no `resp.StatusCode` check on either fetch path, so a 404 or 500 body is written over the artifact as if it were the new version. The server is saying "this is not the resource"; refetch stores the error page anyway. An empty body and a non-HTML `Content-Type` go the same way, and neither can be an artifact at all.
 
-| Source now returns | Result |
-|---|---|
-| Registrar parking page after the domain expires (200) | Artifact becomes the parking page |
-| Cloudflare / nginx error page (5xx) | Artifact becomes the error page |
-| A login wall (200) | Artifact becomes the login form |
-| An empty 200 | Artifact becomes empty |
+A total DNS or connection failure *is* handled — `http.Get` errors and the handler 400s before writing — which is why this is easy to miss. It fails safe only when nothing answers.
 
-A total DNS or connection failure *is* handled — `http.Get` returns an error and the handler 400s before writing — which is why this is easy to miss. It fails safe only in the case where nothing answers at all.
+**2. The write is irreversible, and that is the deeper problem.** `Blob.Put(a.SourceBlobID, …)` overwrites the same blob id in place, and there is no version history ([[av-3pq6]]). Once it has run, the previous body does not exist anywhere.
 
-The loss is unrecoverable. `Blob.Put(a.SourceBlobID, …)` writes over the same blob id in place, there is no version history ([[av-3pq6]]), and nothing prompts before it happens. Found while investigating a source domain that had been live a day earlier — the exact scenario refetch is most likely to be pointed at.
+That matters precisely because **the content itself cannot be judged**. If the source now serves a different page, that is what the source serves — "replaced by a parking page" and "redesigned" are the same observation from here, and sorting them apart would mean inferring intent from content, which this system deliberately does not do (PRD §8.1 already frames refetch as a snapshot update, not a curated one). So the answer to an unwanted update is not to predict it. It is to still have the old one.
+
+Found while investigating a source domain that had been live a day earlier — the case refetch is most likely to be pointed at, since nobody refetches a source they know is dead.
 
 ## Design
 
-**Refuse before writing.** Non-2xx, an empty body, and a `Content-Type` that is not HTML should each end the refetch with the artifact untouched and the reason reported. These are cheap and cover every row in the table above.
+**Reject what the protocol says is not the page.** Non-2xx, an empty body, and a non-HTML content type each end the refetch with the artifact untouched and the reason reported. These are read off the response, not inferred from it, which is what separates them from the heuristics below.
 
-**Write to a new blob, then repoint.** The current in-place overwrite is what makes any failure unrecoverable, and [[av-8gyd]]'s deletion queue now makes the safe shape cheap: store the fresh body under a *new* blob id, update the row to point at it, and enqueue the old id. Nothing is destroyed until the replacement is durably in place, and a crash mid-way leaves the artifact on its old body rather than on half a new one. This is worth doing even with the guards above, because the guards are heuristics and this is structural.
+**Explicitly not doing content judgment.** No parking-page detection, no "this looks like a login wall", no refusing a body that shrank by 90%. A page that legitimately became smaller or simpler is a real update, and a check that blocks it is worse than the problem — it makes a working feature refuse valid input based on a guess. The earlier draft of this ticket proposed a shrinkage guard; it is dropped.
 
-**A shrinkage warning, not a refusal.** A body a small fraction of its previous size is a strong signal the source has been replaced by something that is not the tool — but it is a signal, not a fact, and a genuine rewrite can legitimately shrink. Surface it and let the user decide rather than blocking.
+**Write to a new blob, then repoint — the actual fix.** [[av-8gyd]]'s deletion queue makes the safe shape cheap: store the fresh body under a *new* blob id, update the row to point at it, enqueue the old id. Nothing is destroyed until the replacement is durably in place, and a crash mid-refetch leaves the artifact on its old body rather than half a new one. This is the part that holds when the guards do not, which is most of the time.
 
-**Assets: the trap this ticket exists to flag.** Refetch does not currently touch `artifact_assets` ([[av-20fk]]), so a bad refetch corrupts the body and leaves the payloads intact. When [[av-b17a]] makes refetch run the vendorer, the obvious implementation calls `ReplaceArtifactAssets(…, [])` for a page with no assets — which deletes every asset row, condemns every blob through the refcount, and drains the bytes immediately. That is strictly worse than today: the payload used to die inside the body blob it lived in, and would now be actively reclaimed. **A refetch that produced no assets must not be treated as a refetch whose assets were superseded.** Distinguish "the new page genuinely has none" from "the fetch did not return the page", and when in doubt keep them.
+**Version history is the complete answer** ([[av-3pq6]]). Since an unwanted update is indistinguishable from a wanted one, the only real protection is that the previous version still exists and can be restored. This ticket does not depend on it, but it is where the problem actually ends, and the new-blob-then-repoint shape above is a step toward it rather than away.
 
-**Not solved by version history alone.** [[av-3pq6]] would make this recoverable, which is worth having, but recovering from an avoidable overwrite is worse than not performing it.
+**Assets: the trap this ticket exists to flag.** Refetch does not currently touch `artifact_assets` ([[av-20fk]]), so a bad refetch corrupts the body and leaves the payloads intact. When [[av-b17a]] makes refetch run the vendorer, the obvious implementation calls `ReplaceArtifactAssets(…, [])` for a page with no assets — deleting every asset row, condemning every blob through the refcount, and draining the bytes immediately. That is strictly worse than today: the payload used to die inside the body blob it lived in, and would now be actively reclaimed. **A refetch that produced no assets must not be treated as a refetch whose assets were superseded.**
 
 ## Acceptance Criteria
 
-- A refetch whose source returns 404, 500, or any non-2xx leaves the artifact byte-identical and reports why.
+- A refetch whose source returns any non-2xx leaves the artifact byte-identical and reports why.
 - A refetch returning an empty body, or a non-HTML content type, does the same.
+- A refetch whose source returns a *different but valid* page succeeds and replaces the body. That is the feature working, and a test says so, so nobody adds a content heuristic later.
 - A successful refetch writes a new blob and repoints the row; the previous body is enqueued for deletion rather than overwritten in place.
 - Killing the process mid-refetch leaves the artifact on its previous body.
-- A refetch that returns a page with no runtime assets does not delete the artifact's existing assets.
-- Each of the four failure rows in the description is covered by a test — this is a data-loss path, so the guards need to be pinned, not just present.
+- A refetch returning a page with no runtime assets does not delete the artifact's existing assets.
 
+## Notes
+
+**2026-08-18T01:12:37Z**
+
+Narrowed after review. Dropped the content-based guards (parking-page detection, shrinkage refusal): a source that serves a different page IS serving a different page, and separating 'replaced' from 'redesigned' means inferring intent from content, which this system does not do. What survives is protocol-level (non-2xx, empty, non-HTML) plus the part that actually matters — the overwrite is in place and irreversible. Since an unwanted update cannot be distinguished from a wanted one, recoverability rather than prevention is the answer.
