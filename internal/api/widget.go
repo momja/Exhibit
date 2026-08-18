@@ -116,7 +116,7 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.WidgetBlobID == "" {
-		if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, map[string]any{"widget_blob_id": blobID}); err != nil {
+		if err := ro.cfg.Store.SetWidgetBlobID(r.Context(), ownerID, id, blobID); err != nil {
 			writeArtifactError(w, r, "attach widget", err)
 			return
 		}
@@ -233,7 +233,7 @@ func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.WidgetBlobID != "" {
-		if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, map[string]any{"widget_blob_id": ""}); err != nil {
+		if err := ro.cfg.Store.SetWidgetBlobID(r.Context(), ownerID, id, ""); err != nil {
 			writeArtifactError(w, r, "detach widget", err)
 			return
 		}

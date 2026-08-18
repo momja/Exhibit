@@ -393,3 +393,30 @@ func TestWidgetGenerateTakesNoCallerPrompt(t *testing.T) {
 	// A one-shot session is closed once it has done its job.
 	assert.Contains(t, src, "apiFetch('/api/agent/sessions/' + encodeURIComponent(sessionId), {")
 }
+
+// A PATCH body may not set widget_blob_id. The id is minted server-side and
+// blob ids are global, so a caller who could write this column would repoint
+// their own card at any blob id they can name — including the widget of an
+// artifact belonging to someone else, which the render surface would then serve
+// under their artifact's allowlist. The widget handlers write the column
+// through Store.SetWidgetBlobID instead, which is why removing it from the
+// PATCH allowlist costs them nothing.
+func TestWidgetBlobIDIsNotPatchable(t *testing.T) {
+	r := newTestRouter(t)
+
+	victim := createTestArtifact(t, r, "Someone Else's Tool")
+	require.Equal(t, http.StatusOK, putWidgetReq(t, r, victim, "<b>private</b>").Code)
+	stolen := artifactField(t, r, victim, "widget_blob_id")
+	require.NotEmpty(t, stolen)
+
+	id := createTestArtifact(t, r, "Run Log")
+	payload, _ := json.Marshal(map[string]string{"widget_blob_id": stolen})
+	req := httptest.NewRequest("PATCH", "/api/artifacts/"+id, bytes.NewReader(payload))
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code, "the column is not caller-writable")
+
+	assert.Equal(t, `""`, artifactField(t, r, id, "widget_blob_id"),
+		"and the artifact still has no widget of its own")
+}

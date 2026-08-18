@@ -54,6 +54,10 @@ func writeArtifactError(w http.ResponseWriter, r *http.Request, label string, er
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	if errors.Is(err, store.ErrNotUpdatable) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	serverError(w, r, label, err)
 }
 

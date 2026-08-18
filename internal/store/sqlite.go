@@ -329,10 +329,17 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 // would just be a second place that claim could be made and forgotten.
 // Everything else naming an artifacts column — id, owner_id, source_blob_id,
 // widget_blob_id, created_at, updated_at, tags_text (trigger-maintained) — is
-// deliberately excluded: an update map here is a handler-decoded PATCH body, so
-// an unvalidated key is a column the *caller* chose. widget_blob_id is excluded
-// because it is set only by the widget PUT handler with a server-generated UUID,
-// never by a generic PATCH.
+// deliberately excluded: an update map here is a handler-decoded PATCH body
+// (updateArtifact decodes into map[string]any and passes the keys through), so
+// an unvalidated key is a column the *caller* chose. widget_blob_id matters
+// most of those: a caller who could set it would repoint their card at any
+// blob id they can name, including one belonging to another owner's artifact,
+// since blob ids are global and nothing downstream re-checks whose widget the
+// id was.
+//
+// The server's own writer therefore does not come through here at all — see
+// SetWidgetBlobID. This map answers "what may a PATCH body write", and that is
+// the only question it answers.
 var updatableArtifactColumns = map[string]bool{
 	"title":              true,
 	"tier":               true,
@@ -341,6 +348,34 @@ var updatableArtifactColumns = map[string]bool{
 	"downloads_approved": true,
 	"clipboard_approved": true,
 	"links_approved":     true,
+}
+
+// SetWidgetBlobID points an artifact at the widget body blobID, or detaches its
+// widget when blobID is empty. It exists because widget_blob_id is deliberately
+// not caller-writable (above) while the widget PUT/DELETE handlers must still
+// write it: routing them through the generic update map would mean the same
+// allowlist decided both what a PATCH body may set and what the service itself
+// may set, and narrowing it for the first reason would break the second. The id
+// is minted server-side and reused for the artifact's life, so a widget's
+// render URL stays stable across saves.
+//
+// Owner-scoped like every other artifact write: another owner's id is
+// ErrNotFound, never a refusal that confirms the row exists (§3.3).
+func (s *SQLiteStore) SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE artifacts SET widget_blob_id = ?, updated_at = ? WHERE id = ? AND owner_id = ?`,
+		blobID, time.Now().UTC(), id, ownerID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error {
@@ -374,7 +409,7 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id stri
 			// up to and including owner_id or id. This map is a handler-decoded
 			// PATCH body (internal/api/artifacts.go), so that caller is
 			// whoever sent the request.
-			return fmt.Errorf("update artifact: %q is not an updatable column", k)
+			return fmt.Errorf("update artifact: %q: %w", k, ErrNotUpdatable)
 		}
 		if k == "downloads_approved" || k == "clipboard_approved" || k == "links_approved" {
 			// These columns are INTEGER 0/1; a non-bool here would store a value

@@ -21,6 +21,11 @@ var (
 	// re-enable one, or reset a password (av-utap). It is a refusal, not a
 	// failure: nothing was written.
 	ErrLastAdmin = errors.New("the last enabled admin cannot be demoted or disabled")
+	// ErrNotUpdatable means an update map named a column callers may not
+	// write (updatableArtifactColumns). The key came out of a decoded request
+	// body, so it is a bad request rather than a server fault, and handlers
+	// map it to 400 — a 500 would report the caller's typo as our outage.
+	ErrNotUpdatable = errors.New("not an updatable column")
 )
 
 type Tier int
@@ -182,6 +187,11 @@ type Store interface {
 	GetArtifactUnscoped(ctx context.Context, id string) (*Artifact, error)
 	ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error)
 	UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error
+	// SetWidgetBlobID attaches (or, with an empty blobID, detaches) the
+	// artifact's gallery-card widget body. Separate from UpdateArtifact
+	// because widget_blob_id is not caller-writable: the generic update map is
+	// a decoded PATCH body, and this id is minted server-side.
+	SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error
 	DeleteArtifact(ctx context.Context, ownerID int64, id string) error
 
 	// Network origin decisions (exhibit-x87). ListOriginDecisions returns

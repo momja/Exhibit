@@ -314,8 +314,17 @@ func TestUnscopedAccessorsAreCalledOnlyFromTheRenderSurface(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			// node_modules and the like carry no Go we control.
-			if name := d.Name(); name == "node_modules" || name == ".git" {
+			// node_modules and the like carry no Go we control. Dot-directories
+			// are skipped wholesale rather than named one at a time: .git,
+			// .claude/worktrees and their kin hold *copies* of this repo, and a
+			// stale copy of a file that was fixed here would fail this test
+			// against code nobody is going to edit. Everything git tracks is
+			// visible without them.
+			// (path != root guards the walk's own root entry, whose Name() is
+			// the ".." this relative root ends in — skipping that would skip
+			// everything and leave the test vacuously green.)
+			name := d.Name()
+			if path != root && (name == "node_modules" || strings.HasPrefix(name, ".")) {
 				return fs.SkipDir
 			}
 			return nil
