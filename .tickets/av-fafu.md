@@ -2,7 +2,7 @@
 id: av-fafu
 status: closed
 deps: []
-links: []
+links: [av-siqf]
 created: 2026-08-01T04:21:41Z
 type: epic
 priority: 1
