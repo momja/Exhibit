@@ -143,11 +143,15 @@ func TestBYOKAgentPageRendersKeyUI(t *testing.T) {
 	}
 }
 
-// The mode is the one thing that decides which credential a session runs on,
-// and it decides it for an owner who has never stored a key. Availability is a
-// separate signal and still comes first: with no manager this is a 503, in
-// either mode, not a key error.
-func TestPlatformModeResolvesOptsWithoutAStoredKey(t *testing.T) {
+// Availability is a separate signal from the credential, and it comes first:
+// with no pi binary this is a 503 in either mode, never a key error. That
+// ordering is what keeps "the agent is off on this server" from being reported
+// to a platform-mode user as a key they cannot supply.
+//
+// That platform mode then *resolves* a session for an owner with no stored key
+// is proved end to end, against a real sidecar, in
+// agent_platform_pipeline_test.go — a manager is needed to get past this line.
+func TestAgentAvailabilityIsReportedBeforeAnyKey(t *testing.T) {
 	r := newTestRouter(t)
 
 	// BYOK, no stored key: the precondition failure this replaces.
@@ -157,9 +161,6 @@ func TestPlatformModeResolvesOptsWithoutAStoredKey(t *testing.T) {
 	require.False(t, ok)
 	require.Equal(t, http.StatusServiceUnavailable, w.Code, "no pi binary is reported before any key is")
 
-	// Platform mode with a manager present is exercised end to end in
-	// agent_platform_pipeline_test.go; here, prove the availability signal is
-	// unchanged by the mode.
 	enablePlatformMode(r)
 	w = httptest.NewRecorder()
 	_, ok = r.agentSessionOpts(w, req)

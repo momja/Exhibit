@@ -248,7 +248,7 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 	// Which model answered is the caller's own business on a BYOK instance —
 	// they configured it — and none of it in platform mode, where the
 	// credential is the instance's (av-siqf). Page JS reads neither field.
-	if ro.cfg.PlatformAgentKey == nil {
+	if !ro.platformMode() {
 		resp["provider"] = opts.Provider
 		resp["model"] = opts.Model
 	}
