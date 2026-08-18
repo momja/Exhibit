@@ -384,6 +384,56 @@ carrying a principal is av-c5aq.
   The id is minted once and reused on every save, keeping the widget's render URL —
   which gallery cards embed — stable across edits.
 
+- **Storage accounting** → `blob_sizes` (a blob's length) plus the
+  `blob_references` view (which owner's rows name which blob), migration 021,
+  av-fw1b. It is the first byte count anywhere in the schema: before it the only
+  way to answer "how much is this owner holding" was to stat the blob directory,
+  which knows nothing about owners and, on an object-store backend (av-52ll),
+  is a paginated network crawl.
+
+  Three decisions, in the order they matter.
+
+  **A length is recorded where the bytes are written**, by the funnel every
+  `Blob.Put` call goes through (`internal/api/blobwrite.go`, a counting reader
+  around the write). Not by changing `Blob.Put`'s signature — that interface is
+  the seam the object-store backend drops in behind, and a size out-parameter on
+  it would be a thing every implementation has to get right for one caller's
+  benefit. A test walks the package's AST and fails on a `Blob.Put` outside the
+  funnel, because a missing length is invisible: it under-reports one owner
+  until somebody runs a recompute they have no reason to run.
+
+  **The total is derived, not counted.** An owner's bytes are the join of
+  `blob_sizes` to `blob_references`, so there is no counter for a caller to
+  forget to decrement — deleting an artifact stops its bytes being charged in
+  the same statement that deletes it, and `DELETE /api/account` reaches zero by
+  construction. The view is also the extension point: when av-20fk's refcounted
+  `artifact_assets` land, a migration replaces it with one that unions the asset
+  references in, and the usage query, the recompute pass and the prune all pick
+  them up unchanged, because none of them knows what a reference is made of.
+
+  **A shared blob is charged at full size to every referencing owner**, and once
+  to each of them (the readers take `DISTINCT blob_id` per owner — the charge is
+  deduplicated *within* an owner and never *across* owners). Refcounted assets
+  make this a real fork rather than a detail, and the alternative — dividing a
+  blob's size among its referencing owners — was rejected on two grounds: it is
+  gameable, since an owner could shrink their total by uploading what another
+  tenant already has, and it is unstable, since one owner's number would move
+  because a stranger deleted something. Full-size-per-owner is also simply what
+  each of them would have to store alone. Crucially it is a property of the
+  query rather than of whoever calls it: there is no way to ask for the other
+  answer.
+
+  **And it is correctable.** `RecomputeStorageUsage` re-measures every blob an
+  owner references and rewrites the recorded lengths — idempotent, and the only
+  accounting path that touches the blob store, which is why it is an operator
+  command (`server storage recompute`) rather than anything on a request path.
+  A blob it cannot read keeps the length it already had and is reported as
+  unreadable, because treating an unreadable blob as zero would let one
+  transient backend error silently shrink somebody's total.
+
+  Nothing here refuses anything. The number is read by `/profile` and the CLI
+  and by nothing that can say no; limits over it are av-10bw.
+
 Because handlers never touch SQLite or the filesystem directly, swapping the metadata
 engine (libSQL/Turso) or the blob backend (S3/MinIO) is a backend implementation change
 behind a stable interface.
@@ -907,6 +957,10 @@ no second guard here to get wrong.
     is why the section distinguishes a local account (whose login goes with it)
     from an identity-provider one, and says the second sentence only to the
     people it is true of.
+  - **The size of what is going is stated too** (av-fw1b), from the same
+    summary — and it is the same figure the Account section above shows in
+    ordinary use, since "what am I holding" is a question people have far more
+    often than "what am I deleting".
   - **The live share count is stated up front.** A share is a capability URL
     somebody else may be holding, with no account here and no way to be told it
     stopped working; deletion revokes every one at once. That is the right

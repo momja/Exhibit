@@ -16,6 +16,7 @@ import (
 	"github.com/momja/Exhibit/internal/api"
 	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/humanize"
 	"github.com/momja/Exhibit/internal/logging"
 	"github.com/momja/Exhibit/internal/secrets"
 	"github.com/momja/Exhibit/internal/store"
@@ -346,6 +347,8 @@ const usage = `subcommands:
   user passwd <name>     change an account's password, read from stdin
   user disable <name>    stop an account signing in, and sign it out everywhere
   user enable <name>     let a disabled account sign in again
+  storage usage          print stored bytes per owner, heaviest first
+  storage recompute      re-measure every stored blob and rewrite the recorded sizes
 `
 
 // runSubcommand dispatches the operator-facing commands. They are subcommands
@@ -358,6 +361,8 @@ func runSubcommand(args []string) {
 		hashPassword()
 	case "user":
 		userCommand(args[1:])
+	case "storage":
+		storageCommand(args[1:])
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		fatal("unknown argument", fmt.Errorf("%q", args[0]))
@@ -469,6 +474,75 @@ func userCommand(args []string) {
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		fatal("user", fmt.Errorf("unknown subcommand %q", args[0]))
+	}
+}
+
+// storageCommand is av-fw1b's operator surface: what is on this disk, and the
+// repair when the recorded numbers stop matching it.
+//
+// It is a subcommand rather than an API route for the same reason `user` is —
+// it is what somebody with shell access has — and because recompute reads
+// every stored byte, which is a shape that belongs in a command an operator
+// starts deliberately, not on a request path.
+func storageCommand(args []string) {
+	if len(args) == 0 {
+		fmt.Fprint(os.Stderr, usage)
+		fatal("storage", fmt.Errorf("needs a subcommand"))
+	}
+	logging.Configure(slog.LevelWarn)
+	dataDir := getenv("DATA_DIR", "./data")
+	st, err := store.OpenSQLite(dataDir + "/app.db")
+	if err != nil {
+		fatal("open store", err)
+	}
+	defer func() { _ = st.Close() }()
+	ctx := context.Background()
+
+	switch args[0] {
+	case "usage":
+		owners, err := st.ListStorageUsage(ctx)
+		if err != nil {
+			fatal("storage usage", err)
+		}
+		if len(owners) == 0 {
+			fmt.Fprintln(os.Stderr, "nothing stored")
+			return
+		}
+		var total int64
+		for _, o := range owners {
+			total += o.Bytes
+			fmt.Printf("owner %-6d %10s  %d blobs\n", o.OwnerID, humanize.Bytes(o.Bytes), o.Blobs)
+		}
+		fmt.Printf("%-12s %10s\n", "total", humanize.Bytes(total))
+	case "recompute":
+		// Every owner the schema can name, including owner 1 on a
+		// single-user instance, which has no users row to enumerate — so
+		// the owners come from what is stored, not from the directory.
+		owners, err := st.ListStorageOwners(ctx)
+		if err != nil {
+			fatal("storage recompute", err)
+		}
+		bl, err := blob.NewFSStore(dataDir + "/blobs")
+		if err != nil {
+			fatal("open blob store", err)
+		}
+		for _, ownerID := range owners {
+			res, err := st.RecomputeStorageUsage(ctx, ownerID, bl)
+			if err != nil {
+				fatal("storage recompute", err)
+			}
+			line := fmt.Sprintf("owner %-6d %10s  %d blobs measured", ownerID, humanize.Bytes(res.Bytes), res.Blobs)
+			if res.Unreadable > 0 {
+				// Named rather than folded into the count: these kept the
+				// size they already had, so the total below is only as
+				// correct as those older measurements.
+				line += fmt.Sprintf(", %d unreadable (size left as recorded)", res.Unreadable)
+			}
+			fmt.Println(line)
+		}
+	default:
+		fmt.Fprint(os.Stderr, usage)
+		fatal("storage", fmt.Errorf("unknown subcommand %q", args[0]))
 	}
 }
 

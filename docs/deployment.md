@@ -449,6 +449,39 @@ surface.
 on the disabled control rather than as a surprise after the confirmation. If
 that account is the one you want gone, promote somebody else first.
 
+### 3.6 What is using the disk
+
+Exhibit records how many bytes each stored blob is when it writes it, so
+"what is actually using my disk" has an answer that does not involve
+`du` and does not involve guessing whose library a file belongs to:
+
+```
+docker compose exec app /server storage usage
+```
+
+```
+owner 1        41.3 MiB  128 blobs
+owner 2         2.1 MiB  9 blobs
+total          43.4 MiB
+```
+
+Each person also sees their own figure on `/profile`. Nothing on the instance
+refuses anything because of it — there is no quota, and uploads do not stop.
+
+If the numbers look wrong — a crash between writing a file and recording its
+length, a restore from a backup, a file replaced by hand — re-measure them:
+
+```
+docker compose exec app /server storage recompute
+```
+
+That reads every stored blob, so it is a command you run deliberately rather
+than something the server does on a timer. It is safe to run on a live
+instance, safe to run twice, and only ever replaces a recorded length with the
+length the bytes actually have. A blob it cannot read keeps the length already
+recorded for it and is reported on the line, so a backend hiccup cannot
+silently shrink somebody's total.
+
 ## 4. No AI agent features
 
 Nothing to configure — if `pi` isn't on `PATH`, the agent surface disables itself

@@ -285,7 +285,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	blobID := uuid.New().String()
 
 	// Store the artifact body
-	if err := ro.cfg.Blob.Put(r.Context(), blobID, bytes.NewReader([]byte(req.Body))); err != nil {
+	if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader([]byte(req.Body))); err != nil {
 		serverError(w, r, "store artifact body", err)
 		return
 	}
@@ -433,7 +433,7 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 				}
 				rc.Close()
 			}
-			if err := ro.cfg.Blob.Put(r.Context(), a.SourceBlobID, bytes.NewReader([]byte(newBody))); err != nil {
+			if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, a.SourceBlobID, bytes.NewReader([]byte(newBody))); err != nil {
 				serverError(w, r, "update artifact body", err)
 				return
 			}
@@ -555,7 +555,7 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Overwrite the existing blob with the fresh snapshot.
-	if err := ro.cfg.Blob.Put(r.Context(), a.SourceBlobID, bytes.NewReader(fetched)); err != nil {
+	if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, a.SourceBlobID, bytes.NewReader(fetched)); err != nil {
 		serverError(w, r, "refetch update body", err)
 		return
 	}
@@ -611,7 +611,7 @@ func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 	// the request now 404s. The error log names the blob ids, which is the
 	// part an operator can act on; the alternative, 204 plus a log line, is
 	// precisely the silent success this ticket exists to remove.
-	if err := deleteArtifactBlobs(r.Context(), ro.cfg.Blob, a); err != nil {
+	if err := deleteArtifactBlobs(r.Context(), ro.cfg.Store, ro.cfg.Blob, a); err != nil {
 		serverError(w, r, "delete artifact blobs", err)
 		return
 	}
@@ -642,12 +642,22 @@ func artifactBlobIDs(a *store.Artifact) []string {
 // rest. This is the shared deletion logic profile.go and artifacts.go both
 // need: attempt everything, wrap the first failure as "blob %s: %w", return
 // that first error.
-func deleteBlobs(ctx context.Context, blobs blob.Store, ids []string) error {
+func deleteBlobs(ctx context.Context, st store.Store, blobs blob.Store, ids []string) error {
 	var firstErr error
 	for _, id := range ids {
 		if err := blobs.Delete(ctx, id); err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("blob %s: %w", id, err)
 		}
+	}
+	// And the recorded lengths, which are rows rather than bytes (av-fw1b).
+	// Attempted even when a byte delete failed, because the two answer
+	// different questions and the size row is the one that is *inert* while it
+	// lasts: it is charged to nobody once no row references its blob, so
+	// leaving it is untidiness, not a wrong number. That is also why its
+	// failure never displaces an earlier one — the byte that stayed on disk is
+	// the more important half of this report.
+	if err := st.ForgetBlobSizes(ctx, ids); err != nil {
+		slog.WarnContext(ctx, "forget blob sizes", slog.String("err", err.Error()))
 	}
 	return firstErr
 }
@@ -672,6 +682,6 @@ func deleteBlobs(ctx context.Context, blobs blob.Store, ids []string) error {
 //
 // Every id is attempted before the first error is returned, so one unremovable
 // file cannot strand the artifact's other body.
-func deleteArtifactBlobs(ctx context.Context, blobs blob.Store, a *store.Artifact) error {
-	return deleteBlobs(ctx, blobs, artifactBlobIDs(a))
+func deleteArtifactBlobs(ctx context.Context, st store.Store, blobs blob.Store, a *store.Artifact) error {
+	return deleteBlobs(ctx, st, blobs, artifactBlobIDs(a))
 }

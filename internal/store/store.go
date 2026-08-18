@@ -291,6 +291,26 @@ type Store interface {
 	GetShareUnscoped(ctx context.Context, id string) (*Share, error)
 	DeleteShare(ctx context.Context, ownerID int64, id string) error
 
+	// --- Storage accounting (av-fw1b) ----------------------------------
+	// How many bytes an owner is holding. A length is recorded where the
+	// bytes are written; the total is derived on read by joining those
+	// lengths to the rows that reference them, so there is no counter to
+	// drift. Nothing here refuses anything — limits are av-10bw's.
+	// sqlite_storage.go carries the reasoning, including why a shared blob
+	// is charged in full to every referencing owner.
+
+	// RecordBlobSize persists a blob's byte length; idempotent by upsert,
+	// since bodies are rewritten in place under the same blob id.
+	RecordBlobSize(ctx context.Context, blobID string, bytes int64) error
+	// ForgetBlobSizes drops the lengths of blob ids nothing references any
+	// more. Ids that are still referenced by *anyone* are left alone, so a
+	// caller may pass every id it just deleted without knowing which were
+	// shared. Idempotent.
+	ForgetBlobSizes(ctx context.Context, blobIDs []string) error
+	// StorageUsage is the owner's total stored bytes, in one query and
+	// without touching the blob store.
+	StorageUsage(ctx context.Context, ownerID int64) (int64, error)
+
 	// Lifecycle
 	Close() error
 

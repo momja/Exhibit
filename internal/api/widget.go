@@ -111,7 +111,7 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 	if blobID == "" {
 		blobID = uuid.New().String()
 	}
-	if err := ro.cfg.Blob.Put(r.Context(), blobID, bytes.NewReader([]byte(req.Body))); err != nil {
+	if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader([]byte(req.Body))); err != nil {
 		serverError(w, r, "store widget body", err)
 		return
 	}
@@ -238,7 +238,7 @@ func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.InfoContext(r.Context(), "widget removed", slog.String("artifact_id", id))
-		if err := ro.cfg.Blob.Delete(r.Context(), a.WidgetBlobID); err != nil {
+		if err := deleteBlobs(r.Context(), ro.cfg.Store, ro.cfg.Blob, []string{a.WidgetBlobID}); err != nil {
 			serverError(w, r, "delete widget blob", err)
 			return
 		}

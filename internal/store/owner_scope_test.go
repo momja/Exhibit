@@ -404,6 +404,22 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"GetUserByExternalID": "resolves a login name to an owner; there is no owner yet",
 		"SetUserAdmin":        "keyed by the user id it acts on; an instance-admin operation (av-utap)",
 		"SetUserDisabled":     "keyed by the user id it acts on; an instance-admin operation (av-utap)",
+
+		// Storage accounting (av-fw1b). These two are keyed by *blob id*, and
+		// that is the design rather than an omission: a blob's length is a
+		// fact about bytes, and with refcounted shared assets (av-20fk) the
+		// same blob can be named by rows belonging to several owners. An owner
+		// parameter here would have to mean "record this length for this
+		// owner", which is a per-owner size — the thing this ticket
+		// deliberately does not store.
+		//
+		// Nor do they leak anything across owners. Neither reads a length back
+		// out; RecordBlobSize writes one for an id the caller just wrote the
+		// bytes of, and ForgetBlobSizes only removes rows *nothing*
+		// references. Reading is StorageUsage, which is owner-scoped and takes
+		// the owner first like everything else.
+		"RecordBlobSize":  "keyed by blob id; a length belongs to the bytes, not to an owner (av-fw1b)",
+		"ForgetBlobSizes": "keyed by blob id, and only removes rows no owner's rows reference (av-fw1b)",
 	}
 
 	iface := reflect.TypeOf((*Store)(nil)).Elem()

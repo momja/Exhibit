@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/momja/Exhibit/internal/humanize"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -63,6 +64,13 @@ type profileAccount struct {
 	// artifacts" is how a confirmation stops being read.
 	ArtifactCount int64
 	ShareCount    int64
+	// Storage is what the account is holding, phrased for a person
+	// (av-fw1b) — bodies and widgets today, whatever else the schema learns
+	// to reference later. It sits in the Account section rather than the
+	// danger zone because "what is actually using my disk" is a question
+	// self-hosters have every day and deletion is the once. Nothing here
+	// refuses on it; a limit read from the same number is av-10bw's.
+	Storage string
 	// DeleteBlocked is why this account cannot be deleted, or empty when it
 	// can. It is a reason rather than a boolean because a control that cannot
 	// act is useless without the sentence saying why — the same rule the
@@ -275,7 +283,7 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	// only half happened: the account is gone and cannot be retried, but some
 	// artifact bodies are still on the volume, and that is exactly the thing a
 	// person deleting their library must not be told succeeded.
-	if err := deleteBlobs(ctx, ro.cfg.Blob, blobIDs); err != nil {
+	if err := deleteBlobs(ctx, ro.cfg.Store, ro.cfg.Blob, blobIDs); err != nil {
 		serverError(w, r, "delete account blobs", err)
 		return
 	}
@@ -284,7 +292,9 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 // fillDeleteSection populates what the danger zone states before anyone
-// commits to it: how much is about to go, and whether it may go at all.
+// commits to it: how much is about to go, and whether it may go at all — plus
+// the storage figure the Account section shows, which is the same summary read
+// and so is not worth a second query.
 func (ro *Router) fillDeleteSection(ctx context.Context, u *store.User, acct *profileAccount) error {
 	sum, err := ro.cfg.Store.GetAccountSummary(ctx, u.ID)
 	if err != nil {
@@ -294,6 +304,7 @@ func (ro *Router) fillDeleteSection(ctx context.Context, u *store.User, acct *pr
 	acct.Shares = countPhrase(sum.Shares, "share link", "share links")
 	acct.ArtifactCount = sum.Artifacts
 	acct.ShareCount = sum.Shares
+	acct.Storage = humanize.Bytes(sum.StorageBytes)
 
 	last, err := ro.isLastEnabledAdmin(ctx, u)
 	if err != nil {
