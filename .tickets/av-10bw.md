@@ -26,9 +26,11 @@ This is the ticket that makes a paid tier mean something. Until a limit exists, 
 
 **A refusal must say what happened.** Over-quota is `413` with the limit, the current usage, and the size of the thing refused. A bare failure on a snapshot the user waited thirty seconds for is the worst version of this feature.
 
-**The limit resolves from the owner's entitlement** ([[av-2p8z]]), through that ticket's single resolution function rather than by reading its columns. The gate therefore never learns *why* an owner has the limit they have, which is what keeps it free of any billing concept. A configured default covers owners with no entitlement — every owner on a self-hosted instance — and **unset means unlimited**, so a self-hoster who never configures a quota never meets one.
+**The limit resolves from the owner's entitlement** ([[av-2p8z]]), through that ticket's single resolution function rather than by reading its columns. The gate therefore never learns *why* an owner has the limit they have, which is what keeps it free of any billing concept — including its fail-closed behavior: with enforcement off nothing is refused, and with it on an unresolvable limit refuses rather than allows. This ticket inherits that and does not re-decide it.
 
 **Reads and deletes are never refused.** An over-quota owner can still open, export and delete their artifacts; the only thing that stops is adding more. A limit that locks someone out of their own library to punish them for filling it is a data-hostage, not a quota.
+
+**Being over quota is an expected state, not a corrupt one.** A lowered entitlement puts an owner over their limit instantly and through no action of their own — a plan ends, an admin reduces an allowance — and they may sit there indefinitely holding far more than their ceiling. That is the design working: the paragraph above is what makes it survivable, since they keep full access and can delete down to fit. It is written down because the alternative reading is that over-quota is an inconsistency to be repaired, and the repair anyone reaches for is deleting the user's artifacts. **Nothing in this system may delete an owner's data to enforce a limit.** The only thing a limit ever does is refuse the *next* write.
 
 ## Acceptance Criteria
 
@@ -37,5 +39,12 @@ This is the ticket that makes a paid tier mean something. Until a limit exists, 
 - The check is against the projected total after the write, not the total before it.
 - A refused snapshot ingest reports the limit, current usage, and the assembled size — never a bare failure.
 - An over-quota owner can still list, open, render, export and delete their artifacts, and deleting brings them back under the limit.
+- Lowering an owner's entitlement below their current usage is accepted, leaves every artifact intact, and refuses only their next write — enforced by a test, so no later change can turn over-quota into a reason to reclaim data.
 - The limit resolves from the owner's entitlement when one exists, and from the configured default otherwise, through one resolution function rather than a direct column read.
 
+
+## Notes
+
+**2026-08-18T06:25:14Z**
+
+Being over quota is an expected state, not a corrupt one: a lowered entitlement puts someone over instantly through no action of their own. Added the explicit prohibition — nothing may delete an owner's data to enforce a limit, a limit only ever refuses the next write — with a test, so no later change can read over-quota as an inconsistency to repair by reclaiming data.
