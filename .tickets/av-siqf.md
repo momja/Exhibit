@@ -2,11 +2,12 @@
 id: av-siqf
 status: open
 deps: []
-links: [av-fafu]
+links: [av-fafu, av-99f4]
 created: 2026-08-18T05:37:03Z
 type: feature
 priority: 2
 assignee: Max Omdal
+parent: av-1in5
 tags: [hosted, agent, backend, security]
 ---
 # Platform-level agent API key for hosted deployments
