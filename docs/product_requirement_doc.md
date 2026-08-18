@@ -138,7 +138,10 @@ Blob.put(id, bytes)        Blob.get(id)
   to later server-side durability and availability options (libSQL/Turso, rqlite,
   Litestream all build on SQLite without a data-layer rewrite). Note this is distinct
   from cross-device state, which is already solved by storing state on the server (§5).
-- **Artifact bodies:** a blob interface, local filesystem now, S3-compatible later.
+- **Artifact bodies:** a blob interface with two implementations, chosen by
+  configuration (av-52ll) — the local filesystem, or an S3-compatible bucket.
+  Unset means filesystem, so the bucket is what a hosted or multi-machine
+  deployment opts into and costs a single-machine one nothing.
 
 ### 4.4 Schema (v1)
 

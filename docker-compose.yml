@@ -13,6 +13,24 @@ services:
       - APP_ORIGIN=${APP_ORIGIN:-http://localhost:8080}
       - RENDER_ORIGIN=${RENDER_ORIGIN:-http://localhost:8081}
       - AUTH_TOKEN=${AUTH_TOKEN:-dev-token}
+      # Artifact bodies go to DATA_DIR/blobs unless a bucket is named (av-52ll).
+      # To keep them in the MinIO below instead: bring MinIO up FIRST and create
+      # the bucket, then uncomment these and start the app. The app verifies the
+      # bucket at startup and exits if it cannot reach it, so starting both at
+      # once races MinIO's boot and the app loses. MinIO is also behind a
+      # profile, so plain `docker compose up` does not start it at all:
+      #
+      #   docker compose --profile replication-local up -d minio
+      #   docker run --rm --network=<this>_default minio/mc \
+      #     mb --ignore-existing http://minioadmin:minioadmin@minio:9000/exhibit
+      #   docker compose up -d app
+      #
+      # See docs/deployment.md §7 — and note Litestream backs up the database
+      # only, so the bucket (or DATA_DIR/blobs) still needs its own backup.
+      # - BLOB_S3_BUCKET=exhibit
+      # - BLOB_S3_ENDPOINT=http://minio:9000
+      # - BLOB_S3_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      # - BLOB_S3_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
 
   litestream:
     image: litestream/litestream

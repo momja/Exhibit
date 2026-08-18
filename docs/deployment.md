@@ -51,7 +51,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `AUTH_TOKEN` | `dev-token` | API bearer token — **change this** |
 | `APP_ORIGIN` | `http://localhost:8080` | Public URL of the gallery/API |
 | `RENDER_ORIGIN` | `http://localhost:8081` | Public URL of the artifact renderer (must differ from `APP_ORIGIN` — see [why](./architecture.md#4-trust-boundaries)) |
-| `DATA_DIR` | `./data` | Where the SQLite DB + blobs live |
+| `DATA_DIR` | `./data` | Where the SQLite DB lives, and the artifact bodies too unless `BLOB_S3_BUCKET` is set |
 | `ADDR` | `:8080` | App listen address |
 | `RENDER_ADDR` | `:8081` | Render listen address |
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
@@ -66,6 +66,12 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `PUBLIC_INSTANCE_NAME` | *(unset)* | What this instance calls itself |
 | `PUBLIC_INSTANCE_DESCRIPTION` | *(unset)* | One line about it |
 | `PUBLIC_OWNER_ID` | `1` | Whose library the instance publishes — every artifact query filters on an owner, so a public instance has to name one. `1` is the owner a single-user library is already filed under |
+| `BLOB_S3_BUCKET` | *(unset)* | Store artifact bodies in this S3-compatible bucket instead of on disk. Unset = filesystem under `DATA_DIR`, exactly as before (§7) |
+| `BLOB_S3_ENDPOINT` | AWS S3 | The bucket's API host, with an optional scheme: `http://localhost:9000`, `https://minio.example.com`, or a bare host. **Without a scheme, TLS is assumed** |
+| `BLOB_S3_REGION` | *(unset)* | Region, when your provider needs one. MinIO does not |
+| `BLOB_S3_ACCESS_KEY_ID` | *(unset)* | Access key. Leave both keys unset to use the ambient AWS credential chain (env vars, `~/.aws/credentials`, instance role) |
+| `BLOB_S3_SECRET_ACCESS_KEY` | *(unset)* | Secret key |
+| `BLOB_S3_PREFIX` | *(unset)* | Key prefix, if the bucket holds something else too |
 
 The four `PUBLIC_*` variables are read at startup and surfaced at
 `GET /api/settings/public`, which answers `{"name", "description"}` with no
@@ -480,6 +486,71 @@ boundary, not just cosmetics.
 included) and `LITESTREAM_ACCESS_KEY_ID`/`LITESTREAM_SECRET_ACCESS_KEY`/
 `LITESTREAM_BUCKET_URL`. Skip this to start — plain SQLite on a mounted volume
 is fine until you need it.
+
+> [!IMPORTANT]
+> **Litestream backs up the database, and nothing else.** It streams the SQLite
+> WAL, which holds your titles, tags, collections, shares, state and the *ids*
+> of your artifact bodies — not the bodies. Restoring from Litestream alone
+> gives you a library whose every row survives and whose files do not, which is
+> not a recovered library. Back up your blobs too: the `blobs/` directory under
+> `DATA_DIR`, or (if you moved them to a bucket, §7) that bucket.
+
+## 7. Where artifact bodies live
+
+By default, on disk: `DATA_DIR/blobs`, one file per artifact body and one more
+per gallery widget. Nothing to configure, and this is the right answer for a
+single machine.
+
+Set `BLOB_S3_BUCKET` and they go to an S3-compatible bucket instead. That is
+worth doing when the instance is not one machine — a container with no durable
+volume, more than one replica, or a deploy that would otherwise be a volume
+migration — and when you would rather back up one bucket than a bucket and a
+directory (see the note in §6). Unset, none of this exists: no bucket, no
+credential, no behaviour different from before the option was added.
+
+```bash
+BLOB_S3_BUCKET=exhibit
+BLOB_S3_ENDPOINT=http://minio:9000     # omit for AWS S3; no scheme means https
+BLOB_S3_ACCESS_KEY_ID=...
+BLOB_S3_SECRET_ACCESS_KEY=...
+```
+
+The Compose file's `replication-local` profile runs MinIO, which is the easiest
+way to try this locally. Start MinIO and create the bucket *before* the app —
+the app verifies the bucket at startup and exits if it cannot reach it, so
+bringing both up together races MinIO's boot:
+
+```bash
+docker compose --profile replication-local up -d minio
+# create the bucket, in MinIO's console at http://localhost:9001 or with mc
+docker compose up -d app
+```
+
+Any S3-compatible provider works; nothing AWS-specific is used.
+
+Notes:
+
+- **The bucket must already exist.** The service checks it at startup and
+  refuses to start if it cannot reach it, rather than discovering the problem
+  when someone's first upload fails. The check is a `HEAD` on the bucket, so the
+  credential needs to be allowed that as well as get/put/delete on objects.
+- **Leave both key variables unset** to use the ambient AWS credential chain
+  (`AWS_*` environment variables, `~/.aws/credentials`, an instance role) —
+  which is how a deployment with a role attached should be configured.
+- **Set the bucket, or set none of these.** Any other `BLOB_S3_*` variable
+  without `BLOB_S3_BUCKET` is refused at startup rather than quietly read as
+  "filesystem, then" — otherwise a typo in the bucket name would put your
+  artifact bodies on local disk while you believed they were in the bucket.
+- **`BLOB_S3_ENDPOINT` is a host, not a URL with a path.** A scheme is allowed
+  and selects TLS; a path is refused, because the SDK addresses buckets from the
+  host and would silently ignore it.
+- **`BLOB_S3_PREFIX`** namespaces the keys if the bucket holds anything else,
+  such as your Litestream backups.
+- **There is no migration between the two.** Switching an existing instance to a
+  bucket means copying `DATA_DIR/blobs` into it first (`mc mirror`, `aws s3
+  sync`, or `rclone`); the filenames are the keys, so a straight copy is all it
+  takes. Artifacts whose bodies did not come along will render as "artifact body
+  not found".
 
 ---
 

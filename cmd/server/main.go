@@ -81,7 +81,9 @@ func main() {
 	}
 	defer func() { _ = st.Close() }() // best-effort cleanup at shutdown
 
-	bl, err := blob.NewFSStore(blobDir)
+	// Blob backend (av-52ll). Unset BLOB_S3_BUCKET is the whole of the
+	// self-hosted path: filesystem under DATA_DIR, exactly as before.
+	bl, err := blob.Open(context.Background(), blobDir)
 	if err != nil {
 		fatal("open blob store", err)
 	}

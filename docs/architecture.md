@@ -378,15 +378,62 @@ carrying a principal is av-c5aq.
   whitespace-separated token is emitted as a quoted phrase with a trailing
   `*`, so prefix matching is preserved while `<script>`, `a:b`, or a stray
   quote search for themselves instead of failing the query.
-- **Bodies** → filesystem now, S3-compatible later — same `Blob` interface. An
-  artifact's **widget** (av-fafu) is a body too, so it lives here as a second blob
+- **Bodies** → **filesystem or an S3-compatible bucket, selected by
+  configuration** (av-52ll). Both implement the same three methods and nothing
+  above the interface can tell which is behind it — that substitutability *is*
+  the claim, and it is enforced by one contract test suite in `internal/blob`
+  that both must pass, rather than by two sets of tests that happen to agree.
+  `BLOB_S3_BUCKET` is the selector: unset is `FSStore` under `DATA_DIR`,
+  byte-identical to before the bucket existed, so a self-hoster acquires no new
+  required configuration. Set, `blob.S3Store` addresses the bucket over the
+  MinIO SDK — S3-*compatible* rather than AWS, with the endpoint as
+  configuration and no vendor feature, bucket layout or lifecycle rule assumed.
+  The bucket is what a hosted instance needs and what a self-hosted one's backup
+  story is missing: the Litestream profile streams the SQLite WAL and *only*
+  that, so a restore from it recovers every row and none of the bytes those rows
+  point at.
+
+  Three properties are load-bearing and easy to lose.
+
+  **The backend never buffers a whole blob.** A body that fits in one part is a
+  single streamed PUT with a real `Content-Length`, a larger one of known length
+  is read at offsets and allocates nothing, and only an unknown length has to be
+  discovered by filling a buffer — bounded at the 5 MiB protocol minimum, so a
+  vendored-wasm snapshot is never a per-request allocation the size of itself.
+  Note the scope: this is a property of `internal/blob`, *not* of the service.
+  Callers above the interface still materialise bodies whole — every read site
+  is an `io.ReadAll` and every write site a `bytes.Reader` over a string already
+  in hand — so a 16 MB snapshot does exist in memory during a render. Making
+  *that* true end to end is a change at those call sites and a separate piece of
+  work; what this buys is that the storage layer adds nothing on top of it.
+  The subtlety worth knowing about is that the offset path addresses parts from
+  zero and ignores the reader's position, so a *partially read* reader is
+  reported as unknown-length rather than sized: the alternative uploads the
+  object's first n bytes under the guise of its last n, at the right length and
+  with no error anywhere.
+
+  **A missing blob fails at `Get`, not mid-read.** The SDK's handle is lazy, and
+  a caller that has already begun writing a 200 cannot go back and answer 404 —
+  which is exactly what the render surface does with this error. `Get` therefore
+  forces the request before returning, by reading one byte and putting it back
+  in front of the stream rather than by calling the handle's `Stat`: `Stat`
+  issues a *separate* HEAD, so it would make every blob read two round trips (a
+  gallery of forty widget tiles, forty extra) and still leave a window in which
+  an object deleted between the two failed mid-200.
+
+  **`Delete` performs no existence check.** The idempotent contract on the
+  interface exists precisely because `DeleteObject` already answers success for
+  a key that was never there, so a `HEAD` in front of it would pay a round trip
+  to manufacture a failure no caller wants.
+
+  An artifact's **widget** (av-fafu) is a body too, so it lives here as a second blob
   with only its id (`artifacts.widget_blob_id`, empty for "no widget") on the row.
   The id is minted once and reused on every save, keeping the widget's render URL —
   which gallery cards embed — stable across edits.
 
 Because handlers never touch SQLite or the filesystem directly, swapping the metadata
-engine (libSQL/Turso) or the blob backend (S3/MinIO) is a backend implementation change
-behind a stable interface.
+engine (libSQL/Turso) is a backend implementation change behind a stable interface —
+and the blob backend already is one.
 
 ### 3.4 Ingest scanner
 
@@ -1108,7 +1155,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap) — what remains is letting a non-owner reach a shared artifact at all (av-7k7b), and a person managing their own account (av-g2dx) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
-| Object-storage bodies | Blob interface | S3/MinIO impl behind same interface |
+| Object-storage bodies | Blob interface | **already done** (av-52ll) — `BLOB_S3_BUCKET` selects `S3Store`; unset keeps the filesystem |
 | Tier-2 React | Render surface | add transpile (in-iframe Babel → esbuild) |
 | Chat-UI ingest | API (single write path) | Chrome extension as a new client |
 
