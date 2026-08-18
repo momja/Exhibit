@@ -10,32 +10,40 @@ assignee: Max Omdal
 parent: av-1in5
 tags: [hosted, backend, api, account]
 ---
-# Polar subscription state: plan on the user, maintained by webhook
+# Per-owner entitlements: plan and limits as data an admin can set
 
-Payments land on Polar — a merchant of record, so international VAT/GST registration and remittance are theirs rather than ours, which is the compliance burden that actually costs a small team. But Polar knows what someone paid for and Exhibit knows what they may do, and nothing joins the two.
+Quotas ([[av-10bw]]) need a limit per owner, and nothing carries one. Every user is entitled to exactly the same thing today, which is everything.
 
-This is that join, and it is deliberately small: a plan on the user, and a webhook that keeps it current. No billing provider reaches into `internal/api` to decide whether an ingest is allowed — the gates ([[av-10bw]], and later the agent's) read a column, and this ticket is what maintains it.
+This ticket adds that data and the control surface for it, and deliberately stops there. It knows nothing about payments, subscriptions, or why an owner is on the plan they are on — it stores the answer and lets an admin set it.
+
+That is not a stub standing in for something commercial. On a self-hosted instance it is the feature outright: a household or small-team instance can give one person a larger allowance than another, which is unaskable today. Anything that maintains these values from an external system is an ordinary API client, outside this repo.
 
 ## Design
 
-**Plan state lives on `users`, and the gates read only that.** Not a Polar API call on the request path — that is the same mistake as verifying a provider-signed token per request (`architecture.md` §3.8): it puts a network dependency in front of every gated action and makes an outage at the payment provider an outage of the product. An owner whose plan is already recorded keeps working while Polar is unreachable.
+**Entitlements live on `users`.** A plan label, the limits themselves, and an opaque external reference. The label is for display and for grouping; the limits are what gates actually read, stored per user rather than derived from the label, so an instance can grant one person more without inventing a plan for them.
 
-**The webhook is the single write path for it**, consistent with the rest of the system. Signature-verified, idempotent (providers retry, and a replayed upgrade must not double-apply), and tolerant of out-of-order delivery — a stale event must not downgrade an account that a newer event already upgraded, so order by the event's own timestamp rather than by arrival.
+**Set through the admin route that already exists.** `updateUserRequest` (`internal/api/admin.go:251`) is already nullable-pointer-per-field — `Password`, `Disabled`, `IsAdmin` — and new fields extend it in the same shape. No new route group, and no new credential: `adminOnly` already grants the static service token full authority, which is what an out-of-tree client would authenticate with. The single write path is preserved for exactly the reason `architecture.md` §3.6 gives for the future Chrome extension — an external system that maintains these values is just another API client.
 
-**Route placement.** It is unauthenticated in the session sense but authenticated by signature, so it belongs outside the authenticated API group, alongside `/api/settings/public` as the second deliberate exception — and like that one, registered only when the hosted configuration is present. On a self-hosted instance the route does not exist.
+**Emphatically not on `/profile`.** This is the boundary §3.8a draws, and it is the one that matters here: `/profile` reaches your own account and a session is the whole authorization, while `/admin/users` reaches other accounts and requires an admin. An entitlement a person can set on themselves is not a limit. It belongs on the admin side by the same rule that puts password resets there, and a test should say so rather than leaving it to whoever adds the next profile field.
 
-**Absent plan means the configured default.** Every self-hosted owner has no plan and must behave exactly as today; the default is what [[av-10bw]] resolves its limit from, and unset is unlimited.
+**One resolution function, and gates call it.** `av-10bw` and anything after it ask "what is this owner allowed" and never read the columns directly. Absent entitlement resolves to a configured default; an unset default is unlimited. A self-hosted instance that configures nothing behaves exactly as today.
 
-**Reconciliation, because webhooks are lossy.** A missed or dropped event leaves an account on the wrong plan indefinitely, and the user experiencing it has paid. A path that re-reads subscription state for one owner and repairs the column is the answer, callable by an admin at minimum.
+**The external reference is opaque and carries no vendor semantics.** It is a string an operator's own system uses to recognize an account, in the spirit of a ticket's `--external-ref`. It lives here rather than in the external system because it is durable with the account: the account survives that system being rebuilt, replaced, or dropped.
 
-**Deliberately not here: usage-based billing.** Polar supports metered billing and the agent will want it, but there is nothing to meter yet — that is [[av-hyo6]]. This ticket handles subscription state only.
+**What is deliberately out of tree.** Anything that decides *why* an owner has a given entitlement — payment state, subscriptions, invoices, a provider's webhook and its signature scheme. None of it is in this repo, in any form, including as an interface with a stub implementation. Two reasons beyond the obvious one. Go's `internal/` rule blocks an external module from importing `internal/api`, so the conventional seam-plus-private-implementation shape would force promoting `api.Config` to a public package — a permanent API-surface commitment made for a packaging reason. And an empty `billing` package in a public tree discloses roughly what naming a vendor would, while being useless to everyone who reads it.
 
 ## Acceptance Criteria
 
-- `users` carries plan and subscription status, and every gate resolves an owner's entitlement from it with no outbound call.
-- A signature-verified webhook creates, upgrades, downgrades and cancels correctly; an invalid signature is rejected.
-- Replaying an event is a no-op, and an out-of-order event does not overwrite newer state.
-- With the hosted configuration absent the route is not registered, every owner resolves to the default plan, and behavior is identical to today.
-- A reconcile path repairs one owner's plan from the provider's current state.
-- Payment-provider unavailability does not block any gated action for an owner whose plan is already recorded.
+- `users` carries a plan label, per-owner limits, and an opaque external reference; account deletion removes them with the row.
+- An admin sets all of them through the existing admin user route; a non-admin gets the same `404` `adminOnly` gives every other administrative address.
+- `/profile` cannot set or raise any of them, and a test enforces it.
+- One resolution function answers "what is this owner allowed"; no gate reads the columns directly.
+- An owner with no entitlement resolves to the configured default, and an unset default is unlimited — a self-hosted instance that configures nothing behaves identically to today.
+- No payment provider, subscription concept, or vendor name appears anywhere in the repo, including in tests, fixtures, docs, and `go.mod`.
+- `docs/deployment.md` documents the fields as operator-set, and records that maintaining them from an external system is an ordinary authenticated API client.
 
+## Notes
+
+**2026-08-18T06:12:26Z**
+
+Rewritten to remove the payment vendor entirely. The ticket now covers per-owner entitlements as data plus the admin control surface, and stops there; whatever decides why an owner is on a plan is an ordinary API client living outside this repo. Not an interface with a stub either — Go's internal/ rule would force promoting api.Config to a public package for packaging reasons, and an empty billing package discloses about as much as naming a vendor.

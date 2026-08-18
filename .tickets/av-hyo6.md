@@ -17,5 +17,5 @@ Nothing in Exhibit measures what an owner consumes. Storage has no number ([[av-
 
 This epic is the measurement and the limit. It is separate from [[av-1in5]] because it answers a different question — what someone *used*, a flow over time, rather than what they *hold*, a level — and because the two have different failure modes: an over-quota library refuses the next upload, while an uncapped agent session spends real money before anyone can react.
 
-**Metering is not billing, and a cap is not metering.** Polar's usage billing invoices after the fact, which is exactly what does not help here: the loss has already happened by the time a meter reading becomes an invoice line. The cap has to be enforced ahead of the spend, in-process, and it must hold whether or not any billing provider is reachable.
+**Metering is not billing, and a cap is not metering.** Usage-based billing invoices after the fact, which is exactly what does not help here: the loss has already happened by the time a meter reading becomes an invoice line. The cap has to be enforced ahead of the spend, in-process, and it must hold whether or not any billing provider is reachable.
 

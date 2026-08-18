@@ -26,7 +26,7 @@ This is the ticket that makes a paid tier mean something. Until a limit exists, 
 
 **A refusal must say what happened.** Over-quota is `413` with the limit, the current usage, and the size of the thing refused. A bare failure on a snapshot the user waited thirty seconds for is the worst version of this feature.
 
-**The limit comes from the plan** ([[av-2p8z]]), with a configured default for owners who have none — which is every owner on a self-hosted instance. **Unset means unlimited**, so a self-hoster who never configures a quota never meets one.
+**The limit resolves from the owner's entitlement** ([[av-2p8z]]), through that ticket's single resolution function rather than by reading its columns. The gate therefore never learns *why* an owner has the limit they have, which is what keeps it free of any billing concept. A configured default covers owners with no entitlement — every owner on a self-hosted instance — and **unset means unlimited**, so a self-hoster who never configures a quota never meets one.
 
 **Reads and deletes are never refused.** An over-quota owner can still open, export and delete their artifacts; the only thing that stops is adding more. A limit that locks someone out of their own library to punish them for filling it is a data-hostage, not a quota.
 
@@ -37,5 +37,5 @@ This is the ticket that makes a paid tier mean something. Until a limit exists, 
 - The check is against the projected total after the write, not the total before it.
 - A refused snapshot ingest reports the limit, current usage, and the assembled size — never a bare failure.
 - An over-quota owner can still list, open, render, export and delete their artifacts, and deleting brings them back under the limit.
-- The limit resolves from the owner's plan when one exists, and from the configured default otherwise.
+- The limit resolves from the owner's entitlement when one exists, and from the configured default otherwise, through one resolution function rather than a direct column read.
 

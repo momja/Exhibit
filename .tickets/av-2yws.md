@@ -14,7 +14,7 @@ tags: [hosted, agent, backend]
 
 `internal/agent` records no usage. `readLoop` broadcasts every line Pi emits to SSE subscribers verbatim (`internal/agent/agent.go:565`) and persists the message list into `agent_transcripts`, but nothing extracts token counts, and no table holds them. So an instance running [[av-siqf]]'s platform credential pays a provider bill it cannot attribute to anyone.
 
-Measurement comes before any of it — before pricing, before caps ([[av-99f4]]), before Polar's metered billing. Right now there is not even a number to be wrong about.
+Measurement comes before any of it — before pricing, before caps ([[av-99f4]]), before any usage-based pricing. Right now there is not even a number to be wrong about.
 
 ## Design
 
