@@ -429,7 +429,19 @@ carrying a principal is av-c5aq.
   command (`server storage recompute`) rather than anything on a request path.
   A blob it cannot read keeps the length it already had and is reported as
   unreadable, because treating an unreadable blob as zero would let one
-  transient backend error silently shrink somebody's total.
+  transient backend error silently shrink somebody's total. And it writes each
+  length only if the row still says what it said before the measurement began:
+  an edit landing in that gap has recorded the *new* body's length, and an
+  unconditional write would replace it with the length of a body that no longer
+  exists — a wrong number that would then persist, since nothing re-measures on
+  its own. A repair pass never overwrites something fresher than itself.
+
+  The same measurement, run for a different reason, is the upgrade path:
+  `BackfillBlobSizes` runs at startup over blobs with no recorded length, so a
+  library that predates migration 021 does not report `0 B` until every
+  artifact happens to be edited. It is the shape `BackfillSourceText` already
+  established for migration 010's gap — a startup pass, because the blob store
+  is not reachable from SQL — and it is free on every start after the first.
 
   Nothing here refuses anything. The number is read by `/profile` and the CLI
   and by nothing that can say no; limits over it are av-10bw.
@@ -957,10 +969,14 @@ no second guard here to get wrong.
     is why the section distinguishes a local account (whose login goes with it)
     from an identity-provider one, and says the second sentence only to the
     people it is true of.
-  - **The size of what is going is stated too** (av-fw1b), from the same
-    summary — and it is the same figure the Account section above shows in
-    ordinary use, since "what am I holding" is a question people have far more
-    often than "what am I deleting".
+  - **The size is stated in Account, not here** (av-fw1b). The same summary
+    carries it, so putting it in the confirmation would cost nothing — and it
+    is left out deliberately. This copy is about consequence, and the
+    consequences that need saying are the irreversible ones and the one that
+    lands on somebody else; a byte count beside them reads as a fourth warning
+    while saying nothing a person would act on. "What am I holding" is a
+    question people have far more often than "what am I deleting", and it is
+    answered where they will be looking.
   - **The live share count is stated up front.** A share is a capability URL
     somebody else may be holding, with no account here and no way to be told it
     stopped working; deletion revokes every one at once. That is the right

@@ -462,11 +462,22 @@ docker compose exec app /server storage usage
 ```
 owner 1        41.3 MiB  128 blobs
 owner 2         2.1 MiB  9 blobs
-total          43.4 MiB
+on disk        43.0 MiB  135 blobs stored
 ```
 
 Each person also sees their own figure on `/profile`. Nothing on the instance
 refuses anything because of it — there is no quota, and uploads do not stop.
+
+The last line is not the sum of the ones above it, and the gap is deliberate.
+A file two people's artifacts share is counted in full against each of them —
+that is what each would have to store on their own — while the disk holds it
+once. Per-owner figures answer "what is this person holding"; `on disk`
+answers "what is on this volume".
+
+**Upgrading an existing instance needs no action.** The first start after the
+upgrade measures the files already stored and records their lengths, logging
+`backfilled blob sizes` when it does. It reads each file once, so a large
+library makes that start slower; every later start skips it entirely.
 
 If the numbers look wrong — a crash between writing a file and recording its
 length, a restore from a backup, a file replaced by hand — re-measure them:

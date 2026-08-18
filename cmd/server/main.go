@@ -95,6 +95,16 @@ func main() {
 		slog.Warn("backfill artifact source text", slog.String("err", err.Error()))
 	}
 
+	// The same catch-up for storage accounting (av-fw1b): lengths are recorded
+	// when bytes are written, so a library that predates migration 021 would
+	// report 0 B until every artifact happened to be edited. Selects only
+	// blobs with no recorded length, so this is free on every start after the
+	// first. Non-fatal for the same reason as above — an unmeasured library
+	// under-reports a number nothing refuses on.
+	if err := st.BackfillBlobSizes(context.Background(), bl); err != nil {
+		slog.Warn("backfill blob sizes", slog.String("err", err.Error()))
+	}
+
 	// Agent support (Exh-yvhp): BYO keys are sealed with the server secret;
 	// each chat session runs a `pi --mode rpc` sidecar. Degrades gracefully —
 	// no pi binary just disables the agent surface.
@@ -508,12 +518,18 @@ func storageCommand(args []string) {
 			fmt.Fprintln(os.Stderr, "nothing stored")
 			return
 		}
-		var total int64
 		for _, o := range owners {
-			total += o.Bytes
 			fmt.Printf("owner %-6d %10s  %d blobs\n", o.OwnerID, humanize.Bytes(o.Bytes), o.Blobs)
 		}
-		fmt.Printf("%-12s %10s\n", "total", humanize.Bytes(total))
+		// Counted over distinct blobs rather than by adding the lines above.
+		// A blob two owners reference is charged in full to each of them —
+		// which is right for "what is this owner holding" and wrong for "what
+		// is on this disk", and this line is the second question.
+		blobs, total, err := st.StoredBytes(ctx)
+		if err != nil {
+			fatal("storage usage", err)
+		}
+		fmt.Printf("%-12s %10s  %d blobs stored\n", "on disk", humanize.Bytes(total), blobs)
 	case "recompute":
 		// Every owner the schema can name, including owner 1 on a
 		// single-user instance, which has no users row to enumerate — so

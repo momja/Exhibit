@@ -153,8 +153,8 @@ func (brokenSizeStore) RecordBlobSize(context.Context, string, int64) error {
 	return errors.New("disk full")
 }
 
-// No blob write may bypass putBlob, which is the only place a length is
-// recorded (av-fw1b).
+// No blob write *in package api* may bypass putBlob, which is the only place a
+// length is recorded (av-fw1b).
 //
 // There are five write sites today and they all look correct; five is also few
 // enough that the sixth gets added without anyone noticing the accounting is
@@ -162,6 +162,15 @@ func (brokenSizeStore) RecordBlobSize(context.Context, string, int64) error {
 // owner's storage until somebody runs a recompute they have no reason to run.
 // So the rule is enforced by the parser rather than by review: calling
 // Blob.Put outside the funnel fails here, with the funnel named.
+//
+// What this deliberately does not cover, so nobody reads more into a green run
+// than it means: it walks package `api` alone, and matches the one shape those
+// call sites use (`<x>.Blob.Put(…)`). A blob written from another package
+// cannot call putBlob anyway — it is unexported, and the single write path
+// (architecture §4.1) is why no other package has reason to write one. If that
+// ever stops being true, the funnel has to move somewhere callable and this
+// guard has to follow it; until then a repo-wide check would assert a rule the
+// code does not yet have a way to obey.
 func TestEveryBlobWriteGoesThroughTheFunnel(t *testing.T) {
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -22,9 +23,15 @@ import (
 type fakeBlobs struct {
 	bodies map[string]string
 	fail   map[string]bool
+	// onGet runs at the moment a blob is read, which is where a racing write
+	// lands in the real thing.
+	onGet func(id string)
 }
 
 func (f *fakeBlobs) Get(_ context.Context, id string) (io.ReadCloser, error) {
+	if f.onGet != nil {
+		f.onGet(id)
+	}
 	if f.fail[id] {
 		return nil, errors.New("backend unavailable")
 	}
@@ -291,4 +298,112 @@ func TestDeletingAnAccountTakesItsStorageToZero(t *testing.T) {
 	assert.Zero(t, usage(t, s, member.ID))
 	assert.Equal(t, int64(5000), usage(t, s, admin.ID),
 		"the surviving owner still references the shared blob, so its length survives too")
+}
+
+// A library that predates migration 021 has bytes on disk and no recorded
+// lengths, so it would report zero for everything until each artifact happened
+// to be edited. The startup backfill is what stops an upgrade from silently
+// answering "0 B" for a full shelf.
+func TestBackfillMeasuresBlobsWithNoRecordedLength(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	blobs := &fakeBlobs{bodies: map[string]string{
+		"old-body":   strings.Repeat("x", 300),
+		"old-widget": strings.Repeat("w", 20),
+		"new-body":   strings.Repeat("y", 5),
+	}}
+
+	// Two artifacts as they would look after an upgrade: rows, no lengths.
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{
+		ID: "old", OwnerID: 1, SourceBlobID: "old-body", WidgetBlobID: "old-widget", Tier: Tier1}))
+	// And one written since, whose length the write funnel already recorded.
+	putSized(t, s, "new", 1, "new-body", 5, "", 0)
+	require.Equal(t, int64(5), usage(t, s, 1))
+
+	require.NoError(t, s.BackfillBlobSizes(ctx, blobs))
+	assert.Equal(t, int64(300+20+5), usage(t, s, 1))
+
+	// Idempotent, and free: a second pass finds nothing to measure. Proven by
+	// removing the bodies — a backfill that tried to re-read them would fail
+	// or zero them, and this one does neither.
+	blobs.bodies = map[string]string{}
+	require.NoError(t, s.BackfillBlobSizes(ctx, blobs))
+	assert.Equal(t, int64(300+20+5), usage(t, s, 1))
+}
+
+// A recompute must never overwrite a length that an ordinary write recorded
+// while the pass was reading the blob. The writer's number describes the body
+// that is actually there; the measurement describes one that has been replaced
+// — and on the filesystem backend, where Put truncates the very file being
+// read, possibly neither.
+func TestRecomputeDoesNotClobberAConcurrentWrite(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	putSized(t, s, "a1", 1, "a1-body", 100, "", 0)
+
+	// A reader that performs the racing write at the moment the pass reads it
+	// — the interleaving the real race produces, made deterministic.
+	blobs := &fakeBlobs{bodies: map[string]string{"a1-body": strings.Repeat("x", 100)}}
+	blobs.onGet = func(id string) {
+		require.NoError(t, s.RecordBlobSize(ctx, id, 4242))
+		// Also change what the blob returns, so the pass measures the old body.
+		blobs.onGet = nil
+	}
+
+	res, err := s.RecomputeStorageUsage(ctx, 1, blobs)
+	require.NoError(t, err)
+	assert.Equal(t, 0, res.Blobs, "nothing was rewritten by the pass")
+	assert.Equal(t, 1, res.Superseded)
+	assert.Equal(t, int64(4242), usage(t, s, 1), "the writer's length stands")
+}
+
+// The instance figure is over *distinct* blobs, so it describes a disk. The
+// per-owner totals deliberately add up to more than it once a blob is shared —
+// each owner is charged in full — and a line about disk usage must not be that
+// sum.
+func TestStoredBytesCountsSharedBlobsOnce(t *testing.T) {
+	s := newTestStore(t)
+	const shared = "shared-asset"
+	putSized(t, s, "mine", 1, shared, 5000, "", 0)
+	putSized(t, s, "theirs", 2, shared, 5000, "", 0)
+	putSized(t, s, "solo", 1, "solo-body", 70, "", 0)
+
+	assert.Equal(t, int64(5070), usage(t, s, 1))
+	assert.Equal(t, int64(5000), usage(t, s, 2))
+
+	blobs, bytes, err := s.StoredBytes(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), blobs)
+	assert.Equal(t, int64(5070), bytes, "the shared blob is on the disk once, not twice")
+}
+
+// DeleteAccount hands the size prune every blob id the account named, and
+// SQLite caps a statement at 32766 bound variables — so without chunking a
+// large enough library could not be deleted at all: the prune would fail and
+// roll the whole deletion back.
+func TestDeletingALargeAccountStaysUnderTheVariableLimit(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	admin, err := s.UpsertUser(ctx, "sub-admin", "admin@example.test")
+	require.NoError(t, err)
+	member, err := s.UpsertUser(ctx, "sub-member", "member@example.test")
+	require.NoError(t, err)
+	require.True(t, admin.IsAdmin)
+
+	// 20k blob ids: over the limit as one IN-list, and cheap as rows.
+	const artifacts = 10000
+	for i := range artifacts {
+		id := fmt.Sprintf("a%d", i)
+		putSized(t, s, id, member.ID, id+"-body", 10, id+"-widget", 1)
+	}
+	require.Equal(t, int64(artifacts*11), usage(t, s, member.ID))
+
+	blobIDs, err := s.DeleteAccount(ctx, member.ID)
+	require.NoError(t, err)
+	assert.Len(t, blobIDs, artifacts*2)
+	assert.Zero(t, usage(t, s, member.ID))
+
+	var left int
+	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM blob_sizes`).Scan(&left))
+	assert.Zero(t, left, "every length went with the account")
 }
