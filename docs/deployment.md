@@ -557,6 +557,75 @@ Anything arriving under an unrecognized hostname — the platform's own
 `*.fly.dev` name, a health check by IP — gets the app surface, which is
 authenticated. Only the exact `RENDER_ORIGIN` hostname reaches the renderer.
 
+### 5.2 Fly.io
+
+`fly.toml` at the repo root deploys a single machine with a volume at `/data`.
+It sets `SINGLE_LISTENER=1`, so one internal port serves both origins and the
+server picks between them by `Host` (§5.1). Fly's proxy routes by port and
+cannot map two hostnames to two ports, which is the whole reason that flag
+exists.
+
+Pick your two hostnames first. They have to differ, and Exhibit exits at
+startup if they do not.
+
+```bash
+fly apps create exhibit                # `fly launch` also works but rewrites fly.toml
+fly volumes create exhibit_data --size 1 --region sea --app exhibit
+
+# edit fly.toml: app name, primary_region, APP_ORIGIN, RENDER_ORIGIN
+
+fly certs add exhibit.example.com      # the app
+fly certs add artifacts.example.com    # the renderer
+# add the DNS records fly prints for each, then wait for both to go green:
+fly certs list
+
+fly secrets set AUTH_TOKEN="$(openssl rand -hex 32)"
+fly secrets set EXHIBIT_SECRET="$(openssl rand -hex 32)"
+
+fly deploy
+fly scale count 1                      # confirm; never raise this
+```
+
+The first boot creates an `admin` account with a default password and logs a
+warning about it. Change it before you put anything in the library:
+
+```bash
+fly ssh console -C "/server user passwd admin"
+```
+
+#### Set EXHIBIT_SECRET yourself
+
+Leave it unset and Exhibit generates one into `/data/secret.key` on first boot.
+That survives deploys and restarts, so most of the time you will not notice.
+It does not survive the volume. Destroy and recreate the volume and the new
+secret cannot decrypt anything the old one sealed, which means every stored
+agent provider key is gone with no way to recover it.
+
+Setting it as a Fly secret moves it off the volume, so a rebuilt volume is an
+empty library rather than a broken one. Rotate it and you invalidate stored
+agent keys, so treat it as permanent once the instance holds anything.
+
+#### One machine, and only one
+
+SQLite in WAL mode is a single writer against a local volume, and a Fly volume
+attaches to one machine. A second machine would get its own volume and its own
+database, so you would have two libraries that never converge, and each would
+serve half your requests. `fly.toml` pins `min_machines_running = 1` and turns
+auto-stop off; keep `fly scale count 1` and do not add a second volume.
+
+Auto-stop is off because shares go to people with no account here. A stopped
+machine turns somebody else's link into a cold start. Set
+`auto_stop_machines = "stop"` if only you ever open this instance.
+
+#### Backups
+
+Fly volume snapshots are the zero-effort baseline and cover the machine dying.
+They do not cover deleting the volume, and they are not point-in-time. §6 covers
+Litestream, which streams the database to a bucket. Note it backs up the
+database only. Artifact bodies live on the same volume unless you set
+`BLOB_S3_BUCKET` (§7), so a restore from Litestream alone gives you every row
+and none of the files.
+
 ## 6. Backups (optional)
 
 `docker-compose.yml` includes a `replication` profile that runs Litestream
