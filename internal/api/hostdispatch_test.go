@@ -93,7 +93,13 @@ func TestHostDispatcherRefusesACollapsedBoundary(t *testing.T) {
 		// request to the app surface.
 		{"render origin with no scheme", "https://exhibit.example.com", "artifacts.example.com"},
 		{"app origin with no scheme", "exhibit.example.com", "https://artifacts.example.com"},
+		// Unset is the case a platform deployment actually hits: the committed
+		// fly.toml carries no origins, so a forgotten `fly secrets set` must
+		// stop the boot rather than fall back to localhost.
 		{"render origin unset", "https://exhibit.example.com", ""},
+		{"app origin unset", "", "https://artifacts.example.com"},
+		{"both unset", "", ""},
+		{"origin is only whitespace", "https://exhibit.example.com", "   "},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

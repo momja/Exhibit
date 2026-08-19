@@ -219,7 +219,14 @@ func main() {
 	// internal port for both hostnames, and then the Host header is the only
 	// thing left that can tell the two origins apart.
 	if api.SingleListenerFromEnv() {
-		h, err := api.NewHostDispatcher(router, router.RenderHandler(), appOrigin, renderOrigin)
+		// The raw environment, not the resolved values above. APP_ORIGIN and
+		// RENDER_ORIGIN default to localhost, which is never right behind a
+		// platform proxy, and an instance that booted on those defaults would
+		// answer every request with URLs nobody can reach while looking
+		// healthy. Passing the raw values makes an unset origin a startup
+		// failure instead.
+		h, err := api.NewHostDispatcher(router, router.RenderHandler(),
+			os.Getenv("APP_ORIGIN"), os.Getenv("RENDER_ORIGIN"))
 		if err != nil {
 			fatal("single listener", err)
 		}

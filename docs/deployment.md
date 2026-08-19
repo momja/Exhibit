@@ -565,33 +565,59 @@ server picks between them by `Host` (§5.1). Fly's proxy routes by port and
 cannot map two hostnames to two ports, which is the whole reason that flag
 exists.
 
-Pick your two hostnames first. They have to differ, and Exhibit exits at
-startup if they do not.
+The committed file carries nothing specific to any one deployment: no app name,
+no region, no hostnames. Pass the app name to every command with `-a`, and set
+everything else with `fly secrets set`. That way you deploy from a clean clone
+without editing a tracked file, and `git status` stays empty.
+
+Pick your two hostnames first. They have to differ, and the server exits at
+startup if they are missing or the same.
 
 ```bash
-fly apps create exhibit                # `fly launch` also works but rewrites fly.toml
-fly volumes create exhibit_data --size 1 --region sea --app exhibit
+APP=exhibit                            # your app name
+fly apps create "$APP"
+fly volumes create exhibit_data --size 1 --region sea -a "$APP"
 
-# edit fly.toml: app name, primary_region, APP_ORIGIN, RENDER_ORIGIN
-
-fly certs add exhibit.example.com      # the app
-fly certs add artifacts.example.com    # the renderer
+fly certs add exhibit.example.com   -a "$APP"    # the app
+fly certs add artifacts.example.com -a "$APP"    # the renderer
 # add the DNS records fly prints for each, then wait for both to go green:
-fly certs list
+fly certs list -a "$APP"
 
-fly secrets set AUTH_TOKEN="$(openssl rand -hex 32)"
-fly secrets set EXHIBIT_SECRET="$(openssl rand -hex 32)"
+fly secrets set -a "$APP" \
+  APP_ORIGIN="https://exhibit.example.com" \
+  RENDER_ORIGIN="https://artifacts.example.com" \
+  AUTH_TOKEN="$(openssl rand -hex 32)" \
+  EXHIBIT_SECRET="$(openssl rand -hex 32)"
 
-fly deploy
-fly scale count 1                      # confirm; never raise this
+fly deploy -a "$APP"
+fly scale count 1 -a "$APP"            # confirm; never raise this
 ```
 
 The first boot creates an `admin` account with a default password and logs a
 warning about it. Change it before you put anything in the library:
 
 ```bash
-fly ssh console -C "/server user passwd admin"
+fly ssh console -a "$APP" -C "/server user passwd admin"
 ```
+
+#### Why the origins are secrets
+
+They are not secret. `fly secrets set` is simply the only per-deployment
+mechanism Fly persists. `fly deploy -e APP_ORIGIN=...` applies to that one
+deploy, so the next `fly deploy` without the same flags drops it and the
+instance comes back up on its localhost defaults, serving links that point
+nowhere.
+
+To avoid that failure being quiet, `SINGLE_LISTENER` requires both origins to
+be set explicitly. Miss one and the machine refuses to boot, and the log says
+which:
+
+```
+level=ERROR msg="single listener" err="RENDER_ORIGIN: is not set"
+```
+
+Read them back any time with `fly secrets list` for the names, or
+`fly ssh console -C env` for the values.
 
 #### Set EXHIBIT_SECRET yourself
 
