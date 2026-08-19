@@ -377,6 +377,30 @@ type Store interface {
 	// caller adds: a disable a logged-in browser survives is not a disable.
 	SetUserDisabled(ctx context.Context, userID int64, disabled bool) error
 
+	// --- Per-owner entitlements (av-2p8z) ------------------------------
+	// What an owner is allowed, stored on their users row and read back with
+	// it (User.Entitlement). Only an admin sets these — an entitlement a
+	// person can raise on themselves is not a limit — which is why they are
+	// here, in the block of methods that act on somebody else's account, and
+	// not in the block below it.
+	//
+	// Nothing in this interface resolves an entitlement or refuses anything
+	// because of one. "What is this owner allowed" needs the instance's
+	// configured default as well as these rows, so it is one function in
+	// package api and gates ask that rather than reading these columns.
+
+	// SetEntitlement applies a partial change to one account's entitlement:
+	// an unset field in the patch is left alone, and a patch that clears the
+	// storage limit puts the account back on the instance default.
+	// ErrInvalidEntitlement for a limit that is not one; ErrNotFound for an
+	// account that does not exist.
+	SetEntitlement(ctx context.Context, userID int64, p EntitlementPatch) error
+	// ListEntitlementOverrides returns every account carrying an entitlement
+	// of its own — the drift surface. An entitlement an external system
+	// maintains can fall out of step with that system's view of reality, and
+	// a discrepancy nobody can list is one nobody can find.
+	ListEntitlementOverrides(ctx context.Context) ([]*User, error)
+
 	// --- A person's own account (av-4wyq, epic av-g2dx) -----------------
 	// The two above are an admin acting on somebody else. These two are an
 	// account acting on itself, and neither takes an id a request could

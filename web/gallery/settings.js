@@ -6,6 +6,11 @@
  *   SELF_ID           - the viewer's own account id, so the page can warn
  *                       before they switch themselves off
  *
+ * It also carries the entitlement editor (av-2p8z) — what an owner is allowed.
+ * That control lives on this page and on no other: /profile reaches your own
+ * account with a session as the whole authorization, and an entitlement a
+ * person can raise on themselves is not a limit.
+ *
  * Everything here goes through /api/admin/users, which is the single write
  * path and where the admin check actually lives (internal/api/admin.go). This
  * script guards nothing: it is a client, and hiding a button is a courtesy to
@@ -51,8 +56,11 @@
   }
 
   // One delegated listener for the whole table, so a row added by a reload
-  // needs no re-wiring and the actions stay declared in the markup.
-  document.querySelector('.settings-table').addEventListener('click', function(event) {
+  // needs no re-wiring and the actions stay declared in the markup. By id
+  // rather than by class: the entitlements card carries a second
+  // .settings-table, and "the first one on the page" is not a thing this
+  // listener should depend on.
+  document.getElementById('accounts').addEventListener('click', function(event) {
     const button = event.target.closest('button[data-action]');
     if (!button) return;
     const id = button.dataset.userId;
@@ -74,6 +82,10 @@
       patchUser(id, {disabled: false}, 'Enabling ' + name);
       return;
     }
+    if (button.dataset.action === 'entitlement') {
+      openEntitlement(button);
+      return;
+    }
     if (button.dataset.action === 'disable') {
       // The self-disable warning is the one thing this page confirms, because
       // it is the one action whose consequence lands on the person taking it
@@ -86,6 +98,56 @@
       if (!window.confirm(warning)) return;
       patchUser(id, {disabled: true}, 'Disabling ' + name);
     }
+  });
+
+  // --- entitlements (av-2p8z) -------------------------------------------
+  //
+  // One dialog for every row, filled from the row button's data- attributes
+  // and read back on save. It is the admin surface for what an owner is
+  // allowed, and it exists only here: /profile has no equivalent, because an
+  // entitlement a person can raise on themselves is not a limit.
+  //
+  // The storage field's empty state is a real value, not a blank. Empty sends
+  // `null`, which clears this account's own ceiling and puts it back on the
+  // instance default — which is what a downgrade is, and is why the request
+  // shape distinguishes an absent field from a null one at all.
+  const dialog = document.getElementById('entitlement-dialog');
+  const planInput = document.getElementById('entitlement-plan');
+  const storageInput = document.getElementById('entitlement-storage');
+  const refInput = document.getElementById('entitlement-ref');
+  let editing = null;
+
+  function openEntitlement(button) {
+    editing = {id: button.dataset.userId, name: button.dataset.userName};
+    document.getElementById('entitlement-who').textContent = editing.name;
+    planInput.value = button.dataset.plan || '';
+    storageInput.value = button.dataset.storageLimit || '';
+    refInput.value = button.dataset.ref || '';
+    dialog.showModal();
+  }
+
+  document.getElementById('entitlement-cancel').addEventListener('click', function() {
+    dialog.close();
+  });
+
+  document.getElementById('entitlement-save').addEventListener('click', function() {
+    if (!editing) return;
+    const raw = storageInput.value.trim();
+    // Nothing here is a guard — the server refuses a negative ceiling with a
+    // sentence of its own, and this file is a client. It is a courtesy, so
+    // the person typing finds out before a round trip.
+    if (raw !== '' && !(Number(raw) >= 0)) {
+      say('A storage limit is a number of bytes, or empty for the instance default.', true);
+      return;
+    }
+    const who = editing.name;
+    const id = editing.id;
+    dialog.close();
+    patchUser(id, {
+      plan: planInput.value.trim(),
+      storage_limit_bytes: raw === '' ? null : Number(raw),
+      entitlement_ref: refInput.value.trim()
+    }, 'Saving the entitlement for ' + who);
   });
 
   document.getElementById('create-user').addEventListener('click', async function() {

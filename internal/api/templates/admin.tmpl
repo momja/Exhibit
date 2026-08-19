@@ -35,8 +35,10 @@
 <div class="card">
   <h3 class="settings-h3">Accounts</h3>
   <div class="settings-table-wrap">
-  <table class="settings-table">
-    <thead><tr><th>Account</th><th>Sign-in</th><th>Role</th><th>Status</th><th class="settings-actions-col">Actions</th></tr></thead>
+  {{/* Named, because settings.js hangs one delegated listener on it and there
+       is now more than one .settings-table on this page. */}}
+  <table class="settings-table" id="accounts">
+    <thead><tr><th>Account</th><th>Sign-in</th><th>Role</th><th>Status</th><th>Entitlement</th><th class="settings-actions-col">Actions</th></tr></thead>
     <tbody>
     {{range .Users}}
     <tr data-user-id="{{.ID}}"{{if .Disabled}} class="is-disabled"{{end}}>
@@ -50,9 +52,20 @@
       <td>{{if eq .Kind "local"}}<i class="ph ph-key" aria-hidden="true"></i> Password{{else}}<i class="ph ph-shield-check" aria-hidden="true"></i> Identity provider{{end}}</td>
       <td>{{if .IsAdmin}}<span class="badge badge-admin">Admin</span>{{else}}Member{{end}}</td>
       <td>{{if .Disabled}}<span class="badge badge-off">Disabled</span>{{else}}Active{{end}}</td>
+      {{/* What this account is allowed (av-2p8z). The plan label is shown when
+           there is one and the *resolved* ceiling always, because "5 GiB"
+           without knowing whether it came from the row or from the instance
+           default answers half the question. The badge marks the half that
+           came from the row. */}}
+      <td class="settings-entitlement">
+        {{if .Entitlement.Plan}}<span class="badge">{{.Entitlement.Plan}}</span> {{end}}<span class="settings-limit">{{.StorageLimit}}</span>
+        {{if .Custom}}<span class="badge badge-custom" title="This account carries an entitlement of its own rather than the instance default">Custom</span>{{end}}
+        {{if .Entitlement.Ref}}<div class="muted text-sm settings-ref">{{.Entitlement.Ref}}</div>{{end}}
+      </td>
       <td class="settings-actions">
         {{if eq .Kind "local"}}<button type="button" class="btn btn-sec btn-sm" data-action="password" data-user-id="{{.ID}}" data-user-name="{{.Name}}"><i class="ph ph-key"></i> Reset password</button>{{end}}
         <button type="button" class="btn btn-sec btn-sm" data-action="role" data-user-id="{{.ID}}" data-user-name="{{.Name}}" data-admin="{{.IsAdmin}}">{{if .IsAdmin}}<i class="ph ph-arrow-down"></i> Demote{{else}}<i class="ph ph-arrow-up"></i> Make admin{{end}}</button>
+        <button type="button" class="btn btn-sec btn-sm" data-action="entitlement" data-user-id="{{.ID}}" data-user-name="{{.Name}}" data-plan="{{.Entitlement.Plan}}" data-ref="{{.Entitlement.Ref}}"{{with .Entitlement.StorageLimitBytes}} data-storage-limit="{{.}}"{{end}}><i class="ph ph-sliders"></i> Entitlement</button>
         {{if .Disabled}}<button type="button" class="btn btn-sec btn-sm" data-action="enable" data-user-id="{{.ID}}" data-user-name="{{.Name}}"><i class="ph ph-check"></i> Enable</button>{{else}}<button type="button" class="btn btn-danger btn-sm" data-action="disable" data-user-id="{{.ID}}" data-user-name="{{.Name}}"><i class="ph ph-prohibit"></i> Disable</button>{{end}}
       </td>
     </tr>
@@ -64,6 +77,51 @@
        so the page says what it actually does — otherwise "disable" reads as
        "prevent the next login" and the immediate sign-out is a surprise. */}}
   <p class="muted text-sm settings-note">Disabling an account signs it out everywhere immediately and refuses any further sign-in. Nothing is deleted — its library stays where it is, and enabling the account restores access.</p>
+</div>
+
+{{/* Entitlements (av-2p8z). Two things belong on this page and nowhere else.
+
+     Setting them: an entitlement a person can raise on themselves is not a
+     limit, so this is admin-only by the same rule that puts password resets
+     here, and /profile has no control for any of it.
+
+     Seeing the ones that differ: an entitlement maintained by an external
+     system can drift from that system's view of reality — a downgrade it
+     failed to deliver leaves somebody on a raised ceiling indefinitely.
+     Keeping them current is that system's job; a list nobody can produce is a
+     discrepancy nobody can find. */}}
+<div class="card">
+  <h3 class="settings-h3">Entitlements</h3>
+  {{if .Entitlements.Enforced}}
+  <p class="muted text-sm">Limits are switched on for this instance. An account with no entitlement of its own is on the default: <strong>{{.DefaultStorageLimit}}</strong>{{if .Entitlements.DefaultPlan}}, plan <strong>{{.Entitlements.DefaultPlan}}</strong>{{end}}.</p>
+  {{else}}
+  {{/* Said plainly rather than by hiding the controls. An entitlement set now
+       is real data that takes effect the moment limits are switched on, and
+       an admin who set one and saw nothing happen deserves the reason. */}}
+  <p class="muted text-sm">Limits are switched off for this instance, so every account is unlimited and nothing is refused. Entitlements set here are stored and take effect if limits are switched on (<code>ENTITLEMENTS_ENABLED</code>).</p>
+  {{end}}
+
+  <h4 class="settings-h4">Accounts on their own entitlement</h4>
+  {{if .Custom}}
+  <div class="settings-table-wrap">
+  <table class="settings-table">
+    <thead><tr><th>Account</th><th>Plan</th><th>Storage</th><th>Reference</th></tr></thead>
+    <tbody>
+    {{range .Custom}}
+    <tr>
+      <td><span class="settings-name">{{.Name}}</span></td>
+      <td>{{if .Entitlement.Plan}}{{.Entitlement.Plan}}{{else}}<span class="muted">—</span>{{end}}</td>
+      <td>{{if .Entitlement.StorageLimitBytes}}{{.StorageLimit}}{{else}}<span class="muted">instance default</span>{{end}}</td>
+      <td>{{if .Entitlement.Ref}}<code>{{.Entitlement.Ref}}</code>{{else}}<span class="muted">—</span>{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted text-sm settings-note">Everyone else is on the instance default. If something outside Exhibit maintains these, this list is where a change it failed to deliver shows up.</p>
+  {{else}}
+  <p class="muted text-sm">Every account is on the instance default. Nothing has been set by hand or by anything outside Exhibit.</p>
+  {{end}}
 </div>
 
 <div class="card">
@@ -81,6 +139,30 @@
     </div>
   </div>
 </div>
+
+{{/* One dialog reused by every row, filled from the row's data- attributes.
+     A dialog rather than the chained window.prompt()s the password reset uses:
+     three related values, one of which has a meaningful empty state ("put this
+     account back on the instance default"), are not three unrelated questions.
+     Native <dialog>, so the focus trap and the Escape key are the browser's. */}}
+<dialog id="entitlement-dialog" class="settings-dialog">
+  <form method="dialog" class="settings-form">
+    <h3 class="settings-h3">Entitlement for <span id="entitlement-who"></span></h3>
+    <label class="settings-label" for="entitlement-plan">Plan</label>
+    <input class="field" type="text" id="entitlement-plan" autocomplete="off" spellcheck="false" placeholder="A label — leave empty for the instance default">
+    <label class="settings-label" for="entitlement-storage">Storage limit (bytes)</label>
+    <input class="field" type="number" id="entitlement-storage" min="0" step="1" inputmode="numeric" placeholder="Leave empty for the instance default">
+    <span class="muted text-sm">Bytes, exactly — 5368709120 is 5 GiB. Empty puts this account back on the instance default; it does not make it unlimited.</span>
+    <label class="settings-label" for="entitlement-ref">External reference</label>
+    <input class="field" type="text" id="entitlement-ref" autocomplete="off" spellcheck="false" placeholder="Opaque — whatever your own system calls this account">
+    <span class="muted text-sm">Exhibit stores this and never reads it. It is here so it survives the system that wrote it.</span>
+    <div class="settings-foot">
+      <button class="btn btn-sec" type="button" id="entitlement-cancel">Cancel</button>
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="entitlement-save"><i class="ph ph-check"></i> Save entitlement</button>
+    </div>
+  </form>
+</dialog>
 
 <div id="admin-status" class="settings-status" hidden></div>
 </main>
