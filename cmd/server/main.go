@@ -115,6 +115,13 @@ func main() {
 		fatal("load server secret", err)
 	}
 	mockLLMURL := os.Getenv("MOCK_LLM_URL")
+	// Platform mode (av-siqf): AGENT_API_KEY unset is BYOK and exactly what
+	// every existing instance already does. A key with a missing or unknown
+	// provider fails here rather than at the first session.
+	platformAgentKey, err := api.PlatformKeyFromEnv()
+	if err != nil {
+		fatal("configure the platform agent key", err)
+	}
 	// Agent sessions authenticate with a per-session credential scoped to one
 	// artifact, never the service token (av-e0yj). One registry, shared: the
 	// manager issues from it, the API resolves and enforces against it.
@@ -130,6 +137,10 @@ func main() {
 			APIBaseURL:  appOrigin,
 			Credentials: agentCreds,
 			MockLLMURL:  mockLLMURL,
+			// In platform mode the model is not the user's to know, so Pi's
+			// own identifiers are stripped from the event stream and the
+			// persisted transcript too (av-siqf).
+			HideModelIdentity: platformAgentKey != nil,
 		}, st)
 		if err != nil {
 			fatal("init agent manager", err)
@@ -181,6 +192,7 @@ func main() {
 		AgentCredentials: agentCreds,
 		Secrets:          box,
 		MockEnabled:      mockLLMURL != "",
+		PlatformAgentKey: platformAgentKey,
 		Identity:         identity,
 		LocalCredential:  localCredential,
 		LocalUsers:       localUsers > 0,

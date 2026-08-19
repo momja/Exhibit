@@ -164,6 +164,69 @@ session needs:
 Supported providers: Anthropic, OpenAI, Google Gemini, OpenRouter, OpenCode
 Go, plus `exhibit-mock` when `MOCK_LLM_URL` is set.
 
+## Platform mode: the instance supplies the key (av-siqf)
+
+BYOK above is the self-hosted path and the default. Setting `AGENT_API_KEY`
+(with `AGENT_PROVIDER`, and optionally `AGENT_MODEL`) puts the instance in
+**platform mode**: every session runs on that one credential. It exists for a
+hosted deployment, where asking someone to open a provider account and paste a
+key before they can use the headline feature is the step that loses them.
+
+One variable chooses between two modes; a per-owner key does not take
+precedence over an instance-wide fallback. That shape reads like the flexible
+one and is worse in both directions — it silently mixes billing models, and it
+leaves a key field on a surface whose whole point is that nobody needs one.
+
+**Platform mode reports nothing: not the key, not the provider, not the
+model.** Someone using AI to build a tool does not need to know what is under
+the hood, and naming it invents a decision they cannot act on; anyone who wants
+that control self-hosts, where BYOK gives it to them in full. Concretely:
+
+- `agentSessionOpts` (`internal/api/agent.go`) resolves the platform key and
+  never reads `agent_keys` — an owner's stored key is neither read nor deleted,
+  so turning the variable off restores their BYOK session with that key intact.
+- `GET`/`PUT`/`DELETE /api/agent/key` all `404`: the resource does not exist.
+- The agent page renders no key button, no key modal, no provider `<select>`
+  and no model input — absent, not disabled — and its bootstrap sets
+  `BYOK = false` so the page never calls the key route.
+- Pi's own identifiers are stripped from the event stream and the persisted
+  transcript (below).
+- Availability is a separate, unchanged signal: a missing `pi` binary still
+  disables the surface in either mode.
+
+### What Pi emits, and what is filtered
+
+Every assistant message Pi emits carries the model's identity, and both of this
+service's publishing seams pass Pi's protocol through verbatim — the SSE
+broadcast and `agent_transcripts.messages`. Captured from a real
+`pi --mode rpc` turn (v0.84.1):
+
+```json
+{"type":"turn_end","message":{"role":"assistant","content":[…],
+ "api":"openai-completions","provider":"anthropic","model":"claude-sonnet-4-5",
+ "usage":{…},"stopReason":"toolUse"}}
+```
+
+It appears on `message_start`, `message_end`, `turn_end` and `agent_end`. So
+"the UI names no model" would have been a claim about one page while the
+network tab said otherwise. In platform mode `internal/agent/redact.go` strips
+`api`/`provider`/`model` from Pi's **message envelopes** — objects carrying a
+`role`, and nothing else, so a `model` field inside artifact data or a tool
+argument is left alone — at both seams. BYOK is unfiltered: there the
+identifiers describe a key the caller typed.
+
+The `usage` block beside them (token counts and cost) is deliberately kept: it
+names no model, and it is what metering will read (av-hyo6).
+
+### No spend cap
+
+Platform mode makes every session bill the instance's provider account with
+nothing bounding it — `internal/agent` reads no token usage off Pi's stream, so
+an instance can neither attribute spend to an owner nor stop a session that
+runs away. The startup log says so. Metering and a per-owner budget are
+av-hyo6; until they exist, do not put a platform-mode instance in front of
+untrusted signups.
+
 ## Sessions, streaming, transcripts
 
 - `POST /api/agent/sessions` (optional `artifact_id` scopes the session to an
@@ -255,6 +318,9 @@ capture leaves the sandbox only as data posted to that host.
 | `PI_BIN` | pi executable (default `pi`; agent surface disabled if missing) |
 | `EXHIBIT_SECRET` | optional server secret for key encryption (else `data/secret.key` is generated) |
 | `MOCK_LLM_URL` | dev/test only: enables the `exhibit-mock` provider pointing at `cmd/mockllm` |
+| `AGENT_API_KEY` | the instance's own provider key — set it to enable platform mode; unset is BYOK |
+| `AGENT_PROVIDER` | which provider that key is for; required with `AGENT_API_KEY`, and an unknown one fails at startup |
+| `AGENT_MODEL` | optional model for platform sessions; the operator's choice, never surfaced |
 
 `internal/mockllm` is a deterministic OpenAI-compatible chat-completions
 handler — scripted create / update / re-read tool calls, color transforms,
@@ -265,8 +331,10 @@ model that obeys an "also update artifact &lt;id&gt;" planted in untrusted data 
 so the whole pipeline is testable without real provider credentials.
 `cmd/mockllm` serves it as a standalone process for driving the surface by
 hand; Go tests mount `mockllm.Handler()` on an httptest server and spawn a
-real pi sidecar against it (`internal/api/agent_pipeline_test.go`, skipped
-when `pi` is not installed). The exhibit extension registers the provider only
+real pi sidecar against it (`internal/api/agent_pipeline_test.go` and
+`agent_platform_pipeline_test.go`, both skipped when `pi` is not installed).
+`exhibit-mock` is a valid `AGENT_PROVIDER`, so platform mode is exercised end
+to end with no real credential. The exhibit extension registers the provider only
 when `MOCK_LLM_URL` is set.
 
 ## Extraction plan (epic `Exh-i0ll`)

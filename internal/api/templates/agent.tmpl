@@ -24,7 +24,10 @@
 <header>
   <a href="{{.BackURL}}">←<span class="lbl"> Back</span></a>
   <h1><i class="ph ph-robot"></i> Agent</h1>
-  <button class="key-btn" id="key-btn" onclick="openKeyModal()"><i class="ph ph-key"></i> <span id="key-btn-label">API key</span></button>
+  {{/* Platform mode renders no key control at all (av-siqf) — not a disabled
+       one. The instance supplies the credential, and which provider and model
+       it runs is not something this page reports. */}}
+  {{if .BYOK}}<button class="key-btn" id="key-btn" onclick="openKeyModal()"><i class="ph ph-key"></i> <span id="key-btn-label">API key</span></button>{{end}}
 </header>
 {{if not .AgentEnabled}}<div class="banner-err">Agent support is disabled: the <code>pi</code> binary was not found on this server.</div>{{end}}
 <div class="pane-switch">
@@ -59,6 +62,7 @@
        hx-swap="innerHTML">{{template "agentPreview" .Preview}}</div>
 </div>
 
+{{if .BYOK}}
 <div id="key-modal" class="modal-overlay" hidden>
   <div class="modal" role="dialog" aria-modal="true">
     <h2>Agent API key</h2>
@@ -87,6 +91,7 @@
     </div>
   </div>
 </div>
+{{end}}
 <script>
 const TOKEN = {{.Token}};
 {{/* READ_ONLY and TOKEN are one decision, made server-side per request
@@ -98,6 +103,9 @@ const TOKEN = {{.Token}};
      template text for the boolean, matching the other bootstrap flags:
      html/template's JS escaper pads a {{value}} boolean with spaces. */ -}}
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
+{{/* BYOK false is platform mode (av-siqf): the key markup above is absent, so
+     agent.js must not reach for it or ask the key route about it. */ -}}
+const BYOK = {{if .BYOK}}true{{else}}false{{end}};
 let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 </script>
 <script src="/assets/gallery/api.js"></script>

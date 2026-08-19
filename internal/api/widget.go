@@ -204,6 +204,12 @@ func (ro *Router) widgetGenerateAvailability(r *http.Request) (bool, string) {
 	if ro.cfg.Agent == nil {
 		return false, "Agent support is off on this server (no pi binary), so widgets must be written by hand."
 	}
+	// Platform mode supplies the credential, so there is no key to be missing
+	// — and, more to the point, no way to add one: the reason below would
+	// point at a screen this instance does not render (av-siqf).
+	if ro.platformMode() {
+		return true, ""
+	}
 	k, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerIDFromCtx(r.Context()))
 	if err != nil || k == nil {
 		return false, "Add an agent API key to generate widgets."
