@@ -75,6 +75,9 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `BLOB_S3_ACCESS_KEY_ID` | *(unset)* | Access key. Leave both keys unset to use the ambient AWS credential chain (env vars, `~/.aws/credentials`, instance role) |
 | `BLOB_S3_SECRET_ACCESS_KEY` | *(unset)* | Secret key |
 | `BLOB_S3_PREFIX` | *(unset)* | Key prefix, if the bucket holds something else too |
+| `ENTITLEMENTS_ENABLED` | `false` | Whether per-owner limits are in use on this instance. Unset = off, and every account is unlimited exactly as before (§9). Accepts `true`/`1`/`yes`/`on` and their opposites; anything else is a **startup failure** rather than a guess, because guessing "off" here means no limits at all |
+| `ENTITLEMENTS_DEFAULT_STORAGE_BYTES` | *(unset)* | The storage ceiling for an account with no entitlement of its own, in bytes. **Required** when limits are on — the server refuses to start without it rather than boot with every account unlimited |
+| `ENTITLEMENTS_DEFAULT_PLAN` | *(unset)* | A label for accounts on that default. Display only; no limit is ever read out of a plan name |
 
 The four `PUBLIC_*` variables are read at startup and surfaced at
 `GET /api/settings/public`, which answers `{"name", "description"}` with no
@@ -646,3 +649,99 @@ instance, safe to run twice, and only ever replaces a recorded length with the
 length the bytes actually have. A blob it cannot read keeps the length already
 recorded for it and is reported on the line, so a backend hiccup cannot
 silently shrink somebody's total.
+
+## 9. What each account is allowed
+
+Every account carries an **entitlement**: a plan label, a storage limit, and an
+opaque reference for whatever outside Exhibit keeps track of it. All three are
+set by an admin on `/admin/users`, next to the password reset and the disable
+switch, and by nothing else — an entitlement a person can raise on themselves
+is not a limit, so `/profile` has no control for any of it.
+
+On a self-hosted instance this is the whole feature and it needs no external
+anything: a household or small-team instance can give one person a larger
+allowance than another, which is otherwise unaskable.
+
+**Limits are off unless you switch them on.** With `ENTITLEMENTS_ENABLED`
+unset — the default, and what every existing instance has — every account
+resolves to unlimited and nothing is ever refused. An upgrade must never put a
+ceiling in front of somebody who did not ask for one.
+
+Switching them on requires a default:
+
+```
+ENTITLEMENTS_ENABLED=true
+ENTITLEMENTS_DEFAULT_STORAGE_BYTES=5368709120     # 5 GiB
+ENTITLEMENTS_DEFAULT_PLAN=included                # optional label
+```
+
+**Turning the switch on without a default is a startup failure**, not a
+warning. The alternative is an instance that boots looking configured, on which
+every account that nobody has provisioned is unlimited — the same posture
+`LOGIN_USERNAME` without `LOGIN_PASSWORD_HASH` takes, and for the same reason:
+a half-configured gate should fail where you are watching rather than quietly
+not be a gate.
+
+**Nothing refuses anything yet.** There is no quota: the entitlement is
+recorded, resolvable and visible, and no write stops because of it. What
+switching limits on changes today is that the instance requires a default, and
+that the admin page states which of the two states it is in. The storage figure
+those limits will be compared against is the one in §8.
+
+### Setting them by hand
+
+An admin uses the **Entitlement** button on each row of `/admin/users`. The
+storage field is bytes exactly, and leaving it empty is a real answer: it
+removes this account's own ceiling and puts them back on the instance default.
+It does not make them unlimited — that is an instance-wide state, not something
+one account can be given.
+
+### Setting them from something else
+
+Whatever decides *why* an account is on a given plan lives outside Exhibit
+entirely. There is no integration to configure, no callback URL, and nothing in
+this repo that knows about any such system. What there is instead is the
+ordinary API:
+
+```
+curl -X PATCH https://exhibit.example.com/api/admin/users/7 \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"plan":"household","storage_limit_bytes":10737418240,"entitlement_ref":"acct-7"}'
+```
+
+That is the same route and the same credential the admin page uses — the single
+write path, with no second door cut for a machine. `GET /api/admin/users`
+returns these three fields in the same places, so reading an account, editing
+the object and sending it back does what it looks like it does. Three things
+about the shape are worth knowing:
+
+- **Every field is optional**, and one you leave out is left alone. A caller
+  that sends only `plan` does not reset a ceiling you raised by hand.
+- **`"storage_limit_bytes": null` clears** this account's own ceiling, putting
+  it back on the instance default. That is how a downgrade is expressed, and it
+  is deliberately different from leaving the field out.
+- **`entitlement_ref` is opaque.** Exhibit stores it and never reads it — no
+  parsing, no joins, no behaviour depends on its value. It is here rather than
+  only in your own system because it is durable with the account: the account
+  outlives that system being rebuilt, replaced, or dropped.
+
+### Seeing the ones that differ
+
+Anything maintaining these from outside can fall out of step with itself — a
+downgrade it failed to deliver leaves somebody on a raised ceiling
+indefinitely. Keeping them current is that system's job; seeing them is not, so
+the accounts carrying an entitlement of their own are listed on `/admin/users`,
+and over the API:
+
+```
+curl -H "Authorization: Bearer $AUTH_TOKEN" \
+  "https://exhibit.example.com/api/admin/users?entitlement=custom"
+```
+
+Everyone absent from that list is on the instance default.
+
+**Deleting an account removes its entitlement with it.** These are columns on
+the account's own row, so there is nothing left behind and nothing to clean up
+— and someone who signs in again afterwards arrives as a new account on the
+default, not on their old allowance.
