@@ -165,6 +165,12 @@ artifact_network_origins(
   source,                  -- provenance: user | legacy | runtime
   created_at, updated_at
 )
+-- what each stored blob weighs, and who references it (av-fw1b). The length
+-- is a fact about the bytes, so it carries no owner; ownership comes from the
+-- rows that name the blob, and a shared one is charged in full to each owner
+-- referencing it. An owner's total is the join, derived on read — there is no
+-- counter to drift.
+blob_sizes(blob_id, bytes, updated_at)
 collections(id, owner_id, name)
 artifact_collections(artifact_id, collection_id)
 tags(id, owner_id, name, color)  -- name unique per owner

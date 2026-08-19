@@ -23,12 +23,22 @@ import (
 // behaviour — the alternative is orphaned links to a library that no longer
 // exists — but it is the one consequence of this operation that lands on a
 // third party, so the number is surfaced instead of discovered.
+//
+// StorageBytes is here for a plainer reason (av-fw1b): it is the size of what
+// is about to be erased, and it is the same number /profile shows in ordinary
+// use. Nothing refuses on it.
 type AccountSummary struct {
 	Artifacts int64 `json:"artifacts"`
 	Shares    int64 `json:"shares"`
+	// StorageBytes is the account's total stored bytes — bodies and widgets
+	// today, and whatever else blob_references grows to name. Derived from
+	// the rows, so deleting the account takes it to zero by construction
+	// rather than by a decrement anybody has to remember.
+	StorageBytes int64 `json:"storage_bytes"`
 }
 
-// GetAccountSummary counts the owner's artifacts and the live shares over them.
+// GetAccountSummary counts the owner's artifacts, the live shares over them,
+// and the bytes they are holding.
 func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (AccountSummary, error) {
 	var sum AccountSummary
 	err := s.db.QueryRowContext(ctx, `
@@ -36,6 +46,10 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
                (SELECT COUNT(*) FROM shares
                  WHERE artifact_id IN (SELECT id FROM artifacts WHERE owner_id = ?1))`,
 		userID).Scan(&sum.Artifacts, &sum.Shares)
+	if err != nil {
+		return sum, err
+	}
+	sum.StorageBytes, err = s.StorageUsage(ctx, userID)
 	return sum, err
 }
 
@@ -68,6 +82,10 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 //     the triggers migration 010 installed.
 //   - `tags`, `collections`, `agent_keys` (owner_id) — no cascade reaches
 //     these, since nothing about an artifact owns them; deleted here.
+//   - `blob_sizes` (blob_id) — the recorded length of each blob the account's
+//     rows named, deleted last and only for ids no surviving row references
+//     (av-fw1b). Not owner-scoped: a length is a fact about bytes, and with
+//     refcounted shared assets the same id can be named by another owner.
 //   - `users` (id) — takes `sessions` by ON DELETE CASCADE, which is what
 //     signs the account out everywhere rather than only in the browser that
 //     asked, and takes every `artifact_state` row this user wrote through
@@ -125,6 +143,15 @@ func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string
 		if _, err := tx.ExecContext(ctx, stmt, userID); err != nil {
 			return nil, err
 		}
+	}
+
+	// The lengths recorded for those blobs, last, once every row that could
+	// have referenced them is gone — forgetBlobSizesTx keeps any id another
+	// owner still references, which is the whole reason it is a reference
+	// check rather than a delete by id (av-fw1b). Same argument as the ids
+	// themselves: after this commits nothing can name these rows again.
+	if err := forgetBlobSizesTx(ctx, tx, blobIDs); err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {

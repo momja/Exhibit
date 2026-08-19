@@ -68,6 +68,15 @@ var accountTables = map[string]accountTable{
 		"SELECT COUNT(*) FROM collections WHERE owner_id = ?1"},
 	"agent_keys": {reachExplicit, "the sealed BYO provider key, owner-scoped and reached by no cascade",
 		"SELECT COUNT(*) FROM agent_keys WHERE owner_id = ?1"},
+	// Not owner-scoped, and deliberately so (av-fw1b): a recorded length is a
+	// fact about bytes, and one blob id can be named by rows belonging to
+	// several owners once assets are shared (av-20fk). DeleteAccount collects
+	// the account's blob ids inside its transaction and drops the lengths of
+	// those that nothing references any more — which is why the residue is
+	// counted by blob id here rather than by user.
+	"blob_sizes": {reachExplicit,
+		"the recorded length of each blob the account's rows named, dropped for the ids left unreferenced",
+		"SELECT COUNT(*) FROM blob_sizes WHERE blob_id IN ('member-body', 'member-widget')"},
 
 	"artifact_tags": {reachCascade, "cascades from artifacts(id)",
 		"SELECT COUNT(*) FROM artifact_tags WHERE artifact_id = '" + deletedArtifact + "'"},
@@ -209,6 +218,10 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))
 	require.NoError(t, s.SetAgentKey(ctx, &AgentKey{OwnerID: member.ID, Provider: "anthropic", KeyCiphertext: "sealed"}))
 	require.NoError(t, s.SaveTranscript(ctx, member.ID, deletedArtifact, "sess-1", `[{"role":"user"}]`))
+	// The recorded lengths of the two blobs the artifact above names, so the
+	// blob_sizes residue is asserted against rows that were really there.
+	require.NoError(t, s.RecordBlobSize(ctx, "member-body", 4096))
+	require.NoError(t, s.RecordBlobSize(ctx, "member-widget", 512))
 
 	return accountFixture{s: s, admin: admin, member: member}
 }

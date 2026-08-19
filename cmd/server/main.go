@@ -16,6 +16,7 @@ import (
 	"github.com/momja/Exhibit/internal/api"
 	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/humanize"
 	"github.com/momja/Exhibit/internal/logging"
 	"github.com/momja/Exhibit/internal/secrets"
 	"github.com/momja/Exhibit/internal/store"
@@ -94,6 +95,16 @@ func main() {
 	// if this fails; it's an enhancement pass, not load-bearing for startup.
 	if err := st.BackfillSourceText(context.Background(), bl); err != nil {
 		slog.Warn("backfill artifact source text", slog.String("err", err.Error()))
+	}
+
+	// The same catch-up for storage accounting (av-fw1b): lengths are recorded
+	// when bytes are written, so a library that predates migration 021 would
+	// report 0 B until every artifact happened to be edited. Selects only
+	// blobs with no recorded length, so this is free on every start after the
+	// first. Non-fatal for the same reason as above — an unmeasured library
+	// under-reports a number nothing refuses on.
+	if err := st.BackfillBlobSizes(context.Background(), bl); err != nil {
+		slog.Warn("backfill blob sizes", slog.String("err", err.Error()))
 	}
 
 	// Agent support (Exh-yvhp): BYO keys are sealed with the server secret;
@@ -348,6 +359,8 @@ const usage = `subcommands:
   user passwd <name>     change an account's password, read from stdin
   user disable <name>    stop an account signing in, and sign it out everywhere
   user enable <name>     let a disabled account sign in again
+  storage usage          print stored bytes per owner, heaviest first
+  storage recompute      re-measure every stored blob and rewrite the recorded sizes
 `
 
 // runSubcommand dispatches the operator-facing commands. They are subcommands
@@ -360,6 +373,8 @@ func runSubcommand(args []string) {
 		hashPassword()
 	case "user":
 		userCommand(args[1:])
+	case "storage":
+		storageCommand(args[1:])
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		fatal("unknown argument", fmt.Errorf("%q", args[0]))
@@ -471,6 +486,81 @@ func userCommand(args []string) {
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		fatal("user", fmt.Errorf("unknown subcommand %q", args[0]))
+	}
+}
+
+// storageCommand is av-fw1b's operator surface: what is on this disk, and the
+// repair when the recorded numbers stop matching it.
+//
+// It is a subcommand rather than an API route for the same reason `user` is —
+// it is what somebody with shell access has — and because recompute reads
+// every stored byte, which is a shape that belongs in a command an operator
+// starts deliberately, not on a request path.
+func storageCommand(args []string) {
+	if len(args) == 0 {
+		fmt.Fprint(os.Stderr, usage)
+		fatal("storage", fmt.Errorf("needs a subcommand"))
+	}
+	logging.Configure(slog.LevelWarn)
+	dataDir := getenv("DATA_DIR", "./data")
+	st, err := store.OpenSQLite(dataDir + "/app.db")
+	if err != nil {
+		fatal("open store", err)
+	}
+	defer func() { _ = st.Close() }()
+	ctx := context.Background()
+
+	switch args[0] {
+	case "usage":
+		owners, err := st.ListStorageUsage(ctx)
+		if err != nil {
+			fatal("storage usage", err)
+		}
+		if len(owners) == 0 {
+			fmt.Fprintln(os.Stderr, "nothing stored")
+			return
+		}
+		for _, o := range owners {
+			fmt.Printf("owner %-6d %10s  %d blobs\n", o.OwnerID, humanize.Bytes(o.Bytes), o.Blobs)
+		}
+		// Counted over distinct blobs rather than by adding the lines above.
+		// A blob two owners reference is charged in full to each of them —
+		// which is right for "what is this owner holding" and wrong for "what
+		// is on this disk", and this line is the second question.
+		blobs, total, err := st.StoredBytes(ctx)
+		if err != nil {
+			fatal("storage usage", err)
+		}
+		fmt.Printf("%-12s %10s  %d blobs stored\n", "on disk", humanize.Bytes(total), blobs)
+	case "recompute":
+		// Every owner the schema can name, including owner 1 on a
+		// single-user instance, which has no users row to enumerate — so
+		// the owners come from what is stored, not from the directory.
+		owners, err := st.ListStorageOwners(ctx)
+		if err != nil {
+			fatal("storage recompute", err)
+		}
+		bl, err := blob.NewFSStore(dataDir + "/blobs")
+		if err != nil {
+			fatal("open blob store", err)
+		}
+		for _, ownerID := range owners {
+			res, err := st.RecomputeStorageUsage(ctx, ownerID, bl)
+			if err != nil {
+				fatal("storage recompute", err)
+			}
+			line := fmt.Sprintf("owner %-6d %10s  %d blobs measured", ownerID, humanize.Bytes(res.Bytes), res.Blobs)
+			if res.Unreadable > 0 {
+				// Named rather than folded into the count: these kept the
+				// size they already had, so the total below is only as
+				// correct as those older measurements.
+				line += fmt.Sprintf(", %d unreadable (size left as recorded)", res.Unreadable)
+			}
+			fmt.Println(line)
+		}
+	default:
+		fmt.Fprint(os.Stderr, usage)
+		fatal("storage", fmt.Errorf("unknown subcommand %q", args[0]))
 	}
 }
 
