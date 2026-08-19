@@ -1,6 +1,6 @@
 ---
 id: av-siqf
-status: open
+status: closed
 deps: []
 links: [av-fafu, av-99f4]
 created: 2026-08-18T05:37:03Z
@@ -60,3 +60,26 @@ That is a deliberate scope line, not an oversight: the configuration is useful o
 **2026-08-18T05:53:13Z**
 
 Platform mode reports nothing at all — not provider, not model. Someone using AI to build a tool does not need to know what is under the hood; a power user who wants that control self-hosts, where BYOK already provides it. Widened from 'status route omits the key hint' to 'the key resource and the whole agent-settings UI are absent'. Also flagged the real scope: the SSE stream is an unfiltered passthrough of Pi's protocol and transcripts persist its messages, so full abstraction depends on what Pi emits — verify before calling this done.
+
+**2026-08-18T18:26:20Z**
+
+Pi's protocol was checked, not assumed. A real `pi --mode rpc` turn (v0.84.1) emits
+`{"role":"assistant","api":"openai-completions","provider":…,"model":…}` on
+message_start, message_end, turn_end and agent_end, and the same envelope is what
+`agent_transcripts.messages` persists. Both seams were unfiltered, so the decision
+recorded here is to **filter**, not to accept: `internal/agent/redact.go` strips
+`api`/`provider`/`model` from Pi's message envelopes — objects carrying a `role`, so
+artifact data with a `model` field is untouched — at the broadcast seam and before
+SaveTranscript, and only in platform mode. BYOK streams are unchanged.
+
+Two things kept deliberately:
+- The `usage` block (tokens, cost). It names no model and is what av-hyo6's metering
+  will read; dropping it would cost a future feature to hide nothing.
+- The server-side `agent session started` log line still names provider and model.
+  That is the operator's own log, and the operator set both; the AC's "never in a log
+  line" is about the key *value*, which appears nowhere.
+
+Found only by running it in a browser, not by the unit tests: `POST /api/agent/sessions`
+returned `provider`/`model` in its JSON, and `send()` in agent.js gated on the module
+`keyConfigured` flag, which platform mode never set — the composer silently refused to
+send. Both fixed and pinned by tests.

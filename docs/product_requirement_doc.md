@@ -138,7 +138,10 @@ Blob.put(id, bytes)        Blob.get(id)
   to later server-side durability and availability options (libSQL/Turso, rqlite,
   Litestream all build on SQLite without a data-layer rewrite). Note this is distinct
   from cross-device state, which is already solved by storing state on the server (§5).
-- **Artifact bodies:** a blob interface, local filesystem now, S3-compatible later.
+- **Artifact bodies:** a blob interface with two implementations, chosen by
+  configuration (av-52ll) — the local filesystem, or an S3-compatible bucket.
+  Unset means filesystem, so the bucket is what a hosted or multi-machine
+  deployment opts into and costs a single-machine one nothing.
 
 ### 4.4 Schema (v1)
 
@@ -162,6 +165,12 @@ artifact_network_origins(
   source,                  -- provenance: user | legacy | runtime
   created_at, updated_at
 )
+-- what each stored blob weighs, and who references it (av-fw1b). The length
+-- is a fact about the bytes, so it carries no owner; ownership comes from the
+-- rows that name the blob, and a shared one is charged in full to each owner
+-- referencing it. An owner's total is the join, derived on read — there is no
+-- counter to drift.
+blob_sizes(blob_id, bytes, updated_at)
 collections(id, owner_id, name)
 artifact_collections(artifact_id, collection_id)
 tags(id, owner_id, name, color)  -- name unique per owner

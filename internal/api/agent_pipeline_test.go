@@ -137,7 +137,16 @@ func messageText(raw json.RawMessage) string {
 	return b.String()
 }
 
-func newPiHarness(t *testing.T) *piHarness {
+// newPiHarness wires the BYOK path: a key stored for the owner, exactly as a
+// self-hosted instance has.
+func newPiHarness(t *testing.T) *piHarness { return newPiHarnessMode(t, false) }
+
+// newPlatformPiHarness wires the same rig in platform mode (av-siqf): the
+// instance holds the credential, no agent_keys row is written, and the
+// manager strips Pi's model identifiers on the way out.
+func newPlatformPiHarness(t *testing.T) *piHarness { return newPiHarnessMode(t, true) }
+
+func newPiHarnessMode(t *testing.T, platform bool) *piHarness {
 	t.Helper()
 	piBin, err := exec.LookPath("pi")
 	if err != nil {
@@ -154,16 +163,25 @@ func newPiHarness(t *testing.T) *piHarness {
 
 	creds := agentscope.NewRegistry()
 	mgr, err := agent.New(agent.Config{
-		PiBin:       piBin,
-		WorkRoot:    t.TempDir(),
-		APIBaseURL:  app.URL,
-		Credentials: creds,
-		MockLLMURL:  llm.URL,
+		PiBin:             piBin,
+		WorkRoot:          t.TempDir(),
+		APIBaseURL:        app.URL,
+		Credentials:       creds,
+		MockLLMURL:        llm.URL,
+		HideModelIdentity: platform,
 	}, r.cfg.Store)
 	require.NoError(t, err)
 	r.cfg.Agent = mgr
 	r.cfg.AgentCredentials = creds
 	r.cfg.MockEnabled = true
+
+	if platform {
+		// No agent_keys row at all — the point of the mode.
+		r.cfg.PlatformAgentKey = &PlatformKey{
+			Provider: "exhibit-mock", Model: "exhibit-mock-1", APIKey: "platform-mock-key",
+		}
+		return &piHarness{router: r, llm: rec}
+	}
 
 	w := doJSON(t, r, "PUT", "/api/agent/key", map[string]string{
 		"provider": "exhibit-mock", "model": "exhibit-mock-1", "api_key": "mock-key",

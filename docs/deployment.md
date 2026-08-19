@@ -51,12 +51,15 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `AUTH_TOKEN` | `dev-token` | API bearer token — **change this** |
 | `APP_ORIGIN` | `http://localhost:8080` | Public URL of the gallery/API |
 | `RENDER_ORIGIN` | `http://localhost:8081` | Public URL of the artifact renderer (must differ from `APP_ORIGIN` — see [why](./architecture.md#4-trust-boundaries)) |
-| `DATA_DIR` | `./data` | Where the SQLite DB + blobs live |
+| `DATA_DIR` | `./data` | Where the SQLite DB lives, and the artifact bodies too unless `BLOB_S3_BUCKET` is set |
 | `ADDR` | `:8080` | App listen address |
 | `RENDER_ADDR` | `:8081` | Render listen address |
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
 | `PI_BIN` | `pi` | AI agent executable — unset/missing just disables that feature |
 | `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
+| `AGENT_API_KEY` | *(unset)* | The instance's **own** provider key for the AI agent. Unset = bring-your-own-key, the default and what every existing instance does. Set = platform mode; read [§4.1](#41-letting-the-instance-supply-the-agent-key-platform-mode) before you set it |
+| `AGENT_PROVIDER` | *(unset)* | Which provider `AGENT_API_KEY` belongs to — `anthropic`, `openai`, `google`, `openrouter`, `opencode-go`. **Required** when the key is set; missing or unrecognized is a startup failure, not a surprise at the first session |
+| `AGENT_MODEL` | *(unset)* | Model for platform-mode sessions. Optional — empty leaves it to the provider's default. Your choice, and never shown to users |
 | `LOGIN_USERNAME` | *(unset)* | Names an account for the bootstrap / break-glass login — how you get in on an empty instance, or after losing a password. Accounts themselves are created with the `user add` subcommand, not here; see [§3.2](#32-log-in-with-a-username-and-password) |
 | `LOGIN_PASSWORD_HASH` | *(unset)* | The **bcrypt hash** of that password, not the password. Produce it with the `hash-password` subcommand. Set with `LOGIN_USERNAME`; it stays accepted for that account for as long as both are set (§3.2) |
 | `OIDC_ISSUER` | *(unset)* | Identity provider to delegate login to. Unset = no OIDC |
@@ -66,6 +69,12 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `PUBLIC_INSTANCE_NAME` | *(unset)* | What this instance calls itself |
 | `PUBLIC_INSTANCE_DESCRIPTION` | *(unset)* | One line about it |
 | `PUBLIC_OWNER_ID` | `1` | Whose library the instance publishes — every artifact query filters on an owner, so a public instance has to name one. `1` is the owner a single-user library is already filed under |
+| `BLOB_S3_BUCKET` | *(unset)* | Store artifact bodies in this S3-compatible bucket instead of on disk. Unset = filesystem under `DATA_DIR`, exactly as before (§7) |
+| `BLOB_S3_ENDPOINT` | AWS S3 | The bucket's API host, with an optional scheme: `http://localhost:9000`, `https://minio.example.com`, or a bare host. **Without a scheme, TLS is assumed** |
+| `BLOB_S3_REGION` | *(unset)* | Region, when your provider needs one. MinIO does not |
+| `BLOB_S3_ACCESS_KEY_ID` | *(unset)* | Access key. Leave both keys unset to use the ambient AWS credential chain (env vars, `~/.aws/credentials`, instance role) |
+| `BLOB_S3_SECRET_ACCESS_KEY` | *(unset)* | Secret key |
+| `BLOB_S3_PREFIX` | *(unset)* | Key prefix, if the bucket holds something else too |
 
 The four `PUBLIC_*` variables are read at startup and surfaced at
 `GET /api/settings/public`, which answers `{"name", "description"}` with no
@@ -449,7 +458,49 @@ surface.
 on the disabled control rather than as a surprise after the confirmation. If
 that account is the one you want gone, promote somebody else first.
 
-## 4. No AI agent features
+## 4. AI agent (optional)
+
+Nothing to configure for the default: if `pi` is on `PATH` the agent surface
+works, and each user brings their own provider key, entered in the UI and
+encrypted at rest under `EXHIBIT_SECRET`. That is the right shape for a
+self-hosted library, where the operator is the user and the key is theirs.
+
+### 4.1 Letting the instance supply the agent key (platform mode)
+
+Set `AGENT_API_KEY` and `AGENT_PROVIDER` and the instance runs *every* agent
+session on that one credential:
+
+```bash
+AGENT_API_KEY=sk-ant-...        # your provider key
+AGENT_PROVIDER=anthropic        # required; unknown values fail at startup
+AGENT_MODEL=claude-sonnet-4-5   # optional
+```
+
+This is for a deployment where the people using it are not the people paying
+for it. Nobody is asked for a key, because there is nowhere to put one: the
+key screen is gone, the per-owner key API answers `404`, and neither the
+provider nor the model is reported anywhere — not in a response, not in the
+page, not in the agent's event stream. If you want to *choose* your model, do
+not use this mode; bring your own key, which gives you that choice in full.
+
+Existing per-user keys are left alone: they are not read while platform mode is
+on, not deleted, and unsetting the variable restores each user's own key exactly
+as it was.
+
+> [!WARNING]
+> **There is no spend cap.** Every agent session bills your provider account,
+> and Exhibit currently measures nothing: it cannot attribute a session's cost
+> to a user, and it cannot stop one that runs away. Usage billing meters after
+> the fact, so a bad day is money already spent.
+>
+> Only enable this on an instance whose users you control. Do not put it in
+> front of open signups, or behind a public-mode gallery, until per-owner
+> metering and budgets exist.
+
+The startup log repeats this warning so the instance says it out loud every
+time it boots.
+
+### 4.2 No AI agent features
 
 Nothing to configure — if `pi` isn't on `PATH`, the agent surface disables itself
 automatically. To shrink the image too, drop the AI stuff at build time by
@@ -481,8 +532,117 @@ included) and `LITESTREAM_ACCESS_KEY_ID`/`LITESTREAM_SECRET_ACCESS_KEY`/
 `LITESTREAM_BUCKET_URL`. Skip this to start — plain SQLite on a mounted volume
 is fine until you need it.
 
+> [!IMPORTANT]
+> **Litestream backs up the database, and nothing else.** It streams the SQLite
+> WAL, which holds your titles, tags, collections, shares, state and the *ids*
+> of your artifact bodies — not the bodies. Restoring from Litestream alone
+> gives you a library whose every row survives and whose files do not, which is
+> not a recovered library. Back up your blobs too: the `blobs/` directory under
+> `DATA_DIR`, or (if you moved them to a bucket, §7) that bucket.
+
+## 7. Where artifact bodies live
+
+By default, on disk: `DATA_DIR/blobs`, one file per artifact body and one more
+per gallery widget. Nothing to configure, and this is the right answer for a
+single machine.
+
+Set `BLOB_S3_BUCKET` and they go to an S3-compatible bucket instead. That is
+worth doing when the instance is not one machine — a container with no durable
+volume, more than one replica, or a deploy that would otherwise be a volume
+migration — and when you would rather back up one bucket than a bucket and a
+directory (see the note in §6). Unset, none of this exists: no bucket, no
+credential, no behaviour different from before the option was added.
+
+```bash
+BLOB_S3_BUCKET=exhibit
+BLOB_S3_ENDPOINT=http://minio:9000     # omit for AWS S3; no scheme means https
+BLOB_S3_ACCESS_KEY_ID=...
+BLOB_S3_SECRET_ACCESS_KEY=...
+```
+
+The Compose file's `replication-local` profile runs MinIO, which is the easiest
+way to try this locally. Start MinIO and create the bucket *before* the app —
+the app verifies the bucket at startup and exits if it cannot reach it, so
+bringing both up together races MinIO's boot:
+
+```bash
+docker compose --profile replication-local up -d minio
+# create the bucket, in MinIO's console at http://localhost:9001 or with mc
+docker compose up -d app
+```
+
+Any S3-compatible provider works; nothing AWS-specific is used.
+
+Notes:
+
+- **The bucket must already exist.** The service checks it at startup and
+  refuses to start if it cannot reach it, rather than discovering the problem
+  when someone's first upload fails. The check is a `HEAD` on the bucket, so the
+  credential needs to be allowed that as well as get/put/delete on objects.
+- **Leave both key variables unset** to use the ambient AWS credential chain
+  (`AWS_*` environment variables, `~/.aws/credentials`, an instance role) —
+  which is how a deployment with a role attached should be configured.
+- **Set the bucket, or set none of these.** Any other `BLOB_S3_*` variable
+  without `BLOB_S3_BUCKET` is refused at startup rather than quietly read as
+  "filesystem, then" — otherwise a typo in the bucket name would put your
+  artifact bodies on local disk while you believed they were in the bucket.
+- **`BLOB_S3_ENDPOINT` is a host, not a URL with a path.** A scheme is allowed
+  and selects TLS; a path is refused, because the SDK addresses buckets from the
+  host and would silently ignore it.
+- **`BLOB_S3_PREFIX`** namespaces the keys if the bucket holds anything else,
+  such as your Litestream backups.
+- **There is no migration between the two.** Switching an existing instance to a
+  bucket means copying `DATA_DIR/blobs` into it first (`mc mirror`, `aws s3
+  sync`, or `rclone`); the filenames are the keys, so a straight copy is all it
+  takes. Artifacts whose bodies did not come along will render as "artifact body
+  not found".
+
 ---
 
 More detail: [architecture.md](./architecture.md) (why two origins),
 [security.md](./security.md) (CSP/sandbox policy), [agent.md](./agent.md) (the
 AI agent sidecar).
+
+## 8. What is using the disk
+
+Exhibit records how many bytes each stored blob is when it writes it, so
+"what is actually using my disk" has an answer that does not involve
+`du` and does not involve guessing whose library a file belongs to:
+
+```
+docker compose exec app /server storage usage
+```
+
+```
+owner 1        41.3 MiB  128 blobs
+owner 2         2.1 MiB  9 blobs
+on disk        43.0 MiB  135 blobs stored
+```
+
+Each person also sees their own figure on `/profile`. Nothing on the instance
+refuses anything because of it — there is no quota, and uploads do not stop.
+
+The last line is not the sum of the ones above it, and the gap is deliberate.
+A file two people's artifacts share is counted in full against each of them —
+that is what each would have to store on their own — while the disk holds it
+once. Per-owner figures answer "what is this person holding"; `on disk`
+answers "what is on this volume".
+
+**Upgrading an existing instance needs no action.** The first start after the
+upgrade measures the files already stored and records their lengths, logging
+`backfilled blob sizes` when it does. It reads each file once, so a large
+library makes that start slower; every later start skips it entirely.
+
+If the numbers look wrong — a crash between writing a file and recording its
+length, a restore from a backup, a file replaced by hand — re-measure them:
+
+```
+docker compose exec app /server storage recompute
+```
+
+That reads every stored blob, so it is a command you run deliberately rather
+than something the server does on a timer. It is safe to run on a live
+instance, safe to run twice, and only ever replaces a recorded length with the
+length the bytes actually have. A blob it cannot read keeps the length already
+recorded for it and is reported on the line, so a backend hiccup cannot
+silently shrink somebody's total.

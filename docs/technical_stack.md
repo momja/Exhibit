@@ -19,7 +19,8 @@ safety" (§12).
 | SQLite driver | `modernc.org/sqlite` (pure Go, no CGO) | `mattn/go-sqlite3` (CGO) |
 | Search | SQLite FTS5 | Bleve / external (avoid) |
 | Migrations | `goose` | `golang-migrate` |
-| Blob store | Local FS behind interface → S3/MinIO later | — |
+| Blob store | Local FS **or** S3-compatible bucket behind the `Blob` interface, selected by config (§3) | — |
+| S3 client | `minio/minio-go/v7` | AWS SDK v2 (more modules, AWS-shaped) |
 | Source view/edit | **CodeMirror 6** | Monaco (heavier) |
 | Artifact renderer | Sandboxed `<iframe>` + per-artifact CSP | — |
 | Tier-2 transpile | Babel standalone (in-iframe) → `esbuild` later | SWC |
@@ -68,10 +69,33 @@ search box query matches any of the three.
 **Migrations: `goose`.** Embed migration files in the binary (`go:embed`) and run them on
 startup so a fresh container self-initializes.
 
-**Blob store: filesystem behind the `Blob` interface now.** Artifact bodies are written
-to a mounted volume; later, an S3-compatible backend (AWS SDK v2 or `minio-go`) drops in
-behind the same interface. For self-hosters who want object storage, a MinIO container is
-the natural local S3 (offer it as a Compose profile, §12).
+**Blob store: two implementations behind the `Blob` interface, chosen by
+configuration (av-52ll).** Artifact bodies go either to a mounted volume
+(`blob.FSStore`, the default) or to an S3-compatible bucket (`blob.S3Store`).
+`BLOB_S3_BUCKET` is the selector and unset is the filesystem, in the
+`OIDC_ISSUER` shape: absent means the feature does not exist, and a self-hoster
+gains no required configuration. For self-hosters who *do* want object storage,
+the MinIO container in the Compose file (§12) is the natural local S3, and is
+also what the suite is tested against.
+
+**S3 client: `minio-go`, not the AWS SDK.** The target is S3-*compatible* rather
+than AWS — MinIO is the reference — and minio-go is the client shaped for that:
+one module, an endpoint as a first-class parameter, path-style addressing
+handled for you. AWS SDK v2 would have worked and costs five modules plus
+`BaseEndpoint`/`UsePathStyle` ceremony to reach the same place, which is the
+wrong trade for a service whose whole pitch is one small image. No AWS-specific
+feature is used, so a swap stays a change inside `internal/blob`.
+
+Three properties the implementation must not lose, all pinned by the shared
+contract suite that runs against **both** backends: **the backend buffers no
+more than one 5 MiB part** in either direction (scope matters — callers above
+`Blob` still `io.ReadAll` a body, so this is a promise about the storage layer
+and not about the service); **a missing blob fails at `Get`**, forced by a
+one-byte read rather than a `Stat` that would cost a second round trip on every
+read; and **`Delete` does no existence check**, the interface's idempotent
+contract existing precisely because `DeleteObject` already succeeds for a
+missing key. `architecture.md` §3.3 carries the reasoning, including why a
+partially-read reader is deliberately treated as unknown-length.
 
 WAL mode on from day one (`PRAGMA journal_mode=WAL`) — better concurrency and the
 prerequisite for Litestream.

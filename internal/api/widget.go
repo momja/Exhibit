@@ -111,7 +111,7 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 	if blobID == "" {
 		blobID = uuid.New().String()
 	}
-	if err := ro.cfg.Blob.Put(r.Context(), blobID, bytes.NewReader([]byte(req.Body))); err != nil {
+	if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader([]byte(req.Body))); err != nil {
 		serverError(w, r, "store widget body", err)
 		return
 	}
@@ -204,6 +204,12 @@ func (ro *Router) widgetGenerateAvailability(r *http.Request) (bool, string) {
 	if ro.cfg.Agent == nil {
 		return false, "Agent support is off on this server (no pi binary), so widgets must be written by hand."
 	}
+	// Platform mode supplies the credential, so there is no key to be missing
+	// — and, more to the point, no way to add one: the reason below would
+	// point at a screen this instance does not render (av-siqf).
+	if ro.platformMode() {
+		return true, ""
+	}
 	k, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerIDFromCtx(r.Context()))
 	if err != nil || k == nil {
 		return false, "Add an agent API key to generate widgets."
@@ -238,7 +244,7 @@ func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.InfoContext(r.Context(), "widget removed", slog.String("artifact_id", id))
-		if err := ro.cfg.Blob.Delete(r.Context(), a.WidgetBlobID); err != nil {
+		if err := deleteBlobs(r.Context(), ro.cfg.Store, ro.cfg.Blob, []string{a.WidgetBlobID}); err != nil {
 			serverError(w, r, "delete widget blob", err)
 			return
 		}

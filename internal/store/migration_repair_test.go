@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"testing"
 
@@ -39,6 +40,30 @@ func currentVersion(t *testing.T, s *SQLiteStore) int64 {
 	v, err := goose.GetDBVersion(s.db)
 	require.NoError(t, err)
 	return v
+}
+
+// headVersion is the highest migration this repo defines, read from the
+// embedded files rather than written down here.
+//
+// The assertions below are about *reaching head* — that a repair heals a
+// damaged ledger and then gets out of the way — and not about which number
+// head happens to be this month. Hard-coding it made every new migration fail
+// four unrelated tests and taught whoever hit that to edit a number in a file
+// about migration collisions, which is the last place a numbering change
+// should be routine.
+func headVersion(t *testing.T) int64 {
+	t.Helper()
+	entries, err := migrationsFS.ReadDir("migrations")
+	require.NoError(t, err)
+	var head int64
+	for _, e := range entries {
+		var v int64
+		if _, err := fmt.Sscanf(e.Name(), "%d_", &v); err == nil && v > head {
+			head = v
+		}
+	}
+	require.NotZero(t, head, "no numbered migrations found")
+	return head
 }
 
 // collidedDatabase is the state production reached: version 13 was
@@ -121,7 +146,7 @@ func TestMigration13RewindHappensOnce(t *testing.T) {
 	collided, err := hasReusedVersion13(context.Background(), s.db)
 	require.NoError(t, err)
 	assert.False(t, collided, "the second open sees an ordinary database")
-	assert.Equal(t, int64(18), currentVersion(t, s))
+	assert.Equal(t, headVersion(t), currentVersion(t, s))
 
 	var approved int
 	require.NoError(t, s.db.QueryRow(
@@ -167,7 +192,7 @@ func TestMigration13RewindSkipsPostMergeDatabases(t *testing.T) {
 	require.NoError(t, s.db.QueryRowContext(ctx,
 		`SELECT count(*) FROM goose_db_version WHERE version_id = 13`).Scan(&recorded))
 	assert.Equal(t, 1, recorded, "the version-13 row stays applied")
-	assert.Equal(t, int64(18), currentVersion(t, s), "17 and 18 apply on top")
+	assert.Equal(t, headVersion(t), currentVersion(t, s), "17 and 18 apply on top, and every migration after them")
 
 	present, err := hasColumnDB(ctx, s.db, "artifacts", "links_approved")
 	require.NoError(t, err)
@@ -196,7 +221,7 @@ func TestMigrationsReachHeadWithoutCollision(t *testing.T) {
 			require.NoError(t, err)
 			t.Cleanup(func() { s.Close() })
 
-			assert.Equal(t, int64(18), currentVersion(t, s))
+			assert.Equal(t, headVersion(t), currentVersion(t, s))
 			present, err := hasColumnDB(context.Background(), s.db, "artifacts", "links_approved")
 			require.NoError(t, err)
 			assert.True(t, present)
@@ -302,7 +327,7 @@ func TestMigration13RewindSurvivesConcurrentRepairs(t *testing.T) {
 	users, err := hasTable(context.Background(), s.db, "users")
 	require.NoError(t, err)
 	assert.True(t, users)
-	assert.Equal(t, int64(18), currentVersion(t, s))
+	assert.Equal(t, headVersion(t), currentVersion(t, s))
 	var approved int
 	require.NoError(t, s.db.QueryRowContext(context.Background(),
 		`SELECT links_approved FROM artifacts WHERE id = 'approved'`).Scan(&approved))

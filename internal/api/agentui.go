@@ -23,8 +23,19 @@ type agentPageData struct {
 	ArtifactJSON template.JS
 	MockEnabled  bool
 	AgentEnabled bool
-	BackURL      string
-	Preview      agentPreviewData
+	// BYOK renders the key button and the key modal. False is platform mode
+	// (av-siqf): the instance supplies the credential, so the page carries no
+	// key control, no provider select and no model input — absent rather than
+	// disabled, since a disabled provider picker still names the providers and
+	// still poses a question the user cannot answer.
+	//
+	// It is deliberately not the same signal as AgentEnabled, which reports
+	// whether pi exists at all: an instance can have the agent disabled in
+	// either mode, and a platform instance with no pi binary must still show
+	// the banner rather than a key prompt that would fix nothing.
+	BYOK    bool
+	BackURL string
+	Preview agentPreviewData
 }
 
 // agentPreviewData feeds the "agentPreview" partial - the preview pane's
@@ -142,6 +153,7 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 		ArtifactJSON:    template.JS(artifactJSON),
 		MockEnabled:     ro.cfg.MockEnabled,
 		AgentEnabled:    ro.cfg.Agent != nil,
+		BYOK:            !ro.platformMode(),
 		BackURL:         backURL,
 		Preview:         ro.newAgentPreviewData(r, artifact),
 	})

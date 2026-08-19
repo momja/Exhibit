@@ -378,15 +378,124 @@ carrying a principal is av-c5aq.
   whitespace-separated token is emitted as a quoted phrase with a trailing
   `*`, so prefix matching is preserved while `<script>`, `a:b`, or a stray
   quote search for themselves instead of failing the query.
-- **Bodies** → filesystem now, S3-compatible later — same `Blob` interface. An
-  artifact's **widget** (av-fafu) is a body too, so it lives here as a second blob
+- **Bodies** → **filesystem or an S3-compatible bucket, selected by
+  configuration** (av-52ll). Both implement the same three methods and nothing
+  above the interface can tell which is behind it — that substitutability *is*
+  the claim, and it is enforced by one contract test suite in `internal/blob`
+  that both must pass, rather than by two sets of tests that happen to agree.
+  `BLOB_S3_BUCKET` is the selector: unset is `FSStore` under `DATA_DIR`,
+  byte-identical to before the bucket existed, so a self-hoster acquires no new
+  required configuration. Set, `blob.S3Store` addresses the bucket over the
+  MinIO SDK — S3-*compatible* rather than AWS, with the endpoint as
+  configuration and no vendor feature, bucket layout or lifecycle rule assumed.
+  The bucket is what a hosted instance needs and what a self-hosted one's backup
+  story is missing: the Litestream profile streams the SQLite WAL and *only*
+  that, so a restore from it recovers every row and none of the bytes those rows
+  point at.
+
+  Three properties are load-bearing and easy to lose.
+
+  **The backend never buffers a whole blob.** A body that fits in one part is a
+  single streamed PUT with a real `Content-Length`, a larger one of known length
+  is read at offsets and allocates nothing, and only an unknown length has to be
+  discovered by filling a buffer — bounded at the 5 MiB protocol minimum, so a
+  vendored-wasm snapshot is never a per-request allocation the size of itself.
+  Note the scope: this is a property of `internal/blob`, *not* of the service.
+  Callers above the interface still materialise bodies whole — every read site
+  is an `io.ReadAll` and every write site a `bytes.Reader` over a string already
+  in hand — so a 16 MB snapshot does exist in memory during a render. Making
+  *that* true end to end is a change at those call sites and a separate piece of
+  work; what this buys is that the storage layer adds nothing on top of it.
+  The subtlety worth knowing about is that the offset path addresses parts from
+  zero and ignores the reader's position, so a *partially read* reader is
+  reported as unknown-length rather than sized: the alternative uploads the
+  object's first n bytes under the guise of its last n, at the right length and
+  with no error anywhere.
+
+  **A missing blob fails at `Get`, not mid-read.** The SDK's handle is lazy, and
+  a caller that has already begun writing a 200 cannot go back and answer 404 —
+  which is exactly what the render surface does with this error. `Get` therefore
+  forces the request before returning, by reading one byte and putting it back
+  in front of the stream rather than by calling the handle's `Stat`: `Stat`
+  issues a *separate* HEAD, so it would make every blob read two round trips (a
+  gallery of forty widget tiles, forty extra) and still leave a window in which
+  an object deleted between the two failed mid-200.
+
+  **`Delete` performs no existence check.** The idempotent contract on the
+  interface exists precisely because `DeleteObject` already answers success for
+  a key that was never there, so a `HEAD` in front of it would pay a round trip
+  to manufacture a failure no caller wants.
+
+  An artifact's **widget** (av-fafu) is a body too, so it lives here as a second blob
   with only its id (`artifacts.widget_blob_id`, empty for "no widget") on the row.
   The id is minted once and reused on every save, keeping the widget's render URL —
   which gallery cards embed — stable across edits.
 
+- **Storage accounting** → `blob_sizes` (a blob's length) plus the
+  `blob_references` view (which owner's rows name which blob), migration 021,
+  av-fw1b. It is the first byte count anywhere in the schema: before it the only
+  way to answer "how much is this owner holding" was to stat the blob directory,
+  which knows nothing about owners and, on an object-store backend (av-52ll),
+  is a paginated network crawl.
+
+  Three decisions, in the order they matter.
+
+  **A length is recorded where the bytes are written**, by the funnel every
+  `Blob.Put` call goes through (`internal/api/blobwrite.go`, a counting reader
+  around the write). Not by changing `Blob.Put`'s signature — that interface is
+  the seam the object-store backend drops in behind, and a size out-parameter on
+  it would be a thing every implementation has to get right for one caller's
+  benefit. A test walks the package's AST and fails on a `Blob.Put` outside the
+  funnel, because a missing length is invisible: it under-reports one owner
+  until somebody runs a recompute they have no reason to run.
+
+  **The total is derived, not counted.** An owner's bytes are the join of
+  `blob_sizes` to `blob_references`, so there is no counter for a caller to
+  forget to decrement — deleting an artifact stops its bytes being charged in
+  the same statement that deletes it, and `DELETE /api/account` reaches zero by
+  construction. The view is also the extension point: when av-20fk's refcounted
+  `artifact_assets` land, a migration replaces it with one that unions the asset
+  references in, and the usage query, the recompute pass and the prune all pick
+  them up unchanged, because none of them knows what a reference is made of.
+
+  **A shared blob is charged at full size to every referencing owner**, and once
+  to each of them (the readers take `DISTINCT blob_id` per owner — the charge is
+  deduplicated *within* an owner and never *across* owners). Refcounted assets
+  make this a real fork rather than a detail, and the alternative — dividing a
+  blob's size among its referencing owners — was rejected on two grounds: it is
+  gameable, since an owner could shrink their total by uploading what another
+  tenant already has, and it is unstable, since one owner's number would move
+  because a stranger deleted something. Full-size-per-owner is also simply what
+  each of them would have to store alone. Crucially it is a property of the
+  query rather than of whoever calls it: there is no way to ask for the other
+  answer.
+
+  **And it is correctable.** `RecomputeStorageUsage` re-measures every blob an
+  owner references and rewrites the recorded lengths — idempotent, and the only
+  accounting path that touches the blob store, which is why it is an operator
+  command (`server storage recompute`) rather than anything on a request path.
+  A blob it cannot read keeps the length it already had and is reported as
+  unreadable, because treating an unreadable blob as zero would let one
+  transient backend error silently shrink somebody's total. And it writes each
+  length only if the row still says what it said before the measurement began:
+  an edit landing in that gap has recorded the *new* body's length, and an
+  unconditional write would replace it with the length of a body that no longer
+  exists — a wrong number that would then persist, since nothing re-measures on
+  its own. A repair pass never overwrites something fresher than itself.
+
+  The same measurement, run for a different reason, is the upgrade path:
+  `BackfillBlobSizes` runs at startup over blobs with no recorded length, so a
+  library that predates migration 021 does not report `0 B` until every
+  artifact happens to be edited. It is the shape `BackfillSourceText` already
+  established for migration 010's gap — a startup pass, because the blob store
+  is not reachable from SQL — and it is free on every start after the first.
+
+  Nothing here refuses anything. The number is read by `/profile` and the CLI
+  and by nothing that can say no; limits over it are av-10bw.
+
 Because handlers never touch SQLite or the filesystem directly, swapping the metadata
-engine (libSQL/Turso) or the blob backend (S3/MinIO) is a backend implementation change
-behind a stable interface.
+engine (libSQL/Turso) is a backend implementation change behind a stable interface —
+and the blob backend already is one.
 
 ### 3.4 Ingest scanner
 
@@ -642,6 +751,26 @@ absent the surface degrades to disabled; nothing else changes.
   encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
   handed to the subprocess only through its (minimal, built-from-scratch)
   environment. Reads return masked hints; page JS never sees the key again.
+- **Or the instance's own key (av-siqf).** `AGENT_API_KEY` puts the instance
+  in *platform mode*: `agentSessionOpts` — already the single place a key is
+  resolved, and therefore the only place this appears — returns the platform
+  credential without consulting `agent_keys` at all, so an owner's stored key
+  is neither read nor deleted and unsetting the variable restores it intact.
+  One variable chooses between two modes rather than a per-owner key
+  overriding an instance-wide fallback, which would silently mix billing
+  models and still leave a key field on a surface whose point is that nobody
+  needs one. In this mode nothing reports the credential *or what it is*: the
+  key route `404`s, and the page renders no key control, no provider select
+  and no model input. That last part is a claim about Pi's protocol rather
+  than about a handler — every assistant message Pi emits carries
+  `api`/`provider`/`model`, and both seams that publish it (the SSE broadcast
+  and the persisted transcript) are verbatim passthroughs — so platform mode
+  strips those three fields from Pi's message envelopes at both
+  (`internal/agent/redact.go`), keeping the `usage` block beside them, which
+  names no model and is what metering will read. Availability stays a
+  separate signal: no `pi` binary is still a 503 in either mode. **No spend
+  cap exists** — nothing reads token usage off the stream — so this belongs
+  on a controlled instance until av-hyo6 lands; the startup log says so.
 - **Streaming:** the service fans Pi's event stream out to the browser via
   SSE (`/api/agent/sessions/:id/events`); prompts arriving mid-run become Pi
   steering messages. Transcripts are persisted per artifact
@@ -907,6 +1036,14 @@ no second guard here to get wrong.
     is why the section distinguishes a local account (whose login goes with it)
     from an identity-provider one, and says the second sentence only to the
     people it is true of.
+  - **The size is stated in Account, not here** (av-fw1b). The same summary
+    carries it, so putting it in the confirmation would cost nothing — and it
+    is left out deliberately. This copy is about consequence, and the
+    consequences that need saying are the irreversible ones and the one that
+    lands on somebody else; a byte count beside them reads as a fourth warning
+    while saying nothing a person would act on. "What am I holding" is a
+    question people have far more often than "what am I deleting", and it is
+    answered where they will be looking.
   - **The live share count is stated up front.** A share is a capability URL
     somebody else may be holding, with no account here and no way to be told it
     stopped working; deletion revokes every one at once. That is the right
@@ -1108,7 +1245,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap) — what remains is letting a non-owner reach a shared artifact at all (av-7k7b), and a person managing their own account (av-g2dx) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
-| Object-storage bodies | Blob interface | S3/MinIO impl behind same interface |
+| Object-storage bodies | Blob interface | **already done** (av-52ll) — `BLOB_S3_BUCKET` selects `S3Store`; unset keeps the filesystem |
 | Tier-2 React | Render surface | add transpile (in-iframe Babel → esbuild) |
 | Chat-UI ingest | API (single write path) | Chrome extension as a new client |
 

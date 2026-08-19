@@ -54,6 +54,12 @@ type Config struct {
 	MockLLMURL   string // when set, sessions may use the "exhibit-mock" provider
 	IdleTimeout  time.Duration
 	SystemPrompt string // optional override of the role prompt; empty uses the default
+	// HideModelIdentity strips the provider/model identifiers out of Pi's
+	// event stream and persisted transcripts (av-siqf). It is set when the
+	// instance supplies the credential itself, where the model is not the
+	// user's to know; a BYOK instance leaves it off, because there the
+	// identifiers describe a key the caller typed. See redact.go.
+	HideModelIdentity bool
 }
 
 // providerEnv maps a provider name to the env var pi reads its key from.
@@ -228,17 +234,18 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	spawned = true
 
 	s := &Session{
-		ID:         id,
-		OwnerID:    opts.OwnerID,
-		grant:      grant,
-		nonce:      nonce,
-		mgr:        m,
-		cmd:        cmd,
-		stdin:      stdin,
-		subs:       map[chan []byte]struct{}{},
-		pending:    map[string]chan json.RawMessage{},
-		done:       make(chan struct{}),
-		lastActive: time.Now(),
+		ID:                id,
+		OwnerID:           opts.OwnerID,
+		grant:             grant,
+		nonce:             nonce,
+		hideModelIdentity: m.cfg.HideModelIdentity,
+		mgr:               m,
+		cmd:               cmd,
+		stdin:             stdin,
+		subs:              map[chan []byte]struct{}{},
+		pending:           map[string]chan json.RawMessage{},
+		done:              make(chan struct{}),
+		lastActive:        time.Now(),
 	}
 	// Modify mode opens with the artifact's current source already in
 	// context, so the agent does not spend a tool call reading what the
@@ -348,6 +355,11 @@ type Session struct {
 	grant *agentscope.Grant
 	// nonce fences untrusted text in this session's prompts.
 	nonce string
+	// hideModelIdentity is the manager's platform-mode setting, copied at
+	// construction so the two seams that publish Pi's protocol read it off
+	// the session itself rather than reaching back through the manager
+	// (av-siqf, redact.go).
+	hideModelIdentity bool
 
 	mgr   *Manager
 	cmd   *exec.Cmd
@@ -562,7 +574,18 @@ func (s *Session) handleLine(line []byte) {
 		}
 	}
 
-	s.broadcast(bytes.Clone(line))
+	s.broadcast(s.redact(bytes.Clone(line)))
+}
+
+// redact applies the platform-mode filter to one document on its way out of
+// this process — an event line, or the message list of a transcript. It is
+// the one place the manager's HideModelIdentity setting is consulted, so the
+// two seams that publish Pi's protocol cannot disagree about it.
+func (s *Session) redact(doc []byte) []byte {
+	if !s.hideModelIdentity {
+		return doc
+	}
+	return redactModelIdentity(doc)
 }
 
 // noteArtifactSaved emits the synthetic event the chat UI uses to re-render
@@ -655,7 +678,7 @@ func (s *Session) persistTranscript(artifactID string) {
 	// an artifact this session's owner actually holds, so an artifact id the
 	// model invented (or lifted from another library) fails with ErrNotFound
 	// instead of writing across the tenant boundary.
-	if err := s.mgr.st.SaveTranscript(ctx, s.OwnerID, artifactID, s.ID, string(r.Data.Messages)); err != nil {
+	if err := s.mgr.st.SaveTranscript(ctx, s.OwnerID, artifactID, s.ID, string(s.redact(r.Data.Messages))); err != nil {
 		slog.Warn("transcript save failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 	}
 }

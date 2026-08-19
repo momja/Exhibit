@@ -47,6 +47,13 @@
     <dd>{{if .Account.Name}}<span class="settings-name">{{.Account.Name}}</span>{{else}}<span class="muted">Signed in through your identity provider</span>{{end}}</dd>
     <dt>Sign-in</dt>
     <dd>{{if .Account.HasPassword}}<i class="ph ph-key" aria-hidden="true"></i> Password{{else}}<i class="ph ph-shield-check" aria-hidden="true"></i> Identity provider{{end}}</dd>
+    {{/* av-fw1b. Stated here, in the ordinary part of the page, because "how
+         much am I holding" is a question with no answer at all before this —
+         the only way to find out was to stat the blob directory on the host.
+         It is a figure, not a gate: nothing on this instance refuses anything
+         because of it. */}}
+    <dt>Storage</dt>
+    <dd><i class="ph ph-hard-drives" aria-hidden="true"></i> {{.Account.Storage}}</dd>
   </dl>
   {{if .Account.NameIsSubject}}<p class="muted text-sm settings-note">Your identity provider sent no email address for this account, so the name above is the subject identifier it does send. It is the string an administrator would use to find you.</p>{{end}}
   {{if not .Account.HasPassword}}<p class="muted text-sm settings-note">Your identity provider owns this sign-in. There is no password here to change, and Exhibit cannot change one there.</p>{{end}}

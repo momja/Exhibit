@@ -41,6 +41,13 @@ type Config struct {
 	AgentCredentials *agentscope.Registry
 	Secrets          *secrets.Box
 	MockEnabled      bool
+	// PlatformAgentKey is the credential this instance runs agent sessions
+	// on when it supplies one itself (av-siqf). Nil — the default — is BYOK:
+	// each owner's own key out of agent_keys, exactly as before. Non-nil is
+	// platform mode, and it is the *only* thing that decides between the two,
+	// so the API surface and the page cannot disagree about which is in
+	// force. See agentplatform.go.
+	PlatformAgentKey *PlatformKey
 	// Identity delegates login to an identity provider (av-30rj). Nil — the
 	// default — is a single-user instance: no /auth routes, no login gate,
 	// the static token and owner 1 exactly as before. Non-nil is the only
@@ -465,9 +472,13 @@ func (ro *Router) setupRoutes() {
 		})
 
 		r.Route("/api/agent", func(r chi.Router) {
-			r.Get("/key", ro.getAgentKey)
-			r.Put("/key", ro.putAgentKey)
-			r.Delete("/key", ro.deleteAgentKey)
+			// The per-owner key, and only when the owner is the one who
+			// supplies it: in platform mode this resource does not exist
+			// (av-siqf, agentplatform.go).
+			byok := r.With(ro.byokOnly)
+			byok.Get("/key", ro.getAgentKey)
+			byok.Put("/key", ro.putAgentKey)
+			byok.Delete("/key", ro.deleteAgentKey)
 			r.Post("/sessions", ro.createAgentSession)
 			r.Post("/sessions/{sessionID}/prompt", ro.agentPrompt)
 			r.Post("/sessions/{sessionID}/abort", ro.agentAbort)
