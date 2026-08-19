@@ -2,7 +2,7 @@
 id: av-lvxq
 status: open
 deps: []
-links: []
+links: [av-xath]
 created: 2026-08-19T05:23:08Z
 type: chore
 priority: 2
