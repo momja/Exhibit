@@ -109,7 +109,14 @@
     <tbody>
     {{range .Custom}}
     <tr>
-      <td><span class="settings-name">{{.Name}}</span></td>
+      {{/* The name is this table's only identifying column — there is no
+           sign-in kind or role beside it to disambiguate against — and
+           adminUserView.Name is users.email, which an identity provider is
+           under no obligation to send (NOT NULL DEFAULT '', migration 013).
+           A blank cell here would leave an admin unable to tell whose ceiling
+           is raised, so the account id stands in: it is also the id they
+           would PATCH. */}}
+      <td>{{if .Name}}<span class="settings-name">{{.Name}}</span>{{else}}<span class="muted">Account {{.ID}}</span>{{end}}</td>
       <td>{{if .Entitlement.Plan}}{{.Entitlement.Plan}}{{else}}<span class="muted">—</span>{{end}}</td>
       <td>{{if .Entitlement.StorageLimitBytes}}{{.StorageLimit}}{{else}}<span class="muted">instance default</span>{{end}}</td>
       <td>{{if .Entitlement.Ref}}<code>{{.Entitlement.Ref}}</code>{{else}}<span class="muted">—</span>{{end}}</td>
@@ -151,11 +158,23 @@
     <label class="settings-label" for="entitlement-plan">Plan</label>
     <input class="field" type="text" id="entitlement-plan" autocomplete="off" spellcheck="false" placeholder="A label — leave empty for the instance default">
     <label class="settings-label" for="entitlement-storage">Storage limit (bytes)</label>
-    <input class="field" type="number" id="entitlement-storage" min="0" step="1" inputmode="numeric" placeholder="Leave empty for the instance default">
+    {{/* type="text", deliberately, with inputmode for the numeric keypad on a
+         phone. An <input type="number"> sanitizes its own value: anything that
+         is not a valid floating-point number reads back as the empty string,
+         so `12e` or a lone `-` is indistinguishable from a field left blank —
+         and blank here is a meaningful answer that clears the account's own
+         ceiling. Keeping the raw text is what lets a typo be refused instead
+         of silently applied as a downgrade. */}}
+    <input class="field" type="text" id="entitlement-storage" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Leave empty for the instance default">
     <span class="muted text-sm">Bytes, exactly — 5368709120 is 5 GiB. Empty puts this account back on the instance default; it does not make it unlimited.</span>
     <label class="settings-label" for="entitlement-ref">External reference</label>
     <input class="field" type="text" id="entitlement-ref" autocomplete="off" spellcheck="false" placeholder="Opaque — whatever your own system calls this account">
     <span class="muted text-sm">Exhibit stores this and never reads it. It is here so it survives the system that wrote it.</span>
+    {{/* The dialog's own error line. The page's status region sits behind the
+         modal backdrop, so a refusal reported there is a refusal nobody can
+         read — and this is the one place where the fix for it is "correct what
+         you typed", which needs what you typed still on screen. */}}
+    <p id="entitlement-error" class="settings-dialog-error" hidden></p>
     <div class="settings-foot">
       <button class="btn btn-sec" type="button" id="entitlement-cancel">Cancel</button>
       <span class="spacer"></span>

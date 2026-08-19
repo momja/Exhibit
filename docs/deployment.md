@@ -711,8 +711,10 @@ curl -X PATCH https://exhibit.example.com/api/admin/users/7 \
 ```
 
 That is the same route and the same credential the admin page uses — the single
-write path, with no second door cut for a machine. Three things about the shape
-are worth knowing:
+write path, with no second door cut for a machine. `GET /api/admin/users`
+returns these three fields in the same places, so reading an account, editing
+the object and sending it back does what it looks like it does. Three things
+about the shape are worth knowing:
 
 - **Every field is optional**, and one you leave out is left alone. A caller
   that sends only `plan` does not reset a ceiling you raised by hand.

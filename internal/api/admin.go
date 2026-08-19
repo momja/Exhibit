@@ -153,23 +153,28 @@ type adminUserView struct {
 	IsAdmin   bool      `json:"is_admin"`
 	Disabled  bool      `json:"disabled"`
 	CreatedAt time.Time `json:"created_at"`
-	// Entitlement is what this account is allowed, exactly as stored
-	// (av-2p8z) — a nil storage limit means "none of its own", not "none at
-	// all". It is on the admin view and on no other, because setting it is an
-	// admin's and only an admin's: an entitlement a person can raise on
-	// themselves is not a limit.
-	Entitlement store.Entitlement `json:"entitlement"`
+	// The entitlement, exactly as stored (av-2p8z) — a nil storage limit
+	// means "none of its own", not "none at all". It is on the admin view and
+	// on no other, because setting it is an admin's and only an admin's: an
+	// entitlement a person can raise on themselves is not a limit.
+	//
+	// **Embedded, so it serializes flat** — `plan`, `storage_limit_bytes` and
+	// `entitlement_ref` at the top level, exactly where updateUserRequest
+	// expects them. That is deliberate: this route is the integration point an
+	// external system maintaining these values uses (deployment.md §9), and a
+	// read shape that nests what the write shape flattens turns the obvious
+	// round trip — GET a user, edit the object, PATCH it back — into a silent
+	// no-op, since an unrecognized key decodes to nothing and the handler
+	// writes nothing. One shape both directions, like `is_admin` and
+	// `disabled` beside it.
+	store.Entitlement
 	// Custom marks an account carrying an entitlement of its own, so the
 	// drift list and the row badge agree by construction rather than by two
 	// predicates that have to be kept in step.
 	Custom bool `json:"entitlement_custom"`
-	// StorageLimit is what that entitlement *resolves to* on this instance
-	// right now, phrased for the page. It is a fact about the instance's
-	// configuration as much as about the row — an account with no limit of
-	// its own reads "Unlimited" where limits are off and the default where
-	// they are on — which is why it is computed here rather than by the
-	// template doing arithmetic on the field above.
-	StorageLimit string `json:"resolved_storage_limit"`
+	// StorageLimit is the ceiling this account is on, phrased for a page —
+	// see storageLimitPhrase for which of the two numbers that is.
+	StorageLimit string `json:"storage_limit"`
 }
 
 // adminUserView is a method rather than a free function because phrasing the
@@ -189,15 +194,34 @@ func (ro *Router) adminUserView(u *store.User) adminUserView {
 	}
 }
 
-// storageLimitPhrase says what an entitlement works out to, or that it does
-// not work out to anything.
+// storageLimitPhrase says which ceiling this account is on: **its own when it
+// has one**, and otherwise whatever an account with none resolves to here.
 //
-// An unresolvable row renders as "Unresolved" rather than failing the page.
-// That is the same fail-closed answer the resolver gives a gate — the account
-// is refused, not waived — said where somebody can act on it: an admin screen
-// that 500s because one row is bad hides the one row an admin needs to find.
+// The account's own number is shown even where limits are switched off, and
+// that ordering is the point rather than a detail. Resolving first would
+// short-circuit to "Unlimited" for every row on an instance with limits off —
+// so 5 GiB, 10 GiB and 0 would all render identically, and the drift list,
+// whose entire job is to surface what an external system last wrote, could not
+// show the one thing it exists for. It would also pair "Unlimited" with a
+// "Custom" badge on the same row, which is a sentence contradicting itself.
+// Which mode the instance is in is stated once, above the table.
+//
+// The fallback still goes through the resolver, because that is the part with
+// a rule in it that could drift. An account's own value has no rule: it is the
+// value.
+//
+// An unresolvable one renders as "Unresolved" rather than as a number, and
+// rather than failing the page — the same fail-closed answer the resolver
+// gives a gate, said where somebody can act on it. An admin screen that 500s
+// because one row is bad hides the one row an admin needs to find.
 func (ro *Router) storageLimitPhrase(ent store.Entitlement) string {
-	allowance, err := ro.cfg.Entitlements.resolve(ent)
+	if own := ent.StorageLimitBytes; own != nil {
+		if *own < 0 {
+			return "Unresolved"
+		}
+		return humanize.Bytes(*own)
+	}
+	allowance, err := ro.cfg.Entitlements.resolve(store.Entitlement{})
 	switch {
 	case err != nil:
 		return "Unresolved"

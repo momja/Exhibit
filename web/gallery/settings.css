@@ -80,6 +80,10 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
 .settings-dialog{margin:auto;border:1px solid var(--color-hairline);border-radius:var(--radius-md);background:var(--color-panel);color:var(--color-ink);padding:var(--space-7);max-width:440px;width:calc(100% - 2 * var(--space-5))}
 .settings-dialog::backdrop{background:rgba(20,22,26,.35)}
 .settings-dialog .settings-h3{margin-bottom:var(--space-5);word-break:break-all}
+/* The dialog's own refusal line. The page's status region is behind the
+ * backdrop, so a modal that reports its refusals there reports them nowhere. */
+.settings-dialog-error{margin-top:var(--space-5);font-size:13px;line-height:1.5;color:var(--color-danger-hover)}
+.settings-dialog-error[hidden]{display:none}
 
 /* --- the add-account form ---------------------------------------------- */
 .settings-form{display:flex;flex-direction:column;gap:var(--space-3)}

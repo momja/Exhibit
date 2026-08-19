@@ -447,3 +447,72 @@ func TestTheAdminPageShowsEntitlementsAndTheOnesThatDiffer(t *testing.T) {
 	assert.Contains(t, body, "Accounts on their own entitlement")
 	assert.Contains(t, body, `data-action="entitlement"`)
 }
+
+// --- 5. what the admin surface says -------------------------------------
+
+// The drift list has to be able to show a stored ceiling on an instance where
+// limits are switched off, because that is the state entitlements are set in
+// before anything enforces them — and because an external system's failed
+// downgrade is a *stored* value, not a resolved one. Resolving first makes
+// every row read "Unlimited" and the list unable to show the thing it exists
+// for.
+func TestAStoredCeilingIsShownEvenWhereLimitsAreOff(t *testing.T) {
+	in := newAdminInstance(t)
+	require.False(t, in.ro.cfg.Entitlements.Enforced, "the default this test is about")
+	require.NoError(t, in.st.SetEntitlement(context.Background(), in.member.ID, store.EntitlementPatch{
+		Plan: strPtr("household"), SetStorageLimit: true, StorageLimitBytes: ptr(10 << 30),
+	}))
+
+	w := in.do(t, "GET", "/admin/users", in.adminCookie, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, "10.0 GiB", "the ceiling this account carries, whatever the instance enforces")
+	assert.Contains(t, body, "Accounts on their own entitlement")
+	assert.Contains(t, body, "Limits are switched off", "and the mode said once, above the table")
+
+	// An account with none of its own still reads as what it resolves to.
+	view := in.ro.adminUserView(in.reload(t, in.admin.ID))
+	assert.Equal(t, "Unlimited", view.StorageLimit)
+	view = in.ro.adminUserView(in.reload(t, in.member.ID))
+	assert.Equal(t, "10.0 GiB", view.StorageLimit)
+}
+
+// The route deployment.md §9 points an external system at, used the obvious
+// way: read a user, send the object back. The read and write shapes are the
+// same one, so this is a no-op — and not a silent wipe of the entitlement the
+// caller just read, which is what a nested read shape over a flat write shape
+// would have made it.
+func TestAUserReadBackAndPatchedUnchangedKeepsItsEntitlement(t *testing.T) {
+	in := newAdminInstance(t)
+	require.NoError(t, in.st.SetEntitlement(context.Background(), in.member.ID, store.EntitlementPatch{
+		Plan: strPtr("household"), Ref: strPtr("acct-7"),
+		SetStorageLimit: true, StorageLimitBytes: ptr(9000),
+	}))
+
+	w := in.do(t, "GET", "/api/admin/users", in.adminCookie, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var listed []map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &listed))
+
+	var view map[string]any
+	for _, u := range listed {
+		if int64(u["id"].(float64)) == in.member.ID {
+			view = u
+		}
+	}
+	require.NotNil(t, view)
+	// The three fields are where a writer would look for them: at the top
+	// level, spelled as updateUserRequest spells them.
+	assert.Equal(t, "household", view["plan"])
+	assert.Equal(t, float64(9000), view["storage_limit_bytes"])
+	assert.Equal(t, "acct-7", view["entitlement_ref"])
+
+	w = in.do(t, "PATCH", userPath(in.member.ID), in.adminCookie, view)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	ent := in.reload(t, in.member.ID).Entitlement
+	assert.Equal(t, "household", ent.Plan)
+	assert.Equal(t, "acct-7", ent.Ref)
+	require.NotNil(t, ent.StorageLimitBytes)
+	assert.Equal(t, int64(9000), *ent.StorageLimitBytes)
+}

@@ -120,6 +120,7 @@
   function openEntitlement(button) {
     editing = {id: button.dataset.userId, name: button.dataset.userName};
     document.getElementById('entitlement-who').textContent = editing.name;
+    complain('');
     planInput.value = button.dataset.plan || '';
     storageInput.value = button.dataset.storageLimit || '';
     refInput.value = button.dataset.ref || '';
@@ -130,22 +131,54 @@
     dialog.close();
   });
 
+  // storageLimit reads the ceiling field as one of three answers: a number,
+  // `null` for "put this account back on the instance default", or the string
+  // `invalid`.
+  //
+  // The third one is why the field is type="text" and not type="number". A
+  // number input sanitizes its own value — anything that is not a valid
+  // floating-point number reads back as "" — so `12e`, a lone `-` or a pasted
+  // `5,000` would arrive here indistinguishable from a field deliberately left
+  // blank. Blank is a *meaningful* answer that clears this account's ceiling,
+  // so an admin adjusting a 10 GiB limit who mistyped would be told their
+  // downgrade succeeded. Keeping the raw text is what makes the two tellable
+  // apart, and `validity.badInput` is not a substitute: it is about how the
+  // control was typed into, which is not something this can depend on.
+  //
+  // Digits only, because the column is a whole number of bytes: a fraction
+  // would otherwise reach the server and come back as a generic "invalid
+  // request body" that names no field.
+  function storageLimit() {
+    const raw = storageInput.value.trim();
+    if (raw === '') return null;
+    if (!/^[0-9]+$/.test(raw)) return 'invalid';
+    return Number(raw);
+  }
+
+  function complain(message) {
+    const box = document.getElementById('entitlement-error');
+    box.textContent = message;
+    box.hidden = !message;
+  }
+
   document.getElementById('entitlement-save').addEventListener('click', function() {
     if (!editing) return;
-    const raw = storageInput.value.trim();
-    // Nothing here is a guard — the server refuses a negative ceiling with a
-    // sentence of its own, and this file is a client. It is a courtesy, so
-    // the person typing finds out before a round trip.
-    if (raw !== '' && !(Number(raw) >= 0)) {
-      say('A storage limit is a number of bytes, or empty for the instance default.', true);
+    const limit = storageLimit();
+    // Not a guard — the server refuses a negative ceiling with a sentence of
+    // its own, and this file is a client. It is a courtesy, reported inside
+    // the dialog and without closing it, so the person typing can correct what
+    // they typed instead of reopening the row and starting again.
+    if (limit === 'invalid') {
+      complain('A storage limit is a whole number of bytes, or empty to put this account back on the instance default.');
       return;
     }
+    complain('');
     const who = editing.name;
     const id = editing.id;
     dialog.close();
     patchUser(id, {
       plan: planInput.value.trim(),
-      storage_limit_bytes: raw === '' ? null : Number(raw),
+      storage_limit_bytes: limit,
       entitlement_ref: refInput.value.trim()
     }, 'Saving the entitlement for ' + who);
   });
