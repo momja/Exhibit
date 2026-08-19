@@ -75,7 +75,29 @@ func TestNoConfigurationIsLimitsSwitchedOff(t *testing.T) {
 	assert.Equal(t, int64(42), e.DefaultStorageBytes)
 }
 
+// The switch itself is strict, unlike the other boolean knob in this package.
+// envBool reads an unrecognized value as off and warns, which is right when off
+// is the safe direction; here off means *no limits at all*, so guessing it is
+// the failure the rest of this file exists to prevent.
+func TestAnUnrecognizedSwitchValueIsAStartupError(t *testing.T) {
+	t.Setenv(envEntitlementsDefaultBytes, "1000")
+	for _, bad := range []string{"treu", "enabled", "1.0"} {
+		t.Setenv(envEntitlementsEnabled, bad)
+		_, err := EntitlementsFromEnv()
+		assert.Error(t, err, "%q must not be read as 'no limits at all'", bad)
+	}
+	// The spellings that are not typos stay silent, in both directions.
+	for value, want := range map[string]bool{"": false, "false": false, "off": false, "no": false,
+		"true": true, "1": true, "yes": true, "on": true} {
+		t.Setenv(envEntitlementsEnabled, value)
+		e, err := EntitlementsFromEnv()
+		require.NoError(t, err, "%q", value)
+		assert.Equal(t, want, e.Enforced, "%q", value)
+	}
+}
+
 func TestAMalformedDefaultIsAStartupError(t *testing.T) {
+	t.Setenv(envEntitlementsEnabled, "")
 	for _, bad := range []string{"lots", "-1", "5GiB"} {
 		t.Setenv(envEntitlementsDefaultBytes, bad)
 		_, err := EntitlementsFromEnv()

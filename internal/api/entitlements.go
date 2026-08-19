@@ -85,8 +85,12 @@ type Entitlements struct {
 // the state an operator passes through while setting the feature up, and
 // refusing it would mean the two variables have to be introduced in one step.
 func EntitlementsFromEnv() (Entitlements, error) {
+	enforced, err := entitlementsSwitch()
+	if err != nil {
+		return Entitlements{}, err
+	}
 	e := Entitlements{
-		Enforced:    envBool(envEntitlementsEnabled),
+		Enforced:    enforced,
 		DefaultPlan: strings.TrimSpace(os.Getenv(envEntitlementsDefaultPlan)),
 	}
 	raw := strings.TrimSpace(os.Getenv(envEntitlementsDefaultBytes))
@@ -107,6 +111,37 @@ func EntitlementsFromEnv() (Entitlements, error) {
 				"or every unprovisioned account is unlimited", envEntitlementsEnabled, envEntitlementsDefaultBytes)
 	}
 	return e, nil
+}
+
+// entitlementsSwitch reads the one knob that decides which of the two states
+// this instance is in, and it is deliberately *not* envBool.
+//
+// envBool treats an unrecognized value as off and logs a warning, which is the
+// safe direction for the knob it was written for: a typo leaves a library
+// private. Here the directions are reversed — off means unlimited — so the same
+// rule would let `ENTITLEMENTS_ENABLED=treu` quietly hand an instance whose
+// operator believes limits are in force an instance with none, and say so in a
+// warning that scrolls past. Same reasoning as the missing default below: a
+// half-configured gate fails where the operator is watching.
+//
+// Unset and the two explicit falses are not typos and are not errors.
+func entitlementsSwitch() (bool, error) {
+	raw := strings.TrimSpace(os.Getenv(envEntitlementsEnabled))
+	if raw == "" {
+		return false, nil
+	}
+	switch strings.ToLower(raw) {
+	case "yes", "on":
+		return true, nil
+	case "no", "off":
+		return false, nil
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("%s must be true/false (or yes/no, on/off), got %q — "+
+			"refusing to guess, because guessing \"off\" here means no limits at all", envEntitlementsEnabled, raw)
+	}
+	return v, nil
 }
 
 // LogStartup announces the mode, so which of the two an instance is in is

@@ -75,7 +75,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `BLOB_S3_ACCESS_KEY_ID` | *(unset)* | Access key. Leave both keys unset to use the ambient AWS credential chain (env vars, `~/.aws/credentials`, instance role) |
 | `BLOB_S3_SECRET_ACCESS_KEY` | *(unset)* | Secret key |
 | `BLOB_S3_PREFIX` | *(unset)* | Key prefix, if the bucket holds something else too |
-| `ENTITLEMENTS_ENABLED` | `false` | Whether per-owner limits are in use on this instance. Unset = off, and every account is unlimited exactly as before (§9). Accepts `true`/`1`/`yes`/`on` |
+| `ENTITLEMENTS_ENABLED` | `false` | Whether per-owner limits are in use on this instance. Unset = off, and every account is unlimited exactly as before (§9). Accepts `true`/`1`/`yes`/`on` and their opposites; anything else is a **startup failure** rather than a guess, because guessing "off" here means no limits at all |
 | `ENTITLEMENTS_DEFAULT_STORAGE_BYTES` | *(unset)* | The storage ceiling for an account with no entitlement of its own, in bytes. **Required** when limits are on — the server refuses to start without it rather than boot with every account unlimited |
 | `ENTITLEMENTS_DEFAULT_PLAN` | *(unset)* | A label for accounts on that default. Display only; no limit is ever read out of a plan name |
 
