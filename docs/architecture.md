@@ -307,8 +307,9 @@ The seam between handlers and persistence. Handlers speak only to this interface
 ```
 Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
         list/set/delete per-origin network decisions;
-        users and sessions, including local credentials (§3.8)
-        and the admin mutations over them (§3.8a)
+        users and sessions, including local credentials (§3.8),
+        the admin mutations over them (§3.8a)
+        and the per-owner entitlements they carry (§3.8c)
 Blob:   put/get/delete artifact bodies by id
 ```
 
@@ -989,7 +990,8 @@ does not.
   because carrying an owner is not carrying authority. `GET`/`POST
   /api/admin/users` and `PATCH /api/admin/users/{id}` are the JSON API its
   controls call: the single write path (§3.1) is why the page has no form
-  handler of its own.
+  handler of its own. The `PATCH` also carries the per-owner entitlement
+  (§3.8c), and `GET` takes `?entitlement=custom` — the drift list.
 
 ### 3.8b Your own account: `/profile` (av-qo05)
 
@@ -1065,6 +1067,62 @@ no second guard here to get wrong.
   deletes and which the schema's cascades and migration 014's `users` trigger
   delete for it is written down in `sqlite_account.go` and walked by a tripwire
   test — a table added without a decision about account deletion fails the suite.
+
+### 3.8c Per-owner entitlements: what an owner is allowed (av-2p8z)
+
+Three columns on `users` — a plan label, a storage limit, and an opaque
+external reference — plus one function that turns them into an answer. It
+stores *what* an owner is allowed and nothing about *why*; there is no payment
+state anywhere in this repo, in any form, and whatever maintains these values
+on a commercial instance is an ordinary authenticated API client of
+`PATCH /api/admin/users/{id}`. On a self-hosted instance it is the feature
+outright: a household can give one person a larger allowance than another.
+
+- **It is admin-only, and that is the whole of §3.8a's boundary applied to a
+  new field.** `/profile` reaches your own account with a session as the whole
+  authorization, so an entitlement settable there is not a limit. The rule is
+  held structurally rather than by review: `Store.SetEntitlement` is the only
+  statement that writes those columns, and a test walks package `api`'s AST and
+  fails on a call to it outside `admin.go` — the file every route in which
+  passes `adminOnly`. A later `/profile` field cannot erode it by accident.
+- **Limits are stored per owner, not derived from the plan.** The label is for
+  display and grouping; nothing reads a ceiling out of it. So an instance can
+  grant one person more without inventing a plan for them, and renaming a plan
+  can never move anybody's allowance.
+- **One resolution function, and gates call it.** `Router.resolveAllowance`
+  answers "what is this owner allowed" and returns an `Allowance`; av-10bw's
+  quota gate reads that and never the columns, so it never learns why an owner
+  has the limit they have. There is exactly one place the fallback rules live.
+- **Fail closed on ambiguity, never on absence** — the distinction the design
+  rests on, and two states that look alike and are not.
+  *Limits not in use on this instance* is the default and every self-hosted
+  instance: everything resolves to unlimited, no entitlement row is read at
+  all, and nothing can be refused. *Limits in use but this owner's could not be
+  resolved* — a database error, a row that makes no sense — is an error, logged,
+  and the caller refuses. Absence within an enforcing instance (no `users` row,
+  no limit of the owner's own) is the first kind, not the second: it resolves to
+  the instance default, which is itself a limit and never unlimited. `Limit`'s
+  zero value refuses everything, so a caller that ignores the error still fails
+  closed.
+- **Enforcement is one explicit switch, and a half-configured one fails at
+  startup.** `ENTITLEMENTS_ENABLED` on with no default entitlement is fatal in
+  `main`, the posture `LOGIN_USERNAME` without `LOGIN_PASSWORD_HASH` already
+  takes — rather than booting into a state where every unprovisioned account is
+  unlimited on an instance whose operator believes limits are in force. A
+  startup *warning* was the weaker version and is deliberately rejected:
+  warnings scroll past, and the failure they guard is the one nobody notices
+  until it is expensive.
+- **Non-default entitlements are listable.** An entitlement an external system
+  maintains can drift from that system's view of reality — a downgrade it
+  failed to deliver leaves someone on a raised ceiling indefinitely. Keeping
+  them current is that system's job; *seeing* them is not, so
+  `Store.ListEntitlementOverrides` backs both the `?entitlement=custom` filter
+  and a section on the admin page. The predicate is "carries an entitlement of
+  its own" rather than "resolves differently from the default", because what
+  the external system last *wrote* is where its drift shows up.
+- **Deletion needs no new statement.** They are columns on the account's row,
+  so `DELETE /api/account` removes them with it by construction rather than by
+  a delete somebody has to remember (§3.3, av-4wyq).
 
 ## 4. Trust boundaries
 

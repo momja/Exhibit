@@ -33,6 +33,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/auth"
+	"github.com/momja/Exhibit/internal/humanize"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -152,9 +153,34 @@ type adminUserView struct {
 	IsAdmin   bool      `json:"is_admin"`
 	Disabled  bool      `json:"disabled"`
 	CreatedAt time.Time `json:"created_at"`
+	// The entitlement, exactly as stored (av-2p8z) — a nil storage limit
+	// means "none of its own", not "none at all". It is on the admin view and
+	// on no other, because setting it is an admin's and only an admin's: an
+	// entitlement a person can raise on themselves is not a limit.
+	//
+	// **Embedded, so it serializes flat** — `plan`, `storage_limit_bytes` and
+	// `entitlement_ref` at the top level, exactly where updateUserRequest
+	// expects them. That is deliberate: this route is the integration point an
+	// external system maintaining these values uses (deployment.md §9), and a
+	// read shape that nests what the write shape flattens turns the obvious
+	// round trip — GET a user, edit the object, PATCH it back — into a silent
+	// no-op, since an unrecognized key decodes to nothing and the handler
+	// writes nothing. One shape both directions, like `is_admin` and
+	// `disabled` beside it.
+	store.Entitlement
+	// Custom marks an account carrying an entitlement of its own, so the
+	// drift list and the row badge agree by construction rather than by two
+	// predicates that have to be kept in step.
+	Custom bool `json:"entitlement_custom"`
+	// StorageLimit is the ceiling this account is on, phrased for a page —
+	// see storageLimitPhrase for which of the two numbers that is.
+	StorageLimit string `json:"storage_limit"`
 }
 
-func newAdminUserView(u *store.User) adminUserView {
+// adminUserView is a method rather than a free function because phrasing the
+// resolved limit needs the instance's entitlement configuration, and reading
+// it off the Router is what keeps the page and the resolver from disagreeing.
+func (ro *Router) adminUserView(u *store.User) adminUserView {
 	kind := "sso"
 	if u.HasPassword {
 		kind = "local"
@@ -162,18 +188,73 @@ func newAdminUserView(u *store.User) adminUserView {
 	return adminUserView{
 		ID: u.ID, Name: u.Email, Email: u.Email, Kind: kind,
 		IsAdmin: u.IsAdmin, Disabled: u.Disabled, CreatedAt: u.CreatedAt,
+		Entitlement:  u.Entitlement,
+		Custom:       !u.Entitlement.IsDefault(),
+		StorageLimit: ro.storageLimitPhrase(u.Entitlement),
 	}
 }
 
+// storageLimitPhrase says which ceiling this account is on: **its own when it
+// has one**, and otherwise whatever an account with none resolves to here.
+//
+// The account's own number is shown even where limits are switched off, and
+// that ordering is the point rather than a detail. Resolving first would
+// short-circuit to "Unlimited" for every row on an instance with limits off —
+// so 5 GiB, 10 GiB and 0 would all render identically, and the drift list,
+// whose entire job is to surface what an external system last wrote, could not
+// show the one thing it exists for. It would also pair "Unlimited" with a
+// "Custom" badge on the same row, which is a sentence contradicting itself.
+// Which mode the instance is in is stated once, above the table.
+//
+// The fallback still goes through the resolver, because that is the part with
+// a rule in it that could drift. An account's own value has no rule: it is the
+// value.
+//
+// An unresolvable one renders as "Unresolved" rather than as a number, and
+// rather than failing the page — the same fail-closed answer the resolver
+// gives a gate, said where somebody can act on it. An admin screen that 500s
+// because one row is bad hides the one row an admin needs to find.
+func (ro *Router) storageLimitPhrase(ent store.Entitlement) string {
+	if own := ent.StorageLimitBytes; own != nil {
+		if *own < 0 {
+			return "Unresolved"
+		}
+		return humanize.Bytes(*own)
+	}
+	allowance, err := ro.cfg.Entitlements.resolve(store.Entitlement{})
+	switch {
+	case err != nil:
+		return "Unresolved"
+	case allowance.Storage.Unlimited:
+		return "Unlimited"
+	default:
+		return humanize.Bytes(allowance.Storage.Bytes)
+	}
+}
+
+// listAdminUsers is the directory, and — with `?entitlement=custom` — the
+// drift list: only the accounts carrying an entitlement of their own.
+//
+// The filter is a query parameter on the existing route rather than a route of
+// its own, because it answers the same question about the same rows in the
+// same shape. An unrecognized value lists everybody: this is a view filter, so
+// the failure mode of a typo should be "you were shown too much", never a
+// refusal an external client has to special-case.
 func (ro *Router) listAdminUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := ro.cfg.Store.ListUsers(r.Context())
+	var users []*store.User
+	var err error
+	if r.URL.Query().Get("entitlement") == "custom" {
+		users, err = ro.cfg.Store.ListEntitlementOverrides(r.Context())
+	} else {
+		users, err = ro.cfg.Store.ListUsers(r.Context())
+	}
 	if err != nil {
 		serverError(w, r, "admin list users", err)
 		return
 	}
 	out := make([]adminUserView, 0, len(users))
 	for _, u := range users {
-		out = append(out, newAdminUserView(u))
+		out = append(out, ro.adminUserView(u))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -242,7 +323,7 @@ func (ro *Router) createAdminUser(w http.ResponseWriter, r *http.Request) {
 	}
 	slog.InfoContext(r.Context(), "admin created an account",
 		slog.Int64("user_id", user.ID), slog.Bool("is_admin", user.IsAdmin))
-	writeJSON(w, http.StatusCreated, newAdminUserView(user))
+	writeJSON(w, http.StatusCreated, ro.adminUserView(user))
 }
 
 // updateUserRequest is the mutable half of an account, as pointers: absent
@@ -252,6 +333,64 @@ type updateUserRequest struct {
 	Password *string `json:"password"`
 	Disabled *bool   `json:"disabled"`
 	IsAdmin  *bool   `json:"is_admin"`
+	// The entitlement fields (av-2p8z), extending the same shape rather than
+	// earning a route of their own: they are unrelated to the three above in
+	// exactly the way those three are unrelated to each other, and they need
+	// the same authority. An external system that maintains them is an
+	// ordinary API client of this endpoint, authenticating with the service
+	// token like any other.
+	Plan *string `json:"plan"`
+	// StorageLimitBytes needs three states where a pointer carries two:
+	// absent leaves the ceiling alone, `null` puts the account back on the
+	// instance default, and a number sets it. See nullableInt64 — a pointer
+	// would silently collapse the first two, and "clear this override" is
+	// precisely what a downgrade is.
+	StorageLimitBytes nullableInt64 `json:"storage_limit_bytes"`
+	// EntitlementRef is the opaque external reference. The empty string
+	// clears it, which needs no third state: unlike a limit, "" and "unset"
+	// are the same thing for a string nothing parses.
+	EntitlementRef *string `json:"entitlement_ref"`
+}
+
+// nullableInt64 distinguishes the three states one JSON field can be in:
+// absent (leave it alone), `null` (clear it), and a number (set it).
+//
+// Go's usual answer, a *int64, has only two: encoding/json decodes both an
+// absent key and an explicit null to nil. That collapse is not tolerable here
+// because clearing a per-owner limit — putting an account back on the instance
+// default — is exactly what a downgrade is, and it would become unexpressible.
+//
+// Set is true only when UnmarshalJSON ran, which happens only when the key was
+// present, so the zero value is "absent" without anything having to say so.
+type nullableInt64 struct {
+	Set   bool
+	Value *int64
+}
+
+func (n *nullableInt64) UnmarshalJSON(b []byte) error {
+	n.Set = true
+	if string(b) == "null" {
+		n.Value = nil
+		return nil
+	}
+	var v int64
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	n.Value = &v
+	return nil
+}
+
+// entitlementPatch turns the request's entitlement fields into the store's
+// patch. Nothing else in this file reads them, so the mapping is in one place
+// and the handler below stays about ordering and refusals.
+func (req updateUserRequest) entitlementPatch() store.EntitlementPatch {
+	return store.EntitlementPatch{
+		Plan:              req.Plan,
+		Ref:               req.EntitlementRef,
+		SetStorageLimit:   req.StorageLimitBytes.Set,
+		StorageLimitBytes: req.StorageLimitBytes.Value,
+	}
 }
 
 // updateAdminUser resets a password, disables/enables an account, or
@@ -284,6 +423,17 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Every refusable input is checked before anything is written, so a
+	// request that fails, fails before it has changed anything. The store
+	// refuses a negative ceiling too (and so does the column's CHECK); this is
+	// here to make it a 400 with a sentence in it rather than a 500 arriving
+	// after a role change has already landed.
+	if limit := req.StorageLimitBytes; limit.Set && limit.Value != nil && *limit.Value < 0 {
+		writeError(w, http.StatusBadRequest,
+			"a storage limit is a number of bytes and cannot be negative; send null to put this account back on the instance default")
+		return
+	}
+
 	// Role and disabled-state changes run first, ahead of the password reset.
 	// Both can be refused by the store (ErrLastAdmin), and running them before
 	// an otherwise-irreversible password write means that refusal leaves
@@ -304,6 +454,27 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 		}
 		slog.InfoContext(r.Context(), "admin changed an account's sign-in state",
 			slog.Int64("user_id", id), slog.Bool("disabled", *req.Disabled))
+	}
+	// The entitlement, before the password and after the two refusable
+	// changes, on the same reasoning: it is reversible from this same page a
+	// moment later, and an irreversible password write should be the last
+	// thing a request does.
+	if patch := req.entitlementPatch(); !patch.Empty() {
+		if err := ro.cfg.Store.SetEntitlement(r.Context(), id, patch); err != nil {
+			if errors.Is(err, store.ErrInvalidEntitlement) {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			ro.writeAdminChangeError(w, r, "admin set entitlement", err)
+			return
+		}
+		// The plan and the reference are the operator's own strings and are
+		// logged; the numbers are what an audit of "who raised whose ceiling"
+		// actually needs.
+		slog.InfoContext(r.Context(), "admin changed an account's entitlement",
+			slog.Int64("user_id", id),
+			slog.Bool("storage_limit_set", patch.SetStorageLimit),
+			slog.Any("storage_limit_bytes", patch.StorageLimitBytes))
 	}
 	if req.Password != nil {
 		if len(*req.Password) < minPasswordLength {
@@ -336,7 +507,7 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "admin reread user", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, newAdminUserView(updated))
+	writeJSON(w, http.StatusOK, ro.adminUserView(updated))
 }
 
 // --- the page ----------------------------------------------------------
@@ -355,6 +526,26 @@ type adminPageData struct {
 	LogoSVG template.HTML
 	Users   []adminUserView
 	SelfID  int64
+	// Entitlements is the instance's own configuration (av-2p8z), so the page
+	// can say which of the two states it is in. The controls render either
+	// way — an entitlement is data whether or not anything reads it yet — but
+	// a limit shown on an instance that enforces nothing would be a lie of
+	// omission, so the page says so once, at the top of the section, rather
+	// than annotating every row.
+	Entitlements Entitlements
+	// DefaultStorageLimit phrases the instance default, which is what every
+	// account with no entitlement of its own is on.
+	DefaultStorageLimit string
+	// Custom is the drift list: the accounts carrying an entitlement of their
+	// own. An entitlement an external system maintains can fall out of step
+	// with that system's view of reality — a downgrade it failed to deliver
+	// leaves somebody on a raised ceiling indefinitely — and keeping them
+	// current is that system's job, but *seeing* them is not.
+	//
+	// Read through the same store call `?entitlement=custom` answers with, so
+	// the page and the API cannot come to different conclusions about who is
+	// on a custom entitlement.
+	Custom []adminUserView
 	pageCredentials
 }
 
@@ -377,14 +568,26 @@ func (ro *Router) adminUsersPage(w http.ResponseWriter, r *http.Request) {
 	}
 	views := make([]adminUserView, 0, len(users))
 	for _, u := range users {
-		views = append(views, newAdminUserView(u))
+		views = append(views, ro.adminUserView(u))
+	}
+	custom, err := ro.cfg.Store.ListEntitlementOverrides(r.Context())
+	if err != nil {
+		serverError(w, r, "admin entitlement overrides", err)
+		return
+	}
+	customViews := make([]adminUserView, 0, len(custom))
+	for _, u := range custom {
+		customViews = append(customViews, ro.adminUserView(u))
 	}
 	page, err := renderPage("admin", adminPageData{
-		Favicon:         template.URL(exhibitLogoDataURI),
-		LogoSVG:         template.HTML(exhibitLogoSVG),
-		Users:           views,
-		SelfID:          ownerIDFromCtx(r.Context()),
-		pageCredentials: ro.pageCredentials(r),
+		Favicon:             template.URL(exhibitLogoDataURI),
+		LogoSVG:             template.HTML(exhibitLogoSVG),
+		Users:               views,
+		SelfID:              ownerIDFromCtx(r.Context()),
+		Entitlements:        ro.cfg.Entitlements,
+		DefaultStorageLimit: ro.storageLimitPhrase(store.Entitlement{}),
+		Custom:              customViews,
+		pageCredentials:     ro.pageCredentials(r),
 	})
 	if err != nil {
 		serverError(w, r, "admin users render", err)

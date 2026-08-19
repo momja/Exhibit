@@ -89,6 +89,13 @@ type Config struct {
 	// what lets the server-rendered gallery consult it with no per-request
 	// database round trip. See publicmode.go.
 	Public PublicMode
+	// Entitlements decides whether per-owner limits are in use on this
+	// instance, and what an account with none of its own gets (av-2p8z). The
+	// zero value is limits switched off: every owner resolves to unlimited,
+	// nothing is refused, and no entitlement row is ever read. See
+	// entitlements.go, which also explains why an instance that switches them
+	// on without a default fails at startup rather than booting.
+	Entitlements Entitlements
 }
 
 // Router wraps chi.Mux and holds the config.

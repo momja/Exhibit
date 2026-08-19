@@ -94,23 +94,28 @@ func (s *SQLiteStore) GetUserByExternalID(ctx context.Context, externalID string
 // absent on purpose: it is selected by exactly one query, in
 // LookupLocalCredential, so there is no path by which the hash reaches a
 // caller that did not ask for it by name.
+//
+// The entitlement columns (av-2p8z) are here rather than behind an accessor of
+// their own because the admin directory renders one row per account and would
+// otherwise issue a query per row. userScan (entitlements.go) owns the
+// destinations, so a column added to this list is scanned by every query that
+// uses it or by none.
 const userColumns = `id, external_id, email, created_at, is_admin,
-                     password_hash IS NOT NULL, disabled_at IS NOT NULL`
+                     password_hash IS NOT NULL, disabled_at IS NOT NULL,
+                     plan, storage_limit_bytes, entitlement_ref`
 
 func (s *SQLiteStore) getUserBy(ctx context.Context, where string, arg any) (*User, error) {
-	var u User
-	var created any
+	var sc userScan
 	err := s.db.QueryRowContext(ctx,
 		"SELECT "+userColumns+" FROM users WHERE "+where, arg,
-	).Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword, &u.Disabled)
+	).Scan(sc.dest()...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	u.CreatedAt = anyToTime(created)
-	return &u, nil
+	return sc.user(), nil
 }
 
 // --- Local credentials (av-rzvf) ---------------------------------------
@@ -137,12 +142,11 @@ func (s *SQLiteStore) getUserBy(ctx context.Context, where string, arg any) (*Us
 // business, and a store that verified passwords would be a store that decides
 // authentication policy.
 func (s *SQLiteStore) LookupLocalCredential(ctx context.Context, externalID string) (*User, string, error) {
-	var u User
-	var created any
+	var sc userScan
 	var hash sql.NullString
 	err := s.db.QueryRowContext(ctx,
 		"SELECT "+userColumns+", password_hash FROM users WHERE external_id=?", externalID,
-	).Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword, &u.Disabled, &hash)
+	).Scan(sc.dest(&hash)...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, "", ErrNotFound
 	}
@@ -152,8 +156,7 @@ func (s *SQLiteStore) LookupLocalCredential(ctx context.Context, externalID stri
 	if !hash.Valid || hash.String == "" {
 		return nil, "", ErrNotFound
 	}
-	u.CreatedAt = anyToTime(created)
-	return &u, hash.String, nil
+	return sc.user(), hash.String, nil
 }
 
 // CreateLocalUser provisions an account with a password. It is the CLI's
@@ -376,13 +379,11 @@ func (s *SQLiteStore) ListUsers(ctx context.Context) ([]*User, error) {
 	defer rows.Close()
 	var out []*User
 	for rows.Next() {
-		var u User
-		var created any
-		if err := rows.Scan(&u.ID, &u.ExternalID, &u.Email, &created, &u.IsAdmin, &u.HasPassword, &u.Disabled); err != nil {
+		var sc userScan
+		if err := rows.Scan(sc.dest()...); err != nil {
 			return nil, err
 		}
-		u.CreatedAt = anyToTime(created)
-		out = append(out, &u)
+		out = append(out, sc.user())
 	}
 	return out, rows.Err()
 }

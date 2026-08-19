@@ -44,6 +44,16 @@ type User struct {
 	// using, so SetUserDisabled deletes those rows in the same transaction.
 	// This field is the durable half, the deleted sessions the immediate one.
 	Disabled bool `json:"disabled"`
+	// Entitlement is what this owner is allowed (av-2p8z) — as *stored*, so
+	// a nil limit here means "none of their own", not "none at all".
+	// Resolving it against the instance's default is one function elsewhere
+	// (api.Router.resolveAllowance); nothing should read these fields to
+	// decide whether to refuse something.
+	//
+	// It travels with the User for the same reason IsAdmin does: the admin
+	// directory renders a row per account and would otherwise issue a query
+	// per row. Unlike the password hash, none of it is a credential.
+	Entitlement Entitlement `json:"entitlement"`
 }
 
 // NewLocalUser is CreateLocalUser's argument: the three strings that name a

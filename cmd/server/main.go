@@ -56,6 +56,17 @@ func main() {
 	// because a malformed knob is reported rather than silently fixed up.
 	publicMode := api.PublicModeFromEnv()
 
+	// Per-owner entitlements (av-2p8z). Unset is limits switched off, which is
+	// every self-hosted instance and is byte-identical to before this existed.
+	// Switched on without a default entitlement is fatal here rather than a
+	// warning: the alternative boots an instance whose operator believes
+	// limits are in force and on which every unprovisioned account is
+	// unlimited, and a warning about that scrolls past.
+	entitlements, err := api.EntitlementsFromEnv()
+	if err != nil {
+		fatal("configure per-owner entitlements", err)
+	}
+
 	slog.Info("exhibit starting",
 		slog.String("app_origin", appOrigin),
 		slog.String("render_origin", renderOrigin),
@@ -71,6 +82,8 @@ func main() {
 			slog.Int64("public_owner_id", publicMode.OwnerID),
 		)
 	}
+
+	entitlements.LogStartup()
 
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		fatal("create data dir", err)
@@ -197,6 +210,7 @@ func main() {
 		LocalCredential:  localCredential,
 		LocalUsers:       localUsers > 0,
 		Public:           publicMode,
+		Entitlements:     entitlements,
 	})
 
 	go func() {

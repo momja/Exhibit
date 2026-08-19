@@ -405,6 +405,16 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"SetUserAdmin":        "keyed by the user id it acts on; an instance-admin operation (av-utap)",
 		"SetUserDisabled":     "keyed by the user id it acts on; an instance-admin operation (av-utap)",
 
+		// Entitlements (av-2p8z), on exactly SetUserAdmin's grounds. The
+		// int64 SetEntitlement takes is the *target* account, not the
+		// requesting owner — it would pass the assertion below for a reason
+		// that is not true of it — and the authorization is the route's
+		// (adminOnly), because an entitlement a person can raise on
+		// themselves is not a limit. ListEntitlementOverrides is the
+		// instance's drift list, no more one owner's than ListUsers is.
+		"SetEntitlement":           "keyed by the user id it acts on; an instance-admin operation (av-2p8z)",
+		"ListEntitlementOverrides": "the instance's accounts on their own entitlement, not any one owner's (av-2p8z)",
+
 		// Storage accounting (av-fw1b). These two are keyed by *blob id*, and
 		// that is the design rather than an omission: a blob's length is a
 		// fact about bytes, and with refcounted shared assets (av-20fk) the

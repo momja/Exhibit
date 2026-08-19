@@ -29,8 +29,14 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
  * phone, and a horizontally scrolling <body> is worse than a scrolling
  * table. */
 .settings-table-wrap{overflow-x:auto}
-.settings-table{width:100%;border-collapse:collapse;font-size:13px}
-.settings-table th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#7b828e;padding-bottom:var(--space-3);border-bottom:1px solid var(--color-hairline);white-space:nowrap}
+/* The min-width is what makes the wrapper's scroll actually happen. Without it
+ * a width:100% table meets a narrow container by crushing whichever column can
+ * still give — the account name, the one column nobody can afford to lose —
+ * instead of overflowing into the scroll this wrapper exists for. */
+.settings-table{width:100%;min-width:660px;border-collapse:collapse;font-size:13px}
+/* Headers take the cells' horizontal padding, not just the vertical: with a
+ * column added they otherwise run into each other as one word. */
+.settings-table th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#7b828e;padding:0 var(--space-5) var(--space-3) 0;border-bottom:1px solid var(--color-hairline);white-space:nowrap}
 .settings-table td{padding:var(--space-5) var(--space-5) var(--space-5) 0;border-bottom:1px solid var(--color-hairline);vertical-align:middle}
 .settings-table tr:last-child td{border-bottom:none}
 .settings-name{font-weight:600;color:var(--color-ink-soft);word-break:break-all}
@@ -49,6 +55,35 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
  * switched off, not in error. */
 .badge-admin{background:#eef3fa;color:var(--brand-blue);font-weight:600}
 .badge-off{background:#f2f2f2;color:#6b7280;font-weight:600}
+
+/* --- entitlements (av-2p8z) -------------------------------------------- */
+/* The cell states the *resolved* ceiling and badges the part that came from
+ * the row, because "5 GiB" without knowing whether it is this account's or the
+ * instance's answers half the question. "Custom" is a neutral chip rather than
+ * a warning colour: an account on its own entitlement is the normal state on
+ * an instance that grants any, not a fault. */
+.settings-entitlement{white-space:nowrap}
+.settings-limit{color:var(--color-ink-soft)}
+.badge-custom{background:#f3efe6;color:#7a6535;font-weight:600;margin-left:var(--space-2)}
+/* The external reference is somebody else's identifier, so it is secondary to
+ * the limit above it and may be long — it wraps rather than widening the
+ * table's scroll. */
+.settings-ref{margin-top:2px;white-space:normal;word-break:break-all;max-width:220px}
+.settings-h4{font-size:13px;font-weight:600;margin:var(--space-7) 0 var(--space-5)}
+
+/* The entitlement editor. A native <dialog>, so the focus trap, the Escape
+ * key and the inert background are the browser's rather than three more
+ * listeners in settings.js. */
+/* margin:auto is not decoration — it is what centres a modal <dialog> in its
+ * top layer, and the page's reset zeroes the UA's own. Without it the dialog
+ * opens flush against the top-left corner. */
+.settings-dialog{margin:auto;border:1px solid var(--color-hairline);border-radius:var(--radius-md);background:var(--color-panel);color:var(--color-ink);padding:var(--space-7);max-width:440px;width:calc(100% - 2 * var(--space-5))}
+.settings-dialog::backdrop{background:rgba(20,22,26,.35)}
+.settings-dialog .settings-h3{margin-bottom:var(--space-5);word-break:break-all}
+/* The dialog's own refusal line. The page's status region is behind the
+ * backdrop, so a modal that reports its refusals there reports them nowhere. */
+.settings-dialog-error{margin-top:var(--space-5);font-size:13px;line-height:1.5;color:var(--color-danger-hover)}
+.settings-dialog-error[hidden]{display:none}
 
 /* --- the add-account form ---------------------------------------------- */
 .settings-form{display:flex;flex-direction:column;gap:var(--space-3)}
