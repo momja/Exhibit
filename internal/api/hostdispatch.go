@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -80,6 +81,13 @@ func NewHostDispatcher(app, render http.Handler, appOrigin, renderOrigin string)
 // would produce an empty discriminator that silently matches nothing and sends
 // every request to the app surface.
 func originHost(origin string) (string, error) {
+	// Distinguished from a malformed value because the causes differ: an unset
+	// origin is a deployment that never supplied one, and on a platform whose
+	// proxy hands us a hostname we do not otherwise know, there is nothing
+	// sensible to fall back to.
+	if strings.TrimSpace(origin) == "" {
+		return "", errors.New("is not set")
+	}
 	u, err := url.Parse(origin)
 	if err != nil {
 		return "", fmt.Errorf("parse %q: %w", origin, err)

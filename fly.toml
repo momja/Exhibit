@@ -1,0 +1,87 @@
+# Exhibit on Fly.io. See docs/deployment.md §5.2 for the commands that go with
+# this file.
+#
+# This file is committed and carries nothing specific to any one deployment: no
+# app name, no region, no hostnames, no secrets. Supply the app name with
+# `fly deploy -a <name>` and everything else with `fly secrets set`. What is
+# left here is true of every Fly deployment of Exhibit.
+#
+# TWO ORIGINS, ONE PORT. Exhibit serves the app and the artifact renderer from
+# two different hostnames, and that split is the artifact sandbox boundary
+# rather than a routing preference (docs/architecture.md §4). Fly's proxy routes
+# by port, not by Host header, so both hostnames terminate on one internal port
+# here and the usual two-listener setup cannot separate them. SINGLE_LISTENER
+# makes the server dispatch on the Host header instead: RENDER_ORIGIN's hostname
+# gets the renderer, everything else gets the app. The server refuses to start
+# if the two origins are unset or share a hostname.
+#
+# ONE MACHINE. SQLite in WAL mode is a single writer against a local volume, and
+# a Fly volume attaches to one machine. Two machines would be two divergent
+# libraries, not one shared one. Keep `fly scale count 1`.
+
+[build]
+
+[env]
+  # Both surfaces on one listener, chosen by Host header (see above).
+  SINGLE_LISTENER = "1"
+  ADDR = ":8080"
+
+  # SQLite and artifact bodies both live on the mounted volume below.
+  DATA_DIR = "/data"
+
+  LOG_LEVEL = "info"
+
+# Everything per-deployment goes through `fly secrets set`, which persists
+# across deploys. `fly deploy -e` does not: it applies to one deploy, and the
+# next one without the same flags silently drops it.
+#
+#   APP_ORIGIN           https://exhibit.example.com
+#   RENDER_ORIGIN        https://artifacts.example.com   (a different hostname)
+#   AUTH_TOKEN           the API bearer token
+#   EXHIBIT_SECRET       set it explicitly. Left unset it is generated onto the
+#                        volume, and a volume rebuild then destroys every stored
+#                        agent key. See docs/deployment.md §5.2
+#   LOGIN_PASSWORD_HASH  with LOGIN_USERNAME, if you want a password login
+#   OIDC_CLIENT_SECRET   if you delegate login to an identity provider
+#   AGENT_API_KEY        only for platform mode; read §4.1 first
+#
+# The two origins are not secret. They go here anyway because secrets are the
+# only per-deployment mechanism Fly persists, and an origin that reverts to its
+# localhost default is an instance whose every link points nowhere.
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Never stop the machine. Exhibit serves share links to people who have no
+  # account here and no reason to wait: a stopped machine turns somebody else's
+  # link into a cold start. Set auto_stop_machines = "stop" if this instance is
+  # only ever opened by you and you would rather not pay for idle time.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+# A TCP check, because Exhibit has no health endpoint. An HTTP check would have
+# to name a real route, and every app route worth checking is authenticated or a
+# redirect. This proves the listener accepts connections and claims nothing more.
+[checks]
+  [checks.listening]
+    type = "tcp"
+    port = 8080
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "20s"
+
+[mounts]
+  source = "exhibit_data"
+  destination = "/data"
+
+# Sized deliberately rather than inherited. The runtime image is
+# node:22-bookworm-slim with the `pi` agent harness installed globally, not
+# distroless, and a render holds the whole artifact body in memory before it
+# compresses it. A snapshot that vendored a wasm runtime is tens of megabytes.
+# 512 MB is enough to boot and not enough to render one of those while an agent
+# session runs a node subprocess alongside it.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
