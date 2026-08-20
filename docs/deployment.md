@@ -593,12 +593,25 @@ fly deploy -a "$APP"
 fly scale count 1 -a "$APP"            # confirm; never raise this
 ```
 
-The first boot creates an `admin` account with a default password and logs a
-warning about it. Change it before you put anything in the library:
+The first boot creates an `admin` account with the password `changeme` and logs
+a warning about it on every start until you change it. Two ways to do that.
+
+Sign in at your `APP_ORIGIN` as `admin` / `changeme` and reset it under
+`/admin/users`. Or over SSH:
 
 ```bash
-fly ssh console -a "$APP" -C "/server user passwd admin"
+fly ssh console -a "$APP"
+DATA_DIR=/data /server user passwd admin
 ```
+
+Use an interactive session rather than `fly ssh console -C`. The command reads
+the new password from stdin, and `-C` does not give it a reliable one. The
+password is echoed as you type it; there is no terminal masking.
+
+Set `DATA_DIR` on the command line even though the image already defines it. If
+it is ever missing, the subcommand opens a database that does not exist yet,
+creates it, and reports `no accounts yet` rather than failing, which reads like
+the library is gone.
 
 #### Why the origins are secrets
 
