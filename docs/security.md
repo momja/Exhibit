@@ -625,7 +625,7 @@ After ingest the stored copy never phones home. Updating it is an explicit user
 action (`POST /api/artifacts/:id/refetch`). There are no live-linked imports and
 no automatic refresh.
 
-## 4. Local I/O defaults: clipboard and files
+## 4. Local I/O defaults: clipboard, files, and capture devices
 
 **Render preamble taxonomy** (canonical vocabulary for all docs). The JS
 injected into the rendered frame as the first `<head>` script(s) — replacing
@@ -640,8 +640,15 @@ are four families:
   over a separate, purely in-memory cache**, never persisted and never sent
   anywhere — see §1.2.
 - **Capability bridge** — re-grants a capability the sandbox *denied*
-  (clipboard, downloads) by proxying the op to the trusted host under
-  first-use approval. Not persistence. This section.
+  (clipboard, downloads, external links) by proxying the op to the trusted host
+  under first-use approval. Not persistence. This section.
+- **Capability gate** — for a capability the sandbox denies and the host
+  *cannot re-grant either* (camera/microphone, av-mv3k). It captures the same
+  per-artifact first-use decision a bridge does, then settles the call with the
+  failure the artifact would have seen anyway and points at the context where
+  the decision can be spent. Worth its own name precisely because it is the one
+  member of the family that must not be read as re-granting anything: the
+  decision it records is enforced elsewhere (a response header), not here.
 - **Polyfill** — reconstructs an API *absent* in this environment (e.g. File
   System Access pickers, deferred as av-70t9) atop available primitives.
 - **Compatibility shim** — re-implements an operation the browser nominally
@@ -755,6 +762,60 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     new tab" already reaches the same URL from browser chrome, which the
     sandbox does not govern. Like downloads, the bridge installs only when a
     host frame exists; top-level renders and share pages navigate natively.
+- **Camera and microphone** — approved per device, per artifact
+  (`camera_approved`, `microphone_approved`), and the one capability in this
+  section that is **decided but not delivered in the frame**. Both halves of
+  that sentence are measured facts, not policy preferences:
+  - **The frame cannot reach a device.** `getUserMedia` from the sandbox's
+    opaque origin throws `SecurityError: Invalid security origin` before any
+    permission is consulted. An `allow="camera; microphone"` delegation does not
+    change it — Chrome still refuses with its auto-accept flag set, so the
+    refusal is structural rather than a prompt outcome — which is the same no-op
+    the clipboard delegation turned out to be.
+  - **The host cannot hand one in.** The download bridge's trick is "acquire on
+    the app origin, transfer the payload into the frame", and there is nothing
+    to transfer: a camera `MediaStreamTrack` is not a transferable object in any
+    shipping engine. `postMessage` with one in the transfer list throws
+    `DataCloneError` — to a cross-origin frame, to a same-origin frame, and even
+    to a Worker.
+  - **So the frame's `getUserMedia` is a gate, not a bridge.** It posts the
+    devices its constraints named to the host and then *settles* — rejecting
+    with a `DOMException`, never hanging on a stream that is not coming. On
+    first use the host prompts, naming exactly those devices and saying plainly
+    that a preview cannot provide one; **Allow** persists only the devices
+    asked for and opens the artifact's top-level render, where it works. Once
+    approved, a later request in the preview raises the §1.1 capability banner
+    instead of prompting again.
+  - **The top-level render is enforced, per artifact.** The other three bridges
+    are framed-only because a top-level render is a page the user navigated to
+    and the browser's own controls govern it. That reasoning fails here, because
+    a device permission is granted to an *origin* and one render origin serves
+    the whole library: a visitor who allowed the camera for one artifact opened
+    directly would have allowed it for **every** artifact on that origin, with
+    no per-artifact decision anywhere. So the render document carries a
+    per-artifact `Permissions-Policy: camera=…, microphone=…` built from the same
+    two approvals. `camera=()` is refused by the browser *even when the origin's
+    permission is already granted* — verified against a browser holding that
+    grant. One decision, honored in both contexts.
+  - The consequence is deliberate: an artifact that was never approved cannot
+    reach a device anywhere, including opened directly, and the way to grant one
+    is the artifact's security settings or the host prompt — not the browser's
+    address-bar permission, which cannot tell two artifacts apart.
+  - **Shares** carry the owner's approvals, since a share publishes the artifact
+    as its owner sees it; the visitor's own browser prompt is still the gate on
+    their hardware. **Widgets carry neither**, whatever their artifact holds: a
+    tile renders unattended behind `pointer-events: none`, where there is no
+    gesture to attribute a device prompt to.
+  - The header names camera and microphone and nothing else, so every other
+    Permissions-Policy feature keeps its browser default rather than turning
+    this into a second policy surface beside the CSP.
+  - **Not attempted: synthesizing a stream.** The frame could be fed video
+    frames (`ImageBitmap` → canvas → `captureStream`) and PCM (an
+    `AudioContext` destination) to produce a `MediaStream` object in the
+    preview. That would be a picture of a device, not a device: no real
+    constraints, no `applyConstraints`, no `getSettings`, and a `stop()` that
+    reaches no hardware. It is a rendering feature, and it belongs to its own
+    ticket rather than smuggled in behind a permission one.
 
 ## 5. The agent sidecar: an API client driven by untrusted text
 
@@ -897,7 +958,7 @@ user opened. What that costs, and what it does not:
 
 ## 6. Residual risk
 
-Accepted, with eyes open (see the PRD §6.3): the model controls what an artifact
+Accepted, with eyes open (see the PRD §6.4): the model controls what an artifact
 *reaches*, not what it *displays* — a malicious artifact can still render
 convincing fake UI. The isolation in §1 caps the blast radius (no real session to
 steal). Auth today is a single static bearer token scoped for single-user,

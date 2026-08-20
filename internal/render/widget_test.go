@@ -131,7 +131,7 @@ func TestWidgetPreambleCannotWriteState(t *testing.T) {
 func TestWidgetPreambleInstallsNoCapabilityBridges(t *testing.T) {
 	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true, false)
 
-	for _, marker := range []string{"__avDownload", "__avNavigate", "__avClipboard", "showOpenFilePicker", "__avSnippet"} {
+	for _, marker := range []string{"__avDownload", "__avNavigate", "__avClipboard", "__avMedia", "showOpenFilePicker", "__avSnippet"} {
 		if strings.Contains(doc, marker) {
 			t.Fatalf("widget preamble must not install %s: %s", marker, doc)
 		}
@@ -139,7 +139,7 @@ func TestWidgetPreambleInstallsNoCapabilityBridges(t *testing.T) {
 	// The artifact preamble still has them — this is a widget-only subtraction,
 	// not a removal.
 	full := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
-	for _, marker := range []string{"__avDownload", "__avNavigate", "__avClipboard", "showOpenFilePicker"} {
+	for _, marker := range []string{"__avDownload", "__avNavigate", "__avClipboard", "__avMedia", "showOpenFilePicker"} {
 		if !strings.Contains(full, marker) {
 			t.Fatalf("artifact preamble lost %s: %s", marker, full)
 		}

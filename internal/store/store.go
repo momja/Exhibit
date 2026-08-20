@@ -62,6 +62,22 @@ type Artifact struct {
 	// frame and opened in a new tab. False means the host prompts on the
 	// artifact's first external-link click.
 	LinksApproved bool `json:"links_approved"`
+	// CameraApproved and MicrophoneApproved are the same first-use approval for
+	// the media gate (av-mv3k): navigator.mediaDevices.getUserMedia in the
+	// frame, which asks the host and then settles. Two flags rather than one
+	// because the prompt names the devices the artifact actually asked for — a
+	// dictation tool granted a microphone must not thereby hold a camera.
+	//
+	// These two differ from the other three approvals in where they are
+	// enforced. A capture device is unreachable from the sandbox's opaque
+	// origin and cannot be handed in either (a MediaStreamTrack is not
+	// transferable), so the grant is spent on a *top-level* render, and these
+	// build that document's Permissions-Policy header. That is what keeps it
+	// per-artifact: a browser permission is per-origin, so without the header
+	// one approved artifact would hand the camera to every other artifact on
+	// the render origin. Neither affects the CSP.
+	CameraApproved     bool `json:"camera_approved"`
+	MicrophoneApproved bool `json:"microphone_approved"`
 	// WidgetBlobID is the blob holding this artifact's widget — the small,
 	// informative document its gallery card renders (av-fafu). Empty means the
 	// artifact has no widget and its card falls back to the default tile. The

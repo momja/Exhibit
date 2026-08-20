@@ -216,6 +216,11 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 
 	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin)
 	w.Header().Set("Content-Security-Policy", csp)
+	// A widget's authority is a strict subset of its artifact's (av-fafu), so a
+	// tile is denied both devices whatever the artifact holds — it renders
+	// unattended, behind pointer-events:none, in a card the user did not open.
+	permissions := buildPermissionsPolicy(a.CameraApproved && !widget, a.MicrophoneApproved && !widget)
+	w.Header().Set("Permissions-Policy", permissions)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// The render doc is dynamic: it inlines the artifact's live state and the
 	// per-artifact CSP. It must never be cached, or an iframe can load a stale
@@ -260,6 +265,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		slog.Int("allowlist", len(a.NetworkAllowlist)),
 		slog.Int("state_keys", len(state)),
 		slog.String("csp", csp),
+		slog.String("permissions_policy", permissions),
 	)
 	fmt.Fprint(w, doc)
 }
@@ -343,13 +349,56 @@ func buildCSP(allowlist []string, appOrigin string) string {
 	}, "; ")
 }
 
+// buildPermissionsPolicy generates the per-artifact Permissions-Policy header
+// for a render document from the artifact's camera/microphone approvals
+// (av-mv3k). It names those two features and nothing else: every other
+// Permissions-Policy feature keeps its browser default, so this header answers
+// one question and cannot quietly become a second policy surface beside the
+// CSP.
+//
+// It exists because a browser permission is granted **per origin**, and every
+// artifact on this instance shares one render origin. Without this header, a
+// visitor who allowed the camera for one artifact opened top-level has allowed
+// it for every artifact on that origin, forever, with no per-artifact decision
+// anywhere in the loop — precisely the situation the ingest allowlist exists to
+// prevent for the network. Permissions Policy is per *document*, so it splits
+// the origin's single grant back into one decision per artifact, and it is the
+// browser that enforces it: `camera=()` makes getUserMedia reject even when the
+// origin's permission is already granted.
+//
+// Note this governs the *top-level* render (a direct open, a share) — the one
+// context where an artifact can reach a device at all. In the embedded frame
+// the opaque origin is refused one no matter what any policy says, which is
+// what the media gate in bridgeScript exists to report; both halves read these
+// same two flags, so the decision the host prompt records is the decision this
+// header enforces.
+//
+// 'self' rather than the render origin spelled out: the document's own origin
+// is exactly what is being permitted, and writing it as a literal would make
+// this header depend on RENDER_ORIGIN being configured to the host the document
+// was actually served from.
+func buildPermissionsPolicy(camera, microphone bool) string {
+	feature := func(name string, allowed bool) string {
+		if allowed {
+			return name + "=(self)"
+		}
+		return name + "=()"
+	}
+	return strings.Join([]string{
+		feature("camera", camera),
+		feature("microphone", microphone),
+	}, ", ")
+}
+
 // shimScript is the shim injected before any artifact scripts run. It
 // intercepts the two Web Storage namespaces — localStorage, whose backing is
 // swapped to the server, and (framed only) sessionStorage, which stays in
 // memory for the life of the frame — and bridges the capabilities the sandbox
 // denies — downloads (the sandbox omits allow-downloads) and clipboard
 // read/write (opaque-origin permissions policy) — to the host frame, where
-// they run only after user approval. Framed-only, it also (av-02xs) shims
+// they run only after user approval, and gates the one it denies that the host
+// cannot re-grant either (camera/microphone, av-mv3k). Framed-only, it also
+// (av-02xs) shims
 // fetch() of data: URLs into locally constructed Responses — WebKit refuses
 // large data: fetches from an opaque-origin sandbox, which Safari artifacts
 // otherwise hang on.
@@ -464,8 +513,9 @@ const shimTemplate = `<script>
 
 // bridgeScript is the capability half of the render preamble: the bridges and
 // polyfills that give an artifact back what the opaque-origin sandbox takes
-// away (downloads, clipboard, file pickers) and the diagnostics for what it
-// cannot give back at all.
+// away (downloads, clipboard, external links, file pickers) and the gates and
+// diagnostics for what it cannot give back at all (camera/microphone, module
+// workers).
 //
 // It is a separate string, spliced into shimTemplate's trailing %s, because a
 // widget render omits it entirely rather than shipping it disabled (av-fafu).
@@ -835,6 +885,124 @@ const bridgeScript = `
           navigator.clipboard.readText = clipboardShim.readText;
         }
       } catch (e2) {}
+    }
+
+    // ---- Camera / microphone gate (av-mv3k) ----
+    // This is the one capability in the preamble that is NOT re-granted, and
+    // the reason is two measured facts rather than a policy choice:
+    //
+    //   1. The frame cannot reach a device. getUserMedia from this opaque
+    //      origin throws SecurityError ("Invalid security origin") before any
+    //      permission is consulted. An allow="camera; microphone" delegation on
+    //      the iframe does not help — Chrome refuses it with the fake-UI flag
+    //      set, so the refusal is structural, not a prompt outcome — which is
+    //      the same no-op the clipboard delegation turned out to be (av-hll6).
+    //   2. The host cannot hand one in. A camera MediaStreamTrack is not a
+    //      transferable object in any shipping engine: postMessage with one in
+    //      the transfer list throws DataCloneError, to a cross-origin frame, to
+    //      a same-origin frame, and even to a Worker. So the download bridge's
+    //      trick — acquire on the app origin, transfer the payload in — has
+    //      nothing to transfer.
+    //
+    // What is left is the decision and the honest report of the limitation. The
+    // frame captures the artifact's request, the host owns the per-device
+    // first-use approval and offers the top-level render (a real origin, where
+    // the artifact reaches the device natively under the very same approval —
+    // it builds that document's Permissions-Policy header), and the call
+    // rejects here with a DOMException instead of hanging on a stream that is
+    // never coming. Piping synthesized frames in (canvas.captureStream over
+    // ImageBitmaps, an AudioContext destination over PCM) would produce a
+    // stream in the preview, but not a *device*: no real constraints, no
+    // applyConstraints, no settings, no stop() reaching the hardware. That is a
+    // rendering feature and belongs to its own ticket, not to this one.
+    var mediaSeq = 0;
+    var mediaPending = {};
+
+    // The capability slug names the devices actually asked for, so the host's
+    // banner describes the right one. Kept in step with mediaCapabilitySlug()
+    // in web/gallery/detail.js.
+    var mediaCapability = function(p) {
+      if (p.video && p.audio) return 'camera-microphone';
+      return p.video ? 'camera' : 'microphone';
+    };
+
+    window.addEventListener('message', function(e) {
+      // Same identity check as the clipboard reply: the host answers from the
+      // app origin, targeting '*' because this frame's origin is opaque.
+      if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+      var d = e.data;
+      if (!d || d.__avMediaResult !== true) return;
+      var p = mediaPending[d.id];
+      if (!p) return;
+      delete mediaPending[d.id];
+      // The host asks for the banner in the case where it has nothing else to
+      // offer: the devices are already approved, so there is no prompt to show,
+      // and the top-level render is where the grant can actually be spent.
+      if (d.banner && typeof warnCapability === 'function') {
+        warnCapability(mediaCapability(p), null);
+      }
+      p.reject(new DOMException(d.error || 'Media access denied', d.name || 'NotAllowedError'));
+    });
+
+    var requestMedia = function(constraints) {
+      // Only which devices were asked for crosses the boundary — the host does
+      // not acquire anything, so the constraints themselves would be data
+      // travelling for no reader. Read through a JSON round-trip because the
+      // artifact hands us an arbitrary object, and touching a hostile getter
+      // directly is not worth the risk for two booleans.
+      var plain;
+      try {
+        plain = JSON.parse(JSON.stringify(constraints || {}));
+      } catch (err) {
+        plain = {};
+      }
+      var wantsAudio = !!plain.audio;
+      var wantsVideo = !!plain.video;
+      if (!wantsAudio && !wantsVideo) {
+        // What the native call throws for getUserMedia({}) — the artifact's
+        // own bug, not a denial, so it must not read as one.
+        return Promise.reject(new TypeError('At least one of audio and video must be requested'));
+      }
+      return new Promise(function(resolve, reject) {
+        var id = 'm' + (++mediaSeq);
+        mediaPending[id] = { resolve: resolve, reject: reject, audio: wantsAudio, video: wantsVideo };
+        window.parent.postMessage(
+          { __avMedia: true, artifactId: ARTIFACT_ID, id: id, audio: wantsAudio, video: wantsVideo },
+          API_ORIGIN
+        );
+      });
+    };
+
+    // Replace only getUserMedia, leaving the rest of navigator.mediaDevices
+    // alone — getDisplayMedia, ondevicechange and getSupportedConstraints are
+    // not this gate's to answer for, and swapping the whole object would
+    // quietly remove them.
+    var md = navigator.mediaDevices;
+    if (md) {
+      try {
+        md.getUserMedia = requestMedia;
+      } catch (err) {}
+      if (md.getUserMedia !== requestMedia) {
+        try {
+          Object.defineProperty(md, 'getUserMedia', { value: requestMedia, writable: true, configurable: true });
+        } catch (err) {}
+      }
+    } else {
+      // navigator.mediaDevices is absent entirely in some framed contexts, so an
+      // artifact that so much as reads it dies before asking for a device.
+      // Supply the minimum surface: the gated call plus the two members a
+      // device-picking artifact reaches for beside it. enumerateDevices resolves
+      // empty, which is what an unpermitted context reports anyway.
+      try {
+        Object.defineProperty(navigator, 'mediaDevices', {
+          value: {
+            getUserMedia: requestMedia,
+            enumerateDevices: function() { return Promise.resolve([]); },
+            getSupportedConstraints: function() { return {}; }
+          },
+          configurable: true
+        });
+      } catch (err) {}
     }
 
     // ---- File System Access picker polyfill (av-70t9) ----

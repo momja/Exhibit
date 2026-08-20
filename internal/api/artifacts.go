@@ -391,11 +391,13 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The capability-bridge approval flags (downloads_approved,
-	// clipboard_approved, links_approved) are strict booleans; reject anything
+	// The capability-bridge approval flags are strict booleans; reject anything
 	// else up front so a bad PATCH is a 400, not a stored value that later
-	// fails to scan.
-	for _, field := range []string{"downloads_approved", "clipboard_approved", "links_approved"} {
+	// fails to scan. The list is store.ApprovalColumns rather than a literal
+	// repeated here: the store refuses a non-bool for exactly these columns, and
+	// a capability added to one list but not the other would be accepted by this
+	// handler and then rejected (or stored) one layer down.
+	for _, field := range store.ApprovalColumns {
 		if v, ok := updates[field]; ok {
 			if _, isBool := v.(bool); !isBool {
 				http.Error(w, field+" must be a boolean", http.StatusBadRequest)
