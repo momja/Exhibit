@@ -91,8 +91,11 @@ The only way data changes. Route groups:
   `network_allowlist` (the whole approved set, normalized to origins by
   `internal/origin` before it is stored — see below; the store translates it
   into `decision='allow'` rows and deliberately leaves any `decision='block'`
-  rows alone, §3.3), `downloads_approved` / `clipboard_approved` (the capability
-  bridge's first-use approvals, §6), and other scalar columns. Rewriting the body
+  rows alone, §3.3), `downloads_approved` / `clipboard_approved` /
+  `links_approved` / `camera_approved` / `microphone_approved` (the capability
+  bridge's first-use approvals, §6 — named once in `store.ApprovalColumns` so
+  the handler's strict-bool check and the store's cannot drift), and other
+  scalar columns. Rewriting the body
   re-executes the scan and returns the footprint plus a `footprint_changed` flag so
   the edit dialog can re-run the explicit-approval gate when origins differ from the
   previous version; the allowlist is never seeded from that scan (spec §6.2).
@@ -272,11 +275,27 @@ executable document with the correct security envelope:
   *from a remote origin* still requires that origin on the allowlist — the network
   boundary is unchanged; only inlined/local, no-egress sources are permitted by
   default.
+- Sets a per-artifact **`Permissions-Policy`** naming `camera` and
+  `microphone`, built from the artifact's two device approvals (av-mv3k):
+  `(self)` when approved, `()` when not. This is the one capability approval that
+  is enforced on a *top-level* render rather than only bridged in the frame, and
+  the reason is that a browser permission is granted per **origin** while every
+  artifact shares one render origin — without it, a visitor who allowed the
+  camera for one artifact opened directly has allowed it for every artifact on
+  that origin, with no per-artifact decision in the loop. Permissions Policy is
+  per *document*, so it splits that single origin grant back into one decision
+  per artifact, enforced by the browser even when the origin's permission is
+  already granted. Only those two features are named; every other
+  Permissions-Policy feature keeps its default, so this header answers one
+  question and does not become a second policy surface beside the CSP. A widget
+  render is denied both devices whatever its artifact holds (§5.5's "strict
+  subset", applied to a header).
 - Injects the **render preamble** as the first `<head>` script(s) — the **storage
   shim** with the artifact's state **inlined** into it so `getItem` is correct
-  synchronously, plus the download/clipboard **capability bridges**, the
-  `data:` fetch **compatibility shim**, and the **out-of-line asset manifest**
-  — then the artifact body. (Umbrella/family taxonomy: `security.md` §4.)
+  synchronously, plus the download/clipboard/external-link **capability
+  bridges**, the camera/microphone **capability gate**, the `data:` fetch
+  **compatibility shim**, and the **out-of-line asset manifest** — then the
+  artifact body. (Umbrella/family taxonomy: `security.md` §4.)
 - The `data:` fetch shim (agaf-02xs) answers `fetch()` of a `data:` URL from a
   Response built in the frame rather than letting it reach the network service.
   WebKit refuses large `data:` fetches from an opaque-origin sandbox, so an
@@ -1417,6 +1436,15 @@ flowchart TD
     cbPrompt -->|deny| cbNo["Promise rejects (NotAllowedError)"]
     cb --> cbNative["native Ctrl/Cmd+V paste &rarr;<br/>browser event, unaffected"]
 
+    load --> gm["navigator.mediaDevices<br/>getUserMedia(constraints)"]
+    gm --> gmInt["media GATE replaces the API;<br/>no device is reachable in this frame"]
+    gmInt --> gmQ{"those devices<br/>already approved?"}
+    gmQ -->|yes| gmBanner["reject + &quot;open it directly&quot; banner"]
+    gmQ -->|first attempt| gmPrompt{"host prompts<br/>(artifact + devices)"}
+    gmPrompt -->|approve| gmOK["PATCH camera_approved /<br/>microphone_approved &rarr; open top-level &rarr; reject here"]
+    gmPrompt -->|deny| gmNo["Promise rejects (NotAllowedError)"]
+    gmTop(["top-level render / share"]) --> gmNative["native getUserMedia, enforced by the<br/>artifact's Permissions-Policy header"]
+
     load --> lk["external http(s) anchor<br/>clicked (target=_blank or plain)"]
     lk --> lkInt["link bridge intercepts;<br/>postMessage URL to host"]
     lkInt --> lkQ{"already approved?"}
@@ -1448,6 +1476,25 @@ id so the returned Promise settles with the host's answer; a denial rejects with
 a `NotAllowedError` the artifact handles like any blocked clipboard call. Native
 keyboard paste is a browser event, not an API call, so it is never bridged. See
 `security.md` §4 for the full policy.
+
+Camera and microphone (`camera_approved`, `microphone_approved`) take the same
+first-use decision through the same channel and are deliberately **not** a
+bridge: nothing re-grants the capability in the frame, because nothing can.
+`getUserMedia` on the sandbox's opaque origin throws `SecurityError` before any
+permission is consulted (an `allow=` delegation does not help — it is refused
+with Chrome's auto-accept flag set), and a camera `MediaStreamTrack` is not a
+transferable object in any shipping engine, so "acquire on the app origin and
+transfer the payload in" has nothing to transfer. The frame therefore posts the
+devices its constraints named and *settles* — rejecting with a `DOMException`
+rather than hanging on a stream that is not coming. The host owns the prompt
+(naming exactly those devices, persisting only those) and, on approval, opens
+the top-level render, which is where the grant is spent: that document's
+`Permissions-Policy` header (§3.2) is built from the same two flags, so the
+approval the prompt records is the approval a direct open honors. Once approved,
+a later request in the preview raises the capability banner instead of prompting
+again. There is no allowlist interaction; a device is local I/O, and what the
+artifact does with the captured bytes is governed by `connect-src` like any
+other data in the frame.
 
 External-link navigation rides the same bridge (`links_approved`). The sandbox
 deliberately omits `allow-popups`, so a `target="_blank"` anchor is dropped and a

@@ -156,6 +156,8 @@ artifacts(
   tier,                    -- 1 | 2
   created_at, updated_at,
   downloads_approved,      -- first-use approval for the host-mediated download bridge
+  camera_approved,         -- likewise for the camera; also builds the render
+  microphone_approved,     --   document's Permissions-Policy (§6.3)
   widget_blob_id           -- the card's widget document; empty = default tile (§5.5)
 )
 -- one decision per (artifact, origin), cascading with the artifact (§6)
@@ -379,7 +381,29 @@ The static scan is **transparency, not a wall** (it's evadable). The enforced bo
 is the browser-level CSP generated from the allowlist; the scan just front-loads the
 "approve these domains" decision so the common case needs no runtime interruption.
 
-### 6.3 Residual risk
+### 6.3 Local capabilities: approve per capability, at first use
+
+Network egress is the allowlist's business (§6.2). The capabilities the sandbox
+*denies outright* — downloads, clipboard, opening external links, and the camera
+and microphone — are a second, smaller decision, made the first time an artifact
+reaches for one: the host frame prompts, naming the artifact and what it asked
+for, and the answer is stored per artifact and revocable from its security
+settings. Denial never breaks the artifact; it sees the same failure a blocked
+call has always produced.
+
+Capture devices differ in two ways worth stating. First, no browser can give a
+camera or microphone to the embedded preview at all — the sandbox that isolates
+artifacts leaves the frame without the stable origin a device permission is
+granted to — so an approved artifact uses its camera in its own tab, and the
+prompt says so rather than appearing to enable something it can't. Second, the
+approval is enforced *there*: a browser permission belongs to an origin and every
+artifact in a library shares one render origin, so allowing the camera once would
+otherwise allow it for every artifact forever, with no per-artifact decision
+anywhere. An artifact that was never approved reaches no device, in the preview
+or opened directly. That is the promise §6.2 makes about the network, applied to
+hardware — nothing is reachable until the user says so, about *this* tool.
+
+### 6.4 Residual risk
 
 This controls what an artifact *reaches out to*. It does not stop a malicious artifact
 from, e.g., rendering a convincing fake login form. The isolated-origin + no-

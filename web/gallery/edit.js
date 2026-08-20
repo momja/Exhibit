@@ -13,9 +13,11 @@
  *                        into the allowlist and Save's PATCH upserts it as an
  *                        allow decision. Block decisions this page doesn't
  *                        touch are never cleared by Save (exhibit-x87).
- *   downloadsApproved - persisted first-use download approval (mutable)
- *   clipboardApproved - persisted first-use clipboard approval (mutable)
- *   linksApproved     - persisted first-use external-link approval (mutable)
+ *   downloadsApproved  - persisted first-use download approval (mutable)
+ *   clipboardApproved  - persisted first-use clipboard approval (mutable)
+ *   linksApproved      - persisted first-use external-link approval (mutable)
+ *   cameraApproved     - persisted first-use camera approval (mutable)
+ *   microphoneApproved - persisted first-use microphone approval (mutable)
  */
 
 // --- CodeMirror islands ----------------------------------------------------
@@ -78,11 +80,20 @@ mountEditorWhenOpen('widget-panel', 'widget-src');
 // Save button fires the single PATCH below. This mirrors the panel's own
 // posture summary, which is also derived from these working copies.
 
-let linksApprovedDirty = false; // see the link-select change handler below
+// Dirty flags for the grants the *host frame* can also change while this page
+// is open (av-r0dk, av-mv3k): their bootstrap value goes stale the moment the
+// viewer approves in another tab, so an unconditional write on Save would
+// revoke a newer grant nobody asked to revoke. Only a select the user actually
+// touched ships.
+let linksApprovedDirty = false;
+let cameraApprovedDirty = false;
+let microphoneApprovedDirty = false;
 
 document.getElementById('dl-select').value = String(downloadsApproved);
 document.getElementById('clip-select').value = String(clipboardApproved);
 document.getElementById('link-select').value = String(linksApproved);
+document.getElementById('cam-select').value = String(cameraApproved);
+document.getElementById('mic-select').value = String(microphoneApproved);
 document.getElementById('dl-select').addEventListener('change', function(e) {
   downloadsApproved = e.target.value === 'true';
   renderSecurityPanel();
@@ -93,10 +104,17 @@ document.getElementById('clip-select').addEventListener('change', function(e) {
 });
 document.getElementById('link-select').addEventListener('change', function(e) {
   linksApproved = e.target.value === 'true';
-  // Mark the grant dirty so save() includes it: the value loaded at page load
-  // goes stale the moment the host approves a link in another tab, and an
-  // unconditional write would silently overwrite that newer approval.
   linksApprovedDirty = true;
+  renderSecurityPanel();
+});
+document.getElementById('cam-select').addEventListener('change', function(e) {
+  cameraApproved = e.target.value === 'true';
+  cameraApprovedDirty = true;
+  renderSecurityPanel();
+});
+document.getElementById('mic-select').addEventListener('change', function(e) {
+  microphoneApproved = e.target.value === 'true';
+  microphoneApprovedDirty = true;
   renderSecurityPanel();
 });
 
@@ -193,7 +211,9 @@ function renderSecurityPanel() {
     allowlist.length + (allowlist.length === 1 ? ' origin' : ' origins') +
     ' · downloads: ' + (downloadsApproved ? 'always allow' : 'ask first') +
     ' · clipboard: ' + (clipboardApproved ? 'always allow' : 'ask first') +
-    ' · links: ' + (linksApproved ? 'always allow' : 'ask first');
+    ' · links: ' + (linksApproved ? 'always allow' : 'ask first') +
+    ' · camera: ' + (cameraApproved ? 'always allow' : 'ask first') +
+    ' · microphone: ' + (microphoneApproved ? 'always allow' : 'ask first');
 }
 renderSecurityPanel();
 
@@ -211,11 +231,13 @@ async function save() {
     downloads_approved: downloadsApproved,
     clipboard_approved: clipboardApproved
   };
-  // links_approved ships only when the select was actually changed (see its
-  // change handler above): the bootstrap value is stale if the host granted
-  // a link in another tab, and an unconditional write would revoke that
+  // These three ship only when their select was actually changed (see the
+  // dirty flags above): the bootstrap value is stale if the host granted the
+  // capability in another tab, and an unconditional write would revoke that
   // newer grant on an unrelated save.
   if (linksApprovedDirty) payload.links_approved = linksApproved;
+  if (cameraApprovedDirty) payload.camera_approved = cameraApproved;
+  if (microphoneApprovedDirty) payload.microphone_approved = microphoneApproved;
   const resp = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
     body: JSON.stringify(payload)
