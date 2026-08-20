@@ -213,6 +213,27 @@ func main() {
 		Entitlements:     entitlements,
 	})
 
+	// One listener or two (av-xath). Two is the default and the shape an
+	// operator-supplied proxy expects: a hostname mapped to each port. A
+	// platform proxy that routes by port instead of by Host gives us one
+	// internal port for both hostnames, and then the Host header is the only
+	// thing left that can tell the two origins apart.
+	if api.SingleListenerFromEnv() {
+		h, err := api.NewHostDispatcher(router, router.RenderHandler(), appOrigin, renderOrigin)
+		if err != nil {
+			fatal("single listener", err)
+		}
+		slog.Info("app and render servers listening on one addr, dispatched by Host",
+			slog.String("addr", addr),
+			slog.String("app_origin", appOrigin),
+			slog.String("render_origin", renderOrigin),
+		)
+		if err := http.ListenAndServe(addr, h); err != nil {
+			fatal("server", err)
+		}
+		return
+	}
+
 	go func() {
 		slog.Info("render server listening", slog.String("addr", renderAddr))
 		if err := http.ListenAndServe(renderAddr, router.RenderHandler()); err != nil {

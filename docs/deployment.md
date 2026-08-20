@@ -54,6 +54,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `DATA_DIR` | `./data` | Where the SQLite DB lives, and the artifact bodies too unless `BLOB_S3_BUCKET` is set |
 | `ADDR` | `:8080` | App listen address |
 | `RENDER_ADDR` | `:8081` | Render listen address |
+| `SINGLE_LISTENER` | `false` | Serve both origins from `ADDR` alone, choosing between them by the request's `Host` header. For platforms whose proxy routes by port and cannot map two hostnames to two ports (Fly.io); see [§5.1](#51-one-port-two-hostnames). Accepts `true`/`1`/`yes`/`on`. `RENDER_ADDR` is unused when it is on |
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
 | `PI_BIN` | `pi` | AI agent executable — unset/missing just disables that feature |
 | `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
@@ -526,6 +527,35 @@ Bring your own (Caddy, nginx, Traefik, a cloud LB). Exhibit speaks plain HTTP;
 point your proxy's two hostnames at `APP_ORIGIN`/`RENDER_ORIGIN` and terminate
 TLS there. They must be different hostnames — that's the artifact sandbox
 boundary, not just cosmetics.
+
+### 5.1 One port, two hostnames
+
+Some platforms route by **port**, not by `Host` header — Fly.io is the common
+case. Every hostname they terminate arrives on one internal port, so the two
+listeners above cannot each be given a hostname of their own.
+
+Set `SINGLE_LISTENER=1` and Exhibit serves both surfaces from `ADDR`, picking
+between them by the `Host` header: requests for `RENDER_ORIGIN`'s hostname get
+the render surface, everything else gets the app. `RENDER_ADDR` is unused.
+
+```bash
+ADDR=:8080
+SINGLE_LISTENER=1
+APP_ORIGIN=https://exhibit.example.com
+RENDER_ORIGIN=https://artifacts.example.com   # must be a different hostname
+```
+
+Both hostnames must resolve to the instance and both need a certificate. What
+does not change is the requirement itself: the two origins stay two origins,
+because that split is the artifact sandbox boundary and not a routing detail.
+Exhibit **refuses to start** if `SINGLE_LISTENER` is set and the two origins
+share a hostname — with one listener there is nothing left to tell them apart,
+and serving artifacts from the app's own origin would put the API inside the
+sandbox.
+
+Anything arriving under an unrecognized hostname — the platform's own
+`*.fly.dev` name, a health check by IP — gets the app surface, which is
+authenticated. Only the exact `RENDER_ORIGIN` hostname reaches the renderer.
 
 ## 6. Backups (optional)
 
