@@ -586,6 +586,18 @@ Points of stance embedded in that policy:
   never runs — an indefinite "Loading…" with nothing to debug (av-x01o).
 - **A no-network artifact gets `connect-src 'none'`.** Nothing is reachable by
   default.
+- **An allowlist entry is an origin, and that is enforced at the single write
+  path** (av-i7hd). `POST`/`PATCH /api/artifacts` normalize every entry through
+  `origin.NormalizeOrigin` — absolute `https://host[:port]` (plaintext `http://`
+  only for loopback), lowercased, trailing host dot stripped, default port
+  dropped, userinfo/path/query/fragment refused — and reject anything else with
+  a `400` naming the value. It belongs there rather than in a client because
+  these strings are pasted verbatim into the header above: a path-bearing entry
+  is path-matched by CSP (so it means something other than what the approval UI
+  showed), a keyword or `data:`/`blob:` source is the CSP builder's to emit and
+  never the user's to type, and near-duplicate spellings of one host would split
+  a single decision into several rows. The store applies the same rule as an
+  invariant, so no future caller can reintroduce a non-origin row.
 - **The ingest scan is transparency, not enforcement.** It parses the document
   with a real HTML tokenizer and surfaces the origins the artifact references,
   but its output **never seeds the allowlist** — only origins the user explicitly

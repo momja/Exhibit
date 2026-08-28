@@ -19,6 +19,15 @@ PATCH  /api/artifacts/:id          Update title, body, network_allowlist, etc.
                                    (network_allowlist is the whole approved set; it
                                    replaces the artifact's allow decisions and leaves
                                    any blocked origins untouched)
+
+Every `network_allowlist` entry — on `POST` and on `PATCH` alike — must be an
+**origin**: an absolute `https://host[:port]` (plaintext `http://` only for
+loopback hosts). Scheme and host are lowercased, a trailing dot on the host is
+stripped, a default port is dropped, and duplicates collapse. Anything else —
+a URL with a path or query, credentials, a wildcard, a CSP keyword, a
+`data:`/`blob:` source — is a `400` naming the offending value, not a silently
+truncated row: a path-bearing entry approved as one file would otherwise grant
+its whole origin (av-i7hd).
 POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts)
 DELETE /api/artifacts/:id          Delete artifact, its associated rows, and its blobs
                                    (body + widget). 500 if a blob could not be removed:

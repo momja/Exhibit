@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/origin"
 	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/snapshot"
 	"github.com/momja/Exhibit/internal/store"
@@ -297,9 +298,16 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	// approved the render CSP stays connect-src 'none' and the artifact is
 	// network-inert. See spec §6.2 ("Nothing is rendered with network access
 	// until they decide").
-	allowlist := req.NetworkAllowlist
-	if allowlist == nil {
-		allowlist = []string{}
+	// Whatever the caller approved must be an origin before it is stored: the
+	// allowlist is pasted verbatim into the render CSP, where a path-bearing or
+	// oddly-spelled entry means something other than what the approval UI showed
+	// (av-i7hd). Rejecting names the value so the client can point at it.
+	allowlist, err := origin.NormalizeOrigins(req.NetworkAllowlist)
+	if err != nil {
+		// JSON, like every other client-facing error the gallery pages read:
+		// the page shows data.error, so the named entry reaches the user.
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	now := time.Now().UTC()
@@ -404,6 +412,24 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// The allowlist goes through the same origin normalization as ingest, for
+	// the same reason: this is the single write path, and the values land in a
+	// CSP header (av-i7hd). A rejected entry is named in the 400 so the edit
+	// page can point at the row the user typed.
+	if v, ok := updates["network_allowlist"]; ok {
+		raw, ok := allowlistStrings(v)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "network_allowlist must be an array of strings")
+			return
+		}
+		normalized, err := origin.NormalizeOrigins(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		updates["network_allowlist"] = normalized
+	}
+
 	// Verify the artifact exists *in this owner's library*. Another owner's
 	// id reads back as nil here, exactly like an unknown one, so the 404
 	// below reveals nothing about which ids exist (av-ep8k).
@@ -497,6 +523,29 @@ type updateArtifactResponse struct {
 	Artifact         *store.Artifact `json:"artifact"`
 	NetworkFootprint []string        `json:"network_footprint"`
 	FootprintChanged bool            `json:"footprint_changed"`
+}
+
+// allowlistStrings reads the network_allowlist value out of a decoded PATCH
+// body, which arrives as []interface{} from JSON (or []string from Go code in
+// tests). A non-list — JSON null included — or a list with a non-string in it
+// is the caller's error: clearing the allowlist takes an explicit empty array,
+// so a null can never silently wipe it.
+func allowlistStrings(v any) ([]string, bool) {
+	switch list := v.(type) {
+	case []string:
+		return list, true
+	case []interface{}:
+		out := make([]string, 0, len(list))
+		for _, item := range list {
+			s, ok := item.(string)
+			if !ok {
+				return nil, false
+			}
+			out = append(out, s)
+		}
+		return out, true
+	}
+	return nil, false
 }
 
 // sameOrigins reports whether two origin lists describe the same set,
