@@ -574,15 +574,16 @@ func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, ownerID int64, 
 		// Defense in depth behind the API's validation (av-i7hd): the store's
 		// own invariant is that a row is an origin, so a caller that skipped
 		// normalization can't write a path-bearing or duplicate spelling here.
-		// Unlike the API this can't 400, so an unusable value is dropped rather
-		// than widening the CSP with something nobody approved.
+		// Unlike the API this can't 400, so anything that doesn't validate
+		// cleanly is dropped rather than widening the CSP with something nobody
+		// approved — a path-bearing value is refused, not truncated to its host
+		// (salvaging those is migration 12's job, via origin.SalvageOrigin). The
+		// rejected value is untrusted data, so the log carries fixed context and
+		// a fixed reason only.
 		normalized, err := origin.NormalizeOrigin(o)
-		if normalized == "" {
-			if o != "" && err != nil {
-				slog.Warn("dropping unusable allowlist origin",
-					slog.String("artifact_id", artifactID), slog.String("origin", o),
-					slog.String("err", err.Error()))
-			}
+		if err != nil {
+			slog.Warn("dropping unusable allowlist origin",
+				slog.String("artifact_id", artifactID), slog.String("reason", "invalid_origin"))
 			continue
 		}
 		o = normalized

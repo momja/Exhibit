@@ -91,11 +91,13 @@ func normalizeStoredOrigins(ctx context.Context, tx *sql.Tx) error {
 	order := make([]key, 0, len(stored))
 	dirty, dropped := false, 0
 	for _, r := range stored {
-		normalized, _ := origin.NormalizeOrigin(r.origin)
+		normalized := origin.SalvageOrigin(r.origin)
 		if normalized == "" {
 			dirty, dropped = true, dropped+1
+			// The dropped value is untrusted data; the log carries fixed
+			// context and a fixed reason, never the raw row.
 			slog.Warn("dropping unusable stored allowlist origin",
-				slog.String("artifact_id", r.artifactID), slog.String("origin", r.origin))
+				slog.String("artifact_id", r.artifactID), slog.String("reason", "invalid_origin"))
 			continue
 		}
 		if normalized != r.origin {

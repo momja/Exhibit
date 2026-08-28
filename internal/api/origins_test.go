@@ -124,23 +124,34 @@ func TestCreateArtifactRejectsNonOriginAllowlist(t *testing.T) {
 
 func TestPatchArtifactRejectsNonOriginAllowlist(t *testing.T) {
 	r := newTestRouter(t)
-	id := createTestArtifact(t, r, "Patch validation")
+	ctx := context.Background()
+	const seed = "https://ok.example.com"
 	for name, entry := range map[string]string{
 		"path":     "https://unpkg.com/dist/esm/worker.js",
 		"wildcard": "https://*.example.com",
 	} {
 		t.Run(name, func(t *testing.T) {
-			w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+			w := doJSON(t, r, "POST", "/api/artifacts", map[string]any{
+				"title":             "Patch validation",
+				"body":              "<html></html>",
+				"network_allowlist": []string{seed},
+			})
+			require.Equal(t, http.StatusCreated, w.Code)
+			var created createArtifactResponse
+			require.NoError(t, json.NewDecoder(w.Body).Decode(&created))
+			id := created.Artifact.ID
+
+			w = doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
 				"network_allowlist": []string{entry},
 			})
 			require.Equal(t, http.StatusBadRequest, w.Code)
 			assert.Contains(t, w.Body.String(), entry)
 
-			got := doJSON(t, r, "GET", "/api/artifacts/"+id, nil)
-			require.Equal(t, http.StatusOK, got.Code)
-			var a store.Artifact
-			require.NoError(t, json.NewDecoder(got.Body).Decode(&a))
-			assert.Empty(t, a.NetworkAllowlist, "a rejected PATCH stores nothing")
+			decisions, err := r.cfg.Store.ListOriginDecisions(ctx, id)
+			require.NoError(t, err)
+			require.Len(t, decisions, 1, "a rejected PATCH stores nothing; the seeded origin is untouched")
+			assert.Equal(t, seed, decisions[0].Origin)
+			assert.Equal(t, store.DecisionAllow, decisions[0].Decision)
 		})
 	}
 }

@@ -19,7 +19,8 @@ func TestNormalizeOriginAccepts(t *testing.T) {
 		"dot and slash":          "https://unpkg.com./",
 		"default port":           "https://example.com:443",
 		"explicit port":          "https://example.com:8443",
-		"surrounding space":      "  https://example.com  ",
+		"leading-zero port":      "https://example.com:08080",
+		"leading-zero default":   "https://example.com:0443",
 		"http loopback":          "http://localhost:3000",
 		"http loopback ip":       "http://127.0.0.1:8080",
 		"https ipv6":             "https://[::1]",
@@ -36,7 +37,8 @@ func TestNormalizeOriginAccepts(t *testing.T) {
 		"dot and slash":          "https://unpkg.com",
 		"default port":           "https://example.com",
 		"explicit port":          "https://example.com:8443",
-		"surrounding space":      "https://example.com",
+		"leading-zero port":      "https://example.com:8080",
+		"leading-zero default":   "https://example.com",
 		"http loopback":          "http://localhost:3000",
 		"http loopback ip":       "http://127.0.0.1:8080",
 		"https ipv6":             "https://[::1]",
@@ -79,13 +81,17 @@ func TestNormalizeOriginRecoverable(t *testing.T) {
 	}
 }
 
-// TestNormalizeOriginRejects covers values with no origin in them at all: the
-// error is fatal and nothing is salvaged.
+// TestNormalizeOriginRejects covers values the write path refuses outright:
+// the error is fatal and nothing is salvaged, not even a derived origin.
 func TestNormalizeOriginRejects(t *testing.T) {
 	for name, in := range map[string]string{
 		"empty":             "",
 		"whitespace only":   "   ",
+		"surrounding space": " https://example.com ",
 		"internal space":    "https://exa mple.com",
+		"zero port":         "https://example.com:0",
+		"port above max":    "https://example.com:65536",
+		"five-digit port":   "https://example.com:99999",
 		"scheme-less host":  "example.com",
 		"scheme-less path":  "/lib/thing.js",
 		"protocol relative": "//cdn.example.com",

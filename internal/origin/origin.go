@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -53,12 +54,14 @@ var cspKeywords = map[string]struct{}{
 //     to https://cdn.example.com would grant a whole host from an entry that
 //     read as one file.
 //   - A non-empty first return means an origin could still be *derived* from s.
-//     That is what the legacy-row repair (store migration 23) salvages, so an
-//     already-stored path-bearing row collapses onto the host it always
-//     effectively named instead of being dropped from a working artifact.
+//     That is what the legacy-row repair (store migration 23) salvages through
+//     SalvageOrigin, so an already-stored path-bearing row collapses onto the
+//     host it always effectively named instead of being dropped from a working
+//     artifact.
 //
-// Values with no origin in them at all — empty, relative, whitespace-bearing,
-// wildcarded, a CSP keyword, or a non-http(s) scheme — return ("", err).
+// Values with no origin in them at all — empty, padded with or containing
+// whitespace, relative, wildcarded, a CSP keyword, or a non-http(s) scheme —
+// return ("", err).
 //
 // Scheme policy: https always; http only for loopback hosts (localhost,
 // 127.0.0.0/8, ::1), which is how a self-hosted dev artifact talks to a service
@@ -67,6 +70,11 @@ var cspKeywords = map[string]struct{}{
 // per-artifact allowlist would read as safer than it is.
 func NormalizeOrigin(s string) (string, error) {
 	trimmed := strings.TrimSpace(s)
+	if trimmed != s {
+		// As typed this is not the origin it would normalize to; trimming
+		// silently would store a spelling the user never saw.
+		return "", fmt.Errorf("origin has surrounding whitespace")
+	}
 	if trimmed == "" {
 		return "", fmt.Errorf("empty origin")
 	}
@@ -105,11 +113,17 @@ func NormalizeOrigin(s string) (string, error) {
 	}
 
 	port := u.Port()
-	if port == defaultPort(scheme) {
-		port = ""
-	}
-	if port != "" && !validPort(port) {
-		return "", fmt.Errorf("invalid port %q", port)
+	if port != "" {
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > 65535 {
+			return "", fmt.Errorf("invalid port %q", port)
+		}
+		// Canonicalize the spelling (":0443" is ":443") so a default port
+		// with leading zeros still collapses onto the defaultless form.
+		port = strconv.Itoa(n)
+		if port == defaultPort(scheme) {
+			port = ""
+		}
 	}
 
 	if strings.Contains(host, ":") { // IPv6 literal — CSP needs the brackets back
@@ -133,6 +147,17 @@ func NormalizeOrigin(s string) (string, error) {
 		return normalized, fmt.Errorf("a fragment is not part of an origin; use %s", normalized)
 	}
 	return normalized, nil
+}
+
+// SalvageOrigin is the legacy-row repair's (store migration 23) entry point —
+// and nothing else's. It returns the origin s always effectively named, even
+// when s itself is not an origin (a path-bearing row collapses onto its host),
+// or "" when s has no origin in it at all and the row must be dropped. Every
+// other caller goes through NormalizeOrigin and honors its error: anywhere but
+// the repair, a non-origin is rejected, never silently truncated.
+func SalvageOrigin(s string) string {
+	normalized, _ := NormalizeOrigin(s)
+	return normalized
 }
 
 // NormalizeOrigins normalizes a whole allowlist, de-duplicating the result
@@ -162,15 +187,6 @@ func defaultPort(scheme string) string {
 		return "443"
 	}
 	return "80"
-}
-
-func validPort(port string) bool {
-	for _, r := range port {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return len(port) <= 5
 }
 
 // validHost accepts a DNS name (letters, digits, '-', '.') or an IP literal.

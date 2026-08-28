@@ -527,11 +527,11 @@ type updateArtifactResponse struct {
 
 // allowlistStrings reads the network_allowlist value out of a decoded PATCH
 // body, which arrives as []interface{} from JSON (or []string from Go code in
-// tests). A non-list, or a list with a non-string in it, is the caller's error.
+// tests). A non-list — JSON null included — or a list with a non-string in it
+// is the caller's error: clearing the allowlist takes an explicit empty array,
+// so a null can never silently wipe it.
 func allowlistStrings(v any) ([]string, bool) {
 	switch list := v.(type) {
-	case nil:
-		return []string{}, true
 	case []string:
 		return list, true
 	case []interface{}:
