@@ -577,7 +577,7 @@ func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, ownerID int64, 
 		// Unlike the API this can't 400, so anything that doesn't validate
 		// cleanly is dropped rather than widening the CSP with something nobody
 		// approved — a path-bearing value is refused, not truncated to its host
-		// (salvaging those is migration 12's job, via origin.SalvageOrigin). The
+		// (salvaging those is migration 23's job, via origin.SalvageOrigin). The
 		// rejected value is untrusted data, so the log carries fixed context and
 		// a fixed reason only.
 		normalized, err := origin.NormalizeOrigin(o)
