@@ -316,9 +316,39 @@ var colorHex = map[string]string{
 	"black": "#222222", "yellow": "#f7d51d",
 }
 
+// requestedURL matches an absolute URL the user named in their prompt.
+var requestedURL = regexp.MustCompile(`https?://[^\s"'<>]+`)
+
+// instructionOnly strips a user message down to the text before any fenced
+// untrusted-data block. A modify session's first prompt carries the
+// artifact's own source appended in exactly such a block (av-e0yj), and that
+// source can itself contain URLs — a URL-ingested artifact's injected
+// `<base href>`, for one. Scanning the whole message would let content the
+// user never typed drive this scripted move, which is the same category of
+// mistake — untrusted text steering behavior — the real system prompt fences
+// against.
+func instructionOnly(s string) string {
+	if i := strings.Index(s, "-----BEGIN EXHIBIT UNTRUSTED DATA"); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
 // transform applies the user's requested change to the artifact body. The
-// scripted repertoire: recolor the submit button, or retitle the heading.
+// scripted repertoire: pull in an external script the user names by URL,
+// recolor the submit button, or retitle the heading.
 func transform(body, userText string) (string, string) {
+	// Naming a URL asks for an external <script src>. This is the one scripted
+	// move that changes the artifact's network footprint, which is what makes
+	// the update path's origin-approval reporting testable (av-hrtv).
+	if u := requestedURL.FindString(instructionOnly(userText)); u != "" {
+		tag := `<script src="` + u + `"></script>`
+		if strings.Contains(body, "</head>") {
+			return strings.Replace(body, "</head>", tag+"\n</head>", 1), "added an external script from " + u
+		}
+		return tag + "\n" + body, "added an external script from " + u
+	}
+
 	lower := strings.ToLower(userText)
 	for word, hex := range colorHex {
 		if strings.Contains(lower, word) {
