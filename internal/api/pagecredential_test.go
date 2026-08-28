@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -363,9 +364,18 @@ func TestEventStreamAcceptsTheSessionCookie(t *testing.T) {
 		"an EventSource opened by a session-authenticated page carries only the cookie (av-5imk); "+
 			"refusing it would break the agent surface on every instance with an identity provider")
 
-	// And the static token still works, which is how a single-user instance's
-	// page opens the same stream (av-rgp1 owns narrowing that).
+	// The static token in the query string does *not* work, on this or any
+	// instance (av-rgp1). A single-user instance's page opens the same stream
+	// with a session-bound ticket instead.
 	req = httptest.NewRequest("GET", "/api/agent/sessions/none/events?token="+pageCredentialToken, nil)
+	w = httptest.NewRecorder()
+	ro.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code,
+		"the service token is not a stream credential: a URL reaches logs and history")
+
+	ticket, err := ro.sseTickets.Issue("none", defaultOwnerID)
+	require.NoError(t, err)
+	req = httptest.NewRequest("GET", "/api/agent/sessions/none/events?ticket="+url.QueryEscape(ticket), nil)
 	w = httptest.NewRecorder()
 	ro.ServeHTTP(w, req)
 	assert.NotEqual(t, http.StatusUnauthorized, w.Code)

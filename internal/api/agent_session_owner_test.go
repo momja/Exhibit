@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -236,16 +237,23 @@ func TestSingleUserAgentSessionRoutesUnchanged(t *testing.T) {
 	w := doJSON(t, r, "POST", "/api/agent/sessions", map[string]string{"artifact_id": id})
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	var session struct {
-		ID string `json:"id"`
+		ID        string `json:"id"`
+		SSETicket string `json:"sse_ticket"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &session))
+	require.NotEmpty(t, session.SSETicket, "create returns the ticket the stream needs")
 	base := "/api/agent/sessions/" + session.ID
 
-	// The stream, with the token in the query string — the only place an
-	// EventSource can carry one.
+	// The stream, with the session's SSE ticket in the query string — the only
+	// place an EventSource can carry a credential, and since av-rgp1 the only
+	// credential this route takes there. The service token is refused here even
+	// on a single-user instance, which is the point: a URL ends up in logs and
+	// history, and a ticket is worth a replay of one stream rather than the
+	// library.
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+base+"/events?token=secret", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		srv.URL+base+"/events?ticket="+url.QueryEscape(session.SSETicket), nil)
 	require.NoError(t, err)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)

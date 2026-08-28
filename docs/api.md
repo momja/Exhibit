@@ -200,13 +200,13 @@ artifact's widget URL is stable across edits.
 artifact's tile and returns immediately:
 
 ```json
-{ "session_id": "…" }
+{ "session_id": "…", "sse_ticket": "…" }
 ```
 
 It takes **no body** — the prompt is a server-side constant and the scoping is
 in the session's system prompt, so a caller cannot steer the model through this
 route. It does not wait for the result either: subscribe to the session's
-ordinary stream (`GET /api/agent/sessions/:id/events`) and watch for
+ordinary stream (`GET /api/agent/sessions/:id/events?ticket=<sse_ticket>`) and watch for
 `exhibit_widget_saved`, then `DELETE /api/agent/sessions/:id`. Returns `503`
 when the `pi` binary is absent and `412` when no provider key is configured.
 
@@ -232,13 +232,19 @@ DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 PUT    /api/agent/key                        Store provider API key {"provider","model","api_key"} (encrypted at rest)
 GET    /api/agent/key                        Key status (masked hint only — the key is never returned)
 DELETE /api/agent/key                        Remove the stored key
-POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact}
+POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact} -> {"id","sse_ticket",…}
+POST   /api/agent/sessions/:id/ticket        Mint a fresh SSE ticket for this session (the reconnect path)
 POST   /api/agent/sessions/:id/prompt        Send a prompt {"message", "images"?: [{data, mime_type}], "snippets"?: [descriptor]}
 POST   /api/agent/sessions/:id/abort         Abort the current run
-DELETE /api/agent/sessions/:id               End the session
-GET    /api/agent/sessions/:id/events        SSE event stream (?token= auth — EventSource can't set headers)
+DELETE /api/agent/sessions/:id               End the session (and drops its tickets)
+GET    /api/agent/sessions/:id/events        SSE event stream (?ticket= auth — EventSource can't set headers)
 GET    /api/artifacts/:id/transcripts        Agent conversations persisted with an artifact
 ```
+
+Every `sse_ticket` is session-bound, single-use, and valid for 30 seconds
+(av-rgp1; full contract: `architecture.md` §3.7, `security.md` §6). A client
+must mint a fresh one for each connect — including a reconnect — rather than
+caching or reusing one.
 
 Each session spawns a [Pi](https://github.com/badlogic/pi-mono) sidecar
 (`pi --mode rpc`) whose only tools call back into this API, so agent output

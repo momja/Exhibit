@@ -77,15 +77,20 @@
   };
 
   // apiEventSource is the one API call apiFetch cannot make: EventSource sets
-  // no headers, so a bearer token has to travel in the query string (the
-  // existing contract, and the subject of av-rgp1). A page with no token needs
-  // none — EventSource sends cookies on a same-origin stream, so the session
-  // authenticates it, and the token never appears in a URL on those instances
-  // at all.
-  window.apiEventSource = function(path) {
-    var t = token();
-    if (!t) return new EventSource(path);
+  // no headers, so whatever credential the stream carries has to travel in the
+  // query string. What travels there is a *ticket* — single-use, seconds-lived,
+  // bound to one session, and minted by the caller over an ordinary
+  // authenticated request — never the service token, which a URL would leak
+  // into this service's debug request log, the operator's proxy log, and
+  // browser history (av-rgp1).
+  //
+  // A page holding no token needs no ticket either: EventSource sends cookies
+  // on a same-origin stream, so the session authenticates it and nothing at all
+  // appears in the URL. Which of the two applies is this function's to know, so
+  // callers pass a ticket and stay out of it.
+  window.apiEventSource = function(path, ticket) {
+    if (!token()) return new EventSource(path);
     return new EventSource(path + (path.indexOf('?') === -1 ? '?' : '&') +
-      'token=' + encodeURIComponent(t));
+      'ticket=' + encodeURIComponent(ticket || ''));
   };
 })();

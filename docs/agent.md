@@ -234,12 +234,28 @@ untrusted signups.
   message), `POST …/prompt` (`message` + optional base64 `images` + optional
   `snippets`, the element descriptors the server fences as data),
   `POST …/abort`, `DELETE …`.
-- `GET /api/agent/sessions/:id/events` — SSE. EventSource can't set headers,
-  so this one route takes the app's bearer token via `?token=` — or, on an
-  instance with an identity provider, the session cookie the browser attaches
-  to a same-origin stream on its own, since such a page is deliberately handed
-  no token to pass (`security.md` §1.5). An agent session's own scoped
-  credential is accepted for neither: it is not a page credential.
+- `GET /api/agent/sessions/:id/events` — SSE. EventSource can't set headers, so
+  this one route resolves its own credential, and which one depends on the
+  instance. On one with an identity provider it is the **session cookie** the
+  browser attaches to a same-origin stream on its own, since such a page is
+  deliberately handed no token to pass (`security.md` §1.5). On a single-user
+  instance, whose page *does* hold the static token, it is a **session SSE
+  ticket** (`?ticket=`) rather than that token (av-rgp1): a token in a URL
+  would be copied into the debug request log, the operator's proxy access log,
+  and browser history, and the service token is the whole library. A ticket is
+  a random value bound to one session, single-use, and valid for 30 seconds —
+  minted by `POST /api/agent/sessions` (returned as `sse_ticket` beside the
+  id), `POST /api/artifacts/:id/widget/generate`, or
+  `POST /api/agent/sessions/:id/ticket`, all of them ordinary
+  header-authenticated requests. Either credential resolves the same Principal
+  an API-group request would carry, so this route applies the same owner
+  authorization check as every other session route. Because a ticket is spent
+  on connect, the chat page drives its own reconnect (mint, then reconnect,
+  with backoff) instead of relying on EventSource's automatic retry; the
+  session's event backlog replays on subscribe, so nothing is lost. An agent
+  session's own scoped credential is
+  accepted for neither: it is not a page credential.
+
 - `internal/agent` tracks streaming state (prompts sent mid-stream become Pi
   steering messages), keeps an event backlog for late subscribers, reaps idle
   sessions, and on every settled turn persists the full Pi message list to

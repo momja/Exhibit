@@ -902,4 +902,14 @@ Accepted, with eyes open (see the PRD §6.3): the model controls what an artifac
 convincing fake UI. The isolation in §1 caps the blast radius (no real session to
 steal). Auth today is a single static bearer token scoped for single-user,
 trusted-circle deployment; the middleware seam exists to swap in real identity
-without changing the API contract.
+without changing the API contract. Because that one token is the whole library,
+it travels only in an `Authorization` header, compared in constant time, and
+never in a URL — the agent's SSE stream, which `EventSource` cannot send a
+header on, takes a single-use, seconds-lived, session-bound ticket instead
+(av-rgp1, `architecture.md` §3.7), so the master credential never appears in a
+URL or browser history. That guarantee is about the URL, not every log: this
+service's own request logger (`internal/logging`) records method, path, and —
+at debug level — the raw query, but never headers, so it was never a channel
+for a header-borne credential either way. An operator's reverse proxy is
+outside that guarantee: if its access log is configured to record request
+headers, the `Authorization` header must be redacted there.

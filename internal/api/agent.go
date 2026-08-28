@@ -241,9 +241,20 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "create agent session", err)
 		return
 	}
+	// The ticket rides along with the id: creating a session and connecting
+	// to its stream is one user action, so it should be one round trip.
+	ticket, err := ro.sseTickets.Issue(s.ID, opts.OwnerID)
+	if err != nil {
+		// The caller never learns this session's id, so leaving it running
+		// would strand a subprocess only the idle reaper could ever reclaim.
+		ro.cfg.Agent.Close(opts.OwnerID, s.ID)
+		serverError(w, r, "issue sse ticket", err)
+		return
+	}
 	resp := map[string]any{
 		"id":          s.ID,
 		"artifact_id": s.ArtifactID(),
+		"sse_ticket":  ticket,
 	}
 	// Which model answered is the caller's own business on a BYOK instance —
 	// they configured it — and none of it in platform mode, where the
@@ -253,6 +264,25 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 		resp["model"] = opts.Model
 	}
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// agentSessionTicket mints a fresh SSE ticket for an existing session. A ticket
+// is single-use, so every (re)connect needs one; this is the route a client
+// calls when EventSource's automatic retry would otherwise replay a spent one.
+func (ro *Router) agentSessionTicket(w http.ResponseWriter, r *http.Request) {
+	s := ro.agentSession(w, r)
+	if s == nil {
+		return
+	}
+	ticket, err := ro.sseTickets.Issue(s.ID, s.OwnerID)
+	if err != nil {
+		serverError(w, r, "issue sse ticket", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"sse_ticket":     ticket,
+		"expires_in_sec": int(sseTicketTTL / time.Second),
+	})
 }
 
 // agentPromptRequest keeps the user's words and the untrusted material apart
@@ -342,6 +372,8 @@ func (ro *Router) closeAgentSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ro.cfg.Agent.Close(s.OwnerID, s.ID)
+	// Tickets must not outlive the stream they name.
+	ro.sseTickets.Forget(s.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -392,17 +424,24 @@ func (ro *Router) agentSession(w http.ResponseWriter, r *http.Request) *agent.Se
 //     identity provider authenticates with — such a page is handed no bearer
 //     token at all, precisely so logout can revoke its access. It names its
 //     user, exactly as it does in authMiddleware.
-//   - The **static token**, on a single-user instance whose page has no other
-//     credential. It travels as `?token=` because there is nowhere else for it
-//     to go; narrowing that is av-rgp1's subject, and this function is the one
-//     place it would be narrowed. Matched via matchesServiceToken — the same
-//     constant-time comparison authMiddleware now uses for its Authorization
-//     header, closing what used to be the one place these two paths disagreed
-//     (av-o5cf).
+//   - An **SSE ticket**, on a single-user instance whose page has no other
+//     credential (av-rgp1). Such a page holds the static token, and the token
+//     used to travel here as `?token=` because a query string was the only
+//     place EventSource left for it — which put the instance's single,
+//     never-rotated master credential into this service's own debug request
+//     log, the operator's proxy access log, and browser history, three places
+//     an Authorization header never reaches. The ticket is what goes in the
+//     URL instead: minted by an ordinary header-authenticated request, bound
+//     to one session, single-use, and dead in seconds, so a copy recovered
+//     from a log line buys at most a brief replay of one session's event
+//     stream rather than the library. See ssetickets.go.
 //
 // With no token configured app auth is off entirely, matching authMiddleware —
 // and such an instance still resolves defaultOwnerID rather than "anyone",
-// because auth being off is not the same statement as ownership being off.
+// because auth being off is not the same statement as ownership being off. It
+// is also why the ticket check sits below that branch rather than above it: an
+// unauthenticated instance mints no tickets, and requiring one there would
+// break the deployment shape authMiddleware deliberately waves through.
 func (ro *Router) authorizeEventStream(r *http.Request) (Principal, bool) {
 	if ownerID, ok := ro.sessionUser(r); ok {
 		return Principal{OwnerID: ownerID, Kind: PrincipalSession}, true
@@ -410,14 +449,16 @@ func (ro *Router) authorizeEventStream(r *http.Request) (Principal, bool) {
 	if ro.cfg.AuthToken == "" {
 		return Principal{OwnerID: defaultOwnerID, Kind: PrincipalNone}, true
 	}
-	token := r.URL.Query().Get("token")
-	if token == "" {
-		token = bearerToken(r)
-	}
-	if !ro.matchesServiceToken(token) {
+	// The ticket names the owner it was minted for, so redeeming it resolves
+	// the same Principal the minting request carried. Kind is the service
+	// token's: this branch is reached only on an instance with no login,
+	// whose page authenticates with that token and whose ticket therefore
+	// stands in for it.
+	ownerID, ok := ro.sseTickets.Redeem(chi.URLParam(r, "sessionID"), r.URL.Query().Get("ticket"))
+	if !ok {
 		return Principal{}, false
 	}
-	return Principal{OwnerID: defaultOwnerID, Kind: PrincipalServiceToken}, true
+	return Principal{OwnerID: ownerID, Kind: PrincipalServiceToken}, true
 }
 
 // agentEvents streams a session's Pi events to the browser as SSE. It sits
