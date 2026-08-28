@@ -184,13 +184,26 @@ export default function (pi: ExtensionAPI) {
 			// what stops a model from being talked into naming one (av-e0yj).
 			const r = await api("PATCH", "/api/artifacts/" + encodeURIComponent(target), patch);
 			const a = r.artifact || {};
-			const footprint: string[] = r.network_footprint || [];
-			return ok(`Updated artifact ${a.id || target} ("${a.title || ""}").`, {
+			// Report only the origins the rewritten body leaves *blocked*: an
+			// already-approved origin is not blocked, so re-flagging it would be a
+			// false alarm the create path never has to filter — a brand-new
+			// artifact starts with nothing approved (av-hrtv).
+			const approved: string[] = a.network_allowlist || [];
+			const footprint: string[] = (r.network_footprint || []).filter((o: string) => !approved.includes(o));
+			let text = `Updated artifact ${a.id || target} ("${a.title || ""}").`;
+			if (footprint.length > 0) {
+				text += ` Network footprint (blocked until the user approves): ${footprint.join(", ")}.`;
+			}
+			return ok(text, {
 				exhibit: "artifact_saved",
 				action: "updated",
 				artifactId: a.id || target,
 				title: a.title,
 				footprint,
+				// Whether the new body's origins differ from the previous body's —
+				// a different question from `footprint` above, which is about
+				// approval rather than change.
+				footprintChanged: r.footprint_changed === true,
 			});
 		},
 	});
