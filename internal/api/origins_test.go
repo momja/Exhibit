@@ -147,7 +147,7 @@ func TestPatchArtifactRejectsNonOriginAllowlist(t *testing.T) {
 			require.Equal(t, http.StatusBadRequest, w.Code)
 			assert.Contains(t, w.Body.String(), entry)
 
-			decisions, err := r.cfg.Store.ListOriginDecisions(ctx, id)
+			decisions, err := r.cfg.Store.ListOriginDecisions(ctx, 1, id)
 			require.NoError(t, err)
 			require.Len(t, decisions, 1, "a rejected PATCH stores nothing; the seeded origin is untouched")
 			assert.Equal(t, seed, decisions[0].Origin)
@@ -178,7 +178,7 @@ func TestAllowlistCollapsesNearDuplicates(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&created))
 	assert.Equal(t, []string{"https://unpkg.com"}, created.Artifact.NetworkAllowlist)
 
-	decisions, err := r.cfg.Store.ListOriginDecisions(ctx, created.Artifact.ID)
+	decisions, err := r.cfg.Store.ListOriginDecisions(ctx, 1, created.Artifact.ID)
 	require.NoError(t, err)
 	require.Len(t, decisions, 1, "one decision per (artifact, origin) is a row-level invariant")
 	assert.Equal(t, "https://unpkg.com", decisions[0].Origin)
