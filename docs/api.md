@@ -241,6 +241,11 @@ GET    /api/agent/sessions/:id/events        SSE event stream (?ticket= auth —
 GET    /api/artifacts/:id/transcripts        Agent conversations persisted with an artifact
 ```
 
+Every `sse_ticket` is session-bound, single-use, and valid for 30 seconds
+(av-rgp1; full contract: `architecture.md` §3.7, `security.md` §6). A client
+must mint a fresh one for each connect — including a reconnect — rather than
+caching or reusing one.
+
 Each session spawns a [Pi](https://github.com/badlogic/pi-mono) sidecar
 (`pi --mode rpc`) whose only tools call back into this API, so agent output
 enters the library through the same ingest path (scan + explicit allowlist

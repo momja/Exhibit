@@ -196,6 +196,9 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 	// one here — the button is one action, not two round trips.
 	ticket, err := ro.sseTickets.Issue(s.ID, opts.OwnerID)
 	if err != nil {
+		// The caller never learns this session's id, so leaving it running
+		// would strand a subprocess only the idle reaper could ever reclaim.
+		ro.cfg.Agent.Close(s.OwnerID, s.ID)
 		serverError(w, r, "issue sse ticket", err)
 		return
 	}

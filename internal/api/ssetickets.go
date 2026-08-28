@@ -108,16 +108,32 @@ func (s *sseTicketStore) Forget(sessionID string) {
 
 // liveLocked returns the session's unexpired tickets. Expiry is swept lazily on
 // the paths that already hold the lock — the set is small and short-lived, so a
-// sweeper goroutine would be more machinery than the problem deserves.
+// sweeper goroutine would be more machinery than the problem deserves. While
+// the lock is already held, it also sweeps every *other* session in the store:
+// a session that mints a ticket once and is later reaped without an explicit
+// close (the idle reaper has no reference to this store, so it never calls
+// Forget) would otherwise leave a dead entry behind forever. Piggybacking the
+// full sweep on whichever call happens to hold the lock keeps the map bounded
+// without adding a goroutine of its own.
 func (s *sseTicketStore) liveLocked(sessionID string, now time.Time) []sseTicket {
-	all := s.bySession[sessionID]
-	live := all[:0:0]
-	for _, t := range all {
-		if t.expires.After(now) {
-			live = append(live, t)
+	var requested []sseTicket
+	for id, all := range s.bySession {
+		live := all[:0:0]
+		for _, t := range all {
+			if t.expires.After(now) {
+				live = append(live, t)
+			}
+		}
+		if len(live) == 0 {
+			delete(s.bySession, id)
+		} else {
+			s.bySession[id] = live
+		}
+		if id == sessionID {
+			requested = live
 		}
 	}
-	return live
+	return requested
 }
 
 func (s *sseTicketStore) storeLocked(sessionID string, live []sseTicket) {

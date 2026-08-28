@@ -226,11 +226,14 @@ async function ensureSession() {
 // backlog replay makes that lossless.
 const EVENTS_RETRY_MS = 1000;
 const EVENTS_RETRY_MAX_MS = 15000;
+const TICKET_REFRESH_TIMEOUT_MS = 10000;
 let eventsRetryMs = EVENTS_RETRY_MS;
 let eventsRetryTimer = null;
+let ticketRefreshController = null;
 
 function closeEvents() {
   if (eventsRetryTimer) { clearTimeout(eventsRetryTimer); eventsRetryTimer = null; }
+  if (ticketRefreshController) { ticketRefreshController.abort(); ticketRefreshController = null; }
   if (eventSource) { eventSource.close(); eventSource = null; }
 }
 
@@ -255,10 +258,16 @@ function reconnectEvents() {
     eventsRetryTimer = null;
     if (!sessionId) return;
     const watching = sessionId;
+    const controller = new AbortController();
+    ticketRefreshController = controller;
+    const timeout = setTimeout(() => controller.abort(), TICKET_REFRESH_TIMEOUT_MS);
     let r = null;
     try {
-      r = await apiFetch('/api/agent/sessions/' + encodeURIComponent(watching) + '/ticket', {method:'POST'});
-    } catch { /* offline — fall through to another retry */ }
+      r = await apiFetch('/api/agent/sessions/' + encodeURIComponent(watching) + '/ticket',
+        {method:'POST', signal: controller.signal});
+    } catch { /* offline, timed out, or aborted — fall through to another retry */ }
+    clearTimeout(timeout);
+    if (ticketRefreshController === controller) ticketRefreshController = null;
     if (sessionId !== watching) return;   // session was reset while we waited
     if (!r || !r.ok) {
       // 404 means the session is gone (closed or reaped): stop retrying.

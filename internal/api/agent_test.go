@@ -231,9 +231,12 @@ func TestDebugRequestLogNeverContainsTheServiceToken(t *testing.T) {
 	require.NoError(t, err)
 
 	// Every request the chat page makes, in order: session create, ticket
-	// mint, the stream itself.
-	doJSON(t, r, "POST", "/api/agent/sessions", map[string]string{})
-	doJSON(t, r, "POST", "/api/agent/sessions/sess-1/ticket", nil)
+	// mint, the stream itself. This router has no Agent configured, so both
+	// resolve 503 rather than actually minting anything — that's fine, the
+	// query-string check below cares whether *these calls* ever wrote the
+	// token into the log, not whether they succeeded.
+	assert.Equal(t, http.StatusServiceUnavailable, doJSON(t, r, "POST", "/api/agent/sessions", map[string]string{}).Code)
+	assert.Equal(t, http.StatusServiceUnavailable, doJSON(t, r, "POST", "/api/agent/sessions/sess-1/ticket", nil).Code)
 	req := httptest.NewRequest("GET", "/api/agent/sessions/sess-1/events?ticket="+tkt, nil)
 	r.ServeHTTP(httptest.NewRecorder(), req)
 

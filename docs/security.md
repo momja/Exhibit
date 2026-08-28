@@ -906,5 +906,10 @@ without changing the API contract. Because that one token is the whole library,
 it travels only in an `Authorization` header, compared in constant time, and
 never in a URL — the agent's SSE stream, which `EventSource` cannot send a
 header on, takes a single-use, seconds-lived, session-bound ticket instead
-(av-rgp1, `architecture.md` §3.7), so no log or history entry can carry the
-master credential.
+(av-rgp1, `architecture.md` §3.7), so the master credential never appears in a
+URL or browser history. That guarantee is about the URL, not every log: this
+service's own request logger (`internal/logging`) records method, path, and —
+at debug level — the raw query, but never headers, so it was never a channel
+for a header-borne credential either way. An operator's reverse proxy is
+outside that guarantee: if its access log is configured to record request
+headers, the `Authorization` header must be redacted there.

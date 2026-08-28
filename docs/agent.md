@@ -248,11 +248,12 @@ untrusted signups.
   id), `POST /api/artifacts/:id/widget/generate`, or
   `POST /api/agent/sessions/:id/ticket`, all of them ordinary
   header-authenticated requests. Either credential resolves the same Principal
-  an API-group request would carry, so the owner check every other session
-  route makes applies here too. Because a ticket is spent on connect, the chat
-  page drives its own reconnect (mint, then reconnect, with backoff) instead of
-  relying on EventSource's automatic retry; the session's event backlog replays
-  on subscribe, so nothing is lost. An agent session's own scoped credential is
+  an API-group request would carry, so this route applies the same owner
+  authorization check as every other session route. Because a ticket is spent
+  on connect, the chat page drives its own reconnect (mint, then reconnect,
+  with backoff) instead of relying on EventSource's automatic retry; the
+  session's event backlog replays on subscribe, so nothing is lost. An agent
+  session's own scoped credential is
   accepted for neither: it is not a page credential.
 
 - `internal/agent` tracks streaming state (prompts sent mid-stream become Pi

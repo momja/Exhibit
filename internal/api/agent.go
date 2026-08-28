@@ -245,6 +245,9 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 	// to its stream is one user action, so it should be one round trip.
 	ticket, err := ro.sseTickets.Issue(s.ID, opts.OwnerID)
 	if err != nil {
+		// The caller never learns this session's id, so leaving it running
+		// would strand a subprocess only the idle reaper could ever reclaim.
+		ro.cfg.Agent.Close(opts.OwnerID, s.ID)
 		serverError(w, r, "issue sse ticket", err)
 		return
 	}

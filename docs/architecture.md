@@ -784,8 +784,11 @@ absent the surface degrades to disabled; nothing else changes.
   create, widget generate, or `POST …/sessions/:id/ticket` for reconnects).
   The service token never appears in a URL, so it cannot be copied into this
   service's debug request log, the operator's proxy access log, or browser
-  history; a recovered ticket buys at most a brief replay window on one
-  session's event stream, never the library. Redeeming the ticket also
+  history; a recovered ticket buys at most a brief window to *open* one
+  connection to one session's event stream, never the library. The TTL bounds
+  when a new connection can be established with that ticket — it is not a
+  deadline on a connection already open, which the ticket check never revisits
+  once redeemed. Redeeming the ticket also
   establishes the stream's owner, so the owner check that guards every other
   session route (`Session.OwnerID` vs the request's owner) applies here as
   well — a session id alone is not a capability.
