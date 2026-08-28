@@ -1,7 +1,14 @@
 # Node build inputs/outputs — installed and produced inside the image's Node
 # stage, never sent from the host. Excluding the built assets here guarantees
 # the Go stage embeds only what the Node stage produced, never a stale local copy.
+#
+# The ** matters. Docker matches these patterns against paths relative to the
+# context root, so a bare `node_modules/` catches only a top-level one, and every
+# npm workspace under web/ keeps its own. scripts/build-assets.sh runs `npm ci`
+# in each of them inside the image, so the host copies are replaced even when
+# they are sent.
 node_modules/
+**/node_modules/
 internal/api/assets/
 
 # Local dev artifacts and data — not needed to build the image.
@@ -12,3 +19,16 @@ data/
 .dolt/
 .beads-credential-key
 .git/
+
+# Not build inputs. Nothing embeds from any of these: the only go:embed outside
+# internal/api's assets, templates and migrations is internal/agent's
+# ext/exhibit.ts. The root markdown and LICENSE stay, being small and the first
+# thing anyone looks for.
+.tickets/
+docs/
+design_files/
+dev/
+.github/
+
+# Editor and platform cruft.
+**/.DS_Store
