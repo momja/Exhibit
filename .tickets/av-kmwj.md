@@ -1,6 +1,6 @@
 ---
 id: av-kmwj
-status: open
+status: in_progress
 deps: []
 links: [exhibit-fr7]
 created: 2026-08-29T17:55:52Z
