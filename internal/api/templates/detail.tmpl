@@ -147,7 +147,7 @@
      directive are filled in by detail.js via textContent: they come out of the
      artifact's own blocked request and must never be interpolated as markup. */}}
 <div id="net-modal" class="modal-overlay" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="net-title">
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="net-title">
     <h2 id="net-title">Allow network access?</h2>
     <p><strong>{{.Title}}</strong> tried to contact <code id="net-origin"></code> and was blocked.</p>
     <p class="text-sm muted" id="net-directive"></p>

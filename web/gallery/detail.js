@@ -156,17 +156,26 @@ window.addEventListener('message', function(e) {
   banner.hidden = false;
 });
 
-// The module-worker diagnostic usually fires at iframe load — possibly before
-// this listener is attached, so the shim buffers it and replays on request.
-// Announce readiness on every iframe load (targetOrigin '*' — the frame is
-// opaque; the shim validates the ping came from our app origin) so any buffered
-// diagnostic is delivered even when the worker was constructed before we listened.
+// The shim buffers what it cannot deliver yet — the module-worker diagnostic
+// (av-yvtb) and CSP-violation reports (av-kmwj) both fire at frame load, before
+// this page has attached its listeners — and flushes when we announce ourselves.
+// targetOrigin '*' because the frame is opaque; the shim validates the ping came
+// from our app origin.
+//
+// Announced twice, and both are needed. On every `load`, for the frames that
+// load after this script runs. And once immediately, because a frame that
+// finished loading *before* this script ran has already fired its `load` event
+// and will not fire another — that ordering is the difference between a prompt
+// appearing and an artifact silently failing, and it varies with cache state.
+// A duplicate ping is harmless: the shim flushes its queue once.
 (function() {
   const frame = document.querySelector('iframe');
   if (!frame) return;
-  frame.addEventListener('load', function() {
-    frame.contentWindow.postMessage({ __avHostReady: true }, '*');
-  });
+  function announce() {
+    if (frame.contentWindow) frame.contentWindow.postMessage({ __avHostReady: true }, '*');
+  }
+  frame.addEventListener('load', announce);
+  announce();
 })();
 
 // Download bridge: the sandboxed frame cannot download anything itself (the

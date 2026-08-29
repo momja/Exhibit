@@ -1484,6 +1484,35 @@ const bridgeScript = `
       var silencedOrigins = {};
       (BLOCKED_ORIGINS || []).forEach(function(o) { silencedOrigins[o] = true; });
 
+      // Reports are buffered until the host announces itself, the same problem
+      // and the same handshake as the capability diagnostic above (av-yvtb).
+      // The violation that matters most is the one an artifact triggers on its
+      // first line — an <img src> in the initial markup — and that fires before
+      // the host page has finished parsing, let alone attached its listener. A
+      // one-shot postMessage there is simply lost, which is exactly the kind of
+      // intermittent "sometimes there is no prompt" this feature cannot afford.
+      //
+      // Buffer-then-flush rather than the capability warning's post-and-replay:
+      // that one is idempotent on the host (it reveals one banner however many
+      // times it hears), where a duplicated report here would queue a second
+      // prompt for an origin the user just answered.
+      var hostReady = false;
+      var queuedReports = [];
+      var sendReport = function(msg) {
+        if (hostReady) window.parent.postMessage(msg, API_ORIGIN);
+        else queuedReports.push(msg);
+      };
+      window.addEventListener('message', function(e) {
+        // Only our own host may release the queue; the frame's origin is opaque
+        // so identity is e.source, as with every other message the shim trusts.
+        if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+        if (!e.data || e.data.__avHostReady !== true || hostReady) return;
+        hostReady = true;
+        var pending = queuedReports;
+        queuedReports = [];
+        pending.forEach(function(m) { window.parent.postMessage(m, API_ORIGIN); });
+      });
+
       document.addEventListener('securitypolicyviolation', function(e) {
         // violatedDirective historically carried the whole source expression
         // ("script-src 'unsafe-inline'"); effectiveDirective is the modern,
@@ -1501,10 +1530,7 @@ const bridgeScript = `
         try { origin = new URL(uri).origin; } catch (err) { return; }
         if (silencedOrigins[origin]) return;
         silencedOrigins[origin] = true;
-        window.parent.postMessage(
-          { __avNetwork: true, artifactId: ARTIFACT_ID, origin: origin, directive: directive },
-          API_ORIGIN
-        );
+        sendReport({ __avNetwork: true, artifactId: ARTIFACT_ID, origin: origin, directive: directive });
       });
     }
   }`

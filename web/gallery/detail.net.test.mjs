@@ -55,6 +55,23 @@ const report = (origin, directive = "connect-src") => ({
 
 const originCalls = (api) => api.calls.filter((c) => c.path.includes("/origins"));
 
+// Found in a browser, not by a unit test: on a cold load the frame's document
+// often finishes before detail.js runs, so its `load` event has already fired
+// and a listener attached afterwards never hears it. Announcing only on `load`
+// left the frame's buffered reports stranded and the prompt simply never
+// appeared — intermittently, with cache state deciding.
+test("the host announces itself immediately, not only on a future frame load", () => {
+  const { frame } = loadDetail();
+
+  assert.ok(frame.contentWindow.posted.some((m) => m.__avHostReady === true),
+    "a frame that already loaded fires no second load event; the ping must not wait for one");
+
+  // And still on load, for the frames that do load after this script runs.
+  const count = frame.contentWindow.posted.length;
+  frame.dispatchEvent({ type: "load" });
+  assert.ok(frame.contentWindow.posted.length > count);
+});
+
 test("a blocked origin is prompted for in app chrome, not in the frame", async () => {
   const { byId, postFromFrame } = loadDetail();
 
