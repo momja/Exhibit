@@ -1,6 +1,6 @@
 ---
 id: av-hrtv
-status: in_progress
+status: closed
 deps: []
 links: [av-e0yj]
 created: 2026-08-03T05:01:45Z
@@ -53,3 +53,34 @@ Sequence after av-e0yj: it is rewriting the same tool functions (dropping the id
 **2026-08-04T04:13:00Z**
 
 Started concurrently with av-e0yj rather than after it, at the owner's direction. Both touch exhibit.ts's update_artifact; this branch keeps its diff surgical and expects to be rebased onto bug/av-e0yj/scope-agent-tools before merge. If av-e0yj fixes the r.artifact.id read as it passes through, this ticket narrows to the footprint field, the tests, and the docs line.
+
+**2026-08-28T15:59:28Z**
+
+Reconciled with av-l31x and av-e0yj, both of which landed on main after this
+branch started. av-l31x already fixed the core bug (update_artifact reading
+r.artifact.id/title instead of the top level) — not re-done here. av-e0yj
+rewrote the tool signatures (no id parameter, requireBoundArtifact/target,
+grant-based session scoping), so this branch was reset onto main and the
+remaining scope was hand-ported onto main's current shape rather than merged:
+
+1. Footprint filtering: update_artifact's footprint now excludes origins
+   already on the artifact's allowlist (exhibit.ts), and the tool text carries
+   the same pending-approval note create_artifact already gives.
+2. footprintChanged threaded into the tool's returned details.
+3. docs/security.md: added "An approved origin outlives the code it was
+   approved for" (§6), and corrected a stale §5.3 line that described this as
+   a still-open gap this ticket would close — it does not; re-gating on a
+   rewrite is rejected (see "Not in scope" above).
+4. Tests: internal/agent/artifact_saved_test.go already covered the
+   empty/unbound-grant-broadcasts-nothing case (renamed there, references
+   av-l31x). Added internal/api/agent_update_test.go — two real pi-sidecar
+   tests: TestAgentUpdateReportsOriginsAwaitingApproval (AC3, footprint
+   filtering + footprintChanged) and TestAgentUpdateKeepsApprovedOriginsReachable
+   (AC4, approved origins survive a rewrite and stay in the render CSP).
+   Taught internal/mockllm's transform() to add an external <script src> when
+   a prompt names a URL, so the origin-approval path is actually exercised —
+   scoped to the pre-fence instruction text only, since the naive version
+   picked up the injected <base href> inside a URL-ingested artifact's own
+   fenced source and broke TestAgentSessionIgnoresHostileTitleAndStaysScoped.
+
+Full suite green (go test ./... and make assets && go test ./...).
