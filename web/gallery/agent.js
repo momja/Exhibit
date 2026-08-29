@@ -631,9 +631,49 @@ function renderSnippetChips() {
 }
 function clearSnippets() { pendingSnippets = []; renderSnippetChips(); }
 
+// --- Brief handoff from /new (nw-d1dd) -------------------------------------
+// /new's agent panel is a form, not a chat box, so what arrives here is a set
+// of named answers rather than a sentence. It travels in sessionStorage rather
+// than a query string: it is the user's own content, and a URL is copied into
+// the server's request log, the operator's proxy log and browser history.
+const BRIEF_KEY = 'exhibit:agent-brief';
+
+// One entry per brief field: the key it arrives under and the label it wears
+// in the opening message. Adding a field to /new's form means adding a line
+// here, and that is the whole of the change on this side.
+const BRIEF_FIELDS = [
+  {key: 'title', label: 'Title'},
+  {key: 'description', label: 'What it should do'}
+];
+
+// takeBrief reads the brief and removes it in the same breath: a brief is one
+// session's opening move, and one left behind would start the *next* session
+// on a stale description.
+function takeBrief() {
+  let raw = null;
+  try {
+    raw = sessionStorage.getItem(BRIEF_KEY);
+    if (raw) sessionStorage.removeItem(BRIEF_KEY);
+  } catch (e) {
+    return null;   // storage refused (private mode); the composer starts empty
+  }
+  try { return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+
+// briefToMessage flattens the answers into the first chat message. Fields left
+// blank are dropped rather than sent as empty labels, so an optional field the
+// user skipped never reads to the model as "no title wanted".
+function briefToMessage(brief) {
+  const lines = BRIEF_FIELDS
+    .filter(f => brief[f.key] && String(brief[f.key]).trim())
+    .map(f => f.label + ': ' + String(brief[f.key]).trim());
+  return lines.length ? 'Build a self-contained tool.\n\n' + lines.join('\n') : '';
+}
+
 // --- Boot -------------------------------------------------------------------
 (async function boot() {
   const configured = await refreshKeyStatus();
+  const brief = takeBrief();
   if (artifact) {
     // The pane is already showing this artifact — the page render included the
     // same fragment a swap would fetch — so boot only has to say so.
@@ -642,5 +682,13 @@ function clearSnippets() { pendingSnippets = []; renderSnippetChips(); }
   } else {
     addMsg('sys', 'Describe a small self-contained tool and the agent will build it and save it to your library.');
   }
-  if (!configured) openKeyModal();
+  // A brief only opens a *new* build. In modify mode the session already has a
+  // subject, and a brief that somehow survived would ask for a second one.
+  const opening = (!artifact && brief) ? briefToMessage(brief) : '';
+  // Into the composer first, then sent: with no key configured the modal opens
+  // over the text and the user gets it back after saving one, rather than
+  // watching what they typed on the last page disappear.
+  if (opening) { inputEl.value = opening; autoGrow(); }
+  if (!configured) { openKeyModal(); return; }
+  if (opening) send();
 })();

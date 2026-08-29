@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,9 +22,8 @@ func getPage(t *testing.T, r *Router, path string) string {
 }
 
 // av-qo0j: /new is a real server-rendered page carrying the three routes in.
-// Paste HTML and From URL are the ingest panel's two modes (paste selected by
-// default); Build with agent is a plain link to the agent surface, which owns
-// its own page.
+// nw-d1dd made all three panel modes and put Build with agent first, selected
+// on load — it is no longer a bare link to /agent.
 func TestNewPageOffersThreeRoutes(t *testing.T) {
 	r := newTestRouter(t)
 	page := getPage(t, r, "/new")
@@ -31,18 +31,71 @@ func TestNewPageOffersThreeRoutes(t *testing.T) {
 	assert.Contains(t, page, "<title>Add artifact — Exhibit</title>")
 	assert.Contains(t, page, `<h2>Three ways in.</h2>`)
 
-	// The two panel modes carry data-mode; paste starts selected.
-	assert.Contains(t, page, `<button type="button" class="route is-selected" data-mode="paste" aria-pressed="true" onclick="setMode('paste')">`)
+	assert.Contains(t, page, `<button type="button" class="route is-selected" data-mode="agent" aria-pressed="true" onclick="setMode('agent')">`)
+	assert.Contains(t, page, `<button type="button" class="route" data-mode="paste" aria-pressed="false" onclick="setMode('paste')">`)
 	assert.Contains(t, page, `<button type="button" class="route" data-mode="url" aria-pressed="false" onclick="setMode('url')">`)
-	// The agent tile is a link, not a mode: it carries no data-mode, so the
-	// mode switch can never select it.
-	assert.Contains(t, page, `<a class="route" href="/agent">`)
 	assert.Contains(t, page, `<b>Build with agent</b>`)
+
+	// The agent tile used to be an anchor straight to /agent. It is a mode now,
+	// so a click selects the brief below rather than leaving the page.
+	assert.NotContains(t, page, `<a class="route" href="/agent">`)
 
 	// Sub-page header idiom (detail.tmpl): back link, then page title — not a
 	// Library/Studio segmented nav.
 	assert.Contains(t, page, `<a href="/">←<span class="back-label"> Gallery</span></a>`)
 	assert.Contains(t, page, `<h1>Add artifact</h1>`)
+}
+
+// Order is the ticket (nw-d1dd): agent, then paste, then url.
+func TestNewPageOrdersAgentFirst(t *testing.T) {
+	r := newTestRouter(t)
+	page := getPage(t, r, "/new")
+
+	agent := strings.Index(page, `data-mode="agent"`)
+	paste := strings.Index(page, `data-mode="paste"`)
+	url := strings.Index(page, `data-mode="url"`)
+	require.NotEqual(t, -1, agent)
+	require.NotEqual(t, -1, paste)
+	require.NotEqual(t, -1, url)
+	assert.Less(t, agent, paste, "Build with agent leads the routes")
+	assert.Less(t, paste, url, "Paste HTML sits between the agent and URL tiles")
+}
+
+// The agent route asks for a brief on a form of named fields, not a chat box:
+// the fields are what the agent surface builds its opening message from, and
+// the set is meant to grow. The description is required; the title is not.
+func TestNewPageCarriesTheAgentBriefForm(t *testing.T) {
+	r := newTestRouter(t)
+	page := getPage(t, r, "/new")
+
+	assert.Contains(t, page, `<form class="card ingest-panel" id="agent-panel" onsubmit="startAgent(event)">`)
+	assert.Contains(t, page, `<input class="field" type="text" id="agent-title" name="title"`)
+	assert.Contains(t, page, `<textarea id="agent-description" name="description" required`)
+	assert.Contains(t, page, `<button class="btn" type="submit"><i class="ph ph-robot"></i> Start building</button>`)
+
+	// The ingest form is the other panel, and it starts hidden: the page opens
+	// on the brief.
+	assert.Contains(t, page, `<div class="card ingest-panel" id="ingest-panel" hidden>`)
+}
+
+// The brief crosses to /agent in sessionStorage, never a query string: it is
+// the user's own content, and a URL is copied into this server's request log,
+// the operator's proxy log and browser history. agent.js consumes it once.
+func TestNewPageHandsTheBriefOverOutOfBandOfTheURL(t *testing.T) {
+	r := newTestRouter(t)
+	newJS := galleryAsset(t, r, "/assets/gallery/new.js")
+	agentJS := galleryAsset(t, r, "/assets/gallery/agent.js")
+
+	assert.Contains(t, newJS, `const BRIEF_KEY = 'exhibit:agent-brief';`)
+	assert.Contains(t, newJS, `sessionStorage.setItem(BRIEF_KEY, JSON.stringify(brief));`)
+	assert.Contains(t, newJS, `location.href = '/agent';`)
+	assert.NotContains(t, newJS, `/agent?`, "the brief must never travel in the URL")
+
+	assert.Contains(t, agentJS, `const BRIEF_KEY = 'exhibit:agent-brief';`)
+	assert.Contains(t, agentJS, `sessionStorage.removeItem(BRIEF_KEY);`)
+	// One entry per brief field, so a new field on the form is one line here.
+	assert.Contains(t, agentJS, `const BRIEF_FIELDS = [`)
+	assert.Contains(t, agentJS, `{key: 'description', label: 'What it should do'}`)
 }
 
 // The ingest panel is the whole ingest form the gallery index used to carry:
@@ -78,7 +131,7 @@ func TestNewPageSnapshotToggleIsURLModeOnly(t *testing.T) {
 	page := getPage(t, r, "/new")
 
 	assert.Contains(t, page, `<label class="snapshot-row" id="snapshot-row" hidden>`,
-		"the snapshot row must start hidden, since paste is the default mode")
+		"the snapshot row must start hidden: the page opens on the agent brief, and paste never shows it either")
 
 	js := galleryAsset(t, r, "/assets/gallery/new.js")
 	assert.Contains(t, js, `document.getElementById('snapshot-row').hidden = mode !== 'url';`)

@@ -277,6 +277,28 @@ gallery: chat + streaming on the left, sandboxed preview iframe (same
 page also hosts the same `__avState` bridge as the detail page, so artifact
 state written in the preview persists.
 
+**The brief handoff (nw-d1dd).** A create session usually arrives from `/new`,
+whose Build-with-agent panel is now the page's default and is a *form* rather
+than a prompt box: a title and a description today, more answerable fields
+later. Two things about how it gets here.
+
+It travels in `sessionStorage` under `exhibit:agent-brief`, never a query
+string. It is the user's own content, and a URL is copied into the service's
+request log, the operator's proxy access log and the browser's history — the
+same argument that put the SSE credential in a single-use ticket instead of a
+URL (av-rgp1), applied to content rather than a secret. Same origin, same tab,
+so nothing else is needed to carry it.
+
+And it is consumed exactly once. `agent.js`'s boot reads it and removes it in
+the same breath; a brief left behind would open the *next* session on a stale
+description. It applies only in create mode — a modify session already has a
+subject. The answered fields are flattened into the opening message by
+`briefToMessage`, driven by the `BRIEF_FIELDS` list, so a field added to the
+form is one line here and nothing else. The text goes into the composer before
+it is sent, which is what makes the no-key case behave: the key modal opens
+over the filled composer and the user gets their words back after saving a key,
+instead of watching them vanish with the page they typed them on.
+
 **Preview re-render (av-6m3e).** The preview pane is a server-rendered
 fragment, not DOM the page script assembles. `agent.tmpl`'s `agentPreview`
 partial renders the bar (title, Open/Details links, snippet button) and the
