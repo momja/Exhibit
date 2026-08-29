@@ -140,6 +140,26 @@
     </div>
   </div>
 </div>
+
+{{/* Runtime network-permission prompt (av-kmwj, spec §6.2 step 4). It lives
+     here, in app chrome, and never inside the artifact's frame — the artifact
+     owns that DOM and could draw a forgery of this dialog. The origin and
+     directive are filled in by detail.js via textContent: they come out of the
+     artifact's own blocked request and must never be interpolated as markup. */}}
+<div id="net-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="net-title">
+    <h2 id="net-title">Allow network access?</h2>
+    <p><strong>{{.Title}}</strong> tried to contact <code id="net-origin"></code> and was blocked.</p>
+    <p class="text-sm muted" id="net-directive"></p>
+    <p>Allowing adds this origin to the artifact's allowlist and reloads the artifact so the request can retry. You can revoke it later in allowlist settings.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-sec" id="net-never">Don't ask again</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="net-once">Block once</button>
+      <button type="button" class="btn" id="net-allow"><i class="ph ph-globe-hemisphere-west"></i> Allow origin</button>
+    </div>
+  </div>
+</div>
 <script>
 const TOKEN = {{.Token}};
 {{/* READ_ONLY and TOKEN are one decision, made server-side per request
@@ -153,9 +173,14 @@ const TOKEN = {{.Token}};
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const ID = {{.ID}};
 const SOURCE_URL = {{.SourceURL}};
-{{/* Where a capture device actually works: the top-level render. The media
-     gate opens this on approval, so the page script never rebuilds a render
-     URL of its own. */ -}}
+{{/* The app-origin route that mints a render token and redirects to it, used
+     by the two page scripts that need a render URL they did not receive in the
+     markup: the media gate opens it on approval (av-mv3k), and the network
+     prompt reloads the frame through it (av-kmwj). Deliberately not FrameURL
+     for either — that token is minted once, when this page rendered, and
+     expires in ten minutes, so a page left open longer would land on a 404.
+     /open mints at request time, which is also why the page script never
+     rebuilds a render URL of its own. */ -}}
 const OPEN_URL = {{.OpenURL}};
 {{/* The booleans are emitted as literal template text rather than {{value}}
      interpolations: html/template's JS escaper pads identifiers with spaces,

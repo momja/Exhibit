@@ -276,7 +276,20 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		state = s
 	}
 
-	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, widget, viewer.Anonymous, manifest)
+	// The refused origins the network permission reporter must stay quiet about
+	// (av-kmwj). Read under the artifact's own owner, not the viewer's: a block
+	// is a decision about the artifact, and on a share the viewer has no library
+	// of their own to have made one in. A read failure degrades to an empty list
+	// — the worst that costs is one prompt the user has already answered, which
+	// is a far better failure than not rendering.
+	blocked, err := rd.blockedOrigins(r, a)
+	if err != nil {
+		slog.WarnContext(r.Context(), "render origin decisions read failed",
+			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
+		blocked = nil
+	}
+
+	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, blocked, widget, viewer.Anonymous, manifest)
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
 		slog.Int64("principal", viewer.OwnerID),
@@ -284,11 +297,32 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		slog.Bool("widget", widget),
 		slog.Int("body_bytes", len(bodyBytes)),
 		slog.Int("allowlist", len(a.NetworkAllowlist)),
+		slog.Int("blocked", len(blocked)),
 		slog.Int("state_keys", len(state)),
 		slog.String("csp", csp),
 		slog.String("permissions_policy", permissions),
 	)
 	fmt.Fprint(w, doc)
+}
+
+// blockedOrigins returns the artifact's decision='block' origins — the "don't
+// ask again" answers the runtime permission prompt recorded (av-kmwj).
+//
+// These are deliberately not the complement of the allowlist. An origin with no
+// decision at all is undecided, and undecided is exactly what the prompt exists
+// to ask about; only an explicit refusal silences it.
+func (rd *Renderer) blockedOrigins(r *http.Request, a *store.Artifact) ([]string, error) {
+	decisions, err := rd.cfg.Store.ListOriginDecisions(r.Context(), a.OwnerID, a.ID)
+	if err != nil {
+		return nil, err
+	}
+	var blocked []string
+	for _, d := range decisions {
+		if d.Decision == store.DecisionBlock {
+			blocked = append(blocked, d.Origin)
+		}
+	}
+	return blocked, nil
 }
 
 // buildCSP generates a per-artifact Content-Security-Policy header value
@@ -627,6 +661,14 @@ const shimTemplate = `<script>
   var API_ORIGIN = %q;
   var WIDGET = %t;
   var ANONYMOUS = %t;
+
+  // Origins the user already answered "don't ask again" for (av-kmwj). They
+  // are inlined rather than fetched for the same reason the state cache is:
+  // the reporter below has to know them before the artifact's first blocked
+  // request, which can happen on the first line of its first script. They
+  // never reach the CSP — that is built from allow decisions alone — so this
+  // list only decides what stays quiet.
+  var BLOCKED_ORIGINS = %s;
 
   // State is inlined by the render surface at request time, so getItem is
   // correct on the first *synchronous* read. Fetching it asynchronously would
@@ -1408,6 +1450,63 @@ const bridgeScript = `
       // whose createWritable() materializes a download via the bridge above.
       return Promise.resolve(makeFileHandle(new File([], opts.suggestedName || 'download')));
     };
+
+    // ---- Network permission reporter (av-kmwj, spec §6.2 step 4) ----
+    // The CSP has already blocked the request by the time this fires — the
+    // browser is the wall, and nothing here can rescue a request in flight.
+    // This only *reports* the refusal to the host frame so the user can decide,
+    // in trusted app chrome, whether to widen the policy for the next load. The
+    // prompt cannot live in this frame: the artifact owns this DOM and could
+    // draw a convincing forgery of it.
+    //
+    // ANONYMOUS is the one case that stays silent. A public instance's
+    // unauthenticated visitor cannot write a decision — the API would refuse
+    // it — so asking them would be the same lie persistState refuses to tell.
+    if (!ANONYMOUS) {
+      // Directives whose sources the per-artifact allowlist actually builds
+      // (buildCSP above). A violation outside this set is real but not
+      // actionable: an <iframe> blocked by default-src 'none' would still be
+      // blocked after the user approved its origin, because no allowlist entry
+      // reaches frame-src. Prompting there would promise a fix that does not
+      // arrive. The -elem/-attr variants are here because that is what browsers
+      // report as the effective directive even when the policy only spells out
+      // the parent (a blocked <script src> reports 'script-src-elem').
+      var GOVERNED = {
+        'script-src': 1, 'script-src-elem': 1, 'script-src-attr': 1,
+        'worker-src': 1, 'style-src': 1, 'style-src-elem': 1,
+        'style-src-attr': 1, 'img-src': 1, 'font-src': 1, 'media-src': 1,
+        'connect-src': 1, 'form-action': 1
+      };
+      // Seeded with the refused origins, then joined by every origin as it is
+      // reported. One membership test covers both jobs: an origin the user said
+      // "don't ask again" to never surfaces, and an origin in a retry loop is
+      // reported once per load rather than once per attempt.
+      var silencedOrigins = {};
+      (BLOCKED_ORIGINS || []).forEach(function(o) { silencedOrigins[o] = true; });
+
+      document.addEventListener('securitypolicyviolation', function(e) {
+        // violatedDirective historically carried the whole source expression
+        // ("script-src 'unsafe-inline'"); effectiveDirective is the modern,
+        // narrower name. Take whichever names a governed directive.
+        var effective = String(e.effectiveDirective || '').split(' ')[0];
+        var violated = String(e.violatedDirective || '').split(' ')[0];
+        var directive = GOVERNED[effective] ? effective : (GOVERNED[violated] ? violated : '');
+        if (!directive) return;
+        // Inline/eval violations report a keyword ('inline', 'eval'), not a
+        // URL, and are policy we set deliberately. Only a real origin is
+        // something the user can decide about.
+        var uri = String(e.blockedURI || '');
+        if (uri.indexOf('http://') !== 0 && uri.indexOf('https://') !== 0) return;
+        var origin;
+        try { origin = new URL(uri).origin; } catch (err) { return; }
+        if (silencedOrigins[origin]) return;
+        silencedOrigins[origin] = true;
+        window.parent.postMessage(
+          { __avNetwork: true, artifactId: ARTIFACT_ID, origin: origin, directive: directive },
+          API_ORIGIN
+        );
+      });
+    }
   }`
 
 // widgetBaseCSS is one of two things a widget render adds that an artifact
@@ -1486,21 +1585,40 @@ const widgetHealthScript = `<script>
 // anonymous marks a render for a viewer with no identity (av-wmp6). Callers
 // pass a nil state with it — there is no principal to have any — and the shim
 // stops writing through, so the frame's storage lives and dies with the frame.
-func injectPreamble(body, artifactID, appOrigin string, state map[string]string, widget, anonymous bool, assetManifest map[string]string) string {
+//
+// blocked is the artifact's refused origins (av-kmwj), inlined so the network
+// permission reporter stays quiet about an origin the user already answered
+// "don't ask again" for. It sits beside state because it is the same kind of
+// thing: per-render data the shim must hold before the artifact's first line
+// runs, not a mode flag.
+func injectPreamble(body, artifactID, appOrigin string, state map[string]string, blocked []string, widget, anonymous bool, assetManifest map[string]string) string {
 	if state == nil {
 		state = map[string]string{}
 	}
-	// json.Marshal escapes <, >, & as </>/&, so the literal is
+	if widget {
+		// A widget render omits the bridges entirely, and the reporter lives
+		// among them: a tile has no prompt to raise, so it carries no list of
+		// origins it would have suppressed.
+		blocked = nil
+	}
+	if blocked == nil {
+		blocked = []string{}
+	}
+	// json.Marshal escapes <, >, & as </>/&, so the literals are
 	// safe to embed inside a <script> element (can't break out with </script>).
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
 		stateJSON = []byte("{}")
 	}
+	blockedJSON, err := json.Marshal(blocked)
+	if err != nil {
+		blockedJSON = []byte("[]")
+	}
 	bridges := bridgeScript
 	if widget {
 		bridges = ""
 	}
-	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, widget, anonymous, stateJSON, bridges)
+	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, widget, anonymous, blockedJSON, stateJSON, bridges)
 	if widget {
 		// No snippet picker: it exists so the user can point at an element in
 		// the *artifact* preview and hand it to the agent. A widget frame is

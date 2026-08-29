@@ -115,6 +115,7 @@ var appOriginGETRoutes = []getRoute{
 	// The self-contained export (av-vnkt): a read that materializes the
 	// artifact into one file. It writes nothing.
 	{route: "/api/artifacts/{artifactID}/export"},
+	{route: "/api/artifacts/{artifactID}/origins"},
 	{route: "/api/artifacts/{artifactID}/widget"},
 	{route: "/api/artifacts/{artifactID}/transcripts"},
 	{route: "/api/agent/key"},

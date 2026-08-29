@@ -52,8 +52,9 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
   `POST /api/artifacts` while unbound, plus `GET`/`PATCH` on the session's own
   artifact and the `state` / `widget` sub-resources of that same artifact —
   one allowlist entry per tool above. Every other route — the BYO provider
-  key, shares, deletes, tags, collections, transcripts, `widget/generate`, and
-  every other artifact in the library — is a 403 before any handler runs.
+  key, shares, deletes, tags, collections, transcripts, `widget/generate`,
+  `origins` (approving the artifact's own network egress, av-kmwj), and every
+  other artifact in the library — is a 403 before any handler runs.
 - **This is the per-artifact half only.** The credential's owner becomes the
   request's `ownerID`, so the owner-scoped Store methods (av-ep8k) bound it to
   one tenant exactly as they bound a browser client. The path check then

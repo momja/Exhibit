@@ -95,6 +95,7 @@ func TestArtifactRoutes404ForAnotherOwner(t *testing.T) {
 	allowlist, _ := json.Marshal(map[string]any{"network_allowlist": []string{"https://evil.example.com"}})
 	stateBody, _ := json.Marshal(map[string]any{"key": "planted", "value": "x"})
 	widgetBody, _ := json.Marshal(map[string]any{"body": "<html><body>hijacked tile</body></html>"})
+	originBody, _ := json.Marshal(map[string]any{"origin": "https://evil.example.com", "decision": "allow"})
 
 	cases := []struct {
 		name   string
@@ -112,6 +113,9 @@ func TestArtifactRoutes404ForAnotherOwner(t *testing.T) {
 		{"PUT state", "PUT", "/api/artifacts/%s/state", stateBody},
 		{"DELETE state key", "DELETE", "/api/artifacts/%s/state?key=secret", nil},
 		{"DELETE all state", "DELETE", "/api/artifacts/%s/state", nil},
+		{"GET origins", "GET", "/api/artifacts/%s/origins", nil},
+		{"POST origins (single-origin allow)", "POST", "/api/artifacts/%s/origins", originBody},
+		{"DELETE origins", "DELETE", "/api/artifacts/%s/origins?origin=https%3A%2F%2Ftheirs.example.com", nil},
 		{"GET widget", "GET", "/api/artifacts/%s/widget", nil},
 		{"PUT widget", "PUT", "/api/artifacts/%s/widget", widgetBody},
 		{"DELETE widget", "DELETE", "/api/artifacts/%s/widget", nil},
@@ -162,6 +166,11 @@ func TestForeignArtifactSurvivesTheRefusedWrites(t *testing.T) {
 	do(t, r, "PUT", "/api/artifacts/"+foreignID+"/state", stateBody)
 	do(t, r, "DELETE", "/api/artifacts/"+foreignID+"/state", nil)
 	do(t, r, "DELETE", "/api/artifacts/"+foreignID+"/widget", nil)
+	// The per-origin route is the narrower of the two allowlist write paths
+	// (av-kmwj) and reaches the same rows, so it gets the same guarantee.
+	originBody, _ := json.Marshal(map[string]any{"origin": "https://evil.example.com", "decision": "allow"})
+	do(t, r, "POST", "/api/artifacts/"+foreignID+"/origins", originBody)
+	do(t, r, "DELETE", "/api/artifacts/"+foreignID+"/origins?origin=https%3A%2F%2Ftheirs.example.com", nil)
 	do(t, r, "DELETE", "/api/artifacts/"+foreignID, nil)
 
 	a, err := r.cfg.Store.GetArtifact(ctx, otherOwner, foreignID)
@@ -169,7 +178,9 @@ func TestForeignArtifactSurvivesTheRefusedWrites(t *testing.T) {
 	require.NotNil(t, a, "the artifact must not have been deleted")
 	assert.Equal(t, "Someone Else's Tool", a.Title)
 	assert.Equal(t, []string{"https://theirs.example.com"}, a.NetworkAllowlist,
-		"the render CSP is built from this list; no other owner may widen it")
+		"the render CSP is built from this list; no other owner may widen it — "+
+			"by PATCH or by the per-origin route, and the seeded origin must "+
+			"still be there, so neither may narrow it either")
 	assert.NotEmpty(t, a.WidgetBlobID, "the widget must still be attached")
 
 	state, err := r.cfg.Store.GetState(ctx, store.OwnerID(otherOwner), foreignID, store.ViewerID(otherOwner))

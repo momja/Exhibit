@@ -131,6 +131,39 @@ As with any ingest, residual origins surface in `network_footprint` for
 **explicit** approval — the snapshot never seeds the `network_allowlist`, so a
 snapshotted artifact stays network-inert until you approve its residual origins.
 
+## Network origin decisions
+
+```
+GET    /api/artifacts/:id/origins            List every decision (allow and block)
+POST   /api/artifacts/:id/origins            Decide one origin
+                                             {"origin":"…","decision":"allow"|"block","source":"…"}
+DELETE /api/artifacts/:id/origins?origin=…   Forget one decision (back to undecided)
+```
+
+`PATCH /api/artifacts/:id` with `network_allowlist` carries the whole approved
+set and is what the edit page's Save uses. These routes decide a **single**
+origin, and the difference is what they can express, not only how wide they are.
+`PATCH` replaces the allow rows and deliberately leaves block rows alone, so it
+can neither record a block nor return an origin to undecided; both are here.
+
+- `decision: "allow"` widens the artifact's CSP on its next render.
+- `decision: "block"` records a "don't ask again" answer. It **never** reaches
+  the CSP; the render surface inlines it into the preamble purely so the runtime
+  permission prompt stops raising that origin.
+- `DELETE` is how a block is forgotten. Without it a block would be a permanent
+  trap: a blocked origin never prompts again on its own.
+- `source` is provenance and informational only, defaulting to `"user"`. The
+  runtime prompt sends `"runtime"`.
+
+The origin goes through the same normalization and the same `400` as a
+`network_allowlist` entry (above), for the same reason: an allow row is pasted
+verbatim into a CSP header. On `DELETE` it travels as a query parameter rather
+than a path segment, because an origin is arbitrary caller-supplied text and a
+path segment is resolved by the URL parser before the request is sent.
+
+An agent-session credential cannot reach these routes at all: approving an
+artifact's own network egress is a decision reserved for a person.
+
 ## State (cross-device sync)
 
 ```

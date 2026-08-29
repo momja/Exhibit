@@ -232,7 +232,10 @@ func (ro *Router) resolveAgentGrant(token string) *agentscope.Grant {
 // agent's reach until someone adds it here deliberately. Notably absent:
 // `refetch` (re-pulls a remote page into the body), `collections`/`tags`
 // (library organisation, not the artifact), `transcripts` (other sessions'
-// conversations), and `widget/generate` (an agent spawning another agent).
+// conversations), `widget/generate` (an agent spawning another agent), and
+// `origins` (av-kmwj) — a session steered by text Exhibit did not author must
+// not be able to approve its own network egress, which is the one decision the
+// whole scan-approve-allowlist model reserves for a person.
 //
 // `assets` is GET only, and the asymmetry is the point. The agent needs to
 // know which URLs the page fetches are already served from stored copies —

@@ -366,16 +366,23 @@ with a per-artifact allowlist as the source of truth:
    font, a locally picked file, or a Worker the artifact builds at runtime is not a network
    request). Sorting each new CSP source into one of those two buckets — network-reaching
    (allowlist-gated) or local/no-egress (unconditional) — is the standing rule.
-4. **Runtime escape → blocked.** If a rendered artifact attempts an origin **not** on
-   its allowlist, the attempt is blocked by the browser's CSP. The user can approve
-   the origin afterward in the artifact's allowlist editor, which updates the CSP on
-   next render. A runtime approval prompt is tracked by `exhibit-fr7`; a "don't ask
-   again" answer from it is stored as a `decision='block'` row, which suppresses the
-   prompt and **never** affects the CSP.
+4. **Runtime escape → blocked, then prompted.** If a rendered artifact attempts an
+   origin **not** on its allowlist, the attempt is blocked by the browser's CSP. The
+   render preamble reports the blocked origin to the host frame, which prompts in the
+   app's own chrome — never inside the artifact's DOM, which the artifact could forge:
+   **Allow** approves the origin and transparently reloads the artifact so the request
+   retries under the new CSP; **Block once** dismisses; **Don't ask again** stores a
+   `decision='block'` row, which suppresses future prompts for that origin and
+   **never** affects the CSP. Each origin is prompted at most once per load, and only
+   for the directives the allowlist actually builds — approving an origin the policy
+   would still refuse for another reason would be a promise the CSP does not keep.
+   The top-level and share views have no trusted chrome to host a prompt, so
+   violations there stay silently blocked.
 5. **Per-artifact settings.** Decisions are visible and editable in each artifact's
    settings — the user can review, add, or revoke approved origins at any time, and
    blocked origins are listed separately so an earlier "don't ask again" stays visible
-   and can be overridden rather than reading as merely undecided.
+   and can be overridden (Allow) or dropped entirely (Forget) rather than reading as
+   merely undecided.
 
 The static scan is **transparency, not a wall** (it's evadable). The enforced boundary
 is the browser-level CSP generated from the allowlist; the scan just front-loads the
@@ -478,7 +485,9 @@ single self-contained `.html`.
 - **No pre-render analysis step / no agent inspection** to detect storage usage — the
   runtime storage shim observes instead.
 - **No CSP violation-report pipeline** — replaced by scan + explicit per-artifact
-  allowlist with runtime permission prompts.
+  allowlist with runtime permission prompts. The prompt reads
+  `securitypolicyviolation` in the frame and asks the user; nothing is reported
+  to a server endpoint, aggregated, or retained beyond the one decision row.
 - **No interactive widgets.** A card's widget (§5.5) reports; it never acts. Making
   tiles clickable would put a second, unaudited control surface in the library and
   would need per-tile capability grants the artifact's own approvals never covered.

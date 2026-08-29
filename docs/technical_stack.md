@@ -166,7 +166,10 @@ Renderer construction:
 - Inject the **render preamble** — the **storage shim** (§6 here) with the artifact's
   current state inlined, plus the out-of-line **asset manifest** (av-20fk) that
   redirects the page's own `fetch` of a vendored payload to that artifact's asset
-  route — into `<head>` *before* any artifact script runs.
+  route, and (framed only) the capability bridges plus the **network permission
+  reporter**, a `securitypolicyviolation` listener that hands CSP-blocked origins
+  to the host frame to prompt about — into `<head>` *before* any artifact script
+  runs.
   Serve the document `Cache-Control:
   no-store` — it's dynamic (inlined state + per-artifact CSP) and must not be cached.
 
@@ -303,6 +306,21 @@ hand-rolled HTML escaping the old string-concatenated pages needed.)
 
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.
+
+**Page scripts are tested by running them (av-kmwj).** `web/gallery/testdom.mjs`
+is a small DOM — element lookup, listeners, `hidden`, `textContent`, and a
+`postMessage` boundary between the host and the artifact frame — that a
+`node --test` file loads a *built* page script into and drives through a whole
+interaction. `internal/api`'s `TestGalleryPageScriptSuite` runs those files, so
+`go test ./...` covers both halves of a feature. This exists because the Go
+tests can assert that an id is in the rendered markup and that a substring is in
+the shipped asset, and cannot assert that clicking Allow writes a decision and
+reloads the frame — the gap that let a whole feature reach a merged PR without
+reaching main. It is deliberately not jsdom: these scripts do a narrow set of
+DOM things, and a full DOM implementation is a large dependency for a workspace
+whose entire build step is copying files. The cost is that elements are created
+on demand rather than parsed from the template, so an id the template spells
+differently is the Go template tests' half to catch.
 
 **Partial re-render: htmx (av-6m3e).** When server-side state changes after
 load, the page re-fetches one server-rendered fragment and swaps it in rather
