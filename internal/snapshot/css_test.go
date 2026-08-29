@@ -89,6 +89,38 @@ func TestInlineCSSURLForms(t *testing.T) {
 	assert.Equal(t, 1, srv.hitCount("/css/img/bg.png"), "identical URLs fetch once")
 }
 
+// A url() asset over the size threshold leaves the sheet the same way a markup
+// one leaves the document: the reference becomes the stored asset's URL. This
+// is the CSS half of av-oz40 — a webfont or a background photo is exactly the
+// kind of payload that made a snapshot body megabytes of base64.
+func TestInlineCSSSendsAnOverThresholdAssetToTheSink(t *testing.T) {
+	big := []byte(strings.Repeat("P", InlineDataURIMaxBytes+1))
+	srv := newCSSServer(t, map[string]func(http.ResponseWriter){
+		"/css/img/hero.png": servePNG(big),
+	})
+
+	var sunk []RuntimeAsset
+	sink := func(a RuntimeAsset) (string, error) {
+		sunk = append(sunk, a)
+		return "https://render.test/a/x/assets/as-1", nil
+	}
+
+	f := testFetcher(t, srv.URL+"/css/style.css", DefaultLimits())
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/css/style.css",
+		`a { background: url(img/hero.png); }`, sink)
+
+	require.Empty(t, errs)
+	// Double-quoted like every other rewritten url(), so a URL containing
+	// parentheses or whitespace cannot break the declaration.
+	assert.Contains(t, out, `url("https://render.test/a/x/assets/as-1")`)
+	assert.NotContains(t, out, "base64", "the bytes must not also be left in the sheet")
+	require.Len(t, sunk, 1, "stored once")
+	assert.Equal(t, srv.URL+"/css/img/hero.png", sunk[0].SourceURL,
+		"stored under the absolute URL, resolved against the sheet's own base")
+	assert.Equal(t, "image/png", sunk[0].ContentType)
+	assert.Equal(t, big, sunk[0].Body)
+}
+
 // TestInlineCSSSkipsNonNetworkRefs leaves data:/blob:/about:/#fragment targets
 // untouched with no error and never hits the network.
 func TestInlineCSSSkipsNonNetworkRefs(t *testing.T) {

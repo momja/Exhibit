@@ -28,6 +28,8 @@ import (
 	"encoding/json"
 	"strings"
 
+	"golang.org/x/net/html"
+
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -132,12 +134,48 @@ func injectManifest(body string, manifest map[string]string) (string, error) {
 })();
 </script>`
 
-	if i := strings.Index(strings.ToLower(body), "<head>"); i >= 0 {
-		at := i + len("<head>")
-		return body[:at] + "\n" + script + body[at:], nil
+	at, before := headInsertion(body)
+	if at < 0 {
+		return script + "\n" + body, nil
 	}
-	if i := strings.Index(strings.ToLower(body), "</head>"); i >= 0 {
-		return body[:i] + script + "\n" + body[i:], nil
+	if before {
+		return body[:at] + script + "\n" + body[at:], nil
 	}
-	return script + "\n" + body, nil
+	return body[:at] + "\n" + script + body[at:], nil
+}
+
+// headInsertion returns the byte offset the manifest goes at, and whether it
+// goes before that offset (a </head> end tag) or after it (a <head> start
+// tag). A document with no head at all returns -1, and the caller prepends —
+// tree construction then moves the script into the implicit head.
+//
+// It tokenizes rather than searching for the literal "<head>" because the
+// first occurrence of that text is not necessarily the element: a comment or a
+// script that builds a document out of strings (an iframe srcdoc, say — a
+// common enough shape in these artifacts) contains it as text. Inserting there
+// puts the manifest inside a comment or a string literal, where it never runs,
+// and the exported file's runtime payloads silently fail to load. Byte offsets
+// come from summing the raw token text, so the document itself is returned
+// unchanged rather than re-serialized.
+func headInsertion(body string) (offset int, before bool) {
+	z := html.NewTokenizer(strings.NewReader(body))
+	for at := 0; ; {
+		tt := z.Next()
+		if tt == html.ErrorToken {
+			return -1, false
+		}
+		// Raw first: TagName may reuse the buffer it returns.
+		raw := len(z.Raw())
+		switch tt {
+		case html.StartTagToken:
+			if name, _ := z.TagName(); string(name) == "head" {
+				return at + raw, false
+			}
+		case html.EndTagToken:
+			if name, _ := z.TagName(); string(name) == "head" {
+				return at, true
+			}
+		}
+		at += raw
+	}
 }

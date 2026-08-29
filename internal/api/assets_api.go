@@ -86,7 +86,13 @@ func (ro *Router) deleteAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	// Same pattern as every other delete on this surface: the request drains
 	// what it just enqueued, so no request ever walks a backlog and a crash
-	// leaves the work for the next startup rather than losing it.
-	ro.reclaimBlobs(r.Context(), queued)
+	// leaves the work for the next startup rather than losing it. And, as
+	// there, a failure is a 500 rather than a quiet 204 — the row is gone but
+	// the bytes are not, and a delete must not claim otherwise. It is no
+	// longer a leak either: the queue row outlives the failure.
+	if err := ro.reclaimBlobs(r.Context(), queued); err != nil {
+		serverError(w, r, "delete artifact asset blobs", err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }

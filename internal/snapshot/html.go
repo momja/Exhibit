@@ -108,22 +108,24 @@ func (in *inliner) transform(n *html.Node) {
 	in.inlineStyleAttr(n)
 }
 
-// inlineAttr replaces the named attribute's value with a data: URI of the
-// fetched asset. A failed or non-fetchable reference is left in place.
+// inlineAttr replaces the named attribute's value with the fetched asset's
+// reference — inline, or an out-of-line asset URL past the size threshold. A
+// failed or non-fetchable reference is left in place.
 func (in *inliner) inlineAttr(n *html.Node, key string) {
 	for i := range n.Attr {
 		a := &n.Attr[i]
 		if a.Namespace != "" || a.Key != key {
 			continue
 		}
-		if uri, ok := in.toDataURI(a.Val); ok {
-			a.Val = uri
+		if ref, ok := in.assetRef(a.Val); ok {
+			a.Val = ref
 		}
 	}
 }
 
-// inlineSrcset rewrites each candidate URL in a srcset attribute to a data:
-// URI, preserving descriptors. Candidates that fail to fetch keep their URL.
+// inlineSrcset rewrites each candidate URL in a srcset attribute to the
+// fetched asset's reference, preserving descriptors. Candidates that fail to
+// fetch keep their URL.
 func (in *inliner) inlineSrcset(n *html.Node) {
 	for i := range n.Attr {
 		a := &n.Attr[i]
@@ -140,8 +142,8 @@ func (in *inliner) inlineSrcset(n *html.Node) {
 				b.WriteString(", ")
 			}
 			ref := c.url
-			if uri, ok := in.toDataURI(ref); ok {
-				ref = uri
+			if replacement, ok := in.assetRef(ref); ok {
+				ref = replacement
 			}
 			b.WriteString(ref)
 			if c.descriptor != "" {
@@ -232,10 +234,12 @@ func (in *inliner) inlineStyleAttr(n *html.Node) {
 	}
 }
 
-// toDataURI fetches ref and returns its data: URI. On a non-fetchable ref it
+// assetRef fetches ref and returns the reference the document should carry in
+// its place — a data: URI, or an out-of-line asset URL when the payload is
+// large enough to leave the body (place, sink.go). On a non-fetchable ref it
 // returns false without recording anything; on a fetch failure it records the
 // *FetchError and returns false so the caller keeps the original reference.
-func (in *inliner) toDataURI(ref string) (string, bool) {
+func (in *inliner) assetRef(ref string) (string, bool) {
 	if !fetchable(ref) {
 		return "", false
 	}

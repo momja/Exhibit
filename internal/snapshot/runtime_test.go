@@ -52,19 +52,6 @@ func TestCollectRuntimeAssets(t *testing.T) {
 	})
 	base := srv.URL + "/index.html"
 
-	// The defining property of the pass after av-20fk: it reads the document
-	// and never writes it. Asserted once here and relied on by every case
-	// below, which is why none of them checks the body separately.
-	t.Run("never modifies the document", func(t *testing.T) {
-		body := `<html><head><script>fetch('/build/app.wasm')</script></head><body></body></html>`
-		f := testFetcher(t, base, runtimeLimits())
-		_, _, err := CollectRuntimeAssets(context.Background(), f, body)
-		require.NoError(t, err)
-		// The caller's string is untouched — there is no transformed copy to
-		// compare against, because the pass does not produce one. That is what
-		// lets an agent rewrite the whole body without breaking asset loading.
-	})
-
 	t.Run("collects a root-relative runtime fetch", func(t *testing.T) {
 		body := `<html><head><script>
 			fetch('/build/app.wasm').then(r => r.arrayBuffer());

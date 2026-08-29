@@ -740,3 +740,39 @@ func TestShimFSASaveReusesDownloadBridge(t *testing.T) {
 		t.Fatalf("createWritable.write must accept the WriteParams form: %s", doc)
 	}
 }
+
+// The asset source is a system source, not an approved one: it is added by the
+// render surface and never appears in the allowlist editor. What it must be is
+// an absolute, path-scoped URL. A path-only source would be resolved against
+// whatever the browser is comparing it to, and the artifact's own frame has an
+// opaque origin — so a vendored payload's fetch would be blocked by the very
+// policy that is supposed to permit it. The trailing slash keeps it a prefix
+// over one artifact's assets rather than a grant over the whole origin.
+func TestBuildCSPCarriesTheAbsoluteAssetSource(t *testing.T) {
+	const appOrigin = "https://app.example.com"
+	rd := &Renderer{cfg: Config{RenderOrigin: "https://render.example.com"}}
+
+	base := rd.assetBaseURL("art-1")
+	if base != "https://render.example.com/a/art-1/assets/" {
+		t.Fatalf("asset base %q must be absolute and path-scoped to the artifact", base)
+	}
+
+	csp := buildCSP(nil, appOrigin, base)
+	// Every directive a vendored payload can load under: the runtime pass's
+	// arrive by fetch, markup assets (av-oz40) through the element that names
+	// them.
+	for _, name := range []string{"connect-src", "img-src", "font-src", "media-src", "style-src", "script-src"} {
+		d, ok := directive(t, csp, name)
+		if !ok {
+			t.Fatalf("%s directive missing", name)
+		}
+		if !strings.Contains(d, base) {
+			t.Fatalf("%s %q must carry the asset source %q", name, d, base)
+		}
+	}
+
+	// And it costs an artifact without assets nothing.
+	if strings.Contains(buildCSP(nil, appOrigin, ""), "/assets/") {
+		t.Fatalf("an artifact with no assets must keep the policy it had before assets existed")
+	}
+}

@@ -67,6 +67,25 @@ const blobReferenceCount = `
              WHERE source_blob_id = ?1 OR widget_blob_id = ?1)
          + (SELECT COUNT(*) FROM artifact_assets WHERE blob_id = ?1)`
 
+// releaseReferencedBlobSQL retires a queue row whose blob has acquired a
+// reference again since it was condemned, without touching the bytes.
+//
+// That happens because the intent to delete and the delete itself are two
+// steps with a gap between them, and a blob id can become live again inside
+// it. Asset blobs are content-addressed per owner (av-20fk), so re-ingesting
+// the same payload recreates the *same* id: delete an artifact, re-ingest its
+// wasm, and the queue is still holding the id the new asset row now names. The
+// gap is not always short either — a drain that fails leaves its row for the
+// next startup, which may be days and many ingests later.
+//
+// The refcount is the same one the enqueue was conditional on, embedded rather
+// than repeated so the two can never disagree about what a reference is. It
+// runs inside the DELETE so the check and the retirement are one statement and
+// there is nothing to interleave between them.
+const releaseReferencedBlobSQL = `
+    DELETE FROM pending_blob_deletions
+     WHERE blob_id = ?1 AND (` + blobReferenceCount + `) > 0`
+
 // enqueueUnreferencedBlobs records the intent to delete each of ids whose last
 // reference has just gone, and returns the subset it enqueued.
 //
@@ -148,6 +167,14 @@ func (s *SQLiteStore) PendingBlobDeletions(ctx context.Context) ([]string, error
 // The first error is still returned rather than swallowed: a disk that refused
 // a delete is worth surfacing even though the queue will keep trying.
 //
+// Each id is rechecked for references immediately before its bytes go, and an
+// id that has become live again is dropped from the queue with its bytes
+// untouched. A queued id means "nothing referenced this when it was
+// condemned", which is not the same claim as "nothing references it now": the
+// ids are content addresses, so re-ingesting the same payload reuses the id,
+// and a row left behind by a failed drain can outlive several ingests. Without
+// the recheck that drain deletes the bytes out from under a live artifact.
+//
 // Callers pass the ids the delete operation just enqueued, so a request drains
 // its own work and never walks a backlog.
 func (s *SQLiteStore) DrainBlobDeletions(ctx context.Context, blobs BlobDeleter, ids []string) (int, error) {
@@ -157,6 +184,22 @@ func (s *SQLiteStore) DrainBlobDeletions(ctx context.Context, blobs BlobDeleter,
 		firstErr  error
 	)
 	for _, id := range ids {
+		// Live again: retire the intent, keep the bytes. Reported as drained
+		// because the row left the queue, which is what the count is about.
+		res, err := s.db.ExecContext(ctx, releaseReferencedBlobSQL, id)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("recheck references to blob %s: %w", id, err)
+			}
+			continue // the row stays; better a delayed delete than a wrong one
+		}
+		if n, err := res.RowsAffected(); err == nil && n > 0 {
+			slog.InfoContext(ctx, "queued blob is referenced again; keeping its bytes",
+				slog.String("blob_id", id))
+			drained++
+			continue
+		}
+
 		if err := blobs.Delete(ctx, id); err != nil {
 			if firstErr == nil {
 				firstErr = fmt.Errorf("blob %s: %w", id, err)

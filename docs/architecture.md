@@ -626,6 +626,14 @@ to remove, so it writes that down:
   nobody left to charge. A crash anywhere leaves the queue rows in place, and
   `Blob.Delete` is idempotent for a missing id (av-7jcq), so repeating the work
   costs nothing and needs no compensating existence check.
+- **The drain rechecks before it unlinks**, and an id that has acquired a
+  reference again leaves the queue with its bytes untouched. A queued id says
+  nothing referenced those bytes *when they were condemned*, which is a weaker
+  claim than "nothing references them now": asset blob ids are content
+  addresses, so re-ingesting the same payload names the very id sitting in the
+  queue, and a drain that failed leaves its row for a startup that may be many
+  ingests later. The recheck is the enqueue's own refcount, embedded in the
+  `DELETE` of the queue row so check and retirement are one statement.
 
 What the commit makes durable is therefore the *intent*, not the outcome, and
 everything after it is a retry of the same idempotent work — so there is no

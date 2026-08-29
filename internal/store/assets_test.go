@@ -101,9 +101,9 @@ func TestAnAssetBlobSharedByTwoArtifactsOutlivesTheFirstDeletion(t *testing.T) {
 	seedAssetArtifact(t, fx, "a2")
 
 	fx.putBody(t, "shared-wasm", "\x00asm-shared")
-	for i, id := range []string{"a1", "a2"} {
-		_, err := fx.store.ReplaceArtifactAssets(ctx, 1, id, "gen-"+id,
-			[]ArtifactAsset{asset(string(rune('x'+i))+"-as", "https://cdn.test/app.wasm", "shared-wasm")})
+	for artifactID, assetID := range map[string]string{"a1": "as-a1", "a2": "as-a2"} {
+		_, err := fx.store.ReplaceArtifactAssets(ctx, 1, artifactID, "gen-"+artifactID,
+			[]ArtifactAsset{asset(assetID, "https://cdn.test/app.wasm", "shared-wasm")})
 		require.NoError(t, err)
 	}
 
@@ -130,6 +130,55 @@ func TestAnAssetBlobSharedByTwoArtifactsOutlivesTheFirstDeletion(t *testing.T) {
 	_, err = fx.store.DrainBlobDeletions(ctx, fx.blobs, queued)
 	require.NoError(t, err)
 	assert.NoFileExists(t, fx.path("shared-wasm"))
+}
+
+// A queued id records that nothing referenced those bytes *when they were
+// condemned*, which stops being true if the same payload is ingested again
+// before the drain runs: asset blobs are content-addressed, so the new asset
+// row names the very id sitting in the queue. A drain that took the queue at
+// its word would delete the bytes out from under a live artifact — and this is
+// not a narrow window, because a drain that fails leaves its row for the next
+// startup, however many ingests later that is.
+func TestADrainKeepsBytesThatWereReferencedAgainAfterBeingQueued(t *testing.T) {
+	fx := newQueueFixture(t)
+	ctx := context.Background()
+	seedAssetArtifact(t, fx, "a1")
+	seedAssetArtifact(t, fx, "a2")
+
+	fx.putBody(t, "wasm-shared", "\x00asm-payload")
+	_, err := fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "gen-1",
+		[]ArtifactAsset{asset("as-1", "https://cdn.test/app.wasm", "wasm-shared")})
+	require.NoError(t, err)
+
+	queued, err := fx.store.DeleteArtifact(ctx, 1, "a1")
+	require.NoError(t, err)
+	require.Contains(t, queued, "wasm-shared")
+
+	// The re-ingest lands in the gap: same bytes, same owner, therefore the
+	// same content address the queue is still holding.
+	fx.putBody(t, "wasm-shared", "\x00asm-payload")
+	_, err = fx.store.ReplaceArtifactAssets(ctx, 1, "a2", "gen-1",
+		[]ArtifactAsset{asset("as-2", "https://cdn.test/app.wasm", "wasm-shared")})
+	require.NoError(t, err)
+
+	n, err := fx.store.DrainBlobDeletions(ctx, fx.blobs, queued)
+	require.NoError(t, err)
+	require.FileExists(t, fx.path("wasm-shared"), "a2 loads those bytes now")
+	assert.NoFileExists(t, fx.path("a1-body"), "the genuinely unreferenced body still goes")
+	assert.Equal(t, len(queued), n, "the reprieved id leaves the queue too")
+
+	// Retired rather than left to be reconsidered on every later drain.
+	pending, err := fx.store.PendingBlobDeletions(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, pending)
+
+	// And it is a reprieve, not an amnesty: once a2 goes, the bytes go.
+	queued, err = fx.store.DeleteArtifact(ctx, 1, "a2")
+	require.NoError(t, err)
+	require.Contains(t, queued, "wasm-shared")
+	_, err = fx.store.DrainBlobDeletions(ctx, fx.blobs, queued)
+	require.NoError(t, err)
+	assert.NoFileExists(t, fx.path("wasm-shared"))
 }
 
 // Deleting the artifact takes its assets' bytes, which requires reading the

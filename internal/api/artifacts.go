@@ -279,7 +279,13 @@ func (ro *Router) persistRuntimeAssets(ctx context.Context, ownerID int64, artif
 	if err != nil {
 		return err
 	}
-	ro.reclaimBlobs(ctx, queued)
+	// Logged, not returned: the superseded bytes are still condemned in the
+	// queue and the next startup finishes the job, so failing the ingest over
+	// them would trade a stored artifact for a delayed unlink.
+	if err := ro.reclaimBlobs(ctx, queued); err != nil {
+		slog.WarnContext(ctx, "reclaim superseded asset blobs",
+			slog.String("artifact_id", artifactID), slog.String("err", err.Error()))
+	}
 	return nil
 }
 

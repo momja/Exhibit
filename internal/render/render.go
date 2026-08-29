@@ -456,6 +456,15 @@ func assetManifestScript(manifest map[string]string) string {
           // The response carries the asset's real Content-Type from our own
           // route — WebAssembly.instantiateStreaming rejects anything that is
           // not exactly application/wasm.
+          //
+          // A Request argument is rebuilt on the new URL rather than reduced
+          // to it: headers, credentials, mode, integrity and the abort signal
+          // live on the Request, and a caller that passed one and no init
+          // would otherwise have all of them dropped. GET only, so there is no
+          // body to re-stream.
+          if (typeof Request === 'function' && input instanceof Request) {
+            return nativeFetch(new Request(M[resolved], input), init);
+          }
           return nativeFetch(M[resolved], init);
         }
       }
