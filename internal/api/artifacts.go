@@ -241,41 +241,56 @@ func (ro *Router) persistRuntimeAssets(ctx context.Context, ownerID int64, artif
 		return err
 	}
 
-	rows := make([]store.ArtifactAsset, 0, len(collected))
-	for _, c := range collected {
-		// The markup pass already minted one, because the URL it wrote into
-		// the document contains it; the runtime pass takes one here.
-		assetID := c.AssetID
-		if assetID == "" {
-			minted, err := store.NewAssetID()
-			if err != nil {
-				return err
-			}
-			assetID = minted
-		}
-		// Content-addressed per owner, so one library that loads the same
-		// wasm from two artifacts stores it once — and so deleting one
-		// owner's account can never reach another's bytes.
-		blobID := store.AssetBlobID(ownerID, c.Body)
-		// Through the write funnel like every other blob, so the payload is
-		// charged to whoever stored it (av-fw1b). An asset is the one blob
-		// whose length is not the artifact's own, and it is by far the
-		// largest — a vendored wasm module is most of what a snapshot
-		// weighs — so a write that skipped the funnel here would leave the
-		// number wrong by more than everything else combined.
-		if err := putBlob(ctx, ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader(c.Body)); err != nil {
-			return fmt.Errorf("store asset %s: %w", c.SourceURL, err)
-		}
-		rows = append(rows, store.ArtifactAsset{
-			ID:          assetID,
-			SourceURL:   c.SourceURL,
-			BlobID:      blobID,
-			ContentType: c.ContentType,
-			SizeBytes:   int64(len(c.Body)),
-		})
+	// Content-addressed per owner, so one library that loads the same wasm
+	// from two artifacts stores it once — and so deleting one owner's account
+	// can never reach another's bytes.
+	blobIDs := make([]string, len(collected))
+	for i, c := range collected {
+		blobIDs[i] = store.AssetBlobID(ownerID, c.Body)
 	}
 
-	queued, err := ro.cfg.Store.ReplaceArtifactAssets(ctx, ownerID, artifactID, generationID, rows)
+	// Held from the first byte written to the commit that references it. A
+	// content address is exactly the id the deletion queue may be holding from
+	// an earlier generation, and the drain's recheck-then-unlink is not atomic
+	// with respect to this write: without the lock a drain can pass its
+	// recheck, watch this ingest commit, and then delete the payload the new
+	// row names (store/bloblock.go). The reclaim below is deliberately outside
+	// it — that is the drain, and it takes the same locks.
+	queued, err := func() ([]string, error) {
+		unlock := ro.cfg.Store.LockBlobs(blobIDs...)
+		defer unlock()
+
+		rows := make([]store.ArtifactAsset, 0, len(collected))
+		for i, c := range collected {
+			// The markup pass already minted one, because the URL it wrote into
+			// the document contains it; the runtime pass takes one here.
+			assetID := c.AssetID
+			if assetID == "" {
+				minted, err := store.NewAssetID()
+				if err != nil {
+					return nil, err
+				}
+				assetID = minted
+			}
+			// Through the write funnel like every other blob, so the payload is
+			// charged to whoever stored it (av-fw1b). An asset is the one blob
+			// whose length is not the artifact's own, and it is by far the
+			// largest — a vendored wasm module is most of what a snapshot
+			// weighs — so a write that skipped the funnel here would leave the
+			// number wrong by more than everything else combined.
+			if err := putBlob(ctx, ro.cfg.Store, ro.cfg.Blob, blobIDs[i], bytes.NewReader(c.Body)); err != nil {
+				return nil, fmt.Errorf("store asset %s: %w", c.SourceURL, err)
+			}
+			rows = append(rows, store.ArtifactAsset{
+				ID:          assetID,
+				SourceURL:   c.SourceURL,
+				BlobID:      blobIDs[i],
+				ContentType: c.ContentType,
+				SizeBytes:   int64(len(c.Body)),
+			})
+		}
+		return ro.cfg.Store.ReplaceArtifactAssets(ctx, ownerID, artifactID, generationID, rows)
+	}()
 	if err != nil {
 		return err
 	}

@@ -23,6 +23,11 @@ var migrationsFS embed.FS
 
 type SQLiteStore struct {
 	db *sql.DB
+
+	// Held across a blob write and the transaction that references it, and
+	// across the deletion queue's recheck-and-unlink, so the two cannot
+	// interleave into a referenced blob with no bytes (bloblock.go).
+	blobLocks blobLocks
 }
 
 func OpenSQLite(path string) (*SQLiteStore, error) {

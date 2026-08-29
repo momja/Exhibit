@@ -175,6 +175,11 @@ func (s *SQLiteStore) PendingBlobDeletions(ctx context.Context) ([]string, error
 // and a row left behind by a failed drain can outlive several ingests. Without
 // the recheck that drain deletes the bytes out from under a live artifact.
 //
+// The recheck and the unlink are one critical section per id (bloblock.go),
+// because a recheck is a claim about the instant it ran and the unlink happens
+// outside SQLite: without the lock an ingest that re-references the id can
+// commit between them, and the delete then lands on bytes something names.
+//
 // Callers pass the ids the delete operation just enqueued, so a request drains
 // its own work and never walks a backlog.
 func (s *SQLiteStore) DrainBlobDeletions(ctx context.Context, blobs BlobDeleter, ids []string) (int, error) {
@@ -184,37 +189,49 @@ func (s *SQLiteStore) DrainBlobDeletions(ctx context.Context, blobs BlobDeleter,
 		firstErr  error
 	)
 	for _, id := range ids {
-		// Live again: retire the intent, keep the bytes. Reported as drained
-		// because the row left the queue, which is what the count is about.
-		res, err := s.db.ExecContext(ctx, releaseReferencedBlobSQL, id)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = fmt.Errorf("recheck references to blob %s: %w", id, err)
-			}
-			continue // the row stays; better a delayed delete than a wrong one
-		}
-		if n, err := res.RowsAffected(); err == nil && n > 0 {
-			slog.InfoContext(ctx, "queued blob is referenced again; keeping its bytes",
-				slog.String("blob_id", id))
-			drained++
-			continue
-		}
+		// One id's whole life-or-death decision, under that id's lock: the
+		// recheck below is only true of the instant it runs, and without the
+		// lock an ingest can write the bytes and commit a row naming them in
+		// the gap before Blob.Delete — leaving a live artifact whose payload
+		// is gone (bloblock.go). The lock is taken here rather than around the
+		// loop so a long queue never blocks an ingest of an id it is not
+		// currently working on.
+		func() {
+			unlock := s.LockBlobs(id)
+			defer unlock()
 
-		if err := blobs.Delete(ctx, id); err != nil {
-			if firstErr == nil {
-				firstErr = fmt.Errorf("blob %s: %w", id, err)
+			// Live again: retire the intent, keep the bytes. Reported as drained
+			// because the row left the queue, which is what the count is about.
+			res, err := s.db.ExecContext(ctx, releaseReferencedBlobSQL, id)
+			if err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("recheck references to blob %s: %w", id, err)
+				}
+				return // the row stays; better a delayed delete than a wrong one
 			}
-			continue // the queue row stays; the next drain retries it
-		}
-		if _, err := s.db.ExecContext(ctx,
-			"DELETE FROM pending_blob_deletions WHERE blob_id = ?", id); err != nil {
-			if firstErr == nil {
-				firstErr = fmt.Errorf("dequeue blob %s: %w", id, err)
+			if n, err := res.RowsAffected(); err == nil && n > 0 {
+				slog.InfoContext(ctx, "queued blob is referenced again; keeping its bytes",
+					slog.String("blob_id", id))
+				drained++
+				return
 			}
-			continue
-		}
-		drained++
-		forgotten = append(forgotten, id)
+
+			if err := blobs.Delete(ctx, id); err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("blob %s: %w", id, err)
+				}
+				return // the queue row stays; the next drain retries it
+			}
+			if _, err := s.db.ExecContext(ctx,
+				"DELETE FROM pending_blob_deletions WHERE blob_id = ?", id); err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("dequeue blob %s: %w", id, err)
+				}
+				return
+			}
+			drained++
+			forgotten = append(forgotten, id)
+		}()
 	}
 
 	// The recorded lengths of the bytes that are now actually gone (av-fw1b).

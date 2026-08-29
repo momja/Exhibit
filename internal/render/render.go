@@ -720,6 +720,20 @@ const bridgeScript = `
               } else {
                 bytes = percentDecodeBytes(data);
               }
+              // Native fetch rejects an already-aborted request before it
+              // does any work; a locally built Response must too, or an
+              // artifact that reuses a controller for a timeout gets bytes
+              // it cancelled — and gets them only for data: URLs, which is
+              // the inconsistency this shim exists to remove.
+              var signal = init && 'signal' in init
+                ? init.signal
+                : (input && typeof input === 'object' ? input.signal : null);
+              if (signal && signal.aborted) {
+                return Promise.reject(
+                  signal.reason !== undefined
+                    ? signal.reason
+                    : new DOMException('The user aborted a request.', 'AbortError'));
+              }
               var mime = meta.replace(/;base64$/i, '') || 'text/plain';
               return Promise.resolve(new Response(bytes, {
                 status: 200,

@@ -634,6 +634,16 @@ to remove, so it writes that down:
   queue, and a drain that failed leaves its row for a startup that may be many
   ingests later. The recheck is the enqueue's own refcount, embedded in the
   `DELETE` of the queue row so check and retirement are one statement.
+- **The recheck and the unlink are one critical section**, per blob id
+  (`internal/store/bloblock.go`). A recheck is only true of the instant it
+  ran, and the unlink happens outside SQLite, so without exclusion an ingest
+  can write the bytes and commit a row naming them in the gap between the two
+  — and the delete then lands on a payload something references. The ingest
+  side holds the same id's lock from its first written byte to the commit of
+  the referencing row, so whichever side wins, the loser sees a settled world:
+  either a reference the recheck finds, or bytes it must write again. Only
+  content-addressed ids can lose that race, since only they can be referenced
+  again once condemned; a body or widget id is a fresh UUID and needs nothing.
 
 What the commit makes durable is therefore the *intent*, not the outcome, and
 everything after it is a retry of the same idempotent work — so there is no

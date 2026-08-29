@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/stretchr/testify/assert"
@@ -311,3 +312,91 @@ func TestAFailedUnlinkKeepsItsQueueRow(t *testing.T) {
 type refusingBlobs struct{}
 
 func (refusingBlobs) Delete(context.Context, string) error { return os.ErrPermission }
+
+// The race the per-blob lock exists for (bloblock.go): a drain that has passed
+// its reference recheck is holding a decision about the past, and the unlink
+// happens outside SQLite, so an ingest that re-references the id in that gap
+// would otherwise commit a row naming bytes the drain is about to remove.
+//
+// It is reachable because asset blob ids are content addresses: re-vendoring
+// the same payload names the very id sitting in the queue. Barrier-driven
+// rather than timing-hopeful — the drain is stopped *inside* Blob.Delete, at
+// the exact instant the window is open, and the ingest is started there.
+func TestReIngestDuringADrainKeepsTheBytesItReferences(t *testing.T) {
+	fx := newQueueFixture(t)
+	ctx := context.Background()
+	seedAssetArtifact(t, fx, "a1")
+
+	const (
+		payload = "\x00asm-runtime"
+		blobID  = "asset-1-content-address"
+	)
+	fx.putBody(t, blobID, payload)
+	_, err := fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "gen-1",
+		[]ArtifactAsset{asset("as-1", "https://cdn.test/app.wasm", blobID)})
+	require.NoError(t, err)
+
+	// A generation that drops the payload: its bytes are condemned.
+	queued, err := fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "gen-2", nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{blobID}, queued)
+
+	reached, resume := make(chan struct{}), make(chan struct{})
+	drained := make(chan error, 1)
+	go func() {
+		_, err := fx.store.DrainBlobDeletions(ctx, &pausingBlobs{
+			inner: fx.blobs, reached: reached, resume: resume,
+		}, queued)
+		drained <- err
+	}()
+	<-reached // the drain has rechecked and is about to unlink
+
+	// The ingest half, in the shape internal/api's persistRuntimeAssets has
+	// it: take the id's lock, write the bytes, commit the row naming them.
+	ingested := make(chan error, 1)
+	go func() {
+		unlock := fx.store.LockBlobs(blobID)
+		defer unlock()
+		if err := fx.blobs.Put(ctx, blobID, strings.NewReader(payload)); err != nil {
+			ingested <- err
+			return
+		}
+		_, err := fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "gen-3",
+			[]ArtifactAsset{asset("as-3", "https://cdn.test/app.wasm", blobID)})
+		ingested <- err
+	}()
+
+	// Long enough that an unsynchronized ingest finishes here — which is
+	// exactly the interleaving that used to delete a referenced payload. With
+	// the lock the ingest is still blocked when the drain resumes.
+	time.Sleep(150 * time.Millisecond)
+	close(resume)
+
+	require.NoError(t, <-drained)
+	require.NoError(t, <-ingested)
+
+	assets, err := fx.store.ListArtifactAssets(ctx, 1, "a1")
+	require.NoError(t, err)
+	require.Len(t, assets, 1)
+	require.Equal(t, blobID, assets[0].BlobID)
+	assert.FileExists(t, fx.path(blobID),
+		"an asset row that survived the drain must still have its bytes")
+
+	pending, err := fx.store.PendingBlobDeletions(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, pending, "the drain finished its work; nothing is left condemned")
+}
+
+// pausingBlobs stops a drain inside the unlink, which is the one moment the
+// recheck's answer can go stale.
+type pausingBlobs struct {
+	inner   *blob.FSStore
+	reached chan struct{}
+	resume  chan struct{}
+}
+
+func (p *pausingBlobs) Delete(ctx context.Context, id string) error {
+	close(p.reached)
+	<-p.resume
+	return p.inner.Delete(ctx, id)
+}

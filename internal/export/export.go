@@ -100,6 +100,22 @@ func injectManifest(body string, manifest map[string]string) (string, error) {
   var nativeFetch = window.fetch;
   if (typeof nativeFetch !== 'function') return;
 
+  // fetch() rejects an already-aborted request before it does any work, and a
+  // Response built here must do the same: a caller that reuses a controller
+  // for a timeout would otherwise be handed the bytes it just cancelled, and
+  // only for the assets this manifest answers — the same call against any
+  // other URL behaves natively.
+  function abortReason(input, init) {
+    var signal = init && 'signal' in init
+      ? init.signal
+      : (input && typeof input === 'object' ? input.signal : null);
+    if (!signal || !signal.aborted) return null;
+    if (signal.reason !== undefined) return signal.reason;
+    return typeof DOMException === 'function'
+      ? new DOMException('The user aborted a request.', 'AbortError')
+      : new Error('The user aborted a request.');
+  }
+
   function responseFromDataURI(uri) {
     var comma = uri.indexOf(',');
     if (comma < 0) return null;
@@ -124,6 +140,8 @@ func injectManifest(body string, manifest map[string]string) (string, error) {
         var raw = typeof input === 'string' ? input : (input && input.url) || String(input);
         var resolved = new URL(raw, document.baseURI).href;
         if (Object.prototype.hasOwnProperty.call(M, resolved)) {
+          var aborted = abortReason(input, init);
+          if (aborted) return Promise.reject(aborted);
           var res = responseFromDataURI(M[resolved]);
           if (res) return Promise.resolve(res);
         }

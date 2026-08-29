@@ -457,6 +457,14 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// the owner first like everything else.
 		"RecordBlobSize":  "keyed by blob id; a length belongs to the bytes, not to an owner (av-fw1b)",
 		"ForgetBlobSizes": "keyed by blob id, and only removes rows no owner's rows reference (av-fw1b)",
+
+		// The blob deletion queue's mutual exclusion (av-8gyd), keyed by blob
+		// id on the same grounds and one step further: it reads and writes no
+		// row at all. It excludes a writer of bytes from the drain about to
+		// unlink those bytes, and a lock that took an owner would be a lock
+		// two owners could hold at once over one shared, refcounted asset —
+		// exactly the case it exists for.
+		"LockBlobs": "keyed by blob id; excludes writers from the unlink of the same bytes, reads no rows (av-8gyd)",
 	}
 
 	iface := reflect.TypeOf((*Store)(nil)).Elem()

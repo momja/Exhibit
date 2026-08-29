@@ -235,6 +235,20 @@ type Store interface {
 	DrainBlobDeletions(ctx context.Context, blobs BlobDeleter, ids []string) (int, error)
 	DrainAllBlobDeletions(ctx context.Context, blobs BlobDeleter) (int, error)
 
+	// LockBlobs excludes a caller that is about to write bytes and commit a
+	// row naming them from the drain that is about to unlink those same bytes
+	// (bloblock.go). It belongs on this interface rather than inside the store
+	// because the two halves of that race live in different packages: the
+	// drain is here, and writing an asset's bytes before referencing them is
+	// the API's ingest path. A caller holds it across [write bytes … commit
+	// the referencing row] and — since the database runs on one connection —
+	// never takes it while already inside a transaction.
+	//
+	// Only content-addressed ids can lose this race, since only they can be
+	// referenced again after being condemned; a caller minting a fresh id has
+	// nothing to exclude and need not call this.
+	LockBlobs(ids ...string) func()
+
 	// Network origin decisions (exhibit-x87). ListOriginDecisions returns
 	// every decision for an artifact, allow and block alike, ordered by
 	// origin. AllowedOrigins is the CSP's read path: the origins of the
