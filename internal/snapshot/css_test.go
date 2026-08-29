@@ -80,13 +80,45 @@ func TestInlineCSSURLForms(t *testing.T) {
 	}, "\n")
 
 	f := testFetcher(t, srv.URL+"/css/style.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/css/style.css", css)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/css/style.css", css, nil)
 
 	require.Empty(t, errs)
 	want := `url("` + pngDataURI(img) + `")`
 	assert.Equal(t, 4, strings.Count(out, want), "every url() form should inline to the same data URI:\n%s", out)
 	assert.NotContains(t, out, "img/bg.png", "no relative reference should survive")
 	assert.Equal(t, 1, srv.hitCount("/css/img/bg.png"), "identical URLs fetch once")
+}
+
+// A url() asset over the size threshold leaves the sheet the same way a markup
+// one leaves the document: the reference becomes the stored asset's URL. This
+// is the CSS half of av-oz40 — a webfont or a background photo is exactly the
+// kind of payload that made a snapshot body megabytes of base64.
+func TestInlineCSSSendsAnOverThresholdAssetToTheSink(t *testing.T) {
+	big := []byte(strings.Repeat("P", InlineDataURIMaxBytes+1))
+	srv := newCSSServer(t, map[string]func(http.ResponseWriter){
+		"/css/img/hero.png": servePNG(big),
+	})
+
+	var sunk []RuntimeAsset
+	sink := func(a RuntimeAsset) (string, error) {
+		sunk = append(sunk, a)
+		return "https://render.test/a/x/assets/as-1", nil
+	}
+
+	f := testFetcher(t, srv.URL+"/css/style.css", DefaultLimits())
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/css/style.css",
+		`a { background: url(img/hero.png); }`, sink)
+
+	require.Empty(t, errs)
+	// Double-quoted like every other rewritten url(), so a URL containing
+	// parentheses or whitespace cannot break the declaration.
+	assert.Contains(t, out, `url("https://render.test/a/x/assets/as-1")`)
+	assert.NotContains(t, out, "base64", "the bytes must not also be left in the sheet")
+	require.Len(t, sunk, 1, "stored once")
+	assert.Equal(t, srv.URL+"/css/img/hero.png", sunk[0].SourceURL,
+		"stored under the absolute URL, resolved against the sheet's own base")
+	assert.Equal(t, "image/png", sunk[0].ContentType)
+	assert.Equal(t, big, sunk[0].Body)
 }
 
 // TestInlineCSSSkipsNonNetworkRefs leaves data:/blob:/about:/#fragment targets
@@ -108,7 +140,7 @@ func TestInlineCSSSkipsNonNetworkRefs(t *testing.T) {
 	}, "\n")
 
 	f := testFetcher(t, srv.URL+"/style.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/style.css", css)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/style.css", css, nil)
 
 	assert.Equal(t, css, out, "non-network refs must pass through unchanged")
 	assert.Empty(t, errs)
@@ -134,7 +166,7 @@ func TestInlineCSSNestedImportRebase(t *testing.T) {
 	outer := "@import url(sub/b.css);\nbody { background: url(bg.png); }"
 
 	f := testFetcher(t, srv.URL+"/a/main.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/a/main.css", outer)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/a/main.css", outer, nil)
 
 	require.Empty(t, errs)
 	assert.NotContains(t, out, "@import", "the @import must be folded away")
@@ -158,7 +190,7 @@ func TestInlineCSSImportStringAndMedia(t *testing.T) {
 
 	css := `@import "print.css" print and (min-width: 400px);`
 	f := testFetcher(t, srv.URL+"/main.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/main.css", css)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/main.css", css, nil)
 
 	require.Empty(t, errs)
 	assert.Contains(t, out, "@media print and (min-width: 400px) {", "media query preserved as @media wrapper")
@@ -187,7 +219,7 @@ func TestInlineCSSFailuresLeftVerbatim(t *testing.T) {
 	limits := DefaultLimits()
 	limits.MaxAssetBytes = 1024
 	f := testFetcher(t, srv.URL+"/style.css", limits)
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/style.css", css)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/style.css", css, nil)
 
 	assert.Contains(t, out, `url("`+pngDataURI(good)+`")`, "good asset inlined")
 	assert.Contains(t, out, "url(big.png)", "over-limit asset left verbatim")
@@ -218,7 +250,7 @@ func TestInlineCSSSelfImportTerminates(t *testing.T) {
 	// The body passed in is self.css's own content, based at self.css.
 	body := "@import url(self.css);\nbody { background: url(x.png); }"
 	f := testFetcher(t, srv.URL+"/self.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/self.css", body)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/self.css", body, nil)
 
 	// Terminates. The self-import is a no-op back-edge (never fetched), the
 	// real asset still inlines.
@@ -237,7 +269,7 @@ func TestInlineCSSMutualImportCycleTerminates(t *testing.T) {
 
 	a := "@import url(b.css);\n.a { color: red; }"
 	f := testFetcher(t, srv.URL+"/a.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/a.css", a)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/a.css", a, nil)
 
 	assert.Contains(t, out, ".b { color: blue; }", "b.css folded into a")
 	assert.Contains(t, out, ".a { color: red; }")
@@ -260,7 +292,7 @@ func TestInlineCSSImportDepthCap(t *testing.T) {
 
 	root := "@import url(s1.css);"
 	f := testFetcher(t, srv.URL+"/root.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, srv.URL+"/root.css", root)
+	out, errs := InlineCSS(context.Background(), f, srv.URL+"/root.css", root, nil)
 
 	require.Len(t, errs, 1)
 	assert.Equal(t, ErrBudget, errs[0].Kind, "the over-cap import is reported as budget-exhausted")
@@ -275,7 +307,7 @@ func TestInlineCSSImportDepthCap(t *testing.T) {
 func TestInlineCSSIdentityWhenNoRefs(t *testing.T) {
 	css := "body { color: red; margin: 0; }"
 	f := testFetcher(t, "https://example.com/style.css", DefaultLimits())
-	out, errs := InlineCSS(context.Background(), f, "https://example.com/style.css", css)
+	out, errs := InlineCSS(context.Background(), f, "https://example.com/style.css", css, nil)
 	assert.Equal(t, css, out)
 	assert.Nil(t, errs)
 }

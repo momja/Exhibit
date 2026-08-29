@@ -23,6 +23,11 @@ var migrationsFS embed.FS
 
 type SQLiteStore struct {
 	db *sql.DB
+
+	// Held across a blob write and the transaction that references it, and
+	// across the deletion queue's recheck-and-unlink, so the two cannot
+	// interleave into a referenced blob with no bytes (bloblock.go).
+	blobLocks blobLocks
 }
 
 func OpenSQLite(path string) (*SQLiteStore, error) {
@@ -353,18 +358,28 @@ var updatableArtifactColumns = map[string]bool{
 	"links_approved":     true,
 }
 
-// SetWidgetBlobID points an artifact at the widget body blobID, or detaches its
-// widget when blobID is empty. It exists because widget_blob_id is deliberately
-// not caller-writable (above) while the widget PUT/DELETE handlers must still
-// write it: routing them through the generic update map would mean the same
-// allowlist decided both what a PATCH body may set and what the service itself
-// may set, and narrowing it for the first reason would break the second. The id
-// is minted server-side and reused for the artifact's life, so a widget's
-// render URL stays stable across saves.
+// SetWidgetBlobID points an artifact at the blob holding its widget document.
+// It exists because widget_blob_id is deliberately not caller-writable (above)
+// while the widget PUT handler must still write it: routing that through the
+// generic update map would mean the same allowlist decided both what a PATCH
+// body may set and what the service itself may set, and narrowing it for the
+// first reason would break the second. The id is minted server-side once per
+// artifact and reused on every later save, so a widget's render URL stays
+// stable across edits — which is why this runs on the first save only.
+//
+// It attaches; it does not detach. Clearing the column condemns bytes, and
+// enqueuing those for deletion has to happen in the same transaction that
+// dropped the last reference to them (av-8gyd) — which this method has no way
+// to do. DeleteWidget is that operation, and being the only one is what makes
+// "a detached widget blob is always enqueued" true by construction rather than
+// by every caller remembering.
 //
 // Owner-scoped like every other artifact write: another owner's id is
 // ErrNotFound, never a refusal that confirms the row exists (§3.3).
 func (s *SQLiteStore) SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error {
+	if blobID == "" {
+		return fmt.Errorf("set widget blob id: blob id is required (detaching is DeleteWidget's job)")
+	}
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE artifacts SET widget_blob_id = ?, updated_at = ? WHERE id = ? AND owner_id = ?`,
 		blobID, time.Now().UTC(), id, ownerID)
@@ -636,8 +651,98 @@ func (s *SQLiteStore) attachAllowlists(ctx context.Context, arts []*Artifact) er
 	return rows.Err()
 }
 
-func (s *SQLiteStore) DeleteArtifact(ctx context.Context, ownerID int64, id string) error {
-	return s.execOwned(ctx, "DELETE FROM artifacts WHERE id=? AND owner_id=?", id, ownerID)
+// DeleteArtifact removes the artifact — its tags, collections, shares, origin
+// decisions and state going with it by ON DELETE CASCADE — and returns the
+// blob ids it enqueued for deletion, for the caller to drain (blobqueue.go).
+//
+// Reading the two blob ids, dropping the row and enqueuing what is now
+// unreferenced happen in one transaction, which is what makes the intent to
+// delete those bytes durable at the same instant the last reference to them
+// disappears. Nothing outside this transaction could reconstruct that list
+// afterwards: once the row is gone, nothing names the blobs.
+func (s *SQLiteStore) DeleteArtifact(ctx context.Context, ownerID int64, id string) ([]string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }() // no-op once committed
+
+	var body, widget string
+	err = tx.QueryRowContext(ctx,
+		"SELECT source_blob_id, widget_blob_id FROM artifacts WHERE id=? AND owner_id=?",
+		id, ownerID).Scan(&body, &widget)
+	if errors.Is(err, sql.ErrNoRows) {
+		// Another owner's artifact and one that never existed are the same
+		// answer here, as everywhere else on this interface.
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	// Read before the delete: ON DELETE CASCADE takes the asset rows with the
+	// artifact, and once they are gone nothing names those blobs (av-20fk).
+	assetBlobs, err := assetBlobIDs(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx,
+		"DELETE FROM artifacts WHERE id=? AND owner_id=?", id, ownerID); err != nil {
+		return nil, err
+	}
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, append([]string{body, widget}, assetBlobs...)...)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return queued, nil
+}
+
+// DeleteWidget detaches an artifact's widget and returns the blob id it
+// enqueued for deletion, if any — the caller drains it (blobqueue.go).
+//
+// Detaching is the only exit a widget blob has: the id is minted once and
+// reused on every later save so the tile's render URL stays stable, so once
+// this clears the column nothing can name those bytes again. That is exactly
+// why the clear and the enqueue share a transaction.
+//
+// An artifact with no widget is not an error — the caller's intent, "this
+// artifact must have no widget", is already satisfied — and enqueues nothing.
+// ErrNotFound is reserved for an artifact this owner cannot see.
+func (s *SQLiteStore) DeleteWidget(ctx context.Context, ownerID int64, artifactID string) ([]string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }() // no-op once committed
+
+	var widget string
+	err = tx.QueryRowContext(ctx,
+		"SELECT widget_blob_id FROM artifacts WHERE id=? AND owner_id=?",
+		artifactID, ownerID).Scan(&widget)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if widget == "" {
+		return nil, nil
+	}
+	if _, err := tx.ExecContext(ctx,
+		"UPDATE artifacts SET widget_blob_id='', updated_at=datetime('now') WHERE id=? AND owner_id=?",
+		artifactID, ownerID); err != nil {
+		return nil, err
+	}
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, widget)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return queued, nil
 }
 
 // blobGetter is the read side of blob.Store — the minimal seam

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/snapshot"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -82,13 +83,95 @@ func TestSnapshotIngestVendorsRuntimeFetchedWasm(t *testing.T) {
 	assert.Equal(t, []string{srv.URL + "/build/app.wasm"}, rep.VendoredURLs)
 	assert.Equal(t, int64(len(wasmFixtureBody)), rep.VendoredBytes)
 
-	// The stored body carries the payload inline, so at render the artifact
-	// makes no request for it at all.
+	// av-20fk: the payload is a blob of its own, and the stored body is the
+	// page as it was fetched. This is the property the whole ticket rests on —
+	// the body's size is now independent of its payloads', so an agent can
+	// read and rewrite it, and the render document does not re-transfer 21 MB
+	// of base64 on every view.
 	body := storedBody(t, r, resp.Artifact.ID)
-	assert.Contains(t, body, "data:application/wasm;base64,")
-	assert.Contains(t, body, "window.fetch = function")
-	// Substitution is by interception: the page's own literal is untouched.
+	assert.NotContains(t, body, "base64,", "the payload must not be inlined in the body")
+	assert.NotContains(t, body, "window.fetch = function",
+		"the manifest belongs to the render preamble, not the stored body")
+	// The page's own literal is untouched: nothing is rewritten at ingest.
 	assert.Contains(t, body, `fetch('/build/app.wasm'`)
+
+	// And the bytes are recorded as an asset, under the URL the page will ask
+	// for at run time and the type instantiateStreaming demands.
+	assets, err := r.cfg.Store.ListArtifactAssets(t.Context(), defaultOwnerID, resp.Artifact.ID)
+	require.NoError(t, err)
+	require.Len(t, assets, 1)
+	assert.Equal(t, srv.URL+"/build/app.wasm", assets[0].SourceURL)
+	assert.Equal(t, "application/wasm", assets[0].ContentType)
+	assert.Equal(t, int64(len(wasmFixtureBody)), assets[0].SizeBytes)
+}
+
+// The end-to-end claim: a page whose wasm was vendored renders with a manifest
+// pointing at the asset route, and that route hands back the real bytes with
+// the headers the browser needs — CORS for the opaque-origin frame, the exact
+// wasm type for instantiateStreaming, and a cache directive, which is what
+// makes the second view (and every agent-preview reload) free.
+func TestRuntimeAssetIsServedFromTheAssetRoute(t *testing.T) {
+	withUnguardedFetcher(t)
+	r := newTestRouter(t)
+	srv := wasmFixture(t)
+
+	_, resp := postArtifact(t, r, map[string]any{
+		"url": srv.URL + "/page.html", "snapshot": true, "network_allowlist": []string{},
+	})
+	require.NotNil(t, resp.Artifact)
+	id := resp.Artifact.ID
+
+	assets, err := r.cfg.Store.ListArtifactAssets(t.Context(), defaultOwnerID, id)
+	require.NoError(t, err)
+	require.Len(t, assets, 1)
+
+	// The render document carries the manifest, keyed by the URL the page
+	// requests and pointing at this artifact's own asset path.
+	doc := renderGet(t, r, "/a/"+id+"?"+rendertoken.Param+"="+r.tokens.Mint(id, defaultOwnerID))
+	require.Equal(t, http.StatusOK, doc.Code, doc.Body.String())
+	assetURL := "/a/" + id + "/assets/" + assets[0].ID
+	assert.Contains(t, doc.Body.String(), srv.URL+"/build/app.wasm")
+	assert.Contains(t, doc.Body.String(), assetURL)
+
+	// The CSP permits it, as a system source scoped to this artifact's path —
+	// and the allowlist stays empty, so the user was asked to approve nothing.
+	csp := doc.Header().Get("Content-Security-Policy")
+	assert.Contains(t, csp, "/a/"+id+"/assets/")
+	assert.Empty(t, resp.Artifact.NetworkAllowlist)
+
+	// And the route itself.
+	got := renderGet(t, r, assetURL)
+	require.Equal(t, http.StatusOK, got.Code, got.Body.String())
+	assert.Equal(t, wasmFixtureBody, got.Body.String())
+	assert.Equal(t, "application/wasm", got.Header().Get("Content-Type"))
+	assert.Equal(t, "*", got.Header().Get("Access-Control-Allow-Origin"),
+		"an opaque-origin sandbox sends Origin: null, which only * matches")
+	assert.Contains(t, got.Header().Get("Cache-Control"), "immutable",
+		"caching across views is half the reason the payload left the body")
+	assert.NotEqual(t, "no-store", got.Header().Get("Cache-Control"))
+}
+
+// An asset is reachable only through the artifact that owns it, even by
+// somebody holding both ids.
+func TestAssetRouteRefusesAnotherArtifactsAsset(t *testing.T) {
+	withUnguardedFetcher(t)
+	r := newTestRouter(t)
+	srv := wasmFixture(t)
+
+	_, first := postArtifact(t, r, map[string]any{
+		"url": srv.URL + "/page.html", "snapshot": true, "network_allowlist": []string{},
+	})
+	_, second := postArtifact(t, r, map[string]any{
+		"body": "<html><body>unrelated</body></html>", "network_allowlist": []string{},
+	})
+
+	assets, err := r.cfg.Store.ListArtifactAssets(t.Context(), defaultOwnerID, first.Artifact.ID)
+	require.NoError(t, err)
+	require.Len(t, assets, 1)
+
+	w := renderGet(t, r, "/a/"+second.Artifact.ID+"/assets/"+assets[0].ID)
+	assert.Equal(t, http.StatusNotFound, w.Code,
+		"an asset must not be addressable through an artifact that does not own it")
 }
 
 func TestSnapshotIngestReportsOverCapRuntimeAsset(t *testing.T) {
@@ -134,7 +217,10 @@ func TestSnapshotIngestRuntimeAssetNeedsNoAllowlist(t *testing.T) {
 	})
 	require.NotNil(t, resp.Artifact)
 	assert.Empty(t, resp.Artifact.NetworkAllowlist, "ingest must never seed the allowlist")
-	assert.Contains(t, storedBody(t, r, resp.Artifact.ID), "data:application/wasm;base64,")
+
+	assets, err := r.cfg.Store.ListArtifactAssets(t.Context(), defaultOwnerID, resp.Artifact.ID)
+	require.NoError(t, err)
+	require.Len(t, assets, 1, "the payload is vendored with no origin approved")
 }
 
 // storedBody reads an artifact's stored body back through the API.

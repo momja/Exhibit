@@ -400,9 +400,11 @@ Sharing is a first-class resource, not an export-to-file action.
   column existed unused from the first migration and was removed (av-8ipt) rather
   than left as a dial nothing turns; if forgotten shares become a real problem, the
   answer is to make what is shared visible in the library, not to add a timer.
-- A one-file self-contained `.html` export is **planned** (CSS/JS already inline) — the
-  portable fallback for email/Slack/offline that needs no service at all. Tracked in
-  build-order step 3.
+- A one-file self-contained `.html` export is **shipped** (av-vnkt) — the portable
+  fallback for email/Slack/offline that needs no service at all. It is also what
+  keeps §1's promise intact now that large payloads are stored outside the
+  artifact body: inside the service those are URLs, and this is the boundary
+  where they become bytes again.
 
 Because the artifact is already a portable file, sharing is nearly free; this is much
 of what justifies hosting the service.

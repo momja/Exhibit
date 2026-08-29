@@ -71,6 +71,25 @@ startup so a fresh container self-initializes. **NOTE: ** if you are working on 
 with a migration, make sure to rebase off main before creating a PR, and ensure there are
 not conflicts on the migration number.
 
+**The version number is the dangerous part.** goose identifies a migration by
+its number alone, and that produces two distinct failures this repo has met
+both of. A number reused is applied once and forever, so the second migration
+wearing it is *silently skipped* on every database that took the first — four
+outages, catalogued in `internal/store/migration_repair.go`. And a number
+*below* the ledger's high-water mark stops goose before it runs anything, so
+the instance does not start at all: `found N missing migrations before current
+version`.
+
+The second is the one branch work walks into, because a number is chosen while
+the branch is young and the file lands after main has shipped several more.
+Reserving a low number for work in flight does not survive it — the
+reservation holds only if that branch merges before anything above it deploys.
+So a new migration takes the next number above **every** version already in a
+ledger, `.sql` files and the Go migrations in `migration_repair.go` /
+`migration_origins.go` alike. `internal/store/migration_order_test.go` walks
+both rules, and an end-to-end test opens a database left at the previous
+release to prove the upgrade still starts.
+
 **Blob store: two implementations behind the `Blob` interface, chosen by
 configuration (av-52ll).** Artifact bodies go either to a mounted volume
 (`blob.FSStore`, the default) or to an S3-compatible bucket (`blob.S3Store`).
@@ -135,7 +154,9 @@ Renderer construction:
   `script-src`: when it is missing the worker fails silently, constructing fine but
   never executing its body.
 - Inject the **render preamble** — the **storage shim** (§6 here) with the artifact's
-  current state inlined — into `<head>` *before* any artifact script runs.
+  current state inlined, plus the out-of-line **asset manifest** (av-20fk) that
+  redirects the page's own `fetch` of a vendored payload to that artifact's asset
+  route — into `<head>` *before* any artifact script runs.
   Serve the document `Cache-Control:
   no-store` — it's dynamic (inlined state + per-artifact CSP) and must not be cached.
 
@@ -224,13 +245,17 @@ the outbound network footprint to show the user for approval.
   `XMLHttpRequest`, `new Worker`, and `WebSocket` targets. Whatever it misses is caught
   at runtime by the CSP allowlist.
 - The snapshot vendorer's runtime-asset pass shares the fetch half of that definition
-  (`scanner.FetchRefs`), so the assets it inlines cannot drift from the fetch targets
+  (`scanner.FetchRefs`), so the payloads it vendors cannot drift from the fetch targets
   the footprint reports; ESM import refs stay with the scanner only, because the
   module loader never consults `window.fetch` and those origins are governed by
   `script-src` instead. It compensates for the heuristic's blind spot differently:
-  rather than rewriting the literals it found, it installs a `fetch` wrapper that
-  matches on the resolved URL at call time — so a runtime-constructed URL is served
-  when that same absolute URL also appears as a literal fetch ref, and only then.
+  rather than rewriting the literals it found, the render surface installs a `fetch`
+  wrapper that matches on the resolved URL at call time — so a runtime-constructed URL
+  is served when that same absolute URL also appears as a literal fetch ref, and only
+  then. Since av-20fk the payloads themselves live outside the artifact body, as blobs
+  served from a per-artifact, immutable, cacheable route; the body keeps the literals
+  it was ingested with, so nothing an agent does to the document can break the
+  redirect.
 
 Present the deduplicated origin list at the approval step; write approved origins as
 the artifact's `decision='allow'` rows in `artifact_network_origins`.

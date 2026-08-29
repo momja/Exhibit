@@ -110,6 +110,21 @@ func main() {
 		slog.Warn("backfill artifact source text", slog.String("err", err.Error()))
 	}
 
+	// Finish any blob deletion a previous process condemned but did not
+	// complete (av-8gyd). The queue is normally empty, so this normally reads
+	// one row count and stops; when it is not, these are the bytes of
+	// artifacts already deleted, whose ids nothing but the queue can still
+	// name. A crashed process gets restarted, which is why startup is where
+	// its leftovers are reclaimed rather than a ticker nobody needs.
+	//
+	// Non-fatal, for the same reason the backfill above is: unreclaimed bytes
+	// cost disk, not correctness, and the next startup tries again.
+	if n, err := st.DrainAllBlobDeletions(context.Background(), bl); err != nil {
+		slog.Warn("drain queued blob deletions", slog.String("err", err.Error()))
+	} else if n > 0 {
+		slog.Info("reclaimed queued blob deletions", slog.Int("blobs", n))
+	}
+
 	// The same catch-up for storage accounting (av-fw1b): lengths are recorded
 	// when bytes are written, so a library that predates migration 021 would
 	// report 0 B until every artifact happened to be edited. Selects only

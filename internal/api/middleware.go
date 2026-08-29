@@ -225,16 +225,27 @@ func (ro *Router) resolveAgentGrant(token string) *agentscope.Grant {
 
 // agentSubResources are the sub-paths of an artifact an agent session may
 // touch on its *own* artifact — one entry per tool the extension exposes
-// (state: av-lvi1, widget: av-fafu), with the methods that tool uses.
+// (state: av-lvi1, widget: av-fafu, assets: av-20fk), with the methods that
+// tool uses.
 //
 // It is spelled as an allowlist so a new artifact sub-route is out of an
 // agent's reach until someone adds it here deliberately. Notably absent:
 // `refetch` (re-pulls a remote page into the body), `collections`/`tags`
 // (library organisation, not the artifact), `transcripts` (other sessions'
 // conversations), and `widget/generate` (an agent spawning another agent).
+//
+// `assets` is GET only, and the asymmetry is the point. The agent needs to
+// know which URLs the page fetches are already served from stored copies —
+// otherwise it reads a bare `fetch('https://cdn…/app.wasm')` in the body and
+// "fixes" an origin that is not actually contacted. Deleting one is a
+// different act: it is the owner's escape hatch for a payload whose feature
+// they edited away (architecture §3.1), it is irreversible, and it is decided
+// on grounds the model cannot see. The route also serves metadata only, never
+// bytes, so this grant cannot put a vendored payload into a context window.
 var agentSubResources = map[string][]string{
 	"state":  {http.MethodGet, http.MethodPut, http.MethodDelete},
 	"widget": {http.MethodGet, http.MethodPut, http.MethodDelete},
+	"assets": {http.MethodGet},
 }
 
 // agentScopeAllows is the entire reach of an agent session credential, written

@@ -255,7 +255,7 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ownerID := ownerIDFromCtx(ctx)
-	blobIDs, err := ro.cfg.Store.DeleteAccount(ctx, ownerID)
+	queued, err := ro.cfg.Store.DeleteAccount(ctx, ownerID)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "no such account")
@@ -276,14 +276,16 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	ro.clearCookie(w, sessionCookieName)
 
 	slog.InfoContext(ctx, "account deleted",
-		slog.Int64("user_id", ownerID), slog.Int("blobs", len(blobIDs)))
+		slog.Int64("user_id", ownerID), slog.Int("blobs", len(queued)))
 
 	// Then the bytes, in the same row-first order and for the same reason as
-	// deleteArtifactBlobs (artifacts.go). A 500 here reports an erasure that
+	// reclaimBlobs describes (artifacts.go). A 500 here reports an erasure that
 	// only half happened: the account is gone and cannot be retried, but some
 	// artifact bodies are still on the volume, and that is exactly the thing a
-	// person deleting their library must not be told succeeded.
-	if err := deleteBlobs(ctx, ro.cfg.Store, ro.cfg.Blob, blobIDs); err != nil {
+	// person deleting their library must not be told succeeded. They do not
+	// stay on it, though — the ids are queued (av-8gyd), so the next startup
+	// finishes what this call could not.
+	if err := ro.reclaimBlobs(ctx, queued); err != nil {
 		serverError(w, r, "delete account blobs", err)
 		return
 	}

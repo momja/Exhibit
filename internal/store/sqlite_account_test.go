@@ -76,7 +76,7 @@ var accountTables = map[string]accountTable{
 	// counted by blob id here rather than by user.
 	"blob_sizes": {reachExplicit,
 		"the recorded length of each blob the account's rows named, dropped for the ids left unreferenced",
-		"SELECT COUNT(*) FROM blob_sizes WHERE blob_id IN ('member-body', 'member-widget')"},
+		"SELECT COUNT(*) FROM blob_sizes WHERE blob_id IN ('member-body', 'member-widget', 'member-asset-blob')"},
 
 	"artifact_tags": {reachCascade, "cascades from artifacts(id)",
 		"SELECT COUNT(*) FROM artifact_tags WHERE artifact_id = '" + deletedArtifact + "'"},
@@ -86,6 +86,10 @@ var accountTables = map[string]accountTable{
 		"SELECT COUNT(*) FROM artifact_network_origins WHERE artifact_id = '" + deletedArtifact + "'"},
 	"agent_transcripts": {reachCascade, "cascades from artifacts(id)",
 		"SELECT COUNT(*) FROM agent_transcripts WHERE artifact_id = '" + deletedArtifact + "'"},
+	"artifact_assets": {reachCascade,
+		"cascades from artifacts(id) — and DeleteArtifact reads the blob ids out first, " +
+			"because once these rows are gone nothing names those bytes (av-20fk)",
+		"SELECT COUNT(*) FROM artifact_assets WHERE artifact_id = '" + deletedArtifact + "'"},
 	"shares": {reachCascade,
 		"cascades from artifacts(id) — which is what revokes every capability URL at once",
 		"SELECT COUNT(*) FROM shares WHERE artifact_id = '" + deletedArtifact + "'"},
@@ -108,6 +112,16 @@ var accountTables = map[string]accountTable{
 	"artifacts_fts_config":  {reachNone, "fts5 internal storage for artifacts_fts", ""},
 
 	"goose_db_version": {reachNone, "the migration ledger — a property of the database, not of a person", ""},
+
+	// DeleteAccount writes here, and the reach is still `none`: a blob id
+	// reaches this table only in the transaction that deleted the last row
+	// naming it, which was also the last record of whose it was. What survives
+	// the deletion is an id belonging to nobody, condemned in writing — and it
+	// survives only until the caller's drain, or failing that the next
+	// startup's, removes the bytes and the row (av-8gyd, blobqueue.go). An
+	// account deletion that left this table empty would be the actual leak.
+	"pending_blob_deletions": {reachNone,
+		"ids of bytes already condemned, written as the rows naming them were deleted; the drain retires them", ""},
 }
 
 // schemaTables is every table the live database reports, which is the only
@@ -222,6 +236,19 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	// blob_sizes residue is asserted against rows that were really there.
 	require.NoError(t, s.RecordBlobSize(ctx, "member-body", 4096))
 	require.NoError(t, s.RecordBlobSize(ctx, "member-widget", 512))
+	require.NoError(t, s.RecordBlobSize(ctx, "member-asset-blob", 1048576))
+
+	// One out-of-line asset (av-20fk), so deleting the account is proved to
+	// take the rows that name this person's vendored payloads with it.
+	_, err = s.ReplaceArtifactAssets(ctx, member.ID, deletedArtifact, "member-generation",
+		[]ArtifactAsset{{
+			ID:          "member-asset",
+			SourceURL:   "https://cdn.example.test/app.wasm",
+			BlobID:      "member-asset-blob",
+			ContentType: "application/wasm",
+			SizeBytes:   4,
+		}})
+	require.NoError(t, err)
 
 	return accountFixture{s: s, admin: admin, member: member}
 }
@@ -253,8 +280,10 @@ func TestDeleteAccountLeavesNoRowOfTheAccountBehind(t *testing.T) {
 
 	blobIDs, err := fx.s.DeleteAccount(ctx, fx.member.ID)
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"member-body", "member-widget"}, blobIDs,
-		"the caller is handed every blob id it must now delete, collected before the rows naming them went")
+	assert.ElementsMatch(t, []string{"member-body", "member-widget", "member-asset-blob"}, blobIDs,
+		"the caller is handed every blob id it must now delete, collected before the rows naming them went — "+
+			"including the vendored payloads (av-20fk), which are the largest bytes an account holds and the "+
+			"ones nothing could name afterwards")
 
 	for name, tbl := range accountTables {
 		if tbl.residue == "" {

@@ -160,7 +160,8 @@ func TestOriginDecisionsCascadeOnArtifactDelete(t *testing.T) {
 	putTestArtifact(t, s, "a1", []string{"https://ok.example.com"})
 	require.NoError(t, s.SetOriginDecision(ctx, 1, "a1", "https://nope.example.com", DecisionBlock, "runtime"))
 
-	require.NoError(t, s.DeleteArtifact(ctx, 1, "a1"))
+	_, err := s.DeleteArtifact(ctx, 1, "a1")
+	require.NoError(t, err)
 
 	var count int
 	require.NoError(t, s.db.QueryRowContext(ctx,

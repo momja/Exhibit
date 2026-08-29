@@ -39,6 +39,13 @@ func TestRenderOriginWithholdsTheReferrer(t *testing.T) {
 		{"widget, no token", "/w/{artifactID}", "/w/" + id, http.StatusNotFound},
 		{"share", "/s/{shareID}", "/s/" + shareID, http.StatusOK},
 		{"share, unknown id", "/s/{shareID}", "/s/does-not-exist", http.StatusNotFound},
+		// The asset route (av-20fk) takes no render token — its unguessable
+		// asset id is the credential — but it is still on this surface and
+		// still must not put the URL that reached it into a third party's
+		// logs. An unknown id is the only case available here: the fixture
+		// artifact has no assets.
+		{"asset, unknown id", "/a/{artifactID}/assets/{assetID}",
+			"/a/" + id + "/assets/does-not-exist", http.StatusNotFound},
 	}
 
 	covered := map[string]bool{}

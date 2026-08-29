@@ -112,7 +112,8 @@ func TestSharedBlobIsChargedInFullToEachOwnerAndOnceWithinOne(t *testing.T) {
 
 	// And the stability half of the claim: owner 2 deleting their copy leaves
 	// owner 1's total exactly where it was.
-	require.NoError(t, s.DeleteArtifact(context.Background(), 2, "theirs"))
+	_, err := s.DeleteArtifact(context.Background(), 2, "theirs")
+	require.NoError(t, err)
 	assert.Equal(t, int64(5000), usage(t, s, 1))
 	assert.Zero(t, usage(t, s, 2))
 }
@@ -125,19 +126,21 @@ func TestDeletingAnArtifactDropsItsBytes(t *testing.T) {
 	putSized(t, s, "a1", 1, "a1-body", 1000, "a1-widget", 200)
 	putSized(t, s, "a2", 1, "a2-body", 40, "", 0)
 
-	require.NoError(t, s.DeleteArtifact(ctx, 1, "a1"))
+	_, err := s.DeleteArtifact(ctx, 1, "a1")
+	require.NoError(t, err)
 	assert.Equal(t, int64(40), usage(t, s, 1), "both of the artifact's blobs stop counting")
 }
 
-// Detaching a widget is the same story one column down: SetWidgetBlobID("")
-// removes the reference, so the tile's bytes stop being charged even though
-// the artifact stays.
+// Detaching a widget is the same story one column down: DeleteWidget removes
+// the reference, so the tile's bytes stop being charged even though the
+// artifact stays.
 func TestDetachingAWidgetDropsItsBytes(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	putSized(t, s, "a1", 1, "a1-body", 1000, "a1-widget", 200)
 
-	require.NoError(t, s.SetWidgetBlobID(ctx, 1, "a1", ""))
+	_, err := s.DeleteWidget(ctx, 1, "a1")
+	require.NoError(t, err)
 	assert.Equal(t, int64(1000), usage(t, s, 1))
 }
 
@@ -153,8 +156,10 @@ func TestForgetBlobSizesKeepsStillReferencedLengths(t *testing.T) {
 	putSized(t, s, "solo", 1, "solo-body", 70, "", 0)
 
 	// Owner 1 deletes both of theirs and asks for every id to be forgotten.
-	require.NoError(t, s.DeleteArtifact(ctx, 1, "mine"))
-	require.NoError(t, s.DeleteArtifact(ctx, 1, "solo"))
+	_, err := s.DeleteArtifact(ctx, 1, "mine")
+	require.NoError(t, err)
+	_, err = s.DeleteArtifact(ctx, 1, "solo")
+	require.NoError(t, err)
 	require.NoError(t, s.ForgetBlobSizes(ctx, []string{shared, "solo-body"}))
 
 	assert.Equal(t, int64(5000), usage(t, s, 2), "the shared length survives, because owner 2 still references it")
@@ -406,4 +411,59 @@ func TestDeletingALargeAccountStaysUnderTheVariableLimit(t *testing.T) {
 	var left int
 	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM blob_sizes`).Scan(&left))
 	assert.Zero(t, left, "every length went with the account")
+}
+
+// A vendored payload is charged to the owner whose artifact loads it
+// (av-20fk over av-fw1b). Migration 026 is the whole mechanism: it replaced
+// `blob_references` with one that unions the asset rows in, so the usage query
+// picks them up without knowing they exist.
+//
+// Assets are the bytes that matter most here. A wasm module is most of what a
+// snapshot weighs — which is why av-20fk moved them out of the body — so an
+// instance that left them out of the view would report a library at a fraction
+// of its size on disk.
+func TestAssetBytesAreChargedToTheirArtifactsOwner(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	putSized(t, s, "a1", 1, "a1-body", 1000, "", 0)
+
+	require.NoError(t, s.RecordBlobSize(ctx, "wasm-blob", 8_000_000))
+	_, err := s.ReplaceArtifactAssets(ctx, 1, "a1", "gen-1", []ArtifactAsset{{
+		ID: "asset-1", SourceURL: "https://cdn.example.test/app.wasm",
+		BlobID: "wasm-blob", ContentType: "application/wasm", SizeBytes: 8_000_000,
+	}})
+	require.NoError(t, err)
+
+	assert.Equal(t, int64(8_001_000), usage(t, s, 1),
+		"the payload counts against the owner, not against nobody")
+}
+
+// And the prune direction, which is the worse half of leaving assets out of
+// the view: ForgetBlobSizes keeps a length only while `blob_references` still
+// names its blob, so an unaware view would drop the recorded size of a payload
+// a second artifact in the same library is still using — silently shrinking
+// that owner's total until somebody ran a recompute they had no reason to run.
+func TestForgettingOneArtifactsAssetKeepsALengthAnotherStillUses(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	putSized(t, s, "a1", 1, "a1-body", 10, "", 0)
+	putSized(t, s, "a2", 1, "a2-body", 10, "", 0)
+
+	const shared = "shared-wasm"
+	require.NoError(t, s.RecordBlobSize(ctx, shared, 500))
+	for _, id := range []string{"a1", "a2"} {
+		_, err := s.ReplaceArtifactAssets(ctx, 1, id, "gen-"+id, []ArtifactAsset{{
+			ID: "asset-" + id, SourceURL: "https://cdn.example.test/app.wasm",
+			BlobID: shared, ContentType: "application/wasm", SizeBytes: 500,
+		}})
+		require.NoError(t, err)
+	}
+
+	// a1 goes; a2 still loads the same payload.
+	_, err := s.DeleteArtifact(ctx, 1, "a1")
+	require.NoError(t, err)
+	require.NoError(t, s.ForgetBlobSizes(ctx, []string{"a1-body", shared}))
+
+	assert.Equal(t, int64(510), usage(t, s, 1),
+		"a2's body and the payload it still references")
 }

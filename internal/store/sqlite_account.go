@@ -54,7 +54,7 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 }
 
 // DeleteAccount erases everything this instance holds for userID and returns
-// the blob ids whose bytes the caller must now remove.
+// the blob ids it queued for deletion, for the caller to drain.
 //
 // # Why it returns blob ids rather than deleting them
 //
@@ -64,10 +64,13 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 // blobs" call and this one would have its row deleted here and its bytes
 // missed, and there is no later reader that could ever find them again.
 //
-// The caller deletes the bytes after this returns, which is the same row-first
-// order deleteArtifactBlobs takes and for the same reason: bytes-first risks a
-// live row pointing at a body that no longer exists, and only that failure is
-// unrepairable.
+// The caller drains them after this returns, which is the same row-first order
+// DeleteArtifact takes and for the same reason: bytes-first risks a live row
+// pointing at a body that no longer exists, and only that failure is
+// unrepairable. What makes the window safe is that the returned ids are also
+// written to pending_blob_deletions in this transaction (av-8gyd), so a crash
+// before the caller drains leaves the work for the next startup rather than
+// leaking the files.
 //
 // # What it deletes, and what deletes itself
 //
@@ -145,6 +148,17 @@ func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string
 		}
 	}
 
+	// Every row that named those blobs is gone, so the refcount each id is
+	// judged against is final: enqueue the ones nothing references any more
+	// (av-8gyd). It happens inside this transaction for the same reason
+	// collecting the ids did — after the commit nothing in the database can
+	// name them, so a crash before the files are unlinked would leak them with
+	// no way left to find them.
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, blobIDs...)
+	if err != nil {
+		return nil, err
+	}
+
 	// The lengths recorded for those blobs, last, once every row that could
 	// have referenced them is gone — forgetBlobSizesTx keeps any id another
 	// owner still references, which is the whole reason it is a reference
@@ -157,13 +171,23 @@ func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return blobIDs, nil
+	return queued, nil
 }
 
 // artifactBlobIDs is every blob id an owner's artifacts name: the body of each,
-// plus the widget of any that has one. Both are rewritten in place across the
-// artifact's life (an edit reuses source_blob_id, a widget save reuses
-// widget_blob_id), so this is the complete set and not the newest of a series.
+// the widget of any that has one, and every out-of-line asset any of them
+// vendored (av-20fk).
+//
+// The first two are rewritten in place across the artifact's life (an edit
+// reuses source_blob_id, a widget save reuses widget_blob_id), so those are the
+// complete set and not the newest of a series. Assets are different in kind and
+// are the reason this reads two queries rather than one: they are rows, not
+// columns, there are arbitrarily many of them per artifact, and they are by far
+// the largest bytes an account holds — a vendored wasm module is most of what a
+// snapshot weighs. Leaving them out would mean an erased account's payloads
+// stayed on the volume with nothing left in the database able to name them,
+// which is precisely the permanent leak the deletion queue exists to make
+// impossible.
 func artifactBlobIDs(ctx context.Context, tx *sql.Tx, userID int64) ([]string, error) {
 	rows, err := tx.QueryContext(ctx,
 		"SELECT source_blob_id, widget_blob_id FROM artifacts WHERE owner_id = ?", userID)
@@ -185,5 +209,32 @@ func artifactBlobIDs(ctx context.Context, tx *sql.Tx, userID int64) ([]string, e
 			ids = append(ids, widget)
 		}
 	}
-	return ids, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// The asset blobs, through the artifacts that reference them so the scope
+	// is the same owner predicate. DISTINCT because content addressing is per
+	// owner: two of this account's artifacts loading the same payload name one
+	// blob, and enqueuing it twice would be a second decision about bytes the
+	// first one already condemned.
+	assetRows, err := tx.QueryContext(ctx,
+		`SELECT DISTINCT aa.blob_id FROM artifact_assets aa
+           JOIN artifacts a ON a.id = aa.artifact_id
+          WHERE a.owner_id = ?`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer assetRows.Close()
+
+	for assetRows.Next() {
+		var blobID string
+		if err := assetRows.Scan(&blobID); err != nil {
+			return nil, err
+		}
+		if blobID != "" {
+			ids = append(ids, blobID)
+		}
+	}
+	return ids, assetRows.Err()
 }

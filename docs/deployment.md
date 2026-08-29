@@ -775,6 +775,20 @@ length the bytes actually have. A blob it cannot read keeps the length already
 recorded for it and is reported on the line, so a backend hiccup cannot
 silently shrink somebody's total.
 
+### 8.1 Reclaiming what was deleted
+
+Nothing to do. Deleting an artifact, a widget, or a whole account *attempts* to
+remove its bytes from the configured blob storage — the data volume, or the
+bucket when `BLOB_S3_BUCKET` is set — as part of the request, and the next
+startup finishes whatever that attempt did not: a crash between the two steps,
+or a delete the storage refused (a read-only volume, a bucket that timed out).
+The ids are written to the database by the same transaction that deleted the
+rows, so the intent to delete them outlives both the process and a failed
+attempt, and the retry is repeated until it succeeds. There is no sweep to
+schedule and no reclaim command to run. A `reclaimed queued blob deletions`
+line in the startup log means the previous run left bytes behind, either by
+dying mid-delete or by being refused.
+
 ## 9. What each account is allowed
 
 Every account carries an **entitlement**: a plan label, a storage limit, and an

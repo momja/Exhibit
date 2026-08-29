@@ -28,8 +28,10 @@ import (
 // exhibit-lwb.3's HTML inliner calls for <style> text, style= attributes, and
 // fetched stylesheet bodies; its signature is fixed here so the two tickets can
 // be built in parallel and compose without further coordination.
-func InlineCSS(ctx context.Context, f *Fetcher, baseURL, css string) (string, []*FetchError) {
-	ci := &cssInliner{ctx: ctx, f: f, path: make(map[string]bool)}
+// sink follows InlineHTMLAssets': non-nil sends over-threshold assets out of
+// line, nil inlines everything (av-oz40).
+func InlineCSS(ctx context.Context, f *Fetcher, baseURL, css string, sink AssetSink) (string, []*FetchError) {
+	ci := &cssInliner{ctx: ctx, f: f, sink: sink, path: make(map[string]bool)}
 	out := ci.inline(baseURL, css, 0)
 	return out, ci.errs
 }
@@ -73,6 +75,7 @@ var cssRefRE = regexp.MustCompile(`(?i)` +
 type cssInliner struct {
 	ctx  context.Context
 	f    *Fetcher
+	sink AssetSink
 	errs []*FetchError
 	path map[string]bool // absolute sheet URLs currently being folded (import stack)
 }
@@ -128,7 +131,7 @@ func (ci *cssInliner) inlineURL(base *url.URL, ref, whole string) string {
 	}
 	// Always double-quote: a data: URI can carry characters (';', spaces in a
 	// media-type parameter) that would break an unquoted url() token.
-	return `url("` + dataURI(asset) + `")`
+	return `url("` + place(ci.sink, asset) + `")`
 }
 
 // foldImport fetches an @import'd sheet, recursively inlines it against its own

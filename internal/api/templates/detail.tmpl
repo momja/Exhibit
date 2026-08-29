@@ -32,6 +32,12 @@
   <span class="toolbar-sep">|</span>
   <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot"></i> Modify with agent</a>
   <span class="toolbar-sep">|</span>
+  {{/* The portable copy (av-vnkt): one file with every stored payload folded
+       back in, depending on no origin and no running instance. A plain link,
+       because the response is an attachment — no JS, and it works from the
+       page a visitor is already on. */}}
+  <a href="/api/artifacts/{{.ID}}/export" download><i class="ph ph-download-simple"></i> Download file</a>
+  <span class="toolbar-sep">|</span>
   {{template "capabilityCluster" .Capability}}
   <a href="/artifacts/{{.ID}}/edit#security-panel">Manage in allowlist settings →</a>
   {{if .SourceURL}}

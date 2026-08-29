@@ -101,7 +101,7 @@ func TestAnonymousWidgetRenderInlinesNoState(t *testing.T) {
 // it saved, and the write would be gone on reload. Not persisting is the honest
 // version of what is already true.
 func TestAnonymousPreambleDoesNotPersist(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, true)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, true, nil)
 
 	if !strings.Contains(doc, "var ANONYMOUS = true;") {
 		t.Fatalf("an anonymous preamble must declare itself: %s", doc)
@@ -117,7 +117,7 @@ func TestAnonymousPreambleDoesNotPersist(t *testing.T) {
 
 	// An ordinary render is unchanged: it declares itself identified and keeps
 	// writing through.
-	if owner := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false); !strings.Contains(owner, "var ANONYMOUS = false;") {
+	if owner := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false, nil); !strings.Contains(owner, "var ANONYMOUS = false;") {
 		t.Fatalf("an ordinary render must persist as before: %s", owner)
 	}
 }

@@ -30,10 +30,18 @@ truncated row: a path-bearing entry approved as one file would otherwise grant
 its whole origin (av-i7hd).
 POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts)
 DELETE /api/artifacts/:id          Delete artifact, its associated rows, and its blobs
-                                   (body + widget). 500 if a blob could not be removed:
+                                   (body + widget) — except a blob another artifact
+                                   still references. 500 if a blob could not be removed:
                                    the row is already gone, but a delete that left bytes
                                    on disk must not report success
 ```
+
+**Reclaiming bytes is automatic and invisible.** Rows and files live in two
+stores that cannot commit together, so the transaction that removes the last
+row naming a blob also records the intent to delete it (av-8gyd). The bytes go
+immediately after that commit; anything a crash interrupts is finished by the
+next startup. There is no sweep, no reconciler and no operator command — the
+only thing a 500 above changes is when the file goes, not whether it does.
 
 **Ingest flow** — two steps by design:
 

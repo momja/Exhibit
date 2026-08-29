@@ -192,7 +192,62 @@ type Store interface {
 	// because widget_blob_id is not caller-writable: the generic update map is
 	// a decoded PATCH body, and this id is minted server-side.
 	SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error
-	DeleteArtifact(ctx context.Context, ownerID int64, id string) error
+	// DeleteArtifact removes the artifact and returns the blob ids it queued
+	// for deletion; DeleteWidget does the same for the widget an artifact
+	// detaches. Both enqueue inside the transaction that dropped the
+	// reference, and only for a blob no remaining row names (blobqueue.go).
+	// The caller hands what comes back to DrainBlobDeletions.
+	DeleteArtifact(ctx context.Context, ownerID int64, id string) ([]string, error)
+	DeleteWidget(ctx context.Context, ownerID int64, artifactID string) ([]string, error)
+
+	// Out-of-line assets (av-20fk): the binary payloads a page fetches at run
+	// time, stored as blobs of their own rather than base64 inside the body.
+	//
+	// ReplaceArtifactAssets installs one ingest's or refetch's worth as the
+	// artifact's current generation and retires the previous set, returning
+	// what it queued for deletion. Replacing rather than appending is what
+	// stops a repeated refetch accumulating a full set every time.
+	//
+	// The two Unscoped reads are the render surface's, and carry the same
+	// exception GetArtifactUnscoped does: a share serves an artifact to
+	// someone with no account, so there is no owner to scope by. Neither
+	// exposes more than the render already does — they are the bytes the
+	// served document is about to fetch — and the asset lookup still takes
+	// the artifact id, so one artifact cannot address another's.
+	ReplaceArtifactAssets(ctx context.Context, ownerID int64, artifactID, generationID string, assets []ArtifactAsset) ([]string, error)
+	ListArtifactAssets(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactAsset, error)
+	ArtifactAssetsUnscoped(ctx context.Context, artifactID string) ([]ArtifactAsset, error)
+	GetArtifactAssetUnscoped(ctx context.Context, artifactID, assetID string) (*ArtifactAsset, error)
+	DeleteArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) ([]string, error)
+
+	// The blob deletion queue (av-8gyd). Rows and bytes live in two stores
+	// that cannot commit together, so the *intent* to remove the bytes is
+	// recorded in the transaction that removed the rows, and these three
+	// finish the job: drain what one operation just enqueued (synchronously,
+	// after it) or drain the whole queue at startup, which is where a crashed
+	// process's leftovers are reclaimed. Draining is idempotent, so repeating
+	// one costs nothing.
+	//
+	// None of the three takes an owner, and none can: a blob id reaches the
+	// queue only once the last row naming it — and with it the last record of
+	// whose it was — has been deleted.
+	PendingBlobDeletions(ctx context.Context) ([]string, error)
+	DrainBlobDeletions(ctx context.Context, blobs BlobDeleter, ids []string) (int, error)
+	DrainAllBlobDeletions(ctx context.Context, blobs BlobDeleter) (int, error)
+
+	// LockBlobs excludes a caller that is about to write bytes and commit a
+	// row naming them from the drain that is about to unlink those same bytes
+	// (bloblock.go). It belongs on this interface rather than inside the store
+	// because the two halves of that race live in different packages: the
+	// drain is here, and writing an asset's bytes before referencing them is
+	// the API's ingest path. A caller holds it across [write bytes … commit
+	// the referencing row] and — since the database runs on one connection —
+	// never takes it while already inside a transaction.
+	//
+	// Only content-addressed ids can lose this race, since only they can be
+	// referenced again after being condemned; a caller minting a fresh id has
+	// nothing to exclude and need not call this.
+	LockBlobs(ids ...string) func()
 
 	// Network origin decisions (exhibit-x87). ListOriginDecisions returns
 	// every decision for an artifact, allow and block alike, ordered by
@@ -412,8 +467,8 @@ type Store interface {
 	// (see the type).
 	GetAccountSummary(ctx context.Context, userID int64) (AccountSummary, error)
 	// DeleteAccount erases the account and everything it owns, returning the
-	// blob ids whose bytes the caller must then remove — collected inside the
-	// same transaction, because after it commits nothing can name them again.
+	// blob ids it queued for deletion — collected and enqueued inside the same
+	// transaction, because after it commits nothing can name them again.
 	// ErrLastAdmin when the account is the instance's only enabled admin;
 	// ErrNotFound when there is no such account. sqlite_account.go says what
 	// it deletes and what the schema's cascades delete for it.

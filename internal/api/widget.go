@@ -233,33 +233,26 @@ func (ro *Router) widgetGenerateAvailability(r *http.Request) (bool, string) {
 // to the default tile.
 //
 // Same order as deleteArtifact, for the same reason (artifacts.go,
-// deleteArtifactBlobs): clear the column first, so a failure at the second
-// step leaves an unreferenced file rather than a card pointing at a body that
-// is gone. Detaching is the only exit a widget blob has — the id is otherwise
+// reclaimBlobs): clear the column first, so a failure at the second step
+// leaves an unreferenced file rather than a card pointing at a body that is
+// gone. Detaching is the only exit a widget blob has — the id is otherwise
 // reused for the life of the artifact — so once the column is empty nothing
-// can name these bytes again.
+// can name those bytes again. That is why the store clears the column and
+// queues the id in one transaction (av-8gyd): the queue row is what can still
+// name them if this process dies before the next line runs.
 func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
-	ownerID := ownerIDFromCtx(r.Context())
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
+	queued, err := ro.cfg.Store.DeleteWidget(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
-		serverError(w, r, "delete widget artifact lookup", err)
+		writeArtifactError(w, r, "detach widget", err)
 		return
 	}
-	if a == nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	if a.WidgetBlobID != "" {
-		if err := ro.cfg.Store.SetWidgetBlobID(r.Context(), ownerID, id, ""); err != nil {
-			writeArtifactError(w, r, "detach widget", err)
-			return
-		}
+	if len(queued) > 0 {
 		slog.InfoContext(r.Context(), "widget removed", slog.String("artifact_id", id))
-		if err := deleteBlobs(r.Context(), ro.cfg.Store, ro.cfg.Blob, []string{a.WidgetBlobID}); err != nil {
-			serverError(w, r, "delete widget blob", err)
-			return
-		}
+	}
+	if err := ro.reclaimBlobs(r.Context(), queued); err != nil {
+		serverError(w, r, "delete widget blob", err)
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
