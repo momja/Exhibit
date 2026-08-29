@@ -18,9 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// seedArtifact writes an artifact with a body blob, so asset tests start from a
+// seedAssetArtifact writes an artifact with a body blob, so asset tests start from a
 // row assets can hang off.
-func seedArtifact(t *testing.T, fx *queueFixture, id string) {
+func seedAssetArtifact(t *testing.T, fx *queueFixture, id string) {
 	t.Helper()
 	fx.putBody(t, id+"-body", "<html><script>fetch('/app.wasm')</script></html>")
 	require.NoError(t, fx.store.PutArtifact(context.Background(), &Artifact{
@@ -38,7 +38,7 @@ func asset(id, sourceURL, blobID string) ArtifactAsset {
 func TestReplacingAGenerationReclaimsTheSupersededBytes(t *testing.T) {
 	fx := newQueueFixture(t)
 	ctx := context.Background()
-	seedArtifact(t, fx, "a1")
+	seedAssetArtifact(t, fx, "a1")
 
 	fx.putBody(t, "wasm-v1", "\x00asm-one")
 	_, err := fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "gen-1",
@@ -73,7 +73,7 @@ func TestReplacingAGenerationReclaimsTheSupersededBytes(t *testing.T) {
 func TestAnUnchangedPayloadSurvivesItsGenerationBeingReplaced(t *testing.T) {
 	fx := newQueueFixture(t)
 	ctx := context.Background()
-	seedArtifact(t, fx, "a1")
+	seedAssetArtifact(t, fx, "a1")
 
 	fx.putBody(t, "wasm-stable", "\x00asm-stable")
 	_, err := fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "gen-1",
@@ -97,8 +97,8 @@ func TestAnUnchangedPayloadSurvivesItsGenerationBeingReplaced(t *testing.T) {
 func TestAnAssetBlobSharedByTwoArtifactsOutlivesTheFirstDeletion(t *testing.T) {
 	fx := newQueueFixture(t)
 	ctx := context.Background()
-	seedArtifact(t, fx, "a1")
-	seedArtifact(t, fx, "a2")
+	seedAssetArtifact(t, fx, "a1")
+	seedAssetArtifact(t, fx, "a2")
 
 	fx.putBody(t, "shared-wasm", "\x00asm-shared")
 	for i, id := range []string{"a1", "a2"} {
@@ -137,7 +137,7 @@ func TestAnAssetBlobSharedByTwoArtifactsOutlivesTheFirstDeletion(t *testing.T) {
 func TestDeletingAnArtifactReclaimsItsAssetBytes(t *testing.T) {
 	fx := newQueueFixture(t)
 	ctx := context.Background()
-	seedArtifact(t, fx, "a1")
+	seedAssetArtifact(t, fx, "a1")
 
 	fx.putBody(t, "only-wasm", "\x00asm-only")
 	_, err := fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "gen-1",
@@ -158,7 +158,7 @@ func TestDeletingAnArtifactReclaimsItsAssetBytes(t *testing.T) {
 func TestDeletingOneAssetReclaimsOnlyItsBytes(t *testing.T) {
 	fx := newQueueFixture(t)
 	ctx := context.Background()
-	seedArtifact(t, fx, "a1")
+	seedAssetArtifact(t, fx, "a1")
 
 	fx.putBody(t, "wasm-a", "\x00asm-a")
 	fx.putBody(t, "wasm-b", "\x00asm-b")
@@ -188,7 +188,7 @@ func TestDeletingOneAssetReclaimsOnlyItsBytes(t *testing.T) {
 func TestAssetWritesAreOwnerScoped(t *testing.T) {
 	fx := newQueueFixture(t)
 	ctx := context.Background()
-	seedArtifact(t, fx, "a1")
+	seedAssetArtifact(t, fx, "a1")
 
 	_, err := fx.store.ReplaceArtifactAssets(ctx, 2, "a1", "gen-1",
 		[]ArtifactAsset{asset("as-1", "https://cdn.test/app.wasm", "wasm")})
@@ -208,8 +208,8 @@ func TestAssetWritesAreOwnerScoped(t *testing.T) {
 func TestAnAssetIsNotReachableThroughAnotherArtifact(t *testing.T) {
 	fx := newQueueFixture(t)
 	ctx := context.Background()
-	seedArtifact(t, fx, "a1")
-	seedArtifact(t, fx, "a2")
+	seedAssetArtifact(t, fx, "a1")
+	seedAssetArtifact(t, fx, "a2")
 
 	fx.putBody(t, "wasm-a", "\x00asm-a")
 	_, err := fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "gen-1",

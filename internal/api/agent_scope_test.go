@@ -130,6 +130,11 @@ func TestAgentCredentialReachesNothingButItsArtifact(t *testing.T) {
 		{"DELETE", "/api/artifacts/" + other + "/state"},
 		{"GET", "/api/artifacts/" + other + "/widget"},
 		{"PUT", "/api/artifacts/" + other + "/widget"},
+		{"GET", "/api/artifacts/" + other + "/assets"},
+		// Reading its own assets is a tool it has (below); deleting one is not.
+		// That is the owner's escape hatch for a payload whose feature they
+		// edited away, decided on grounds the model cannot see (av-20fk).
+		{"DELETE", "/api/artifacts/" + id + "/assets/anything"},
 	}
 
 	for _, c := range refused {
@@ -164,6 +169,14 @@ func TestAgentCredentialReachesItsOwnArtifactSubResources(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	w = doWithToken(t, r, "GET", "/api/artifacts/"+id+"/widget", tok, nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// The asset summary the extension puts in front of the model (av-20fk):
+	// without it the agent reads a bare fetch literal in the body and "fixes"
+	// an origin that is in fact served from a stored copy. Metadata only —
+	// this route never returns bytes, so the grant cannot put a vendored
+	// payload into a context window.
+	w = doWithToken(t, r, "GET", "/api/artifacts/"+id+"/assets", tok, nil)
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
@@ -255,6 +268,7 @@ func TestAgentScopeAllowsRejectsPathTricks(t *testing.T) {
 		{"GET", "/api/artifacts/abc/widget"},
 		{"PUT", "/api/artifacts/abc/widget"},
 		{"DELETE", "/api/artifacts/abc/widget"},
+		{"GET", "/api/artifacts/abc/assets"},
 	}
 	for _, c := range allowed {
 		assert.Truef(t, agentScopeAllows(scope, c.method, c.path), "%s %s", c.method, c.path)
@@ -264,6 +278,7 @@ func TestAgentScopeAllowsRejectsPathTricks(t *testing.T) {
 		{"GET", "/api/artifacts/abd"},
 		{"GET", "/api/artifacts/abd/state"},
 		{"POST", "/api/artifacts/abc/state"},
+		{"DELETE", "/api/artifacts/abc/assets/xyz"},
 		{"GET", "/api/artifacts/abc/transcripts"},
 		{"POST", "/api/artifacts/abc/widget/generate"},
 		{"POST", "/api/artifacts/abc/tags/1"},

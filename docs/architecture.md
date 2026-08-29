@@ -535,10 +535,15 @@ carrying a principal is av-c5aq.
   `blob_sizes` to `blob_references`, so there is no counter for a caller to
   forget to decrement — deleting an artifact stops its bytes being charged in
   the same statement that deletes it, and `DELETE /api/account` reaches zero by
-  construction. The view is also the extension point: when av-20fk's refcounted
-  `artifact_assets` land, a migration replaces it with one that unions the asset
-  references in, and the usage query, the recompute pass and the prune all pick
-  them up unchanged, because none of them knows what a reference is made of.
+  construction. The view is also the extension point, and av-20fk is the case it
+  was built for: migration 026 replaced it with one that unions the asset
+  references in — through `artifacts`, since `artifact_assets` has no owner of
+  its own — and the usage query, the recompute pass, the backfill and the
+  unreferenced-size prune all picked them up with no code change, because none
+  of them knows what a reference is made of. That was not optional bookkeeping:
+  a vendored payload is the largest thing the system stores, so leaving it out
+  charged it to nobody, and — worse — the prune would have dropped the recorded
+  length of a payload a second artifact in the same library still used.
 
   **A shared blob is charged at full size to every referencing owner**, and once
   to each of them (the readers take `DISTINCT blob_id` per owner — the charge is
@@ -591,7 +596,11 @@ to remove, so it writes that down:
 - The transaction that removes an artifact, or detaches a widget, or erases an
   account also inserts those blob ids into `pending_blob_deletions`. One
   transaction, so the intent is recorded exactly when the last reference
-  disappears — which is also the last moment anything could name them.
+  disappears — which is also the last moment anything could name them. "Those
+  blob ids" includes an artifact's out-of-line assets (av-20fk), which is the
+  one arm that is rows rather than columns and the one carrying most of the
+  bytes: an account erasure that collected only bodies and widgets would leave
+  every vendored payload on the volume with nothing left able to name it.
 - **The enqueue is conditional on a refcount taken in that same transaction**:
   drop the row, count the rows still referencing that blob id, enqueue only on
   zero. Two artifacts in one library can legitimately share a blob, so an
@@ -599,10 +608,13 @@ to remove, so it writes that down:
   count inside the transaction is what makes the decision race-free. The count
   is one query (`internal/store/blobqueue.go`), which is the place a future
   blob-referencing table has to be added to.
-- After the commit the caller deletes the files, then their queue rows. A crash
-  anywhere leaves the queue rows in place, and `Blob.Delete` is idempotent for
-  a missing id (av-7jcq), so repeating the work costs nothing and needs no
-  compensating existence check.
+- After the commit the caller deletes the files, then their queue rows, then
+  the lengths recorded for the ids that actually went (av-fw1b) — the drain is
+  the right place for that and the only one, since a blob reaches this queue
+  precisely when the last row referencing it disappeared, so by then there is
+  nobody left to charge. A crash anywhere leaves the queue rows in place, and
+  `Blob.Delete` is idempotent for a missing id (av-7jcq), so repeating the work
+  costs nothing and needs no compensating existence check.
 
 What the commit makes durable is therefore the *intent*, not the outcome, and
 everything after it is a retry of the same idempotent work — so there is no

@@ -412,3 +412,58 @@ func TestDeletingALargeAccountStaysUnderTheVariableLimit(t *testing.T) {
 	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM blob_sizes`).Scan(&left))
 	assert.Zero(t, left, "every length went with the account")
 }
+
+// A vendored payload is charged to the owner whose artifact loads it
+// (av-20fk over av-fw1b). Migration 026 is the whole mechanism: it replaced
+// `blob_references` with one that unions the asset rows in, so the usage query
+// picks them up without knowing they exist.
+//
+// Assets are the bytes that matter most here. A wasm module is most of what a
+// snapshot weighs — which is why av-20fk moved them out of the body — so an
+// instance that left them out of the view would report a library at a fraction
+// of its size on disk.
+func TestAssetBytesAreChargedToTheirArtifactsOwner(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	putSized(t, s, "a1", 1, "a1-body", 1000, "", 0)
+
+	require.NoError(t, s.RecordBlobSize(ctx, "wasm-blob", 8_000_000))
+	_, err := s.ReplaceArtifactAssets(ctx, 1, "a1", "gen-1", []ArtifactAsset{{
+		ID: "asset-1", SourceURL: "https://cdn.example.test/app.wasm",
+		BlobID: "wasm-blob", ContentType: "application/wasm", SizeBytes: 8_000_000,
+	}})
+	require.NoError(t, err)
+
+	assert.Equal(t, int64(8_001_000), usage(t, s, 1),
+		"the payload counts against the owner, not against nobody")
+}
+
+// And the prune direction, which is the worse half of leaving assets out of
+// the view: ForgetBlobSizes keeps a length only while `blob_references` still
+// names its blob, so an unaware view would drop the recorded size of a payload
+// a second artifact in the same library is still using — silently shrinking
+// that owner's total until somebody ran a recompute they had no reason to run.
+func TestForgettingOneArtifactsAssetKeepsALengthAnotherStillUses(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	putSized(t, s, "a1", 1, "a1-body", 10, "", 0)
+	putSized(t, s, "a2", 1, "a2-body", 10, "", 0)
+
+	const shared = "shared-wasm"
+	require.NoError(t, s.RecordBlobSize(ctx, shared, 500))
+	for _, id := range []string{"a1", "a2"} {
+		_, err := s.ReplaceArtifactAssets(ctx, 1, id, "gen-"+id, []ArtifactAsset{{
+			ID: "asset-" + id, SourceURL: "https://cdn.example.test/app.wasm",
+			BlobID: shared, ContentType: "application/wasm", SizeBytes: 500,
+		}})
+		require.NoError(t, err)
+	}
+
+	// a1 goes; a2 still loads the same payload.
+	_, err := s.DeleteArtifact(ctx, 1, "a1")
+	require.NoError(t, err)
+	require.NoError(t, s.ForgetBlobSizes(ctx, []string{"a1-body", shared}))
+
+	assert.Equal(t, int64(510), usage(t, s, 1),
+		"a2's body and the payload it still references")
+}

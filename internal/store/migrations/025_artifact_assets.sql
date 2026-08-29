@@ -1,4 +1,8 @@
 -- +goose Up
+-- Version 25 for the reason 024 records: this file was numbered 20 while 18
+-- was the highest, and a migration numbered below the ledger's high-water mark
+-- stops goose before it runs anything.
+--
 -- Out-of-line artifact assets (av-20fk): the binary payloads a page fetches at
 -- run time — wasm modules, Emscripten .data heaps — stored as blobs of their
 -- own instead of base64 inside the artifact body.

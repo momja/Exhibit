@@ -256,7 +256,13 @@ func (ro *Router) persistRuntimeAssets(ctx context.Context, ownerID int64, artif
 		// wasm from two artifacts stores it once — and so deleting one
 		// owner's account can never reach another's bytes.
 		blobID := store.AssetBlobID(ownerID, c.Body)
-		if err := ro.cfg.Blob.Put(ctx, blobID, bytes.NewReader(c.Body)); err != nil {
+		// Through the write funnel like every other blob, so the payload is
+		// charged to whoever stored it (av-fw1b). An asset is the one blob
+		// whose length is not the artifact's own, and it is by far the
+		// largest — a vendored wasm module is most of what a snapshot
+		// weighs — so a write that skipped the funnel here would leave the
+		// number wrong by more than everything else combined.
+		if err := putBlob(ctx, ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader(c.Body)); err != nil {
 			return fmt.Errorf("store asset %s: %w", c.SourceURL, err)
 		}
 		rows = append(rows, store.ArtifactAsset{

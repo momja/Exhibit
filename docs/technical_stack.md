@@ -69,6 +69,25 @@ search box query matches any of the three.
 **Migrations: `goose`.** Embed migration files in the binary (`go:embed`) and run them on
 startup so a fresh container self-initializes.
 
+**The version number is the dangerous part.** goose identifies a migration by
+its number alone, and that produces two distinct failures this repo has met
+both of. A number reused is applied once and forever, so the second migration
+wearing it is *silently skipped* on every database that took the first — four
+outages, catalogued in `internal/store/migration_repair.go`. And a number
+*below* the ledger's high-water mark stops goose before it runs anything, so
+the instance does not start at all: `found N missing migrations before current
+version`.
+
+The second is the one branch work walks into, because a number is chosen while
+the branch is young and the file lands after main has shipped several more.
+Reserving a low number for work in flight does not survive it — the
+reservation holds only if that branch merges before anything above it deploys.
+So a new migration takes the next number above **every** version already in a
+ledger, `.sql` files and the Go migrations in `migration_repair.go` /
+`migration_origins.go` alike. `internal/store/migration_order_test.go` walks
+both rules, and an end-to-end test opens a database left at the previous
+release to prove the upgrade still starts.
+
 **Blob store: two implementations behind the `Blob` interface, chosen by
 configuration (av-52ll).** Artifact bodies go either to a mounted volume
 (`blob.FSStore`, the default) or to an S3-compatible bucket (`blob.S3Store`).

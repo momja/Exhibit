@@ -175,9 +175,19 @@ func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string
 }
 
 // artifactBlobIDs is every blob id an owner's artifacts name: the body of each,
-// plus the widget of any that has one. Both are rewritten in place across the
-// artifact's life (an edit reuses source_blob_id, a widget save reuses
-// widget_blob_id), so this is the complete set and not the newest of a series.
+// the widget of any that has one, and every out-of-line asset any of them
+// vendored (av-20fk).
+//
+// The first two are rewritten in place across the artifact's life (an edit
+// reuses source_blob_id, a widget save reuses widget_blob_id), so those are the
+// complete set and not the newest of a series. Assets are different in kind and
+// are the reason this reads two queries rather than one: they are rows, not
+// columns, there are arbitrarily many of them per artifact, and they are by far
+// the largest bytes an account holds — a vendored wasm module is most of what a
+// snapshot weighs. Leaving them out would mean an erased account's payloads
+// stayed on the volume with nothing left in the database able to name them,
+// which is precisely the permanent leak the deletion queue exists to make
+// impossible.
 func artifactBlobIDs(ctx context.Context, tx *sql.Tx, userID int64) ([]string, error) {
 	rows, err := tx.QueryContext(ctx,
 		"SELECT source_blob_id, widget_blob_id FROM artifacts WHERE owner_id = ?", userID)
@@ -199,5 +209,32 @@ func artifactBlobIDs(ctx context.Context, tx *sql.Tx, userID int64) ([]string, e
 			ids = append(ids, widget)
 		}
 	}
-	return ids, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// The asset blobs, through the artifacts that reference them so the scope
+	// is the same owner predicate. DISTINCT because content addressing is per
+	// owner: two of this account's artifacts loading the same payload name one
+	// blob, and enqueuing it twice would be a second decision about bytes the
+	// first one already condemned.
+	assetRows, err := tx.QueryContext(ctx,
+		`SELECT DISTINCT aa.blob_id FROM artifact_assets aa
+           JOIN artifacts a ON a.id = aa.artifact_id
+          WHERE a.owner_id = ?`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer assetRows.Close()
+
+	for assetRows.Next() {
+		var blobID string
+		if err := assetRows.Scan(&blobID); err != nil {
+			return nil, err
+		}
+		if blobID != "" {
+			ids = append(ids, blobID)
+		}
+	}
+	return ids, assetRows.Err()
 }

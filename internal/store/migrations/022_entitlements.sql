@@ -3,9 +3,12 @@
 -- admin can set.
 --
 -- Version numbering: 8 and 12 are occupied by Go migrations in
--- migration_repair.go that have no file here, and 019/020 are claimed by work
--- in flight on other branches even though no file for them exists in this
--- tree. Two prior outages came from two migrations sharing a version — read
+-- migration_repair.go that have no file here. 019/020 were once claimed by
+-- work in flight on another branch; that reservation was released when the
+-- branch landed (av-20fk/av-8gyd took 024/025 instead), because a number
+-- reserved below this file is unreachable once this file has deployed — goose
+-- refuses to start on an unapplied migration below the ledger's high-water
+-- mark. Two prior outages came from two migrations sharing a version — read
 -- migration_repair.go's header before adding another, and never renumber one
 -- that has run.
 --

@@ -76,7 +76,7 @@ var accountTables = map[string]accountTable{
 	// counted by blob id here rather than by user.
 	"blob_sizes": {reachExplicit,
 		"the recorded length of each blob the account's rows named, dropped for the ids left unreferenced",
-		"SELECT COUNT(*) FROM blob_sizes WHERE blob_id IN ('member-body', 'member-widget')"},
+		"SELECT COUNT(*) FROM blob_sizes WHERE blob_id IN ('member-body', 'member-widget', 'member-asset-blob')"},
 
 	"artifact_tags": {reachCascade, "cascades from artifacts(id)",
 		"SELECT COUNT(*) FROM artifact_tags WHERE artifact_id = '" + deletedArtifact + "'"},
@@ -236,6 +236,7 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	// blob_sizes residue is asserted against rows that were really there.
 	require.NoError(t, s.RecordBlobSize(ctx, "member-body", 4096))
 	require.NoError(t, s.RecordBlobSize(ctx, "member-widget", 512))
+	require.NoError(t, s.RecordBlobSize(ctx, "member-asset-blob", 1048576))
 
 	// One out-of-line asset (av-20fk), so deleting the account is proved to
 	// take the rows that name this person's vendored payloads with it.
@@ -279,8 +280,10 @@ func TestDeleteAccountLeavesNoRowOfTheAccountBehind(t *testing.T) {
 
 	blobIDs, err := fx.s.DeleteAccount(ctx, fx.member.ID)
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"member-body", "member-widget"}, blobIDs,
-		"the caller is handed every blob id it must now delete, collected before the rows naming them went")
+	assert.ElementsMatch(t, []string{"member-body", "member-widget", "member-asset-blob"}, blobIDs,
+		"the caller is handed every blob id it must now delete, collected before the rows naming them went — "+
+			"including the vendored payloads (av-20fk), which are the largest bytes an account holds and the "+
+			"ones nothing could name afterwards")
 
 	for name, tbl := range accountTables {
 		if tbl.residue == "" {
