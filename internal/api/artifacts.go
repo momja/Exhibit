@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -346,7 +347,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	// keeps its empty footprint.
 	var footprint []string
 	if req.URL != "" {
-		footprint = scanner.ScanWithBase(req.Body, req.URL)
+		footprint = ro.withoutRenderOrigin(scanner.ScanWithBase(req.Body, req.URL))
 		// Option A fallback (exhibit-lwb.6): relative references that survive
 		// ingest — snapshot off, failed, or partial — would otherwise resolve
 		// against the render origin and 404. The injected base points them
@@ -354,7 +355,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		// allowlist's decision.
 		req.Body = snapshot.InjectBaseHref(req.Body, req.URL)
 	} else {
-		footprint = scanner.Scan(req.Body)
+		footprint = ro.withoutRenderOrigin(scanner.Scan(req.Body))
 	}
 	if snapReport != nil {
 		snapReport.ResidualOrigins = footprint
@@ -386,6 +387,12 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// After normalization, because that is what makes the comparison exact.
+	// Dropped rather than refused: an allow row for the render origin would
+	// widen the CSP from this artifact's own asset path to the whole origin
+	// (withoutRenderOrigin), and a client that sent one was echoing a
+	// footprint rather than asking for cross-artifact reach.
+	allowlist = ro.withoutRenderOrigin(allowlist)
 
 	now := time.Now().UTC()
 	a := &store.Artifact{
@@ -517,7 +524,7 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		updates["network_allowlist"] = normalized
+		updates["network_allowlist"] = ro.withoutRenderOrigin(normalized)
 	}
 
 	// Verify the artifact exists *in this owner's library*. Another owner's
@@ -589,8 +596,8 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	var footprint []string
 	footprintChanged := false
 	if bodySet && newBody != oldBody {
-		footprint = scanner.Scan(newBody)
-		footprintChanged = !sameOrigins(footprint, scanner.Scan(oldBody))
+		footprint = ro.withoutRenderOrigin(scanner.Scan(newBody))
+		footprintChanged = !sameOrigins(footprint, ro.withoutRenderOrigin(scanner.Scan(oldBody)))
 	}
 	if footprint == nil {
 		footprint = []string{}
@@ -701,7 +708,7 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 
 	// Re-scan the network footprint and bump updated_at. Title is preserved.
 	updates := map[string]any{
-		"network_allowlist": scanner.Scan(string(fetched)),
+		"network_allowlist": ro.withoutRenderOrigin(scanner.Scan(string(fetched))),
 		"source_text":       store.ExtractSearchText(string(fetched)),
 	}
 	if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, updates); err != nil {
@@ -782,4 +789,87 @@ func (ro *Router) reclaimBlobs(ctx context.Context, queued []string) error {
 	}
 	_, err := ro.cfg.Store.DrainBlobDeletions(ctx, ro.cfg.Blob, queued)
 	return err
+}
+
+// withoutRenderOrigin drops the render origin from a scan result.
+//
+// The scan reports what a body will try to contact, and since av-oz40 a body
+// can legitimately contain URLs on the render origin: a markup asset over the
+// inlining threshold is rewritten in place to its asset route, so an <img src>
+// that used to name a third-party CDN now names us. (The runtime pass leaves
+// the body alone, which is why av-20fk alone never hit this.)
+//
+// Reporting that origin is wrong twice over.
+//
+// It is not a decision. The artifact's own asset path is a *system* source the
+// render surface adds unconditionally (render.go's buildCSP), path-scoped to
+// this artifact's id, and it is exactly the bytes that used to sit in the
+// document as data: URIs at no approval cost — moving them one hop away changed
+// the addressing and nothing else. So the footprint would be asking the user
+// about something they cannot meaningfully refuse: saying no changes no
+// behaviour, because the CSP source does not come from the allowlist.
+//
+// And saying *yes* is worse than meaningless. An allow row for the render
+// origin widens every directive from `RENDER_ORIGIN/a/<this id>/assets/` to the
+// whole origin, which would let the artifact fetch any *other* artifact's
+// render document and assets — a cross-artifact read the path scoping exists to
+// prevent, arrived at by a user answering a question the UI should never have
+// asked.
+//
+// Applied at every point a scan result becomes a footprint or an allowlist, so
+// there is no path — ingest, edit, or refetch — by which the origin can reach
+// artifact_network_origins. That keeps architecture.md §3.2's claim true as
+// written: a fully vendored artifact keeps an empty footprint, and there is no
+// row a user can revoke to break their own artifact.
+// Both sides are compared as canonical origin spellings, because the
+// configured value is an operator's string and the scanned one is the
+// scanner's: `https://X:443/` and `https://x` are one origin and must not
+// differ here.
+//
+// canonicalOrigin rather than origin.NormalizeOrigin, and the difference
+// matters: NormalizeOrigin enforces allowlist *policy* — no plaintext http
+// off loopback — and a render origin served over http behind an operator's
+// proxy is a legal configuration that policy would refuse, leaving this
+// comparison unable to run on exactly the instance that needs it. What is
+// wanted here is spelling, not permission.
+func (ro *Router) withoutRenderOrigin(origins []string) []string {
+	render := canonicalOrigin(ro.cfg.RenderOrigin)
+	if render == "" {
+		return origins
+	}
+	out := origins[:0:0] // never alias the caller's backing array
+	for _, o := range origins {
+		if canonicalOrigin(o) == render {
+			continue
+		}
+		out = append(out, o)
+	}
+	return out
+}
+
+// canonicalOrigin reduces a URL to `scheme://host[:port]`, lowercased, with a
+// trailing dot and a default port dropped — the same spelling the scanner
+// produces, which is what makes the comparison above exact rather than
+// approximate. Returns "" for anything with no origin in it.
+func canonicalOrigin(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || !u.IsAbs() || u.Host == "" {
+		return ""
+	}
+	scheme := strings.ToLower(u.Scheme)
+	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+	if host == "" {
+		return ""
+	}
+	if strings.Contains(host, ":") { // IPv6 literal keeps its brackets
+		host = "[" + host + "]"
+	}
+	port := u.Port()
+	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
+		port = ""
+	}
+	if port != "" {
+		return scheme + "://" + host + ":" + port
+	}
+	return scheme + "://" + host
 }

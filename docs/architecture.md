@@ -254,7 +254,18 @@ executable document with the correct security envelope:
   anything to a third party — has the same answer either way. It is never written
   to `artifact_network_origins` and never appears in the allowlist editor, so a
   fully vendored wasm artifact keeps an empty footprint and there is no row a user
-  can revoke to break their own artifact. `worker-src` is spelled out rather than
+  can revoke to break their own artifact. Keeping that true took an explicit
+  rule once av-oz40 began rewriting *markup* references into the body: the
+  scanner then finds an `<img src>` on the render origin where a CDN used to
+  be, and reported it as an origin to approve. The render origin is therefore
+  dropped from every scan result before it becomes a footprint or an allowlist
+  (`withoutRenderOrigin` in `internal/api/artifacts.go`, matched on canonical
+  spelling rather than bytes, and applied at the write paths too so no client
+  can send one in). Dropping it is not tidiness: an allow row for the render
+  origin widens every directive from `RENDER_ORIGIN/a/<id>/assets/` to the
+  whole origin — read access to every *other* artifact's render document and
+  assets, arrived at by a user answering a question the UI should never have
+  asked. `worker-src` is spelled out rather than
   left to fall back to `script-src` because its absence fails *silently* — the
   `Worker` constructor succeeds, nothing is logged, and the worker body simply never
   runs (av-x01o). Loading a script, worker, stylesheet, image, font, or media file
