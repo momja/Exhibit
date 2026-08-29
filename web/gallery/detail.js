@@ -502,17 +502,39 @@ document.addEventListener('keydown', function(e) {
 document.getElementById('media-allow').addEventListener('click', async function() {
   const req = pendingMedia;
   if (!req) return;
-  if (!(await setMediaApproved(req))) return;
+  // Claim the tab in the click's own task, before the PATCH. A window.open that
+  // waits on a roundtrip first is an unsolicited popup: Safari blocks it
+  // outright, and Chrome allows it only while the transient activation is still
+  // live, so a slow PATCH loses the tab and the artifact is then told it was
+  // opened directly when nothing opened. The placeholder is navigated once the
+  // approval is persisted and closed if it isn't.
+  //
+  // 'noopener' can't be used here — it returns null, leaving nothing to
+  // navigate — so the opener is severed by hand instead, while the tab is still
+  // about:blank and therefore same-origin enough for the property to be
+  // writable. It stays severed across the navigation. This is not decoration:
+  // the top-level render runs the artifact's own script, and an opener handle
+  // would let it navigate the library tab out from under the user.
+  const tab = window.open('', '_blank');
+  if (tab) {
+    try { tab.opener = null; } catch (err) { /* cross-origin already; nothing to sever */ }
+  }
+  if (!(await setMediaApproved(req))) {
+    if (tab) tab.close();
+    return;
+  }
   // Only settle the transaction if the pending request is still the one the
   // user approved — a dismissal or a newer request must not be answered by
   // opening a tab for this one after the fact.
-  if (pendingMedia !== req) return;
+  if (pendingMedia !== req) {
+    if (tab) tab.close();
+    return;
+  }
   document.getElementById('media-modal').hidden = true;
   pendingMedia = null;
-  // The click's transient activation covers the PATCH roundtrip, so this opens
-  // rather than being swallowed as an unsolicited popup. No banner: the user is
-  // already looking at the place the grant works.
-  window.open(OPEN_URL, '_blank', 'noopener');
+  // No banner: the user is already looking at the place the grant works.
+  if (tab) tab.location = OPEN_URL;
+  else window.open(OPEN_URL, '_blank', 'noopener');
   replyMedia(req.id, false,
     'Capture devices are unavailable in the embedded preview; the artifact was opened directly',
     'NotSupportedError');

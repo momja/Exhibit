@@ -331,7 +331,7 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 	return results, nil
 }
 
-// ApprovalColumns are the capability-bridge first-use approval columns: the
+// ApprovalColumns are the first-use capability approval columns: the
 // per-artifact "yes, this tool may do that" decisions the host frame persists
 // (architecture.md §6). They are named once, here, because two layers have to
 // agree about them — the API rejects a non-bool in a PATCH body with a 400

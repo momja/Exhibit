@@ -92,9 +92,11 @@ The only way data changes. Route groups:
   `internal/origin` before it is stored — see below; the store translates it
   into `decision='allow'` rows and deliberately leaves any `decision='block'`
   rows alone, §3.3), `downloads_approved` / `clipboard_approved` /
-  `links_approved` / `camera_approved` / `microphone_approved` (the capability
-  bridge's first-use approvals, §6 — named once in `store.ApprovalColumns` so
-  the handler's strict-bool check and the store's cannot drift), and other
+  `links_approved` / `camera_approved` / `microphone_approved` (the per-artifact
+  first-use capability approvals, §6 — the first three spent by a host bridge,
+  the two device flags by the frame's gate and the render document's
+  `Permissions-Policy`; named once in `store.ApprovalColumns` so the handler's
+  strict-bool check and the store's cannot drift), and other
   scalar columns. Rewriting the body
   re-executes the scan and returns the footprint plus a `footprint_changed` flag so
   the edit dialog can re-run the explicit-approval gate when origins differ from the
@@ -1492,9 +1494,10 @@ the top-level render, which is where the grant is spent: that document's
 `Permissions-Policy` header (§3.2) is built from the same two flags, so the
 approval the prompt records is the approval a direct open honors. Once approved,
 a later request in the preview raises the capability banner instead of prompting
-again. There is no allowlist interaction; a device is local I/O, and what the
-artifact does with the captured bytes is governed by `connect-src` like any
-other data in the frame.
+again. There is no allowlist interaction; a device is local I/O, and captured
+bytes leave the frame only where the artifact's CSP already lets anything leave
+— `connect-src` for a fetch, XHR or WebSocket, `form-action` for a submission,
+`img-src` and the rest for a URL the artifact smuggles them into.
 
 External-link navigation rides the same bridge (`links_approved`). The sandbox
 deliberately omits `allow-popups`, so a `target="_blank"` anchor is dropped and a
