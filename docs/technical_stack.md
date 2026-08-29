@@ -67,7 +67,9 @@ of the artifact source (markup/script/style excluded), and tag names — a singl
 search box query matches any of the three.
 
 **Migrations: `goose`.** Embed migration files in the binary (`go:embed`) and run them on
-startup so a fresh container self-initializes.
+startup so a fresh container self-initializes. **NOTE: ** if you are working on a feature
+with a migration, make sure to rebase off main before creating a PR, and ensure there are
+not conflicts on the migration number.
 
 **Blob store: two implementations behind the `Blob` interface, chosen by
 configuration (av-52ll).** Artifact bodies go either to a mounted volume
