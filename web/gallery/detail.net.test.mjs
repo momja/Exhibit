@@ -24,7 +24,7 @@ const ID = "art-1";
 const OPEN_URL = "/artifacts/art-1/open";
 
 // Loads detail.js with the bootstrap globals its page template renders.
-function loadDetail({ readOnly = false, responses = [] } = {}) {
+function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
   const api = recordingApi(responses);
   const page = loadPageScript(DETAIL_JS, {
     TOKEN: "",
@@ -44,7 +44,11 @@ function loadDetail({ readOnly = false, responses = [] } = {}) {
     "dl-modal": { hidden: true },
     "clip-modal": { hidden: true },
     "link-modal": { hidden: true },
-    "media-modal": { hidden: true }
+    "media-modal": { hidden: true },
+    // What detail.tmpl renders for the capability banner: hidden, with the
+    // shared headline already in place.
+    "capability-warning-banner": { hidden: true },
+    "capability-warning-headline": { textContent: headline }
   });
   return { ...page, api };
 }
@@ -204,6 +208,39 @@ test("a report for another artifact is ignored", async () => {
 
   await postFromFrame({ __avNetwork: true, artifactId: "someone-else", origin: "https://x.example.com" });
   assert.equal(byId("net-modal").hidden, true);
+});
+
+// av-kmwj: the redirect case does not prompt, it explains. The frame sends the
+// capability-warning message instead, and the banner has to say something true
+// about it — its shared headline offers "open it directly to run it", which is
+// exactly wrong here: the top-level render enforces the same policy.
+test("a blocked redirect replaces the banner headline rather than promising a fix", async () => {
+  const { byId, postFromFrame } = loadDetail();
+
+  await postFromFrame({
+    __avCapabilityWarning: true, artifactId: ID,
+    capability: "redirected-origin",
+    resource: "https://picsum.photos/id/0/400/300"
+  });
+
+  assert.equal(byId("capability-warning-banner").hidden, false);
+  assert.match(byId("capability-warning-headline").textContent, /redirected to an unapproved origin/);
+  assert.match(byId("capability-warning-detail").textContent, /forwarded the request somewhere else/);
+  assert.equal(byId("net-modal").hidden, true, "the redirect case must never open the prompt");
+});
+
+// A capability that the sandbox itself causes keeps the shared headline, so the
+// swap above is per-capability rather than a blanket replacement.
+test("an ordinary sandbox capability keeps the shared headline", async () => {
+  const { byId, postFromFrame } = loadDetail({ headline: "SHARED" });
+
+  await postFromFrame({
+    __avCapabilityWarning: true, artifactId: ID,
+    capability: "module-worker", resource: "https://x.test/w.js"
+  });
+
+  assert.equal(byId("capability-warning-banner").hidden, false);
+  assert.equal(byId("capability-warning-headline").textContent, "SHARED");
 });
 
 test("a read-only visitor is not asked a question they cannot answer", async () => {

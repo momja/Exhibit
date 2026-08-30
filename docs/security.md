@@ -630,7 +630,7 @@ forgery there. Three answers:
   Allow overrides one, Forget deletes it — so the answer is never a one-way
   trap.
 
-Four properties of the reporter are load-bearing:
+Five properties of the reporter are load-bearing:
 
 - **It reports only what the allowlist can fix.** A violation of a directive
   built from the allowlist (`script-src` and its `-elem`/`-attr` variants,
@@ -639,6 +639,20 @@ Four properties of the reporter are load-bearing:
   blocked by `default-src 'none'` would be blocked identically after the user
   approved its origin, so prompting there would promise a fix that never
   arrives.
+- **An origin the policy already permits is a redirect, and is never
+  prompted for.** CSP re-checks every hop of a redirect, so a request to an
+  allowlisted host that 302s somewhere else is blocked at the second hop —
+  and the violation report names the URL the artifact *asked for*, not the
+  one it was sent to, because a policy must not become a way to probe where a
+  cross-origin redirect leads. The reporter therefore sees an origin that is
+  already allowed. Offering to allow it again is worse than saying nothing:
+  the grant is a no-op, the request fails identically on reload, and Allow
+  reloads the frame, which re-fires the violation and re-opens the prompt.
+  That loop is why the reporter is inlined with the CSP's own origins
+  (`ALLOWED_ORIGINS`) and diverts this case to the capability banner
+  (`redirected-origin`), which explains what happened and says the
+  destination has to be added by name. `picsum.photos` serving images from
+  `fastly.picsum.photos` is the canonical example.
 - **Each origin is reported once per load**, so a request in a retry loop
   cannot spam the host. The same set that enforces this is seeded with the
   artifact's refused origins, which is why a "don't ask again" answer is quiet
@@ -657,14 +671,26 @@ Four properties of the reporter are load-bearing:
   allowlist, and a session steered by text Exhibit did not author must not
   approve its own network egress.
 
-**Known gap: the agent chat page's preview pane.** It embeds the same render
-document and hosts only the state bridge, so it has no download, clipboard,
-link or network prompt — an artifact that reaches an unapproved origin while
-being built there still fails silently. Nothing is *granted* by the gap: the
-CSP blocks the request either way, and the fix is to open the artifact's own
-page or the edit page's allowlist. Giving that surface the whole capability
-bridge set is a larger piece of work than this one and is deliberately not
-attempted here.
+**Where the prompt is, and is not.**
+
+- **The detail page** hosts it. The frame is sandboxed and the page around it
+  is ours, which is the whole precondition.
+- **A top-level render and a share do not, by design.** `/a/:id` opened
+  directly is a real-origin document whose only DOM belongs to the artifact,
+  so a prompt drawn there would be a prompt the artifact could forge — and
+  there is no host frame to post the report to in the first place. The entire
+  bridge half of the preamble is framed-only for this reason. Violations
+  there stay blocked and silent, and the browser console names the blocked
+  URL, which is the one place a redirect destination is visible at all.
+- **The agent chat page does not, and this is a gap rather than a decision.**
+  Its preview pane embeds the same render document but hosts only the state
+  bridge — no download, clipboard, link, camera/microphone, capability
+  warning, or network prompt. An artifact reaching an unapproved origin while
+  being built there fails silently. Nothing is *granted* by the gap: the CSP
+  blocks the request either way, and the fix is to open the artifact's own
+  page or the edit page's allowlist. Wiring one of the six bridges there
+  would leave a surface where a single capability works and five do not, so
+  the whole set belongs in one piece of work, tracked separately.
 
 ## 3. Vendoring: snapshot on import, never live-linked
 

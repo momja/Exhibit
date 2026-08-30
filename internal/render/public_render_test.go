@@ -101,7 +101,7 @@ func TestAnonymousWidgetRenderInlinesNoState(t *testing.T) {
 // it saved, and the write would be gone on reload. Not persisting is the honest
 // version of what is already true.
 func TestAnonymousPreambleDoesNotPersist(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, nil, false, true, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, true, nil)
 
 	if !strings.Contains(doc, "var ANONYMOUS = true;") {
 		t.Fatalf("an anonymous preamble must declare itself: %s", doc)
@@ -117,7 +117,7 @@ func TestAnonymousPreambleDoesNotPersist(t *testing.T) {
 
 	// An ordinary render is unchanged: it declares itself identified and keeps
 	// writing through.
-	if owner := injectPreamble("<head></head>", "abc", "https://app.test", nil, nil, false, false, nil); !strings.Contains(owner, "var ANONYMOUS = false;") {
+	if owner := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil); !strings.Contains(owner, "var ANONYMOUS = false;") {
 		t.Fatalf("an ordinary render must persist as before: %s", owner)
 	}
 }
@@ -133,7 +133,7 @@ func TestAnonymousPreambleDoesNotPersist(t *testing.T) {
 // is the same fact persistState already states from the write side: not asking
 // is honest, where asking a question whose answer cannot be stored is not.
 func TestAnonymousPreambleDoesNotReportBlockedOrigins(t *testing.T) {
-	anon := injectPreamble("<head></head>", "abc", "https://app.test", nil, nil, false, true, nil)
+	anon := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, true, nil)
 	if !strings.Contains(anon, "if (!ANONYMOUS) {") {
 		t.Fatalf("the network reporter must be gated on a viewer who can answer: %s", anon)
 	}

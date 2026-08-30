@@ -60,7 +60,10 @@
 <div id="capability-warning-banner" class="banner banner-warn" role="alert" hidden>
   <i class="ph ph-warning" aria-hidden="true"></i>
   <div class="banner-body">
-    <span>This artifact uses unsupported browser capabilities. Open it directly to run it.</span>
+    {{/* The default headline, true of everything the sandbox itself causes. A
+         capability that opening the artifact directly does NOT fix — a blocked
+         redirect (av-kmwj) — replaces it from CAPABILITY_COPY. */}}
+    <span id="capability-warning-headline">This artifact uses unsupported browser capabilities. Open it directly to run it.</span>
     {{/* detail.js fills #capability-warning-detail with the specific failure once
          the shim reports it (the capability and, when known, its resource). */}}
     <details class="banner-details">

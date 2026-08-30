@@ -374,10 +374,12 @@ with a per-artifact allowlist as the source of truth:
    retries under the new CSP; **Block once** dismisses; **Don't ask again** stores a
    `decision='block'` row, which suppresses future prompts for that origin and
    **never** affects the CSP. Each origin is prompted at most once per load, and only
-   for the directives the allowlist actually builds — approving an origin the policy
-   would still refuse for another reason would be a promise the CSP does not keep.
-   The top-level and share views have no trusted chrome to host a prompt, so
-   violations there stay silently blocked.
+   where approving it would actually help: not for a directive the allowlist does not
+   build, and not for an origin the policy already permits — a request to an allowed
+   host that redirects elsewhere is blocked at the second hop, and the browser hides
+   the destination, so the prompt would offer a grant that is already given. That
+   case is explained rather than asked about. The top-level and share views have no
+   trusted chrome to host a prompt, so violations there stay silently blocked.
 5. **Per-artifact settings.** Decisions are visible and editable in each artifact's
    settings — the user can review, add, or revoke approved origins at any time, and
    blocked origins are listed separately so an earlier "don't ask again" stays visible

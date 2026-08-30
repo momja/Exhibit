@@ -115,6 +115,28 @@ const CAPABILITY_COPY = {
       'it a real origin, where it reaches them under the approval you already granted.',
     resourceLabel: 'Device'
   },
+  // av-kmwj. The artifact asked for an origin its allowlist already permits and
+  // the browser blocked it anyway, which means the request did not end where it
+  // started. CSP re-checks every redirect hop, and it deliberately reports the
+  // URL the artifact asked for rather than the one it was sent to — a policy
+  // must not become a way to probe where a cross-origin redirect leads. So
+  // nobody on this page can name the origin that actually needs approving, and
+  // the network prompt stays out of the way rather than offering to grant a
+  // permission that is already granted.
+  //
+  // It carries its own headline because the shared one is wrong here: opening
+  // the artifact directly does not fix a redirect, the policy is identical
+  // there. What it does buy is a console that names the blocked URL.
+  'redirected-origin': {
+    headline: 'A request was blocked after being redirected to an unapproved origin.',
+    detail: 'This artifact contacted a host you have already allowed, but that host ' +
+      'forwarded the request somewhere else, and the destination is not on the ' +
+      "allowlist. Browsers hide a redirect's destination from the page, so Exhibit " +
+      'cannot offer it for approval — if you know the host it forwards to, add it in ' +
+      'allowlist settings. Opening the artifact directly runs it under the same ' +
+      'policy, where the browser console names the blocked URL.',
+    resourceLabel: 'Blocked request'
+  },
   'module-worker': {
     detail: "This artifact spawns a module worker (new Worker(url, { type: 'module' })), " +
       'which browsers refuse to run in the embedded preview because its sandboxed ' +
@@ -143,6 +165,12 @@ window.addEventListener('message', function(e) {
   if (detail && !detail.textContent) {
     const copy = CAPABILITY_COPY[d.capability] || CAPABILITY_COPY_FALLBACK;
     detail.textContent = copy.detail;
+    // Most capabilities share the banner's headline ("open it directly to run
+    // it"), which is true of every failure the sandbox causes. A capability
+    // that opening directly does NOT fix supplies its own rather than leaving
+    // the shared line to say something false.
+    const headline = document.getElementById('capability-warning-headline');
+    if (headline && copy.headline) headline.textContent = copy.headline;
     if (d.resource) {
       const label = document.createElement('div');
       label.className = 'banner-detail-url';

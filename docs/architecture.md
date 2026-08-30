@@ -318,11 +318,14 @@ executable document with the correct security envelope:
   `security.md` §4.)
 - The network permission reporter (av-kmwj) is a `securitypolicyviolation`
   listener that posts CSP-blocked origins to the host frame, which prompts in
-  app chrome. It reports only violations of the directives this policy builds
-  from the allowlist, since approving an origin the policy refuses for another
-  reason (an `<iframe>` under `default-src 'none'`, say) would change nothing.
-  It is seeded with the artifact's `decision='block'` origins so a refused one
-  is never re-reported, and each origin reports once per load. Like the
+  app chrome. It reports only violations the prompt could actually fix: not a
+  directive this policy does not build from the allowlist (an `<iframe>` under
+  `default-src 'none'`, say), and not an origin the policy already carries —
+  that is a redirect, whose destination CSP deliberately withholds, so it goes
+  to the capability banner with an explanation instead. Both origin lists are
+  inlined for it: the allowlist so it can recognise the redirect case, and the
+  `decision='block'` origins so a refused one is never re-reported. Each
+  origin is handled once per load. Like the
   bridges it is framed-only and absent from a widget render; it is also absent
   for an anonymous viewer, who could not record either answer. Full policy:
   `security.md` §2.1.
