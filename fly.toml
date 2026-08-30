@@ -52,13 +52,27 @@
 [http_service]
   internal_port = 8080
   force_https = true
-  # Never stop the machine. Exhibit serves share links to people who have no
-  # account here and no reason to wait: a stopped machine turns somebody else's
-  # link into a cold start. Set auto_stop_machines = "stop" if this instance is
-  # only ever opened by you and you would rather not pay for idle time.
-  auto_stop_machines = "off"
+  # Stop the machine when nothing is talking to it, and let the proxy start it
+  # again on the next request. The cost is a cold start: a share link belongs to
+  # someone with no account here and no reason to wait, and on an idle instance
+  # theirs is exactly the request that pays for the boot. That is accepted for a
+  # library this quiet, where the machine would otherwise bill for a full day to
+  # serve a handful of minutes. Set auto_stop_machines = "off" to buy that
+  # latency back.
+  #
+  # Both lines below are the setting. min_machines_running is a floor on running
+  # machines in the primary region, so leaving it at 1 with a single-machine app
+  # makes that machine the floor and nothing ever stops.
+  #
+  # "stop" and not "suspend": suspend restores the process from a memory
+  # snapshot, which would look like the better fit for the in-memory agent
+  # session registry (internal/agent, architecture.md 3.7), except that the
+  # sockets do not come back with it. A resumed session finds its SSE stream and
+  # its provider connection dead and sits there wedged. A clean boot fails
+  # honestly instead.
+  auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 1
+  min_machines_running = 0
   processes = ["app"]
 
 # A TCP check, because Exhibit has no health endpoint. An HTTP check would have

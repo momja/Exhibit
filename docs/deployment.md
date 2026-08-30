@@ -636,12 +636,24 @@ agent keys, so treat it as permanent once the instance holds anything.
 SQLite in WAL mode is a single writer against a local volume, and a Fly volume
 attaches to one machine. A second machine would get its own volume and its own
 database, so you would have two libraries that never converge, and each would
-serve half your requests. `fly.toml` pins `min_machines_running = 1` and turns
-auto-stop off; keep `fly scale count 1` and do not add a second volume.
+serve half your requests. Keep `fly scale count 1` and do not add a second
+volume.
 
-Auto-stop is off because shares go to people with no account here. A stopped
-machine turns somebody else's link into a cold start. Set
-`auto_stop_machines = "stop"` if only you ever open this instance.
+`fly.toml` stops the machine when it goes idle (`auto_stop_machines = "stop"`,
+`min_machines_running = 0`) and lets the proxy start it again on the next
+request. Both settings are the switch: `min_machines_running` is a floor on
+running machines in the primary region, so leaving it at 1 on a single-machine
+app makes that machine the floor and nothing ever stops.
+
+What you trade away is the first request after an idle period, which waits for
+a boot. On a library that publishes shares that request is often somebody
+else's, arriving on a link with no account behind it. Set
+`auto_stop_machines = "off"` if you would rather pay for the idle time than
+hand anyone a cold start.
+
+An idle stop is a real shutdown, so it takes any in-flight agent turn with it:
+sessions live in memory, and a transcript is only written when a turn settles.
+av-rcwx covers draining on signal and persisting mid-turn.
 
 #### Backups
 
