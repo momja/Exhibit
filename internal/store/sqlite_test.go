@@ -681,6 +681,59 @@ func TestLinksApproved(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// camera_approved / microphone_approved are the media bridge's first-use
+// approvals (av-mv3k): two independent grants — a tool approved for a
+// microphone was never approved for a camera — with the same default-false,
+// round-trip, flip, and non-bool rejection as their three siblings.
+func TestMediaApprovals(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "md-1", OwnerID: 1, SourceBlobID: "b1"}))
+	got, err := s.GetArtifact(ctx, 1, "md-1")
+	require.NoError(t, err)
+	assert.False(t, got.CameraApproved, "new artifacts must not be pre-approved for the camera")
+	assert.False(t, got.MicrophoneApproved, "new artifacts must not be pre-approved for the microphone")
+
+	require.NoError(t, s.UpdateArtifact(ctx, 1, "md-1", map[string]any{"camera_approved": true}))
+	got, err = s.GetArtifact(ctx, 1, "md-1")
+	require.NoError(t, err)
+	assert.True(t, got.CameraApproved)
+	assert.False(t, got.MicrophoneApproved, "a camera grant must not carry the microphone with it")
+	assert.False(t, got.DownloadsApproved, "media approval must not leak into downloads")
+	assert.False(t, got.ClipboardApproved, "media approval must not leak into clipboard")
+	assert.False(t, got.LinksApproved, "media approval must not leak into links")
+
+	require.NoError(t, s.UpdateArtifact(ctx, 1, "md-1", map[string]any{"microphone_approved": true}))
+	require.NoError(t, s.UpdateArtifact(ctx, 1, "md-1", map[string]any{"camera_approved": false}))
+	got, err = s.GetArtifact(ctx, 1, "md-1")
+	require.NoError(t, err)
+	assert.False(t, got.CameraApproved)
+	assert.True(t, got.MicrophoneApproved, "revoking the camera must leave the microphone alone")
+
+	for _, field := range []string{"camera_approved", "microphone_approved"} {
+		err = s.UpdateArtifact(ctx, 1, "md-1", map[string]any{field: "yes"})
+		assert.Error(t, err, "%s must reject a non-bool", field)
+	}
+}
+
+// Every capability-approval column named for the API's strict-bool check must
+// also be one the store accepts and refuses a non-bool for. The two lists live
+// in one place precisely so a sixth capability cannot reach the handler's
+// validation and miss the store's — this pins that they stay one list.
+func TestApprovalColumnsAreUpdatableAndBoolChecked(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "ac-1", OwnerID: 1, SourceBlobID: "b1"}))
+
+	for _, col := range ApprovalColumns {
+		assert.True(t, updatableArtifactColumns[col], "%s must be writable by a PATCH body", col)
+		require.NoError(t, s.UpdateArtifact(ctx, 1, "ac-1", map[string]any{col: true}), col)
+		assert.Error(t, s.UpdateArtifact(ctx, 1, "ac-1", map[string]any{col: "yes"}),
+			"%s must reject a non-bool", col)
+	}
+}
+
 // TestMigration008RepairsRenumberCollision guards against the version-5 reuse
 // introduced when 005_agent.sql was renumbered to 007 (commit 1162b17) and
 // version 5 was reassigned to 005_downloads_approved.sql. goose records

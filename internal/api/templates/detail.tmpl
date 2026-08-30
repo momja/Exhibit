@@ -116,6 +116,30 @@
     </div>
   </div>
 </div>
+{{/* Camera / microphone first-use approval (av-mv3k). One modal for both
+     devices: the artifact asks for what its getUserMedia constraints named, so
+     the prompt names exactly that and detail.js persists only the flags that
+     were actually requested.
+
+     The copy differs from its three siblings because the capability does: a
+     device cannot be delivered into this frame by anyone — the sandbox's opaque
+     origin is refused one, and a MediaStreamTrack cannot be transferred in — so
+     the grant is spent on the top-level render, which the same approval unlocks
+     through the document's Permissions-Policy header. Saying that plainly is
+     the point: an "Allow" that silently did nothing here would be the worst
+     available answer. */}}
+<div id="media-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="media-title">
+    <h2 id="media-title">Allow device access?</h2>
+    <p><strong>{{.Title}}</strong> wants to use <span id="media-devices">your camera</span>.</p>
+    <p>Browsers cannot give a capture device to this embedded preview, so allowing opens the artifact in its own tab, where it can use the device. Your browser will ask for its own permission there. The approval is remembered for this artifact and can be revoked at any time from its security settings.</p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="media-block">Block</button>
+      <button type="button" class="btn" id="media-allow"><i id="media-icon" class="ph ph-camera"></i> Allow and open</button>
+    </div>
+  </div>
+</div>
 <script>
 const TOKEN = {{.Token}};
 {{/* READ_ONLY and TOKEN are one decision, made server-side per request
@@ -129,12 +153,18 @@ const TOKEN = {{.Token}};
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const ID = {{.ID}};
 const SOURCE_URL = {{.SourceURL}};
+{{/* Where a capture device actually works: the top-level render. The media
+     gate opens this on approval, so the page script never rebuilds a render
+     URL of its own. */ -}}
+const OPEN_URL = {{.OpenURL}};
 {{/* The booleans are emitted as literal template text rather than {{value}}
      interpolations: html/template's JS escaper pads identifiers with spaces,
      and a plain `= true;` keeps the bootstrap greppable. */ -}}
 let downloadsApproved = {{if .Capability.DownloadsApproved}}true{{else}}false{{end}};
 let clipboardApproved = {{if .Capability.ClipboardApproved}}true{{else}}false{{end}};
 let linksApproved = {{if .Capability.LinksApproved}}true{{else}}false{{end}};
+let cameraApproved = {{if .Capability.CameraApproved}}true{{else}}false{{end}};
+let microphoneApproved = {{if .Capability.MicrophoneApproved}}true{{else}}false{{end}};
 </script>
 <script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/components.js"></script>

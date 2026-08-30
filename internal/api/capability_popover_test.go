@@ -48,7 +48,7 @@ func TestCapabilityPopoverSandboxedShowsFullyContained(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	page := w.Body.String()
 
-	assert.Contains(t, page, "Fully contained — no network, download, clipboard, or external link access")
+	assert.Contains(t, page, "Fully contained — no network, download, clipboard, external link, camera, or microphone access")
 	assert.NotContains(t, page, "capability-popover-label")
 	assert.NotContains(t, page, "capability-popover-origins")
 }
@@ -155,6 +155,47 @@ func TestCapabilityPopoverLinksRowPerFlag(t *testing.T) {
 	require.True(t, clusterStart >= 0 && popoverStart > clusterStart, "cluster must precede its popover")
 	assert.Contains(t, page[clusterStart:popoverStart], glyph, "capability-cluster must render the links glyph")
 	assert.NotContains(t, page, "Fully contained")
+}
+
+// av-mv3k: camera and microphone are two grants, not one "media" grant — each
+// gets its own popover row and cluster glyph, and approving one must not
+// display the other. A media-only grant must never collapse to "Fully
+// contained" either.
+func TestCapabilityPopoverCameraAndMicrophoneRowsPerFlag(t *testing.T) {
+	cases := []struct {
+		field  string
+		glyph  string
+		row    string
+		absent string
+	}{
+		{"camera_approved", `<span class="capability-glyph"><i class="ph ph-camera"></i></span>`,
+			"Camera — Can capture video from your camera", "Microphone —"},
+		{"microphone_approved", `<span class="capability-glyph"><i class="ph ph-microphone"></i></span>`,
+			"Microphone — Can capture audio from your microphone", "Camera —"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.field, func(t *testing.T) {
+			r := newTestRouter(t)
+			id := createTestArtifact(t, r, "Recorder")
+			w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{tc.field: true})
+			require.Equal(t, http.StatusOK, w.Code)
+
+			req := httptest.NewRequest("GET", "/", nil)
+			w2 := httptest.NewRecorder()
+			r.ServeHTTP(w2, req)
+			require.Equal(t, http.StatusOK, w2.Code)
+			page := w2.Body.String()
+
+			assert.Contains(t, page, `<div class="capability-popover-row">`+tc.glyph+`<span>`+tc.row+`</span></div>`)
+			clusterStart := strings.Index(page, "capability-cluster")
+			popoverStart := strings.Index(page, `<div class="capability-popover" id="`)
+			require.True(t, clusterStart >= 0 && popoverStart > clusterStart, "cluster must precede its popover")
+			assert.Contains(t, page[clusterStart:popoverStart], tc.glyph, "capability-cluster must render the glyph")
+			// One grant is one grant: the sibling device stays unmentioned.
+			assert.NotContains(t, page, tc.absent)
+			assert.NotContains(t, page, "Fully contained")
+		})
+	}
 }
 
 // The footer Manage link points at the artifact's Edit page security section

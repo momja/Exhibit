@@ -113,6 +113,11 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
              SELECT source_blob_id AS blob_id, owner_id FROM artifacts WHERE source_blob_id != ''
              UNION ALL
              SELECT widget_blob_id AS blob_id, owner_id FROM artifacts WHERE widget_blob_id != ''`,
+		// After the view, not before: the one being dropped names
+		// artifact_assets, and SQLite resolves a view's body when the table it
+		// selects from is altered.
+		"ALTER TABLE artifacts DROP COLUMN camera_approved",
+		"ALTER TABLE artifacts DROP COLUMN microphone_approved",
 	} {
 		_, err := s.db.ExecContext(ctx, stmt)
 		require.NoError(t, err, stmt)
@@ -130,5 +135,12 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 		require.NoError(t, upgraded.db.QueryRowContext(ctx,
 			"SELECT COUNT(*) FROM sqlite_master WHERE name = ?", obj).Scan(&n))
 		assert.Equal(t, 1, n, "%s was not created by the upgrade", obj)
+	}
+	// ...and so did 027, whose columns the rewind above took back off.
+	for _, col := range []string{"camera_approved", "microphone_approved"} {
+		var n int
+		require.NoError(t, upgraded.db.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM pragma_table_info('artifacts') WHERE name = ?", col).Scan(&n))
+		assert.Equal(t, 1, n, "artifacts.%s was not created by the upgrade", col)
 	}
 }

@@ -124,7 +124,7 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	var a Artifact
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.WidgetBlobID)
+	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.WidgetBlobID)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +136,8 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	return &a, nil
 }
 
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, widget_blob_id"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.widget_blob_id"
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, widget_blob_id"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.widget_blob_id"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
@@ -145,9 +145,9 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 		now = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, links_approved, widget_blob_id, source_text, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.LinksApproved, a.WidgetBlobID, a.SourceText,
+		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, widget_blob_id, source_text, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.LinksApproved, a.CameraApproved, a.MicrophoneApproved, a.WidgetBlobID, a.SourceText,
 		now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
 	if err != nil {
@@ -331,6 +331,34 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 	return results, nil
 }
 
+// ApprovalColumns are the first-use capability approval columns: the
+// per-artifact "yes, this tool may do that" decisions the host frame persists
+// (architecture.md §6). They are named once, here, because two layers have to
+// agree about them — the API rejects a non-bool in a PATCH body with a 400
+// (internal/api/artifacts.go) and the UPDATE below refuses to store one — and a
+// sixth capability that reached only one of those two lists would be accepted
+// by the handler and then stored as a value no later read can scan.
+//
+// The order is the order the UI shows them in: downloads, clipboard, links,
+// camera, microphone.
+var ApprovalColumns = []string{
+	"downloads_approved",
+	"clipboard_approved",
+	"links_approved",
+	"camera_approved",
+	"microphone_approved",
+}
+
+// approvalArtifactColumns is ApprovalColumns as a set, for the per-key check in
+// UpdateArtifact.
+var approvalArtifactColumns = func() map[string]bool {
+	m := make(map[string]bool, len(ApprovalColumns))
+	for _, c := range ApprovalColumns {
+		m[c] = true
+	}
+	return m
+}()
+
 // updatableArtifactColumns is the allowlist UpdateArtifact checks its caller's
 // keys against. "network_allowlist" is deliberately absent: it never reaches
 // the generic loop below (handled and stripped first), so listing it here
@@ -349,13 +377,15 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 // SetWidgetBlobID. This map answers "what may a PATCH body write", and that is
 // the only question it answers.
 var updatableArtifactColumns = map[string]bool{
-	"title":              true,
-	"tier":               true,
-	"source_url":         true,
-	"source_text":        true,
-	"downloads_approved": true,
-	"clipboard_approved": true,
-	"links_approved":     true,
+	"title":               true,
+	"tier":                true,
+	"source_url":          true,
+	"source_text":         true,
+	"downloads_approved":  true,
+	"clipboard_approved":  true,
+	"links_approved":      true,
+	"camera_approved":     true,
+	"microphone_approved": true,
 }
 
 // SetWidgetBlobID points an artifact at the blob holding its widget document.
@@ -429,7 +459,7 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id stri
 			// whoever sent the request.
 			return fmt.Errorf("update artifact: %q: %w", k, ErrNotUpdatable)
 		}
-		if k == "downloads_approved" || k == "clipboard_approved" || k == "links_approved" {
+		if approvalArtifactColumns[k] {
 			// These columns are INTEGER 0/1; a non-bool here would store a value
 			// that later fails the bool scan and bricks reads of the artifact.
 			if _, ok := v.(bool); !ok {
