@@ -776,3 +776,110 @@ func TestBuildCSPCarriesTheAbsoluteAssetSource(t *testing.T) {
 		t.Fatalf("an artifact with no assets must keep the policy it had before assets existed")
 	}
 }
+
+// av-kmwj: a request the CSP blocks must be reported to the *host* frame, never
+// prompted for inside the artifact's own DOM (which the artifact controls and
+// could forge). The reporter listens for securitypolicyviolation and posts the
+// origin to the parent, pinned to the app origin like every other bridge.
+func TestPreambleReportsCSPViolationsToHost(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, nil, false, false, nil)
+
+	if !strings.Contains(doc, "securitypolicyviolation") {
+		t.Fatalf("preamble must listen for CSP violations: %s", doc)
+	}
+	if !strings.Contains(doc, "__avNetwork") {
+		t.Fatalf("violations must be posted to the host as __avNetwork: %s", doc)
+	}
+	// Framed-only, like every other bridge: a top-level render or a share has
+	// no trusted chrome to host a prompt, so there is nobody to report to.
+	if !strings.Contains(doc, "if (window.parent !== window) {") {
+		t.Fatalf("the reporter must sit inside the framed-only guard: %s", doc)
+	}
+}
+
+// The report that matters most is the one an artifact triggers on its first
+// line — an <img src> in the initial markup — and that fires before the host
+// page has attached its listener. A one-shot postMessage there is lost, so the
+// preamble buffers until the host's __avHostReady ping and flushes then
+// (the same handshake av-yvtb's capability diagnostic uses).
+//
+// Buffer-then-flush, not the diagnostic's post-and-replay: that one is
+// idempotent on the host, where a duplicated report would queue a second
+// prompt for an origin the user just answered.
+func TestPreambleBuffersReportsUntilTheHostIsListening(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, nil, false, false, nil)
+
+	for _, want := range []string{"__avHostReady", "queuedReports", "hostReady"} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("the reporter must buffer against the host handshake (%s): %s", want, doc)
+		}
+	}
+	// The queue is drained, not replayed: a second flush would re-prompt. The
+	// assertion names the clearing statement specifically — the declaration
+	// `var queuedReports = []` would satisfy a looser one while the flush
+	// re-sent everything on every ping.
+	if !strings.Contains(doc, "\n        queuedReports = [];") {
+		t.Fatalf("the flush must clear the queue: %s", doc)
+	}
+	// A violation never posts directly; everything goes through the buffer.
+	if strings.Contains(doc, "{ __avNetwork: true, artifactId: ARTIFACT_ID, origin: origin, directive: directive },") {
+		t.Fatalf("reports must go through sendReport, not straight to postMessage: %s", doc)
+	}
+}
+
+// Only violations of directives the allowlist actually builds are reported. An
+// <iframe> blocked by default-src 'none' would still be blocked after the user
+// approved its origin — no allowlist entry reaches frame-src — so prompting
+// there would promise a fix that never arrives.
+func TestPreambleReportsOnlyAllowlistGovernedDirectives(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, nil, false, false, nil)
+
+	// The -elem/-attr variants matter: browsers report those as the effective
+	// directive even when the policy only spells out the parent.
+	for _, name := range []string{
+		"'script-src'", "'script-src-elem'", "'worker-src'", "'style-src'",
+		"'img-src'", "'font-src'", "'media-src'", "'connect-src'", "'form-action'",
+	} {
+		if !strings.Contains(doc, name) {
+			t.Fatalf("%s is built from the allowlist and must be reportable: %s", name, doc)
+		}
+	}
+	if strings.Contains(doc, "'frame-src'") {
+		t.Fatalf("frame-src is not built from the allowlist; approving its origin would not unblock it: %s", doc)
+	}
+}
+
+// Origins the user answered "don't ask again" for are inlined so a repeat
+// violation stays silent instead of re-prompting on every load. They must never
+// appear in the CSP — that is built from allow decisions alone.
+func TestPreambleInlinesBlockedOriginsWithoutWideningCSP(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil,
+		[]string{"https://tracker.example.com"}, false, false, nil)
+
+	if !strings.Contains(doc, `["https://tracker.example.com"]`) {
+		t.Fatalf("blocked origins must be inlined for suppression: %s", doc)
+	}
+	// Both halves, named as statements: seeding the set is useless without the
+	// guard that reads it, and the guard's absence leaves the word behind.
+	if !strings.Contains(doc, "silencedOrigins[o] = true;") {
+		t.Fatalf("blocked origins must seed the reporter's suppression set: %s", doc)
+	}
+	if !strings.Contains(doc, "if (silencedOrigins[origin]) return;") {
+		t.Fatalf("a silenced origin must be dropped before it is reported: %s", doc)
+	}
+	if !strings.Contains(doc, "silencedOrigins[origin] = true;") {
+		t.Fatalf("a reported origin must join the set, or a retry loop spams the host: %s", doc)
+	}
+	if csp := buildCSP(nil, "https://app.test", ""); strings.Contains(csp, "tracker.example.com") {
+		t.Fatalf("a block decision must never widen the CSP: %s", csp)
+	}
+}
+
+// An artifact with no block decisions must still inline a valid empty array,
+// never `null` — null.forEach would throw and take the whole preamble with it.
+func TestPreambleNilBlockedIsEmptyArray(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, nil, false, false, nil)
+	if !strings.Contains(doc, "var BLOCKED_ORIGINS = [];") {
+		t.Fatalf("nil blocked list should inline an empty array, got: %s", doc)
+	}
+}
