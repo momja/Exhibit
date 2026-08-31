@@ -60,7 +60,10 @@
 <div id="capability-warning-banner" class="banner banner-warn" role="alert" hidden>
   <i class="ph ph-warning" aria-hidden="true"></i>
   <div class="banner-body">
-    <span>This artifact uses unsupported browser capabilities. Open it directly to run it.</span>
+    {{/* The default headline, true of everything the sandbox itself causes. A
+         capability that opening the artifact directly does NOT fix — a blocked
+         redirect (av-kmwj) — replaces it from CAPABILITY_COPY. */}}
+    <span id="capability-warning-headline">This artifact uses unsupported browser capabilities. Open it directly to run it.</span>
     {{/* detail.js fills #capability-warning-detail with the specific failure once
          the shim reports it (the capability and, when known, its resource). */}}
     <details class="banner-details">
@@ -140,6 +143,8 @@
     </div>
   </div>
 </div>
+
+{{template "networkPrompt"}}
 <script>
 const TOKEN = {{.Token}};
 {{/* READ_ONLY and TOKEN are one decision, made server-side per request
@@ -153,9 +158,14 @@ const TOKEN = {{.Token}};
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const ID = {{.ID}};
 const SOURCE_URL = {{.SourceURL}};
-{{/* Where a capture device actually works: the top-level render. The media
-     gate opens this on approval, so the page script never rebuilds a render
-     URL of its own. */ -}}
+{{/* The app-origin route that mints a render token and redirects to it, used
+     by the two page scripts that need a render URL they did not receive in the
+     markup: the media gate opens it on approval (av-mv3k), and the network
+     prompt reloads the frame through it (av-kmwj). Deliberately not FrameURL
+     for either — that token is minted once, when this page rendered, and
+     expires in ten minutes, so a page left open longer would land on a 404.
+     /open mints at request time, which is also why the page script never
+     rebuilds a render URL of its own. */ -}}
 const OPEN_URL = {{.OpenURL}};
 {{/* The booleans are emitted as literal template text rather than {{value}}
      interpolations: html/template's JS escaper pads identifiers with spaces,
@@ -169,6 +179,9 @@ let microphoneApproved = {{if .Capability.MicrophoneApproved}}true{{else}}false{
 <script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/components.js"></script>
 <script src="/assets/gallery/state-api.js"></script>
+{{/* The runtime network prompt (av-kmwj), shared with the agent chat page
+     (av-6xvs). Before detail.js, which installs it at load. */}}
+<script src="/assets/gallery/network-prompt.js"></script>
 <script src="/assets/gallery/detail.js"></script>
 </body>
 </html>{{end}}

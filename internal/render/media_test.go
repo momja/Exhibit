@@ -158,7 +158,7 @@ func TestServeWidgetDeniesDevicesEvenWhenArtifactApproved(t *testing.T) {
 // hands the decision to the host and then *settles*, rather than hanging on a
 // stream that is never coming.
 func TestShimInstallsMediaGate(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 
 	// The message shape the host's media listener validates, and the reply the
 	// frame correlates by request id.
@@ -202,7 +202,7 @@ func TestShimInstallsMediaGate(t *testing.T) {
 // Permissions-Policy header, and gating it there would break the one context
 // where the capability is reachable.
 func TestShimMediaGateIsFramedOnly(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 	guard := strings.Index(doc, "if (window.parent !== window) {")
 	media := strings.Index(doc, "__avMedia")
 	if guard < 0 || media < guard {

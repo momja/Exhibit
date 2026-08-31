@@ -563,6 +563,37 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && snippetMode) toggleSnippet();
 });
 
+// Network permission prompt (av-6xvs): the same dialog the detail page hosts,
+// from the same shared module. This pane embeds the same render document
+// behind the same sandbox on the same app origin, so it has the trusted chrome
+// the prompt needs — it simply never had the prompt, and an artifact reaching
+// an unapproved origin while being built here failed silently.
+//
+// Everything page-specific is here. The frame and the id are resolved on each
+// use rather than captured, because both change: htmx replaces #pv-frame after
+// every agent save, and there is no artifact at all until the agent creates
+// one. reload re-renders the preview pane through that same htmx path rather
+// than reassigning src, so the fragment mints a fresh render token and the
+// pane keeps its one definition (av-6m3e).
+window.ExhibitNetworkPrompt.install({
+  frame: previewFrame,
+  artifactId: previewArtifactId,
+  // The transcript is this page's status line. #pv-title holds the artifact's
+  // name and must not be overwritten with a progress message.
+  report: function (text) { addMsg('sys', text); },
+  reload: refreshPreview
+});
+
+// Tell each preview frame the host is listening, so the preamble flushes the
+// reports it buffered at load. The frame is a *new element* after every swap,
+// so this runs again on each one — without it a violation raised before the
+// page noticed the new frame would be lost, which is the failure mode the
+// handshake exists to remove.
+document.getElementById('pane-preview').addEventListener('htmx:afterSwap', function () {
+  window.ExhibitNetworkPrompt.announceTo(previewFrame());
+});
+window.ExhibitNetworkPrompt.announceTo(previewFrame());
+
 // State bridge (same contract as the detail page): the sandboxed preview
 // iframe can't call the API itself, so its storage shim posts writes here
 // and this authenticated host forwards them.

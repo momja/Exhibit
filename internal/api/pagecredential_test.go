@@ -93,6 +93,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/artifacts/{artifactID}/state", path: "/api/artifacts/{id}/state"},
 	{route: "/api/artifacts/{artifactID}/assets", path: "/api/artifacts/{id}/assets"},
 	{route: "/api/artifacts/{artifactID}/export", path: "/api/artifacts/{id}/export"},
+	{route: "/api/artifacts/{artifactID}/origins", path: "/api/artifacts/{id}/origins"},
 	{route: "/api/artifacts/{artifactID}/widget", path: "/api/artifacts/{id}/widget"},
 	{route: "/api/artifacts/{artifactID}/transcripts", path: "/api/artifacts/{id}/transcripts"},
 	{route: "/api/agent/key", path: "/api/agent/key"},

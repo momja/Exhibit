@@ -150,6 +150,22 @@ The only way data changes. Route groups:
   nothing else, so a create or update here would be a second way to put arbitrary
   content behind an artifact's render URL. The delete is the owner's escape hatch
   for the one case no rule decides — a payload whose feature they edited away.
+- `GET/POST/DELETE /api/artifacts/:id/origins` — per-origin network decisions
+  (av-kmwj). `POST` decides one origin (`allow` | `block`); `DELETE ?origin=…`
+  forgets a decision, returning the origin to undecided. This is the runtime
+  permission prompt's write path (§6), and it exists beside `PATCH` rather than
+  inside it because the two differ in what they can *express*, not only in
+  width: `PATCH` replaces the allow set and deliberately leaves block rows
+  alone, so it can neither record a "don't ask again" nor undo one. The prompt
+  also learns about one blocked origin at a time — restating the whole
+  allowlist from a page that holds no working copy of it would clobber
+  decisions made elsewhere since that page loaded. Entries go through the same
+  `origin.NormalizeOrigin` validation as the allowlist (av-i7hd), for the same
+  reason: an allow row is pasted verbatim into a CSP header. The origin travels
+  as a query parameter on `DELETE`, not a path segment, for the reason
+  `/state` established (av-hh1o). An agent session cannot reach this route:
+  `agentSubResources` is a deny-by-default allowlist, and approving an
+  artifact's own network egress is not a decision model output gets to make.
 - `GET/PUT/DELETE /api/artifacts/:id/widget` — the artifact's gallery-card widget
   (av-fafu). A second document stored beside the artifact's body and hung off the
   artifact rather than made a resource of its own, because it has no identity, no
@@ -232,8 +248,9 @@ which queries forgot to scope.
 A read-only surface on `RENDER_ORIGIN` whose entire job is to emit an artifact as an
 executable document with the correct security envelope:
 
-- Looks up the artifact, pulls its body from the blob store, its approved origins
-  (the artifact's `decision='allow'` rows, §3.3), and its current state.
+- Looks up the artifact, pulls its body from the blob store, its origin decisions
+  (§3.3 — the `allow` rows build the CSP, the `block` rows are inlined to mute
+  the runtime prompt, av-kmwj), and its current state.
 - Generates the per-artifact CSP (`connect-src`/`script-src`/`worker-src`/`style-src`/
   `img-src`/`font-src`/`media-src` from the allowlist) and sets it as a response header
   on the document. `connect-src` is the allowlist alone — the storage shim needs no
@@ -296,8 +313,22 @@ executable document with the correct security envelope:
   shim** with the artifact's state **inlined** into it so `getItem` is correct
   synchronously, plus the download/clipboard/external-link **capability
   bridges**, the camera/microphone **capability gate**, the `data:` fetch
-  **compatibility shim**, and the **out-of-line asset manifest** — then the
-  artifact body. (Umbrella/family taxonomy: `security.md` §4.)
+  **compatibility shim**, the **out-of-line asset manifest**, and the **network
+  permission reporter** — then the artifact body. (Umbrella/family taxonomy:
+  `security.md` §4.)
+- The network permission reporter (av-kmwj) is a `securitypolicyviolation`
+  listener that posts CSP-blocked origins to the host frame, which prompts in
+  app chrome. It reports only violations the prompt could actually fix: not a
+  directive this policy does not build from the allowlist (an `<iframe>` under
+  `default-src 'none'`, say), and not an origin the policy already carries —
+  that is a redirect, whose destination CSP deliberately withholds, so it goes
+  to the capability banner with an explanation instead. Both origin lists are
+  inlined for it: the allowlist so it can recognise the redirect case, and the
+  `decision='block'` origins so a refused one is never re-reported. Each
+  origin is handled once per load. Like the
+  bridges it is framed-only and absent from a widget render; it is also absent
+  for an anonymous viewer, who could not record either answer. Full policy:
+  `security.md` §2.1.
 - The `data:` fetch shim (agaf-02xs) answers `fetch()` of a `data:` URL from a
   Response built in the frame rather than letting it reach the network service.
   WebKit refuses large `data:` fetches from an opaque-origin sandbox, so an
@@ -466,7 +497,9 @@ carrying a principal is av-c5aq.
   narrow a policy but never widen one, and dropping values with no origin in
   them at all. `decision='allow'` is the only input to the render CSP;
   `decision='block'` records a "don't ask again" answer for the runtime prompt
-  (exhibit-fr7) and never widens the policy. A caller that knows only the
+  (av-kmwj) and never widens the policy — the render surface inlines those
+  rows into the preamble so the prompt stays quiet, which is the only thing
+  they are read for. A caller that knows only the
   allowlist replaces the allow rows without touching block rows, so a save from
   the edit page can never silently clear a decision it never displayed.
 - **Search** → an FTS5 table over artifact title, the visible text of the
@@ -1418,7 +1451,13 @@ flowchart TD
     load --> fetch["artifact fetch to origin X"]
     fetch --> fetchQ{"origin on allowlist?"}
     fetchQ -->|yes| fPermit["browser permits"]
-    fetchQ -->|no| fBlock["browser blocks (CSP); UI prompts<br/>user &rarr; approve &rarr; PATCH allowlist"]
+    fetchQ -->|no| fBlock["browser blocks (CSP); the preamble posts<br/>the blocked origin to the host frame"]
+    fBlock --> fPrompt{"already refused, or<br/>not an allowlist directive?"}
+    fPrompt -->|yes| fQuiet["stays silent &mdash; no prompt"]
+    fPrompt -->|no| fAsk{"host prompts in app chrome<br/>(origin + directive)"}
+    fAsk -->|Allow| fAllow["POST /origins allow &rarr; frame reloads<br/>via /open &rarr; new CSP, request retries"]
+    fAsk -->|Block once| fOnce["dismiss; the next load asks again"]
+    fAsk -->|Don't ask again| fNever["POST /origins block &rarr; suppresses the<br/>prompt, never widens the CSP"]
 
     load --> dl["artifact download<br/>blob:/data: anchor, clicked or click()ed"]
     dl --> dlInt["download bridge intercepts;<br/>postMessage filename + bytes to host"]

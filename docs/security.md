@@ -602,8 +602,104 @@ Points of stance embedded in that policy:
   with a real HTML tokenizer and surfaces the origins the artifact references,
   but its output **never seeds the allowlist** — only origins the user explicitly
   approves are written. A runtime attempt to reach anything else is blocked by
-  the browser; the user can approve the origin afterward in the artifact's
-  allowlist editor, which updates the CSP on next render.
+  the browser and then surfaced by the runtime prompt below.
+
+### 2.1 The runtime permission prompt (av-kmwj)
+
+The CSP has already blocked the request by the time anyone is asked about it.
+The prompt widens the policy for the *next* load; it never rescues a request in
+flight, and nothing about it is an enforcement point. What it fixes is the
+silence: before it, an artifact that reached an unapproved origin simply failed,
+with the explanation available only in a browser console the audience for this
+product does not open.
+
+The render preamble listens for `securitypolicyviolation` in the artifact frame
+and posts the blocked origin to the **host frame**; the dialog renders in app
+chrome, because the artifact controls its own DOM and could draw a convincing
+forgery there. Three answers:
+
+- **Allow** writes a `decision='allow'` row and reloads the frame. A CSP is a
+  response header fixed at load, so a widened policy needs a new document; the
+  host makes that transparent by reassigning the frame's `src` — through the
+  app origin's `/artifacts/:id/open`, which mints a render token at request
+  time, since the token baked into the original `src` expires (av-c5aq).
+- **Block once** dismisses. The next load asks again.
+- **Don't ask again** writes a `decision='block'` row. Block rows never widen
+  the CSP; they are inlined into the render preamble purely so that origin
+  stops being reported. They stay visible and reversible on the edit page —
+  Allow overrides one, Forget deletes it — so the answer is never a one-way
+  trap.
+
+Five properties of the reporter are load-bearing:
+
+- **It reports only what the allowlist can fix.** A violation of a directive
+  built from the allowlist (`script-src` and its `-elem`/`-attr` variants,
+  `worker-src`, `style-src`, `img-src`, `font-src`, `media-src`, `connect-src`,
+  `form-action`) is actionable. One outside that set is not: an `<iframe>`
+  blocked by `default-src 'none'` would be blocked identically after the user
+  approved its origin, so prompting there would promise a fix that never
+  arrives.
+- **An origin the policy already permits is a redirect, and is never
+  prompted for.** CSP re-checks every hop of a redirect, so a request to an
+  allowlisted host that 302s somewhere else is blocked at the second hop —
+  and the violation report names the URL the artifact *asked for*, not the
+  one it was sent to, because a policy must not become a way to probe where a
+  cross-origin redirect leads. The reporter therefore sees an origin that is
+  already allowed. Offering to allow it again is worse than saying nothing:
+  the grant is a no-op, the request fails identically on reload, and Allow
+  reloads the frame, which re-fires the violation and re-opens the prompt.
+  That loop is why the reporter is inlined with the CSP's own origins
+  (`ALLOWED_ORIGINS`) and diverts this case to the capability banner
+  (`redirected-origin`), which explains what happened and says the
+  destination has to be added by name. `picsum.photos` serving images from
+  `fastly.picsum.photos` is the canonical example. The banner is where this
+  case currently *ends*, which is not good enough — the visitor is told what
+  broke and given no way to fix it short of already knowing the destination
+  host. Giving it a real path is av-jnfh, which also records why the frame
+  cannot resolve the redirect itself: the opaque response filter, not our
+  sandbox and not our CSP, reports `redirected: false` for a request that was.
+- **Each origin is reported once per load**, so a request in a retry loop
+  cannot spam the host. The same set that enforces this is seeded with the
+  artifact's refused origins, which is why a "don't ask again" answer is quiet
+  rather than merely dismissed.
+- **It is framed-only and never anonymous.** A top-level render and a share
+  have no trusted app chrome to host a prompt, so violations there stay
+  silently blocked; a widget frame omits the reporter along with the rest of
+  the capability bridges. A public instance's unauthenticated visitor cannot
+  record either answer, so they are not asked — the same reasoning that stops
+  the storage shim writing through for them (av-wmp6).
+- **Decisions go through `POST/DELETE /api/artifacts/:id/origins`, one origin
+  at a time.** `PATCH` carries the whole allow set, and a prompt that restated
+  it would clobber decisions made elsewhere since its page loaded — and could
+  express neither a block nor a return to undecided. An **agent session cannot
+  reach this route at all**: `agentSubResources` is a deny-by-default
+  allowlist, and a session steered by text Exhibit did not author must not
+  approve its own network egress.
+
+**Where the prompt is, and is not.**
+
+- **The detail page** hosts it. The frame is sandboxed and the page around it
+  is ours, which is the whole precondition.
+- **A top-level render and a share do not, by design.** `/a/:id` opened
+  directly is a real-origin document whose only DOM belongs to the artifact,
+  so a prompt drawn there would be a prompt the artifact could forge — and
+  there is no host frame to post the report to in the first place. The entire
+  bridge half of the preamble is framed-only for this reason. Violations
+  there stay blocked and silent, and the devtools Network panel is where the
+  blocked request and its redirect chain are visible at all. Whether silence
+  is the right answer, or whether a non-deciding notice pointing back at
+  app-origin chrome would be worth the habit it teaches, is av-tan0.
+- **The agent chat page hosts it too** (av-6xvs). Its preview pane is on the
+  app origin under our own template with the artifact in the same sandboxed
+  cross-origin frame, which is the whole precondition — it simply had none of
+  the prompt, so an artifact reaching an unapproved origin while being built
+  there failed silently. Both pages now install one module
+  (`network-prompt.js`) over one dialog partial, so a later fix to either
+  cannot land on one surface and miss the other. Its remaining gap is the
+  *other* bridges: downloads, clipboard, external links and
+  camera/microphone are still absent there, and each is a distinct capability
+  with its own approval, so they belong together in one piece of work rather
+  than arriving one at a time.
 
 ## 3. Vendoring: snapshot on import, never live-linked
 

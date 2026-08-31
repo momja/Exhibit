@@ -42,7 +42,15 @@ iframe{width:100%;height:100%;border:none;display:block}
 .modal h2{font-size:16px;font-weight:600}
 .modal p{font-size:13px;color:#555;margin-top:10px;overflow-wrap:anywhere}
 .modal code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:12px}
-.modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
+.modal-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:18px}
+/* A button label that breaks mid-phrase reads as two ambiguous words stacked,
+   not as one choice — and these are the words the whole dialog turns on. */
+.modal-actions .btn{white-space:nowrap}
+/* The network prompt (av-kmwj) offers three answers where every other dialog
+   offers two, and three of these labels do not fit 380px. The wider box is a
+   modifier rather than a new width for .modal, because widening every dialog
+   to suit the busiest one makes the simple ones look emptier than they are. */
+.modal-wide{width:460px}
 
 /* --- mobile: compact header + actions bottom sheet (av-g7n7) -------------
  * On a phone the artifact, not the chrome, owns the screen. The header

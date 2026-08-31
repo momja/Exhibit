@@ -176,3 +176,29 @@
   <a href="/">←<span class="back-label"> Gallery</span></a>
   <h1>{{.}}</h1>
 </header>{{end}}
+
+{{/* The runtime network-permission dialog (av-kmwj), shared by every page that
+     embeds an artifact: the detail viewer and the agent chat's preview pane
+     (av-6xvs). One definition because the two pages must offer the same three
+     answers with the same ids — web/gallery/network-prompt.js drives it and
+     addresses those ids by name.
+
+     It lives in app chrome and never inside the artifact's frame: the artifact
+     owns that DOM and could draw a convincing forgery of this dialog. The
+     origin and directive are filled in by script via textContent, because they
+     come out of the artifact's own blocked request and must never be
+     interpolated as markup here. */}}
+{{define "networkPrompt"}}<div id="net-modal" class="modal-overlay" hidden>
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="net-title">
+    <h2 id="net-title">Allow network access?</h2>
+    <p>This artifact tried to contact <code id="net-origin"></code> and was blocked.</p>
+    <p class="text-sm muted" id="net-directive"></p>
+    <p>Allowing adds this origin to the artifact's allowlist and reloads the artifact so the request can retry. You can revoke it later in allowlist settings.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-sec" id="net-never">Don't ask again</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="net-once">Block once</button>
+      <button type="button" class="btn" id="net-allow"><i class="ph ph-globe-hemisphere-west"></i> Allow origin</button>
+    </div>
+  </div>
+</div>{{end}}
