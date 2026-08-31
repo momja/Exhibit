@@ -2,7 +2,7 @@
 id: av-kmwj
 status: in_progress
 deps: []
-links: [exhibit-fr7]
+links: [exhibit-fr7, av-jnfh]
 created: 2026-08-29T17:55:52Z
 type: feature
 priority: 2
