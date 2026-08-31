@@ -1,6 +1,6 @@
 ---
 id: av-6xvs
-status: open
+status: closed
 deps: []
 links: [av-kmwj]
 created: 2026-08-31T05:32:44Z
