@@ -2,7 +2,7 @@
 id: av-tan0
 status: open
 deps: []
-links: [av-kmwj]
+links: [av-kmwj, av-g234]
 created: 2026-08-31T05:33:14Z
 type: feature
 priority: 3
