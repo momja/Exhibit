@@ -98,6 +98,18 @@ func TestNewPageHandsTheBriefOverOutOfBandOfTheURL(t *testing.T) {
 	assert.Contains(t, agentJS, `{key: 'description', label: 'What it should do'}`)
 }
 
+// Start building sends the brief. The next page is not a second submit button,
+// including on the no-key path: there the composer is filled, the key modal
+// opens, and saving a key spends the waiting brief.
+func TestAgentPageSendsTheBriefItArrivesWith(t *testing.T) {
+	r := newTestRouter(t)
+	agentJS := galleryAsset(t, r, "/assets/gallery/agent.js")
+
+	assert.Contains(t, agentJS, `if (opening) send();`)
+	assert.Contains(t, agentJS, `briefAwaitingKey = !!opening;`)
+	assert.Contains(t, agentJS, `if (briefAwaitingKey) {`)
+}
+
 // The ingest panel is the whole ingest form the gallery index used to carry:
 // title, source, url, snapshot toggle, scan result, status, and the submit.
 func TestNewPageCarriesTheIngestPanel(t *testing.T) {

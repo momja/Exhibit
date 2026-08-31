@@ -26,6 +26,9 @@ let keyConfigured = false;
 let configuredProvider = null;   // provider the stored key currently belongs to, or null
 let pendingSnippets = [];   // [{image:{data,mimeType}, descriptor, thumbUrl}]
 let snippetMode = false;
+// A brief arrived from /new but there was no key to send it with. saveKey
+// spends this, so "Start building" still means the brief is sent (nw-d1dd).
+let briefAwaitingKey = false;
 
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
@@ -182,6 +185,14 @@ async function saveKey() {
   // A new key means the next prompt should start a fresh session.
   resetSession();
   addMsg('sys', 'API key saved. The key is encrypted on the server and never returned to the browser.');
+  // The brief that couldn't be sent a moment ago goes now. send() reads the
+  // composer rather than the stored brief, so an edit made while the modal was
+  // up is what gets sent. Only a *save* spends it: cancelling the modal leaves
+  // the text in the composer for the user to send when they're ready.
+  if (briefAwaitingKey) {
+    briefAwaitingKey = false;
+    if (inputEl.value.trim()) send();
+  }
 }
 
 async function deleteKey() {
@@ -689,6 +700,6 @@ function briefToMessage(brief) {
   // over the text and the user gets it back after saving one, rather than
   // watching what they typed on the last page disappear.
   if (opening) { inputEl.value = opening; autoGrow(); }
-  if (!configured) { openKeyModal(); return; }
+  if (!configured) { briefAwaitingKey = !!opening; openKeyModal(); return; }
   if (opening) send();
 })();

@@ -294,10 +294,16 @@ the same breath; a brief left behind would open the *next* session on a stale
 description. It applies only in create mode — a modify session already has a
 subject. The answered fields are flattened into the opening message by
 `briefToMessage`, driven by the `BRIEF_FIELDS` list, so a field added to the
-form is one line here and nothing else. The text goes into the composer before
-it is sent, which is what makes the no-key case behave: the key modal opens
-over the filled composer and the user gets their words back after saving a key,
-instead of watching them vanish with the page they typed them on.
+form is one line here and nothing else.
+
+Clicking Start building sends it; the next page is not a second submit button.
+The text is put in the composer *before* it goes, which is what makes the no-key
+case behave. With no key stored, boot fills the composer, opens the key modal
+and remembers that a brief is waiting; saving a key sends it. So the user gets
+their words back rather than watching them vanish with the page they typed them
+on, and the brief is still sent by the click that started it. `send()` reads the
+composer rather than the stored brief, so an edit made while the modal was up is
+what gets sent, and cancelling the modal leaves the text there to send by hand.
 
 **Preview re-render (av-6m3e).** The preview pane is a server-rendered
 fragment, not DOM the page script assembles. `agent.tmpl`'s `agentPreview`
