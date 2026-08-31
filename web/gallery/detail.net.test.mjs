@@ -190,6 +190,26 @@ test("several blocked origins queue rather than overwrite each other", async () 
   );
 });
 
+test("a dismissal during the block write is not thrown away by the write finishing", async () => {
+  // The dialog stays live while the block POST is in flight, so Escape (and
+  // the backdrop, and Block once) can promote the next queued report out from
+  // under it. If the settled write then advanced again it would drop that
+  // report unseen, and the preamble reports each origin only once per load —
+  // so the user would never be asked about b at all.
+  const { byId, postFromFrame, pressKey } = loadDetail();
+
+  await postFromFrame(report("https://a.example.com"));
+  await postFromFrame(report("https://b.example.com"));
+
+  const written = byId("net-never").click();
+  pressKey("Escape");
+  assert.equal(byId("net-origin").textContent, "https://b.example.com");
+  await written;
+
+  assert.equal(byId("net-modal").hidden, false, "b is still waiting on an answer");
+  assert.equal(byId("net-origin").textContent, "https://b.example.com");
+});
+
 test("Allow drops the queue, because the reload re-reports whatever is still blocked", async () => {
   const { byId, postFromFrame } = loadDetail();
 

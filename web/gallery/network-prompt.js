@@ -113,10 +113,16 @@
 
       document.getElementById('net-never').addEventListener('click', async function () {
         const req = pending;
+        if (!req) { showNext(); return; }
         // A failed write leaves the prompt up rather than pretending the origin
         // was refused: the next load would ask again, having said it would not.
-        if (req && !(await decide(req.origin, 'block'))) return;
-        showNext();
+        if (!(await decide(req.origin, 'block'))) return;
+        // Escape, the backdrop and Block once stay live while that write is in
+        // flight, and each one promotes the next queued report. Advancing again
+        // here would drop the promoted origin without ever showing it, and the
+        // preamble reports each origin only once per load, so it would be gone
+        // for good. Only this request's own dismissal is ours to make.
+        if (pending === req) showNext();
       });
 
       document.getElementById('net-allow').addEventListener('click', async function () {

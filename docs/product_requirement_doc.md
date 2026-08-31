@@ -346,8 +346,12 @@ all, **controls and surfaces what the artifact may reach over the network.**
 
 ### 6.2 Network control: scan, approve, allowlist, prompt
 
-We do **not** use CSP violation reporting. Instead, a simpler explicit-consent flow,
-with a per-artifact allowlist as the source of truth:
+We do **not** report CSP violations to a server — no `report-uri`/`report-to`
+endpoint, no aggregation pipeline, nothing retained. (The frame does listen for
+its own `securitypolicyviolation` events, which is what step 4 below is built
+on; that never leaves the browser except as the one decision the user makes.)
+Instead, a simpler explicit-consent flow, with a per-artifact allowlist as the
+source of truth:
 
 1. **Scan at ingest.** On `push`, statically parse the artifact for outbound
    references — `fetch(`/`XMLHttpRequest`, ESM/`import` URLs, `<script src>`,
