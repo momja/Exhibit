@@ -18,7 +18,13 @@ import { fileURLToPath } from "node:url";
 import { loadPageScript, recordingApi } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const DETAIL_JS = path.join(here, "../../internal/api/assets/gallery/detail.js");
+const ASSETS = path.join(here, "../../internal/api/assets/gallery");
+// The order detail.tmpl loads them in: the shared prompt module, then the page
+// script that installs it.
+const DETAIL_JS = [
+  path.join(ASSETS, "network-prompt.js"),
+  path.join(ASSETS, "detail.js")
+];
 
 const ID = "art-1";
 const OPEN_URL = "/artifacts/art-1/open";
@@ -226,6 +232,8 @@ test("a blocked redirect replaces the banner headline rather than promising a fi
   assert.equal(byId("capability-warning-banner").hidden, false);
   assert.match(byId("capability-warning-headline").textContent, /redirected to an unapproved origin/);
   assert.match(byId("capability-warning-detail").textContent, /forwarded the request somewhere else/);
+  assert.match(byId("capability-warning-detail").textContent, /Network panel/,
+    "the devtools Network panel is where a redirect chain is visible; the console is not");
   assert.equal(byId("net-modal").hidden, true, "the redirect case must never open the prompt");
 });
 

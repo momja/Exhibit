@@ -652,7 +652,12 @@ Five properties of the reporter are load-bearing:
   (`ALLOWED_ORIGINS`) and diverts this case to the capability banner
   (`redirected-origin`), which explains what happened and says the
   destination has to be added by name. `picsum.photos` serving images from
-  `fastly.picsum.photos` is the canonical example.
+  `fastly.picsum.photos` is the canonical example. The banner is where this
+  case currently *ends*, which is not good enough — the visitor is told what
+  broke and given no way to fix it short of already knowing the destination
+  host. Giving it a real path is av-jnfh, which also records why the frame
+  cannot resolve the redirect itself: the opaque response filter, not our
+  sandbox and not our CSP, reports `redirected: false` for a request that was.
 - **Each origin is reported once per load**, so a request in a retry loop
   cannot spam the host. The same set that enforces this is seeded with the
   artifact's refused origins, which is why a "don't ask again" answer is quiet
@@ -680,17 +685,21 @@ Five properties of the reporter are load-bearing:
   so a prompt drawn there would be a prompt the artifact could forge — and
   there is no host frame to post the report to in the first place. The entire
   bridge half of the preamble is framed-only for this reason. Violations
-  there stay blocked and silent, and the browser console names the blocked
-  URL, which is the one place a redirect destination is visible at all.
-- **The agent chat page does not, and this is a gap rather than a decision.**
-  Its preview pane embeds the same render document but hosts only the state
-  bridge — no download, clipboard, link, camera/microphone, capability
-  warning, or network prompt. An artifact reaching an unapproved origin while
-  being built there fails silently. Nothing is *granted* by the gap: the CSP
-  blocks the request either way, and the fix is to open the artifact's own
-  page or the edit page's allowlist. Wiring one of the six bridges there
-  would leave a surface where a single capability works and five do not, so
-  the whole set belongs in one piece of work, tracked separately.
+  there stay blocked and silent, and the devtools Network panel is where the
+  blocked request and its redirect chain are visible at all. Whether silence
+  is the right answer, or whether a non-deciding notice pointing back at
+  app-origin chrome would be worth the habit it teaches, is av-tan0.
+- **The agent chat page hosts it too** (av-6xvs). Its preview pane is on the
+  app origin under our own template with the artifact in the same sandboxed
+  cross-origin frame, which is the whole precondition — it simply had none of
+  the prompt, so an artifact reaching an unapproved origin while being built
+  there failed silently. Both pages now install one module
+  (`network-prompt.js`) over one dialog partial, so a later fix to either
+  cannot land on one surface and miss the other. Its remaining gap is the
+  *other* bridges: downloads, clipboard, external links and
+  camera/microphone are still absent there, and each is a distinct capability
+  with its own approval, so they belong together in one piece of work rather
+  than arriving one at a time.
 
 ## 3. Vendoring: snapshot on import, never live-linked
 

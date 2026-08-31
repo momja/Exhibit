@@ -402,7 +402,9 @@ func TestDetailPagePromptsForBlockedNetworkOrigins(t *testing.T) {
 	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
 	require.NoError(t, err)
 
-	// The dialog, with all three answers the ticket specifies.
+	// The dialog, with all three answers the ticket specifies. It comes from
+	// the shared networkPrompt partial (av-6xvs), so this also pins that the
+	// page still includes it.
 	assert.Contains(t, page, `id="net-modal"`)
 	assert.Contains(t, page, `id="net-allow"`)
 	assert.Contains(t, page, `id="net-once"`)
@@ -417,10 +419,49 @@ func TestDetailPagePromptsForBlockedNetworkOrigins(t *testing.T) {
 
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
-	assert.Contains(t, string(detailJS), "__avNetwork",
-		"the viewer must handle the render preamble's CSP-violation reports")
-	assert.Contains(t, string(detailJS), "/origins",
+	assert.Contains(t, page, `<script src="/assets/gallery/network-prompt.js"></script>`,
+		"the dialog is inert without the module that drives it")
+	assert.Contains(t, string(detailJS), "ExhibitNetworkPrompt.install",
+		"the viewer installs the shared prompt rather than hand-rolling one")
+
+	promptJS, err := embeddedAssets.ReadFile("assets/gallery/network-prompt.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(promptJS), "__avNetwork",
+		"the module handles the render preamble's CSP-violation reports")
+	assert.Contains(t, string(promptJS), "/origins",
 		"decisions go through the per-origin route, not a whole-allowlist PATCH")
+}
+
+// av-6xvs: the agent chat page embeds the same render document behind the same
+// sandbox on the same app origin, so it has the trusted chrome the prompt needs
+// — and it had none of the prompt. An artifact reaching an unapproved origin
+// while being built there failed silently.
+//
+// The two pages now share one dialog and one module, which is what this pins:
+// the same partial and the same script on both, so the next fix to either
+// cannot land on one surface and miss the other.
+func TestAgentPageHostsTheNetworkPrompt(t *testing.T) {
+	r := newTestRouter(t)
+	req := httptest.NewRequest("GET", "/agent", nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	assert.Contains(t, page, `id="net-modal"`)
+	assert.Contains(t, page, `id="net-allow"`)
+	assert.Contains(t, page, `id="net-once"`)
+	assert.Contains(t, page, `id="net-never"`)
+	assert.Contains(t, page, `<code id="net-origin"></code>`)
+	assert.Contains(t, page, `<script src="/assets/gallery/network-prompt.js"></script>`)
+
+	agentJS, err := embeddedAssets.ReadFile("assets/gallery/agent.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(agentJS), "ExhibitNetworkPrompt.install",
+		"the agent page must install the prompt, not merely render its markup")
+	assert.Contains(t, string(agentJS), "ExhibitNetworkPrompt.announceTo",
+		"each swapped-in preview frame must be told the host is listening")
 }
 
 // allowDecisions builds the allow-decision rows the edit page reads for its

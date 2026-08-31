@@ -133,8 +133,9 @@ const CAPABILITY_COPY = {
       'forwarded the request somewhere else, and the destination is not on the ' +
       "allowlist. Browsers hide a redirect's destination from the page, so Exhibit " +
       'cannot offer it for approval — if you know the host it forwards to, add it in ' +
-      'allowlist settings. Opening the artifact directly runs it under the same ' +
-      'policy, where the browser console names the blocked URL.',
+      "allowlist settings. Opening the artifact directly runs it under the same " +
+      "policy, where your browser's Network panel shows the redirect and names " +
+      'the destination.',
     resourceLabel: 'Blocked request'
   },
   'module-worker': {
@@ -184,27 +185,11 @@ window.addEventListener('message', function(e) {
   banner.hidden = false;
 });
 
-// The shim buffers what it cannot deliver yet — the module-worker diagnostic
-// (av-yvtb) and CSP-violation reports (av-kmwj) both fire at frame load, before
-// this page has attached its listeners — and flushes when we announce ourselves.
-// targetOrigin '*' because the frame is opaque; the shim validates the ping came
-// from our app origin.
-//
-// Announced twice, and both are needed. On every `load`, for the frames that
-// load after this script runs. And once immediately, because a frame that
-// finished loading *before* this script ran has already fired its `load` event
-// and will not fire another — that ordering is the difference between a prompt
-// appearing and an artifact silently failing, and it varies with cache state.
-// A duplicate ping is harmless: the shim flushes its queue once.
-(function() {
-  const frame = document.querySelector('iframe');
-  if (!frame) return;
-  function announce() {
-    if (frame.contentWindow) frame.contentWindow.postMessage({ __avHostReady: true }, '*');
-  }
-  frame.addEventListener('load', announce);
-  announce();
-})();
+// The preamble buffers what it cannot deliver yet — the module-worker
+// diagnostic (av-yvtb) and CSP-violation reports (av-kmwj) both fire at frame
+// load, before this page has attached its listeners — and flushes when the host
+// announces itself. announceTo owns both halves of that handshake.
+window.ExhibitNetworkPrompt.announceTo(document.querySelector('iframe'));
 
 // Download bridge: the sandboxed frame cannot download anything itself (the
 // sandbox omits allow-downloads). The shim posts intercepted download
@@ -579,114 +564,33 @@ document.getElementById('media-allow').addEventListener('click', async function(
     'NotSupportedError');
 });
 
-// Network permission prompt (av-kmwj, spec §6.2 step 4): the artifact's CSP has
-// already blocked the request — the browser is the wall — so this only asks
-// whether to widen the policy for next time. The prompt lives here, in app
-// chrome, because the artifact owns its own DOM and could draw a forgery of it.
+// Network permission prompt (av-kmwj): the dialog and its whole behaviour
+// live in network-prompt.js, shared with the agent chat page (av-6xvs). This
+// page only supplies the four things the two surfaces differ in.
 //
-// Allow records an allow decision and reloads the frame (a CSP is a response
-// header fixed at load, so a new policy needs a new document); Block once just
-// dismisses and the next load asks again; "Don't ask again" records a block
-// decision, which never widens the CSP and only stops the prompt. Reports
-// arriving while a prompt is open queue, so a page contacting three origins
-// asks about each rather than losing two.
-let pendingNet = null;
-const netQueue = [];
-
-window.addEventListener('message', function(e) {
-  const d = e.data;
-  if (!d || d.__avNetwork !== true || d.artifactId !== ID) return;
-  const frame = document.querySelector('iframe');
-  if (!frame || e.source !== frame.contentWindow) return;
-  // A read-only visitor cannot record either answer — apiFetch would refuse
-  // the write — so prompting them would be asking a question with no answer.
-  // The render preamble already stays silent for an anonymous render; this is
-  // the same fact enforced on the side that owns the dialog.
-  if (typeof READ_ONLY === 'boolean' && READ_ONLY) return;
-  netQueue.push({ origin: String(d.origin || ''), directive: String(d.directive || '') });
-  if (!pendingNet) showNextNetPrompt();
-});
-
-// Advances to the next queued report, or closes the dialog when the queue is
-// empty. Every dismissal path goes through here, so "next" and "close" are one
-// behaviour rather than two that can disagree.
-function showNextNetPrompt() {
-  pendingNet = netQueue.shift() || null;
-  const modal = document.getElementById('net-modal');
-  if (!pendingNet) {
-    modal.hidden = true;
-    const frame = document.querySelector('iframe');
-    if (frame) frame.focus();
-    return;
-  }
-  // textContent, never innerHTML: the origin comes out of the artifact's own
-  // blocked request and must not be interpreted as markup on the app origin.
-  document.getElementById('net-origin').textContent = pendingNet.origin;
-  document.getElementById('net-directive').textContent =
-    pendingNet.directive ? 'Blocked by ' + pendingNet.directive : '';
-  modal.hidden = false;
-  // Land on the safe answer, the way the link prompt does.
-  document.getElementById('net-once').focus();
-}
-
-// Records one origin's decision through the per-origin route. Not PATCH: this
-// page holds no working copy of the allowlist, and restating one from here
-// would overwrite decisions made on the edit page since this page loaded.
-async function setOriginDecision(origin, decision) {
-  const st = document.getElementById('al-status');
-  const r = await apiFetch('/api/artifacts/' + encodeURIComponent(ID) + '/origins', {
-    method: 'POST',
-    body: JSON.stringify({ origin: origin, decision: decision, source: 'runtime' })
-  }).catch(function() { return null; });
-  if (!r || !r.ok) { st.textContent = '✗ Failed to save the decision for ' + origin; return false; }
-  return true;
-}
-
-document.getElementById('net-once').addEventListener('click', showNextNetPrompt);
-document.getElementById('net-modal').addEventListener('click', function(e) {
-  if (e.target.id === 'net-modal') showNextNetPrompt();
-});
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape' && !document.getElementById('net-modal').hidden) showNextNetPrompt();
-});
-
-document.getElementById('net-never').addEventListener('click', async function() {
-  const req = pendingNet;
-  // A failed write leaves the prompt up rather than pretending the origin was
-  // refused: the next load would ask again, having said it would not.
-  if (req && !(await setOriginDecision(req.origin, 'block'))) return;
-  showNextNetPrompt();
-});
-
-document.getElementById('net-allow').addEventListener('click', async function() {
-  const req = pendingNet;
-  if (!req) { showNextNetPrompt(); return; }
-  if (!(await setOriginDecision(req.origin, 'allow'))) return;
-  document.getElementById('net-modal').hidden = true;
-  pendingNet = null;
-  // The reload re-runs the artifact under the new CSP, so anything still
-  // blocked reports itself again. Drop the queue rather than ask twice about
-  // origins the fresh load is about to raise on its own.
-  netQueue.length = 0;
-  reloadFrame();
-});
-
-// Refetches the render document so the widened CSP takes effect, with no
-// manual refresh. It goes through the app origin's /open route rather than
-// reusing the current src: that src carries a render token minted when the
-// page rendered, which expires — /open mints a fresh one on redirect, so this
+// reload goes through the app origin's /open route rather than reusing the
+// frame's current src: that src carries a render token minted when this page
+// rendered, which expires — /open mints a fresh one on redirect, so the reload
 // works on a page that has been open all afternoon. The stamp only defeats the
 // browser's cache of the redirect itself.
-function reloadFrame() {
-  const frame = document.querySelector('iframe');
-  const st = document.getElementById('al-status');
-  st.textContent = 'Applying…';
-  frame.src = OPEN_URL + '?r=' + Date.now();
-  frame.addEventListener('load', function onload() {
-    frame.removeEventListener('load', onload);
-    st.textContent = '';
-  });
-}
+window.ExhibitNetworkPrompt.install({
+  frame: function () { return document.querySelector('iframe'); },
+  artifactId: function () { return ID; },
+  readOnly: function () { return typeof READ_ONLY === 'boolean' && READ_ONLY; },
+  report: function (text) {
+    const st = document.getElementById('al-status');
+    if (st) st.textContent = text;
+  },
+  reload: function () {
+    const frame = document.querySelector('iframe');
+    frame.src = OPEN_URL + '?r=' + Date.now();
+    frame.addEventListener('load', function onload() {
+      frame.removeEventListener('load', onload);
+      const st = document.getElementById('al-status');
+      if (st) st.textContent = '';
+    });
+  }
+});
 
 // "Update from source" — only reachable from the toolbar button, which the
 // server renders only for URL-ingested artifacts (SOURCE_URL is '' otherwise).

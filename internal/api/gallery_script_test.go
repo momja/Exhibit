@@ -35,7 +35,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 	}
 	// Named explicitly rather than by a --test directory walk, so a file added
 	// with a typo'd name is a missing test rather than a silent no-op.
-	suites := []string{"detail.net.test.mjs", "edit.origins.test.mjs"}
+	suites := []string{"detail.net.test.mjs", "edit.origins.test.mjs", "agent.net.test.mjs"}
 	cmd := exec.Command(node, append([]string{"--test"}, suites...)...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()

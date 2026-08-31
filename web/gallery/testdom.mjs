@@ -76,7 +76,11 @@ function makeElement(id) {
 // `hidden` on the modal overlays. Without it every dialog would start visible,
 // and "the prompt is not showing yet" would be a claim the harness itself made
 // false.
-export function loadPageScript(scriptPath, globals = {}, initial = {}) {
+// scriptPaths is one path or several, run in order in one shared context —
+// the page loads them as sibling <script> tags, so a module one of them
+// depends on (network-prompt.js under detail.js) has to be listed first here
+// exactly as it is in the template.
+export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
   const elements = new Map();
   const byId = (id) => {
     if (!elements.has(id)) elements.set(id, makeElement(id));
@@ -117,6 +121,11 @@ export function loadPageScript(scriptPath, globals = {}, initial = {}) {
     location: { hash: "", reload() {} }
   };
 
+  // Page scripts reach for both the bare name and the window-prefixed one
+  // (`apiFetch(...)` beside `window.matchMedia(...)`), so a supplied global has
+  // to exist on both or the harness fails for a reason the page never would.
+  Object.assign(window, globals);
+
   const context = vm.createContext({
     window,
     document,
@@ -134,7 +143,9 @@ export function loadPageScript(scriptPath, globals = {}, initial = {}) {
     ...globals
   });
   context.globalThis = context;
-  vm.runInContext(readFileSync(scriptPath, "utf8"), context, { filename: scriptPath });
+  for (const path of [].concat(scriptPaths)) {
+    vm.runInContext(readFileSync(path, "utf8"), context, { filename: path });
+  }
 
   // Delivers a message as if the artifact frame had posted it. `source`
   // defaults to the frame's window, so a test that wants to prove the identity
