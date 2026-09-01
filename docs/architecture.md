@@ -900,15 +900,37 @@ edit page's preview, the agent preview pane, and the fragment route. See
 `widgets.md`.
 
 Ingest has its own page, `GET /new` (`new.tmpl`), rather than a form stacked on
-top of the library index (av-qo0j). It presents the three routes in as peers —
-Paste HTML and From URL, the two modes of one ingest panel, plus a link to the
-agent surface (§3.7) — and the index keeps a primary "Add artifact" button
-pointing at it. The page holds no server state of its own: it posts to
+top of the library index (av-qo0j). It presents three routes in as peers, all
+of them modes of the panel below the tiles: **Build with agent**, then Paste
+HTML and From URL. The index keeps a primary "Add artifact" button pointing at
+it. The page holds no server state of its own: it posts to
 `POST /api/artifacts` like any other API client, walks the user through the
 footprint approval, PATCHes the approved allowlist, and hands off to the new
 artifact's detail page. The snapshot toggle is URL-mode-only, because the
 vendorer (§3.4a) needs an absolute base URL to resolve a page's references
 against.
+
+**Build with agent leads, and is selected on load** (nw-d1dd). Most artifacts
+now start as a description rather than as source the user already has, so the
+tile that used to be a bare link to `/agent` is the page's default mode. Its
+panel is a **form of named fields, not a prompt box**: a title and a
+description today, with room for more answerable fields beside them. The
+distinction is the point — the agent surface already has a chat box, and a
+second freeform one on this page would only move it a page earlier. What the
+form buys is guided input, which is why anything added here should be a
+question with an answer rather than more open space.
+
+The brief crosses to `/agent` in **`sessionStorage`, never a query string**.
+It is the user's own content, and a URL is copied into this service's request
+log, the operator's proxy access log and the browser's history — the same
+reasoning that keeps the SSE credential out of a URL (§3.7, av-rgp1), applied
+to content instead of a secret. `agent.js` reads the brief once on boot,
+removes it in the same breath (a leftover would open the *next* session on a
+stale description), flattens the answered fields into the session's opening
+message, and sends it. With no API key configured the text lands in the
+composer and the key modal opens over it, so nothing typed on the previous
+page is lost. One list in `agent.js` maps brief fields to their labels in that
+message, so a field added to the form is a line there and nothing else.
 
 `notfound.tmpl` answers every app-origin HTML 404 — an unrouted
 path (registered as the mux's `NotFound` handler) and a missing artifact on the

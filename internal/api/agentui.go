@@ -133,9 +133,10 @@ func (ro *Router) agentPreviewPartial(w http.ResponseWriter, r *http.Request) {
 // BackURL mirrors the two ways this page is reached rather than hardcoding
 // the gallery: the detail page's "Modify with agent" link (?artifact=<id>)
 // expects the back link to return to that artifact, and the add-artifact
-// page's "Build with agent" tile (bare /agent) expects it back on /new -
-// otherwise "add artifact -> agent -> back" strands the visitor on the
-// gallery instead of where they came from.
+// page's brief form (bare /agent) expects it back on /new - otherwise
+// "add artifact -> agent -> back" strands the visitor on the gallery instead
+// of where they came from. The brief itself is not in that URL: /new hands it
+// over in sessionStorage, which agent.js reads on boot (nw-d1dd).
 func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 	artifactJSON := "null"
 	backURL := "/new"
