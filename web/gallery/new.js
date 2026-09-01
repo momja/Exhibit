@@ -90,6 +90,26 @@ function startAgent(event) {
   location.href = '/agent';
 }
 
+// errorMessage extracts something readable from a failed response, whatever
+// shape it came in. JSON {error: …} is preferred; the API's http.Error path
+// sends plain text; and a body that is empty or unreadable falls back to the
+// status line, which at least names what happened.
+async function errorMessage(resp) {
+  let text = '';
+  try {
+    text = (await resp.text()).trim();
+  } catch (err) {
+    return resp.statusText || ('HTTP ' + resp.status);
+  }
+  if (text.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.error) return parsed.error;
+    } catch (err) { /* not JSON after all; fall through to the text */ }
+  }
+  return text || resp.statusText || ('HTTP ' + resp.status);
+}
+
 async function ingest() {
   const title = document.getElementById('title').value.trim();
   const status = document.getElementById('status');
@@ -110,12 +130,37 @@ async function ingest() {
     payload = {title: title || 'Untitled', body, network_allowlist: []};
   }
 
-  const resp = await apiFetch('/api/artifacts', {
-    method: 'POST',
-    body: JSON.stringify(payload)
-  });
-  const data = await resp.json();
-  if (!resp.ok) { status.textContent = 'Error: ' + (data.error || resp.statusText); return; }
+  let resp;
+  try {
+    resp = await apiFetch('/api/artifacts', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    // The request never completed — offline, DNS, a dropped connection. Say so
+    // rather than leaving the last progress message on screen, which reads as a
+    // hang and is indistinguishable from a slow snapshot.
+    status.textContent = 'Error: could not reach the server (' + err.message + ')';
+    return;
+  }
+
+  // The failure branch has to come before parsing, and parsing has to tolerate
+  // a non-JSON body. The API's error path is http.Error, which writes plain
+  // text: calling resp.json() first threw on every failed ingest, and with
+  // nothing catching it the status stayed on 'Fetching page and snapshotting
+  // assets…' forever. A dead URL looked identical to a slow one.
+  if (!resp.ok) {
+    status.textContent = 'Error: ' + (await errorMessage(resp));
+    return;
+  }
+
+  let data;
+  try {
+    data = await resp.json();
+  } catch (err) {
+    status.textContent = 'Error: the server sent a response this page could not read.';
+    return;
+  }
 
   const id = data.artifact.id;
   const footprint = data.network_footprint || [];

@@ -165,3 +165,47 @@ func TestSetItemEmptyStringThenReloadStaysEmptyString(t *testing.T) {
 		t.Fatalf("an intentionally empty value must survive a reload as '', not be dropped: %s", after)
 	}
 }
+
+// av-kmwj, the server half of the report/prompt/allow/reload loop. The two
+// decisions have opposite effects on a re-render and neither is visible from
+// the other's read path, so both are checked against one served document:
+//
+//   - allow widens the CSP header, which is what makes a reload after "Allow"
+//     actually retry the request rather than block it identically;
+//   - block reaches the preamble and never the header, which is what makes
+//     "don't ask again" stop the prompt without granting anything.
+func TestServedDocumentSeparatesAllowedAndBlockedOrigins(t *testing.T) {
+	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
+	ctx := context.Background()
+
+	if doc := serve(t, rd, "abc"); !strings.Contains(doc, "var BLOCKED_ORIGINS = [];") {
+		t.Fatalf("an artifact with no decisions inlines an empty suppression list: %s", doc)
+	}
+
+	if err := st.SetOriginDecision(ctx, 1, "abc", "https://tracker.example.com", store.DecisionBlock, "runtime"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetOriginDecision(ctx, 1, "abc", "https://cdn.example.com", store.DecisionAllow, "runtime"); err != nil {
+		t.Fatal(err)
+	}
+
+	w := httptest.NewRecorder()
+	rd.ServeArtifact(w, renderRequest("/a/abc", "abc", 1))
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	doc, csp := w.Body.String(), w.Header().Get("Content-Security-Policy")
+
+	if !strings.Contains(doc, "https://tracker.example.com") {
+		t.Fatalf("the refused origin must be inlined so the prompt stays quiet: %s", doc)
+	}
+	if strings.Contains(csp, "tracker.example.com") {
+		t.Fatalf("a block decision must never widen the CSP: %s", csp)
+	}
+	if !strings.Contains(csp, "https://cdn.example.com") {
+		t.Fatalf("an allow decision must reach the CSP, or a reload would block identically: %s", csp)
+	}
+	if strings.Contains(doc, "var BLOCKED_ORIGINS = [\"https://cdn.example.com\"") {
+		t.Fatalf("an allowed origin is not suppressed; it is permitted: %s", doc)
+	}
+}

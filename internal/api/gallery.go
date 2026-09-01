@@ -358,12 +358,14 @@ func tagViews(tags []*store.Tag) []tagView {
 // partial without the link, and TestCapabilityPopoverManageLinkGatedByShowManage
 // exercises exactly that.
 type capabilityView struct {
-	ArtifactID        string
-	NetworkAllowlist  []string
-	DownloadsApproved bool
-	ClipboardApproved bool
-	LinksApproved     bool
-	ShowManage        bool
+	ArtifactID         string
+	NetworkAllowlist   []string
+	DownloadsApproved  bool
+	ClipboardApproved  bool
+	LinksApproved      bool
+	CameraApproved     bool
+	MicrophoneApproved bool
+	ShowManage         bool
 }
 
 // widgetView is a card's tile (av-fafu). Exactly one of its two states
@@ -491,12 +493,14 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query string, 
 			Created:    a.CreatedAt.Format("Jan 2, 2006"),
 			Tags:       tagViews(a.Tags),
 			Capability: capabilityView{
-				ArtifactID:        a.ID,
-				NetworkAllowlist:  a.NetworkAllowlist,
-				DownloadsApproved: a.DownloadsApproved,
-				ClipboardApproved: a.ClipboardApproved,
-				LinksApproved:     a.LinksApproved,
-				ShowManage:        true,
+				ArtifactID:         a.ID,
+				NetworkAllowlist:   a.NetworkAllowlist,
+				DownloadsApproved:  a.DownloadsApproved,
+				ClipboardApproved:  a.ClipboardApproved,
+				LinksApproved:      a.LinksApproved,
+				CameraApproved:     a.CameraApproved,
+				MicrophoneApproved: a.MicrophoneApproved,
+				ShowManage:         true,
 			},
 			Widget: newWidgetView(a, urls),
 		}
@@ -560,12 +564,14 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials)
 		OpenURL:   openURL(a.ID),
 		SourceURL: a.SourceURL,
 		Capability: capabilityView{
-			ArtifactID:        a.ID,
-			NetworkAllowlist:  allowlist,
-			DownloadsApproved: a.DownloadsApproved,
-			ClipboardApproved: a.ClipboardApproved,
-			LinksApproved:     a.LinksApproved,
-			ShowManage:        true,
+			ArtifactID:         a.ID,
+			NetworkAllowlist:   allowlist,
+			DownloadsApproved:  a.DownloadsApproved,
+			ClipboardApproved:  a.ClipboardApproved,
+			LinksApproved:      a.LinksApproved,
+			CameraApproved:     a.CameraApproved,
+			MicrophoneApproved: a.MicrophoneApproved,
+			ShowManage:         true,
 		},
 		pageCredentials: creds,
 	})
@@ -586,12 +592,14 @@ type editPageData struct {
 	// "Allow" rows. Unapproved is never merged into Allowlist server-side;
 	// that would auto-seed the allowlist from the scan, which spec §6.2
 	// forbids.
-	Allowlist         []string
-	Blocked           []string
-	Unapproved        []string
-	DownloadsApproved bool
-	ClipboardApproved bool
-	LinksApproved     bool
+	Allowlist          []string
+	Blocked            []string
+	Unapproved         []string
+	DownloadsApproved  bool
+	ClipboardApproved  bool
+	LinksApproved      bool
+	CameraApproved     bool
+	MicrophoneApproved bool
 	// The gallery widget (av-fafu): its source for the editor, and the same
 	// tile view the library renders for the live preview beside it. WidgetSrc
 	// is "" when the artifact has no widget, which is also when Widget renders
@@ -619,20 +627,22 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, wi
 	// a blocked origin is a decision already made and belongs in Blocked.
 	unapproved := diffOrigins(scanner.Scan(src), allowlist, blocked)
 	return renderPage("edit", editPageData{
-		ID:                a.ID,
-		Title:             a.Title,
-		Src:               src,
-		pageCredentials:   creds,
-		Allowlist:         allowlist,
-		Blocked:           blocked,
-		Unapproved:        unapproved,
-		WidgetSrc:         widgetSrc,
-		Widget:            newWidgetView(a, urls),
-		CanGenerateWidget: canGenerate,
-		GenerateHint:      generateHint,
-		DownloadsApproved: a.DownloadsApproved,
-		ClipboardApproved: a.ClipboardApproved,
-		LinksApproved:     a.LinksApproved,
+		ID:                 a.ID,
+		Title:              a.Title,
+		Src:                src,
+		pageCredentials:    creds,
+		Allowlist:          allowlist,
+		Blocked:            blocked,
+		Unapproved:         unapproved,
+		WidgetSrc:          widgetSrc,
+		Widget:             newWidgetView(a, urls),
+		CanGenerateWidget:  canGenerate,
+		GenerateHint:       generateHint,
+		DownloadsApproved:  a.DownloadsApproved,
+		ClipboardApproved:  a.ClipboardApproved,
+		LinksApproved:      a.LinksApproved,
+		CameraApproved:     a.CameraApproved,
+		MicrophoneApproved: a.MicrophoneApproved,
 	})
 }
 

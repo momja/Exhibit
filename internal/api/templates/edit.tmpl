@@ -61,6 +61,11 @@
           {{range .Blocked}}<div class="allowlist-row" data-origin="{{.}}">
             <code title="{{.}}">{{.}}</code>
             <span class="text-sm muted">blocked</span>
+            {{/* Forget drops the decision entirely rather than overriding it,
+                 returning the origin to undecided so the runtime prompt may ask
+                 again (av-kmwj). Without it, "don't ask again" is a one-way
+                 trap: a blocked origin never prompts on its own. */}}
+            <button type="button" class="btn btn-sm btn-sec" data-action="forget">Forget</button>
             <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
           </div>{{end}}
         </div>
@@ -89,6 +94,27 @@
         <label class="row">
           <span class="spacer">External links</span>
           <select id="link-select" class="select">
+            <option value="false">Ask first</option>
+            <option value="true">Always allow</option>
+          </select>
+        </label>
+        {{/* Camera and microphone (av-mv3k) are two controls rather than one
+             "media" row because they are two grants: an artifact that asked for
+             a microphone was never approved for a camera. Unlike the three
+             above, these also decide whether the artifact may reach the device
+             when opened *directly* — they build the render document's
+             Permissions-Policy header — which is what makes the grant
+             per-artifact rather than per-render-origin. */}}
+        <label class="row">
+          <span class="spacer">Camera</span>
+          <select id="cam-select" class="select">
+            <option value="false">Ask first</option>
+            <option value="true">Always allow</option>
+          </select>
+        </label>
+        <label class="row">
+          <span class="spacer">Microphone</span>
+          <select id="mic-select" class="select">
             <option value="false">Ask first</option>
             <option value="true">Always allow</option>
           </select>
@@ -127,6 +153,29 @@
         <span class="spacer"></span>
         <button type="button" class="btn btn-sm btn-danger" id="state-erase"><i class="ph ph-warning"></i> Erase all data</button>
       </div>
+    </div>
+  </details>
+
+  {{/* Out-of-line assets (av-20fk). Same shape as the state panel above and
+       for the same reason: the shell renders server-side, the contents are
+       fetched on first open. It is the only place these bytes are visible at
+       all — they are deliberately not in the source below — so it is also the
+       only place they can be reclaimed. */}}
+  <details class="details-panel" id="assets-panel">
+    <summary id="assets-summary">{{template "panelCaret"}} <span id="assets-summary-text">Stored assets</span></summary>
+    <div class="panel-body">
+      <p class="text-sm muted">
+        Binary payloads this artifact loads at run time — a WebAssembly module, a data heap —
+        saved alongside it so the tool keeps working after the site it came from changes.
+        They are stored outside the source, which is why the code below still shows the
+        original <code>fetch</code> calls.
+      </p>
+      <p class="text-sm muted">
+        Deleting one is permanent, and it will break the artifact if its code still loads that
+        file. Match the address against the source before removing it.
+      </p>
+      <div id="assets-rows"></div>
+      <span id="assets-status" class="text-sm muted"></span>
     </div>
   </details>
 
@@ -213,10 +262,13 @@ let blocked = {{.Blocked}};
 let downloadsApproved = {{if .DownloadsApproved}}true{{else}}false{{end}};
 let clipboardApproved = {{if .ClipboardApproved}}true{{else}}false{{end}};
 let linksApproved = {{if .LinksApproved}}true{{else}}false{{end}};
+let cameraApproved = {{if .CameraApproved}}true{{else}}false{{end}};
+let microphoneApproved = {{if .MicrophoneApproved}}true{{else}}false{{end}};
 </script>
 <script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/edit.js"></script>
 <script src="/assets/gallery/state-api.js"></script>
 <script src="/assets/gallery/state.js"></script>
+<script src="/assets/gallery/assets.js"></script>
 </body>
 </html>{{end}}

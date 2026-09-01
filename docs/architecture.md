@@ -88,10 +88,16 @@ The only way data changes. Route groups:
   patched).
 - `GET /api/artifacts`, `GET /api/artifacts/:id` — list/detail (drives the gallery).
 - `PATCH /api/artifacts/:id` — edits: title, body (rewrites the stored blob),
-  `network_allowlist` (accepted unchanged as the whole approved set; the store
-  translates it into `decision='allow'` rows and deliberately leaves any
-  `decision='block'` rows alone, §3.3), `downloads_approved` / `clipboard_approved` (the capability
-  bridge's first-use approvals, §6), and other scalar columns. Rewriting the body
+  `network_allowlist` (the whole approved set, normalized to origins by
+  `internal/origin` before it is stored — see below; the store translates it
+  into `decision='allow'` rows and deliberately leaves any `decision='block'`
+  rows alone, §3.3), `downloads_approved` / `clipboard_approved` /
+  `links_approved` / `camera_approved` / `microphone_approved` (the per-artifact
+  first-use capability approvals, §6 — the first three spent by a host bridge,
+  the two device flags by the frame's gate and the render document's
+  `Permissions-Policy`; named once in `store.ApprovalColumns` so the handler's
+  strict-bool check and the store's cannot drift), and other
+  scalar columns. Rewriting the body
   re-executes the scan and returns the footprint plus a `footprint_changed` flag so
   the edit dialog can re-run the explicit-approval gate when origins differ from the
   previous version; the allowlist is never seeded from that scan (spec §6.2).
@@ -105,9 +111,11 @@ The only way data changes. Route groups:
   bytes, because the two failure modes are not equally bad — a failed *row*
   delete after the bytes are gone leaves a live artifact whose only copy of
   itself no longer exists, which nothing on the instance can repair; a failed
-  *blob* delete after the row is gone leaves unreferenced bytes an operator can
-  sweep. The blob failure still surfaces as a 500 rather than a silent 204: a
-  deletion that left the file on disk must not claim otherwise.
+  *blob* delete after the row is gone leaves unreferenced bytes, which breaks
+  no row. The blob failure still surfaces as a 500 rather than a silent 204: a
+  deletion that left the file on disk must not claim otherwise. What it no
+  longer means is a permanent leak — the store queued those ids in the delete's
+  own transaction (§3.3a), so the drain is retried until it succeeds.
   `DELETE /api/artifacts/:id/widget` removes the detached widget's blob the
   same way, in the same order — detaching is the only exit a widget blob has,
   since the id is otherwise reused for the artifact's life.
@@ -124,6 +132,40 @@ The only way data changes. Route groups:
   rows (av-q0ub): the session supplies both principals §3.3 describes, so a read
   never returns the union of every viewer's state and "erase all" means *mine*,
   not the artifact's.
+- `GET /api/artifacts/:id/export` — the artifact as **one self-contained file**
+  (av-vnkt), with every out-of-line asset folded back in as a `data:` URI. It is
+  the enforcement point for the invariant those assets created: *the URL form is
+  an internal storage and transport representation; the file is the canonical
+  artifact, and it is materialized at every boundary where the artifact leaves
+  the service.* A single file has nowhere else to put bytes, so `data:` and its
+  ~1.33x are the price of the format — paid once, here, rather than on every
+  render as the old inlining did. `internal/export` holds it as a package rather
+  than a handler method because the static build (Exh-avau) is the other caller
+  and must make the same decision the same way. A read of an asset that fails
+  fails the whole export: better that than a file which claims to be portable
+  while pointing at a URL that dies with the instance.
+- `GET /api/artifacts/:id/assets`, `DELETE /api/artifacts/:id/assets/:assetID` —
+  the artifact's out-of-line payloads (av-20fk), metadata only and never bytes.
+  Read-and-delete by design: assets are produced by the ingest vendorer and by
+  nothing else, so a create or update here would be a second way to put arbitrary
+  content behind an artifact's render URL. The delete is the owner's escape hatch
+  for the one case no rule decides — a payload whose feature they edited away.
+- `GET/POST/DELETE /api/artifacts/:id/origins` — per-origin network decisions
+  (av-kmwj). `POST` decides one origin (`allow` | `block`); `DELETE ?origin=…`
+  forgets a decision, returning the origin to undecided. This is the runtime
+  permission prompt's write path (§6), and it exists beside `PATCH` rather than
+  inside it because the two differ in what they can *express*, not only in
+  width: `PATCH` replaces the allow set and deliberately leaves block rows
+  alone, so it can neither record a "don't ask again" nor undo one. The prompt
+  also learns about one blocked origin at a time — restating the whole
+  allowlist from a page that holds no working copy of it would clobber
+  decisions made elsewhere since that page loaded. Entries go through the same
+  `origin.NormalizeOrigin` validation as the allowlist (av-i7hd), for the same
+  reason: an allow row is pasted verbatim into a CSP header. The origin travels
+  as a query parameter on `DELETE`, not a path segment, for the reason
+  `/state` established (av-hh1o). An agent session cannot reach this route:
+  `agentSubResources` is a deny-by-default allowlist, and approving an
+  artifact's own network egress is not a decision model output gets to make.
 - `GET/PUT/DELETE /api/artifacts/:id/widget` — the artifact's gallery-card widget
   (av-fafu). A second document stored beside the artifact's body and hung off the
   artifact rather than made a resource of its own, because it has no identity, no
@@ -140,8 +182,8 @@ The only way data changes. Route groups:
   service token is not a person, and would resolve to the single-user default
   owner. The body must carry the typed confirmation phrase, checked here as well
   as in the page, because a client-side interlock is a courtesy to whoever is
-  clicking and never a control. `Store.DeleteAccount` returns the blob ids whose
-  rows it removed and the handler then deletes those bytes (§3.3, av-7jcq); the
+  clicking and never a control. `Store.DeleteAccount` queues the blob ids whose
+  rows it removed and the handler then deletes those bytes (§3.3a, av-7jcq); the
   instance's last enabled admin is refused (`ErrLastAdmin`).
 - collection/tag CRUD.
 - `GET /api/settings/public` — the instance's own name and description
@@ -157,6 +199,19 @@ The only way data changes. Route groups:
   route `404` — indistinguishable from one that never had it, and unambiguous
   for the caller, since 200-with-empty-strings already means "public, but
   unnamed".
+
+**Allowlist entries are origins, validated here** (av-i7hd). `POST` and
+`PATCH` both run `network_allowlist` through `origin.NormalizeOrigin`, which
+reduces a value to scheme + host + explicit non-default port (lowercased, with
+a trailing dot on the host stripped, and userinfo/path/query/fragment gone) and
+de-duplicates the result. This is validation at the single write path rather
+than a client convention, because the values are pasted straight into the
+render CSP: a path-bearing entry is *path-matched* by CSP, so it would silently
+mean something other than what the approval UI showed, and near-duplicate
+spellings of one host would make "one decision per (artifact, origin)" (§3.3)
+false in practice. A non-origin entry is a `400` naming the value rather than a
+silent truncation to its host — truncating would grant a whole origin from an
+entry the user approved as a single file.
 
 Middleware chain (via `chi`): request logging → auth → owner scoping (`owner_id`)
 → handler. Auth accepts two credentials, in that order of preference: a session
@@ -193,8 +248,9 @@ which queries forgot to scope.
 A read-only surface on `RENDER_ORIGIN` whose entire job is to emit an artifact as an
 executable document with the correct security envelope:
 
-- Looks up the artifact, pulls its body from the blob store, its approved origins
-  (the artifact's `decision='allow'` rows, §3.3), and its current state.
+- Looks up the artifact, pulls its body from the blob store, its origin decisions
+  (§3.3 — the `allow` rows build the CSP, the `block` rows are inlined to mute
+  the runtime prompt, av-kmwj), and its current state.
 - Generates the per-artifact CSP (`connect-src`/`script-src`/`worker-src`/`style-src`/
   `img-src`/`font-src`/`media-src` from the allowlist) and sets it as a response header
   on the document. `connect-src` is the allowlist alone — the storage shim needs no
@@ -211,18 +267,68 @@ executable document with the correct security envelope:
   `<video>`/`<audio>` element can play back a file the artifact loaded locally via
   `<input type=file>` + `URL.createObjectURL`, and `script-src`/`worker-src` always
   carry `blob:`/`data:` so a script or Worker the artifact builds at runtime (the
-  standard ffmpeg.wasm pattern) executes. `worker-src` is spelled out rather than
+  standard ffmpeg.wasm pattern) executes. One source is neither of those two buckets and is
+  called out for it: an artifact's **own asset path** in `connect-src` (av-20fk)
+  is a *system* source, added by the render surface and never by approval. Those
+  are the same bytes that used to sit in the document as `data:` URIs and cost no
+  approval; only the addressing changed, so the question the bucket rule actually
+  asks — can the artifact reach content the user did not approve, or send
+  anything to a third party — has the same answer either way. It is never written
+  to `artifact_network_origins` and never appears in the allowlist editor, so a
+  fully vendored wasm artifact keeps an empty footprint and there is no row a user
+  can revoke to break their own artifact. Keeping that true took an explicit
+  rule once av-oz40 began rewriting *markup* references into the body: the
+  scanner then finds an `<img src>` on the render origin where a CDN used to
+  be, and reported it as an origin to approve. The render origin is therefore
+  dropped from every scan result before it becomes a footprint or an allowlist
+  (`withoutRenderOrigin` in `internal/api/artifacts.go`, matched on canonical
+  spelling rather than bytes, and applied at the write paths too so no client
+  can send one in). Dropping it is not tidiness: an allow row for the render
+  origin widens every directive from `RENDER_ORIGIN/a/<id>/assets/` to the
+  whole origin — read access to every *other* artifact's render document and
+  assets, arrived at by a user answering a question the UI should never have
+  asked. `worker-src` is spelled out rather than
   left to fall back to `script-src` because its absence fails *silently* — the
   `Worker` constructor succeeds, nothing is logged, and the worker body simply never
   runs (av-x01o). Loading a script, worker, stylesheet, image, font, or media file
   *from a remote origin* still requires that origin on the allowlist — the network
   boundary is unchanged; only inlined/local, no-egress sources are permitted by
   default.
+- Sets a per-artifact **`Permissions-Policy`** naming `camera` and
+  `microphone`, built from the artifact's two device approvals (av-mv3k):
+  `(self)` when approved, `()` when not. This is the one capability approval that
+  is enforced on a *top-level* render rather than only bridged in the frame, and
+  the reason is that a browser permission is granted per **origin** while every
+  artifact shares one render origin — without it, a visitor who allowed the
+  camera for one artifact opened directly has allowed it for every artifact on
+  that origin, with no per-artifact decision in the loop. Permissions Policy is
+  per *document*, so it splits that single origin grant back into one decision
+  per artifact, enforced by the browser even when the origin's permission is
+  already granted. Only those two features are named; every other
+  Permissions-Policy feature keeps its default, so this header answers one
+  question and does not become a second policy surface beside the CSP. A widget
+  render is denied both devices whatever its artifact holds (§5.5's "strict
+  subset", applied to a header).
 - Injects the **render preamble** as the first `<head>` script(s) — the **storage
   shim** with the artifact's state **inlined** into it so `getItem` is correct
-  synchronously, plus the download/clipboard **capability bridges** and the
-  `data:` fetch **compatibility shim** — then the artifact body. (Umbrella/family
-  taxonomy: `security.md` §4.)
+  synchronously, plus the download/clipboard/external-link **capability
+  bridges**, the camera/microphone **capability gate**, the `data:` fetch
+  **compatibility shim**, the **out-of-line asset manifest**, and the **network
+  permission reporter** — then the artifact body. (Umbrella/family taxonomy:
+  `security.md` §4.)
+- The network permission reporter (av-kmwj) is a `securitypolicyviolation`
+  listener that posts CSP-blocked origins to the host frame, which prompts in
+  app chrome. It reports only violations the prompt could actually fix: not a
+  directive this policy does not build from the allowlist (an `<iframe>` under
+  `default-src 'none'`, say), and not an origin the policy already carries —
+  that is a redirect, whose destination CSP deliberately withholds, so it goes
+  to the capability banner with an explanation instead. Both origin lists are
+  inlined for it: the allowlist so it can recognise the redirect case, and the
+  `decision='block'` origins so a refused one is never re-reported. Each
+  origin is handled once per load. Like the
+  bridges it is framed-only and absent from a widget render; it is also absent
+  for an anonymous viewer, who could not record either answer. Full policy:
+  `security.md` §2.1.
 - The `data:` fetch shim (agaf-02xs) answers `fetch()` of a `data:` URL from a
   Response built in the frame rather than letting it reach the network service.
   WebKit refuses large `data:` fetches from an opaque-origin sandbox, so an
@@ -231,15 +337,33 @@ executable document with the correct security envelope:
   frame already holds, and decoding it locally is strictly less work than the
   path it replaces. Framed-only, and **ordering-sensitive**: it must install
   before any artifact script, since a wrapper only shadows `fetch` for callers
-  that run after it. Note the snapshot vendorer (§3.4a) injects a fetch wrapper
-  of its own into the artifact body, and that one deliberately decodes its
-  manifest entries itself rather than delegating a `data:` URI back to `fetch` —
-  so each is correct standing alone, and neither's behaviour is contingent on the
-  other having installed. What still needs this shim is every *other* `data:`
-  fetch in the frame: one the artifact's own code performs, or one a future
-  wrapper delegates.
+  that run after it. It is one of two `fetch` wrappers the preamble installs —
+  the asset manifest below is the other — and their order is now explicit rather
+  than incidental: the manifest installs last and therefore wraps this one. What
+  needs this shim is every `data:` fetch in the frame the manifest does not
+  answer: one the artifact's own code performs, or one a future wrapper delegates.
+- The **out-of-line asset manifest** (av-20fk) redirects the page's own `fetch`
+  of each vendored payload to that artifact's asset route, matching on the
+  *resolved* URL at call time so it survives minification and catches URLs the
+  page assembles itself. It is injected here rather than stored in the body,
+  which is what makes an agent's wholesale body rewrite unable to break asset
+  loading, and what keeps `artifact_assets` the single source of truth. Widget
+  renders get it too: the `WIDGET` narrowing exists to drop *authority* — the
+  capability bridges — and resolving an artifact's own bytes grants none.
 - Sets `Cache-Control: no-store` — the document is dynamic (inlined state + per-artifact
   CSP) and must never be served stale from a cache.
+- Serves one out-of-line asset at `/a/:id/assets/:assetID` (av-20fk). This is the
+  single exception to both rules above it: **no render token, and not `no-store`**.
+  Both follow from the same fact — it serves immutable bytes and nothing else, no
+  state and no policy — and they are linked, because a short-lived token in the URL
+  would change it on every render and destroy exactly the cross-view caching that
+  moving these payloads out of the body was for. The credential is the asset id:
+  128 random bits, reachable only by someone who already knows the artifact id too,
+  and looked up *under* that artifact so one artifact can never address another's
+  bytes. It answers `Access-Control-Allow-Origin: *` (the sandbox's opaque origin
+  sends `Origin: null`, which nothing else matches) with the payload's real
+  `Content-Type`, and it **must never redirect** — the CSP source permitting it is
+  path-scoped, and CSP drops path matching across a redirect.
 - Is **gzip-compressed** when the client accepts it (av-f9b2). This is the surface where
   compression earns the most: `no-store` means there is no cache to amortise a render
   document across views, so every view pays its full size on the wire — and a snapshot
@@ -309,7 +433,8 @@ Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
         list/set/delete per-origin network decisions;
         users and sessions, including local credentials (§3.8),
         the admin mutations over them (§3.8a)
-        and the per-owner entitlements they carry (§3.8c)
+        and the per-owner entitlements they carry (§3.8c);
+        the blob deletion queue (§3.3a)
 Blob:   put/get/delete artifact bodies by id
 ```
 
@@ -362,9 +487,19 @@ carrying a principal is av-c5aq.
 - **Network origin decisions** → `artifact_network_origins`, one row per
   (artifact, origin) — the primary key is what makes "one decision per origin" a
   schema invariant rather than a convention, and `ON DELETE CASCADE` retires the
-  rows with the artifact. `decision='allow'` is the only input to the render CSP;
+  rows with the artifact. The primary key only delivers that invariant if the
+  value in the row *is* an origin, so the store normalizes it too
+  (`origin.NormalizeOrigin`, av-i7hd): the API's 400 is the user-facing rule and
+  this is the same rule as a store invariant, closing it to any future caller.
+  Rows written before that validation existed are repaired once by a Go
+  migration (version 23) that normalizes them and collapses the resulting
+  duplicates — keeping `block` over `allow` on a collision, so a repair can
+  narrow a policy but never widen one, and dropping values with no origin in
+  them at all. `decision='allow'` is the only input to the render CSP;
   `decision='block'` records a "don't ask again" answer for the runtime prompt
-  (exhibit-fr7) and never widens the policy. A caller that knows only the
+  (av-kmwj) and never widens the policy — the render surface inlines those
+  rows into the preamble so the prompt stays quiet, which is the only thing
+  they are read for. A caller that knows only the
   allowlist replaces the allow rows without touching block rows, so a save from
   the edit page can never silently clear a decision it never displayed.
 - **Search** → an FTS5 table over artifact title, the visible text of the
@@ -379,6 +514,17 @@ carrying a principal is av-c5aq.
   whitespace-separated token is emitted as a quoted phrase with a trailing
   `*`, so prefix matching is preserved while `<script>`, `a:b`, or a stray
   quote search for themselves instead of failing the query.
+- **Out-of-line assets** → `artifact_assets`, one row per vendored payload
+  (av-20fk), with the bytes in the blob store. Content-addressed **per owner,
+  never globally**: dedup inside a library is free, but sharing bytes across
+  owners would let deleting one account strip a payload out of another's
+  artifact unless the refcount were exactly right in every delete path forever.
+  Deletability appeals only to what was recorded — the artifact went, a
+  generation was superseded, or the owner asked — and **never** to whether the
+  body still contains a matching `fetch` literal: the render manifest matches
+  resolved URLs at call time, so a rewritten body can consume an asset whose
+  literal is long gone. Enqueuing a blob for deletion is refcounted inside the
+  removing transaction for the same reason sharing exists.
 - **Bodies** → **filesystem or an S3-compatible bucket, selected by
   configuration** (av-52ll). Both implement the same three methods and nothing
   above the interface can tell which is behind it — that substitutability *is*
@@ -454,10 +600,15 @@ carrying a principal is av-c5aq.
   `blob_sizes` to `blob_references`, so there is no counter for a caller to
   forget to decrement — deleting an artifact stops its bytes being charged in
   the same statement that deletes it, and `DELETE /api/account` reaches zero by
-  construction. The view is also the extension point: when av-20fk's refcounted
-  `artifact_assets` land, a migration replaces it with one that unions the asset
-  references in, and the usage query, the recompute pass and the prune all pick
-  them up unchanged, because none of them knows what a reference is made of.
+  construction. The view is also the extension point, and av-20fk is the case it
+  was built for: migration 026 replaced it with one that unions the asset
+  references in — through `artifacts`, since `artifact_assets` has no owner of
+  its own — and the usage query, the recompute pass, the backfill and the
+  unreferenced-size prune all picked them up with no code change, because none
+  of them knows what a reference is made of. That was not optional bookkeeping:
+  a vendored payload is the largest thing the system stores, so leaving it out
+  charged it to nobody, and — worse — the prune would have dropped the recorded
+  length of a payload a second artifact in the same library still used.
 
   **A shared blob is charged at full size to every referencing owner**, and once
   to each of them (the readers take `DISTINCT blob_id` per owner — the charge is
@@ -493,10 +644,81 @@ carrying a principal is av-c5aq.
 
   Nothing here refuses anything. The number is read by `/profile` and the CLI
   and by nothing that can say no; limits over it are av-10bw.
+- **Condemned blob ids** → `pending_blob_deletions`, the deletion queue (§3.3a).
 
 Because handlers never touch SQLite or the filesystem directly, swapping the metadata
 engine (libSQL/Turso) is a backend implementation change behind a stable interface —
 and the blob backend already is one.
+
+### 3.3a Blob deletion queue (av-8gyd)
+
+Rows and bytes live in two stores that cannot commit together, and the row has
+to go first (above). That leaves a window in which a crash used to leak a file
+permanently, with nothing able to name it afterwards. The fix is not to go
+looking for strays later — the deleting code already knows which blobs it meant
+to remove, so it writes that down:
+
+- The transaction that removes an artifact, or detaches a widget, or erases an
+  account also inserts those blob ids into `pending_blob_deletions`. One
+  transaction, so the intent is recorded exactly when the last reference
+  disappears — which is also the last moment anything could name them. "Those
+  blob ids" includes an artifact's out-of-line assets (av-20fk), which is the
+  one arm that is rows rather than columns and the one carrying most of the
+  bytes: an account erasure that collected only bodies and widgets would leave
+  every vendored payload on the volume with nothing left able to name it.
+- **The enqueue is conditional on a refcount taken in that same transaction**:
+  drop the row, count the rows still referencing that blob id, enqueue only on
+  zero. Two artifacts in one library can legitimately share a blob, so an
+  unconditional enqueue would strip the payload out of the survivor; doing the
+  count inside the transaction is what makes the decision race-free. The count
+  is one query (`internal/store/blobqueue.go`), which is the place a future
+  blob-referencing table has to be added to.
+- After the commit the caller deletes the files, then their queue rows, then
+  the lengths recorded for the ids that actually went (av-fw1b) — the drain is
+  the right place for that and the only one, since a blob reaches this queue
+  precisely when the last row referencing it disappeared, so by then there is
+  nobody left to charge. A crash anywhere leaves the queue rows in place, and
+  `Blob.Delete` is idempotent for a missing id (av-7jcq), so repeating the work
+  costs nothing and needs no compensating existence check.
+- **The drain rechecks before it unlinks**, and an id that has acquired a
+  reference again leaves the queue with its bytes untouched. A queued id says
+  nothing referenced those bytes *when they were condemned*, which is a weaker
+  claim than "nothing references them now": asset blob ids are content
+  addresses, so re-ingesting the same payload names the very id sitting in the
+  queue, and a drain that failed leaves its row for a startup that may be many
+  ingests later. The recheck is the enqueue's own refcount, embedded in the
+  `DELETE` of the queue row so check and retirement are one statement.
+- **The recheck and the unlink are one critical section**, per blob id
+  (`internal/store/bloblock.go`). A recheck is only true of the instant it
+  ran, and the unlink happens outside SQLite, so without exclusion an ingest
+  can write the bytes and commit a row naming them in the gap between the two
+  — and the delete then lands on a payload something references. The ingest
+  side holds the same id's lock from its first written byte to the commit of
+  the referencing row, so whichever side wins, the loser sees a settled world:
+  either a reference the recheck finds, or bytes it must write again. Only
+  content-addressed ids can lose that race, since only they can be referenced
+  again once condemned; a body or widget id is a fresh UUID and needs nothing.
+
+What the commit makes durable is therefore the *intent*, not the outcome, and
+everything after it is a retry of the same idempotent work — so there is no
+state a crash can leave that a later drain cannot finish.
+
+**When the drain runs.** Synchronously after a delete, for only the ids that
+operation enqueued (bounded and fast, so no request ever walks a backlog), and
+over the whole queue at startup, which is where crash leftovers are reclaimed —
+a crashed process gets restarted, so the restart is the natural pairing. No
+ticker, no worker pool, no scheduler; the queue is a plain table in the same
+database because sharing a transaction with the row delete *is* the mechanism,
+and an external queue would reintroduce the two-store atomicity problem one
+layer up.
+
+**No full scan, anywhere.** A reconciler that walks the blob store and infers
+deletability from a missing reference is the wrong shape: a bug in the
+inference deletes live artifacts, and its cost grows with the library. The
+queue inverts both — it holds only ids something already decided to delete, so
+a bug in the drain can reach nothing but condemned bytes, and it costs nothing
+when idle because it is normally empty. Reclamation is automatic and invisible:
+there is no operator command, and nothing to run by hand.
 
 ### 3.4 Ingest scanner
 
@@ -522,6 +744,16 @@ promise even after the source site rots:
 - **HTML inlining** walks the parsed tree and folds each fetchable reference into the
   document: `<img>`/`<source>` (and `srcset`), icon `<link>`s → `data:` URIs;
   `<script src>` → inline `<script>`; `<link rel=stylesheet>` → inline `<style>`.
+  Above `snapshot.InlineDataURIMaxBytes` the asset instead becomes an out-of-line
+  blob and the reference is rewritten to its asset URL (av-oz40). It is a
+  threshold rather than a rule because both directions have a real cost: inlining
+  is paid at ~1.33x in every place the body travels, while externalizing a
+  200-byte favicon buys a second HTTP request for nothing. Unlike the runtime
+  pass this one *rewrites the document*, and must: an `<img src>` is not loaded
+  through `window.fetch`, so there is nothing to intercept at render. That is
+  safe here in a way it would not have been there — the URL *is* the reference,
+  so an agent preserves it like any attribute, where the runtime pass's injected
+  script could plausibly be dropped as noise.
 - **CSS inlining** recurses through `url()` and `@import` chains (each sheet re-based
   against its own URL), inlining as `data:` URIs with cycle and depth guards.
 - **Runtime-asset inlining** (av-ghvs) is a second pass over the markup-inlined
@@ -542,20 +774,25 @@ promise even after the source site rots:
   deliberately left alone: native module loading never consults `window.fetch`, so a
   vendored copy could never be served to the module loader — those origins belong to
   the `script-src` allowlist, where the footprint reports them.
-  Substitution is by **interception, not source rewriting**: the bytes go into a
-  manifest keyed by absolute URL, and a small `window.fetch` wrapper injected at the
-  top of `<head>` consults it at call time. That survives minification, which a
-  literal rewrite could not. A runtime-constructed URL is served only when that same
-  absolute URL also appears as a literal fetch ref somewhere in the page — manifest
-  entries come from literals alone, so a URL assembled from parts the page never
-  spells out still reaches the network. The
-  manifest values are `data:` URIs so the synthetic response carries a real
-  `Content-Type` — `WebAssembly.instantiateStreaming` rejects anything that is not
-  exactly `application/wasm`. No CSP change is needed: `connect-src` already carries
-  `data:` unconditionally as a local, no-egress source, so a vendored artifact runs
-  with an empty allowlist. Because the page's original literal is left in place, the
-  scan still reports that origin; over-reporting fails safe (it asks about an origin
-  no longer contacted rather than staying silent about one that is).
+  The pass **collects; it does not transform** (av-20fk). Each payload becomes a
+  blob of its own, recorded in `artifact_assets`, and the stored body keeps the
+  fetch literals it was ingested with — there is no ingest-time body transform at
+  all. Substitution moved to render time (§3.2), and two properties follow that
+  are the reason for it: an agent rewriting the whole document — the normal
+  operation in the preview loop — cannot break asset loading, because there is
+  nothing in the body to break; and the assets table is the single source of
+  truth rather than being copied into every stored body as ~1.33x base64.
+  The alternative had put a 16 MiB payload into the agent's context as ~21 MB on
+  every read *and* every write, made the edit page slow, and — since the render
+  document is necessarily `no-store` — re-transferred it on every single view.
+  Substitution remains by **interception, not source rewriting**, wherever it
+  happens: a runtime-constructed URL is served only when that same absolute URL
+  also appears as a literal fetch ref somewhere in the page, since assets come
+  from literals alone. Note the direction of that limit — it constrains what is
+  *collected*, not what is *consumed*, which is why a vanished literal can never
+  authorise deleting an asset (§3.3). Because the page's original literal is left
+  in place, the scan still reports that origin; over-reporting fails safe (it asks
+  about an origin no longer contacted rather than staying silent about one that is).
 - **Partial failure is data, not an error.** Any reference that can't be inlined (404,
   over a limit, blocked address, runtime-constructed URL) keeps its original value and
   is recorded as a typed `FetchError`; the rest of the page is still vendored. The
@@ -1101,7 +1338,9 @@ no second guard here to get wrong.
     learning that *after* typing a confirmation phrase is a worse way to learn
     it), and an instance with no login configured has no account to act on.
   Erasure is rows *and* bytes: `DeleteAccount` collects the blob ids inside its
-  transaction and the handler removes those files (av-7jcq). Which tables it
+  transaction and queues them there too, so the handler removing those files is
+  work the next startup repeats if this process does not finish it (§3.3a).
+  Which tables it
   deletes and which the schema's cascades and migration 014's `users` trigger
   delete for it is written down in `sqlite_account.go` and walked by a tripwire
   test — a table added without a decision about account deletion fails the suite.
@@ -1234,7 +1473,13 @@ flowchart TD
     load --> fetch["artifact fetch to origin X"]
     fetch --> fetchQ{"origin on allowlist?"}
     fetchQ -->|yes| fPermit["browser permits"]
-    fetchQ -->|no| fBlock["browser blocks (CSP); UI prompts<br/>user &rarr; approve &rarr; PATCH allowlist"]
+    fetchQ -->|no| fBlock["browser blocks (CSP); the preamble posts<br/>the blocked origin to the host frame"]
+    fBlock --> fPrompt{"already refused, or<br/>not an allowlist directive?"}
+    fPrompt -->|yes| fQuiet["stays silent &mdash; no prompt"]
+    fPrompt -->|no| fAsk{"host prompts in app chrome<br/>(origin + directive)"}
+    fAsk -->|Allow| fAllow["POST /origins allow &rarr; frame reloads<br/>via /open &rarr; new CSP, request retries"]
+    fAsk -->|Block once| fOnce["dismiss; the next load asks again"]
+    fAsk -->|Don't ask again| fNever["POST /origins block &rarr; suppresses the<br/>prompt, never widens the CSP"]
 
     load --> dl["artifact download<br/>blob:/data: anchor, clicked or click()ed"]
     dl --> dlInt["download bridge intercepts;<br/>postMessage filename + bytes to host"]
@@ -1253,6 +1498,15 @@ flowchart TD
     cbPrompt -->|approve| cbOK["PATCH clipboard_approved &rarr;<br/>op &rarr; result"]
     cbPrompt -->|deny| cbNo["Promise rejects (NotAllowedError)"]
     cb --> cbNative["native Ctrl/Cmd+V paste &rarr;<br/>browser event, unaffected"]
+
+    load --> gm["navigator.mediaDevices<br/>getUserMedia(constraints)"]
+    gm --> gmInt["media GATE replaces the API;<br/>no device is reachable in this frame"]
+    gmInt --> gmQ{"those devices<br/>already approved?"}
+    gmQ -->|yes| gmBanner["reject + &quot;open it directly&quot; banner"]
+    gmQ -->|first attempt| gmPrompt{"host prompts<br/>(artifact + devices)"}
+    gmPrompt -->|approve| gmOK["PATCH camera_approved /<br/>microphone_approved &rarr; open top-level &rarr; reject here"]
+    gmPrompt -->|deny| gmNo["Promise rejects (NotAllowedError)"]
+    gmTop(["top-level render / share"]) --> gmNative["native getUserMedia, enforced by the<br/>artifact's Permissions-Policy header"]
 
     load --> lk["external http(s) anchor<br/>clicked (target=_blank or plain)"]
     lk --> lkInt["link bridge intercepts;<br/>postMessage URL to host"]
@@ -1285,6 +1539,26 @@ id so the returned Promise settles with the host's answer; a denial rejects with
 a `NotAllowedError` the artifact handles like any blocked clipboard call. Native
 keyboard paste is a browser event, not an API call, so it is never bridged. See
 `security.md` §4 for the full policy.
+
+Camera and microphone (`camera_approved`, `microphone_approved`) take the same
+first-use decision through the same channel and are deliberately **not** a
+bridge: nothing re-grants the capability in the frame, because nothing can.
+`getUserMedia` on the sandbox's opaque origin throws `SecurityError` before any
+permission is consulted (an `allow=` delegation does not help — it is refused
+with Chrome's auto-accept flag set), and a camera `MediaStreamTrack` is not a
+transferable object in any shipping engine, so "acquire on the app origin and
+transfer the payload in" has nothing to transfer. The frame therefore posts the
+devices its constraints named and *settles* — rejecting with a `DOMException`
+rather than hanging on a stream that is not coming. The host owns the prompt
+(naming exactly those devices, persisting only those) and, on approval, opens
+the top-level render, which is where the grant is spent: that document's
+`Permissions-Policy` header (§3.2) is built from the same two flags, so the
+approval the prompt records is the approval a direct open honors. Once approved,
+a later request in the preview raises the capability banner instead of prompting
+again. There is no allowlist interaction; a device is local I/O, and captured
+bytes leave the frame only where the artifact's CSP already lets anything leave
+— `connect-src` for a fetch, XHR or WebSocket, `form-action` for a submission,
+`img-src` and the rest for a URL the artifact smuggles them into.
 
 External-link navigation rides the same bridge (`links_approved`). The sandbox
 deliberately omits `allow-popups`, so a `target="_blank"` anchor is dropped and a

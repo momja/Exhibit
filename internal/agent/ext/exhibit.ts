@@ -184,16 +184,64 @@ export default function (pi: ExtensionAPI) {
 			// what stops a model from being talked into naming one (av-e0yj).
 			const r = await api("PATCH", "/api/artifacts/" + encodeURIComponent(target), patch);
 			const a = r.artifact || {};
-			const footprint: string[] = r.network_footprint || [];
-			return ok(`Updated artifact ${a.id || target} ("${a.title || ""}").`, {
+			// Report only the origins the rewritten body leaves *blocked*: an
+			// already-approved origin is not blocked, so re-flagging it would be a
+			// false alarm the create path never has to filter — a brand-new
+			// artifact starts with nothing approved (av-hrtv).
+			const approved: string[] = a.network_allowlist || [];
+			const footprint: string[] = (r.network_footprint || []).filter((o: string) => !approved.includes(o));
+			let text = `Updated artifact ${a.id || target} ("${a.title || ""}").`;
+			if (footprint.length > 0) {
+				text += ` Network footprint (blocked until the user approves): ${footprint.join(", ")}.`;
+			}
+			return ok(text, {
 				exhibit: "artifact_saved",
 				action: "updated",
 				artifactId: a.id || target,
 				title: a.title,
 				footprint,
+				// Whether the new body's origins differ from the previous body's —
+				// a different question from `footprint` above, which is about
+				// approval rather than change.
+				footprintChanged: r.footprint_changed === true,
 			});
 		},
 	});
+
+	/**
+	 * Describe the artifact's out-of-line assets (av-20fk) — never their bytes.
+	 *
+	 * These payloads (wasm modules, Emscripten heaps) used to sit in the body as
+	 * base64, which is what made a vendored artifact unreadable: a single 16 MiB
+	 * module arrived as ~21 MB of context on every read and had to be sent back
+	 * whole to change one line. They now live outside the body entirely.
+	 *
+	 * The model still needs to know they exist. Without this it reads a bare
+	 * `fetch('/app.wasm')` in a document with no such file and reasonably
+	 * concludes the code is broken — the redirect to the stored payload is
+	 * injected at render, so nothing in the source it is holding explains it.
+	 * Listing them is enough; the bytes are opaque and there is nothing an LLM
+	 * can do with them.
+	 */
+	async function assetSummary(artifactId: string): Promise<string> {
+		try {
+			const r = await api("GET", "/api/artifacts/" + encodeURIComponent(artifactId) + "/assets");
+			const assets = r.assets || [];
+			if (assets.length === 0) return "assets: none";
+			const lines = assets.map(
+				(a: any) => `  - ${a.source_url} (${a.content_type}, ${a.size_bytes} bytes)`,
+			);
+			return (
+				"assets: these URLs are served from stored copies at render time, so the fetches\n" +
+				"below work even though the files are not in the source. Leave the fetch calls as\n" +
+				"they are; the redirect is injected outside this document.\n" +
+				lines.join("\n")
+			);
+		} catch {
+			// Never fail a read over metadata: the source is what was asked for.
+			return "assets: unavailable";
+		}
+	}
 
 	pi.registerTool({
 		name: "get_artifact",
@@ -207,9 +255,10 @@ export default function (pi: ExtensionAPI) {
 		async execute() {
 			const target = requireBoundArtifact();
 			const a = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "?body=true");
-			const meta =
+			let meta =
 				`id: ${a.id}\ntitle: ${a.title}\n` +
 				`allowlist: [${(a.network_allowlist || []).join(", ")}]`;
+			meta += "\n" + (await assetSummary(target));
 			return ok(fenced("current source of the artifact this session is editing", meta + "\n\n" + (a.body || "")), {
 				exhibit: "artifact_read",
 				artifactId: target,

@@ -9,12 +9,13 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/origin"
 	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/snapshot"
 	"github.com/momja/Exhibit/internal/store"
@@ -176,25 +177,36 @@ var newSnapshotFetcher = func(pageURL string) (*snapshot.Fetcher, error) {
 // per-asset failures are recorded in the report with the rest of the page
 // still vendored. ResidualOrigins is left for the caller, which computes it
 // from the final document.
-func snapshotBody(ctx context.Context, pageURL, body string) (string, *snapshotReport) {
+// Vendored payloads come back separately, to be stored as blobs of their own
+// once the artifact row exists rather than folded into the body. They arrive by
+// two routes, because the two passes cannot substitute the same way: the markup
+// walker rewrites its references through `sink` as it goes (an <img src> is not
+// fetch-loaded, so there is nothing to intercept), while the runtime pass leaves
+// the document untouched and is redirected at render.
+func snapshotBody(ctx context.Context, pageURL, body string, sink snapshot.AssetSink) (string, []snapshot.RuntimeAsset, *snapshotReport) {
+	var assets []snapshot.RuntimeAsset
 	report := &snapshotReport{VendoredURLs: []string{}}
 	f, err := newSnapshotFetcher(pageURL)
 	if err != nil {
 		report.Error = err.Error()
-		return body, report
+		return body, nil, report
 	}
-	out, fetchErrs, err := snapshot.InlineHTMLAssets(ctx, f, body)
+	out, fetchErrs, err := snapshot.InlineHTMLAssets(ctx, f, body, sink)
 	if err != nil {
 		report.Error = err.Error()
-		return body, report
+		return body, nil, report
 	}
 	// Second pass, on the same fetcher so both share one budget, one dedupe
-	// cache and one Vendored() total: fold in the binary payloads the page
-	// fetches from JavaScript, which the markup walker above cannot see. A
-	// transform error here is not fatal either — keep the markup-vendored
-	// document and report the runtime failures alongside it.
-	if runtimeOut, runtimeErrs, rerr := snapshot.InlineRuntimeAssets(ctx, f, out); rerr == nil {
-		out = runtimeOut
+	// cache and one Vendored() total: collect the binary payloads the page
+	// fetches from JavaScript, which the markup walker above cannot see.
+	//
+	// Unlike the markup pass this one does not touch the document (av-20fk).
+	// The payloads become blobs of their own and the render surface injects
+	// the manifest that redirects the fetch, so the stored body keeps the
+	// literals it was ingested with. A transform error here is not fatal
+	// either — keep the markup-vendored document and report the failures.
+	if collected, runtimeErrs, rerr := snapshot.CollectRuntimeAssets(ctx, f, out); rerr == nil {
+		assets = collected
 		fetchErrs = append(fetchErrs, runtimeErrs...)
 	} else {
 		report.Error = rerr.Error()
@@ -208,7 +220,88 @@ func snapshotBody(ctx context.Context, pageURL, body string) (string, *snapshotR
 		}
 		report.Failures = append(report.Failures, fail)
 	}
-	return out, report
+	return out, assets, report
+}
+
+// persistRuntimeAssets stores each collected payload as its own blob and makes
+// them the artifact's current asset generation, draining whatever the previous
+// generation left behind.
+//
+// It runs after the artifact row exists, because an asset row references it.
+// A failure here is reported but never fails the ingest: the artifact is
+// already stored and usable, and an asset that did not land shows up the same
+// way an un-vendored one always has — the page's own fetch reaches the network
+// and the allowlist governs it.
+func (ro *Router) persistRuntimeAssets(ctx context.Context, ownerID int64, artifactID string, collected []snapshot.RuntimeAsset) error {
+	if len(collected) == 0 {
+		return nil
+	}
+	generationID, err := store.NewGenerationID()
+	if err != nil {
+		return err
+	}
+
+	// Content-addressed per owner, so one library that loads the same wasm
+	// from two artifacts stores it once — and so deleting one owner's account
+	// can never reach another's bytes.
+	blobIDs := make([]string, len(collected))
+	for i, c := range collected {
+		blobIDs[i] = store.AssetBlobID(ownerID, c.Body)
+	}
+
+	// Held from the first byte written to the commit that references it. A
+	// content address is exactly the id the deletion queue may be holding from
+	// an earlier generation, and the drain's recheck-then-unlink is not atomic
+	// with respect to this write: without the lock a drain can pass its
+	// recheck, watch this ingest commit, and then delete the payload the new
+	// row names (store/bloblock.go). The reclaim below is deliberately outside
+	// it — that is the drain, and it takes the same locks.
+	queued, err := func() ([]string, error) {
+		unlock := ro.cfg.Store.LockBlobs(blobIDs...)
+		defer unlock()
+
+		rows := make([]store.ArtifactAsset, 0, len(collected))
+		for i, c := range collected {
+			// The markup pass already minted one, because the URL it wrote into
+			// the document contains it; the runtime pass takes one here.
+			assetID := c.AssetID
+			if assetID == "" {
+				minted, err := store.NewAssetID()
+				if err != nil {
+					return nil, err
+				}
+				assetID = minted
+			}
+			// Through the write funnel like every other blob, so the payload is
+			// charged to whoever stored it (av-fw1b). An asset is the one blob
+			// whose length is not the artifact's own, and it is by far the
+			// largest — a vendored wasm module is most of what a snapshot
+			// weighs — so a write that skipped the funnel here would leave the
+			// number wrong by more than everything else combined.
+			if err := putBlob(ctx, ro.cfg.Store, ro.cfg.Blob, blobIDs[i], bytes.NewReader(c.Body)); err != nil {
+				return nil, fmt.Errorf("store asset %s: %w", c.SourceURL, err)
+			}
+			rows = append(rows, store.ArtifactAsset{
+				ID:          assetID,
+				SourceURL:   c.SourceURL,
+				BlobID:      blobIDs[i],
+				ContentType: c.ContentType,
+				SizeBytes:   int64(len(c.Body)),
+			})
+		}
+		return ro.cfg.Store.ReplaceArtifactAssets(ctx, ownerID, artifactID, generationID, rows)
+	}()
+	if err != nil {
+		return err
+	}
+	// Logged, not returned: the superseded bytes are still condemned in the
+	// queue and the next startup finishes the job, so failing the ingest over
+	// them would trade a stored artifact for a delayed unlink.
+	if err := ro.reclaimBlobs(ctx, queued); err != nil {
+		slog.WarnContext(ctx, "reclaim superseded asset blobs",
+			slog.String("artifact_id", artifactID), slog.String("err", err.Error()))
+	}
+	return nil
 }
 
 func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
@@ -254,9 +347,18 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		req.Tier = store.Tier1
 	}
 
+	// The artifact id is minted here rather than after the transform, because
+	// the markup pass rewrites references to their final asset URLs as it
+	// walks — and those URLs contain this id. Nothing is persisted under it
+	// until PutArtifact below, so an ingest that fails leaves nothing behind.
+	ownerID := ownerIDFromCtx(r.Context())
+	id := uuid.New().String()
+
 	var snapReport *snapshotReport
+	var runtimeAssets []snapshot.RuntimeAsset
+	collector := newAssetCollector(ro.cfg.RenderOrigin, id)
 	if req.Snapshot {
-		req.Body, snapReport = snapshotBody(r.Context(), req.URL, req.Body)
+		req.Body, runtimeAssets, snapReport = snapshotBody(r.Context(), req.URL, req.Body, collector.sink)
 	}
 
 	// Scan for network footprint. A URL ingest resolves relative references
@@ -266,7 +368,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	// keeps its empty footprint.
 	var footprint []string
 	if req.URL != "" {
-		footprint = scanner.ScanWithBase(req.Body, req.URL)
+		footprint = ro.withoutRenderOrigin(scanner.ScanWithBase(req.Body, req.URL))
 		// Option A fallback (exhibit-lwb.6): relative references that survive
 		// ingest — snapshot off, failed, or partial — would otherwise resolve
 		// against the render origin and 404. The injected base points them
@@ -274,14 +376,12 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		// allowlist's decision.
 		req.Body = snapshot.InjectBaseHref(req.Body, req.URL)
 	} else {
-		footprint = scanner.Scan(req.Body)
+		footprint = ro.withoutRenderOrigin(scanner.Scan(req.Body))
 	}
 	if snapReport != nil {
 		snapReport.ResidualOrigins = footprint
 	}
 
-	ownerID := ownerIDFromCtx(r.Context())
-	id := uuid.New().String()
 	blobID := uuid.New().String()
 
 	// Store the artifact body
@@ -297,10 +397,23 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	// approved the render CSP stays connect-src 'none' and the artifact is
 	// network-inert. See spec §6.2 ("Nothing is rendered with network access
 	// until they decide").
-	allowlist := req.NetworkAllowlist
-	if allowlist == nil {
-		allowlist = []string{}
+	// Whatever the caller approved must be an origin before it is stored: the
+	// allowlist is pasted verbatim into the render CSP, where a path-bearing or
+	// oddly-spelled entry means something other than what the approval UI showed
+	// (av-i7hd). Rejecting names the value so the client can point at it.
+	allowlist, err := origin.NormalizeOrigins(req.NetworkAllowlist)
+	if err != nil {
+		// JSON, like every other client-facing error the gallery pages read:
+		// the page shows data.error, so the named entry reaches the user.
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
+	// After normalization, because that is what makes the comparison exact.
+	// Dropped rather than refused: an allow row for the render origin would
+	// widen the CSP from this artifact's own asset path to the whole origin
+	// (withoutRenderOrigin), and a client that sent one was echoing a
+	// footprint rather than asking for cross-artifact reach.
+	allowlist = ro.withoutRenderOrigin(allowlist)
 
 	now := time.Now().UTC()
 	a := &store.Artifact{
@@ -319,6 +432,19 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	if err := ro.cfg.Store.PutArtifact(r.Context(), a); err != nil {
 		serverError(w, r, "store artifact", err)
 		return
+	}
+
+	// Assets go after the row they reference. Never fatal (av-20fk): a
+	// payload that did not land leaves the page's own fetch to reach the
+	// network, which is exactly where it was before any of this existed.
+	if err := ro.persistRuntimeAssets(r.Context(), ownerID, id, collector.merge(runtimeAssets)); err != nil {
+		slog.WarnContext(r.Context(), "store runtime assets",
+			slog.String("artifact_id", id), slog.String("err", err.Error()))
+		if snapReport != nil {
+			snapReport.Failures = append(snapReport.Failures, snapshotFailure{
+				Kind: "asset_store", Detail: err.Error(),
+			})
+		}
 	}
 
 	// A create-mode agent session binds here, to the id this handler just
@@ -391,17 +517,37 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The capability-bridge approval flags (downloads_approved,
-	// clipboard_approved, links_approved) are strict booleans; reject anything
+	// The capability-bridge approval flags are strict booleans; reject anything
 	// else up front so a bad PATCH is a 400, not a stored value that later
-	// fails to scan.
-	for _, field := range []string{"downloads_approved", "clipboard_approved", "links_approved"} {
+	// fails to scan. The list is store.ApprovalColumns rather than a literal
+	// repeated here: the store refuses a non-bool for exactly these columns, and
+	// a capability added to one list but not the other would be accepted by this
+	// handler and then rejected (or stored) one layer down.
+	for _, field := range store.ApprovalColumns {
 		if v, ok := updates[field]; ok {
 			if _, isBool := v.(bool); !isBool {
 				http.Error(w, field+" must be a boolean", http.StatusBadRequest)
 				return
 			}
 		}
+	}
+
+	// The allowlist goes through the same origin normalization as ingest, for
+	// the same reason: this is the single write path, and the values land in a
+	// CSP header (av-i7hd). A rejected entry is named in the 400 so the edit
+	// page can point at the row the user typed.
+	if v, ok := updates["network_allowlist"]; ok {
+		raw, ok := allowlistStrings(v)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "network_allowlist must be an array of strings")
+			return
+		}
+		normalized, err := origin.NormalizeOrigins(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		updates["network_allowlist"] = ro.withoutRenderOrigin(normalized)
 	}
 
 	// Verify the artifact exists *in this owner's library*. Another owner's
@@ -473,8 +619,8 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	var footprint []string
 	footprintChanged := false
 	if bodySet && newBody != oldBody {
-		footprint = scanner.Scan(newBody)
-		footprintChanged = !sameOrigins(footprint, scanner.Scan(oldBody))
+		footprint = ro.withoutRenderOrigin(scanner.Scan(newBody))
+		footprintChanged = !sameOrigins(footprint, ro.withoutRenderOrigin(scanner.Scan(oldBody)))
 	}
 	if footprint == nil {
 		footprint = []string{}
@@ -497,6 +643,29 @@ type updateArtifactResponse struct {
 	Artifact         *store.Artifact `json:"artifact"`
 	NetworkFootprint []string        `json:"network_footprint"`
 	FootprintChanged bool            `json:"footprint_changed"`
+}
+
+// allowlistStrings reads the network_allowlist value out of a decoded PATCH
+// body, which arrives as []interface{} from JSON (or []string from Go code in
+// tests). A non-list — JSON null included — or a list with a non-string in it
+// is the caller's error: clearing the allowlist takes an explicit empty array,
+// so a null can never silently wipe it.
+func allowlistStrings(v any) ([]string, bool) {
+	switch list := v.(type) {
+	case []string:
+		return list, true
+	case []interface{}:
+		out := make([]string, 0, len(list))
+		for _, item := range list {
+			s, ok := item.(string)
+			if !ok {
+				return nil, false
+			}
+			out = append(out, s)
+		}
+		return out, true
+	}
+	return nil, false
 }
 
 // sameOrigins reports whether two origin lists describe the same set,
@@ -562,7 +731,7 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 
 	// Re-scan the network footprint and bump updated_at. Title is preserved.
 	updates := map[string]any{
-		"network_allowlist": scanner.Scan(string(fetched)),
+		"network_allowlist": ro.withoutRenderOrigin(scanner.Scan(string(fetched))),
 		"source_text":       store.ExtractSearchText(string(fetched)),
 	}
 	if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, updates); err != nil {
@@ -588,30 +757,27 @@ func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
 
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
+	// No pre-read to establish that the artifact exists: the delete itself
+	// answers ErrNotFound (as 404) for an id this owner cannot see, and the
+	// blob ids the handler needs come back from the same call rather than from
+	// a row it looked up beforehand — which is also what keeps them consistent
+	// with what the transaction actually removed.
+	queued, err := ro.cfg.Store.DeleteArtifact(r.Context(), ownerID, id)
 	if err != nil {
-		serverError(w, r, "get artifact for delete", err)
-		return
-	}
-	if a == nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-
-	if err := ro.cfg.Store.DeleteArtifact(r.Context(), ownerID, id); err != nil {
 		writeArtifactError(w, r, "delete artifact", err)
 		return
 	}
 
 	slog.InfoContext(r.Context(), "artifact deleted", slog.String("id", id))
 
-	// The row is gone; now the bytes (av-7jcq). A 500 here reports a delete
-	// that only half happened — the artifact has left the library but its file
-	// is still on disk — and that is the honest status even though retrying
-	// the request now 404s. The error log names the blob ids, which is the
-	// part an operator can act on; the alternative, 204 plus a log line, is
-	// precisely the silent success this ticket exists to remove.
-	if err := deleteArtifactBlobs(r.Context(), ro.cfg.Store, ro.cfg.Blob, a); err != nil {
+	// The rows are gone and the bytes are condemned in writing; now remove
+	// them (av-8gyd). A 500 here reports a delete that only half happened —
+	// the artifact has left the library but its file is still on disk — and
+	// that is the honest status even though retrying the request now 404s.
+	// What it no longer reports is a *permanent* leak: the queue row survives
+	// the failure, so the next startup finishes the job whether or not anybody
+	// reads the log.
+	if err := ro.reclaimBlobs(r.Context(), queued); err != nil {
 		serverError(w, r, "delete artifact blobs", err)
 		return
 	}
@@ -619,51 +785,9 @@ func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// artifactBlobIDs is every blob an artifact owns: its body, plus its widget
-// when it has one.
-//
-// Two is the whole list, not the newest of a series. Both ids are minted once
-// and rewritten in place — an edit PUTs the new body back into
-// a.SourceBlobID, a refetch does the same, and a widget save reuses
-// a.WidgetBlobID so the tile's render URL stays stable across edits
-// (widget.go) — so no earlier version of either is left behind to find.
-func artifactBlobIDs(a *store.Artifact) []string {
-	ids := []string{a.SourceBlobID}
-	if a.WidgetBlobID != "" {
-		ids = append(ids, a.WidgetBlobID)
-	}
-	return ids
-}
-
-// deleteBlobs removes a list of blobs, attempting every id even if one fails.
-//
-// The first error encountered is wrapped with the blob id and returned; all
-// other ids are still attempted, so one unremovable file cannot strand the
-// rest. This is the shared deletion logic profile.go and artifacts.go both
-// need: attempt everything, wrap the first failure as "blob %s: %w", return
-// that first error.
-func deleteBlobs(ctx context.Context, st store.Store, blobs blob.Store, ids []string) error {
-	var firstErr error
-	for _, id := range ids {
-		if err := blobs.Delete(ctx, id); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("blob %s: %w", id, err)
-		}
-	}
-	// And the recorded lengths, which are rows rather than bytes (av-fw1b).
-	// Attempted even when a byte delete failed, because the two answer
-	// different questions and the size row is the one that is *inert* while it
-	// lasts: it is charged to nobody once no row references its blob, so
-	// leaving it is untidiness, not a wrong number. That is also why its
-	// failure never displaces an earlier one — the byte that stayed on disk is
-	// the more important half of this report.
-	if err := st.ForgetBlobSizes(ctx, ids); err != nil {
-		slog.WarnContext(ctx, "forget blob sizes", slog.String("err", err.Error()))
-	}
-	return firstErr
-}
-
-// deleteArtifactBlobs removes the bodies an artifact owned. Call it *after*
-// the row is gone.
+// reclaimBlobs removes the bytes of the ids a delete operation just queued,
+// and retires their queue rows. Call it *after* the transaction that condemned
+// them committed.
 //
 // That ordering is the decision, and it turns on an asymmetry between the two
 // failure modes:
@@ -671,17 +795,104 @@ func deleteBlobs(ctx context.Context, st store.Store, blobs blob.Store, ids []st
 //   - Bytes first, and a failing row delete leaves a live artifact pointing at
 //     a body that no longer exists. It renders an error forever and nothing on
 //     the instance can repair it, because the blob was the only copy.
-//   - Row first, and a failing blob delete leaves bytes nobody references.
-//     That is exactly the state the product shipped in before av-7jcq, it
-//     breaks no row, and an operator can sweep it using the ids the caller's
-//     error log names.
+//   - Rows first, and a failing blob delete leaves bytes nobody references.
+//     That breaks no row, and since av-8gyd it is not even a leak: the ids sit
+//     in pending_blob_deletions until a drain succeeds.
 //
-// Prefer the recoverable failure: the row goes first. The blob failure is
-// still returned rather than swallowed — a deletion that left the bytes on
-// disk must not report success.
+// Prefer the recoverable failure: the rows go first. The blob failure is still
+// returned rather than swallowed — a deletion that left the bytes on disk must
+// not report success.
 //
-// Every id is attempted before the first error is returned, so one unremovable
-// file cannot strand the artifact's other body.
-func deleteArtifactBlobs(ctx context.Context, st store.Store, blobs blob.Store, a *store.Artifact) error {
-	return deleteBlobs(ctx, st, blobs, artifactBlobIDs(a))
+// Only this operation's own ids are passed, never the whole queue, so no
+// request ever walks a backlog; the backlog is the startup drain's job
+// (cmd/server/main.go).
+func (ro *Router) reclaimBlobs(ctx context.Context, queued []string) error {
+	if len(queued) == 0 {
+		return nil
+	}
+	_, err := ro.cfg.Store.DrainBlobDeletions(ctx, ro.cfg.Blob, queued)
+	return err
+}
+
+// withoutRenderOrigin drops the render origin from a scan result.
+//
+// The scan reports what a body will try to contact, and since av-oz40 a body
+// can legitimately contain URLs on the render origin: a markup asset over the
+// inlining threshold is rewritten in place to its asset route, so an <img src>
+// that used to name a third-party CDN now names us. (The runtime pass leaves
+// the body alone, which is why av-20fk alone never hit this.)
+//
+// Reporting that origin is wrong twice over.
+//
+// It is not a decision. The artifact's own asset path is a *system* source the
+// render surface adds unconditionally (render.go's buildCSP), path-scoped to
+// this artifact's id, and it is exactly the bytes that used to sit in the
+// document as data: URIs at no approval cost — moving them one hop away changed
+// the addressing and nothing else. So the footprint would be asking the user
+// about something they cannot meaningfully refuse: saying no changes no
+// behaviour, because the CSP source does not come from the allowlist.
+//
+// And saying *yes* is worse than meaningless. An allow row for the render
+// origin widens every directive from `RENDER_ORIGIN/a/<this id>/assets/` to the
+// whole origin, which would let the artifact fetch any *other* artifact's
+// render document and assets — a cross-artifact read the path scoping exists to
+// prevent, arrived at by a user answering a question the UI should never have
+// asked.
+//
+// Applied at every point a scan result becomes a footprint or an allowlist, so
+// there is no path — ingest, edit, or refetch — by which the origin can reach
+// artifact_network_origins. That keeps architecture.md §3.2's claim true as
+// written: a fully vendored artifact keeps an empty footprint, and there is no
+// row a user can revoke to break their own artifact.
+// Both sides are compared as canonical origin spellings, because the
+// configured value is an operator's string and the scanned one is the
+// scanner's: `https://X:443/` and `https://x` are one origin and must not
+// differ here.
+//
+// canonicalOrigin rather than origin.NormalizeOrigin, and the difference
+// matters: NormalizeOrigin enforces allowlist *policy* — no plaintext http
+// off loopback — and a render origin served over http behind an operator's
+// proxy is a legal configuration that policy would refuse, leaving this
+// comparison unable to run on exactly the instance that needs it. What is
+// wanted here is spelling, not permission.
+func (ro *Router) withoutRenderOrigin(origins []string) []string {
+	render := canonicalOrigin(ro.cfg.RenderOrigin)
+	if render == "" {
+		return origins
+	}
+	out := origins[:0:0] // never alias the caller's backing array
+	for _, o := range origins {
+		if canonicalOrigin(o) == render {
+			continue
+		}
+		out = append(out, o)
+	}
+	return out
+}
+
+// canonicalOrigin reduces a URL to `scheme://host[:port]`, lowercased, with a
+// trailing dot and a default port dropped — the same spelling the scanner
+// produces, which is what makes the comparison above exact rather than
+// approximate. Returns "" for anything with no origin in it.
+func canonicalOrigin(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || !u.IsAbs() || u.Host == "" {
+		return ""
+	}
+	scheme := strings.ToLower(u.Scheme)
+	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+	if host == "" {
+		return ""
+	}
+	if strings.Contains(host, ":") { // IPv6 literal keeps its brackets
+		host = "[" + host + "]"
+	}
+	port := u.Port()
+	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
+		port = ""
+	}
+	if port != "" {
+		return scheme + "://" + host + ":" + port
+	}
+	return scheme + "://" + host
 }

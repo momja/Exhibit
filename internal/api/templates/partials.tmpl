@@ -112,15 +112,15 @@
      transparency, not a verdict (spec 6.2) — no green/amber, ever. Fully
      sandboxed (empty allowlist, neither capability approved) collapses to a
      single muted ph-shield-check + "Sandboxed"; otherwise each grant gets its
-     own neutral glyph, in a fixed order: network count, then downloads, then
-     clipboard. The trigger is tabindex=0 + role=button so it's reachable by
+     own neutral glyph, in a fixed order: network count, then downloads,
+     clipboard, external links, camera, microphone. The trigger is tabindex=0 + role=button so it's reachable by
      keyboard independent of the card/toolbar around it; aria-describedby
      wires it to the popover div by id. The popover opens only on explicit
      activation (click/tap, or Enter/Space while focused) via components.js;
      hover/focus alone just apply a CSS affordance highlight
      (.capability-cluster:hover/:focus-visible) without opening anything.
      Data: capabilityView (gallery.go). */}}
-{{define "capabilityCluster"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved) (not .LinksApproved)}}<div class="capability-wrap"><div class="capability-cluster{{if not $sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger>{{if $sandboxed}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{if .LinksApproved}}<span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span>{{end}}{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}
+{{define "capabilityCluster"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved) (not .LinksApproved) (not .CameraApproved) (not .MicrophoneApproved)}}<div class="capability-wrap"><div class="capability-cluster{{if not $sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger>{{if $sandboxed}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{if .LinksApproved}}<span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span>{{end}}{{if .CameraApproved}}<span class="capability-glyph"><i class="ph ph-camera"></i></span>{{end}}{{if .MicrophoneApproved}}<span class="capability-glyph"><i class="ph ph-microphone"></i></span>{{end}}{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}
 
 {{/* panelCaret is the open/closed caret pair every .details-panel summary
      leads with (the edit page's security, artifact source, and gallery widget
@@ -156,12 +156,12 @@
 
 {{/* capabilityPopover is the "receipt" for what was approved at ingest
      (spec 6.2) — capabilityCluster's aria-describedby target. One row per
-     active grant (network origins in monospace, then downloads, then
-     clipboard); the no-grants state collapses to a single "Fully contained"
+     active grant (network origins in monospace, then downloads, clipboard,
+     external links, camera, microphone); the no-grants state collapses to a single "Fully contained"
      reassurance row instead. The footer "Manage" link is omitted whenever
      ShowManage is false (the no-owner-session / share case). Data:
      capabilityView (gallery.go). */}}
-{{define "capabilityPopover"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved) (not .LinksApproved)}}<div class="capability-popover" id="capability-popover-{{.ArtifactID}}"><div class="capability-popover-header">Sandbox posture</div>{{if $sandboxed}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-shield-check"></i></span><span>Fully contained — no network, download, clipboard, or external link access</span></div>{{else}}{{if .NetworkAllowlist}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-globe"></i></span><div><div class="capability-popover-label">Network — {{len .NetworkAllowlist}} origin{{if ne (len .NetworkAllowlist) 1}}s{{end}}</div><div class="capability-popover-origins">{{range .NetworkAllowlist}}<code>{{.}}</code>{{end}}</div></div></div>{{end}}{{if .DownloadsApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-download-simple"></i></span><span>Downloads — Can save files to your device</span></div>{{end}}{{if .ClipboardApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-clipboard"></i></span><span>Clipboard — Can read and write your clipboard</span></div>{{end}}{{if .LinksApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span><span>External links — Can open links in new tabs</span></div>{{end}}{{end}}{{if .ShowManage}}<a class="capability-popover-manage" href="/artifacts/{{.ArtifactID}}/edit#security-panel">Manage security settings →</a>{{end}}</div>{{end}}
+{{define "capabilityPopover"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved) (not .LinksApproved) (not .CameraApproved) (not .MicrophoneApproved)}}<div class="capability-popover" id="capability-popover-{{.ArtifactID}}"><div class="capability-popover-header">Sandbox posture</div>{{if $sandboxed}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-shield-check"></i></span><span>Fully contained — no network, download, clipboard, external link, camera, or microphone access</span></div>{{else}}{{if .NetworkAllowlist}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-globe"></i></span><div><div class="capability-popover-label">Network — {{len .NetworkAllowlist}} origin{{if ne (len .NetworkAllowlist) 1}}s{{end}}</div><div class="capability-popover-origins">{{range .NetworkAllowlist}}<code>{{.}}</code>{{end}}</div></div></div>{{end}}{{if .DownloadsApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-download-simple"></i></span><span>Downloads — Can save files to your device</span></div>{{end}}{{if .ClipboardApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-clipboard"></i></span><span>Clipboard — Can read and write your clipboard</span></div>{{end}}{{if .LinksApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span><span>External links — Can open links in new tabs</span></div>{{end}}{{if .CameraApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-camera"></i></span><span>Camera — Can capture video from your camera</span></div>{{end}}{{if .MicrophoneApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-microphone"></i></span><span>Microphone — Can capture audio from your microphone</span></div>{{end}}{{end}}{{if .ShowManage}}<a class="capability-popover-manage" href="/artifacts/{{.ArtifactID}}/edit#security-panel">Manage security settings →</a>{{end}}</div>{{end}}
 
 {{/* settingsHeader is the sub-page header the account surfaces share: a back
      link to the gallery and the page's own title, the same idiom new.tmpl and
@@ -176,3 +176,29 @@
   <a href="/">←<span class="back-label"> Gallery</span></a>
   <h1>{{.}}</h1>
 </header>{{end}}
+
+{{/* The runtime network-permission dialog (av-kmwj), shared by every page that
+     embeds an artifact: the detail viewer and the agent chat's preview pane
+     (av-6xvs). One definition because the two pages must offer the same three
+     answers with the same ids — web/gallery/network-prompt.js drives it and
+     addresses those ids by name.
+
+     It lives in app chrome and never inside the artifact's frame: the artifact
+     owns that DOM and could draw a convincing forgery of this dialog. The
+     origin and directive are filled in by script via textContent, because they
+     come out of the artifact's own blocked request and must never be
+     interpolated as markup here. */}}
+{{define "networkPrompt"}}<div id="net-modal" class="modal-overlay" hidden>
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="net-title">
+    <h2 id="net-title">Allow network access?</h2>
+    <p>This artifact tried to contact <code id="net-origin"></code> and was blocked.</p>
+    <p class="text-sm muted" id="net-directive"></p>
+    <p>Allowing adds this origin to the artifact's allowlist and reloads the artifact so the request can retry. You can revoke it later in allowlist settings.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-sec" id="net-never">Don't ask again</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="net-once">Block once</button>
+      <button type="button" class="btn" id="net-allow"><i class="ph ph-globe-hemisphere-west"></i> Allow origin</button>
+    </div>
+  </div>
+</div>{{end}}

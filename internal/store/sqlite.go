@@ -14,6 +14,8 @@ import (
 
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
+
+	"github.com/momja/Exhibit/internal/origin"
 )
 
 //go:embed migrations/*.sql
@@ -21,6 +23,11 @@ var migrationsFS embed.FS
 
 type SQLiteStore struct {
 	db *sql.DB
+
+	// Held across a blob write and the transaction that references it, and
+	// across the deletion queue's recheck-and-unlink, so the two cannot
+	// interleave into a referenced blob with no bytes (bloblock.go).
+	blobLocks blobLocks
 }
 
 func OpenSQLite(path string) (*SQLiteStore, error) {
@@ -50,6 +57,7 @@ func (s *SQLiteStore) migrate() error {
 	if err := rewindReusedVersion13(ctx, s.db); err != nil {
 		return fmt.Errorf("rewind version 13: %w", err)
 	}
+	registerOriginNormalizationMigration() // v23: normalize/collapse pre-av-i7hd origin rows
 	goose.SetBaseFS(migrationsFS)
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		return err
@@ -116,7 +124,7 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	var a Artifact
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.WidgetBlobID)
+	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.WidgetBlobID)
 	if err != nil {
 		return nil, err
 	}
@@ -128,8 +136,8 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	return &a, nil
 }
 
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, widget_blob_id"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.widget_blob_id"
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, widget_blob_id"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.widget_blob_id"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
@@ -137,9 +145,9 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 		now = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, links_approved, widget_blob_id, source_text, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.LinksApproved, a.WidgetBlobID, a.SourceText,
+		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, widget_blob_id, source_text, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.LinksApproved, a.CameraApproved, a.MicrophoneApproved, a.WidgetBlobID, a.SourceText,
 		now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
 	if err != nil {
@@ -323,6 +331,34 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 	return results, nil
 }
 
+// ApprovalColumns are the first-use capability approval columns: the
+// per-artifact "yes, this tool may do that" decisions the host frame persists
+// (architecture.md §6). They are named once, here, because two layers have to
+// agree about them — the API rejects a non-bool in a PATCH body with a 400
+// (internal/api/artifacts.go) and the UPDATE below refuses to store one — and a
+// sixth capability that reached only one of those two lists would be accepted
+// by the handler and then stored as a value no later read can scan.
+//
+// The order is the order the UI shows them in: downloads, clipboard, links,
+// camera, microphone.
+var ApprovalColumns = []string{
+	"downloads_approved",
+	"clipboard_approved",
+	"links_approved",
+	"camera_approved",
+	"microphone_approved",
+}
+
+// approvalArtifactColumns is ApprovalColumns as a set, for the per-key check in
+// UpdateArtifact.
+var approvalArtifactColumns = func() map[string]bool {
+	m := make(map[string]bool, len(ApprovalColumns))
+	for _, c := range ApprovalColumns {
+		m[c] = true
+	}
+	return m
+}()
+
 // updatableArtifactColumns is the allowlist UpdateArtifact checks its caller's
 // keys against. "network_allowlist" is deliberately absent: it never reaches
 // the generic loop below (handled and stripped first), so listing it here
@@ -341,27 +377,39 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 // SetWidgetBlobID. This map answers "what may a PATCH body write", and that is
 // the only question it answers.
 var updatableArtifactColumns = map[string]bool{
-	"title":              true,
-	"tier":               true,
-	"source_url":         true,
-	"source_text":        true,
-	"downloads_approved": true,
-	"clipboard_approved": true,
-	"links_approved":     true,
+	"title":               true,
+	"tier":                true,
+	"source_url":          true,
+	"source_text":         true,
+	"downloads_approved":  true,
+	"clipboard_approved":  true,
+	"links_approved":      true,
+	"camera_approved":     true,
+	"microphone_approved": true,
 }
 
-// SetWidgetBlobID points an artifact at the widget body blobID, or detaches its
-// widget when blobID is empty. It exists because widget_blob_id is deliberately
-// not caller-writable (above) while the widget PUT/DELETE handlers must still
-// write it: routing them through the generic update map would mean the same
-// allowlist decided both what a PATCH body may set and what the service itself
-// may set, and narrowing it for the first reason would break the second. The id
-// is minted server-side and reused for the artifact's life, so a widget's
-// render URL stays stable across saves.
+// SetWidgetBlobID points an artifact at the blob holding its widget document.
+// It exists because widget_blob_id is deliberately not caller-writable (above)
+// while the widget PUT handler must still write it: routing that through the
+// generic update map would mean the same allowlist decided both what a PATCH
+// body may set and what the service itself may set, and narrowing it for the
+// first reason would break the second. The id is minted server-side once per
+// artifact and reused on every later save, so a widget's render URL stays
+// stable across edits — which is why this runs on the first save only.
+//
+// It attaches; it does not detach. Clearing the column condemns bytes, and
+// enqueuing those for deletion has to happen in the same transaction that
+// dropped the last reference to them (av-8gyd) — which this method has no way
+// to do. DeleteWidget is that operation, and being the only one is what makes
+// "a detached widget blob is always enqueued" true by construction rather than
+// by every caller remembering.
 //
 // Owner-scoped like every other artifact write: another owner's id is
 // ErrNotFound, never a refusal that confirms the row exists (§3.3).
 func (s *SQLiteStore) SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error {
+	if blobID == "" {
+		return fmt.Errorf("set widget blob id: blob id is required (detaching is DeleteWidget's job)")
+	}
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE artifacts SET widget_blob_id = ?, updated_at = ? WHERE id = ? AND owner_id = ?`,
 		blobID, time.Now().UTC(), id, ownerID)
@@ -411,7 +459,7 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id stri
 			// whoever sent the request.
 			return fmt.Errorf("update artifact: %q: %w", k, ErrNotUpdatable)
 		}
-		if k == "downloads_approved" || k == "clipboard_approved" || k == "links_approved" {
+		if approvalArtifactColumns[k] {
 			// These columns are INTEGER 0/1; a non-bool here would store a value
 			// that later fails the bool scan and bricks reads of the artifact.
 			if _, ok := v.(bool); !ok {
@@ -507,33 +555,46 @@ func (s *SQLiteStore) AllowedOrigins(ctx context.Context, ownerID int64, artifac
 // SetOriginDecision widens or narrows what an artifact may reach, so it is
 // the sharpest thing in this file to leave unscoped: the owner check runs
 // before the upsert, and a foreign artifact gets ErrNotFound rather than a
-// new allow row.
-func (s *SQLiteStore) SetOriginDecision(ctx context.Context, ownerID int64, artifactID, origin, decision, source string) error {
+// new allow row. One decision per *origin* (docs/architecture.md §3.3) only
+// holds if what lands in the row is an origin; a near-duplicate spelling
+// would otherwise split one decision into several (av-i7hd).
+func (s *SQLiteStore) SetOriginDecision(ctx context.Context, ownerID int64, artifactID, o, decision, source string) error {
 	if decision != DecisionAllow && decision != DecisionBlock {
 		return fmt.Errorf("invalid origin decision %q", decision)
 	}
 	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
 		return err
 	}
+	normalized, err := origin.NormalizeOrigin(o)
+	if err != nil {
+		return fmt.Errorf("invalid origin %q: %w", o, err)
+	}
+	o = normalized
 	// The (artifact_id, origin) primary key is what makes one decision per
 	// origin an invariant; the upsert flips an existing decision in place
 	// rather than creating a second, contradictory row.
-	_, err := s.db.ExecContext(ctx,
+	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO artifact_network_origins (artifact_id, origin, decision, source)
 		 VALUES (?, ?, ?, ?)
 		 ON CONFLICT(artifact_id, origin) DO UPDATE SET
 		   decision=excluded.decision, source=excluded.source, updated_at=datetime('now')`,
-		artifactID, origin, decision, source)
+		artifactID, o, decision, source)
 	return err
 }
 
 // DeleteOriginDecision is idempotent like the state deletes: removing a
 // decision that isn't there is what the caller asked for either way. Owner
-// scoping only guarantees it can never remove someone else's.
-func (s *SQLiteStore) DeleteOriginDecision(ctx context.Context, ownerID int64, artifactID, origin string) error {
+// scoping only guarantees it can never remove someone else's. The origin is
+// normalized when it can be, so a caller may spell it the way the user typed
+// it, but an unnormalizable value is still passed through verbatim — that is
+// exactly how a pre-normalization legacy row is deleted.
+func (s *SQLiteStore) DeleteOriginDecision(ctx context.Context, ownerID int64, artifactID, o string) error {
+	if normalized, _ := origin.NormalizeOrigin(o); normalized != "" {
+		o = normalized
+	}
 	_, err := s.db.ExecContext(ctx,
 		"DELETE FROM artifact_network_origins WHERE artifact_id=? AND origin=? AND "+ownedArtifact,
-		artifactID, origin, ownerID)
+		artifactID, o, ownerID)
 	return err
 }
 
@@ -555,9 +616,22 @@ func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, ownerID int64, 
 		return err
 	}
 	for _, o := range origins {
-		if o == "" {
+		// Defense in depth behind the API's validation (av-i7hd): the store's
+		// own invariant is that a row is an origin, so a caller that skipped
+		// normalization can't write a path-bearing or duplicate spelling here.
+		// Unlike the API this can't 400, so anything that doesn't validate
+		// cleanly is dropped rather than widening the CSP with something nobody
+		// approved — a path-bearing value is refused, not truncated to its host
+		// (salvaging those is migration 23's job, via origin.SalvageOrigin). The
+		// rejected value is untrusted data, so the log carries fixed context and
+		// a fixed reason only.
+		normalized, err := origin.NormalizeOrigin(o)
+		if err != nil {
+			slog.Warn("dropping unusable allowlist origin",
+				slog.String("artifact_id", artifactID), slog.String("reason", "invalid_origin"))
 			continue
 		}
+		o = normalized
 		// An origin listed here was explicitly approved, so an allow
 		// decision overrides any block row it previously carried.
 		if _, err := tx.ExecContext(ctx,
@@ -607,8 +681,98 @@ func (s *SQLiteStore) attachAllowlists(ctx context.Context, arts []*Artifact) er
 	return rows.Err()
 }
 
-func (s *SQLiteStore) DeleteArtifact(ctx context.Context, ownerID int64, id string) error {
-	return s.execOwned(ctx, "DELETE FROM artifacts WHERE id=? AND owner_id=?", id, ownerID)
+// DeleteArtifact removes the artifact — its tags, collections, shares, origin
+// decisions and state going with it by ON DELETE CASCADE — and returns the
+// blob ids it enqueued for deletion, for the caller to drain (blobqueue.go).
+//
+// Reading the two blob ids, dropping the row and enqueuing what is now
+// unreferenced happen in one transaction, which is what makes the intent to
+// delete those bytes durable at the same instant the last reference to them
+// disappears. Nothing outside this transaction could reconstruct that list
+// afterwards: once the row is gone, nothing names the blobs.
+func (s *SQLiteStore) DeleteArtifact(ctx context.Context, ownerID int64, id string) ([]string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }() // no-op once committed
+
+	var body, widget string
+	err = tx.QueryRowContext(ctx,
+		"SELECT source_blob_id, widget_blob_id FROM artifacts WHERE id=? AND owner_id=?",
+		id, ownerID).Scan(&body, &widget)
+	if errors.Is(err, sql.ErrNoRows) {
+		// Another owner's artifact and one that never existed are the same
+		// answer here, as everywhere else on this interface.
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	// Read before the delete: ON DELETE CASCADE takes the asset rows with the
+	// artifact, and once they are gone nothing names those blobs (av-20fk).
+	assetBlobs, err := assetBlobIDs(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx,
+		"DELETE FROM artifacts WHERE id=? AND owner_id=?", id, ownerID); err != nil {
+		return nil, err
+	}
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, append([]string{body, widget}, assetBlobs...)...)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return queued, nil
+}
+
+// DeleteWidget detaches an artifact's widget and returns the blob id it
+// enqueued for deletion, if any — the caller drains it (blobqueue.go).
+//
+// Detaching is the only exit a widget blob has: the id is minted once and
+// reused on every later save so the tile's render URL stays stable, so once
+// this clears the column nothing can name those bytes again. That is exactly
+// why the clear and the enqueue share a transaction.
+//
+// An artifact with no widget is not an error — the caller's intent, "this
+// artifact must have no widget", is already satisfied — and enqueues nothing.
+// ErrNotFound is reserved for an artifact this owner cannot see.
+func (s *SQLiteStore) DeleteWidget(ctx context.Context, ownerID int64, artifactID string) ([]string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }() // no-op once committed
+
+	var widget string
+	err = tx.QueryRowContext(ctx,
+		"SELECT widget_blob_id FROM artifacts WHERE id=? AND owner_id=?",
+		artifactID, ownerID).Scan(&widget)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if widget == "" {
+		return nil, nil
+	}
+	if _, err := tx.ExecContext(ctx,
+		"UPDATE artifacts SET widget_blob_id='', updated_at=datetime('now') WHERE id=? AND owner_id=?",
+		artifactID, ownerID); err != nil {
+		return nil, err
+	}
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, widget)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return queued, nil
 }
 
 // blobGetter is the read side of blob.Store — the minimal seam

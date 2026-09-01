@@ -1,8 +1,12 @@
 package render
 
 import (
+	"context"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // directive returns the value of the named CSP directive (e.g. "style-src"),
@@ -44,14 +48,14 @@ func TestBuildCSPConnectSrcIsAllowlistOnly(t *testing.T) {
 	}
 
 	t.Run("empty allowlist leaves connect-src with no network reach", func(t *testing.T) {
-		cs := connectSrc(t, buildCSP(nil, appOrigin))
+		cs := connectSrc(t, buildCSP(nil, appOrigin, ""))
 		if n := network(cs); n != "" {
 			t.Fatalf("connect-src %q must reach nothing without an allowlist, got network sources %q", cs, n)
 		}
 	})
 
 	t.Run("populated allowlist is exactly the allowlist", func(t *testing.T) {
-		cs := connectSrc(t, buildCSP([]string{"https://api.github.com"}, appOrigin))
+		cs := connectSrc(t, buildCSP([]string{"https://api.github.com"}, appOrigin, ""))
 		if network(cs) != "https://api.github.com" {
 			t.Fatalf("connect-src %q must reach exactly the allowlisted origin", cs)
 		}
@@ -76,7 +80,7 @@ func TestBuildCSPConnectSrcAlwaysAllowsBlobAndData(t *testing.T) {
 	}
 	for name, allowlist := range cases {
 		t.Run(name, func(t *testing.T) {
-			cs := connectSrc(t, buildCSP(allowlist, appOrigin))
+			cs := connectSrc(t, buildCSP(allowlist, appOrigin, ""))
 			for _, src := range []string{"blob:", "data:"} {
 				if !strings.Contains(cs, src) {
 					t.Fatalf("connect-src %q must allow %s — reading back local bytes is not egress", cs, src)
@@ -99,7 +103,7 @@ func TestBuildCSPStyleSrcAlwaysAllowsInline(t *testing.T) {
 	}
 	for name, allowlist := range cases {
 		t.Run(name, func(t *testing.T) {
-			ss, ok := directive(t, buildCSP(allowlist, appOrigin), "style-src")
+			ss, ok := directive(t, buildCSP(allowlist, appOrigin, ""), "style-src")
 			if !ok {
 				t.Fatalf("style-src directive missing")
 			}
@@ -118,7 +122,7 @@ func TestBuildCSPStyleSrcHonorsAllowlistedOrigin(t *testing.T) {
 	const appOrigin = "https://app.example.com"
 	const cdn = "https://cdn.example.com"
 
-	ss, _ := directive(t, buildCSP([]string{cdn}, appOrigin), "style-src")
+	ss, _ := directive(t, buildCSP([]string{cdn}, appOrigin, ""), "style-src")
 	if !strings.Contains(ss, cdn) {
 		t.Fatalf("style-src %q dropped the allowlisted stylesheet origin %q", ss, cdn)
 	}
@@ -139,7 +143,7 @@ func TestBuildCSPFontSrcAlwaysAllowsDataURI(t *testing.T) {
 	}
 	for name, allowlist := range cases {
 		t.Run(name, func(t *testing.T) {
-			fs, ok := directive(t, buildCSP(allowlist, appOrigin), "font-src")
+			fs, ok := directive(t, buildCSP(allowlist, appOrigin, ""), "font-src")
 			if !ok {
 				t.Fatalf("font-src directive missing — a data: font falls back to default-src 'none' and is blocked")
 			}
@@ -156,7 +160,7 @@ func TestBuildCSPFontSrcHonorsAllowlistedOrigin(t *testing.T) {
 	const appOrigin = "https://app.example.com"
 	const fonts = "https://fonts.example.com"
 
-	fs, _ := directive(t, buildCSP([]string{fonts}, appOrigin), "font-src")
+	fs, _ := directive(t, buildCSP([]string{fonts}, appOrigin, ""), "font-src")
 	if !strings.Contains(fs, fonts) {
 		t.Fatalf("font-src %q dropped the allowlisted font origin %q", fs, fonts)
 	}
@@ -177,7 +181,7 @@ func TestBuildCSPMediaSrcAlwaysAllowsBlob(t *testing.T) {
 	}
 	for name, allowlist := range cases {
 		t.Run(name, func(t *testing.T) {
-			ms, ok := directive(t, buildCSP(allowlist, appOrigin), "media-src")
+			ms, ok := directive(t, buildCSP(allowlist, appOrigin, ""), "media-src")
 			if !ok {
 				t.Fatalf("media-src directive missing — a blob: media source falls back to default-src 'none' and is blocked")
 			}
@@ -202,7 +206,7 @@ func TestBuildCSPScriptSrcAlwaysAllowsBlobAndData(t *testing.T) {
 	}
 	for name, allowlist := range cases {
 		t.Run(name, func(t *testing.T) {
-			ss, ok := directive(t, buildCSP(allowlist, appOrigin), "script-src")
+			ss, ok := directive(t, buildCSP(allowlist, appOrigin, ""), "script-src")
 			if !ok {
 				t.Fatalf("script-src directive missing")
 			}
@@ -232,7 +236,7 @@ func TestBuildCSPWorkerSrcAlwaysAllowsBlobAndData(t *testing.T) {
 	}
 	for name, allowlist := range cases {
 		t.Run(name, func(t *testing.T) {
-			ws, ok := directive(t, buildCSP(allowlist, appOrigin), "worker-src")
+			ws, ok := directive(t, buildCSP(allowlist, appOrigin, ""), "worker-src")
 			if !ok {
 				t.Fatalf("worker-src directive missing — a blob:/data: worker then fails silently, never running its body")
 			}
@@ -252,7 +256,7 @@ func TestBuildCSPWorkerSrcHonorsAllowlistedOrigin(t *testing.T) {
 	const appOrigin = "https://app.example.com"
 	const cdn = "https://unpkg.com"
 
-	ws, _ := directive(t, buildCSP([]string{cdn}, appOrigin), "worker-src")
+	ws, _ := directive(t, buildCSP([]string{cdn}, appOrigin, ""), "worker-src")
 	if !strings.Contains(ws, cdn) {
 		t.Fatalf("worker-src %q dropped the allowlisted worker origin %q", ws, cdn)
 	}
@@ -270,7 +274,7 @@ func TestBuildCSPFormActionMirrorsAllowlist(t *testing.T) {
 	const appOrigin = "https://app.example.com"
 
 	t.Run("empty allowlist pins form-action to self", func(t *testing.T) {
-		fa, ok := directive(t, buildCSP(nil, appOrigin), "form-action")
+		fa, ok := directive(t, buildCSP(nil, appOrigin, ""), "form-action")
 		if !ok {
 			t.Fatalf("form-action directive missing — a form with no explicit action would then be unrestricted, not blocked")
 		}
@@ -280,7 +284,7 @@ func TestBuildCSPFormActionMirrorsAllowlist(t *testing.T) {
 	})
 
 	t.Run("populated allowlist includes the allowlisted origin and self", func(t *testing.T) {
-		fa, ok := directive(t, buildCSP([]string{"https://api.github.com"}, appOrigin), "form-action")
+		fa, ok := directive(t, buildCSP([]string{"https://api.github.com"}, appOrigin, ""), "form-action")
 		if !ok {
 			t.Fatalf("form-action directive missing")
 		}
@@ -302,7 +306,7 @@ func TestBuildCSPFormActionMirrorsAllowlist(t *testing.T) {
 // mention fetch (it shims data: URL fetches, av-02xs) but must never invoke it
 // with a URL — its only network-adjacent call is nativeFetch.apply passthrough.
 func TestShimWritesViaPostMessageNotFetch(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 	if !strings.Contains(doc, "window.parent.postMessage") {
 		t.Fatalf("shim should write via postMessage to the host frame: %s", doc)
 	}
@@ -319,7 +323,7 @@ func TestShimWritesViaPostMessageNotFetch(t *testing.T) {
 // mitigation trialed in av-02xs was removed as ineffective — assert it stays
 // gone so it can't silently degrade artifact rendering again.
 func TestShimFramedDataURLFetchWrapper(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 	if !strings.Contains(doc, "window.fetch = function(input, init)") {
 		t.Fatalf("framed shim must wrap fetch for data: URLs: %s", doc)
 	}
@@ -339,7 +343,7 @@ func TestShimFramedDataURLFetchWrapper(t *testing.T) {
 		t.Fatalf("ineffective canvas mitigation must not ship in the shim: %s", doc)
 	}
 
-	widgetDoc := injectPreamble("<head></head>", "abc", "https://app.test", nil, true, false)
+	widgetDoc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, true, false, nil)
 	if strings.Contains(widgetDoc, "window.fetch = function(input, init)") {
 		t.Fatalf("widget renders must not carry the fetch shim: %s", widgetDoc)
 	}
@@ -349,7 +353,7 @@ func TestShimFramedDataURLFetchWrapper(t *testing.T) {
 // rather than fetching asynchronously (which the artifact's own init would race).
 func TestInjectShimInlinesStateWithoutAsyncHydrate(t *testing.T) {
 	state := map[string]string{"tkgraph:config:v1": `{"lastSource":"github"}`}
-	doc := injectPreamble("<html><head></head><body></body></html>", "abc", "https://app.test", state, false, false)
+	doc := injectPreamble("<html><head></head><body></body></html>", "abc", "https://app.test", state, originPolicy{}, false, false, nil)
 
 	// The state value is embedded directly in the shim's cache.
 	if !strings.Contains(doc, "lastSource") || !strings.Contains(doc, "github") {
@@ -368,7 +372,7 @@ func TestInjectShimInlinesStateWithoutAsyncHydrate(t *testing.T) {
 
 // A nil/empty state must produce a valid empty-object cache, never `null`.
 func TestInjectShimNilStateIsEmptyObject(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 	if !strings.Contains(doc, "var cache = {}") {
 		t.Fatalf("nil state should inline an empty object, got: %s", doc)
 	}
@@ -404,7 +408,7 @@ func TestShimStorageNamespacesAreIndependent(t *testing.T) {
 	// A key inlined into the persisted namespace — the collision case: an
 	// artifact writing sessionStorage['draft'] must not see or overwrite it.
 	doc := injectPreamble("<head></head>", "abc", "https://app.test",
-		map[string]string{"draft": "saved"}, false, false)
+		map[string]string{"draft": "saved"}, originPolicy{}, false, false, nil)
 
 	local := storageInstall(t, doc, "localStorage")
 	session := storageInstall(t, doc, "sessionStorage")
@@ -442,7 +446,7 @@ func TestShimStorageNamespacesAreIndependent(t *testing.T) {
 // localStorage keeps its unconditional install: it serves the inlined reads
 // top-level too (its own top-level write problem is av-blzu).
 func TestShimSessionStorageInstallIsFramedOnly(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 
 	guard := strings.Index(doc, "if (window.parent !== window) {")
 	if guard < 0 {
@@ -462,7 +466,7 @@ func TestShimSessionStorageInstallIsFramedOnly(t *testing.T) {
 // operation is tagged with an explicit op so the host bridge — and the two
 // listeners that consume it — can tell them apart with no ambiguity.
 func TestShimRemoveItemAndClearUseExplicitOp(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 
 	if !strings.Contains(doc, "persist('delete', key)") {
 		t.Fatalf("removeItem must post an explicit 'delete' op, not a '' sentinel: %s", doc)
@@ -483,7 +487,7 @@ func TestShimRemoveItemAndClearUseExplicitOp(t *testing.T) {
 // with no persist call at all, so the wipe looked successful until the next
 // render re-inlined every original key.
 func TestShimClearWritesThrough(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 
 	clearIdx := strings.Index(doc, "clear: function() {")
 	if clearIdx < 0 {
@@ -503,7 +507,7 @@ func TestShimClearWritesThrough(t *testing.T) {
 // per operation, so clear() and removeItem() called with no host frame stay
 // cache-only and never throw — matching every other bridge's guard.
 func TestShimPersistStateGuardsTopLevelForEveryOp(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 
 	fn := "function persistState(op, key, value) {"
 	start := strings.Index(doc, fn)
@@ -522,7 +526,7 @@ func TestShimPersistStateGuardsTopLevelForEveryOp(t *testing.T) {
 // must never gain a network path for this (blob payloads come from a
 // createObjectURL registry, not a connect-src-governed fetch).
 func TestShimInstallsDownloadBridge(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 
 	// The message shape the host's download listener validates.
 	if !strings.Contains(doc, "__avDownload") {
@@ -551,7 +555,7 @@ func TestShimInstallsDownloadBridge(t *testing.T) {
 // pages get no bridge in v1. Widget renders never carry this block at all
 // (av-fafu) — see widget_test.go.
 func TestShimDownloadBridgeIsFramedOnly(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 	if !strings.Contains(doc, "if (window.parent !== window) {") {
 		t.Fatalf("download bridge must be guarded to framed (gallery-embedded) contexts: %s", doc)
 	}
@@ -564,7 +568,7 @@ func TestShimDownloadBridgeIsFramedOnly(t *testing.T) {
 // (blob:/data:) still win over navigation, and same-origin/hash/mailto/
 // javascript: links are left to their native behavior.
 func TestShimInstallsLinkNavigationBridge(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 
 	if !strings.Contains(doc, "__avNavigate") {
 		t.Fatalf("shim missing the link navigation bridge message: %s", doc)
@@ -592,7 +596,7 @@ func TestShimInstallsLinkNavigationBridge(t *testing.T) {
 // host frame (naming the 'module-worker' capability), pinned to the app origin
 // like every other bridge — so the host can warn.
 func TestShimInstallsModuleWorkerInterceptor(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 
 	// The generic message shape the host's banner listener validates.
 	if !strings.Contains(doc, "__avCapabilityWarning") {
@@ -635,7 +639,7 @@ func TestShimInstallsModuleWorkerInterceptor(t *testing.T) {
 // (which have a real origin and run module workers fine) neither install it nor
 // warn.
 func TestShimModuleWorkerInterceptorIsFramedOnly(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 	// The interceptor block sits inside the framed guard; the diagnostic marker
 	// must appear after the guard opens.
 	guard := strings.Index(doc, "if (window.parent !== window) {")
@@ -651,7 +655,7 @@ func TestShimModuleWorkerInterceptorIsFramedOnly(t *testing.T) {
 // the download bridge it installs framed-only (guarded by the same
 // window.parent check), so top-level/share renders are unaffected.
 func TestShimInstallsClipboardBridge(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 
 	// The message shape the host's clipboard listener validates.
 	if !strings.Contains(doc, "__avClipboard") {
@@ -678,7 +682,7 @@ func TestShimInstallsClipboardBridge(t *testing.T) {
 // save's createWritable routes through the download bridge. Like the other
 // bridges, framed-only (co-located inside the window.parent guard).
 func TestShimInstallsFSAPickerPolyfill(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 
 	// All three FSA entry points are replaced on window.
 	for _, name := range []string{"showOpenFilePicker", "showDirectoryPicker", "showSaveFilePicker"} {
@@ -722,7 +726,7 @@ func TestShimInstallsFSAPickerPolyfill(t *testing.T) {
 // surface single-path and the sandbox token set unchanged (downloads_test.go
 // still asserts sandbox="allow-scripts" with no allow-downloads).
 func TestShimFSASaveReusesDownloadBridge(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, false, false)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
 
 	// The save writable triggers a download via a detached anchor click, the
 	// same vector the download bridge intercepts.
@@ -738,5 +742,229 @@ func TestShimFSASaveReusesDownloadBridge(t *testing.T) {
 	// that spec-conformant artifacts pass, not just bare Blob/ArrayBuffer.
 	if !strings.Contains(doc, "data.type === 'write'") {
 		t.Fatalf("createWritable.write must accept the WriteParams form: %s", doc)
+	}
+}
+
+// The asset source is a system source, not an approved one: it is added by the
+// render surface and never appears in the allowlist editor. What it must be is
+// an absolute, path-scoped URL. A path-only source would be resolved against
+// whatever the browser is comparing it to, and the artifact's own frame has an
+// opaque origin — so a vendored payload's fetch would be blocked by the very
+// policy that is supposed to permit it. The trailing slash keeps it a prefix
+// over one artifact's assets rather than a grant over the whole origin.
+func TestBuildCSPCarriesTheAbsoluteAssetSource(t *testing.T) {
+	const appOrigin = "https://app.example.com"
+	rd := &Renderer{cfg: Config{RenderOrigin: "https://render.example.com"}}
+
+	base := rd.assetBaseURL("art-1")
+	if base != "https://render.example.com/a/art-1/assets/" {
+		t.Fatalf("asset base %q must be absolute and path-scoped to the artifact", base)
+	}
+
+	csp := buildCSP(nil, appOrigin, base)
+	// Every directive a vendored payload can load under: the runtime pass's
+	// arrive by fetch, markup assets (av-oz40) through the element that names
+	// them.
+	for _, name := range []string{"connect-src", "img-src", "font-src", "media-src", "style-src", "script-src"} {
+		d, ok := directive(t, csp, name)
+		if !ok {
+			t.Fatalf("%s directive missing", name)
+		}
+		if !strings.Contains(d, base) {
+			t.Fatalf("%s %q must carry the asset source %q", name, d, base)
+		}
+	}
+
+	// And it costs an artifact without assets nothing.
+	if strings.Contains(buildCSP(nil, appOrigin, ""), "/assets/") {
+		t.Fatalf("an artifact with no assets must keep the policy it had before assets existed")
+	}
+}
+
+// av-kmwj: a request the CSP blocks must be reported to the *host* frame, never
+// prompted for inside the artifact's own DOM (which the artifact controls and
+// could forge). The reporter listens for securitypolicyviolation and posts the
+// origin to the parent, pinned to the app origin like every other bridge.
+func TestPreambleReportsCSPViolationsToHost(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+
+	if !strings.Contains(doc, "securitypolicyviolation") {
+		t.Fatalf("preamble must listen for CSP violations: %s", doc)
+	}
+	if !strings.Contains(doc, "__avNetwork") {
+		t.Fatalf("violations must be posted to the host as __avNetwork: %s", doc)
+	}
+	// Framed-only, like every other bridge: a top-level render or a share has
+	// no trusted chrome to host a prompt, so there is nobody to report to.
+	if !strings.Contains(doc, "if (window.parent !== window) {") {
+		t.Fatalf("the reporter must sit inside the framed-only guard: %s", doc)
+	}
+}
+
+// The report that matters most is the one an artifact triggers on its first
+// line — an <img src> in the initial markup — and that fires before the host
+// page has attached its listener. A one-shot postMessage there is lost, so the
+// preamble buffers until the host's __avHostReady ping and flushes then
+// (the same handshake av-yvtb's capability diagnostic uses).
+//
+// Buffer-then-flush, not the diagnostic's post-and-replay: that one is
+// idempotent on the host, where a duplicated report would queue a second
+// prompt for an origin the user just answered.
+func TestPreambleBuffersReportsUntilTheHostIsListening(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+
+	for _, want := range []string{"__avHostReady", "queuedReports", "hostReady"} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("the reporter must buffer against the host handshake (%s): %s", want, doc)
+		}
+	}
+	// The queue is drained, not replayed: a second flush would re-prompt. The
+	// assertion names the clearing statement specifically — the declaration
+	// `var queuedReports = []` would satisfy a looser one while the flush
+	// re-sent everything on every ping.
+	if !strings.Contains(doc, "\n        queuedReports = [];") {
+		t.Fatalf("the flush must clear the queue: %s", doc)
+	}
+	// A violation never posts directly; everything goes through the buffer.
+	if strings.Contains(doc, "{ __avNetwork: true, artifactId: ARTIFACT_ID, origin: origin, directive: directive },") {
+		t.Fatalf("reports must go through sendReport, not straight to postMessage: %s", doc)
+	}
+}
+
+// Only violations of directives the allowlist actually builds are reported. An
+// <iframe> blocked by default-src 'none' would still be blocked after the user
+// approved its origin — no allowlist entry reaches frame-src — so prompting
+// there would promise a fix that never arrives.
+func TestPreambleReportsOnlyAllowlistGovernedDirectives(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+
+	// The -elem/-attr variants matter: browsers report those as the effective
+	// directive even when the policy only spells out the parent.
+	for _, name := range []string{
+		"'script-src'", "'script-src-elem'", "'worker-src'", "'style-src'",
+		"'img-src'", "'font-src'", "'media-src'", "'connect-src'", "'form-action'",
+	} {
+		if !strings.Contains(doc, name) {
+			t.Fatalf("%s is built from the allowlist and must be reportable: %s", name, doc)
+		}
+	}
+	if strings.Contains(doc, "'frame-src'") {
+		t.Fatalf("frame-src is not built from the allowlist; approving its origin would not unblock it: %s", doc)
+	}
+}
+
+// Origins the user answered "don't ask again" for are inlined so a repeat
+// violation stays silent instead of re-prompting on every load. They must never
+// appear in the CSP — that is built from allow decisions alone.
+func TestPreambleInlinesBlockedOriginsWithoutWideningCSP(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil,
+		originPolicy{Blocked: []string{"https://tracker.example.com"}}, false, false, nil)
+
+	if !strings.Contains(doc, `["https://tracker.example.com"]`) {
+		t.Fatalf("blocked origins must be inlined for suppression: %s", doc)
+	}
+	// Both halves, named as statements: seeding the set is useless without the
+	// guard that reads it, and the guard's absence leaves the word behind.
+	if !strings.Contains(doc, "silencedOrigins[o] = true;") {
+		t.Fatalf("blocked origins must seed the reporter's suppression set: %s", doc)
+	}
+	if !strings.Contains(doc, "if (silencedOrigins[origin]) return;") {
+		t.Fatalf("a silenced origin must be dropped before it is reported: %s", doc)
+	}
+	if !strings.Contains(doc, "silencedOrigins[origin] = true;") {
+		t.Fatalf("a reported origin must join the set, or a retry loop spams the host: %s", doc)
+	}
+	if csp := buildCSP(nil, "https://app.test", ""); strings.Contains(csp, "tracker.example.com") {
+		t.Fatalf("a block decision must never widen the CSP: %s", csp)
+	}
+}
+
+// An artifact with no block decisions must still inline a valid empty array,
+// never `null` — null.forEach would throw and take the whole preamble with it.
+func TestPreambleNilBlockedIsEmptyArray(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	if !strings.Contains(doc, "var BLOCKED_ORIGINS = [];") {
+		t.Fatalf("nil blocked list should inline an empty array, got: %s", doc)
+	}
+}
+
+// av-kmwj, the redirect loop. picsum.photos serves images by 302-ing to
+// fastly.picsum.photos, and CSP re-checks every redirect hop — so an artifact
+// whose allowlist names picsum.photos still has its images blocked. The
+// violation report names the *pre-redirect* URL, because the spec strips the
+// destination rather than let a policy probe where a cross-origin redirect
+// leads. The reporter therefore sees an origin that is already allowed.
+//
+// Prompting there is worse than useless: it offers a permission that is already
+// granted, the request fails identically on the next load, and the prompt comes
+// back forever. The reporter must recognise the case and hand it to the
+// capability banner instead.
+func TestPreambleDoesNotPromptForAnAlreadyAllowedOrigin(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil,
+		originPolicy{Allowed: []string{"https://picsum.photos"}}, false, false, nil)
+
+	if !strings.Contains(doc, `var ALLOWED_ORIGINS = ["https://picsum.photos"];`) {
+		t.Fatalf("the CSP's own origins must be inlined for the reporter to recognise them: %s", doc)
+	}
+	// The branch, named as a statement: an allowed origin diverts to the
+	// capability channel and returns before any report is sent.
+	if !strings.Contains(doc, "if (allowedOrigins[origin]) {") {
+		t.Fatalf("an already-allowed origin must not reach the prompt: %s", doc)
+	}
+	if !strings.Contains(doc, "warnCapability('redirected-origin', uri)") {
+		t.Fatalf("the redirect case must explain itself through the capability banner: %s", doc)
+	}
+	if !strings.Contains(doc, "(ALLOWED_ORIGINS || []).forEach") {
+		t.Fatalf("the allowed set must be built before the listener runs: %s", doc)
+	}
+}
+
+// The three states stay distinct. Allowed and blocked are inlined separately
+// because they mean opposite things to the reporter — one is "already yes, so
+// explain", the other "already no, so say nothing" — and an origin in neither
+// is the only one worth a prompt.
+func TestPreambleInlinesAllowedAndBlockedSeparately(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{
+		Allowed: []string{"https://cdn.example.com"},
+		Blocked: []string{"https://tracker.example.com"},
+	}, false, false, nil)
+
+	if !strings.Contains(doc, `var ALLOWED_ORIGINS = ["https://cdn.example.com"];`) {
+		t.Fatalf("allowed origins must inline on their own: %s", doc)
+	}
+	if !strings.Contains(doc, `var BLOCKED_ORIGINS = ["https://tracker.example.com"];`) {
+		t.Fatalf("blocked origins must inline on their own: %s", doc)
+	}
+	// A refusal still never reaches the policy.
+	if csp := buildCSP([]string{"https://cdn.example.com"}, "https://app.test", ""); strings.Contains(csp, "tracker.example.com") {
+		t.Fatalf("a block decision must never widen the CSP: %s", csp)
+	}
+}
+
+// The allowed set the reporter compares against is the artifact's allowlist —
+// the same slice buildCSP was handed — rather than a second read that could
+// disagree with it. The check is only meaningful if the two are the same set.
+func TestOriginPolicyTakesAllowedFromTheArtifactAllowlist(t *testing.T) {
+	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
+	ctx := context.Background()
+	if err := st.SetOriginDecision(ctx, 1, "abc", "https://cdn.example.com", store.DecisionAllow, "runtime"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetOriginDecision(ctx, 1, "abc", "https://tracker.example.com", store.DecisionBlock, "runtime"); err != nil {
+		t.Fatal(err)
+	}
+	a, err := st.GetArtifact(ctx, 1, "abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := rd.originPolicyFor(renderRequest("/a/abc", "abc", 1), a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(policy.Allowed, a.NetworkAllowlist) {
+		t.Fatalf("allowed must be the artifact's allowlist verbatim: %v vs %v", policy.Allowed, a.NetworkAllowlist)
+	}
+	if !reflect.DeepEqual(policy.Blocked, []string{"https://tracker.example.com"}) {
+		t.Fatalf("blocked must hold only the refusals: %v", policy.Blocked)
 	}
 }

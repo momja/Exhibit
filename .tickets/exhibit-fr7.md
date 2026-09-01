@@ -2,7 +2,7 @@
 id: exhibit-fr7
 status: closed
 deps: [exhibit-x87]
-links: [av-jafp, av-isb3, av-mf1x, av-41se, av-5aje, exhibit-x87]
+links: [av-jafp, av-isb3, av-mf1x, av-41se, av-5aje, exhibit-x87, av-kmwj]
 created: 2026-07-01T05:23:56Z
 type: feature
 priority: 2

@@ -109,6 +109,13 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/api/artifacts/"},
 	{route: "/api/artifacts/{artifactID}/"},
 	{route: "/api/artifacts/{artifactID}/state"},
+	// Out-of-line assets (av-20fk): a read of what an artifact stores beside
+	// its body — metadata only, never the bytes, and it mutates nothing.
+	{route: "/api/artifacts/{artifactID}/assets"},
+	// The self-contained export (av-vnkt): a read that materializes the
+	// artifact into one file. It writes nothing.
+	{route: "/api/artifacts/{artifactID}/export"},
+	{route: "/api/artifacts/{artifactID}/origins"},
 	{route: "/api/artifacts/{artifactID}/widget"},
 	{route: "/api/artifacts/{artifactID}/transcripts"},
 	{route: "/api/agent/key"},

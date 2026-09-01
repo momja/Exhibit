@@ -37,7 +37,12 @@ home-screen widget shows a slice of its app.
   artifact. This is why "informative only" needs no event plumbing to enforce.
 - **Under the artifact's security envelope, never its own.** Same opaque-origin
   sandbox, same per-artifact CSP built from the same allowlist. No download
-  bridge, no clipboard bridge, no file-picker polyfill, no element picker.
+  bridge, no clipboard bridge, no file-picker polyfill, no element picker. The
+  subtraction reaches the response headers too: a widget render's
+  `Permissions-Policy` denies the camera and the microphone whatever its
+  artifact holds (av-mv3k), because a tile draws unattended behind
+  `pointer-events: none`, where there is no gesture a device prompt could
+  belong to.
 - **Optional.** No widget means the card renders a **default tile** — a
   monogram on a tint derived from the artifact's id, plain server-rendered
   markup with no frame to load.

@@ -19,12 +19,29 @@ PATCH  /api/artifacts/:id          Update title, body, network_allowlist, etc.
                                    (network_allowlist is the whole approved set; it
                                    replaces the artifact's allow decisions and leaves
                                    any blocked origins untouched)
+
+Every `network_allowlist` entry — on `POST` and on `PATCH` alike — must be an
+**origin**: an absolute `https://host[:port]` (plaintext `http://` only for
+loopback hosts). Scheme and host are lowercased, a trailing dot on the host is
+stripped, a default port is dropped, and duplicates collapse. Anything else —
+a URL with a path or query, credentials, a wildcard, a CSP keyword, a
+`data:`/`blob:` source — is a `400` naming the offending value, not a silently
+truncated row: a path-bearing entry approved as one file would otherwise grant
+its whole origin (av-i7hd).
 POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts)
 DELETE /api/artifacts/:id          Delete artifact, its associated rows, and its blobs
-                                   (body + widget). 500 if a blob could not be removed:
+                                   (body + widget) — except a blob another artifact
+                                   still references. 500 if a blob could not be removed:
                                    the row is already gone, but a delete that left bytes
                                    on disk must not report success
 ```
+
+**Reclaiming bytes is automatic and invisible.** Rows and files live in two
+stores that cannot commit together, so the transaction that removes the last
+row naming a blob also records the intent to delete it (av-8gyd). The bytes go
+immediately after that commit; anything a crash interrupts is finished by the
+next startup. There is no sweep, no reconciler and no operator command — the
+only thing a 500 above changes is when the file goes, not whether it does.
 
 **Ingest flow** — two steps by design:
 
@@ -113,6 +130,39 @@ via the injected `<base href>`) and are reported. The response carries a
 As with any ingest, residual origins surface in `network_footprint` for
 **explicit** approval — the snapshot never seeds the `network_allowlist`, so a
 snapshotted artifact stays network-inert until you approve its residual origins.
+
+## Network origin decisions
+
+```
+GET    /api/artifacts/:id/origins            List every decision (allow and block)
+POST   /api/artifacts/:id/origins            Decide one origin
+                                             {"origin":"…","decision":"allow"|"block","source":"…"}
+DELETE /api/artifacts/:id/origins?origin=…   Forget one decision (back to undecided)
+```
+
+`PATCH /api/artifacts/:id` with `network_allowlist` carries the whole approved
+set and is what the edit page's Save uses. These routes decide a **single**
+origin, and the difference is what they can express, not only how wide they are.
+`PATCH` replaces the allow rows and deliberately leaves block rows alone, so it
+can neither record a block nor return an origin to undecided; both are here.
+
+- `decision: "allow"` widens the artifact's CSP on its next render.
+- `decision: "block"` records a "don't ask again" answer. It **never** reaches
+  the CSP; the render surface inlines it into the preamble purely so the runtime
+  permission prompt stops raising that origin.
+- `DELETE` is how a block is forgotten. Without it a block would be a permanent
+  trap: a blocked origin never prompts again on its own.
+- `source` is provenance and informational only, defaulting to `"user"`. The
+  runtime prompt sends `"runtime"`.
+
+The origin goes through the same normalization and the same `400` as a
+`network_allowlist` entry (above), for the same reason: an allow row is pasted
+verbatim into a CSP header. On `DELETE` it travels as a query parameter rather
+than a path segment, because an origin is arbitrary caller-supplied text and a
+path segment is resolved by the URL parser before the request is sent.
+
+An agent-session credential cannot reach these routes at all: approving an
+artifact's own network egress is a decision reserved for a person.
 
 ## State (cross-device sync)
 

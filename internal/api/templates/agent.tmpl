@@ -63,6 +63,11 @@
 </div>
 
 {{if .BYOK}}
+{{/* The same runtime network-permission dialog the detail page hosts
+     (av-6xvs). This pane embeds the same render document behind the same
+     sandbox and sits on the same app origin, so it has the trusted chrome the
+     prompt needs — it simply never had the prompt. */}}
+{{template "networkPrompt"}}
 <div id="key-modal" class="modal-overlay" hidden>
   <div class="modal" role="dialog" aria-modal="true">
     <h2>Agent API key</h2>
@@ -110,6 +115,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 </script>
 <script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/state-api.js"></script>
+<script src="/assets/gallery/network-prompt.js"></script>
 {{/* components.js carries the widget-tile health watcher (av-fafu); the
      preview pane renders a tile, so it needs it like the gallery does. */}}
 <script src="/assets/gallery/components.js"></script>

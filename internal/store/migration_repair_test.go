@@ -43,14 +43,18 @@ func currentVersion(t *testing.T, s *SQLiteStore) int64 {
 }
 
 // headVersion is the highest migration this repo defines, read from the
-// embedded files rather than written down here.
+// embedded .sql files plus the Go-registered ones (the column repairs and the
+// origin-normalization repair) rather than written down here.
 //
 // The assertions below are about *reaching head* — that a repair heals a
 // damaged ledger and then gets out of the way — and not about which number
 // head happens to be this month. Hard-coding it made every new migration fail
 // four unrelated tests and taught whoever hit that to edit a number in a file
 // about migration collisions, which is the last place a numbering change
-// should be routine.
+// should be routine. Every Go migration registered so far has landed below
+// the highest .sql file, so folding them into the max was never load-bearing
+// until the origin-normalization repair (av-i7hd) took the *next* version
+// after the current .sql head instead of an old collided one.
 func headVersion(t *testing.T) int64 {
 	t.Helper()
 	entries, err := migrationsFS.ReadDir("migrations")
@@ -61,6 +65,14 @@ func headVersion(t *testing.T) int64 {
 		if _, err := fmt.Sscanf(e.Name(), "%d_", &v); err == nil && v > head {
 			head = v
 		}
+	}
+	for _, r := range columnRepairs {
+		if r.Version > head {
+			head = r.Version
+		}
+	}
+	if repairOriginNormalizationVersion > head {
+		head = repairOriginNormalizationVersion
 	}
 	require.NotZero(t, head, "no numbered migrations found")
 	return head

@@ -48,7 +48,7 @@ func TestCapabilityPopoverSandboxedShowsFullyContained(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	page := w.Body.String()
 
-	assert.Contains(t, page, "Fully contained — no network, download, clipboard, or external link access")
+	assert.Contains(t, page, "Fully contained — no network, download, clipboard, external link, camera, or microphone access")
 	assert.NotContains(t, page, "capability-popover-label")
 	assert.NotContains(t, page, "capability-popover-origins")
 }
@@ -157,6 +157,47 @@ func TestCapabilityPopoverLinksRowPerFlag(t *testing.T) {
 	assert.NotContains(t, page, "Fully contained")
 }
 
+// av-mv3k: camera and microphone are two grants, not one "media" grant — each
+// gets its own popover row and cluster glyph, and approving one must not
+// display the other. A media-only grant must never collapse to "Fully
+// contained" either.
+func TestCapabilityPopoverCameraAndMicrophoneRowsPerFlag(t *testing.T) {
+	cases := []struct {
+		field  string
+		glyph  string
+		row    string
+		absent string
+	}{
+		{"camera_approved", `<span class="capability-glyph"><i class="ph ph-camera"></i></span>`,
+			"Camera — Can capture video from your camera", "Microphone —"},
+		{"microphone_approved", `<span class="capability-glyph"><i class="ph ph-microphone"></i></span>`,
+			"Microphone — Can capture audio from your microphone", "Camera —"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.field, func(t *testing.T) {
+			r := newTestRouter(t)
+			id := createTestArtifact(t, r, "Recorder")
+			w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{tc.field: true})
+			require.Equal(t, http.StatusOK, w.Code)
+
+			req := httptest.NewRequest("GET", "/", nil)
+			w2 := httptest.NewRecorder()
+			r.ServeHTTP(w2, req)
+			require.Equal(t, http.StatusOK, w2.Code)
+			page := w2.Body.String()
+
+			assert.Contains(t, page, `<div class="capability-popover-row">`+tc.glyph+`<span>`+tc.row+`</span></div>`)
+			clusterStart := strings.Index(page, "capability-cluster")
+			popoverStart := strings.Index(page, `<div class="capability-popover" id="`)
+			require.True(t, clusterStart >= 0 && popoverStart > clusterStart, "cluster must precede its popover")
+			assert.Contains(t, page[clusterStart:popoverStart], tc.glyph, "capability-cluster must render the glyph")
+			// One grant is one grant: the sibling device stays unmentioned.
+			assert.NotContains(t, page, tc.absent)
+			assert.NotContains(t, page, "Fully contained")
+		})
+	}
+}
+
 // The footer Manage link points at the artifact's Edit page security section
 // and is present on both the gallery card and the artifact viewer/detail
 // page — the ticket explicitly calls out "card + viewer", not just one.
@@ -181,26 +222,36 @@ func TestCapabilityPopoverManageLinkOnGalleryAndDetail(t *testing.T) {
 }
 
 // Origins are rendered through html/template's contextual auto-escaping, not
-// hand-rolled escaping — an origin containing HTML-significant characters
-// (as the scanner can produce, per scanner-origins-need-html-escaping) must
+// hand-rolled escaping — an origin containing HTML-significant characters must
 // come out escaped, never as raw markup an attacker-controlled origin could
 // use to break out of the popover.
+//
+// Since av-i7hd such a value can no longer reach the store at all (the write
+// path rejects it, asserted below), so the escaping guarantee is exercised
+// against the partial directly — the shape a row written before that
+// validation existed still has.
 func TestCapabilityPopoverEscapesOrigins(t *testing.T) {
+	html, err := renderPartial(t, "capabilityCluster", capabilityView{
+		ArtifactID:       "art-escaped",
+		NetworkAllowlist: []string{`https://evil.example.com"><script>alert(1)</script>`},
+		ShowManage:       true,
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, html, "<script>alert(1)</script>")
+	assert.Contains(t, html, "&lt;script&gt;alert(1)&lt;/script&gt;")
+}
+
+// The same hostile value at the single write path: it is not stored and then
+// escaped, it is refused, and the 400 names the entry so the edit page can
+// point at the row the user typed (av-i7hd).
+func TestAllowlistRejectsHostileOrigin(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Escaped")
 	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
 		"network_allowlist": []string{`https://evil.example.com"><script>alert(1)</script>`},
 	})
-	require.Equal(t, http.StatusOK, w.Code)
-
-	req := httptest.NewRequest("GET", "/", nil)
-	w2 := httptest.NewRecorder()
-	r.ServeHTTP(w2, req)
-	require.Equal(t, http.StatusOK, w2.Code)
-	page := w2.Body.String()
-
-	assert.NotContains(t, page, "<script>alert(1)</script>")
-	assert.Contains(t, page, "&lt;script&gt;alert(1)&lt;/script&gt;")
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), `evil.example.com`)
 }
 
 // The popover's footer Manage link is gated by ShowManage — off in the

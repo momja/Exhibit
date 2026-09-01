@@ -67,7 +67,28 @@ of the artifact source (markup/script/style excluded), and tag names — a singl
 search box query matches any of the three.
 
 **Migrations: `goose`.** Embed migration files in the binary (`go:embed`) and run them on
-startup so a fresh container self-initializes.
+startup so a fresh container self-initializes. **NOTE: ** if you are working on a feature
+with a migration, make sure to rebase off main before creating a PR, and ensure there are
+not conflicts on the migration number.
+
+**The version number is the dangerous part.** goose identifies a migration by
+its number alone, and that produces two distinct failures this repo has met
+both of. A number reused is applied once and forever, so the second migration
+wearing it is *silently skipped* on every database that took the first — four
+outages, catalogued in `internal/store/migration_repair.go`. And a number
+*below* the ledger's high-water mark stops goose before it runs anything, so
+the instance does not start at all: `found N missing migrations before current
+version`.
+
+The second is the one branch work walks into, because a number is chosen while
+the branch is young and the file lands after main has shipped several more.
+Reserving a low number for work in flight does not survive it — the
+reservation holds only if that branch merges before anything above it deploys.
+So a new migration takes the next number above **every** version already in a
+ledger, `.sql` files and the Go migrations in `migration_repair.go` /
+`migration_origins.go` alike. `internal/store/migration_order_test.go` walks
+both rules, and an end-to-end test opens a database left at the previous
+release to prove the upgrade still starts.
 
 **Blob store: two implementations behind the `Blob` interface, chosen by
 configuration (av-52ll).** Artifact bodies go either to a mounted volume
@@ -116,9 +137,13 @@ Renderer construction:
   iframe in an opaque origin. This is what prevents an artifact from touching the app's
   cookies/storage and what lets two artifacts coexist without reading each other, even on
   a shared render origin.
-- The embedding page grants `allow="clipboard-read; clipboard-write"` on the iframe —
-  a Permissions Policy delegation so artifacts can use the async Clipboard API without
-  any relaxation of the sandbox or CSP.
+- The embedding page adds **no** `allow=` delegation: a Permissions Policy
+  allowlist keys on the frame's src origin, which is opaque here, so the
+  delegation matches nothing (measured — Chrome refuses `allow="camera"` on a
+  sandboxed frame even with its auto-accept flag set). Clipboard is re-granted
+  by the render preamble's capability bridge instead; camera and microphone
+  cannot be re-granted by anyone here (a `MediaStreamTrack` is not transferable
+  in any shipping engine), so they are gated and spent on the top-level render.
 - Inject a generated **per-artifact CSP** (`connect-src`/`script-src`/`worker-src`/
   `style-src`/`img-src`/`font-src`/`media-src` built from the artifact's allowlist) into
   the served document. The browser enforces the network boundary; this is the wall behind
@@ -132,8 +157,19 @@ Renderer construction:
   run without approval. `worker-src` is emitted explicitly rather than inherited from
   `script-src`: when it is missing the worker fails silently, constructing fine but
   never executing its body.
+- Set a per-artifact **`Permissions-Policy`** naming `camera` and `microphone`
+  only, built from the artifact's two device approvals. This is what makes a
+  device grant per-artifact rather than per-render-origin: browser permissions
+  are granted to an origin, and one render origin serves the whole library, so
+  without it the first artifact allowed the camera would have allowed it for all
+  of them. See `architecture.md` §3.2.
 - Inject the **render preamble** — the **storage shim** (§6 here) with the artifact's
-  current state inlined — into `<head>` *before* any artifact script runs.
+  current state inlined, plus the out-of-line **asset manifest** (av-20fk) that
+  redirects the page's own `fetch` of a vendored payload to that artifact's asset
+  route, and (framed only) the capability bridges plus the **network permission
+  reporter**, a `securitypolicyviolation` listener that hands CSP-blocked origins
+  to the host frame to prompt about — into `<head>` *before* any artifact script
+  runs.
   Serve the document `Cache-Control:
   no-store` — it's dynamic (inlined state + per-artifact CSP) and must not be cached.
 
@@ -222,13 +258,17 @@ the outbound network footprint to show the user for approval.
   `XMLHttpRequest`, `new Worker`, and `WebSocket` targets. Whatever it misses is caught
   at runtime by the CSP allowlist.
 - The snapshot vendorer's runtime-asset pass shares the fetch half of that definition
-  (`scanner.FetchRefs`), so the assets it inlines cannot drift from the fetch targets
+  (`scanner.FetchRefs`), so the payloads it vendors cannot drift from the fetch targets
   the footprint reports; ESM import refs stay with the scanner only, because the
   module loader never consults `window.fetch` and those origins are governed by
   `script-src` instead. It compensates for the heuristic's blind spot differently:
-  rather than rewriting the literals it found, it installs a `fetch` wrapper that
-  matches on the resolved URL at call time — so a runtime-constructed URL is served
-  when that same absolute URL also appears as a literal fetch ref, and only then.
+  rather than rewriting the literals it found, the render surface installs a `fetch`
+  wrapper that matches on the resolved URL at call time — so a runtime-constructed URL
+  is served when that same absolute URL also appears as a literal fetch ref, and only
+  then. Since av-20fk the payloads themselves live outside the artifact body, as blobs
+  served from a per-artifact, immutable, cacheable route; the body keeps the literals
+  it was ingested with, so nothing an agent does to the document can break the
+  redirect.
 
 Present the deduplicated origin list at the approval step; write approved origins as
 the artifact's `decision='allow'` rows in `artifact_network_origins`.
@@ -266,6 +306,21 @@ hand-rolled HTML escaping the old string-concatenated pages needed.)
 
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.
+
+**Page scripts are tested by running them (av-kmwj).** `web/gallery/testdom.mjs`
+is a small DOM — element lookup, listeners, `hidden`, `textContent`, and a
+`postMessage` boundary between the host and the artifact frame — that a
+`node --test` file loads a *built* page script into and drives through a whole
+interaction. `internal/api`'s `TestGalleryPageScriptSuite` runs those files, so
+`go test ./...` covers both halves of a feature. This exists because the Go
+tests can assert that an id is in the rendered markup and that a substring is in
+the shipped asset, and cannot assert that clicking Allow writes a decision and
+reloads the frame — the gap that let a whole feature reach a merged PR without
+reaching main. It is deliberately not jsdom: these scripts do a narrow set of
+DOM things, and a full DOM implementation is a large dependency for a workspace
+whose entire build step is copying files. The cost is that elements are created
+on demand rather than parsed from the template, so an id the template spells
+differently is the Go template tests' half to catch.
 
 **Partial re-render: htmx (av-6m3e).** When server-side state changes after
 load, the page re-fetches one server-rendered fragment and swaps it in rather

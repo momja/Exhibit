@@ -6,9 +6,15 @@
  *   ID                 - the artifact id
  *   SOURCE_URL         - source URL for URL-ingested artifacts ('' otherwise;
  *                        the Update-from-source button only renders when set)
+ *   OPEN_URL           - the app-origin route that mints a fresh render token
+ *                        and redirects to it: the "Open in new tab" destination,
+ *                        where capture devices actually work (av-mv3k), and what
+ *                        the network prompt reloads the frame through (av-kmwj)
  *   downloadsApproved  - persisted first-use download approval (mutable)
  *   clipboardApproved  - persisted first-use clipboard approval (mutable)
  *   linksApproved      - persisted first-use external-link approval (mutable)
+ *   cameraApproved     - persisted first-use camera approval (mutable)
+ *   microphoneApproved - persisted first-use microphone approval (mutable)
  */
 
 // Mobile actions sheet (av-g7n7): below 640px the toolbar is styled as a
@@ -88,6 +94,50 @@ window.addEventListener('message', function(e) {
 // the shim attaches (e.g. a worker's script URL). Unknown slugs fall back to a
 // generic description so an added detection is never left with empty details.
 const CAPABILITY_COPY = {
+  camera: {
+    detail: 'This artifact asked for your camera. No browser can give a camera to the ' +
+      "embedded preview — its sandboxed frame has no stable origin, and a device " +
+      'permission is granted to an origin. Opening the artifact directly gives it a real ' +
+      'origin, where it reaches the camera under the approval you already granted.',
+    resourceLabel: 'Device'
+  },
+  microphone: {
+    detail: 'This artifact asked for your microphone. No browser can give a microphone to ' +
+      "the embedded preview — its sandboxed frame has no stable origin, and a device " +
+      'permission is granted to an origin. Opening the artifact directly gives it a real ' +
+      'origin, where it reaches the microphone under the approval you already granted.',
+    resourceLabel: 'Device'
+  },
+  'camera-microphone': {
+    detail: 'This artifact asked for your camera and microphone. No browser can give a ' +
+      "capture device to the embedded preview — its sandboxed frame has no stable origin, " +
+      'and a device permission is granted to an origin. Opening the artifact directly gives ' +
+      'it a real origin, where it reaches them under the approval you already granted.',
+    resourceLabel: 'Device'
+  },
+  // av-kmwj. The artifact asked for an origin its allowlist already permits and
+  // the browser blocked it anyway, which means the request did not end where it
+  // started. CSP re-checks every redirect hop, and it deliberately reports the
+  // URL the artifact asked for rather than the one it was sent to — a policy
+  // must not become a way to probe where a cross-origin redirect leads. So
+  // nobody on this page can name the origin that actually needs approving, and
+  // the network prompt stays out of the way rather than offering to grant a
+  // permission that is already granted.
+  //
+  // It carries its own headline because the shared one is wrong here: opening
+  // the artifact directly does not fix a redirect, the policy is identical
+  // there. What it does buy is a console that names the blocked URL.
+  'redirected-origin': {
+    headline: 'A request was blocked after being redirected to an unapproved origin.',
+    detail: 'This artifact contacted a host you have already allowed, but that host ' +
+      'forwarded the request somewhere else, and the destination is not on the ' +
+      "allowlist. Browsers hide a redirect's destination from the page, so Exhibit " +
+      'cannot offer it for approval — if you know the host it forwards to, add it in ' +
+      "allowlist settings. Opening the artifact directly runs it under the same " +
+      "policy, where your browser's Network panel shows the redirect and names " +
+      'the destination.',
+    resourceLabel: 'Blocked request'
+  },
   'module-worker': {
     detail: "This artifact spawns a module worker (new Worker(url, { type: 'module' })), " +
       'which browsers refuse to run in the embedded preview because its sandboxed ' +
@@ -116,6 +166,12 @@ window.addEventListener('message', function(e) {
   if (detail && !detail.textContent) {
     const copy = CAPABILITY_COPY[d.capability] || CAPABILITY_COPY_FALLBACK;
     detail.textContent = copy.detail;
+    // Most capabilities share the banner's headline ("open it directly to run
+    // it"), which is true of every failure the sandbox causes. A capability
+    // that opening directly does NOT fix supplies its own rather than leaving
+    // the shared line to say something false.
+    const headline = document.getElementById('capability-warning-headline');
+    if (headline && copy.headline) headline.textContent = copy.headline;
     if (d.resource) {
       const label = document.createElement('div');
       label.className = 'banner-detail-url';
@@ -129,18 +185,11 @@ window.addEventListener('message', function(e) {
   banner.hidden = false;
 });
 
-// The module-worker diagnostic usually fires at iframe load — possibly before
-// this listener is attached, so the shim buffers it and replays on request.
-// Announce readiness on every iframe load (targetOrigin '*' — the frame is
-// opaque; the shim validates the ping came from our app origin) so any buffered
-// diagnostic is delivered even when the worker was constructed before we listened.
-(function() {
-  const frame = document.querySelector('iframe');
-  if (!frame) return;
-  frame.addEventListener('load', function() {
-    frame.contentWindow.postMessage({ __avHostReady: true }, '*');
-  });
-})();
+// The preamble buffers what it cannot deliver yet — the module-worker
+// diagnostic (av-yvtb) and CSP-violation reports (av-kmwj) both fire at frame
+// load, before this page has attached its listeners — and flushes when the host
+// announces itself. announceTo owns both halves of that handshake.
+window.ExhibitNetworkPrompt.announceTo(document.querySelector('iframe'));
 
 // Download bridge: the sandboxed frame cannot download anything itself (the
 // sandbox omits allow-downloads). The shim posts intercepted download
@@ -373,6 +422,174 @@ document.getElementById('link-allow').addEventListener('click', async function()
   if (!ok || pendingLink !== link) return;
   closeLinkModal();
   if (link) window.open(link.url, '_blank', 'noopener');
+});
+
+// Camera / microphone gate (av-mv3k): the only capability here that is decided
+// but not delivered, because neither half of the usual trick is available.
+// getUserMedia from the frame's opaque origin throws SecurityError before any
+// permission is consulted (an allow="camera" delegation does not change that —
+// it is refused even with Chrome's auto-accept flag set), and a camera
+// MediaStreamTrack is not a transferable object in any shipping engine, so the
+// download bridge's "acquire here, transfer the payload in" has nothing to
+// transfer.
+//
+// So this owns the decision and hands the user the place the decision can be
+// spent: the top-level render, a real origin where the artifact reaches the
+// device itself under the very same approval (it builds that document's
+// Permissions-Policy header). Unapproved, we prompt and — on Allow — persist
+// and open it. Already approved, there is nothing to prompt for, so the frame
+// raises the standard capability banner instead. Either way the artifact's
+// getUserMedia rejects promptly rather than hanging on a stream that is never
+// coming.
+let pendingMedia = null;
+
+// Prose for the devices a request named, for the prompt.
+function mediaDeviceLabel(req) {
+  if (req.video && req.audio) return 'your camera and microphone';
+  return req.video ? 'your camera' : 'your microphone';
+}
+
+window.addEventListener('message', function(e) {
+  const d = e.data;
+  if (!d || d.__avMedia !== true || d.artifactId !== ID) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || e.source !== frame.contentWindow) return;
+  const req = { id: String(d.id), audio: !!d.audio, video: !!d.video };
+  if (!req.audio && !req.video) return;
+  // Approved means approved for every device this request named: a camera-only
+  // grant must still prompt when the artifact later asks for the microphone.
+  const needsPrompt = (req.video && !cameraApproved) || (req.audio && !microphoneApproved);
+  if (!needsPrompt) {
+    // Nothing to decide — the grant is already there, it just cannot be spent
+    // in this frame. Ask the frame to raise the banner, which offers the
+    // top-level render, and settle the call.
+    replyMedia(req.id, true, 'Capture devices are unavailable in the embedded preview; open the artifact directly',
+      'NotSupportedError');
+    return;
+  }
+  // A second request arriving while the prompt is open displaces the first, so
+  // settle the one being displaced rather than leaving its getUserMedia promise
+  // pending forever — an artifact that never settles looks like a hang, which is
+  // the failure mode this gate exists to remove.
+  if (pendingMedia) replyMedia(pendingMedia.id, false, 'Permission denied', 'NotAllowedError');
+  pendingMedia = req;
+  document.getElementById('media-devices').textContent = mediaDeviceLabel(req);
+  document.getElementById('media-icon').className = req.video ? 'ph ph-camera' : 'ph ph-microphone';
+  document.getElementById('media-modal').hidden = false;
+  document.getElementById('media-block').focus();
+});
+
+// Settles one pending getUserMedia inside the frame. targetOrigin is '*'
+// because the frame's origin is opaque. banner asks the frame to raise the
+// unsupported-capability banner (the frame owns that channel, so there is one
+// path to it rather than two); every reply is a rejection, since there is no
+// stream to return.
+function replyMedia(id, banner, error, name) {
+  const frame = document.querySelector('iframe');
+  if (!frame) return;
+  frame.contentWindow.postMessage(
+    { __avMediaResult: true, id: id, ok: false, banner: banner, error: error, name: name }, '*'
+  );
+}
+
+// Persists only the devices this request named (see the prompt gate above), so
+// a dictation tool approved for a microphone never comes away with a camera.
+async function setMediaApproved(req) {
+  if (req.video && !cameraApproved) {
+    if (!(await setCapabilityApproved('camera_approved', true, 'camera'))) return false;
+    cameraApproved = true;
+  }
+  if (req.audio && !microphoneApproved) {
+    if (!(await setCapabilityApproved('microphone_approved', true, 'microphone'))) return false;
+    microphoneApproved = true;
+  }
+  return true;
+}
+
+// deny=true settles the pending call so the artifact's getUserMedia rejects
+// with the DOMException a blocked call throws, instead of hanging.
+function closeMediaModal(deny) {
+  document.getElementById('media-modal').hidden = true;
+  if (deny && pendingMedia) replyMedia(pendingMedia.id, false, 'Permission denied', 'NotAllowedError');
+  pendingMedia = null;
+  const frame = document.querySelector('iframe');
+  if (frame) frame.focus();
+}
+
+document.getElementById('media-block').addEventListener('click', function() { closeMediaModal(true); });
+document.getElementById('media-modal').addEventListener('click', function(e) {
+  if (e.target.id === 'media-modal') closeMediaModal(true);
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && !document.getElementById('media-modal').hidden) closeMediaModal(true);
+});
+document.getElementById('media-allow').addEventListener('click', async function() {
+  const req = pendingMedia;
+  if (!req) return;
+  // Claim the tab in the click's own task, before the PATCH. A window.open that
+  // waits on a roundtrip first is an unsolicited popup: Safari blocks it
+  // outright, and Chrome allows it only while the transient activation is still
+  // live, so a slow PATCH loses the tab and the artifact is then told it was
+  // opened directly when nothing opened. The placeholder is navigated once the
+  // approval is persisted and closed if it isn't.
+  //
+  // 'noopener' can't be used here — it returns null, leaving nothing to
+  // navigate — so the opener is severed by hand instead, while the tab is still
+  // about:blank and therefore same-origin enough for the property to be
+  // writable. It stays severed across the navigation. This is not decoration:
+  // the top-level render runs the artifact's own script, and an opener handle
+  // would let it navigate the library tab out from under the user.
+  const tab = window.open('', '_blank');
+  if (tab) {
+    try { tab.opener = null; } catch (err) { /* cross-origin already; nothing to sever */ }
+  }
+  if (!(await setMediaApproved(req))) {
+    if (tab) tab.close();
+    return;
+  }
+  // Only settle the transaction if the pending request is still the one the
+  // user approved — a dismissal or a newer request must not be answered by
+  // opening a tab for this one after the fact.
+  if (pendingMedia !== req) {
+    if (tab) tab.close();
+    return;
+  }
+  document.getElementById('media-modal').hidden = true;
+  pendingMedia = null;
+  // No banner: the user is already looking at the place the grant works.
+  if (tab) tab.location = OPEN_URL;
+  else window.open(OPEN_URL, '_blank', 'noopener');
+  replyMedia(req.id, false,
+    'Capture devices are unavailable in the embedded preview; the artifact was opened directly',
+    'NotSupportedError');
+});
+
+// Network permission prompt (av-kmwj): the dialog and its whole behaviour
+// live in network-prompt.js, shared with the agent chat page (av-6xvs). This
+// page only supplies the four things the two surfaces differ in.
+//
+// reload goes through the app origin's /open route rather than reusing the
+// frame's current src: that src carries a render token minted when this page
+// rendered, which expires — /open mints a fresh one on redirect, so the reload
+// works on a page that has been open all afternoon. The stamp only defeats the
+// browser's cache of the redirect itself.
+window.ExhibitNetworkPrompt.install({
+  frame: function () { return document.querySelector('iframe'); },
+  artifactId: function () { return ID; },
+  readOnly: function () { return typeof READ_ONLY === 'boolean' && READ_ONLY; },
+  report: function (text) {
+    const st = document.getElementById('al-status');
+    if (st) st.textContent = text;
+  },
+  reload: function () {
+    const frame = document.querySelector('iframe');
+    frame.src = OPEN_URL + '?r=' + Date.now();
+    frame.addEventListener('load', function onload() {
+      frame.removeEventListener('load', onload);
+      const st = document.getElementById('al-status');
+      if (st) st.textContent = '';
+    });
+  }
 });
 
 // "Update from source" — only reachable from the toolbar button, which the

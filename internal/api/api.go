@@ -461,6 +461,29 @@ func (ro *Router) setupRoutes() {
 				r.Get("/state", ro.getState)
 				r.Put("/state", ro.setState)
 				r.Delete("/state", ro.deleteState)
+				// Out-of-line assets (av-20fk). Read-and-delete only: they
+				// are written by ingest, never by a client, so there is no
+				// PUT. The delete is the owner's escape hatch for the one
+				// case no rule can decide — a payload whose feature they
+				// edited away — and it takes the asset id as a path segment
+				// because that id is ours and opaque, unlike a state key.
+				// A single self-contained file (av-vnkt): the artifact with
+				// its out-of-line assets folded back in, depending on no
+				// origin, no token, and no running instance. This is where
+				// the "it's just a file" promise is kept now that payloads
+				// live outside the body.
+				r.Get("/export", ro.exportArtifact)
+				r.Get("/assets", ro.listAssets)
+				r.Delete("/assets/{assetID}", ro.deleteAsset)
+				// Per-origin network decisions (av-kmwj). Decided one
+				// origin at a time, because that is what the runtime
+				// permission prompt knows: PATCH above replaces the whole
+				// allow set, which the prompt cannot restate without
+				// clobbering decisions it never saw — and cannot express a
+				// block or a return to undecided at all.
+				r.Get("/origins", ro.listOriginDecisions)
+				r.Post("/origins", ro.setOriginDecision)
+				r.Delete("/origins", ro.deleteOriginDecision)
 				// The artifact's gallery-card widget (av-fafu) — a second
 				// document under the artifact's own security envelope, so it
 				// hangs off the artifact rather than being a resource of its
@@ -582,6 +605,12 @@ func (ro *Router) RenderHandler() http.Handler {
 
 	// Serve a rendered artifact by id
 	r.Get("/a/{artifactID}", renderer.ServeArtifact)
+	// One of the artifact's out-of-line assets (av-20fk). Registered before
+	// the document route reads as more specific, and chi routes it that way
+	// regardless. Deliberately un-tokened and cacheable — see ServeAsset for
+	// why those two go together — and it must never redirect, because the CSP
+	// source permitting it is path-scoped.
+	r.Get("/a/{artifactID}/assets/{assetID}", renderer.ServeAsset)
 	// Serve an artifact's gallery-card widget (av-fafu) — same origin, same
 	// per-artifact CSP, narrower preamble.
 	r.Get("/w/{artifactID}", renderer.ServeWidget)

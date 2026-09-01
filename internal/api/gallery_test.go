@@ -391,6 +391,79 @@ func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
 		"the viewer must never mutate network_allowlist; management is Edit-only")
 }
 
+// av-kmwj: the runtime network-permission prompt lives in trusted app chrome,
+// not in the artifact frame — the artifact controls that DOM and could draw a
+// forgery of the dialog. This pins the markup half: the ids the page script
+// addresses, and the bootstrap value it reloads the frame through. What the
+// script does with them is exercised end to end in
+// web/gallery/detail.net.test.mjs (run by TestGalleryPageScriptSuite).
+func TestDetailPagePromptsForBlockedNetworkOrigins(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Fetcher", Tier: store.Tier1, CreatedAt: time.Now()}
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
+	require.NoError(t, err)
+
+	// The dialog, with all three answers the ticket specifies. It comes from
+	// the shared networkPrompt partial (av-6xvs), so this also pins that the
+	// page still includes it.
+	assert.Contains(t, page, `id="net-modal"`)
+	assert.Contains(t, page, `id="net-allow"`)
+	assert.Contains(t, page, `id="net-once"`)
+	assert.Contains(t, page, `id="net-never"`)
+	// Empty in the markup: the origin comes out of the artifact's own blocked
+	// request and is set as text by the script, never interpolated here.
+	assert.Contains(t, page, `<code id="net-origin"></code>`)
+	// Allow reloads the frame through the token-minting open route. FrameURL's
+	// token is minted once, at page render, and expires — a page left open
+	// longer would reload into a 404.
+	assert.Contains(t, page, `const OPEN_URL = "/artifacts/abc123/open";`)
+
+	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
+	require.NoError(t, err)
+	assert.Contains(t, page, `<script src="/assets/gallery/network-prompt.js"></script>`,
+		"the dialog is inert without the module that drives it")
+	assert.Contains(t, string(detailJS), "ExhibitNetworkPrompt.install",
+		"the viewer installs the shared prompt rather than hand-rolling one")
+
+	promptJS, err := embeddedAssets.ReadFile("assets/gallery/network-prompt.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(promptJS), "__avNetwork",
+		"the module handles the render preamble's CSP-violation reports")
+	assert.Contains(t, string(promptJS), "/origins",
+		"decisions go through the per-origin route, not a whole-allowlist PATCH")
+}
+
+// av-6xvs: the agent chat page embeds the same render document behind the same
+// sandbox on the same app origin, so it has the trusted chrome the prompt needs
+// — and it had none of the prompt. An artifact reaching an unapproved origin
+// while being built there failed silently.
+//
+// The two pages now share one dialog and one module, which is what this pins:
+// the same partial and the same script on both, so the next fix to either
+// cannot land on one surface and miss the other.
+func TestAgentPageHostsTheNetworkPrompt(t *testing.T) {
+	r := newTestRouter(t)
+	req := httptest.NewRequest("GET", "/agent", nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	assert.Contains(t, page, `id="net-modal"`)
+	assert.Contains(t, page, `id="net-allow"`)
+	assert.Contains(t, page, `id="net-once"`)
+	assert.Contains(t, page, `id="net-never"`)
+	assert.Contains(t, page, `<code id="net-origin"></code>`)
+	assert.Contains(t, page, `<script src="/assets/gallery/network-prompt.js"></script>`)
+
+	agentJS, err := embeddedAssets.ReadFile("assets/gallery/agent.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(agentJS), "ExhibitNetworkPrompt.install",
+		"the agent page must install the prompt, not merely render its markup")
+	assert.Contains(t, string(agentJS), "ExhibitNetworkPrompt.announceTo",
+		"each swapped-in preview frame must be told the host is listening")
+}
+
 // allowDecisions builds the allow-decision rows the edit page reads for its
 // allowlist (exhibit-x87 — origins live in artifact_network_origins, so the
 // page is fed decisions rather than an Artifact field).
@@ -425,6 +498,31 @@ func TestEditPageShowsBlockedOriginsDistinctlyFromUndecided(t *testing.T) {
 		"a block decision must never widen the allowlist")
 	assert.Contains(t, page, `<h3 class="text-sm muted">Blocked</h3>`,
 		"blocked origins need their own labelled section, not a plain Allow row")
+}
+
+// av-kmwj: a "don't ask again" block must be reversible two ways — Allow
+// (override it) and Forget (drop it, so the runtime prompt may ask again).
+// Without Forget the answer is a one-way trap, since a blocked origin never
+// prompts on its own. The behaviour behind the button — that Save deletes it
+// through the per-origin route, and only after the PATCH — is exercised in
+// web/gallery/edit.origins.test.mjs.
+func TestEditPageCanForgetABlockDecision(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Blocked", Tier: store.Tier1,
+		CreatedAt: time.Now()}
+	decisions := []store.OriginDecision{
+		{Origin: "https://tracker.example.com", Decision: store.DecisionBlock, Source: "runtime"},
+	}
+	page, err := renderEditPage(a, decisions, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
+	require.NoError(t, err)
+	assert.Contains(t, page, `data-action="forget"`)
+	assert.Contains(t, page, `data-action="allow"`,
+		"Forget is the second answer, not a replacement for overriding the block")
+
+	editJS, err := embeddedAssets.ReadFile("assets/gallery/edit.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(editJS), "'/origins?origin='",
+		"PATCH cannot return an origin to undecided; only the per-origin DELETE can")
+	assert.Contains(t, string(editJS), "method: 'DELETE'")
 }
 
 // av-p0a1: the edit page's security panel renders allowlist rows via

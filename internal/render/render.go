@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -214,8 +215,33 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		return
 	}
 
-	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin)
+	// Out-of-line assets (av-20fk). The manifest redirects the page's own
+	// fetch of each vendored payload to this artifact's asset route, and the
+	// CSP gains that path so the redirected fetch is permitted. Read failure
+	// is not fatal: the artifact renders, and its fetch reaches the network
+	// exactly as it would have before any of this existed.
+	assets, err := rd.cfg.Store.ArtifactAssetsUnscoped(r.Context(), a.ID)
+	if err != nil {
+		slog.WarnContext(r.Context(), "render asset read failed",
+			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
+		assets = nil
+	}
+	manifest := make(map[string]string, len(assets))
+	for _, as := range assets {
+		manifest[as.SourceURL] = rd.assetBaseURL(a.ID) + as.ID
+	}
+	assetBase := ""
+	if len(manifest) > 0 {
+		assetBase = rd.assetBaseURL(a.ID)
+	}
+
+	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin, assetBase)
 	w.Header().Set("Content-Security-Policy", csp)
+	// A widget's authority is a strict subset of its artifact's (av-fafu), so a
+	// tile is denied both devices whatever the artifact holds — it renders
+	// unattended, behind pointer-events:none, in a card the user did not open.
+	permissions := buildPermissionsPolicy(a.CameraApproved && !widget, a.MicrophoneApproved && !widget)
+	w.Header().Set("Permissions-Policy", permissions)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// The render doc is dynamic: it inlines the artifact's live state and the
 	// per-artifact CSP. It must never be cached, or an iframe can load a stale
@@ -250,7 +276,21 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		state = s
 	}
 
-	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, widget, viewer.Anonymous)
+	// What the network permission reporter may and may not prompt about
+	// (av-kmwj). Read under the artifact's own owner, not the viewer's: a
+	// decision is made about the artifact, and on a share the viewer has no
+	// library of their own to have made one in. A read failure keeps the
+	// allowlist (which came off the artifact row, not this query) and drops
+	// only the refusals — the worst that costs is one prompt the user has
+	// already answered, which is a far better failure than not rendering.
+	origins, err := rd.originPolicyFor(r, a)
+	if err != nil {
+		slog.WarnContext(r.Context(), "render origin decisions read failed",
+			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
+		origins = originPolicy{Allowed: a.NetworkAllowlist}
+	}
+
+	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, manifest)
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
 		slog.Int64("principal", viewer.OwnerID),
@@ -258,10 +298,46 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		slog.Bool("widget", widget),
 		slog.Int("body_bytes", len(bodyBytes)),
 		slog.Int("allowlist", len(a.NetworkAllowlist)),
+		slog.Int("blocked", len(origins.Blocked)),
 		slog.Int("state_keys", len(state)),
 		slog.String("csp", csp),
+		slog.String("permissions_policy", permissions),
 	)
 	fmt.Fprint(w, doc)
+}
+
+// originPolicy is what the network permission reporter needs to know about an
+// artifact's origin decisions (av-kmwj). Two lists rather than one, because the
+// reporter has three cases to tell apart and only two of them are silent:
+//
+//   - Allowed: already in the CSP. A violation naming one of these is a request
+//     that was redirected elsewhere, and the redirect target is hidden from
+//     both frames by the spec. Approving it again would change nothing, so the
+//     reporter explains instead of prompting.
+//   - Blocked: an explicit "don't ask again". Silent, permanently.
+//   - Anything else is undecided, which is exactly what the prompt is for.
+type originPolicy struct {
+	Allowed []string
+	Blocked []string
+}
+
+// originPolicyFor reads the artifact's decisions into the two lists the
+// preamble inlines. Allowed is taken from the artifact's allowlist rather than
+// re-derived here, so the reporter's idea of "already permitted" is by
+// construction the same set buildCSP emitted — the whole point of the check is
+// that those two agree.
+func (rd *Renderer) originPolicyFor(r *http.Request, a *store.Artifact) (originPolicy, error) {
+	decisions, err := rd.cfg.Store.ListOriginDecisions(r.Context(), a.OwnerID, a.ID)
+	if err != nil {
+		return originPolicy{}, err
+	}
+	policy := originPolicy{Allowed: a.NetworkAllowlist}
+	for _, d := range decisions {
+		if d.Decision == store.DecisionBlock {
+			policy.Blocked = append(policy.Blocked, d.Origin)
+		}
+	}
+	return policy, nil
 }
 
 // buildCSP generates a per-artifact Content-Security-Policy header value
@@ -317,7 +393,21 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 //     otherwise govern. form-action is pinned to 'self' even with an empty
 //     allowlist: a form with no/empty action submits to the current document (the
 //     render URL itself), which is zero-egress and needs no approval.
-func buildCSP(allowlist []string, appOrigin string) string {
+//   - connect-src additionally carries this artifact's own asset path when it
+//     has out-of-line assets (av-20fk) — a *system* source, not an allowlist
+//     entry. Those bytes used to sit in the document as data: URIs, which cost
+//     no approval; moving them one hop away changed the addressing and nothing
+//     else. The question the two-bucket rule actually asks — can the artifact
+//     reach content the user did not approve, or send anything to a third
+//     party — has the same answer either way: no. It is therefore never
+//     written to artifact_network_origins and never appears in the allowlist
+//     editor, so a fully vendored wasm artifact keeps an empty footprint and
+//     there is no row a user can revoke to break their own artifact. The
+//     source is path-scoped to the artifact's own id, so it grants no reach
+//     over any other artifact's assets — and the route it names must never
+//     redirect, because CSP drops path matching across a redirect and would
+//     turn this scoped grant into a silent failure.
+func buildCSP(allowlist []string, appOrigin, assetBase string) string {
 	origins := strings.Join(allowlist, " ")
 
 	// withOrigins appends the approved (network-reaching) origins to a directive's
@@ -329,18 +419,213 @@ func buildCSP(allowlist []string, appOrigin string) string {
 		return directive + " " + origins
 	}
 
+	// Only emitted when the artifact actually has assets, so an artifact
+	// without them keeps a byte-identical policy to before this existed.
+	//
+	// It reaches every directive an asset can load under, not just connect-src:
+	// the runtime pass's payloads arrive by fetch, but markup assets (av-oz40)
+	// are loaded by the element referencing them — an <img> under img-src, an
+	// @font-face under font-src, a vendored stylesheet under style-src. A
+	// directive left out here fails exactly the way a missing worker-src does:
+	// the element simply never loads, with the artifact looking broken for a
+	// reason the allowlist editor cannot explain.
+	withAssets := func(directive string) string {
+		if assetBase == "" {
+			return directive
+		}
+		return directive + " " + assetBase
+	}
+
 	return strings.Join([]string{
 		"default-src 'none'",
-		withOrigins("script-src 'unsafe-inline' 'unsafe-eval' blob: data:"),
+		withOrigins(withAssets("script-src 'unsafe-inline' 'unsafe-eval' blob: data:")),
 		withOrigins("worker-src blob: data:"),
-		withOrigins("style-src 'unsafe-inline'"),
-		withOrigins("img-src data:"),
-		withOrigins("font-src data:"),
-		withOrigins("media-src blob:"),
-		withOrigins("connect-src blob: data:"),
+		withOrigins(withAssets("style-src 'unsafe-inline'")),
+		withOrigins(withAssets("img-src data:")),
+		withOrigins(withAssets("font-src data:")),
+		withOrigins(withAssets("media-src blob:")),
+		withOrigins(withAssets("connect-src blob: data:")),
 		withOrigins("form-action 'self'"),
 		"frame-ancestors " + appOrigin,
 	}, "; ")
+}
+
+// buildPermissionsPolicy generates the per-artifact Permissions-Policy header
+// for a render document from the artifact's camera/microphone approvals
+// (av-mv3k). It names those two features and nothing else: every other
+// Permissions-Policy feature keeps its browser default, so this header answers
+// one question and cannot quietly become a second policy surface beside the
+// CSP.
+//
+// It exists because a browser permission is granted **per origin**, and every
+// artifact on this instance shares one render origin. Without this header, a
+// visitor who allowed the camera for one artifact opened top-level has allowed
+// it for every artifact on that origin, forever, with no per-artifact decision
+// anywhere in the loop — precisely the situation the ingest allowlist exists to
+// prevent for the network. Permissions Policy is per *document*, so it splits
+// the origin's single grant back into one decision per artifact, and it is the
+// browser that enforces it: `camera=()` makes getUserMedia reject even when the
+// origin's permission is already granted.
+//
+// Note this governs the *top-level* render (a direct open, a share) — the one
+// context where an artifact can reach a device at all. In the embedded frame
+// the opaque origin is refused one no matter what any policy says, which is
+// what the media gate in bridgeScript exists to report; both halves read these
+// same two flags, so the decision the host prompt records is the decision this
+// header enforces.
+//
+// 'self' rather than the render origin spelled out: the document's own origin
+// is exactly what is being permitted, and writing it as a literal would make
+// this header depend on RENDER_ORIGIN being configured to the host the document
+// was actually served from.
+func buildPermissionsPolicy(camera, microphone bool) string {
+	feature := func(name string, allowed bool) string {
+		if allowed {
+			return name + "=(self)"
+		}
+		return name + "=()"
+	}
+	return strings.Join([]string{
+		feature("camera", camera),
+		feature("microphone", microphone),
+	}, ", ")
+}
+
+// assetBaseURL is the path-scoped CSP source and URL prefix for one artifact's
+// out-of-line assets. The trailing slash is what makes it a path *prefix* in a
+// CSP source expression rather than an exact-file match.
+func (rd *Renderer) assetBaseURL(artifactID string) string {
+	return rd.cfg.RenderOrigin + "/a/" + artifactID + "/assets/"
+}
+
+// assetManifestScript redirects the page's own fetches of vendored payloads to
+// this artifact's asset route.
+//
+// Substitution is by interception rather than by rewriting the artifact's
+// source, and the manifest is injected here rather than stored in the body.
+// Both choices are load-bearing:
+//
+//   - Interception survives minification, alternate quoting, and a URL the
+//     page assembles at run time, none of which a literal rewrite of the
+//     source could follow. It matches on the *resolved* URL at call time.
+//   - Injecting at render means an agent rewriting the whole document — the
+//     normal operation in the preview loop — cannot break asset loading,
+//     because there is nothing in the document to break. The stored body keeps
+//     the literals it was ingested with, and the assets table is the single
+//     source of truth rather than being copied into every stored body.
+//
+// It is deliberately tiny and total: anything it does not recognise — a
+// non-GET, an unparseable input, a URL not in the manifest — falls through to
+// the real fetch untouched, so installing it can only add behaviour.
+//
+// A matched request is re-issued against the asset URL rather than answered
+// locally. That is what buys the cache: the asset route is immutable and
+// long-lived, so the second view of an artifact (and every iteration of the
+// agent preview loop, which reloads this frame on each save) does not
+// re-transfer the payload — while the render document around it stays
+// no-store, as it must.
+func assetManifestScript(manifest map[string]string) string {
+	if len(manifest) == 0 {
+		return ""
+	}
+	// json.Marshal escapes <, > and & to their \u00NN forms, so no manifest
+	// value can terminate the enclosing <script> element.
+	payload, err := json.Marshal(manifest)
+	if err != nil {
+		return ""
+	}
+	return `<script>
+(function () {
+  var M = ` + string(payload) + `;
+  var nativeFetch = window.fetch;
+  if (typeof nativeFetch !== 'function') return;
+
+  window.fetch = function (input, init) {
+    try {
+      // Only GET is served from the manifest: a POST to the same URL is a
+      // different request and must reach the network.
+      var method = (init && init.method) || (input && input.method) || 'GET';
+      if (String(method).toUpperCase() === 'GET') {
+        var raw = typeof input === 'string' ? input : (input && input.url) || String(input);
+        var resolved = new URL(raw, document.baseURI).href;
+        if (Object.prototype.hasOwnProperty.call(M, resolved)) {
+          // The response carries the asset's real Content-Type from our own
+          // route — WebAssembly.instantiateStreaming rejects anything that is
+          // not exactly application/wasm.
+          //
+          // A Request argument is rebuilt on the new URL rather than reduced
+          // to it: headers, credentials, mode, integrity and the abort signal
+          // live on the Request, and a caller that passed one and no init
+          // would otherwise have all of them dropped. GET only, so there is no
+          // body to re-stream.
+          if (typeof Request === 'function' && input instanceof Request) {
+            return nativeFetch(new Request(M[resolved], input), init);
+          }
+          return nativeFetch(M[resolved], init);
+        }
+      }
+    } catch (e) { /* fall through to the real fetch */ }
+    return nativeFetch(input, init);
+  };
+})();
+</script>`
+}
+
+// ServeAsset serves one out-of-line asset (av-20fk).
+//
+// This is the only route on the render surface without a render token, and the
+// only one that is not Cache-Control: no-store. Both follow from the same
+// fact: it serves immutable bytes and nothing else — no state, no policy, no
+// document. A short-lived token here would change the URL on every render and
+// destroy the cross-view caching that is half the reason these payloads left
+// the body in the first place, so the credential is the asset id itself: 128
+// random bits, reachable only by someone who already knows the artifact id
+// too, and the row is looked up under that artifact so one artifact can never
+// address another's bytes.
+//
+// It must never redirect. The CSP source that permits this fetch is
+// path-scoped, and CSP drops path matching across a redirect — a redirect here
+// would turn a working grant into a silent block.
+func (rd *Renderer) ServeAsset(w http.ResponseWriter, r *http.Request) {
+	artifactID := chi.URLParam(r, "artifactID")
+	assetID := chi.URLParam(r, "assetID")
+
+	asset, err := rd.cfg.Store.GetArtifactAssetUnscoped(r.Context(), artifactID, assetID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if asset == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	rc, err := rd.cfg.Blob.Get(r.Context(), asset.BlobID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	defer rc.Close()
+
+	// The frame that fetches this is sandboxed without allow-same-origin, so
+	// its Origin is the opaque "null" — which only `*` matches. Credentials
+	// are never sent with it, and there are none to send: the bytes are
+	// authorized by the unguessable id in the path, not by a session.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", asset.ContentType)
+	w.Header().Set("Content-Length", strconv.FormatInt(asset.SizeBytes, 10))
+	// Immutable and content-addressed: the bytes behind an asset id never
+	// change, because a changed payload is a new asset in a new generation.
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	// The bytes are opaque binaries, but say so rather than let a browser
+	// decide for itself what a payload might be.
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	if _, err := io.Copy(w, rc); err != nil {
+		slog.WarnContext(r.Context(), "asset write failed",
+			slog.String("artifact_id", artifactID), slog.String("asset_id", assetID),
+			slog.String("err", err.Error()))
+	}
 }
 
 // shimScript is the shim injected before any artifact scripts run. It
@@ -349,7 +634,9 @@ func buildCSP(allowlist []string, appOrigin string) string {
 // memory for the life of the frame — and bridges the capabilities the sandbox
 // denies — downloads (the sandbox omits allow-downloads) and clipboard
 // read/write (opaque-origin permissions policy) — to the host frame, where
-// they run only after user approval. Framed-only, it also (av-02xs) shims
+// they run only after user approval, and gates the one it denies that the host
+// cannot re-grant either (camera/microphone, av-mv3k). Framed-only, it also
+// (av-02xs) shims
 // fetch() of data: URLs into locally constructed Responses — WebKit refuses
 // large data: fetches from an opaque-origin sandbox, which Safari artifacts
 // otherwise hang on.
@@ -389,6 +676,19 @@ const shimTemplate = `<script>
   var API_ORIGIN = %q;
   var WIDGET = %t;
   var ANONYMOUS = %t;
+
+  // The artifact's origin decisions, inlined rather than fetched for the same
+  // reason the state cache is: the reporter below has to know them before the
+  // artifact's first blocked request, which can happen on the first line of
+  // its first script.
+  //
+  // ALLOWED_ORIGINS is the same set the CSP above was built from. The reporter
+  // needs it to recognise a violation it must not offer to fix: an origin the
+  // policy already permits, blocked anyway, is a request that was redirected
+  // somewhere else (av-kmwj). BLOCKED_ORIGINS never reaches the CSP at all —
+  // it only decides what stays quiet.
+  var ALLOWED_ORIGINS = %s;
+  var BLOCKED_ORIGINS = %s;
 
   // State is inlined by the render surface at request time, so getItem is
   // correct on the first *synchronous* read. Fetching it asynchronously would
@@ -464,8 +764,9 @@ const shimTemplate = `<script>
 
 // bridgeScript is the capability half of the render preamble: the bridges and
 // polyfills that give an artifact back what the opaque-origin sandbox takes
-// away (downloads, clipboard, file pickers) and the diagnostics for what it
-// cannot give back at all.
+// away (downloads, clipboard, external links, file pickers) and the gates and
+// diagnostics for what it cannot give back at all (camera/microphone, module
+// workers).
 //
 // It is a separate string, spliced into shimTemplate's trailing %s, because a
 // widget render omits it entirely rather than shipping it disabled (av-fafu).
@@ -530,6 +831,20 @@ const bridgeScript = `
                 for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
               } else {
                 bytes = percentDecodeBytes(data);
+              }
+              // Native fetch rejects an already-aborted request before it
+              // does any work; a locally built Response must too, or an
+              // artifact that reuses a controller for a timeout gets bytes
+              // it cancelled — and gets them only for data: URLs, which is
+              // the inconsistency this shim exists to remove.
+              var signal = init && 'signal' in init
+                ? init.signal
+                : (input && typeof input === 'object' ? input.signal : null);
+              if (signal && signal.aborted) {
+                return Promise.reject(
+                  signal.reason !== undefined
+                    ? signal.reason
+                    : new DOMException('The user aborted a request.', 'AbortError'));
               }
               var mime = meta.replace(/;base64$/i, '') || 'text/plain';
               return Promise.resolve(new Response(bytes, {
@@ -837,6 +1152,124 @@ const bridgeScript = `
       } catch (e2) {}
     }
 
+    // ---- Camera / microphone gate (av-mv3k) ----
+    // This is the one capability in the preamble that is NOT re-granted, and
+    // the reason is two measured facts rather than a policy choice:
+    //
+    //   1. The frame cannot reach a device. getUserMedia from this opaque
+    //      origin throws SecurityError ("Invalid security origin") before any
+    //      permission is consulted. An allow="camera; microphone" delegation on
+    //      the iframe does not help — Chrome refuses it with the fake-UI flag
+    //      set, so the refusal is structural, not a prompt outcome — which is
+    //      the same no-op the clipboard delegation turned out to be (av-hll6).
+    //   2. The host cannot hand one in. A camera MediaStreamTrack is not a
+    //      transferable object in any shipping engine: postMessage with one in
+    //      the transfer list throws DataCloneError, to a cross-origin frame, to
+    //      a same-origin frame, and even to a Worker. So the download bridge's
+    //      trick — acquire on the app origin, transfer the payload in — has
+    //      nothing to transfer.
+    //
+    // What is left is the decision and the honest report of the limitation. The
+    // frame captures the artifact's request, the host owns the per-device
+    // first-use approval and offers the top-level render (a real origin, where
+    // the artifact reaches the device natively under the very same approval —
+    // it builds that document's Permissions-Policy header), and the call
+    // rejects here with a DOMException instead of hanging on a stream that is
+    // never coming. Piping synthesized frames in (canvas.captureStream over
+    // ImageBitmaps, an AudioContext destination over PCM) would produce a
+    // stream in the preview, but not a *device*: no real constraints, no
+    // applyConstraints, no settings, no stop() reaching the hardware. That is a
+    // rendering feature and belongs to its own ticket, not to this one.
+    var mediaSeq = 0;
+    var mediaPending = {};
+
+    // The capability slug names the devices actually asked for, so the host's
+    // banner describes the right one. Kept in step with mediaCapabilitySlug()
+    // in web/gallery/detail.js.
+    var mediaCapability = function(p) {
+      if (p.video && p.audio) return 'camera-microphone';
+      return p.video ? 'camera' : 'microphone';
+    };
+
+    window.addEventListener('message', function(e) {
+      // Same identity check as the clipboard reply: the host answers from the
+      // app origin, targeting '*' because this frame's origin is opaque.
+      if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+      var d = e.data;
+      if (!d || d.__avMediaResult !== true) return;
+      var p = mediaPending[d.id];
+      if (!p) return;
+      delete mediaPending[d.id];
+      // The host asks for the banner in the case where it has nothing else to
+      // offer: the devices are already approved, so there is no prompt to show,
+      // and the top-level render is where the grant can actually be spent.
+      if (d.banner && typeof warnCapability === 'function') {
+        warnCapability(mediaCapability(p), null);
+      }
+      p.reject(new DOMException(d.error || 'Media access denied', d.name || 'NotAllowedError'));
+    });
+
+    var requestMedia = function(constraints) {
+      // Only which devices were asked for crosses the boundary — the host does
+      // not acquire anything, so the constraints themselves would be data
+      // travelling for no reader. Read through a JSON round-trip because the
+      // artifact hands us an arbitrary object, and touching a hostile getter
+      // directly is not worth the risk for two booleans.
+      var plain;
+      try {
+        plain = JSON.parse(JSON.stringify(constraints || {}));
+      } catch (err) {
+        plain = {};
+      }
+      var wantsAudio = !!plain.audio;
+      var wantsVideo = !!plain.video;
+      if (!wantsAudio && !wantsVideo) {
+        // What the native call throws for getUserMedia({}) — the artifact's
+        // own bug, not a denial, so it must not read as one.
+        return Promise.reject(new TypeError('At least one of audio and video must be requested'));
+      }
+      return new Promise(function(resolve, reject) {
+        var id = 'm' + (++mediaSeq);
+        mediaPending[id] = { resolve: resolve, reject: reject, audio: wantsAudio, video: wantsVideo };
+        window.parent.postMessage(
+          { __avMedia: true, artifactId: ARTIFACT_ID, id: id, audio: wantsAudio, video: wantsVideo },
+          API_ORIGIN
+        );
+      });
+    };
+
+    // Replace only getUserMedia, leaving the rest of navigator.mediaDevices
+    // alone — getDisplayMedia, ondevicechange and getSupportedConstraints are
+    // not this gate's to answer for, and swapping the whole object would
+    // quietly remove them.
+    var md = navigator.mediaDevices;
+    if (md) {
+      try {
+        md.getUserMedia = requestMedia;
+      } catch (err) {}
+      if (md.getUserMedia !== requestMedia) {
+        try {
+          Object.defineProperty(md, 'getUserMedia', { value: requestMedia, writable: true, configurable: true });
+        } catch (err) {}
+      }
+    } else {
+      // navigator.mediaDevices is absent entirely in some framed contexts, so an
+      // artifact that so much as reads it dies before asking for a device.
+      // Supply the minimum surface: the gated call plus the two members a
+      // device-picking artifact reaches for beside it. enumerateDevices resolves
+      // empty, which is what an unpermitted context reports anyway.
+      try {
+        Object.defineProperty(navigator, 'mediaDevices', {
+          value: {
+            getUserMedia: requestMedia,
+            enumerateDevices: function() { return Promise.resolve([]); },
+            getSupportedConstraints: function() { return {}; }
+          },
+          configurable: true
+        });
+      } catch (err) {}
+    }
+
     // ---- File System Access picker polyfill (av-70t9) ----
     // The sandboxed iframe's opaque origin makes the File System Access API
     // unreachable: Blink's VerifyIsAllowedToShowFilePicker throws a
@@ -1037,6 +1470,115 @@ const bridgeScript = `
       // whose createWritable() materializes a download via the bridge above.
       return Promise.resolve(makeFileHandle(new File([], opts.suggestedName || 'download')));
     };
+
+    // ---- Network permission reporter (av-kmwj, spec §6.2 step 4) ----
+    // The CSP has already blocked the request by the time this fires — the
+    // browser is the wall, and nothing here can rescue a request in flight.
+    // This only *reports* the refusal to the host frame so the user can decide,
+    // in trusted app chrome, whether to widen the policy for the next load. The
+    // prompt cannot live in this frame: the artifact owns this DOM and could
+    // draw a convincing forgery of it.
+    //
+    // ANONYMOUS is the one case that stays silent. A public instance's
+    // unauthenticated visitor cannot write a decision — the API would refuse
+    // it — so asking them would be the same lie persistState refuses to tell.
+    if (!ANONYMOUS) {
+      // Directives whose sources the per-artifact allowlist actually builds
+      // (buildCSP above). A violation outside this set is real but not
+      // actionable: an <iframe> blocked by default-src 'none' would still be
+      // blocked after the user approved its origin, because no allowlist entry
+      // reaches frame-src. Prompting there would promise a fix that does not
+      // arrive. The -elem/-attr variants are here because that is what browsers
+      // report as the effective directive even when the policy only spells out
+      // the parent (a blocked script element reports 'script-src-elem').
+      var GOVERNED = {
+        'script-src': 1, 'script-src-elem': 1, 'script-src-attr': 1,
+        'worker-src': 1, 'style-src': 1, 'style-src-elem': 1,
+        'style-src-attr': 1, 'img-src': 1, 'font-src': 1, 'media-src': 1,
+        'connect-src': 1, 'form-action': 1
+      };
+      // Seeded with the refused origins, then joined by every origin as it is
+      // handled. One membership test covers both jobs: an origin the user said
+      // "don't ask again" to never surfaces, and an origin in a retry loop is
+      // handled once per load rather than once per attempt.
+      var silencedOrigins = {};
+      (BLOCKED_ORIGINS || []).forEach(function(o) { silencedOrigins[o] = true; });
+
+      // The origins the CSP was built from. A violation naming one of these is
+      // the redirect case below — never a prompt, because the answer is
+      // already yes.
+      var allowedOrigins = {};
+      (ALLOWED_ORIGINS || []).forEach(function(o) { allowedOrigins[o] = true; });
+
+      // Reports are buffered until the host announces itself, the same problem
+      // and the same handshake as the capability diagnostic above (av-yvtb).
+      // The violation that matters most is the one an artifact triggers on its
+      // first line — an <img src> in the initial markup — and that fires before
+      // the host page has finished parsing, let alone attached its listener. A
+      // one-shot postMessage there is simply lost, which is exactly the kind of
+      // intermittent "sometimes there is no prompt" this feature cannot afford.
+      //
+      // Buffer-then-flush rather than the capability warning's post-and-replay:
+      // that one is idempotent on the host (it reveals one banner however many
+      // times it hears), where a duplicated report here would queue a second
+      // prompt for an origin the user just answered.
+      var hostReady = false;
+      var queuedReports = [];
+      var sendReport = function(msg) {
+        if (hostReady) window.parent.postMessage(msg, API_ORIGIN);
+        else queuedReports.push(msg);
+      };
+      window.addEventListener('message', function(e) {
+        // Only our own host may release the queue; the frame's origin is opaque
+        // so identity is e.source, as with every other message the shim trusts.
+        if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+        if (!e.data || e.data.__avHostReady !== true || hostReady) return;
+        hostReady = true;
+        var pending = queuedReports;
+        queuedReports = [];
+        pending.forEach(function(m) { window.parent.postMessage(m, API_ORIGIN); });
+      });
+
+      document.addEventListener('securitypolicyviolation', function(e) {
+        // violatedDirective historically carried the whole source expression
+        // ("script-src 'unsafe-inline'"); effectiveDirective is the modern,
+        // narrower name. Take whichever names a governed directive.
+        var effective = String(e.effectiveDirective || '').split(' ')[0];
+        var violated = String(e.violatedDirective || '').split(' ')[0];
+        var directive = GOVERNED[effective] ? effective : (GOVERNED[violated] ? violated : '');
+        if (!directive) return;
+        // Inline/eval violations report a keyword ('inline', 'eval'), not a
+        // URL, and are policy we set deliberately. Only a real origin is
+        // something the user can decide about.
+        var uri = String(e.blockedURI || '');
+        if (uri.indexOf('http://') !== 0 && uri.indexOf('https://') !== 0) return;
+        var origin;
+        try { origin = new URL(uri).origin; } catch (err) { return; }
+        if (silencedOrigins[origin]) return;
+        silencedOrigins[origin] = true;
+
+        // The origin is already on the allowlist and the request was blocked
+        // anyway, which means it did not end where it started: the fetch was
+        // redirected to some other origin, and CSP re-checks every hop. The
+        // report deliberately names the *pre-redirect* URL — the spec strips
+        // the destination so a policy cannot be used to probe where a
+        // cross-origin redirect leads — so neither this frame nor the host can
+        // learn the origin that actually needs approving.
+        //
+        // Prompting here is therefore worse than useless: it offers to grant a
+        // permission that is already granted, the request fails identically on
+        // the next load, and the prompt returns for as long as the artifact
+        // keeps asking. That is the loop this branch exists to break. It goes
+        // to the capability banner instead, which is the channel for "this
+        // failed in a way you cannot fix from here" (av-yvtb) — a slug and a
+        // copy entry, no new message type.
+        if (allowedOrigins[origin]) {
+          if (typeof warnCapability === 'function') warnCapability('redirected-origin', uri);
+          return;
+        }
+        sendReport({ __avNetwork: true, artifactId: ARTIFACT_ID, origin: origin, directive: directive });
+      });
+    }
   }`
 
 // widgetBaseCSS is one of two things a widget render adds that an artifact
@@ -1115,21 +1657,47 @@ const widgetHealthScript = `<script>
 // anonymous marks a render for a viewer with no identity (av-wmp6). Callers
 // pass a nil state with it — there is no principal to have any — and the shim
 // stops writing through, so the frame's storage lives and dies with the frame.
-func injectPreamble(body, artifactID, appOrigin string, state map[string]string, widget, anonymous bool) string {
+//
+// origins is the artifact's origin decisions (av-kmwj), inlined so the network
+// permission reporter can tell an undecided origin from one it must not offer
+// to fix. It sits beside state because it is the same kind of thing: per-render
+// data the shim must hold before the artifact's first line runs, not a mode
+// flag.
+func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous bool, assetManifest map[string]string) string {
 	if state == nil {
 		state = map[string]string{}
 	}
-	// json.Marshal escapes <, >, & as </>/&, so the literal is
+	if widget {
+		// A widget render omits the bridges entirely, and the reporter lives
+		// among them: a tile has no prompt to raise, so it carries neither
+		// list.
+		origins = originPolicy{}
+	}
+	if origins.Allowed == nil {
+		origins.Allowed = []string{}
+	}
+	if origins.Blocked == nil {
+		origins.Blocked = []string{}
+	}
+	// json.Marshal escapes <, >, & as </>/&, so the literals are
 	// safe to embed inside a <script> element (can't break out with </script>).
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
 		stateJSON = []byte("{}")
 	}
+	allowedJSON, err := json.Marshal(origins.Allowed)
+	if err != nil {
+		allowedJSON = []byte("[]")
+	}
+	blockedJSON, err := json.Marshal(origins.Blocked)
+	if err != nil {
+		blockedJSON = []byte("[]")
+	}
 	bridges := bridgeScript
 	if widget {
 		bridges = ""
 	}
-	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, widget, anonymous, stateJSON, bridges)
+	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, widget, anonymous, allowedJSON, blockedJSON, stateJSON, bridges)
 	if widget {
 		// No snippet picker: it exists so the user can point at an element in
 		// the *artifact* preview and hand it to the agent. A widget frame is
@@ -1142,6 +1710,17 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 		// renders and share views.
 		shim += "\n" + snippetScript(appOrigin)
 	}
+
+	// The out-of-line asset manifest (av-20fk), last in the preamble so it
+	// wraps the fetch the data: shim above already installed and is therefore
+	// the outermost wrapper — and, like every wrapper here, it only shadows
+	// fetch for callers that run after it, which is why the whole preamble
+	// goes in before any artifact script.
+	//
+	// Widget renders get it too. The WIDGET narrowing exists to drop
+	// *authority* — the capability bridges — and resolving an artifact's own
+	// payload grants none.
+	shim += "\n" + assetManifestScript(assetManifest)
 
 	// Try to inject after <head>
 	idx := strings.Index(strings.ToLower(body), "<head>")

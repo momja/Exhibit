@@ -11,11 +11,15 @@
  *                        "don't ask again" answer (mutable working copy).
  *                        They never reach the CSP; allowing one here moves it
  *                        into the allowlist and Save's PATCH upserts it as an
- *                        allow decision. Block decisions this page doesn't
- *                        touch are never cleared by Save (exhibit-x87).
- *   downloadsApproved - persisted first-use download approval (mutable)
- *   clipboardApproved - persisted first-use clipboard approval (mutable)
- *   linksApproved     - persisted first-use external-link approval (mutable)
+ *                        allow decision; forgetting one deletes the decision
+ *                        outright (av-kmwj) so the runtime prompt may ask
+ *                        again. Block decisions this page doesn't touch are
+ *                        never cleared by Save (exhibit-x87).
+ *   downloadsApproved  - persisted first-use download approval (mutable)
+ *   clipboardApproved  - persisted first-use clipboard approval (mutable)
+ *   linksApproved      - persisted first-use external-link approval (mutable)
+ *   cameraApproved     - persisted first-use camera approval (mutable)
+ *   microphoneApproved - persisted first-use microphone approval (mutable)
  */
 
 // --- CodeMirror islands ----------------------------------------------------
@@ -78,11 +82,20 @@ mountEditorWhenOpen('widget-panel', 'widget-src');
 // Save button fires the single PATCH below. This mirrors the panel's own
 // posture summary, which is also derived from these working copies.
 
-let linksApprovedDirty = false; // see the link-select change handler below
+// Dirty flags for the grants the *host frame* can also change while this page
+// is open (av-r0dk, av-mv3k): their bootstrap value goes stale the moment the
+// viewer approves in another tab, so an unconditional write on Save would
+// revoke a newer grant nobody asked to revoke. Only a select the user actually
+// touched ships.
+let linksApprovedDirty = false;
+let cameraApprovedDirty = false;
+let microphoneApprovedDirty = false;
 
 document.getElementById('dl-select').value = String(downloadsApproved);
 document.getElementById('clip-select').value = String(clipboardApproved);
 document.getElementById('link-select').value = String(linksApproved);
+document.getElementById('cam-select').value = String(cameraApproved);
+document.getElementById('mic-select').value = String(microphoneApproved);
 document.getElementById('dl-select').addEventListener('change', function(e) {
   downloadsApproved = e.target.value === 'true';
   renderSecurityPanel();
@@ -93,10 +106,17 @@ document.getElementById('clip-select').addEventListener('change', function(e) {
 });
 document.getElementById('link-select').addEventListener('change', function(e) {
   linksApproved = e.target.value === 'true';
-  // Mark the grant dirty so save() includes it: the value loaded at page load
-  // goes stale the moment the host approves a link in another tab, and an
-  // unconditional write would silently overwrite that newer approval.
   linksApprovedDirty = true;
+  renderSecurityPanel();
+});
+document.getElementById('cam-select').addEventListener('change', function(e) {
+  cameraApproved = e.target.value === 'true';
+  cameraApprovedDirty = true;
+  renderSecurityPanel();
+});
+document.getElementById('mic-select').addEventListener('change', function(e) {
+  microphoneApproved = e.target.value === 'true';
+  microphoneApprovedDirty = true;
   renderSecurityPanel();
 });
 
@@ -126,6 +146,24 @@ function bindAllowSection(containerId, take) {
 bindAllowSection('unapproved-rows', o => { unapproved = unapproved.filter(x => x !== o); });
 bindAllowSection('blocked-rows', o => { blocked = blocked.filter(x => x !== o); });
 
+// "Forget" drops a block decision instead of overriding it: the origin returns
+// to undecided, so the runtime network prompt (av-kmwj) may ask about it again.
+// PATCH cannot express that — it replaces the allow set and deliberately leaves
+// block rows alone — so Save deletes these through the per-origin route.
+// Collected here and applied there, like every other edit on this page.
+let forgotten = [];
+const blockedRows = document.getElementById('blocked-rows');
+if (blockedRows) {
+  blockedRows.addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-action="forget"]');
+    if (!btn) return;
+    const origin = btn.closest('.allowlist-row').dataset.origin;
+    blocked = blocked.filter(x => x !== origin);
+    if (!forgotten.includes(origin)) forgotten.push(origin);
+    renderSecurityPanel();
+  });
+}
+
 document.getElementById('al-add-btn').addEventListener('click', function() {
   const inp = document.getElementById('al-add-input');
   const val = inp.value.trim();
@@ -138,11 +176,16 @@ document.getElementById('al-add-input').addEventListener('keydown', function(e) 
   if (e.key === 'Enter') { e.preventDefault(); document.getElementById('al-add-btn').click(); }
 });
 
-// Builds one allowlist/unapproved row via createElement + textContent rather
-// than interpolated markup — origins are user/scanner-controlled and can
+// Builds one allowlist/unapproved/blocked row via createElement + textContent
+// rather than interpolated markup — origins are user/scanner-controlled and can
 // contain HTML metacharacters (av-tux9), same reasoning as detail.js's
 // renderBadges().
-function buildOriginRow(origin, actionLabel, action, note) {
+//
+// actions is a list of [label, action] pairs rendered left to right. It is a
+// list because a blocked row carries two answers (Forget and Allow, av-kmwj)
+// where the others carry one; the last is the row's primary and gets the solid
+// button, except for a destructive "remove", which never is.
+function buildOriginRow(origin, actions, note) {
   const row = document.createElement('div');
   row.className = 'allowlist-row';
   row.dataset.origin = origin;
@@ -158,21 +201,24 @@ function buildOriginRow(origin, actionLabel, action, note) {
     tag.textContent = note;
     row.appendChild(tag);
   }
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = action === 'remove' ? 'btn btn-sm btn-sec' : 'btn btn-sm';
-  btn.dataset.action = action;
-  btn.textContent = actionLabel;
-  row.appendChild(btn);
+  actions.forEach(function(a, i) {
+    const [label, action] = a;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = (i === actions.length - 1 && action !== 'remove') ? 'btn btn-sm' : 'btn btn-sm btn-sec';
+    btn.dataset.action = action;
+    btn.textContent = label;
+    row.appendChild(btn);
+  });
   return row;
 }
 
-function renderOriginSection(containerId, origins, note) {
+function renderOriginSection(containerId, origins, note, actions) {
   const rows = document.getElementById(containerId);
   if (!rows) return; // section absent because it rendered empty server-side
   const heading = rows.previousElementSibling;
   rows.innerHTML = '';
-  origins.forEach(o => rows.appendChild(buildOriginRow(o, 'Allow', 'allow', note)));
+  origins.forEach(o => rows.appendChild(buildOriginRow(o, actions, note)));
   const show = origins.length > 0;
   rows.style.display = show ? '' : 'none';
   if (heading) heading.style.display = show ? '' : 'none';
@@ -181,19 +227,22 @@ function renderOriginSection(containerId, origins, note) {
 function renderSecurityPanel() {
   const alRows = document.getElementById('allowlist-rows');
   alRows.innerHTML = '';
-  allowlist.forEach(o => alRows.appendChild(buildOriginRow(o, 'Remove', 'remove')));
+  allowlist.forEach(o => alRows.appendChild(buildOriginRow(o, [['Remove', 'remove']])));
 
-  // Both sections offer "Allow"; the blocked one labels each row so an
-  // explicit "don't ask again" reads differently from an undecided origin.
-  // Each section (and its heading) hides once emptied.
-  renderOriginSection('unapproved-rows', unapproved, null);
-  renderOriginSection('blocked-rows', blocked, 'blocked');
+  // Both sections offer "Allow"; the blocked one labels each row so an explicit
+  // "don't ask again" reads differently from an undecided origin, and adds
+  // "Forget" to drop the decision back to undecided. Each section (and its
+  // heading) hides once emptied.
+  renderOriginSection('unapproved-rows', unapproved, null, [['Allow', 'allow']]);
+  renderOriginSection('blocked-rows', blocked, 'blocked', [['Forget', 'forget'], ['Allow', 'allow']]);
 
   document.getElementById('security-summary-text').textContent =
     allowlist.length + (allowlist.length === 1 ? ' origin' : ' origins') +
     ' · downloads: ' + (downloadsApproved ? 'always allow' : 'ask first') +
     ' · clipboard: ' + (clipboardApproved ? 'always allow' : 'ask first') +
-    ' · links: ' + (linksApproved ? 'always allow' : 'ask first');
+    ' · links: ' + (linksApproved ? 'always allow' : 'ask first') +
+    ' · camera: ' + (cameraApproved ? 'always allow' : 'ask first') +
+    ' · microphone: ' + (microphoneApproved ? 'always allow' : 'ask first');
 }
 renderSecurityPanel();
 
@@ -211,11 +260,13 @@ async function save() {
     downloads_approved: downloadsApproved,
     clipboard_approved: clipboardApproved
   };
-  // links_approved ships only when the select was actually changed (see its
-  // change handler above): the bootstrap value is stale if the host granted
-  // a link in another tab, and an unconditional write would revoke that
+  // These three ship only when their select was actually changed (see the
+  // dirty flags above): the bootstrap value is stale if the host granted the
+  // capability in another tab, and an unconditional write would revoke that
   // newer grant on an unrelated save.
   if (linksApprovedDirty) payload.links_approved = linksApproved;
+  if (cameraApprovedDirty) payload.camera_approved = cameraApproved;
+  if (microphoneApprovedDirty) payload.microphone_approved = microphoneApproved;
   const resp = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
     body: JSON.stringify(payload)
@@ -225,6 +276,11 @@ async function save() {
     status.textContent = '✗ Error: ' + (data.error || resp.statusText);
     return;
   }
+  // Blocks the user chose to forget, applied after the PATCH so a failed save
+  // leaves every decision exactly as it was. A forget that fails is reported
+  // rather than swallowed: the row is already gone from the panel, so silence
+  // would show an origin as undecided that the next render still suppresses.
+  if (forgotten.length > 0 && !(await forgetBlockedOrigins(status))) return;
   status.textContent = '✓ Saved';
   // If the edited body changed the network footprint, the server re-ran the
   // scan and returned it. Re-run the explicit-approval flow so the user can
@@ -236,6 +292,29 @@ async function save() {
     return;
   }
   setTimeout(() => { window.location.href = '/artifacts/' + ID; }, 500);
+}
+
+// Deletes each forgotten block decision through the per-origin route. Returns
+// false (and says which origin) on the first failure, leaving the rest in
+// `forgotten` so a retried Save picks up where this one stopped.
+async function forgetBlockedOrigins(status) {
+  // An origin the user forgot and then re-added to the allowlist is not
+  // forgotten — the PATCH just wrote it as an allow decision, and deleting it
+  // here would silently undo the newer of the two answers.
+  forgotten = forgotten.filter(o => !allowlist.includes(o));
+  while (forgotten.length > 0) {
+    const origin = forgotten[0];
+    const r = await apiFetch('/api/artifacts/' + encodeURIComponent(ID) +
+      '/origins?origin=' + encodeURIComponent(origin), {
+      method: 'DELETE'
+    }).catch(() => null);
+    if (!r || !r.ok) {
+      status.textContent = '✗ Saved, but could not forget ' + origin;
+      return false;
+    }
+    forgotten.shift();
+  }
+  return true;
 }
 
 function showApproval(footprint) {

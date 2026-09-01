@@ -197,6 +197,6 @@ func TestHostDispatcherKeepsTheOriginBoundary(t *testing.T) {
 				"the render surface answered %s %s on the app origin", method, route)
 			return nil
 		}))
-		assert.Equal(t, 2, walked, "expected /a/{id} and /w/{id}")
+		assert.Equal(t, 3, walked, "expected /a/{id}, /a/{id}/assets/{assetID} and /w/{id}")
 	})
 }

@@ -40,13 +40,16 @@ import (
 //
 // A non-nil error is returned only for an unrecoverable parse or serialization
 // failure; per-asset failures come back in the slice, never as the error.
-func InlineHTMLAssets(ctx context.Context, f *Fetcher, body string) (string, []*FetchError, error) {
+// sink, when non-nil, receives assets too large to be worth inlining and
+// returns the URL to reference them by instead (av-oz40); pass nil to inline
+// everything, which is what this function did before out-of-line assets existed.
+func InlineHTMLAssets(ctx context.Context, f *Fetcher, body string, sink AssetSink) (string, []*FetchError, error) {
 	doc, err := html.Parse(strings.NewReader(body))
 	if err != nil {
 		return "", nil, err
 	}
 
-	in := &inliner{ctx: ctx, f: f, docBase: documentBase(f)}
+	in := &inliner{ctx: ctx, f: f, docBase: documentBase(f), sink: sink}
 	in.walk(doc)
 
 	var buf bytes.Buffer
@@ -63,6 +66,7 @@ type inliner struct {
 	ctx     context.Context
 	f       *Fetcher
 	docBase string
+	sink    AssetSink
 	errs    []*FetchError
 }
 
@@ -104,22 +108,24 @@ func (in *inliner) transform(n *html.Node) {
 	in.inlineStyleAttr(n)
 }
 
-// inlineAttr replaces the named attribute's value with a data: URI of the
-// fetched asset. A failed or non-fetchable reference is left in place.
+// inlineAttr replaces the named attribute's value with the fetched asset's
+// reference — inline, or an out-of-line asset URL past the size threshold. A
+// failed or non-fetchable reference is left in place.
 func (in *inliner) inlineAttr(n *html.Node, key string) {
 	for i := range n.Attr {
 		a := &n.Attr[i]
 		if a.Namespace != "" || a.Key != key {
 			continue
 		}
-		if uri, ok := in.toDataURI(a.Val); ok {
-			a.Val = uri
+		if ref, ok := in.assetRef(a.Val); ok {
+			a.Val = ref
 		}
 	}
 }
 
-// inlineSrcset rewrites each candidate URL in a srcset attribute to a data:
-// URI, preserving descriptors. Candidates that fail to fetch keep their URL.
+// inlineSrcset rewrites each candidate URL in a srcset attribute to the
+// fetched asset's reference, preserving descriptors. Candidates that fail to
+// fetch keep their URL.
 func (in *inliner) inlineSrcset(n *html.Node) {
 	for i := range n.Attr {
 		a := &n.Attr[i]
@@ -136,8 +142,8 @@ func (in *inliner) inlineSrcset(n *html.Node) {
 				b.WriteString(", ")
 			}
 			ref := c.url
-			if uri, ok := in.toDataURI(ref); ok {
-				ref = uri
+			if replacement, ok := in.assetRef(ref); ok {
+				ref = replacement
 			}
 			b.WriteString(ref)
 			if c.descriptor != "" {
@@ -185,7 +191,7 @@ func (in *inliner) inlineLink(n *html.Node) {
 			return
 		}
 		// A fetched sheet re-bases against its own absolute URL, not the doc.
-		css, errs := InlineCSS(in.ctx, in.f, asset.URL, string(asset.Body))
+		css, errs := InlineCSS(in.ctx, in.f, asset.URL, string(asset.Body), in.sink)
 		in.errs = append(in.errs, errs...)
 		n.Data = "style"
 		n.DataAtom = atom.Style
@@ -209,7 +215,7 @@ func (in *inliner) inlineStyleElement(n *html.Node) {
 	if css == "" {
 		return
 	}
-	out, errs := InlineCSS(in.ctx, in.f, in.docBase, css)
+	out, errs := InlineCSS(in.ctx, in.f, in.docBase, css, in.sink)
 	in.errs = append(in.errs, errs...)
 	setText(n, out)
 }
@@ -222,16 +228,18 @@ func (in *inliner) inlineStyleAttr(n *html.Node) {
 		if a.Namespace != "" || a.Key != "style" || a.Val == "" {
 			continue
 		}
-		out, errs := InlineCSS(in.ctx, in.f, in.docBase, a.Val)
+		out, errs := InlineCSS(in.ctx, in.f, in.docBase, a.Val, in.sink)
 		in.errs = append(in.errs, errs...)
 		a.Val = out
 	}
 }
 
-// toDataURI fetches ref and returns its data: URI. On a non-fetchable ref it
+// assetRef fetches ref and returns the reference the document should carry in
+// its place — a data: URI, or an out-of-line asset URL when the payload is
+// large enough to leave the body (place, sink.go). On a non-fetchable ref it
 // returns false without recording anything; on a fetch failure it records the
 // *FetchError and returns false so the caller keeps the original reference.
-func (in *inliner) toDataURI(ref string) (string, bool) {
+func (in *inliner) assetRef(ref string) (string, bool) {
 	if !fetchable(ref) {
 		return "", false
 	}
@@ -240,7 +248,7 @@ func (in *inliner) toDataURI(ref string) (string, bool) {
 		in.record(err)
 		return "", false
 	}
-	return dataURI(asset), true
+	return place(in.sink, asset), true
 }
 
 // record appends a fetch failure to the run's residual list.

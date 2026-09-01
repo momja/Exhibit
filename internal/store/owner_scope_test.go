@@ -80,7 +80,15 @@ func ownerCases() []ownerCase {
 			return false, s.UpdateArtifact(ctx, o, id, map[string]any{"network_allowlist": []string{"https://evil.example.com"}})
 		}},
 		{"DeleteArtifact", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.DeleteArtifact(ctx, o, id)
+			_, err := s.DeleteArtifact(ctx, o, id)
+			return false, err
+		}},
+		{"SetWidgetBlobID", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			return false, s.SetWidgetBlobID(ctx, o, id, "widget-blob-"+id)
+		}},
+		{"DeleteWidget", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, err := s.DeleteWidget(ctx, o, id)
+			return false, err
 		}},
 		{"ListOriginDecisions", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			d, err := s.ListOriginDecisions(ctx, o, id)
@@ -368,6 +376,25 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"GetArtifactUnscoped": "deliberate render/share exception (av-c5aq)",
 		"GetShareUnscoped":    "deliberate share exception (architecture §7)",
 
+		// Out-of-line assets (av-20fk). Both are render-path reads, and the
+		// render path serves shares to people with no account — there is no
+		// owner to scope by, the same exception GetArtifactUnscoped carries.
+		// Neither widens what a render already exposes: these are exactly the
+		// bytes the served document is about to fetch, and the asset lookup
+		// still requires the artifact id, so one artifact cannot address
+		// another's bytes.
+		"ArtifactAssetsUnscoped":   "deliberate render/share exception (av-20fk)",
+		"GetArtifactAssetUnscoped": "deliberate render/share exception (av-20fk)",
+
+		// The blob deletion queue (av-8gyd). A blob id is written here only by
+		// the transaction that deleted the last row naming it — which is also
+		// the last record of whose it was. There is no owner left to scope by,
+		// and nothing to leak: the queue holds ids of bytes already condemned,
+		// never a way to reach a live artifact.
+		"PendingBlobDeletions":  "queued ids outlive the rows that owned them; there is no owner left",
+		"DrainBlobDeletions":    "removes bytes already condemned; the ids come from the caller's own delete",
+		"DrainAllBlobDeletions": "a janitor over the whole queue, owned by no one",
+
 		// Identity and sessions (av-30rj). These methods *establish* who the
 		// owner is; they cannot take one as input without assuming the answer
 		// to the question they exist to ask. A session id is a bearer
@@ -430,6 +457,14 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// the owner first like everything else.
 		"RecordBlobSize":  "keyed by blob id; a length belongs to the bytes, not to an owner (av-fw1b)",
 		"ForgetBlobSizes": "keyed by blob id, and only removes rows no owner's rows reference (av-fw1b)",
+
+		// The blob deletion queue's mutual exclusion (av-8gyd), keyed by blob
+		// id on the same grounds and one step further: it reads and writes no
+		// row at all. It excludes a writer of bytes from the drain about to
+		// unlink those bytes, and a lock that took an owner would be a lock
+		// two owners could hold at once over one shared, refcounted asset —
+		// exactly the case it exists for.
+		"LockBlobs": "keyed by blob id; excludes writers from the unlink of the same bytes, reads no rows (av-8gyd)",
 	}
 
 	iface := reflect.TypeOf((*Store)(nil)).Elem()

@@ -1,6 +1,6 @@
 ---
 id: av-fvci
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-07-08T07:29:36Z
@@ -66,3 +66,7 @@ If adopted, this ticket's acceptance criteria change shape: define the cx-*
 vocabulary in TICKETS.md (agent-tier mapping unchanged), backfill obvious cases,
 and keep wedow/ticket#66 open as the eventual first-class-field cleanup rather
 than a blocker.
+
+**2026-08-29T18:45:15Z**
+
+Closing as won't complete. Will wait and see if ticket ever implements plugins, but this would require a custom script that is too narrowly scoped for my liking.

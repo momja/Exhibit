@@ -1,6 +1,6 @@
 ---
 id: av-vnkt
-status: open
+status: closed
 deps: []
 links: [Exh-avau, av-1rvm, av-20fk, av-oz40]
 created: 2026-08-17T03:19:40Z

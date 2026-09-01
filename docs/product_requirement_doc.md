@@ -156,6 +156,8 @@ artifacts(
   tier,                    -- 1 | 2
   created_at, updated_at,
   downloads_approved,      -- first-use approval for the host-mediated download bridge
+  camera_approved,         -- likewise for the camera; also builds the render
+  microphone_approved,     --   document's Permissions-Policy (§6.3)
   widget_blob_id           -- the card's widget document; empty = default tile (§5.5)
 )
 -- one decision per (artifact, origin), cascading with the artifact (§6)
@@ -344,8 +346,12 @@ all, **controls and surfaces what the artifact may reach over the network.**
 
 ### 6.2 Network control: scan, approve, allowlist, prompt
 
-We do **not** use CSP violation reporting. Instead, a simpler explicit-consent flow,
-with a per-artifact allowlist as the source of truth:
+We do **not** report CSP violations to a server — no `report-uri`/`report-to`
+endpoint, no aggregation pipeline, nothing retained. (The frame does listen for
+its own `securitypolicyviolation` events, which is what step 4 below is built
+on; that never leaves the browser except as the one decision the user makes.)
+Instead, a simpler explicit-consent flow, with a per-artifact allowlist as the
+source of truth:
 
 1. **Scan at ingest.** On `push`, statically parse the artifact for outbound
    references — `fetch(`/`XMLHttpRequest`, ESM/`import` URLs, `<script src>`,
@@ -364,22 +370,53 @@ with a per-artifact allowlist as the source of truth:
    font, a locally picked file, or a Worker the artifact builds at runtime is not a network
    request). Sorting each new CSP source into one of those two buckets — network-reaching
    (allowlist-gated) or local/no-egress (unconditional) — is the standing rule.
-4. **Runtime escape → blocked.** If a rendered artifact attempts an origin **not** on
-   its allowlist, the attempt is blocked by the browser's CSP. The user can approve
-   the origin afterward in the artifact's allowlist editor, which updates the CSP on
-   next render. A runtime approval prompt is tracked by `exhibit-fr7`; a "don't ask
-   again" answer from it is stored as a `decision='block'` row, which suppresses the
-   prompt and **never** affects the CSP.
+4. **Runtime escape → blocked, then prompted.** If a rendered artifact attempts an
+   origin **not** on its allowlist, the attempt is blocked by the browser's CSP. The
+   render preamble reports the blocked origin to the host frame, which prompts in the
+   app's own chrome — never inside the artifact's DOM, which the artifact could forge:
+   **Allow** approves the origin and transparently reloads the artifact so the request
+   retries under the new CSP; **Block once** dismisses; **Don't ask again** stores a
+   `decision='block'` row, which suppresses future prompts for that origin and
+   **never** affects the CSP. Each origin is prompted at most once per load, and only
+   where approving it would actually help: not for a directive the allowlist does not
+   build, and not for an origin the policy already permits — a request to an allowed
+   host that redirects elsewhere is blocked at the second hop, and the browser hides
+   the destination, so the prompt would offer a grant that is already given. That
+   case is explained rather than asked about. The top-level and share views have no
+   trusted chrome to host a prompt, so violations there stay silently blocked.
 5. **Per-artifact settings.** Decisions are visible and editable in each artifact's
    settings — the user can review, add, or revoke approved origins at any time, and
    blocked origins are listed separately so an earlier "don't ask again" stays visible
-   and can be overridden rather than reading as merely undecided.
+   and can be overridden (Allow) or dropped entirely (Forget) rather than reading as
+   merely undecided.
 
 The static scan is **transparency, not a wall** (it's evadable). The enforced boundary
 is the browser-level CSP generated from the allowlist; the scan just front-loads the
 "approve these domains" decision so the common case needs no runtime interruption.
 
-### 6.3 Residual risk
+### 6.3 Local capabilities: approve per capability, at first use
+
+Network egress is the allowlist's business (§6.2). The capabilities the sandbox
+*denies outright* — downloads, clipboard, opening external links, and the camera
+and microphone — are a second, smaller decision, made the first time an artifact
+reaches for one: the host frame prompts, naming the artifact and what it asked
+for, and the answer is stored per artifact and revocable from its security
+settings. Denial never breaks the artifact; it sees the same failure a blocked
+call has always produced.
+
+Capture devices differ in two ways worth stating. First, no browser can give a
+camera or microphone to the embedded preview at all — the sandbox that isolates
+artifacts leaves the frame without the stable origin a device permission is
+granted to — so an approved artifact uses its camera in its own tab, and the
+prompt says so rather than appearing to enable something it can't. Second, the
+approval is enforced *there*: a browser permission belongs to an origin and every
+artifact in a library shares one render origin, so allowing the camera once would
+otherwise allow it for every artifact forever, with no per-artifact decision
+anywhere. An artifact that was never approved reaches no device, in the preview
+or opened directly. That is the promise §6.2 makes about the network, applied to
+hardware — nothing is reachable until the user says so, about *this* tool.
+
+### 6.4 Residual risk
 
 This controls what an artifact *reaches out to*. It does not stop a malicious artifact
 from, e.g., rendering a convincing fake login form. The isolated-origin + no-
@@ -400,9 +437,11 @@ Sharing is a first-class resource, not an export-to-file action.
   column existed unused from the first migration and was removed (av-8ipt) rather
   than left as a dial nothing turns; if forgotten shares become a real problem, the
   answer is to make what is shared visible in the library, not to add a timer.
-- A one-file self-contained `.html` export is **planned** (CSS/JS already inline) — the
-  portable fallback for email/Slack/offline that needs no service at all. Tracked in
-  build-order step 3.
+- A one-file self-contained `.html` export is **shipped** (av-vnkt) — the portable
+  fallback for email/Slack/offline that needs no service at all. It is also what
+  keeps §1's promise intact now that large payloads are stored outside the
+  artifact body: inside the service those are URLs, and this is the boundary
+  where they become bytes again.
 
 Because the artifact is already a portable file, sharing is nearly free; this is much
 of what justifies hosting the service.
@@ -452,7 +491,9 @@ single self-contained `.html`.
 - **No pre-render analysis step / no agent inspection** to detect storage usage — the
   runtime storage shim observes instead.
 - **No CSP violation-report pipeline** — replaced by scan + explicit per-artifact
-  allowlist with runtime permission prompts.
+  allowlist with runtime permission prompts. The prompt reads
+  `securitypolicyviolation` in the frame and asks the user; nothing is reported
+  to a server endpoint, aggregated, or retained beyond the one decision row.
 - **No interactive widgets.** A card's widget (§5.5) reports; it never acts. Making
   tiles clickable would put a second, unaudited control surface in the library and
   would need per-tile capability grants the artifact's own approvals never covered.
