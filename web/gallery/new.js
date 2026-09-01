@@ -80,8 +80,12 @@ function startAgent(event) {
   try {
     sessionStorage.setItem(BRIEF_KEY, JSON.stringify(brief));
   } catch (e) {
-    // Storage refused (private mode, blocked site data). The agent page still
-    // opens; it opens with an empty composer instead of the brief.
+    // Storage refused (private mode, blocked site data, quota). The agent page
+    // still opens; it opens with an empty composer instead of the brief. Clear
+    // the key on the way out: a brief an earlier hand-off left behind is the
+    // one agent.js would otherwise consume, so a failed write would start the
+    // session on somebody's previous description rather than on none.
+    try { sessionStorage.removeItem(BRIEF_KEY); } catch (e2) { /* nothing left to do */ }
   }
   location.href = '/agent';
 }
