@@ -30,6 +30,33 @@ type Config struct {
 	// cookie here would be readable by the artifact itself. A nil Signer fails
 	// those two routes closed; /s/:shareID never consults it.
 	Tokens *rendertoken.Signer
+	// EmbedOrigins are the sites, besides the app itself, permitted to put a
+	// **share** in an iframe (av-6nbo). Empty — the default, and every instance
+	// that has not asked for this — emits exactly the frame-ancestors this
+	// surface has always emitted.
+	//
+	// Shares only, deliberately. /a/:id and /w/:id carry a render token naming
+	// a principal and inline that principal's state (av-c5aq, av-q0ub): they
+	// are documents *about a specific person*, reached through a credential the
+	// app minted into a frame it controls, and no third-party page has business
+	// holding one. A share carries no token and no principal, is already
+	// readable by anyone with the link, and is the only render document whose
+	// purpose is to be seen somewhere other than here. Widening the tight case
+	// to reach the loose one would give up a real property for nothing, so it
+	// is not widened.
+	//
+	// What this header is and is not. frame-ancestors is the second lock here,
+	// not the first. The first is that every postMessage the render preamble
+	// sends targets APP_ORIGIN rather than '*', so a page on another origin
+	// receives nothing from the shim however it framed the document — and, in
+	// the same stroke, a share framed elsewhere cannot persist state, because
+	// its write-through is addressed to a parent that is not the framer. No
+	// cookie is ever set on the render origin, so there is no session for a
+	// hostile framer to clickjack, and a share render holds no privileged
+	// control a stolen click could spend. That is why widening this for shares
+	// costs little — and equally why it stays opt-in rather than becoming the
+	// default: cheap is not free, and nobody should acquire it without asking.
+	EmbedOrigins []string
 }
 
 // Renderer handles render-origin requests.
@@ -77,7 +104,10 @@ func (rd *Renderer) ServeArtifact(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rd.serveArtifactDoc(w, r, a, viewer)
+	// No extra framers: this document names a principal and inlines their
+	// state, so the app's own pages are the only pages that may embed it. See
+	// Config.EmbedOrigins for why the share route is the one that widens.
+	rd.serveArtifactDoc(w, r, a, viewer, nil)
 }
 
 // authorize is the front door for the two token-gated routes. It verifies the
@@ -160,7 +190,12 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	// a decision its owner made about one artifact; public mode is one env var
 	// over a whole library. The blast radius differs by orders of magnitude, so
 	// the defaults do too.
-	rd.serveArtifactDoc(w, r, a, rendertoken.Claims{OwnerID: a.OwnerID})
+	//
+	// This is also the one route whose document a configured third-party site
+	// may frame (av-6nbo) — empty unless the operator named one, and shares
+	// only because a share is the render document that already carries neither
+	// a principal nor a credential. Config.EmbedOrigins holds the argument.
+	rd.serveArtifactDoc(w, r, a, rendertoken.Claims{OwnerID: a.OwnerID}, rd.cfg.EmbedOrigins)
 }
 
 // ServeWidget serves an artifact's widget (av-fafu) — the small, informative
@@ -179,12 +214,14 @@ func (rd *Renderer) ServeWidget(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	rd.serveDoc(w, r, a, a.WidgetBlobID, true, viewer)
+	// Token-gated like /a/:id, and framed only by the gallery card that owns
+	// it, so nothing widens here either.
+	rd.serveDoc(w, r, a, a.WidgetBlobID, true, viewer, nil)
 }
 
 // serveArtifactDoc serves the artifact's own body — the full, interactive tool.
-func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, viewer rendertoken.Claims) {
-	rd.serveDoc(w, r, a, a.SourceBlobID, false, viewer)
+func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, viewer rendertoken.Claims, embedOrigins []string) {
+	rd.serveDoc(w, r, a, a.SourceBlobID, false, viewer, embedOrigins)
 }
 
 // serveDoc reads blobID, wraps it in the artifact's security envelope (CSP from
@@ -201,7 +238,13 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 // answer to "whose state should be inlined here" — since av-q0ub artifact_state
 // is keyed by (artifact_id, user_id, key), and viewer.OwnerID is that user_id —
 // or, when the viewer is anonymous, the answer "nobody's".
-func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, blobID string, widget bool, viewer rendertoken.Claims) {
+//
+// embedOrigins is who — besides the app — may frame *this* document (av-6nbo).
+// It is a parameter rather than something read off the config here so that the
+// routes decide it and the decision is visible at each of them: the two
+// token-gated routes hand over nil, and the share route hands over what the
+// operator configured. serveDoc holds no policy about framing at all.
+func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, blobID string, widget bool, viewer rendertoken.Claims, embedOrigins []string) {
 	rc, err := rd.cfg.Blob.Get(r.Context(), blobID)
 	if err != nil {
 		http.Error(w, "artifact body not found", http.StatusNotFound)
@@ -235,7 +278,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		assetBase = rd.assetBaseURL(a.ID)
 	}
 
-	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin, assetBase)
+	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin, assetBase, embedOrigins...)
 	w.Header().Set("Content-Security-Policy", csp)
 	// A widget's authority is a strict subset of its artifact's (av-fafu), so a
 	// tile is denied both devices whatever the artifact holds — it renders
@@ -292,9 +335,11 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 }
 
 // buildCSP generates a per-artifact Content-Security-Policy header value
-// from the artifact's network allowlist. appOrigin is the only origin permitted
-// to embed this page in an iframe. The storage shim needs no connect-src of its
-// own: it reads inlined state and writes via postMessage to the host frame.
+// from the artifact's network allowlist. appOrigin is permitted to embed this
+// page in an iframe, and — with no embedOrigins — is the only origin that may
+// (see below, and Config.EmbedOrigins). The storage shim needs no connect-src
+// of its own: it reads inlined state and writes via postMessage to the host
+// frame.
 //
 // Every source in this policy falls into one of two buckets, and which bucket a
 // new source belongs to is the only question worth asking when adding one:
@@ -358,7 +403,16 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 //     over any other artifact's assets — and the route it names must never
 //     redirect, because CSP drops path matching across a redirect and would
 //     turn this scoped grant into a silent failure.
-func buildCSP(allowlist []string, appOrigin, assetBase string) string {
+//
+// frame-ancestors is in neither bucket: it governs who may embed *this*
+// document rather than what the document may reach, so the two-bucket rule has
+// nothing to say about it. appOrigin is always named. embedOrigins is variadic
+// and empty at nearly every call site, which is the shape of the guarantee:
+// unset, this emits the byte-identical policy it emitted before third-party
+// embedding existed (av-6nbo). Only the share route passes anything, and
+// Config.EmbedOrigins is where the reasoning lives — including why this header
+// is the second lock on that door rather than the first.
+func buildCSP(allowlist []string, appOrigin, assetBase string, embedOrigins ...string) string {
 	origins := strings.Join(allowlist, " ")
 
 	// withOrigins appends the approved (network-reaching) origins to a directive's
@@ -397,7 +451,7 @@ func buildCSP(allowlist []string, appOrigin, assetBase string) string {
 		withOrigins(withAssets("media-src blob:")),
 		withOrigins(withAssets("connect-src blob: data:")),
 		withOrigins("form-action 'self'"),
-		"frame-ancestors " + appOrigin,
+		strings.Join(append([]string{"frame-ancestors", appOrigin}, embedOrigins...), " "),
 	}, "; ")
 }
 

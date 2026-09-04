@@ -96,6 +96,13 @@ type Config struct {
 	// entitlements.go, which also explains why an instance that switches them
 	// on without a default fails at startup rather than booting.
 	Entitlements Entitlements
+	// EmbedOrigins are the sites, besides this app, allowed to frame a share
+	// (av-6nbo). Empty — the default — leaves the render CSP's frame-ancestors
+	// exactly as it has always been. It is carried here only to reach the
+	// render surface, which is where the shares-only decision is argued: see
+	// render.Config.EmbedOrigins. Read from the environment by
+	// EmbedOriginsFromEnv (embedorigins.go).
+	EmbedOrigins []string
 }
 
 // Router wraps chi.Mux and holds the config.
@@ -580,6 +587,9 @@ func (ro *Router) RenderHandler() http.Handler {
 		// The same Signer the app surface mints with: one process, one key,
 		// stateless verification — no shared table, no round trip.
 		Tokens: ro.tokens,
+		// Empty on every instance that has not opted in, which keeps the
+		// emitted frame-ancestors byte-identical to before av-6nbo.
+		EmbedOrigins: ro.cfg.EmbedOrigins,
 	})
 
 	r := chi.NewRouter()
