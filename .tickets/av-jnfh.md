@@ -61,6 +61,13 @@ DNS answer, MaxRedirects 5, 10s timeout, proxying disabled), reading only the
 Location chain and never a body. The prompt then names the real destination and
 Allow writes it.
 
+`Fetch` and `FetchWithCap` are not that: both read the response into an
+`Asset`. Header-only resolution needs its own method over the Fetcher's own
+`http.Client`, so it keeps the redirect policy, timeout, proxy-off transport
+and dial-time guard while closing each response unread. Test it against a
+target whose body is large enough — or slow enough — that reading it would
+show up.
+
 Cost: a new authenticated route that makes an outbound request to an
 artifact-chosen URL at *view* time. It is strictly weaker than a capability the
 API already grants (`POST /api/artifacts` with `url` fetches an arbitrary
@@ -116,9 +123,19 @@ behind a prompt fix.
 2. Whatever is granted is visible: the allowlist editor shows the user exactly
    what a subdomain approval covers, or exactly which destination origin was
    added, and either is revocable like any other decision.
-3. The rule stays enforced at the single write path. If wildcards become
-   storable, av-i7hd's normalization is extended deliberately rather than
-   bypassed, and a non-origin entry is still a 400.
+3. The rule stays enforced at the single write path, and a wildcard grant is
+   **its own validated type**, not a loosening of `origin.NormalizeOrigin`.
+   NormalizeOrigin is unchanged, so ordinary allowlist input that is not an
+   origin — anything carrying a `*` included — still returns a 400 naming the
+   value, exactly as av-i7hd made it. The grant type has an explicit grammar
+   and admits nothing outside it: scheme, `*.`, a registrable domain, and an
+   optional explicit non-default port. Rejected outright: paths, queries,
+   fragments, userinfo, IP literals, a bare public suffix (`*.co.uk` grants a
+   whole TLD), and `*` anywhere but the leftmost label. The store validates the
+   same grammar for the reason it already re-runs NormalizeOrigin — so no
+   future caller can bypass the handler — and the store, the allowlist editor,
+   and the CSP builder all speak that one type, so a grant stays scoped,
+   visible, and revocable end to end.
 4. If the server-resolve shape is chosen, the outbound fetch goes through
    internal/snapshot's guarded Fetcher, reads no response body, and is rate
    limited per owner; security.md states plainly what the route lets an
