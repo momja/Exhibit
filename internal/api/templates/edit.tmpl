@@ -61,6 +61,11 @@
           {{range .Blocked}}<div class="allowlist-row" data-origin="{{.}}">
             <code title="{{.}}">{{.}}</code>
             <span class="text-sm muted">blocked</span>
+            {{/* Forget drops the decision entirely rather than overriding it,
+                 returning the origin to undecided so the runtime prompt may ask
+                 again (av-kmwj). Without it, "don't ask again" is a one-way
+                 trap: a blocked origin never prompts on its own. */}}
+            <button type="button" class="btn btn-sm btn-sec" data-action="forget">Forget</button>
             <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
           </div>{{end}}
         </div>

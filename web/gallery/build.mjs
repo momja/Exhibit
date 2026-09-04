@@ -29,6 +29,10 @@ const files = [
   "new.css", "new.js",
   "detail.css", "detail.js",
   "state-api.js",
+  // The runtime network-permission prompt (av-kmwj, av-6xvs), shared by the
+  // detail viewer and the agent chat's preview pane. Listed before both, since
+  // each installs it at load.
+  "network-prompt.js",
   "edit.css", "edit.js", "state.js", "assets.js",
   "notfound.css", "notfound.js",
   // The account-settings surfaces: av-utap's /admin/users and av-qo05's

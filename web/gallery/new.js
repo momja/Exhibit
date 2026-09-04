@@ -8,20 +8,30 @@
  * (av-qo0j); the library page kept search, tags and modals. Ingest behavior is
  * unchanged: persist first (network-inert), surface the scanned footprint for
  * explicit approval, then PATCH the approved allowlist.
+ *
+ * nw-d1dd added a third mode, agent, and made it the one the page opens on.
+ * It shares the tile switch and nothing else: it submits a brief to the agent
+ * surface rather than an artifact to the API, so it has its own panel, its own
+ * footer and its own submit.
  */
 
-let currentMode = 'paste';
+let currentMode = 'agent';
 
-// Mount the CodeMirror island over the body textarea. The editor keeps
-// textarea.value in sync, so ingest() below still reads the field — and if the
-// bundle failed to load, the plain textarea still works.
-if (window.ArtifactEditor) {
+// The CodeMirror island mounts the first time Paste HTML is selected, not at
+// load. The page no longer opens on paste, and an editor mounted inside a
+// display:none wrapper measures itself as zero-height and stays that way until
+// something forces a remeasure. The editor keeps textarea.value in sync, so
+// ingest() below still reads the field — and if the bundle failed to load, the
+// plain textarea still works.
+let editorMounted = false;
+function mountEditor() {
+  if (editorMounted || !window.ArtifactEditor) return;
   ArtifactEditor.mount(document.getElementById('body'));
+  editorMounted = true;
 }
 
-// The Paste/URL route tiles are the panel's mode switch: they change what the
-// panel asks for, not what it does. The agent tile carries no data-mode — it
-// is a plain link to /agent — so it never participates in the selection.
+// The route tiles are the page's mode switch: which panel is on screen and,
+// for the two ingest modes, what that panel asks for.
 function setMode(mode) {
   currentMode = mode;
   document.querySelectorAll('.route[data-mode]').forEach(function(tile) {
@@ -29,6 +39,9 @@ function setMode(mode) {
     tile.classList.toggle('is-selected', on);
     tile.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
+  const ingesting = mode !== 'agent';
+  document.getElementById('agent-panel').hidden = ingesting;
+  document.getElementById('ingest-panel').hidden = !ingesting;
   // Hide the field *wrappers*, not the controls: the mounted CodeMirror sets
   // .cm-editor{display:flex!important} on itself and would win against an
   // inline display:none of its own.
@@ -40,6 +53,41 @@ function setMode(mode) {
   // Hiding the control here is the visible half of that rule; ingest() reads
   // the checkbox only on the url branch, so paste mode cannot send it at all.
   document.getElementById('snapshot-row').hidden = mode !== 'url';
+  if (mode === 'paste') mountEditor();
+}
+
+// --- Agent brief -----------------------------------------------------------
+// The brief crosses to /agent in sessionStorage rather than in a query string.
+// These are the user's own words about what they are building, and a URL is
+// copied into this server's request log, the operator's proxy access log and
+// the browser's history — the same reasoning that keeps the SSE credential out
+// of a URL (av-rgp1), applied to content instead of a secret. Same origin,
+// same tab, and agent.js consumes it exactly once on boot.
+const BRIEF_KEY = 'exhibit:agent-brief';
+
+// startAgent collects the brief and hands off. It is the form's submit
+// handler, so the browser has already enforced `required` on the description
+// by the time it runs; the check below is what a submit triggered any other
+// way falls back on.
+function startAgent(event) {
+  if (event) event.preventDefault();
+  const description = document.getElementById('agent-description');
+  if (!description.value.trim()) { description.focus(); return; }
+  const brief = {
+    title: document.getElementById('agent-title').value.trim(),
+    description: description.value.trim()
+  };
+  try {
+    sessionStorage.setItem(BRIEF_KEY, JSON.stringify(brief));
+  } catch (e) {
+    // Storage refused (private mode, blocked site data, quota). The agent page
+    // still opens; it opens with an empty composer instead of the brief. Clear
+    // the key on the way out: a brief an earlier hand-off left behind is the
+    // one agent.js would otherwise consume, so a failed write would start the
+    // session on somebody's previous description rather than on none.
+    try { sessionStorage.removeItem(BRIEF_KEY); } catch (e2) { /* nothing left to do */ }
+  }
+  location.href = '/agent';
 }
 
 // errorMessage extracts something readable from a failed response, whatever

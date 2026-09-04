@@ -482,6 +482,15 @@ func (ro *Router) setupRoutes() {
 				r.Get("/export", ro.exportArtifact)
 				r.Get("/assets", ro.listAssets)
 				r.Delete("/assets/{assetID}", ro.deleteAsset)
+				// Per-origin network decisions (av-kmwj). Decided one
+				// origin at a time, because that is what the runtime
+				// permission prompt knows: PATCH above replaces the whole
+				// allow set, which the prompt cannot restate without
+				// clobbering decisions it never saw — and cannot express a
+				// block or a return to undecided at all.
+				r.Get("/origins", ro.listOriginDecisions)
+				r.Post("/origins", ro.setOriginDecision)
+				r.Delete("/origins", ro.deleteOriginDecision)
 				// The artifact's gallery-card widget (av-fafu) — a second
 				// document under the artifact's own security envelope, so it
 				// hangs off the artifact rather than being a resource of its

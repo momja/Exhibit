@@ -11,8 +11,10 @@
  *                        "don't ask again" answer (mutable working copy).
  *                        They never reach the CSP; allowing one here moves it
  *                        into the allowlist and Save's PATCH upserts it as an
- *                        allow decision. Block decisions this page doesn't
- *                        touch are never cleared by Save (exhibit-x87).
+ *                        allow decision; forgetting one deletes the decision
+ *                        outright (av-kmwj) so the runtime prompt may ask
+ *                        again. Block decisions this page doesn't touch are
+ *                        never cleared by Save (exhibit-x87).
  *   downloadsApproved  - persisted first-use download approval (mutable)
  *   clipboardApproved  - persisted first-use clipboard approval (mutable)
  *   linksApproved      - persisted first-use external-link approval (mutable)
@@ -144,6 +146,24 @@ function bindAllowSection(containerId, take) {
 bindAllowSection('unapproved-rows', o => { unapproved = unapproved.filter(x => x !== o); });
 bindAllowSection('blocked-rows', o => { blocked = blocked.filter(x => x !== o); });
 
+// "Forget" drops a block decision instead of overriding it: the origin returns
+// to undecided, so the runtime network prompt (av-kmwj) may ask about it again.
+// PATCH cannot express that — it replaces the allow set and deliberately leaves
+// block rows alone — so Save deletes these through the per-origin route.
+// Collected here and applied there, like every other edit on this page.
+let forgotten = [];
+const blockedRows = document.getElementById('blocked-rows');
+if (blockedRows) {
+  blockedRows.addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-action="forget"]');
+    if (!btn) return;
+    const origin = btn.closest('.allowlist-row').dataset.origin;
+    blocked = blocked.filter(x => x !== origin);
+    if (!forgotten.includes(origin)) forgotten.push(origin);
+    renderSecurityPanel();
+  });
+}
+
 document.getElementById('al-add-btn').addEventListener('click', function() {
   const inp = document.getElementById('al-add-input');
   const val = inp.value.trim();
@@ -156,11 +176,16 @@ document.getElementById('al-add-input').addEventListener('keydown', function(e) 
   if (e.key === 'Enter') { e.preventDefault(); document.getElementById('al-add-btn').click(); }
 });
 
-// Builds one allowlist/unapproved row via createElement + textContent rather
-// than interpolated markup — origins are user/scanner-controlled and can
+// Builds one allowlist/unapproved/blocked row via createElement + textContent
+// rather than interpolated markup — origins are user/scanner-controlled and can
 // contain HTML metacharacters (av-tux9), same reasoning as detail.js's
 // renderBadges().
-function buildOriginRow(origin, actionLabel, action, note) {
+//
+// actions is a list of [label, action] pairs rendered left to right. It is a
+// list because a blocked row carries two answers (Forget and Allow, av-kmwj)
+// where the others carry one; the last is the row's primary and gets the solid
+// button, except for a destructive "remove", which never is.
+function buildOriginRow(origin, actions, note) {
   const row = document.createElement('div');
   row.className = 'allowlist-row';
   row.dataset.origin = origin;
@@ -176,21 +201,24 @@ function buildOriginRow(origin, actionLabel, action, note) {
     tag.textContent = note;
     row.appendChild(tag);
   }
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = action === 'remove' ? 'btn btn-sm btn-sec' : 'btn btn-sm';
-  btn.dataset.action = action;
-  btn.textContent = actionLabel;
-  row.appendChild(btn);
+  actions.forEach(function(a, i) {
+    const [label, action] = a;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = (i === actions.length - 1 && action !== 'remove') ? 'btn btn-sm' : 'btn btn-sm btn-sec';
+    btn.dataset.action = action;
+    btn.textContent = label;
+    row.appendChild(btn);
+  });
   return row;
 }
 
-function renderOriginSection(containerId, origins, note) {
+function renderOriginSection(containerId, origins, note, actions) {
   const rows = document.getElementById(containerId);
   if (!rows) return; // section absent because it rendered empty server-side
   const heading = rows.previousElementSibling;
   rows.innerHTML = '';
-  origins.forEach(o => rows.appendChild(buildOriginRow(o, 'Allow', 'allow', note)));
+  origins.forEach(o => rows.appendChild(buildOriginRow(o, actions, note)));
   const show = origins.length > 0;
   rows.style.display = show ? '' : 'none';
   if (heading) heading.style.display = show ? '' : 'none';
@@ -199,13 +227,14 @@ function renderOriginSection(containerId, origins, note) {
 function renderSecurityPanel() {
   const alRows = document.getElementById('allowlist-rows');
   alRows.innerHTML = '';
-  allowlist.forEach(o => alRows.appendChild(buildOriginRow(o, 'Remove', 'remove')));
+  allowlist.forEach(o => alRows.appendChild(buildOriginRow(o, [['Remove', 'remove']])));
 
-  // Both sections offer "Allow"; the blocked one labels each row so an
-  // explicit "don't ask again" reads differently from an undecided origin.
-  // Each section (and its heading) hides once emptied.
-  renderOriginSection('unapproved-rows', unapproved, null);
-  renderOriginSection('blocked-rows', blocked, 'blocked');
+  // Both sections offer "Allow"; the blocked one labels each row so an explicit
+  // "don't ask again" reads differently from an undecided origin, and adds
+  // "Forget" to drop the decision back to undecided. Each section (and its
+  // heading) hides once emptied.
+  renderOriginSection('unapproved-rows', unapproved, null, [['Allow', 'allow']]);
+  renderOriginSection('blocked-rows', blocked, 'blocked', [['Forget', 'forget'], ['Allow', 'allow']]);
 
   document.getElementById('security-summary-text').textContent =
     allowlist.length + (allowlist.length === 1 ? ' origin' : ' origins') +
@@ -247,6 +276,11 @@ async function save() {
     status.textContent = '✗ Error: ' + (data.error || resp.statusText);
     return;
   }
+  // Blocks the user chose to forget, applied after the PATCH so a failed save
+  // leaves every decision exactly as it was. A forget that fails is reported
+  // rather than swallowed: the row is already gone from the panel, so silence
+  // would show an origin as undecided that the next render still suppresses.
+  if (forgotten.length > 0 && !(await forgetBlockedOrigins(status))) return;
   status.textContent = '✓ Saved';
   // If the edited body changed the network footprint, the server re-ran the
   // scan and returned it. Re-run the explicit-approval flow so the user can
@@ -258,6 +292,29 @@ async function save() {
     return;
   }
   setTimeout(() => { window.location.href = '/artifacts/' + ID; }, 500);
+}
+
+// Deletes each forgotten block decision through the per-origin route. Returns
+// false (and says which origin) on the first failure, leaving the rest in
+// `forgotten` so a retried Save picks up where this one stopped.
+async function forgetBlockedOrigins(status) {
+  // An origin the user forgot and then re-added to the allowlist is not
+  // forgotten — the PATCH just wrote it as an allow decision, and deleting it
+  // here would silently undo the newer of the two answers.
+  forgotten = forgotten.filter(o => !allowlist.includes(o));
+  while (forgotten.length > 0) {
+    const origin = forgotten[0];
+    const r = await apiFetch('/api/artifacts/' + encodeURIComponent(ID) +
+      '/origins?origin=' + encodeURIComponent(origin), {
+      method: 'DELETE'
+    }).catch(() => null);
+    if (!r || !r.ok) {
+      status.textContent = '✗ Saved, but could not forget ' + origin;
+      return false;
+    }
+    forgotten.shift();
+  }
+  return true;
 }
 
 function showApproval(footprint) {

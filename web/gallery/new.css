@@ -33,9 +33,18 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
 .route b{font-size:14px;font-weight:600}
 .route-note{font-size:12.5px;color:var(--color-muted);line-height:1.5}
 
-/* --- ingest panel ------------------------------------------------------ */
-/* .card carries the surface (components.css); this adds the field rhythm. */
+/* --- panels ------------------------------------------------------------ */
+/* .card carries the surface (components.css); this adds the field rhythm.
+ * Two panels share these rules and exactly one is on screen: the agent brief
+ * and the ingest form. They ask for unlike things, so they are separate
+ * elements rather than one panel with more fields toggled inside it — and the
+ * brief's field set is the one meant to grow (nw-d1dd). */
 .ingest-panel{padding:var(--space-7)}
+.ingest-panel[hidden]{display:none}
+/* The brief's description is prose, not source: it opts out of the monospace
+ * code box the ingest textarea rules below establish. An id beats those
+ * selectors everywhere, the phone-height override included. */
+#agent-description{height:132px;font-family:inherit;font-size:var(--field-font-size);line-height:1.55}
 .ingest-field{margin-bottom:var(--space-6)}
 .ingest-field[hidden]{display:none}
 /* Small-caps field labels: the panel asks for three unlike things (a name, a

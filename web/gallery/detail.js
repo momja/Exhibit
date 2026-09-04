@@ -6,8 +6,10 @@
  *   ID                 - the artifact id
  *   SOURCE_URL         - source URL for URL-ingested artifacts ('' otherwise;
  *                        the Update-from-source button only renders when set)
- *   OPEN_URL           - this artifact's top-level render URL (the "Open in new
- *                        tab" destination), where capture devices actually work
+ *   OPEN_URL           - the app-origin route that mints a fresh render token
+ *                        and redirects to it: the "Open in new tab" destination,
+ *                        where capture devices actually work (av-mv3k), and what
+ *                        the network prompt reloads the frame through (av-kmwj)
  *   downloadsApproved  - persisted first-use download approval (mutable)
  *   clipboardApproved  - persisted first-use clipboard approval (mutable)
  *   linksApproved      - persisted first-use external-link approval (mutable)
@@ -113,6 +115,29 @@ const CAPABILITY_COPY = {
       'it a real origin, where it reaches them under the approval you already granted.',
     resourceLabel: 'Device'
   },
+  // av-kmwj. The artifact asked for an origin its allowlist already permits and
+  // the browser blocked it anyway, which means the request did not end where it
+  // started. CSP re-checks every redirect hop, and it deliberately reports the
+  // URL the artifact asked for rather than the one it was sent to — a policy
+  // must not become a way to probe where a cross-origin redirect leads. So
+  // nobody on this page can name the origin that actually needs approving, and
+  // the network prompt stays out of the way rather than offering to grant a
+  // permission that is already granted.
+  //
+  // It carries its own headline because the shared one is wrong here: opening
+  // the artifact directly does not fix a redirect, the policy is identical
+  // there. What it does buy is a console that names the blocked URL.
+  'redirected-origin': {
+    headline: 'A request was blocked after being redirected to an unapproved origin.',
+    detail: 'This artifact contacted a host you have already allowed, but that host ' +
+      'forwarded the request somewhere else, and the destination is not on the ' +
+      "allowlist. Browsers hide a redirect's destination from the page, so Exhibit " +
+      'cannot offer it for approval — if you know the host it forwards to, add it in ' +
+      "allowlist settings. Opening the artifact directly runs it under the same " +
+      "policy, where your browser's Network panel shows the redirect and names " +
+      'the destination.',
+    resourceLabel: 'Blocked request'
+  },
   'module-worker': {
     detail: "This artifact spawns a module worker (new Worker(url, { type: 'module' })), " +
       'which browsers refuse to run in the embedded preview because its sandboxed ' +
@@ -141,6 +166,12 @@ window.addEventListener('message', function(e) {
   if (detail && !detail.textContent) {
     const copy = CAPABILITY_COPY[d.capability] || CAPABILITY_COPY_FALLBACK;
     detail.textContent = copy.detail;
+    // Most capabilities share the banner's headline ("open it directly to run
+    // it"), which is true of every failure the sandbox causes. A capability
+    // that opening directly does NOT fix supplies its own rather than leaving
+    // the shared line to say something false.
+    const headline = document.getElementById('capability-warning-headline');
+    if (headline && copy.headline) headline.textContent = copy.headline;
     if (d.resource) {
       const label = document.createElement('div');
       label.className = 'banner-detail-url';
@@ -154,18 +185,11 @@ window.addEventListener('message', function(e) {
   banner.hidden = false;
 });
 
-// The module-worker diagnostic usually fires at iframe load — possibly before
-// this listener is attached, so the shim buffers it and replays on request.
-// Announce readiness on every iframe load (targetOrigin '*' — the frame is
-// opaque; the shim validates the ping came from our app origin) so any buffered
-// diagnostic is delivered even when the worker was constructed before we listened.
-(function() {
-  const frame = document.querySelector('iframe');
-  if (!frame) return;
-  frame.addEventListener('load', function() {
-    frame.contentWindow.postMessage({ __avHostReady: true }, '*');
-  });
-})();
+// The preamble buffers what it cannot deliver yet — the module-worker
+// diagnostic (av-yvtb) and CSP-violation reports (av-kmwj) both fire at frame
+// load, before this page has attached its listeners — and flushes when the host
+// announces itself. announceTo owns both halves of that handshake.
+window.ExhibitNetworkPrompt.announceTo(document.querySelector('iframe'));
 
 // Download bridge: the sandboxed frame cannot download anything itself (the
 // sandbox omits allow-downloads). The shim posts intercepted download
@@ -538,6 +562,34 @@ document.getElementById('media-allow').addEventListener('click', async function(
   replyMedia(req.id, false,
     'Capture devices are unavailable in the embedded preview; the artifact was opened directly',
     'NotSupportedError');
+});
+
+// Network permission prompt (av-kmwj): the dialog and its whole behaviour
+// live in network-prompt.js, shared with the agent chat page (av-6xvs). This
+// page only supplies the four things the two surfaces differ in.
+//
+// reload goes through the app origin's /open route rather than reusing the
+// frame's current src: that src carries a render token minted when this page
+// rendered, which expires — /open mints a fresh one on redirect, so the reload
+// works on a page that has been open all afternoon. The stamp only defeats the
+// browser's cache of the redirect itself.
+window.ExhibitNetworkPrompt.install({
+  frame: function () { return document.querySelector('iframe'); },
+  artifactId: function () { return ID; },
+  readOnly: function () { return typeof READ_ONLY === 'boolean' && READ_ONLY; },
+  report: function (text) {
+    const st = document.getElementById('al-status');
+    if (st) st.textContent = text;
+  },
+  reload: function () {
+    const frame = document.querySelector('iframe');
+    frame.src = OPEN_URL + '?r=' + Date.now();
+    frame.addEventListener('load', function onload() {
+      frame.removeEventListener('load', onload);
+      const st = document.getElementById('al-status');
+      if (st) st.textContent = '';
+    });
+  }
 });
 
 // "Update from source" — only reachable from the toolbar button, which the

@@ -1,6 +1,6 @@
 ---
 id: nw-d1dd
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-08-29T16:24:19Z

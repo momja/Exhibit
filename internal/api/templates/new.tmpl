@@ -1,13 +1,15 @@
-{{/* Add-artifact (ingest) page. Data: newPageData (gallery.go).
+{{/* Add-artifact page. Data: newPageData (gallery.go).
 
      Ingest used to sit on top of the library index, pushing the collection —
      the reason that page exists — below the fold (av-qo0j). It lives here
      instead, as one page whose whole job is getting a file in.
 
-     The three routes in are presented as equals: two of them (Paste HTML,
-     From URL) are the two modes of the ingest panel below and swap what the
-     panel asks for; the third hands off to the agent surface, which owns its
-     own page. */}}
+     The three routes in are peers, and all three are modes of the panel below
+     (nw-d1dd): the tile decides which panel the page shows and what it asks
+     for. Build with agent leads and is selected on load — most artifacts now
+     start as a description rather than as source somebody already has. Its
+     panel is a *form*, not a chat box: named fields the agent surface turns
+     into its opening message, and the set is meant to grow. */}}
 {{define "new"}}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -37,10 +39,16 @@
   <p>However it arrives, it lands in your library as one self-contained file you own.</p>
 </div>
 
-{{/* data-mode marks the two tiles that drive the panel below; the agent tile
-     is a plain link and carries none, so the mode switch never selects it. */}}
+{{/* Every tile carries data-mode: the agent tile used to be a bare link to
+     /agent and is now the panel's default mode, so the brief below it is
+     filled in before the session starts rather than after. */}}
 <div class="routes">
-  <button type="button" class="route is-selected" data-mode="paste" aria-pressed="true" onclick="setMode('paste')">
+  <button type="button" class="route is-selected" data-mode="agent" aria-pressed="true" onclick="setMode('agent')">
+    <span class="route-icon"><i class="ph ph-robot"></i></span>
+    <b>Build with agent</b>
+    <span class="route-note">Describe the tool and iterate with an assistant until it works.</span>
+  </button>
+  <button type="button" class="route" data-mode="paste" aria-pressed="false" onclick="setMode('paste')">
     <span class="route-icon"><i class="ph ph-code"></i></span>
     <b>Paste HTML</b>
     <span class="route-note">Drop in source you already have from a chat or your editor.</span>
@@ -50,14 +58,34 @@
     <b>From URL</b>
     <span class="route-note">Fetch a page once and keep your own copy. Assets inlined.</span>
   </button>
-  <a class="route" href="/agent">
-    <span class="route-icon"><i class="ph ph-robot"></i></span>
-    <b>Build with agent</b>
-    <span class="route-note">Describe the tool and iterate with an assistant until it works.</span>
-  </a>
 </div>
 
-<div class="card ingest-panel">
+{{/* The agent brief. Deliberately a form of named fields rather than one
+     freeform prompt box: the answers are what the agent surface builds its
+     opening message from, and more fields will join them here. Anything added
+     should be another *answerable* field — a second open textarea would just
+     be the chat box moved up a page.
+
+     It is a real <form>, so the browser does the empty-description check and
+     Enter in the title submits; startAgent takes over from there. */}}
+<form class="card ingest-panel" id="agent-panel" onsubmit="startAgent(event)">
+  <div class="ingest-field">
+    <label class="ingest-label" for="agent-title">Title <span class="ingest-label-opt">optional</span></label>
+    <input class="field" type="text" id="agent-title" name="title" placeholder="Session timer">
+  </div>
+  <div class="ingest-field">
+    <label class="ingest-label" for="agent-description">Description</label>
+    <textarea id="agent-description" name="description" required placeholder="What should the tool do? Say what you want on screen, and what it should remember between visits."></textarea>
+  </div>
+
+  <div class="ingest-foot">
+    <span class="spacer"></span>
+    <a class="btn btn-sec" href="/">Cancel</a>
+    <button class="btn" type="submit"><i class="ph ph-robot"></i> Start building</button>
+  </div>
+</form>
+
+<div class="card ingest-panel" id="ingest-panel" hidden>
   <div class="ingest-field">
     <label class="ingest-label" for="title">Title <span class="ingest-label-opt">optional</span></label>
     <input class="field" type="text" id="title" placeholder="Untitled">
