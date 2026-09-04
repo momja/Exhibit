@@ -2,7 +2,7 @@
 id: av-6nbo
 status: closed
 deps: []
-links: []
+links: [av-q3iy]
 created: 2026-09-04T05:45:55Z
 type: feature
 priority: 2
