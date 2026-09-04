@@ -25,9 +25,10 @@ own code convention.
   nothing, which is what makes the same path safe to expose unauthenticated for
   share links (`/s/:shareID`).
 - Every rendered document carries `frame-ancestors <APP_ORIGIN>` in its CSP, so
-  only the app's own pages may embed an artifact, and `Cache-Control: no-store`,
-  so a stale document (old render preamble, old state, old CSP) is never
-  served from a cache.
+  only the app's own pages may embed an artifact — plus, on a **share** and only
+  when an operator configured `EMBED_ORIGINS`, the sites they named (§1.8) — and
+  `Cache-Control: no-store`, so a stale document (old render preamble, old
+  state, old CSP) is never served from a cache.
 - The render preamble's write path is the only channel out of the sandbox: a
   `postMessage` with `targetOrigin` pinned to the app origin. The host page
   accepts a state message only after checking its shape **and** that
@@ -531,6 +532,42 @@ real non-admin's real session and asserts the refusal is identical for an
 account that exists and one that does not, then uses a live cookie *after* a
 disable to prove the session really ended.
 
+### 1.8 Who may frame a render document: `frame-ancestors`, and what it is worth
+
+Every rendered document names its permitted framers, and by default that is
+`APP_ORIGIN` alone. `EMBED_ORIGINS` (av-6nbo) adds the sites an operator names
+— empty on every instance that has not set it, where the emitted policy is
+byte-identical to what it always was.
+
+**Shares only.** `/s/:shareID` carries no render token and therefore no
+principal: it is authorized by the share row, is already readable by anyone
+holding the link, and is the one render document whose purpose is to be seen
+somewhere other than the gallery. `/a/:id` and `/w/:id` are the opposite —
+reached with a token naming a viewer (§1.3) and rendered with *that viewer's*
+state inlined — so they stay framed by the app alone whatever is configured.
+The decision is made at the two routes rather than inside the CSP builder,
+which holds no policy about framing; `internal/render/embed_test.go` asserts
+both halves.
+
+**And this header is the second lock, not the first.** It is worth being
+precise about what it defends, because it is easy to credit it with more:
+
+- The render preamble's every `postMessage` targets `APP_ORIGIN`, never `'*'`.
+  A page on another origin therefore receives nothing from the shim however it
+  framed the document — and in the same stroke a share embedded elsewhere
+  cannot *save* state, because its write-through is addressed to a parent that
+  is not the framer. State on such a page is read-at-render and dies with the
+  frame.
+- No cookie is ever set on the render origin (§1.3), so there is no session for
+  a hostile framer to clickjack.
+- A share render holds no privileged control — no share-management UI, no
+  approval prompt, no account surface — so there is no click for a framing page
+  to steal the meaning of.
+
+That is why widening this for shares costs little. It is also exactly why it
+stays opt-in: cheap is not free, and an instance should acquire the widening
+because its operator asked for it, not because a default handed it over.
+
 ## 2. CSP: the allowlist is the wall
 
 Each artifact carries a set of per-origin decisions (`artifact_network_origins`,
@@ -549,11 +586,14 @@ font-src    data: <allowlisted origins>
 media-src   blob: <allowlisted origins>
 connect-src <allowlisted origins, or 'none' if the list is empty>
 form-action 'self' <allowlisted origins>
-frame-ancestors <APP_ORIGIN>
+frame-ancestors <APP_ORIGIN> <EMBED_ORIGINS, on a share, if configured>
 ```
 
 Every source above belongs to one of two buckets, and sorting a new one into the
-right bucket is the whole design rule:
+right bucket is the whole design rule. `frame-ancestors` is the exception that
+proves it: it governs who may embed *this* document rather than what the
+document may reach, so neither bucket applies and it is decided by the route
+instead (§1.8).
 
 | Bucket | Examples | Gating |
 |--------|----------|--------|

@@ -383,6 +383,23 @@ executable document with the correct security envelope:
   so it was removed. Native keyboard paste (Ctrl/Cmd+V) is a browser event and
   works regardless.
 
+- Names in `frame-ancestors` who may embed the document: `APP_ORIGIN` always,
+  and on a **share** the origins `EMBED_ORIGINS` configured (av-6nbo). Unset —
+  every instance that has not asked — emits the byte-identical policy it always
+  did. The widening is per *route*, not per artifact, and stops at `/s/:shareID`
+  on purpose: that document carries no render token and therefore no principal,
+  is already readable by anyone with the link, and is the only one whose point
+  is to be seen off the gallery, while `/a/:id` and `/w/:id` inline a named
+  viewer's state. So the two token-gated routes hand `serveDoc` no extra
+  framers and the share route hands it the configured set — the decision is
+  visible at the routes, and `buildCSP` holds no framing policy of its own.
+  This header is also the *second* lock on that door rather than the first: the
+  preamble's every `postMessage` targets `APP_ORIGIN`, so a foreign framer
+  receives nothing from the shim and a share framed there cannot even write its
+  state back; no cookie is ever set on this origin; and a share render holds no
+  privileged control a stolen click could spend. Cheap to widen for shares, and
+  for the same reason not worth turning on by default (`security.md` §1.8).
+
 - Serves an artifact's **widget** at `/w/:id` (av-fafu) — the glanceable tile its
   gallery card renders. This is the same read path with the same CSP, built from
   the same allowlist, and the same state inlined; it differs only in which blob it

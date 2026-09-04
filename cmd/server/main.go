@@ -67,6 +67,17 @@ func main() {
 		fatal("configure per-owner entitlements", err)
 	}
 
+	// Third-party embedding (av-6nbo). Unset — the default — is the render
+	// CSP's frame-ancestors exactly as it has always been: the app origin and
+	// nothing else. An entry that is not an origin is fatal rather than
+	// dropped, because dropping it fails closed *silently*: what the operator
+	// would see is a broken frame on a site they configured, with nothing
+	// naming the typo.
+	embedOrigins, err := api.EmbedOriginsFromEnv()
+	if err != nil {
+		fatal("configure embed origins", err)
+	}
+
 	slog.Info("exhibit starting",
 		slog.String("app_origin", appOrigin),
 		slog.String("render_origin", renderOrigin),
@@ -76,6 +87,14 @@ func main() {
 		slog.Bool("debug", level <= slog.LevelDebug),
 		slog.Bool("public_mode", publicMode.Enabled),
 	)
+	if len(embedOrigins) > 0 {
+		// Logged because it widens a security header, and an operator reading
+		// a startup log should be able to see every such widening in force
+		// without diffing an environment file against the defaults.
+		slog.Info("third-party share embedding enabled",
+			slog.String("embed_origins", strings.Join(embedOrigins, " ")),
+		)
+	}
 	if publicMode.Enabled {
 		slog.Info("public instance mode enabled",
 			slog.String("instance_name", publicMode.Name),
@@ -226,6 +245,7 @@ func main() {
 		LocalUsers:       localUsers > 0,
 		Public:           publicMode,
 		Entitlements:     entitlements,
+		EmbedOrigins:     embedOrigins,
 	})
 
 	// One listener or two (av-xath). Two is the default and the shape an
