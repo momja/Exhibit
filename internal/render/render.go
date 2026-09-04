@@ -30,32 +30,37 @@ type Config struct {
 	// cookie here would be readable by the artifact itself. A nil Signer fails
 	// those two routes closed; /s/:shareID never consults it.
 	Tokens *rendertoken.Signer
-	// EmbedOrigins are the sites, besides the app itself, permitted to put a
-	// **share** in an iframe (av-6nbo). Empty — the default, and every instance
-	// that has not asked for this — emits exactly the frame-ancestors this
-	// surface has always emitted.
+	// EmbedOrigins narrows who may put a **share** in an iframe (av-q3iy).
+	// Empty — the default, and every instance that has not asked otherwise —
+	// means a share says `frame-ancestors *`: anyone may frame it. Set, the
+	// share's framers become the app origin plus exactly these, and every other
+	// site is refused. So this is a lockdown, not a widening; it is the only
+	// configuration on this surface whose *presence* takes something away.
 	//
-	// Shares only, deliberately. /a/:id and /w/:id carry a render token naming
-	// a principal and inline that principal's state (av-c5aq, av-q0ub): they
-	// are documents *about a specific person*, reached through a credential the
-	// app minted into a frame it controls, and no third-party page has business
-	// holding one. A share carries no token and no principal, is already
-	// readable by anyone with the link, and is the only render document whose
-	// purpose is to be seen somewhere other than here. Widening the tight case
-	// to reach the loose one would give up a real property for nothing, so it
-	// is not widened.
+	// Why open is the default. A share is a public link — that is the whole of
+	// what a share is — and a public link that refuses to be embedded
+	// contradicts its own purpose: an operator's own landing page showing an
+	// artifact from their own instance is the ordinary case, and it should not
+	// have to begin by discovering an environment variable. The header buys
+	// almost nothing back here, because frame-ancestors is the *second* lock on
+	// this door and not the first. The first is that every postMessage the
+	// render preamble sends targets APP_ORIGIN rather than '*', so a page on
+	// another origin receives nothing from the shim however it framed the
+	// document — and, in the same stroke, a share framed elsewhere cannot
+	// persist state, because its write-through is addressed to a parent that is
+	// not the framer. No cookie is ever set on the render origin, so there is
+	// no session for a hostile framer to clickjack, and a share render holds no
+	// privileged control a stolen click could spend. Denying by default would
+	// therefore be configuration for its own sake, paid for by every operator
+	// who wanted the obvious thing.
 	//
-	// What this header is and is not. frame-ancestors is the second lock here,
-	// not the first. The first is that every postMessage the render preamble
-	// sends targets APP_ORIGIN rather than '*', so a page on another origin
-	// receives nothing from the shim however it framed the document — and, in
-	// the same stroke, a share framed elsewhere cannot persist state, because
-	// its write-through is addressed to a parent that is not the framer. No
-	// cookie is ever set on the render origin, so there is no session for a
-	// hostile framer to clickjack, and a share render holds no privileged
-	// control a stolen click could spend. That is why widening this for shares
-	// costs little — and equally why it stays opt-in rather than becoming the
-	// default: cheap is not free, and nobody should acquire it without asking.
+	// Shares only, deliberately, in both directions. /a/:id and /w/:id carry a
+	// render token naming a principal and inline that principal's state
+	// (av-c5aq, av-q0ub): they are documents *about a specific person*, reached
+	// through a credential the app minted into a frame it controls, and no
+	// third-party page has business holding one. They are framed by the app
+	// origin alone whatever this holds — neither opened by an empty value nor
+	// narrowed by a populated one.
 	EmbedOrigins []string
 }
 
@@ -104,9 +109,10 @@ func (rd *Renderer) ServeArtifact(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// No extra framers: this document names a principal and inlines their
-	// state, so the app's own pages are the only pages that may embed it. See
-	// Config.EmbedOrigins for why the share route is the one that widens.
+	// The app's own pages and nothing else: this document names a principal and
+	// inlines their state, so it is never framed off the gallery whatever
+	// EMBED_ORIGINS says. nil is that policy, not an absent one — see
+	// Config.EmbedOrigins for why the share route is the one that is open.
 	rd.serveArtifactDoc(w, r, a, viewer, nil)
 }
 
@@ -191,11 +197,43 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	// over a whole library. The blast radius differs by orders of magnitude, so
 	// the defaults do too.
 	//
-	// This is also the one route whose document a configured third-party site
-	// may frame (av-6nbo) — empty unless the operator named one, and shares
-	// only because a share is the render document that already carries neither
-	// a principal nor a credential. Config.EmbedOrigins holds the argument.
-	rd.serveArtifactDoc(w, r, a, rendertoken.Claims{OwnerID: a.OwnerID}, rd.cfg.EmbedOrigins)
+	// This is also the one route whose document any site may frame (av-q3iy),
+	// and the one an operator can narrow with EMBED_ORIGINS — shares only,
+	// because a share is the render document that already carries neither a
+	// principal nor a credential. Config.EmbedOrigins holds the argument.
+	rd.serveArtifactDoc(w, r, a, rendertoken.Claims{OwnerID: a.OwnerID},
+		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
+}
+
+// shareFrameAncestors is the whole of the share route's framing policy
+// (av-q3iy): with nothing configured a share may be framed by anyone, and
+// EMBED_ORIGINS turns that into the app origin plus the sites it names.
+//
+// `*` is written out rather than achieved by omitting the directive, though a
+// missing frame-ancestors permits the same set. The directive is the statement
+// that this was decided — a policy with a hole in it reads identically to one
+// that forgot, and the next person to add a route here should have to answer
+// the question rather than inherit the answer by default.
+//
+// The app origin is prepended to a configured set because the gallery framing
+// its own share must never be something an operator can switch off by naming
+// their landing page. It is not prepended to `*`, which already covers it. An
+// entry that repeats the app origin is dropped rather than emitted twice —
+// cosmetic, since CSP reads the directive as a set, but that entry is the
+// natural way to write "my gallery and nobody else" and the header it produces
+// should not look like a bug.
+func shareFrameAncestors(appOrigin string, embedOrigins []string) []string {
+	if len(embedOrigins) == 0 {
+		return []string{"*"}
+	}
+	framers := make([]string, 0, len(embedOrigins)+1)
+	framers = append(framers, appOrigin)
+	for _, o := range embedOrigins {
+		if o != appOrigin {
+			framers = append(framers, o)
+		}
+	}
+	return framers
 }
 
 // ServeWidget serves an artifact's widget (av-fafu) — the small, informative
@@ -215,13 +253,13 @@ func (rd *Renderer) ServeWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Token-gated like /a/:id, and framed only by the gallery card that owns
-	// it, so nothing widens here either.
+	// it, so the app origin alone here too.
 	rd.serveDoc(w, r, a, a.WidgetBlobID, true, viewer, nil)
 }
 
 // serveArtifactDoc serves the artifact's own body — the full, interactive tool.
-func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, viewer rendertoken.Claims, embedOrigins []string) {
-	rd.serveDoc(w, r, a, a.SourceBlobID, false, viewer, embedOrigins)
+func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, viewer rendertoken.Claims, frameAncestors []string) {
+	rd.serveDoc(w, r, a, a.SourceBlobID, false, viewer, frameAncestors)
 }
 
 // serveDoc reads blobID, wraps it in the artifact's security envelope (CSP from
@@ -239,12 +277,13 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 // is keyed by (artifact_id, user_id, key), and viewer.OwnerID is that user_id —
 // or, when the viewer is anonymous, the answer "nobody's".
 //
-// embedOrigins is who — besides the app — may frame *this* document (av-6nbo).
-// It is a parameter rather than something read off the config here so that the
-// routes decide it and the decision is visible at each of them: the two
-// token-gated routes hand over nil, and the share route hands over what the
-// operator configured. serveDoc holds no policy about framing at all.
-func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, blobID string, widget bool, viewer rendertoken.Claims, embedOrigins []string) {
+// frameAncestors is who may frame *this* document — the complete set, with nil
+// meaning the app origin alone (av-6nbo, av-q3iy). It is a parameter rather
+// than something read off the config here so that the routes decide it and the
+// decision is visible at each of them: the two token-gated routes hand over
+// nil, and the share route hands over what shareFrameAncestors resolved. Both
+// serveDoc and buildCSP hold no policy about framing at all.
+func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, blobID string, widget bool, viewer rendertoken.Claims, frameAncestors []string) {
 	rc, err := rd.cfg.Blob.Get(r.Context(), blobID)
 	if err != nil {
 		http.Error(w, "artifact body not found", http.StatusNotFound)
@@ -278,7 +317,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		assetBase = rd.assetBaseURL(a.ID)
 	}
 
-	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin, assetBase, embedOrigins...)
+	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin, assetBase, frameAncestors...)
 	w.Header().Set("Content-Security-Policy", csp)
 	// A widget's authority is a strict subset of its artifact's (av-fafu), so a
 	// tile is denied both devices whatever the artifact holds — it renders
@@ -384,9 +423,9 @@ func (rd *Renderer) originPolicyFor(r *http.Request, a *store.Artifact) (originP
 }
 
 // buildCSP generates a per-artifact Content-Security-Policy header value
-// from the artifact's network allowlist. appOrigin is permitted to embed this
-// page in an iframe, and — with no embedOrigins — is the only origin that may
-// (see below, and Config.EmbedOrigins). The storage shim needs no connect-src
+// from the artifact's network allowlist. appOrigin is who may embed this page
+// in an iframe unless the caller names someone else (see below, and
+// Config.EmbedOrigins). The storage shim needs no connect-src
 // of its own: it reads inlined state and writes via postMessage to the host
 // frame.
 //
@@ -455,14 +494,21 @@ func (rd *Renderer) originPolicyFor(r *http.Request, a *store.Artifact) (originP
 //
 // frame-ancestors is in neither bucket: it governs who may embed *this*
 // document rather than what the document may reach, so the two-bucket rule has
-// nothing to say about it. appOrigin is always named. embedOrigins is variadic
-// and empty at nearly every call site, which is the shape of the guarantee:
-// unset, this emits the byte-identical policy it emitted before third-party
-// embedding existed (av-6nbo). Only the share route passes anything, and
-// Config.EmbedOrigins is where the reasoning lives — including why this header
-// is the second lock on that door rather than the first.
-func buildCSP(allowlist []string, appOrigin, assetBase string, embedOrigins ...string) string {
+// nothing to say about it. frameAncestors is the directive's complete source
+// list and is variadic because nearly every call site wants the default —
+// appOrigin alone, the answer for the two token-gated routes and every caller
+// that does not care. Only the share route passes anything, and it passes
+// whatever shareFrameAncestors resolved (av-q3iy). This function therefore
+// decides nothing about framing; Config.EmbedOrigins is where the reasoning
+// lives, including why a share is open by default and why this header is the
+// second lock on that door rather than the first.
+func buildCSP(allowlist []string, appOrigin, assetBase string, frameAncestors ...string) string {
 	origins := strings.Join(allowlist, " ")
+
+	framers := frameAncestors
+	if len(framers) == 0 {
+		framers = []string{appOrigin}
+	}
 
 	// withOrigins appends the approved (network-reaching) origins to a directive's
 	// unconditional, no-egress sources.
@@ -500,7 +546,7 @@ func buildCSP(allowlist []string, appOrigin, assetBase string, embedOrigins ...s
 		withOrigins(withAssets("media-src blob:")),
 		withOrigins(withAssets("connect-src blob: data:")),
 		withOrigins("form-action 'self'"),
-		strings.Join(append([]string{"frame-ancestors", appOrigin}, embedOrigins...), " "),
+		strings.Join(append([]string{"frame-ancestors"}, framers...), " "),
 	}, "; ")
 }
 

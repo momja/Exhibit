@@ -24,11 +24,12 @@ own code convention.
 - The render surface is read-only. It looks up, wraps, and serves — it mutates
   nothing, which is what makes the same path safe to expose unauthenticated for
   share links (`/s/:shareID`).
-- Every rendered document carries `frame-ancestors <APP_ORIGIN>` in its CSP, so
-  only the app's own pages may embed an artifact — plus, on a **share** and only
-  when an operator configured `EMBED_ORIGINS`, the sites they named (§1.8) — and
-  `Cache-Control: no-store`, so a stale document (old render preamble, old
-  state, old CSP) is never served from a cache.
+- Every rendered document names its permitted framers in its CSP: a token-gated
+  render (`/a/:id`, `/w/:id`) carries `frame-ancestors <APP_ORIGIN>`, so only
+  the app's own pages may embed it, while a **share** is framable by anyone
+  unless an operator restricted it with `EMBED_ORIGINS` (§1.8). Every rendered
+  document also carries `Cache-Control: no-store`, so a stale document (old
+  render preamble, old state, old CSP) is never served from a cache.
 - The render preamble's write path is the only channel out of the sandbox: a
   `postMessage` with `targetOrigin` pinned to the app origin. The host page
   accepts a state message only after checking its shape **and** that
@@ -534,23 +535,40 @@ disable to prove the session really ended.
 
 ### 1.8 Who may frame a render document: `frame-ancestors`, and what it is worth
 
-Every rendered document names its permitted framers, and by default that is
-`APP_ORIGIN` alone. `EMBED_ORIGINS` (av-6nbo) adds the sites an operator names
-— empty on every instance that has not set it, where the emitted policy is
-byte-identical to what it always was.
+Every rendered document names its permitted framers, and the answer depends on
+which document it is:
 
-**Shares only.** `/s/:shareID` carries no render token and therefore no
-principal: it is authorized by the share row, is already readable by anyone
-holding the link, and is the one render document whose purpose is to be seen
-somewhere other than the gallery. `/a/:id` and `/w/:id` are the opposite —
-reached with a token naming a viewer (§1.3) and rendered with *that viewer's*
-state inlined — so they stay framed by the app alone whatever is configured.
-The decision is made at the two routes rather than inside the CSP builder,
-which holds no policy about framing; `internal/render/embed_test.go` asserts
-both halves.
+| Route | `frame-ancestors` |
+|-------|-------------------|
+| `/a/:id`, `/w/:id` | `<APP_ORIGIN>` — always, whatever is configured |
+| `/s/:shareID`, `EMBED_ORIGINS` unset | `*` — any site may frame it |
+| `/s/:shareID`, `EMBED_ORIGINS` set | `<APP_ORIGIN> <the configured origins>` |
 
-**And this header is the second lock, not the first.** It is worth being
-precise about what it defends, because it is easy to credit it with more:
+So `EMBED_ORIGINS` (av-6nbo, inverted by av-q3iy) is a **lockdown**: setting it
+takes framing away from everyone it does not name. It is the only configuration
+on this surface whose presence narrows rather than widens, and it is worth
+saying so plainly because the name reads the other way.
+
+**A share is open because a share is a public link.** Its content is readable by
+anyone holding the URL — that is the entire point of minting one — so a header
+refusing to let that URL be embedded contradicts what it is for, while costing
+every operator who wants their own site to show their own artifact a lookup
+first. Denying by default would have been configuration for its own sake.
+
+**Shares only, in both directions.** `/s/:shareID` carries no render token and
+therefore no principal: it is authorized by the share row, is already readable
+by anyone holding the link, and is the one render document whose purpose is to
+be seen somewhere other than the gallery. `/a/:id` and `/w/:id` are the
+opposite — reached with a token naming a viewer (§1.3) and rendered with *that
+viewer's* state inlined — so they are framed by the app alone whatever is
+configured: neither opened by the default nor narrowed by a setting. The
+decision is made at the routes rather than inside the CSP builder, which holds
+no policy about framing; `internal/render/embed_test.go` asserts every cell of
+the table above.
+
+**And this header is the second lock, not the first** — which is what makes the
+open default cheap. It is worth being precise about what it defends, because it
+is easy to credit it with more:
 
 - The render preamble's every `postMessage` targets `APP_ORIGIN`, never `'*'`.
   A page on another origin therefore receives nothing from the shim however it
@@ -564,9 +582,12 @@ precise about what it defends, because it is easy to credit it with more:
   approval prompt, no account surface — so there is no click for a framing page
   to steal the meaning of.
 
-That is why widening this for shares costs little. It is also exactly why it
-stays opt-in: cheap is not free, and an instance should acquire the widening
-because its operator asked for it, not because a default handed it over.
+What a framing site gets, then, is a page it could already have linked to, in a
+box on its own page. What it does not get is the shim's messages, a session, or
+a control worth stealing a click into. An operator who still wants framing
+closed — a corporate deployment where a share is internal-only, say — has
+`EMBED_ORIGINS` for it, and setting it to their own app origin refuses everyone
+else.
 
 ## 2. CSP: the allowlist is the wall
 
@@ -586,7 +607,7 @@ font-src    data: <allowlisted origins>
 media-src   blob: <allowlisted origins>
 connect-src <allowlisted origins, or 'none' if the list is empty>
 form-action 'self' <allowlisted origins>
-frame-ancestors <APP_ORIGIN> <EMBED_ORIGINS, on a share, if configured>
+frame-ancestors <APP_ORIGIN>, or on a share * unless EMBED_ORIGINS narrows it
 ```
 
 Every source above belongs to one of two buckets, and sorting a new one into the
