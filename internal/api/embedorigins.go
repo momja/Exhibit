@@ -9,20 +9,23 @@ import (
 	"github.com/momja/Exhibit/internal/origin"
 )
 
-// Third-party embedding configuration (av-6nbo).
+// Third-party embedding configuration (av-6nbo, inverted by av-q3iy).
 //
-// Every render document carries `frame-ancestors <APP_ORIGIN>`, so nothing but
-// the app's own pages may put one in an iframe. EMBED_ORIGINS names the other
-// sites allowed to embed a *share* — a landing page that wants to show a real,
-// running artifact rather than a screenshot of one. Unset, which is every
-// instance that has not asked for this, the emitted policy is byte-identical to
-// what it has always been.
+// A *share* is `frame-ancestors *` by default: it is a public link, and a
+// public link that refuses to be embedded contradicts what it is for — an
+// operator's own landing page showing a real, running artifact from their own
+// instance is the ordinary case. EMBED_ORIGINS is how an operator takes that
+// back, naming the only sites (beside APP_ORIGIN) that may frame one; every
+// other site is then refused. The token-gated renders `/a/:id` and `/w/:id`
+// are unaffected either way — they name a viewer and inline that viewer's
+// state, and are framed by the app origin alone. render.Config.EmbedOrigins
+// carries the full argument, including why the default costs so little.
 //
 // Why this is configuration and not a per-artifact decision: it is a property
-// of the deployment (which of my own sites may frame my library's shares),
-// not of any one artifact, and it is the operator's to state once. The
-// per-artifact allowlist governs the opposite direction — what an artifact
-// reaches out to — and nothing about framing belongs in it.
+// of the deployment (who may frame my library's shares at all), not of any one
+// artifact, and it is the operator's to state once. The per-artifact allowlist
+// governs the opposite direction — what an artifact reaches out to — and
+// nothing about framing belongs in it.
 const envEmbedOrigins = "EMBED_ORIGINS"
 
 // EmbedOriginsFromEnv reads EMBED_ORIGINS: origins separated by commas or
@@ -38,12 +41,15 @@ const envEmbedOrigins = "EMBED_ORIGINS"
 // codebase and this reuses it rather than inventing a second.
 //
 // An unusable entry is an error the caller makes fatal, not an entry silently
-// dropped. Dropping fails closed — the site simply cannot frame the share, which
-// is the behaviour of every instance that never set this — but it fails
-// *invisibly*: the operator sees a broken frame on a page they configured
-// correctly as far as they know, with nothing anywhere naming the typo. This is
-// read once at startup by someone who set it deliberately, and that is the only
-// cheap moment to say so.
+// dropped, and since av-q3iy that matters in both directions. Dropping one
+// entry narrows the policy below what the operator wrote, and does it
+// *invisibly*: they see a broken frame on a page they configured correctly as
+// far as they know, with nothing anywhere naming the typo. Dropping the whole
+// value — the failure a "just ignore what I cannot parse" rule eventually
+// reaches — is worse now that empty means open: an instance whose operator
+// asked for a lockdown would serve shares framable by anyone and say nothing.
+// This is read once at startup by someone who set it deliberately, and that is
+// the only cheap moment to say so.
 func EmbedOriginsFromEnv() ([]string, error) {
 	// Comma or whitespace, accepted interchangeably: neither can appear inside
 	// an origin, so there is no ambiguity to resolve, and an operator who

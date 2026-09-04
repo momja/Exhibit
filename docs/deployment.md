@@ -70,7 +70,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `PUBLIC_INSTANCE_NAME` | *(unset)* | What this instance calls itself |
 | `PUBLIC_INSTANCE_DESCRIPTION` | *(unset)* | One line about it |
 | `PUBLIC_OWNER_ID` | `1` | Whose library the instance publishes — every artifact query filters on an owner, so a public instance has to name one. `1` is the owner a single-user library is already filed under |
-| `EMBED_ORIGINS` | *(unset)* | Sites, besides `APP_ORIGIN`, allowed to put a **share** in an iframe. Origins separated by commas or spaces; an entry that is not an origin is a startup failure rather than a silent drop. Unset = only your own gallery may frame a render document, exactly as before |
+| `EMBED_ORIGINS` | *(unset)* | Restricts who may put a **share** in an iframe to `APP_ORIGIN` plus these. Origins separated by commas or spaces; an entry that is not an origin is a startup failure rather than a silent drop. Unset = any site may frame a share, which is what a public link is for; `/a/:id` and `/w/:id` are framed by your gallery alone either way |
 | `BLOB_S3_BUCKET` | *(unset)* | Store artifact bodies in this S3-compatible bucket instead of on disk. Unset = filesystem under `DATA_DIR`, exactly as before (§7) |
 | `BLOB_S3_ENDPOINT` | AWS S3 | The bucket's API host, with an optional scheme: `http://localhost:9000`, `https://minio.example.com`, or a bare host. **Without a scheme, TLS is assumed** |
 | `BLOB_S3_REGION` | *(unset)* | Region, when your provider needs one. MinIO does not |
@@ -104,34 +104,40 @@ If you *want* a link that carries your data with it, that is what a share
 (`/s/:id`) is — a decision you make one artifact at a time, and it still renders
 as you see it.
 
-**Letting another site frame a share (`EMBED_ORIGINS`).** Every rendered
-document says `frame-ancestors <APP_ORIGIN>`, so by default only your own
-gallery may put one in an iframe — a landing page of yours that wants to show a
-real, running artifact instead of a screenshot gets a browser refusal and a
-broken frame. Naming that page here lets it embed:
+**Restricting who may frame a share (`EMBED_ORIGINS`).** A share is a public
+link, so by default any site may put one in an iframe — your landing page can
+show a real, running artifact from your instance with nothing configured here.
+Set this when you want that narrowed to sites you name:
 
 ```
 EMBED_ORIGINS=https://example.com,https://blog.example.com
 ```
 
-Commas or spaces, whichever you prefer. Each entry must be a bare origin —
-scheme, host, and a port only when it is not the default — because the values go
-straight into a CSP directive, where a trailing path would be path-matched and
-mean something narrower than it reads as. `https://example.com/embed`,
-`example.com` and `https://*.example.com` are all refused **at startup**, named
-in the error, rather than dropped: a dropped entry would leave you looking at a
-broken frame on a site you believe you configured.
+With it set, a share may be framed by your app origin and those two, and every
+other site gets a browser refusal and a broken frame. Commas or spaces,
+whichever you prefer. Each entry must be a bare origin — scheme, host, and a
+port only when it is not the default — because the values go straight into a CSP
+directive, where a trailing path would be path-matched and mean something
+narrower than it reads as. `https://example.com/embed`, `example.com` and
+`https://*.example.com` are all refused **at startup**, named in the error,
+rather than dropped: a dropped entry would leave you looking at a broken frame
+on a site you believe you configured.
 
-Two things it does, and two it does not. It applies to **shares only** —
-`/s/:shareID`, the render document that carries no credential and no viewer, and
-is already readable by anyone holding the link. `/a/:id` and `/w/:id` inline a
-specific person's state and stay framed by your gallery alone whatever is set
-here. And it grants the framing site nothing else: the artifact's messages to
-its host are addressed to `APP_ORIGIN`, so a page on another origin receives
-nothing from the frame and a share embedded there cannot save state. There is
-no session cookie on the render origin to be clickjacked either. This header is
-the second lock on that door — which is why widening it is cheap, and why it is
-still yours to ask for rather than on by default.
+It reaches **shares only** — `/s/:shareID`, the render document that carries no
+credential and no viewer, and is already readable by anyone holding the link.
+`/a/:id` and `/w/:id` inline a specific person's state and are framed by your
+gallery alone, whether or not you set this.
+
+**What the open default does not give away.** Framing a share grants the
+framing site nothing beyond what the link already gave it. The artifact's
+messages to its host are addressed to `APP_ORIGIN`, so a page on another origin
+receives nothing from the frame — and a share embedded there cannot even save
+state, because its write-through is addressed to a parent that is not the
+framer. There is no session cookie on the render origin to be clickjacked, and
+a share render holds no privileged control a stolen click could spend. This
+header is the second lock on that door, not the first, which is why refusing
+every framer by default would have cost every operator a lookup and bought
+close to nothing.
 
 ## 3. Logging in (optional)
 

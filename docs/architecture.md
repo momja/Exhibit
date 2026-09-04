@@ -383,22 +383,27 @@ executable document with the correct security envelope:
   so it was removed. Native keyboard paste (Ctrl/Cmd+V) is a browser event and
   works regardless.
 
-- Names in `frame-ancestors` who may embed the document: `APP_ORIGIN` always,
-  and on a **share** the origins `EMBED_ORIGINS` configured (av-6nbo). Unset —
-  every instance that has not asked — emits the byte-identical policy it always
-  did. The widening is per *route*, not per artifact, and stops at `/s/:shareID`
-  on purpose: that document carries no render token and therefore no principal,
-  is already readable by anyone with the link, and is the only one whose point
-  is to be seen off the gallery, while `/a/:id` and `/w/:id` inline a named
-  viewer's state. So the two token-gated routes hand `serveDoc` no extra
-  framers and the share route hands it the configured set — the decision is
-  visible at the routes, and `buildCSP` holds no framing policy of its own.
-  This header is also the *second* lock on that door rather than the first: the
-  preamble's every `postMessage` targets `APP_ORIGIN`, so a foreign framer
-  receives nothing from the shim and a share framed there cannot even write its
-  state back; no cookie is ever set on this origin; and a share render holds no
-  privileged control a stolen click could spend. Cheap to widen for shares, and
-  for the same reason not worth turning on by default (`security.md` §1.8).
+- Names in `frame-ancestors` who may embed the document, and the answer differs
+  by *route* (av-6nbo, av-q3iy). `/a/:id` and `/w/:id` are `APP_ORIGIN` alone.
+  A **share** is `*` — anyone — unless `EMBED_ORIGINS` names the sites allowed
+  to frame one, in which case it is `APP_ORIGIN` plus those and every other
+  site is refused. So the configuration is a lockdown rather than a widening,
+  and the default is open because a share is a public link: a link that
+  refuses to be embedded contradicts what it is for, and an operator's own site
+  showing their own artifact should not have to begin by finding an environment
+  variable. `/s/:shareID` is the one route that gets it because it carries no
+  render token and therefore no principal, is already readable by anyone
+  holding the link, and is the only render document whose point is to be seen
+  off the gallery, while `/a/:id` and `/w/:id` inline a named viewer's state.
+  The two token-gated routes hand `serveDoc` nil and the share route hands it
+  what `shareFrameAncestors` resolved — the decision is visible at the routes,
+  and `buildCSP` holds no framing policy of its own.
+  The default is cheap because this header is the *second* lock on that door
+  rather than the first: the preamble's every `postMessage` targets
+  `APP_ORIGIN`, so a foreign framer receives nothing from the shim and a share
+  framed there cannot even write its state back; no cookie is ever set on this
+  origin; and a share render holds no privileged control a stolen click could
+  spend (`security.md` §1.8).
 
 - Serves an artifact's **widget** at `/w/:id` (av-fafu) — the glanceable tile its
   gallery card renders. This is the same read path with the same CSP, built from

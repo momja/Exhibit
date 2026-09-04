@@ -67,12 +67,12 @@ func main() {
 		fatal("configure per-owner entitlements", err)
 	}
 
-	// Third-party embedding (av-6nbo). Unset — the default — is the render
-	// CSP's frame-ancestors exactly as it has always been: the app origin and
-	// nothing else. An entry that is not an origin is fatal rather than
-	// dropped, because dropping it fails closed *silently*: what the operator
-	// would see is a broken frame on a site they configured, with nothing
-	// naming the typo.
+	// Who may frame a share (av-q3iy). Unset — the default — leaves a share
+	// framable by anyone, which is what a public link is for; setting it
+	// restricts framing to the app origin and these. An entry that is not an
+	// origin is fatal rather than dropped: a dropped entry silently narrows a
+	// policy the operator wrote, and a dropped value silently opens one they
+	// asked to close.
 	embedOrigins, err := api.EmbedOriginsFromEnv()
 	if err != nil {
 		fatal("configure embed origins", err)
