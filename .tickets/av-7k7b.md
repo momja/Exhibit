@@ -45,3 +45,36 @@ Consequences for this epic:
 - This is the same reasoning already documented for sessionStorage in spec §5.2: install a replacement only where the native surface is broken or wrong; leave it alone where it works. The symmetry is a good sign the decision is right for the right reason.
 
 Related: av-q0ub adds the `(artifact, principal)` state key that makes "whose state gets inlined" expressible rather than implicit, and would let a future `state_mode` on the share row offer an explicit "share a read-only snapshot of my data" option. Not needed for this epic; noted so the default-closed choice here stays compatible with it.
+
+**2026-09-05T16:53:14Z**
+
+CORRECTION (2026-09-05): the "no shim on shared renders" scope decision is dead
+
+The scope decisions at the top say a share gets no shim, no inlined owner state,
+and is read-only end to end. Two things have overtaken that.
+
+**Shipped behaviour already differs.** render.ServeShare passes
+Claims{OwnerID: a.OwnerID} into serveArtifactDoc, so a share inlines the owner's
+state today and installs the preamble like any other render. Only the write
+vanishes, because persistState returns early on window.parent === window. The
+acceptance criterion "no shim script and no owner state in the served document"
+describes something the code has not done for a while.
+
+**The product moved the other way.** av-0k5q chose directed shares over saved
+copies: an artifact keeps its single owner, a recipient runs it and writes its
+state, and nothing is ever copied or re-editable by them. av-v991 takes the
+anonymous share to a writable shared board, one board per link, on the owner's
+rows. A share carrying live state is now the direction rather than a leak to
+close.
+
+**What survives from this epic:**
+
+- A share UI that mints, lists and revokes. Still the missing product (av-6xjd).
+- The enumeration problem. A share forgotten eight months ago and still carrying
+  live state is the failure mode worth designing against, and it got worse with
+  this decision, not better.
+- The visitor's half. Someone handed a link opted into nothing and has to be
+  told plainly what the page does with what they type.
+
+Rewrite the scope decisions and acceptance criteria against av-v991's state
+modes before anyone starts building.

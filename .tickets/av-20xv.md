@@ -35,3 +35,30 @@ DESIGN — decide which of three, none of which is 'wire it up as-is'
 **Whichever is chosen, the interim fix is the same and should not wait:** stop accepting a value the server does not honour. Either reject `public: false` with a 400 naming the reason, or ignore it and omit it from responses. Silently storing an unenforced access-control flag is the actual defect.
 
 Note for (b) and (c): av-wmp6 shipped public mode reading two routes (`GET /api/artifacts`, `GET /api/artifacts/:id`) as `PUBLIC_OWNER_ID`. That listing is exactly where a `listed` flag would apply, so (b) is a small addition on top of what already exists.
+
+**2026-09-05T16:53:24Z**
+
+DECISION (2026-09-05): (c), and the flag gets a real meaning as a result
+
+The design note defers option (c), a per-recipient share, to av-0k5q as a
+product direction rather than a bug fix. That direction is now chosen: shares
+are directed grants, the artifact keeps its single owner, and a recipient may
+run it and write its state but never copy it or edit its source.
+
+That changes what this ticket is about. `public` is unenforced today because
+`public: false` has no alternative to point at: with no recipient on the row,
+every share is a capability URL and there is nothing at the door to check. Once
+a recipient exists the flag finally distinguishes two real things.
+
+    public: true    anonymous link. Anyone holding the URL opens it.
+    public: false   directed. Requires a named recipient, checked at the door.
+
+So do not remove it and do not rename it to `listed`. Build it as part of the
+recipient work, where it is one column beside another rather than a feature of
+its own. Option (b), the listed/unlisted reading, is a different question and
+should get its own field if public mode ever wants one.
+
+**The interim fix still stands and should not wait for any of that.** Right now
+the server stores an access-control flag it does not honour, which is worse than
+having no flag. Reject `public: false` with a 400 naming the reason until the
+recipient check exists.

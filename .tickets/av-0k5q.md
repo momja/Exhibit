@@ -52,3 +52,44 @@ Folding both into one 'shared with me' list is the mistake to avoid. If sessions
 **Do not add tabs yet.** Add provenance as a *filter* beside tags and collections; promote it to a partition only when there is enough not-yours content to justify one. Today there is none, because neither (a) nor (b) exists. Tabs added ahead of the content they organize become chrome that never earns itself, and the gallery already carries search, tag and collection filters that a fourth dimension joins cleanly.
 
 Sequencing: this ticket is blocked on nothing technically, but it should not be built before the (a)/(b) decision, and (b)'s save action wants the ingest path it would reuse (`POST /api/artifacts`, already the single write path) rather than a new one.
+
+**2026-09-05T16:52:47Z**
+
+DECISION (2026-09-05): directed shares. (a), not (b).
+
+The design note above recommends (b) and this overrides it. (b) looked right
+because a copy preserves durability. It is wrong because a copy destroys
+ownership: two owners, two files, and no answer to whose artifact it is. Every
+artifact has exactly one owner, and sharing never changes that.
+
+## What a share grants in v1
+
+- Run it. The recipient opens the artifact and uses it.
+- Write its state through use. Their moves, their input, their saved config.
+  This is the only mutation a non-owner performs.
+- Nothing else. No copy into their gallery, no source editing, no metadata
+  changes, no re-sharing.
+
+So a shared artifact is not a library item for the recipient. It stays in the
+owner's library and the recipient reaches it by link.
+
+## What that answers
+
+**The tabs question this ticket opened: still no tabs, now for a better
+reason.** There is no second set to partition. With no copy and no ownership
+transfer, nothing lands in the recipient's gallery to file. A "shared with me"
+section is a later question rather than a blocker, and if it ever arrives it
+lists links, not artifacts.
+
+**"Shared with me has no data behind it" is fixed by this choice, not by a
+workaround.** A recipient on the share row is the relationship the original
+analysis said was missing. That is also option (c) in av-20xv, which deferred
+the call here.
+
+## What it opens
+
+Whose state rows does a recipient write? av-q0ub already keys state by
+(artifact, viewer, key), so an identified recipient writing their own rows is
+the shipped default and costs nothing new. The anonymous park board wants the
+opposite: one board everyone shares. Both are wanted, so it is a per-share
+setting rather than a global rule. av-v991 owns it and now carries the decision.
