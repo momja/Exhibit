@@ -1,6 +1,6 @@
 ---
 id: av-7k7b
-status: open
+status: closed
 deps: []
 links: [av-buyx, av-q0ub, av-wrbu, av-wmp6, av-v991, av-0k5q, av-ec0t, av-20xv, av-6xjd]
 created: 2026-07-06T22:04:52Z
@@ -321,3 +321,41 @@ Build order for the remaining slices: av-awr4 first and alone, because it
 establishes the owner-versus-recipient gate in the page layer and av-6xjd would
 otherwise invent a second one while both edit detail.tmpl. Then av-6xjd and
 av-v991 in parallel.
+
+**2026-09-06T16:11:14Z**
+
+SHIPPED (2026-09-06): sharing v1, against the 2026-09-05 scope note
+
+The acceptance criteria at the top of this ticket were never rewritten and are
+stale — they describe the abandoned "no shim on shared renders" design, which
+the 2026-09-05 correction already marked dead. What shipped is the V1 SCOPE
+note and its addendum, slice by slice:
+
+    av-6axy  render token: named claims, viewer principal separate from owner
+    av-lrae  grant schema, non-owner read accessor, shares.public dropped
+    av-awr4  recipient's read-only artifact view
+    av-v991  grantee state writes, shared mode, live resync
+    av-6xjd  owner's share panel, bulk grants, link toggle, gallery badge
+
+Every scope decision holds: one owner per artifact, no copies, a grant names an
+account on this instance, a recipient runs the tool and writes its state and
+nothing else, the anonymous link stays read-only and singular, no expiry, and
+only the owner touches CSP, allowlists or capability approvals.
+
+Two things found during the build that no ticket had covered, both fixed:
+
+- **A grant's id was a public URL.** Grants and links share a table and
+  ServeShare read any row, so every grant silently minted another unguessable
+  anonymous link that switching the public one off would not revoke.
+  GetShareUnscoped was replaced by GetAnonymousShareUnscoped, narrowed to
+  `recipient_id IS NULL`, so the case is unrepresentable rather than checked.
+- **A grantee could read state and not write it.** SetState gates on
+  ownsArtifact, so 'own' mode — the default — did not work at all, and the
+  epic's central promise was untrue. Fixed with a parallel one-principal write
+  path, authorized by the grant predicate, with the target resolved inside.
+
+Deferred with their designs intact: the anonymous writable board (the park
+chess board, av-v991), a "shared with me" list, expiry, and versioned writes.
+
+Known at release: av-6axy changes the render token wire format, so tokens
+minted by the previous binary stop verifying. See the RELEASE NOTE above.
