@@ -237,3 +237,39 @@ a grant revokes that person outright, so the mode sits where it reads correctly.
 field taking several names and one submit, not one person at a time. That pushes
 the still-open "how does the owner name a recipient" question toward a
 multi-entry typed field.
+
+**2026-09-06T01:26:52Z**
+
+DECISION (2026-09-05): one anonymous link per artifact
+
+The anonymous share is a single link, not a set. Grants are per person; the
+public link is per artifact.
+
+**The unique index proposed earlier does not enforce this.** SQLite treats every
+NULL in a unique index as distinct from every other NULL, so
+UNIQUE(artifact_id, recipient_id) accepts any number of recipient-less rows for
+one artifact. It constrains grants and says nothing about the link. Two indexes:
+
+    CREATE UNIQUE INDEX shares_artifact_recipient
+      ON shares(artifact_id, recipient_id);
+    CREATE UNIQUE INDEX shares_one_anonymous_link
+      ON shares(artifact_id) WHERE recipient_id IS NULL;
+
+The partial index makes it a schema fact rather than a handler convention. No
+precedent in the tree (idx_tags_owner_name is the only unique index today), but
+SQLite has had partial indexes since 3.8.
+
+## Consequences for the UI
+
+- **Minting is a toggle, not a button.** "Public link" is a switch: on creates
+  the row and shows the URL, off deletes it and the URL dies. Nothing
+  accumulates a list of links whose destinations nobody remembers.
+- **Revoke has exactly one meaning**, which is the whole reason not to allow a
+  set of them.
+- **Rotation needs its own control.** A leaked link wants replacing, and
+  toggling off then on gets there while leaving the user unsure it worked. A
+  "replace link" action that deletes and re-mints in one step, stating that the
+  old URL stops working, earns its button.
+
+The id stays random and unguessable: for that row the URL is still the entire
+authorization.
