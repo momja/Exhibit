@@ -346,7 +346,7 @@ func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
 // without weakening the sandbox (allow-scripts stays, allow-same-origin omitted).
 func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Clip Tool", Tier: store.Tier1, CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds, nil)
 	require.NoError(t, err)
 
 	assert.NotContains(t, page, `allow="clipboard-read; clipboard-write"`,
@@ -370,7 +370,7 @@ func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Read Only Tool", Tier: store.Tier1,
 		CreatedAt: time.Now(), NetworkAllowlist: []string{"https://example.com"}}
-	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds, nil)
 	require.NoError(t, err)
 
 	// No inline allowlist editor or add-origin control.
@@ -399,7 +399,7 @@ func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
 // web/gallery/detail.net.test.mjs (run by TestGalleryPageScriptSuite).
 func TestDetailPagePromptsForBlockedNetworkOrigins(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Fetcher", Tier: store.Tier1, CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds, nil)
 	require.NoError(t, err)
 
 	// The dialog, with all three answers the ticket specifies. It comes from

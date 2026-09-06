@@ -503,8 +503,14 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// on the route (adminOnly, internal/api/admin.go), where the acting
 		// admin is known and the target is not yet.
 		"GetUserByExternalID": "resolves a login name to an owner; there is no owner yet",
-		"SetUserAdmin":        "keyed by the user id it acts on; an instance-admin operation (av-utap)",
-		"SetUserDisabled":     "keyed by the user id it acts on; an instance-admin operation (av-utap)",
+		// Resolving a typed handle to an account (av-6xjd), on exactly
+		// GetUserByExternalID's grounds: it answers "who is this name", a
+		// question about the instance's directory rather than about anybody's
+		// library. The caller that spends the answer is owner-scoped where it
+		// counts — CreateShare refuses to share an artifact you do not own.
+		"GetUserByEmail":  "resolves a typed handle to an account; the owner scoping is on the share it feeds (av-6xjd)",
+		"SetUserAdmin":    "keyed by the user id it acts on; an instance-admin operation (av-utap)",
+		"SetUserDisabled": "keyed by the user id it acts on; an instance-admin operation (av-utap)",
 
 		// Entitlements (av-2p8z), on exactly SetUserAdmin's grounds. The
 		// int64 SetEntitlement takes is the *target* account, not the

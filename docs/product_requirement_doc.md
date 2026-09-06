@@ -159,10 +159,17 @@ artifacts(
   camera_approved,         -- likewise for the camera; also builds the render
   microphone_approved,     --   document's Permissions-Policy (§6.3)
   widget_blob_id,          -- the card's widget document; empty = default tile (§5.5)
-  share_state_mode         -- whose state a recipient writes: their own, or the
+  share_state_mode,        -- whose state a recipient writes: their own, or the
                            -- owner's shared board. One answer per ARTIFACT, not
                            -- per grant, which would admit one recipient on their
                            -- own rows while another writes the owner's.
+  share_grant_count,       -- how many accounts hold a grant, and whether the
+  share_link               --   one anonymous link exists. Denormalized rollups
+                           --   of `shares`, trigger-maintained the way
+                           --   tags_text is: the gallery asks this of every
+                           --   card and the answer changes only when a share
+                           --   row is written. They are what makes the card
+                           --   badge, and therefore auditing, possible (§7).
 )
 -- one decision per (artifact, origin), cascading with the artifact (§6)
 artifact_network_origins(
@@ -497,6 +504,28 @@ Sharing is a first-class resource, not an export-to-file action.
   tool whose saved data evaporates on every reload is not one a recipient can
   use. It widens nothing else — the body, the title, the allowlist and the
   capability approvals stay refused exactly as they are for a stranger.
+- **The owner's surface is a panel on the artifact's own page** (av-6xjd), with
+  three independent halves: the people currently granted, the public link, and
+  whose data everybody writes. Granting is a **bulk** action — one field taking
+  several names, one submit — because "gave friends access, dropped the link in
+  the group chat" is one gesture; each name is reported back individually, so a
+  typo neither refuses the others nor passes unmentioned. The field confirms
+  existence on purpose: answering "added" for a name nobody holds leaves the
+  owner believing their friend has access when the friend has none, which is
+  worse than leaking one bit per guessed name. The public link is a **toggle**
+  rather than a create button — an artifact has exactly one — plus a "replace
+  link" that rotates it in one step and says outright that the old URL stops
+  working, because a leaked link wants rotating and toggling off-then-on leaves
+  the user unsure it worked.
+- **Enumeration is not optional.** You cannot audit what you cannot list, and a
+  grant carrying live state makes that worse rather than better. Every gallery
+  card shows **one badge naming the strongest thing true** — a shared data
+  board, a public link, or N people — and a private artifact shows *none*,
+  because the absence is the signal and forty badges on forty cards is a marker
+  people learn to ignore. It is ambient rather than hover-only: the failure to
+  design against is the share made months ago that nobody has thought about
+  since, and a marker you have to go looking for does not help somebody who has
+  forgotten.
 - **A share lives until it is deleted.** There is no expiring link: revocation is
   deleting the row, and that is the only lifetime the product promises. An expiry
   column existed unused from the first migration and was removed (av-8ipt) rather
@@ -543,9 +572,14 @@ into the storage shim. Transparent to the artifact.
 
 ### 8.4 Share
 
-One button mints a share row and returns `/s/:shareId`, openable by anyone in any
-browser with no account and no dependency on the originating assistant — or (planned) export a
-single self-contained `.html`.
+Open the artifact, open its share panel, and take one of two routes. Type the
+names of people with accounts here and submit once — they open the same
+`/artifacts/:id` you do, because a grant is not a link. Or switch the public
+link on and hand out `/s/:shareId`, openable by anyone in any browser with no
+account and no dependency on the originating assistant. Either way the artifact
+grows a badge on its gallery card, so a month later the library itself is the
+answer to "what have I shared". Export to a single self-contained `.html` is
+the third route, and needs no service at all.
 
 ## 9. Explicit non-goals
 

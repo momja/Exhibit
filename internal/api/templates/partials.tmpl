@@ -163,6 +163,125 @@
      capabilityView (gallery.go). */}}
 {{define "capabilityPopover"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved) (not .LinksApproved) (not .CameraApproved) (not .MicrophoneApproved)}}<div class="capability-popover" id="capability-popover-{{.ArtifactID}}"><div class="capability-popover-header">Sandbox posture</div>{{if $sandboxed}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-shield-check"></i></span><span>Fully contained — no network, download, clipboard, external link, camera, or microphone access</span></div>{{else}}{{if .NetworkAllowlist}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-globe"></i></span><div><div class="capability-popover-label">Network — {{len .NetworkAllowlist}} origin{{if ne (len .NetworkAllowlist) 1}}s{{end}}</div><div class="capability-popover-origins">{{range .NetworkAllowlist}}<code>{{.}}</code>{{end}}</div></div></div>{{end}}{{if .DownloadsApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-download-simple"></i></span><span>Downloads — Can save files to your device</span></div>{{end}}{{if .ClipboardApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-clipboard"></i></span><span>Clipboard — Can read and write your clipboard</span></div>{{end}}{{if .LinksApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span><span>External links — Can open links in new tabs</span></div>{{end}}{{if .CameraApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-camera"></i></span><span>Camera — Can capture video from your camera</span></div>{{end}}{{if .MicrophoneApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-microphone"></i></span><span>Microphone — Can capture audio from your microphone</span></div>{{end}}{{end}}{{if .ShowManage}}<a class="capability-popover-manage" href="/artifacts/{{.ArtifactID}}/edit#security-panel">Manage security settings →</a>{{end}}</div>{{end}}
 
+{{/* shareBadge is the gallery card's sharing marker (av-6xjd). One badge
+     naming the strongest thing true — the states are a ladder ordered by how
+     much authority has left the owner's hands, not four independent flags —
+     and NOTHING at all for a private artifact, which is the common case: a
+     library of forty cards must not render forty badges, and marking the
+     default trains people to ignore the marker.
+
+     It is ambient, never hover-only, because the failure it exists for is the
+     share made months ago that nobody has thought about since. The title
+     carries the full sentence, naming every fact that is true, since the label
+     can only carry the strongest one. Data: shareBadgeView (gallery.go). */}}
+{{define "shareBadge"}}{{if .Level}}<span class="share-badge share-badge-{{.Level}}" title="{{.Detail}}"><i class="ph {{.Icon}}" aria-hidden="true"></i>{{.Label}}</span>{{end}}{{end}}
+
+{{/* sharePanel is the owner's sharing surface on the artifact detail page
+     (av-6xjd). Rendered only when detailPageData.Share is non-nil, which is
+     only for the owner — a recipient may use the artifact, and who else was
+     given it is not part of what a grant carries.
+
+     The body is split in two on purpose. #share-body is what htmx swaps after
+     every change, so it holds the server's truth and nothing else; the results
+     and status lines sit OUTSIDE it, in the stable part, because a bulk grant's
+     per-name report ("tpyo — no such account") is exactly what the swap that
+     follows the grant would otherwise wipe before it could be read.
+
+     A swap, not a reload: this page holds a live artifact frame, and reloading
+     to show a new guest list would restart the tool the owner is looking at.
+     Data: detailPageData (gallery.go). */}}
+{{define "sharePanel"}}<details class="details-panel share-panel" id="share-panel">
+  <summary>{{template "panelCaret"}} Sharing</summary>
+  <div class="panel-body">
+    <div id="share-body"
+         hx-get="/partials/share-panel?artifact={{.ID}}"
+         hx-trigger="exhibit:shares-changed from:body"
+         hx-swap="innerHTML">{{template "sharePanelBody" .Share}}</div>
+    {{/* Written by share.js, one row per submitted name. Outside the swap. */}}
+    <div id="share-add-results" class="share-results"></div>
+    <span id="share-status" class="text-sm muted"></span>
+  </div>
+</details>{{end}}
+
+{{/* sharePanelBody is the swappable half: three independent controls and the
+     list of who currently holds access. It is the same partial for the initial
+     page render and for /partials/share-panel, which is what keeps one
+     definition of the guest list — the alternative is page JS rebuilding these
+     rows in a second language, over recipient names it would then have to
+     escape by hand. html/template's contextual escaping is that defence here,
+     and a name is attacker-influenced text (a login name, or an address an
+     identity provider reported).
+
+     Data: sharePanelView (gallery.go). */}}
+{{define "sharePanelBody"}}<div class="share-cols" data-artifact-id="{{.ArtifactID}}">
+  <section class="share-col">
+    <h3 class="text-sm muted">People</h3>
+    {{/* One field taking several names and one submit: "gave friends access,
+         dropped the link in the group chat" is one gesture, not three. The
+         field confirms existence deliberately — answering "added" for a name
+         nobody holds would leave the owner believing their friend has access
+         when the friend has none, which is discovered weeks later and by the
+         wrong person. */}}
+    <div class="share-add">
+      <input type="text" id="share-add-input" class="field" placeholder="Usernames or emails, separated by commas" autocomplete="off">
+      <button type="button" class="btn btn-sm" id="share-add-btn"><i class="ph ph-user-plus"></i> Give access</button>
+    </div>
+    {{if .Shares.Grants}}
+    <ul class="share-grants" id="share-grants">
+      {{range .Shares.Grants}}<li class="share-grant" data-share-id="{{.ID}}">
+        <span class="share-grant-name">{{.Name}}</span>
+        {{/* A disabled account is shown rather than filtered: a row that
+             silently vanishes is a row the owner cannot revoke and does not
+             know exists. */}}
+        {{if .Disabled}}<span class="text-sm muted">account disabled</span>{{end}}
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-sm btn-sec" data-action="revoke" data-share-id="{{.ID}}" aria-label="Revoke access for {{.Name}}"><i class="ph ph-x"></i> Revoke</button>
+      </li>{{end}}
+    </ul>
+    {{else}}<p class="text-sm muted">Nobody else has been given access.</p>{{end}}
+  </section>
+
+  <section class="share-col">
+    <h3 class="text-sm muted">Public link</h3>
+    {{/* A toggle, not a create button, because an artifact has exactly one
+         anonymous link (a partial unique index, av-lrae): on mints the row and
+         shows the URL, off deletes it and the URL dies. Nothing accumulates a
+         list of links whose destinations nobody remembers, and revoking has
+         exactly one meaning. */}}
+    {{/* The row's share id rides on the toggle itself: switching the link off
+         is a DELETE of that row, and the id is the only thing the page needs
+         to know about it. */}}
+    <label class="row">
+      <input type="checkbox" id="share-link-toggle"{{if .Shares.Link}} checked data-share-id="{{.Shares.Link.ID}}"{{end}}>
+      <span class="spacer">Anyone with the link can open this artifact</span>
+    </label>
+    {{if .Shares.Link}}
+    <div class="share-link-row">
+      <input type="text" id="share-link-url" class="field" readonly value="{{.Shares.Link.URL}}" aria-label="Public link">
+      <button type="button" class="btn btn-sm btn-sec" id="share-link-copy"><i class="ph ph-copy"></i> Copy</button>
+    </div>
+    {{/* Rotation earns its own control: a leaked link wants replacing, and
+         toggling off then on gets there while leaving the user unsure it
+         worked. One step, and it says outright what it costs. */}}
+    <div class="btn-row">
+      <button type="button" class="btn btn-sm btn-sec" id="share-link-replace"><i class="ph ph-arrows-clockwise"></i> Replace link</button>
+      <span class="text-sm muted">The current link stops working.</span>
+    </div>
+    {{end}}
+
+    <h3 class="text-sm muted">Saved data</h3>
+    {{/* One answer per artifact, not per person: "shared board or private
+         copies" is one question, and per-grant would admit one recipient on
+         their own rows while another writes the owner's — a state nobody wants
+         and one that makes "whose data am I looking at" unexplainable. */}}
+    <select id="share-state-mode" class="select" aria-label="Saved data">
+      <option value="own"{{if not .StateModeShared}} selected{{end}}>Each person keeps their own data</option>
+      <option value="shared"{{if .StateModeShared}} selected{{end}}>Everyone shares one copy</option>
+    </select>
+    <p class="text-sm muted">With one shared copy, anything the people above type is visible to you and to each other, and they can change what you saved.</p>
+  </section>
+</div>{{end}}
+
 {{/* settingsHeader is the sub-page header the account surfaces share: a back
      link to the gallery and the page's own title, the same idiom new.tmpl and
      detail.tmpl use. Data: the page title (a string).

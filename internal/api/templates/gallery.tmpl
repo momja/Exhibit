@@ -75,6 +75,11 @@
   {{template "tagRow" .}}
   <div class="card-footer">
     <div class="card-meta">{{.Created}}</div>
+    {{/* The sharing marker (av-6xjd) sits beside the sandbox-posture cluster
+         because they answer the same shape of question about the card — what
+         has left the owner's hands — and renders nothing at all for a private
+         artifact, which is most of them. */}}
+    {{template "shareBadge" .Share}}
     {{template "capabilityCluster" .Capability}}
   </div>
 </div>{{end}}</div>

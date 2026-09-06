@@ -416,6 +416,11 @@ func (ro *Router) setupRoutes() {
 		// API's auth group and under the same owner resolution.
 		r.Get("/partials/agent-preview", ro.agentPreviewPartial)
 		r.Get("/partials/card-widget", ro.cardWidgetPartial)
+		// The share panel (av-6xjd), re-rendered after a grant, a revoke or a
+		// link change. The detail page holds a live artifact frame, so a
+		// reload to show the new list would restart the tool the owner is
+		// looking at.
+		r.Get("/partials/share-panel", ro.sharePanelPartial)
 	})
 
 	// Embedded static assets (client JS islands, e.g. the CodeMirror editor)
@@ -509,6 +514,13 @@ func (ro *Router) setupRoutes() {
 				// Artifact-centric tag routes
 				r.Post("/tags/{tagID}", ro.addArtifactTag)
 				r.Delete("/tags/{tagID}", ro.removeArtifactTag)
+				// Who can open this artifact (av-6xjd): its anonymous link and
+				// every account holding a grant. Read-only here, because a
+				// share row has an id of its own and is minted and revoked
+				// under /api/shares by that id. What this adds is the question
+				// neither of those can answer — what is true right now — and
+				// you cannot audit what you cannot list.
+				r.Get("/shares", ro.listArtifactShares)
 				// Agent conversations persisted with this artifact
 				r.Get("/transcripts", ro.listTranscripts)
 			})

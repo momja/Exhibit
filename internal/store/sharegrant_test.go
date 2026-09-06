@@ -351,9 +351,8 @@ func countStateRowsFor(t *testing.T, s *SQLiteStore, viewer int64) int {
 }
 
 // share_state_mode's default, asserted through the interface it is read by.
-// One answer per artifact, and until av-v991 ships the modes beyond it, that
-// answer is always this one — a recipient writes their own rows, never the
-// owner's.
+// A new artifact is always private-per-person: the mode is something somebody
+// chose, never something an ingest inherited.
 func TestAnArtifactDefaultsToItsViewersOwnState(t *testing.T) {
 	f := newGrantFixture(t)
 
@@ -363,13 +362,203 @@ func TestAnArtifactDefaultsToItsViewersOwnState(t *testing.T) {
 	assert.Equal(t, ShareStateOwn, a.ShareStateMode)
 }
 
-// The column is read and never written, which is the claim the comment on
-// Artifact.ShareStateMode makes and this is the executable half of it: a caller
-// cannot store a mode nothing honours yet.
-func TestShareStateModeIsNotCallerWritable(t *testing.T) {
+// av-6xjd gave the owner a control for the mode, so the column became
+// writable — and validated on the way in. This supersedes av-lrae's "not
+// caller writable", which was the right contract while nothing could set the
+// value and no surface could read it back.
+//
+// The value check is the half worth an executable claim. share_state_mode is
+// an enum the render path branches on, so an unrecognized value is not a bad
+// label but a branch nobody wrote, silently deciding whose state rows a
+// recipient writes.
+func TestShareStateModeIsWritableOnlyAsOneOfItsTwoValues(t *testing.T) {
 	f := newGrantFixture(t)
+	ctx := context.Background()
 
-	err := f.s.UpdateArtifact(context.Background(), alice, f.artifactID,
-		map[string]any{"share_state_mode": "shared"})
-	assert.ErrorIs(t, err, ErrNotUpdatable)
+	require.NoError(t, f.s.UpdateArtifact(ctx, alice, f.artifactID,
+		map[string]any{"share_state_mode": ShareStateShared}))
+	a, err := f.s.GetArtifact(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	assert.Equal(t, ShareStateShared, a.ShareStateMode)
+
+	for _, bad := range []any{"everyone", "", 1, true} {
+		err := f.s.UpdateArtifact(ctx, alice, f.artifactID,
+			map[string]any{"share_state_mode": bad})
+		assert.Error(t, err, "%v is not a mode anything honours", bad)
+	}
+
+	// And a refusal changed nothing: the stored mode is still the last value
+	// that actually was one.
+	a, err = f.s.GetArtifact(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	assert.Equal(t, ShareStateShared, a.ShareStateMode)
+}
+
+// The two rollups the gallery badge is built from (av-6xjd), asserted through
+// the accessor the gallery reads them by. They are trigger-maintained, so what
+// is under test is that minting and revoking a share moves them with no Go
+// code saying so — the property that makes the badge correct for a caller who
+// never heard of it.
+func TestSharingAnArtifactUpdatesItsCardCounts(t *testing.T) {
+	f := newGrantFixture(t)
+	ctx := context.Background()
+	recipient := bob
+
+	read := func() (int, bool) {
+		a, err := f.s.GetArtifact(ctx, alice, f.artifactID)
+		require.NoError(t, err)
+		return a.ShareGrantCount, a.SharePublicLink
+	}
+
+	grants, link := read()
+	assert.Equal(t, 0, grants)
+	assert.False(t, link, "an artifact nobody has shared carries no marker at all")
+
+	require.NoError(t, f.s.CreateShare(ctx, alice, &Share{ID: "lnk", ArtifactID: f.artifactID}))
+	grants, link = read()
+	assert.Equal(t, 0, grants)
+	assert.True(t, link)
+
+	require.NoError(t, f.s.CreateShare(ctx, alice,
+		&Share{ID: "grant-bob", ArtifactID: f.artifactID, RecipientID: &recipient}))
+	grants, link = read()
+	assert.Equal(t, 1, grants)
+	assert.True(t, link, "a grant does not disturb the link's count, nor the reverse")
+
+	require.NoError(t, f.s.DeleteShare(ctx, alice, "lnk"))
+	grants, link = read()
+	assert.Equal(t, 1, grants)
+	assert.False(t, link)
+
+	require.NoError(t, f.s.DeleteShare(ctx, alice, "grant-bob"))
+	grants, link = read()
+	assert.Equal(t, 0, grants)
+	assert.False(t, link, "revoking the last share returns the card to unmarked")
+}
+
+// Deleting the account a grant names retires the grant by FK cascade — and the
+// rollup has to follow, or the owner's card claims somebody can open the
+// artifact who has no account at all. No Go code participates; this is the
+// trigger finishing what the cascade started.
+func TestDeletingARecipientLeavesTheCardCountCorrect(t *testing.T) {
+	f := newGrantFixture(t)
+	ctx := context.Background()
+	recipient := bob
+
+	require.NoError(t, f.s.CreateShare(ctx, alice,
+		&Share{ID: "grant-bob", ArtifactID: f.artifactID, RecipientID: &recipient}))
+	_, err := f.s.DeleteAccount(ctx, recipient)
+	require.NoError(t, err)
+
+	a, err := f.s.GetArtifact(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	assert.Equal(t, 0, a.ShareGrantCount)
+}
+
+// The enumeration half (av-6xjd): the owner's panel lists both kinds in one
+// read, each grant carrying the account it names, because a grant is only
+// legible as the person it was given to.
+func TestListArtifactSharesNamesTheLinkAndEveryGrant(t *testing.T) {
+	f := newGrantFixture(t)
+	ctx := context.Background()
+	recipient := bob
+
+	require.NoError(t, f.s.CreateShare(ctx, alice, &Share{ID: "lnk", ArtifactID: f.artifactID}))
+	require.NoError(t, f.s.CreateShare(ctx, alice,
+		&Share{ID: "grant-bob", ArtifactID: f.artifactID, RecipientID: &recipient}))
+
+	shares, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	require.Len(t, shares, 2)
+
+	assert.Equal(t, "lnk", shares[0].ID)
+	assert.Nil(t, shares[0].RecipientID, "the link names nobody; that is what makes it the link")
+	assert.Nil(t, shares[0].Recipient)
+
+	assert.Equal(t, "grant-bob", shares[1].ID)
+	require.NotNil(t, shares[1].Recipient)
+	assert.Equal(t, bob, shares[1].Recipient.ID)
+
+	// And the guest list is the owner's. Another owner asking gets what they
+	// get for an artifact that does not exist: nothing, never a refusal.
+	other, err := f.s.ListArtifactShares(ctx, bob, f.artifactID)
+	require.NoError(t, err)
+	assert.Empty(t, other)
+}
+
+// Rotating the link is one operation, not a delete a caller follows with a
+// create: the gap between those two is an artifact with no link at all, which
+// is worse than either the old link or the new one.
+func TestReplaceAnonymousLinkRotatesInOneStep(t *testing.T) {
+	f := newGrantFixture(t)
+	ctx := context.Background()
+	recipient := bob
+
+	require.NoError(t, f.s.CreateShare(ctx, alice, &Share{ID: "old", ArtifactID: f.artifactID}))
+	fresh, err := f.s.ReplaceAnonymousLink(ctx, alice, f.artifactID, "new")
+	require.NoError(t, err)
+	assert.Equal(t, "new", fresh.ID)
+
+	// The old id is gone, which is the whole point: a leaked link stops
+	// working the moment it is replaced.
+	gone, err := f.s.GetAnonymousShareUnscoped(ctx, "old")
+	require.NoError(t, err)
+	assert.Nil(t, gone)
+	live, err := f.s.GetAnonymousShareUnscoped(ctx, "new")
+	require.NoError(t, err)
+	require.NotNil(t, live)
+
+	// Grants are untouched: replacing the public link is not a revocation of
+	// the people who were named.
+	require.NoError(t, f.s.CreateShare(ctx, alice,
+		&Share{ID: "grant-bob", ArtifactID: f.artifactID, RecipientID: &recipient}))
+	_, err = f.s.ReplaceAnonymousLink(ctx, alice, f.artifactID, "newer")
+	require.NoError(t, err)
+	shares, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	assert.Len(t, shares, 2)
+
+	// Replacing on an artifact with no link yet is a mint, so a caller need
+	// not know which of the two cases it is in.
+	require.NoError(t, f.s.DeleteShare(ctx, alice, "newer"))
+	minted, err := f.s.ReplaceAnonymousLink(ctx, alice, f.artifactID, "first-one")
+	require.NoError(t, err)
+	assert.Equal(t, "first-one", minted.ID)
+
+	// And it is owner-scoped like every other write that names an artifact.
+	_, err = f.s.ReplaceAnonymousLink(ctx, bob, f.artifactID, "stolen")
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+// Resolving a typed handle to an account (av-6xjd), and the one case that has
+// to refuse rather than choose. external_id is UNIQUE so a login name is
+// exact; email is not, and picking between two accounts that share an address
+// would hand somebody's artifact to whichever of them was created first.
+func TestGetUserByEmailRefusesAnAmbiguousAddress(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	one, err := s.UpsertUser(ctx, "sub-one", "shared@example.test")
+	require.NoError(t, err)
+	found, err := s.GetUserByEmail(ctx, "shared@example.test")
+	require.NoError(t, err)
+	assert.Equal(t, one.ID, found.ID)
+
+	// An address is not case-sensitive to the person typing it.
+	found, err = s.GetUserByEmail(ctx, "Shared@Example.test")
+	require.NoError(t, err)
+	assert.Equal(t, one.ID, found.ID)
+
+	_, err = s.UpsertUser(ctx, "sub-two", "shared@example.test")
+	require.NoError(t, err)
+	_, err = s.GetUserByEmail(ctx, "shared@example.test")
+	assert.ErrorIs(t, err, ErrAmbiguousUser)
+
+	// The blank address matches nothing. users.email is NOT NULL DEFAULT '',
+	// so without that guard every account a provider named no address for
+	// would answer to an empty field.
+	_, err = s.UpsertUser(ctx, "sub-nameless", "")
+	require.NoError(t, err)
+	_, err = s.GetUserByEmail(ctx, "")
+	assert.ErrorIs(t, err, ErrNotFound)
 }

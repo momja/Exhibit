@@ -34,6 +34,12 @@ var (
 	// a server fault. Being specific costs nothing here: the caller has
 	// already been proved to own the artifact.
 	ErrDuplicateShare = errors.New("a share for that artifact and recipient already exists")
+	// ErrAmbiguousUser means a handle matched more than one account, which
+	// only email can do — external_id is UNIQUE. It is an error rather than a
+	// "first match wins" because the caller is about to give somebody access
+	// to somebody else's artifact, and the wrong somebody is the failure the
+	// whole grant model exists to avoid.
+	ErrAmbiguousUser = errors.New("that address names more than one account")
 )
 
 type Tier int
@@ -104,12 +110,26 @@ type Artifact struct {
 	// StatePrincipal is the only place this string is read. Nothing else
 	// should compare it, so there is one rule rather than one per caller.
 	//
-	// Read-only for now, and deliberately: PutArtifact lets the column's
-	// DEFAULT supply it and UpdateArtifact will not write it, so no caller can
-	// store a mode nothing honours. av-v991 owns the modes beyond the default
-	// and the surface that sets them.
+	// The owner's share panel writes it through PATCH (av-6xjd); what the
+	// value *means* at render time is av-v991's.
 	ShareStateMode string `json:"share_state_mode"`
-	Tags           []*Tag `json:"tags"` // populated on read by GetArtifact/ListArtifacts
+	// ShareGrantCount and SharePublicLink are the artifact's sharing state as
+	// the gallery card reads it (av-6xjd) — how many accounts hold a grant,
+	// and whether its one anonymous link exists.
+	//
+	// They are denormalized columns kept current by triggers, exactly as
+	// tags_text is (migration 029, following av-b6o9's precedent), because the
+	// alternative is a join on every gallery render to answer a question whose
+	// answer changes only when a share row is written. Like tags_text they are
+	// read-only from here: no caller writes them, and PutArtifact and
+	// UpdateArtifact leave them to the schema.
+	//
+	// They exist so a library can be *audited*. The failure to design against
+	// is the share made months ago and forgotten, so the card's badge has to be
+	// ambient — and a badge nothing can compute is no badge at all.
+	ShareGrantCount int    `json:"share_grant_count"`
+	SharePublicLink bool   `json:"share_public_link"`
+	Tags            []*Tag `json:"tags"` // populated on read by GetArtifact/ListArtifacts
 	// SourceText is the artifact's body reduced to its visible text (see
 	// ExtractSearchText), written into PutArtifact only to seed the
 	// artifacts_fts search index (§8.2/§3.3: search over source, not just
@@ -131,8 +151,8 @@ type Collection struct {
 // viewer of the artifact is on the owner's rows, so two people take turns on
 // one board and the owner sees the position the other left.
 //
-// Both are named rather than spelled as literals so the schema default and the
-// code agree in one place.
+// Both are named rather than spelled as literals so the schema default, the write
+// path's validation and the render path's branch agree in one place.
 const (
 	ShareStateOwn    = "own"
 	ShareStateShared = "shared"
@@ -156,6 +176,15 @@ func (a *Artifact) StatePrincipal(viewer ViewerID) ViewerID {
 		return ViewerID(a.OwnerID)
 	}
 	return viewer
+}
+
+// ValidShareStateMode reports whether v is a mode the column may hold. It is a
+// function rather than a set literal because both the API handler (which
+// answers 400) and UpdateArtifact (which refuses the write) ask it, and the two
+// must not be able to disagree about what is storable — the same argument
+// ApprovalColumns makes for the capability flags.
+func ValidShareStateMode(v string) bool {
+	return v == ShareStateOwn || v == ShareStateShared
 }
 
 // DefaultTagColor is applied to a tag when no color is supplied.
@@ -206,6 +235,21 @@ type Share struct {
 	ID          string `json:"id"`
 	ArtifactID  string `json:"artifact_id"`
 	RecipientID *int64 `json:"recipient_id"`
+}
+
+// ArtifactShare is a share row together with the account it names, which is
+// what the owner's share panel actually lists (av-6xjd): a grant is only
+// legible as the person it was given to, and revoking one means picking a
+// person out of a list.
+//
+// Recipient is nil for the anonymous link, which names nobody by definition.
+// It travels as the whole User rather than a pre-rendered label because who
+// counts as a display name is a question the *page* answers — external_id is
+// `local:<name>` for a local account and an opaque provider subject for an
+// OIDC one, and reducing that to text is presentation, not persistence.
+type ArtifactShare struct {
+	Share
+	Recipient *User `json:"recipient"`
 }
 
 // AgentKey is an owner's BYO agent provider credential. KeyCiphertext is the
@@ -492,6 +536,27 @@ type Store interface {
 	// accepted duplicate.
 	CreateShare(ctx context.Context, ownerID int64, s *Share) error
 	GetShare(ctx context.Context, ownerID int64, id string) (*Share, error)
+	// ListArtifactShares is the enumeration half of sharing (av-6xjd): every
+	// share of one artifact, link and grants alike, each grant carrying the
+	// account it names. Owner-scoped like the two above, because who an
+	// artifact has been given to is the owner's business and nobody else's —
+	// a recipient can see the artifact, never the guest list.
+	//
+	// It joins `users` rather than leaving the caller to resolve ids, because
+	// the alternative is a query per grant on a list whose whole purpose is to
+	// be read at a glance.
+	ListArtifactShares(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactShare, error)
+	// ReplaceAnonymousLink rotates an artifact's public link: it deletes the
+	// existing one, if any, and mints newID in its place, in ONE transaction.
+	//
+	// One transaction because "replace" is one decision and its two halves
+	// fail differently. A leaked link wants rotating, and the sequence a
+	// caller would otherwise write — delete, then create — leaves the artifact
+	// with *no* link when the second half fails, which is a worse outcome than
+	// either the old link or a new one. The unique index forbids doing it the
+	// other way round (mint first, then delete), so the atomicity has to come
+	// from here.
+	ReplaceAnonymousLink(ctx context.Context, ownerID int64, artifactID, newID string) (*Share, error)
 	// GetAnonymousShareUnscoped resolves an artifact's *anonymous link* with
 	// no owner check — the second deliberate exception. `GET /s/:id` is
 	// answered for anyone holding the link, because there the row is the
@@ -556,6 +621,20 @@ type Store interface {
 	// a name rather than an owner id. Unlike LookupLocalCredential below, it
 	// does not treat "has no password" as "does not exist".
 	GetUserByExternalID(ctx context.Context, externalID string) (*User, error)
+	// GetUserByEmail is the fallback half of naming a recipient (av-6xjd).
+	// A typed handle resolves as `local:<normalized>` first, through the
+	// accessor above, because for an account this instance issued the login
+	// name *is* the identity and external_id's UNIQUE constraint makes that
+	// lookup exact. An OIDC row has no such name — its external_id is the
+	// provider's subject — so email is what is left to address it by.
+	//
+	// Unlike external_id, email is not unique, so this refuses ambiguity
+	// rather than resolving it: ErrAmbiguousUser when several accounts carry
+	// the address, since picking one would mean granting a stranger access to
+	// somebody's artifact on a coin flip. An empty email matches nothing —
+	// the column is NOT NULL DEFAULT '' (migration 013) and a blank one is an
+	// absent value, not a handle every such account answers to.
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
 
 	// CreateSession records a logged-in browser under a caller-supplied
 	// opaque id. GetSession returns ErrNotFound when that id is unknown *or*

@@ -96,7 +96,11 @@ The only way data changes. Route groups:
   first-use capability approvals, §6 — the first three spent by a host bridge,
   the two device flags by the frame's gate and the render document's
   `Permissions-Policy`; named once in `store.ApprovalColumns` so the handler's
-  strict-bool check and the store's cannot drift), and other
+  strict-bool check and the store's cannot drift), `share_state_mode` (whose
+  state rows a recipient writes — their own, or the owner's shared copy;
+  checked against `store.ValidShareStateMode` in the handler *and* in the
+  store, av-6xjd, because it is an enum the render path branches on and an
+  unrecognized value is not a bad label but a branch nobody wrote), and other
   scalar columns. Rewriting the body
   re-executes the scan and returns the footprint plus a `footprint_changed` flag so
   the edit dialog can re-run the explicit-approval gate when origins differ from the
@@ -179,7 +183,27 @@ The only way data changes. Route groups:
   its origins the *artifact's* allowlist doesn't cover — those are already blocked
   at render, so this explains a blank tile rather than gating one, and (as
   everywhere) never seeds the allowlist. See `widgets.md`.
-- `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
+- `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle. One route
+  mints both kinds because they are one resource told apart by `recipient_id`
+  (av-lrae), and the request says which by what it names. `recipients` — an
+  array of typed handles, resolved as `local:<normalized>` first and then
+  email — makes it a **bulk grant**, and the response is one `results` row per
+  name (`granted` | `already_shared` | `unknown` | `ambiguous` | `self`)
+  rather than a status covering all of them: "alice, bob, tpyo" must neither
+  refuse three people over one typo nor succeed without mentioning it, and the
+  `unknown` row is the deliberate existence confirmation (av-6xjd — answering
+  "added" for a name nobody holds leaves the owner believing their friend has
+  access when the friend has none). With no recipients the request mints the
+  artifact's one anonymous link, and `replace: true` rotates it: the delete and
+  the re-mint happen in one store transaction (§3.3), because the sequence a
+  caller would otherwise write leaves the artifact with *no* link when the
+  second half fails.
+- `GET /api/artifacts/:id/shares` — who can currently open an artifact: its
+  link, and every grant with the account it names (av-6xjd). Read-only, because
+  a share row has an id of its own and is minted and revoked above by that id;
+  what this adds is the question neither of those can answer. Owner-scoped, and
+  not only by habit — the guest list is not part of what a grant carries, so a
+  recipient asking gets the 404 a nonexistent artifact gets.
 - `DELETE /api/account` — erases the **caller's own** account and the library it
   owns (av-4wyq). It takes no id, from the path or the body, and that is the
   whole authorization argument: `/api/admin/users` is where acting on somebody
@@ -620,6 +644,28 @@ like an artifact that does not exist — 404, never 403, for the reason above.
   whitespace-separated token is emitted as a quoted phrase with a trailing
   `*`, so prefix matching is preserved while `<script>`, `a:b`, or a stray
   quote search for themselves instead of failing the query.
+- **Shares** → `shares`, plus two denormalized rollups on `artifacts`
+  (av-6xjd). `ListArtifactShares` is the enumeration read: one artifact's link
+  and grants, each grant carrying the account it names, owner-scoped like every
+  other artifact-child read. `ReplaceAnonymousLink` rotates the link inside one
+  transaction, because the unique index forbids minting before deleting and the
+  reverse order leaves the artifact linkless if the second statement fails.
+  Naming a recipient is `GetUserByExternalID(auth.LocalExternalID(name))` and
+  then `GetUserByEmail`, in that order: `external_id` is UNIQUE so a local
+  account's login name is an exact key, while an OIDC row's is a provider
+  subject nobody could type. Email is *not* unique, so that fallback refuses
+  ambiguity (`ErrAmbiguousUser`) rather than resolving it — picking between two
+  accounts would hand somebody's artifact to whichever was created first.
+
+  `artifacts.share_grant_count` and `artifacts.share_link` are the gallery
+  badge's inputs, kept current by triggers on `shares` (migration 029), exactly
+  as `tags_text` is and for the same reason av-b6o9 gives: the index page asks
+  one question of a hundred artifacts, and the answer changes only when a share
+  row is written. They are read and never written from Go — a caller that could
+  set them could tell the gallery an artifact is private while three accounts
+  hold grants on it. Each trigger recomputes from `shares` rather than
+  incrementing, so the cascades (deleting an artifact, or the account a grant
+  names) are correct with no delete path knowing about them.
 - **Out-of-line assets** → `artifact_assets`, one row per vendored payload
   (av-20fk), with the bytes in the blob store. Content-addressed **per owner,
   never globally**: dedup inside a library is free, but sharing bytes across
@@ -1048,6 +1094,39 @@ consequence of the layout rather than something event handlers must enforce.
 Both states come from one `cardWidget` partial, shared by the gallery card, the
 edit page's preview, the agent preview pane, and the fragment route. See
 `widgets.md`.
+
+**Sharing: the owner's panel and the card's badge (av-6xjd).** The detail page
+carries a collapsed `sharePanel` below the artifact frame, rendered only when
+`detailPageData.Share` is non-nil — which is only for the owner, and via the
+same `pageCredentials.forArtifactOwnedBy` flag every other owner-only control
+on that page hangs off. A recipient does not get it: the controls would 404,
+and more to the point the list *is* the guest list, which a grant does not
+carry. Three independent halves in it — the people currently granted (one field
+taking several names, one submit, each name reported back), the public link (a
+toggle, plus a one-step "replace link" that says the old URL stops working),
+and one control for `share_state_mode`.
+
+Its body is an htmx target: a mutation ends by firing `exhibit:shares-changed`
+and `/partials/share-panel` re-renders the same named partial the full page
+used. A reload is not an option here — this page holds a live artifact frame,
+and showing the new guest list must not restart the tool the owner is looking
+at — and rebuilding the rows in page JS would be a second definition of the
+list, in a second language, over recipient names it would then have to escape
+by hand. The per-name grant report sits *outside* the swapped region for the
+one reason that matters: the swap that follows a grant would otherwise wipe
+"tpyo — no such account" before anybody read it.
+
+On the gallery card, `shareBadge` renders **one badge naming the strongest
+thing true**, from the two denormalized rollups (§3.3) rather than a join: a
+grant on a `shared` artifact ("Shared data", somebody can change the owner's
+data) outranks a public link ("Public link", anyone with a URL can read it),
+which outranks grants alone ("Shared with N"). A private artifact gets **no
+marker at all** — the absence is the signal, since a library of forty cards
+must not render forty badges and marking the default trains people to ignore
+the marker. The badge is ambient rather than hover-only, because the failure it
+exists for is the share made months ago that nobody has thought about since;
+the `title` carries the full sentence, naming every fact that is true, since
+the label can only carry the strongest one.
 
 Ingest has its own page, `GET /new` (`new.tmpl`), rather than a form stacked on
 top of the library index (av-qo0j). It presents three routes in as peers, all

@@ -532,6 +532,21 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// share_state_mode is an enum the render path branches on (av-6xjd), so an
+	// unrecognized value is not a bad label — it is a branch nobody wrote,
+	// deciding whose state rows a recipient writes. Checked here for the same
+	// reason the approval flags are: the store refuses it too, and a rule held
+	// in one layer alone is a rule the other layer can later be given a way
+	// around.
+	if v, ok := updates["share_state_mode"]; ok {
+		mode, isString := v.(string)
+		if !isString || !store.ValidShareStateMode(mode) {
+			writeError(w, http.StatusBadRequest,
+				`share_state_mode must be "`+store.ShareStateOwn+`" or "`+store.ShareStateShared+`"`)
+			return
+		}
+	}
+
 	// The allowlist goes through the same origin normalization as ingest, for
 	// the same reason: this is the single write path, and the values land in a
 	// CSP header (av-i7hd). A rejected entry is named in the 400 so the edit

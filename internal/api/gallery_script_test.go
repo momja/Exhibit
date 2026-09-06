@@ -40,6 +40,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"detail.recipient.test.mjs",
 		"detail.statesync.test.mjs",
 		"edit.origins.test.mjs",
+		"share.test.mjs",
 		"agent.net.test.mjs",
 		// Not a page script: render.shim.test.mjs runs the render preamble,
 		// which is a Go string literal it lifts out of render.go. It belongs

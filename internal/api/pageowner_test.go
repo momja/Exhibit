@@ -95,6 +95,12 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 		ownPath: "/partials/agent-preview?artifact={id}", foreignPath: "/partials/agent-preview?artifact={id}"},
 	{route: "/partials/card-widget", ownerScoped: true,
 		ownPath: "/partials/card-widget?artifact={id}", foreignPath: "/partials/card-widget?artifact={id}"},
+	// The owner's share panel (av-6xjd). Owner-scoped for a reason beyond the
+	// usual one: the fragment lists *who else* an artifact was given to, and a
+	// guest list is exactly the thing a recipient — let alone another tenant —
+	// must not be able to read off somebody's library.
+	{route: "/partials/share-panel", ownerScoped: true,
+		ownPath: "/partials/share-panel?artifact={id}", foreignPath: "/partials/share-panel?artifact={id}"},
 
 	// A page that reads nothing. Ingest is entirely a client-side
 	// conversation with POST /api/artifacts, which authenticates itself, so
@@ -142,6 +148,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/api/artifacts/{artifactID}/export", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/origins", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/widget", why: "API group, covered by owner_scope_test.go"},
+	{route: "/api/artifacts/{artifactID}/shares", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/transcripts", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/agent/key", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/collections/", why: "API group, covered by owner_scope_test.go"},

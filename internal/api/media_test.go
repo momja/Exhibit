@@ -92,7 +92,7 @@ func TestDetailPageSandboxUnchangedByMediaApproval(t *testing.T) {
 	for _, approved := range []bool{false, true} {
 		a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Recorder", Tier: store.Tier1,
 			CreatedAt: time.Now(), CameraApproved: approved, MicrophoneApproved: approved}
-		page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
+		page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds, nil)
 		require.NoError(t, err)
 
 		start := strings.Index(page, "<iframe")
@@ -114,7 +114,7 @@ func TestDetailPageSandboxUnchangedByMediaApproval(t *testing.T) {
 func TestDetailPageRendersMediaGate(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Recorder", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
+	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds, nil)
 	require.NoError(t, err)
 
 	// The first-use prompt: an accessible dialog naming the devices asked for.
@@ -151,7 +151,7 @@ func TestDetailPageRendersMediaGate(t *testing.T) {
 
 	// An approved artifact renders with the approvals baked in.
 	a.CameraApproved, a.MicrophoneApproved = true, true
-	page, err = renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds)
+	page, err = renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds, nil)
 	require.NoError(t, err)
 	assert.Contains(t, page, "let cameraApproved = true;")
 	assert.Contains(t, page, "let microphoneApproved = true;")

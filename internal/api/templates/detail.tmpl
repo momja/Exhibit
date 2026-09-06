@@ -10,6 +10,12 @@
 <link rel="stylesheet" href="/assets/gallery/tokens.css">
 <link rel="stylesheet" href="/assets/gallery/components.css">
 <link rel="stylesheet" href="/assets/gallery/detail.css">
+{{/* htmx swaps the share panel's body after a grant, a revoke or a link
+     change (av-6m3e); self-hosted from the app origin like every other asset,
+     never a CDN. Loaded only where there is a panel to swap: a recipient's
+     page has no share controls at all, so it should not carry the library
+     that refreshes them. */}}
+{{if .Share}}<script src="/assets/htmx/htmx.min.js"></script>{{end}}
 </head>
 <body>
 <header>
@@ -157,6 +163,12 @@
        keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. */}}
   <iframe src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy"></iframe>
 </div>
+{{/* The owner's share panel (av-6xjd). .Share is non-nil only for the owner —
+     the server skips the read entirely for anybody else — so this is the same
+     gate as every other owner-only control on the page rather than a second
+     one beside it. Below the frame, collapsed, because it is something you go
+     looking for: the artifact still owns the page. */}}
+{{if .Share}}{{template "sharePanel" .}}{{end}}
 
 {{/* The four capability dialogs below, and the network prompt at the end of
      this file, are rendered for every visitor and OPENED for the owner alone
@@ -288,5 +300,9 @@ let microphoneApproved = {{if .Capability.MicrophoneApproved}}true{{else}}false{
      (av-6xvs). Before detail.js, which installs it at load. */}}
 <script src="/assets/gallery/network-prompt.js"></script>
 <script src="/assets/gallery/detail.js"></script>
+{{/* The share panel's script, loaded only where the panel exists. It resolves
+     everything by id inside #share-panel and tolerates the panel's absence, so
+     the guard is a courtesy rather than the control. */}}
+{{if .Share}}<script src="/assets/gallery/share.js"></script>{{end}}
 </body>
 </html>{{end}}

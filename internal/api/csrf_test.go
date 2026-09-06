@@ -97,6 +97,11 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/profile"},
 	{route: "/partials/agent-preview"},
 	{route: "/partials/card-widget"},
+	// The owner's share panel, re-rendered after a change (av-6xjd). It reads
+	// that artifact's share rows and renders them; every mutation the panel
+	// makes goes to /api/shares or the artifact PATCH, under an unsafe method
+	// Lax withholds the cookie from.
+	{route: "/partials/share-panel"},
 	// Static assets, the manifest, the share redirect, and the instance's
 	// public identity (av-4ac9) — public reads, credential or not.
 	{route: "/assets/*"},
@@ -117,6 +122,9 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/api/artifacts/{artifactID}/export"},
 	{route: "/api/artifacts/{artifactID}/origins"},
 	{route: "/api/artifacts/{artifactID}/widget"},
+	// Who can open an artifact (av-6xjd): the enumeration read. Minting and
+	// revoking live under /api/shares, on unsafe methods.
+	{route: "/api/artifacts/{artifactID}/shares"},
 	{route: "/api/artifacts/{artifactID}/transcripts"},
 	{route: "/api/agent/key"},
 	// SSE. It subscribes to a live session's event stream; it starts no turn

@@ -77,6 +77,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	// same rule as the pages they are swapped into.
 	{route: "/partials/agent-preview", path: "/partials/agent-preview?artifact={id}"},
 	{route: "/partials/card-widget", path: "/partials/card-widget?artifact={id}"},
+	{route: "/partials/share-panel", path: "/partials/share-panel?artifact={id}"},
 
 	// Static and public surfaces. They embed nothing per-request, which is
 	// exactly the claim being checked.
@@ -95,6 +96,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/artifacts/{artifactID}/export", path: "/api/artifacts/{id}/export"},
 	{route: "/api/artifacts/{artifactID}/origins", path: "/api/artifacts/{id}/origins"},
 	{route: "/api/artifacts/{artifactID}/widget", path: "/api/artifacts/{id}/widget"},
+	{route: "/api/artifacts/{artifactID}/shares", path: "/api/artifacts/{id}/shares"},
 	{route: "/api/artifacts/{artifactID}/transcripts", path: "/api/artifacts/{id}/transcripts"},
 	{route: "/api/agent/key", path: "/api/agent/key"},
 	// SSE. With no agent manager configured it answers "not enabled" and

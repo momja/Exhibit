@@ -118,6 +118,15 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 		// selects from is altered.
 		"ALTER TABLE artifacts DROP COLUMN camera_approved",
 		"ALTER TABLE artifacts DROP COLUMN microphone_approved",
+		// 029's share rollups (av-6xjd), and the triggers before the columns
+		// on either side of them: a trigger naming a column blocks that
+		// column's DROP, in both the table it fires on and the table it
+		// writes.
+		"DROP TRIGGER IF EXISTS shares_counts_sync_update",
+		"DROP TRIGGER IF EXISTS shares_counts_sync_delete",
+		"DROP TRIGGER IF EXISTS shares_counts_sync_insert",
+		"ALTER TABLE artifacts DROP COLUMN share_link",
+		"ALTER TABLE artifacts DROP COLUMN share_grant_count",
 		// 028's grant schema (av-lrae), rewound in the reverse of the order it
 		// was applied: the indexes before the column they are built on, and
 		// `public` restored, since the release being simulated still had it.
@@ -190,9 +199,16 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{
 		ID: "shared-twice", OwnerID: alice, Title: "shared twice", SourceBlobID: "b1", Tier: Tier1}))
 
-	// Rewind 028 and plant the rows a pre-028 instance could hold.
+	// Rewind 028 and plant the rows a pre-028 instance could hold. 029's
+	// triggers and columns (av-6xjd) come off first, since a trigger naming
+	// shares.recipient_id blocks that column's DROP.
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id >= 28",
+		"DROP TRIGGER IF EXISTS shares_counts_sync_update",
+		"DROP TRIGGER IF EXISTS shares_counts_sync_delete",
+		"DROP TRIGGER IF EXISTS shares_counts_sync_insert",
+		"ALTER TABLE artifacts DROP COLUMN share_link",
+		"ALTER TABLE artifacts DROP COLUMN share_grant_count",
 		"DROP INDEX IF EXISTS shares_one_anonymous_link",
 		"DROP INDEX IF EXISTS shares_artifact_recipient",
 		"ALTER TABLE shares DROP COLUMN recipient_id",
@@ -225,4 +241,15 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	}
 	require.NoError(t, rows.Err())
 	assert.Equal(t, []string{"first"}, kept)
+
+	// 029's rollups were backfilled from the rows that survived (av-6xjd). A
+	// library that predates the migration must not read as private on the
+	// gallery — the badge exists precisely for the share nobody remembers, and
+	// one that only appears on artifacts shared *after* the upgrade would miss
+	// every one of them.
+	var grants, link int
+	require.NoError(t, upgraded.db.QueryRowContext(ctx,
+		"SELECT share_grant_count, share_link FROM artifacts WHERE id = 'shared-twice'").Scan(&grants, &link))
+	assert.Equal(t, 0, grants)
+	assert.Equal(t, 1, link, "the surviving row is an anonymous link and the card must say so")
 }

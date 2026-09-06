@@ -28,6 +28,9 @@ const files = [
   "index.css", "index.js",
   "new.css", "new.js",
   "detail.css", "detail.js",
+  // The owner's share panel (av-6xjd) — an island on the detail page, loaded
+  // only where the panel renders, which is only for the artifact's owner.
+  "share.js",
   "state-api.js",
   // The runtime network-permission prompt (av-kmwj, av-6xvs), shared by the
   // detail viewer and the agent chat's preview pane. Listed before both, since
