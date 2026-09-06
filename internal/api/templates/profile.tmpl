@@ -67,6 +67,34 @@
   {{end}}
 </div>
 
+{{/* Sign out (nw-a1ef). The session was revocable from the first day it
+     existed, since /auth/logout deletes the row, and nothing in the UI ever
+     pointed at it. Clearing a cookie by hand was the only way out.
+
+     It sits below Account and above the danger zone, which is the order of
+     consequence: reading about yourself, ending a session, then the one act
+     with no undo. A sign-out card wedged under the red one would read as part
+     of it.
+
+     A POST, not the link /auth/logout also answers. Both verbs are registered
+     (auth.go) and a forged logout achieves nothing worse than an
+     inconvenience, so this is not a CSRF argument. It is that a GET is
+     something a browser or an extension may fetch on its own: a speculative
+     prefetch of a sign-out link signs the user out with no click anywhere,
+     and the form costs one element to rule that out.
+
+     Rendered only when there is a session to end. An instance with no login
+     registers no /auth/logout at all, so the button would 404 there. */}}
+{{if .Account.CanSignOut}}
+<div class="card">
+  <h3 class="settings-h3">Sign out</h3>
+  <p class="settings-copy">Ends this session and revokes it here, so the cookie in this browser stops working on the next request rather than when it expires. Your library is untouched, and signing in again brings you back to it.</p>
+  <form class="settings-foot" method="post" action="/auth/logout">
+    <button class="btn btn-sec" type="submit"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</button>
+  </form>
+</div>
+{{end}}
+
 {{/* The danger zone (section: av-qo05; the deletion behind it: av-4wyq).
 
      The copy is the hard part and it is load-bearing. Deleting here erases

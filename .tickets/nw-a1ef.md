@@ -1,6 +1,6 @@
 ---
 id: nw-a1ef
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-09-06T16:35:35Z

@@ -113,7 +113,11 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
  * rather than a second component that happens to be red. */
 .card-danger{border:1px solid var(--color-danger);box-shadow:none}
 .settings-h3-danger{display:flex;align-items:center;gap:var(--space-3);color:var(--color-danger-hover)}
-.settings-danger-copy{font-size:13px;color:var(--color-ink-soft);line-height:1.55;max-width:620px}
+/* Body copy inside a card, danger-tinted or not. One rule with two names,
+ * because the two are the same paragraph: the danger zone's weight comes from
+ * the card's border and its heading, never from its sentences being a
+ * different size. */
+.settings-copy,.settings-danger-copy{font-size:13px;color:var(--color-ink-soft);line-height:1.55;max-width:620px}
 .settings-danger-copy+.settings-danger-copy{margin-top:var(--space-5)}
 /* The reason beside a disabled control shares the button's .settings-foot row
  * and wraps under it on a narrow screen. A control that cannot act is useless

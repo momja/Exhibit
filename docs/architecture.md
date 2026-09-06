@@ -1310,9 +1310,24 @@ no second guard here to get wrong.
   static — an anchor, no menu. What belongs on the page (deletion, the agent
   key, sessions) each needs explanation or a confirmation beside it, and none of
   that fits a menu item.
-- **Sections from the first one.** The page is `.card` blocks, though only
-  Account has content today, because the rest of av-g2dx — the BYO agent key,
-  active sessions, export — should land as an addition rather than a redesign.
+- **Sections from the first one.** The page is `.card` blocks: Account, Sign
+  out, and the danger zone. The rest of av-g2dx (the BYO agent key, active
+  sessions, export) should land as an addition rather than a redesign, and
+  Sign out (nw-a1ef) is that shape working. It is a card between the other
+  two, and nothing else moved.
+- **Signing out is a `POST`, and it is on this page** (nw-a1ef). The session
+  has been revocable since av-30rj gave it a row to delete, and until this
+  ticket nothing in the UI pointed at `/auth/logout`, so the only way out of
+  an account was clearing a cookie by hand. Two decisions in it. It is a form
+  rather than the link the same route also answers: a forged logout is only an
+  inconvenience, so this is not a CSRF argument, but a `GET` is something a
+  browser or an extension may fetch on its own, and a prefetched sign-out link
+  signs someone out with no click anywhere. And it renders only for a request
+  that holds a session, because an instance with no login registers no
+  `/auth/logout` at all (`setupAuthRoutes` returns early), which would make the
+  control a link to a 404. It sits above the danger zone, in order of
+  consequence: reading about yourself, ending a session, then the one act with
+  no undo.
 - **The display name has a fallback `admin.go` does not need.**
   `newAdminUserView` is `Name: u.Email`, and `users.email` is NOT NULL
   defaulting to the empty string (migration 013) — a portable second key beside
