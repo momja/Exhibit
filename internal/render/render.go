@@ -160,14 +160,26 @@ func (rd *Renderer) authorize(w http.ResponseWriter, r *http.Request, id string)
 	return a, viewer, true
 }
 
-// ServeShare serves an artifact via a share link. The row's existence is the
-// whole lifetime: a share is live until it is deleted (av-8ipt), so revoking
-// one is DELETE /api/shares/:id and nothing here expires on a clock.
+// ServeShare serves an artifact via its anonymous share link. The row's
+// existence is the whole lifetime: a share is live until it is deleted
+// (av-8ipt), so revoking one is DELETE /api/shares/:id and nothing here
+// expires on a clock.
+//
+// It is the *link* and never a grant, which since av-lrae is a distinction
+// this table can express. A share row is the authorization only where there is
+// nobody at the door to check, and a grant names somebody — so serving one
+// here would turn its id back into a capability URL and undo the reason grants
+// exist. Concretely: three people granted an artifact would be three
+// unguessable URLs serving it to anyone with no account, and an owner
+// switching the public link off would revoke none of them while believing
+// otherwise. The accessor refuses rather than this handler filtering, so the
+// case is unrepresentable on the unscoped read surface (store.go); a grant's
+// id arrives here as nothing, and answers what a nonexistent one answers.
 func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareID")
-	// The share row is the authorization here (architecture §7), so this
+	// The link row is the authorization here (architecture §7), so this
 	// path is owner-independent by design — not an oversight.
-	sh, err := rd.cfg.Store.GetShareUnscoped(r.Context(), shareID)
+	sh, err := rd.cfg.Store.GetAnonymousShareUnscoped(r.Context(), shareID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

@@ -1206,20 +1206,26 @@ func (s *SQLiteStore) CreateShare(ctx context.Context, ownerID int64, sh *Share)
 	return err
 }
 
-// GetShare resolves a share the caller owns (through its artifact) — the
-// read behind revoking one. Serving a share to its visitor is
-// GetShareUnscoped instead, because there the row is the authorization.
+// GetShare resolves a share the caller owns (through its artifact), of either
+// kind — the read behind revoking one, and revoking a grant is as much the
+// owner's business as revoking the link. Serving one to its visitor is
+// GetAnonymousShareUnscoped instead, because there the row is the
+// authorization and only a link's ever was.
 func (s *SQLiteStore) GetShare(ctx context.Context, ownerID int64, id string) (*Share, error) {
 	return s.getShareWhere(ctx,
 		`SELECT id, artifact_id, recipient_id FROM shares
 		  WHERE id=? AND `+ownedArtifact, id, ownerID)
 }
 
-// GetShareUnscoped resolves a share row with no owner check — see the Store
-// interface comment. `grep Unscoped` is the audit.
-func (s *SQLiteStore) GetShareUnscoped(ctx context.Context, id string) (*Share, error) {
+// GetAnonymousShareUnscoped resolves an artifact's anonymous link with no
+// owner check — see the Store interface comment for why it is narrowed to the
+// link rather than free to resolve any share row. `grep Unscoped` is the
+// audit, and the `recipient_id IS NULL` here is what keeps that audit's answer
+// small: an id is the whole authorization on this path, so the only rows
+// reachable by id alone must be the ones whose id was ever meant to be one.
+func (s *SQLiteStore) GetAnonymousShareUnscoped(ctx context.Context, id string) (*Share, error) {
 	return s.getShareWhere(ctx,
-		"SELECT id, artifact_id, recipient_id FROM shares WHERE id=?", id)
+		"SELECT id, artifact_id, recipient_id FROM shares WHERE id=? AND recipient_id IS NULL", id)
 }
 
 func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...any) (*Share, error) {

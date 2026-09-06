@@ -424,11 +424,27 @@ type Store interface {
 	// accepted duplicate.
 	CreateShare(ctx context.Context, ownerID int64, s *Share) error
 	GetShare(ctx context.Context, ownerID int64, id string) (*Share, error)
-	// GetShareUnscoped resolves a share row with no owner check — the second
-	// deliberate exception. `GET /s/:id` is answered for anyone holding the
-	// link, because the share row *is* the authorization (architecture §7);
-	// there is no owner to compare against by design.
-	GetShareUnscoped(ctx context.Context, id string) (*Share, error)
+	// GetAnonymousShareUnscoped resolves an artifact's *anonymous link* with
+	// no owner check — the second deliberate exception. `GET /s/:id` is
+	// answered for anyone holding the link, because there the row is the
+	// authorization (architecture §7) and there is no owner to compare
+	// against by design.
+	//
+	// It cannot return a grant, and that narrowing is the accessor's reason
+	// to exist rather than a filter bolted onto it (av-lrae). A share row is
+	// the authorization only while there is nobody at the door to check; a
+	// grant names somebody, so under the grant model its id is meant to buy
+	// nothing. Both kinds live in one table now, so an accessor that returned
+	// either would quietly make every grant id a working public URL — three
+	// grants would be three unguessable links serving the artifact to anyone
+	// with no account, and toggling the public link off would revoke none of
+	// them. Refusing here makes that unrepresentable instead of checked, and
+	// keeps `grep Unscoped` an honest account of what the un-owner-scoped
+	// read surface reaches: the link, and nothing else.
+	//
+	// A grant's id is therefore indistinguishable from an id that never
+	// existed, for the same reason every other refusal in this interface is.
+	GetAnonymousShareUnscoped(ctx context.Context, id string) (*Share, error)
 	DeleteShare(ctx context.Context, ownerID int64, id string) error
 
 	// --- Storage accounting (av-fw1b) ----------------------------------

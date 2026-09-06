@@ -496,12 +496,25 @@ returns; a cross-tenant write returns `ErrNotFound`, which handlers render as
 artifact routes a membership oracle over ids.
 
 Exactly two accessors opt out, and are named to say so: `GetArtifactUnscoped`
-and `GetShareUnscoped`. They serve the render surface, which has no session and
-no owner in context, and the share path, which is owner-independent by design
-because the share row *is* the authorization (§7). `grep Unscoped` is the whole
-audit of the un-owner-scoped read surface — a test enforces that the call sites
-stay inside `internal/render`, and closing the render gap with a signed token
-carrying a principal is av-c5aq.
+and `GetAnonymousShareUnscoped`. They serve the render surface, which has no
+session and no owner in context, and the share path, which is owner-independent
+by design because the link row *is* the authorization (§7). `grep Unscoped` is
+the whole audit of the un-owner-scoped read surface — a test enforces that the
+call sites stay inside `internal/render`, and closing the render gap with a
+signed token carrying a principal is av-c5aq.
+
+The share accessor is narrowed to the **anonymous link**, and the narrowing is
+in the query rather than in `ServeShare` (av-lrae). A share row is the
+authorization only where there is nobody at the door to check; a grant names
+somebody, so its id is meant to buy nothing. Both kinds now live in one table,
+so an accessor free to resolve either would make every grant id a working
+public URL — three grants would be three unguessable links serving the artifact
+to anyone with no account, and switching the public link off would revoke none
+of them while the owner believed otherwise. That is av-20xv's defect
+(advertising an access control that is not enforced) arrived at from the other
+direction, so it is made unrepresentable on the unscoped surface instead of
+checked by a caller. A grant's id answers at `/s/:shareID` exactly what an id
+that was never issued answers.
 
 **A non-owner reaches a shared artifact through a parallel accessor, never
 through a widened predicate** (av-lrae). `GetArtifactReadableBy` takes a
@@ -1660,7 +1673,9 @@ inlining state adds no third unscoped accessor.
 A share is a row (`shares(id, artifact_id, recipient_id)`), not an export action.
 `GET /s/:shareId` resolves the row and serves the artifact **through the same read-only
 render surface** under the same per-artifact CSP — just without the app auth check,
-because the share row *is* the authorization. This reuse is why sharing is nearly free:
+because the link row *is* the authorization. Only a row with no recipient is
+reachable there: a grant is authorized by identity rather than by its id, so
+serving one would turn that id back into a capability URL (§3.3). This reuse is why sharing is nearly free:
 it's the render path with a different front-door check. A one-file self-contained `.html`
 export remains as the service-independent fallback.
 

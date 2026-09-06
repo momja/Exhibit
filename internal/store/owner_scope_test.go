@@ -323,13 +323,23 @@ func TestUnscopedAccessorsAreDeliberatelyOwnerBlind(t *testing.T) {
 	require.NotNil(t, a, "the render surface has no owner in context (av-c5aq)")
 	assert.Equal(t, bob, a.OwnerID, "it carries its owner, so the state read can be scoped")
 
-	sh, err := s.GetShareUnscoped(ctx, "share-bobs")
+	sh, err := s.GetAnonymousShareUnscoped(ctx, "share-bobs")
 	require.NoError(t, err)
-	require.NotNil(t, sh, "the share row is the authorization (architecture §7)")
+	require.NotNil(t, sh, "the link row is the authorization (architecture §7)")
 
 	missing, err := s.GetArtifactUnscoped(ctx, "no-such-artifact")
 	require.NoError(t, err)
 	assert.Nil(t, missing)
+
+	// Owner-blind, and no wider than that. A grant's id is not a credential —
+	// identity at the door is (av-lrae) — so it must not resolve on the one
+	// accessor that takes an id and asks nothing else.
+	recipient := alice
+	require.NoError(t, s.CreateShare(ctx, bob,
+		&Share{ID: "grant-to-alice", ArtifactID: "bobs", RecipientID: &recipient}))
+	grant, err := s.GetAnonymousShareUnscoped(ctx, "grant-to-alice")
+	require.NoError(t, err, "a grant id is absent here, not an error")
+	assert.Nil(t, grant, "a grant is not reachable by its id alone")
 }
 
 // TestUnscopedAccessorsAreCalledOnlyFromTheRenderSurface is AC#6's tripwire,
@@ -401,14 +411,14 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 	// Each exemption carries its reason. Adding to this list is the
 	// deliberate act; forgetting the parameter is not.
 	exempt := map[string]string{
-		"Close":               "no data in its signature at all",
-		"PutArtifact":         "carries the owner in Artifact.OwnerID",
-		"ListArtifacts":       "carries the owner in ListOptions.OwnerID",
-		"CreateCollection":    "carries the owner in Collection.OwnerID",
-		"CreateTag":           "carries the owner in Tag.OwnerID",
-		"SetAgentKey":         "carries the owner in AgentKey.OwnerID",
-		"GetArtifactUnscoped": "deliberate render/share exception (av-c5aq)",
-		"GetShareUnscoped":    "deliberate share exception (architecture §7)",
+		"Close":                     "no data in its signature at all",
+		"PutArtifact":               "carries the owner in Artifact.OwnerID",
+		"ListArtifacts":             "carries the owner in ListOptions.OwnerID",
+		"CreateCollection":          "carries the owner in Collection.OwnerID",
+		"CreateTag":                 "carries the owner in Tag.OwnerID",
+		"SetAgentKey":               "carries the owner in AgentKey.OwnerID",
+		"GetArtifactUnscoped":       "deliberate render/share exception (av-c5aq)",
+		"GetAnonymousShareUnscoped": "deliberate share exception (architecture §7); narrowed to the link (av-lrae)",
 
 		// The non-owner read accessor (av-lrae). It takes a ViewerID and not
 		// an owner, and that is the point rather than an omission: the two

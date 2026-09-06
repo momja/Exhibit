@@ -446,7 +446,11 @@ Sharing is a first-class resource, not an export-to-file action.
   grant to that person, who opens the artifact at its ordinary URL — the link
   does not carry the grant, so the artifact URL *is* the share URL.
 - Served at `GET /s/:shareId` with no auth, from the isolated render origin, under the
-  artifact's own CSP allowlist.
+  artifact's own CSP allowlist. **Only the anonymous link is served there.** A
+  grant's id is not a URL — identity at the door is its authorization — so it
+  answers exactly what an id that was never issued answers. Otherwise every
+  grant would silently mint another unguessable public link, and revoking the
+  public one would revoke none of them.
 - **A share lives until it is deleted.** There is no expiring link: revocation is
   deleting the row, and that is the only lifetime the product promises. An expiry
   column existed unused from the first migration and was removed (av-8ipt) rather
