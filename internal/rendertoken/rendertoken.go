@@ -200,6 +200,27 @@ func (s *Signer) Mint(artifactID string, ownerID int64) string {
 	return s.MintFor(artifactID, ownerID, TTL)
 }
 
+// MintViewer returns a token that renders ownerID's artifact for viewerID —
+// the two principals held apart, which is what this package's claim set was
+// widened for (av-6axy). It is what the app origin mints into the frame of a
+// recipient reading an artifact a grant names them on (av-awr4): the owner
+// still authorizes the read, and the recipient's own rows are what the
+// document inlines.
+//
+// A fixed constructor rather than a MintClaims call at the one site that needs
+// it, for the reason the others are: this claim set carries no free-form value
+// and therefore cannot fail to encode, and a caller minting a credential
+// should not have to handle an impossible error — the obvious handling is to
+// fall back to "", and an empty token is a 404 far from here that nothing
+// explains.
+//
+// Passing the owner as the viewer is not a special case. encodeClaims omits a
+// principal equal to the owner, so such a token is byte-identical to Mint's,
+// which is what lets one call site cover both the owner and the recipient.
+func (s *Signer) MintViewer(artifactID string, ownerID, viewerID int64) string {
+	return mustMint(s.mint(artifactID, Claims{OwnerID: ownerID, ViewerID: viewerID}, TTL))
+}
+
 // MintAnonymous returns a token that renders ownerID's artifact for a viewer
 // with no identity — the public-instance case (av-wmp6). The document it
 // authorizes carries the artifact and no state at all.
@@ -220,8 +241,8 @@ func (s *Signer) MintAnonymousFor(artifactID string, ownerID int64, d time.Durat
 }
 
 // MintClaims returns a token carrying an arbitrary claim set, for what the
-// four fixed constructors above do not cover — a share opened by its
-// recipient, where the principal is not the owner.
+// fixed constructors above do not cover — a render happening under a named
+// share row, where the claim that has to travel is free-form text.
 //
 // It is the fallible entry point because it is the only one that can be handed
 // a value this package cannot serialize: the share id is free-form text, where

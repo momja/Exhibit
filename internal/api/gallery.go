@@ -38,8 +38,20 @@ type renderURLs struct {
 	// it via renderSigner, which itself never returns nil (an ephemeral key
 	// stands in when no secrets Box is configured). A Router built any other
 	// way — direct struct literal, a future constructor — must preserve that.
-	signer  *rendertoken.Signer
-	ownerID int64
+	signer *rendertoken.Signer
+	// ownerID is the owner of the artifacts these URLs address — the principal
+	// that authorizes the read at the render surface, which refuses a token
+	// whose owner does not own the artifact. viewerID is whose state rows the
+	// document inlines (av-6axy).
+	//
+	// They hold the same value for every URL a page mints about its own
+	// library, and differ in exactly one place: a recipient opening an artifact
+	// a grant names them on (av-awr4), where the owner still authorizes and the
+	// recipient's own rows are what renders. ownedBy is the only way to make
+	// them differ, so "these URLs point at somebody else's artifact" is a
+	// statement a call site has to make out loud.
+	ownerID  int64
+	viewerID int64
 	// anonymous mints tokens that render the owner's artifact for nobody: no
 	// state inlined, no write-through (av-wmp6). It is set when the request
 	// being served is a public instance's unauthenticated visitor.
@@ -56,12 +68,28 @@ type renderURLs struct {
 // comment); NewRouter guarantees that for every Router this package
 // constructs.
 func (ro *Router) renderURLs(r *http.Request) renderURLs {
+	viewer := ownerIDFromCtx(r.Context())
 	return renderURLs{
 		origin:    ro.cfg.RenderOrigin,
 		signer:    ro.tokens,
-		ownerID:   ownerIDFromCtx(r.Context()),
+		ownerID:   viewer,
+		viewerID:  viewer,
 		anonymous: publicVisitor(r.Context()),
 	}
+}
+
+// ownedBy re-points these URLs at an artifact somebody else owns, keeping this
+// request's visitor as the state principal (av-awr4).
+//
+// It exists because a grant separates two things the rest of the page has no
+// reason to tell apart: the artifact is read under its *owner's* authority —
+// the render surface verifies the token's owner against the artifact's row —
+// while the state inlined into it belongs to whoever is looking. Calling it
+// with the request's own owner is a no-op, which is why the detail page can
+// call it unconditionally and stay correct for the owner.
+func (u renderURLs) ownedBy(ownerID int64) renderURLs {
+	u.ownerID = ownerID
+	return u
 }
 
 // mint signs one render-origin credential for id, as whoever this page is being
@@ -70,7 +98,10 @@ func (u renderURLs) mint(id string) string {
 	if u.anonymous {
 		return u.signer.MintAnonymous(id, u.ownerID)
 	}
-	return u.signer.Mint(id, u.ownerID)
+	// MintViewer with the two principals equal encodes no principal at all, so
+	// this is byte-identical to Mint for every page that renders its own
+	// library — there is no owner/recipient branch here to get wrong.
+	return u.signer.MintViewer(id, u.ownerID, u.viewerID)
 }
 
 // artifact returns the tokened URL of an artifact's render document, for an
@@ -131,9 +162,26 @@ func (ro *Router) galleryNew(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, page)
 }
 
+// galleryDetail serves the viewer page — the one app-origin page a non-owner
+// can reach (av-awr4).
+//
+// A grant is not a link: it puts no secret in the URL, so a recipient opens the
+// artifact at the same /artifacts/:id the owner does, and there is no second
+// address and no second template. What differs is what the page *offers*, and
+// that is one narrowing (forArtifactOwnedBy) rather than a parallel render
+// path — the same shape public mode already uses to suppress edit controls from
+// request context.
+//
+// The read goes through GetArtifactReadableBy, the deny-by-default accessor
+// av-lrae added beside the owner-scoped one. It is the only route that calls it
+// today, and deliberately: widening the owner predicate itself would have
+// handed a recipient the DELETE and the body rewrite along with the read. A
+// viewer with no grant gets (nil, nil) — the 404 page, indistinguishable from
+// an artifact that never existed.
 func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
+	viewerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(viewerID), id)
 	if err != nil {
 		serverError(w, r, "gallery detail lookup", err)
 		return
@@ -147,8 +195,11 @@ func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	// page must never embed the source — for a multi-MB artifact that made
 	// this page itself multi-MB and Safari stalls on the response, so the
 	// artifact "never loads". The edit page is where the body is viewed and
-	// edited.
-	page, err := renderDetailPage(a, ro.renderURLs(r), ro.pageCredentials(r))
+	// edited. For a recipient there is no such page at all: the source is one
+	// of the things a grant does not carry.
+	page, err := renderDetailPage(a,
+		ro.renderURLs(r).ownedBy(a.OwnerID),
+		ro.pageCredentials(r).forArtifactOwnedBy(viewerID, a.OwnerID))
 	if err != nil {
 		serverError(w, r, "gallery detail render", err)
 		return
@@ -209,23 +260,36 @@ func openURL(artifactID string) string {
 // start at the click, so the TTL can stay minutes without the affordance
 // breaking. It also keeps the token out of the page source, where a "copy link
 // address" would spread a credential.
+// It reads through the same grant-aware accessor the detail page does
+// (av-awr4), because this is the door the detail page's own affordances lead
+// to: the toolbar's "Open in new tab", and the capability banner's remedy for
+// a frame the sandbox cannot run. A recipient whose page offers those and
+// whose /open then 404s has a broken page, and the reason would be invisible.
+// It grants nothing extra — a top-level render of an artifact they may already
+// read, under that artifact's own unchanged CSP.
 func (ro *Router) openArtifact(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
 	urls := ro.renderURLs(r)
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), urls.ownerID, id)
+	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(urls.viewerID), id)
 	if err != nil {
 		serverError(w, r, "open artifact lookup", err)
 		return
 	}
-	// The owner check is belt to the query's braces: GetArtifact is already
-	// scoped to urls.ownerID (av-ep8k), so this can only fire if that scoping
-	// itself were ever wrong. Cheap, and it keeps the cross-tenant guarantee
-	// true even if a future call site's scoping regresses — the same
-	// defense-in-depth render.go's ServeArtifact keeps.
-	if a == nil || a.OwnerID != urls.ownerID {
+	if a == nil {
 		ro.notFound(w, r)
 		return
 	}
+	// The token is minted as the artifact's owner because that is who the
+	// render surface checks it against; the visitor stays the state principal.
+	// For an owner opening their own artifact the two are the same value and
+	// this is the token it always was.
+	//
+	// The old belt-to-the-braces `a.OwnerID != urls.ownerID` check is gone with
+	// the owner-scoped read it braced. It cannot be restated here: a recipient
+	// legitimately opens an artifact they do not own, so the comparison it made
+	// is no longer a statement about authority. The accessor is what authorizes
+	// now, and it says so in SQL.
+	urls = urls.ownedBy(a.OwnerID)
 	// The Location header carries a credential and a deadline; a cached
 	// redirect would hand out a token that has already expired.
 	w.Header().Set("Cache-Control", "no-store")
@@ -551,6 +615,16 @@ type detailPageData struct {
 	pageCredentials
 }
 
+// renderDetailPage builds the viewer page for whoever this request is.
+//
+// creds.ReadOnly is the single switch between the owner's page and a
+// recipient's (av-awr4). Everything the template withholds — the edit link, the
+// source, the agent, the export, refetch, the allowlist and capability
+// controls — hangs off it, and so does the popover's Manage link and the page
+// script's willingness to approve anything. The capability *cluster* itself
+// stays: it reports what this tool may reach, which is a fact about the
+// artifact running in the recipient's browser and exactly what the CSP-block
+// explanation refers back to. What goes is the link to change it.
 func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials) (string, error) {
 	allowlist := a.NetworkAllowlist
 	if allowlist == nil {
@@ -571,7 +645,10 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials)
 			LinksApproved:      a.LinksApproved,
 			CameraApproved:     a.CameraApproved,
 			MicrophoneApproved: a.MicrophoneApproved,
-			ShowManage:         true,
+			// The popover's Manage link points at the edit page, which a
+			// recipient cannot reach: it is a link to a 404 rather than a
+			// control they might have used.
+			ShowManage: !creds.ReadOnly,
 		},
 		pageCredentials: creds,
 	})

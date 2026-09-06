@@ -451,6 +451,18 @@ Sharing is a first-class resource, not an export-to-file action.
   answers exactly what an id that was never issued answers. Otherwise every
   grant would silently mint another unguessable public link, and revoking the
   public one would revoke none of them.
+- **A grantee gets the ordinary artifact page, in a read-only mode** (av-awr4).
+  Same URL, same template: what a grant buys is running the tool, not a second
+  surface. The page withholds everything a grant does not carry — the source,
+  the edit and agent routes, the export, refetch, tag and collection controls —
+  and, less obviously and more importantly, raises none of the host-frame
+  prompts that write per-artifact authority. Only an owner changes an
+  artifact's allowlist or spends a capability approval, so a recipient offered
+  one would click Allow and watch nothing happen. The refusals are explained
+  instead: a blocked origin is named in the page's own chrome, with no button,
+  because the only way to change it is to ask the owner. A shared artifact is
+  frozen at whatever its owner approved, and the failure worth designing
+  against is that being true *silently*.
 - **A share lives until it is deleted.** There is no expiring link: revocation is
   deleting the row, and that is the only lifetime the product promises. An expiry
   column existed unused from the first migration and was removed (av-8ipt) rather

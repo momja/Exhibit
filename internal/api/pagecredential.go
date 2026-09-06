@@ -102,6 +102,32 @@ func (ro *Router) pageCredentials(r *http.Request) pageCredentials {
 	}
 }
 
+// forArtifactOwnedBy narrows this request's credentials to the one artifact a
+// page is about: a visitor who does not own it may not mutate it (av-awr4).
+//
+// It only ever *removes* authority — `||`, never an assignment — so a
+// principal that was already read-only stays read-only whoever owns what it is
+// looking at. That direction is the whole safety of putting a per-artifact
+// fact into a per-request field.
+//
+// A recipient is exactly the principal pageCredentials.ReadOnly was given its
+// own field for: read-only without being anonymous. It is deliberately the
+// same flag rather than a second one beside it, because the failure this
+// prevents is a page offering a control the credential will refuse — two flags
+// are two things to keep in agreement, and the disagreement *is* the bug. So
+// the detail template's chrome and api.js's local refusal are one decision:
+// nothing is rendered that could not be sent, and nothing is sent that would
+// not be honoured.
+//
+// The narrowing lives here rather than in the resolved Principal because
+// ownership is a property of an (viewer, artifact) pair and a Principal is
+// resolved before any artifact is known. A recipient still owns their own
+// library, and reading somebody else's shelf must not lock them out of it.
+func (c pageCredentials) forArtifactOwnedBy(viewerID, ownerID int64) pageCredentials {
+	c.ReadOnly = c.ReadOnly || viewerID != ownerID
+	return c
+}
+
 func (ro *Router) pageToken(ctx context.Context, anonymous bool) string {
 	if sessionAuthed(ctx) || anonymous || ro.loginEnabled() {
 		return ""

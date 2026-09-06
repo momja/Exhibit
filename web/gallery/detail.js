@@ -17,6 +17,32 @@
  *   microphoneApproved - persisted first-use microphone approval (mutable)
  */
 
+// Whether this visitor may grant this artifact anything (av-awr4).
+//
+// Four first-use prompts on this page write per-artifact authority — downloads,
+// clipboard, external links, and the camera/microphone gate, all through PATCH
+// /api/artifacts/:id — and a fifth, the network prompt, through POST
+// …/origins. Every one of them is the owner's decision to make, enforced by
+// owner-scoped queries that have always refused anybody else. So a recipient
+// who was offered them would click Allow and watch nothing happen, and would
+// reasonably conclude the tool is broken rather than that it is not theirs.
+//
+// The answer is not to prompt: the artifact's request is settled the way a
+// denial has always settled it, so the artifact sees the failure it already
+// knows how to handle and nothing hangs. What the visitor is told about is the
+// one case where silence would leave a tool visibly doing nothing with no
+// reason anywhere — a blocked origin, which explainBlockedOrigin below turns
+// into a sentence.
+//
+// READ_ONLY is the server's word for it, narrowed per artifact by
+// pageCredentials.forArtifactOwnedBy. Reading it here rather than a flag of
+// this script's own is what keeps "what the page offers" and "what the page may
+// send" one decision: api.js refuses the same writes locally off the same
+// value, so a prompt that slipped through this gate would still send nothing.
+function mayApprove() {
+  return !(typeof READ_ONLY === 'boolean' && READ_ONLY);
+}
+
 // Mobile actions sheet (av-g7n7): below 640px the toolbar is styled as a
 // bottom sheet that this kebab slides up over a scrim. One body class drives
 // both, and above the breakpoint the kebab and scrim are display:none — so
@@ -52,6 +78,15 @@ document.addEventListener('keydown', function(e) {
 // forward them same-origin with the auth token. Validate the message shape and
 // that it truly came from our artifact frame (e.origin is 'null' when sandboxed,
 // so identity is established by the source window, not the origin string).
+//
+// A recipient's writes stop at api.js, which refuses them for a read-only
+// visitor rather than sending them to be refused (av-awr4). Their reads still
+// work — the render surface inlines the viewer's own rows, which is what
+// av-6axy's principal split bought — so the artifact boots with whatever it
+// had and loses what it is given afterwards. That asymmetry is the state
+// routes' to close and not this page's: they are owner-scoped in SQL, and
+// av-lrae pins that a grant does not widen them. av-v991's state modes are
+// where "whose board is this" gets decided and where the write path follows.
 window.addEventListener('message', function(e) {
   const d = e.data;
   if (!d || d.__avState !== true || d.artifactId !== ID) return;
@@ -212,6 +247,11 @@ window.addEventListener('message', function(e) {
     bytes: d.bytes
   };
   if (downloadsApproved) { triggerDownload(dl); return; }
+  // Unapproved and not ours to approve: drop the bytes, exactly as a denial
+  // does. The artifact keeps running and never learns the difference — which
+  // is also all it learned before any of this existed, when the sandbox simply
+  // swallowed the download.
+  if (!mayApprove()) { pendingDownload = null; return; }
   pendingDownload = dl;
   document.getElementById('dl-filename').textContent = dl.filename;
   document.getElementById('dl-modal').hidden = false;
@@ -287,6 +327,10 @@ window.addEventListener('message', function(e) {
   const op = d.op === 'read' ? 'read' : 'write';
   const req = { id: String(d.id), op: op, text: op === 'write' ? String(d.text == null ? '' : d.text) : null };
   if (clipboardApproved) { performClipboard(req); return; }
+  // Not ours to approve. Reject rather than drop: a clipboard call is a
+  // promise the artifact is awaiting, so silence here is a hang, where a
+  // rejection is the DOMException a blocked clipboard has always thrown.
+  if (!mayApprove()) { replyClip(req.id, false, undefined, 'Clipboard access denied'); return; }
   pendingClip = req;
   document.getElementById('clip-direction').textContent = op === 'read' ? 'read' : 'write to';
   document.getElementById('clip-modal').hidden = false;
@@ -373,6 +417,9 @@ window.addEventListener('message', function(e) {
     window.open(url.href, '_blank', 'noopener');
     return;
   }
+  // Not ours to approve: the destination is dropped, which is what a denial
+  // does and what the sandbox did before the bridge existed.
+  if (!mayApprove()) return;
   pendingLink = { url: url.href, host: url.hostname };
   document.getElementById('link-host').textContent = url.hostname;
   document.getElementById('link-modal').hidden = false;
@@ -465,6 +512,19 @@ window.addEventListener('message', function(e) {
     // top-level render, and settle the call.
     replyMedia(req.id, true, 'Capture devices are unavailable in the embedded preview; open the artifact directly',
       'NotSupportedError');
+    return;
+  }
+  // Not ours to approve. Settle it as a denial — the same DOMException the
+  // Block button produces — so getUserMedia rejects promptly instead of
+  // hanging on a stream that is not coming.
+  //
+  // Nothing about the owner's approval would have handed over the visitor's
+  // hardware anyway: it lifts Exhibit's own block, and the browser then asks
+  // its own permission on the machine the camera is attached to. That second
+  // gate is why an approved artifact is not a device grant, and why nothing
+  // here needs to say more than "no".
+  if (!mayApprove()) {
+    replyMedia(req.id, false, 'Permission denied', 'NotAllowedError');
     return;
   }
   // A second request arriving while the prompt is open displaces the first, so
@@ -564,9 +624,54 @@ document.getElementById('media-allow').addEventListener('click', async function(
     'NotSupportedError');
 });
 
+// What a blocked origin becomes when the visitor cannot approve it (av-awr4).
+//
+// This is the whole of the recipient's half of the network model, and it is a
+// statement rather than a control: a shared artifact is frozen at whatever its
+// owner allowed, and widening that from here would be one person editing
+// another person's CSP. Correct — and it fails invisibly unless somebody says
+// so, which is what the ticket is actually about. Without this the tool draws
+// an empty chart and no surface anywhere mentions the request that died.
+//
+// It accumulates rather than reporting the first and stopping: an artifact
+// reaching four unapproved origins has four things wrong with it, and naming
+// one would leave the visitor fixing a list they cannot see the end of. The
+// preamble already reports each origin at most once per load, so the set here
+// is the set of distinct blocked origins and the guard is belt to that.
+const blockedOrigins = [];
+
+function explainBlockedOrigin(origin) {
+  const banner = document.getElementById('origin-blocked-banner');
+  // Rendered only for a read-only visitor, and this only runs for one — but
+  // the two facts are decided in different files, so the null check is what
+  // keeps a future divergence a no-op instead of an exception at page load.
+  if (!banner || !origin || blockedOrigins.indexOf(origin) !== -1) return;
+  blockedOrigins.push(origin);
+
+  // textContent throughout: an origin arrives from the artifact's own blocked
+  // request and must never be interpreted as markup on the app origin.
+  const headline = document.getElementById('origin-blocked-headline');
+  if (headline) {
+    headline.textContent = blockedOrigins.length === 1
+      ? 'This tool tried to reach ' + origin + '. Its owner has not allowed that.'
+      : 'This tool tried to reach ' + blockedOrigins.length +
+        ' origins its owner has not allowed.';
+  }
+  const list = document.getElementById('origin-blocked-list');
+  if (list) {
+    const row = document.createElement('div');
+    row.className = 'banner-detail-url';
+    const code = document.createElement('code');
+    code.textContent = origin;
+    row.appendChild(code);
+    list.appendChild(row);
+  }
+  banner.hidden = false;
+}
+
 // Network permission prompt (av-kmwj): the dialog and its whole behaviour
 // live in network-prompt.js, shared with the agent chat page (av-6xvs). This
-// page only supplies the four things the two surfaces differ in.
+// page only supplies the things the two surfaces differ in.
 //
 // reload goes through the app origin's /open route rather than reusing the
 // frame's current src: that src carries a render token minted when this page
@@ -576,7 +681,8 @@ document.getElementById('media-allow').addEventListener('click', async function(
 window.ExhibitNetworkPrompt.install({
   frame: function () { return document.querySelector('iframe'); },
   artifactId: function () { return ID; },
-  readOnly: function () { return typeof READ_ONLY === 'boolean' && READ_ONLY; },
+  readOnly: function () { return !mayApprove(); },
+  explain: explainBlockedOrigin,
   report: function (text) {
     const st = document.getElementById('al-status');
     if (st) st.textContent = text;

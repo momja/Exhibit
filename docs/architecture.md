@@ -925,6 +925,50 @@ pressure the same weight amplifies into a multi-gigabyte runaway. The rule for
 any future panel here: the detail page may show *facts about* an artifact, never
 the artifact's bytes.
 
+**The detail page is also the recipient's page** (av-awr4). A grant puts no
+secret in a URL, so somebody an artifact is shared with opens it at the same
+`/artifacts/:id` its owner does — one address, one template, and `galleryDetail`
+reading through `Store.GetArtifactReadableBy` (§3.3) rather than the
+owner-scoped accessor. A viewer with no grant gets the 404 page, which is what
+an artifact that never existed gets.
+
+What separates the two renders is one narrowing:
+`pageCredentials.forArtifactOwnedBy` sets `ReadOnly` for a visitor who does not
+own the artifact, and the template's owner-only chrome — edit, agent, export,
+refetch, the allowlist link, the popover's Manage link — hangs off that single
+flag, as does `api.js`'s local refusal of writes. Deliberately one flag and not
+two: the failure being prevented is a page offering a control the server will
+refuse, and two flags are two things to keep in agreement. The narrowing only
+ever *removes* authority, and it is per-artifact rather than a field on the
+resolved Principal because ownership is a property of a (viewer, artifact) pair
+while a Principal is resolved before any artifact is known — a recipient still
+owns their own library.
+
+The part that is not about hiding buttons: **three host-frame prompts write
+per-artifact authority**, and all three would have rendered for a recipient and
+404'd on submit — the network permission prompt through `POST …/origins`, the
+download/clipboard/link first-use approvals and the camera/microphone gate
+through `PATCH /api/artifacts/:id`. A recipient's session raises none of them.
+The artifact's request is settled the way a denial has always settled it, so
+nothing hangs; and a blocked *origin* — the one case where silence leaves a tool
+visibly doing nothing — is explained instead, in the page's own chrome, naming
+the origin and saying that its owner has not allowed it. No button, because
+there is no answer this visitor could give. `security.md` §2.1 carries the
+policy and why it is the redirect case's shape.
+
+`/artifacts/:id/open` reads through the same accessor, because the recipient's
+page still offers "Open in new tab" and the capability banner still points at
+it; an affordance whose route 404s is the same dishonesty one door over. It
+grants nothing new — a top-level render of an artifact they may already read,
+under that artifact's own unchanged CSP.
+
+What a recipient still cannot do is **write state**. The render inlines their
+own rows (av-6axy's principal split, §3.2), so a shared tool boots with what
+they left in it; the write-through stops at `api.js`, because the state routes
+are owner-scoped in SQL and av-lrae pins that a grant does not widen them. The
+epic's "a recipient writes state through use" therefore waits on av-v991, which
+is where "whose board is this" gets decided.
+
 The edit page carries one further island, the **state inspector** (av-hg5f): a
 collapsible panel beside the security panel that reads the artifact's state rows
 and renders each value through a control inferred from its shape — text, number,
@@ -1694,7 +1738,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap) — the grant schema and the viewer-scoped read accessor exist (av-lrae) — what remains is a route that calls it, so a non-owner can reach a shared artifact at all (av-7k7b), and a person managing their own account (av-g2dx) |
+| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap); a non-owner reaches a shared artifact through the grant schema and the viewer-scoped read accessor (av-lrae), the token's two principals (av-6axy) and the viewer page that calls them (av-awr4, §3.5) — what remains is the owner's surface for creating grants (av-6xjd), whether a shared artifact is one board or several (av-v991), and a person managing their own account (av-g2dx) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | **already done** (av-52ll) — `BLOB_S3_BUCKET` selects `S3Store`; unset keeps the filesystem |

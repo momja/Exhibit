@@ -72,7 +72,12 @@ var testPageCreds = pageCredentials{Token: "tok"}
 // need one; the key is throwaway because those tests assert on markup, not on
 // what the render surface will later accept.
 func testRenderURLs(origin string) renderURLs {
-	return renderURLs{origin: origin, signer: rendertoken.NewRandomSigner(), ownerID: defaultOwnerID}
+	return renderURLs{
+		origin: origin, signer: rendertoken.NewRandomSigner(),
+		// The two principals are the same person everywhere but a grant
+		// (av-awr4), and these tests are not about grants.
+		ownerID: defaultOwnerID, viewerID: defaultOwnerID,
+	}
 }
 
 func TestAuthMiddleware(t *testing.T) {

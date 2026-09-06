@@ -411,6 +411,18 @@ session is either a public visitor or a gap in `sessionGate`, and the service
 token is the right answer to neither. Falling back to it would turn every future
 hole in the gate into a credential leak rather than a `401`.
 
+`READ_ONLY` is its own column and not `TOKEN == ""` because the two answer
+different questions, and av-awr4 is the case that makes the difference load
+bearing: a **recipient** of a shared artifact is a session-authenticated
+browser holding a real credential, read-only about *this* artifact and not
+about their own library. The detail page therefore narrows the resolved value
+per artifact (`pageCredentials.forArtifactOwnedBy`), only ever removing
+authority, and the resulting flag decides both what the page renders and what
+`apiFetch` will send — one decision, so a control cannot outlive the credential
+that would have to back it. Ownership cannot live on the Principal itself: a
+Principal is resolved before any artifact is named, and read-only-everywhere
+would lock a recipient out of their own shelf.
+
 Two supporting pieces follow from the same decision:
 
 - **One client spends it.** `web/gallery/api.js` exposes `apiFetch`; no page
@@ -756,6 +768,34 @@ Five properties of the reporter are load-bearing:
 
 - **The detail page** hosts it. The frame is sandboxed and the page around it
   is ours, which is the whole precondition.
+- **Not for a recipient, who is told instead** (av-awr4). Somebody an artifact
+  is shared with opens the same detail page its owner does, and only the owner
+  may widen an artifact's allowlist — the origin routes are owner-scoped, so a
+  prompt shown to a recipient would 404 on Allow and teach them the tool is
+  flaky rather than that it is not theirs to grant. This is the *redirect*
+  case's shape reused rather than a new mechanism: explain, do not ask.
+
+  Silence would be the wrong half of that. **A shared artifact is frozen at
+  whatever its owner approved**, so an allowlist short of what the tool needs
+  makes the tool visibly do nothing, with the only account of it in a console
+  the audience for this product does not open. The block therefore becomes a
+  sentence in app chrome naming the origin — "This tool tried to reach
+  api.example.com. Its owner has not allowed that." — accumulating one line per
+  distinct origin, and carrying no control, because there is no answer this
+  visitor could give. Fixing it means asking the owner, and saying so is the
+  whole feature.
+
+  The same session raises none of the other first-use prompts either
+  (downloads, clipboard, external links, camera/microphone — all `PATCH
+  /api/artifacts/:id`). Those settle as denials, which is a failure the
+  artifact already handles and the sandbox already produced before any bridge
+  existed; only the network case needs saying out loud, because only it leaves
+  the tool looking broken rather than refused. A capability the *owner* already
+  approved still works — the grant belongs to the artifact, and spending one
+  writes nothing. Asserted by driving the shipped page script
+  (`web/gallery/detail.recipient.test.mjs`): that nothing opens is a claim
+  about behaviour, and reading the markup would answer a different question,
+  since every dialog is still in the document for both visitors.
 - **A top-level render and a share do not, by design.** `/a/:id` opened
   directly is a real-origin document whose only DOM belongs to the artifact,
   so a prompt drawn there would be a prompt the artifact could forge — and
