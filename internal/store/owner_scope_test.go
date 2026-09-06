@@ -28,12 +28,40 @@ const (
 	bob   int64 = 2
 )
 
+// seedOwnerAccounts gives alice and bob `users` rows, in that order so their
+// ids are the constants above. A grant names users(id) for real (av-lrae), so
+// a share directed at somebody needs that somebody to exist. Idempotent: an
+// upsert on the external id, so calling it once per artifact is free.
+func seedOwnerAccounts(t *testing.T, s *SQLiteStore) {
+	t.Helper()
+	ctx := context.Background()
+	for _, account := range []struct {
+		id  int64
+		sub string
+	}{{alice, "sub-alice"}, {bob, "sub-bob"}} {
+		u, err := s.UpsertUser(ctx, account.sub, account.sub+"@example.test")
+		require.NoError(t, err)
+		require.Equal(t, account.id, u.ID,
+			"the fixture owner ids must be the ids `users` actually hands out")
+	}
+}
+
+// otherOwner is the account that is not this artifact's owner — the recipient
+// a grant in these fixtures is directed at.
+func otherOwner(artifactID string) int64 {
+	if ownerOf(artifactID) == alice {
+		return bob
+	}
+	return alice
+}
+
 // putOwnedArtifact seeds one artifact plus its state, origin decision,
 // transcript, share, tag and collection, so every method under test has
 // something to find when it is allowed to — and something to leave alone
 // when it isn't.
 func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 	t.Helper()
+	seedOwnerAccounts(t, s)
 	ctx := context.Background()
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{
 		ID: id, OwnerID: owner, Title: id, SourceBlobID: "blob-" + id, Tier: Tier1,
@@ -42,7 +70,7 @@ func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 	}))
 	require.NoError(t, s.SetState(ctx, OwnerID(owner), id, ViewerID(owner), "seed", "value"))
 	require.NoError(t, s.SaveTranscript(ctx, owner, id, "session-"+id, `[{"role":"user"}]`))
-	require.NoError(t, s.CreateShare(ctx, owner, &Share{ID: "share-" + id, ArtifactID: id, Public: true}))
+	require.NoError(t, s.CreateShare(ctx, owner, &Share{ID: "share-" + id, ArtifactID: id}))
 	require.NoError(t, s.CreateTag(ctx, &Tag{ID: "tag-" + id, OwnerID: owner, Name: "tag-" + id}))
 	require.NoError(t, s.CreateCollection(ctx, &Collection{ID: "col-" + id, OwnerID: owner, Name: "col-" + id}))
 }
@@ -144,7 +172,13 @@ func ownerCases() []ownerCase {
 			return len(ts) == 0, err
 		}},
 		{"CreateShare", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.CreateShare(ctx, o, &Share{ID: "planted-share-" + id, ArtifactID: id, Public: true})
+			// A grant rather than a second anonymous link, because the
+			// artifact already carries its one link and the schema refuses
+			// another (av-lrae) — the denial under test has to be about
+			// ownership, not about the link already existing.
+			recipient := otherOwner(id)
+			return false, s.CreateShare(ctx, o,
+				&Share{ID: "planted-share-" + id, ArtifactID: id, RecipientID: &recipient})
 		}},
 		{"GetShare", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			sh, err := s.GetShare(ctx, o, "share-"+id)
@@ -375,6 +409,17 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"SetAgentKey":         "carries the owner in AgentKey.OwnerID",
 		"GetArtifactUnscoped": "deliberate render/share exception (av-c5aq)",
 		"GetShareUnscoped":    "deliberate share exception (architecture §7)",
+
+		// The non-owner read accessor (av-lrae). It takes a ViewerID and not
+		// an owner, and that is the point rather than an omission: the two
+		// principals answer different questions — the OWNER authorizes and may
+		// mutate, the VIEWER may read and writes state under their own id — and
+		// this method exists precisely to admit a viewer who is not the owner.
+		// It is scoped, tightly: the artifact's owner, or an account a grant
+		// row names on it, and nothing else. What keeps that narrow is that it
+		// is a *separate* accessor rather than a wider predicate inside
+		// ownedArtifact, which every mutating query would have inherited.
+		"GetArtifactReadableBy": "takes the VIEWER, deliberately not the owner; read-only by construction (av-lrae)",
 
 		// Out-of-line assets (av-20fk). Both are render-path reads, and the
 		// render path serves shares to people with no account — there is no

@@ -158,7 +158,11 @@ artifacts(
   downloads_approved,      -- first-use approval for the host-mediated download bridge
   camera_approved,         -- likewise for the camera; also builds the render
   microphone_approved,     --   document's Permissions-Policy (§6.3)
-  widget_blob_id           -- the card's widget document; empty = default tile (§5.5)
+  widget_blob_id,          -- the card's widget document; empty = default tile (§5.5)
+  share_state_mode         -- whose state a recipient writes: their own, or the
+                           -- owner's shared board. One answer per ARTIFACT, not
+                           -- per grant, which would admit one recipient on their
+                           -- own rows while another writes the owner's.
 )
 -- one decision per (artifact, origin), cascading with the artifact (§6)
 artifact_network_origins(
@@ -183,7 +187,15 @@ artifact_tags(artifact_id, tag_id)
 -- that is §5.3's whole promise, and nothing here is keyed by device.
 artifact_state(artifact_id, user_id, key, value, updated_at)
 -- sharing as a row, §7. No expiry column: a share lives until it is deleted.
-shares(id, artifact_id, public)
+-- recipient_id NULL is the artifact's one anonymous link, where the unguessable
+-- id is the whole authorization; set, the row is a GRANT to that account, which
+-- opens the artifact at its ordinary URL and needs no secret. Two unique
+-- indexes make both facts schema invariants: one grant per (artifact, person),
+-- and — through a PARTIAL index, since SQLite treats every NULL in a unique
+-- index as distinct — one anonymous link per artifact. The old `public` column
+-- was dropped with av-lrae: it means exactly `recipient_id IS NULL`, and it was
+-- never enforced anyway (av-20xv).
+shares(id, artifact_id, recipient_id)
 ```
 
 ### 4.5 Identity & auth
@@ -429,7 +441,10 @@ known.
 
 Sharing is a first-class resource, not an export-to-file action.
 
-- A share is a row: `shares(id, artifact_id, public)`.
+- A share is a row: `shares(id, artifact_id, recipient_id)`. A row with no
+  recipient is the artifact's single anonymous link; one naming an account is a
+  grant to that person, who opens the artifact at its ordinary URL — the link
+  does not carry the grant, so the artifact URL *is* the share URL.
 - Served at `GET /s/:shareId` with no auth, from the isolated render origin, under the
   artifact's own CSP allowlist.
 - **A share lives until it is deleted.** There is no expiring link: revocation is

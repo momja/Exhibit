@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -12,7 +13,17 @@ import (
 
 type createShareRequest struct {
 	ArtifactID string `json:"artifact_id"`
-	Public     bool   `json:"public"`
+
+	// Public is a tombstone on exactly ExpiresAt's grounds, and it is what
+	// closes av-20xv. The column was accepted, stored, and never read by
+	// ServeShare, so `public: false` was precisely the value a caller would
+	// set believing they had restricted something — an access control the API
+	// advertised and did not have. av-lrae dropped it rather than wiring it
+	// up, because once a recipient is on the row it means exactly "no
+	// recipient": a share with nobody named on it *is* the public link.
+	// Continuing to accept the key would leave the request shape offering a
+	// choice the resource no longer has.
+	Public json.RawMessage `json:"public"`
 
 	// ExpiresAt is a tombstone, not a setting. Share expiry was removed in
 	// av-8ipt; this field exists only so a request that still asks for one is
@@ -43,11 +54,16 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "artifact_id is required", http.StatusBadRequest)
 		return
 	}
-	// Any mention of the key is an error, whatever its value — one rule with no
-	// sub-cases, and it says out loud that a share now lives until it is
-	// deleted. DELETE /api/shares/:id is how it ends.
+	// Any mention of either key is an error, whatever its value — one rule with
+	// no sub-cases. The first says out loud that a share now lives until it is
+	// deleted (DELETE /api/shares/:id is how it ends); the second, that a share
+	// with no recipient is already the public one.
 	if req.ExpiresAt != nil {
 		http.Error(w, "expires_at is no longer supported: shares live until deleted (DELETE /api/shares/:id)", http.StatusBadRequest)
+		return
+	}
+	if req.Public != nil {
+		http.Error(w, "public is no longer supported: a share with no recipient is the artifact's public link (av-20xv)", http.StatusBadRequest)
 		return
 	}
 
@@ -67,19 +83,29 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// No recipient: this route mints the artifact's anonymous link, which is
+	// the only share v1 has a caller for. Directing one at an account is
+	// av-6xjd's, and it arrives with the thing this route would otherwise have
+	// to invent — a way to name a person that is not a raw user id.
 	sh := &store.Share{
 		ID:         uuid.New().String(),
 		ArtifactID: req.ArtifactID,
-		Public:     req.Public,
 	}
 
 	if err := ro.cfg.Store.CreateShare(r.Context(), ownerID, sh); err != nil {
+		// The artifact already has its one link (av-lrae). That is a schema
+		// invariant doing its job, so it is the caller's answer — 409 — rather
+		// than a 500 reporting our own constraint as a fault.
+		if errors.Is(err, store.ErrDuplicateShare) {
+			writeError(w, http.StatusConflict, "this artifact already has a public link")
+			return
+		}
 		writeArtifactError(w, r, "create share", err)
 		return
 	}
 
 	slog.DebugContext(r.Context(), "share created",
-		slog.String("share_id", sh.ID), slog.String("artifact_id", req.ArtifactID), slog.Bool("public", req.Public))
+		slog.String("share_id", sh.ID), slog.String("artifact_id", req.ArtifactID))
 
 	resp := createShareResponse{
 		Share:    sh,

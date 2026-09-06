@@ -92,7 +92,7 @@ func TestShareInlinesTheOwnersState(t *testing.T) {
 	if err := st.SetState(ctx, 1, "abc", store.ViewerID(otherViewer), "note", "SHOULD-NOT-APPEAR"); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateShare(ctx, 1, &store.Share{ID: "sh1", ArtifactID: "abc", Public: true}); err != nil {
+	if err := st.CreateShare(ctx, 1, &store.Share{ID: "sh1", ArtifactID: "abc"}); err != nil {
 		t.Fatal(err)
 	}
 

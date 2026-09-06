@@ -302,13 +302,13 @@ func TestShareRoutes404AcrossOwners(t *testing.T) {
 	ctx := context.Background()
 	foreignID := seedForeignArtifact(t, r)
 
-	body, _ := json.Marshal(map[string]any{"artifact_id": foreignID, "public": true})
+	body, _ := json.Marshal(map[string]any{"artifact_id": foreignID})
 	w := do(t, r, "POST", "/api/shares", body)
 	assert.Equal(t, http.StatusNotFound, w.Code, "a share may only be minted by the artifact's owner")
 
 	// A share the other owner already holds cannot be revoked either.
 	require.NoError(t, r.cfg.Store.CreateShare(ctx, otherOwner,
-		&store.Share{ID: "foreign-share", ArtifactID: foreignID, Public: true}))
+		&store.Share{ID: "foreign-share", ArtifactID: foreignID}))
 	w = do(t, r, "DELETE", "/api/shares/foreign-share", nil)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 

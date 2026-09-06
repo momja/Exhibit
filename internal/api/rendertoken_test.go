@@ -27,7 +27,7 @@ func renderGet(t *testing.T, r *Router, target string) *httptest.ResponseRecorde
 // like any other client.
 func createShare(t *testing.T, r *Router, artifactID string) string {
 	t.Helper()
-	b, _ := json.Marshal(map[string]any{"artifact_id": artifactID, "public": true})
+	b, _ := json.Marshal(map[string]any{"artifact_id": artifactID})
 	req := httptest.NewRequest("POST", "/api/shares", bytes.NewReader(b))
 	req.Header.Set("Authorization", authHeader())
 	req.Header.Set("Content-Type", "application/json")
