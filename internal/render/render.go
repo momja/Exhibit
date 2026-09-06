@@ -189,7 +189,11 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	// The share row is the authorization (architecture.md §7), so this route
 	// carries no token and has no principal of its own. State is inlined for
 	// the artifact's owner: a share publishes the artifact *as its owner sees
-	// it*, which is what a link recipient with no account can be shown.
+	// it*, which is what a link recipient with no account can be shown. Both
+	// principals are therefore named here explicitly (av-6axy): the owner
+	// authorizes the read and is also, on this route alone, the viewer whose
+	// rows are inlined. Leaving the viewer unset would inline nobody's — the
+	// fail-closed direction, and still the wrong document.
 	//
 	// Deliberately NOT the anonymous viewer that a public-instance visitor gets
 	// (av-wmp6), even though both are strangers with no credential. A share is
@@ -201,7 +205,7 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	// and the one an operator can narrow with EMBED_ORIGINS — shares only,
 	// because a share is the render document that already carries neither a
 	// principal nor a credential. Config.EmbedOrigins holds the argument.
-	rd.serveArtifactDoc(w, r, a, rendertoken.Claims{OwnerID: a.OwnerID},
+	rd.serveArtifactDoc(w, r, a, rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
 		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 }
 
@@ -271,11 +275,12 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 // served: same allowlist, same CSP, same opaque-origin sandbox. widget only
 // selects the narrower preamble, so a widget's authority can only ever be a
 // subset of its artifact's — there is no second policy to keep in sync.
-// viewer is who this document is being rendered *for*: the principal named by a
-// verified render token, or (on a share) the artifact's own owner. It is the
-// answer to "whose state should be inlined here" — since av-q0ub artifact_state
-// is keyed by (artifact_id, user_id, key), and viewer.OwnerID is that user_id —
-// or, when the viewer is anonymous, the answer "nobody's".
+// viewer is who this document is being rendered *for*: the claims of a
+// verified render token, or (on a share) the artifact's own owner. It carries
+// both principals (av-6axy). viewer.OwnerID authorized the read; it is
+// viewer.ViewerID that answers "whose state should be inlined here" — since
+// av-q0ub artifact_state is keyed by (artifact_id, user_id, key), and that is
+// the user_id — or, when the viewer is anonymous, the answer "nobody's".
 //
 // frameAncestors is who may frame *this* document — the complete set, with nil
 // meaning the app origin alone (av-6nbo, av-q3iy). It is a parameter rather
@@ -337,10 +342,11 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// The two principals are read off different things on purpose (av-q0ub).
 	// Authorization comes from the artifact this handler already resolved, so
 	// the read stays owner-scoped without a third unscoped accessor. Selection
-	// comes from the viewer — the render token's subject, or the artifact's
-	// owner on a share. They are equal today because authorize() requires it,
-	// and the point of keeping them separate is that a shared artifact opened
-	// by someone else (av-7k7b) inlines *that viewer's* rows, not the owner's.
+	// comes from the token's viewer claim (av-6axy) — a principal of its own on
+	// the wire, defaulting to the owner when the token names none, which is
+	// every token minted today. They are equal on every route that exists, and
+	// the point of keeping them separate is that a shared artifact opened by
+	// someone else (av-7k7b) inlines *that viewer's* rows, not the owner's.
 	//
 	// An anonymous viewer (a public instance's unauthenticated visitor,
 	// av-wmp6) is that separation taken to its limit: there is no user_id to
@@ -349,7 +355,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// should be asked for.
 	var state map[string]string
 	if !viewer.Anonymous {
-		s, err := rd.cfg.Store.GetState(r.Context(), store.OwnerID(a.OwnerID), a.ID, store.ViewerID(viewer.OwnerID))
+		s, err := rd.cfg.Store.GetState(r.Context(), store.OwnerID(a.OwnerID), a.ID, store.ViewerID(viewer.ViewerID))
 		if err != nil {
 			slog.WarnContext(r.Context(), "render state read failed",
 				slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
@@ -375,7 +381,8 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, manifest)
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
-		slog.Int64("principal", viewer.OwnerID),
+		slog.Int64("owner", viewer.OwnerID),
+		slog.Int64("principal", viewer.ViewerID),
 		slog.Bool("anonymous", viewer.Anonymous),
 		slog.Bool("widget", widget),
 		slog.Int("body_bytes", len(bodyBytes)),

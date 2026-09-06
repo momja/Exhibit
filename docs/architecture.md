@@ -430,6 +430,18 @@ executable document with the correct security envelope:
   `/s/:shareID` takes no token — the share row is the authorization (§7). Full
   rationale: `security.md` §1.3.
 
+  Its claims are **named**, not positional (av-6axy): `o=1.e=1785948001.<tag>`,
+  with the tag still last so the cut is unambiguous and the artifact id still
+  mixed into the MAC rather than carried. That encoding exists to carry the
+  claim beside it — `p`, the *viewer* principal, separate from the owner. The
+  owner authorizes the read; the principal selects whose state rows are inlined,
+  which is the same split store's `OwnerID`/`ViewerID` draw over `artifact_state`
+  (§3.3). They are the same person on every route that exists today, so `p` is
+  absent from every token minted today and defaults to `o`; they are different
+  people the moment an artifact is shared with somebody (av-7k7b). Duplicate and
+  unknown keys are rejected rather than resolved, and so is a token carrying
+  both `a` and `p`.
+
 - Renders **for nobody** when the token says so (av-wmp6). A token carries an
   optional `anonymous` claim, and a document rendered under one inlines *no*
   state and installs a shim that writes none — the artifact boots empty and its
@@ -1620,10 +1632,11 @@ the same rows by construction, and the phone's `setItem` is simply what the
 laptop's next render inlines.
 
 Which viewer's rows those are is decided once, at the top of the render: the
-**principal** carried by the signed render token (av-c5aq), or the artifact's own
-owner on a share, since a share publishes the artifact *as its owner sees it*
-(§7). The authorization for that read still comes from the artifact row this
-handler already resolved, so inlining state adds no third unscoped accessor.
+**principal** carried by the signed render token (av-c5aq) in its own claim
+beside the owner (av-6axy), or the artifact's own owner on a share, since a
+share publishes the artifact *as its owner sees it* (§7). The authorization for
+that read still comes from the artifact row this handler already resolved, so
+inlining state adds no third unscoped accessor.
 
 ## 7. Sharing
 

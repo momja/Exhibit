@@ -152,21 +152,33 @@ av-c5aq):
   scope is what makes a URL-borne credential acceptable: the artifact *can* read
   its own token out of `location.href`, and that gains it only the access it
   already has, to itself, for a few more minutes.
-- **Shape: HMAC-SHA256 over `(version, artifact id, claims)`**, encoded
-  `<owner>.<expiry>[.a].<tag>` in a `t` query parameter. Not a JWT: one issuer,
-  one verifier, one algorithm, so an algorithm-negotiation surface would be pure
+- **Shape: HMAC-SHA256 over `(version, artifact id, claims)`**, with the claims
+  written as `name=value` pairs joined by `.` and the tag last —
+  `o=1.e=1785948001.<tag>` in a `t` query parameter. Not a JWT: one issuer, one
+  verifier, one algorithm, so an algorithm-negotiation surface would be pure
   cost. The artifact id is *mixed into the MAC* rather than carried as a field,
   so a token minted for artifact A does not verify on artifact B's route — the
   scoping is the signature itself, not a comparison a verifier could omit. The
   tag is the last field and everything before it is the signed message, so a
-  claim can be added without changing what is authenticated; an unknown claim is
-  rejected rather than ignored, since a message this version cannot fully read
-  is one it must not act on half of.
+  claim can be added without changing what is authenticated — and claims are
+  parsed only *after* the MAC verifies.
+- **The claim set is closed and the parser is strict** (av-6axy): `o` (the
+  owner, required, and what authorizes the read), `e` (expiry, required), `p`
+  (the principal whose state is inlined, absent meaning the owner), `a`
+  (anonymous), `s` (the share this render happens under). A duplicate key, an
+  unknown key, a value carrying `.` or `=`, and a token bearing both `a` and `p`
+  are each rejected rather than resolved: a message this version cannot fully
+  read is one it must not act on half of, and `o=1.o=2` must not mean whatever a
+  last-wins reader would make of it. The version stays *inside* the MAC and off
+  the wire — what a wire version buys, two verifiers side by side through a
+  format rollout, the ten-minute TTL already buys.
 - **The optional `a` claim renders for nobody** (av-wmp6): a public instance
   mints it for a visitor with no credential, and the document it authorizes
   inlines no state and persists none. It lives *inside* the MAC because it
   subtracts authority — as a query parameter, the viewer could delete it and be
-  handed the owner's data.
+  handed the owner's data. It is its own key rather than `p=0` for the same
+  reason: a falsy principal is one careless "zero means unset" branch away from
+  silently promoting a nobody to the owner.
 - **Key: derived from the existing server secret** (`EXHIBIT_SECRET`, or the
   generated `secret.key`), domain-separated from the AES-GCM key that seals
   agent provider keys. One secret for an operator to manage, not two. With no
@@ -190,8 +202,11 @@ Where a token is minted matters for both cost and staleness:
   be expired by the time anyone used it — and "copy link address" would spread a
   credential.
 
-The verified owner is also the render surface's **state principal**: the answer
-to "whose state should be inlined into this document". That answer is
+The token also names the render surface's **state principal**: the answer to
+"whose state should be inlined into this document", which is a different
+question from "who may read this artifact" and since av-6axy has a claim of its
+own. `o` authorizes the read; `p` selects the rows, and defaults to `o` when
+absent, which is every token any route mints today. That answer is
 load-bearing — `artifact_state` is keyed by `(artifact_id, user_id, key)`
 (av-q0ub), and the token's principal *is* that `user_id`. A principal with rows
 of their own gets exactly those; a principal with none gets an empty cache,

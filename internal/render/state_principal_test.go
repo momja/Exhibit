@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -144,5 +145,46 @@ func TestASecondDeviceRenderInlinesTheFirstDevicesWrites(t *testing.T) {
 	}
 	if strings.Count(doc, `"runs"`) != 1 {
 		t.Fatalf("one user's key must inline once, not once per device: %s", doc)
+	}
+}
+
+// av-6axy AC#5, and the reason the token grew a principal claim at all. Until
+// now the two questions the token answers — who may read this artifact, and
+// whose rows go in it — had one answer, so nothing could tell whether the
+// render surface was reading the owner or the viewer. A token naming a
+// principal that is not the owner separates them: the read is authorized as
+// owner 1, and the document must come back holding viewer 42's rows and none
+// of owner 1's.
+//
+// No route mints such a token yet (av-awr4 is what will), which is precisely
+// why it is minted by hand here — the mechanism has to be correct before the
+// route that depends on it exists.
+func TestRenderInlinesThePrincipalsRowsNotTheOwners(t *testing.T) {
+	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
+	ctx := context.Background()
+
+	if err := st.SetState(ctx, 1, "abc", 1, "note", "OWNER-ONLY"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetState(ctx, 1, "abc", store.ViewerID(otherViewer), "note", "the recipient's"); err != nil {
+		t.Fatal(err)
+	}
+
+	tok, err := testTokens.MintClaims("abc", rendertoken.Claims{OwnerID: 1, ViewerID: otherViewer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	rd.ServeArtifact(w, rawRequest("/a/abc?"+rendertoken.Param+"="+tok, "abc"))
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	doc := w.Body.String()
+	if !strings.Contains(doc, `"note":"the recipient's"`) {
+		t.Fatalf("the token's principal's state must be inlined: %s", doc)
+	}
+	if strings.Contains(doc, "OWNER-ONLY") {
+		t.Fatalf("the owner's state reached a document rendered for another principal: %s", doc)
 	}
 }

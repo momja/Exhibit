@@ -131,13 +131,17 @@ var (
 	// The stamp trails the token in an href/src attribute, where html/template
 	// escapes the separating '&' — so both spellings have to match.
 	stampPattern = regexp.MustCompile(`(?:\?|&amp;|&)r=\d+`)
-	// A render token is "<owner>.<exp>.<base64url mac>" (rendertoken), and all
-	// three parts move between renders.
-	tokenPattern = regexp.MustCompile(`t=\d+\.\d+\.[A-Za-z0-9_-]+`)
+	// A render token is "o=<owner>.e=<exp>.<base64url mac>" (rendertoken), and
+	// every part of it moves between renders. The whole parameter value is
+	// blanked rather than its fields matched one by one: the claim set grows
+	// (av-6axy), and a pattern widened claim by claim would quietly stop
+	// matching one day — leaving two live tokens in the compared strings and a
+	// test that passes or fails on the clock.
+	tokenPattern = regexp.MustCompile(`(\?|&amp;|&)t=[^"'\s&]+`)
 )
 
 // stripToken blanks the render token so two URLs compare on everything else.
-func stripToken(s string) string { return tokenPattern.ReplaceAllString(s, "t=TOKEN") }
+func stripToken(s string) string { return tokenPattern.ReplaceAllString(s, "${1}t=TOKEN") }
 
 // normalizePerRender blanks both values that are per-render by design — the
 // cache-busting stamp and the minted render token — so two renders of the same
