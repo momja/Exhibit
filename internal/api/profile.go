@@ -71,6 +71,15 @@ type profileAccount struct {
 	// self-hosters have every day and deletion is the once. Nothing here
 	// refuses on it; a limit read from the same number is av-10bw's.
 	Storage string
+	// CanSignOut is whether this request has a session to end. It reads
+	// sessionAuthed rather than SignedIn: the two agree today, and they
+	// answer different questions. SignedIn is "there is a `users` row behind
+	// this owner"; this is "the browser holds a session cookie, and
+	// /auth/logout is registered to revoke it", which is what the control
+	// actually spends. An instance with no login registers no /auth/logout at
+	// all (setupAuthRoutes returns early), so a button shown there would point
+	// at a 404.
+	CanSignOut bool
 	// DeleteBlocked is why this account cannot be deleted, or empty when it
 	// can. It is a reason rather than a boolean because a control that cannot
 	// act is useless without the sentence saying why — the same rule the
@@ -155,6 +164,7 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	acct.CanSignOut = sessionAuthed(ctx)
 	if !acct.SignedIn {
 		// No login configured, so there is no `users` row and nothing for
 		// deletion to act on. The section still renders — it is where the

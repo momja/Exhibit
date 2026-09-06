@@ -158,8 +158,58 @@ func TestProfileDeleteControlIsLiveAndSaysWhatItReaches(t *testing.T) {
 	// inert until profile.js reveals it, and the request itself is the
 	// script's to make — there is no form here and no link that a stray click,
 	// a prefetch or a crawler could follow into an irreversible act.
+	//
+	// Scoped to the danger card rather than the whole page. The property is
+	// about *this* section, and the page above it may well grow forms
+	// (nw-a1ef's sign-out is one). A page-wide assertion would then fail as
+	// though the deletion had acquired a form of its own.
 	assert.Contains(t, page, `id="delete-confirm" hidden`)
-	assert.NotContains(t, page, "<form")
+	at := strings.Index(page, "card-danger")
+	require.GreaterOrEqual(t, at, 0, "the danger card is what this assertion is about")
+	assert.NotContains(t, page[at:], "<form")
+}
+
+// nw-a1ef. The session has been revocable since av-30rj gave it a row to
+// delete, and until this ticket nothing in the UI pointed at /auth/logout, so
+// clearing a cookie by hand was the only way out of an account.
+func TestProfileSignsYouOut(t *testing.T) {
+	in := newProfileInstance(t, "sub-out", "out@example.test")
+	page := in.page(t)
+
+	assert.Contains(t, page, `action="/auth/logout"`)
+	// A POST, not the link the same route also answers. A GET is something a
+	// browser or an extension may fetch on its own, and a prefetched sign-out
+	// link signs the user out with no click anywhere.
+	assert.Contains(t, page, `method="post" action="/auth/logout"`)
+	assert.NotContains(t, page, `href="/auth/logout"`)
+	// Above the danger zone: reading about yourself, ending a session, then
+	// the one act with no undo.
+	assert.Less(t, strings.Index(page, "/auth/logout"), strings.Index(page, "card-danger"),
+		"sign out belongs above the deletion, not wedged under the red card")
+
+	// And it works: the row is gone, so the cookie is dead on the next
+	// request rather than at its TTL.
+	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	req.AddCookie(in.cookie)
+	w := httptest.NewRecorder()
+	in.ro.ServeHTTP(w, req)
+	require.Equal(t, http.StatusFound, w.Code)
+
+	req = httptest.NewRequest(http.MethodGet, "/profile", nil)
+	req.AddCookie(in.cookie)
+	w = httptest.NewRecorder()
+	in.ro.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusFound, w.Code, "the revoked session buys nothing")
+	assert.Contains(t, w.Header().Get("Location"), "/auth/login")
+}
+
+// An instance with no login registers no /auth/logout at all (setupAuthRoutes
+// returns early), so a sign-out control there would point at a 404. The page
+// omits it rather than offering a way out of an account that does not exist.
+func TestProfileOffersNoSignOutWithoutALogin(t *testing.T) {
+	page := getPage(t, newTestRouter(t), "/profile")
+	assert.NotContains(t, page, "/auth/logout")
+	assert.NotContains(t, page, "Sign out")
 }
 
 // A session is the whole authorization: no admin role, and no session means no
