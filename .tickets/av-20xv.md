@@ -62,3 +62,23 @@ should get its own field if public mode ever wants one.
 the server stores an access-control flag it does not honour, which is worse than
 having no flag. Reject `public: false` with a 400 naming the reason until the
 recipient check exists.
+
+**2026-09-06T01:21:09Z**
+
+SUPERSEDED (2026-09-05, same day): drop `public`, do not wire it up
+
+The note above concludes that a recipient column gives `public` a real meaning
+(true = anonymous link, false = directed) and says to build it alongside the
+recipient work. Working through the schema on av-7k7b shows that is wrong, in
+the direction of removal rather than more work.
+
+Once shares carries recipient_id, `public` is exactly `recipient_id IS NULL`.
+Two columns encoding one fact, with nothing preventing them from disagreeing —
+which is a worse version of the defect this ticket already describes.
+
+So: drop it in the same migration that adds recipient_id. Same reasoning av-8ipt
+applied to expires_at, and doing it while every row is still uninterpreted keeps
+it a schema change rather than a data migration.
+
+The interim fix stands until then: stop accepting a value the server does not
+honour.

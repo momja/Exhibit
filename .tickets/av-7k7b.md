@@ -139,3 +139,58 @@ The prerequisite this creates: a non-owner cannot reach the detail page at all
 today, because GetArtifact is owner-scoped and 404s. That is the "letting a
 non-owner reach a shared artifact" line in architecture.md §8's evolution table,
 and it moves onto v1's critical path.
+
+**2026-09-06T01:21:09Z**
+
+DECISIONS (2026-09-05): read widening, and what a share row becomes
+
+## Non-owner read is a parallel accessor, not a widened predicate
+
+ownsArtifact and the owner-scoped EXISTS subquery stay exactly as they are.
+Reaching a shared artifact goes through a separate, deny-by-default accessor
+naming only the routes a recipient may use.
+
+The rejected alternative was widening the existing predicate to "owner, or named
+on a live share". One change and every query picks it up, including DELETE, the
+body rewrite and share revocation — so a recipient would inherit the ability to
+destroy the artifact, and the failure would be silent. Deny-by-default is the
+shape agentSubResources and public mode's route allowlist both already use, for
+this reason.
+
+## A directed share is a GRANT, not a link
+
+The prior question, which the earlier "one row or many recipients?" framing hid.
+
+    link   the unguessable id is the secret; you send /s/abc123
+    grant  the row says "user 7 may read artifact X"; they open /artifacts/X
+
+Grant. The unguessable id exists because an anonymous link has nothing else to
+check at the door; a named grant has identity there, so the secret buys nothing
+and adds a way to lose access — a recipient who drops the bookmark is locked out
+of something they were granted. It also collapses the URL space: the recipient's
+link, their "shared with me" row and the owner's own link all point at
+/artifacts/:id.
+
+The anonymous link stays a row in the same table with no recipient, where the
+secret id is still the whole authorization, and /s/:shareID stays its door.
+
+So: one row per recipient, because a row IS a recipient.
+
+## Schema
+
+    ALTER TABLE shares ADD COLUMN recipient_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+    ALTER TABLE shares ADD COLUMN state_mode   TEXT NOT NULL DEFAULT 'own';
+    CREATE UNIQUE INDEX shares_artifact_recipient ON shares(artifact_id, recipient_id);
+
+recipient_id IS NULL is the anonymous link; set, it is a grant. The unique index
+makes "one grant per (artifact, person)" a schema invariant rather than a
+convention — the argument artifact_network_origins already makes for its primary
+key. Two grants with different state modes should be unrepresentable.
+
+The cascade means a recipient deleting their account takes their grants with it,
+and migration 014's users trigger already retires their state rows.
+
+This supersedes the av-20xv note from earlier today: shares.public should be
+DROPPED, not wired up. It becomes exactly `recipient_id IS NULL`, so keeping it
+is two columns encoding one fact with no way to stop them disagreeing. Same
+reasoning av-8ipt used on expires_at.
