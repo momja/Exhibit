@@ -66,6 +66,9 @@ function loadDetail({ readOnly, approvals = {} } = {}) {
   const page = loadPageScript(DETAIL_JS, {
     TOKEN: "",
     READ_ONLY: readOnly,
+    // A recipient's page is read-only AND state-writable (av-v991).
+    STATE_WRITABLE: true,
+    SHARED_STATE: false,
     ID,
     SOURCE_URL: "",
     OPEN_URL,
@@ -76,6 +79,7 @@ function loadDetail({ readOnly, approvals = {} } = {}) {
     microphoneApproved: false,
     ...approvals,
     apiFetch: api.apiFetch,
+    apiStateFetch: api.apiStateFetch,
     open: (url) => { opened.push(url); return null; }
   }, HIDDEN);
   return { ...page, api, opened };
@@ -237,11 +241,14 @@ test("a recipient's session issues no API call at all across every bridge", asyn
   await postFromFrame(externalLink());
   await postFromFrame(cameraRequest());
 
-  // The state bridge is deliberately absent from this battery: a recipient's
-  // storage write does reach apiFetch, and it is api.js that refuses it (last
-  // test). That is a real gap rather than a tidy one — see the state-bridge
-  // comment in detail.js — and hiding it inside this assertion would make the
-  // file claim more than it has.
+  // The state bridge is deliberately absent from this battery, and since
+  // av-v991 the reason is the opposite of what it was: a recipient's storage
+  // write is *meant* to go out. It travels through apiStateFetch, the one
+  // exception carved out of READ_ONLY, because the data an artifact saves while
+  // somebody uses it belongs to whoever typed it. What this battery is about is
+  // the five bridges that write the OWNER's per-artifact authority, and folding
+  // a legitimate state write into it would make the assertion say something
+  // false.
   assert.deepEqual(api.calls, [],
     "every route these bridges write to is owner-scoped and would answer 404; " +
     "sending them is how a recipient learns the tool is broken instead of that " +
@@ -270,33 +277,84 @@ test("the owner's session prompts and writes", async () => {
 
 // The second layer, and the one that holds whatever a page script does. api.js
 // is where READ_ONLY is spent, so a write from a recipient's page never leaves
-// the browser — including the state write-through, which is the one the
-// bridges above do still attempt. It is refused rather than 404'd: the state
-// routes are owner-scoped in SQL and av-lrae pins that a grant does not widen
-// them, so until av-v991 decides whose board a shared artifact is, a recipient
-// reads their inlined rows and writes none.
+// the browser — with exactly one exception, which av-v991 added and which is
+// asserted beside it below so the boundary is legible as a pair rather than as
+// a rule with a hole in it.
 test("api.js refuses a read-only visitor's writes before the network sees them", async () => {
   const sent = [];
   const { window } = loadPageScript([API_JS], {
     TOKEN: "",
     READ_ONLY: true,
+    STATE_WRITABLE: true,
     fetch: (path, opts) => { sent.push({ path, opts }); return Promise.resolve({ ok: true }); }
   });
-
-  const refused = await window.apiFetch("/api/artifacts/" + ID + "/state", {
-    method: "PUT", body: JSON.stringify({ key: "k", value: "v" })
-  });
-  assert.equal(refused.ok, false);
-  assert.equal(refused.status, 403);
 
   const patched = await window.apiFetch("/api/artifacts/" + ID, {
     method: "PATCH", body: JSON.stringify({ downloads_approved: true })
   });
+  assert.equal(patched.ok, false);
   assert.equal(patched.status, 403);
+
+  // Even the state route, through the ordinary entry point: what is permitted
+  // is the state WRITE PATH, not a route pattern apiFetch has learned to make
+  // an exception for.
+  const refused = await window.apiFetch("/api/artifacts/" + ID + "/state", {
+    method: "PUT", body: JSON.stringify({ key: "k", value: "v" })
+  });
+  assert.equal(refused.status, 403);
 
   assert.deepEqual(sent, [], "a refused write must not reach the network at all");
 
   // Reads still go, or the page could not render anything it fetches.
   await window.apiFetch("/api/artifacts/" + ID);
   assert.equal(sent.length, 1);
+});
+
+// The exception, and its own limit (av-v991). A recipient may save what they
+// type into a tool they were granted — the alternative is a tool that forgets
+// everything on every reload — and may still change nothing about the artifact.
+// An anonymous reader may do neither, which is what keeps this from being
+// "read-only, but not really".
+test("api.js lets a read-only visitor write state, and only state", async () => {
+  const sent = [];
+  const { window } = loadPageScript([API_JS], {
+    TOKEN: "",
+    READ_ONLY: true,
+    STATE_WRITABLE: true,
+    fetch: (path, opts) => { sent.push({ path, opts }); return Promise.resolve({ ok: true }); }
+  });
+
+  const wrote = await window.apiStateFetch("/api/artifacts/" + ID + "/state", {
+    method: "PUT", body: JSON.stringify({ key: "k", value: "v" })
+  });
+  assert.equal(wrote.ok, true);
+  assert.equal(sent.length, 1, "the recipient's own saved data is theirs to write");
+  assert.equal(sent[0].opts.headers["Content-Type"], "application/json",
+    "and it is sent through the same credentialed path as everything else");
+});
+
+test("an anonymous visitor writes no state either", async () => {
+  const sent = [];
+  const { window } = loadPageScript([API_JS], {
+    TOKEN: "",
+    READ_ONLY: true,
+    STATE_WRITABLE: false,
+    fetch: (path, opts) => { sent.push({ path, opts }); return Promise.resolve({ ok: true }); }
+  });
+
+  const refused = await window.apiStateFetch("/api/artifacts/" + ID + "/state", {
+    method: "PUT", body: JSON.stringify({ key: "k", value: "v" })
+  });
+  assert.equal(refused.status, 403);
+  assert.deepEqual(sent, [], "there is no principal to save anything for");
+
+  // A page that never declares the flag at all is the same answer, because the
+  // default has to be the one that withholds.
+  const undeclared = loadPageScript([API_JS], {
+    TOKEN: "", READ_ONLY: false,
+    fetch: () => Promise.resolve({ ok: true })
+  });
+  const alsoRefused = await undeclared.window.apiStateFetch("/api/artifacts/" + ID + "/state",
+    { method: "PUT", body: "{}" });
+  assert.equal(alsoRefused.status, 403);
 });

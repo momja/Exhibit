@@ -130,6 +130,25 @@
   </div>
 </div>
 {{end}}
+{{/* State changed under the artifact's feet (av-v991). The host refetches the
+     artifact's saved data and posts it into the frame, where the shim applies
+     it and fires real 'storage' events — so an artifact written to the platform
+     contract updates itself and this banner never appears. One that read
+     storage at startup and never listened again cannot, and this is its remedy:
+     a reload the visitor chooses.
+
+     In the page's chrome and never in the artifact's DOM, which the artifact
+     could forge into a button of its own. And never automatic: the render
+     document is no-store so a reload is a full re-fetch, sessionStorage is
+     in-memory by design and dies with the frame, and so does anything the
+     artifact holds in a variable — including a half-typed input. */}}
+<div id="state-changed-banner" class="banner banner-info" role="status" hidden>
+  <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
+  <div class="banner-body">
+    <span>This tool's saved data changed somewhere else. It is running with what it loaded.</span>
+  </div>
+  <button type="button" class="banner-action" id="state-changed-reload"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Reload the tool</button>
+</div>
 <div class="panels">
   {{/* No allow="clipboard-*" delegation: the frame's opaque origin matches no
        Permissions-Policy allowlist, so the delegation was a no-op (av-hll6).
@@ -228,6 +247,20 @@ const TOKEN = {{.Token}};
      template text for the boolean, matching the other bootstrap flags:
      html/template's JS escaper pads a {{value}} boolean with spaces. */ -}}
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
+{{/* STATE_WRITABLE is not READ_ONLY inverted, and the two sit together so that
+     is visible (av-v991). READ_ONLY is about the artifact — its body, its
+     allowlist, its capability approvals, all of them the owner's. This is about
+     the data the artifact saves while somebody uses it, which belongs to
+     whoever typed it: a granted recipient's page is read-only AND
+     state-writable, and an anonymous reader's page is neither. api.js spends it
+     in apiStateFetch, and the server refuses the same set again.
+
+     SHARED_STATE says the artifact puts every viewer on the owner's rows, so
+     somebody else may be writing them while this page is open. It turns on the
+     periodic resync; the visibilitychange resync runs for every artifact,
+     because a tab left open all afternoon is stale whoever wrote the rows. */ -}}
+const STATE_WRITABLE = {{if .StateWritable}}true{{else}}false{{end}};
+const SHARED_STATE = {{if .SharedState}}true{{else}}false{{end}};
 const ID = {{.ID}};
 const SOURCE_URL = {{.SourceURL}};
 {{/* The app-origin route that mints a render token and redirects to it, used

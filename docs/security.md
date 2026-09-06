@@ -862,7 +862,14 @@ are four families:
   *backing* behind an unchanged surface. `localStorage` is backed by the server
   → portable, cross-device state. `sessionStorage` is a **separate namespace
   over a separate, purely in-memory cache**, never persisted and never sent
-  anywhere — see §1.2.
+  anywhere — see §1.2. The adapter carries traffic in *both* directions
+  (av-v991): writes post to the host, and the host posts back the server's
+  current map, which the adapter applies to its cache in place and reports as
+  real `storage` events. The inbound half adds no authority — it is the
+  artifact's own state arriving over the channel its writes already leave by,
+  pinned to `APP_ORIGIN` and checked on both halves of the sender's identity —
+  and it is what makes two accounts on one `share_state_mode: shared` artifact
+  see each other's moves without reloading.
 - **Capability bridge** — re-grants a capability the sandbox *denied*
   (clipboard, downloads, external links) by proxying the op to the trusted host
   under first-use approval. Not persistence. This section.

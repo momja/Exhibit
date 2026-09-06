@@ -237,9 +237,20 @@ Responsibilities (per the main spec §5):
   forced, because an opaque origin has no storage key and the native getter throws a
   `SecurityError` on property access. Top-level the document has a real origin where
   native `sessionStorage` is correct and reload-surviving, so it is left in place.
+- The `localStorage` cache is also **written from the outside**: the host frame posts
+  the server's current map in, and the shim diffs it, applies the difference to that
+  same cache **in place** and dispatches one `storage` event per changed key. Two
+  details are load-bearing rather than incidental — `clear()` must delete the cache's
+  keys instead of rebinding its local (a rebind orphans the object the resync writes
+  into), and `StorageEvent` must be constructed **without** `storageArea`, which
+  WebIDL types as `Storage?` and which therefore throws a `TypeError` when handed a
+  plain object (measured in Chromium; listeners read `key`/`newValue` and essentially
+  never `storageArea`).
 - `IndexedDB` interception and the `window.storage`-style async API are **deferred**
   (build-order step 2 remaining). v1 ships `localStorage` and `sessionStorage` only.
 - Last-write-wins on conflicts (`localStorage`; nothing is stored for `sessionStorage`).
+  Liveness shrinks the window in which that loses a write; it does not merge, and the
+  shim is the wrong layer to try.
 
 Keep this as a single audited file — it's security-sensitive (it sits between untrusted
 artifact code and your API) and should be easy to read end to end.

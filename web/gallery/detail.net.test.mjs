@@ -35,6 +35,8 @@ function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
   const page = loadPageScript(DETAIL_JS, {
     TOKEN: "",
     READ_ONLY: readOnly,
+    STATE_WRITABLE: !readOnly,
+    SHARED_STATE: false,
     ID,
     SOURCE_URL: "",
     OPEN_URL,
@@ -43,7 +45,8 @@ function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
     linksApproved: false,
     cameraApproved: false,
     microphoneApproved: false,
-    apiFetch: api.apiFetch
+    apiFetch: api.apiFetch,
+    apiStateFetch: api.apiStateFetch
   }, {
     // What detail.tmpl renders: every capability dialog starts hidden.
     "net-modal": { hidden: true },

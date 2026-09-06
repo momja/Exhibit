@@ -92,12 +92,17 @@ type Artifact struct {
 	// widget has no identity of its own: it reads this artifact's state and
 	// renders under this artifact's CSP allowlist.
 	WidgetBlobID string `json:"widget_blob_id"`
-	// ShareStateMode says whose state rows a recipient writes when they use
-	// this artifact through a share (av-lrae): ShareStateOwn, the default and
-	// the only mode v1 has, gives each viewer their own. It sits on the
-	// artifact rather than on the grant because it is one question with one
-	// answer per artifact — per-grant would admit one recipient on their own
-	// rows while another writes the owner's.
+	// ShareStateMode says whose state rows a viewer reads and writes on this
+	// artifact (av-lrae, given meaning by av-v991): ShareStateOwn, the
+	// default, gives each viewer their own; ShareStateShared puts every viewer
+	// on the owner's rows — one board, which is what a two-player artifact
+	// means. It sits on the artifact rather than on the grant because it is
+	// one question with one answer per artifact: per-grant would admit one
+	// recipient on their own rows while another wrote the owner's, and "whose
+	// board am I on" would stop being answerable on the page.
+	//
+	// StatePrincipal is the only place this string is read. Nothing else
+	// should compare it, so there is one rule rather than one per caller.
 	//
 	// Read-only for now, and deliberately: PutArtifact lets the column's
 	// DEFAULT supply it and UpdateArtifact will not write it, so no caller can
@@ -120,11 +125,38 @@ type Collection struct {
 	Name    string `json:"name"`
 }
 
-// ShareStateOwn is Artifact.ShareStateMode's default and, in v1, its only
-// value: a recipient using a shared artifact reads and writes their own state
-// rows, never the owner's. It is named rather than spelled as a literal so the
-// schema default and the code agree in one place.
-const ShareStateOwn = "own"
+// ShareStateOwn is Artifact.ShareStateMode's default: a viewer using a shared
+// artifact reads and writes their own state rows, never the owner's — av-q0ub's
+// per-viewer isolation, unchanged. ShareStateShared is the opt-out: every
+// viewer of the artifact is on the owner's rows, so two people take turns on
+// one board and the owner sees the position the other left.
+//
+// Both are named rather than spelled as literals so the schema default and the
+// code agree in one place.
+const (
+	ShareStateOwn    = "own"
+	ShareStateShared = "shared"
+)
+
+// StatePrincipal answers, for one viewer of this artifact, whose state rows
+// they read and write — the user_id artifact_state is keyed by (av-q0ub).
+//
+// It is the single resolution point for share_state_mode, deliberately: a
+// handler that computed the answer for itself could compute it differently on
+// the read path and the write path, and the failure mode is one person editing
+// another person's board without either of them being told. Callers pass the
+// viewer and take what comes back; there is no target parameter to get wrong.
+//
+// Anything that is not ShareStateShared resolves to the viewer themselves,
+// which is what makes an unset mode — a zero-valued Artifact, a row written
+// before the column existed — fail towards isolation rather than towards the
+// owner's rows.
+func (a *Artifact) StatePrincipal(viewer ViewerID) ViewerID {
+	if a.ShareStateMode == ShareStateShared {
+		return ViewerID(a.OwnerID)
+	}
+	return viewer
+}
 
 // DefaultTagColor is applied to a tag when no color is supplied.
 const DefaultTagColor = "#6B7280"
@@ -402,6 +434,42 @@ type Store interface {
 	SetState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID, key, value string) error
 	DeleteState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID, key string) error
 	ClearState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID) error
+
+	// State, as a VIEWER (av-v991). The parallel path a granted non-owner
+	// reaches state through, standing to the four methods above exactly as
+	// GetArtifactReadableBy stands to GetArtifact: a second accessor
+	// authorized by the grant predicate, never a widening of the owner-scoped
+	// one. Everything else an owner-scoped query guards stays refused —
+	// TestAGrantDoesNotWidenAnyOwnerScopedMethod walks that, and names state
+	// as the one exception it was decided to make.
+	//
+	// It is the exception because the epic's central promise is that a
+	// recipient may *use* a shared artifact, and a tool whose saved data
+	// evaporates on reload is not usable. Reading it was already theirs
+	// (av-6axy inlines the viewer's rows); this is the write half.
+	//
+	// **One principal, not two.** The owner-scoped four take (ownerID
+	// authorizes, userID selects); these take the viewer alone, because a
+	// viewer writing on somebody else's artifact can only ever write on their
+	// own behalf. Collapsing the parameters makes that structural instead of a
+	// rule every caller has to remember — there is no second principal to pass
+	// wrongly, and no way to spell "write as somebody else".
+	//
+	// Which rows they touch is resolved inside, from the artifact's
+	// share_state_mode (Artifact.StatePrincipal): their own under
+	// ShareStateOwn, the owner's under ShareStateShared. The caller names no
+	// target, so no handler can pick the wrong one.
+	//
+	// An artifact this viewer may not reach reads as empty and refuses a write
+	// with ErrNotFound — the same shapes the owner-scoped four use, for the
+	// same reason (a 403 would confirm the row exists). The two deletes stay
+	// idempotent through it: rows the caller cannot reach are not rows they
+	// asked to have removed, so an unreachable artifact is a silent no-op
+	// rather than an error.
+	GetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) (map[string]string, error)
+	SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string) error
+	DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string) error
+	ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) error
 
 	// Agent (Exh-yvhp). SetAgentKey upserts the owner's single configured
 	// provider key; GetAgentKey returns nil when none is set.

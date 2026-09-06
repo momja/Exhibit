@@ -18,6 +18,12 @@
  *     provider. The static token is the only credential such an instance has,
  *     and its page visitor is the operator who holds it anyway.
  *
+ * A fourth value, STATE_WRITABLE, rides beside them and is not a fourth case:
+ * it says whether this visitor may write the artifact's own saved data, which
+ * a granted recipient may do on an artifact they may not otherwise change
+ * (av-v991). apiStateFetch below is where it is spent, and it is the only
+ * refusal in this file that is not READ_ONLY's.
+ *
  * Page scripts therefore call apiFetch, never fetch-plus-a-hand-built header.
  * That is the point: the three cases are distinguished once, here, and a call
  * site cannot get them wrong individually. A new `'Authorization': 'Bearer ' +
@@ -37,6 +43,14 @@
     return typeof READ_ONLY === 'boolean' ? READ_ONLY : false;
   }
 
+  // Whether this visitor may write the artifact's own saved state (av-v991).
+  // Decided server-side alongside the two above, and false unless the page says
+  // otherwise — a page that never declares it writes no state, which is the
+  // fail-closed reading.
+  function stateWritable() {
+    return typeof STATE_WRITABLE === 'boolean' ? STATE_WRITABLE : false;
+  }
+
   // apiHeaders builds the headers for one API call: the caller's, plus the
   // bearer token when this page was given one.
   function apiHeaders(extra) {
@@ -49,9 +63,9 @@
   // A refused write answers in the shape the server would have used, so the
   // `if (!r.ok)` branch every caller already has reports it in that page's own
   // words. Degrading to read-only must not look like a network failure.
-  function refused() {
+  function refused(message) {
     return new Response(
-      JSON.stringify({error: 'This library is read-only — sign in to make changes.'}),
+      JSON.stringify({error: message || 'This library is read-only — sign in to make changes.'}),
       {status: 403, statusText: 'Forbidden', headers: {'Content-Type': 'application/json'}}
     );
   }
@@ -60,12 +74,12 @@
     return method !== 'GET' && method !== 'HEAD';
   }
 
-  // apiFetch is fetch against this app's API, credentialed for this visitor.
-  // A JSON body gets its Content-Type here so callers stop repeating it.
-  window.apiFetch = function(path, opts) {
+  // send performs one credentialed call. It is deliberately the only place a
+  // request is actually built: the two entry points below differ in what they
+  // REFUSE, never in what they send, so a second refusal rule can never come
+  // with a second credential rule attached.
+  function send(path, opts) {
     opts = Object.assign({}, opts || {});
-    var method = (opts.method || 'GET').toUpperCase();
-    if (readOnly() && isWrite(method)) return Promise.resolve(refused());
     opts.headers = apiHeaders(opts.headers);
     var hasContentType = Object.keys(opts.headers).some(function(k) {
       return k.toLowerCase() === 'content-type';
@@ -74,6 +88,42 @@
       opts.headers['Content-Type'] = 'application/json';
     }
     return fetch(path, opts);
+  }
+
+  // apiFetch is fetch against this app's API, credentialed for this visitor.
+  // A JSON body gets its Content-Type here so callers stop repeating it.
+  window.apiFetch = function(path, opts) {
+    var method = ((opts && opts.method) || 'GET').toUpperCase();
+    if (readOnly() && isWrite(method)) return Promise.resolve(refused());
+    return send(path, opts);
+  };
+
+  // apiStateFetch is the artifact-state write path, and the only place a
+  // READ_ONLY visitor's write is allowed out (av-v991).
+  //
+  // The two flags answer different questions and this is where that shows.
+  // READ_ONLY says "this artifact is not yours to change" — its body, its
+  // allowlist, its capability approvals. The data an artifact saves while
+  // somebody uses it is not the artifact; it belongs to whoever typed it, and
+  // refusing it here would leave a granted tool forgetting everything on every
+  // reload, which is not a shared tool at all. So a recipient's page is
+  // READ_ONLY and STATE_WRITABLE at once, and an anonymous reader is neither.
+  //
+  // The exception is gated on a server-supplied flag rather than on a route
+  // pattern this file would have to recognise, and it is spent by exactly one
+  // caller: the host frame's storage bridge. The server refuses the same set
+  // again — the state routes are authenticated, and the store resolves the
+  // artifact through the grant predicate — so nothing here is what holds the
+  // line; it stops the page sending a write that would only be refused.
+  //
+  // Reads do not come through here. A GET is not a write, so the resync uses
+  // apiFetch like anything else.
+  window.apiStateFetch = function(path, opts) {
+    var method = ((opts && opts.method) || 'GET').toUpperCase();
+    if (isWrite(method) && !stateWritable()) {
+      return Promise.resolve(refused('This artifact cannot save data for you.'));
+    }
+    return send(path, opts);
   };
 
   // apiEventSource is the one API call apiFetch cannot make: EventSource sets

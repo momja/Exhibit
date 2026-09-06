@@ -612,6 +612,13 @@ type detailPageData struct {
 	OpenURL    string
 	SourceURL  string
 	Capability capabilityView
+	// SharedState is share_state_mode == 'shared': every viewer of this
+	// artifact is on the owner's rows, so somebody else may be writing them
+	// while this page is open. It drives the page's state resync (av-v991) and
+	// nothing else — the frame's document already resolved whose rows to
+	// inline, server-side, and this is only the page learning that it is worth
+	// asking again.
+	SharedState bool
 	pageCredentials
 }
 
@@ -637,6 +644,9 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials)
 		FrameURL:  urls.artifact(a.ID),
 		OpenURL:   openURL(a.ID),
 		SourceURL: a.SourceURL,
+		// Read through the same constant the store resolves the mode with, so
+		// the page and the render agree about what 'shared' is spelled as.
+		SharedState: a.ShareStateMode == store.ShareStateShared,
 		Capability: capabilityView{
 			ArtifactID:         a.ID,
 			NetworkAllowlist:   allowlist,

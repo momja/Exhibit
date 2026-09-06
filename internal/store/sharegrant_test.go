@@ -200,6 +200,19 @@ func TestAnAnonymousLinkGrantsNobodyInParticular(t *testing.T) {
 //
 // It reuses ownerCases() deliberately: a method added there is covered here on
 // the day it is added, which is the only way this stays true.
+//
+// **State is the one deliberate exception, and it was decided rather than
+// leaked** (av-v991). A recipient may write the state of an artifact they were
+// granted — a tool whose saved data evaporates on reload is not a tool they can
+// use, which is the epic's central promise. That exception does not live here:
+// the four methods this test walks are still owner-scoped and still deny a
+// grantee, exactly as asserted below. It lives in the four ...AsViewer methods
+// beside them, which take one principal and resolve whose rows they touch from
+// the artifact's share_state_mode — see TestAGranteeWritesStateAndOnlyState
+// and TestSharedModePutsEveryViewerOnTheOwnersBoard, and read them together
+// with this one. Whatever else moves, the closing assertions here must keep
+// holding: a grantee may not reach the artifact itself, and under the default
+// mode may not touch the owner's state rows either.
 func TestAGrantDoesNotWidenAnyOwnerScopedMethod(t *testing.T) {
 	for _, tc := range ownerCases() {
 		t.Run(tc.name, func(t *testing.T) {

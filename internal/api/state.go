@@ -9,16 +9,18 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-// statePrincipals returns the two principals every state route needs: the
-// owner authorizing the reach into this artifact, and the viewer whose rows are
-// being addressed (av-q0ub). On the API path the session answers both questions
-// with the same id — a caller reaches only its own library, and reads and
-// writes only its own state — but they remain two questions. They diverge on
-// the render path (the token's principal against the artifact's owner) and will
-// diverge here the moment a non-owner may open a shared artifact (av-7k7b).
-func statePrincipals(r *http.Request) (ownerID store.OwnerID, userID store.ViewerID) {
-	id := ownerIDFromCtx(r.Context())
-	return store.OwnerID(id), store.ViewerID(id)
+// stateViewer is the one principal every state route needs: whoever is looking
+// (av-v991).
+//
+// It used to be two — an owner authorizing the reach and a viewer selecting the
+// rows (av-q0ub) — and on this path that was always the same id twice, because
+// only an owner could reach an artifact at all. A grant ended that, and the
+// answer is not to resolve a second principal here but to stop having one: the
+// store's ...AsViewer methods take the viewer alone and resolve whose rows that
+// means from the artifact's share_state_mode. A caller writing on somebody
+// else's behalf is then not something these handlers can express.
+func stateViewer(r *http.Request) store.ViewerID {
+	return store.ViewerID(ownerIDFromCtx(r.Context()))
 }
 
 func (ro *Router) getState(w http.ResponseWriter, r *http.Request) {
@@ -28,8 +30,7 @@ func (ro *Router) getState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	owner, viewer := statePrincipals(r)
-	state, err := ro.cfg.Store.GetState(r.Context(), owner, artifactID, viewer)
+	state, err := ro.cfg.Store.GetStateAsViewer(r.Context(), stateViewer(r), artifactID)
 	if err != nil {
 		serverError(w, r, "get state", err)
 		return
@@ -67,8 +68,7 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	owner, viewer := statePrincipals(r)
-	if err := ro.cfg.Store.SetState(r.Context(), owner, artifactID, viewer, key, req.Value); err != nil {
+	if err := ro.cfg.Store.SetStateAsViewer(r.Context(), stateViewer(r), artifactID, key, req.Value); err != nil {
 		writeArtifactError(w, r, "set state", err)
 		return
 	}
@@ -115,7 +115,7 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	owner, viewer := statePrincipals(r)
+	viewer := stateViewer(r)
 
 	// Absent key: erase everything *this viewer* holds on the artifact.
 	// Destructive and irreversible — there is no version history for state —
@@ -123,7 +123,7 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	// origin decisions, capability approvals all survive), and no other
 	// viewer's rows.
 	if !query.Has("key") {
-		if err := ro.cfg.Store.ClearState(r.Context(), owner, artifactID, viewer); err != nil {
+		if err := ro.cfg.Store.ClearStateAsViewer(r.Context(), viewer, artifactID); err != nil {
 			serverError(w, r, "clear state", err)
 			return
 		}
@@ -133,7 +133,7 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	key := query.Get("key")
-	if err := ro.cfg.Store.DeleteState(r.Context(), owner, artifactID, viewer, key); err != nil {
+	if err := ro.cfg.Store.DeleteStateAsViewer(r.Context(), viewer, artifactID, key); err != nil {
 		serverError(w, r, "delete state", err)
 		return
 	}
@@ -143,16 +143,21 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// artifactExists reports whether the artifact is there *in the requesting
-// owner's library*, having already written the 404/500 response when it is
-// not. State rows outlive nothing: without this check a delete against an
-// unknown id would silently succeed, since removing rows that don't exist is
-// a no-op. Another owner's id fails it exactly like an unknown one — the
-// store makes the two indistinguishable, and the state queries carry the
-// owner predicate themselves, so this stays a courtesy 404 rather than the
-// thing enforcing the boundary (av-ep8k).
+// artifactExists reports whether this viewer can reach the artifact at all,
+// having already written the 404/500 response when they cannot. State rows
+// outlive nothing: without this check a delete against an unknown id would
+// silently succeed, since removing rows that don't exist is a no-op.
+//
+// It reads through GetArtifactReadableBy, the same deny-by-default accessor the
+// detail page uses (av-lrae), because a granted recipient reaching their own
+// state is the point of av-v991 and an owner-scoped lookup here would 404 them
+// before the store was asked. It stays a courtesy 404 rather than the thing
+// enforcing the boundary: the ...AsViewer methods carry the identical predicate
+// themselves, so removing this would change what the caller is *told*, never
+// what they can touch. An artifact neither owned nor granted fails it exactly
+// like an unknown one — the store makes the two indistinguishable (av-ep8k).
 func (ro *Router) artifactExists(w http.ResponseWriter, r *http.Request, artifactID, op string) bool {
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), artifactID)
+	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), stateViewer(r), artifactID)
 	if err != nil {
 		serverError(w, r, op+" artifact lookup", err)
 		return false

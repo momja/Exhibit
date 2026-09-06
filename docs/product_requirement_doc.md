@@ -305,11 +305,31 @@ separately:
    already authenticated — performs the write-through `PUT /api/artifacts/:id/state`. The
    sandbox never touches the network, so there is no CORS surface and the state endpoint
    stays authenticated (the single write path, §4.1, is preserved: the host calls the API).
-3. Conflict policy: last-write-wins (adequate for this use case).
+3. **Resync — the same bridge, backwards.** An inlined cache is a snapshot, and a page
+   left open goes stale. So the host refetches the state on the app origin with its own
+   credential and posts the map *into* the frame; the shim diffs it against the live
+   cache, applies adds, changes and deletes in place, and dispatches one `storage` event
+   per changed key. That is the platform's own "another tab wrote this" contract, so an
+   artifact written against the standard updates itself with no new API and no
+   cooperation from its author. It asks when the tab becomes visible again — the
+   cross-device case, and the moment somebody actually cares — and, for a shared-state
+   artifact (§7), every few seconds while it is being watched. An artifact that
+   ignores `storage` cannot be re-rendered by the shim, so it is offered a reload in the
+   app's own chrome; never in the artifact's DOM, which the artifact could forge, and
+   never silently, because a reload discards `sessionStorage` and everything the
+   artifact holds in a variable, including a half-typed input.
+4. Conflict policy: last-write-wins (adequate for this use case).
 
 Result: iPhone writes land on the server; Mac reads them back — the second device's render
 inlines the same state. Cross-device state with no skill, no special artifact format, and
 no cooperation from the artifact's author.
+
+**The ceiling, stated so no surface exceeds it.** Merge is *not* solved and cannot be at
+this layer: a list kept as one JSON blob under one key loses an item whenever two people
+add at once, however fast the channel — CRDTs are the real answer and are far outside this
+product. What resync buys is that the window shrinks from "until somebody reloads" to
+seconds, which is enough for two people taking coarse turns. Nothing in the UI may imply
+collaborative editing.
 
 ### 5.4 Boundary
 
@@ -463,6 +483,20 @@ Sharing is a first-class resource, not an export-to-file action.
   because the only way to change it is to ask the owner. A shared artifact is
   frozen at whatever its owner approved, and the failure worth designing
   against is that being true *silently*.
+- **A grantee writes the artifact's state, and `artifacts.share_state_mode`
+  says whose rows that is** (av-v991). `own`, the default, gives each viewer
+  their own — §5's per-viewer isolation, so somebody invited to use your tool
+  gets their own saved config. `shared` puts every viewer on the owner's rows:
+  one board, which is what a two-player artifact means, and what makes the
+  owner's own card show the position the other player left. One answer per
+  artifact rather than per grant, because "whose board am I on" has to be
+  answerable on the page, and one resolution point in the code, so the render
+  and the write can never disagree about it.
+
+  This is the one thing a grant widens beyond reading, and it is deliberate: a
+  tool whose saved data evaporates on every reload is not one a recipient can
+  use. It widens nothing else — the body, the title, the allowlist and the
+  capability approvals stay refused exactly as they are for a stranger.
 - **A share lives until it is deleted.** There is no expiring link: revocation is
   deleting the row, and that is the only lifetime the product promises. An expiry
   column existed unused from the first migration and was removed (av-8ipt) rather

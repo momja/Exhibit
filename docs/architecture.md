@@ -129,9 +129,15 @@ The only way data changes. Route groups:
   text. Erasing all state touches state alone: body, origin decisions, and capability
   approvals survive. All of them are authenticated like every other route here — the
   inspector adds no second write path. Every one is scoped to the session's own
-  rows (av-q0ub): the session supplies both principals §3.3 describes, so a read
-  never returns the union of every viewer's state and "erase all" means *mine*,
-  not the artifact's.
+  rows (av-q0ub): a read never returns the union of every viewer's state and
+  "erase all" means *mine*, not the artifact's. They are the one route family a
+  granted non-owner may **write** (av-v991) — a tool whose saved data
+  evaporates on reload is not one a recipient can use — and the exception is
+  exactly that wide: the handlers resolve one principal, the viewer, and the
+  store's `...AsViewer` methods decide whose rows that means from the
+  artifact's `share_state_mode` (§3.3). No handler names a target, and
+  `PATCH`, `DELETE`, the origin routes and the export refuse a grantee exactly
+  as before.
 - `GET /api/artifacts/:id/export` — the artifact as **one self-contained file**
   (av-vnkt), with every out-of-line asset folded back in as a `data:` URI. It is
   the enforcement point for the invariant those assets created: *the URL form is
@@ -250,7 +256,13 @@ executable document with the correct security envelope:
 
 - Looks up the artifact, pulls its body from the blob store, its origin decisions
   (§3.3 — the `allow` rows build the CSP, the `block` rows are inlined to mute
-  the runtime prompt, av-kmwj), and its current state.
+  the runtime prompt, av-kmwj), and its current state. *Whose* state is the
+  artifact's answer rather than this handler's (av-v991): the token's viewer
+  claim goes through `Artifact.StatePrincipal`, so a `share_state_mode` of
+  `shared` inlines the owner's board for everybody looking at it and `own`
+  inlines each viewer's own. It is the same function the write path resolves
+  through, which is what stops a shared artifact being read off one set of rows
+  and written to another.
 - Generates the per-artifact CSP (`connect-src`/`script-src`/`worker-src`/`style-src`/
   `img-src`/`font-src`/`media-src` from the allowlist) and sets it as a response header
   on the document. `connect-src` is the allowlist alone — the storage shim needs no
@@ -316,6 +328,23 @@ executable document with the correct security envelope:
   **compatibility shim**, the **out-of-line asset manifest**, and the **network
   permission reporter** — then the artifact body. (Umbrella/family taxonomy:
   `security.md` §4.)
+- The storage shim also **receives** (av-v991). The inlined cache is a snapshot
+  of the instant the document was served, and on a `shared` artifact somebody
+  else is writing the same rows; the host frame refetches and posts the current
+  map in, which the shim applies to that cache in place and reports as real
+  `storage` events, one per changed key. It is `persistState`'s channel
+  reversed — frame → host for writes, host → frame for updates — so there is no
+  endpoint on this origin, no `connect-src` source and no write credential in
+  the document, and the render surface stays read-only. Both halves of the
+  sender's identity are checked, because unlike the frame's own messages the
+  host has a real origin to check. Two properties fall out and are worth
+  keeping: `clear()` deletes the cache's keys rather than rebinding the local,
+  or a post-clear resync would write into an object nothing reads; and
+  `StorageEvent` is constructed **without** `storageArea`, which WebIDL types
+  as `Storage?` and which therefore throws when handed the shim's plain object.
+  What this buys is stated narrowly on purpose — the window in which two
+  writes collide shrinks from "until somebody reloads" to seconds. It does not
+  merge, and cannot at this layer.
 - The network permission reporter (av-kmwj) is a `securitypolicyviolation`
   listener that posts CSP-blocked origins to the host frame, which prompts in
   app chrome. It reports only violations the prompt could actually fix: not a
@@ -535,14 +564,27 @@ like an artifact that does not exist — 404, never 403, for the reason above.
 - **Metadata, collections, tags, shares, state** → SQLite (one file, WAL mode).
 - **Artifact state** → `artifact_state`, keyed by `(artifact_id, user_id, key)`
   (av-q0ub). `user_id` is the **viewer**, deliberately not named `owner_id`,
-  because on a shared artifact they are different people. So the four state
-  methods take *two* principals and they answer different questions:
+  because on a shared artifact they are different people. So the four
+  owner-scoped state methods take *two* principals answering two questions:
   `ownerID` authorizes reaching the artifact (the same owner-scoped `EXISTS`
   predicate every other artifact-child method uses), and `userID` selects whose
-  rows. They hold the same value at every call site today and will not once a
-  non-owner may open a shared artifact (av-7k7b), which is why they are two
-  parameters — with `artifactID` between them, so transposing the two is a
-  compile error rather than a cross-tenant read. Nothing is keyed by device:
+  rows — with `artifactID` between them, so transposing the two is a compile
+  error rather than a cross-tenant read.
+
+  **A viewer reaches state through four parallel methods instead** (av-v991),
+  standing to those exactly as `GetArtifactReadableBy` stands to `GetArtifact`:
+  authorized by `readableByViewer`, never by a widened owner predicate. They
+  take **one** principal, because a viewer writing on somebody else's artifact
+  can only ever write on their own behalf — collapsing the parameters makes
+  that structural rather than a rule each caller has to keep. Whose rows they
+  touch is resolved inside, by `Artifact.StatePrincipal`, the single place
+  `share_state_mode` is read: `own` (the default) is the viewer's own rows,
+  `shared` is the owner's — one board, which is what a two-player artifact
+  means. Every production caller now goes through them, the render surface
+  included, so the read path and the write path cannot resolve the mode
+  differently. State is the **one deliberate exception** to "a grant widens
+  nothing", and `TestAGrantDoesNotWidenAnyOwnerScopedMethod` says so in those
+  words. Nothing is keyed by device:
   one user on any number of devices is one set of rows, which is the entire
   point of storing state server-side (§6). Two cascades retire a row — with its
   artifact (FK), and with its viewer (a trigger on `users` DELETE; a real FK
@@ -1646,6 +1688,36 @@ Two properties fall out of the sandbox's opaque origin: reads are **inlined at r
 **bridged through the host frame** (the iframe can't call the API cross-origin, so the
 authenticated host does it — no CORS, state endpoint stays authed).
 
+**Resync runs that same bridge backwards** (av-v991). An inlined cache is a
+snapshot, and a page left open goes stale: on a `shared` artifact because
+somebody else is writing those rows, and on any artifact because the same
+person may be writing them from another device. So the host refetches
+`GET /api/artifacts/:id/state` on the app origin, with its own credential, and
+posts the map into the frame; the shim diffs it against the live cache, applies
+adds, changes and deletes **in place**, and dispatches one `storage` event per
+changed key — the platform's own "another tab wrote this" contract, so an
+artifact written against the standard gets multi-player with no new API and no
+cooperation from its author. It asks on `visibilitychange` for every artifact,
+which is the cross-device case and costs one request when somebody returns to
+the tab, and additionally on a several-second interval for a `shared` artifact,
+which is the only place a third party is writing while you watch. A visitor
+with no principal never asks: their frame was rendered with no state inlined.
+
+An artifact that ignores `storage` cannot be re-rendered by the shim, so the
+frame reports back whether anything listened and the host offers a reload — in
+**app chrome**, never in the artifact's DOM, which the artifact could forge.
+Never automatically: the render document is `no-store`, so a reload is a full
+re-fetch; `sessionStorage` is in-memory by design and dies with the frame; and
+so does everything the artifact holds in a variable, including a half-typed
+input.
+
+The ceiling is deliberate and the UI must not exceed it. **Merge is not solved
+and cannot be at this layer**: a list kept as one JSON blob under one key still
+loses an item when two people add at once, because last-write-wins is what the
+store does. Liveness shrinks the window from "until somebody reloads" to
+seconds, which is enough for two people taking coarse turns and is not
+collaborative editing.
+
 Downloads ride the same host-frame bridge. The sandbox deliberately omits
 `allow-downloads`, so nothing in the frame downloads directly; the download bridge intercepts
 the common export vectors (`blob:`/`data:` anchors — recovering `blob:` payloads
@@ -1738,7 +1810,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap); a non-owner reaches a shared artifact through the grant schema and the viewer-scoped read accessor (av-lrae), the token's two principals (av-6axy) and the viewer page that calls them (av-awr4, §3.5) — what remains is the owner's surface for creating grants (av-6xjd), whether a shared artifact is one board or several (av-v991), and a person managing their own account (av-g2dx) |
+| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap); a non-owner reaches a shared artifact through the grant schema and the viewer-scoped read accessor (av-lrae), the token's two principals (av-6axy) and the viewer page that calls them (av-awr4, §3.5) — a shared artifact is one board or several by its `share_state_mode`, which the render and the viewer-scoped state write both resolve through one function (av-v991) — what remains is the owner's surface for creating grants and setting that mode (av-6xjd), and a person managing their own account (av-g2dx) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | **already done** (av-52ll) — `BLOB_S3_BUCKET` selects `S3Store`; unset keeps the filesystem |

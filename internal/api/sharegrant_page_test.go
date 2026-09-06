@@ -264,7 +264,6 @@ func TestAGrantReachesTheViewerPageAndNoOtherAppRoute(t *testing.T) {
 		{http.MethodDelete, "/api/artifacts/" + in.granted, ""},
 		{http.MethodPost, "/api/artifacts/" + in.granted + "/origins",
 			`{"origin":"https://api.example.com","decision":"allow","source":"runtime"}`},
-		{http.MethodPut, "/api/artifacts/" + in.granted + "/state", `{"key":"k","value":"v"}`},
 		{http.MethodGet, "/api/artifacts/" + in.granted + "/export", ""},
 	} {
 		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
@@ -277,4 +276,79 @@ func TestAGrantReachesTheViewerPageAndNoOtherAppRoute(t *testing.T) {
 				"issued; a 403 would confirm the row exists. Body: %s",
 			tc.method, tc.path, w.Body.String())
 	}
+}
+
+// The one route deliberately missing from the list above (av-v991), and the
+// exception is stated here rather than left as a gap in a deny list.
+//
+// A grantee may write the artifact's state. Everything else that route family's
+// neighbours refuse stays refused — the body, the title, the allowlist, the
+// capability approvals are all the owner's — but the data a tool saves while
+// somebody uses it belongs to whoever typed it, and refusing it would leave a
+// granted tool forgetting everything on every reload. That is not a narrower
+// version of sharing; it is not sharing at all, which is why this is an
+// exception worth having.
+func TestAGranteeWritesStateThroughTheAPIAndStillReachesNothingElse(t *testing.T) {
+	in := newGrantedInstance(t)
+	ctx := context.Background()
+
+	req := httptest.NewRequest(http.MethodPut, "/api/artifacts/"+in.granted+"/state",
+		strings.NewReader(`{"key":"note","value":"the recipient's own"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(in.cookieTwo)
+	w := httptest.NewRecorder()
+	in.ro.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNoContent, w.Code,
+		"a recipient must be able to save what they type into a tool they were granted")
+
+	// Under the default mode it landed on THEIR rows. The owner's are untouched,
+	// which is what keeps the tripwire's closing assertion true.
+	theirs, err := in.ro.cfg.Store.GetState(ctx,
+		store.OwnerID(in.ownerOne), in.granted, store.ViewerID(in.ownerTwo))
+	require.NoError(t, err)
+	assert.Equal(t, "the recipient's own", theirs["note"])
+
+	owners, err := in.ro.cfg.Store.GetState(ctx,
+		store.OwnerID(in.ownerOne), in.granted, store.ViewerID(in.ownerOne))
+	require.NoError(t, err)
+	assert.Equal(t, ownerOneState, owners["note"],
+		"'own' is av-q0ub's per-viewer isolation: two people, two sets of rows under "+
+			"the same key, and neither write reaches the other")
+
+	// And a stranger is where they always were. The write path is authorized by
+	// the grant, not by holding a session.
+	stranger := newStrangerSession(t, in)
+	req = httptest.NewRequest(http.MethodPut, "/api/artifacts/"+in.granted+"/state",
+		strings.NewReader(`{"key":"note","value":"planted"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(stranger)
+	w = httptest.NewRecorder()
+	in.ro.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code,
+		"an account with no grant reads exactly like an artifact that does not exist")
+}
+
+// The recipient's erase-all means MINE (av-q0ub), and this is that carried onto
+// the route a grantee can now reach. A recipient tidying up after themselves
+// must not wipe the library owner's saved data as a side effect.
+func TestAGranteesEraseAllLeavesTheOwnersStateAlone(t *testing.T) {
+	in := newGrantedInstance(t)
+	ctx := context.Background()
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/artifacts/"+in.granted+"/state", nil)
+	req.AddCookie(in.cookieTwo)
+	w := httptest.NewRecorder()
+	in.ro.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNoContent, w.Code)
+
+	theirs, err := in.ro.cfg.Store.GetState(ctx,
+		store.OwnerID(in.ownerOne), in.granted, store.ViewerID(in.ownerTwo))
+	require.NoError(t, err)
+	assert.Empty(t, theirs, "the recipient's own rows are theirs to erase")
+
+	owners, err := in.ro.cfg.Store.GetState(ctx,
+		store.OwnerID(in.ownerOne), in.granted, store.ViewerID(in.ownerOne))
+	require.NoError(t, err)
+	assert.Equal(t, ownerOneState, owners["note"],
+		"and the owner's survive an erase they never asked for")
 }

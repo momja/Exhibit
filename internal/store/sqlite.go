@@ -1120,6 +1120,95 @@ func (s *SQLiteStore) ClearState(ctx context.Context, ownerID OwnerID, artifactI
 	return err
 }
 
+// The four state methods a VIEWER reaches (av-v991) — see the Store interface
+// for why they take one principal and resolve the target themselves.
+//
+// Each is authorization plus resolution, then a delegation to the owner-scoped
+// method above. Delegating rather than reimplementing is the point: there is
+// still exactly one statement per operation, so the owner's path and a
+// grantee's cannot drift into writing different rows. The owner predicate the
+// delegate carries is satisfied by construction, because stateTarget read that
+// owner off the very artifact row it authorized against.
+
+// stateTarget resolves the artifact a viewer is addressing state on, and
+// answers the two things the methods below need from it: the owner whose
+// predicate the delegate will check, and whose rows this viewer is on.
+//
+// Authorization is readableByViewer, deliberately not ownedArtifact — that is
+// the whole of what makes these a parallel path rather than a widening. An
+// artifact the viewer neither owns nor holds a grant on is ErrNotFound, which
+// is what a nonexistent id answers too.
+func (s *SQLiteStore) stateTarget(ctx context.Context, viewerID ViewerID, artifactID string) (OwnerID, ViewerID, error) {
+	var a Artifact
+	err := s.db.QueryRowContext(ctx,
+		"SELECT artifacts.owner_id, artifacts.share_state_mode FROM artifacts WHERE artifacts.id=? AND "+readableByViewer,
+		artifactID, int64(viewerID), int64(viewerID)).Scan(&a.OwnerID, &a.ShareStateMode)
+	if err == sql.ErrNoRows {
+		return 0, 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, 0, err
+	}
+	return OwnerID(a.OwnerID), a.StatePrincipal(viewerID), nil
+}
+
+// GetStateAsViewer reads the rows this viewer is on. An artifact they cannot
+// reach reads empty rather than erroring, matching GetState's answer for
+// another owner's id: absence and inaccessibility must look the same.
+func (s *SQLiteStore) GetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) (map[string]string, error) {
+	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
+	if errors.Is(err, ErrNotFound) {
+		return map[string]string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.GetState(ctx, owner, artifactID, principal)
+}
+
+// SetStateAsViewer is the write av-awr4 found missing. Without it 'own' mode —
+// the default — leaves a recipient reading state they can never change, so a
+// shared tool forgets everything the moment its frame reloads.
+func (s *SQLiteStore) SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string) error {
+	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
+	if err != nil {
+		return err
+	}
+	return s.SetState(ctx, owner, artifactID, principal, key, value)
+}
+
+// DeleteStateAsViewer removes one key from the rows this viewer is on. An
+// unreachable artifact holds nothing of theirs, so it is a silent no-op — the
+// idempotent contract the owner-scoped deletes already keep, extended to the
+// wider "cannot reach it" case for the same reason: the caller asked for a key
+// not to exist, and there it does not.
+func (s *SQLiteStore) DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string) error {
+	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return s.DeleteState(ctx, owner, artifactID, principal, key)
+}
+
+// ClearStateAsViewer erases everything this viewer holds on the artifact —
+// *theirs*, which under ShareStateOwn is their own rows and under
+// ShareStateShared is the board they are playing on. Either way it is the
+// erase-all av-q0ub defined: one viewer's state, never the artifact's, and
+// never another viewer's.
+func (s *SQLiteStore) ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) error {
+	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return s.ClearState(ctx, owner, artifactID, principal)
+}
+
 func (s *SQLiteStore) SetAgentKey(ctx context.Context, k *AgentKey) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO agent_keys (owner_id, provider, model, key_ciphertext, updated_at)

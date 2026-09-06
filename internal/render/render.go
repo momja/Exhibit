@@ -365,9 +365,17 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// select by, so there is no state to inline. The query is skipped rather
 	// than issued and discarded — "nobody's rows" is not a row set the store
 	// should be asked for.
+	//
+	// Which rows the viewer claim selects is the artifact's answer, not this
+	// handler's (av-v991): StatePrincipal maps the token's viewer through
+	// share_state_mode, so 'shared' inlines the owner's board for everybody
+	// looking at it and 'own' inlines each viewer's own. It is the same
+	// function the write path resolves through, which is what keeps a shared
+	// artifact from being read off one set of rows and written to another.
 	var state map[string]string
 	if !viewer.Anonymous {
-		s, err := rd.cfg.Store.GetState(r.Context(), store.OwnerID(a.OwnerID), a.ID, store.ViewerID(viewer.ViewerID))
+		s, err := rd.cfg.Store.GetState(r.Context(), store.OwnerID(a.OwnerID), a.ID,
+			a.StatePrincipal(store.ViewerID(viewer.ViewerID)))
 		if err != nil {
 			slog.WarnContext(r.Context(), "render state read failed",
 				slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
@@ -765,6 +773,14 @@ func (rd *Renderer) ServeAsset(w http.ResponseWriter, r *http.Request) {
 // Chromium per-frame putImageData leak (verified live at 7.3GB->10GB with the
 // mitigation active), and it degraded pixel-art rendering for no benefit.
 //
+// State also travels the other way (av-v991). The inlined cache is a snapshot,
+// and on an artifact whose share_state_mode is 'shared' somebody else is
+// writing the same rows; the host frame refetches and posts the current map
+// back in, which the shim applies to the cache in place and reports as real
+// 'storage' events. Same channel as persistState, reversed — so there is no
+// endpoint on this origin, no connect-src source and no credential in this
+// document, and the render surface stays read-only.
+//
 // WIDGET (av-fafu) narrows the same shim for a widget render. A widget is a
 // *view* of an artifact: it reads the artifact's state and shows one fact from
 // it. So in widget mode writes stop at the in-memory cache — the write-through
@@ -855,7 +871,12 @@ const shimTemplate = `<script>
         if (persist) persist('delete', key);
       },
       clear: function() {
-        store = {};
+        // The keys are deleted rather than the local rebound to {}. Rebinding
+        // would leave store and the object the frame was built over as two
+        // different things, and the resync below writes into the latter — so
+        // after one clear() an artifact would stop seeing anything anyone
+        // else wrote, silently and for the life of the frame (av-v991).
+        Object.keys(store).forEach(function(k) { delete store[k]; });
         if (persist) persist('clear');
       },
       key: function(n) {
@@ -877,6 +898,120 @@ const shimTemplate = `<script>
   try {
     Object.defineProperty(window, 'localStorage', { value: makeStorage(cache, persistState), writable: false });
   } catch(e) {}
+
+  // ---- Resync (av-v991) ----
+  // The state inlined above is a snapshot of the instant this document was
+  // served. On a 'shared' artifact somebody else is writing the same rows, and
+  // on any artifact the same person may be writing them from another device,
+  // so the host frame refetches and posts the current map in here. This is
+  // persistState's channel reversed — frame -> host for writes, host -> frame
+  // for updates — which is why there is no endpoint, no connect-src source and
+  // no credential in this document: the host holds the session and does the
+  // fetching on the app origin, and the render surface stays read-only.
+  //
+  // Applying it means mutating the cache IN PLACE. It is the very object
+  // makeStorage closed over, so an assignment here would update a map nothing
+  // reads — the same trap clear() used to fall into, and the reason that fix
+  // had to land first.
+  //
+  // What this buys is stated narrowly on purpose: the window in which two
+  // people's writes collide shrinks from "until somebody reloads" to seconds.
+  // It does not merge. Two people appending to one JSON blob under one key
+  // still lose an item, because last-write-wins is what the store does and no
+  // amount of liveness changes that.
+  function applyStateSync(incoming) {
+    if (!incoming || typeof incoming !== 'object') return 0;
+    var changes = [];
+    // Deletions first, while cache still holds the old values to report.
+    Object.keys(cache).forEach(function(k) {
+      if (!Object.prototype.hasOwnProperty.call(incoming, k)) {
+        changes.push({ key: k, oldValue: cache[k], newValue: null });
+        delete cache[k];
+      }
+    });
+    Object.keys(incoming).forEach(function(k) {
+      var value = String(incoming[k]);
+      var had = Object.prototype.hasOwnProperty.call(cache, k);
+      if (had && cache[k] === value) return;
+      changes.push({ key: k, oldValue: had ? cache[k] : null, newValue: value });
+      cache[k] = value;
+    });
+    changes.forEach(function(c) { fireStorageEvent(c.key, c.oldValue, c.newValue); });
+    return changes.length;
+  }
+
+  // A real 'storage' event per changed key. This is the platform's own "another
+  // tab wrote this" contract, so an artifact written against the standard gets
+  // multi-player with no new API and no cooperation from whoever wrote it.
+  //
+  // storageArea is deliberately omitted. StorageEventInit types it as
+  // 'Storage?', and this shim's namespace is a plain object, so passing it
+  // throws before the event exists ("Failed to convert value to 'Storage'",
+  // measured in Chromium 149; the WebIDL says every engine must). Listeners
+  // read key and newValue; storageArea is essentially never touched, and an
+  // event that is never dispatched is worth far less than a missing field.
+  function fireStorageEvent(key, oldValue, newValue) {
+    var ev;
+    try {
+      ev = new StorageEvent('storage', {
+        key: key, oldValue: oldValue, newValue: newValue, url: String(location.href)
+      });
+    } catch (e) {
+      // No StorageEvent constructor: a plain event carrying the same three
+      // properties still reaches a listener that reads them.
+      ev = new Event('storage');
+      ev.key = key;
+      ev.oldValue = oldValue;
+      ev.newValue = newValue;
+    }
+    window.dispatchEvent(ev);
+  }
+
+  // Framed and with a principal: the two conditions under which a resync can
+  // arrive at all. An anonymous render (av-wmp6) inlines no state and persists
+  // none, so there is nothing to keep in step; top-level there is no host.
+  // Widgets do get this — receiving an update is a read, and reading state to
+  // show one fact from it is the whole of what a widget does.
+  if (window.parent !== window && !ANONYMOUS) {
+    // Whether anything in this frame is listening for 'storage'. The shim can
+    // guarantee getItem returns fresh data; it cannot re-render an artifact
+    // that read storage once at startup and never looked again. So the host is
+    // told, and offers a reload control in ITS OWN chrome for the artifacts
+    // that need one — never in the artifact's DOM, which the artifact could
+    // forge, and never as a silent reload: this document is no-store (a full
+    // re-fetch), sessionStorage is in-memory by design and would die, and so
+    // would anything the artifact holds in a variable, including a half-typed
+    // input.
+    //
+    // Counting registrations means wrapping addEventListener, which is why it
+    // is scoped to the framed case rather than installed for every render: the
+    // wrapper is a pass-through, but a pass-through nobody needs is still a
+    // difference between the preview and the artifact opened directly.
+    var storageListeners = 0;
+    try {
+      var nativeAddEventListener = window.addEventListener;
+      window.addEventListener = function(type) {
+        if (type === 'storage') storageListeners++;
+        return nativeAddEventListener.apply(this, arguments);
+      };
+    } catch (e) {}
+    var listeningForStorage = function() {
+      return storageListeners > 0 || typeof window.onstorage === 'function';
+    };
+
+    window.addEventListener('message', function(e) {
+      // The host is a real origin, so unlike the messages this frame sends,
+      // both halves of its identity are checkable.
+      if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+      var d = e.data;
+      if (!d || d.__avStateSync !== true || d.artifactId !== ARTIFACT_ID) return;
+      var changed = applyStateSync(d.state);
+      window.parent.postMessage({
+        __avStateSynced: true, artifactId: ARTIFACT_ID,
+        changed: changed, live: listeningForStorage()
+      }, API_ORIGIN);
+    });
+  }
 %s
 })();
 </script>`

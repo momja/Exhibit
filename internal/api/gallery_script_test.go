@@ -38,8 +38,15 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 	suites := []string{
 		"detail.net.test.mjs",
 		"detail.recipient.test.mjs",
+		"detail.statesync.test.mjs",
 		"edit.origins.test.mjs",
 		"agent.net.test.mjs",
+		// Not a page script: render.shim.test.mjs runs the render preamble,
+		// which is a Go string literal it lifts out of render.go. It belongs
+		// here anyway, for the reason this suite exists — a Go test can assert
+		// that the shim's bytes contain a substring and cannot assert that a
+		// resync fires one storage event per changed key.
+		"render.shim.test.mjs",
 	}
 	cmd := exec.Command(node, append([]string{"--test"}, suites...)...)
 	cmd.Dir = dir

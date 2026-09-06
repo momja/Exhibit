@@ -431,6 +431,25 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// ownedArtifact, which every mutating query would have inherited.
 		"GetArtifactReadableBy": "takes the VIEWER, deliberately not the owner; read-only by construction (av-lrae)",
 
+		// The state methods a viewer reaches (av-v991), on the same grounds one
+		// step further: they take a ViewerID and no owner because a viewer
+		// writing on somebody else's artifact can only ever write on their own
+		// behalf. A second parameter here would be a way to spell "write as
+		// somebody else", which is exactly what collapsing them to one
+		// principal makes unrepresentable.
+		//
+		// They are not unscoped. Each resolves the artifact through
+		// readableByViewer — its owner, or an account a grant names on it —
+		// before touching a row, and then resolves *whose* rows from the
+		// artifact's share_state_mode rather than from anything the caller
+		// passed. What they widen is state, and only state, deliberately: the
+		// owner-scoped four beside them are untouched, and
+		// TestAGrantDoesNotWidenAnyOwnerScopedMethod walks everything else.
+		"GetStateAsViewer":    "takes the VIEWER; whose rows is resolved inside, never passed (av-v991)",
+		"SetStateAsViewer":    "takes the VIEWER; a viewer can only write on their own behalf (av-v991)",
+		"DeleteStateAsViewer": "takes the VIEWER; a viewer can only delete on their own behalf (av-v991)",
+		"ClearStateAsViewer":  "takes the VIEWER; erase-all means mine, resolved inside (av-v991, av-q0ub)",
+
 		// Out-of-line assets (av-20fk). Both are render-path reads, and the
 		// render path serves shares to people with no account — there is no
 		// owner to scope by, the same exception GetArtifactUnscoped carries.

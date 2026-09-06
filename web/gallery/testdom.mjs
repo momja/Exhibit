@@ -96,6 +96,7 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
 
   const documentListeners = {};
   const windowListeners = {};
+  const intervals = [];
 
   const document = {
     body: makeElement("body"),
@@ -108,7 +109,11 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
     removeEventListener(type, fn) {
       documentListeners[type] = (documentListeners[type] || []).filter((f) => f !== fn);
     },
-    get activeElement() { return null; }
+    get activeElement() { return null; },
+    // Writable, because a script that resyncs when the tab comes back has to be
+    // drivable through both states. A real document reports "visible" for a
+    // page nobody backgrounded, so that is the default.
+    visibilityState: "visible"
   };
 
   const window = {
@@ -143,6 +148,11 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
     console,
     setTimeout,
     clearTimeout,
+    // Collected rather than scheduled: a polling script under a real timer
+    // makes every assertion a race, and every test file slow by the interval
+    // it happens to have chosen. tickIntervals() above is the clock.
+    setInterval: (fn) => { intervals.push(fn); return intervals.length; },
+    clearInterval: (id) => { if (id) intervals[id - 1] = () => {}; },
     encodeURIComponent,
     JSON,
     Promise,
@@ -164,19 +174,54 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
   const pressKey = (key) =>
     (documentListeners.keydown || []).forEach((fn) => fn({ key }));
 
-  return { byId, frame, window, document, context, postFromFrame, pressKey };
+  // Lets already-resolved promises finish before a test looks. A handler that
+  // fetches and then acts on the answer is two awaits deep, and awaiting only
+  // the handler itself returns before either of them has run — so the test
+  // would assert against a page that has not reacted yet.
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  // Drives a document-level event other than a keypress. visibilitychange is
+  // the one that matters: it is how a script learns the tab came back, and a
+  // test cannot background a tab any other way.
+  const dispatchOnDocument = async (type) => {
+    await Promise.all((documentListeners[type] || []).map((fn) => fn({ type })));
+    await settle();
+  };
+
+  const setVisibility = (state) => {
+    document.visibilityState = state;
+    return dispatchOnDocument("visibilitychange");
+  };
+
+  return {
+    byId, frame, window, document, context,
+    postFromFrame, pressKey, dispatchOnDocument, setVisibility,
+    // Runs whatever setInterval callbacks the script registered, once each.
+    // Real timers in a test are a race; this makes "a tick happened" a thing
+    // the test states rather than waits for.
+    tickIntervals: async () => {
+      await Promise.all(intervals.map((fn) => fn()));
+      await settle();
+    }
+  };
 }
 
 // A stand-in for api.js's apiFetch that records every call and answers with
 // whatever the test queued. Defaults to success, so a test only spells out the
 // response it cares about.
+//
+// apiStateFetch shares the same log and the same queue, deliberately: in the
+// shipped file they are two refusal rules over one credentialed send, so a test
+// asserting "this session sent nothing" has to see both. Which entry point a
+// call came through is recorded as `via`, for the tests that care that a state
+// write did not travel the ordinary path.
 export function recordingApi(responses = []) {
   const calls = [];
   const queue = [...responses];
-  const apiFetch = (path, opts = {}) => {
-    calls.push({ path, method: opts.method || "GET", body: opts.body });
+  const record = (via) => (path, opts = {}) => {
+    calls.push({ path, method: opts.method || "GET", body: opts.body, via });
     const next = queue.shift();
     return Promise.resolve(next || { ok: true, status: 200, json: async () => ({}) });
   };
-  return { apiFetch, calls };
+  return { apiFetch: record("apiFetch"), apiStateFetch: record("apiStateFetch"), calls };
 }
