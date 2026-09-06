@@ -61,3 +61,48 @@ What is left for this ticket, and it is still the whole product:
 4. The recipient's half. Someone handed a link opted into nothing, and on a
    'shared' board their input is visible to the owner. The page has to say so in
    a sentence, not a badge.
+
+**2026-09-06T01:01:48Z**
+
+RULE (2026-09-05): only the owner modifies CSP, allowlists and capability
+approvals
+
+The server already enforces this and has since av-ep8k. setOriginDecision reads
+ownerIDFromCtx and Store.SetOriginDecision gates on ownsArtifact before the
+upsert; PATCH /api/artifacts/:id is owner-scoped the same way. A non-owner gets
+404, never 403. The agent surface already lives under the same rule for the same
+stated reason: agentSubResources excludes the origins route because approving an
+artifact's own egress is not a decision model output gets to make.
+
+## What breaks anyway, and it is this ticket's to fix
+
+A recipient viewing a shared artifact gets an app-origin page with a host frame,
+which is where the prompts live. Three of them write per-artifact authority:
+
+    network permission prompt (av-kmwj)     POST /api/artifacts/:id/origins
+    download / clipboard / link first-use   PATCH /api/artifacts/:id
+    camera / microphone gate                PATCH /api/artifacts/:id
+
+Hand a recipient today's detail page and all three render, and all three 404 on
+submit. Click Allow, nothing happens. That teaches the recipient the tool is
+flaky rather than that it is not theirs to grant.
+
+**A recipient's session renders none of those prompts.** What they get instead
+is the path av-kmwj already built for the case where approving would not help
+(a redirect): explain, do not ask. "This tool tried to reach api.example.com.
+Its owner has not allowed that." No button.
+
+Extend the rule past the allowlist to the capability approvals. They are the
+same per-artifact authority in different columns, and the two device flags build
+the Permissions-Policy header. One asymmetry worth stating so nobody reads it as
+a hole: camera and microphone still hit the browser's own native permission
+prompt on the recipient's machine, so an owner's approval never hands over a
+stranger's camera. It stops Exhibit blocking it; the browser is the second gate.
+
+## The consequence to design for
+
+A shared artifact is frozen at whatever its owner approved. If the owner's
+allowlist is missing an origin the tool needs, the recipient cannot fix it and
+has to go ask. That is correct — the alternative is a recipient widening
+somebody else's CSP — but it fails invisibly unless the explanation above is
+actually shown. A silent blank tool is the failure mode here.

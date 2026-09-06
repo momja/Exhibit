@@ -115,3 +115,27 @@ for critical data" warning copy is not needed on any surface v1 ships.
 
 Two accounts on one board is in scope (a directed share in 'shared' state mode),
 so the liveness problem is not deferred with the anonymous link. See av-v991.
+
+**2026-09-06T01:02:20Z**
+
+V1 SCOPE ADDENDUM (2026-09-05)
+
+Two additions to the scope list above.
+
+**Only the owner modifies CSP, allowlists and capability approvals.** Already
+enforced server-side by owner-scoped queries (av-ep8k), so this is a client
+rule: a recipient's session renders none of the host-frame prompts that write
+per-artifact authority. It explains instead of asking, the way av-kmwj already
+handles a violation approval could not fix. Detail and the failure mode on
+av-6xjd.
+
+**The recipient's surface is the app-origin detail page, not /s/:id.** They hold
+an account, so they get the ordinary framed page. That removes three pieces from
+v1 that earlier notes on av-v991 designed: no SSE on the render origin, no
+connect-src system source, and no share-scoped write credential. The host frame
+already carries both directions.
+
+The prerequisite this creates: a non-owner cannot reach the detail page at all
+today, because GetArtifact is owner-scoped and 404s. That is the "letting a
+non-owner reach a shared artifact" line in architecture.md §8's evolution table,
+and it moves onto v1's critical path.
