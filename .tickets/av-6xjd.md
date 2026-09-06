@@ -1,7 +1,7 @@
 ---
 id: av-6xjd
 status: open
-deps: []
+deps: [av-lrae]
 links: [av-0k5q, av-20xv, av-v991, av-7k7b, av-8ipt]
 created: 2026-08-09T16:34:08Z
 type: feature
@@ -152,3 +152,50 @@ recipient who loses the link loses the artifact, which is a small version of the
 "digging through chat logs" problem the PRD opens by rejecting. A list of grants
 is not a copy and claims no ownership, so it stays compatible with av-0k5q's
 one-owner rule whenever it is built.
+
+**2026-09-06T01:34:21Z**
+
+SLICE 4 OF SHARING V1 (2026-09-05): this ticket's premise is satisfied, build it
+
+The title says 'design and test before building' and the body says it is
+deliberately not started until the interaction design and the state question are
+settled. Both are settled as of today. This is now the build ticket for the
+owner's share panel, and it depends on av-lrae (the grant schema).
+
+## What to build
+
+A share panel on the artifact detail page, owner-only, with two independent
+halves.
+
+**Grants.** A username field taking SEVERAL names and one submit — 'gave friends
+access, dropped the link' is one gesture (av-7k7b). Below it, the list of people
+currently granted, each with a revoke. A grant is a row; revoking is a DELETE.
+
+Resolve a typed name as `local:<normalized>` first, then email. The field
+confirms existence deliberately: answering 'added' for a username nobody holds
+means the owner believes their friend has access and the friend does not.
+
+**The public link.** A toggle, not a create button: on mints the single
+anonymous row and shows the URL, off deletes it and the URL dies. Plus a
+'replace link' action that deletes and re-mints in one step and says the old URL
+stops working, because a leaked link wants rotating and toggling off-then-on
+leaves the user unsure it worked.
+
+**The state mode** (av-v991) is one control per artifact, not per grant: 'each
+person keeps their own data' or 'everyone shares one copy'. It reads on this
+panel and writes artifacts.share_state_mode.
+
+## Enumeration — the piece most likely to be cut, and the one that should not be
+
+You cannot audit what you cannot list, and a grant carrying live state makes
+that worse. ListArtifacts carries no share data at all today, so the gallery
+cannot show it even if the template wanted to. av-v991's 2026-08-06 18:48 note
+has the badge design (one badge naming the strongest thing true, private gets no
+marker) and the denormalization argument (a count on artifacts kept current the
+way tags_text is, rather than a join on every gallery render — av-b6o9 is the
+precedent).
+
+## Not in this ticket
+
+The recipient's own view is av-awr4. A 'shared with me' list is deferred
+entirely; a recipient keeps the URL the owner sent them.
