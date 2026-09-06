@@ -194,3 +194,46 @@ This supersedes the av-20xv note from earlier today: shares.public should be
 DROPPED, not wired up. It becomes exactly `recipient_id IS NULL`, so keeping it
 is two columns encoding one fact with no way to stop them disagreeing. Same
 reasoning av-8ipt used on expires_at.
+
+**2026-09-06T01:23:15Z**
+
+CORRECTION (2026-09-05): state_mode belongs on the artifact, not the grant
+
+Raised by the group-chat case: give several friends access, drop ONE URL in a
+group chat, each of them opens it in their own account.
+
+The grant model already delivers that and it is worth stating outright, since
+"one row per recipient" reads as "one URL per recipient" and is not:
+**the artifact URL is the share URL.** /artifacts/:id is the same address for
+the owner and every grantee, because the link does not carry the grant. Only
+the anonymous /s/:shareID model puts the capability in the URL. Someone in that
+chat without a grant gets a 404; someone without an account hits the login gate
+and then a 404 as themselves.
+
+The alternative the case seemed to ask for — one row per artifact holding a
+recipient list — costs more and expresses less. SQLite has no arrays, so it
+becomes shares(artifact_id, ...) plus share_recipients(share_id, user_id): two
+tables to say what one grant row says, and revoking a person becomes a list edit
+rather than a DELETE.
+
+## What it does change
+
+state_mode was wrong on the grant. "Shared board or private copies" is one
+question with one answer per artifact, and per-grant admits Alice on her own
+list while Bob writes the owner's. Nobody wants that state and it makes "whose
+board am I on" unexplainable on the page.
+
+    ALTER TABLE artifacts ADD COLUMN share_state_mode TEXT NOT NULL DEFAULT 'own';
+    ALTER TABLE shares   ADD COLUMN recipient_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+    CREATE UNIQUE INDEX shares_artifact_recipient ON shares(artifact_id, recipient_id);
+
+av-v991's 18:42 note put the flag on the share row so revoking a share would
+revoke write access in one motion. Under grants that argument is spent: deleting
+a grant revokes that person outright, so the mode sits where it reads correctly.
+
+## And granting is a bulk action
+
+"Gave friends access, dropped the link" is one gesture. The UI is an add-people
+field taking several names and one submit, not one person at a time. That pushes
+the still-open "how does the owner name a recipient" question toward a
+multi-entry typed field.
