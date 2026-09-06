@@ -301,3 +301,23 @@ and nothing more.
 And "sorted key order" was built as a fixed canonical order (o, e, p, a, s)
 rather than lexicographic, which would emit e= before o= and contradict every
 documented wire example. Same property, one claim set to one byte string.
+
+**2026-09-06T06:35:41Z**
+
+BUILD SPLIT (2026-09-05): who makes share_state_mode writable
+
+av-lrae added artifacts.share_state_mode deliberately read-only — PutArtifact
+leaves it to the DEFAULT and it is absent from updatableArtifactColumns, so
+nothing can store a mode the render path does not yet honour. Two tickets could
+each reasonably claim the write path, and doing it twice or not at all are both
+easy outcomes, so it is assigned here:
+
+- **av-6xjd owns the WRITE path.** The share panel carries the control, so it
+  adds share_state_mode to the PATCH surface and validates the value.
+- **av-v991 owns the MEANING.** What 'shared' does at render time — resolving
+  every viewer to the owner's rows — plus the resync and the storage events.
+
+Build order for the remaining slices: av-awr4 first and alone, because it
+establishes the owner-versus-recipient gate in the page layer and av-6xjd would
+otherwise invent a second one while both edit detail.tmpl. Then av-6xjd and
+av-v991 in parallel.
