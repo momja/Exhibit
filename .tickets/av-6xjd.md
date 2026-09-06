@@ -106,3 +106,49 @@ allowlist is missing an origin the tool needs, the recipient cannot fix it and
 has to go ask. That is correct — the alternative is a recipient widening
 somebody else's CSP — but it fails invisibly unless the explanation above is
 actually shown. A silent blank tool is the failure mode here.
+
+**2026-09-06T01:30:11Z**
+
+DECISIONS (2026-09-05): recipients are named by username; no "shared with me"
+list in v1
+
+## Recipient handle
+
+A recipient is specified by username, typed. Not a picker over the instance's
+accounts: a picker publishes the whole user directory to every user, which
+av-utap went out of its way to avoid from a different door.
+
+**Username is only well-defined for local accounts.** users.external_id is
+`local:<normalized name>` for an account this instance issued
+(auth.LocalExternalID), and that column's UNIQUE constraint already makes one
+account per login name a schema invariant, so the lookup is exact and free. An
+OIDC account's external_id is the provider subject — opaque, not a username.
+Those rows carry email, though it is NOT NULL defaulting to '' and can be blank.
+
+v1 resolves a typed handle as: `local:<normalized>` first, then email. No schema
+change, works on a local-accounts instance and an OIDC one, and the fuzziness
+stays inside one resolver.
+
+The clean alternative is a real users.username column, unique, which would also
+retire the display-name fallbacks /profile and /admin/users each carry today.
+That is account-management work (av-g2dx, av-utap) rather than sharing work, so
+it is deliberately not pulled in here.
+
+**This field confirms existence, on purpose.** Answering "added" for a username
+nobody holds means the owner believes their friend has access and the friend
+does not, which is worse than the leak. So it leaks one bit per guessed name,
+where a picker would hand over the entire list for nothing. Rate limiting is the
+answer if that ever matters.
+
+**Granting is bulk.** Several usernames, one submit, per the group-chat case on
+av-7k7b.
+
+## No "shared with me" list in v1
+
+Deferred, not rejected. A recipient keeps the artifact URL the owner sent them.
+
+What that costs, stated so it is a known debt rather than a surprise: a
+recipient who loses the link loses the artifact, which is a small version of the
+"digging through chat logs" problem the PRD opens by rejecting. A list of grants
+is not a copy and claims no ownership, so it stays compatible with av-0k5q's
+one-owner rule whenever it is built.
