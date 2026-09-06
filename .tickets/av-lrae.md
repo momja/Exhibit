@@ -1,6 +1,6 @@
 ---
 id: av-lrae
-status: in_progress
+status: closed
 deps: []
 links: [av-20xv]
 created: 2026-09-06T01:32:48Z
