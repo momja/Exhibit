@@ -273,3 +273,31 @@ SQLite has had partial indexes since 3.8.
 
 The id stays random and unguessable: for that row the URL is still the entire
 authorization.
+
+**2026-09-06T03:55:12Z**
+
+RELEASE NOTE (2026-09-05): av-6axy changes the render token wire format
+
+The named-claim encoding (av-6axy, merged to the epic branch) is a clean cutover
+rather than a compatible extension, which the design sanctioned: "accept a short
+TTL window and cut over cleanly (TTL is 10 minutes; in-flight tokens age out
+fast)".
+
+So on the deploy that ships it, **render tokens minted by the previous binary
+stop verifying.** Exposure is narrow — a link a user clicks later goes through
+/artifacts/:id/open, which mints on redirect — and what breaks is a page held
+open across the deploy whose frames or htmx fragments reload inside the ten
+minute window. Those frames 404 until the page is reloaded.
+
+Worth one line in the release notes; not worth a compatibility parser.
+
+Also correcting an acceptance criterion I wrote on av-6axy: "a token minted with
+no p and no a is byte-identical to what this package mints today" is not
+achievable, since changing the encoding is the ticket. The design note's
+"byte-identical" sentence is about p defaulting to o. The tests pin the
+meaningful version instead: an ordinary mint is exactly o=<owner>.e=<unix>.<tag>
+and nothing more.
+
+And "sorted key order" was built as a fixed canonical order (o, e, p, a, s)
+rather than lexicographic, which would emit e= before o= and contradict every
+documented wire example. Same property, one claim set to one byte string.
