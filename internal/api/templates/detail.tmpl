@@ -66,6 +66,13 @@
   {{template "capabilityCluster" .Capability}}
   {{if not .ReadOnly}}
   <a href="/artifacts/{{.ID}}/edit#security-panel">Manage in allowlist settings →</a>
+  {{/* Opens the share modal (av-esa1). A button rather than a link because the
+       panel is on this page; .Share gates it on the same value that decides
+       whether the modal is rendered at all, so the control and its target
+       cannot disagree about who is an owner. */}}
+  {{if .Share}}
+  <span class="toolbar-sep">|</span>
+  <button type="button" id="share-open"><i class="ph ph-share-network"></i> Share</button>{{end}}
   {{if .SourceURL}}
   <span class="toolbar-sep">|</span>
   <button onclick="refetchSource()">Update from source ↻</button>{{end}}
@@ -163,12 +170,6 @@
        keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. */}}
   <iframe src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy"></iframe>
 </div>
-{{/* The owner's share panel (av-6xjd). .Share is non-nil only for the owner —
-     the server skips the read entirely for anybody else — so this is the same
-     gate as every other owner-only control on the page rather than a second
-     one beside it. Below the frame, collapsed, because it is something you go
-     looking for: the artifact still owns the page. */}}
-{{if .Share}}{{template "sharePanel" .}}{{end}}
 
 {{/* The four capability dialogs below, and the network prompt at the end of
      this file, are rendered for every visitor and OPENED for the owner alone
@@ -185,6 +186,8 @@
      of the two: what matters is that nothing in a recipient's session sends
      the write, which is asserted by running the page script
      (web/gallery/detail.recipient.test.mjs), not by reading this file. */}}
+{{if .Share}}{{template "sharePanel" .}}{{end}}
+
 <div id="dl-modal" class="modal-overlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dl-title">
     <h2 id="dl-title">Allow downloads?</h2>

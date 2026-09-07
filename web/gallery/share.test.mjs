@@ -40,6 +40,11 @@ function loadShare({ link = "", responses = [], confirmed = true } = {}) {
     CustomEvent,
     navigator: { clipboard: { writeText: (t) => { copied.push(t); return Promise.resolve(); } } }
   }, {
+    // The template renders the overlay hidden (av-esa1). Seeding it here is
+    // what the harness's `initial` is for: without it every test would start
+    // with the modal already open, and "it opens when clicked" would be a
+    // claim the harness had made true before the script ran.
+    "share-panel": { hidden: true },
     "share-add-input": { value: "" },
     "share-link-toggle": { dataset: link ? { shareId: link } : {} },
     "share-link-url": { value: "http://render.test/s/" + link, select() {} }
@@ -209,4 +214,52 @@ test("a refused write is reported, not passed off as done", async () => {
   assert.deepEqual(page.events, ["exhibit:shares-changed"],
     "the panel still re-renders on a failure, so what it shows is the server's " +
     "state rather than the one the click implied");
+});
+
+/* av-esa1 — the panel is a modal now, so how it opens and closes is behaviour
+ * rather than markup. The Go template test can see that #share-open is in the
+ * page; only running the script proves the button is wired to the overlay, and
+ * that Escape and the backdrop reach it too.
+ *
+ * The backdrop case is the one worth having. It is the difference between
+ * `e.target === panel` and a check that also matches clicks inside the dialog,
+ * and getting it wrong throws away whatever the owner had half-typed in the
+ * username field the moment they click a label. */
+
+test("the panel starts closed and the toolbar button opens it", () => {
+  const page = loadShare();
+  const panel = page.byId("share-panel");
+  assert.equal(panel.hidden, true, "the modal must hold no layout until asked for");
+
+  page.byId("share-open").dispatchEvent({ type: "click", target: { id: "share-open" } });
+  assert.equal(panel.hidden, false);
+});
+
+test("Done, the backdrop, and Escape each close it — a click inside does not", () => {
+  const page = loadShare();
+  const panel = page.byId("share-panel");
+  const open = () =>
+    page.byId("share-open").dispatchEvent({ type: "click", target: { id: "share-open" } });
+
+  open();
+  page.byId("share-close").dispatchEvent({ type: "click", target: { id: "share-close" } });
+  assert.equal(panel.hidden, true, "the Done button closes it");
+
+  open();
+  panel.dispatchEvent({ type: "click", target: panel });
+  assert.equal(panel.hidden, true, "a click on the backdrop closes it");
+
+  open();
+  page.pressKey("Escape");
+  assert.equal(panel.hidden, true, "Escape closes it");
+
+  open();
+  panel.dispatchEvent({ type: "click", target: { id: "share-add-submit" } });
+  assert.equal(panel.hidden, false, "a click inside the dialog must not close it");
+});
+
+test("Escape does nothing while the panel is already closed", () => {
+  const page = loadShare();
+  page.pressKey("Escape");
+  assert.equal(page.byId("share-panel").hidden, true);
 });

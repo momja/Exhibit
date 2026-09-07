@@ -24,6 +24,44 @@
 
   const byId = (id) => document.getElementById(id);
 
+  // --- opening and closing (av-esa1) -------------------------------------
+  //
+  // The same three ways out the page's capability dialogs offer: the button,
+  // the backdrop, and Escape. They are spelled here rather than shared with
+  // detail.js because this script is loaded only where the panel exists, and
+  // a shared opener would have to be resolved by whichever of the two files
+  // happened to load first.
+  //
+  // Nothing here refetches on open. The panel body is server-rendered with the
+  // page and htmx keeps it current on every change, so what is behind the
+  // button is already right — and a fetch-on-open would show a spinner over
+  // data the page had in its hand the whole time.
+  function open_() {
+    panel.hidden = false;
+    const first = panel.querySelector('input, select, button');
+    if (first) first.focus();
+  }
+
+  function close_() {
+    panel.hidden = true;
+    status('');
+    const opener = byId('share-open');
+    if (opener) opener.focus();
+  }
+
+  const opener = byId('share-open');
+  if (opener) opener.addEventListener('click', open_);
+  const closer = byId('share-close');
+  if (closer) closer.addEventListener('click', close_);
+  // Backdrop only: the check is on the overlay itself, so a click that lands
+  // on the dialog inside it does not close the panel mid-edit.
+  panel.addEventListener('click', function(e) {
+    if (e.target === panel) close_();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && !panel.hidden) close_();
+  });
+
   // The status line and the per-name results live OUTSIDE the swapped region,
   // which is the whole reason they are separate elements: a bulk grant's
   // report is exactly what the swap that follows the grant would otherwise

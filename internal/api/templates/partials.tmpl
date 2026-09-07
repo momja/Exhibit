@@ -190,18 +190,35 @@
      A swap, not a reload: this page holds a live artifact frame, and reloading
      to show a new guest list would restart the tool the owner is looking at.
      Data: detailPageData (gallery.go). */}}
-{{define "sharePanel"}}<details class="details-panel share-panel" id="share-panel">
-  <summary>{{template "panelCaret"}} Sharing</summary>
-  <div class="panel-body">
+{{/* The owner's share panel (av-esa1). A modal, not a panel that holds
+     layout: sharing is an occasional action on a page whose subject is the
+     running tool, so it takes no room until it is asked for.
+
+     It reuses the modal-overlay/modal markup the four capability dialogs on
+     this page already use, rather than a <dialog>. Those styles and their
+     backdrop-and-Escape close behaviour exist; a second modal idiom on one
+     page would cost more than the newer element buys.
+
+     #share-panel is the stable id share.js delegates every listener from —
+     htmx replaces the contents of #share-body underneath it, so a listener
+     bound inside that region would be bound to a node that no longer exists
+     after the first change. */}}
+{{define "sharePanel"}}<div id="share-panel" class="modal-overlay" hidden>
+  <div class="modal share-modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
+    <h2 id="share-title"><i class="ph ph-share-network"></i> Share settings</h2>
     <div id="share-body"
          hx-get="/partials/share-panel?artifact={{.ID}}"
          hx-trigger="exhibit:shares-changed from:body"
          hx-swap="innerHTML">{{template "sharePanelBody" .Share}}</div>
     {{/* Written by share.js, one row per submitted name. Outside the swap. */}}
     <div id="share-add-results" class="share-results"></div>
-    <span id="share-status" class="text-sm muted"></span>
+    <div class="modal-actions">
+      <span id="share-status" class="text-sm muted"></span>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="share-close">Done</button>
+    </div>
   </div>
-</details>{{end}}
+</div>{{end}}
 
 {{/* sharePanelBody is the swappable half: three independent controls and the
      list of who currently holds access. It is the same partial for the initial

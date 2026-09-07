@@ -52,8 +52,8 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
  * banners hold theirs.
  *
  * Rendered only for the owner, so none of this reaches a recipient's page. */
-.share-panel{flex-shrink:0;border-radius:0;border-left:none;border-right:none;border-bottom:none;padding:8px 20px 12px}
-.share-panel>.panel-body{max-height:40vh;overflow-y:auto}
+.share-modal{width:620px}
+#share-body{max-height:min(60vh,520px);overflow-y:auto}
 .share-cols{display:flex;gap:24px;flex-wrap:wrap}
 .share-col{flex:1 1 280px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .share-col h3{margin:0}

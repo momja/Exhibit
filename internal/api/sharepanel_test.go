@@ -201,12 +201,17 @@ func TestOnlyTheOwnerGetsTheSharePanel(t *testing.T) {
 
 	owner := responseText(in.get(t, "/artifacts/"+in.granted, in.cookieOne))
 	assert.Contains(t, owner, `id="share-panel"`)
+	// The modal is opened from the toolbar (av-esa1), so the trigger is part
+	// of the same gate rather than a separate question: a panel nobody can
+	// open is the failure mode that replaced "a panel always taking space".
+	assert.Contains(t, owner, `id="share-open"`)
 	assert.Contains(t, owner, `id="share-link-toggle"`)
 	assert.Contains(t, owner, `id="share-add-input"`)
 	assert.Contains(t, owner, "/assets/gallery/share.js")
 
 	recipient := responseText(in.get(t, "/artifacts/"+in.granted, in.cookieTwo))
 	assert.NotContains(t, recipient, `id="share-panel"`)
+	assert.NotContains(t, recipient, `id="share-open"`)
 	assert.NotContains(t, recipient, "/assets/gallery/share.js")
 	assert.NotContains(t, recipient, "/assets/htmx/htmx.min.js",
 		"a page with no panel to swap should not carry the library that swaps it")
