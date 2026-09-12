@@ -289,7 +289,13 @@
          copies" is one question, and per-grant would admit one recipient on
          their own rows while another writes the owner's — a state nobody wants
          and one that makes "whose data am I looking at" unexplainable. */}}
-    <select id="share-state-mode" class="select" aria-label="Saved data">
+    {{/* data-grant-count rides on the select the same way share-link-toggle
+         carries its row's id (av-tlpv): switching away from 'shared' is what
+         orphans a grantee's writes (StatePrincipal, internal/store/store.go),
+         and share.js needs the count at the moment of the click to word the
+         confirmation — an extra fetch just to ask "how many people" would be
+         asking the server something this render already knows. */}}
+    <select id="share-state-mode" class="select" aria-label="Saved data" data-grant-count="{{len .Shares.Grants}}">
       <option value="own"{{if not .StateModeShared}} selected{{end}}>Each person keeps their own data</option>
       <option value="shared"{{if .StateModeShared}} selected{{end}}>Everyone shares one copy</option>
     </select>

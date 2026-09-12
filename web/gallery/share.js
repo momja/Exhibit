@@ -206,7 +206,36 @@
   // single question, and a Save button beside one select is a second thing to
   // press for no gain. The swap that follows re-renders it from the stored
   // value, so a rejected write corrects itself on screen.
+  //
+  // Switching away from 'shared' needs a guard the other direction doesn't
+  // (av-tlpv): StatePrincipal (internal/store/store.go) resolves every
+  // grantee's reads/writes to the owner's rows while shared, and to their own
+  // rows otherwise. Nothing is deleted by the switch, but a grantee's own row
+  // is empty — they wrote the owner's, never theirs — so their very next
+  // visit looks like the artifact forgot everything they did. There are only
+  // two modes, so 'own' is the only value this can be switching *to* from
+  // 'shared'; no need to track what the select held before.
   async function setStateMode(mode) {
+    if (mode === 'own') {
+      // Read off the select's own dataset (data-grant-count, set by the
+      // template render) the same way linkID() reads share-link-toggle's
+      // data-share-id, rather than off the change event's target — e.target
+      // is the same element in a browser, but the test harness dispatches a
+      // plain object as target, so byId() is what a test can seed.
+      const select = byId('share-state-mode');
+      const grants = select ? parseInt(select.dataset.grantCount, 10) || 0 : 0;
+      if (grants > 0) {
+        const people = grants === 1 ? '1 person' : grants + ' people';
+        const ok = confirm(
+          'Stop sharing one copy of this data?\n\n' +
+          people + ' currently read and write one shared copy of this ' +
+          "artifact's data. Switching gives each of them their own copy " +
+          'instead — nothing already saved is deleted, but on their next visit ' +
+          "it will look empty, since they were writing to yours."
+        );
+        if (!ok) { changed(); return; }
+      }
+    }
     status('Saving…');
     const r = await apiFetch('/api/artifacts/' + ID, {
       method: 'PATCH',

@@ -253,6 +253,25 @@ func TestTheFragmentRendersTheSameListTheFullPageDoes(t *testing.T) {
 	}
 }
 
+// data-grant-count is what share.js reads to decide whether switching away
+// from 'shared' needs a confirmation (av-tlpv) — it must track the actual
+// grant list, not just be present, or the client-side guard fires against a
+// stale number.
+func TestTheStateModeSelectCarriesTheGrantCount(t *testing.T) {
+	ro := newTestRouter(t)
+	seedLocalAccount(t, ro, "alice")
+	seedLocalAccount(t, ro, "bob")
+	artifactID := seedShareableArtifact(t, ro, "Tool")
+
+	page := getPage(t, ro, "/artifacts/"+artifactID)
+	assert.Contains(t, page, `data-grant-count="0"`)
+
+	grantTo(t, ro, artifactID, []string{"alice", "bob"})
+
+	page = getPage(t, ro, "/artifacts/"+artifactID)
+	assert.Contains(t, page, `data-grant-count="2"`)
+}
+
 // --- the shared tile ----------------------------------------------------
 
 // av-ei5h: the public link section carries the widget's embed snippet
