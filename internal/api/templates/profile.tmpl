@@ -106,7 +106,7 @@
      than someone who never had the button at all.
 
      Two steps rather than one. The first states what goes, including how many
-     share links other people hold that stop working; the second asks for a
+     shares other people hold that stop working; the second asks for a
      typed phrase. A click can be a mis-tap, and there is no undo anywhere near
      this — no soft delete, no trash, no snapshot (av-1rvm covers state
      durability separately).
@@ -120,8 +120,9 @@
   <p class="settings-danger-copy">Deleting your account erases everything you've created, including shared artifacts. Every artifact and its file, and all other account data. It is permanent. There is no undo, no trash, and no copy kept on this side.</p>
   {{if .Account.SignedIn}}
   {{/* Counted rather than gestured at, and shares first among equals: an
-       artifact is your own, but a share link is a URL somebody else may be
-       holding, with no account here and no way to be told it stopped
+       artifact is your own, but a share is access somebody else may be
+       relying on — a link anyone may hold, or a grant on their account —
+       with no account here guaranteed and no way to be told it stopped
        working. */}}
   <p class="settings-danger-copy">This account holds <strong>{{.Account.Artifacts}}</strong>.{{if .Account.ShareCount}} Deleting it breaks <strong>{{.Account.Shares}}</strong> that other people may be holding.{{end}}</p>
   {{/* What deletion reaches stops at this instance, and which sentence says so

@@ -108,7 +108,8 @@ type pageCredentials struct {
 func (ro *Router) pageCredentials(r *http.Request) pageCredentials {
 	ctx := r.Context()
 	anonymous := publicVisitor(ctx)
-	readOnly := principalFromCtx(ctx).ReadOnly
+	p := principalFromCtx(ctx)
+	readOnly := p.ReadOnly
 	return pageCredentials{
 		Token: ro.pageToken(ctx, anonymous),
 		// Derived from the resolved Principal, not recomputed from
@@ -119,8 +120,14 @@ func (ro *Router) pageCredentials(r *http.Request) pageCredentials {
 		// A visitor writes state when they have a principal to write it as.
 		// That is the whole rule: a public instance's anonymous reader has
 		// none, and everyone else — the operator on a static token, a
-		// signed-in person, and (below) a recipient — has one.
-		StateWritable: !anonymous && !readOnly,
+		// signed-in person, and (below) a recipient — has one. A request no
+		// gate resolved (PrincipalNone) on a login-enabled instance has no
+		// credential behind it either: the state routes would 401 it, so
+		// StateWritable must not promise the page's JS otherwise. The
+		// single-user instance keeps the fallback below — with no login
+		// there is no second credential to resolve, and its visitor is by
+		// construction the operator who already holds the static token.
+		StateWritable: !anonymous && !readOnly && (!ro.loginEnabled() || p.Kind != PrincipalNone),
 	}
 }
 

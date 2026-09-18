@@ -490,8 +490,9 @@ executable document with the correct security envelope:
   owner authorizes the read; the principal selects whose state rows are inlined,
   which is the same split store's `OwnerID`/`ViewerID` draw over `artifact_state`
   (§3.3). They are the same person on every route that exists today, so `p` is
-  absent from every token minted today and defaults to `o`; they are different
-  people the moment an artifact is shared with somebody (av-7k7b). Duplicate and
+  omitted on an owner's own routes, where it defaults to `o` (MintViewer encodes
+  no principal when the two are equal); they are different people on a recipient's
+  frame, where the token carries `p` naming the viewer whose rows are inlined (av-awr4). Duplicate and
   unknown keys are rejected rather than resolved, and so is a token carrying
   both `a` and `p`.
 
@@ -1050,12 +1051,14 @@ it; an affordance whose route 404s is the same dishonesty one door over. It
 grants nothing new — a top-level render of an artifact they may already read,
 under that artifact's own unchanged CSP.
 
-What a recipient still cannot do is **write state**. The render inlines their
-own rows (av-6axy's principal split, §3.2), so a shared tool boots with what
-they left in it; the write-through stops at `api.js`, because the state routes
-are owner-scoped in SQL and av-lrae pins that a grant does not widen them. The
-epic's "a recipient writes state through use" therefore waits on av-v991, which
-is where "whose board is this" gets decided.
+What a recipient still cannot do is change the artifact: the body, the
+allowlist, the capability approvals and the shares stay refused exactly as for
+a stranger (av-awr4). Writing state is the one deliberate exception (av-v991):
+the render inlines the rows `share_state_mode` selects for them — their own, or
+the owner's shared board — and the write-through lands on those same rows
+through the viewer-scoped methods, resolved by the one `StatePrincipal`
+function both paths share, so the read and the write can never disagree about
+whose board this is.
 
 The edit page carries one further island, the **state inspector** (av-hg5f): a
 collapsible panel beside the security panel that reads the artifact's state rows
@@ -1889,7 +1892,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap); a non-owner reaches a shared artifact through the grant schema and the viewer-scoped read accessor (av-lrae), the token's two principals (av-6axy) and the viewer page that calls them (av-awr4, §3.5) — a shared artifact is one board or several by its `share_state_mode`, which the render and the viewer-scoped state write both resolve through one function (av-v991) — what remains is the owner's surface for creating grants and setting that mode (av-6xjd), and a person managing their own account (av-g2dx) |
+| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap); a non-owner reaches a shared artifact through the grant schema and the viewer-scoped read accessor (av-lrae), the token's two principals (av-6axy) and the viewer page that calls them (av-awr4, §3.5) — a shared artifact is one board or several by its `share_state_mode`, which the render and the viewer-scoped state write both resolve through one function (av-v991) — what remains is a person managing their own account (av-g2dx) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | **already done** (av-52ll) — `BLOB_S3_BUCKET` selects `S3Store`; unset keeps the filesystem |

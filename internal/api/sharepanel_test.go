@@ -307,14 +307,14 @@ func TestTheCardBadgeNamesTheStrongestThingTrue(t *testing.T) {
 			a:     store.Artifact{ShareGrantCount: 3, SharePublicLink: link, ShareStateMode: store.ShareStateOwn},
 			level: "public", label: "Public link",
 			detail: "3 people can open this artifact. Each keeps their own data. " +
-				"Anyone with its public link can open it.",
+				"Anyone with its public link can open it and read the owner's saved data.",
 		},
 		{
 			name:  "writing the owner's data outranks anyone reading it",
 			a:     store.Artifact{ShareGrantCount: 2, SharePublicLink: link, ShareStateMode: store.ShareStateShared},
 			level: "shared-data", label: "Shared data",
 			detail: "2 people can open this artifact, and everyone using it reads and writes " +
-				"one shared copy of its data. Anyone with its public link can open it.",
+				"one shared copy of its data. Anyone with its public link can open it and read the owner's saved data.",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

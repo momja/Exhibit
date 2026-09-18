@@ -206,7 +206,8 @@ The token also names the render surface's **state principal**: the answer to
 "whose state should be inlined into this document", which is a different
 question from "who may read this artifact" and since av-6axy has a claim of its
 own. `o` authorizes the read; `p` selects the rows, and defaults to `o` when
-absent, which is every token any route mints today. That answer is
+absent — which is every owner frame, since MintViewer omits a principal equal
+to the owner. A recipient's frame carries their own `p`. That answer is
 load-bearing — `artifact_state` is keyed by `(artifact_id, user_id, key)`
 (av-q0ub), and the token's principal *is* that `user_id`. A principal with rows
 of their own gets exactly those; a principal with none gets an empty cache,

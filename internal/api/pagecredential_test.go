@@ -318,10 +318,12 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 
 	// The dangerous middle case: a provider is configured but this request
 	// resolved no session. That is a public visitor or a hole in sessionGate,
-	// and the static token is not the right answer to either.
-	assert.Equal(t, pageCredentials{StateWritable: true},
+	// and the static token is not the right answer to either — nor is a page
+	// whose JS believes its writes will land, since the state routes would
+	// 401 a request with no credential behind it.
+	assert.Equal(t, pageCredentials{StateWritable: false},
 		withIdentity.pageCredentials(req(context.Background())),
-		"identity configured, no session resolved: withhold rather than fall back to the service token")
+		"identity configured, no session resolved: withhold the token and the writability")
 
 	// The same middle case, reached the other way. An instance whose login is a
 	// local credential issues sessions exactly as a provider-backed one does, so
@@ -330,7 +332,7 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 	// "is there an identity provider?" — and since av-jviu seeds an account on
 	// first boot, this is now the configuration a self-hoster actually runs.
 	withLocal, _ := newPageCredentialRouter(t, nil, func(c *Config) { c.LocalUsers = true })
-	assert.Equal(t, pageCredentials{StateWritable: true},
+	assert.Equal(t, pageCredentials{StateWritable: false},
 		withLocal.pageCredentials(req(context.Background())),
 		"local login configured, no session resolved: withhold, exactly as for a provider")
 	assert.Equal(t, pageCredentials{StateWritable: true},

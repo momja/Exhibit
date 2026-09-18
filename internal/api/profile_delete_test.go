@@ -224,13 +224,13 @@ func TestProfileDeleteSectionCountsLiveShares(t *testing.T) {
 
 	page := in.page(t)
 	assert.Contains(t, page, "<strong>1 artifact</strong>")
-	assert.Contains(t, page, "<strong>2 share links</strong>")
+	assert.Contains(t, page, "<strong>2 shares</strong>")
 
 	// And again in the confirmation itself, which is the last thing read
 	// before the phrase is typed — the count is not left behind on the step
 	// somebody has already scrolled past.
 	assert.Contains(t, page, "including 1 artifact and everything saved inside")
-	assert.Contains(t, page, "2 share links will stop working for whoever is holding them")
+	assert.Contains(t, page, "2 shares will stop working for whoever is holding them")
 }
 
 // An account with no shares is not warned about links that will stop working;

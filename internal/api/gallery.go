@@ -596,7 +596,7 @@ func newShareBadgeView(a *store.Artifact) shareBadgeView {
 		}
 	}
 	if link {
-		detail = append(detail, "Anyone with its public link can open it.")
+		detail = append(detail, "Anyone with its public link can open it and read the owner's saved data.")
 	}
 
 	badge := shareBadgeView{Detail: strings.Join(detail, " ")}
