@@ -26,8 +26,10 @@ const LINK_ID = "share-link-row-id";
 
 // loadShare renders the panel for its owner. `link` is the share id the
 // template puts on the toggle when the artifact already has a public link —
-// its absence is what "the link is off" looks like in the markup.
-function loadShare({ link = "", responses = [], confirmed = true } = {}) {
+// its absence is what "the link is off" looks like in the markup. `embed`
+// is the widget snippet the template renders when the artifact has both a
+// link and a widget (av-ei5h); empty is the no-widget panel.
+function loadShare({ link = "", embed = "", responses = [], confirmed = true } = {}) {
   const api = recordingApi(responses);
   const events = [];
   const copied = [];
@@ -47,7 +49,8 @@ function loadShare({ link = "", responses = [], confirmed = true } = {}) {
     "share-panel": { hidden: true },
     "share-add-input": { value: "" },
     "share-link-toggle": { dataset: link ? { shareId: link } : {} },
-    "share-link-url": { value: "http://render.test/s/" + link, select() {} }
+    "share-link-url": { value: "http://render.test/s/" + link, select() {} },
+    "share-widget-embed": { value: embed, select() {} }
   });
 
   // The panel fires exhibit:shares-changed and htmx re-fetches the fragment.
@@ -183,6 +186,16 @@ test("Copy puts the link on the clipboard from the app origin", async () => {
   await page.click("share-link-copy");
 
   assert.deepEqual(page.copied, ["http://render.test/s/" + LINK_ID]);
+  assert.deepEqual(page.api.calls, [], "copying decides nothing, so it writes nothing");
+});
+
+test("Copy puts the widget embed snippet on the clipboard", async () => {
+  const snippet = '<iframe src="http://render.test/s/' + LINK_ID + '/widget" width="320" height="132" style="border:0"></iframe>';
+  const page = loadShare({ link: LINK_ID, embed: snippet });
+
+  await page.click("share-widget-copy");
+
+  assert.deepEqual(page.copied, [snippet]);
   assert.deepEqual(page.api.calls, [], "copying decides nothing, so it writes nothing");
 });
 

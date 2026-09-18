@@ -284,6 +284,16 @@
       <button type="button" class="btn btn-sm btn-sec" id="share-link-replace"><i class="ph ph-arrows-clockwise"></i> Replace link</button>
       <span class="text-sm muted">The current link stops working.</span>
     </div>
+    {{/* The shared tile (av-ei5h): an iframe snippet for the link's widget,
+         shown only when the artifact has one to serve. The URL inside is
+         live exactly while this link is — replacing the link replaces it. */}}
+    {{if .WidgetEmbed}}
+    <div class="share-link-row">
+      <input type="text" id="share-widget-embed" class="field" readonly value="{{.WidgetEmbed}}" aria-label="Shared widget embed code">
+      <button type="button" class="btn btn-sm btn-sec" id="share-widget-copy"><i class="ph ph-copy"></i> Copy</button>
+    </div>
+    <p class="text-sm muted">Embeddable tile showing this tool's saved data. Read-only, like the public link.</p>
+    {{end}}
     {{end}}
 
     <h3 class="text-sm muted">Saved data</h3>

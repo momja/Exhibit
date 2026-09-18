@@ -107,6 +107,7 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/assets/*"},
 	{route: "/manifest.json"},
 	{route: "/s/{shareID}"},
+	{route: "/s/{shareID}/widget"},
 	{route: "/api/settings/public"},
 
 	// The authenticated API group — the routes the session cookie actually

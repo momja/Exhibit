@@ -134,6 +134,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 
 	// Owner-independent by design rather than by omission.
 	{route: "/s/{shareID}", why: "the share row is the authorization (architecture.md §7); it redirects to the render origin and reads no library"},
+	{route: "/s/{shareID}/widget", why: "same share-row authorization as /s/{shareID}, serving the widget blob (av-ei5h); it redirects to the render origin and reads no library"},
 	{route: "/api/agent/sessions/{sessionID}/events", scopedByHandler: true, coveredBy: "agent_session_owner_test.go",
 		why: "streams one agent session's events by id; it is owner-scoped, but by authorizeEventStream resolving the owner itself (EventSource sets no headers, so it cannot sit in a group that runs the middlewares)"},
 

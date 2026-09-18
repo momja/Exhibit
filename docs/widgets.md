@@ -56,6 +56,7 @@ still wants a face. There is no separate mechanism for it.
 | Surface | What it does |
 |---|---|
 | `GET RENDER_ORIGIN/w/:artifactID` | Serves the widget document (`internal/render`). 404 when the artifact has none. |
+| `GET RENDER_ORIGIN/s/:shareID/widget` | Serves the widget through the artifact's anonymous link (av-ei5h): share row authorizes, owner's state inlined, share framing applies. 404 when the artifact has none. |
 | Gallery card | Frames the widget, or renders the default tile (`cardWidget` partial). |
 | Artifact edit page | "Gallery widget" panel: source editor, live preview, Generate / Save / Remove. |
 | Agent chat | `set_widget` / `get_widget` tools; the preview pane shows the tile. |
@@ -204,7 +205,6 @@ what keeps "last 30 days" demo data from ageing into an empty widget.
 
 ## Known limits (POC)
 
-- Shares (`/s/:shareID`) serve the artifact only; there is no shared widget.
 - The tile is a fixed 132 px tall. There is no small/medium/large family.
 - A widget does not re-render while its card is on screen (see above).
 - **No size cap on a widget body** — an 8 MB widget is accepted and served
