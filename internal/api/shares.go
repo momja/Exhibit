@@ -217,6 +217,13 @@ func (ro *Router) shareURL(shareID string) string {
 	return ro.cfg.RenderOrigin + "/s/" + shareID
 }
 
+// shareWidgetURL is where an anonymous link's widget is served (av-ei5h):
+// the render origin, beside the artifact's own share URL. One definition so
+// the panel and any future caller cannot disagree.
+func (ro *Router) shareWidgetURL(shareID string) string {
+	return ro.shareURL(shareID) + "/widget"
+}
+
 // grantShares resolves each typed handle and mints a grant for it, reporting
 // one result per name.
 //

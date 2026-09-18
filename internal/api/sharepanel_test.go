@@ -253,6 +253,33 @@ func TestTheFragmentRendersTheSameListTheFullPageDoes(t *testing.T) {
 	}
 }
 
+// --- the shared tile ----------------------------------------------------
+
+// av-ei5h: the public link section carries the widget's embed snippet, but
+// only when there is a tile to embed. The snippet names the link's widget
+// URL, so it is live exactly while the link above it is — replacing the link
+// replaces it, and the fragment re-render after any change keeps them in step.
+func TestThePanelEmbedsTheWidgetOnlyWithLinkAndWidget(t *testing.T) {
+	ro := newTestRouter(t)
+	artifactID := seedShareableArtifact(t, ro, "Tool")
+
+	panel := func() string {
+		return getPage(t, ro, "/partials/share-panel?artifact="+artifactID)
+	}
+	assert.NotContains(t, panel(), `id="share-widget-embed"`,
+		"no link and no widget: nothing to embed")
+
+	mintLink(t, ro, artifactID, false)
+	assert.NotContains(t, panel(), `id="share-widget-embed"`,
+		"a link to an artifact with no widget embeds nothing")
+
+	require.Equal(t, http.StatusOK, putWidgetReq(t, ro, artifactID, "<b>42 km</b>").Code)
+	got := panel()
+	assert.Contains(t, got, `id="share-widget-embed"`)
+	assert.Contains(t, got, `/widget`, "the snippet must name the shared-widget route")
+	assert.Contains(t, got, `&lt;iframe`, "the snippet is an iframe, escaped into the value attribute")
+}
+
 // --- the badge ----------------------------------------------------------
 
 // One badge naming the strongest thing true, and none at all for a private

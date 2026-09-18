@@ -28,7 +28,7 @@ type Config struct {
 	// and /w/:id require (av-c5aq). It is how this surface learns who it is
 	// serving without holding a session — see internal/rendertoken for why a
 	// cookie here would be readable by the artifact itself. A nil Signer fails
-	// those two routes closed; /s/:shareID never consults it.
+	// those two routes closed; the /s/* share routes never consult it.
 	Tokens *rendertoken.Signer
 	// EmbedOrigins narrows who may put a **share** in an iframe (av-q3iy).
 	// Empty — the default, and every instance that has not asked otherwise —
@@ -176,26 +176,8 @@ func (rd *Renderer) authorize(w http.ResponseWriter, r *http.Request, id string)
 // case is unrepresentable on the unscoped read surface (store.go); a grant's
 // id arrives here as nothing, and answers what a nonexistent one answers.
 func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
-	shareID := chi.URLParam(r, "shareID")
-	// The link row is the authorization here (architecture §7), so this
-	// path is owner-independent by design — not an oversight.
-	sh, err := rd.cfg.Store.GetAnonymousShareUnscoped(r.Context(), shareID)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	if sh == nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-
-	a, err := rd.cfg.Store.GetArtifactUnscoped(r.Context(), sh.ArtifactID)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	if a == nil {
-		http.Error(w, "artifact not found", http.StatusNotFound)
+	a, ok := rd.resolveShare(w, r, chi.URLParam(r, "shareID"))
+	if !ok {
 		return
 	}
 	// The share row is the authorization (architecture.md §7), so this route
@@ -213,15 +195,46 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	// over a whole library. The blast radius differs by orders of magnitude, so
 	// the defaults do too.
 	//
-	// This is also the one route whose document any site may frame (av-q3iy),
-	// and the one an operator can narrow with EMBED_ORIGINS — shares only,
+	// Share routes are also the only ones whose documents any site may frame
+	// (av-q3iy), and the ones an operator can narrow with EMBED_ORIGINS — shares only,
 	// because a share is the render document that already carries neither a
 	// principal nor a credential. Config.EmbedOrigins holds the argument.
 	rd.serveArtifactDoc(w, r, a, rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
 		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 }
 
-// shareFrameAncestors is the whole of the share route's framing policy
+// resolveShare is the front door for the share-authorized routes. It loads
+// the anonymous link row — the whole authorization on these routes
+// (architecture.md §7) — and the artifact it names, both owner-independent
+// by design, not by oversight. A grant's id arrives here as nothing: the
+// accessor is narrowed to recipient_id IS NULL (av-lrae), so serving one
+// would turn its id back into a capability URL and undo the reason grants
+// exist. Every miss answers 404, never 403, like the token-gated authorize
+// above.
+func (rd *Renderer) resolveShare(w http.ResponseWriter, r *http.Request, shareID string) (*store.Artifact, bool) {
+	sh, err := rd.cfg.Store.GetAnonymousShareUnscoped(r.Context(), shareID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return nil, false
+	}
+	if sh == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return nil, false
+	}
+
+	a, err := rd.cfg.Store.GetArtifactUnscoped(r.Context(), sh.ArtifactID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return nil, false
+	}
+	if a == nil {
+		http.Error(w, "artifact not found", http.StatusNotFound)
+		return nil, false
+	}
+	return a, true
+}
+
+// shareFrameAncestors is the whole of the share routes' framing policy
 // (av-q3iy): with nothing configured a share may be framed by anyone, and
 // EMBED_ORIGINS turns that into the app origin plus the sites it names.
 //
@@ -250,6 +263,31 @@ func shareFrameAncestors(appOrigin string, embedOrigins []string) []string {
 		}
 	}
 	return framers
+}
+
+// ServeShareWidget serves an artifact's widget through its anonymous share
+// link (av-ei5h) — the glanceable tile, embeddable off-site. It is ServeShare
+// and ServeWidget composed: the share row authorizes (no token, owner's state
+// inlined) and the widget blob renders (narrowed preamble, no bridges, no
+// devices). An artifact with no widget 404s; the embedder falls back to
+// whatever static tile it would have rendered instead.
+func (rd *Renderer) ServeShareWidget(w http.ResponseWriter, r *http.Request) {
+	a, ok := rd.resolveShare(w, r, chi.URLParam(r, "shareID"))
+	if !ok {
+		return
+	}
+	if a.WidgetBlobID == "" {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	// Share framing, not /w/:id's app-only framing: a shared widget's point
+	// is embedding off the gallery, under the same EMBED_ORIGINS lockdown as
+	// the shared artifact. Same disclosure as that document — the owner's live
+	// numbers to anyone holding the link — in a more scrapable shape, which is
+	// inherent to publishing a tile.
+	rd.serveDoc(w, r, a, a.WidgetBlobID, true,
+		rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
+		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 }
 
 // ServeWidget serves an artifact's widget (av-fafu) — the small, informative

@@ -149,10 +149,10 @@ func TestHostDispatcherKeepsTheOriginBoundary(t *testing.T) {
 		require.NotEmpty(t, render.Header().Get("Content-Security-Policy"))
 	})
 
-	// /s/{shareID} is the one path both muxes claim — the app redirects to the
-	// render origin, the render surface serves the artifact. It is the sharpest
-	// available proof that dispatch happens at all, since path routing alone
-	// cannot tell these two apart.
+	// /s/{shareID} and /s/{shareID}/widget (av-ei5h) are the paths both muxes
+	// claim — the app redirects to the render origin, the render surface
+	// serves the document. They are the sharpest available proof that dispatch
+	// happens at all, since path routing alone cannot tell these two apart.
 	t.Run("the shared path resolves per origin", func(t *testing.T) {
 		app := dispatchTo(h, http.MethodGet, "app.test", "/s/"+shareID)
 		assert.Equal(t, http.StatusFound, app.Code)
@@ -162,17 +162,32 @@ func TestHostDispatcherKeepsTheOriginBoundary(t *testing.T) {
 		render := dispatchTo(h, http.MethodGet, "render.test", "/s/"+shareID)
 		assert.Equal(t, http.StatusOK, render.Code)
 		assert.True(t, servedByRender(render))
+
+		appWidget := dispatchTo(h, http.MethodGet, "app.test", "/s/"+shareID+"/widget")
+		assert.Equal(t, http.StatusFound, appWidget.Code)
+		assert.Equal(t, "http://render.test/s/"+shareID+"/widget", appWidget.Header().Get("Location"))
+		assert.False(t, servedByRender(appWidget))
+
+		renderWidget := dispatchTo(h, http.MethodGet, "render.test", "/s/"+shareID+"/widget")
+		assert.Equal(t, http.StatusOK, renderWidget.Code)
+		assert.True(t, servedByRender(renderWidget))
 	})
 
 	// Both walks below are walks rather than lists for the reason every other
 	// route walk in this package is one (csrf_test.go, pageowner_test.go): the
 	// failure that matters is a route added later by someone who never read
 	// this file.
+	// dualClaimed are the paths legitimately answered by both muxes (asserted
+	// above): the app redirects each to the render origin, which serves it.
+	dualClaimed := func(route string) bool {
+		r := strings.TrimSuffix(route, "/")
+		return r == "/s/{shareID}" || r == "/s/{shareID}/widget"
+	}
 	t.Run("no app route answers on the render origin", func(t *testing.T) {
 		var walked int
 		require.NoError(t, chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-			if strings.TrimSuffix(route, "/") == "/s/{shareID}" {
-				return nil // legitimately answered by both, asserted above
+			if dualClaimed(route) {
+				return nil
 			}
 			walked++
 			w := dispatchTo(h, method, "render.test", concretePath(route))
@@ -188,7 +203,7 @@ func TestHostDispatcherKeepsTheOriginBoundary(t *testing.T) {
 		require.True(t, ok, "render mux no longer exposes its routes")
 		var walked int
 		require.NoError(t, chi.Walk(routes, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-			if strings.TrimSuffix(route, "/") == "/s/{shareID}" {
+			if dualClaimed(route) {
 				return nil
 			}
 			walked++
@@ -197,6 +212,6 @@ func TestHostDispatcherKeepsTheOriginBoundary(t *testing.T) {
 				"the render surface answered %s %s on the app origin", method, route)
 			return nil
 		}))
-		assert.Equal(t, 3, walked, "expected /a/{id}, /a/{id}/assets/{assetID} and /w/{id}")
+		assert.Equal(t, 3, walked, "expected /a/{id}, /a/{id}/assets/{assetID} and /w/{id}; the /s/* pair is dual-claimed and exempt above")
 	})
 }

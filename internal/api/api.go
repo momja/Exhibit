@@ -432,6 +432,9 @@ func (ro *Router) setupRoutes() {
 
 	// Public share route — no auth required
 	ro.Get("/s/{shareID}", ro.serveShare)
+	// Public shared-widget route (av-ei5h) — no auth required, same
+	// share-row authorization, redirects to the render origin like above.
+	ro.Get("/s/{shareID}/widget", ro.serveShareWidget)
 
 	// The instance's public identity (av-4ac9). Registered here, outside the
 	// authenticated API group, because a visitor with no credential is
@@ -638,6 +641,9 @@ func (ro *Router) RenderHandler() http.Handler {
 	r.Get("/w/{artifactID}", renderer.ServeWidget)
 	// Serve share via render origin
 	r.Get("/s/{shareID}", renderer.ServeShare)
+	// Serve an artifact's widget via its share link (av-ei5h) — share row
+	// authorizes, widget blob renders, share framing applies.
+	r.Get("/s/{shareID}/widget", renderer.ServeShareWidget)
 
 	return r
 }
@@ -647,4 +653,11 @@ func (ro *Router) RenderHandler() http.Handler {
 func (ro *Router) serveShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareID")
 	http.Redirect(w, r, ro.cfg.RenderOrigin+"/s/"+shareID, http.StatusFound)
+}
+
+// serveShareWidget handles public shared-widget links on the app origin,
+// redirecting to the render origin (av-ei5h).
+func (ro *Router) serveShareWidget(w http.ResponseWriter, r *http.Request) {
+	shareID := chi.URLParam(r, "shareID")
+	http.Redirect(w, r, ro.cfg.RenderOrigin+"/s/"+shareID+"/widget", http.StatusFound)
 }

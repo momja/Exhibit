@@ -84,6 +84,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/assets/*", path: "/assets/gallery/api.js"},
 	{route: "/manifest.json", path: "/manifest.json"},
 	{route: "/s/{shareID}", path: "/s/some-share"},
+	{route: "/s/{shareID}/widget", path: "/s/some-share/widget"},
 	{route: "/api/settings/public", path: "/api/settings/public"},
 
 	// The authenticated API. A JSON response has no business echoing the

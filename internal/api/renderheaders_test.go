@@ -39,6 +39,11 @@ func TestRenderOriginWithholdsTheReferrer(t *testing.T) {
 		{"widget, no token", "/w/{artifactID}", "/w/" + id, http.StatusNotFound},
 		{"share", "/s/{shareID}", "/s/" + shareID, http.StatusOK},
 		{"share, unknown id", "/s/{shareID}", "/s/does-not-exist", http.StatusNotFound},
+		// The shared widget (av-ei5h) carries no token — the share row is
+		// the authorization — but it is still on this surface, so both the
+		// success and the miss must withhold the Referer like every row here.
+		{"share widget", "/s/{shareID}/widget", "/s/" + shareID + "/widget", http.StatusOK},
+		{"share widget, unknown id", "/s/{shareID}/widget", "/s/does-not-exist/widget", http.StatusNotFound},
 		// The asset route (av-20fk) takes no render token — its unguessable
 		// asset id is the credential — but it is still on this surface and
 		// still must not put the URL that reached it into a third party's

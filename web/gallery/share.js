@@ -186,15 +186,18 @@
     return toggle ? toggle.dataset.shareId : '';
   }
 
-  function copyLink() {
-    const field = byId('share-link-url');
+  // One copier for both readonly rows: the link URL and the widget embed
+  // snippet (av-ei5h) are both copy-only fields, and copying decides
+  // nothing, so it writes nothing either way.
+  function copyField(id, what) {
+    const field = byId(id);
     if (!field) return;
     field.select();
     // The app origin is not sandboxed, so this is the ordinary clipboard API
     // and not the host bridge the artifact frame has to use.
     navigator.clipboard.writeText(field.value)
-      .then(function() { status('✓ Link copied'); })
-      .catch(function() { status('Select the link and copy it.'); });
+      .then(function() { status('✓ ' + what + ' copied'); })
+      .catch(function() { status('Select the ' + what.toLowerCase() + ' and copy it.'); });
   }
 
   // --- whose data --------------------------------------------------------
@@ -219,7 +222,8 @@
     if (revokeBtn) return revoke(revokeBtn.dataset.shareId);
     if (target.id === 'share-add-btn') return grant();
     if (target.id === 'share-link-replace') return replaceLink();
-    if (target.id === 'share-link-copy') return copyLink();
+    if (target.id === 'share-link-copy') return copyField('share-link-url', 'Link');
+    if (target.id === 'share-widget-copy') return copyField('share-widget-embed', 'Embed code');
     return undefined;
   });
 

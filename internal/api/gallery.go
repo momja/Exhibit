@@ -408,11 +408,16 @@ func (ro *Router) sharePanel(r *http.Request, a *store.Artifact) (sharePanelView
 	if err != nil {
 		return sharePanelView{}, err
 	}
-	return sharePanelView{
+	view := sharePanelView{
 		ArtifactID:      a.ID,
 		Shares:          newArtifactSharesView(shares, ro.shareURL),
 		StateModeShared: a.ShareStateMode == store.ShareStateShared,
-	}, nil
+	}
+	if view.Shares.Link != nil && a.WidgetBlobID != "" {
+		view.WidgetEmbed = `<iframe src="` + ro.shareWidgetURL(view.Shares.Link.ID) +
+			`" width="320" height="132" style="border:0"></iframe>`
+	}
+	return view, nil
 }
 
 // notFound serves the app's HTML 404 (av-at2v). It is both the mux's fallback
@@ -530,6 +535,12 @@ type sharePanelView struct {
 	ArtifactID      string
 	Shares          artifactSharesView
 	StateModeShared bool
+	// WidgetEmbed is the ready-to-paste iframe snippet for the artifact's
+	// shared tile (av-ei5h). Empty when the artifact has no widget or no
+	// public link — both must be true for the URL inside it to resolve, so
+	// the panel shows nothing rather than a dead snippet. Panel-only, like
+	// everything here: the JSON shares route keeps its own shape.
+	WidgetEmbed string
 }
 
 // shareBadgeView is the gallery card's sharing marker (av-6xjd, designed on
