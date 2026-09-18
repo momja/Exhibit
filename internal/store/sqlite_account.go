@@ -17,12 +17,13 @@ import (
 // confirmation can say it rather than gesture at it.
 //
 // Shares are here for a reason the other counts do not share. An artifact and
-// its state belong to the person deleting them; a share is a capability URL
-// somebody *else* may be holding, with no account on this instance and no way
-// to be told it stopped working. Revoking them all at once is the right
-// behaviour — the alternative is orphaned links to a library that no longer
-// exists — but it is the one consequence of this operation that lands on a
-// third party, so the number is surfaced instead of discovered.
+// its state belong to the person deleting them; a share is access somebody
+// *else* may be relying on — a link anyone may hold, or a grant on their
+// account — with no way to be told it stopped working. Revoking them all at
+// once is the right behaviour — the alternative is orphaned shares pointing
+// at a library that no longer exists — but it is the one consequence of this
+// operation that lands on a third party, so the number is surfaced instead
+// of discovered.
 //
 // StorageBytes is here for a plainer reason (av-fw1b): it is the size of what
 // is about to be erased, and it is the same number /profile shows in ordinary

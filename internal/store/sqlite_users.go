@@ -90,6 +90,56 @@ func (s *SQLiteStore) GetUserByExternalID(ctx context.Context, externalID string
 	return s.getUserBy(ctx, "external_id=?", externalID)
 }
 
+// GetUserByEmail is the fallback half of naming a recipient (av-6xjd): the way
+// to address an OIDC account, whose external_id is a provider subject and not
+// something a person could type.
+//
+// It differs from every other lookup on this type in having to cope with a
+// non-unique key, and it does so by refusing rather than choosing. LIMIT 2
+// answers "is there more than one" in the same round trip as "is there one",
+// and two matches are ErrAmbiguousUser — because the caller is about to hand
+// somebody access to somebody else's artifact, and resolving the ambiguity by
+// lowest id would do that to whichever account happened to be created first.
+//
+// An empty address matches nothing. users.email is NOT NULL DEFAULT ”
+// (migration 013), so without that guard every account a provider gave no
+// address to would answer to the empty string.
+//
+// COLLATE NOCASE because an address is not case-sensitive to the person typing
+// it, and the column holds whatever a provider last reported — which is not
+// normalized and not ours to normalize. It widens what counts as ambiguous,
+// and that is the safe direction: two accounts differing only in case are
+// exactly the pair a caller must not be allowed to pick between silently.
+func (s *SQLiteStore) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	if email == "" {
+		return nil, ErrNotFound
+	}
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT "+userColumns+" FROM users WHERE email = ? COLLATE NOCASE ORDER BY id LIMIT 2", email)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var found *User
+	for rows.Next() {
+		if found != nil {
+			return nil, ErrAmbiguousUser
+		}
+		var sc userScan
+		if err := rows.Scan(sc.dest()...); err != nil {
+			return nil, err
+		}
+		found = sc.user()
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if found == nil {
+		return nil, ErrNotFound
+	}
+	return found, nil
+}
+
 // userColumns is the projection every user read shares. password_hash is
 // absent on purpose: it is selected by exactly one query, in
 // LookupLocalCredential, so there is no path by which the hash reaches a

@@ -58,9 +58,12 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 @media (hover:none),(pointer:coarse){.card-edit{opacity:1;pointer-events:auto}}
 .card-meta{font-size:12px;color:#888}
 /* Footer row: created date opposite the capability posture cluster
- * (av-isb3), separated from the card body by a hairline. */
+ * (av-isb3), separated from the card body by a hairline. The sharing marker
+ * (av-6xjd) joins that right-hand pair when it renders at all, so the auto
+ * margin on the date is what keeps those two together rather than letting
+ * space-between spread three items evenly across the row. */
 .card-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:2px;padding-top:8px;border-top:1px solid var(--color-hairline)}
-.card-footer .card-meta{margin:0}
+.card-footer .card-meta{margin:0;margin-right:auto}
 .card-actions{display:flex;gap:12px;font-size:13px}
 .card-actions a{color:#555;text-decoration:none}
 .card-actions a:hover{color:var(--brand-blue)}

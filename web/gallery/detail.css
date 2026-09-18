@@ -33,9 +33,46 @@ iframe{width:100%;height:100%;border:none;display:block}
 .banner-detail-url code{background:#fff3;padding:1px 5px;border-radius:3px;font-size:11px}
 .banner-action{color:var(--brand-blue);text-decoration:none;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;flex-shrink:0;line-height:1.4}
 .banner-action:hover{text-decoration:underline}
+/* The resync notice (av-v991) reports a fact rather than a problem, so it does
+   not borrow the warning banner's yellow — a page that shouts about somebody
+   else saving something trains people to dismiss it. */
+.banner-info{border-bottom-color:#adc6ff;background:#f0f5ff;color:#243c5a}
+.banner-info i.ph{color:var(--brand-blue);font-size:16px;flex-shrink:0;line-height:1.4}
+/* .banner-action is otherwise an anchor; the reload is a button because it acts
+   on this page rather than navigating away. */
+button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:pointer}
 .allowlist{padding:8px 20px;background:#fffbe6;border-bottom:1px solid #ffe58f;font-size:13px;flex-shrink:0}
 .allowlist code{background:#fff3;padding:1px 5px;border-radius:3px;font-size:12px}
 .allowlist input{border:1px solid #ddd;border-radius:4px;padding:3px 8px;font-size:var(--field-font-size);width:240px;margin:0 6px}
+/* The owner's share panel (av-6xjd). It sits below the artifact frame as a
+ * collapsed .details-panel, so the artifact keeps the page: closed it is one
+ * line of chrome, and opening it takes height from the frame (the flex:1
+ * child) rather than laying a modal over the tool somebody is using.
+ * flex-shrink:0 holds it at its content height, the way the toolbar and the
+ * banners hold theirs.
+ *
+ * Rendered only for the owner, so none of this reaches a recipient's page. */
+.share-modal{width:620px}
+#share-body{max-height:min(60vh,520px);overflow-y:auto}
+.share-cols{display:flex;gap:24px;flex-wrap:wrap}
+.share-col{flex:1 1 280px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.share-col h3{margin:0}
+.share-add{display:flex;gap:8px;align-items:center}
+.share-add .field{flex:1;min-width:0}
+.share-grants{list-style:none;display:flex;flex-direction:column;gap:4px}
+.share-grant{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;border-bottom:1px solid var(--color-hairline)}
+.share-grant:last-child{border-bottom:none}
+.share-grant-name{overflow-wrap:anywhere}
+.share-link-row{display:flex;gap:8px;align-items:center}
+.share-link-row .field{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:var(--field-code-font-size)}
+/* The per-name grant report. It lives outside the htmx-swapped region — the
+ * swap that follows a grant would otherwise wipe it before it could be read —
+ * and each row names one submitted handle and what became of it. A name that
+ * resolved to nothing is muted rather than red: a typo is an answer, not a
+ * fault, and the panel's job is to say which of your friends can now open it. */
+.share-results{display:flex;flex-direction:column;gap:2px;margin-top:8px;font-size:12px;color:var(--color-muted)}
+.share-results code{background:var(--color-ground);padding:1px 5px;border-radius:3px}
+.share-result-granted{color:var(--color-ink)}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100}
 .modal-overlay[hidden]{display:none}
 .modal{background:#fff;border-radius:10px;padding:20px;width:380px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,.25)}

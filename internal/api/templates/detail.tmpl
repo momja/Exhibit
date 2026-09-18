@@ -10,6 +10,12 @@
 <link rel="stylesheet" href="/assets/gallery/tokens.css">
 <link rel="stylesheet" href="/assets/gallery/components.css">
 <link rel="stylesheet" href="/assets/gallery/detail.css">
+{{/* htmx swaps the share panel's body after a grant, a revoke or a link
+     change (av-6m3e); self-hosted from the app origin like every other asset,
+     never a CDN. Loaded only where there is a panel to swap: a recipient's
+     page has no share controls at all, so it should not carry the library
+     that refreshes them. */}}
+{{if .Share}}<script src="/assets/htmx/htmx.min.js"></script>{{end}}
 </head>
 <body>
 <header>
@@ -27,6 +33,20 @@
        where the toolbar is an inline row that needs no header of its own. */}}
   <div class="sheet-head"><span class="sheet-grip"></span><span class="sheet-title">{{.Title}}</span><span class="muted text-sm">{{.Created}}</span></div>
   <a href="{{.OpenURL}}" target="_blank">Open in new tab ↗</a>
+  {{/* Everything from here to the capability cluster belongs to the artifact's
+       OWNER (av-awr4). A recipient reached this page through a grant, which is
+       read access to the artifact and nothing else, so each of these would
+       answer 404 from a server that has always been owner-scoped: /edit and
+       /agent read the body, the export reads it too, and refetch rewrites it.
+       Rendering them and letting them fail is the specific dishonesty this
+       gate exists to remove — a control that does nothing teaches the visitor
+       the tool is flaky rather than that it is not theirs.
+
+       The condition is .ReadOnly, from pageCredentials, and deliberately not a
+       second flag of this template's own: it is the same value api.js refuses
+       writes on, so what the page offers and what the page may send cannot
+       drift apart. */}}
+  {{if not .ReadOnly}}
   <span class="toolbar-sep">|</span>
   <a href="/artifacts/{{.ID}}/edit"><i class="ph ph-pencil-simple"></i> Edit</a>
   <span class="toolbar-sep">|</span>
@@ -37,12 +57,26 @@
        because the response is an attachment — no JS, and it works from the
        page a visitor is already on. */}}
   <a href="/api/artifacts/{{.ID}}/export" download><i class="ph ph-download-simple"></i> Download file</a>
+  {{end}}
   <span class="toolbar-sep">|</span>
+  {{/* The cluster stays for everyone, and the link to change it does not. What
+       this artifact may reach is a fact about the tool running in the visitor's
+       own browser — the one piece of the owner's configuration a recipient has
+       a direct stake in, and what the CSP-block explanation points back at. */}}
   {{template "capabilityCluster" .Capability}}
+  {{if not .ReadOnly}}
   <a href="/artifacts/{{.ID}}/edit#security-panel">Manage in allowlist settings →</a>
+  {{/* Opens the share modal (av-esa1). A button rather than a link because the
+       panel is on this page; .Share gates it on the same value that decides
+       whether the modal is rendered at all, so the control and its target
+       cannot disagree about who is an owner. */}}
+  {{if .Share}}
+  <span class="toolbar-sep">|</span>
+  <button type="button" id="share-open"><i class="ph ph-share-network"></i> Share</button>{{end}}
   {{if .SourceURL}}
   <span class="toolbar-sep">|</span>
   <button onclick="refetchSource()">Update from source ↻</button>{{end}}
+  {{end}}
   <span id="al-status" class="muted"></span>
 </div>
 {{/* Scrim behind the mobile actions sheet; display:none above 640px. */}}
@@ -73,6 +107,61 @@
   </div>
   <a class="banner-action" href="{{.OpenURL}}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</a>
 </div>
+{{/* The recipient's answer to a CSP-blocked origin (av-awr4): explain, do not
+     ask. Only the artifact's owner may widen its allowlist, so the runtime
+     permission prompt is not offered here — a prompt whose Allow 404s teaches
+     the visitor the tool is flaky rather than that it is not theirs to grant.
+     But silence is worse: a shared artifact is frozen at whatever its owner
+     approved, and if that set is short of what the tool needs, the tool simply
+     does nothing with no reason given anywhere. So the block becomes a
+     sentence naming the origin.
+
+     A banner of its own rather than the capability one above, for three
+     reasons that all bite. That banner is single-use — the first message to
+     fill its <details> wins — so an artifact that both spawns a module worker
+     and reaches an unapproved origin would report one and swallow the other.
+     It accumulates: a tool reaching four origins is four facts, not the first
+     one. And its trailing action is "Open in new tab", which is a real remedy
+     for a sandbox limitation and no remedy at all here — the top-level render
+     runs under the identical policy. This one carries no action, which is the
+     point: there is nothing on this page for the visitor to press.
+
+     Rendered only for a read-only visitor, so an owner's page is byte-for-byte
+     what it was; detail.js tolerates its absence for the same reason. */}}
+{{if .ReadOnly}}
+<div id="origin-blocked-banner" class="banner banner-warn" role="alert" hidden>
+  <i class="ph ph-warning" aria-hidden="true"></i>
+  <div class="banner-body">
+    {{/* detail.js writes the headline, because it names origins it learns at
+         runtime from the frame's own blocked requests. */}}
+    <span id="origin-blocked-headline"></span>
+    <details class="banner-details">
+      <summary>Details</summary>
+      <p>Only this artifact's owner can change what it is allowed to contact, so it cannot be approved from here — the tool is running exactly as they set it up. If it needs one of these, ask them to add it to the artifact's allowlist.</p>
+      <div id="origin-blocked-list"></div>
+    </details>
+  </div>
+</div>
+{{end}}
+{{/* State changed under the artifact's feet (av-v991). The host refetches the
+     artifact's saved data and posts it into the frame, where the shim applies
+     it and fires real 'storage' events — so an artifact written to the platform
+     contract updates itself and this banner never appears. One that read
+     storage at startup and never listened again cannot, and this is its remedy:
+     a reload the visitor chooses.
+
+     In the page's chrome and never in the artifact's DOM, which the artifact
+     could forge into a button of its own. And never automatic: the render
+     document is no-store so a reload is a full re-fetch, sessionStorage is
+     in-memory by design and dies with the frame, and so does anything the
+     artifact holds in a variable — including a half-typed input. */}}
+<div id="state-changed-banner" class="banner banner-info" role="status" hidden>
+  <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
+  <div class="banner-body">
+    <span>This tool's saved data changed somewhere else. It is running with what it loaded.</span>
+  </div>
+  <button type="button" class="banner-action" id="state-changed-reload"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Reload the tool</button>
+</div>
 <div class="panels">
   {{/* No allow="clipboard-*" delegation: the frame's opaque origin matches no
        Permissions-Policy allowlist, so the delegation was a no-op (av-hll6).
@@ -81,6 +170,23 @@
        keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. */}}
   <iframe src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy"></iframe>
 </div>
+
+{{/* The four capability dialogs below, and the network prompt at the end of
+     this file, are rendered for every visitor and OPENED for the owner alone
+     (av-awr4). Each writes per-artifact authority the server grants only to an
+     owner, so a recipient who saw one would be answering a question whose
+     answer is refused — detail.js therefore settles the artifact's request the
+     way a denial always has and never raises the dialog.
+
+     The gate is in the script rather than here, deliberately. These are one
+     definition apiece, resolved by id from four bridges and a shared module; a
+     template that dropped the markup would leave every one of those resolving
+     null, and the failure would be an exception at page load rather than a
+     dialog that stays shut. Hiding the markup would also be the weaker claim
+     of the two: what matters is that nothing in a recipient's session sends
+     the write, which is asserted by running the page script
+     (web/gallery/detail.recipient.test.mjs), not by reading this file. */}}
+{{if .Share}}{{template "sharePanel" .}}{{end}}
 
 <div id="dl-modal" class="modal-overlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dl-title">
@@ -156,6 +262,20 @@ const TOKEN = {{.Token}};
      template text for the boolean, matching the other bootstrap flags:
      html/template's JS escaper pads a {{value}} boolean with spaces. */ -}}
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
+{{/* STATE_WRITABLE is not READ_ONLY inverted, and the two sit together so that
+     is visible (av-v991). READ_ONLY is about the artifact — its body, its
+     allowlist, its capability approvals, all of them the owner's. This is about
+     the data the artifact saves while somebody uses it, which belongs to
+     whoever typed it: a granted recipient's page is read-only AND
+     state-writable, and an anonymous reader's page is neither. api.js spends it
+     in apiStateFetch, and the server refuses the same set again.
+
+     SHARED_STATE says the artifact puts every viewer on the owner's rows, so
+     somebody else may be writing them while this page is open. It turns on the
+     periodic resync; the visibilitychange resync runs for every artifact,
+     because a tab left open all afternoon is stale whoever wrote the rows. */ -}}
+const STATE_WRITABLE = {{if .StateWritable}}true{{else}}false{{end}};
+const SHARED_STATE = {{if .SharedState}}true{{else}}false{{end}};
 const ID = {{.ID}};
 const SOURCE_URL = {{.SourceURL}};
 {{/* The app-origin route that mints a render token and redirects to it, used
@@ -183,5 +303,9 @@ let microphoneApproved = {{if .Capability.MicrophoneApproved}}true{{else}}false{
      (av-6xvs). Before detail.js, which installs it at load. */}}
 <script src="/assets/gallery/network-prompt.js"></script>
 <script src="/assets/gallery/detail.js"></script>
+{{/* The share panel's script, loaded only where the panel exists. It resolves
+     everything by id inside #share-panel and tolerates the panel's absence, so
+     the guard is a courtesy rather than the control. */}}
+{{if .Share}}<script src="/assets/gallery/share.js"></script>{{end}}
 </body>
 </html>{{end}}

@@ -38,8 +38,20 @@ type renderURLs struct {
 	// it via renderSigner, which itself never returns nil (an ephemeral key
 	// stands in when no secrets Box is configured). A Router built any other
 	// way — direct struct literal, a future constructor — must preserve that.
-	signer  *rendertoken.Signer
-	ownerID int64
+	signer *rendertoken.Signer
+	// ownerID is the owner of the artifacts these URLs address — the principal
+	// that authorizes the read at the render surface, which refuses a token
+	// whose owner does not own the artifact. viewerID is whose state rows the
+	// document inlines (av-6axy).
+	//
+	// They hold the same value for every URL a page mints about its own
+	// library, and differ in exactly one place: a recipient opening an artifact
+	// a grant names them on (av-awr4), where the owner still authorizes and the
+	// recipient's own rows are what renders. ownedBy is the only way to make
+	// them differ, so "these URLs point at somebody else's artifact" is a
+	// statement a call site has to make out loud.
+	ownerID  int64
+	viewerID int64
 	// anonymous mints tokens that render the owner's artifact for nobody: no
 	// state inlined, no write-through (av-wmp6). It is set when the request
 	// being served is a public instance's unauthenticated visitor.
@@ -56,12 +68,28 @@ type renderURLs struct {
 // comment); NewRouter guarantees that for every Router this package
 // constructs.
 func (ro *Router) renderURLs(r *http.Request) renderURLs {
+	viewer := ownerIDFromCtx(r.Context())
 	return renderURLs{
 		origin:    ro.cfg.RenderOrigin,
 		signer:    ro.tokens,
-		ownerID:   ownerIDFromCtx(r.Context()),
+		ownerID:   viewer,
+		viewerID:  viewer,
 		anonymous: publicVisitor(r.Context()),
 	}
+}
+
+// ownedBy re-points these URLs at an artifact somebody else owns, keeping this
+// request's visitor as the state principal (av-awr4).
+//
+// It exists because a grant separates two things the rest of the page has no
+// reason to tell apart: the artifact is read under its *owner's* authority —
+// the render surface verifies the token's owner against the artifact's row —
+// while the state inlined into it belongs to whoever is looking. Calling it
+// with the request's own owner is a no-op, which is why the detail page can
+// call it unconditionally and stay correct for the owner.
+func (u renderURLs) ownedBy(ownerID int64) renderURLs {
+	u.ownerID = ownerID
+	return u
 }
 
 // mint signs one render-origin credential for id, as whoever this page is being
@@ -70,7 +98,10 @@ func (u renderURLs) mint(id string) string {
 	if u.anonymous {
 		return u.signer.MintAnonymous(id, u.ownerID)
 	}
-	return u.signer.Mint(id, u.ownerID)
+	// MintViewer with the two principals equal encodes no principal at all, so
+	// this is byte-identical to Mint for every page that renders its own
+	// library — there is no owner/recipient branch here to get wrong.
+	return u.signer.MintViewer(id, u.ownerID, u.viewerID)
 }
 
 // artifact returns the tokened URL of an artifact's render document, for an
@@ -131,9 +162,26 @@ func (ro *Router) galleryNew(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, page)
 }
 
+// galleryDetail serves the viewer page — the one app-origin page a non-owner
+// can reach (av-awr4).
+//
+// A grant is not a link: it puts no secret in the URL, so a recipient opens the
+// artifact at the same /artifacts/:id the owner does, and there is no second
+// address and no second template. What differs is what the page *offers*, and
+// that is one narrowing (forArtifactOwnedBy) rather than a parallel render
+// path — the same shape public mode already uses to suppress edit controls from
+// request context.
+//
+// The read goes through GetArtifactReadableBy, the deny-by-default accessor
+// av-lrae added beside the owner-scoped one. It is the only route that calls it
+// today, and deliberately: widening the owner predicate itself would have
+// handed a recipient the DELETE and the body rewrite along with the read. A
+// viewer with no grant gets (nil, nil) — the 404 page, indistinguishable from
+// an artifact that never existed.
 func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
+	viewerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(viewerID), id)
 	if err != nil {
 		serverError(w, r, "gallery detail lookup", err)
 		return
@@ -147,8 +195,24 @@ func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	// page must never embed the source — for a multi-MB artifact that made
 	// this page itself multi-MB and Safari stalls on the response, so the
 	// artifact "never loads". The edit page is where the body is viewed and
-	// edited.
-	page, err := renderDetailPage(a, ro.renderURLs(r), ro.pageCredentials(r))
+	// edited. For a recipient there is no such page at all: the source is one
+	// of the things a grant does not carry.
+	creds := ro.pageCredentials(r).forArtifactOwnedBy(viewerID, a.OwnerID)
+
+	// The share panel is read only for the owner, and the read is skipped
+	// entirely for anybody else — a recipient may use the artifact, and who
+	// else was given it is not part of what a grant carries.
+	var share *sharePanelView
+	if !creds.ReadOnly {
+		view, err := ro.sharePanel(r, a)
+		if err != nil {
+			serverError(w, r, "gallery detail shares", err)
+			return
+		}
+		share = &view
+	}
+
+	page, err := renderDetailPage(a, ro.renderURLs(r).ownedBy(a.OwnerID), creds, share)
 	if err != nil {
 		serverError(w, r, "gallery detail render", err)
 		return
@@ -209,23 +273,36 @@ func openURL(artifactID string) string {
 // start at the click, so the TTL can stay minutes without the affordance
 // breaking. It also keeps the token out of the page source, where a "copy link
 // address" would spread a credential.
+// It reads through the same grant-aware accessor the detail page does
+// (av-awr4), because this is the door the detail page's own affordances lead
+// to: the toolbar's "Open in new tab", and the capability banner's remedy for
+// a frame the sandbox cannot run. A recipient whose page offers those and
+// whose /open then 404s has a broken page, and the reason would be invisible.
+// It grants nothing extra — a top-level render of an artifact they may already
+// read, under that artifact's own unchanged CSP.
 func (ro *Router) openArtifact(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
 	urls := ro.renderURLs(r)
-	a, err := ro.cfg.Store.GetArtifact(r.Context(), urls.ownerID, id)
+	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(urls.viewerID), id)
 	if err != nil {
 		serverError(w, r, "open artifact lookup", err)
 		return
 	}
-	// The owner check is belt to the query's braces: GetArtifact is already
-	// scoped to urls.ownerID (av-ep8k), so this can only fire if that scoping
-	// itself were ever wrong. Cheap, and it keeps the cross-tenant guarantee
-	// true even if a future call site's scoping regresses — the same
-	// defense-in-depth render.go's ServeArtifact keeps.
-	if a == nil || a.OwnerID != urls.ownerID {
+	if a == nil {
 		ro.notFound(w, r)
 		return
 	}
+	// The token is minted as the artifact's owner because that is who the
+	// render surface checks it against; the visitor stays the state principal.
+	// For an owner opening their own artifact the two are the same value and
+	// this is the token it always was.
+	//
+	// The old belt-to-the-braces `a.OwnerID != urls.ownerID` check is gone with
+	// the owner-scoped read it braced. It cannot be restated here: a recipient
+	// legitimately opens an artifact they do not own, so the comparison it made
+	// is no longer a statement about authority. The accessor is what authorizes
+	// now, and it says so in SQL.
+	urls = urls.ownedBy(a.OwnerID)
 	// The Location header carries a credential and a deadline; a cached
 	// redirect would hand out a token that has already expired.
 	w.Header().Set("Cache-Control", "no-store")
@@ -284,6 +361,63 @@ func (ro *Router) cardWidgetPartial(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, fragment)
+}
+
+// sharePanelPartial re-renders the owner's share panel (av-6xjd) after a
+// grant, a revoke, or a change to the public link.
+//
+// It exists for the reason the widget preview fragment does: the detail page
+// holds a live artifact frame, and a reload to show the new guest list would
+// restart the tool the owner is looking at. Rendering the same named partial
+// the full page render used is what keeps one definition of the list — the
+// alternative is page JS rebuilding rows in a second language, over
+// attacker-influenced names it would then have to escape by hand.
+//
+// GetArtifact, not the grant-aware accessor: this panel is the owner's, and a
+// recipient asking for it gets the 404 a nonexistent artifact gets.
+func (ro *Router) sharePanelPartial(w http.ResponseWriter, r *http.Request) {
+	ownerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, r.URL.Query().Get("artifact"))
+	if err != nil {
+		serverError(w, r, "share panel partial lookup", err)
+		return
+	}
+	if a == nil {
+		// Plain-text 404: htmx leaves the target untouched on an error
+		// response, so the owner keeps the panel they had.
+		http.Error(w, "artifact not found", http.StatusNotFound)
+		return
+	}
+	view, err := ro.sharePanel(r, a)
+	if err != nil {
+		serverError(w, r, "share panel partial shares", err)
+		return
+	}
+	fragment, err := renderPage("sharePanelBody", view)
+	if err != nil {
+		serverError(w, r, "share panel partial render", err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, fragment)
+}
+
+// sharePanel reads one artifact's sharing state for the owner's panel.
+func (ro *Router) sharePanel(r *http.Request, a *store.Artifact) (sharePanelView, error) {
+	shares, err := ro.cfg.Store.ListArtifactShares(r.Context(), a.OwnerID, a.ID)
+	if err != nil {
+		return sharePanelView{}, err
+	}
+	view := sharePanelView{
+		ArtifactID:      a.ID,
+		Shares:          newArtifactSharesView(shares, ro.shareURL),
+		StateModeShared: a.ShareStateMode == store.ShareStateShared,
+	}
+	if view.Shares.Link != nil && a.WidgetBlobID != "" {
+		view.WidgetEmbed = `<iframe src="` + ro.shareWidgetURL(view.Shares.Link.ID) +
+			`" width="320" height="132" style="border:0"></iframe>`
+	}
+	return view, nil
 }
 
 // notFound serves the app's HTML 404 (av-at2v). It is both the mux's fallback
@@ -390,10 +524,103 @@ type widgetView struct {
 	Title string
 }
 
+// sharePanelView is the owner's share panel (av-6xjd) — the three independent
+// controls that decide who can open an artifact, and the list of who currently
+// can.
+//
+// StateModeShared is a bool rather than the raw mode string because the panel
+// offers a choice between exactly two answers and a template comparing strings
+// would be a third place the enum's spelling has to be right.
+type sharePanelView struct {
+	ArtifactID      string
+	Shares          artifactSharesView
+	StateModeShared bool
+	// WidgetEmbed is the ready-to-paste iframe snippet for the artifact's
+	// shared tile (av-ei5h). Empty when the artifact has no widget or no
+	// public link — both must be true for the URL inside it to resolve, so
+	// the panel shows nothing rather than a dead snippet. Panel-only, like
+	// everything here: the JSON shares route keeps its own shape.
+	WidgetEmbed string
+}
+
+// shareBadgeView is the gallery card's sharing marker (av-6xjd, designed on
+// av-v991's 2026-08-06 note).
+//
+// **One badge, naming the strongest thing true**, because the states are a
+// ladder ordered by how much authority has left the owner's hands, not four
+// independent flags:
+//
+//	private          no share row at all
+//	shared with N    named accounts can run it, each on their own data
+//	public link      anyone holding a URL can run it, and sees the owner's data
+//	shared data      somebody named can CHANGE the owner's data
+//
+// **Private gets no marker.** The absence is the signal: a library of forty
+// cards must not render forty badges, and marking the default trains people to
+// ignore the marker. Level is "" for that case and the partial renders
+// nothing.
+//
+// It is ambient — always visible on the card, never hover-only — because the
+// failure it exists for is the share made eight months ago that nobody has
+// thought about since. A marker you have to go looking for does not help
+// somebody who has forgotten.
+type shareBadgeView struct {
+	// Level is "", "granted", "public" or "shared-data"; it drives the class
+	// and is what a test asserts on.
+	Level string
+	Icon  string
+	Label string
+	// Detail is the full sentence, on the badge's title. Unlike Label it names
+	// *every* fact that is true, since the label can only carry the strongest
+	// one and "public link" would otherwise hide the three people who also
+	// hold grants.
+	Detail string
+}
+
+func newShareBadgeView(a *store.Artifact) shareBadgeView {
+	grants, link := a.ShareGrantCount, a.SharePublicLink
+	if grants == 0 && !link {
+		return shareBadgeView{}
+	}
+
+	people := strconv.Itoa(grants) + " person"
+	if grants != 1 {
+		people = strconv.Itoa(grants) + " people"
+	}
+	detail := []string{}
+	if grants > 0 {
+		if a.ShareStateMode == store.ShareStateShared {
+			detail = append(detail, people+" can open this artifact, and everyone using it reads and writes one shared copy of its data.")
+		} else {
+			detail = append(detail, people+" can open this artifact. Each keeps their own data.")
+		}
+	}
+	if link {
+		detail = append(detail, "Anyone with its public link can open it and read the owner's saved data.")
+	}
+
+	badge := shareBadgeView{Detail: strings.Join(detail, " ")}
+	switch {
+	// Write beats read: a named person changing the owner's saved data is
+	// more authority given away than a stranger reading it, which is the
+	// order av-v991's ladder puts them in. The public link, when there is
+	// also one, is still stated in Detail.
+	case grants > 0 && a.ShareStateMode == store.ShareStateShared:
+		badge.Level, badge.Icon, badge.Label = "shared-data", "ph-users-three", "Shared data"
+	case link:
+		badge.Level, badge.Icon, badge.Label = "public", "ph-globe", "Public link"
+	default:
+		badge.Level, badge.Icon, badge.Label = "granted", "ph-user-circle", "Shared with "+strconv.Itoa(grants)
+	}
+	return badge
+}
+
 // galleryCard is one artifact card on the index page. The tagRow/tagPills
 // partials read ArtifactID and Tags from it directly; the capabilityCluster
 // partial reads Capability to render the card-footer posture badge + popover
-// (av-isb3, av-41se); Widget renders the card's tile (av-fafu).
+// (av-isb3, av-41se); Widget renders the card's tile (av-fafu); Share renders
+// the sharing marker (av-6xjd), and renders nothing at all when the artifact
+// is private.
 type galleryCard struct {
 	ArtifactID string
 	Title      string
@@ -401,6 +628,7 @@ type galleryCard struct {
 	Tags       []tagView
 	Capability capabilityView
 	Widget     widgetView
+	Share      shareBadgeView
 }
 
 // newWidgetView builds a card's tile view model, minting the tile frame's
@@ -503,6 +731,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query string, 
 				ShowManage:         true,
 			},
 			Widget: newWidgetView(a, urls),
+			Share:  newShareBadgeView(a),
 		}
 	}
 	return renderPage("gallery", galleryPageData{
@@ -548,21 +777,55 @@ type detailPageData struct {
 	OpenURL    string
 	SourceURL  string
 	Capability capabilityView
+	// SharedState is share_state_mode == 'shared': every viewer of this
+	// artifact is on the owner's rows, so somebody else may be writing them
+	// while this page is open. It drives the page's state resync (av-v991) and
+	// nothing else — the frame's document already resolved whose rows to
+	// inline, server-side, and this is only the page learning that it is worth
+	// asking again.
+	SharedState bool
 	pageCredentials
+	// Share is the owner's share panel (av-6xjd), and it is nil for anybody
+	// else. Nil rather than an empty struct, because "this visitor has no
+	// share panel" and "this artifact is shared with nobody" are different
+	// facts and the template must not be able to confuse them: a recipient
+	// must not learn the guest list, and an owner with no shares yet must
+	// still get the controls.
+	//
+	// The gate is creds.ReadOnly, narrowed per artifact by
+	// forArtifactOwnedBy — the same flag every other owner-only control on
+	// this page hangs off, and deliberately not a second one, because two
+	// flags are two things to keep in agreement and the disagreement is the
+	// bug.
+	Share *sharePanelView
 }
 
-func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials) (string, error) {
+// renderDetailPage builds the viewer page for whoever this request is.
+//
+// creds.ReadOnly is the single switch between the owner's page and a
+// recipient's (av-awr4). Everything the template withholds — the edit link, the
+// source, the agent, the export, refetch, the allowlist and capability
+// controls — hangs off it, and so does the popover's Manage link and the page
+// script's willingness to approve anything. The capability *cluster* itself
+// stays: it reports what this tool may reach, which is a fact about the
+// artifact running in the recipient's browser and exactly what the CSP-block
+// explanation refers back to. What goes is the link to change it.
+func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials, share *sharePanelView) (string, error) {
 	allowlist := a.NetworkAllowlist
 	if allowlist == nil {
 		allowlist = []string{}
 	}
 	return renderPage("detail", detailPageData{
+		Share:     share,
 		ID:        a.ID,
 		Title:     a.Title,
 		Created:   a.CreatedAt.Format("Jan 2, 2006 15:04"),
 		FrameURL:  urls.artifact(a.ID),
 		OpenURL:   openURL(a.ID),
 		SourceURL: a.SourceURL,
+		// Read through the same constant the store resolves the mode with, so
+		// the page and the render agree about what 'shared' is spelled as.
+		SharedState: a.ShareStateMode == store.ShareStateShared,
 		Capability: capabilityView{
 			ArtifactID:         a.ID,
 			NetworkAllowlist:   allowlist,
@@ -571,7 +834,10 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials)
 			LinksApproved:      a.LinksApproved,
 			CameraApproved:     a.CameraApproved,
 			MicrophoneApproved: a.MicrophoneApproved,
-			ShowManage:         true,
+			// The popover's Manage link points at the edit page, which a
+			// recipient cannot reach: it is a link to a 404 rather than a
+			// control they might have used.
+			ShowManage: !creds.ReadOnly,
 		},
 		pageCredentials: creds,
 	})

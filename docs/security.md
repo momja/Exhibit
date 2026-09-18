@@ -152,21 +152,33 @@ av-c5aq):
   scope is what makes a URL-borne credential acceptable: the artifact *can* read
   its own token out of `location.href`, and that gains it only the access it
   already has, to itself, for a few more minutes.
-- **Shape: HMAC-SHA256 over `(version, artifact id, claims)`**, encoded
-  `<owner>.<expiry>[.a].<tag>` in a `t` query parameter. Not a JWT: one issuer,
-  one verifier, one algorithm, so an algorithm-negotiation surface would be pure
+- **Shape: HMAC-SHA256 over `(version, artifact id, claims)`**, with the claims
+  written as `name=value` pairs joined by `.` and the tag last —
+  `o=1.e=1785948001.<tag>` in a `t` query parameter. Not a JWT: one issuer, one
+  verifier, one algorithm, so an algorithm-negotiation surface would be pure
   cost. The artifact id is *mixed into the MAC* rather than carried as a field,
   so a token minted for artifact A does not verify on artifact B's route — the
   scoping is the signature itself, not a comparison a verifier could omit. The
   tag is the last field and everything before it is the signed message, so a
-  claim can be added without changing what is authenticated; an unknown claim is
-  rejected rather than ignored, since a message this version cannot fully read
-  is one it must not act on half of.
+  claim can be added without changing what is authenticated — and claims are
+  parsed only *after* the MAC verifies.
+- **The claim set is closed and the parser is strict** (av-6axy): `o` (the
+  owner, required, and what authorizes the read), `e` (expiry, required), `p`
+  (the principal whose state is inlined, absent meaning the owner), `a`
+  (anonymous), `s` (the share this render happens under). A duplicate key, an
+  unknown key, a value carrying `.` or `=`, and a token bearing both `a` and `p`
+  are each rejected rather than resolved: a message this version cannot fully
+  read is one it must not act on half of, and `o=1.o=2` must not mean whatever a
+  last-wins reader would make of it. The version stays *inside* the MAC and off
+  the wire — what a wire version buys, two verifiers side by side through a
+  format rollout, the ten-minute TTL already buys.
 - **The optional `a` claim renders for nobody** (av-wmp6): a public instance
   mints it for a visitor with no credential, and the document it authorizes
   inlines no state and persists none. It lives *inside* the MAC because it
   subtracts authority — as a query parameter, the viewer could delete it and be
-  handed the owner's data.
+  handed the owner's data. It is its own key rather than `p=0` for the same
+  reason: a falsy principal is one careless "zero means unset" branch away from
+  silently promoting a nobody to the owner.
 - **Key: derived from the existing server secret** (`EXHIBIT_SECRET`, or the
   generated `secret.key`), domain-separated from the AES-GCM key that seals
   agent provider keys. One secret for an operator to manage, not two. With no
@@ -190,8 +202,12 @@ Where a token is minted matters for both cost and staleness:
   be expired by the time anyone used it — and "copy link address" would spread a
   credential.
 
-The verified owner is also the render surface's **state principal**: the answer
-to "whose state should be inlined into this document". That answer is
+The token also names the render surface's **state principal**: the answer to
+"whose state should be inlined into this document", which is a different
+question from "who may read this artifact" and since av-6axy has a claim of its
+own. `o` authorizes the read; `p` selects the rows, and defaults to `o` when
+absent — which is every owner frame, since MintViewer omits a principal equal
+to the owner. A recipient's frame carries their own `p`. That answer is
 load-bearing — `artifact_state` is keyed by `(artifact_id, user_id, key)`
 (av-q0ub), and the token's principal *is* that `user_id`. A principal with rows
 of their own gets exactly those; a principal with none gets an empty cache,
@@ -395,6 +411,18 @@ session". On an instance that *has* a provider, a page render that resolved no
 session is either a public visitor or a gap in `sessionGate`, and the service
 token is the right answer to neither. Falling back to it would turn every future
 hole in the gate into a credential leak rather than a `401`.
+
+`READ_ONLY` is its own column and not `TOKEN == ""` because the two answer
+different questions, and av-awr4 is the case that makes the difference load
+bearing: a **recipient** of a shared artifact is a session-authenticated
+browser holding a real credential, read-only about *this* artifact and not
+about their own library. The detail page therefore narrows the resolved value
+per artifact (`pageCredentials.forArtifactOwnedBy`), only ever removing
+authority, and the resulting flag decides both what the page renders and what
+`apiFetch` will send — one decision, so a control cannot outlive the credential
+that would have to back it. Ownership cannot live on the Principal itself: a
+Principal is resolved before any artifact is named, and read-only-everywhere
+would lock a recipient out of their own shelf.
 
 Two supporting pieces follow from the same decision:
 
@@ -741,6 +769,34 @@ Five properties of the reporter are load-bearing:
 
 - **The detail page** hosts it. The frame is sandboxed and the page around it
   is ours, which is the whole precondition.
+- **Not for a recipient, who is told instead** (av-awr4). Somebody an artifact
+  is shared with opens the same detail page its owner does, and only the owner
+  may widen an artifact's allowlist — the origin routes are owner-scoped, so a
+  prompt shown to a recipient would 404 on Allow and teach them the tool is
+  flaky rather than that it is not theirs to grant. This is the *redirect*
+  case's shape reused rather than a new mechanism: explain, do not ask.
+
+  Silence would be the wrong half of that. **A shared artifact is frozen at
+  whatever its owner approved**, so an allowlist short of what the tool needs
+  makes the tool visibly do nothing, with the only account of it in a console
+  the audience for this product does not open. The block therefore becomes a
+  sentence in app chrome naming the origin — "This tool tried to reach
+  api.example.com. Its owner has not allowed that." — accumulating one line per
+  distinct origin, and carrying no control, because there is no answer this
+  visitor could give. Fixing it means asking the owner, and saying so is the
+  whole feature.
+
+  The same session raises none of the other first-use prompts either
+  (downloads, clipboard, external links, camera/microphone — all `PATCH
+  /api/artifacts/:id`). Those settle as denials, which is a failure the
+  artifact already handles and the sandbox already produced before any bridge
+  existed; only the network case needs saying out loud, because only it leaves
+  the tool looking broken rather than refused. A capability the *owner* already
+  approved still works — the grant belongs to the artifact, and spending one
+  writes nothing. Asserted by driving the shipped page script
+  (`web/gallery/detail.recipient.test.mjs`): that nothing opens is a claim
+  about behaviour, and reading the markup would answer a different question,
+  since every dialog is still in the document for both visitors.
 - **A top-level render and a share do not, by design.** `/a/:id` opened
   directly is a real-origin document whose only DOM belongs to the artifact,
   so a prompt drawn there would be a prompt the artifact could forge — and
@@ -807,7 +863,14 @@ are four families:
   *backing* behind an unchanged surface. `localStorage` is backed by the server
   → portable, cross-device state. `sessionStorage` is a **separate namespace
   over a separate, purely in-memory cache**, never persisted and never sent
-  anywhere — see §1.2.
+  anywhere — see §1.2. The adapter carries traffic in *both* directions
+  (av-v991): writes post to the host, and the host posts back the server's
+  current map, which the adapter applies to its cache in place and reports as
+  real `storage` events. The inbound half adds no authority — it is the
+  artifact's own state arriving over the channel its writes already leave by,
+  pinned to `APP_ORIGIN` and checked on both halves of the sender's identity —
+  and it is what makes two accounts on one `share_state_mode: shared` artifact
+  see each other's moves without reloading.
 - **Capability bridge** — re-grants a capability the sandbox *denied*
   (clipboard, downloads, external links) by proxying the op to the trusted host
   under first-use approval. Not persistence. This section.

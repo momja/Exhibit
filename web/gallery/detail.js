@@ -3,6 +3,12 @@
  * per-request globals this file reads (and reassigns) before it loads:
  *   TOKEN / READ_ONLY  - this visitor's API credential, decided server-side
  *                        per request (av-5imk); spent via api.js's apiFetch
+ *   STATE_WRITABLE     - whether this visitor may write the artifact's saved
+ *                        data. Not READ_ONLY inverted: a granted recipient is
+ *                        both read-only and state-writable (av-v991)
+ *   SHARED_STATE       - the artifact's share_state_mode is 'shared', so every
+ *                        viewer is on the owner's rows and somebody else may be
+ *                        writing them while this page is open
  *   ID                 - the artifact id
  *   SOURCE_URL         - source URL for URL-ingested artifacts ('' otherwise;
  *                        the Update-from-source button only renders when set)
@@ -16,6 +22,32 @@
  *   cameraApproved     - persisted first-use camera approval (mutable)
  *   microphoneApproved - persisted first-use microphone approval (mutable)
  */
+
+// Whether this visitor may grant this artifact anything (av-awr4).
+//
+// Four first-use prompts on this page write per-artifact authority — downloads,
+// clipboard, external links, and the camera/microphone gate, all through PATCH
+// /api/artifacts/:id — and a fifth, the network prompt, through POST
+// …/origins. Every one of them is the owner's decision to make, enforced by
+// owner-scoped queries that have always refused anybody else. So a recipient
+// who was offered them would click Allow and watch nothing happen, and would
+// reasonably conclude the tool is broken rather than that it is not theirs.
+//
+// The answer is not to prompt: the artifact's request is settled the way a
+// denial has always settled it, so the artifact sees the failure it already
+// knows how to handle and nothing hangs. What the visitor is told about is the
+// one case where silence would leave a tool visibly doing nothing with no
+// reason anywhere — a blocked origin, which explainBlockedOrigin below turns
+// into a sentence.
+//
+// READ_ONLY is the server's word for it, narrowed per artifact by
+// pageCredentials.forArtifactOwnedBy. Reading it here rather than a flag of
+// this script's own is what keeps "what the page offers" and "what the page may
+// send" one decision: api.js refuses the same writes locally off the same
+// value, so a prompt that slipped through this gate would still send nothing.
+function mayApprove() {
+  return !(typeof READ_ONLY === 'boolean' && READ_ONLY);
+}
 
 // Mobile actions sheet (av-g7n7): below 640px the toolbar is styled as a
 // bottom sheet that this kebab slides up over a scrim. One body class drives
@@ -52,6 +84,28 @@ document.addEventListener('keydown', function(e) {
 // forward them same-origin with the auth token. Validate the message shape and
 // that it truly came from our artifact frame (e.origin is 'null' when sandboxed,
 // so identity is established by the source window, not the origin string).
+//
+// These go through apiStateFetch rather than apiFetch, and that is the one
+// difference av-v991 makes here. A recipient's page is READ_ONLY — the artifact
+// is not theirs to change — but the data it saves while they use it is theirs,
+// so the state write is the single exception carved out of that flag, gated on
+// STATE_WRITABLE and refused again by the server. Before it, a granted tool
+// booted with the state it had and lost everything typed into it afterwards.
+//
+// pendingStateWrites is read by the resync below: a refetch that lands between
+// a setItem and its PUT would push the pre-write server copy back into the
+// frame and fire a storage event undoing what the user just did. Last-write-
+// wins settles it a moment later either way, but the flicker is visible and
+// avoidable.
+let pendingStateWrites = 0;
+
+function sendStateWrite(path, opts) {
+  pendingStateWrites++;
+  return apiStateFetch(path, opts)
+    .catch(function () {})
+    .then(function () { pendingStateWrites--; });
+}
+
 window.addEventListener('message', function(e) {
   const d = e.data;
   if (!d || d.__avState !== true || d.artifactId !== ID) return;
@@ -61,22 +115,124 @@ window.addEventListener('message', function(e) {
   // definition — the ".." path-traversal bug (av-hh1o) had to be fixed in
   // three copies of it.
   if (d.op === 'clear') {
-    apiFetch(window.ExhibitState.deleteURL(ID), {
-      method: 'DELETE'
-    }).catch(function(){});
+    sendStateWrite(window.ExhibitState.deleteURL(ID), { method: 'DELETE' });
   } else if (d.op === 'delete') {
-    apiFetch(window.ExhibitState.deleteURL(ID, d.key), {
-      method: 'DELETE'
-    }).catch(function(){});
+    sendStateWrite(window.ExhibitState.deleteURL(ID, d.key), { method: 'DELETE' });
   } else if (d.op === 'set' || d.op === undefined) {
     // Only a recognized write reaches the API. An unknown op used to fall
     // through to this branch, so a future typo would silently become a write.
-    apiFetch(window.ExhibitState.url(ID), {
+    sendStateWrite(window.ExhibitState.url(ID), {
       method: 'PUT',
       body: JSON.stringify({ key: d.key, value: d.value })
-    }).catch(function(){});
+    });
   }
 });
+
+// State resync (av-v991): the other direction of the same channel.
+//
+// The frame's cache was inlined when the render document was served, so it is a
+// snapshot. On a SHARED_STATE artifact somebody else is writing the same rows;
+// on any artifact the same person may be writing them from another device. The
+// host refetches on the app origin with its own credential and posts the map
+// into the frame, which applies it in place and fires real 'storage' events.
+// There is no channel on the render origin — no SSE, no connect-src source, no
+// write credential in that document — because there does not need to be one.
+//
+// What this buys, stated as narrowly as it deserves: the window in which two
+// people's writes collide shrinks from "until somebody reloads" to seconds. It
+// does not merge. Two people appending to one JSON blob under one key still
+// lose an item, and no polling interval fixes that.
+const STATE_RESYNC_INTERVAL_MS = 5000;
+let stateResyncTimer = null;
+
+function stateSyncEnabled() {
+  // A visitor with no principal has no rows to keep in step, and their frame
+  // was rendered with none inlined — polling would be a 401 every few seconds.
+  return typeof STATE_WRITABLE === 'boolean' && STATE_WRITABLE;
+}
+
+async function resyncState() {
+  if (!stateSyncEnabled() || pendingStateWrites > 0) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || !frame.contentWindow) return;
+  let resp;
+  try {
+    resp = await apiFetch(window.ExhibitState.url(ID));
+  } catch (err) {
+    return;
+  }
+  if (!resp || !resp.ok) return;
+  const state = await resp.json().catch(function () { return null; });
+  if (!state || typeof state !== 'object') return;
+  // targetOrigin '*' because the frame's origin is opaque and matches nothing
+  // else. The payload is the artifact's own state, which the frame already
+  // holds a snapshot of, so there is nothing here to leak to a frame that is
+  // somehow not ours — and the frame checks e.origin against the app origin
+  // before believing it.
+  frame.contentWindow.postMessage({ __avStateSync: true, artifactId: ID, state: state }, '*');
+}
+
+// Two triggers, and they answer different questions.
+//
+// visibilitychange is the important one and applies to every artifact: a tab
+// left open for an hour has no idea whether anything changed, and asking once
+// when the person comes back is both cheap and exactly when they care. It is
+// also the cross-device case — the phone wrote, the laptop was asleep.
+//
+// The interval only runs for a SHARED_STATE artifact, because only there is
+// somebody else writing your rows while you watch. Polling every artifact view
+// would spend a request every few seconds to discover nothing, forever.
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') resyncState();
+});
+
+function startStateResync() {
+  if (!stateSyncEnabled() || !SHARED_STATE || stateResyncTimer) return;
+  stateResyncTimer = setInterval(function () {
+    // A hidden tab is nobody watching; the visibilitychange handler catches it
+    // up the moment it is looked at again.
+    if (document.visibilityState !== 'hidden') resyncState();
+  }, STATE_RESYNC_INTERVAL_MS);
+}
+startStateResync();
+
+// The frame's answer to a resync, and the reason the reload control exists.
+//
+// The shim can guarantee getItem returns fresh data. It cannot re-render an
+// artifact that read storage once at startup and never listened again, and most
+// artifacts are written that way. So when a resync changed something and
+// nothing in the frame was listening, the visitor is offered a reload — in the
+// page's own chrome, never in the artifact's DOM, which the artifact could
+// forge into a convincing button of its own.
+//
+// Never a silent reload. The render document is no-store, so a reload is a full
+// re-fetch; sessionStorage is in-memory by design and would die with the frame;
+// and so would everything the artifact holds in a variable rather than in
+// storage, including a half-typed input.
+window.addEventListener('message', function (e) {
+  const d = e.data;
+  if (!d || d.__avStateSynced !== true || d.artifactId !== ID) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || e.source !== frame.contentWindow) return;
+  const banner = document.getElementById('state-changed-banner');
+  if (!banner) return;
+  // An artifact that listens updated itself, so saying "this tool's data
+  // changed, reload it" would be noise reporting work already done.
+  if (d.changed > 0 && !d.live) banner.hidden = false;
+});
+
+// Reloading goes through /open rather than reusing the frame's current src, for
+// the reason the network prompt already does: that src carries a render token
+// minted when this page loaded, and this banner is most likely to be pressed on
+// a page that has been open a while.
+const stateReloadBtn = document.getElementById('state-changed-reload');
+if (stateReloadBtn) {
+  stateReloadBtn.addEventListener('click', function () {
+    const frame = document.querySelector('iframe');
+    if (frame) frame.src = OPEN_URL + '?r=' + Date.now();
+    document.getElementById('state-changed-banner').hidden = true;
+  });
+}
 
 // Unsupported-capability warning (av-yvtb): some browser capabilities can't work
 // inside the render frame's opaque-origin sandbox and fail silently rather than
@@ -212,6 +368,11 @@ window.addEventListener('message', function(e) {
     bytes: d.bytes
   };
   if (downloadsApproved) { triggerDownload(dl); return; }
+  // Unapproved and not ours to approve: drop the bytes, exactly as a denial
+  // does. The artifact keeps running and never learns the difference — which
+  // is also all it learned before any of this existed, when the sandbox simply
+  // swallowed the download.
+  if (!mayApprove()) { pendingDownload = null; return; }
   pendingDownload = dl;
   document.getElementById('dl-filename').textContent = dl.filename;
   document.getElementById('dl-modal').hidden = false;
@@ -287,6 +448,10 @@ window.addEventListener('message', function(e) {
   const op = d.op === 'read' ? 'read' : 'write';
   const req = { id: String(d.id), op: op, text: op === 'write' ? String(d.text == null ? '' : d.text) : null };
   if (clipboardApproved) { performClipboard(req); return; }
+  // Not ours to approve. Reject rather than drop: a clipboard call is a
+  // promise the artifact is awaiting, so silence here is a hang, where a
+  // rejection is the DOMException a blocked clipboard has always thrown.
+  if (!mayApprove()) { replyClip(req.id, false, undefined, 'Clipboard access denied'); return; }
   pendingClip = req;
   document.getElementById('clip-direction').textContent = op === 'read' ? 'read' : 'write to';
   document.getElementById('clip-modal').hidden = false;
@@ -373,6 +538,9 @@ window.addEventListener('message', function(e) {
     window.open(url.href, '_blank', 'noopener');
     return;
   }
+  // Not ours to approve: the destination is dropped, which is what a denial
+  // does and what the sandbox did before the bridge existed.
+  if (!mayApprove()) return;
   pendingLink = { url: url.href, host: url.hostname };
   document.getElementById('link-host').textContent = url.hostname;
   document.getElementById('link-modal').hidden = false;
@@ -465,6 +633,19 @@ window.addEventListener('message', function(e) {
     // top-level render, and settle the call.
     replyMedia(req.id, true, 'Capture devices are unavailable in the embedded preview; open the artifact directly',
       'NotSupportedError');
+    return;
+  }
+  // Not ours to approve. Settle it as a denial — the same DOMException the
+  // Block button produces — so getUserMedia rejects promptly instead of
+  // hanging on a stream that is not coming.
+  //
+  // Nothing about the owner's approval would have handed over the visitor's
+  // hardware anyway: it lifts Exhibit's own block, and the browser then asks
+  // its own permission on the machine the camera is attached to. That second
+  // gate is why an approved artifact is not a device grant, and why nothing
+  // here needs to say more than "no".
+  if (!mayApprove()) {
+    replyMedia(req.id, false, 'Permission denied', 'NotAllowedError');
     return;
   }
   // A second request arriving while the prompt is open displaces the first, so
@@ -564,9 +745,54 @@ document.getElementById('media-allow').addEventListener('click', async function(
     'NotSupportedError');
 });
 
+// What a blocked origin becomes when the visitor cannot approve it (av-awr4).
+//
+// This is the whole of the recipient's half of the network model, and it is a
+// statement rather than a control: a shared artifact is frozen at whatever its
+// owner allowed, and widening that from here would be one person editing
+// another person's CSP. Correct — and it fails invisibly unless somebody says
+// so, which is what the ticket is actually about. Without this the tool draws
+// an empty chart and no surface anywhere mentions the request that died.
+//
+// It accumulates rather than reporting the first and stopping: an artifact
+// reaching four unapproved origins has four things wrong with it, and naming
+// one would leave the visitor fixing a list they cannot see the end of. The
+// preamble already reports each origin at most once per load, so the set here
+// is the set of distinct blocked origins and the guard is belt to that.
+const blockedOrigins = [];
+
+function explainBlockedOrigin(origin) {
+  const banner = document.getElementById('origin-blocked-banner');
+  // Rendered only for a read-only visitor, and this only runs for one — but
+  // the two facts are decided in different files, so the null check is what
+  // keeps a future divergence a no-op instead of an exception at page load.
+  if (!banner || !origin || blockedOrigins.indexOf(origin) !== -1) return;
+  blockedOrigins.push(origin);
+
+  // textContent throughout: an origin arrives from the artifact's own blocked
+  // request and must never be interpreted as markup on the app origin.
+  const headline = document.getElementById('origin-blocked-headline');
+  if (headline) {
+    headline.textContent = blockedOrigins.length === 1
+      ? 'This tool tried to reach ' + origin + '. Its owner has not allowed that.'
+      : 'This tool tried to reach ' + blockedOrigins.length +
+        ' origins its owner has not allowed.';
+  }
+  const list = document.getElementById('origin-blocked-list');
+  if (list) {
+    const row = document.createElement('div');
+    row.className = 'banner-detail-url';
+    const code = document.createElement('code');
+    code.textContent = origin;
+    row.appendChild(code);
+    list.appendChild(row);
+  }
+  banner.hidden = false;
+}
+
 // Network permission prompt (av-kmwj): the dialog and its whole behaviour
 // live in network-prompt.js, shared with the agent chat page (av-6xvs). This
-// page only supplies the four things the two surfaces differ in.
+// page only supplies the things the two surfaces differ in.
 //
 // reload goes through the app origin's /open route rather than reusing the
 // frame's current src: that src carries a render token minted when this page
@@ -576,7 +802,8 @@ document.getElementById('media-allow').addEventListener('click', async function(
 window.ExhibitNetworkPrompt.install({
   frame: function () { return document.querySelector('iframe'); },
   artifactId: function () { return ID; },
-  readOnly: function () { return typeof READ_ONLY === 'boolean' && READ_ONLY; },
+  readOnly: function () { return !mayApprove(); },
+  explain: explainBlockedOrigin,
   report: function (text) {
     const st = document.getElementById('al-status');
     if (st) st.textContent = text;

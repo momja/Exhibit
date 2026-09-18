@@ -102,7 +102,7 @@ func TestServeShareCarriesOwnerApprovals(t *testing.T) {
 	if err := st.UpdateArtifact(ctx, 1, "abc", map[string]any{"microphone_approved": true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateShare(ctx, 1, &store.Share{ID: "sh1", ArtifactID: "abc", Public: true}); err != nil {
+	if err := st.CreateShare(ctx, 1, &store.Share{ID: "sh1", ArtifactID: "abc"}); err != nil {
 		t.Fatal(err)
 	}
 

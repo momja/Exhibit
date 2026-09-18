@@ -72,7 +72,12 @@ var testPageCreds = pageCredentials{Token: "tok"}
 // need one; the key is throwaway because those tests assert on markup, not on
 // what the render surface will later accept.
 func testRenderURLs(origin string) renderURLs {
-	return renderURLs{origin: origin, signer: rendertoken.NewRandomSigner(), ownerID: defaultOwnerID}
+	return renderURLs{
+		origin: origin, signer: rendertoken.NewRandomSigner(),
+		// The two principals are the same person everywhere but a grant
+		// (av-awr4), and these tests are not about grants.
+		ownerID: defaultOwnerID, viewerID: defaultOwnerID,
+	}
 }
 
 func TestAuthMiddleware(t *testing.T) {
@@ -269,7 +274,7 @@ func TestShareCreate(t *testing.T) {
 	id := resp["artifact"].(map[string]any)["id"].(string)
 
 	// Create share
-	shareBody := map[string]any{"artifact_id": id, "public": true}
+	shareBody := map[string]any{"artifact_id": id}
 	sb, _ := json.Marshal(shareBody)
 	req = httptest.NewRequest("POST", "/api/shares", bytes.NewReader(sb))
 	req.Header.Set("Authorization", authHeader())
@@ -314,7 +319,7 @@ func TestShareCreateRejectsExpiresAt(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			sb, _ := json.Marshal(map[string]any{
-				"artifact_id": id, "public": true, "expires_at": value,
+				"artifact_id": id, "expires_at": value,
 			})
 			req := httptest.NewRequest("POST", "/api/shares", bytes.NewReader(sb))
 			req.Header.Set("Authorization", authHeader())
@@ -325,4 +330,72 @@ func TestShareCreateRejectsExpiresAt(t *testing.T) {
 			assert.Contains(t, w.Body.String(), "expires_at is no longer supported")
 		})
 	}
+}
+
+// av-20xv, closed: `public` was accepted, stored and never read, so
+// `public: false` was the one value a caller would set believing they had
+// restricted something. av-lrae dropped the column — it means exactly "no
+// recipient" now — and the request shape must stop offering the choice rather
+// than keep taking a value nothing honours. Both spellings are refused, since
+// the defect is accepting the key at all.
+func TestShareCreateRejectsPublic(t *testing.T) {
+	r := newTestRouter(t)
+	id := seedShareableArtifact(t, r, "Public Flag Test")
+
+	for name, value := range map[string]any{
+		"true":  true,
+		"false": false,
+	} {
+		t.Run(name, func(t *testing.T) {
+			sb, _ := json.Marshal(map[string]any{"artifact_id": id, "public": value})
+			req := httptest.NewRequest("POST", "/api/shares", bytes.NewReader(sb))
+			req.Header.Set("Authorization", authHeader())
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Contains(t, w.Body.String(), "public is no longer supported")
+		})
+	}
+}
+
+// av-lrae: an artifact has one anonymous link, enforced by a partial unique
+// index. The second attempt is the schema doing its job, so the caller is told
+// that — 409 — rather than handed a 500 reporting our own invariant as a
+// fault. (The link is also what the UI turns into a toggle rather than a
+// button that accumulates URLs nobody remembers.)
+func TestShareCreateRefusesASecondPublicLink(t *testing.T) {
+	r := newTestRouter(t)
+	id := seedShareableArtifact(t, r, "One Link Test")
+
+	mint := func() *httptest.ResponseRecorder {
+		sb, _ := json.Marshal(map[string]any{"artifact_id": id})
+		req := httptest.NewRequest("POST", "/api/shares", bytes.NewReader(sb))
+		req.Header.Set("Authorization", authHeader())
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w
+	}
+
+	require.Equal(t, http.StatusCreated, mint().Code)
+	second := mint()
+	assert.Equal(t, http.StatusConflict, second.Code)
+	assert.Contains(t, second.Body.String(), "already has a public link")
+}
+
+// seedShareableArtifact ingests one artifact and returns its id.
+func seedShareableArtifact(t *testing.T, r *Router, title string) string {
+	t.Helper()
+	b, _ := json.Marshal(map[string]any{
+		"title": title, "body": "<html></html>", "network_allowlist": []string{}})
+	req := httptest.NewRequest("POST", "/api/artifacts", bytes.NewReader(b))
+	req.Header.Set("Authorization", authHeader())
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	return resp["artifact"].(map[string]any)["id"].(string)
 }

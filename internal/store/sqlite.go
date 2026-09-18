@@ -124,7 +124,7 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	var a Artifact
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.WidgetBlobID)
+	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareGrantCount, &a.SharePublicLink)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +136,17 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	return &a, nil
 }
 
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, widget_blob_id"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.widget_blob_id"
+// share_state_mode is read here and written only through UpdateArtifact's
+// validated path (av-6xjd): PutArtifact leaves it to the column's DEFAULT, so
+// a new artifact is always 'own' and the mode is a decision somebody made
+// rather than one an ingest inherited.
+//
+// share_grant_count and share_link are read and NEVER written from Go. They
+// are trigger-maintained rollups of the shares table (migration 029), like
+// tags_text — a caller that could set them could tell the gallery an artifact
+// is private while three accounts hold grants on it.
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, widget_blob_id, share_state_mode, share_grant_count, share_link"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.widget_blob_id, a.share_state_mode, a.share_grant_count, a.share_link"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
@@ -190,6 +199,34 @@ func (s *SQLiteStore) GetArtifact(ctx context.Context, ownerID int64, id string)
 func (s *SQLiteStore) GetArtifactUnscoped(ctx context.Context, id string) (*Artifact, error) {
 	return s.getArtifactWhere(ctx,
 		"SELECT "+artifactCols+" FROM artifacts WHERE id=?", id)
+}
+
+// readableByViewer is the deny-by-default counterpart to ownedArtifact
+// (av-lrae): the artifact's owner, or an account a grant row names on it.
+//
+// It is written here, once, and used by exactly one method. That is the point
+// — it is deliberately *not* folded into ownedArtifact, which every
+// artifact-child query interpolates: widening that predicate would hand a
+// recipient the DELETE, the body rewrite and the origin decisions along with
+// the read, and it would do so silently, because no call site mentions it.
+//
+// `recipient_id = ?` never matches the anonymous link's NULL, which is correct
+// and not incidental: a link is authorized by holding its id at /s/:shareID,
+// never by being logged in as somebody. And the two parameters are the same
+// viewer id twice, so a zero value — a caller that forgot to resolve a
+// principal — matches no owner and no grant and fails closed.
+const readableByViewer = `(artifacts.owner_id = ?
+      OR EXISTS (SELECT 1 FROM shares
+                  WHERE shares.artifact_id = artifacts.id AND shares.recipient_id = ?))`
+
+// GetArtifactReadableBy resolves an artifact this viewer may read — see the
+// Store interface comment for why reaching a shared artifact is a second
+// accessor rather than a wider predicate. A viewer with no grant reads exactly
+// like an artifact that does not exist.
+func (s *SQLiteStore) GetArtifactReadableBy(ctx context.Context, viewerID ViewerID, id string) (*Artifact, error) {
+	return s.getArtifactWhere(ctx,
+		"SELECT "+artifactCols+" FROM artifacts WHERE id=? AND "+readableByViewer,
+		id, int64(viewerID), int64(viewerID))
 }
 
 func (s *SQLiteStore) getArtifactWhere(ctx context.Context, query string, args ...any) (*Artifact, error) {
@@ -364,7 +401,8 @@ var approvalArtifactColumns = func() map[string]bool {
 // the generic loop below (handled and stripped first), so listing it here
 // would just be a second place that claim could be made and forgotten.
 // Everything else naming an artifacts column — id, owner_id, source_blob_id,
-// widget_blob_id, created_at, updated_at, tags_text (trigger-maintained) — is
+// widget_blob_id, created_at, updated_at, tags_text and the share_grant_count
+// / share_link rollups (all trigger-maintained) — is
 // deliberately excluded: an update map here is a handler-decoded PATCH body
 // (updateArtifact decodes into map[string]any and passes the keys through), so
 // an unvalidated key is a column the *caller* chose. widget_blob_id matters
@@ -386,6 +424,12 @@ var updatableArtifactColumns = map[string]bool{
 	"links_approved":      true,
 	"camera_approved":     true,
 	"microphone_approved": true,
+	// Whose state a recipient writes (av-6xjd). It became writable here when
+	// the owner got a control for it; the value is checked below rather than
+	// merely allowed, because unlike a title this column is read as an enum by
+	// the render path, and an unrecognized value there is a branch nobody
+	// wrote.
+	"share_state_mode": true,
 }
 
 // SetWidgetBlobID points an artifact at the blob holding its widget document.
@@ -464,6 +508,18 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id stri
 			// that later fails the bool scan and bricks reads of the artifact.
 			if _, ok := v.(bool); !ok {
 				return fmt.Errorf("%s must be a boolean", k)
+			}
+		}
+		if k == "share_state_mode" {
+			// The API rejects a bad mode with a 400 (internal/api/artifacts.go)
+			// and this rejects the write, for the reason the approval columns
+			// are checked twice: the handler's list is a user-facing rule and
+			// this is the same rule as a store invariant, closed to any future
+			// caller. A mode nothing recognizes would decide whose state rows a
+			// recipient writes by falling off the end of a switch.
+			mode, ok := v.(string)
+			if !ok || !ValidShareStateMode(mode) {
+				return fmt.Errorf("share_state_mode must be %q or %q", ShareStateOwn, ShareStateShared)
 			}
 		}
 		setClauses = append(setClauses, k+"=?")
@@ -1088,6 +1144,95 @@ func (s *SQLiteStore) ClearState(ctx context.Context, ownerID OwnerID, artifactI
 	return err
 }
 
+// The four state methods a VIEWER reaches (av-v991) — see the Store interface
+// for why they take one principal and resolve the target themselves.
+//
+// Each is authorization plus resolution, then a delegation to the owner-scoped
+// method above. Delegating rather than reimplementing is the point: there is
+// still exactly one statement per operation, so the owner's path and a
+// grantee's cannot drift into writing different rows. The owner predicate the
+// delegate carries is satisfied by construction, because stateTarget read that
+// owner off the very artifact row it authorized against.
+
+// stateTarget resolves the artifact a viewer is addressing state on, and
+// answers the two things the methods below need from it: the owner whose
+// predicate the delegate will check, and whose rows this viewer is on.
+//
+// Authorization is readableByViewer, deliberately not ownedArtifact — that is
+// the whole of what makes these a parallel path rather than a widening. An
+// artifact the viewer neither owns nor holds a grant on is ErrNotFound, which
+// is what a nonexistent id answers too.
+func (s *SQLiteStore) stateTarget(ctx context.Context, viewerID ViewerID, artifactID string) (OwnerID, ViewerID, error) {
+	var a Artifact
+	err := s.db.QueryRowContext(ctx,
+		"SELECT artifacts.owner_id, artifacts.share_state_mode FROM artifacts WHERE artifacts.id=? AND "+readableByViewer,
+		artifactID, int64(viewerID), int64(viewerID)).Scan(&a.OwnerID, &a.ShareStateMode)
+	if err == sql.ErrNoRows {
+		return 0, 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, 0, err
+	}
+	return OwnerID(a.OwnerID), a.StatePrincipal(viewerID), nil
+}
+
+// GetStateAsViewer reads the rows this viewer is on. An artifact they cannot
+// reach reads empty rather than erroring, matching GetState's answer for
+// another owner's id: absence and inaccessibility must look the same.
+func (s *SQLiteStore) GetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) (map[string]string, error) {
+	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
+	if errors.Is(err, ErrNotFound) {
+		return map[string]string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.GetState(ctx, owner, artifactID, principal)
+}
+
+// SetStateAsViewer is the write av-awr4 found missing. Without it 'own' mode —
+// the default — leaves a recipient reading state they can never change, so a
+// shared tool forgets everything the moment its frame reloads.
+func (s *SQLiteStore) SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string) error {
+	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
+	if err != nil {
+		return err
+	}
+	return s.SetState(ctx, owner, artifactID, principal, key, value)
+}
+
+// DeleteStateAsViewer removes one key from the rows this viewer is on. An
+// unreachable artifact holds nothing of theirs, so it is a silent no-op — the
+// idempotent contract the owner-scoped deletes already keep, extended to the
+// wider "cannot reach it" case for the same reason: the caller asked for a key
+// not to exist, and there it does not.
+func (s *SQLiteStore) DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string) error {
+	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return s.DeleteState(ctx, owner, artifactID, principal, key)
+}
+
+// ClearStateAsViewer erases everything this viewer holds on the artifact —
+// *theirs*, which under ShareStateOwn is their own rows and under
+// ShareStateShared is the board they are playing on. Either way it is the
+// erase-all av-q0ub defined: one viewer's state, never the artifact's, and
+// never another viewer's.
+func (s *SQLiteStore) ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) error {
+	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return s.ClearState(ctx, owner, artifactID, principal)
+}
+
 func (s *SQLiteStore) SetAgentKey(ctx context.Context, k *AgentKey) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO agent_keys (owner_id, provider, model, key_ciphertext, updated_at)
@@ -1153,51 +1298,189 @@ func (s *SQLiteStore) ListTranscripts(ctx context.Context, ownerID int64, artifa
 	return out, rows.Err()
 }
 
-// CreateShare mints a link to an artifact, so it is gated on owning that
+// CreateShare mints a share of an artifact, so it is gated on owning that
 // artifact — otherwise a share row would be a way to publish someone else's
-// library through the deliberately unauthenticated /s/:id path.
+// library, through the deliberately unauthenticated /s/:id path or, now, by
+// granting it to oneself.
+//
+// A nil RecipientID mints the artifact's anonymous link; a set one grants that
+// account. Both uniqueness rules are the schema's (av-lrae), so a second link
+// or a repeat grant surfaces as ErrDuplicateShare — a refusal, not a fault.
 func (s *SQLiteStore) CreateShare(ctx context.Context, ownerID int64, sh *Share) error {
 	if err := s.ownsArtifact(ctx, ownerID, sh.ArtifactID); err != nil {
 		return err
 	}
 	_, err := s.db.ExecContext(ctx,
-		"INSERT INTO shares (id, artifact_id, public) VALUES (?, ?, ?)",
-		sh.ID, sh.ArtifactID, sh.Public)
+		"INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, ?)",
+		sh.ID, sh.ArtifactID, sh.RecipientID)
+	if isUniqueViolation(err) {
+		return ErrDuplicateShare
+	}
 	return err
 }
 
-// GetShare resolves a share the caller owns (through its artifact) — the
-// read behind revoking one. Serving a share to its visitor is
-// GetShareUnscoped instead, because there the row is the authorization.
+// GetShare resolves a share the caller owns (through its artifact), of either
+// kind — the read behind revoking one, and revoking a grant is as much the
+// owner's business as revoking the link. Serving one to its visitor is
+// GetAnonymousShareUnscoped instead, because there the row is the
+// authorization and only a link's ever was.
 func (s *SQLiteStore) GetShare(ctx context.Context, ownerID int64, id string) (*Share, error) {
 	return s.getShareWhere(ctx,
-		`SELECT id, artifact_id, public FROM shares
+		`SELECT id, artifact_id, recipient_id FROM shares
 		  WHERE id=? AND `+ownedArtifact, id, ownerID)
 }
 
-// GetShareUnscoped resolves a share row with no owner check — see the Store
-// interface comment. `grep Unscoped` is the audit.
-func (s *SQLiteStore) GetShareUnscoped(ctx context.Context, id string) (*Share, error) {
+// GetAnonymousShareUnscoped resolves an artifact's anonymous link with no
+// owner check — see the Store interface comment for why it is narrowed to the
+// link rather than free to resolve any share row. `grep Unscoped` is the
+// audit, and the `recipient_id IS NULL` here is what keeps that audit's answer
+// small: an id is the whole authorization on this path, so the only rows
+// reachable by id alone must be the ones whose id was ever meant to be one.
+func (s *SQLiteStore) GetAnonymousShareUnscoped(ctx context.Context, id string) (*Share, error) {
 	return s.getShareWhere(ctx,
-		"SELECT id, artifact_id, public FROM shares WHERE id=?", id)
+		"SELECT id, artifact_id, recipient_id FROM shares WHERE id=? AND recipient_id IS NULL", id)
 }
 
 func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...any) (*Share, error) {
 	row := s.db.QueryRowContext(ctx, query, args...)
 	var sh Share
-	var public int
-	err := row.Scan(&sh.ID, &sh.ArtifactID, &public)
+	// NULL is the anonymous link, so the nullable scan target is carrying the
+	// distinction rather than papering over a missing value.
+	var recipient sql.NullInt64
+	err := row.Scan(&sh.ID, &sh.ArtifactID, &recipient)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	sh.Public = public == 1
+	if recipient.Valid {
+		sh.RecipientID = &recipient.Int64
+	}
 	return &sh, nil
 }
 
 func (s *SQLiteStore) DeleteShare(ctx context.Context, ownerID int64, id string) error {
 	return s.execOwned(ctx,
 		"DELETE FROM shares WHERE id=? AND "+ownedArtifact, id, ownerID)
+}
+
+// ListArtifactShares enumerates one artifact's shares for its owner (av-6xjd)
+// — the link, and every grant with the account it names.
+//
+// The rows and the accounts they name are two queries rather than a LEFT JOIN,
+// which is the shape attachTags and attachAllowlists already use here. The
+// join would need a second, all-nullable scan of userColumns to survive the
+// anonymous link's missing partner — a parallel copy of a projection whose
+// whole point (userScan) is that there is only one of it. Two statements, both
+// bounded by the artifact's share count, cost less than that duplication.
+//
+// The ordering puts the link first (recipient_id IS NULL sorts before NOT NULL
+// as 0 before 1) and then grants oldest-first, so the list does not reshuffle
+// itself as people are added.
+func (s *SQLiteStore) ListArtifactShares(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactShare, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, artifact_id, recipient_id FROM shares
+		  WHERE artifact_id = ? AND `+ownedArtifact+`
+		  ORDER BY (recipient_id IS NOT NULL), rowid`, artifactID, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ArtifactShare{}
+	for rows.Next() {
+		var sh ArtifactShare
+		var recipient sql.NullInt64
+		if err := rows.Scan(&sh.ID, &sh.ArtifactID, &recipient); err != nil {
+			return nil, err
+		}
+		if recipient.Valid {
+			id := recipient.Int64
+			sh.RecipientID = &id
+		}
+		out = append(out, sh)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, s.attachShareRecipients(ctx, out)
+}
+
+// attachShareRecipients fills in the account each grant names, in one query
+// over the ids the listing collected. A recipient row that has vanished leaves
+// Recipient nil rather than failing the listing: the FK cascade means that
+// should not happen, and an owner whose share panel refuses to render because
+// of one dangling id has lost the ability to revoke the others.
+func (s *SQLiteStore) attachShareRecipients(ctx context.Context, shares []ArtifactShare) error {
+	placeholders := []string{}
+	args := []any{}
+	for _, sh := range shares {
+		if sh.RecipientID != nil {
+			placeholders = append(placeholders, "?")
+			args = append(args, *sh.RecipientID)
+		}
+	}
+	if len(placeholders) == 0 {
+		return nil
+	}
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT "+userColumns+" FROM users WHERE id IN ("+strings.Join(placeholders, ",")+")", args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	byID := map[int64]*User{}
+	for rows.Next() {
+		var sc userScan
+		if err := rows.Scan(sc.dest()...); err != nil {
+			return err
+		}
+		u := sc.user()
+		byID[u.ID] = u
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for i := range shares {
+		if shares[i].RecipientID != nil {
+			shares[i].Recipient = byID[*shares[i].RecipientID]
+		}
+	}
+	return nil
+}
+
+// ReplaceAnonymousLink rotates an artifact's public link in one transaction —
+// see the Store interface for why the two halves must not be two requests.
+//
+// The delete is unconditional and matches nothing when there is no link, so
+// "replace" and "mint" are the same call and a caller need not know which case
+// it is in. A duplicate is still possible in principle (two rotations racing)
+// and is reported as ErrDuplicateShare rather than swallowed: it means the row
+// this transaction did not see is the one somebody else just minted.
+func (s *SQLiteStore) ReplaceAnonymousLink(ctx context.Context, ownerID int64, artifactID, newID string) (*Share, error) {
+	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
+		return nil, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }() // no-op once committed
+
+	if _, err := tx.ExecContext(ctx,
+		"DELETE FROM shares WHERE artifact_id=? AND recipient_id IS NULL", artifactID); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx,
+		"INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, NULL)",
+		newID, artifactID); err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrDuplicateShare
+		}
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &Share{ID: newID, ArtifactID: artifactID}, nil
 }

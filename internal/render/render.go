@@ -28,7 +28,7 @@ type Config struct {
 	// and /w/:id require (av-c5aq). It is how this surface learns who it is
 	// serving without holding a session — see internal/rendertoken for why a
 	// cookie here would be readable by the artifact itself. A nil Signer fails
-	// those two routes closed; /s/:shareID never consults it.
+	// those two routes closed; the /s/* share routes never consult it.
 	Tokens *rendertoken.Signer
 	// EmbedOrigins narrows who may put a **share** in an iframe (av-q3iy).
 	// Empty — the default, and every instance that has not asked otherwise —
@@ -160,36 +160,34 @@ func (rd *Renderer) authorize(w http.ResponseWriter, r *http.Request, id string)
 	return a, viewer, true
 }
 
-// ServeShare serves an artifact via a share link. The row's existence is the
-// whole lifetime: a share is live until it is deleted (av-8ipt), so revoking
-// one is DELETE /api/shares/:id and nothing here expires on a clock.
+// ServeShare serves an artifact via its anonymous share link. The row's
+// existence is the whole lifetime: a share is live until it is deleted
+// (av-8ipt), so revoking one is DELETE /api/shares/:id and nothing here
+// expires on a clock.
+//
+// It is the *link* and never a grant, which since av-lrae is a distinction
+// this table can express. A share row is the authorization only where there is
+// nobody at the door to check, and a grant names somebody — so serving one
+// here would turn its id back into a capability URL and undo the reason grants
+// exist. Concretely: three people granted an artifact would be three
+// unguessable URLs serving it to anyone with no account, and an owner
+// switching the public link off would revoke none of them while believing
+// otherwise. The accessor refuses rather than this handler filtering, so the
+// case is unrepresentable on the unscoped read surface (store.go); a grant's
+// id arrives here as nothing, and answers what a nonexistent one answers.
 func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
-	shareID := chi.URLParam(r, "shareID")
-	// The share row is the authorization here (architecture §7), so this
-	// path is owner-independent by design — not an oversight.
-	sh, err := rd.cfg.Store.GetShareUnscoped(r.Context(), shareID)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	if sh == nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-
-	a, err := rd.cfg.Store.GetArtifactUnscoped(r.Context(), sh.ArtifactID)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	if a == nil {
-		http.Error(w, "artifact not found", http.StatusNotFound)
+	a, ok := rd.resolveShare(w, r, chi.URLParam(r, "shareID"))
+	if !ok {
 		return
 	}
 	// The share row is the authorization (architecture.md §7), so this route
 	// carries no token and has no principal of its own. State is inlined for
 	// the artifact's owner: a share publishes the artifact *as its owner sees
-	// it*, which is what a link recipient with no account can be shown.
+	// it*, which is what a link recipient with no account can be shown. Both
+	// principals are therefore named here explicitly (av-6axy): the owner
+	// authorizes the read and is also, on this route alone, the viewer whose
+	// rows are inlined. Leaving the viewer unset would inline nobody's — the
+	// fail-closed direction, and still the wrong document.
 	//
 	// Deliberately NOT the anonymous viewer that a public-instance visitor gets
 	// (av-wmp6), even though both are strangers with no credential. A share is
@@ -197,15 +195,46 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	// over a whole library. The blast radius differs by orders of magnitude, so
 	// the defaults do too.
 	//
-	// This is also the one route whose document any site may frame (av-q3iy),
-	// and the one an operator can narrow with EMBED_ORIGINS — shares only,
+	// Share routes are also the only ones whose documents any site may frame
+	// (av-q3iy), and the ones an operator can narrow with EMBED_ORIGINS — shares only,
 	// because a share is the render document that already carries neither a
 	// principal nor a credential. Config.EmbedOrigins holds the argument.
-	rd.serveArtifactDoc(w, r, a, rendertoken.Claims{OwnerID: a.OwnerID},
+	rd.serveArtifactDoc(w, r, a, rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
 		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 }
 
-// shareFrameAncestors is the whole of the share route's framing policy
+// resolveShare is the front door for the share-authorized routes. It loads
+// the anonymous link row — the whole authorization on these routes
+// (architecture.md §7) — and the artifact it names, both owner-independent
+// by design, not by oversight. A grant's id arrives here as nothing: the
+// accessor is narrowed to recipient_id IS NULL (av-lrae), so serving one
+// would turn its id back into a capability URL and undo the reason grants
+// exist. Every miss answers 404, never 403, like the token-gated authorize
+// above.
+func (rd *Renderer) resolveShare(w http.ResponseWriter, r *http.Request, shareID string) (*store.Artifact, bool) {
+	sh, err := rd.cfg.Store.GetAnonymousShareUnscoped(r.Context(), shareID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return nil, false
+	}
+	if sh == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return nil, false
+	}
+
+	a, err := rd.cfg.Store.GetArtifactUnscoped(r.Context(), sh.ArtifactID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return nil, false
+	}
+	if a == nil {
+		http.Error(w, "artifact not found", http.StatusNotFound)
+		return nil, false
+	}
+	return a, true
+}
+
+// shareFrameAncestors is the whole of the share routes' framing policy
 // (av-q3iy): with nothing configured a share may be framed by anyone, and
 // EMBED_ORIGINS turns that into the app origin plus the sites it names.
 //
@@ -234,6 +263,31 @@ func shareFrameAncestors(appOrigin string, embedOrigins []string) []string {
 		}
 	}
 	return framers
+}
+
+// ServeShareWidget serves an artifact's widget through its anonymous share
+// link (av-ei5h) — the glanceable tile, embeddable off-site. It is ServeShare
+// and ServeWidget composed: the share row authorizes (no token, owner's state
+// inlined) and the widget blob renders (narrowed preamble, no bridges, no
+// devices). An artifact with no widget 404s; the embedder falls back to
+// whatever static tile it would have rendered instead.
+func (rd *Renderer) ServeShareWidget(w http.ResponseWriter, r *http.Request) {
+	a, ok := rd.resolveShare(w, r, chi.URLParam(r, "shareID"))
+	if !ok {
+		return
+	}
+	if a.WidgetBlobID == "" {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	// Share framing, not /w/:id's app-only framing: a shared widget's point
+	// is embedding off the gallery, under the same EMBED_ORIGINS lockdown as
+	// the shared artifact. Same disclosure as that document — the owner's live
+	// numbers to anyone holding the link — in a more scrapable shape, which is
+	// inherent to publishing a tile.
+	rd.serveDoc(w, r, a, a.WidgetBlobID, true,
+		rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
+		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 }
 
 // ServeWidget serves an artifact's widget (av-fafu) — the small, informative
@@ -271,11 +325,12 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 // served: same allowlist, same CSP, same opaque-origin sandbox. widget only
 // selects the narrower preamble, so a widget's authority can only ever be a
 // subset of its artifact's — there is no second policy to keep in sync.
-// viewer is who this document is being rendered *for*: the principal named by a
-// verified render token, or (on a share) the artifact's own owner. It is the
-// answer to "whose state should be inlined here" — since av-q0ub artifact_state
-// is keyed by (artifact_id, user_id, key), and viewer.OwnerID is that user_id —
-// or, when the viewer is anonymous, the answer "nobody's".
+// viewer is who this document is being rendered *for*: the claims of a
+// verified render token, or (on a share) the artifact's own owner. It carries
+// both principals (av-6axy). viewer.OwnerID authorized the read; it is
+// viewer.ViewerID that answers "whose state should be inlined here" — since
+// av-q0ub artifact_state is keyed by (artifact_id, user_id, key), and that is
+// the user_id — or, when the viewer is anonymous, the answer "nobody's".
 //
 // frameAncestors is who may frame *this* document — the complete set, with nil
 // meaning the app origin alone (av-6nbo, av-q3iy). It is a parameter rather
@@ -337,19 +392,28 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// The two principals are read off different things on purpose (av-q0ub).
 	// Authorization comes from the artifact this handler already resolved, so
 	// the read stays owner-scoped without a third unscoped accessor. Selection
-	// comes from the viewer — the render token's subject, or the artifact's
-	// owner on a share. They are equal today because authorize() requires it,
-	// and the point of keeping them separate is that a shared artifact opened
-	// by someone else (av-7k7b) inlines *that viewer's* rows, not the owner's.
+	// comes from the token's viewer claim (av-6axy) — a principal of its own on
+	// the wire, defaulting to the owner when the token names none, which is
+	// every token minted today. They are equal on every route that exists, and
+	// the point of keeping them separate is that a shared artifact opened by
+	// someone else (av-7k7b) inlines *that viewer's* rows, not the owner's.
 	//
 	// An anonymous viewer (a public instance's unauthenticated visitor,
 	// av-wmp6) is that separation taken to its limit: there is no user_id to
 	// select by, so there is no state to inline. The query is skipped rather
 	// than issued and discarded — "nobody's rows" is not a row set the store
 	// should be asked for.
+	//
+	// Which rows the viewer claim selects is the artifact's answer, not this
+	// handler's (av-v991): StatePrincipal maps the token's viewer through
+	// share_state_mode, so 'shared' inlines the owner's board for everybody
+	// looking at it and 'own' inlines each viewer's own. It is the same
+	// function the write path resolves through, which is what keeps a shared
+	// artifact from being read off one set of rows and written to another.
 	var state map[string]string
 	if !viewer.Anonymous {
-		s, err := rd.cfg.Store.GetState(r.Context(), store.OwnerID(a.OwnerID), a.ID, store.ViewerID(viewer.OwnerID))
+		s, err := rd.cfg.Store.GetState(r.Context(), store.OwnerID(a.OwnerID), a.ID,
+			a.StatePrincipal(store.ViewerID(viewer.ViewerID)))
 		if err != nil {
 			slog.WarnContext(r.Context(), "render state read failed",
 				slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
@@ -375,7 +439,8 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, manifest)
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
-		slog.Int64("principal", viewer.OwnerID),
+		slog.Int64("owner", viewer.OwnerID),
+		slog.Int64("principal", viewer.ViewerID),
 		slog.Bool("anonymous", viewer.Anonymous),
 		slog.Bool("widget", widget),
 		slog.Int("body_bytes", len(bodyBytes)),
@@ -746,6 +811,14 @@ func (rd *Renderer) ServeAsset(w http.ResponseWriter, r *http.Request) {
 // Chromium per-frame putImageData leak (verified live at 7.3GB->10GB with the
 // mitigation active), and it degraded pixel-art rendering for no benefit.
 //
+// State also travels the other way (av-v991). The inlined cache is a snapshot,
+// and on an artifact whose share_state_mode is 'shared' somebody else is
+// writing the same rows; the host frame refetches and posts the current map
+// back in, which the shim applies to the cache in place and reports as real
+// 'storage' events. Same channel as persistState, reversed — so there is no
+// endpoint on this origin, no connect-src source and no credential in this
+// document, and the render surface stays read-only.
+//
 // WIDGET (av-fafu) narrows the same shim for a widget render. A widget is a
 // *view* of an artifact: it reads the artifact's state and shows one fact from
 // it. So in widget mode writes stop at the in-memory cache — the write-through
@@ -836,7 +909,12 @@ const shimTemplate = `<script>
         if (persist) persist('delete', key);
       },
       clear: function() {
-        store = {};
+        // The keys are deleted rather than the local rebound to {}. Rebinding
+        // would leave store and the object the frame was built over as two
+        // different things, and the resync below writes into the latter — so
+        // after one clear() an artifact would stop seeing anything anyone
+        // else wrote, silently and for the life of the frame (av-v991).
+        Object.keys(store).forEach(function(k) { delete store[k]; });
         if (persist) persist('clear');
       },
       key: function(n) {
@@ -858,6 +936,120 @@ const shimTemplate = `<script>
   try {
     Object.defineProperty(window, 'localStorage', { value: makeStorage(cache, persistState), writable: false });
   } catch(e) {}
+
+  // ---- Resync (av-v991) ----
+  // The state inlined above is a snapshot of the instant this document was
+  // served. On a 'shared' artifact somebody else is writing the same rows, and
+  // on any artifact the same person may be writing them from another device,
+  // so the host frame refetches and posts the current map in here. This is
+  // persistState's channel reversed — frame -> host for writes, host -> frame
+  // for updates — which is why there is no endpoint, no connect-src source and
+  // no credential in this document: the host holds the session and does the
+  // fetching on the app origin, and the render surface stays read-only.
+  //
+  // Applying it means mutating the cache IN PLACE. It is the very object
+  // makeStorage closed over, so an assignment here would update a map nothing
+  // reads — the same trap clear() used to fall into, and the reason that fix
+  // had to land first.
+  //
+  // What this buys is stated narrowly on purpose: the window in which two
+  // people's writes collide shrinks from "until somebody reloads" to seconds.
+  // It does not merge. Two people appending to one JSON blob under one key
+  // still lose an item, because last-write-wins is what the store does and no
+  // amount of liveness changes that.
+  function applyStateSync(incoming) {
+    if (!incoming || typeof incoming !== 'object') return 0;
+    var changes = [];
+    // Deletions first, while cache still holds the old values to report.
+    Object.keys(cache).forEach(function(k) {
+      if (!Object.prototype.hasOwnProperty.call(incoming, k)) {
+        changes.push({ key: k, oldValue: cache[k], newValue: null });
+        delete cache[k];
+      }
+    });
+    Object.keys(incoming).forEach(function(k) {
+      var value = String(incoming[k]);
+      var had = Object.prototype.hasOwnProperty.call(cache, k);
+      if (had && cache[k] === value) return;
+      changes.push({ key: k, oldValue: had ? cache[k] : null, newValue: value });
+      cache[k] = value;
+    });
+    changes.forEach(function(c) { fireStorageEvent(c.key, c.oldValue, c.newValue); });
+    return changes.length;
+  }
+
+  // A real 'storage' event per changed key. This is the platform's own "another
+  // tab wrote this" contract, so an artifact written against the standard gets
+  // multi-player with no new API and no cooperation from whoever wrote it.
+  //
+  // storageArea is deliberately omitted. StorageEventInit types it as
+  // 'Storage?', and this shim's namespace is a plain object, so passing it
+  // throws before the event exists ("Failed to convert value to 'Storage'",
+  // measured in Chromium 149; the WebIDL says every engine must). Listeners
+  // read key and newValue; storageArea is essentially never touched, and an
+  // event that is never dispatched is worth far less than a missing field.
+  function fireStorageEvent(key, oldValue, newValue) {
+    var ev;
+    try {
+      ev = new StorageEvent('storage', {
+        key: key, oldValue: oldValue, newValue: newValue, url: String(location.href)
+      });
+    } catch (e) {
+      // No StorageEvent constructor: a plain event carrying the same three
+      // properties still reaches a listener that reads them.
+      ev = new Event('storage');
+      ev.key = key;
+      ev.oldValue = oldValue;
+      ev.newValue = newValue;
+    }
+    window.dispatchEvent(ev);
+  }
+
+  // Framed and with a principal: the two conditions under which a resync can
+  // arrive at all. An anonymous render (av-wmp6) inlines no state and persists
+  // none, so there is nothing to keep in step; top-level there is no host.
+  // Widgets do get this — receiving an update is a read, and reading state to
+  // show one fact from it is the whole of what a widget does.
+  if (window.parent !== window && !ANONYMOUS) {
+    // Whether anything in this frame is listening for 'storage'. The shim can
+    // guarantee getItem returns fresh data; it cannot re-render an artifact
+    // that read storage once at startup and never looked again. So the host is
+    // told, and offers a reload control in ITS OWN chrome for the artifacts
+    // that need one — never in the artifact's DOM, which the artifact could
+    // forge, and never as a silent reload: this document is no-store (a full
+    // re-fetch), sessionStorage is in-memory by design and would die, and so
+    // would anything the artifact holds in a variable, including a half-typed
+    // input.
+    //
+    // Counting registrations means wrapping addEventListener, which is why it
+    // is scoped to the framed case rather than installed for every render: the
+    // wrapper is a pass-through, but a pass-through nobody needs is still a
+    // difference between the preview and the artifact opened directly.
+    var storageListeners = 0;
+    try {
+      var nativeAddEventListener = window.addEventListener;
+      window.addEventListener = function(type) {
+        if (type === 'storage') storageListeners++;
+        return nativeAddEventListener.apply(this, arguments);
+      };
+    } catch (e) {}
+    var listeningForStorage = function() {
+      return storageListeners > 0 || typeof window.onstorage === 'function';
+    };
+
+    window.addEventListener('message', function(e) {
+      // The host is a real origin, so unlike the messages this frame sends,
+      // both halves of its identity are checkable.
+      if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+      var d = e.data;
+      if (!d || d.__avStateSync !== true || d.artifactId !== ARTIFACT_ID) return;
+      var changed = applyStateSync(d.state);
+      window.parent.postMessage({
+        __avStateSynced: true, artifactId: ARTIFACT_ID,
+        changed: changed, live: listeningForStorage()
+      }, API_ORIGIN);
+    });
+  }
 %s
 })();
 </script>`

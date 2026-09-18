@@ -158,7 +158,18 @@ artifacts(
   downloads_approved,      -- first-use approval for the host-mediated download bridge
   camera_approved,         -- likewise for the camera; also builds the render
   microphone_approved,     --   document's Permissions-Policy (§6.3)
-  widget_blob_id           -- the card's widget document; empty = default tile (§5.5)
+  widget_blob_id,          -- the card's widget document; empty = default tile (§5.5)
+  share_state_mode,        -- whose state a recipient writes: their own, or the
+                           -- owner's shared board. One answer per ARTIFACT, not
+                           -- per grant, which would admit one recipient on their
+                           -- own rows while another writes the owner's.
+  share_grant_count,       -- how many accounts hold a grant, and whether the
+  share_link               --   one anonymous link exists. Denormalized rollups
+                           --   of `shares`, trigger-maintained the way
+                           --   tags_text is: the gallery asks this of every
+                           --   card and the answer changes only when a share
+                           --   row is written. They are what makes the card
+                           --   badge, and therefore auditing, possible (§7).
 )
 -- one decision per (artifact, origin), cascading with the artifact (§6)
 artifact_network_origins(
@@ -183,7 +194,15 @@ artifact_tags(artifact_id, tag_id)
 -- that is §5.3's whole promise, and nothing here is keyed by device.
 artifact_state(artifact_id, user_id, key, value, updated_at)
 -- sharing as a row, §7. No expiry column: a share lives until it is deleted.
-shares(id, artifact_id, public)
+-- recipient_id NULL is the artifact's one anonymous link, where the unguessable
+-- id is the whole authorization; set, the row is a GRANT to that account, which
+-- opens the artifact at its ordinary URL and needs no secret. Two unique
+-- indexes make both facts schema invariants: one grant per (artifact, person),
+-- and — through a PARTIAL index, since SQLite treats every NULL in a unique
+-- index as distinct — one anonymous link per artifact. The old `public` column
+-- was dropped with av-lrae: it means exactly `recipient_id IS NULL`, and it was
+-- never enforced anyway (av-20xv).
+shares(id, artifact_id, recipient_id)
 ```
 
 ### 4.5 Identity & auth
@@ -293,11 +312,31 @@ separately:
    already authenticated — performs the write-through `PUT /api/artifacts/:id/state`. The
    sandbox never touches the network, so there is no CORS surface and the state endpoint
    stays authenticated (the single write path, §4.1, is preserved: the host calls the API).
-3. Conflict policy: last-write-wins (adequate for this use case).
+3. **Resync — the same bridge, backwards.** An inlined cache is a snapshot, and a page
+   left open goes stale. So the host refetches the state on the app origin with its own
+   credential and posts the map *into* the frame; the shim diffs it against the live
+   cache, applies adds, changes and deletes in place, and dispatches one `storage` event
+   per changed key. That is the platform's own "another tab wrote this" contract, so an
+   artifact written against the standard updates itself with no new API and no
+   cooperation from its author. It asks when the tab becomes visible again — the
+   cross-device case, and the moment somebody actually cares — and, for a shared-state
+   artifact (§7), every few seconds while it is being watched. An artifact that
+   ignores `storage` cannot be re-rendered by the shim, so it is offered a reload in the
+   app's own chrome; never in the artifact's DOM, which the artifact could forge, and
+   never silently, because a reload discards `sessionStorage` and everything the
+   artifact holds in a variable, including a half-typed input.
+4. Conflict policy: last-write-wins (adequate for this use case).
 
 Result: iPhone writes land on the server; Mac reads them back — the second device's render
 inlines the same state. Cross-device state with no skill, no special artifact format, and
 no cooperation from the artifact's author.
+
+**The ceiling, stated so no surface exceeds it.** Merge is *not* solved and cannot be at
+this layer: a list kept as one JSON blob under one key loses an item whenever two people
+add at once, however fast the channel — CRDTs are the real answer and are far outside this
+product. What resync buys is that the window shrinks from "until somebody reloads" to
+seconds, which is enough for two people taking coarse turns. Nothing in the UI may imply
+collaborative editing.
 
 ### 5.4 Boundary
 
@@ -429,9 +468,64 @@ known.
 
 Sharing is a first-class resource, not an export-to-file action.
 
-- A share is a row: `shares(id, artifact_id, public)`.
+- A share is a row: `shares(id, artifact_id, recipient_id)`. A row with no
+  recipient is the artifact's single anonymous link; one naming an account is a
+  grant to that person, who opens the artifact at its ordinary URL — the link
+  does not carry the grant, so the artifact URL *is* the share URL.
 - Served at `GET /s/:shareId` with no auth, from the isolated render origin, under the
-  artifact's own CSP allowlist.
+  artifact's own CSP allowlist. **Only the anonymous link is served there.** A
+  grant's id is not a URL — identity at the door is its authorization — so it
+  answers exactly what an id that was never issued answers. Otherwise every
+  grant would silently mint another unguessable public link, and revoking the
+  public one would revoke none of them.
+- **A grantee gets the ordinary artifact page, in a read-only mode** (av-awr4).
+  Same URL, same template: what a grant buys is running the tool, not a second
+  surface. The page withholds everything a grant does not carry — the source,
+  the edit and agent routes, the export, refetch, tag and collection controls —
+  and, less obviously and more importantly, raises none of the host-frame
+  prompts that write per-artifact authority. Only an owner changes an
+  artifact's allowlist or spends a capability approval, so a recipient offered
+  one would click Allow and watch nothing happen. The refusals are explained
+  instead: a blocked origin is named in the page's own chrome, with no button,
+  because the only way to change it is to ask the owner. A shared artifact is
+  frozen at whatever its owner approved, and the failure worth designing
+  against is that being true *silently*.
+- **A grantee writes the artifact's state, and `artifacts.share_state_mode`
+  says whose rows that is** (av-v991). `own`, the default, gives each viewer
+  their own — §5's per-viewer isolation, so somebody invited to use your tool
+  gets their own saved config. `shared` puts every viewer on the owner's rows:
+  one board, which is what a two-player artifact means, and what makes the
+  owner's own card show the position the other player left. One answer per
+  artifact rather than per grant, because "whose board am I on" has to be
+  answerable on the page, and one resolution point in the code, so the render
+  and the write can never disagree about it.
+
+  This is the one thing a grant widens beyond reading, and it is deliberate: a
+  tool whose saved data evaporates on every reload is not one a recipient can
+  use. It widens nothing else — the body, the title, the allowlist and the
+  capability approvals stay refused exactly as they are for a stranger.
+- **The owner's surface is a panel on the artifact's own page** (av-6xjd), with
+  three independent halves: the people currently granted, the public link, and
+  whose data everybody writes. Granting is a **bulk** action — one field taking
+  several names, one submit — because "gave friends access, dropped the link in
+  the group chat" is one gesture; each name is reported back individually, so a
+  typo neither refuses the others nor passes unmentioned. The field confirms
+  existence on purpose: answering "added" for a name nobody holds leaves the
+  owner believing their friend has access when the friend has none, which is
+  worse than leaking one bit per guessed name. The public link is a **toggle**
+  rather than a create button — an artifact has exactly one — plus a "replace
+  link" that rotates it in one step and says outright that the old URL stops
+  working, because a leaked link wants rotating and toggling off-then-on leaves
+  the user unsure it worked.
+- **Enumeration is not optional.** You cannot audit what you cannot list, and a
+  grant carrying live state makes that worse rather than better. Every gallery
+  card shows **one badge naming the strongest thing true** — a shared data
+  board, a public link, or N people — and a private artifact shows *none*,
+  because the absence is the signal and forty badges on forty cards is a marker
+  people learn to ignore. It is ambient rather than hover-only: the failure to
+  design against is the share made months ago that nobody has thought about
+  since, and a marker you have to go looking for does not help somebody who has
+  forgotten.
 - **A share lives until it is deleted.** There is no expiring link: revocation is
   deleting the row, and that is the only lifetime the product promises. An expiry
   column existed unused from the first migration and was removed (av-8ipt) rather
@@ -478,9 +572,14 @@ into the storage shim. Transparent to the artifact.
 
 ### 8.4 Share
 
-One button mints a share row and returns `/s/:shareId`, openable by anyone in any
-browser with no account and no dependency on the originating assistant — or (planned) export a
-single self-contained `.html`.
+Open the artifact, open its share panel, and take one of two routes. Type the
+names of people with accounts here and submit once — they open the same
+`/artifacts/:id` you do, because a grant is not a link. Or switch the public
+link on and hand out `/s/:shareId`, openable by anyone in any browser with no
+account and no dependency on the originating assistant. Either way the artifact
+grows a badge on its gallery card, so a month later the library itself is the
+answer to "what have I shared". Export to a single self-contained `.html` is
+the third route, and needs no service at all.
 
 ## 9. Explicit non-goals
 

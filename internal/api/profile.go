@@ -52,14 +52,14 @@ type profileAccount struct {
 	HasPassword bool
 	// Artifacts and Shares are what deletion would destroy, counted and
 	// phrased server-side (av-4wyq). Shares carry the weight of the pair: an
-	// artifact is the person's own, but a share is a URL somebody *else* may
-	// be holding, with no account on this instance and no way to be told it
-	// stopped working.
+	// artifact is the person's own, but a share is access somebody *else* may
+	// be relying on — a link anyone may hold, or a grant on their account —
+	// with no way to be told it stopped working.
 	Artifacts string
 	Shares    string
 	// ArtifactCount and ShareCount are the same two numbers unphrased, so the
 	// template can decide whether a clause applies at all rather than
-	// rendering it with a zero in it. "No share links will break" is noise on
+	// rendering it with a zero in it. "No shares will break" is noise on
 	// an account that never made one, and a confirmation built around "your no
 	// artifacts" is how a confirmation stops being read.
 	ArtifactCount int64
@@ -313,7 +313,7 @@ func (ro *Router) fillDeleteSection(ctx context.Context, u *store.User, acct *pr
 		return err
 	}
 	acct.Artifacts = countPhrase(sum.Artifacts, "artifact", "artifacts")
-	acct.Shares = countPhrase(sum.Shares, "share link", "share links")
+	acct.Shares = countPhrase(sum.Shares, "share", "shares")
 	acct.ArtifactCount = sum.Artifacts
 	acct.ShareCount = sum.Shares
 	acct.Storage = humanize.Bytes(sum.StorageBytes)

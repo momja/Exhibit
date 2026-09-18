@@ -517,6 +517,18 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// An agent session may rewrite its own artifact's body, but it may not
+	// decide whose state rows a recipient writes. That is a sharing-policy
+	// answer — one board or several — reserved for the owner, for the same
+	// reason shares and origin decisions are outside the grant's reach
+	// (middleware.go:agentSubResources). The key's presence is the refusal,
+	// whatever its value: a session that could set it could also flip it.
+	if _, ok := updates["share_state_mode"]; ok && principalFromCtx(r.Context()).Kind == PrincipalAgentGrant {
+		writeError(w, http.StatusBadRequest,
+			"share_state_mode is set by the artifact's owner, not by an agent session")
+		return
+	}
+
 	// The capability-bridge approval flags are strict booleans; reject anything
 	// else up front so a bad PATCH is a 400, not a stored value that later
 	// fails to scan. The list is store.ApprovalColumns rather than a literal
@@ -529,6 +541,21 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, field+" must be a boolean", http.StatusBadRequest)
 				return
 			}
+		}
+	}
+
+	// share_state_mode is an enum the render path branches on (av-6xjd), so an
+	// unrecognized value is not a bad label — it is a branch nobody wrote,
+	// deciding whose state rows a recipient writes. Checked here for the same
+	// reason the approval flags are: the store refuses it too, and a rule held
+	// in one layer alone is a rule the other layer can later be given a way
+	// around.
+	if v, ok := updates["share_state_mode"]; ok {
+		mode, isString := v.(string)
+		if !isString || !store.ValidShareStateMode(mode) {
+			writeError(w, http.StatusBadRequest,
+				`share_state_mode must be "`+store.ShareStateOwn+`" or "`+store.ShareStateShared+`"`)
+			return
 		}
 	}
 

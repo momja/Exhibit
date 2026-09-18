@@ -96,7 +96,11 @@ The only way data changes. Route groups:
   first-use capability approvals, §6 — the first three spent by a host bridge,
   the two device flags by the frame's gate and the render document's
   `Permissions-Policy`; named once in `store.ApprovalColumns` so the handler's
-  strict-bool check and the store's cannot drift), and other
+  strict-bool check and the store's cannot drift), `share_state_mode` (whose
+  state rows a recipient writes — their own, or the owner's shared copy;
+  checked against `store.ValidShareStateMode` in the handler *and* in the
+  store, av-6xjd, because it is an enum the render path branches on and an
+  unrecognized value is not a bad label but a branch nobody wrote), and other
   scalar columns. Rewriting the body
   re-executes the scan and returns the footprint plus a `footprint_changed` flag so
   the edit dialog can re-run the explicit-approval gate when origins differ from the
@@ -129,9 +133,15 @@ The only way data changes. Route groups:
   text. Erasing all state touches state alone: body, origin decisions, and capability
   approvals survive. All of them are authenticated like every other route here — the
   inspector adds no second write path. Every one is scoped to the session's own
-  rows (av-q0ub): the session supplies both principals §3.3 describes, so a read
-  never returns the union of every viewer's state and "erase all" means *mine*,
-  not the artifact's.
+  rows (av-q0ub): a read never returns the union of every viewer's state and
+  "erase all" means *mine*, not the artifact's. They are the one route family a
+  granted non-owner may **write** (av-v991) — a tool whose saved data
+  evaporates on reload is not one a recipient can use — and the exception is
+  exactly that wide: the handlers resolve one principal, the viewer, and the
+  store's `...AsViewer` methods decide whose rows that means from the
+  artifact's `share_state_mode` (§3.3). No handler names a target, and
+  `PATCH`, `DELETE`, the origin routes and the export refuse a grantee exactly
+  as before.
 - `GET /api/artifacts/:id/export` — the artifact as **one self-contained file**
   (av-vnkt), with every out-of-line asset folded back in as a `data:` URI. It is
   the enforcement point for the invariant those assets created: *the URL form is
@@ -173,7 +183,27 @@ The only way data changes. Route groups:
   its origins the *artifact's* allowlist doesn't cover — those are already blocked
   at render, so this explains a blank tile rather than gating one, and (as
   everywhere) never seeds the allowlist. See `widgets.md`.
-- `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle.
+- `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle. One route
+  mints both kinds because they are one resource told apart by `recipient_id`
+  (av-lrae), and the request says which by what it names. `recipients` — an
+  array of typed handles, resolved as `local:<normalized>` first and then
+  email — makes it a **bulk grant**, and the response is one `results` row per
+  name (`granted` | `already_shared` | `unknown` | `ambiguous` | `self`)
+  rather than a status covering all of them: "alice, bob, tpyo" must neither
+  refuse three people over one typo nor succeed without mentioning it, and the
+  `unknown` row is the deliberate existence confirmation (av-6xjd — answering
+  "added" for a name nobody holds leaves the owner believing their friend has
+  access when the friend has none). With no recipients the request mints the
+  artifact's one anonymous link, and `replace: true` rotates it: the delete and
+  the re-mint happen in one store transaction (§3.3), because the sequence a
+  caller would otherwise write leaves the artifact with *no* link when the
+  second half fails.
+- `GET /api/artifacts/:id/shares` — who can currently open an artifact: its
+  link, and every grant with the account it names (av-6xjd). Read-only, because
+  a share row has an id of its own and is minted and revoked above by that id;
+  what this adds is the question neither of those can answer. Owner-scoped, and
+  not only by habit — the guest list is not part of what a grant carries, so a
+  recipient asking gets the 404 a nonexistent artifact gets.
 - `DELETE /api/account` — erases the **caller's own** account and the library it
   owns (av-4wyq). It takes no id, from the path or the body, and that is the
   whole authorization argument: `/api/admin/users` is where acting on somebody
@@ -250,7 +280,13 @@ executable document with the correct security envelope:
 
 - Looks up the artifact, pulls its body from the blob store, its origin decisions
   (§3.3 — the `allow` rows build the CSP, the `block` rows are inlined to mute
-  the runtime prompt, av-kmwj), and its current state.
+  the runtime prompt, av-kmwj), and its current state. *Whose* state is the
+  artifact's answer rather than this handler's (av-v991): the token's viewer
+  claim goes through `Artifact.StatePrincipal`, so a `share_state_mode` of
+  `shared` inlines the owner's board for everybody looking at it and `own`
+  inlines each viewer's own. It is the same function the write path resolves
+  through, which is what stops a shared artifact being read off one set of rows
+  and written to another.
 - Generates the per-artifact CSP (`connect-src`/`script-src`/`worker-src`/`style-src`/
   `img-src`/`font-src`/`media-src` from the allowlist) and sets it as a response header
   on the document. `connect-src` is the allowlist alone — the storage shim needs no
@@ -316,6 +352,23 @@ executable document with the correct security envelope:
   **compatibility shim**, the **out-of-line asset manifest**, and the **network
   permission reporter** — then the artifact body. (Umbrella/family taxonomy:
   `security.md` §4.)
+- The storage shim also **receives** (av-v991). The inlined cache is a snapshot
+  of the instant the document was served, and on a `shared` artifact somebody
+  else is writing the same rows; the host frame refetches and posts the current
+  map in, which the shim applies to that cache in place and reports as real
+  `storage` events, one per changed key. It is `persistState`'s channel
+  reversed — frame → host for writes, host → frame for updates — so there is no
+  endpoint on this origin, no `connect-src` source and no write credential in
+  the document, and the render surface stays read-only. Both halves of the
+  sender's identity are checked, because unlike the frame's own messages the
+  host has a real origin to check. Two properties fall out and are worth
+  keeping: `clear()` deletes the cache's keys rather than rebinding the local,
+  or a post-clear resync would write into an object nothing reads; and
+  `StorageEvent` is constructed **without** `storageArea`, which WebIDL types
+  as `Storage?` and which therefore throws when handed the shim's plain object.
+  What this buys is stated narrowly on purpose — the window in which two
+  writes collide shrinks from "until somebody reloads" to seconds. It does not
+  merge, and cannot at this layer.
 - The network permission reporter (av-kmwj) is a `securitypolicyviolation`
   listener that posts CSP-blocked origins to the host frame, which prompts in
   app chrome. It reports only violations the prompt could actually fix: not a
@@ -430,6 +483,19 @@ executable document with the correct security envelope:
   `/s/:shareID` takes no token — the share row is the authorization (§7). Full
   rationale: `security.md` §1.3.
 
+  Its claims are **named**, not positional (av-6axy): `o=1.e=1785948001.<tag>`,
+  with the tag still last so the cut is unambiguous and the artifact id still
+  mixed into the MAC rather than carried. That encoding exists to carry the
+  claim beside it — `p`, the *viewer* principal, separate from the owner. The
+  owner authorizes the read; the principal selects whose state rows are inlined,
+  which is the same split store's `OwnerID`/`ViewerID` draw over `artifact_state`
+  (§3.3). They are the same person on every route that exists today, so `p` is
+  omitted on an owner's own routes, where it defaults to `o` (MintViewer encodes
+  no principal when the two are equal); they are different people on a recipient's
+  frame, where the token carries `p` naming the viewer whose rows are inlined (av-awr4). Duplicate and
+  unknown keys are rejected rather than resolved, and so is a token carrying
+  both `a` and `p`.
+
 - Renders **for nobody** when the token says so (av-wmp6). A token carries an
   optional `anonymous` claim, and a document rendered under one inlines *no*
   state and installs a shim that writes none — the artifact boots empty and its
@@ -452,6 +518,7 @@ The seam between handlers and persistence. Handlers speak only to this interface
 
 ```
 Store:  put/get/list/search artifacts, collections, tags, shares; get/put state;
+        read an artifact a grant names the viewer on (§3.3, av-lrae);
         list/set/delete per-origin network decisions;
         users and sessions, including local credentials (§3.8),
         the admin mutations over them (§3.8a)
@@ -483,24 +550,66 @@ returns; a cross-tenant write returns `ErrNotFound`, which handlers render as
 artifact routes a membership oracle over ids.
 
 Exactly two accessors opt out, and are named to say so: `GetArtifactUnscoped`
-and `GetShareUnscoped`. They serve the render surface, which has no session and
-no owner in context, and the share path, which is owner-independent by design
-because the share row *is* the authorization (§7). `grep Unscoped` is the whole
-audit of the un-owner-scoped read surface — a test enforces that the call sites
-stay inside `internal/render`, and closing the render gap with a signed token
-carrying a principal is av-c5aq.
+and `GetAnonymousShareUnscoped`. They serve the render surface, which has no
+session and no owner in context, and the share path, which is owner-independent
+by design because the link row *is* the authorization (§7). `grep Unscoped` is
+the whole audit of the un-owner-scoped read surface — a test enforces that the
+call sites stay inside `internal/render`, and closing the render gap with a
+signed token carrying a principal is av-c5aq.
+
+The share accessor is narrowed to the **anonymous link**, and the narrowing is
+in the query rather than in `ServeShare` (av-lrae). A share row is the
+authorization only where there is nobody at the door to check; a grant names
+somebody, so its id is meant to buy nothing. Both kinds now live in one table,
+so an accessor free to resolve either would make every grant id a working
+public URL — three grants would be three unguessable links serving the artifact
+to anyone with no account, and switching the public link off would revoke none
+of them while the owner believed otherwise. That is av-20xv's defect
+(advertising an access control that is not enforced) arrived at from the other
+direction, so it is made unrepresentable on the unscoped surface instead of
+checked by a caller. A grant's id answers at `/s/:shareID` exactly what an id
+that was never issued answers.
+
+**A non-owner reaches a shared artifact through a parallel accessor, never
+through a widened predicate** (av-lrae). `GetArtifactReadableBy` takes a
+`ViewerID` and resolves the artifact when that viewer owns it *or* a
+`shares.recipient_id` row names them on it. It is deliberately a second method
+rather than a wider `ownsArtifact`: that predicate and the owner-scoped
+`EXISTS` subquery are interpolated into every artifact-scoped statement, so
+widening them to "owner, or named on a live grant" is one change that DELETE,
+the body rewrite, the origin decisions and share revocation all pick up — a
+recipient would inherit the ability to destroy what they were shown, and no
+call site would mention it. Deny-by-default, naming only the paths a recipient
+may use, is the shape `agentSubResources` and public mode's route allowlist
+already take. Two principals now exist per request and the parameter types say
+which is which: the **owner** authorizes and may mutate, the **viewer** may
+read and writes state under their own id. A viewer with no grant reads exactly
+like an artifact that does not exist — 404, never 403, for the reason above.
 
 - **Metadata, collections, tags, shares, state** → SQLite (one file, WAL mode).
 - **Artifact state** → `artifact_state`, keyed by `(artifact_id, user_id, key)`
   (av-q0ub). `user_id` is the **viewer**, deliberately not named `owner_id`,
-  because on a shared artifact they are different people. So the four state
-  methods take *two* principals and they answer different questions:
+  because on a shared artifact they are different people. So the four
+  owner-scoped state methods take *two* principals answering two questions:
   `ownerID` authorizes reaching the artifact (the same owner-scoped `EXISTS`
   predicate every other artifact-child method uses), and `userID` selects whose
-  rows. They hold the same value at every call site today and will not once a
-  non-owner may open a shared artifact (av-7k7b), which is why they are two
-  parameters — with `artifactID` between them, so transposing the two is a
-  compile error rather than a cross-tenant read. Nothing is keyed by device:
+  rows — with `artifactID` between them, so transposing the two is a compile
+  error rather than a cross-tenant read.
+
+  **A viewer reaches state through four parallel methods instead** (av-v991),
+  standing to those exactly as `GetArtifactReadableBy` stands to `GetArtifact`:
+  authorized by `readableByViewer`, never by a widened owner predicate. They
+  take **one** principal, because a viewer writing on somebody else's artifact
+  can only ever write on their own behalf — collapsing the parameters makes
+  that structural rather than a rule each caller has to keep. Whose rows they
+  touch is resolved inside, by `Artifact.StatePrincipal`, the single place
+  `share_state_mode` is read: `own` (the default) is the viewer's own rows,
+  `shared` is the owner's — one board, which is what a two-player artifact
+  means. Every production caller now goes through them, the render surface
+  included, so the read path and the write path cannot resolve the mode
+  differently. State is the **one deliberate exception** to "a grant widens
+  nothing", and `TestAGrantDoesNotWidenAnyOwnerScopedMethod` says so in those
+  words. Nothing is keyed by device:
   one user on any number of devices is one set of rows, which is the entire
   point of storing state server-side (§6). Two cascades retire a row — with its
   artifact (FK), and with its viewer (a trigger on `users` DELETE; a real FK
@@ -536,6 +645,28 @@ carrying a principal is av-c5aq.
   whitespace-separated token is emitted as a quoted phrase with a trailing
   `*`, so prefix matching is preserved while `<script>`, `a:b`, or a stray
   quote search for themselves instead of failing the query.
+- **Shares** → `shares`, plus two denormalized rollups on `artifacts`
+  (av-6xjd). `ListArtifactShares` is the enumeration read: one artifact's link
+  and grants, each grant carrying the account it names, owner-scoped like every
+  other artifact-child read. `ReplaceAnonymousLink` rotates the link inside one
+  transaction, because the unique index forbids minting before deleting and the
+  reverse order leaves the artifact linkless if the second statement fails.
+  Naming a recipient is `GetUserByExternalID(auth.LocalExternalID(name))` and
+  then `GetUserByEmail`, in that order: `external_id` is UNIQUE so a local
+  account's login name is an exact key, while an OIDC row's is a provider
+  subject nobody could type. Email is *not* unique, so that fallback refuses
+  ambiguity (`ErrAmbiguousUser`) rather than resolving it — picking between two
+  accounts would hand somebody's artifact to whichever was created first.
+
+  `artifacts.share_grant_count` and `artifacts.share_link` are the gallery
+  badge's inputs, kept current by triggers on `shares` (migration 029), exactly
+  as `tags_text` is and for the same reason av-b6o9 gives: the index page asks
+  one question of a hundred artifacts, and the answer changes only when a share
+  row is written. They are read and never written from Go — a caller that could
+  set them could tell the gallery an artifact is private while three accounts
+  hold grants on it. Each trigger recomputes from `shares` rather than
+  incrementing, so the cascades (deleting an artifact, or the account a grant
+  names) are correct with no delete path knowing about them.
 - **Out-of-line assets** → `artifact_assets`, one row per vendored payload
   (av-20fk), with the bytes in the blob store. Content-addressed **per owner,
   never globally**: dedup inside a library is free, but sharing bytes across
@@ -883,6 +1014,52 @@ pressure the same weight amplifies into a multi-gigabyte runaway. The rule for
 any future panel here: the detail page may show *facts about* an artifact, never
 the artifact's bytes.
 
+**The detail page is also the recipient's page** (av-awr4). A grant puts no
+secret in a URL, so somebody an artifact is shared with opens it at the same
+`/artifacts/:id` its owner does — one address, one template, and `galleryDetail`
+reading through `Store.GetArtifactReadableBy` (§3.3) rather than the
+owner-scoped accessor. A viewer with no grant gets the 404 page, which is what
+an artifact that never existed gets.
+
+What separates the two renders is one narrowing:
+`pageCredentials.forArtifactOwnedBy` sets `ReadOnly` for a visitor who does not
+own the artifact, and the template's owner-only chrome — edit, agent, export,
+refetch, the allowlist link, the popover's Manage link — hangs off that single
+flag, as does `api.js`'s local refusal of writes. Deliberately one flag and not
+two: the failure being prevented is a page offering a control the server will
+refuse, and two flags are two things to keep in agreement. The narrowing only
+ever *removes* authority, and it is per-artifact rather than a field on the
+resolved Principal because ownership is a property of a (viewer, artifact) pair
+while a Principal is resolved before any artifact is known — a recipient still
+owns their own library.
+
+The part that is not about hiding buttons: **three host-frame prompts write
+per-artifact authority**, and all three would have rendered for a recipient and
+404'd on submit — the network permission prompt through `POST …/origins`, the
+download/clipboard/link first-use approvals and the camera/microphone gate
+through `PATCH /api/artifacts/:id`. A recipient's session raises none of them.
+The artifact's request is settled the way a denial has always settled it, so
+nothing hangs; and a blocked *origin* — the one case where silence leaves a tool
+visibly doing nothing — is explained instead, in the page's own chrome, naming
+the origin and saying that its owner has not allowed it. No button, because
+there is no answer this visitor could give. `security.md` §2.1 carries the
+policy and why it is the redirect case's shape.
+
+`/artifacts/:id/open` reads through the same accessor, because the recipient's
+page still offers "Open in new tab" and the capability banner still points at
+it; an affordance whose route 404s is the same dishonesty one door over. It
+grants nothing new — a top-level render of an artifact they may already read,
+under that artifact's own unchanged CSP.
+
+What a recipient still cannot do is change the artifact: the body, the
+allowlist, the capability approvals and the shares stay refused exactly as for
+a stranger (av-awr4). Writing state is the one deliberate exception (av-v991):
+the render inlines the rows `share_state_mode` selects for them — their own, or
+the owner's shared board — and the write-through lands on those same rows
+through the viewer-scoped methods, resolved by the one `StatePrincipal`
+function both paths share, so the read and the write can never disagree about
+whose board this is.
+
 The edit page carries one further island, the **state inspector** (av-hg5f): a
 collapsible panel beside the security panel that reads the artifact's state rows
 and renders each value through a control inferred from its shape — text, number,
@@ -920,6 +1097,39 @@ consequence of the layout rather than something event handlers must enforce.
 Both states come from one `cardWidget` partial, shared by the gallery card, the
 edit page's preview, the agent preview pane, and the fragment route. See
 `widgets.md`.
+
+**Sharing: the owner's panel and the card's badge (av-6xjd).** The detail page
+carries a collapsed `sharePanel` below the artifact frame, rendered only when
+`detailPageData.Share` is non-nil — which is only for the owner, and via the
+same `pageCredentials.forArtifactOwnedBy` flag every other owner-only control
+on that page hangs off. A recipient does not get it: the controls would 404,
+and more to the point the list *is* the guest list, which a grant does not
+carry. Three independent halves in it — the people currently granted (one field
+taking several names, one submit, each name reported back), the public link (a
+toggle, plus a one-step "replace link" that says the old URL stops working),
+and one control for `share_state_mode`.
+
+Its body is an htmx target: a mutation ends by firing `exhibit:shares-changed`
+and `/partials/share-panel` re-renders the same named partial the full page
+used. A reload is not an option here — this page holds a live artifact frame,
+and showing the new guest list must not restart the tool the owner is looking
+at — and rebuilding the rows in page JS would be a second definition of the
+list, in a second language, over recipient names it would then have to escape
+by hand. The per-name grant report sits *outside* the swapped region for the
+one reason that matters: the swap that follows a grant would otherwise wipe
+"tpyo — no such account" before anybody read it.
+
+On the gallery card, `shareBadge` renders **one badge naming the strongest
+thing true**, from the two denormalized rollups (§3.3) rather than a join: a
+grant on a `shared` artifact ("Shared data", somebody can change the owner's
+data) outranks a public link ("Public link", anyone with a URL can read it),
+which outranks grants alone ("Shared with N"). A private artifact gets **no
+marker at all** — the absence is the signal, since a library of forty cards
+must not render forty badges and marking the default trains people to ignore
+the marker. The badge is ambient rather than hover-only, because the failure it
+exists for is the share made months ago that nobody has thought about since;
+the `title` carries the full sentence, naming every fact that is true, since
+the label can only carry the strongest one.
 
 Ingest has its own page, `GET /new` (`new.tmpl`), rather than a form stacked on
 top of the library index (av-qo0j). It presents three routes in as peers, all
@@ -1560,6 +1770,36 @@ Two properties fall out of the sandbox's opaque origin: reads are **inlined at r
 **bridged through the host frame** (the iframe can't call the API cross-origin, so the
 authenticated host does it — no CORS, state endpoint stays authed).
 
+**Resync runs that same bridge backwards** (av-v991). An inlined cache is a
+snapshot, and a page left open goes stale: on a `shared` artifact because
+somebody else is writing those rows, and on any artifact because the same
+person may be writing them from another device. So the host refetches
+`GET /api/artifacts/:id/state` on the app origin, with its own credential, and
+posts the map into the frame; the shim diffs it against the live cache, applies
+adds, changes and deletes **in place**, and dispatches one `storage` event per
+changed key — the platform's own "another tab wrote this" contract, so an
+artifact written against the standard gets multi-player with no new API and no
+cooperation from its author. It asks on `visibilitychange` for every artifact,
+which is the cross-device case and costs one request when somebody returns to
+the tab, and additionally on a several-second interval for a `shared` artifact,
+which is the only place a third party is writing while you watch. A visitor
+with no principal never asks: their frame was rendered with no state inlined.
+
+An artifact that ignores `storage` cannot be re-rendered by the shim, so the
+frame reports back whether anything listened and the host offers a reload — in
+**app chrome**, never in the artifact's DOM, which the artifact could forge.
+Never automatically: the render document is `no-store`, so a reload is a full
+re-fetch; `sessionStorage` is in-memory by design and dies with the frame; and
+so does everything the artifact holds in a variable, including a half-typed
+input.
+
+The ceiling is deliberate and the UI must not exceed it. **Merge is not solved
+and cannot be at this layer**: a list kept as one JSON blob under one key still
+loses an item when two people add at once, because last-write-wins is what the
+store does. Liveness shrinks the window from "until somebody reloads" to
+seconds, which is enough for two people taking coarse turns and is not
+collaborative editing.
+
 Downloads ride the same host-frame bridge. The sandbox deliberately omits
 `allow-downloads`, so nothing in the frame downloads directly; the download bridge intercepts
 the common export vectors (`blob:`/`data:` anchors — recovering `blob:` payloads
@@ -1620,17 +1860,20 @@ the same rows by construction, and the phone's `setItem` is simply what the
 laptop's next render inlines.
 
 Which viewer's rows those are is decided once, at the top of the render: the
-**principal** carried by the signed render token (av-c5aq), or the artifact's own
-owner on a share, since a share publishes the artifact *as its owner sees it*
-(§7). The authorization for that read still comes from the artifact row this
-handler already resolved, so inlining state adds no third unscoped accessor.
+**principal** carried by the signed render token (av-c5aq) in its own claim
+beside the owner (av-6axy), or the artifact's own owner on a share, since a
+share publishes the artifact *as its owner sees it* (§7). The authorization for
+that read still comes from the artifact row this handler already resolved, so
+inlining state adds no third unscoped accessor.
 
 ## 7. Sharing
 
-A share is a row (`shares(id, artifact_id, public)`), not an export action.
+A share is a row (`shares(id, artifact_id, recipient_id)`), not an export action.
 `GET /s/:shareId` resolves the row and serves the artifact **through the same read-only
 render surface** under the same per-artifact CSP — just without the app auth check,
-because the share row *is* the authorization. This reuse is why sharing is nearly free:
+because the link row *is* the authorization. Only a row with no recipient is
+reachable there: a grant is authorized by identity rather than by its id, so
+serving one would turn that id back into a capability URL (§3.3). This reuse is why sharing is nearly free:
 it's the render path with a different front-door check. A one-file self-contained `.html`
 export remains as the service-independent fallback.
 
@@ -1649,7 +1892,7 @@ Each future capability attaches to a seam already present in v1, so none is a re
 | Future need | Attaches to | Change required |
 |-------------|-------------|-----------------|
 | Cross-device state | state endpoints (§6) | **already done** — state is server-side |
-| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap) — what remains is letting a non-owner reach a shared artifact at all (av-7k7b), and a person managing their own account (av-g2dx) |
+| Multi-user | auth middleware + `owner_id` | sessions and the identity seam are in place (§3.8), a built-in user backend issues local accounts without one (av-rzvf), queries are owner-scoped (§3.3), `artifact_state` is keyed by `(artifact_id, user_id, key)` (av-q0ub), and an admin creates, disables and resets other accounts (§3.8a, av-utap); a non-owner reaches a shared artifact through the grant schema and the viewer-scoped read accessor (av-lrae), the token's two principals (av-6axy) and the viewer page that calls them (av-awr4, §3.5) — a shared artifact is one board or several by its `share_state_mode`, which the render and the viewer-scoped state write both resolve through one function (av-v991) — what remains is a person managing their own account (av-g2dx) |
 | Server durability / restore | Store (SQLite + WAL) | Litestream sidecar; no app change |
 | HA / multi-region reads | Store interface | libSQL/Turso behind same interface |
 | Object-storage bodies | Blob interface | **already done** (av-52ll) — `BLOB_S3_BUCKET` selects `S3Store`; unset keeps the filesystem |

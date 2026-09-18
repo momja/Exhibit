@@ -23,6 +23,14 @@
  *                  A CSP is a response header fixed at load, so a new policy
  *                  needs a new document, and each page reaches one differently.
  *   readOnly()   - optional; true refuses the prompt outright.
+ *   explain(o,d) - optional; where a refused report goes instead of the
+ *                  dialog. A visitor who cannot record an answer is not asked,
+ *                  but the block still has to be accounted for somewhere or
+ *                  the artifact just quietly does nothing (av-awr4). Omitted,
+ *                  a refused report is dropped, which is what the agent page
+ *                  wants: its visitor is always the owner, so readOnly() there
+ *                  means the credential is gone rather than that the artifact
+ *                  belongs to somebody else.
  *
  * The dialog markup is the shared `networkPrompt` template partial, so the ids
  * below are the same wherever it renders. A page that omits the partial gets a
@@ -44,6 +52,7 @@
       const artifactId = opts.artifactId;
       const reload = opts.reload;
       const readOnly = opts.readOnly || function () { return false; };
+      const explain = opts.explain || function () {};
       // Where progress and failure are reported. A function that takes text
       // rather than an element: the detail page has a status span, the agent
       // page writes into its transcript, and neither should have to pretend to
@@ -100,7 +109,17 @@
         // refuse the write — so prompting them would be asking a question with
         // no answer. The render preamble already stays silent for an anonymous
         // render; this is the same fact on the side that owns the dialog.
-        if (readOnly()) return;
+        //
+        // Refused is not the same as unmentioned. A recipient's artifact is
+        // frozen at whatever its owner approved (av-awr4), and if that set is
+        // missing an origin the tool needs, the tool fails with the reason
+        // available nowhere the visitor will look. So the report is handed to
+        // the page's explanation instead of the queue — never both, since the
+        // whole claim is that this session asks nothing and writes nothing.
+        if (readOnly()) {
+          explain(String(d.origin || ''), String(d.directive || ''));
+          return;
+        }
         queue.push({ origin: String(d.origin || ''), directive: String(d.directive || '') });
         if (!pending) showNext();
       });

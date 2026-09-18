@@ -95,6 +95,12 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 		ownPath: "/partials/agent-preview?artifact={id}", foreignPath: "/partials/agent-preview?artifact={id}"},
 	{route: "/partials/card-widget", ownerScoped: true,
 		ownPath: "/partials/card-widget?artifact={id}", foreignPath: "/partials/card-widget?artifact={id}"},
+	// The owner's share panel (av-6xjd). Owner-scoped for a reason beyond the
+	// usual one: the fragment lists *who else* an artifact was given to, and a
+	// guest list is exactly the thing a recipient — let alone another tenant —
+	// must not be able to read off somebody's library.
+	{route: "/partials/share-panel", ownerScoped: true,
+		ownPath: "/partials/share-panel?artifact={id}", foreignPath: "/partials/share-panel?artifact={id}"},
 
 	// A page that reads nothing. Ingest is entirely a client-side
 	// conversation with POST /api/artifacts, which authenticates itself, so
@@ -128,6 +134,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 
 	// Owner-independent by design rather than by omission.
 	{route: "/s/{shareID}", why: "the share row is the authorization (architecture.md §7); it redirects to the render origin and reads no library"},
+	{route: "/s/{shareID}/widget", why: "same share-row authorization as /s/{shareID}, serving the widget blob (av-ei5h); it redirects to the render origin and reads no library"},
 	{route: "/api/agent/sessions/{sessionID}/events", scopedByHandler: true, coveredBy: "agent_session_owner_test.go",
 		why: "streams one agent session's events by id; it is owner-scoped, but by authorizeEventStream resolving the owner itself (EventSource sets no headers, so it cannot sit in a group that runs the middlewares)"},
 
@@ -142,6 +149,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/api/artifacts/{artifactID}/export", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/origins", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/widget", why: "API group, covered by owner_scope_test.go"},
+	{route: "/api/artifacts/{artifactID}/shares", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/transcripts", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/agent/key", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/collections/", why: "API group, covered by owner_scope_test.go"},

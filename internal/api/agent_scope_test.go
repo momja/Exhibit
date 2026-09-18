@@ -79,6 +79,34 @@ func TestAgentCredentialCannotWriteAnotherArtifact(t *testing.T) {
 	assert.Equal(t, "<html><body>b</body></html>", stored.Body)
 }
 
+// An agent session rewrites its artifact's body but does not decide whose
+// state rows a recipient writes: share_state_mode is a sharing-policy answer
+// reserved for the owner, like shares and origin decisions. The refusal is on
+// the key's presence, whatever its value — and nothing is persisted.
+func TestAgentCredentialCannotChangeShareStateMode(t *testing.T) {
+	r, reg := newScopedTestRouter(t)
+
+	id := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
+	grant, err := reg.Issue(1, id)
+	require.NoError(t, err)
+
+	w := doWithToken(t, r, "PATCH", "/api/artifacts/"+id, grant.Token(),
+		map[string]any{"share_state_mode": "shared", "title": "Owned"})
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Untouched: the mode still holds its default and the smuggled title
+	// with it — the refusal happens before anything reaches the store.
+	w = doJSON(t, r, "GET", "/api/artifacts/"+id, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var got struct {
+		Title          string `json:"title"`
+		ShareStateMode string `json:"share_state_mode"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, "A", got.Title)
+	assert.Equal(t, "own", got.ShareStateMode)
+}
+
 // Acceptance criterion 2: reads are scoped the same way. Reading another
 // artifact is how a hostile body would get its neighbours into the model's
 // context — and from there to the configured provider.

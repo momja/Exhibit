@@ -77,12 +77,14 @@ var appOriginGETRoutePaths = []pageRoute{
 	// same rule as the pages they are swapped into.
 	{route: "/partials/agent-preview", path: "/partials/agent-preview?artifact={id}"},
 	{route: "/partials/card-widget", path: "/partials/card-widget?artifact={id}"},
+	{route: "/partials/share-panel", path: "/partials/share-panel?artifact={id}"},
 
 	// Static and public surfaces. They embed nothing per-request, which is
 	// exactly the claim being checked.
 	{route: "/assets/*", path: "/assets/gallery/api.js"},
 	{route: "/manifest.json", path: "/manifest.json"},
 	{route: "/s/{shareID}", path: "/s/some-share"},
+	{route: "/s/{shareID}/widget", path: "/s/some-share/widget"},
 	{route: "/api/settings/public", path: "/api/settings/public"},
 
 	// The authenticated API. A JSON response has no business echoing the
@@ -95,6 +97,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/artifacts/{artifactID}/export", path: "/api/artifacts/{id}/export"},
 	{route: "/api/artifacts/{artifactID}/origins", path: "/api/artifacts/{id}/origins"},
 	{route: "/api/artifacts/{artifactID}/widget", path: "/api/artifacts/{id}/widget"},
+	{route: "/api/artifacts/{artifactID}/shares", path: "/api/artifacts/{id}/shares"},
 	{route: "/api/artifacts/{artifactID}/transcripts", path: "/api/artifacts/{id}/transcripts"},
 	{route: "/api/agent/key", path: "/api/agent/key"},
 	// SSE. With no agent manager configured it answers "not enabled" and
@@ -298,11 +301,11 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 	anonymous := withPrincipal(context.Background(), Principal{Kind: PrincipalPublic, ReadOnly: true})
 	session := withPrincipal(context.Background(), Principal{Kind: PrincipalSession})
 
-	assert.Equal(t, pageCredentials{Token: pageCredentialToken},
+	assert.Equal(t, pageCredentials{Token: pageCredentialToken, StateWritable: true},
 		single.pageCredentials(req(context.Background())),
 		"single-user: the static token is the only credential the instance has")
 
-	assert.Equal(t, pageCredentials{},
+	assert.Equal(t, pageCredentials{StateWritable: true},
 		withIdentity.pageCredentials(req(session)),
 		"session-authenticated: the cookie is the credential, so the page is handed none")
 
@@ -315,10 +318,12 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 
 	// The dangerous middle case: a provider is configured but this request
 	// resolved no session. That is a public visitor or a hole in sessionGate,
-	// and the static token is not the right answer to either.
-	assert.Equal(t, pageCredentials{},
+	// and the static token is not the right answer to either — nor is a page
+	// whose JS believes its writes will land, since the state routes would
+	// 401 a request with no credential behind it.
+	assert.Equal(t, pageCredentials{StateWritable: false},
 		withIdentity.pageCredentials(req(context.Background())),
-		"identity configured, no session resolved: withhold rather than fall back to the service token")
+		"identity configured, no session resolved: withhold the token and the writability")
 
 	// The same middle case, reached the other way. An instance whose login is a
 	// local credential issues sessions exactly as a provider-backed one does, so
@@ -327,10 +332,10 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 	// "is there an identity provider?" — and since av-jviu seeds an account on
 	// first boot, this is now the configuration a self-hoster actually runs.
 	withLocal, _ := newPageCredentialRouter(t, nil, func(c *Config) { c.LocalUsers = true })
-	assert.Equal(t, pageCredentials{},
+	assert.Equal(t, pageCredentials{StateWritable: false},
 		withLocal.pageCredentials(req(context.Background())),
 		"local login configured, no session resolved: withhold, exactly as for a provider")
-	assert.Equal(t, pageCredentials{},
+	assert.Equal(t, pageCredentials{StateWritable: true},
 		withLocal.pageCredentials(req(session)),
 		"local login, session-authenticated: the cookie is the credential")
 
@@ -343,6 +348,17 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 	assert.Equal(t, pageCredentials{ReadOnly: true},
 		withIdentity.pageCredentials(req(readOnlySession)),
 		"session-authenticated but read-only: no token (the cookie is the credential), and ReadOnly must still be honored")
+
+	// StateWritable is not ReadOnly inverted, and this is where the two part
+	// company (av-v991). A visitor writes an artifact's saved data when they
+	// have a principal to write it as, so the anonymous cases above are false
+	// and everyone else is true. The recipient — read-only about the artifact,
+	// state-writable within it — is made by forArtifactOwnedBy below, which is
+	// why it is asserted there rather than here.
+	assert.False(t, single.pageCredentials(req(anonymous)).StateWritable,
+		"an anonymous visitor has no principal whose rows a write could land in")
+	assert.True(t, withIdentity.pageCredentials(req(session)).StateWritable,
+		"a signed-in person does")
 }
 
 // The SSE stream is the one API call a page cannot credential with a header —
@@ -410,4 +426,27 @@ func TestPageScriptsUseTheSharedAPIClient(t *testing.T) {
 			"%s opens an SSE stream directly; call apiEventSource instead, which appends the "+
 				"token only when the page was given one (av-5imk)", name)
 	}
+}
+
+// The recipient's shape, and the reason StateWritable is a separate field
+// (av-v991). forArtifactOwnedBy only ever REMOVES authority, and what it
+// removes is authority over the artifact — its body, its allowlist, its
+// capability approvals. The data the artifact saves while somebody uses it is
+// not the artifact, and taking that away too would leave a granted tool
+// forgetting everything on every reload, which is not a shared tool at all.
+func TestANonOwnerKeepsTheStateWriteAndLosesEverythingElse(t *testing.T) {
+	owner := pageCredentials{Token: "t", StateWritable: true}
+
+	own := owner.forArtifactOwnedBy(7, 7)
+	assert.False(t, own.ReadOnly, "an owner looking at their own artifact is unchanged")
+	assert.True(t, own.StateWritable)
+
+	granted := owner.forArtifactOwnedBy(7, 9)
+	assert.True(t, granted.ReadOnly, "somebody else's artifact is not theirs to change")
+	assert.True(t, granted.StateWritable, "what they type into it is still theirs")
+
+	// And the removal only ever removes: a visitor who could not write state
+	// before does not acquire it by looking at their own library.
+	anonymous := pageCredentials{ReadOnly: true}
+	assert.False(t, anonymous.forArtifactOwnedBy(7, 7).StateWritable)
 }

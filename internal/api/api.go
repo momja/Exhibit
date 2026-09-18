@@ -416,6 +416,11 @@ func (ro *Router) setupRoutes() {
 		// API's auth group and under the same owner resolution.
 		r.Get("/partials/agent-preview", ro.agentPreviewPartial)
 		r.Get("/partials/card-widget", ro.cardWidgetPartial)
+		// The share panel (av-6xjd), re-rendered after a grant, a revoke or a
+		// link change. The detail page holds a live artifact frame, so a
+		// reload to show the new list would restart the tool the owner is
+		// looking at.
+		r.Get("/partials/share-panel", ro.sharePanelPartial)
 	})
 
 	// Embedded static assets (client JS islands, e.g. the CodeMirror editor)
@@ -427,6 +432,9 @@ func (ro *Router) setupRoutes() {
 
 	// Public share route — no auth required
 	ro.Get("/s/{shareID}", ro.serveShare)
+	// Public shared-widget route (av-ei5h) — no auth required, same
+	// share-row authorization, redirects to the render origin like above.
+	ro.Get("/s/{shareID}/widget", ro.serveShareWidget)
 
 	// The instance's public identity (av-4ac9). Registered here, outside the
 	// authenticated API group, because a visitor with no credential is
@@ -509,6 +517,13 @@ func (ro *Router) setupRoutes() {
 				// Artifact-centric tag routes
 				r.Post("/tags/{tagID}", ro.addArtifactTag)
 				r.Delete("/tags/{tagID}", ro.removeArtifactTag)
+				// Who can open this artifact (av-6xjd): its anonymous link and
+				// every account holding a grant. Read-only here, because a
+				// share row has an id of its own and is minted and revoked
+				// under /api/shares by that id. What this adds is the question
+				// neither of those can answer — what is true right now — and
+				// you cannot audit what you cannot list.
+				r.Get("/shares", ro.listArtifactShares)
 				// Agent conversations persisted with this artifact
 				r.Get("/transcripts", ro.listTranscripts)
 			})
@@ -626,6 +641,9 @@ func (ro *Router) RenderHandler() http.Handler {
 	r.Get("/w/{artifactID}", renderer.ServeWidget)
 	// Serve share via render origin
 	r.Get("/s/{shareID}", renderer.ServeShare)
+	// Serve an artifact's widget via its share link (av-ei5h) — share row
+	// authorizes, widget blob renders, share framing applies.
+	r.Get("/s/{shareID}/widget", renderer.ServeShareWidget)
 
 	return r
 }
@@ -635,4 +653,11 @@ func (ro *Router) RenderHandler() http.Handler {
 func (ro *Router) serveShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareID")
 	http.Redirect(w, r, ro.cfg.RenderOrigin+"/s/"+shareID, http.StatusFound)
+}
+
+// serveShareWidget handles public shared-widget links on the app origin,
+// redirecting to the render origin (av-ei5h).
+func (ro *Router) serveShareWidget(w http.ResponseWriter, r *http.Request) {
+	shareID := chi.URLParam(r, "shareID")
+	http.Redirect(w, r, ro.cfg.RenderOrigin+"/s/"+shareID+"/widget", http.StatusFound)
 }

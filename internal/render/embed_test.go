@@ -117,7 +117,7 @@ func TestShareFrameAncestors(t *testing.T) {
 func TestServeShareWithoutEmbedOriginsIsFramableByAnyone(t *testing.T) {
 	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
 	if err := st.CreateShare(context.Background(), 1,
-		&store.Share{ID: "sh1", ArtifactID: "abc", Public: true}); err != nil {
+		&store.Share{ID: "sh1", ArtifactID: "abc"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -140,7 +140,7 @@ func TestServeShareHonorsConfiguredEmbedOrigins(t *testing.T) {
 	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
 	rd.cfg.EmbedOrigins = []string{"https://landing.example", "https://docs.example"}
 	if err := st.CreateShare(context.Background(), 1,
-		&store.Share{ID: "sh1", ArtifactID: "abc", Public: true}); err != nil {
+		&store.Share{ID: "sh1", ArtifactID: "abc"}); err != nil {
 		t.Fatal(err)
 	}
 

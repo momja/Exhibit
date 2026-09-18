@@ -37,7 +37,15 @@ type deleteInstance struct {
 	st      store.Store
 	blobDir string
 	member  *store.User
-	cookie  *http.Cookie
+	// admin is the other account on the instance — the one a grant can be
+	// directed at, now that a second share of one artifact has to be a grant
+	// rather than a second link (av-lrae).
+	admin  *store.User
+	cookie *http.Cookie
+	// shareID is the anonymous link seedLibrary minted. An artifact has
+	// exactly one, so a test that needs the link asks for the one that exists
+	// instead of minting another.
+	shareID string
 }
 
 func newDeleteInstance(t *testing.T) deleteInstance {
@@ -57,7 +65,7 @@ func newDeleteInstance(t *testing.T) deleteInstance {
 	require.False(t, member.IsAdmin)
 
 	return deleteInstance{
-		ro: ro, st: st, blobDir: blobDir, member: member,
+		ro: ro, st: st, blobDir: blobDir, member: member, admin: admin,
 		cookie: sessionCookieFor(t, st, member.ID, "session-member"),
 	}
 }
@@ -92,7 +100,7 @@ func (in deleteInstance) do(t *testing.T, method, path string, body any) *httpte
 
 // seedLibrary gives the member one of everything the deletion has to reach,
 // and returns the artifact's id.
-func (in deleteInstance) seedLibrary(t *testing.T) string {
+func (in *deleteInstance) seedLibrary(t *testing.T) string {
 	t.Helper()
 	w := in.do(t, http.MethodPost, "/api/artifacts", map[string]any{
 		"title":             "Member's tool",
@@ -129,6 +137,9 @@ func (in deleteInstance) seedLibrary(t *testing.T) string {
 
 	share := in.do(t, http.MethodPost, "/api/shares", map[string]any{"artifact_id": id})
 	require.Equal(t, http.StatusCreated, share.Code, share.Body.String())
+	var minted createShareResponse
+	require.NoError(t, json.Unmarshal(share.Body.Bytes(), &minted))
+	in.shareID = minted.Share.ID
 
 	ctx := context.Background()
 	require.NoError(t, in.st.SetAgentKey(ctx, &store.AgentKey{
@@ -205,18 +216,21 @@ func TestProfileDeleteSectionDistinguishesALocalAccount(t *testing.T) {
 func TestProfileDeleteSectionCountsLiveShares(t *testing.T) {
 	in := newDeleteInstance(t)
 	id := in.seedLibrary(t)
-	require.Equal(t, http.StatusCreated,
-		in.do(t, http.MethodPost, "/api/shares", map[string]any{"artifact_id": id}).Code)
+	// A grant, not a second link: an artifact has exactly one anonymous link
+	// (av-lrae) and seedLibrary already minted it. The count the copy carries
+	// is "people who will lose access", which a grant is squarely part of.
+	require.NoError(t, in.st.CreateShare(context.Background(), in.member.ID,
+		&store.Share{ID: "to-the-admin", ArtifactID: id, RecipientID: &in.admin.ID}))
 
 	page := in.page(t)
 	assert.Contains(t, page, "<strong>1 artifact</strong>")
-	assert.Contains(t, page, "<strong>2 share links</strong>")
+	assert.Contains(t, page, "<strong>2 shares</strong>")
 
 	// And again in the confirmation itself, which is the last thing read
 	// before the phrase is typed — the count is not left behind on the step
 	// somebody has already scrolled past.
 	assert.Contains(t, page, "including 1 artifact and everything saved inside")
-	assert.Contains(t, page, "2 share links will stop working for whoever is holding them")
+	assert.Contains(t, page, "2 shares will stop working for whoever is holding them")
 }
 
 // An account with no shares is not warned about links that will stop working;
@@ -317,14 +331,11 @@ func TestDeleteAccountErasesTheLibraryAndItsBytes(t *testing.T) {
 // count exists to warn about.
 func TestDeleteAccountRevokesEveryShare(t *testing.T) {
 	in := newDeleteInstance(t)
-	id := in.seedLibrary(t)
-	w := in.do(t, http.MethodPost, "/api/shares", map[string]any{"artifact_id": id})
-	require.Equal(t, http.StatusCreated, w.Code)
-	var created createShareResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
-	share := created.Share
-	require.NotNil(t, share)
-	require.NotEmpty(t, share.ID)
+	in.seedLibrary(t)
+	// The link seedLibrary already minted: an artifact has exactly one
+	// (av-lrae), so there is no second one to make here.
+	shareID := in.shareID
+	require.NotEmpty(t, shareID)
 
 	// Asked of the surface that answers a share URL, not of the store. The
 	// claim is about the link a stranger is holding — served from
@@ -332,12 +343,12 @@ func TestDeleteAccountRevokesEveryShare(t *testing.T) {
 	// to change, and a store read would be one layer short of saying so. (It
 	// would also be an un-owner-scoped read outside internal/render, which
 	// owner_scope_test.go's tripwire refuses on purpose.)
-	assert.Equal(t, http.StatusOK, in.share(t, share.ID).Code,
+	assert.Equal(t, http.StatusOK, in.share(t, shareID).Code,
 		"the link is live first, or its being dead afterwards would prove nothing")
 
 	require.Equal(t, http.StatusNoContent, in.deleteAccount(t).Code)
 
-	assert.Equal(t, http.StatusNotFound, in.share(t, share.ID).Code,
+	assert.Equal(t, http.StatusNotFound, in.share(t, shareID).Code,
 		"a share URL anyone was holding resolves to nothing")
 }
 

@@ -28,12 +28,40 @@ const (
 	bob   int64 = 2
 )
 
+// seedOwnerAccounts gives alice and bob `users` rows, in that order so their
+// ids are the constants above. A grant names users(id) for real (av-lrae), so
+// a share directed at somebody needs that somebody to exist. Idempotent: an
+// upsert on the external id, so calling it once per artifact is free.
+func seedOwnerAccounts(t *testing.T, s *SQLiteStore) {
+	t.Helper()
+	ctx := context.Background()
+	for _, account := range []struct {
+		id  int64
+		sub string
+	}{{alice, "sub-alice"}, {bob, "sub-bob"}} {
+		u, err := s.UpsertUser(ctx, account.sub, account.sub+"@example.test")
+		require.NoError(t, err)
+		require.Equal(t, account.id, u.ID,
+			"the fixture owner ids must be the ids `users` actually hands out")
+	}
+}
+
+// otherOwner is the account that is not this artifact's owner — the recipient
+// a grant in these fixtures is directed at.
+func otherOwner(artifactID string) int64 {
+	if ownerOf(artifactID) == alice {
+		return bob
+	}
+	return alice
+}
+
 // putOwnedArtifact seeds one artifact plus its state, origin decision,
 // transcript, share, tag and collection, so every method under test has
 // something to find when it is allowed to — and something to leave alone
 // when it isn't.
 func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 	t.Helper()
+	seedOwnerAccounts(t, s)
 	ctx := context.Background()
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{
 		ID: id, OwnerID: owner, Title: id, SourceBlobID: "blob-" + id, Tier: Tier1,
@@ -42,7 +70,7 @@ func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 	}))
 	require.NoError(t, s.SetState(ctx, OwnerID(owner), id, ViewerID(owner), "seed", "value"))
 	require.NoError(t, s.SaveTranscript(ctx, owner, id, "session-"+id, `[{"role":"user"}]`))
-	require.NoError(t, s.CreateShare(ctx, owner, &Share{ID: "share-" + id, ArtifactID: id, Public: true}))
+	require.NoError(t, s.CreateShare(ctx, owner, &Share{ID: "share-" + id, ArtifactID: id}))
 	require.NoError(t, s.CreateTag(ctx, &Tag{ID: "tag-" + id, OwnerID: owner, Name: "tag-" + id}))
 	require.NoError(t, s.CreateCollection(ctx, &Collection{ID: "col-" + id, OwnerID: owner, Name: "col-" + id}))
 }
@@ -144,7 +172,13 @@ func ownerCases() []ownerCase {
 			return len(ts) == 0, err
 		}},
 		{"CreateShare", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.CreateShare(ctx, o, &Share{ID: "planted-share-" + id, ArtifactID: id, Public: true})
+			// A grant rather than a second anonymous link, because the
+			// artifact already carries its one link and the schema refuses
+			// another (av-lrae) — the denial under test has to be about
+			// ownership, not about the link already existing.
+			recipient := otherOwner(id)
+			return false, s.CreateShare(ctx, o,
+				&Share{ID: "planted-share-" + id, ArtifactID: id, RecipientID: &recipient})
 		}},
 		{"GetShare", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			sh, err := s.GetShare(ctx, o, "share-"+id)
@@ -289,13 +323,23 @@ func TestUnscopedAccessorsAreDeliberatelyOwnerBlind(t *testing.T) {
 	require.NotNil(t, a, "the render surface has no owner in context (av-c5aq)")
 	assert.Equal(t, bob, a.OwnerID, "it carries its owner, so the state read can be scoped")
 
-	sh, err := s.GetShareUnscoped(ctx, "share-bobs")
+	sh, err := s.GetAnonymousShareUnscoped(ctx, "share-bobs")
 	require.NoError(t, err)
-	require.NotNil(t, sh, "the share row is the authorization (architecture §7)")
+	require.NotNil(t, sh, "the link row is the authorization (architecture §7)")
 
 	missing, err := s.GetArtifactUnscoped(ctx, "no-such-artifact")
 	require.NoError(t, err)
 	assert.Nil(t, missing)
+
+	// Owner-blind, and no wider than that. A grant's id is not a credential —
+	// identity at the door is (av-lrae) — so it must not resolve on the one
+	// accessor that takes an id and asks nothing else.
+	recipient := alice
+	require.NoError(t, s.CreateShare(ctx, bob,
+		&Share{ID: "grant-to-alice", ArtifactID: "bobs", RecipientID: &recipient}))
+	grant, err := s.GetAnonymousShareUnscoped(ctx, "grant-to-alice")
+	require.NoError(t, err, "a grant id is absent here, not an error")
+	assert.Nil(t, grant, "a grant is not reachable by its id alone")
 }
 
 // TestUnscopedAccessorsAreCalledOnlyFromTheRenderSurface is AC#6's tripwire,
@@ -367,14 +411,44 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 	// Each exemption carries its reason. Adding to this list is the
 	// deliberate act; forgetting the parameter is not.
 	exempt := map[string]string{
-		"Close":               "no data in its signature at all",
-		"PutArtifact":         "carries the owner in Artifact.OwnerID",
-		"ListArtifacts":       "carries the owner in ListOptions.OwnerID",
-		"CreateCollection":    "carries the owner in Collection.OwnerID",
-		"CreateTag":           "carries the owner in Tag.OwnerID",
-		"SetAgentKey":         "carries the owner in AgentKey.OwnerID",
-		"GetArtifactUnscoped": "deliberate render/share exception (av-c5aq)",
-		"GetShareUnscoped":    "deliberate share exception (architecture §7)",
+		"Close":                     "no data in its signature at all",
+		"PutArtifact":               "carries the owner in Artifact.OwnerID",
+		"ListArtifacts":             "carries the owner in ListOptions.OwnerID",
+		"CreateCollection":          "carries the owner in Collection.OwnerID",
+		"CreateTag":                 "carries the owner in Tag.OwnerID",
+		"SetAgentKey":               "carries the owner in AgentKey.OwnerID",
+		"GetArtifactUnscoped":       "deliberate render/share exception (av-c5aq)",
+		"GetAnonymousShareUnscoped": "deliberate share exception (architecture §7); narrowed to the link (av-lrae)",
+
+		// The non-owner read accessor (av-lrae). It takes a ViewerID and not
+		// an owner, and that is the point rather than an omission: the two
+		// principals answer different questions — the OWNER authorizes and may
+		// mutate, the VIEWER may read and writes state under their own id — and
+		// this method exists precisely to admit a viewer who is not the owner.
+		// It is scoped, tightly: the artifact's owner, or an account a grant
+		// row names on it, and nothing else. What keeps that narrow is that it
+		// is a *separate* accessor rather than a wider predicate inside
+		// ownedArtifact, which every mutating query would have inherited.
+		"GetArtifactReadableBy": "takes the VIEWER, deliberately not the owner; read-only by construction (av-lrae)",
+
+		// The state methods a viewer reaches (av-v991), on the same grounds one
+		// step further: they take a ViewerID and no owner because a viewer
+		// writing on somebody else's artifact can only ever write on their own
+		// behalf. A second parameter here would be a way to spell "write as
+		// somebody else", which is exactly what collapsing them to one
+		// principal makes unrepresentable.
+		//
+		// They are not unscoped. Each resolves the artifact through
+		// readableByViewer — its owner, or an account a grant names on it —
+		// before touching a row, and then resolves *whose* rows from the
+		// artifact's share_state_mode rather than from anything the caller
+		// passed. What they widen is state, and only state, deliberately: the
+		// owner-scoped four beside them are untouched, and
+		// TestAGrantDoesNotWidenAnyOwnerScopedMethod walks everything else.
+		"GetStateAsViewer":    "takes the VIEWER; whose rows is resolved inside, never passed (av-v991)",
+		"SetStateAsViewer":    "takes the VIEWER; a viewer can only write on their own behalf (av-v991)",
+		"DeleteStateAsViewer": "takes the VIEWER; a viewer can only delete on their own behalf (av-v991)",
+		"ClearStateAsViewer":  "takes the VIEWER; erase-all means mine, resolved inside (av-v991, av-q0ub)",
 
 		// Out-of-line assets (av-20fk). Both are render-path reads, and the
 		// render path serves shares to people with no account — there is no
@@ -429,8 +503,14 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// on the route (adminOnly, internal/api/admin.go), where the acting
 		// admin is known and the target is not yet.
 		"GetUserByExternalID": "resolves a login name to an owner; there is no owner yet",
-		"SetUserAdmin":        "keyed by the user id it acts on; an instance-admin operation (av-utap)",
-		"SetUserDisabled":     "keyed by the user id it acts on; an instance-admin operation (av-utap)",
+		// Resolving a typed handle to an account (av-6xjd), on exactly
+		// GetUserByExternalID's grounds: it answers "who is this name", a
+		// question about the instance's directory rather than about anybody's
+		// library. The caller that spends the answer is owner-scoped where it
+		// counts — CreateShare refuses to share an artifact you do not own.
+		"GetUserByEmail":  "resolves a typed handle to an account; the owner scoping is on the share it feeds (av-6xjd)",
+		"SetUserAdmin":    "keyed by the user id it acts on; an instance-admin operation (av-utap)",
+		"SetUserDisabled": "keyed by the user id it acts on; an instance-admin operation (av-utap)",
 
 		// Entitlements (av-2p8z), on exactly SetUserAdmin's grounds. The
 		// int64 SetEntitlement takes is the *target* account, not the

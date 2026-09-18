@@ -26,6 +26,20 @@ var (
 	// body, so it is a bad request rather than a server fault, and handlers
 	// map it to 400 — a 500 would report the caller's typo as our outage.
 	ErrNotUpdatable = errors.New("not an updatable column")
+	// ErrDuplicateShare means the artifact already carries the share being
+	// minted: a grant to that same account, or — since av-lrae made the
+	// anonymous link singular — a second link. Both are refused by a unique
+	// index rather than by a handler, and this is that refusal typed, so the
+	// API answers 409 instead of reporting a schema invariant doing its job as
+	// a server fault. Being specific costs nothing here: the caller has
+	// already been proved to own the artifact.
+	ErrDuplicateShare = errors.New("a share for that artifact and recipient already exists")
+	// ErrAmbiguousUser means a handle matched more than one account, which
+	// only email can do — external_id is UNIQUE. It is an error rather than a
+	// "first match wins" because the caller is about to give somebody access
+	// to somebody else's artifact, and the wrong somebody is the failure the
+	// whole grant model exists to avoid.
+	ErrAmbiguousUser = errors.New("that address names more than one account")
 )
 
 type Tier int
@@ -84,7 +98,38 @@ type Artifact struct {
 	// widget has no identity of its own: it reads this artifact's state and
 	// renders under this artifact's CSP allowlist.
 	WidgetBlobID string `json:"widget_blob_id"`
-	Tags         []*Tag `json:"tags"` // populated on read by GetArtifact/ListArtifacts
+	// ShareStateMode says whose state rows a viewer reads and writes on this
+	// artifact (av-lrae, given meaning by av-v991): ShareStateOwn, the
+	// default, gives each viewer their own; ShareStateShared puts every viewer
+	// on the owner's rows — one board, which is what a two-player artifact
+	// means. It sits on the artifact rather than on the grant because it is
+	// one question with one answer per artifact: per-grant would admit one
+	// recipient on their own rows while another wrote the owner's, and "whose
+	// board am I on" would stop being answerable on the page.
+	//
+	// StatePrincipal is the only place this string is read. Nothing else
+	// should compare it, so there is one rule rather than one per caller.
+	//
+	// The owner's share panel writes it through PATCH (av-6xjd); what the
+	// value *means* at render time is av-v991's.
+	ShareStateMode string `json:"share_state_mode"`
+	// ShareGrantCount and SharePublicLink are the artifact's sharing state as
+	// the gallery card reads it (av-6xjd) — how many accounts hold a grant,
+	// and whether its one anonymous link exists.
+	//
+	// They are denormalized columns kept current by triggers, exactly as
+	// tags_text is (migration 029, following av-b6o9's precedent), because the
+	// alternative is a join on every gallery render to answer a question whose
+	// answer changes only when a share row is written. Like tags_text they are
+	// read-only from here: no caller writes them, and PutArtifact and
+	// UpdateArtifact leave them to the schema.
+	//
+	// They exist so a library can be *audited*. The failure to design against
+	// is the share made months ago and forgotten, so the card's badge has to be
+	// ambient — and a badge nothing can compute is no badge at all.
+	ShareGrantCount int    `json:"share_grant_count"`
+	SharePublicLink bool   `json:"share_public_link"`
+	Tags            []*Tag `json:"tags"` // populated on read by GetArtifact/ListArtifacts
 	// SourceText is the artifact's body reduced to its visible text (see
 	// ExtractSearchText), written into PutArtifact only to seed the
 	// artifacts_fts search index (§8.2/§3.3: search over source, not just
@@ -98,6 +143,48 @@ type Collection struct {
 	ID      string `json:"id"`
 	OwnerID int64  `json:"owner_id"`
 	Name    string `json:"name"`
+}
+
+// ShareStateOwn is Artifact.ShareStateMode's default: a viewer using a shared
+// artifact reads and writes their own state rows, never the owner's — av-q0ub's
+// per-viewer isolation, unchanged. ShareStateShared is the opt-out: every
+// viewer of the artifact is on the owner's rows, so two people take turns on
+// one board and the owner sees the position the other left.
+//
+// Both are named rather than spelled as literals so the schema default, the write
+// path's validation and the render path's branch agree in one place.
+const (
+	ShareStateOwn    = "own"
+	ShareStateShared = "shared"
+)
+
+// StatePrincipal answers, for one viewer of this artifact, whose state rows
+// they read and write — the user_id artifact_state is keyed by (av-q0ub).
+//
+// It is the single resolution point for share_state_mode, deliberately: a
+// handler that computed the answer for itself could compute it differently on
+// the read path and the write path, and the failure mode is one person editing
+// another person's board without either of them being told. Callers pass the
+// viewer and take what comes back; there is no target parameter to get wrong.
+//
+// Anything that is not ShareStateShared resolves to the viewer themselves,
+// which is what makes an unset mode — a zero-valued Artifact, a row written
+// before the column existed — fail towards isolation rather than towards the
+// owner's rows.
+func (a *Artifact) StatePrincipal(viewer ViewerID) ViewerID {
+	if a.ShareStateMode == ShareStateShared {
+		return ViewerID(a.OwnerID)
+	}
+	return viewer
+}
+
+// ValidShareStateMode reports whether v is a mode the column may hold. It is a
+// function rather than a set literal because both the API handler (which
+// answers 400) and UpdateArtifact (which refuses the write) ask it, and the two
+// must not be able to disagree about what is storable — the same argument
+// ApprovalColumns makes for the capability flags.
+func ValidShareStateMode(v string) bool {
+	return v == ShareStateOwn || v == ShareStateShared
 }
 
 // DefaultTagColor is applied to a tag when no color is supplied.
@@ -129,12 +216,40 @@ type OriginDecision struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Share is a link to an artifact. It has no lifetime of its own: a share lives
-// until its row is deleted (av-8ipt dropped the never-set expires_at column).
+// Share is one artifact made reachable by somebody who does not own it. It has
+// no lifetime of its own: a share lives until its row is deleted (av-8ipt
+// dropped the never-set expires_at column).
+//
+// RecipientID is the whole of what distinguishes the two kinds (av-lrae).
+// Nil is the anonymous link, where the unguessable id is the entire
+// authorization because there is no identity at the door to check; set, it is
+// a grant to that account, which opens the artifact at its ordinary URL and
+// needs no secret. Exactly one link and at most one grant per person are
+// possible, enforced by two unique indexes rather than by any handler.
+//
+// The old `public` column is deliberately absent: it was accepted, stored and
+// never read (av-20xv), and once a recipient exists it means exactly
+// `RecipientID == nil` — two fields for one fact, with nothing stopping them
+// disagreeing.
 type Share struct {
-	ID         string `json:"id"`
-	ArtifactID string `json:"artifact_id"`
-	Public     bool   `json:"public"`
+	ID          string `json:"id"`
+	ArtifactID  string `json:"artifact_id"`
+	RecipientID *int64 `json:"recipient_id"`
+}
+
+// ArtifactShare is a share row together with the account it names, which is
+// what the owner's share panel actually lists (av-6xjd): a grant is only
+// legible as the person it was given to, and revoking one means picking a
+// person out of a list.
+//
+// Recipient is nil for the anonymous link, which names nobody by definition.
+// It travels as the whole User rather than a pre-rendered label because who
+// counts as a display name is a question the *page* answers — external_id is
+// `local:<name>` for a local account and an opaque provider subject for an
+// OIDC one, and reducing that to text is presentation, not persistence.
+type ArtifactShare struct {
+	Share
+	Recipient *User `json:"recipient"`
 }
 
 // AgentKey is an owner's BYO agent provider credential. KeyCiphertext is the
@@ -201,6 +316,30 @@ type Store interface {
 	// comparison. The name is long and explicit so `grep Unscoped` enumerates
 	// the entire un-owner-scoped read surface.
 	GetArtifactUnscoped(ctx context.Context, id string) (*Artifact, error)
+	// GetArtifactReadableBy resolves an artifact a *viewer* may read: their
+	// own, or one a grant row names them on (av-lrae). It is the third and
+	// last member of this family, and the one that admits a non-owner.
+	//
+	// It is a separate accessor rather than a wider predicate inside
+	// GetArtifact, and that is the whole design. Widening the owner-scoped
+	// EXISTS subquery to "owner, or named on a live grant" is one change every
+	// artifact-scoped query picks up — DELETE, the body rewrite, the origin
+	// decisions, share revocation — so a recipient would silently inherit the
+	// ability to destroy the artifact they were shown. Deny-by-default,
+	// naming only the paths a recipient may use, is the shape
+	// agentSubResources and public mode's route allowlist already take, for
+	// this reason.
+	//
+	// It takes a ViewerID, not an owner, and the distinct type is load-bearing:
+	// two principals now exist per request (the OWNER authorizes and may
+	// mutate; the VIEWER may read, and writes state under their own id), and
+	// passing one where the other belongs must not compile. What it grants is
+	// in its name — reading. Nothing here is a route to mutation.
+	//
+	// A viewer with no grant reads exactly like an artifact that does not
+	// exist: (nil, nil), which handlers render as 404. Never a 403, for the
+	// reason in this type's comment.
+	GetArtifactReadableBy(ctx context.Context, viewerID ViewerID, id string) (*Artifact, error)
 	ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error)
 	UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error
 	// SetWidgetBlobID attaches (or, with an empty blobID, detaches) the
@@ -340,6 +479,42 @@ type Store interface {
 	DeleteState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID, key string) error
 	ClearState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID) error
 
+	// State, as a VIEWER (av-v991). The parallel path a granted non-owner
+	// reaches state through, standing to the four methods above exactly as
+	// GetArtifactReadableBy stands to GetArtifact: a second accessor
+	// authorized by the grant predicate, never a widening of the owner-scoped
+	// one. Everything else an owner-scoped query guards stays refused —
+	// TestAGrantDoesNotWidenAnyOwnerScopedMethod walks that, and names state
+	// as the one exception it was decided to make.
+	//
+	// It is the exception because the epic's central promise is that a
+	// recipient may *use* a shared artifact, and a tool whose saved data
+	// evaporates on reload is not usable. Reading it was already theirs
+	// (av-6axy inlines the viewer's rows); this is the write half.
+	//
+	// **One principal, not two.** The owner-scoped four take (ownerID
+	// authorizes, userID selects); these take the viewer alone, because a
+	// viewer writing on somebody else's artifact can only ever write on their
+	// own behalf. Collapsing the parameters makes that structural instead of a
+	// rule every caller has to remember — there is no second principal to pass
+	// wrongly, and no way to spell "write as somebody else".
+	//
+	// Which rows they touch is resolved inside, from the artifact's
+	// share_state_mode (Artifact.StatePrincipal): their own under
+	// ShareStateOwn, the owner's under ShareStateShared. The caller names no
+	// target, so no handler can pick the wrong one.
+	//
+	// An artifact this viewer may not reach reads as empty and refuses a write
+	// with ErrNotFound — the same shapes the owner-scoped four use, for the
+	// same reason (a 403 would confirm the row exists). The two deletes stay
+	// idempotent through it: rows the caller cannot reach are not rows they
+	// asked to have removed, so an unreachable artifact is a silent no-op
+	// rather than an error.
+	GetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) (map[string]string, error)
+	SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string) error
+	DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string) error
+	ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) error
+
 	// Agent (Exh-yvhp). SetAgentKey upserts the owner's single configured
 	// provider key; GetAgentKey returns nil when none is set.
 	SetAgentKey(ctx context.Context, k *AgentKey) error
@@ -353,13 +528,56 @@ type Store interface {
 
 	// Shares. A share is minted and revoked by the artifact's owner, so those
 	// two are owner-scoped; resolving one to serve it is not (below).
+	//
+	// CreateShare mints either kind: a nil Share.RecipientID is the artifact's
+	// one anonymous link, a set one is a grant to that account. Both
+	// uniqueness rules live in the schema, so a second link or a repeated
+	// grant comes back as ErrDuplicateShare rather than as a silently
+	// accepted duplicate.
 	CreateShare(ctx context.Context, ownerID int64, s *Share) error
 	GetShare(ctx context.Context, ownerID int64, id string) (*Share, error)
-	// GetShareUnscoped resolves a share row with no owner check — the second
-	// deliberate exception. `GET /s/:id` is answered for anyone holding the
-	// link, because the share row *is* the authorization (architecture §7);
-	// there is no owner to compare against by design.
-	GetShareUnscoped(ctx context.Context, id string) (*Share, error)
+	// ListArtifactShares is the enumeration half of sharing (av-6xjd): every
+	// share of one artifact, link and grants alike, each grant carrying the
+	// account it names. Owner-scoped like the two above, because who an
+	// artifact has been given to is the owner's business and nobody else's —
+	// a recipient can see the artifact, never the guest list.
+	//
+	// It joins `users` rather than leaving the caller to resolve ids, because
+	// the alternative is a query per grant on a list whose whole purpose is to
+	// be read at a glance.
+	ListArtifactShares(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactShare, error)
+	// ReplaceAnonymousLink rotates an artifact's public link: it deletes the
+	// existing one, if any, and mints newID in its place, in ONE transaction.
+	//
+	// One transaction because "replace" is one decision and its two halves
+	// fail differently. A leaked link wants rotating, and the sequence a
+	// caller would otherwise write — delete, then create — leaves the artifact
+	// with *no* link when the second half fails, which is a worse outcome than
+	// either the old link or a new one. The unique index forbids doing it the
+	// other way round (mint first, then delete), so the atomicity has to come
+	// from here.
+	ReplaceAnonymousLink(ctx context.Context, ownerID int64, artifactID, newID string) (*Share, error)
+	// GetAnonymousShareUnscoped resolves an artifact's *anonymous link* with
+	// no owner check — the second deliberate exception. `GET /s/:id` is
+	// answered for anyone holding the link, because there the row is the
+	// authorization (architecture §7) and there is no owner to compare
+	// against by design.
+	//
+	// It cannot return a grant, and that narrowing is the accessor's reason
+	// to exist rather than a filter bolted onto it (av-lrae). A share row is
+	// the authorization only while there is nobody at the door to check; a
+	// grant names somebody, so under the grant model its id is meant to buy
+	// nothing. Both kinds live in one table now, so an accessor that returned
+	// either would quietly make every grant id a working public URL — three
+	// grants would be three unguessable links serving the artifact to anyone
+	// with no account, and toggling the public link off would revoke none of
+	// them. Refusing here makes that unrepresentable instead of checked, and
+	// keeps `grep Unscoped` an honest account of what the un-owner-scoped
+	// read surface reaches: the link, and nothing else.
+	//
+	// A grant's id is therefore indistinguishable from an id that never
+	// existed, for the same reason every other refusal in this interface is.
+	GetAnonymousShareUnscoped(ctx context.Context, id string) (*Share, error)
 	DeleteShare(ctx context.Context, ownerID int64, id string) error
 
 	// --- Storage accounting (av-fw1b) ----------------------------------
@@ -403,6 +621,20 @@ type Store interface {
 	// a name rather than an owner id. Unlike LookupLocalCredential below, it
 	// does not treat "has no password" as "does not exist".
 	GetUserByExternalID(ctx context.Context, externalID string) (*User, error)
+	// GetUserByEmail is the fallback half of naming a recipient (av-6xjd).
+	// A typed handle resolves as `local:<normalized>` first, through the
+	// accessor above, because for an account this instance issued the login
+	// name *is* the identity and external_id's UNIQUE constraint makes that
+	// lookup exact. An OIDC row has no such name — its external_id is the
+	// provider's subject — so email is what is left to address it by.
+	//
+	// Unlike external_id, email is not unique, so this refuses ambiguity
+	// rather than resolving it: ErrAmbiguousUser when several accounts carry
+	// the address, since picking one would mean granting a stranger access to
+	// somebody's artifact on a coin flip. An empty email matches nothing —
+	// the column is NOT NULL DEFAULT '' (migration 013) and a blank one is an
+	// absent value, not a handle every such account answers to.
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
 
 	// CreateSession records a logged-in browser under a caller-supplied
 	// opaque id. GetSession returns ErrNotFound when that id is unknown *or*

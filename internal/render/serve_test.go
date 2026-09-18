@@ -17,6 +17,15 @@ import (
 // ClearState) and then re-serve to observe what the next render inlines —
 // standing in for "reload" since there is no browser in these tests.
 func newTestRenderer(t *testing.T, id, body string) (*Renderer, *store.SQLiteStore) {
+	rd, st, _ := newTestRendererAt(t, id, body)
+	return rd, st
+}
+
+// newTestRendererAt is the same, handing back the database file's path. Exactly
+// one caller wants it: share_state_mode is deliberately not caller-writable
+// through the Store (av-lrae; av-6xjd owns the PATCH surface), so a test of
+// what the value MEANS has to write it with SQL of its own.
+func newTestRendererAt(t *testing.T, id, body string) (*Renderer, *store.SQLiteStore, string) {
 	t.Helper()
 
 	dbf, err := os.CreateTemp(t.TempDir(), "render-*.db")
@@ -49,7 +58,7 @@ func newTestRenderer(t *testing.T, id, body string) (*Renderer, *store.SQLiteSto
 		AppOrigin: "https://app.test", RenderOrigin: "https://render.test",
 		Tokens: testTokens,
 	})
-	return rd, st
+	return rd, st, dbf.Name()
 }
 
 // serve renders the artifact once and returns the response body — the

@@ -47,6 +47,22 @@ type pageCredentials struct {
 	// off; withholding a credential is this ticket's job, dressing the page
 	// for it is theirs.
 	ReadOnly bool
+	// StateWritable is the one exception carved out of ReadOnly, and it exists
+	// because the two answer different questions (av-v991). ReadOnly is about
+	// the artifact — its body, its allowlist, its capability approvals, all of
+	// which belong to its owner. This is about what the artifact *saves while
+	// you use it*, which belongs to whoever is using it: a recipient's todo
+	// list is theirs, and on a 'shared' artifact the board is the point of the
+	// grant. Refusing it would leave a granted tool forgetting everything on
+	// every reload, which is not a shared tool at all.
+	//
+	// It is emphatically NOT "read-only, but". An anonymous visitor has no
+	// principal to write as, so this is false for them and the route would
+	// refuse them anyway; what it admits is exactly a signed-in person on an
+	// artifact they may reach, which is the same predicate the store's
+	// ...AsViewer methods enforce in SQL. The page and the server therefore
+	// agree by construction rather than by two rules that must be kept in step.
+	StateWritable bool
 }
 
 // pageCredentials answers what this request's page render may embed.
@@ -92,14 +108,61 @@ type pageCredentials struct {
 func (ro *Router) pageCredentials(r *http.Request) pageCredentials {
 	ctx := r.Context()
 	anonymous := publicVisitor(ctx)
+	p := principalFromCtx(ctx)
+	readOnly := p.ReadOnly
 	return pageCredentials{
 		Token: ro.pageToken(ctx, anonymous),
 		// Derived from the resolved Principal, not recomputed from
 		// publicVisitor: ReadOnly is its own field precisely because a future
 		// principal (a shared artifact's viewer, av-7k7b) may be read-only
 		// without being anonymous, and this must not hardcode the two as one.
-		ReadOnly: principalFromCtx(ctx).ReadOnly,
+		ReadOnly: readOnly,
+		// A visitor writes state when they have a principal to write it as.
+		// That is the whole rule: a public instance's anonymous reader has
+		// none, and everyone else — the operator on a static token, a
+		// signed-in person, and (below) a recipient — has one. A request no
+		// gate resolved (PrincipalNone) on a login-enabled instance has no
+		// credential behind it either: the state routes would 401 it, so
+		// StateWritable must not promise the page's JS otherwise. The
+		// single-user instance keeps the fallback below — with no login
+		// there is no second credential to resolve, and its visitor is by
+		// construction the operator who already holds the static token.
+		StateWritable: !anonymous && !readOnly && (!ro.loginEnabled() || p.Kind != PrincipalNone),
 	}
+}
+
+// forArtifactOwnedBy narrows this request's credentials to the one artifact a
+// page is about: a visitor who does not own it may not mutate it (av-awr4).
+//
+// It only ever *removes* authority — `||`, never an assignment — so a
+// principal that was already read-only stays read-only whoever owns what it is
+// looking at. That direction is the whole safety of putting a per-artifact
+// fact into a per-request field.
+//
+// A recipient is exactly the principal pageCredentials.ReadOnly was given its
+// own field for: read-only without being anonymous. It is deliberately the
+// same flag rather than a second one beside it, because the failure this
+// prevents is a page offering a control the credential will refuse — two flags
+// are two things to keep in agreement, and the disagreement *is* the bug. So
+// the detail template's chrome and api.js's local refusal are one decision:
+// nothing is rendered that could not be sent, and nothing is sent that would
+// not be honoured.
+//
+// The narrowing lives here rather than in the resolved Principal because
+// ownership is a property of an (viewer, artifact) pair and a Principal is
+// resolved before any artifact is known. A recipient still owns their own
+// library, and reading somebody else's shelf must not lock them out of it.
+//
+// StateWritable is deliberately left alone here, and that asymmetry is the
+// point (av-v991): not owning an artifact is a reason you may not change it,
+// and no reason at all that the data you type into it should evaporate. This
+// method is only ever reached after the grant accessor admitted the visitor,
+// so "not the owner" means "a recipient" and never "a stranger" — and the
+// store enforces that same predicate again on the write, so nothing here is
+// the thing holding the line.
+func (c pageCredentials) forArtifactOwnedBy(viewerID, ownerID int64) pageCredentials {
+	c.ReadOnly = c.ReadOnly || viewerID != ownerID
+	return c
 }
 
 func (ro *Router) pageToken(ctx context.Context, anonymous bool) string {

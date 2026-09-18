@@ -128,6 +128,24 @@ input,select,textarea{font-size:var(--field-font-size)}
 .capability-cluster .capability-glyph{display:inline-flex;align-items:center;font-size:14px;line-height:1}
 .capability-cluster .capability-count{color:var(--color-ink);font-weight:600}
 
+/* The card's sharing marker (av-6xjd). Same inline weight as the capability
+ * cluster beside it and the same neutral treatment — it reports a state, it
+ * does not judge one. It is AMBIENT: always visible, never revealed on hover,
+ * because the thing it exists to catch is the share nobody has thought about
+ * since. There is deliberately no rule for a private artifact — that badge is
+ * not rendered at all, and marking the default would train people to stop
+ * seeing the marker.
+ *
+ * The three levels are a ladder ordered by how much authority has left the
+ * owner's hands, and the ink darkens along it. Still no red: an artifact
+ * shared on purpose is not a fault, and a warning colour on a deliberate act
+ * is a colour people learn to ignore. */
+.share-badge{display:inline-flex;align-items:center;gap:var(--space-2);font-size:12px;line-height:1;white-space:nowrap;color:var(--color-muted)}
+.share-badge i{font-size:14px}
+.share-badge-granted{color:var(--color-ink-soft)}
+.share-badge-public,.share-badge-shared-data{color:var(--color-ink)}
+.share-badge-shared-data{font-weight:600}
+
 /* capability-wrap positions the popover (av-41se) relative to its trigger.
  * The popover opens only on explicit activation — click/tap, or Enter/Space
  * while the trigger has focus — handled by components.js; it does NOT open

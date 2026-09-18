@@ -118,6 +118,23 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 		// selects from is altered.
 		"ALTER TABLE artifacts DROP COLUMN camera_approved",
 		"ALTER TABLE artifacts DROP COLUMN microphone_approved",
+		// 029's share rollups (av-6xjd), and the triggers before the columns
+		// on either side of them: a trigger naming a column blocks that
+		// column's DROP, in both the table it fires on and the table it
+		// writes.
+		"DROP TRIGGER IF EXISTS shares_counts_sync_update",
+		"DROP TRIGGER IF EXISTS shares_counts_sync_delete",
+		"DROP TRIGGER IF EXISTS shares_counts_sync_insert",
+		"ALTER TABLE artifacts DROP COLUMN share_link",
+		"ALTER TABLE artifacts DROP COLUMN share_grant_count",
+		// 028's grant schema (av-lrae), rewound in the reverse of the order it
+		// was applied: the indexes before the column they are built on, and
+		// `public` restored, since the release being simulated still had it.
+		"DROP INDEX IF EXISTS shares_one_anonymous_link",
+		"DROP INDEX IF EXISTS shares_artifact_recipient",
+		"ALTER TABLE shares DROP COLUMN recipient_id",
+		"ALTER TABLE shares ADD COLUMN public INTEGER NOT NULL DEFAULT 1",
+		"ALTER TABLE artifacts DROP COLUMN share_state_mode",
 	} {
 		_, err := s.db.ExecContext(ctx, stmt)
 		require.NoError(t, err, stmt)
@@ -137,10 +154,102 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 		assert.Equal(t, 1, n, "%s was not created by the upgrade", obj)
 	}
 	// ...and so did 027, whose columns the rewind above took back off.
-	for _, col := range []string{"camera_approved", "microphone_approved"} {
+	for _, col := range []string{"camera_approved", "microphone_approved", "share_state_mode"} {
 		var n int
 		require.NoError(t, upgraded.db.QueryRowContext(ctx,
 			"SELECT COUNT(*) FROM pragma_table_info('artifacts') WHERE name = ?", col).Scan(&n))
 		assert.Equal(t, 1, n, "artifacts.%s was not created by the upgrade", col)
 	}
+	// ...and 028 (av-lrae): shares gained a recipient, lost the flag nothing
+	// ever enforced, and acquired both uniqueness rules. Asserted here rather
+	// than only in the grant tests because this is the path a *deployed*
+	// instance takes, and a schema invariant that only holds on a fresh
+	// database is not an invariant.
+	var hasRecipient, hasPublic int
+	require.NoError(t, upgraded.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM pragma_table_info('shares') WHERE name = 'recipient_id'").Scan(&hasRecipient))
+	assert.Equal(t, 1, hasRecipient, "shares.recipient_id was not created by the upgrade")
+	require.NoError(t, upgraded.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM pragma_table_info('shares') WHERE name = 'public'").Scan(&hasPublic))
+	assert.Equal(t, 0, hasPublic, "shares.public survived the upgrade (av-20xv)")
+
+	for _, idx := range []string{"shares_artifact_recipient", "shares_one_anonymous_link"} {
+		var n int
+		require.NoError(t, upgraded.db.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?", idx).Scan(&n))
+		assert.Equal(t, 1, n, "%s was not created by the upgrade", idx)
+	}
+}
+
+// The upgrade hazard 028 had to design against: nothing before it stopped an
+// owner minting several shares of one artifact, and every one of those rows
+// becomes an anonymous link when recipient_id arrives NULL. Creating the
+// partial unique index over them would fail, and a failed migration is an
+// instance that does not start — the one upgrade outcome worse than losing a
+// duplicate link.
+//
+// So the migration collapses them first, keeping the earliest, and this is
+// that claim run against a database that really holds the offending rows.
+func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.db")
+	s, err := OpenSQLite(path)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{
+		ID: "shared-twice", OwnerID: alice, Title: "shared twice", SourceBlobID: "b1", Tier: Tier1}))
+
+	// Rewind 028 and plant the rows a pre-028 instance could hold. 029's
+	// triggers and columns (av-6xjd) come off first, since a trigger naming
+	// shares.recipient_id blocks that column's DROP.
+	for _, stmt := range []string{
+		"DELETE FROM goose_db_version WHERE version_id >= 28",
+		"DROP TRIGGER IF EXISTS shares_counts_sync_update",
+		"DROP TRIGGER IF EXISTS shares_counts_sync_delete",
+		"DROP TRIGGER IF EXISTS shares_counts_sync_insert",
+		"ALTER TABLE artifacts DROP COLUMN share_link",
+		"ALTER TABLE artifacts DROP COLUMN share_grant_count",
+		"DROP INDEX IF EXISTS shares_one_anonymous_link",
+		"DROP INDEX IF EXISTS shares_artifact_recipient",
+		"ALTER TABLE shares DROP COLUMN recipient_id",
+		"ALTER TABLE shares ADD COLUMN public INTEGER NOT NULL DEFAULT 1",
+		"ALTER TABLE artifacts DROP COLUMN share_state_mode",
+		"INSERT INTO shares (id, artifact_id, public) VALUES ('first', 'shared-twice', 1)",
+		"INSERT INTO shares (id, artifact_id, public) VALUES ('second', 'shared-twice', 1)",
+		"INSERT INTO shares (id, artifact_id, public) VALUES ('third', 'shared-twice', 1)",
+	} {
+		_, err := s.db.ExecContext(ctx, stmt)
+		require.NoError(t, err, stmt)
+	}
+	require.NoError(t, s.Close())
+
+	upgraded, err := OpenSQLite(path)
+	require.NoError(t, err, "an instance with duplicate shares must still start")
+	defer upgraded.Close()
+
+	// One row left, and it is the earliest — the link most likely to be in
+	// somebody's hands already.
+	rows, err := upgraded.db.QueryContext(ctx,
+		"SELECT id FROM shares WHERE artifact_id = 'shared-twice'")
+	require.NoError(t, err)
+	defer rows.Close()
+	var kept []string
+	for rows.Next() {
+		var id string
+		require.NoError(t, rows.Scan(&id))
+		kept = append(kept, id)
+	}
+	require.NoError(t, rows.Err())
+	assert.Equal(t, []string{"first"}, kept)
+
+	// 029's rollups were backfilled from the rows that survived (av-6xjd). A
+	// library that predates the migration must not read as private on the
+	// gallery — the badge exists precisely for the share nobody remembers, and
+	// one that only appears on artifacts shared *after* the upgrade would miss
+	// every one of them.
+	var grants, link int
+	require.NoError(t, upgraded.db.QueryRowContext(ctx,
+		"SELECT share_grant_count, share_link FROM artifacts WHERE id = 'shared-twice'").Scan(&grants, &link))
+	assert.Equal(t, 0, grants)
+	assert.Equal(t, 1, link, "the surviving row is an anonymous link and the card must say so")
 }

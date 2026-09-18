@@ -90,9 +90,17 @@ var accountTables = map[string]accountTable{
 		"cascades from artifacts(id) — and DeleteArtifact reads the blob ids out first, " +
 			"because once these rows are gone nothing names those bytes (av-20fk)",
 		"SELECT COUNT(*) FROM artifact_assets WHERE artifact_id = '" + deletedArtifact + "'"},
+	// Two cascades reach this table, and the second one is the reason a grant
+	// carries a real foreign key (av-lrae). artifacts(id) revokes every share
+	// *of* the deleted account's library at once — the capability URLs and the
+	// grants alike. users(id) revokes every grant *held by* the deleted
+	// account, which is a row on somebody else's artifact and therefore the
+	// second place a person's data lives outside their own library. Only
+	// artifact_state's trigger otherwise reaches that far.
 	"shares": {reachCascade,
-		"cascades from artifacts(id) — which is what revokes every capability URL at once",
-		"SELECT COUNT(*) FROM shares WHERE artifact_id = '" + deletedArtifact + "'"},
+		"cascades from artifacts(id) for the shares of this library, and from users(id) for the " +
+			"grants this person held on somebody else's artifact",
+		"SELECT COUNT(*) FROM shares WHERE artifact_id = '" + deletedArtifact + "' OR recipient_id = ?1"},
 	"sessions": {reachCascade,
 		"cascades from users(id), which is what signs the account out everywhere rather than in one browser",
 		"SELECT COUNT(*) FROM sessions WHERE user_id = ?1"},
@@ -228,7 +236,7 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 
 	require.NoError(t, s.SetOriginDecision(ctx, member.ID, deletedArtifact,
 		"https://api.example.test", "allow", "user"))
-	require.NoError(t, s.CreateShare(ctx, member.ID, &Share{ID: "member-share", ArtifactID: deletedArtifact, Public: true}))
+	require.NoError(t, s.CreateShare(ctx, member.ID, &Share{ID: "member-share", ArtifactID: deletedArtifact}))
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))
 	require.NoError(t, s.SetAgentKey(ctx, &AgentKey{OwnerID: member.ID, Provider: "anthropic", KeyCiphertext: "sealed"}))
 	require.NoError(t, s.SaveTranscript(ctx, member.ID, deletedArtifact, "sess-1", `[{"role":"user"}]`))
@@ -402,7 +410,12 @@ func TestGetAccountSummaryCountsWhatDeletionWouldDestroy(t *testing.T) {
 	assert.Equal(t, int64(1), sum.Artifacts)
 	assert.Equal(t, int64(1), sum.Shares)
 
-	require.NoError(t, fx.s.CreateShare(ctx, fx.member.ID, &Share{ID: "member-share-2", ArtifactID: deletedArtifact}))
+	// A second share of one artifact has to be a *grant* now: the anonymous
+	// link is singular (av-lrae) and seedEverything already minted it. That is
+	// the more interesting count anyway — the sentence this number appears in
+	// is about people who will lose their access.
+	require.NoError(t, fx.s.CreateShare(ctx, fx.member.ID,
+		&Share{ID: "member-share-2", ArtifactID: deletedArtifact, RecipientID: &fx.admin.ID}))
 	sum, err = fx.s.GetAccountSummary(ctx, fx.member.ID)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), sum.Shares)
