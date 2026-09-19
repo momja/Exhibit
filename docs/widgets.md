@@ -56,7 +56,7 @@ still wants a face. There is no separate mechanism for it.
 | Surface | What it does |
 |---|---|
 | `GET RENDER_ORIGIN/w/:artifactID` | Serves the widget document (`internal/render`). 404 when the artifact has none. |
-| `GET RENDER_ORIGIN/s/:shareID/widget` | Serves the widget through the artifact's anonymous link (av-ei5h): share row authorizes, owner's state inlined, share framing applies. 404 when the artifact has none. |
+| `GET RENDER_ORIGIN/s/:shareID/widget` | Serves the widget through the artifact's anonymous link (av-ei5h): share row authorizes, owner's state inlined, share framing applies. An artifact with no widget serves its default tile instead (av-cp7j): a static monogram document, no script, CSP of inline style only. The share panel's embed snippet therefore appears whenever the link exists. |
 | Gallery card | Frames the widget, or renders the default tile (`cardWidget` partial). |
 | Artifact edit page | "Gallery widget" panel: source editor, live preview, Generate / Save / Remove. |
 | Agent chat | `set_widget` / `get_widget` tools; the preview pane shows the tile. |

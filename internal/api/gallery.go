@@ -8,19 +8,18 @@ package api
 
 import (
 	"fmt"
-	"hash/fnv"
 	"html/template"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/momja/Exhibit/internal/color"
 	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/store"
+	"github.com/momja/Exhibit/internal/tile"
 )
 
 // renderURLs mints the render-origin URLs one page render points its frames at.
@@ -413,7 +412,7 @@ func (ro *Router) sharePanel(r *http.Request, a *store.Artifact) (sharePanelView
 		Shares:          newArtifactSharesView(shares, ro.shareURL),
 		StateModeShared: a.ShareStateMode == store.ShareStateShared,
 	}
-	if view.Shares.Link != nil && a.WidgetBlobID != "" {
+	if view.Shares.Link != nil {
 		view.WidgetEmbed = `<iframe src="` + ro.shareWidgetURL(view.Shares.Link.ID) +
 			`" width="320" height="132" style="border:0"></iframe>`
 	}
@@ -536,9 +535,10 @@ type sharePanelView struct {
 	Shares          artifactSharesView
 	StateModeShared bool
 	// WidgetEmbed is the ready-to-paste iframe snippet for the artifact's
-	// shared tile (av-ei5h). Empty when the artifact has no widget or no
-	// public link — both must be true for the URL inside it to resolve, so
-	// the panel shows nothing rather than a dead snippet. Panel-only, like
+	// shared tile (av-ei5h). Empty when there is no public link, since the
+	// URL inside it would not resolve. An artifact with no widget still gets
+	// one: the link serves its default tile (av-cp7j), and a widget added
+	// later replaces that tile under the same URL. Panel-only, like
 	// everything here: the JSON shares route keeps its own shape.
 	WidgetEmbed string
 }
@@ -635,49 +635,14 @@ type galleryCard struct {
 // render token as it goes.
 func newWidgetView(a *store.Artifact, urls renderURLs) widgetView {
 	v := widgetView{
-		Monogram: monogram(a.Title),
-		Hue:      titleHue(a.ID),
+		Monogram: tile.Monogram(a.Title),
+		Hue:      tile.Hue(a.ID),
 		Title:    a.Title,
 	}
 	if a.WidgetBlobID != "" {
 		v.URL = urls.widget(a.ID)
 	}
 	return v
-}
-
-// monogram reduces a title to the one or two letters the default tile shows.
-// It walks runes rather than bytes so a non-ASCII title yields a real letter
-// instead of half a UTF-8 sequence, and falls back to a dash for a title with
-// no letters at all (an untitled artifact, an emoji-only name).
-func monogram(title string) string {
-	var letters []rune
-	takeNext := true
-	for _, r := range title {
-		if unicode.IsSpace(r) || r == '-' || r == '_' {
-			takeNext = true
-			continue
-		}
-		if takeNext && unicode.IsLetter(r) {
-			letters = append(letters, unicode.ToUpper(r))
-			takeNext = false
-			if len(letters) == 2 {
-				break
-			}
-		}
-	}
-	if len(letters) == 0 {
-		return "—"
-	}
-	return string(letters)
-}
-
-// titleHue derives a stable 0–359 hue from an artifact id, so every card gets a
-// distinct-looking but unchanging tile. FNV-1a because the requirement is
-// "spread ids across the wheel", not secrecy.
-func titleHue(id string) int {
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(id))
-	return int(h.Sum32() % 360)
 }
 
 // addTagModalData feeds the addTagModal partial: every existing tag for the

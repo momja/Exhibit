@@ -2,7 +2,7 @@
 id: av-ei5h
 status: closed
 deps: []
-links: [av-fafu, av-7k7b]
+links: [av-fafu, av-7k7b, av-cp7j]
 created: 2026-09-18T15:22:01Z
 type: feature
 priority: 2
@@ -19,4 +19,3 @@ New handler ServeShareWidget mirroring ServeShare: resolve GetAnonymousShareUnsc
 ## Acceptance Criteria
 
 GET RENDER_ORIGIN /s/:id/widget serves the widget doc with widget preamble (no capability bridges, camera/mic denied), owner state inlined, and share framing headers; 404 when the artifact has no widget; grant ids answer as nonexistent ids; app-origin /s/:id/widget redirects to the render origin; route walks updated (pageowner, pagecredential, csrf, hostdispatch dual-claim exemption, renderheaders rows); share panel surfaces the widget embed snippet; docs/widgets.md Known limits line removed.
-

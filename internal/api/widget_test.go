@@ -171,30 +171,6 @@ func TestGalleryCardRendersWidgetOrDefaultTile(t *testing.T) {
 	assert.Contains(t, page, `tabindex="-1"`)
 }
 
-// The default tile's hue must be stable per artifact — a card that changes
-// face between visits is not recognizable.
-func TestDefaultTileHueIsStablePerArtifact(t *testing.T) {
-	assert.Equal(t, titleHue("abc"), titleHue("abc"))
-	assert.NotEqual(t, titleHue("abc"), titleHue("abd"))
-	assert.Less(t, titleHue("abc"), 360)
-}
-
-func TestMonogram(t *testing.T) {
-	cases := map[string]string{
-		"Run Log":              "RL",
-		"Mortgage Calculator":  "MC",
-		"reading-list":         "RL",
-		"Budget":               "B",
-		"":                     "—",
-		"🙂":                    "—",
-		"Über Tracker Deluxe":  "ÜT",
-		"  leading whitespace": "LW",
-	}
-	for title, want := range cases {
-		assert.Equal(t, want, monogram(title), "monogram(%q)", title)
-	}
-}
-
 // The edit page's preview swaps in this fragment after a save, so it must be
 // the same cardWidget markup the gallery renders — one definition — carrying a
 // cache-busting stamp (the browser only refetches a frame whose src changed).
