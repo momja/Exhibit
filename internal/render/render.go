@@ -16,6 +16,7 @@ import (
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/store"
+	"github.com/momja/Exhibit/internal/tile"
 )
 
 // Config holds the dependencies for the render surface.
@@ -269,15 +270,16 @@ func shareFrameAncestors(appOrigin string, embedOrigins []string) []string {
 // link (av-ei5h) — the glanceable tile, embeddable off-site. It is ServeShare
 // and ServeWidget composed: the share row authorizes (no token, owner's state
 // inlined) and the widget blob renders (narrowed preamble, no bridges, no
-// devices). An artifact with no widget 404s; the embedder falls back to
-// whatever static tile it would have rendered instead.
+// devices). An artifact with no widget serves the default tile instead
+// (av-cp7j), the same face its gallery card shows, because an embed has no
+// fallback of its own and would otherwise show a bare 404.
 func (rd *Renderer) ServeShareWidget(w http.ResponseWriter, r *http.Request) {
 	a, ok := rd.resolveShare(w, r, chi.URLParam(r, "shareID"))
 	if !ok {
 		return
 	}
 	if a.WidgetBlobID == "" {
-		http.Error(w, "not found", http.StatusNotFound)
+		rd.serveDefaultTile(w, a, shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 		return
 	}
 	// Share framing, not /w/:id's app-only framing: a shared widget's point
@@ -288,6 +290,27 @@ func (rd *Renderer) ServeShareWidget(w http.ResponseWriter, r *http.Request) {
 	rd.serveDoc(w, r, a, a.WidgetBlobID, true,
 		rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
 		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
+}
+
+// serveDefaultTile serves the monogram tile for an artifact with no widget
+// (av-cp7j). It is a static document of our own making: no artifact bytes, no
+// state, no preamble and no script, so its CSP permits inline style and
+// nothing else. That is narrower than any widget render, which is the right
+// direction for a document that exists to say "nothing to show here". Only
+// framing follows the caller, since this stands in for a real widget on
+// whatever page embeds it.
+func (rd *Renderer) serveDefaultTile(w http.ResponseWriter, a *store.Artifact, frameAncestors []string) {
+	w.Header().Set("Content-Security-Policy", strings.Join([]string{
+		"default-src 'none'",
+		"style-src 'unsafe-inline'",
+		strings.Join(append([]string{"frame-ancestors"}, frameAncestors...), " "),
+	}, "; "))
+	w.Header().Set("Permissions-Policy", buildPermissionsPolicy(false, false))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// no-store like every render document: the monogram follows the title,
+	// and adding a widget must replace this tile on the next load.
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(tile.Document(a.ID, a.Title))
 }
 
 // ServeWidget serves an artifact's widget (av-fafu) — the small, informative

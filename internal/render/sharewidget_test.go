@@ -172,9 +172,11 @@ func TestShareWidgetGrantIsNotAURL(t *testing.T) {
 	}
 }
 
-// No widget, no widget document — shared or otherwise. The embedder falls back
-// to its static tile, the way the gallery card falls back to the monogram.
-func TestShareWidgetNotFoundWithoutWidget(t *testing.T) {
+// No widget of its own: the link serves the default tile (av-cp7j), the same
+// monogram the gallery card shows, rather than a 404 an embed would display
+// verbatim. It is a static document, so its policy is narrower than a widget
+// render's: inline style and nothing else, and no artifact bytes or state.
+func TestShareWidgetServesTheDefaultTileWithoutWidget(t *testing.T) {
 	rd, _, _, _ := newShareWidgetFixture(t)
 
 	// The fixture's artifact has a widget; an artifact without one shares the
@@ -185,15 +187,39 @@ func TestShareWidgetNotFoundWithoutWidget(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := rd.cfg.Store.PutArtifact(ctx, &store.Artifact{
-		ID: "plain", OwnerID: 1, Title: "p", SourceBlobID: "plain-body", Tier: 1,
+		ID: "plain", OwnerID: 1, Title: "Run Log", SourceBlobID: "plain-body", Tier: 1,
+		NetworkAllowlist: []string{"https://api.example.com"},
 	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rd.cfg.Store.SetState(ctx, 1, "plain", 1, "runs", `SECRET-STATE`); err != nil {
 		t.Fatal(err)
 	}
 	if err := rd.cfg.Store.CreateShare(ctx, 1, &store.Share{ID: "plain-link", ArtifactID: "plain"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if w := serveShareWidgetRaw(t, rd, "plain-link"); w.Code != 404 {
-		t.Fatalf("expected 404 for a shared artifact with no widget, got %d", w.Code)
+	w := serveShareWidgetRaw(t, rd, "plain-link")
+	if w.Code != 200 {
+		t.Fatalf("expected the default tile, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, ">RL</span>") {
+		t.Errorf("the tile must carry the artifact's monogram:\n%s", body)
+	}
+	for _, leak := range []string{"plain</body>", "SECRET-STATE", "<script"} {
+		if strings.Contains(body, leak) {
+			t.Errorf("the default tile must not contain %q", leak)
+		}
+	}
+	csp := w.Header().Get("Content-Security-Policy")
+	if !strings.HasPrefix(csp, "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors") {
+		t.Errorf("the tile permits inline style and nothing else, got %q", csp)
+	}
+	if strings.Contains(csp, "api.example.com") {
+		t.Errorf("a static tile needs none of the artifact's allowlist, got %q", csp)
+	}
+	if got := w.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
 	}
 }

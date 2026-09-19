@@ -1,6 +1,6 @@
 ---
 id: av-cp7j
-status: in_progress
+status: closed
 deps: []
 links: [av-ei5h]
 created: 2026-09-19T14:47:46Z
