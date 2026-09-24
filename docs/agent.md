@@ -24,7 +24,7 @@ browser chat UI ──POST prompt──► Go service ──JSONL stdin──►
 ```
 
 The single write path is preserved: the agent's only tools are
-`create_artifact` / `update_artifact` / `edit_artifact` / `get_artifact` for the document,
+`create_artifact` / `write_artifact` / `edit_artifact` / `get_artifact` for the document,
 `get_state` / `set_state` / `delete_state` for the artifact's stored state
 (av-lvi1), and `set_widget` / `get_widget` for the artifact's gallery tile
 (av-fafu) — all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
@@ -39,7 +39,7 @@ A session reaches exactly one artifact, and that is enforced twice — once for
 ergonomics, once for real. `security.md` §5 is the full statement; the shape:
 
 - **No tool takes an artifact id.** `create_artifact(title, body)`,
-  `update_artifact(body[, title])`, `edit_artifact(edits)`, `get_artifact()`, `get_state()`,
+  `write_artifact(body[, title])`, `edit_artifact(edits)`, `get_artifact()`, `get_state()`,
   `set_state(key, value)`, `delete_state([key])`, `set_widget(body)`,
   `get_widget()`. A tool with no id parameter cannot be talked into a
   different target, which matters because artifact bodies and titles are
@@ -51,7 +51,7 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
   quote/dash/whitespace fallback; ambiguous, overlapping, or unmatched edits
   fail the whole call with no PATCH issued). It reads the latest saved source
   itself, splices the replacements, and persists through the same PATCH +
-  scan + `artifact_saved` path as `update_artifact`, which remains for full
+  scan + `artifact_saved` path as `write_artifact`, which remains for full
   rewrites. Engine: `internal/agent/ext/edit.ts` (pure, node-tested); wiring:
   `ext/exhibit.ts`.
 - **The API refuses anything outside the scope.** The sidecar authenticates
@@ -137,7 +137,7 @@ same SSE route the chat uses and waits for `exhibit_widget_saved`, so the whole
 feature adds a route and no streaming machinery.
 
 `WidgetOnly` exists because the ordinary modify-an-artifact scoping tells the
-model to save with `update_artifact` — exactly what a generate-the-tile session
+model to save with `write_artifact` — exactly what a generate-the-tile session
 must never do. The two are mutually exclusive branches of `modePrompt`
 (`internal/agent/prompt.go`) for that reason, and `internal/mockllm` plays the
 widget branch so the path is covered end to end. Note the button's route is
@@ -320,7 +320,7 @@ partial renders the bar (title, Open/Details links, snippet button) and the
 frame well; `GET /partials/agent-preview?artifact=<id>` serves that same
 partial standalone. The pane carries the htmx wiring
 (`hx-get`/`hx-trigger="exhibit:artifact-saved from:body"`/`hx-swap="innerHTML"`),
-so a `create_artifact`/`update_artifact`/`edit_artifact` save travels
+so a `create_artifact`/`write_artifact`/`edit_artifact` save travels
 `Session.noteArtifactSaved` → `exhibit_artifact_saved` over SSE → `agent.js`
 dispatches `exhibit:artifact-saved` → htmx fetches the fragment → the pane
 swaps. A `set_state`/`delete_state` call (av-lvi1) drives the identical

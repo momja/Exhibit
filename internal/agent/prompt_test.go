@@ -22,7 +22,7 @@ func TestSystemPromptCarriesNoArtifactText(t *testing.T) {
 	assert.NotContains(t, sys, "Evil <title>")
 	assert.NotContains(t, sys, "art-1")
 	// The tools take no artifact id, so the prompt must not describe one.
-	assert.NotContains(t, sys, "update_artifact(id")
+	assert.NotContains(t, sys, "write_artifact(id")
 	assert.NotContains(t, sys, "get_artifact(id")
 	assert.NotContains(t, sys, "set_widget(id")
 	assert.NotContains(t, sys, "set_state(id")
@@ -39,7 +39,7 @@ func TestSystemPromptOverrideKeepsTheFenceContract(t *testing.T) {
 // A widget-only session (av-fafu — the edit page's "Generate widget" button)
 // must be scoped to set_widget and nothing else. In particular it must NOT
 // inherit the ordinary edit-an-artifact paragraph, which instructs the model to
-// save with edit_artifact/update_artifact — the one thing this session must never do, since
+// save with edit_artifact/write_artifact — the one thing this session must never do, since
 // the artifact's own source is not what the user asked to change.
 func TestWidgetOnlySessionIsScopedToTheWidget(t *testing.T) {
 	prompt := buildSystemPrompt("", "n0nce", CreateOpts{
@@ -50,11 +50,11 @@ func TestWidgetOnlySessionIsScopedToTheWidget(t *testing.T) {
 
 	assert.Contains(t, prompt, "set_widget")
 	assert.Contains(t, prompt, "exactly one job")
-	assert.Contains(t, prompt, "Do NOT call create_artifact, update_artifact, or edit_artifact")
+	assert.Contains(t, prompt, "Do NOT call create_artifact, write_artifact, or edit_artifact")
 	// The edit-mode paragraph tells the model to make changes with
-	// edit_artifact/update_artifact. Both paragraphs at once would be a direct
+	// edit_artifact/write_artifact. Both paragraphs at once would be a direct
 	// contradiction.
-	assert.NotContains(t, prompt, "make small changes with edit_artifact and full rewrites with update_artifact (never create_artifact)")
+	assert.NotContains(t, prompt, "make small changes with edit_artifact and full rewrites with write_artifact (never create_artifact)")
 	// Scoping is by credential, not by naming an id at the model.
 	assert.NotContains(t, prompt, "Run Log")
 }
@@ -63,8 +63,11 @@ func TestWidgetOnlySessionIsScopedToTheWidget(t *testing.T) {
 func TestEditSessionKeepsItsInstruction(t *testing.T) {
 	prompt := buildSystemPrompt("", "n0nce", CreateOpts{ArtifactID: "abc", ArtifactTitle: "Run Log"})
 
-	assert.Contains(t, prompt, "make small changes with edit_artifact and full rewrites with update_artifact (never create_artifact)")
+	assert.Contains(t, prompt, "make small changes with edit_artifact and full rewrites with write_artifact (never create_artifact)")
 	assert.Contains(t, prompt, "edit_artifact(edits)")
+	// The rename (av-f5i5): the full-rewrite tool is write_artifact now, and
+	// the old update_artifact name must not linger anywhere in the prompt.
+	assert.NotContains(t, prompt, "update_artifact")
 	assert.NotContains(t, prompt, "exactly one job")
 	// The topic guardrail. It arrived on main while this paragraph was being
 	// moved out of agent.go and into modePrompt here, so it is exactly the kind

@@ -3,7 +3,7 @@
  *
  * Loaded by the exhibit service into every agent session it spawns
  * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model nine
- * tools — create_artifact / update_artifact / edit_artifact / get_artifact for the document,
+ * tools — create_artifact / write_artifact / edit_artifact / get_artifact for the document,
  * get_state / set_state / delete_state for the artifact's stored state, and
  * set_widget / get_widget for the artifact's gallery-card widget (av-fafu) —
  * all of which go through the exhibit HTTP API, so agent output enters the
@@ -130,7 +130,7 @@ export default function (pi: ExtensionAPI) {
 		description:
 			"Save a brand-new artifact into the Exhibit library and bind this session to it. " +
 			"body must be a complete, self-contained HTML document (all CSS/JS inline). " +
-			"Available only until this session has an artifact; afterwards use update_artifact. " +
+			"Available only until this session has an artifact; afterwards use edit_artifact (small changes) or write_artifact (full rewrite). " +
 			"Returns the artifact id, its render URL, and the scanned network footprint (origins " +
 			"the document references; they stay blocked until the user approves them).",
 		parameters: Type.Object({
@@ -164,7 +164,7 @@ export default function (pi: ExtensionAPI) {
 
 	/**
 	 * Persist a full replacement body through the single write path. Shared
-	 * by update_artifact (the model supplies the body) and edit_artifact
+	 * by write_artifact (the model supplies the body) and edit_artifact
 	 * (the body is the engine's splice of targeted edits into the current
 	 * source) — one function so both report the same footprint semantics and
 	 * the same artifact_saved event the chat UI re-renders on.
@@ -205,8 +205,8 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	pi.registerTool({
-		name: "update_artifact",
-		label: "Update artifact",
+		name: "write_artifact",
+		label: "Write artifact",
 		description:
 			"Replace this session's artifact source wholesale. body must be the complete new HTML " +
 			"document, never a fragment or diff. Prefer edit_artifact for targeted changes — " +
@@ -226,7 +226,7 @@ export default function (pi: ExtensionAPI) {
 		label: "Edit artifact",
 		description:
 			"Make targeted in-place edits to this session's artifact source, without rewriting " +
-			"the whole document. Prefer this over update_artifact for small changes (a fix, a " +
+			"the whole document. Prefer this over write_artifact for small changes (a fix, a " +
 			"restyle, one section). Each edit's oldText must match its target exactly and uniquely " +
 			"in the current source — copy it from get_artifact, with enough surrounding context to " +
 			"be unique; minor quote/dash/whitespace drift is tolerated. Put several disjoint changes " +

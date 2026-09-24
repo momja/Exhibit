@@ -61,7 +61,7 @@ const PATCH_OK = {
 };
 
 describe("edit_artifact tool", () => {
-	it("registers with the same scoping as update_artifact (no artifact id parameter)", async (t) => {
+	it("registers with the same scoping as write_artifact (no artifact id parameter)", async (t) => {
 		needExhibit(t);
 		const pi = makePi();
 		await exhibitMod.default(pi);

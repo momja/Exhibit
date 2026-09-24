@@ -66,7 +66,7 @@ func find(events []map[string]any, typ string) map[string]any {
 func TestSaveWithArtifactIDBroadcastsTheSavedEvent(t *testing.T) {
 	s := newDetachedSession(t, "art-1")
 
-	events := feed(t, s, `{"type":"tool_execution_end","toolName":"update_artifact","isError":false,`+
+	events := feed(t, s, `{"type":"tool_execution_end","toolName":"write_artifact","isError":false,`+
 		`"result":{"details":{"exhibit":"artifact_saved","action":"updated","artifactId":"art-1",`+
 		`"title":"Charty"}}}`)
 
@@ -85,7 +85,7 @@ func TestSaveWithArtifactIDBroadcastsTheSavedEvent(t *testing.T) {
 func TestSaveWithoutArtifactIDBroadcastsNothingSynthetic(t *testing.T) {
 	s := newDetachedSession(t, "")
 
-	events := feed(t, s, `{"type":"tool_execution_end","toolName":"update_artifact","isError":false,`+
+	events := feed(t, s, `{"type":"tool_execution_end","toolName":"write_artifact","isError":false,`+
 		`"result":{"details":{"exhibit":"artifact_saved","action":"updated"}}}`)
 
 	assert.Nil(t, find(events, "exhibit_artifact_saved"),

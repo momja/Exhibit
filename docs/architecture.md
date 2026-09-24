@@ -1192,7 +1192,7 @@ absent the surface degrades to disabled; nothing else changes.
 
 - **Single write path preserved:** the sidecar is loaded with built-in tools
   disabled and exactly one extension (`internal/agent/ext/exhibit.ts`) whose
-  `create_artifact` / `update_artifact` / `edit_artifact` (pi-style targeted
+  `create_artifact` / `write_artifact` / `edit_artifact` (pi-style targeted
   replacements, av-f5i5) / `get_artifact` tools, plus
   `get_state` / `set_state` / `delete_state` for the artifact's stored state
   (av-lvi1) and `set_widget` / `get_widget` for the artifact's gallery-card

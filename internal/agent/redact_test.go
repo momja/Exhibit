@@ -14,7 +14,7 @@ import (
 // emits carries api/provider/model, on message_start, message_end, turn_end
 // and agent_end alike.
 const (
-	piTurnEnd  = `{"type":"turn_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_1","name":"update_artifact","arguments":{"body":"<html>ok</html>"}}],"api":"openai-completions","provider":"anthropic","model":"claude-sonnet-4-5","usage":{"input":12,"output":34,"totalTokens":46,"cost":{"total":0.002}},"stopReason":"toolUse","timestamp":1787034911097,"responseId":"chatcmpl-1"},"toolResults":[{"role":"toolResult","toolCallId":"call_1","toolName":"update_artifact","content":[{"type":"text","text":"Updated artifact abc."}],"isError":false,"timestamp":1787034911128}]}`
+	piTurnEnd  = `{"type":"turn_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_1","name":"write_artifact","arguments":{"body":"<html>ok</html>"}}],"api":"openai-completions","provider":"anthropic","model":"claude-sonnet-4-5","usage":{"input":12,"output":34,"totalTokens":46,"cost":{"total":0.002}},"stopReason":"toolUse","timestamp":1787034911097,"responseId":"chatcmpl-1"},"toolResults":[{"role":"toolResult","toolCallId":"call_1","toolName":"write_artifact","content":[{"type":"text","text":"Updated artifact abc."}],"isError":false,"timestamp":1787034911128}]}`
 	piAgentEnd = `{"type":"agent_end","messages":[{"role":"user","content":[{"type":"text","text":"make it green"}],"timestamp":1787034911051},{"role":"assistant","content":[],"api":"openai-completions","provider":"anthropic","model":"claude-sonnet-4-5","timestamp":1787034911097}],"willRetry":false}`
 )
 

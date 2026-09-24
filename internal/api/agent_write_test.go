@@ -141,7 +141,7 @@ func allowlistOf(t *testing.T, r *Router, id string) []string {
 // out: they are not blocked, and asking for approval again would be a false
 // alarm. footprintChanged, threaded alongside, reflects that this edit really
 // did change the scanned footprint.
-func TestAgentUpdateReportsOriginsAwaitingApproval(t *testing.T) {
+func TestAgentWriteReportsOriginsAwaitingApproval(t *testing.T) {
 	h := newPiHarness(t)
 	const body = `<html><head><title>Charty</title>` +
 		`<script src="https://approved.example.com/lib.js"></script></head><body><h1>Charty</h1></body></html>`
@@ -159,7 +159,7 @@ func TestAgentUpdateReportsOriginsAwaitingApproval(t *testing.T) {
 	assert.NotContains(t, footprint, "https://approved.example.com",
 		"an already-approved origin is not blocked, so it must not be reported as pending approval")
 
-	result := events.toolResultFor(t, "update_artifact")
+	result := events.toolResultFor(t, "write_artifact")
 	assert.Contains(t, result.text, "https://cdn.example.com",
 		"the model must be told in words, the way create_artifact already is")
 	assert.Equal(t, true, result.details["footprintChanged"], "a newly referenced origin did change the footprint")
@@ -170,7 +170,7 @@ func TestAgentUpdateReportsOriginsAwaitingApproval(t *testing.T) {
 // origin afterward. Approval is per (artifact, origin), not per body version
 // — see docs/security.md, "An approved origin outlives the code it was
 // approved for" — so re-gating on this rewrite is deliberately not attempted.
-func TestAgentUpdateKeepsApprovedOriginsReachable(t *testing.T) {
+func TestAgentWriteKeepsApprovedOriginsReachable(t *testing.T) {
 	h := newPiHarness(t)
 	const origin = "https://approved.example.com"
 	const body = `<html><head><title>Charty</title>` +

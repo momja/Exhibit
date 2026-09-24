@@ -146,7 +146,7 @@ type CreateOpts struct {
 	// widget and nothing else (av-fafu) — the one-shot sessions behind the
 	// edit page's "Generate widget" button. It exists because the ordinary
 	// edit-an-artifact instruction tells the model to save with
-	// update_artifact, which is exactly the wrong thing here: the artifact's
+	// write_artifact, which is exactly the wrong thing here: the artifact's
 	// own source must not change.
 	WidgetOnly bool
 }

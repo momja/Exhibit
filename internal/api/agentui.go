@@ -89,7 +89,7 @@ func (ro *Router) newAgentPreviewData(r *http.Request, a *store.Artifact) agentP
 
 // agentPreviewPartial serves the preview pane as a standalone fragment. The
 // agent page's htmx wiring re-fetches it whenever the session reports a saved
-// artifact, so a create_artifact/update_artifact tool call re-renders the pane
+// artifact, so a create_artifact/write_artifact tool call re-renders the pane
 // from the same template the initial page render used - no second, JS-side
 // definition of this markup, and no full page reload (which would drop the
 // chat transcript and the SSE stream).

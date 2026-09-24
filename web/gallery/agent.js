@@ -354,7 +354,7 @@ function handleAgentEvent(ev) {
     }
     case 'exhibit_artifact_saved': {
       // The server-side hook behind this event (Session.noteArtifactSaved)
-      // fires once create_artifact/update_artifact has landed, which makes it
+      // fires once create_artifact/write_artifact has landed, which makes it
       // the trigger for re-rendering the preview pane.
       artifact = {id: ev.artifactId, title: ev.title || 'Artifact'};
       refreshPreview();
@@ -416,7 +416,7 @@ function toolLabel(name, args) {
   args = args || {};
   switch (name) {
     case 'create_artifact': return 'Creating "' + (args.title || 'artifact') + '"';
-    case 'update_artifact': return 'Updating artifact';
+    case 'write_artifact': return 'Writing artifact';
     case 'edit_artifact': return 'Editing artifact';
     case 'get_artifact': return 'Reading artifact source';
     case 'get_state': return 'Reading artifact state';

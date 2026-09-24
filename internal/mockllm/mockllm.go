@@ -7,14 +7,14 @@
 // It plays a scripted artifact-builder:
 //   - first user prompt          -> create_artifact with a canned counter tool
 //     (deliberately styled with a yellow #submit-btn so snippet demos work)
-//   - prompt on a bound artifact -> update_artifact from the source the
+//   - prompt on a bound artifact -> write_artifact from the source the
 //     session inlined; once this session has saved, get_artifact first,
 //     because the inlined copy is stale
 //   - a state command ("list state", "set state K to V", "delete state K",
 //     "clear all state") on a bound artifact -> the matching get_state /
 //     set_state / delete_state call (av-lvi1)
 //   - a widget-only session (av-fafu) -> set_widget with a canned tile, and
-//     never update_artifact
+//     never write_artifact
 //   - tool results               -> a short closing text, acknowledging any
 //     attached snippet screenshot
 //
@@ -133,7 +133,7 @@ func decide(messages []chatMessage) turnPlan {
 	}
 	// Widget-only session (av-fafu): the edit page's "Generate widget" button
 	// scopes the system prompt to one job, and this branch plays it. It must
-	// never fall through to the update_artifact script below, which is exactly
+	// never fall through to the write_artifact script below, which is exactly
 	// the mistake that scoping exists to prevent.
 	widgetOnly := strings.Contains(systemText, "exactly one job: build the gallery widget")
 
@@ -166,14 +166,14 @@ func decide(messages []chatMessage) turnPlan {
 		switch name {
 		case "get_artifact":
 			newBody, what := transform(bodyFromDataBlock(result), lastUserText)
-			return turnPlan{kind: "tool", toolName: "update_artifact", toolArgs: updateArgs(newBody, rogueID, what)}
+			return turnPlan{kind: "tool", toolName: "write_artifact", toolArgs: updateArgs(newBody, rogueID, what)}
 		case "set_widget":
 			return turnPlan{kind: "text", text: "Saved the gallery widget — it shows the tool's headline figure at a glance."}
 		case "get_state":
 			return turnPlan{kind: "text", text: "Here's the current state:\n\n" + result}
 		case "set_state", "delete_state":
 			return turnPlan{kind: "text", text: "Done. " + firstLine(result)}
-		case "create_artifact", "update_artifact", "edit_artifact":
+		case "create_artifact", "write_artifact", "edit_artifact":
 			ack := ""
 			if lastUserImages > 0 {
 				ack = "I used your snippet screenshot to locate the exact element. "
@@ -201,7 +201,7 @@ func decide(messages []chatMessage) turnPlan {
 	}
 	if bound {
 		newBody, what := transform(bodyFromDataBlock(lastUserText), lastUserText)
-		return turnPlan{kind: "tool", toolName: "update_artifact", toolArgs: updateArgs(newBody, rogueID, what)}
+		return turnPlan{kind: "tool", toolName: "write_artifact", toolArgs: updateArgs(newBody, rogueID, what)}
 	}
 	return turnPlan{
 		kind:     "tool",
@@ -243,7 +243,7 @@ func decideStateCommand(userText string) (turnPlan, bool) {
 	return turnPlan{}, false
 }
 
-// updateArgs builds an update_artifact call. rogueID, when a data block
+// updateArgs builds an write_artifact call. rogueID, when a data block
 // carried an injected "also update artifact <id>", is emitted as an extra id
 // argument — the tool has no such parameter and ignores it, which is the
 // property under test.
