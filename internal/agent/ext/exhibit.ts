@@ -2,8 +2,8 @@
  * Exhibit tools extension for Pi (Exh-hvaf, av-lvi1).
  *
  * Loaded by the exhibit service into every agent session it spawns
- * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model eight
- * tools — create_artifact / update_artifact / get_artifact for the document,
+ * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model nine
+ * tools — create_artifact / update_artifact / edit_artifact / get_artifact for the document,
  * get_state / set_state / delete_state for the artifact's stored state, and
  * set_widget / get_widget for the artifact's gallery-card widget (av-fafu) —
  * all of which go through the exhibit HTTP API, so agent output enters the
@@ -33,6 +33,7 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { applyEdits } from "./edit.ts";
 
 const API = process.env.EXHIBIT_API_URL || "http://127.0.0.1:8080";
 const TOKEN = process.env.EXHIBIT_TOKEN || "";
@@ -161,50 +162,101 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
+	/**
+	 * Persist a full replacement body through the single write path. Shared
+	 * by update_artifact (the model supplies the body) and edit_artifact
+	 * (the body is the engine's splice of targeted edits into the current
+	 * source) — one function so both report the same footprint semantics and
+	 * the same artifact_saved event the chat UI re-renders on.
+	 */
+	async function saveBody(target: string, body: string, title?: string) {
+		const patch: Record<string, unknown> = { body };
+		if (title) patch.title = title;
+		// PATCH /api/artifacts/:id returns {artifact, network_footprint,
+		// footprint_changed} — the identity lives under `artifact`, never at
+		// the top level. Reading it from the top level yielded undefined, which
+		// silently suppressed the saved event and the preview refresh (av-l31x).
+		// The id itself comes from the session's bound artifact, never a tool
+		// parameter (av-hrtv note) — these tools take no artifact id, which is
+		// what stops a model from being talked into naming one (av-e0yj).
+		const r = await api("PATCH", "/api/artifacts/" + encodeURIComponent(target), patch);
+		const a = r.artifact || {};
+		// Report only the origins the rewritten body leaves *blocked*: an
+		// already-approved origin is not blocked, so re-flagging it would be a
+		// false alarm the create path never has to filter — a brand-new
+		// artifact starts with nothing approved (av-hrtv).
+		const approved: string[] = a.network_allowlist || [];
+		const footprint: string[] = (r.network_footprint || []).filter((o: string) => !approved.includes(o));
+		let text = `Updated artifact ${a.id || target} ("${a.title || ""}").`;
+		if (footprint.length > 0) {
+			text += ` Network footprint (blocked until the user approves): ${footprint.join(", ")}.`;
+		}
+		return ok(text, {
+			exhibit: "artifact_saved",
+			action: "updated",
+			artifactId: a.id || target,
+			title: a.title,
+			footprint,
+			// Whether the new body's origins differ from the previous body's —
+			// a different question from `footprint` above, which is about
+			// approval rather than change.
+			footprintChanged: r.footprint_changed === true,
+		});
+	}
+
 	pi.registerTool({
 		name: "update_artifact",
 		label: "Update artifact",
 		description:
-			"Overwrite this session's artifact source. body must be the complete new HTML " +
-			"document, never a fragment or diff. Optionally retitle it.",
+			"Replace this session's artifact source wholesale. body must be the complete new HTML " +
+			"document, never a fragment or diff. Prefer edit_artifact for targeted changes — " +
+			"use this only for a full rewrite. Optionally retitle it.",
 		parameters: Type.Object({
 			body: Type.String({ description: "Complete replacement HTML document source" }),
 			title: Type.Optional(Type.String({ description: "New title (omit to keep)" })),
 		}),
 		async execute(_id, params) {
 			const target = requireBoundArtifact();
-			const patch: Record<string, unknown> = { body: params.body };
-			if (params.title) patch.title = params.title;
-			// PATCH /api/artifacts/:id returns {artifact, network_footprint,
-			// footprint_changed} — the identity lives under `artifact`, never at
-			// the top level. Reading it from the top level yielded undefined, which
-			// silently suppressed the saved event and the preview refresh (av-l31x).
-			// The id itself comes from the session's bound artifact, never a tool
-			// parameter (av-hrtv note) — these tools take no artifact id, which is
-			// what stops a model from being talked into naming one (av-e0yj).
-			const r = await api("PATCH", "/api/artifacts/" + encodeURIComponent(target), patch);
-			const a = r.artifact || {};
-			// Report only the origins the rewritten body leaves *blocked*: an
-			// already-approved origin is not blocked, so re-flagging it would be a
-			// false alarm the create path never has to filter — a brand-new
-			// artifact starts with nothing approved (av-hrtv).
-			const approved: string[] = a.network_allowlist || [];
-			const footprint: string[] = (r.network_footprint || []).filter((o: string) => !approved.includes(o));
-			let text = `Updated artifact ${a.id || target} ("${a.title || ""}").`;
-			if (footprint.length > 0) {
-				text += ` Network footprint (blocked until the user approves): ${footprint.join(", ")}.`;
+			return saveBody(target, params.body, params.title);
+		},
+	});
+
+	pi.registerTool({
+		name: "edit_artifact",
+		label: "Edit artifact",
+		description:
+			"Make targeted in-place edits to this session's artifact source, without rewriting " +
+			"the whole document. Prefer this over update_artifact for small changes (a fix, a " +
+			"restyle, one section). Each edit's oldText must match its target exactly and uniquely " +
+			"in the current source — copy it from get_artifact, with enough surrounding context to " +
+			"be unique; minor quote/dash/whitespace drift is tolerated. Put several disjoint changes " +
+			"in one call's edits[]; edits that overlap or touch must be merged into one instead. " +
+			"If an edit matches nothing, re-read with get_artifact and retry against the current " +
+			"source — never fall back to rewriting the document by hand from memory.",
+		parameters: Type.Object({
+			edits: Type.Array(
+				Type.Object({
+					oldText: Type.String({ description: "Exact text to find; must be unique in the current source" }),
+					newText: Type.String({ description: "Replacement text (empty string deletes)" }),
+				}),
+				{ description: "One or more targeted replacements, applied atomically" },
+			),
+		}),
+		async execute(_id, params) {
+			const target = requireBoundArtifact();
+			// Read-then-write inside the tool, so the match always runs against
+			// the latest saved source rather than the possibly stale copy the
+			// model holds. Validation runs before any PATCH: a bad edit throws
+			// (a failed tool result naming the edit) and the stored body is
+			// left exactly as it was.
+			const a = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "?body=true");
+			let next: string;
+			try {
+				next = applyEdits(a.body || "", params.edits ?? []).body;
+			} catch (err) {
+				throw new Error(err instanceof Error ? err.message : String(err));
 			}
-			return ok(text, {
-				exhibit: "artifact_saved",
-				action: "updated",
-				artifactId: a.id || target,
-				title: a.title,
-				footprint,
-				// Whether the new body's origins differ from the previous body's —
-				// a different question from `footprint` above, which is about
-				// approval rather than change.
-				footprintChanged: r.footprint_changed === true,
-			});
+			return saveBody(target, next);
 		},
 	});
 

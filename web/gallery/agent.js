@@ -417,6 +417,7 @@ function toolLabel(name, args) {
   switch (name) {
     case 'create_artifact': return 'Creating "' + (args.title || 'artifact') + '"';
     case 'update_artifact': return 'Updating artifact';
+    case 'edit_artifact': return 'Editing artifact';
     case 'get_artifact': return 'Reading artifact source';
     case 'get_state': return 'Reading artifact state';
     case 'set_state': return 'Setting state key "' + (args.key || '') + '"';

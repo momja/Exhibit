@@ -173,7 +173,7 @@ func decide(messages []chatMessage) turnPlan {
 			return turnPlan{kind: "text", text: "Here's the current state:\n\n" + result}
 		case "set_state", "delete_state":
 			return turnPlan{kind: "text", text: "Done. " + firstLine(result)}
-		case "create_artifact", "update_artifact":
+		case "create_artifact", "update_artifact", "edit_artifact":
 			ack := ""
 			if lastUserImages > 0 {
 				ack = "I used your snippet screenshot to locate the exact element. "
