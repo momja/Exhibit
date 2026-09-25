@@ -26,7 +26,7 @@ browser chat UI ──POST prompt──► Go service ──JSONL stdin──►
 The single write path is preserved: the agent's only tools are
 `create_artifact` / `write_artifact` / `edit_artifact` / `get_artifact` for the document,
 `get_state` / `set_state` / `delete_state` for the artifact's stored state
-(av-lvi1), and `set_widget` / `get_widget` for the artifact's gallery tile
+(av-lvi1), and `set_widget` / `edit_widget` / `get_widget` for the artifact's gallery tile
 (av-fafu) — all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
 materialized to the data dir at startup) that calls back into the exhibit HTTP
 API. Agent output is scanned like any other ingest; scanned origins are
@@ -40,7 +40,7 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
 
 - **No tool takes an artifact id.** `create_artifact(title, body)`,
   `write_artifact(body[, title])`, `edit_artifact(edits)`, `get_artifact()`, `get_state()`,
-  `set_state(key, value)`, `delete_state([key])`, `set_widget(body)`,
+  `set_state(key, value)`, `delete_state([key])`, `set_widget(body)`, `edit_widget(edits)`,
   `get_widget()`. A tool with no id parameter cannot be talked into a
   different target, which matters because artifact bodies and titles are
   untrusted text that reaches the model's context. The extension resolves the
@@ -272,7 +272,7 @@ untrusted signups.
   (`GET /api/artifacts/:id/transcripts`), the foundation for future remixing.
 - When a save-tool call succeeds, the session emits a synthetic
   `exhibit_artifact_saved` event; a `set_state`/`delete_state` call emits the
-  analogous `exhibit_state_changed` event, and `set_widget` the
+  analogous `exhibit_state_changed` event, and `set_widget`/`edit_widget` the
   `exhibit_widget_saved` one. All three name the session's own artifact, read
   from the credential's scope rather than from the tool result. The chat UI
   uses any of them to re-render the live preview (see below).

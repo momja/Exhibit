@@ -167,7 +167,7 @@ func decide(messages []chatMessage) turnPlan {
 		case "get_artifact":
 			newBody, what := transform(bodyFromDataBlock(result), lastUserText)
 			return turnPlan{kind: "tool", toolName: "write_artifact", toolArgs: updateArgs(newBody, rogueID, what)}
-		case "set_widget":
+		case "set_widget", "edit_widget":
 			return turnPlan{kind: "text", text: "Saved the gallery widget — it shows the tool's headline figure at a glance."}
 		case "get_state":
 			return turnPlan{kind: "text", text: "Here's the current state:\n\n" + result}

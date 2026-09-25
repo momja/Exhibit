@@ -2,10 +2,10 @@
  * Exhibit tools extension for Pi (Exh-hvaf, av-lvi1).
  *
  * Loaded by the exhibit service into every agent session it spawns
- * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model nine
+ * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model ten
  * tools — create_artifact / write_artifact / edit_artifact / get_artifact for the document,
  * get_state / set_state / delete_state for the artifact's stored state, and
- * set_widget / get_widget for the artifact's gallery-card widget (av-fafu) —
+ * set_widget / edit_widget / get_widget for the artifact's gallery-card widget (av-fafu) —
  * all of which go through the exhibit HTTP API, so agent output enters the
  * library through the same single write path as every other ingest (scan,
  * footprint, explicit allowlist approval) and every other state edit (the
@@ -411,13 +411,44 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
+	/**
+	 * Persist a full widget document through the single write path. Shared
+	 * by set_widget (the model supplies the body) and edit_widget (the body
+	 * is the engine's splice of targeted edits into the current tile) — one
+	 * function so both report the same unapproved-origins warning and the
+	 * same widget_saved event the gallery card re-renders on.
+	 */
+	async function saveWidget(target: string, body: string) {
+		const r = await api("PUT", "/api/artifacts/" + encodeURIComponent(target) + "/widget", {
+			body,
+		});
+		const unapproved: string[] = r.unapproved_origins || [];
+		let text = `Saved the gallery widget for artifact ${target}.`;
+		if (unapproved.length > 0) {
+			// The widget shares the artifact's allowlist, so an origin the
+			// artifact never got approved for is simply blocked at render.
+			// Say so rather than letting it show up as a blank tile.
+			text +=
+				` Warning: it references ${unapproved.join(", ")}, which the artifact's network ` +
+				`allowlist does not cover — the browser will block those. Prefer a widget with no ` +
+				`external references at all.`;
+		}
+		return ok(text, {
+			exhibit: "widget_saved",
+			artifactId: target,
+			widgetUrl: r.widget_url,
+			unapproved,
+		});
+	}
+
 	pi.registerTool({
 		name: "set_widget",
 		label: "Set widget",
 		description:
 			"Save (or replace) this session's artifact gallery widget — the small, glanceable tile its card " +
 			"shows in the library, like an iOS home-screen widget. body must be a complete, " +
-			"self-contained HTML document. The widget reads the SAME localStorage keys the artifact " +
+			"self-contained HTML document. Prefer edit_widget for targeted changes to an existing " +
+			"tile — use this only for a new or full-rewrite widget. The widget reads the SAME localStorage keys the artifact " +
 			"writes (state is inlined before its scripts run, so synchronous getItem at startup is " +
 			"correct), but it CANNOT write state, download files, or use the clipboard, and it is " +
 			"rendered non-interactive — a click on it opens the artifact. Design for a ~272x132 px " +
@@ -428,26 +459,58 @@ export default function (pi: ExtensionAPI) {
 		}),
 		async execute(_id, params) {
 			const target = requireBoundArtifact();
-			const r = await api("PUT", "/api/artifacts/" + encodeURIComponent(target) + "/widget", {
-				body: params.body,
-			});
-			const unapproved: string[] = r.unapproved_origins || [];
-			let text = `Saved the gallery widget for artifact ${target}.`;
-			if (unapproved.length > 0) {
-				// The widget shares the artifact's allowlist, so an origin the
-				// artifact never got approved for is simply blocked at render.
-				// Say so rather than letting it show up as a blank tile.
-				text +=
-					` Warning: it references ${unapproved.join(", ")}, which the artifact's network ` +
-					`allowlist does not cover — the browser will block those. Prefer a widget with no ` +
-					`external references at all.`;
+			return saveWidget(target, params.body);
+		},
+	});
+
+	pi.registerTool({
+		name: "edit_widget",
+		label: "Edit widget",
+		description:
+			"Make targeted in-place edits to this session's artifact gallery widget, without rewriting " +
+			"the whole tile. Prefer this over set_widget for small changes. Each edit's oldText must " +
+			"match its target exactly and uniquely in the current widget source — copy it from " +
+			"get_widget, with enough surrounding context to be unique; minor quote/dash/whitespace " +
+			"drift is tolerated. Put several disjoint changes in one call's edits[]; edits that " +
+			"overlap or touch must be merged into one instead. If the artifact has no widget yet, " +
+			"create it with set_widget first; if an edit matches nothing, re-read with get_widget " +
+			"and retry against the current source.",
+		parameters: Type.Object({
+			edits: Type.Array(
+				Type.Object({
+					oldText: Type.String({ description: "Exact text to find; must be unique in the current widget source" }),
+					newText: Type.String({ description: "Replacement text (empty string deletes)" }),
+				}),
+				{ description: "One or more targeted replacements, applied atomically" },
+			),
+		}),
+		async execute(_id, params) {
+			const target = requireBoundArtifact();
+		// Read-then-write inside the tool, so the match always runs against
+		// the latest saved tile rather than the possibly stale copy the
+		// model holds. A missing widget is guidance, not a failure of the
+		// match: there is nothing to edit, so say to create it instead.
+			// Validation runs before any PUT: a bad edit throws (a failed
+			// tool result naming the edit) and the stored tile is left
+			// exactly as it was.
+			let current: string;
+			try {
+				const w = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "/widget");
+				current = w.body || "";
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				if (msg.includes("-> 404")) {
+					throw new Error("This artifact has no widget yet — create it with set_widget first.");
+				}
+				throw err;
 			}
-			return ok(text, {
-				exhibit: "widget_saved",
-				artifactId: target,
-				widgetUrl: r.widget_url,
-				unapproved,
-			});
+			let next: string;
+			try {
+				next = applyEdits(current, params.edits ?? []).body;
+			} catch (err) {
+				throw new Error(err instanceof Error ? err.message : String(err));
+			}
+			return saveWidget(target, next);
 		},
 	});
 

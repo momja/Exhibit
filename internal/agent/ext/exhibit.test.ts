@@ -38,7 +38,7 @@ function needExhibit(t) {
 }
 
 /** Stub fetch routing on method+path; records every call. */
-function makeFetch({ body, patchResult }) {
+function makeFetch({ body, patchResult, widgetBody = null, widgetPutResult = null }) {
 	const calls = [];
 	const fetch = async (url, opts) => {
 		calls.push({ url, method: opts?.method, body: opts?.body });
@@ -49,6 +49,17 @@ function makeFetch({ body, patchResult }) {
 		if (opts?.method === "PATCH" && path === "/api/artifacts/artifact-1") {
 			return { ok: true, text: async () => JSON.stringify(patchResult) };
 		}
+		if (path === "/api/artifacts/artifact-1/widget") {
+			if (opts?.method === "GET") {
+				if (widgetBody === null) {
+					return { ok: false, status: 404, text: async () => "not found" };
+				}
+				return { ok: true, text: async () => JSON.stringify({ body: widgetBody }) };
+			}
+			if (opts?.method === "PUT") {
+				return { ok: true, text: async () => JSON.stringify(widgetPutResult) };
+			}
+		}
 		throw new Error("unexpected fetch " + opts?.method + " " + path);
 	};
 	return { calls, fetch };
@@ -58,6 +69,11 @@ const PATCH_OK = {
 	artifact: { id: "artifact-1", title: "T", network_allowlist: [] },
 	network_footprint: [],
 	footprint_changed: false,
+};
+
+const WIDGET_PUT_OK = {
+	widget_url: "http://exhibit.test/w/artifact-1",
+	unapproved_origins: [],
 };
 
 describe("edit_artifact tool", () => {
@@ -127,5 +143,87 @@ describe("edit_artifact tool", () => {
 			pi.tools.get("edit_artifact").execute("call-1", { edits: [{ oldText: "a", newText: "b" }] }),
 			/call create_artifact first/,
 		);
+	});
+});
+
+describe("edit_widget tool", () => {
+	it("registers with the same scoping as set_widget (no artifact id parameter)", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		const tool = pi.tools.get("edit_widget");
+		assert.ok(tool, "edit_widget registered");
+		const props = tool.parameters?.properties ?? {};
+		assert.ok(!("id" in props) && !("artifactId" in props) && !("artifact_id" in props) && !("path" in props), "takes no artifact id or path");
+		assert.ok("edits" in props, "takes edits[]");
+	});
+
+	it("GETs the current tile, PUTs only the edited result, and reports widget_saved", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		const { calls, fetch } = makeFetch({
+			widgetBody: '<div class="v" id="v">—</div>',
+			widgetPutResult: WIDGET_PUT_OK,
+		});
+		const origFetch = globalThis.fetch;
+		globalThis.fetch = fetch;
+		try {
+			const result = await pi.tools.get("edit_widget").execute("call-1", {
+				edits: [{ oldText: '<div class="v" id="v">—</div>', newText: '<div class="v" id="v">0</div>' }],
+			});
+			const put = calls.find((c) => c.method === "PUT");
+			assert.ok(put, "PUT issued");
+			assert.equal(JSON.parse(put.body).body, '<div class="v" id="v">0</div>');
+			assert.equal(result.details.exhibit, "widget_saved", "tile re-render event fires");
+		} finally {
+			globalThis.fetch = origFetch;
+		}
+	});
+
+	it("issues no PUT when any edit is invalid", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		const { calls, fetch } = makeFetch({
+			widgetBody: "<div>tile</div>",
+			widgetPutResult: WIDGET_PUT_OK,
+		});
+		const origFetch = globalThis.fetch;
+		globalThis.fetch = fetch;
+		try {
+			await assert.rejects(
+				pi.tools.get("edit_widget").execute("call-1", {
+					edits: [{ oldText: "missing piece", newText: "x" }],
+				}),
+				/edits\[0\] matches nothing/,
+			);
+			assert.ok(!calls.some((c) => c.method === "PUT"), "no PUT issued");
+		} finally {
+			globalThis.fetch = origFetch;
+		}
+	});
+
+	it("tells the model to create the tile when the artifact has none yet", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		const { calls, fetch } = makeFetch({
+			widgetBody: null,
+			widgetPutResult: WIDGET_PUT_OK,
+		});
+		const origFetch = globalThis.fetch;
+		globalThis.fetch = fetch;
+		try {
+			await assert.rejects(
+				pi.tools.get("edit_widget").execute("call-1", {
+					edits: [{ oldText: "a", newText: "b" }],
+				}),
+				/create it with set_widget first/,
+			);
+			assert.ok(!calls.some((c) => c.method === "PUT"), "no PUT issued");
+		} finally {
+			globalThis.fetch = origFetch;
+		}
 	});
 });

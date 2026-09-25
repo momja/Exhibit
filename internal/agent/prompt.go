@@ -31,7 +31,8 @@ This session works on exactly one artifact, and none of your tools takes an arti
 - get_state(): read every state key/value stored for this session's artifact.
 - set_state(key, value): write one state key (creates it if absent); every other key is untouched.
 - delete_state([key]): delete one key, or omit key to erase ALL state for the artifact — destructive and irreversible, only do this when the user clearly asked to reset/clear everything.
-- set_widget(body): save this artifact's gallery widget (see below).
+- set_widget(body): save this artifact's gallery widget (see below) — a full tile document; prefer edit_widget for small changes to an existing tile.
+- edit_widget(edits): make targeted in-place edits to this session's artifact gallery widget, like edit_artifact does for the artifact source.
 - get_widget(): read this artifact's current widget source.
 
 When the session already has an artifact, its current source is given to you in a data block below, so you do not need to read it first. Call get_artifact only to re-read after your own save or when you suspect the source changed underneath you.
@@ -49,7 +50,7 @@ WIDGETS. Every artifact can carry a widget: a second self-contained HTML documen
 - Always handle empty state — a widget rendered before the user has entered anything must read calmly ("No runs logged yet"), never NaN, undefined, or blank.
 - Otherwise the same rules as the artifact: one file, everything inline, no external references (the widget inherits the artifact's network allowlist, so anything unapproved is blocked), inline SVG for charts and glyphs.
 - A stateless tool (a calculator, a converter) has nothing to report, so give it a STATIC widget: a small identity card — an inline-SVG glyph, the tool's name, one descriptive line — with no script at all. If even that adds nothing, skip set_widget and the library draws a default tile.
-- When you change what an artifact stores, update its widget in the same turn so the two stay in agreement.
+- When you change what an artifact stores, update its widget in the same turn so the two stay in agreement — with edit_widget for a small tile change, set_widget for a new or rewritten one.
 
 A data block labelled as a selected element (often with a screenshot attached) is the exact element the user means — find it in the source by its selector and outerHTML and change it with edit_artifact, using the outerHTML (plus context) as oldText.`
 
@@ -82,7 +83,7 @@ Block labels are written by Exhibit and describe where the data came from.`
 func modePrompt(opts CreateOpts) string {
 	switch {
 	case opts.WidgetOnly:
-		return "\n\nThis session has exactly one job: build the gallery widget for its artifact. Its current source is in the data block below — read it to learn which localStorage keys it writes and what shape it stores in them, then save the tile with set_widget following the WIDGETS rules above. Do NOT call create_artifact, write_artifact, or edit_artifact — the artifact's own source must not change. Save one widget, say in one sentence what it shows, and stop."
+		return "\n\nThis session has exactly one job: build the gallery widget for its artifact. Its current source is in the data block below — read it to learn which localStorage keys it writes and what shape it stores in them, then save the tile with set_widget following the WIDGETS rules above. Do NOT call create_artifact, write_artifact, edit_artifact, or edit_widget — the artifact's own source must not change, and the tile is built in one set_widget save. Save one widget, say in one sentence what it shows, and stop."
 	case opts.ArtifactID != "":
 		return "\n\nThis session is editing an artifact that already exists. Its current source is in the data block below; make small changes with edit_artifact and full rewrites with write_artifact (never create_artifact). Do not engage with off-topic queries unrelated to the artifact."
 	}

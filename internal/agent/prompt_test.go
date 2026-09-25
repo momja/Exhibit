@@ -50,7 +50,7 @@ func TestWidgetOnlySessionIsScopedToTheWidget(t *testing.T) {
 
 	assert.Contains(t, prompt, "set_widget")
 	assert.Contains(t, prompt, "exactly one job")
-	assert.Contains(t, prompt, "Do NOT call create_artifact, write_artifact, or edit_artifact")
+	assert.Contains(t, prompt, "Do NOT call create_artifact, write_artifact, edit_artifact, or edit_widget")
 	// The edit-mode paragraph tells the model to make changes with
 	// edit_artifact/write_artifact. Both paragraphs at once would be a direct
 	// contradiction.
@@ -65,6 +65,7 @@ func TestEditSessionKeepsItsInstruction(t *testing.T) {
 
 	assert.Contains(t, prompt, "make small changes with edit_artifact and full rewrites with write_artifact (never create_artifact)")
 	assert.Contains(t, prompt, "edit_artifact(edits)")
+	assert.Contains(t, prompt, "edit_widget(edits)")
 	// The rename (av-f5i5): the full-rewrite tool is write_artifact now, and
 	// the old update_artifact name must not linger anywhere in the prompt.
 	assert.NotContains(t, prompt, "update_artifact")
