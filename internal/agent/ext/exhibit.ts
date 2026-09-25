@@ -2,10 +2,10 @@
  * Exhibit tools extension for Pi (Exh-hvaf, av-lvi1).
  *
  * Loaded by the exhibit service into every agent session it spawns
- * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model eight
- * tools — create_artifact / update_artifact / get_artifact for the document,
+ * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model ten
+ * tools — create_artifact / write_artifact / edit_artifact / get_artifact for the document,
  * get_state / set_state / delete_state for the artifact's stored state, and
- * set_widget / get_widget for the artifact's gallery-card widget (av-fafu) —
+ * set_widget / edit_widget / get_widget for the artifact's gallery-card widget (av-fafu) —
  * all of which go through the exhibit HTTP API, so agent output enters the
  * library through the same single write path as every other ingest (scan,
  * footprint, explicit allowlist approval) and every other state edit (the
@@ -33,6 +33,7 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { applyEdits } from "./edit.ts";
 
 const API = process.env.EXHIBIT_API_URL || "http://127.0.0.1:8080";
 const TOKEN = process.env.EXHIBIT_TOKEN || "";
@@ -129,7 +130,7 @@ export default function (pi: ExtensionAPI) {
 		description:
 			"Save a brand-new artifact into the Exhibit library and bind this session to it. " +
 			"body must be a complete, self-contained HTML document (all CSS/JS inline). " +
-			"Available only until this session has an artifact; afterwards use update_artifact. " +
+			"Available only until this session has an artifact; afterwards use edit_artifact (small changes) or write_artifact (full rewrite). " +
 			"Returns the artifact id, its render URL, and the scanned network footprint (origins " +
 			"the document references; they stay blocked until the user approves them).",
 		parameters: Type.Object({
@@ -161,50 +162,101 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
+	/**
+	 * Persist a full replacement body through the single write path. Shared
+	 * by write_artifact (the model supplies the body) and edit_artifact
+	 * (the body is the engine's splice of targeted edits into the current
+	 * source) — one function so both report the same footprint semantics and
+	 * the same artifact_saved event the chat UI re-renders on.
+	 */
+	async function saveBody(target: string, body: string, title?: string) {
+		const patch: Record<string, unknown> = { body };
+		if (title) patch.title = title;
+		// PATCH /api/artifacts/:id returns {artifact, network_footprint,
+		// footprint_changed} — the identity lives under `artifact`, never at
+		// the top level. Reading it from the top level yielded undefined, which
+		// silently suppressed the saved event and the preview refresh (av-l31x).
+		// The id itself comes from the session's bound artifact, never a tool
+		// parameter (av-hrtv note) — these tools take no artifact id, which is
+		// what stops a model from being talked into naming one (av-e0yj).
+		const r = await api("PATCH", "/api/artifacts/" + encodeURIComponent(target), patch);
+		const a = r.artifact || {};
+		// Report only the origins the rewritten body leaves *blocked*: an
+		// already-approved origin is not blocked, so re-flagging it would be a
+		// false alarm the create path never has to filter — a brand-new
+		// artifact starts with nothing approved (av-hrtv).
+		const approved: string[] = a.network_allowlist || [];
+		const footprint: string[] = (r.network_footprint || []).filter((o: string) => !approved.includes(o));
+		let text = `Updated artifact ${a.id || target} ("${a.title || ""}").`;
+		if (footprint.length > 0) {
+			text += ` Network footprint (blocked until the user approves): ${footprint.join(", ")}.`;
+		}
+		return ok(text, {
+			exhibit: "artifact_saved",
+			action: "updated",
+			artifactId: a.id || target,
+			title: a.title,
+			footprint,
+			// Whether the new body's origins differ from the previous body's —
+			// a different question from `footprint` above, which is about
+			// approval rather than change.
+			footprintChanged: r.footprint_changed === true,
+		});
+	}
+
 	pi.registerTool({
-		name: "update_artifact",
-		label: "Update artifact",
+		name: "write_artifact",
+		label: "Write artifact",
 		description:
-			"Overwrite this session's artifact source. body must be the complete new HTML " +
-			"document, never a fragment or diff. Optionally retitle it.",
+			"Replace this session's artifact source wholesale. body must be the complete new HTML " +
+			"document, never a fragment or diff. Prefer edit_artifact for targeted changes — " +
+			"use this only for a full rewrite. Optionally retitle it.",
 		parameters: Type.Object({
 			body: Type.String({ description: "Complete replacement HTML document source" }),
 			title: Type.Optional(Type.String({ description: "New title (omit to keep)" })),
 		}),
 		async execute(_id, params) {
 			const target = requireBoundArtifact();
-			const patch: Record<string, unknown> = { body: params.body };
-			if (params.title) patch.title = params.title;
-			// PATCH /api/artifacts/:id returns {artifact, network_footprint,
-			// footprint_changed} — the identity lives under `artifact`, never at
-			// the top level. Reading it from the top level yielded undefined, which
-			// silently suppressed the saved event and the preview refresh (av-l31x).
-			// The id itself comes from the session's bound artifact, never a tool
-			// parameter (av-hrtv note) — these tools take no artifact id, which is
-			// what stops a model from being talked into naming one (av-e0yj).
-			const r = await api("PATCH", "/api/artifacts/" + encodeURIComponent(target), patch);
-			const a = r.artifact || {};
-			// Report only the origins the rewritten body leaves *blocked*: an
-			// already-approved origin is not blocked, so re-flagging it would be a
-			// false alarm the create path never has to filter — a brand-new
-			// artifact starts with nothing approved (av-hrtv).
-			const approved: string[] = a.network_allowlist || [];
-			const footprint: string[] = (r.network_footprint || []).filter((o: string) => !approved.includes(o));
-			let text = `Updated artifact ${a.id || target} ("${a.title || ""}").`;
-			if (footprint.length > 0) {
-				text += ` Network footprint (blocked until the user approves): ${footprint.join(", ")}.`;
+			return saveBody(target, params.body, params.title);
+		},
+	});
+
+	pi.registerTool({
+		name: "edit_artifact",
+		label: "Edit artifact",
+		description:
+			"Make targeted in-place edits to this session's artifact source, without rewriting " +
+			"the whole document. Prefer this over write_artifact for small changes (a fix, a " +
+			"restyle, one section). Each edit's oldText must match its target exactly and uniquely " +
+			"in the current source — copy it from get_artifact, with enough surrounding context to " +
+			"be unique; minor quote/dash/whitespace drift is tolerated. Put several disjoint changes " +
+			"in one call's edits[]; edits that overlap or touch must be merged into one instead. " +
+			"If an edit matches nothing, re-read with get_artifact and retry against the current " +
+			"source — never fall back to rewriting the document by hand from memory.",
+		parameters: Type.Object({
+			edits: Type.Array(
+				Type.Object({
+					oldText: Type.String({ description: "Exact text to find; must be unique in the current source" }),
+					newText: Type.String({ description: "Replacement text (empty string deletes)" }),
+				}),
+				{ description: "One or more targeted replacements, applied atomically" },
+			),
+		}),
+		async execute(_id, params) {
+			const target = requireBoundArtifact();
+			// Read-then-write inside the tool, so the match always runs against
+			// the latest saved source rather than the possibly stale copy the
+			// model holds. Validation runs before any PATCH: a bad edit throws
+			// (a failed tool result naming the edit) and the stored body is
+			// left exactly as it was.
+			const a = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "?body=true");
+			let next: string;
+			try {
+				next = applyEdits(a.body || "", params.edits ?? []).body;
+			} catch (err) {
+				throw new Error(err instanceof Error ? err.message : String(err));
 			}
-			return ok(text, {
-				exhibit: "artifact_saved",
-				action: "updated",
-				artifactId: a.id || target,
-				title: a.title,
-				footprint,
-				// Whether the new body's origins differ from the previous body's —
-				// a different question from `footprint` above, which is about
-				// approval rather than change.
-				footprintChanged: r.footprint_changed === true,
-			});
+			return saveBody(target, next);
 		},
 	});
 
@@ -359,13 +411,44 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
+	/**
+	 * Persist a full widget document through the single write path. Shared
+	 * by set_widget (the model supplies the body) and edit_widget (the body
+	 * is the engine's splice of targeted edits into the current tile) — one
+	 * function so both report the same unapproved-origins warning and the
+	 * same widget_saved event the gallery card re-renders on.
+	 */
+	async function saveWidget(target: string, body: string) {
+		const r = await api("PUT", "/api/artifacts/" + encodeURIComponent(target) + "/widget", {
+			body,
+		});
+		const unapproved: string[] = r.unapproved_origins || [];
+		let text = `Saved the gallery widget for artifact ${target}.`;
+		if (unapproved.length > 0) {
+			// The widget shares the artifact's allowlist, so an origin the
+			// artifact never got approved for is simply blocked at render.
+			// Say so rather than letting it show up as a blank tile.
+			text +=
+				` Warning: it references ${unapproved.join(", ")}, which the artifact's network ` +
+				`allowlist does not cover — the browser will block those. Prefer a widget with no ` +
+				`external references at all.`;
+		}
+		return ok(text, {
+			exhibit: "widget_saved",
+			artifactId: target,
+			widgetUrl: r.widget_url,
+			unapproved,
+		});
+	}
+
 	pi.registerTool({
 		name: "set_widget",
 		label: "Set widget",
 		description:
 			"Save (or replace) this session's artifact gallery widget — the small, glanceable tile its card " +
 			"shows in the library, like an iOS home-screen widget. body must be a complete, " +
-			"self-contained HTML document. The widget reads the SAME localStorage keys the artifact " +
+			"self-contained HTML document. Prefer edit_widget for targeted changes to an existing " +
+			"tile — use this only for a new or full-rewrite widget. The widget reads the SAME localStorage keys the artifact " +
 			"writes (state is inlined before its scripts run, so synchronous getItem at startup is " +
 			"correct), but it CANNOT write state, download files, or use the clipboard, and it is " +
 			"rendered non-interactive — a click on it opens the artifact. Design for a ~272x132 px " +
@@ -376,26 +459,58 @@ export default function (pi: ExtensionAPI) {
 		}),
 		async execute(_id, params) {
 			const target = requireBoundArtifact();
-			const r = await api("PUT", "/api/artifacts/" + encodeURIComponent(target) + "/widget", {
-				body: params.body,
-			});
-			const unapproved: string[] = r.unapproved_origins || [];
-			let text = `Saved the gallery widget for artifact ${target}.`;
-			if (unapproved.length > 0) {
-				// The widget shares the artifact's allowlist, so an origin the
-				// artifact never got approved for is simply blocked at render.
-				// Say so rather than letting it show up as a blank tile.
-				text +=
-					` Warning: it references ${unapproved.join(", ")}, which the artifact's network ` +
-					`allowlist does not cover — the browser will block those. Prefer a widget with no ` +
-					`external references at all.`;
+			return saveWidget(target, params.body);
+		},
+	});
+
+	pi.registerTool({
+		name: "edit_widget",
+		label: "Edit widget",
+		description:
+			"Make targeted in-place edits to this session's artifact gallery widget, without rewriting " +
+			"the whole tile. Prefer this over set_widget for small changes. Each edit's oldText must " +
+			"match its target exactly and uniquely in the current widget source — copy it from " +
+			"get_widget, with enough surrounding context to be unique; minor quote/dash/whitespace " +
+			"drift is tolerated. Put several disjoint changes in one call's edits[]; edits that " +
+			"overlap or touch must be merged into one instead. If the artifact has no widget yet, " +
+			"create it with set_widget first; if an edit matches nothing, re-read with get_widget " +
+			"and retry against the current source.",
+		parameters: Type.Object({
+			edits: Type.Array(
+				Type.Object({
+					oldText: Type.String({ description: "Exact text to find; must be unique in the current widget source" }),
+					newText: Type.String({ description: "Replacement text (empty string deletes)" }),
+				}),
+				{ description: "One or more targeted replacements, applied atomically" },
+			),
+		}),
+		async execute(_id, params) {
+			const target = requireBoundArtifact();
+		// Read-then-write inside the tool, so the match always runs against
+		// the latest saved tile rather than the possibly stale copy the
+		// model holds. A missing widget is guidance, not a failure of the
+		// match: there is nothing to edit, so say to create it instead.
+			// Validation runs before any PUT: a bad edit throws (a failed
+			// tool result naming the edit) and the stored tile is left
+			// exactly as it was.
+			let current: string;
+			try {
+				const w = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "/widget");
+				current = w.body || "";
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				if (msg.includes("-> 404")) {
+					throw new Error("This artifact has no widget yet — create it with set_widget first.");
+				}
+				throw err;
 			}
-			return ok(text, {
-				exhibit: "widget_saved",
-				artifactId: target,
-				widgetUrl: r.widget_url,
-				unapproved,
-			});
+			let next: string;
+			try {
+				next = applyEdits(current, params.edits ?? []).body;
+			} catch (err) {
+				throw new Error(err instanceof Error ? err.message : String(err));
+			}
+			return saveWidget(target, next);
 		},
 	});
 

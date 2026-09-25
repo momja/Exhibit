@@ -39,7 +39,7 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-//go:embed ext/exhibit.ts
+//go:embed ext/exhibit.ts ext/edit.ts
 var extFS embed.FS
 
 // Config for the Manager.
@@ -85,7 +85,9 @@ type Manager struct {
 	sessions map[string]*Session
 }
 
-// New materializes the extension under cfg.WorkRoot and starts the idle reaper.
+// New materializes the extension (exhibit.ts plus its edit-engine import,
+// edit.ts, which pi's jiti loader resolves relative to the extension file)
+// under cfg.WorkRoot and starts the idle reaper.
 func New(cfg Config, st store.Store) (*Manager, error) {
 	if cfg.Credentials == nil {
 		return nil, fmt.Errorf("agent manager needs a credential registry")
@@ -103,6 +105,15 @@ func New(cfg Config, st store.Store) (*Manager, error) {
 	extPath := filepath.Join(cfg.WorkRoot, "exhibit.ts")
 	if err := os.WriteFile(extPath, src, 0o644); err != nil {
 		return nil, fmt.Errorf("materialize exhibit extension: %w", err)
+	}
+	// edit.ts is exhibit.ts's only relative import (the edit_artifact engine,
+	// av-f5i5). It must sit beside the extension or the sidecar fails to load.
+	editSrc, err := extFS.ReadFile("ext/edit.ts")
+	if err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(filepath.Join(cfg.WorkRoot, "edit.ts"), editSrc, 0o644); err != nil {
+		return nil, fmt.Errorf("materialize exhibit edit engine: %w", err)
 	}
 	m := &Manager{cfg: cfg, st: st, extPath: extPath, sessions: map[string]*Session{}}
 	go m.reap()
@@ -135,7 +146,7 @@ type CreateOpts struct {
 	// widget and nothing else (av-fafu) — the one-shot sessions behind the
 	// edit page's "Generate widget" button. It exists because the ordinary
 	// edit-an-artifact instruction tells the model to save with
-	// update_artifact, which is exactly the wrong thing here: the artifact's
+	// write_artifact, which is exactly the wrong thing here: the artifact's
 	// own source must not change.
 	WidgetOnly bool
 }
