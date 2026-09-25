@@ -83,6 +83,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	// exactly the claim being checked.
 	{route: "/assets/*", path: "/assets/gallery/api.js"},
 	{route: "/manifest.json", path: "/manifest.json"},
+	{route: "/favicon.ico", path: "/favicon.ico"},
 	{route: "/s/{shareID}", path: "/s/some-share"},
 	{route: "/s/{shareID}/widget", path: "/s/some-share/widget"},
 	{route: "/api/settings/public", path: "/api/settings/public"},

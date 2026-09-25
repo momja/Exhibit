@@ -19,6 +19,9 @@ import (
 // '&' by default, which is what keeps this safe to embed in a <script>
 // block despite the title coming from user-authored artifact data.
 type agentPageData struct {
+	// Favicon is a data: URI (base64 SVG); typed template.URL because
+	// html/template rejects the data: scheme in URL contexts by default.
+	Favicon template.URL
 	pageCredentials
 	ArtifactJSON template.JS
 	MockEnabled  bool
@@ -150,6 +153,7 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	page, err := renderPage("agent", agentPageData{
+		Favicon:         template.URL(exhibitLogoDataURI),
 		pageCredentials: ro.pageCredentials(r),
 		ArtifactJSON:    template.JS(artifactJSON),
 		MockEnabled:     ro.cfg.MockEnabled,

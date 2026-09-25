@@ -25,6 +25,14 @@ type Config struct {
 	Blob         blob.Store
 	AppOrigin    string
 	RenderOrigin string
+	// FaviconSVG is the Exhibit brand mark served at /favicon.ico (nw-6184).
+	// Render documents are visitor-authored files that own their own <head>,
+	// so the surface never injects an icon link into them; instead this
+	// fallback gives every document without an icon of its own the same mark
+	// the app origin wears. The api package supplies its compiled-in logo
+	// (internal/api/logo.svg) — one artwork, both origins — and an empty
+	// value answers 404, so a Renderer built without it fails closed.
+	FaviconSVG string
 	// Tokens verifies the short-lived (artifact, owner) credential that /a/:id
 	// and /w/:id require (av-c5aq). It is how this surface learns who it is
 	// serving without holding a session — see internal/rendertoken for why a
@@ -100,6 +108,23 @@ func NoReferrer(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// ServeFavicon serves the Exhibit brand mark at /favicon.ico (nw-6184). It
+// is the fallback every render document without an icon of its own resolves
+// to: a browser shows the linked icon when the artifact names one and probes
+// this path otherwise, so the surface's pages wear the same mark as the app
+// origin without the surface ever rewriting a visitor-authored <head>. The
+// bytes are SVG despite the .ico path, like the app origin's twin route, and
+// an unconfigured Renderer answers 404 rather than an empty document.
+func (rd *Renderer) ServeFavicon(w http.ResponseWriter, r *http.Request) {
+	if rd.cfg.FaviconSVG == "" {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = io.WriteString(w, rd.cfg.FaviconSVG)
 }
 
 // ServeArtifact serves the artifact identified by {artifactID} from the URL,

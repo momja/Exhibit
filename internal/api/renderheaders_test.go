@@ -51,6 +51,10 @@ func TestRenderOriginWithholdsTheReferrer(t *testing.T) {
 		// artifact has no assets.
 		{"asset, unknown id", "/a/{artifactID}/assets/{assetID}",
 			"/a/" + id + "/assets/does-not-exist", http.StatusNotFound},
+		// The brand mark as a file (nw-6184): no token and no principal,
+		// the same static artwork for every visitor — but still on this
+		// surface, so it withholds the Referer like every row here.
+		{"favicon", "/favicon.ico", "/favicon.ico", http.StatusOK},
 	}
 
 	covered := map[string]bool{}

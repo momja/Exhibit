@@ -130,6 +130,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	// Static and instance-level surfaces: nothing per-visitor to scope.
 	{route: "/assets/*", why: "embedded static assets, identical for every visitor"},
 	{route: "/manifest.json", why: "static app manifest, identical for every visitor"},
+	{route: "/favicon.ico", why: "static brand mark, identical for every visitor"},
 	{route: "/api/settings/public", why: "the instance's own name and description, deliberately readable by anyone"},
 
 	// Owner-independent by design rather than by omission.
