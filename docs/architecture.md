@@ -1192,9 +1192,10 @@ absent the surface degrades to disabled; nothing else changes.
 
 - **Single write path preserved:** the sidecar is loaded with built-in tools
   disabled and exactly one extension (`internal/agent/ext/exhibit.ts`) whose
-  `create_artifact` / `update_artifact` / `get_artifact` tools, plus
+  `create_artifact` / `write_artifact` / `edit_artifact` (pi-style targeted
+  replacements, av-f5i5) / `get_artifact` tools, plus
   `get_state` / `set_state` / `delete_state` for the artifact's stored state
-  (av-lvi1) and `set_widget` / `get_widget` for the artifact's gallery-card
+  (av-lvi1) and `set_widget` / `edit_widget` / `get_widget` for the artifact's gallery-card
   widget (av-fafu), call back into the exhibit HTTP API — the same routes and
   Store methods the edit page's state inspector (§3.5) uses. Agent output is
   scanned like any ingest and its footprint is never auto-approved.

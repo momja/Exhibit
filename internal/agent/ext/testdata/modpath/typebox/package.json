@@ -1,0 +1,7 @@
+{
+	"name": "typebox-test-double",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "Resolves bare 'typebox' imports for exhibit.test.ts via NODE_PATH (see ext_test.go). NOT the real TypeBox: schemas are opaque descriptors, enough for tool registration. pi provides the real package at runtime."
+}

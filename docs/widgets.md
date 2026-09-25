@@ -78,7 +78,7 @@ POSTs to `/widget/generate`, which starts a one-shot agent session and returns
 its id immediately. Everything that makes the result a *widget* lives
 server-side — the fixed `generateWidgetPrompt` plus a `WidgetOnly` system
 prompt that tells the model to read the artifact, save with `set_widget`, and
-never touch `create_artifact`/`update_artifact` (the ordinary edit-mode
+never touch `create_artifact`/`write_artifact`/`edit_artifact`/`edit_widget` (the ordinary edit-mode
 instruction says the opposite, which is why the two are mutually exclusive
 branches of `sessionSystemPrompt`). There is nothing here a caller can put into
 the model's context.
