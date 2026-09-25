@@ -159,10 +159,13 @@ export function resolveSpans(body: string, edits: ArtifactEdit[]): EditSpan[] {
 			);
 		}
 
-		// No exact match: fuzzy fallback over normalized text.
+		// No exact match: fuzzy fallback over normalized text. The needle keeps
+		// its full normalized form — edge whitespace included — so the search
+		// matches what the model actually specified. Only the blank rejection
+		// trims, catching whitespace-only oldText without altering the search.
 		const { text: normBody, map } = lazyBody();
-		const needle = normalizeWithMap(edit.oldText).text.trim();
-		if (needle === "") {
+		const needle = normalizeWithMap(edit.oldText).text;
+		if (needle.trim() === "") {
 			throw new EditValidationError(index, `${label} matches nothing in the artifact — re-read it with get_artifact and copy oldText from the current source.`);
 		}
 		const fuzzy = allOccurrences(normBody, needle);

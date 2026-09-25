@@ -157,6 +157,33 @@ describe("fuzzy fallback", () => {
 		assert.equal(out, "<h1>done</h1>");
 	});
 
+	it("retains edge whitespace in the fuzzy needle instead of trimming it", () => {
+		// The trailing space is significant: the body has none, so this must
+		// fail rather than silently match the shorter trimmed needle.
+		assert.throws(() => applyEdits("<h1>Hi</h1>", [{ oldText: "<h1>Hi</h1> ", newText: "x" }]), (err) => {
+			assert.ok(err instanceof EditValidationError);
+			assert.match(err.message, /edits\[0\] matches nothing/);
+			return true;
+		});
+	});
+
+	it("still rejects whitespace-only oldText", () => {
+		assert.throws(() => applyEdits("<h1>Hi</h1>", [{ oldText: "   ", newText: "x" }]), (err) => {
+			assert.ok(err instanceof EditValidationError);
+			assert.match(err.message, /matches nothing/);
+			return true;
+		});
+	});
+
+	it("matches edge whitespace when the body actually has it", () => {
+		const body = "<div>  content  </div>";
+		const { body: out, spans } = applyEdits(body, [{ oldText: "<div> content </div>", newText: "<div>done</div>" }]);
+		assert.equal(out, "<div>done</div>");
+		assert.equal(spans[0].fuzzy, true);
+		assert.equal(spans[0].start, 0);
+		assert.equal(spans[0].end, body.length);
+	});
+
 	it("rejects a fuzzily ambiguous oldText", () => {
 		// No exact hit (both paragraphs carry extra spaces), but both
 		// normalize to the same needle: ambiguous under the fallback too.
