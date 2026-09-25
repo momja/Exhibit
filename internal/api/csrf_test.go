@@ -106,6 +106,8 @@ var appOriginGETRoutes = []getRoute{
 	// public identity (av-4ac9) — public reads, credential or not.
 	{route: "/assets/*"},
 	{route: "/manifest.json"},
+	// The brand mark as a file (nw-6184): a static read like the manifest.
+	{route: "/favicon.ico"},
 	{route: "/s/{shareID}"},
 	{route: "/s/{shareID}/widget"},
 	{route: "/api/settings/public"},

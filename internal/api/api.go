@@ -430,6 +430,11 @@ func (ro *Router) setupRoutes() {
 	// the favicon.
 	ro.Get("/manifest.json", ro.manifest)
 
+	// The brand mark as a file (nw-6184) — app origin only, public and
+	// static like the manifest, for the requests no page's data-URI icon
+	// link covers (the browser's automatic /favicon.ico probe, bookmarks).
+	ro.Get("/favicon.ico", ro.favicon)
+
 	// Public share route — no auth required
 	ro.Get("/s/{shareID}", ro.serveShare)
 	// Public shared-widget route (av-ei5h) — no auth required, same
@@ -611,6 +616,10 @@ func (ro *Router) RenderHandler() http.Handler {
 		// The same Signer the app surface mints with: one process, one key,
 		// stateless verification — no shared table, no round trip.
 		Tokens: ro.tokens,
+		// The brand mark the render surface falls back to (nw-6184): the
+		// same compiled-in logo the app origin inlines and serves, so both
+		// origins wear one artwork.
+		FaviconSVG: exhibitLogoSVG,
 		// Empty on every instance that has not asked to restrict framing,
 		// which leaves a share's frame-ancestors open (av-q3iy).
 		EmbedOrigins: ro.cfg.EmbedOrigins,
@@ -628,6 +637,11 @@ func (ro *Router) RenderHandler() http.Handler {
 	// produced it carries a render token (av-nr0p).
 	r.Use(render.NoReferrer)
 
+	// The brand mark as a file (nw-6184): the fallback icon for every
+	// render document without one of its own. No token and no principal —
+	// it is the same static artwork for every visitor, like the app
+	// origin's twin route.
+	r.Get("/favicon.ico", renderer.ServeFavicon)
 	// Serve a rendered artifact by id
 	r.Get("/a/{artifactID}", renderer.ServeArtifact)
 	// One of the artifact's out-of-line assets (av-20fk). Registered before

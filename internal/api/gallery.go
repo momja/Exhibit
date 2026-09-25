@@ -735,6 +735,9 @@ func renderNewPage(creds pageCredentials) (string, error) {
 // long after the page was rendered — so its token is minted at click time
 // instead of going stale in the markup (av-c5aq).
 type detailPageData struct {
+	// Favicon is a data: URI (base64 SVG); typed template.URL because
+	// html/template rejects the data: scheme in URL contexts by default.
+	Favicon    template.URL
 	ID         string
 	Title      string
 	Created    string
@@ -781,6 +784,7 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		allowlist = []string{}
 	}
 	return renderPage("detail", detailPageData{
+		Favicon:   template.URL(exhibitLogoDataURI),
 		Share:     share,
 		ID:        a.ID,
 		Title:     a.Title,
@@ -809,9 +813,12 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 }
 
 type editPageData struct {
-	ID    string
-	Title string
-	Src   string
+	// Favicon is a data: URI (base64 SVG); typed template.URL because
+	// html/template rejects the data: scheme in URL contexts by default.
+	Favicon template.URL
+	ID      string
+	Title   string
+	Src     string
 	pageCredentials
 	// An origin has three states here, not two (exhibit-x87): Allowlist holds
 	// the decision='allow' origins (the ones the render CSP is built from);
@@ -858,6 +865,7 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, wi
 	// a blocked origin is a decision already made and belongs in Blocked.
 	unapproved := diffOrigins(scanner.Scan(src), allowlist, blocked)
 	return renderPage("edit", editPageData{
+		Favicon:            template.URL(exhibitLogoDataURI),
 		ID:                 a.ID,
 		Title:              a.Title,
 		Src:                src,
