@@ -104,7 +104,13 @@ The only way data changes. Route groups:
   scalar columns. Rewriting the body
   re-executes the scan and returns the footprint plus a `footprint_changed` flag so
   the edit dialog can re-run the explicit-approval gate when origins differ from the
-  previous version; the allowlist is never seeded from that scan (spec §6.2).
+  previous version; the allowlist is never seeded from that scan (spec §6.2). Both
+  versions are scanned by the rule ingest applied (§3.4), so an edit compares like
+  with like. When the previous body's bytes are gone, the rewrite still goes
+  through, because it is the only way to repair the artifact, and
+  `footprint_changed` comes back true: the comparison is unknown, so the gate
+  runs. Any other failure to read the previous body aborts the PATCH before
+  anything is written, the bundled fields included (av-wu9d).
   Tag and collection membership use the dedicated `POST/DELETE
   /api/artifacts/:id/tags/:tagID` and `.../collections/:colID` routes.
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
@@ -721,6 +727,13 @@ like an artifact that does not exist — 404, never 403, for the reason above.
   gallery of forty widget tiles, forty extra) and still leave a window in which
   an object deleted between the two failed mid-200.
 
+  That error also says the blob is missing, in one spelling for both backends:
+  it satisfies `errors.Is(err, fs.ErrNotExist)`, which `FSStore` gets from
+  `os.Open` and `S3Store` produces from the `NoSuchKey` code (av-wu9d). A body
+  PATCH is the caller that needs it, since a lost body is something the rewrite
+  repairs, while any other read failure means the store could not show the
+  bytes that are about to be overwritten.
+
   **`Delete` performs no existence check.** The idempotent contract on the
   interface exists precisely because `DeleteObject` already answers success for
   a key that was never there, so a `HEAD` in front of it would pay a round trip
@@ -879,10 +892,27 @@ Invoked by `POST /api/artifacts`. Parses the document with a real HTML tokenizer
 (`x/net/html`) to extract referenced origins (`src`/`href`/`action`/`<link>`/ESM
 imports), plus a literal-URL heuristic over inline JS. Produces the deduplicated origin
 list for the approval step. It is **transparency, not enforcement** — its output seeds
-the approval step, never the allowlist directly; the CSP is the wall. For a URL ingest
-the scan is **base-aware**: relative references are resolved against the source URL so
-residual external origins still surface (a bare `Scan` drops relatives; `ScanWithBase`
-resolves them).
+the approval step, never the allowlist directly; the CSP is the wall.
+
+**One rule, applied to the document as stored** (av-wu9d). Ingest is not the only
+caller: a body PATCH scans both versions, the edit page lists what the body
+references but nobody decided, and the widget routes report theirs. All of them go
+through `networkFootprint` (`internal/api/artifacts.go`), which runs
+`scanner.ScanDoc` over the stored bytes and drops the render origin. Relative
+references resolve through the document's own `<base href>`, the way the browser
+will resolve them, and are dropped when it has no usable one, because they then
+resolve against the render document and stay local. A URL ingest therefore injects
+its fallback base (§3.4a) *before* it scans: a page's residual relatives surface as
+the source origin, and a page that brought its own base is read under that base
+instead. Ingest and a later edit agree by construction, since they apply one rule
+to the same bytes, which is exactly what they failed to do when ingest resolved
+against the source URL and edits dropped relatives.
+
+Which base governs follows the HTML rule rather than the first tag that looks like
+one: the first `base` element with an `href` decides, even when that href is empty,
+and a `base` inside SVG or an inert `<template>` does not count. The `<base>`
+element itself is never reported. It fetches nothing, and listing it would ask the
+user to approve an origin a fully vendored artifact never contacts.
 
 ### 3.4a Snapshot vendorer (URL ingest)
 
@@ -1681,9 +1711,9 @@ flowchart TD
     fetch --> snapQ{snapshot on?}
     snapQ -->|yes| snap["snapshot.InlineHTMLAssets — bounded fetch + inline<br/>assets as data:/inline &lt;script&gt;/&lt;style&gt; &rarr;<br/>self-contained body + report<br/>(vendored, residual, per-asset failures — never fatal)"]
     snapQ -->|no| scan1
-    snap --> scan1["ScanWithBase: resolve relatives vs source &rarr; footprint;<br/>inject &lt;base href&gt; for surviving relatives"]
+    snap --> scan1["inject &lt;base href&gt; for surviving relatives, unless the page<br/>has its own; ScanDoc the body as stored &rarr; footprint"]
 
-    kind -->|paste| scan2["API: Scan — tokenize, extract origins &rarr;<br/>footprint list"]
+    kind -->|paste| scan2["API: ScanDoc: tokenize, resolve relatives through<br/>the document's own base &rarr; footprint list"]
 
     scan1 --> resp1["API &rarr; respond: &quot;these N origins will be<br/>contacted — approve?&quot; (+ snapshot report)"]
     scan2 --> resp1

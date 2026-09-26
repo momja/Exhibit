@@ -2,7 +2,9 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +15,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/momja/Exhibit/internal/blob"
 )
 
 // createArtifact POSTs a body-based artifact and returns its id.
@@ -409,42 +413,85 @@ func TestPatchArtifactSameFootprintReportsNoChange(t *testing.T) {
 	assert.Equal(t, second, getArtifactBody(t, r, id))
 }
 
-// patchBody PATCHes a new source body and decodes the update response.
-func patchBody(t *testing.T, r *Router, id, body string) map[string]any {
+// patchBodyFootprint PATCHes a new source body and decodes the footprint half
+// of the update response.
+func patchBodyFootprint(t *testing.T, r *Router, id, body string) updateArtifactResponse {
 	t.Helper()
-	pb, _ := json.Marshal(map[string]any{"body": body})
-	req := httptest.NewRequest("PATCH", "/api/artifacts/"+id, bytes.NewReader(pb))
-	req.Header.Set("Authorization", authHeader())
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{"body": body})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	var updated map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
-	return updated
+	var resp updateArtifactResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	return resp
 }
 
-// TestPatchURLEditKeepsIngestFootprintShape is the av-wu9d acceptance pin:
-// a trivial edit to a URL-ingested artifact must report the same footprint
-// shape ingest did — inherited relatives resolve through the injected base
-// fallback, not dropped as unknown bare paths.
-func TestPatchURLEditKeepsIngestFootprintShape(t *testing.T) {
+// ingestFootprint creates an artifact and returns its id and the footprint
+// ingest reported.
+func ingestFootprint(t *testing.T, r *Router, payload map[string]any) (string, []string) {
+	t.Helper()
+	resp := createArtifactResp(t, r, payload)
+	footprint := []string{}
+	for _, o := range resp["network_footprint"].([]any) {
+		footprint = append(footprint, o.(string))
+	}
+	return resp["artifact"].(map[string]any)["id"].(string), footprint
+}
+
+// TestPatchURLEditKeepsIngestFootprint is the av-wu9d acceptance pin: a
+// trivial edit to the body a URL ingest actually stored reports the footprint
+// ingest reported, exactly, with no change flagged. Editing the stored bytes
+// rather than a hand-written copy is the point: the injected base is whatever
+// InjectBaseHref produced.
+func TestPatchURLEditKeepsIngestFootprint(t *testing.T) {
 	r := newTestRouter(t)
 
-	const sourceURL = "https://example.com/blog/post"
-	first := `<html><head><title>t</title></head><body><h1>hello</h1><img src="/images/logo.png"><script>fetch('/api/data')</script></body></html>`
-	ingest := createArtifactResp(t, r, map[string]any{
-		"title": "wu9d", "url": sourceURL, "body": first, "network_allowlist": []string{},
+	first := `<html><head><title>t</title></head><body><h1>hello</h1>` +
+		`<img src="/images/logo.png"><script src="https://cdn.other.com/lib.js"></script>` +
+		`<script>fetch('/api/data')</script></body></html>`
+	id, ingested := ingestFootprint(t, r, map[string]any{
+		"title": "wu9d", "url": "https://example.com/blog/post", "body": first, "network_allowlist": []string{},
 	})
-	assert.Contains(t, ingest["network_footprint"], "https://example.com")
-	id := ingest["artifact"].(map[string]any)["id"].(string)
+	assert.ElementsMatch(t, []string{"https://example.com", "https://cdn.other.com"}, ingested)
 
-	// Trivial heading edit; base fallback and relatives preserved.
-	second := `<html><head><base href="`+sourceURL+`"><title>t</title></head><body><h1>hello edited</h1><img src="/images/logo.png"><script>fetch('/api/data')</script></body></html>`
-	updated := patchBody(t, r, id, second)
-	assert.Contains(t, updated["network_footprint"], "https://example.com")
-	assert.False(t, updated["footprint_changed"].(bool))
+	stored := getArtifactBody(t, r, id)
+	edited := strings.Replace(stored, "<h1>hello</h1>", "<h1>hello edited</h1>", 1)
+	require.NotEqual(t, stored, edited)
+
+	updated := patchBodyFootprint(t, r, id, edited)
+	assert.ElementsMatch(t, ingested, updated.NetworkFootprint)
+	assert.False(t, updated.FootprintChanged)
+}
+
+// A fetched page that declares its own <base> keeps it (InjectBaseHref skips
+// injection), so its relatives reach that base's origin and not the page URL.
+// Ingest used to resolve them against the page URL and drop the base tag's
+// origin, asking the user to approve a host the artifact never contacts while
+// CSP blocked the one it does. (av-wu9d review)
+func TestURLIngestFollowsThePagesOwnBase(t *testing.T) {
+	r := newTestRouter(t)
+
+	page := `<html><head><base href="https://cdn.site/app/"></head><body><h1>hi</h1><img src="logo.png"></body></html>`
+	id, ingested := ingestFootprint(t, r, map[string]any{
+		"title": "own base", "url": "https://example.com/page", "body": page, "network_allowlist": []string{},
+	})
+	assert.Equal(t, []string{"https://cdn.site"}, ingested)
+
+	stored := getArtifactBody(t, r, id)
+	updated := patchBodyFootprint(t, r, id, strings.Replace(stored, "<h1>hi</h1>", "<h1>hey</h1>", 1))
+	assert.Equal(t, ingested, updated.NetworkFootprint, "an edit must see what ingest saw")
+	assert.False(t, updated.FootprintChanged)
+}
+
+// A pasted document's own <base> governs its relatives too. Before, paste
+// ingest ran a scan that drops relatives, and once the base tag stopped being
+// reported the footprint came back empty: nothing to approve at the door.
+func TestPasteIngestFollowsTheDocumentsOwnBase(t *testing.T) {
+	r := newTestRouter(t)
+
+	_, ingested := ingestFootprint(t, r, map[string]any{
+		"title": "pasted base", "network_allowlist": []string{},
+		"body": `<base href="https://x.com/"><img src="a.png"><script>fetch('api')</script>`,
+	})
+	assert.Equal(t, []string{"https://x.com"}, ingested)
 }
 
 // TestPatchDetectsRelativeChangeUnderStableBase covers the case plain Scan
@@ -462,20 +509,20 @@ func TestPatchDetectsRelativeChangeUnderStableBase(t *testing.T) {
 	})
 
 	// Adding a relative under the stable base introduces the source origin.
-	added := patchBody(t, r, id, withImg)
-	assert.Contains(t, added["network_footprint"], "https://example.com")
-	assert.True(t, added["footprint_changed"].(bool), "added relative must report a footprint change")
+	added := patchBodyFootprint(t, r, id, withImg)
+	assert.Equal(t, []string{"https://example.com"}, added.NetworkFootprint)
+	assert.True(t, added.FootprintChanged, "added relative must report a footprint change")
 
 	// Removing it again drops the origin.
-	removed := patchBody(t, r, id, plain)
-	assert.NotContains(t, removed["network_footprint"], "https://example.com")
-	assert.True(t, removed["footprint_changed"].(bool), "removed relative must report a footprint change")
+	removed := patchBodyFootprint(t, r, id, plain)
+	assert.Empty(t, removed.NetworkFootprint)
+	assert.True(t, removed.FootprintChanged, "removed relative must report a footprint change")
 }
 
 // TestPatchDroppedBaseResolvesLocally pins the Exhibit-namespace rule: once
 // the author deletes the fallback tag, surviving relatives are local paths
-// (render origin), not source contacts — the scan must not attribute them to
-// the source site. (av-wu9d discussion)
+// (render origin), not source contacts, so the scan must not attribute them
+// to the source site.
 func TestPatchDroppedBaseResolvesLocally(t *testing.T) {
 	r := newTestRouter(t)
 
@@ -486,42 +533,78 @@ func TestPatchDroppedBaseResolvesLocally(t *testing.T) {
 		"title": "wu9d", "url": sourceURL, "body": withBase, "network_allowlist": []string{},
 	})
 
-	updated := patchBody(t, r, id, noBase)
-	assert.NotContains(t, updated["network_footprint"], "https://example.com")
-	assert.True(t, updated["footprint_changed"].(bool))
+	updated := patchBodyFootprint(t, r, id, noBase)
+	assert.Empty(t, updated.NetworkFootprint)
+	assert.True(t, updated.FootprintChanged)
 }
 
-// TestPatchUnreadableOldBodyAborts pins the av-wu9d minor defect: when the
-// previous blob cannot be read there is no baseline to diff against, so the
-// PATCH must fail before writing anything — not report a phantom diff on a
-// silent empty baseline while overwriting bytes it never compared.
-func TestPatchUnreadableOldBodyAborts(t *testing.T) {
+// A body whose bytes are gone has no baseline to diff, and the rewrite is the
+// only way to repair the artifact. So the PATCH goes through, the bundled
+// title applies, and the unknown comparison reports a change so the approval
+// gate still runs. Refusing it instead left every body PATCH on that artifact
+// answering 500 forever. (av-wu9d review)
+func TestPatchMissingOldBodyRepairsTheArtifact(t *testing.T) {
 	r, blobDir := newTestRouterWithBlobDir(t)
 
 	id := createArtifact(t, r, map[string]any{
 		"title": "wu9d", "body": "<html><body>original</body></html>", "network_allowlist": []string{},
 	})
-
-	// Find the source blob file and remove it so the pre-write read fails.
-	req := httptest.NewRequest("GET", "/api/artifacts/"+id, nil)
-	req.Header.Set("Authorization", authHeader())
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-	var got map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&got))
-	blobID := got["source_blob_id"].(string)
+	var blobID string
+	require.NoError(t, json.Unmarshal([]byte(artifactField(t, r, id, "source_blob_id")), &blobID))
 	require.NoError(t, os.Remove(filepath.Join(blobDir, blobID)))
 
-	// The body update must fail; the bundled title rename must not apply
-	// either — nothing is written when the baseline is unreadable.
-	pb, _ := json.Marshal(map[string]any{"title": "renamed", "body": "<html><body>new</body></html>"})
-	preq := httptest.NewRequest("PATCH", "/api/artifacts/"+id, bytes.NewReader(pb))
-	preq.Header.Set("Authorization", authHeader())
-	preq.Header.Set("Content-Type", "application/json")
-	pw := httptest.NewRecorder()
-	r.ServeHTTP(pw, preq)
-	assert.Equal(t, http.StatusInternalServerError, pw.Code, pw.Body.String())
+	repaired := `<html><body>new<script src="https://cdn.example.com/a.js"></script></body></html>`
+	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{"title": "renamed", "body": repaired})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resp updateArtifactResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+
+	assert.Equal(t, []string{"https://cdn.example.com"}, resp.NetworkFootprint)
+	assert.True(t, resp.FootprintChanged, "an unknown baseline must run the approval gate")
+	assert.Equal(t, repaired, getArtifactBody(t, r, id))
+	assert.Equal(t, `"renamed"`, artifactField(t, r, id, "title"))
+}
+
+// failingGets is a blob store whose Get fails the way an outage does, with an
+// error that is not fs.ErrNotExist, and which counts Puts so a test can show
+// nothing was written after the failure.
+type failingGets struct {
+	blob.Store
+	puts int
+}
+
+func (f *failingGets) Get(context.Context, string) (io.ReadCloser, error) {
+	return nil, errors.New("blob backend unavailable")
+}
+
+func (f *failingGets) Put(ctx context.Context, id string, body io.Reader) error {
+	f.puts++
+	return f.Store.Put(ctx, id, body)
+}
+
+// A read that fails for any other reason aborts the PATCH before anything is
+// written: not the body, not the title bundled with it. A silent empty
+// baseline would report a phantom diff against a body the store could not
+// show us, and overwrite it. (av-wu9d)
+func TestPatchUnreadableOldBodyWritesNothing(t *testing.T) {
+	r := newTestRouter(t)
+
+	const original = "<html><body>original</body></html>"
+	id := createArtifact(t, r, map[string]any{
+		"title": "wu9d", "body": original, "network_allowlist": []string{},
+	})
+
+	healthy := r.cfg.Blob
+	failing := &failingGets{Store: healthy}
+	r.cfg.Blob = failing
+	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id,
+		map[string]any{"title": "renamed", "body": "<html><body>new</body></html>"})
+	r.cfg.Blob = healthy
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code, w.Body.String())
+	assert.Zero(t, failing.puts, "no blob may be written once the baseline read failed")
+	assert.Equal(t, original, getArtifactBody(t, r, id))
+	assert.Equal(t, `"wu9d"`, artifactField(t, r, id, "title"))
 }
 
 func TestRefetchArtifactOverwritesBody(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -361,23 +362,20 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		req.Body, runtimeAssets, snapReport = snapshotBody(r.Context(), req.URL, req.Body, collector.sink)
 	}
 
-	// Scan for network footprint. A URL ingest resolves relative references
-	// against the source page so residual origins surface for approval. The
-	// scan runs before the <base href> injection below, so the fallback tag
-	// itself is never reported as network egress — a fully vendored artifact
-	// keeps its empty footprint.
-	var footprint []string
+	// Option A fallback (exhibit-lwb.6): relative references that survive
+	// ingest (snapshot off, failed, or partial) would otherwise resolve
+	// against the render origin and 404. The injected base points them back
+	// at the source site; whether that origin is reachable stays the
+	// allowlist's decision. A page that declares its own base keeps it.
 	if req.URL != "" {
-		footprint = ro.withoutRenderOrigin(scanner.ScanWithBase(req.Body, req.URL))
-		// Option A fallback (exhibit-lwb.6): relative references that survive
-		// ingest — snapshot off, failed, or partial — would otherwise resolve
-		// against the render origin and 404. The injected base points them
-		// back at the source site; whether that origin is reachable stays the
-		// allowlist's decision.
 		req.Body = snapshot.InjectBaseHref(req.Body, req.URL)
-	} else {
-		footprint = ro.withoutRenderOrigin(scanner.Scan(req.Body))
 	}
+	// Scanned after the injection, as the body will be stored: relatives
+	// resolve through whichever base the stored document carries, which is
+	// the rule a later edit and the edit page apply to the same bytes
+	// (av-wu9d). The base tag itself is never reported, so a fully vendored
+	// artifact keeps its empty footprint.
+	footprint := networkFootprint(req.Body, ro.cfg.RenderOrigin)
 	if snapReport != nil {
 		snapReport.ResidualOrigins = footprint
 	}
@@ -593,29 +591,38 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	// Handle body update: capture the previous body before overwriting (so the
 	// post-edit can be diffed against it), write the new blob, and re-scan.
 	var newBody, oldBody string
-	bodySet := false
+	bodySet, baselineLost := false, false
 	if bodyVal, ok := updates["body"]; ok {
 		if bodyStr, ok := bodyVal.(string); ok && bodyStr != "" {
 			newBody = bodyStr
 			bodySet = true
 			// Read the previous body before it is overwritten so the edit
 			// dialog can tell whether the network footprint actually changed.
-			// A failed read aborts before anything is written: falling back
-			// to an empty baseline would report a phantom diff against a
-			// body we never saw, while overwriting bytes we can no longer
-			// compare. (av-wu9d)
+			// Two failures, handled differently (av-wu9d). A body that is gone
+			// leaves no baseline, and this rewrite is the only way to repair
+			// the artifact, so it goes ahead with the comparison marked
+			// unknown, which reports the footprint as changed and runs the
+			// approval gate. Any other failure aborts before anything is
+			// written, rather than overwriting bytes the store could not show
+			// us.
 			rc, gerr := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
-			if gerr != nil {
+			switch {
+			case errors.Is(gerr, fs.ErrNotExist):
+				baselineLost = true
+				slog.WarnContext(r.Context(), "previous artifact body missing; rewriting with no footprint baseline",
+					slog.String("id", id), slog.String("blob_id", a.SourceBlobID))
+			case gerr != nil:
 				serverError(w, r, "read previous artifact body", gerr)
 				return
+			default:
+				prev, perr := io.ReadAll(rc)
+				rc.Close()
+				if perr != nil {
+					serverError(w, r, "read previous artifact body", perr)
+					return
+				}
+				oldBody = string(prev)
 			}
-			prev, perr := io.ReadAll(rc)
-			rc.Close()
-			if perr != nil {
-				serverError(w, r, "read previous artifact body", perr)
-				return
-			}
-			oldBody = string(prev)
 			if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, a.SourceBlobID, bytes.NewReader([]byte(newBody))); err != nil {
 				serverError(w, r, "update artifact body", err)
 				return
@@ -650,16 +657,18 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	// Re-execute the network scan when the body actually changed (a diff
 	// against the previous version), and surface the footprint — and whether
 	// it differs from before — so the edit dialog can re-run the explicit
-	// approval flow the way ingest does. Both sides resolve relatives against
-	// the body's own <base> (ScanDoc): inherited source-relative refs keep the
-	// meaning the injected fallback tag gives them while it is present, and
-	// authored locals stay local once it is gone. The allowlist itself is
-	// never seeded from here.
+	// approval flow the way ingest does. Edits that don't touch the body, or
+	// that leave the network footprint unchanged, report no change and stay on
+	// the existing allowlist. Both sides go through networkFootprint, the rule
+	// ingest applied to the stored body, so an edit compares like with like. A
+	// lost baseline is an unknown comparison and counts as a change. The
+	// allowlist itself is never seeded from here.
 	var footprint []string
 	footprintChanged := false
 	if bodySet && newBody != oldBody {
-		footprint = ro.withoutRenderOrigin(scanner.ScanDoc(newBody))
-		footprintChanged = !sameOrigins(footprint, ro.withoutRenderOrigin(scanner.ScanDoc(oldBody)))
+		footprint = networkFootprint(newBody, ro.cfg.RenderOrigin)
+		footprintChanged = baselineLost ||
+			!sameOrigins(footprint, networkFootprint(oldBody, ro.cfg.RenderOrigin))
 	}
 	if footprint == nil {
 		footprint = []string{}
@@ -895,7 +904,13 @@ func (ro *Router) reclaimBlobs(ctx context.Context, queued []string) error {
 // comparison unable to run on exactly the instance that needs it. What is
 // wanted here is spelling, not permission.
 func (ro *Router) withoutRenderOrigin(origins []string) []string {
-	render := canonicalOrigin(ro.cfg.RenderOrigin)
+	return withoutOrigin(origins, ro.cfg.RenderOrigin)
+}
+
+// withoutOrigin is withoutRenderOrigin for a caller that holds the render
+// origin rather than the Router.
+func withoutOrigin(origins []string, renderOrigin string) []string {
+	render := canonicalOrigin(renderOrigin)
 	if render == "" {
 		return origins
 	}
@@ -907,6 +922,16 @@ func (ro *Router) withoutRenderOrigin(origins []string) []string {
 		out = append(out, o)
 	}
 	return out
+}
+
+// networkFootprint is the footprint reported for a body wherever one is shown:
+// ingest, a body PATCH, the edit page and the widget routes. Relatives resolve
+// through the document's own <base> the way the browser will resolve them
+// (scanner.ScanDoc), and the render origin is dropped (withoutRenderOrigin).
+// It is one function so those surfaces cannot disagree about one body; that
+// disagreement was av-wu9d.
+func networkFootprint(body, renderOrigin string) []string {
+	return withoutOrigin(scanner.ScanDoc(body), renderOrigin)
 }
 
 // canonicalOrigin reduces a URL to `scheme://host[:port]`, lowercased, with a

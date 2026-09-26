@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/url"
 	"strings"
@@ -271,6 +272,11 @@ func (s *S3Store) Get(ctx context.Context, id string) (io.ReadCloser, error) {
 	n, err := obj.Read(first[:])
 	if err != nil && !errors.Is(err, io.EOF) {
 		_ = obj.Close()
+		// The interface promises fs.ErrNotExist for a missing id, which the
+		// SDK spells as an S3 error code.
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return nil, fmt.Errorf("blob: get %s: %w: %w", id, fs.ErrNotExist, err)
+		}
 		return nil, fmt.Errorf("blob: get %s: %w", id, err)
 	}
 	slog.DebugContext(ctx, "blob opened", slog.String("id", id))

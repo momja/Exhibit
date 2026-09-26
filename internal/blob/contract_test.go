@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"io/fs"
 	"strings"
 	"testing"
 
@@ -66,6 +67,9 @@ func runStoreContract(t *testing.T, open func(t *testing.T) blob.Store) {
 			rc.Close()
 			t.Fatal("Get of a missing blob must fail at Get, not at first Read")
 		}
+		// And say it is missing, in one spelling for every backend: a body
+		// PATCH repairs a lost blob and aborts on any other failure (av-wu9d).
+		assert.ErrorIs(t, err, fs.ErrNotExist)
 	})
 
 	t.Run("DeleteRemovesTheBytes", func(t *testing.T) {

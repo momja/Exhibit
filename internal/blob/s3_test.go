@@ -2,6 +2,11 @@ package blob
 
 import (
 	"context"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -123,3 +128,44 @@ func TestKnownSize(t *testing.T) {
 type readerOnly struct{}
 
 func (readerOnly) Read([]byte) (int, error) { return 0, nil }
+
+// TestS3StoreGetMapsNoSuchKeyToNotExist pins the half of the Get contract the
+// shared suite can only reach with a real bucket configured: S3 reports a
+// missing key as an error code, and Store promises fs.ErrNotExist for it
+// (av-wu9d). A refusal is not a missing blob, and must not read as one, or a
+// body PATCH would overwrite bytes it merely could not see.
+func TestS3StoreGetMapsNoSuchKeyToNotExist(t *testing.T) {
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s3Error := func(status int, code string) {
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(status)
+			fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?><Error><Code>%s</Code><Message>%s</Message><Resource>%s</Resource><RequestId>1</RequestId></Error>`,
+				code, code, r.URL.Path)
+		}
+		switch {
+		case r.Method == http.MethodHead && strings.Trim(r.URL.Path, "/") == "bucket":
+			w.WriteHeader(http.StatusOK) // BucketExists at construction
+		case r.URL.Path == "/bucket/missing":
+			s3Error(http.StatusNotFound, "NoSuchKey")
+		case r.URL.Path == "/bucket/denied":
+			s3Error(http.StatusForbidden, "AccessDenied")
+		default:
+			http.Error(w, "unexpected request "+r.Method+" "+r.URL.String(), http.StatusTeapot)
+		}
+	}))
+	t.Cleanup(fake.Close)
+
+	s, err := NewS3Store(context.Background(), S3Config{
+		Bucket: "bucket", Endpoint: fake.URL, Region: "us-east-1",
+		AccessKey: "test", SecretKey: "test",
+	})
+	require.NoError(t, err)
+
+	_, err = s.Get(context.Background(), "missing")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, fs.ErrNotExist)
+
+	_, err = s.Get(context.Background(), "denied")
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, fs.ErrNotExist)
+}
