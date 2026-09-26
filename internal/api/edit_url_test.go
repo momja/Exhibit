@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -405,6 +407,121 @@ func TestPatchArtifactSameFootprintReportsNoChange(t *testing.T) {
 	assert.False(t, updated["footprint_changed"].(bool), "same origin set must not report a footprint change")
 	assert.Contains(t, updated["network_footprint"], "https://cdn.jsdelivr.net")
 	assert.Equal(t, second, getArtifactBody(t, r, id))
+}
+
+// patchBody PATCHes a new source body and decodes the update response.
+func patchBody(t *testing.T, r *Router, id, body string) map[string]any {
+	t.Helper()
+	pb, _ := json.Marshal(map[string]any{"body": body})
+	req := httptest.NewRequest("PATCH", "/api/artifacts/"+id, bytes.NewReader(pb))
+	req.Header.Set("Authorization", authHeader())
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var updated map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
+	return updated
+}
+
+// TestPatchURLEditKeepsIngestFootprintShape is the av-wu9d acceptance pin:
+// a trivial edit to a URL-ingested artifact must report the same footprint
+// shape ingest did — inherited relatives resolve through the injected base
+// fallback, not dropped as unknown bare paths.
+func TestPatchURLEditKeepsIngestFootprintShape(t *testing.T) {
+	r := newTestRouter(t)
+
+	const sourceURL = "https://example.com/blog/post"
+	first := `<html><head><title>t</title></head><body><h1>hello</h1><img src="/images/logo.png"><script>fetch('/api/data')</script></body></html>`
+	ingest := createArtifactResp(t, r, map[string]any{
+		"title": "wu9d", "url": sourceURL, "body": first, "network_allowlist": []string{},
+	})
+	assert.Contains(t, ingest["network_footprint"], "https://example.com")
+	id := ingest["artifact"].(map[string]any)["id"].(string)
+
+	// Trivial heading edit; base fallback and relatives preserved.
+	second := `<html><head><base href="`+sourceURL+`"><title>t</title></head><body><h1>hello edited</h1><img src="/images/logo.png"><script>fetch('/api/data')</script></body></html>`
+	updated := patchBody(t, r, id, second)
+	assert.Contains(t, updated["network_footprint"], "https://example.com")
+	assert.False(t, updated["footprint_changed"].(bool))
+}
+
+// TestPatchDetectsRelativeChangeUnderStableBase covers the case plain Scan
+// misses while the injected base is preserved on both sides: adding or
+// removing a relative changes what the page contacts, so the gate must fire.
+func TestPatchDetectsRelativeChangeUnderStableBase(t *testing.T) {
+	r := newTestRouter(t)
+
+	const sourceURL = "https://example.com/blog/post"
+	base := `<base href="` + sourceURL + `">`
+	plain := `<html><head>` + base + `<title>t</title></head><body><h1>hi</h1></body></html>`
+	withImg := `<html><head>` + base + `<title>t</title></head><body><h1>hi</h1><img src="/new.png"></body></html>`
+	id := createArtifact(t, r, map[string]any{
+		"title": "wu9d", "url": sourceURL, "body": plain, "network_allowlist": []string{},
+	})
+
+	// Adding a relative under the stable base introduces the source origin.
+	added := patchBody(t, r, id, withImg)
+	assert.Contains(t, added["network_footprint"], "https://example.com")
+	assert.True(t, added["footprint_changed"].(bool), "added relative must report a footprint change")
+
+	// Removing it again drops the origin.
+	removed := patchBody(t, r, id, plain)
+	assert.NotContains(t, removed["network_footprint"], "https://example.com")
+	assert.True(t, removed["footprint_changed"].(bool), "removed relative must report a footprint change")
+}
+
+// TestPatchDroppedBaseResolvesLocally pins the Exhibit-namespace rule: once
+// the author deletes the fallback tag, surviving relatives are local paths
+// (render origin), not source contacts — the scan must not attribute them to
+// the source site. (av-wu9d discussion)
+func TestPatchDroppedBaseResolvesLocally(t *testing.T) {
+	r := newTestRouter(t)
+
+	const sourceURL = "https://example.com/blog/post"
+	withBase := `<html><head><base href="` + sourceURL + `"><title>t</title></head><body><img src="/a.png"></body></html>`
+	noBase := `<html><head><title>t</title></head><body><img src="/a.png"></body></html>`
+	id := createArtifact(t, r, map[string]any{
+		"title": "wu9d", "url": sourceURL, "body": withBase, "network_allowlist": []string{},
+	})
+
+	updated := patchBody(t, r, id, noBase)
+	assert.NotContains(t, updated["network_footprint"], "https://example.com")
+	assert.True(t, updated["footprint_changed"].(bool))
+}
+
+// TestPatchUnreadableOldBodyAborts pins the av-wu9d minor defect: when the
+// previous blob cannot be read there is no baseline to diff against, so the
+// PATCH must fail before writing anything — not report a phantom diff on a
+// silent empty baseline while overwriting bytes it never compared.
+func TestPatchUnreadableOldBodyAborts(t *testing.T) {
+	r, blobDir := newTestRouterWithBlobDir(t)
+
+	id := createArtifact(t, r, map[string]any{
+		"title": "wu9d", "body": "<html><body>original</body></html>", "network_allowlist": []string{},
+	})
+
+	// Find the source blob file and remove it so the pre-write read fails.
+	req := httptest.NewRequest("GET", "/api/artifacts/"+id, nil)
+	req.Header.Set("Authorization", authHeader())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&got))
+	blobID := got["source_blob_id"].(string)
+	require.NoError(t, os.Remove(filepath.Join(blobDir, blobID)))
+
+	// The body update must fail; the bundled title rename must not apply
+	// either — nothing is written when the baseline is unreadable.
+	pb, _ := json.Marshal(map[string]any{"title": "renamed", "body": "<html><body>new</body></html>"})
+	preq := httptest.NewRequest("PATCH", "/api/artifacts/"+id, bytes.NewReader(pb))
+	preq.Header.Set("Authorization", authHeader())
+	preq.Header.Set("Content-Type", "application/json")
+	pw := httptest.NewRecorder()
+	r.ServeHTTP(pw, preq)
+	assert.Equal(t, http.StatusInternalServerError, pw.Code, pw.Body.String())
 }
 
 func TestRefetchArtifactOverwritesBody(t *testing.T) {

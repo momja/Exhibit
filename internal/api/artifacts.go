@@ -600,12 +600,22 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 			bodySet = true
 			// Read the previous body before it is overwritten so the edit
 			// dialog can tell whether the network footprint actually changed.
-			if rc, gerr := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID); gerr == nil {
-				if prev, perr := io.ReadAll(rc); perr == nil {
-					oldBody = string(prev)
-				}
-				rc.Close()
+			// A failed read aborts before anything is written: falling back
+			// to an empty baseline would report a phantom diff against a
+			// body we never saw, while overwriting bytes we can no longer
+			// compare. (av-wu9d)
+			rc, gerr := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
+			if gerr != nil {
+				serverError(w, r, "read previous artifact body", gerr)
+				return
 			}
+			prev, perr := io.ReadAll(rc)
+			rc.Close()
+			if perr != nil {
+				serverError(w, r, "read previous artifact body", perr)
+				return
+			}
+			oldBody = string(prev)
 			if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, a.SourceBlobID, bytes.NewReader([]byte(newBody))); err != nil {
 				serverError(w, r, "update artifact body", err)
 				return
@@ -640,14 +650,16 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	// Re-execute the network scan when the body actually changed (a diff
 	// against the previous version), and surface the footprint — and whether
 	// it differs from before — so the edit dialog can re-run the explicit
-	// approval flow the way ingest does. Edits that don't touch the body, or
-	// that leave the network footprint unchanged, report no change and stay on
-	// the existing allowlist. The allowlist itself is never seeded from here.
+	// approval flow the way ingest does. Both sides resolve relatives against
+	// the body's own <base> (ScanDoc): inherited source-relative refs keep the
+	// meaning the injected fallback tag gives them while it is present, and
+	// authored locals stay local once it is gone. The allowlist itself is
+	// never seeded from here.
 	var footprint []string
 	footprintChanged := false
 	if bodySet && newBody != oldBody {
-		footprint = ro.withoutRenderOrigin(scanner.Scan(newBody))
-		footprintChanged = !sameOrigins(footprint, ro.withoutRenderOrigin(scanner.Scan(oldBody)))
+		footprint = ro.withoutRenderOrigin(scanner.ScanDoc(newBody))
+		footprintChanged = !sameOrigins(footprint, ro.withoutRenderOrigin(scanner.ScanDoc(oldBody)))
 	}
 	if footprint == nil {
 		footprint = []string{}

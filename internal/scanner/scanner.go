@@ -34,6 +34,22 @@ func ScanWithBase(body, baseURL string) []string {
 	return scan(body, parseBase(baseURL))
 }
 
+// ScanDoc behaves like Scan but resolves relative references against the
+// document's own <base href> when it carries an absolute http(s) URL, and
+// drops them otherwise. The base element itself is routing policy, not a
+// network contact, so it is never reported — only what resolves through it.
+// Use this for bodies that already carry their base (stored artifact source,
+// hand-authored widget source): inherited relatives keep their source meaning
+// while the tag is present, and authored locals stay local once it is gone.
+// Bodies without a usable base scan exactly like Scan(body). (av-wu9d)
+func ScanDoc(body string) []string {
+	return scan(body, docBase(body))
+}
+
+// docBase returns the document's first <base href> as a resolution base when
+// it is an absolute http(s) URL, and nil otherwise. A nil base makes ScanDoc
+// equal Scan.
+
 // scan is the shared implementation behind Scan and ScanWithBase. A nil base
 // drops relative references; a non-nil base resolves them to their real origin.
 func scan(body string, base *url.URL) []string {
@@ -80,9 +96,49 @@ func parseBase(baseURL string) *url.URL {
 	return u
 }
 
+func docBase(body string) *url.URL {
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		return nil
+	}
+	var found string
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if found != "" {
+			return
+		}
+		if n.Type == html.ElementNode && n.Data == "base" {
+			for _, attr := range n.Attr {
+				if attr.Key == "href" {
+				found = attr.Val
+				return
+			}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+			if found != "" {
+				return
+			}
+		}
+	}
+	walk(doc)
+	if found == "" {
+		return nil
+	}
+	return parseBase(found)
+}
+
 // walkHTML traverses the HTML node tree and calls add for each URL attribute found.
+// A <base> element is routing policy for the relatives around it, not a
+// network contact itself, so it is skipped: what resolves through it is
+// reported, the tag itself never is. (av-wu9d)
 func walkHTML(n *html.Node, add func(string)) {
 	if n.Type == html.ElementNode {
+		if n.Data == "base" {
+			// Skip attrs, still recurse (a base has no element children,
+			// but the traversal shape stays uniform).
+		} else {
 		for _, attr := range n.Attr {
 			switch {
 			case attr.Key == "src" || attr.Key == "action":
@@ -94,11 +150,15 @@ func walkHTML(n *html.Node, add func(string)) {
 				// Skip anchor hrefs — they're navigation, not network fetch targets
 			}
 		}
+		}
 	}
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		walkHTML(c, add)
 	}
 }
+
+// docBase finds the document's first <base href> for ScanDoc. The html parser
+// lowercases tag and attribute names, so exact matches suffice.
 
 // fetchPattern matches URL string literals in fetch() and XMLHttpRequest calls.
 var fetchPattern = regexp.MustCompile(`fetch\(\s*['"]([^'"]+)['"]`)

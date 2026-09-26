@@ -167,3 +167,63 @@ func TestScanWithBaseMatchesScanWithoutBase(t *testing.T) {
 		}
 	}
 }
+
+// TestScanDoc covers the av-wu9d contract: the document's own <base> governs
+// relatives but is never itself reported as a contact.
+func TestScanDoc(t *testing.T) {
+	tests := []struct {
+		name     string
+		html     string
+		expected []string
+	}{
+		{
+			name:     "base tag itself is never reported",
+			html:     `<html><head><base href="https://source.example.com/blog/post"></head><body><h1>hi</h1></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "inherited relative resolves through preserved base",
+			html:     `<html><head><base href="https://source.example.com/blog/post"></head><body><img src="/images/logo.png"></body></html>`,
+			expected: []string{"https://source.example.com"},
+		},
+		{
+			name:     "relative fetch literal resolves through preserved base",
+			html:     `<html><head><base href="https://source.example.com/blog/post"></head><body><script>fetch('/api/data')</script></body></html>`,
+			expected: []string{"https://source.example.com"},
+		},
+		{
+			name:     "authored local without base stays local",
+			html:     `<html><body><h1>hi</h1><img src="/new.png"></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "absolute refs unaffected by doc base",
+			html:     `<html><head><base href="https://source.example.com/x"></head><body><script src="https://cdn.other.com/lib.js"></script></body></html>`,
+			expected: []string{"https://cdn.other.com"},
+		},
+		{
+			name:     "non-http doc base is ignored",
+			html:     `<html><head><base href="ftp://files.example.com/x"></head><body><img src="/a.png"></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "relative doc base is ignored",
+			html:     `<html><head><base href="/rooted/base"></head><body><img src="/a.png"></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "anchor href still ignored with doc base",
+			html:     `<html><head><base href="https://source.example.com/x"></head><body><a href="page2.html">next</a></body></html>`,
+			expected: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origins := ScanDoc(tt.html)
+			sort.Strings(origins)
+			sort.Strings(tt.expected)
+			assert.Equal(t, tt.expected, origins)
+		})
+	}
+}

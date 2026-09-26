@@ -69,7 +69,7 @@ func (ro *Router) getWidget(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "read widget body", err)
 		return
 	}
-	footprint := scanner.Scan(string(body))
+	footprint := scanner.ScanDoc(string(body))
 	writeJSON(w, http.StatusOK, widgetResponse{
 		Body:             string(body),
 		NetworkFootprint: footprint,
@@ -122,7 +122,7 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	footprint := scanner.Scan(req.Body)
+	footprint := scanner.ScanDoc(req.Body)
 	unapproved := diffOrigins(footprint, a.NetworkAllowlist)
 	slog.InfoContext(r.Context(), "widget saved",
 		slog.String("artifact_id", id),

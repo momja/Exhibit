@@ -23,3 +23,9 @@ Minor related issue in the same block: when reading the previous blob fails the 
 - A failed read of the previous body aborts the PATCH before the new body is written — or records an explicit "unknown comparison" while preserving the existing blob and approval state. Either way the current silent-empty-baseline behavior (which makes the diff trivially true and reports footprint_changed spuriously) is gone.
 - A test asserts an edit to a URL-ingested artifact reports the same footprint shape ingest did.
 
+
+## Notes
+
+**2026-09-26T16:33:24Z**
+
+Decision (rule b): base counts nowhere, relatives resolve through the doc's own <base>. Implemented ScanDoc (own base governs, tag never listed) instead of the acceptance's unconditional ScanWithBase(SourceURL): unconditional misattributes Exhibit-authored locals to the source site and misses intentional base deletion. Save stays verbatim (no re-injection — authored paths are Exhibit-namespace). Shrinks-to-empty stays silent (no auto-revoke, explicit-only); refetch stays av-b17a scope.
