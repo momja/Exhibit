@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/momja/Exhibit/internal/scanner"
 )
 
 // An artifact's widget (av-fafu) is a second self-contained HTML document: the
@@ -69,7 +68,7 @@ func (ro *Router) getWidget(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "read widget body", err)
 		return
 	}
-	footprint := scanner.Scan(string(body))
+	footprint := networkFootprint(string(body), ro.cfg.RenderOrigin)
 	writeJSON(w, http.StatusOK, widgetResponse{
 		Body:             string(body),
 		NetworkFootprint: footprint,
@@ -122,7 +121,7 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	footprint := scanner.Scan(req.Body)
+	footprint := networkFootprint(req.Body, ro.cfg.RenderOrigin)
 	unapproved := diffOrigins(footprint, a.NetworkAllowlist)
 	slog.InfoContext(r.Context(), "widget saved",
 		slog.String("artifact_id", id),

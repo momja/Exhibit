@@ -17,7 +17,6 @@ import (
 
 	"github.com/momja/Exhibit/internal/color"
 	"github.com/momja/Exhibit/internal/rendertoken"
-	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/momja/Exhibit/internal/tile"
 )
@@ -826,7 +825,7 @@ type editPageData struct {
 	// answers from the runtime prompt, which never widen the CSP but must stay
 	// visible and overridable rather than silently reading as undecided;
 	// Unapproved holds the origins the current body references (per
-	// scanner.Scan) that carry no decision at all, surfaced as one-click
+	// networkFootprint) that carry no decision at all, surfaced as one-click
 	// "Allow" rows. Unapproved is never merged into Allowlist server-side;
 	// that would auto-seed the allowlist from the scan, which spec §6.2
 	// forbids.
@@ -863,7 +862,7 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, wi
 	}
 	// Only origins with no decision at all are "referenced, not approved" —
 	// a blocked origin is a decision already made and belongs in Blocked.
-	unapproved := diffOrigins(scanner.Scan(src), allowlist, blocked)
+	unapproved := diffOrigins(networkFootprint(src, urls.origin), allowlist, blocked)
 	return renderPage("edit", editPageData{
 		Favicon:            template.URL(exhibitLogoDataURI),
 		ID:                 a.ID,

@@ -13,6 +13,12 @@ import (
 
 type Store interface {
 	Put(ctx context.Context, id string, r io.Reader) error
+	// Get opens the bytes stored under id. A missing id fails here rather
+	// than at the first Read, and its error satisfies errors.Is(err,
+	// fs.ErrNotExist) whichever backend is behind the interface, so a caller
+	// can tell bytes that are gone from a store that failed to answer. A body
+	// PATCH depends on that distinction: a lost body is repaired by the
+	// rewrite, where a failed read aborts it (av-wu9d).
 	Get(ctx context.Context, id string) (io.ReadCloser, error)
 	// Delete removes the bytes stored under id (av-7jcq).
 	//

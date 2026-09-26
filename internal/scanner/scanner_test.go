@@ -43,6 +43,11 @@ func TestScan(t *testing.T) {
 			html:     `<html><body><script type="module">import x from "https://esm.sh/react"</script></body></html>`,
 			expected: []string{"https://esm.sh"},
 		},
+		{
+			name:     "base tag is not a contact and does not resolve relatives",
+			html:     `<html><head><base href="https://source.example.com/"></head><body><img src="a.png"></body></html>`,
+			expected: []string{},
+		},
 	}
 
 	for _, tt := range tests {
@@ -55,7 +60,9 @@ func TestScan(t *testing.T) {
 	}
 }
 
-func TestScanWithBase(t *testing.T) {
+// TestScanDocResolvesThroughDocBase: relatives resolve against the document's
+// own <base>, exactly where the browser sends them.
+func TestScanDocResolvesThroughDocBase(t *testing.T) {
 	tests := []struct {
 		name     string
 		html     string
@@ -111,7 +118,7 @@ func TestScanWithBase(t *testing.T) {
 			expected: []string{"https://cdn.other.com"},
 		},
 		{
-			name:     "invalid base drops relatives (equals Scan)",
+			name:     "relative base drops relatives (equals Scan)",
 			html:     `<html><body><script src="js/app.js"></script><script src="https://cdn.other.com/lib.js"></script></body></html>`,
 			base:     "not-an-absolute-url",
 			expected: []string{"https://cdn.other.com"},
@@ -121,6 +128,18 @@ func TestScanWithBase(t *testing.T) {
 			html:     `<html><body><script src="js/app.js"></script></body></html>`,
 			base:     "ftp://files.example.com/x",
 			expected: []string{},
+		},
+		{
+			name:     "protocol-relative base takes https",
+			html:     `<html><body><img src="a.png"></body></html>`,
+			base:     "//cdn.example/x/",
+			expected: []string{"https://cdn.example"},
+		},
+		{
+			name:     "base href is trimmed like the browser trims it",
+			html:     `<html><body><img src="a.png"></body></html>`,
+			base:     " https://ws.example/ ",
+			expected: []string{"https://ws.example"},
 		},
 		{
 			name:     "data uri still dropped even with a base",
@@ -138,7 +157,7 @@ func TestScanWithBase(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			origins := ScanWithBase(tt.html, tt.base)
+			origins := ScanDoc(`<base href="` + tt.base + `">` + tt.html)
 			sort.Strings(origins)
 			sort.Strings(tt.expected)
 			assert.Equal(t, tt.expected, origins)
@@ -146,9 +165,10 @@ func TestScanWithBase(t *testing.T) {
 	}
 }
 
-// TestScanWithBaseMatchesScanWithoutBase proves the no-base path is byte-for-byte
-// identical to Scan: an empty or invalid base must not change the result at all.
-func TestScanWithBaseMatchesScanWithoutBase(t *testing.T) {
+// TestScanDocWithoutUsableBaseMatchesScan proves the no-base path is identical
+// to Scan: a document with no base, or one whose governing base is not an
+// absolute http(s) URL, must scan exactly as if the tag were not there.
+func TestScanDocWithoutUsableBaseMatchesScan(t *testing.T) {
 	samples := []string{
 		`<html><body></body></html>`,
 		`<html><head><script src="https://cdn.example.com/lib.js"></script></head></html>`,
@@ -156,14 +176,106 @@ func TestScanWithBaseMatchesScanWithoutBase(t *testing.T) {
 		`<html><body><script type="module">import x from "./util.js"</script></body></html>`,
 		`<html><body><img src="//proto.example.com/x.png"></body></html>`,
 	}
+	prefixes := []string{
+		``,
+		`<base href="">`,
+		`<base href="not-an-absolute-url">`,
+		`<base href="ftp://files.example.com/x">`,
+		`<base target="_blank">`,
+	}
 	for _, s := range samples {
 		want := Scan(s)
 		sort.Strings(want)
 
-		for _, base := range []string{"", "not-an-absolute-url", "ftp://files.example.com/x"} {
-			got := ScanWithBase(s, base)
+		for _, prefix := range prefixes {
+			got := ScanDoc(prefix + s)
 			sort.Strings(got)
-			assert.Equal(t, want, got, "ScanWithBase(_, %q) should equal Scan", base)
+			assert.Equal(t, want, got, "ScanDoc with prefix %q should equal Scan", prefix)
 		}
+	}
+}
+
+// TestScanDoc covers the av-wu9d contract: the document's own <base> governs
+// relatives but is never itself reported as a contact.
+func TestScanDoc(t *testing.T) {
+	tests := []struct {
+		name     string
+		html     string
+		expected []string
+	}{
+		{
+			name:     "base tag itself is never reported",
+			html:     `<html><head><base href="https://source.example.com/blog/post"></head><body><h1>hi</h1></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "inherited relative resolves through preserved base",
+			html:     `<html><head><base href="https://source.example.com/blog/post"></head><body><img src="/images/logo.png"></body></html>`,
+			expected: []string{"https://source.example.com"},
+		},
+		{
+			name:     "relative fetch literal resolves through preserved base",
+			html:     `<html><head><base href="https://source.example.com/blog/post"></head><body><script>fetch('/api/data')</script></body></html>`,
+			expected: []string{"https://source.example.com"},
+		},
+		{
+			name:     "authored local without base stays local",
+			html:     `<html><body><h1>hi</h1><img src="/new.png"></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "absolute refs unaffected by doc base",
+			html:     `<html><head><base href="https://source.example.com/x"></head><body><script src="https://cdn.other.com/lib.js"></script></body></html>`,
+			expected: []string{"https://cdn.other.com"},
+		},
+		{
+			name:     "non-http doc base is ignored",
+			html:     `<html><head><base href="ftp://files.example.com/x"></head><body><img src="/a.png"></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "relative doc base is ignored",
+			html:     `<html><head><base href="/rooted/base"></head><body><img src="/a.png"></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "first base with an href governs, even an empty one",
+			html:     `<html><head><base href=""><base href="https://late.example/"></head><body><img src="a.png"></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "a relative first base shadows a later absolute one",
+			html:     `<html><head><base href="/local/"><base href="https://late.example/"></head><body><img src="a.png"></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "base without href is skipped",
+			html:     `<html><head><base target="_blank"><base href="https://second.example/"></head><body><img src="a.png"></body></html>`,
+			expected: []string{"https://second.example"},
+		},
+		{
+			name:     "base in svg foreign content does not govern",
+			html:     `<html><body><svg><base href="https://svg.example/"></base></svg><img src="a.png"></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "base inside an inert template does not govern",
+			html:     `<html><head><template><base href="https://tmpl.example/"></template></head><body><img src="a.png"></body></html>`,
+			expected: []string{},
+		},
+		{
+			name:     "anchor href still ignored with doc base",
+			html:     `<html><head><base href="https://source.example.com/x"></head><body><a href="page2.html">next</a></body></html>`,
+			expected: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origins := ScanDoc(tt.html)
+			sort.Strings(origins)
+			sort.Strings(tt.expected)
+			assert.Equal(t, tt.expected, origins)
+		})
 	}
 }
