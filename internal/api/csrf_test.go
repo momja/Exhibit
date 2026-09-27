@@ -97,6 +97,7 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/profile"},
 	{route: "/partials/agent-preview"},
 	{route: "/partials/card-widget"},
+	{route: "/partials/tag-panel"},
 	// The owner's share panel, re-rendered after a change (av-6xjd). It reads
 	// that artifact's share rows and renders them; every mutation the panel
 	// makes goes to /api/shares or the artifact PATCH, under an unsafe method

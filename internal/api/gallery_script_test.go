@@ -41,6 +41,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"detail.statesync.test.mjs",
 		"edit.origins.test.mjs",
 		"share.test.mjs",
+		"tags.test.mjs",
 		"agent.net.test.mjs",
 		"components.popover.test.mjs",
 		// Not a page script: render.shim.test.mjs runs the render preamble,

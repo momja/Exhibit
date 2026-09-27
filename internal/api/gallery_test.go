@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,7 +49,6 @@ func TestGalleryIndexRendersTagPills(t *testing.T) {
 	// Pills are neutral (single low-saturation color) with the tag color
 	// carried by a leading dot — not a filled-color pill — so a row of tags
 	// reads as metadata, not as headers bigger than the card title.
-	assert.Contains(t, page, `<ul class="tag-pills" data-artifact-id="`+id+`">`)
 	assert.Contains(t, page, `<li class="tag-pill" data-tag-id="`+dark.ID+`">`)
 	assert.Contains(t, page, `<span class="tag-dot" style="background:#ffffff" aria-hidden="true"></span>`)
 	assert.Contains(t, page, `<span class="tag-pill-label">charts</span>`)
@@ -58,23 +58,24 @@ func TestGalleryIndexRendersTagPills(t *testing.T) {
 	assert.NotContains(t, page, `style="background:#ffffff;color:`)
 	assert.NotContains(t, page, `style="background:#111111;color:`)
 
-	// Untagged card: no empty pill row, but still a trailing '+' to add the
-	// first tag (tww.2.5).
-	assert.NotContains(t, page, `<ul class="tag-pills" data-artifact-id="`+untaggedID+`">`)
-	assert.Contains(t, page, `<button type="button" class="tag-add-btn" data-artifact-id="`+untaggedID+`" aria-label="Add tag">`)
+	// Untagged card: no pill row and no add control.
+	assert.Equal(t, 1, strings.Count(page, `<ul class="tag-pills">`), "only the tagged card renders a pill row")
+	assert.Contains(t, page, `/artifacts/`+untaggedID+`/edit`)
+	assert.NotContains(t, page, `tag-add-btn`)
 
 	// Tags are smaller than the title: pill 11px vs card-title 15px, so the row
 	// never outweighs the artifact name it belongs to.
-	css := galleryAsset(t, r, "/assets/gallery/index.css")
+	css := galleryAsset(t, r, "/assets/gallery/components.css")
 	assert.Contains(t, css, `.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px`)
 	// The dot and label flow together as one flex group; symmetric padding
 	// centers that group so the right side isn't padded more than the left.
 	// The dot is NOT absolutely positioned — it is a normal flex item.
 	assert.Contains(t, css, `.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#888;transition:opacity .12s ease}`)
-	assert.Contains(t, css, `.card-title{font-size:15px;font-weight:600`)
+	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/index.css"), `.card-title{font-size:15px;font-weight:600`)
 }
 
-func TestTagPillHoverControls(t *testing.T) {
+// Gallery tags are static: pills only, no controls, modals or tag writes.
+func TestGalleryTagsAreStatic(t *testing.T) {
 	r := newTestRouter(t)
 	tag := createTestTag(t, r, "charts", "#FFFFFF")
 	id := createTestArtifact(t, r, "Tagged")
@@ -88,65 +89,76 @@ func TestTagPillHoverControls(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
-	// Pencil (edit) on the left of the label, x (detach) on the right —
-	// both real <button>s so they're keyboard-focusable, and both carry the
-	// data the click handlers need.
-	assert.Contains(t, page, `<button type="button" class="tag-pill-edit" data-tag-id="`+tag.ID+`" data-tag-name="charts" data-tag-color="#ffffff" aria-label="Edit tag charts"><i class="ph ph-pencil-simple"></i></button>`)
-	assert.Contains(t, page, `<span class="tag-pill-label">charts</span>`)
-	assert.Contains(t, page, `<button type="button" class="tag-pill-detach" data-tag-id="`+tag.ID+`" data-artifact-id="`+id+`" aria-label="Remove tag charts from this artifact"><i class="ph ph-x"></i></button>`)
+	assert.Contains(t, page, `<li class="tag-pill" data-tag-id="`+tag.ID+`"><span class="tag-dot" style="background:#ffffff" aria-hidden="true"></span><span class="tag-pill-label">charts</span></li>`)
+	for _, gone := range []string{"tag-pill-edit", "tag-pill-detach", "tag-add-btn", "tag-edit-modal", "tag-add-modal", "DEFAULT_TAG_COLOR"} {
+		assert.NotContains(t, page, gone)
+	}
 
-	// Hidden-until-hover/focus is CSS-driven (opacity/pointer-events on
-	// .tag-pill-edit/.tag-pill-detach). The controls are absolutely positioned
-	// over the pill's end caps (overlay) so revealing them never shifts the
-	// pill; the dot fades out when the edit pencil enters the left cap.
-	css := galleryAsset(t, r, "/assets/gallery/index.css")
-	assert.Contains(t, css, `.tag-pill-edit,.tag-pill-detach{position:absolute`)
-	assert.Contains(t, css, `opacity:0;pointer-events:none`)
-	assert.Contains(t, css, `.tag-pill:hover .tag-dot,.tag-pill:focus-within .tag-dot{opacity:0}`)
+	js := galleryAsset(t, r, "/assets/gallery/index.js")
+	assert.NotContains(t, js, "/api/tags")
+	assert.NotContains(t, js, "function openAddTagModal(")
+	assert.NotContains(t, js, "function openEditTagModal(")
 }
 
-func TestGalleryIndexRendersEditTagModal(t *testing.T) {
+// The edit page's Tags panel: per-tag controls, an add dropdown of unattached
+// tags, the edit-tag modal, and an htmx-refreshed body.
+func TestEditPageRendersTagsPanel(t *testing.T) {
 	r := newTestRouter(t)
+	charts := createTestTag(t, r, "charts", "#FFFFFF")
+	other := createTestTag(t, r, "other", "")
+	id := createTestArtifact(t, r, "Tagged")
+	w := doJSON(t, r, "POST", "/api/tags/"+charts.ID+"/artifacts/"+id, nil)
+	require.Equal(t, http.StatusNoContent, w.Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-	page := w.Body.String()
+	req := httptest.NewRequest("GET", "/artifacts/"+id+"/edit", nil)
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req)
+	require.Equal(t, http.StatusOK, w2.Code)
+	page := w2.Body.String()
 
-	// One shared, initially-hidden modal shell per page load; per-tag state
-	// is populated by openEditTagModal in the page script.
+	assert.Contains(t, page, `<details class="details-panel" id="tags-panel">`)
+	assert.Contains(t, page, `hx-get="/partials/tag-panel?artifact=`+id+`"`)
+	assert.Contains(t, page, `hx-trigger="exhibit:tags-changed from:body"`)
+	assert.Contains(t, page, `data-action="edit-tag" data-tag-id="`+charts.ID+`" data-tag-name="charts" data-tag-color="#ffffff"`)
+	assert.Contains(t, page, `data-action="detach-tag" data-tag-id="`+charts.ID+`" aria-label="Remove tag charts from this artifact"`)
+	// The dropdown offers what is not yet attached.
+	assert.Contains(t, page, `<option value="`+other.ID+`">other</option>`)
+	assert.NotContains(t, page, `<option value="`+charts.ID+`">`)
+	assert.Contains(t, page, `<option value="__new__">+ Create new tag</option>`)
+	assert.Contains(t, page, `id="tag-add-color-hex" class="field" value="#6b7280"`)
+	// The library-wide edit dialog, and the script that drives both.
 	assert.Contains(t, page, `<div id="tag-edit-modal" class="modal-overlay" hidden>`)
-	assert.Contains(t, page, `<input type="text" id="tag-edit-name" maxlength="60">`)
-	assert.Contains(t, page, `<div class="color-presets">`)
 	assert.Contains(t, page, `data-color="#6B7280"`) // store.DefaultTagColor preset
-	assert.Contains(t, page, `id="tag-edit-color-hex"`)
 	assert.Contains(t, page, `id="tag-edit-delete"`)
-	assert.Contains(t, page, `id="tag-edit-save"`)
-	// The modal's behavior lives in the static page script the page loads.
-	assert.Contains(t, page, `<script src="/assets/gallery/index.js"></script>`)
-	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/index.js"), `function openEditTagModal(`)
+	assert.Contains(t, page, `<script src="/assets/gallery/tags.js"></script>`)
+	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/tags.js"), "exhibit:tags-changed")
 }
 
-func TestGalleryIndexRendersAddTagModal(t *testing.T) {
+// /partials/tag-panel reflects current tags and 404s for a missing artifact.
+func TestTagPanelPartial(t *testing.T) {
 	r := newTestRouter(t)
 	tag := createTestTag(t, r, "charts", "")
+	id := createTestArtifact(t, r, "Tagged")
 
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	get := func(artifact string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", "/partials/tag-panel?artifact="+artifact, nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w
+	}
+
+	w := get(id)
 	require.Equal(t, http.StatusOK, w.Code)
-	page := w.Body.String()
+	assert.Contains(t, w.Body.String(), "This artifact has no tags.")
+	assert.Contains(t, w.Body.String(), `<option value="`+tag.ID+`">charts</option>`)
 
-	// One shared, initially-hidden modal shell with a dropdown built from
-	// every existing tag, plus a "create new" option that reveals the same
-	// name+color fields as the edit-tag modal.
-	assert.Contains(t, page, `<div id="tag-add-modal" class="modal-overlay" hidden>`)
-	assert.Contains(t, page, `<option value="`+tag.ID+`">charts</option>`)
-	assert.Contains(t, page, `<option value="__new__">+ Create new tag</option>`)
-	assert.Contains(t, page, `<input type="text" id="tag-add-name" maxlength="60">`)
-	assert.Contains(t, page, `id="tag-add-confirm"`)
-	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/index.js"), `function openAddTagModal(`)
+	require.Equal(t, http.StatusNoContent, doJSON(t, r, "POST", "/api/tags/"+tag.ID+"/artifacts/"+id, nil).Code)
+	w = get(id)
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `data-action="detach-tag" data-tag-id="`+tag.ID+`"`)
+	assert.NotContains(t, w.Body.String(), `<option value="`+tag.ID+`">`)
+
+	assert.Equal(t, http.StatusNotFound, get("no-such-artifact").Code)
 }
 
 // Search filters eagerly as the user types: an inline input with a debounce
@@ -487,7 +499,7 @@ func TestEditPageShowsBlockedOriginsDistinctlyFromUndecided(t *testing.T) {
 	decisions := []store.OriginDecision{
 		{Origin: "https://blocked.example.com", Decision: store.DecisionBlock, Source: "runtime"},
 	}
-	page, err := renderEditPage(a, decisions, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "")
+	page, err := renderEditPage(a, decisions, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let blocked = ["https://blocked.example.com"];`,
@@ -512,7 +524,7 @@ func TestEditPageCanForgetABlockDecision(t *testing.T) {
 	decisions := []store.OriginDecision{
 		{Origin: "https://tracker.example.com", Decision: store.DecisionBlock, Source: "runtime"},
 	}
-	page, err := renderEditPage(a, decisions, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
+	page, err := renderEditPage(a, decisions, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 	assert.Contains(t, page, `data-action="forget"`)
 	assert.Contains(t, page, `data-action="allow"`,
@@ -535,7 +547,7 @@ func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
 	payload := `https://x"><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Edit XSS", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
+	page, err := renderEditPage(a, allowDecisions(payload), nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `<code title="https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
@@ -553,7 +565,7 @@ func TestEditPageSurfacesUnapprovedOriginsWithoutSeedingAllowlist(t *testing.T) 
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "No auto-seed", Tier: store.Tier1,
 		CreatedAt: time.Now()}
 	src := `<script src="https://cdn.example.com/lib.js"></script>`
-	page, err := renderEditPage(a, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "")
+	page, err := renderEditPage(a, nil, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `data-origin="https://cdn.example.com"`)
@@ -573,7 +585,7 @@ func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 	payload := `https://evil</script><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Script Breakout", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderEditPage(a, allowDecisions(payload), "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
+	page, err := renderEditPage(a, allowDecisions(payload), nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let allowlist = ["https://evil\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e"];`,
@@ -588,7 +600,7 @@ func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 func TestEditPageShowsLinksCapabilitySelect(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Links", Tier: store.Tier1,
 		CreatedAt: time.Now(), LinksApproved: true}
-	page, err := renderEditPage(a, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
+	page, err := renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `<span class="spacer">External links</span>`)
@@ -596,7 +608,7 @@ func TestEditPageShowsLinksCapabilitySelect(t *testing.T) {
 	assert.Contains(t, page, "let linksApproved = true;")
 
 	a.LinksApproved = false
-	page, err = renderEditPage(a, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
+	page, err = renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 	assert.Contains(t, page, "let linksApproved = false;")
 

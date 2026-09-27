@@ -1000,7 +1000,7 @@ editor (an esbuild-built, `go:embed`-served bundle) and the **renderer iframe**
 but search filters eagerly from the client: a debounced input refetches the
 same server-rendered gallery with the query and swaps only the grid, so the
 FTS5 search query stays authoritative without a full page reload. Filter,
-tag/collection management, and the allowlist editor are full-page server renders.
+collection management, and the allowlist editor are full-page server renders.
 
 **The detail page never embeds the artifact's source** (agaf-02xs). The code
 lives one click away on the edit page, in CodeMirror, which is the surface built

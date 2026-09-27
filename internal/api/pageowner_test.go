@@ -95,6 +95,8 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 		ownPath: "/partials/agent-preview?artifact={id}", foreignPath: "/partials/agent-preview?artifact={id}"},
 	{route: "/partials/card-widget", ownerScoped: true,
 		ownPath: "/partials/card-widget?artifact={id}", foreignPath: "/partials/card-widget?artifact={id}"},
+	{route: "/partials/tag-panel", ownerScoped: true,
+		ownPath: "/partials/tag-panel?artifact={id}", foreignPath: "/partials/tag-panel?artifact={id}"},
 	// The owner's share panel (av-6xjd). Owner-scoped for a reason beyond the
 	// usual one: the fragment lists *who else* an artifact was given to, and a
 	// guest list is exactly the thing a recipient — let alone another tenant —
