@@ -302,7 +302,7 @@ and add real thumbnails later without schema changes.
 
 **As built: server-rendered pages via the stdlib `html/template`** — templates in
 `internal/api/templates/` (committed source, `go:embed`-ed), handlers and view models
-in `internal/api/gallery.go` (epi-q0u2). Each page's CSS and JS are static assets
+in `internal/api/`, one file per page (epi-q0u2). Each page's CSS and JS are static assets
 authored in the `web/gallery/` workspace, copied into the embedded assets at build
 time (§13), and served under `/assets/gallery/`; per-request values reach the page
 scripts through a small inline bootstrap `<script>` that html/template JSON-encodes.

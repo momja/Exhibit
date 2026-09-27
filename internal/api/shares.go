@@ -332,7 +332,7 @@ func (ro *Router) listArtifactShares(w http.ResponseWriter, r *http.Request) {
 
 // artifactSharesView is one artifact's sharing state, and it is deliberately
 // one type serving two consumers: the JSON route above, and the owner's
-// server-rendered share panel (gallery.go). The panel is the surface people
+// server-rendered share panel (detail.go). The panel is the surface people
 // use and the route is what a script or a curl can audit with; splitting them
 // would be two answers to "who can open this" with nothing keeping them equal.
 //
