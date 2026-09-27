@@ -129,11 +129,8 @@ type readerOnly struct{}
 
 func (readerOnly) Read([]byte) (int, error) { return 0, nil }
 
-// TestS3StoreGetMapsNoSuchKeyToNotExist pins the half of the Get contract the
-// shared suite can only reach with a real bucket configured: S3 reports a
-// missing key as an error code, and Store promises fs.ErrNotExist for it
-// (av-wu9d). A refusal is not a missing blob, and must not read as one, or a
-// body PATCH would overwrite bytes it merely could not see.
+// S3 reports a missing key as NoSuchKey, which Get must turn into
+// fs.ErrNotExist. Other errors, such as AccessDenied, must not match it.
 func TestS3StoreGetMapsNoSuchKeyToNotExist(t *testing.T) {
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s3Error := func(status int, code string) {

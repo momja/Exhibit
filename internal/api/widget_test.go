@@ -401,9 +401,7 @@ func TestWidgetBlobIDIsNotPatchable(t *testing.T) {
 		"and the artifact still has no widget of its own")
 }
 
-// The widget routes report the same footprint as everything else, with the
-// render origin dropped, so a widget that loads its artifact's own assets is
-// not told those assets are unapproved. (av-wu9d review)
+// The widget routes leave the render origin out of the footprint.
 func TestWidgetFootprintDropsTheRenderOrigin(t *testing.T) {
 	r := newTestRouter(t)
 	id := createArtifact(t, r, map[string]any{

@@ -413,8 +413,7 @@ func TestPatchArtifactSameFootprintReportsNoChange(t *testing.T) {
 	assert.Equal(t, second, getArtifactBody(t, r, id))
 }
 
-// patchBodyFootprint PATCHes a new source body and decodes the footprint half
-// of the update response.
+// patchBodyFootprint PATCHes a new source body and returns the update response.
 func patchBodyFootprint(t *testing.T, r *Router, id, body string) updateArtifactResponse {
 	t.Helper()
 	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{"body": body})
@@ -436,11 +435,8 @@ func ingestFootprint(t *testing.T, r *Router, payload map[string]any) (string, [
 	return resp["artifact"].(map[string]any)["id"].(string), footprint
 }
 
-// TestPatchURLEditKeepsIngestFootprint is the av-wu9d acceptance pin: a
-// trivial edit to the body a URL ingest actually stored reports the footprint
-// ingest reported, exactly, with no change flagged. Editing the stored bytes
-// rather than a hand-written copy is the point: the injected base is whatever
-// InjectBaseHref produced.
+// A trivial edit to the body a URL ingest stored reports the same footprint
+// ingest did, with no change flagged.
 func TestPatchURLEditKeepsIngestFootprint(t *testing.T) {
 	r := newTestRouter(t)
 
@@ -461,11 +457,8 @@ func TestPatchURLEditKeepsIngestFootprint(t *testing.T) {
 	assert.False(t, updated.FootprintChanged)
 }
 
-// A fetched page that declares its own <base> keeps it (InjectBaseHref skips
-// injection), so its relatives reach that base's origin and not the page URL.
-// Ingest used to resolve them against the page URL and drop the base tag's
-// origin, asking the user to approve a host the artifact never contacts while
-// CSP blocked the one it does. (av-wu9d review)
+// A fetched page that declares its own <base> keeps it, so its relatives
+// resolve against that base and not the page URL.
 func TestURLIngestFollowsThePagesOwnBase(t *testing.T) {
 	r := newTestRouter(t)
 
@@ -481,9 +474,7 @@ func TestURLIngestFollowsThePagesOwnBase(t *testing.T) {
 	assert.False(t, updated.FootprintChanged)
 }
 
-// A pasted document's own <base> governs its relatives too. Before, paste
-// ingest ran a scan that drops relatives, and once the base tag stopped being
-// reported the footprint came back empty: nothing to approve at the door.
+// A pasted document's own <base> governs its relatives too.
 func TestPasteIngestFollowsTheDocumentsOwnBase(t *testing.T) {
 	r := newTestRouter(t)
 
@@ -494,9 +485,7 @@ func TestPasteIngestFollowsTheDocumentsOwnBase(t *testing.T) {
 	assert.Equal(t, []string{"https://x.com"}, ingested)
 }
 
-// TestPatchDetectsRelativeChangeUnderStableBase covers the case plain Scan
-// misses while the injected base is preserved on both sides: adding or
-// removing a relative changes what the page contacts, so the gate must fire.
+// Adding or removing a relative under an unchanged base changes the footprint.
 func TestPatchDetectsRelativeChangeUnderStableBase(t *testing.T) {
 	r := newTestRouter(t)
 
@@ -519,10 +508,8 @@ func TestPatchDetectsRelativeChangeUnderStableBase(t *testing.T) {
 	assert.True(t, removed.FootprintChanged, "removed relative must report a footprint change")
 }
 
-// TestPatchDroppedBaseResolvesLocally pins the Exhibit-namespace rule: once
-// the author deletes the fallback tag, surviving relatives are local paths
-// (render origin), not source contacts, so the scan must not attribute them
-// to the source site.
+// Once the base tag is deleted, relatives resolve against the render origin,
+// so they are not reported as source-site contacts.
 func TestPatchDroppedBaseResolvesLocally(t *testing.T) {
 	r := newTestRouter(t)
 
@@ -538,11 +525,8 @@ func TestPatchDroppedBaseResolvesLocally(t *testing.T) {
 	assert.True(t, updated.FootprintChanged)
 }
 
-// A body whose bytes are gone has no baseline to diff, and the rewrite is the
-// only way to repair the artifact. So the PATCH goes through, the bundled
-// title applies, and the unknown comparison reports a change so the approval
-// gate still runs. Refusing it instead left every body PATCH on that artifact
-// answering 500 forever. (av-wu9d review)
+// When the previous body is missing, the PATCH still writes the new body and
+// the bundled title, and reports the footprint as changed.
 func TestPatchMissingOldBodyRepairsTheArtifact(t *testing.T) {
 	r, blobDir := newTestRouterWithBlobDir(t)
 
@@ -565,9 +549,8 @@ func TestPatchMissingOldBodyRepairsTheArtifact(t *testing.T) {
 	assert.Equal(t, `"renamed"`, artifactField(t, r, id, "title"))
 }
 
-// failingGets is a blob store whose Get fails the way an outage does, with an
-// error that is not fs.ErrNotExist, and which counts Puts so a test can show
-// nothing was written after the failure.
+// failingGets is a blob store whose Get always fails with an error other than
+// fs.ErrNotExist. It counts Puts.
 type failingGets struct {
 	blob.Store
 	puts int
@@ -582,10 +565,8 @@ func (f *failingGets) Put(ctx context.Context, id string, body io.Reader) error 
 	return f.Store.Put(ctx, id, body)
 }
 
-// A read that fails for any other reason aborts the PATCH before anything is
-// written: not the body, not the title bundled with it. A silent empty
-// baseline would report a phantom diff against a body the store could not
-// show us, and overwrite it. (av-wu9d)
+// Any other read failure aborts the PATCH before anything is written,
+// including the bundled title.
 func TestPatchUnreadableOldBodyWritesNothing(t *testing.T) {
 	r := newTestRouter(t)
 

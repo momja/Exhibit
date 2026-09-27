@@ -18,28 +18,23 @@ import (
 
 // Scan parses an HTML document and returns a deduplicated list of origins
 // referenced by src, href, action attributes and inline fetch/import calls.
-// Relative references are dropped, even when the document declares a <base>;
-// use ScanDoc to resolve them the way the browser will.
+// Relative references are dropped, even when the document has a <base>. Use
+// ScanDoc to resolve them.
 func Scan(body string) []string {
 	return scan(body, false)
 }
 
 // ScanDoc behaves like Scan but resolves relative references against the
-// document's own <base href> when that is an absolute http(s) URL, and drops
-// them otherwise, because without one they resolve against the render
-// document's URL and stay local. The base element itself is never reported:
-// it tells the browser where relatives go and fetches nothing, so only what
-// resolves through it is a contact. This is the scan for any body that will
-// be stored or rendered as it stands. A URL ingest's injected fallback base
-// (snapshot.InjectBaseHref) is honoured while the tag is there, and relatives
-// an author writes after deleting it are read as local. (av-wu9d)
+// document's own <base href> when that is an absolute http(s) URL. Without
+// one, relatives resolve against the render origin, so they are dropped. The
+// <base> element itself is never reported.
 func ScanDoc(body string) []string {
 	return scan(body, true)
 }
 
-// scan is the shared implementation behind Scan and ScanDoc. It parses the
-// document once; followDocBase decides whether relative references resolve
-// through the document's own base or are dropped.
+// scan is the shared implementation behind Scan and ScanDoc. followDocBase
+// decides whether relatives resolve through the document's own base or are
+// dropped.
 func scan(body string, followDocBase bool) []string {
 	doc, err := html.Parse(strings.NewReader(body))
 	if err != nil {
@@ -90,14 +85,10 @@ func parseBase(baseURL string) *url.URL {
 	return u
 }
 
-// docBase returns the URL the browser resolves the document's relative
-// references against, when that is an absolute http(s) URL, and nil
-// otherwise. It applies the HTML rule rather than taking the first tag that
-// looks like one: the first base element in tree order that has an href
-// attribute decides, even when the href is empty (which leaves relatives on
-// the document URL). A base inside SVG or MathML is not an HTML base, and one
-// inside a <template> is inert, so neither counts. The href is trimmed and a
-// protocol-relative one takes https, as resolveOrigin does for references.
+// docBase returns the document's base URL when it is an absolute http(s) URL,
+// and nil otherwise. As in the browser, the first base element with an href
+// wins even if the href is empty, and a base inside SVG, MathML or <template>
+// doesn't count. A protocol-relative href takes https, like resolveOrigin.
 func docBase(doc *html.Node) *url.URL {
 	href, ok := firstBaseHref(doc)
 	if !ok {
@@ -110,9 +101,8 @@ func docBase(doc *html.Node) *url.URL {
 	return parseBase(href)
 }
 
-// firstBaseHref finds the href of the document's governing base element for
-// docBase. The html parser lowercases tag and attribute names, so exact
-// matches suffice.
+// firstBaseHref returns the href of the base element docBase uses. The html
+// parser lowercases tag and attribute names, so exact matches suffice.
 func firstBaseHref(n *html.Node) (string, bool) {
 	if n.Type == html.ElementNode && n.Namespace == "" {
 		switch n.Data {
@@ -135,8 +125,7 @@ func firstBaseHref(n *html.Node) (string, bool) {
 }
 
 // walkHTML traverses the HTML node tree and calls add for each URL attribute
-// found. A <base> is skipped because it fetches nothing: what resolves
-// through it is reported, the tag itself never is. (av-wu9d)
+// found. <base> is skipped because it fetches nothing itself.
 func walkHTML(n *html.Node, add func(string)) {
 	if n.Type == html.ElementNode && n.Data != "base" {
 		for _, attr := range n.Attr {

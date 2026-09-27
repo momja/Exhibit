@@ -362,19 +362,14 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		req.Body, runtimeAssets, snapReport = snapshotBody(r.Context(), req.URL, req.Body, collector.sink)
 	}
 
-	// Option A fallback (exhibit-lwb.6): relative references that survive
-	// ingest (snapshot off, failed, or partial) would otherwise resolve
-	// against the render origin and 404. The injected base points them back
-	// at the source site; whether that origin is reachable stays the
-	// allowlist's decision. A page that declares its own base keeps it.
+	// Relative references that survive ingest would otherwise resolve against
+	// the render origin. The injected base points them at the source site. A
+	// page that declares its own base keeps it.
 	if req.URL != "" {
 		req.Body = snapshot.InjectBaseHref(req.Body, req.URL)
 	}
-	// Scanned after the injection, as the body will be stored: relatives
-	// resolve through whichever base the stored document carries, which is
-	// the rule a later edit and the edit page apply to the same bytes
-	// (av-wu9d). The base tag itself is never reported, so a fully vendored
-	// artifact keeps its empty footprint.
+	// Scan the body as it will be stored, so ingest and later edits resolve
+	// relatives through the same base.
 	footprint := networkFootprint(req.Body, ro.cfg.RenderOrigin)
 	if snapReport != nil {
 		snapReport.ResidualOrigins = footprint
@@ -598,13 +593,9 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 			bodySet = true
 			// Read the previous body before it is overwritten so the edit
 			// dialog can tell whether the network footprint actually changed.
-			// Two failures, handled differently (av-wu9d). A body that is gone
-			// leaves no baseline, and this rewrite is the only way to repair
-			// the artifact, so it goes ahead with the comparison marked
-			// unknown, which reports the footprint as changed and runs the
-			// approval gate. Any other failure aborts before anything is
-			// written, rather than overwriting bytes the store could not show
-			// us.
+			// A missing body can't be compared, but this rewrite repairs it,
+			// so go ahead and report the footprint as changed. Any other read
+			// failure aborts before anything is written. (av-wu9d)
 			rc, gerr := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
 			switch {
 			case errors.Is(gerr, fs.ErrNotExist):
@@ -659,9 +650,7 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	// it differs from before — so the edit dialog can re-run the explicit
 	// approval flow the way ingest does. Edits that don't touch the body, or
 	// that leave the network footprint unchanged, report no change and stay on
-	// the existing allowlist. Both sides go through networkFootprint, the rule
-	// ingest applied to the stored body, so an edit compares like with like. A
-	// lost baseline is an unknown comparison and counts as a change. The
+	// the existing allowlist. A missing previous body counts as a change. The
 	// allowlist itself is never seeded from here.
 	var footprint []string
 	footprintChanged := false
@@ -907,8 +896,7 @@ func (ro *Router) withoutRenderOrigin(origins []string) []string {
 	return withoutOrigin(origins, ro.cfg.RenderOrigin)
 }
 
-// withoutOrigin is withoutRenderOrigin for a caller that holds the render
-// origin rather than the Router.
+// withoutOrigin is withoutRenderOrigin for callers without a Router.
 func withoutOrigin(origins []string, renderOrigin string) []string {
 	render := canonicalOrigin(renderOrigin)
 	if render == "" {
@@ -924,12 +912,10 @@ func withoutOrigin(origins []string, renderOrigin string) []string {
 	return out
 }
 
-// networkFootprint is the footprint reported for a body wherever one is shown:
-// ingest, a body PATCH, the edit page and the widget routes. Relatives resolve
-// through the document's own <base> the way the browser will resolve them
-// (scanner.ScanDoc), and the render origin is dropped (withoutRenderOrigin).
-// It is one function so those surfaces cannot disagree about one body; that
-// disagreement was av-wu9d.
+// networkFootprint returns the origins a stored body will contact. Relative
+// references resolve through the body's own <base>, and the render origin is
+// left out. Ingest, PATCH, the edit page and the widget routes all use it, so
+// they report the same footprint for the same body. (av-wu9d)
 func networkFootprint(body, renderOrigin string) []string {
 	return withoutOrigin(scanner.ScanDoc(body), renderOrigin)
 }

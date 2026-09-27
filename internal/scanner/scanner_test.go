@@ -60,8 +60,7 @@ func TestScan(t *testing.T) {
 	}
 }
 
-// TestScanDocResolvesThroughDocBase: relatives resolve against the document's
-// own <base>, exactly where the browser sends them.
+// Relatives resolve against the document's own <base>.
 func TestScanDocResolvesThroughDocBase(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -165,9 +164,7 @@ func TestScanDocResolvesThroughDocBase(t *testing.T) {
 	}
 }
 
-// TestScanDocWithoutUsableBaseMatchesScan proves the no-base path is identical
-// to Scan: a document with no base, or one whose governing base is not an
-// absolute http(s) URL, must scan exactly as if the tag were not there.
+// With no usable base, ScanDoc returns exactly what Scan does.
 func TestScanDocWithoutUsableBaseMatchesScan(t *testing.T) {
 	samples := []string{
 		`<html><body></body></html>`,
@@ -195,8 +192,7 @@ func TestScanDocWithoutUsableBaseMatchesScan(t *testing.T) {
 	}
 }
 
-// TestScanDoc covers the av-wu9d contract: the document's own <base> governs
-// relatives but is never itself reported as a contact.
+// The document's own <base> governs relatives but is never reported itself.
 func TestScanDoc(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -546,10 +546,8 @@ func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
 		"raw payload must never reach allowlist row markup")
 }
 
-// The edit page lists the footprint the write paths report, with the render
-// origin dropped. An artifact's own asset URLs live there (av-oz40), and an
-// Allow row for it could never clear: every write path drops that origin, so
-// clicking Allow writes nothing. (av-wu9d review)
+// The edit page never offers the render origin as an Allow row. The write
+// paths drop it, so the row would never clear.
 func TestEditPageNeverOffersTheRenderOrigin(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Vendored", Tier: store.Tier1,
 		CreatedAt: time.Now()}
