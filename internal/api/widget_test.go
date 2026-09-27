@@ -224,6 +224,7 @@ func TestEditPageSectionsAreSymmetricPanels(t *testing.T) {
 	page := w.Body.String()
 
 	for _, panel := range []string{
+		`<details class="details-panel" id="tags-panel">`,
 		`<details class="details-panel" id="security-panel">`,
 		`<details class="details-panel" id="state-panel">`,
 		`<details class="details-panel" id="assets-panel">`,
@@ -233,8 +234,8 @@ func TestEditPageSectionsAreSymmetricPanels(t *testing.T) {
 		assert.Contains(t, page, panel)
 	}
 	// One caret definition, rendered by every summary (panelCaret partial) —
-	// security, state (av-hg5f), assets (av-20fk), source, and widget.
-	assert.Equal(t, 5, strings.Count(page, `class="ph ph-caret-right details-caret details-caret-closed"`))
+	// tags, security, state (av-hg5f), assets (av-20fk), source, and widget.
+	assert.Equal(t, 6, strings.Count(page, `class="ph ph-caret-right details-caret details-caret-closed"`))
 	// Both source fields are real textareas the editor island mounts over, so
 	// the widget source is not a second-class field.
 	assert.Contains(t, page, `<textarea id="body">`)

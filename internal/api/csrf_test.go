@@ -97,6 +97,9 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/profile"},
 	{route: "/partials/agent-preview"},
 	{route: "/partials/card-widget"},
+	// The edit page's Tags panel body. Every tag change is a JSON API
+	// call; this only re-renders what the store now says.
+	{route: "/partials/tag-panel"},
 	// The owner's share panel, re-rendered after a change (av-6xjd). It reads
 	// that artifact's share rows and renders them; every mutation the panel
 	// makes goes to /api/shares or the artifact PATCH, under an unsafe method

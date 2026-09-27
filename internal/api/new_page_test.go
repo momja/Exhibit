@@ -191,12 +191,11 @@ func TestGalleryIndexHasNoIngestMarkup(t *testing.T) {
 	assert.NotContains(t, css, ".tab-btn")
 	assert.NotContains(t, css, "#snapshot-row")
 
-	// So did the ingest script; search, tags and modals stayed.
+	// So did the ingest script; search stayed.
 	js := galleryAsset(t, r, "/assets/gallery/index.js")
 	assert.NotContains(t, js, "function ingest(")
 	assert.NotContains(t, js, "function setMode(")
 	assert.Contains(t, js, "runSearch")
-	assert.Contains(t, js, "function openAddTagModal(")
 }
 
 // The empty library points at /new rather than at an upload box that is no

@@ -284,6 +284,7 @@ func TestGalleryPages404ForAnotherOwner(t *testing.T) {
 		"/artifacts/" + foreignID,
 		"/artifacts/" + foreignID + "/edit",
 		"/partials/card-widget?artifact=" + foreignID,
+		"/partials/tag-panel?artifact=" + foreignID,
 	} {
 		req := httptest.NewRequest("GET", path, nil)
 		w := httptest.NewRecorder()

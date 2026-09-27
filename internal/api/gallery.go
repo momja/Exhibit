@@ -137,9 +137,7 @@ func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tags, _ := ro.cfg.Store.ListTags(r.Context(), ownerID)
-
-	page, err := renderGalleryPage(arts, tags, q, ro.pageCredentials(r), ro.renderURLs(r), ro.adminRequest(r))
+	page, err := renderGalleryPage(arts, q, ro.pageCredentials(r), ro.renderURLs(r), ro.adminRequest(r))
 	if err != nil {
 		serverError(w, r, "gallery index render", err)
 		return
@@ -246,8 +244,14 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	library, err := ro.cfg.Store.ListTags(r.Context(), ownerID)
+	if err != nil {
+		serverError(w, r, "gallery edit list tags", err)
+		return
+	}
+
 	canGenerate, generateHint := ro.widgetGenerateAvailability(r)
-	page, err := renderEditPage(a, decisions, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint)
+	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint)
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
@@ -356,6 +360,37 @@ func (ro *Router) cardWidgetPartial(w http.ResponseWriter, r *http.Request) {
 	fragment, err := renderPage("cardWidget", view)
 	if err != nil {
 		serverError(w, r, "card widget partial render", err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, fragment)
+}
+
+// tagPanelPartial re-renders the body of the edit page's Tags panel after an
+// attach, a detach, or a library-wide rename/recolor/delete. It exists for the
+// reason the widget preview fragment does: a reload would drop the edit page's
+// unsaved editor buffers, and rebuilding the rows in page JS would be a second
+// definition of the list over user-authored tag names.
+func (ro *Router) tagPanelPartial(w http.ResponseWriter, r *http.Request) {
+	ownerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, r.URL.Query().Get("artifact"))
+	if err != nil {
+		serverError(w, r, "tag panel partial lookup", err)
+		return
+	}
+	if a == nil {
+		// Plain-text 404: htmx leaves the target untouched on an error.
+		http.Error(w, "artifact not found", http.StatusNotFound)
+		return
+	}
+	library, err := ro.cfg.Store.ListTags(r.Context(), ownerID)
+	if err != nil {
+		serverError(w, r, "tag panel partial list tags", err)
+		return
+	}
+	fragment, err := renderPage("tagPanelBody", newTagPanelView(a, library))
+	if err != nil {
+		serverError(w, r, "tag panel partial render", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -478,6 +513,37 @@ func tagViews(tags []*store.Tag) []tagView {
 		views[i] = tagView{ID: t.ID, Name: t.Name, Color: color.Normalize(t.Color)}
 	}
 	return views
+}
+
+// tagPanelView feeds the edit page's Tags panel (tagPanelBody): the tags on
+// this artifact, the owner's other tags for the add dropdown, and the preset
+// palette plus default color for the create-new fields.
+type tagPanelView struct {
+	ArtifactID   string
+	Tags         []tagView
+	Available    []tagView
+	Presets      []string
+	DefaultColor string
+}
+
+func newTagPanelView(a *store.Artifact, library []*store.Tag) tagPanelView {
+	attached := make(map[string]bool, len(a.Tags))
+	for _, t := range a.Tags {
+		attached[t.ID] = true
+	}
+	available := []*store.Tag{}
+	for _, t := range library {
+		if !attached[t.ID] {
+			available = append(available, t)
+		}
+	}
+	return tagPanelView{
+		ArtifactID:   a.ID,
+		Tags:         tagViews(a.Tags),
+		Available:    tagViews(available),
+		Presets:      color.Presets,
+		DefaultColor: color.Normalize(store.DefaultTagColor),
+	}
 }
 
 // capabilityView is the data the capabilityCluster (badge, av-isb3) and
@@ -615,8 +681,9 @@ func newShareBadgeView(a *store.Artifact) shareBadgeView {
 	return badge
 }
 
-// galleryCard is one artifact card on the index page. The tagRow/tagPills
-// partials read ArtifactID and Tags from it directly; the capabilityCluster
+// galleryCard is one artifact card on the index page. The tagPills partial
+// reads Tags from it directly (static pills — tags are edited on the edit
+// page's Tags panel, not from the grid); the capabilityCluster
 // partial reads Capability to render the card-footer posture badge + popover
 // (av-isb3, av-41se); Widget renders the card's tile (av-fafu); Share renders
 // the sharing marker (av-6xjd), and renders nothing at all when the artifact
@@ -645,13 +712,6 @@ func newWidgetView(a *store.Artifact, urls renderURLs) widgetView {
 	return v
 }
 
-// addTagModalData feeds the addTagModal partial: every existing tag for the
-// dropdown, plus the preset palette for the create-new fields.
-type addTagModalData struct {
-	Tags    []tagView
-	Presets []string
-}
-
 // The brand palette lives in web/gallery/tokens.css (av-xgik): pages link it
 // instead of the old per-template inline :root injection. tokens.css mirrors
 // internal/color/brand.go — keep the two in sync (color.BrandBlue still
@@ -662,13 +722,10 @@ type galleryPageData struct {
 	// html/template rejects the data: scheme in URL contexts by default.
 	Favicon template.URL
 	// LogoSVG is the compiled-in brand mark (logo.go), trusted markup.
-	LogoSVG     template.HTML
-	Query       string
-	Cards       []galleryCard
-	Presets     []string
-	AddTagModal addTagModalData
+	LogoSVG template.HTML
+	Query   string
+	Cards   []galleryCard
 	pageCredentials
-	DefaultTagColor string
 	// IsAdmin reveals the header link to /admin/users (av-utap). It decides
 	// what the page *offers* and nothing else: the route carries its own
 	// adminOnly guard, so a visitor who reaches it by typing the URL is
@@ -677,7 +734,7 @@ type galleryPageData struct {
 	IsAdmin bool
 }
 
-func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query string, creds pageCredentials, urls renderURLs, isAdmin bool) (string, error) {
+func renderGalleryPage(arts []*store.Artifact, query string, creds pageCredentials, urls renderURLs, isAdmin bool) (string, error) {
 	cards := make([]galleryCard, len(arts))
 	for i, a := range arts {
 		cards[i] = galleryCard{
@@ -704,10 +761,7 @@ func renderGalleryPage(arts []*store.Artifact, tags []*store.Tag, query string, 
 		LogoSVG:         template.HTML(exhibitLogoSVG),
 		Query:           query,
 		Cards:           cards,
-		Presets:         color.Presets,
-		AddTagModal:     addTagModalData{Tags: tagViews(tags), Presets: color.Presets},
 		pageCredentials: creds,
-		DefaultTagColor: store.DefaultTagColor,
 		IsAdmin:         isAdmin,
 	})
 }
@@ -849,9 +903,14 @@ type editPageData struct {
 	// harder to diagnose than one that says what it needs.
 	CanGenerateWidget bool
 	GenerateHint      string
+	// TagPanel is the Tags panel's body — the one place an artifact's tags
+	// are changed (the gallery renders them as static pills) — and Presets
+	// feeds the edit-tag modal beside it.
+	TagPanel tagPanelView
+	Presets  []string
 }
 
-func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string) (string, error) {
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string) (string, error) {
 	allowlist, blocked := []string{}, []string{}
 	for _, d := range decisions {
 		switch d.Decision {
@@ -877,6 +936,8 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, src, wi
 		Widget:             newWidgetView(a, urls),
 		CanGenerateWidget:  canGenerate,
 		GenerateHint:       generateHint,
+		TagPanel:           newTagPanelView(a, library),
+		Presets:            color.Presets,
 		DownloadsApproved:  a.DownloadsApproved,
 		ClipboardApproved:  a.ClipboardApproved,
 		LinksApproved:      a.LinksApproved,

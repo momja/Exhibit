@@ -1000,7 +1000,20 @@ editor (an esbuild-built, `go:embed`-served bundle) and the **renderer iframe**
 but search filters eagerly from the client: a debounced input refetches the
 same server-rendered gallery with the query and swaps only the grid, so the
 FTS5 search query stays authoritative without a full page reload. Filter,
-tag/collection management, and the allowlist editor are full-page server renders.
+collection management, and the allowlist editor are full-page server renders.
+
+**Tags are static on the library grid.** A card renders its tags as plain
+pills with no controls, and a click on one opens the artifact like a click
+anywhere else on the card. Changing an artifact's tags is an edit, so it lives
+on the edit page's **Tags** panel: the current tags each carry edit and remove
+controls, a dropdown attaches one of the owner's other tags or creates a new
+one, and the edit-tag dialog renames, recolors or deletes a tag across the
+whole library. Each action writes through the tag API immediately (tags are a
+different resource from the document the page's Save button writes, as the
+widget is) and the panel body is re-rendered from `/partials/tag-panel` by
+htmx, so neither editor on that page loses its unsaved buffer.
+
+![The edit page's Tags panel](screenshots/tags-edit/02-edit-tags-panel.png)
 
 **The detail page never embeds the artifact's source** (agaf-02xs). The code
 lives one click away on the edit page, in CodeMirror, which is the surface built

@@ -36,7 +36,7 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .card-headrow{display:flex;align-items:flex-start;gap:var(--space-3)}
 .card-headrow .card-title{flex:1;min-width:0}
 /* The chip holds its space at rest and animates only opacity, the same way
- * the tag-pill controls below do, so revealing it never reflows the card.
+ * the capability popover does, so revealing it never reflows the card.
  * It is labelled, not icon-only: a bare pencil is targetable by voice
  * control via its accessible name, but that name is undiscoverable when
  * nothing on screen states it. --color-ink-soft measures 12.6:1 on the card
@@ -68,37 +68,5 @@ main{padding:24px;max-width:1200px;margin:0 auto}
 .card-actions a{color:#555;text-decoration:none}
 .card-actions a:hover{color:var(--brand-blue)}
 .card:hover .card-title{color:var(--brand-blue)}
-.tag-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
-.tag-add-btn{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:20px;height:20px;padding:0;border:1px dashed #ccc;border-radius:50%;background:transparent;color:#888;cursor:pointer}
-.tag-add-btn:hover,.tag-add-btn:focus-visible{border-color:var(--brand-blue);border-style:solid;color:var(--brand-blue)}
-.tag-add-btn i{font-size:11px;line-height:1}
-.tag-pills{display:flex;flex-wrap:wrap;gap:6px;list-style:none}
-.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px;font-weight:500;line-height:1;background:#f1f1f1;color:#555}
-.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#888;transition:opacity .12s ease}
-.tag-pill-label{overflow-wrap:anywhere}
-.tag-pill-edit,.tag-pill-detach{position:absolute;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:18px;height:18px;padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .12s ease,background .12s ease}
-.tag-pill-edit{left:2px}
-.tag-pill-detach{right:2px}
-.tag-pill-edit i,.tag-pill-detach i{font-size:11px;line-height:1}
-.tag-pill:hover .tag-pill-edit,.tag-pill:hover .tag-pill-detach,
-.tag-pill:focus-within .tag-pill-edit,.tag-pill:focus-within .tag-pill-detach,
-.tag-pill-edit:focus-visible,.tag-pill-detach:focus-visible{opacity:1;pointer-events:auto}
-.tag-pill:hover .tag-dot,.tag-pill:focus-within .tag-dot{opacity:0}
-.tag-pill-edit:hover,.tag-pill-detach:hover{background:rgba(0,0,0,.15)}
 .empty{color:#888;font-size:14px;padding:20px 0}
 .empty a{color:var(--brand-blue)}
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100}
-.modal-overlay[hidden]{display:none}
-.modal{background:#fff;border-radius:10px;padding:20px;width:320px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,.25)}
-.modal h2{font-size:16px;font-weight:600}
-.modal label{display:block;font-size:12px;color:#555;margin:12px 0 4px}
-.modal input[type=text],.modal select{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:var(--field-font-size);outline:none;background:#fff;color:#111}
-.modal input[type=text]:focus,.modal select:focus{border-color:var(--brand-blue)}
-.color-presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
-.color-swatch{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
-.color-swatch.selected{border-color:#333}
-.color-custom-row{display:flex;gap:8px;align-items:center;margin-top:8px}
-.color-custom-row input[type=color]{width:36px;height:30px;padding:0;border:1px solid #ddd;border-radius:6px;cursor:pointer}
-.color-custom-row input[type=text]{flex:1}
-.modal-error{color:#c00;font-size:12px;margin-top:10px}
-.modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}

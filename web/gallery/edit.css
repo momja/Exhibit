@@ -142,3 +142,29 @@ input.state-input{max-width:340px}
   overflow-wrap: anywhere;
 }
 .asset-meta { flex: 0 0 auto; white-space: nowrap; }
+
+/* --- tags panel: the one place an artifact's tags change ----------------
+ * The pills are the shared component (components.css); here each carries its
+ * own edit and remove controls, always visible — there is no hover on touch,
+ * and this panel exists to be acted on. */
+.tag-edit-list{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin-bottom:12px}
+.tag-pill-editable{height:26px;padding:0 3px 0 9px;font-size:12px}
+.tag-pill-btn{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:none;border-radius:50%;background:transparent;color:inherit;cursor:pointer}
+.tag-pill-btn:hover,.tag-pill-btn:focus-visible{background:rgba(0,0,0,.12)}
+.tag-pill-btn i{font-size:12px;line-height:1}
+.tag-panel>p{margin-bottom:12px}
+.tag-add-row{display:flex;gap:8px;align-items:center}
+.tag-add-row .select{flex:1;max-width:320px}
+.tag-create{display:flex;flex-direction:column;gap:4px;margin-top:10px;max-width:320px}
+.tag-error{color:#c00;margin-top:8px}
+
+/* The edit-tag modal (renames/recolors/deletes a tag library-wide). */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal-overlay[hidden]{display:none}
+.modal{background:#fff;border-radius:10px;padding:20px;width:380px;max-width:92vw;box-shadow:0 4px 24px rgba(0,0,0,.25)}
+.modal h2{font-size:16px;font-weight:600}
+.modal label{display:block;font-size:12px;color:#555;margin:12px 0 4px}
+.modal input[type=text]{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:var(--field-font-size);outline:none;background:#fff;color:#111}
+.modal input[type=text]:focus{border-color:var(--brand-blue)}
+.modal-error{color:#c00;font-size:12px;margin-top:10px}
+.modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}

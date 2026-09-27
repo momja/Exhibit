@@ -77,6 +77,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	// same rule as the pages they are swapped into.
 	{route: "/partials/agent-preview", path: "/partials/agent-preview?artifact={id}"},
 	{route: "/partials/card-widget", path: "/partials/card-widget?artifact={id}"},
+	{route: "/partials/tag-panel", path: "/partials/tag-panel?artifact={id}"},
 	{route: "/partials/share-panel", path: "/partials/share-panel?artifact={id}"},
 
 	// Static and public surfaces. They embed nothing per-request, which is

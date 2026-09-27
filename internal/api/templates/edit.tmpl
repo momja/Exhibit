@@ -29,10 +29,30 @@
        above them rather than being buried in one. */}}
   <input type="text" id="title" value="{{.Title}}" placeholder="Title">
 
-  {{/* The page is peer sections — security, state, artifact source, gallery
-       widget — each a .details-panel with the same caret and summary shape.
+  {{/* The page is peer sections — tags, security, state, artifact source,
+       gallery widget — each a .details-panel with the same caret and summary
+       shape.
        Artifact source is the only one rendered open: it is what "Edit" means,
        and the others are things you go looking for. */}}
+  {{/* Tags. The one place an artifact's tags change — the library grid
+       renders them as static pills. Like the widget panel it writes through
+       its own endpoints (the tag API) the moment you act, not through the Save
+       button below: tags are a separate resource from the artifact document,
+       and one Save covering both would misreport what changed. The body is
+       an htmx target re-rendered after each change (tags.js fires
+       exhibit:tags-changed), so neither editor on this page loses its buffer. */}}
+  <details class="details-panel" id="tags-panel">
+    <summary>{{template "panelCaret"}} Tags</summary>
+    <div class="panel-body">
+      <div id="tags-body"
+           hx-get="/partials/tag-panel?artifact={{.ID}}"
+           hx-trigger="exhibit:tags-changed from:body"
+           hx-swap="innerHTML">{{template "tagPanelBody" .TagPanel}}</div>
+      {{/* Outside the swap, so a failure message survives the re-render. */}}
+      <div id="tag-add-error" class="text-sm tag-error" hidden></div>
+    </div>
+  </details>
+
   <details class="details-panel" id="security-panel">
     <summary id="security-summary">{{template "panelCaret"}} <span id="security-summary-text"></span></summary>
     <div class="panel-body security-body">
@@ -235,6 +255,7 @@
   </div>
 </div>
 </main>
+{{template "editTagModal" .Presets}}
 {{/* components.js carries the widget-tile health watcher (av-fafu), which the
      widget panel's preview needs like any other page rendering a tile. */}}
 <script src="/assets/gallery/components.js"></script>
@@ -271,5 +292,6 @@ let microphoneApproved = {{if .MicrophoneApproved}}true{{else}}false{{end}};
 <script src="/assets/gallery/state-api.js"></script>
 <script src="/assets/gallery/state.js"></script>
 <script src="/assets/gallery/assets.js"></script>
+<script src="/assets/gallery/tags.js"></script>
 </body>
 </html>{{end}}
