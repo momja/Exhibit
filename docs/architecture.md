@@ -1002,13 +1002,6 @@ same server-rendered gallery with the query and swaps only the grid, so the
 FTS5 search query stays authoritative without a full page reload. Filter,
 collection management, and the allowlist editor are full-page server renders.
 
-**Tags are static on the library grid**; they are changed on the edit page's
-**Tags** panel (attach, detach, create, and library-wide rename/recolor/delete
-via a dialog). Changes write through the tag API immediately and htmx
-re-renders the panel from `/partials/tag-panel`.
-
-![The edit page's Tags panel](screenshots/tags-edit/02-edit-tags-panel.png)
-
 **The detail page never embeds the artifact's source** (agaf-02xs). The code
 lives one click away on the edit page, in CodeMirror, which is the surface built
 for reading it; the detail page is the *running* artifact. That is a size

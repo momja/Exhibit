@@ -354,8 +354,7 @@ Shipped consumers: the agent surface's preview pane, re-rendered after every
 agent save (`architecture.md` §3.7, `docs/agent.md`); and the artifact edit
 page's widget panel, which swaps `/partials/card-widget` after a save so the
 tile refreshes without a reload that would drop the CodeMirror buffer beside it
-(`docs/widgets.md`); and the same page's Tags panel, which swaps
-`/partials/tag-panel` after every attach, detach or tag edit.
+(`docs/widgets.md`).
 
 **Home-screen app shell (av-fdcx).** Every app-origin page head includes the shared
 `pwaHead` partial: the `manifest.json` link plus the `apple-*` tags iOS reads instead
