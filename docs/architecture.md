@@ -905,8 +905,7 @@ resolve against the render document and stay local. A URL ingest therefore injec
 its fallback base (§3.4a) *before* it scans: a page's residual relatives surface as
 the source origin, and a page that brought its own base is read under that base
 instead. Ingest and a later edit agree by construction, since they apply one rule
-to the same bytes, which is exactly what they failed to do when ingest resolved
-against the source URL and edits dropped relatives.
+to the same bytes.
 
 Which base governs follows the HTML rule rather than the first tag that looks like
 one: the first `base` element with an `href` decides, even when that href is empty,
