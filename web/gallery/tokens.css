@@ -62,13 +62,10 @@
 	--space-7:20px;
 	--space-8:24px;
 
-	/* The app bar is one height on every page, so moving between the gallery
-	 * and an artifact never shifts the content below it. 40px is the artifact
-	 * page's bar — the page where the chrome should take the least room —
-	 * and every other page matches it. Border-box: it includes the underline. */
+	/* One app bar height on every page, so navigation never shifts content.
+	 * Small because the artifact page should give the artifact the room. */
 	--header-height:40px;
-	/* The square controls that sit in that bar (gallery icons, the detail
-	 * kebab): a bar-height box would touch both edges of it. */
+	/* Square controls in the bar; smaller than it so they don't touch its edges. */
 	--header-control-size:32px;
 
 	/* radii */

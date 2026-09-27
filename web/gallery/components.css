@@ -38,11 +38,8 @@
 .btn-danger:disabled:hover{background:var(--color-danger)}
 
 /* --- app bar ---------------------------------------------------------- */
-/* Every page sheet still styles its own header (padding, gap, colours); this
- * owns only its height, so the bar cannot drift between pages again. It is
- * `body>header` rather than `header` so it outranks each sheet's `header`
- * rule, including the phone overrides that restate its padding — horizontal
- * padding stays the page's, vertical padding is replaced by the fixed height. */
+/* Height lives here so pages can't drift apart; everything else stays in each
+ * page sheet. `body>header` outranks the sheets' `header` padding rules. */
 body>header{height:var(--header-height);padding-top:0;padding-bottom:0;flex-shrink:0}
 body>header .icon-btn{width:var(--header-control-size);height:var(--header-control-size)}
 body>header .btn:not(.icon-btn){padding-top:var(--space-1);padding-bottom:var(--space-1)}
