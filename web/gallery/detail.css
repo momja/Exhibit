@@ -102,7 +102,7 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
   /* The date is demoted to the sheet header; the back link to its arrow. */
   header .muted,header .back-label{display:none}
   header a{font-size:18px;line-height:1}
-  #sheet-toggle{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:36px;height:36px;font-size:18px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-panel);color:var(--color-ink-soft);cursor:pointer}
+  #sheet-toggle{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:var(--header-control-size);height:var(--header-control-size);font-size:18px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-panel);color:var(--color-ink-soft);cursor:pointer}
   /* One pane fits a phone; the sheet's Edit action is the way to the code. */
 
   .sheet-scrim{display:block;position:fixed;inset:0;background:var(--overlay);z-index:30;opacity:0;pointer-events:none;transition:opacity .2s ease}

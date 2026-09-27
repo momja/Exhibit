@@ -62,6 +62,12 @@
 	--space-7:20px;
 	--space-8:24px;
 
+	/* One app bar height on every page, so navigation never shifts content.
+	 * Small because the artifact page should give the artifact the room. */
+	--header-height:40px;
+	/* Square controls in the bar; smaller than it so they don't touch its edges. */
+	--header-control-size:32px;
+
 	/* radii */
 	--radius-sm:3px;   /* inline code, badges */
 	--radius-md:6px;   /* inputs, buttons */

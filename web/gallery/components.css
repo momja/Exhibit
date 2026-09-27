@@ -37,6 +37,13 @@
 .btn-sec:disabled:hover{background:var(--color-panel);border-color:var(--color-border);color:var(--color-ink-soft)}
 .btn-danger:disabled:hover{background:var(--color-danger)}
 
+/* --- app bar ---------------------------------------------------------- */
+/* Height lives here so pages can't drift apart; everything else stays in each
+ * page sheet. `body>header` outranks the sheets' `header` padding rules. */
+body>header{height:var(--header-height);padding-top:0;padding-bottom:0;flex-shrink:0}
+body>header .icon-btn{width:var(--header-control-size);height:var(--header-control-size)}
+body>header .btn:not(.icon-btn){padding-top:var(--space-1);padding-bottom:var(--space-1)}
+
 /* --- surfaces --------------------------------------------------------- */
 .card{background:var(--color-panel);border-radius:var(--radius-lg);padding:var(--space-6);box-shadow:var(--shadow-card)}
 
