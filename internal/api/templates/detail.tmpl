@@ -12,10 +12,12 @@
 <link rel="stylesheet" href="/assets/gallery/components.css">
 <link rel="stylesheet" href="/assets/gallery/detail.css">
 {{/* htmx swaps the share panel's body after a grant, a revoke or a link
-     change (av-6m3e); self-hosted from the app origin like every other asset,
-     never a CDN. Loaded only where there is a panel to swap: a recipient's
-     page has no share controls at all, so it should not carry the library
-     that refreshes them. */}}
+     change (av-6m3e), and the capability cluster after a runtime origin
+     approval (av-mf1x); self-hosted from the app origin like every other
+     asset, never a CDN. Loaded only for the owner: a recipient's page has
+     no share controls and cannot approve anything, so it should not carry
+     the library that refreshes them. .Share is non-nil exactly for the
+     owner, so it gates both consumers at once. */}}
 {{if .Share}}<script src="/assets/htmx/htmx.min.js"></script>{{end}}
 </head>
 <body>
@@ -64,7 +66,17 @@
        this artifact may reach is a fact about the tool running in the visitor's
        own browser — the one piece of the owner's configuration a recipient has
        a direct stake in, and what the CSP-block explanation points back at. */}}
-  {{template "capabilityCluster" .Capability}}
+  {{/* The cluster is an htmx target (av-mf1x): after a runtime origin
+       approval the prompt fires exhibit:capabilities-changed on <body> and
+       htmx re-fetches the fragment, so the toolbar stops describing the
+       allowlist as it was at page load. innerHTML, because the fragment
+       renders the capabilityCluster partial itself. For a recipient htmx is
+       not loaded and these attributes are inert — they cannot approve
+       anything, so there is nothing to refresh. */}}
+  <div id="capability-cluster"
+       hx-get="/partials/capability-cluster?artifact={{.ID}}"
+       hx-trigger="exhibit:capabilities-changed from:body"
+       hx-swap="innerHTML">{{template "capabilityCluster" .Capability}}</div>
   {{if not .ReadOnly}}
   <a href="/artifacts/{{.ID}}/edit#security-panel">Manage in allowlist settings →</a>
   {{/* Opens the share modal (av-esa1). A button rather than a link because the

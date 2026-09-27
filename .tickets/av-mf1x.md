@@ -1,6 +1,6 @@
 ---
 id: av-mf1x
-status: open
+status: closed
 deps: [av-4oa1]
 links: [av-isb3, av-41se, exhibit-fr7]
 created: 2026-07-20T03:43:19Z
@@ -21,3 +21,9 @@ Do not rebuild the badge in page JS — that duplicates the capabilityCluster/ca
 
 After approving an origin from the runtime prompt, the toolbar badge and its popover reflect the new allowlist without a manual page reload, and the iframe reload stays transparent.
 
+
+## Notes
+
+**2026-09-27T20:01:13Z**
+
+Implemented via htmx (av-4oa1's mechanism, delivered by av-6m3e): new GET /partials/capability-cluster fragment rendering the same capabilityCluster partial; detail toolbar wraps the cluster in an htmx target on exhibit:capabilities-changed; network-prompt.js Allow handler fires the event before the transparent frame reload. Recipients read the fragment minus the Manage link; strangers 404. Follow-up (same staleness class, out of scope): the first-use capability-bridge approvals in detail.js (dl/clip/link/media Allow) also widen posture without refreshing the badge — one event fire each once covered by tests. Incidental: fixed pre-existing stale renderEditPage call in gallery_test.go:568 (failed package build on main).

@@ -469,6 +469,44 @@ func (ro *Router) sharePanelPartial(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, fragment)
 }
 
+// capabilityClusterPartial re-renders one artifact's capability badge and
+// popover after a runtime origin approval (av-mf1x), so the toolbar stops
+// describing the allowlist as it was at page load. The prompt transparently
+// reloads the frame under the widened CSP; this fragment is what keeps the
+// chrome beside it from disagreeing, without a full reload that would drop
+// the artifact's in-frame state and without page JS rebuilding the badge in
+// a second language.
+//
+// The read goes through GetArtifactReadableBy, like the detail page itself:
+// the cluster reports what the tool running in the visitor's browser may
+// reach, which a recipient has the same stake in as the owner. What differs
+// is the popover's Manage link — ShowManage follows the same ReadOnly
+// narrowing the full page render uses, so the fragment and the page cannot
+// disagree about who may change the posture. A viewer with no grant gets
+// the same 404 the page gives them.
+func (ro *Router) capabilityClusterPartial(w http.ResponseWriter, r *http.Request) {
+	viewerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(viewerID), r.URL.Query().Get("artifact"))
+	if err != nil {
+		serverError(w, r, "capability cluster partial lookup", err)
+		return
+	}
+	if a == nil {
+		// Plain-text 404: htmx leaves the target untouched on an error
+		// response, so the visitor keeps the badge they had.
+		http.Error(w, "artifact not found", http.StatusNotFound)
+		return
+	}
+	creds := ro.pageCredentials(r).forArtifactOwnedBy(viewerID, a.OwnerID)
+	fragment, err := renderPage("capabilityCluster", newCapabilityView(a, !creds.ReadOnly))
+	if err != nil {
+		serverError(w, r, "capability cluster partial render", err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, fragment)
+}
+
 // sharePanel reads one artifact's sharing state for the owner's panel.
 func (ro *Router) sharePanel(r *http.Request, a *store.Artifact) (sharePanelView, error) {
 	shares, err := ro.cfg.Store.ListArtifactShares(r.Context(), a.OwnerID, a.ID)
@@ -575,6 +613,30 @@ func newTagPanelView(a *store.Artifact, library []*store.Tag) tagPanelView {
 		Available:    tagViews(available),
 		Presets:      color.Presets,
 		DefaultColor: color.Normalize(store.DefaultTagColor),
+	}
+}
+
+// newCapabilityView builds the data the capabilityCluster (badge, av-isb3)
+// and capabilityPopover (av-41se) partials render, from one artifact. Every
+// caller — the gallery card, the detail page, the capability-cluster
+// fragment — goes through here so the badge has exactly one definition of
+// what an artifact's posture is (av-mf1x): a field added to the partial but
+// not to this constructor would render stale-or-absent in one surface and
+// current in another, which is the drift this helper exists to prevent.
+func newCapabilityView(a *store.Artifact, showManage bool) capabilityView {
+	allowlist := a.NetworkAllowlist
+	if allowlist == nil {
+		allowlist = []string{}
+	}
+	return capabilityView{
+		ArtifactID:         a.ID,
+		NetworkAllowlist:   allowlist,
+		DownloadsApproved:  a.DownloadsApproved,
+		ClipboardApproved:  a.ClipboardApproved,
+		LinksApproved:      a.LinksApproved,
+		CameraApproved:     a.CameraApproved,
+		MicrophoneApproved: a.MicrophoneApproved,
+		ShowManage:         showManage,
 	}
 }
 
@@ -773,18 +835,9 @@ func renderGalleryPage(arts []*store.Artifact, query string, creds pageCredentia
 			Title:      a.Title,
 			Created:    a.CreatedAt.Format("Jan 2, 2006"),
 			Tags:       tagViews(a.Tags),
-			Capability: capabilityView{
-				ArtifactID:         a.ID,
-				NetworkAllowlist:   a.NetworkAllowlist,
-				DownloadsApproved:  a.DownloadsApproved,
-				ClipboardApproved:  a.ClipboardApproved,
-				LinksApproved:      a.LinksApproved,
-				CameraApproved:     a.CameraApproved,
-				MicrophoneApproved: a.MicrophoneApproved,
-				ShowManage:         true,
-			},
-			Widget: newWidgetView(a, urls),
-			Share:  newShareBadgeView(a),
+			Capability: newCapabilityView(a, true),
+			Widget:     newWidgetView(a, urls),
+			Share:      newShareBadgeView(a),
 		}
 	}
 	return renderPage("gallery", galleryPageData{
@@ -864,10 +917,6 @@ type detailPageData struct {
 // artifact running in the recipient's browser and exactly what the CSP-block
 // explanation refers back to. What goes is the link to change it.
 func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials, share *sharePanelView) (string, error) {
-	allowlist := a.NetworkAllowlist
-	if allowlist == nil {
-		allowlist = []string{}
-	}
 	return renderPage("detail", detailPageData{
 		Favicon:   template.URL(exhibitLogoDataURI),
 		Share:     share,
@@ -880,19 +929,10 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		// Read through the same constant the store resolves the mode with, so
 		// the page and the render agree about what 'shared' is spelled as.
 		SharedState: a.ShareStateMode == store.ShareStateShared,
-		Capability: capabilityView{
-			ArtifactID:         a.ID,
-			NetworkAllowlist:   allowlist,
-			DownloadsApproved:  a.DownloadsApproved,
-			ClipboardApproved:  a.ClipboardApproved,
-			LinksApproved:      a.LinksApproved,
-			CameraApproved:     a.CameraApproved,
-			MicrophoneApproved: a.MicrophoneApproved,
-			// The popover's Manage link points at the edit page, which a
-			// recipient cannot reach: it is a link to a 404 rather than a
-			// control they might have used.
-			ShowManage: !creds.ReadOnly,
-		},
+		// The popover's Manage link points at the edit page, which a
+		// recipient cannot reach: it is a link to a 404 rather than a
+		// control they might have used.
+		Capability:      newCapabilityView(a, !creds.ReadOnly),
 		pageCredentials: creds,
 	})
 }

@@ -423,6 +423,11 @@ func (ro *Router) setupRoutes() {
 		// reload to show the new list would restart the tool the owner is
 		// looking at.
 		r.Get("/partials/share-panel", ro.sharePanelPartial)
+		// The capability badge + popover (av-isb3, av-41se), re-rendered
+		// after a runtime origin approval (av-mf1x). Same reason as the
+		// share panel: the frame reloads transparently under the widened
+		// CSP, and the toolbar must follow without a page reload.
+		r.Get("/partials/capability-cluster", ro.capabilityClusterPartial)
 	})
 
 	// Embedded static assets (client JS islands, e.g. the CodeMirror editor)

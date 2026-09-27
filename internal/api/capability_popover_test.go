@@ -300,3 +300,79 @@ func renderPartial(t *testing.T, name string, data any) (string, error) {
 	err := pageTemplates.ExecuteTemplate(&b, name, data)
 	return b.String(), err
 }
+
+// av-mf1x: the capability cluster fragment, re-fetched by htmx after a
+// runtime origin approval so the toolbar stops describing the allowlist as it
+// was at page load. The fragment carries the badge and the popover together —
+// capabilityCluster renders both — so one swap refreshes both stale surfaces
+// the ticket names.
+func TestCapabilityClusterPartialReflectsCurrentAllowlist(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Badge refresh")
+	w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+		"network_allowlist": []string{"https://cdn.example.com"},
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	fragment := getPage(t, r, "/partials/capability-cluster?artifact="+id)
+	assert.Contains(t, fragment, `<span class="capability-count">1</span>`)
+	assert.Contains(t, fragment, `<code>https://cdn.example.com</code>`)
+	assert.Contains(t, fragment, `Manage security settings`,
+		"the owner's fragment keeps the popover's footer link, like the owner's page")
+
+	// The fragment renders the same partial the full page render used — one
+	// definition of the badge, which is the whole point of the exercise.
+	page := getPage(t, r, "/artifacts/"+id)
+	for _, marker := range []string{`<span class="capability-count">1</span>`, `<code>https://cdn.example.com</code>`} {
+		assert.Contains(t, fragment, marker)
+		assert.Contains(t, page, marker)
+	}
+}
+
+// An unknown artifact answers with a plain 404 rather than an empty badge:
+// htmx leaves the target alone on an error response, so the visitor keeps
+// the badge they had instead of watching it blank out.
+func TestCapabilityClusterPartialUnknownArtifactIsNotFound(t *testing.T) {
+	r := newTestRouter(t)
+
+	req := httptest.NewRequest("GET", "/partials/capability-cluster?artifact=does-not-exist", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.NotContains(t, w.Body.String(), "capability-cluster")
+}
+
+// The cluster reports what the tool may reach in the visitor's browser, so a
+// recipient with a grant reads the same fragment as the owner — minus the
+// Manage link, which points at an edit page they cannot reach. A stranger
+// with no grant gets the 404 the detail page gives them.
+func TestCapabilityClusterPartialRecipientReadsPostureWithoutManageLink(t *testing.T) {
+	in := newGrantedInstance(t)
+
+	owner := responseText(in.get(t, "/partials/capability-cluster?artifact="+in.granted, in.cookieOne))
+	assert.Contains(t, owner, `Manage security settings`)
+
+	recipient := in.get(t, "/partials/capability-cluster?artifact="+in.granted, in.cookieTwo)
+	require.Equal(t, http.StatusOK, recipient.Code)
+	assert.Contains(t, responseText(recipient), `Sandbox posture`)
+	assert.NotContains(t, responseText(recipient), `Manage security settings`)
+	assert.NotContains(t, responseText(recipient), `capability-popover-manage`)
+}
+
+// The detail page must carry the wiring that turns an approval into a swap:
+// the cluster wrapped in an htmx target fetching the fragment above on the
+// event the runtime prompt fires, with htmx itself served from our own
+// origin (never a CDN).
+func TestDetailPageWiresCapabilityClusterSwapToHtmx(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Swap wiring")
+	page := getPage(t, r, "/artifacts/"+id)
+
+	assert.Contains(t, page, `<script src="/assets/htmx/htmx.min.js"></script>`)
+	assert.NotContains(t, page, "unpkg.com")
+	assert.Contains(t, page, `id="capability-cluster"`)
+	assert.Contains(t, page, `hx-get="/partials/capability-cluster?artifact=`+id+`"`)
+	assert.Contains(t, page, `hx-trigger="exhibit:capabilities-changed from:body"`)
+	assert.Contains(t, page, `hx-swap="innerHTML"`)
+}

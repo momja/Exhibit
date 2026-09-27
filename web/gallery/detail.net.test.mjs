@@ -32,6 +32,7 @@ const OPEN_URL = "/artifacts/art-1/open";
 // Loads detail.js with the bootstrap globals its page template renders.
 function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
   const api = recordingApi(responses);
+  const capabilitiesChanged = [];
   const page = loadPageScript(DETAIL_JS, {
     TOKEN: "",
     READ_ONLY: readOnly,
@@ -46,7 +47,11 @@ function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
     cameraApproved: false,
     microphoneApproved: false,
     apiFetch: api.apiFetch,
-    apiStateFetch: api.apiStateFetch
+    apiStateFetch: api.apiStateFetch,
+    // The runtime prompt fires exhibit:capabilities-changed on Allow so htmx
+    // re-fetches the badge (av-mf1x); the harness's CustomEvent is the same
+    // constructor the page's listener contract is asserted against below.
+    CustomEvent
   }, {
     // What detail.tmpl renders: every capability dialog starts hidden.
     "net-modal": { hidden: true },
@@ -59,7 +64,11 @@ function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
     "capability-warning-banner": { hidden: true },
     "capability-warning-headline": { textContent: headline }
   });
-  return { ...page, api };
+  // htmx is not in the harness, so the refresh contract is the event itself:
+  // the listener the #capability-cluster target stands in for here.
+  page.document.body.addEventListener("exhibit:capabilities-changed",
+    (e) => capabilitiesChanged.push(e.type));
+  return { ...page, api, capabilitiesChanged };
 }
 
 const report = (origin, directive = "connect-src") => ({
@@ -98,7 +107,7 @@ test("a blocked origin is prompted for in app chrome, not in the frame", async (
 });
 
 test("Allow records an allow decision and reloads the frame under the new CSP", async () => {
-  const { byId, frame, api, postFromFrame } = loadDetail();
+  const { byId, frame, api, postFromFrame, capabilitiesChanged } = loadDetail();
   const before = frame.src;
 
   await postFromFrame(report("https://cdn.example.com"));
@@ -111,6 +120,11 @@ test("Allow records an allow decision and reloads the frame under the new CSP", 
   assert.deepEqual(JSON.parse(call.body), {
     origin: "https://cdn.example.com", decision: "allow", source: "runtime"
   });
+
+  // av-mf1x: the approval widens the allowlist the toolbar badge describes,
+  // so the prompt fires the event the #capability-cluster htmx target
+  // re-fetches on — alongside the frame reload, not instead of it.
+  assert.deepEqual(capabilitiesChanged, ["exhibit:capabilities-changed"]);
 
   assert.notEqual(frame.src, before, "the frame must refetch, or the widened CSP never applies");
   assert.ok(frame.src.startsWith(OPEN_URL + "?r="),
@@ -126,7 +140,7 @@ test("Allow records an allow decision and reloads the frame under the new CSP", 
 });
 
 test("a failed write leaves the prompt open rather than claiming success", async () => {
-  const { byId, frame, postFromFrame } = loadDetail({
+  const { byId, frame, postFromFrame, capabilitiesChanged } = loadDetail({
     responses: [{ ok: false, status: 500, json: async () => ({}) }]
   });
   const before = frame.src;
@@ -137,10 +151,12 @@ test("a failed write leaves the prompt open rather than claiming success", async
   assert.equal(byId("net-modal").hidden, false, "the user must be able to try again");
   assert.equal(frame.src, before, "no reload: the CSP did not change");
   assert.match(byId("al-status").textContent, /Failed to save/);
+  assert.deepEqual(capabilitiesChanged, [],
+    "no write, no posture change: the badge must not re-fetch");
 });
 
 test("Don't ask again records a block decision and never an allow", async () => {
-  const { byId, frame, api, postFromFrame } = loadDetail();
+  const { byId, frame, api, postFromFrame, capabilitiesChanged } = loadDetail();
   const before = frame.src;
 
   await postFromFrame(report("https://tracker.example.com"));
@@ -151,6 +167,8 @@ test("Don't ask again records a block decision and never an allow", async () => 
   assert.equal(byId("net-modal").hidden, true);
   assert.equal(frame.src, before,
     "a block changes no policy, so there is nothing to reload for");
+  assert.deepEqual(capabilitiesChanged, [],
+    "a block widens nothing the badge reports, so there is nothing to re-fetch for");
 });
 
 test("Block once dismisses without writing anything", async () => {
@@ -275,9 +293,11 @@ test("an ordinary sandbox capability keeps the shared headline", async () => {
 });
 
 test("a read-only visitor is not asked a question they cannot answer", async () => {
-  const { byId, api, postFromFrame } = loadDetail({ readOnly: true });
+  const { byId, api, postFromFrame, capabilitiesChanged } = loadDetail({ readOnly: true });
 
   await postFromFrame(report("https://cdn.example.com"));
   assert.equal(byId("net-modal").hidden, true);
   assert.deepEqual(originCalls(api), []);
+  assert.deepEqual(capabilitiesChanged, [],
+    "a visitor who cannot approve changes no posture");
 });
