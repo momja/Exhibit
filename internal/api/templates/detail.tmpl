@@ -12,12 +12,10 @@
 <link rel="stylesheet" href="/assets/gallery/components.css">
 <link rel="stylesheet" href="/assets/gallery/detail.css">
 {{/* htmx swaps the share panel's body after a grant, a revoke or a link
-     change (av-6m3e), and the capability cluster after a runtime origin
-     approval (av-mf1x); self-hosted from the app origin like every other
-     asset, never a CDN. Loaded only for the owner: a recipient's page has
-     no share controls and cannot approve anything, so it should not carry
-     the library that refreshes them. .Share is non-nil exactly for the
-     owner, so it gates both consumers at once. */}}
+     change (av-6m3e); self-hosted from the app origin like every other asset,
+     never a CDN. Loaded only where there is a panel to swap: a recipient's
+     page has no share controls at all, so it should not carry the library
+     that refreshes them. */}}
 {{if .Share}}<script src="/assets/htmx/htmx.min.js"></script>{{end}}
 </head>
 <body>
