@@ -69,10 +69,18 @@
   // Closing when focus leaves the trigger+popover pair entirely (e.g.
   // tabbing past the Manage link to the next control on the page) — since
   // opening no longer rides :focus-within, nothing else would close it here.
+  //
+  // Only a focusout that NAMES where focus went counts. A null relatedTarget
+  // is what Safari reports when the Manage link is tapped: it does not focus
+  // an anchor on click, so the trigger blurs toward nothing. Closing then
+  // hides the popover (pointer-events:none) before the tap's click is
+  // dispatched, and the link never navigates — on iOS, every time. Pointer
+  // dismissal is the click handler's job above, which runs after the link
+  // has had its click.
   document.addEventListener('focusout', function(e) {
     var wrap = e.target.closest && e.target.closest('.capability-wrap');
     if (!wrap || !wrap.classList.contains('is-open')) return;
-    if (!e.relatedTarget || !wrap.contains(e.relatedTarget)) setOpen(wrap, false);
+    if (e.relatedTarget && !wrap.contains(e.relatedTarget)) setOpen(wrap, false);
   });
 })();
 

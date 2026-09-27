@@ -42,6 +42,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"edit.origins.test.mjs",
 		"share.test.mjs",
 		"agent.net.test.mjs",
+		"components.popover.test.mjs",
 		// Not a page script: render.shim.test.mjs runs the render preamble,
 		// which is a Go string literal it lifts out of render.go. It belongs
 		// here anyway, for the reason this suite exists — a Go test can assert
