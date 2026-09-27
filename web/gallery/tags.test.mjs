@@ -1,14 +1,4 @@
-/* The edit page's Tags panel, driven the way a browser drives it.
- *
- * Tags moved off the gallery grid onto the edit page, so this panel is now the
- * only place an artifact's tags change. The Go tests prove the markup is there;
- * these prove clicking it sends the right requests — detach is one DELETE on
- * this artifact, "create new" is a create followed by an attach, and every
- * change ends in exhibit:tags-changed (the htmx re-render) rather than a
- * reload that would drop the page's unsaved editor buffers.
- *
- * Loads internal/api/assets/gallery/tags.js — the built, embedded copy.
- */
+/* Drives the built tags.js through the edit page's Tags panel interactions. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
@@ -38,9 +28,7 @@ function loadTags({ responses = [], initial = {}, confirmed = true } = {}) {
   page.window.location.reload = () => { reloads++; };
   page.document.body.addEventListener("exhibit:tags-changed", (e) => events.push(e.type));
 
-  // A click on a server-rendered control inside the panel: `closest` resolves
-  // the selector the delegated handler asks for to the control, as a browser
-  // would for a click on the control's icon.
+  // Simulates a click on a control inside the delegated panel.
   const clickControl = (control, matches) => page.byId("tags-panel").dispatchEvent({
     type: "click",
     target: { id: "", closest: (sel) => (matches(sel) ? control : null) }

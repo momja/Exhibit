@@ -3,9 +3,6 @@
  * per-request globals this file reads before it loads:
  *   TOKEN / READ_ONLY - this visitor's API credential, decided server-side
  *                       per request (av-5imk); spent via api.js's apiFetch
- *
- * Tags on the cards are static pills: an artifact's tags are changed from its
- * edit page's Tags panel (tags.js), not from the library grid.
  */
 
 // Eager search: filter the gallery as the user types instead of waiting for a
@@ -50,10 +47,9 @@
 })();
 
 // Clicking anywhere on a card opens that artifact's detail/viewer page — the
-// card itself is the way in, tag pills included (they are static). Clicks
-// that land on an interactive child (the title or Edit link, or the
-// capability cluster, whose own click toggles its popover in components.js)
-// are left alone so those keep their own behavior.
+// card itself is the way in. Clicks on an interactive child (the title or
+// Edit link, or the capability cluster, whose own click toggles its popover
+// in components.js) are left alone so those keep their own behavior.
 // The 'Open' card action was removed; this is the single open affordance per
 // card.
 document.addEventListener('click', function(e) {

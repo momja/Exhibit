@@ -1,25 +1,7 @@
-/* The edit page's Tags panel. Served from the app origin at
- * /assets/gallery/tags.js, loaded by edit.tmpl.
- *
- * This is the one place an artifact's tags change: the library grid renders
- * them as static pills. Attaching, detaching and creating act on this
- * artifact; the edit-tag modal renames, recolors or deletes a tag across the
- * whole library.
- *
- * Globals from the page's inline bootstrap:
- *   ID                - the artifact id
- *   TOKEN / READ_ONLY - this visitor's API credential (av-5imk), spent by
- *                       api.js's apiFetch
- *
- * Every change goes through the tag API and then fires `exhibit:tags-changed`,
- * which htmx turns into a re-fetch of /partials/tag-panel — the server owns the
- * rows, in one definition shared with the full page render, so nothing here
- * builds markup over user-authored tag names. No reload either: it would drop
- * the unsaved buffers in the editors elsewhere on this page.
- *
- * Listeners are delegated from #tags-panel, which is stable — htmx replaces the
- * contents of #tags-body inside it, so anything bound to an element in there
- * would be bound to a node that is gone after the first change.
+/* Edit page Tags panel (edit.tmpl). Globals: ID, TOKEN/READ_ONLY (api.js).
+ * Every change goes through the tag API, then fires exhibit:tags-changed so
+ * htmx re-renders #tags-body. Listeners are delegated from #tags-panel, which
+ * survives the swap.
  */
 (function() {
   const panel = document.getElementById('tags-panel');
@@ -31,8 +13,6 @@
     document.body.dispatchEvent(new CustomEvent('exhibit:tags-changed'));
   }
 
-  // One error line per surface: the panel's lives outside the swapped region
-  // so the re-render that follows a failed attempt does not wipe it.
   function setError(id, message) {
     const el = byId(id);
     if (!el) return;
@@ -46,9 +26,7 @@
     return data.error || fallback;
   }
 
-  // Colors: a swatch, the native picker and the hex field all describe one
-  // value, so setting any of them sets all three. `scope` is the element the
-  // swatches live under — the panel's create fields or the edit modal.
+  // Keeps swatches, picker and hex field in sync. `scope` holds the swatches.
   function setColor(prefix, scope, hex) {
     const hexField = byId(prefix + '-color-hex');
     const picker = byId(prefix + '-color-picker');
@@ -76,8 +54,7 @@
     changed();
   }
 
-  // Attach an existing tag, or create one first when "create new" is chosen.
-  // Attaching a tag the artifact already carries is a no-op on the server.
+  // Attach an existing tag, creating it first for "create new".
   async function add() {
     setError('tag-add-error', '');
     const select = byId('tag-add-select');
@@ -101,8 +78,7 @@
       method: 'POST'
     }).catch(function() { return null; });
     if (!attached || !attached.ok) setError('tag-add-error', await errorOf(attached, 'Could not add the tag.'));
-    // A tag created just now exists even when the attach failed, so the
-    // dropdown is re-rendered either way.
+    // Re-render even on failure: a just-created tag belongs in the dropdown.
     changed();
   }
 
@@ -141,7 +117,7 @@
     }
   });
 
-  // --- the edit-tag modal: library-wide rename, recolor, delete -----------
+  // --- edit-tag modal: library-wide rename, recolor, delete ---
 
   const modal = byId('tag-edit-modal');
   let editingTagID = null;
@@ -186,7 +162,6 @@
   if (modal) {
     modal.addEventListener('click', function(e) {
       const target = e.target;
-      // Backdrop only: a click on the dialog inside it does not close it.
       if (target === modal) return closeEditModal();
       const swatch = target.closest ? target.closest('.color-swatch') : null;
       if (swatch) return setColor('tag-edit', modal, swatch.dataset.color);

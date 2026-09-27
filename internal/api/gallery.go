@@ -366,11 +366,8 @@ func (ro *Router) cardWidgetPartial(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, fragment)
 }
 
-// tagPanelPartial re-renders the body of the edit page's Tags panel after an
-// attach, a detach, or a library-wide rename/recolor/delete. It exists for the
-// reason the widget preview fragment does: a reload would drop the edit page's
-// unsaved editor buffers, and rebuilding the rows in page JS would be a second
-// definition of the list over user-authored tag names.
+// tagPanelPartial re-renders the edit page's Tags panel body after a tag
+// change, so the page's editors keep their unsaved buffers.
 func (ro *Router) tagPanelPartial(w http.ResponseWriter, r *http.Request) {
 	ownerID := ownerIDFromCtx(r.Context())
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, r.URL.Query().Get("artifact"))
@@ -379,7 +376,6 @@ func (ro *Router) tagPanelPartial(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a == nil {
-		// Plain-text 404: htmx leaves the target untouched on an error.
 		http.Error(w, "artifact not found", http.StatusNotFound)
 		return
 	}
@@ -515,9 +511,8 @@ func tagViews(tags []*store.Tag) []tagView {
 	return views
 }
 
-// tagPanelView feeds the edit page's Tags panel (tagPanelBody): the tags on
-// this artifact, the owner's other tags for the add dropdown, and the preset
-// palette plus default color for the create-new fields.
+// tagPanelView feeds tagPanelBody. Available is the owner's tags not yet on
+// the artifact.
 type tagPanelView struct {
 	ArtifactID   string
 	Tags         []tagView
@@ -682,8 +677,7 @@ func newShareBadgeView(a *store.Artifact) shareBadgeView {
 }
 
 // galleryCard is one artifact card on the index page. The tagPills partial
-// reads Tags from it directly (static pills — tags are edited on the edit
-// page's Tags panel, not from the grid); the capabilityCluster
+// reads Tags from it directly; the capabilityCluster
 // partial reads Capability to render the card-footer posture badge + popover
 // (av-isb3, av-41se); Widget renders the card's tile (av-fafu); Share renders
 // the sharing marker (av-6xjd), and renders nothing at all when the artifact
@@ -903,9 +897,7 @@ type editPageData struct {
 	// harder to diagnose than one that says what it needs.
 	CanGenerateWidget bool
 	GenerateHint      string
-	// TagPanel is the Tags panel's body — the one place an artifact's tags
-	// are changed (the gallery renders them as static pills) — and Presets
-	// feeds the edit-tag modal beside it.
+	// TagPanel feeds the Tags panel; Presets feeds the edit-tag modal.
 	TagPanel tagPanelView
 	Presets  []string
 }

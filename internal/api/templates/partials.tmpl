@@ -18,35 +18,21 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Exhibit">{{end}}
 
-{{/* tagPills renders an artifact's tags as small neutral pills, each led by a
-     colored dot that carries the tag's color — like a 'Development' label with
-     a colored dot rather than a filled-color pill. Pills are lighter than the
-     card title so a row of tags reads as secondary metadata, not as headers
-     bigger than the title. It renders nothing when there are no tags so
-     untagged cards carry no empty row.
-
-     The pills are static: they carry no controls. Changing an artifact's tags
-     is an edit, and it happens on the edit page's Tags panel (tagPanelBody
-     below), not from the library grid — a click anywhere on a card, pills
-     included, opens the artifact.
+{{/* tagPills renders an artifact's tags as static pills, each led by a dot
+     in the tag's color. Tags are edited on the edit page (tagPanelBody).
      Data: {Tags []tagView}. */}}
 {{define "tagPills"}}{{if .Tags}}<ul class="tag-pills">{{range .Tags}}<li class="tag-pill" data-tag-id="{{.ID}}"><span class="tag-dot" style="background:{{.Color}}" aria-hidden="true"></span><span class="tag-pill-label">{{.Name}}</span></li>{{end}}</ul>{{end}}{{end}}
 
 {{/* colorSwatches renders the shared preset-color palette used by both the
-     edit-tag modal and the Tags panel's create-new fields on the edit page. Swatches are
+     edit-tag modal and the Tags panel's create-new fields. Swatches are
      plain buttons scoped by the caller's modal id in CSS/JS, so the markup
      itself carries no modal-specific state. The swatch/dot backgrounds stay
      inline styles: they are per-tag dynamic values, which classes cannot
      express. Data: []string (hex colors). */}}
 {{define "colorSwatches"}}<div class="color-presets">{{range .}}<button type="button" class="color-swatch" data-color="{{.}}" style="background:{{.}}" aria-label="{{.}}"></button>{{end}}</div>{{end}}
 
-{{/* editTagModal is the (initially hidden) edit-tag modal shell shared by
-     every pencil control in the edit page's Tags panel. There is one instance
-     per page load, outside the panel's swapped region; openEditTagModal (in
-     /assets/gallery/tags.js) populates it for whichever tag was clicked.
-     Renaming, recoloring and deleting a tag are library-wide changes, which
-     is why they sit behind a dialog rather than inline beside one artifact.
-     Data: []string (the preset palette). */}}
+{{/* editTagModal renames, recolors or deletes a tag library-wide; opened
+     from the Tags panel's pencils by tags.js. Data: []string (presets). */}}
 {{define "editTagModal"}}<div id="tag-edit-modal" class="modal-overlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tag-edit-title">
     <h2 id="tag-edit-title">Edit tag</h2>
@@ -68,18 +54,9 @@
   </div>
 </div>{{end}}
 
-{{/* tagPanelBody is the swappable body of the edit page's Tags panel: the
-     artifact's current tags, each with an edit (pencil) and a remove (x)
-     control, and a row that attaches an existing tag or creates a new one.
-     The same partial serves the initial page render and /partials/tag-panel,
-     which htmx re-fetches after every change (exhibit:tags-changed) — so the
-     page never reloads and drops the CodeMirror buffers beside it, and page JS
-     never rebuilds rows over user-authored tag names by hand.
-
-     Tag changes apply immediately through the tag API rather than waiting for
-     the page's Save button: they are a different resource from the artifact
-     document, the way the widget panel is.
-     Data: tagPanelView (gallery.go). */}}
+{{/* tagPanelBody is the edit page's Tags panel body: current tags with
+     edit/remove controls, plus an add-or-create row. Shared by the page render
+     and /partials/tag-panel. Data: tagPanelView (gallery.go). */}}
 {{define "tagPanelBody"}}<div class="tag-panel" data-artifact-id="{{.ArtifactID}}">
   {{if .Tags}}<ul class="tag-edit-list" id="tag-edit-list">
     {{range .Tags}}<li class="tag-pill tag-pill-editable" data-tag-id="{{.ID}}">

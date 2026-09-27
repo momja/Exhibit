@@ -37,7 +37,6 @@ const files = [
   // each installs it at load.
   "network-prompt.js",
   "edit.css", "edit.js", "state.js", "assets.js",
-  // The edit page's Tags panel — the one place an artifact's tags change.
   "tags.js",
   "notfound.css", "notfound.js",
   // The account-settings surfaces: av-utap's /admin/users and av-qo05's

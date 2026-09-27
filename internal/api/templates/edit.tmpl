@@ -34,13 +34,8 @@
        shape.
        Artifact source is the only one rendered open: it is what "Edit" means,
        and the others are things you go looking for. */}}
-  {{/* Tags. The one place an artifact's tags change — the library grid
-       renders them as static pills. Like the widget panel it writes through
-       its own endpoints (the tag API) the moment you act, not through the Save
-       button below: tags are a separate resource from the artifact document,
-       and one Save covering both would misreport what changed. The body is
-       an htmx target re-rendered after each change (tags.js fires
-       exhibit:tags-changed), so neither editor on this page loses its buffer. */}}
+  {{/* Tags (tags.js). Changes save immediately via the tag API, not the
+       Save button; htmx re-renders the body on exhibit:tags-changed. */}}
   <details class="details-panel" id="tags-panel">
     <summary>{{template "panelCaret"}} Tags</summary>
     <div class="panel-body">
@@ -48,7 +43,7 @@
            hx-get="/partials/tag-panel?artifact={{.ID}}"
            hx-trigger="exhibit:tags-changed from:body"
            hx-swap="innerHTML">{{template "tagPanelBody" .TagPanel}}</div>
-      {{/* Outside the swap, so a failure message survives the re-render. */}}
+      {{/* Outside the swap so errors survive the re-render. */}}
       <div id="tag-add-error" class="text-sm tag-error" hidden></div>
     </div>
   </details>

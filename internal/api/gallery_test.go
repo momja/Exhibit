@@ -58,8 +58,7 @@ func TestGalleryIndexRendersTagPills(t *testing.T) {
 	assert.NotContains(t, page, `style="background:#ffffff;color:`)
 	assert.NotContains(t, page, `style="background:#111111;color:`)
 
-	// Untagged card: no empty pill row, and no add control — tags are
-	// changed on the edit page, not from the grid.
+	// Untagged card: no pill row and no add control.
 	assert.Equal(t, 1, strings.Count(page, `<ul class="tag-pills">`), "only the tagged card renders a pill row")
 	assert.Contains(t, page, `/artifacts/`+untaggedID+`/edit`)
 	assert.NotContains(t, page, `tag-add-btn`)
@@ -75,10 +74,7 @@ func TestGalleryIndexRendersTagPills(t *testing.T) {
 	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/index.css"), `.card-title{font-size:15px;font-weight:600`)
 }
 
-// Tags are static in the gallery: a card shows its pills and nothing that
-// changes them — no edit/detach controls, no '+' button, no tag modals, and no
-// tag-mutating code in the page script. Changing tags is an edit, made from
-// the artifact's edit page.
+// Gallery tags are static: pills only, no controls, modals or tag writes.
 func TestGalleryTagsAreStatic(t *testing.T) {
 	r := newTestRouter(t)
 	tag := createTestTag(t, r, "charts", "#FFFFFF")
@@ -104,11 +100,8 @@ func TestGalleryTagsAreStatic(t *testing.T) {
 	assert.NotContains(t, js, "function openEditTagModal(")
 }
 
-// The edit page's Tags panel is where an artifact's tags change: its current
-// tags each carry edit and remove controls, the add dropdown offers only the
-// owner's tags not already attached (plus "create new"), the edit-tag modal is
-// on the page, and the panel's body is an htmx target re-fetched after a
-// change.
+// The edit page's Tags panel: per-tag controls, an add dropdown of unattached
+// tags, the edit-tag modal, and an htmx-refreshed body.
 func TestEditPageRendersTagsPanel(t *testing.T) {
 	r := newTestRouter(t)
 	charts := createTestTag(t, r, "charts", "#FFFFFF")
@@ -141,8 +134,7 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/tags.js"), "exhibit:tags-changed")
 }
 
-// /partials/tag-panel renders the same body the edit page does, reflecting the
-// artifact's current tags, and 404s for an artifact that does not exist.
+// /partials/tag-panel reflects current tags and 404s for a missing artifact.
 func TestTagPanelPartial(t *testing.T) {
 	r := newTestRouter(t)
 	tag := createTestTag(t, r, "charts", "")

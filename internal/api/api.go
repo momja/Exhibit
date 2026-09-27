@@ -416,8 +416,7 @@ func (ro *Router) setupRoutes() {
 		// API's auth group and under the same owner resolution.
 		r.Get("/partials/agent-preview", ro.agentPreviewPartial)
 		r.Get("/partials/card-widget", ro.cardWidgetPartial)
-		// The edit page's Tags panel, re-rendered after every tag change so
-		// the editors beside it keep their unsaved buffers.
+		// The edit page's Tags panel, re-rendered after each tag change.
 		r.Get("/partials/tag-panel", ro.tagPanelPartial)
 		// The share panel (av-6xjd), re-rendered after a grant, a revoke or a
 		// link change. The detail page holds a live artifact frame, so a
