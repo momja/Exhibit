@@ -334,7 +334,7 @@ whose entire build step is copying files. The cost is that elements are created
 on demand rather than parsed from the template, so an id the template spells
 differently is the Go template tests' half to catch.
 
-**Partial re-render: htmx (av-6m3e).** When server-side state changes after
+**Partial re-render: htmx 4 (av-6m3e, av-3cdp).** When server-side state changes after
 load, the page re-fetches one server-rendered fragment and swaps it in rather
 than reloading (a reload drops live iframes, editor buffers, and SSE streams)
 or rebuilding the markup in JS (a second definition of the same component, in a
@@ -350,6 +350,11 @@ it won over a hand-rolled fetch-and-swap helper. The rules it must follow:
   Phosphor icons below, and loaded from `/assets/htmx/htmx.min.js`.
 - Page JS keeps no cached references into a swappable region: after a swap the
   old nodes are gone. Resolve elements on use.
+- Error responses never swap: every page that loads htmx carries
+  `<meta name="htmx-config" content='{"noSwap":[204,304,"4xx","5xx"]}'>`,
+  pinning the v2 behavior htmx 4 changed (4xx/5xx swap by default). The
+  fragment 404s are plain text that must leave the target untouched, and
+  page JS listens for `htmx:after:swap` (the v4 event name).
 
 Shipped consumers: the agent surface's preview pane, re-rendered after every
 agent save (`architecture.md` §3.7, `docs/agent.md`); and the artifact edit

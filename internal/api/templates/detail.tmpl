@@ -16,7 +16,11 @@
      never a CDN. Loaded only where there is a panel to swap: a recipient's
      page has no share controls at all, so it should not carry the library
      that refreshes them. */}}
-{{if .Share}}<script src="/assets/htmx/htmx.min.js"></script>{{end}}
+{{if .Share}}{{/* htmx 4 swaps 4xx/5xx by default; the share-panel 404 is
+     plain text meant to leave the panel untouched, so pin the v2 behavior
+     back via the meta config (av-3cdp). */}}
+<meta name="htmx-config" content='{"noSwap":[204,304,"4xx","5xx"]}'>
+<script src="/assets/htmx/htmx.min.js"></script>{{end}}
 </head>
 <body>
 <header>

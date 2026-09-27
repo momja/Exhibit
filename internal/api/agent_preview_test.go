@@ -99,6 +99,10 @@ func TestAgentPageWiresPreviewSwapToHtmx(t *testing.T) {
 	page := getPage(t, r, "/agent")
 
 	assert.Contains(t, page, `<script src="/assets/htmx/htmx.min.js"></script>`)
+	// htmx 4 swaps 4xx/5xx by default; the fragment 404s are plain text that
+	// must leave the pane untouched, so the page pins the v2 behavior back
+	// (av-3cdp).
+	assert.Contains(t, page, `<meta name="htmx-config" content='{"noSwap":[204,304,"4xx","5xx"]}'>`)
 	assert.NotContains(t, page, "unpkg.com")
 	assert.Contains(t, page, `hx-get="/partials/agent-preview"`)
 	assert.Contains(t, page, `hx-trigger="exhibit:artifact-saved from:body"`)
