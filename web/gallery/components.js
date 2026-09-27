@@ -69,10 +69,12 @@
   // Closing when focus leaves the trigger+popover pair entirely (e.g.
   // tabbing past the Manage link to the next control on the page) — since
   // opening no longer rides :focus-within, nothing else would close it here.
+  // Ignore a null relatedTarget: Safari reports one when the Manage link is
+  // tapped, and closing here would swallow the link's click.
   document.addEventListener('focusout', function(e) {
     var wrap = e.target.closest && e.target.closest('.capability-wrap');
     if (!wrap || !wrap.classList.contains('is-open')) return;
-    if (!e.relatedTarget || !wrap.contains(e.relatedTarget)) setOpen(wrap, false);
+    if (e.relatedTarget && !wrap.contains(e.relatedTarget)) setOpen(wrap, false);
   });
 })();
 
