@@ -967,7 +967,7 @@ approval as any other footprint (spec §6.2).
 
 Server-rendered pages built with the stdlib `html/template`: the templates live in
 `internal/api/templates/` (committed source, `go:embed`-ed), their handlers and view
-models in `internal/api/gallery.go`. Each page's stylesheet and script are static
+models in `internal/api/`, one file per page. Each page's stylesheet and script are static
 assets authored in the `web/gallery/` workspace and served under `/assets/gallery/`;
 per-request values (the page's API credential, artifact id, allowlist, capability
 approvals) reach the page scripts through a small inline bootstrap `<script>` the

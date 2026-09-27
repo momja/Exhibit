@@ -1,7 +1,4 @@
-// The agent chat page is an html/template file, templates/agent.tmpl (its
-// handler and view model live here, matching the rest of the gallery -
-// gallery.go); this file just holds the handler and the view model the
-// template consumes.
+// The agent chat page (templates/agent.tmpl): its handler and view model.
 package api
 
 import (

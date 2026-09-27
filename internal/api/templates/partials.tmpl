@@ -56,7 +56,7 @@
 
 {{/* tagPanelBody is the edit page's Tags panel body: current tags with
      edit/remove controls, plus an add-or-create row. Shared by the page render
-     and /partials/tag-panel. Data: tagPanelView (gallery.go). */}}
+     and /partials/tag-panel. Data: tagPanelView (edit.go). */}}
 {{define "tagPanelBody"}}<div class="tag-panel" data-artifact-id="{{.ArtifactID}}">
   {{if .Tags}}<ul class="tag-edit-list" id="tag-edit-list">
     {{range .Tags}}<li class="tag-pill tag-pill-editable" data-tag-id="{{.ID}}">
@@ -99,7 +99,7 @@
      activation (click/tap, or Enter/Space while focused) via components.js;
      hover/focus alone just apply a CSS affordance highlight
      (.capability-cluster:hover/:focus-visible) without opening anything.
-     Data: capabilityView (gallery.go). */}}
+     Data: capabilityView (pages.go). */}}
 {{define "capabilityCluster"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved) (not .LinksApproved) (not .CameraApproved) (not .MicrophoneApproved)}}<div class="capability-wrap"><div class="capability-cluster{{if not $sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger>{{if $sandboxed}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{if .LinksApproved}}<span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span>{{end}}{{if .CameraApproved}}<span class="capability-glyph"><i class="ph ph-camera"></i></span>{{end}}{{if .MicrophoneApproved}}<span class="capability-glyph"><i class="ph ph-microphone"></i></span>{{end}}{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}
 
 {{/* panelCaret is the open/closed caret pair every .details-panel summary
@@ -131,7 +131,7 @@
      passes through to the card (which opens the artifact), and tabindex=-1
      keeps its contents out of the tab order — the widget states a fact, it is
      not a control. The <title> is the accessible name every iframe needs.
-     Data: widgetView (gallery.go). */}}
+     Data: widgetView (pages.go). */}}
 {{define "cardWidget"}}<div class="card-widget{{if .URL}} has-frame{{end}}"><div class="card-widget-default" style="--tile-hue:{{.Hue}}"><span class="card-widget-monogram">{{.Monogram}}</span></div>{{if .URL}}<iframe class="card-widget-frame" src="{{.URL}}" sandbox="allow-scripts" loading="lazy" tabindex="-1" scrolling="no" title="{{.Title}} widget"></iframe>{{end}}</div>{{end}}
 
 {{/* capabilityPopover is the "receipt" for what was approved at ingest
@@ -140,7 +140,7 @@
      external links, camera, microphone); the no-grants state collapses to a single "Fully contained"
      reassurance row instead. The footer "Manage" link is omitted whenever
      ShowManage is false (the no-owner-session / share case). Data:
-     capabilityView (gallery.go). */}}
+     capabilityView (pages.go). */}}
 {{define "capabilityPopover"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved) (not .LinksApproved) (not .CameraApproved) (not .MicrophoneApproved)}}<div class="capability-popover" id="capability-popover-{{.ArtifactID}}"><div class="capability-popover-header">Sandbox posture</div>{{if $sandboxed}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-shield-check"></i></span><span>Fully contained — no network, download, clipboard, external link, camera, or microphone access</span></div>{{else}}{{if .NetworkAllowlist}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-globe"></i></span><div><div class="capability-popover-label">Network — {{len .NetworkAllowlist}} origin{{if ne (len .NetworkAllowlist) 1}}s{{end}}</div><div class="capability-popover-origins">{{range .NetworkAllowlist}}<code>{{.}}</code>{{end}}</div></div></div>{{end}}{{if .DownloadsApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-download-simple"></i></span><span>Downloads — Can save files to your device</span></div>{{end}}{{if .ClipboardApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-clipboard"></i></span><span>Clipboard — Can read and write your clipboard</span></div>{{end}}{{if .LinksApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span><span>External links — Can open links in new tabs</span></div>{{end}}{{if .CameraApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-camera"></i></span><span>Camera — Can capture video from your camera</span></div>{{end}}{{if .MicrophoneApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-microphone"></i></span><span>Microphone — Can capture audio from your microphone</span></div>{{end}}{{end}}{{if .ShowManage}}<a class="capability-popover-manage" href="/artifacts/{{.ArtifactID}}/edit#security-panel">Manage security settings →</a>{{end}}</div>{{end}}
 
 {{/* shareBadge is the gallery card's sharing marker (av-6xjd). One badge
@@ -169,7 +169,7 @@
 
      A swap, not a reload: this page holds a live artifact frame, and reloading
      to show a new guest list would restart the tool the owner is looking at.
-     Data: detailPageData (gallery.go). */}}
+     Data: detailPageData (detail.go). */}}
 {{/* The owner's share panel (av-esa1). A modal, not a panel that holds
      layout: sharing is an occasional action on a page whose subject is the
      running tool, so it takes no room until it is asked for.
@@ -209,7 +209,7 @@
      and a name is attacker-influenced text (a login name, or an address an
      identity provider reported).
 
-     Data: sharePanelView (gallery.go). */}}
+     Data: sharePanelView (detail.go). */}}
 {{define "sharePanelBody"}}<div class="share-cols" data-artifact-id="{{.ArtifactID}}">
   <section class="share-col">
     <h3 class="text-sm muted">People</h3>
