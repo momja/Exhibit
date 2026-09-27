@@ -19,10 +19,11 @@
      definitions keep winning. */}}
 <link rel="stylesheet" href="/assets/gallery/components.css">
 <link rel="stylesheet" href="/assets/gallery/agent.css">
-{{/* htmx 4 swaps 4xx/5xx responses by default; the fragment 404s below
-     are plain text meant to leave the pane untouched, so pin the v2
-     behavior back via the meta config (av-3cdp). */}}
-<meta name="htmx-config" content='{"noSwap":[204,304,"4xx","5xx"]}'>
+{{/* htmx 4 swaps 4xx/5xx responses by default. The fragment 404s carry the
+     user-facing fragmentError partial and are meant to swap; 401/5xx stay
+     pinned to no-swap — those bodies are plain text, and a 500 may carry
+     internal error strings (av-3cdp). */}}
+<meta name="htmx-config" content='{"noSwap":[204,304,401,"5xx"]}'>
 <script src="/assets/htmx/htmx.min.js"></script>
 </head>
 <body>

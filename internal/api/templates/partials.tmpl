@@ -54,6 +54,13 @@
   </div>
 </div>{{end}}
 
+{{/* fragmentError is the user-facing 404 body every /partials/* route serves
+     when its artifact is gone (av-3cdp): htmx 4 swaps 4xx responses, so the
+     pane shows this notice instead of keeping a stale view with no
+     explanation. Kept on one line like the pill markup above — the fragment
+     tests assert on the contiguous class attr. Data: string (the message). */}}
+{{define "fragmentError"}}<div class="frag-error"><i class="ph ph-warning-circle"></i><span>{{.}}</span></div>{{end}}
+
 {{/* tagPanelBody is the edit page's Tags panel body: current tags with
      edit/remove controls, plus an add-or-create row. Shared by the page render
      and /partials/tag-panel. Data: tagPanelView (gallery.go). */}}

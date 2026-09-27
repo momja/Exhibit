@@ -332,6 +332,24 @@ func (ro *Router) widgetSource(r *http.Request, a *store.Artifact) string {
 }
 
 // cardWidgetPartial re-renders one artifact's tile as a standalone fragment
+// fragmentNotFound answers a /partials/* lookup for an artifact that is gone
+// (deleted, or outside the caller's library) with a 404 carrying the
+// user-facing fragmentError partial. htmx 4 swaps 4xx responses, so the pane
+// shows this notice instead of keeping a stale view with no explanation.
+// 401/5xx stay non-swapping via the pages' htmx-config meta tag: those bodies
+// are plain text, and a 500 may carry internal error strings (serverError
+// writes err.Error()), so they must never land in a pane.
+func fragmentNotFound(w http.ResponseWriter) {
+	fragment, err := renderPage("fragmentError", "Artifact not found. It may have been deleted.")
+	if err != nil {
+		http.Error(w, "artifact not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	fmt.Fprint(w, fragment)
+}
+
 // (av-fafu). The edit page's widget panel swaps it in after a save so the
 // preview updates without a page reload — which would drop the CodeMirror
 // buffer beside it — and without page JS assembling markup the cardWidget
@@ -347,9 +365,9 @@ func (ro *Router) cardWidgetPartial(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a == nil {
-		// Plain-text 404: htmx leaves the target untouched on an error
-		// response, so the visitor keeps the tile they had.
-		http.Error(w, "artifact not found", http.StatusNotFound)
+		// The pane swaps this 404's user-facing fragment in place of the
+		// tile it had, so the visitor learns the artifact is gone.
+		fragmentNotFound(w)
 		return
 	}
 	view := newWidgetView(a, ro.renderURLs(r))
@@ -375,7 +393,7 @@ func (ro *Router) tagPanelPartial(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a == nil {
-		http.Error(w, "artifact not found", http.StatusNotFound)
+		fragmentNotFound(w)
 		return
 	}
 	library, err := ro.cfg.Store.ListTags(r.Context(), ownerID)
@@ -412,9 +430,10 @@ func (ro *Router) sharePanelPartial(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a == nil {
-		// Plain-text 404: htmx leaves the target untouched on an error
-		// response, so the owner keeps the panel they had.
-		http.Error(w, "artifact not found", http.StatusNotFound)
+		// The panel swaps this 404's user-facing fragment in place of the
+		// panel it had. Same 404 a nonexistent artifact gets, so a
+		// recipient learns nothing about an artifact outside their shares.
+		fragmentNotFound(w)
 		return
 	}
 	view, err := ro.sharePanel(r, a)

@@ -16,10 +16,10 @@
      never a CDN. Loaded only where there is a panel to swap: a recipient's
      page has no share controls at all, so it should not carry the library
      that refreshes them. */}}
-{{if .Share}}{{/* htmx 4 swaps 4xx/5xx by default; the share-panel 404 is
-     plain text meant to leave the panel untouched, so pin the v2 behavior
-     back via the meta config (av-3cdp). */}}
-<meta name="htmx-config" content='{"noSwap":[204,304,"4xx","5xx"]}'>
+{{if .Share}}{{/* htmx 4 swaps 4xx/5xx by default. The share-panel 404 carries
+     the user-facing fragmentError partial and is meant to swap; 401/5xx stay
+     pinned to no-swap — plain text, never pane content (av-3cdp). */}}
+<meta name="htmx-config" content='{"noSwap":[204,304,401,"5xx"]}'>
 <script src="/assets/htmx/htmx.min.js"></script>{{end}}
 </head>
 <body>

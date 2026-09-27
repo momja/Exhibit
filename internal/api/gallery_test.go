@@ -158,7 +158,9 @@ func TestTagPanelPartial(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `data-action="detach-tag" data-tag-id="`+tag.ID+`"`)
 	assert.NotContains(t, w.Body.String(), `<option value="`+tag.ID+`">`)
 
-	assert.Equal(t, http.StatusNotFound, get("no-such-artifact").Code)
+	missing := get("no-such-artifact")
+	assert.Equal(t, http.StatusNotFound, missing.Code)
+	assert.Contains(t, missing.Body.String(), `class="frag-error"`)
 }
 
 // Search filters eagerly as the user types: an inline input with a debounce

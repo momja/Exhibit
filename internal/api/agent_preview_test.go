@@ -77,9 +77,9 @@ func TestAgentPreviewWithoutArtifactRendersEmptyState(t *testing.T) {
 	}
 }
 
-// An unknown artifact answers with a plain 404 rather than an empty-state
-// fragment: htmx leaves the target alone on an error response, so the visitor
-// keeps the preview they had instead of watching it blank out.
+// An unknown artifact answers 404 with the user-facing fragmentError
+// partial, which htmx swaps into the pane in place of the stale preview —
+// the visitor learns the artifact is gone instead of staring at its old body.
 func TestAgentPreviewUnknownArtifactIsNotFound(t *testing.T) {
 	r := newTestRouter(t)
 
@@ -88,6 +88,8 @@ func TestAgentPreviewUnknownArtifactIsNotFound(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), `class="frag-error"`)
+	assert.Contains(t, w.Body.String(), "Artifact not found. It may have been deleted.")
 	assert.NotContains(t, w.Body.String(), "empty-preview")
 }
 
@@ -102,7 +104,7 @@ func TestAgentPageWiresPreviewSwapToHtmx(t *testing.T) {
 	// htmx 4 swaps 4xx/5xx by default; the fragment 404s are plain text that
 	// must leave the pane untouched, so the page pins the v2 behavior back
 	// (av-3cdp).
-	assert.Contains(t, page, `<meta name="htmx-config" content='{"noSwap":[204,304,"4xx","5xx"]}'>`)
+	assert.Contains(t, page, `<meta name="htmx-config" content='{"noSwap":[204,304,401,"5xx"]}'>`)
 	assert.NotContains(t, page, "unpkg.com")
 	assert.Contains(t, page, `hx-get="/partials/agent-preview"`)
 	assert.Contains(t, page, `hx-trigger="exhibit:artifact-saved from:body"`)

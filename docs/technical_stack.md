@@ -350,11 +350,13 @@ it won over a hand-rolled fetch-and-swap helper. The rules it must follow:
   Phosphor icons below, and loaded from `/assets/htmx/htmx.min.js`.
 - Page JS keeps no cached references into a swappable region: after a swap the
   old nodes are gone. Resolve elements on use.
-- Error responses never swap: every page that loads htmx carries
-  `<meta name="htmx-config" content='{"noSwap":[204,304,"4xx","5xx"]}'>`,
-  pinning the v2 behavior htmx 4 changed (4xx/5xx swap by default). The
-  fragment 404s are plain text that must leave the target untouched, and
-  page JS listens for `htmx:after:swap` (the v4 event name).
+- A missing artifact is a user-facing error, not a silent no-op: every
+  `/partials/*` route answers an unknown id with 404 carrying the shared
+  `fragmentError` partial, which htmx swaps into the pane in place of the
+  stale view. Pages pin `noSwap` to `[204,304,401,"5xx"]` via the
+  `htmx-config` meta tag — 401/5xx bodies are plain text (a 500 may carry
+  internal error strings), so those never land in a pane. Page JS listens
+  for `htmx:after:swap` (the v4 event name).
 
 Shipped consumers: the agent surface's preview pane, re-rendered after every
 agent save (`architecture.md` §3.7, `docs/agent.md`); and the artifact edit
