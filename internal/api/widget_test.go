@@ -401,3 +401,27 @@ func TestWidgetBlobIDIsNotPatchable(t *testing.T) {
 	assert.Equal(t, `""`, artifactField(t, r, id, "widget_blob_id"),
 		"and the artifact still has no widget of its own")
 }
+
+// The widget routes leave the render origin out of the footprint.
+func TestWidgetFootprintDropsTheRenderOrigin(t *testing.T) {
+	r := newTestRouter(t)
+	id := createArtifact(t, r, map[string]any{
+		"title": "w", "body": "<html></html>", "network_allowlist": []string{},
+	})
+	widget := `<img src="http://render.test/a/` + id + `/assets/0f.png">` +
+		`<script src="https://cdn.example.com/chart.js"></script>`
+
+	put := putWidgetReq(t, r, id, widget)
+	require.Equal(t, http.StatusOK, put.Code, put.Body.String())
+	var saved widgetResponse
+	require.NoError(t, json.NewDecoder(put.Body).Decode(&saved))
+	assert.Equal(t, []string{"https://cdn.example.com"}, saved.NetworkFootprint)
+	assert.Equal(t, []string{"https://cdn.example.com"}, saved.Unapproved)
+
+	get := doJSON(t, r, "GET", "/api/artifacts/"+id+"/widget", nil)
+	require.Equal(t, http.StatusOK, get.Code, get.Body.String())
+	var read widgetResponse
+	require.NoError(t, json.NewDecoder(get.Body).Decode(&read))
+	assert.Equal(t, saved.NetworkFootprint, read.NetworkFootprint)
+	assert.Equal(t, saved.Unapproved, read.Unapproved)
+}

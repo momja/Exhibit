@@ -558,6 +558,19 @@ func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
 		"raw payload must never reach allowlist row markup")
 }
 
+// The edit page never offers the render origin as an Allow row. The write
+// paths drop it, so the row would never clear.
+func TestEditPageNeverOffersTheRenderOrigin(t *testing.T) {
+	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Vendored", Tier: store.Tier1,
+		CreatedAt: time.Now()}
+	src := `<img src="https://render.test/a/abc123/assets/0f.png">` +
+		`<script src="https://cdn.example.com/lib.js"></script>`
+	page, err := renderEditPage(a, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "")
+	require.NoError(t, err)
+
+	assert.Contains(t, page, `let unapproved = ["https://cdn.example.com"];`)
+}
+
 // av-p0a1: origins the artifact's body references but hasn't approved
 // (ingest-scan footprint minus the allowlist) surface as one-click "Allow"
 // rows and must never be written to the allowlist itself.

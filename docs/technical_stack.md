@@ -113,7 +113,8 @@ more than one 5 MiB part** in either direction (scope matters — callers above
 `Blob` still `io.ReadAll` a body, so this is a promise about the storage layer
 and not about the service); **a missing blob fails at `Get`**, forced by a
 one-byte read rather than a `Stat` that would cost a second round trip on every
-read; and **`Delete` does no existence check**, the interface's idempotent
+read, with an error satisfying `errors.Is(err, fs.ErrNotExist)` on both backends;
+and **`Delete` does no existence check**, the interface's idempotent
 contract existing precisely because `DeleteObject` already succeeds for a
 missing key. `architecture.md` §3.3 carries the reasoning, including why a
 partially-read reader is deliberately treated as unknown-length.

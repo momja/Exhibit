@@ -13,6 +13,9 @@ import (
 
 type Store interface {
 	Put(ctx context.Context, id string, r io.Reader) error
+	// Get opens the bytes stored under id. A missing id fails here, not at
+	// the first Read, with an error that satisfies errors.Is(err,
+	// fs.ErrNotExist) on every backend. (av-wu9d)
 	Get(ctx context.Context, id string) (io.ReadCloser, error)
 	// Delete removes the bytes stored under id (av-7jcq).
 	//

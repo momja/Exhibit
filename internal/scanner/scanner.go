@@ -18,25 +18,33 @@ import (
 
 // Scan parses an HTML document and returns a deduplicated list of origins
 // referenced by src, href, action attributes and inline fetch/import calls.
-// Relative references are dropped — use ScanWithBase to resolve them.
+// Relative references are dropped, even when the document has a <base>. Use
+// ScanDoc to resolve them.
 func Scan(body string) []string {
-	return scan(body, nil)
+	return scan(body, false)
 }
 
-// ScanWithBase behaves like Scan but, when baseURL is a non-empty absolute
-// http(s) URL, resolves relative references against it so residual external
-// origins still surface in the footprint. This matters for snapshot imports:
-// anything that couldn't be inlined (runtime-constructed fetch URLs, over-limit
-// assets) would otherwise be silently dropped and 404 at render time. When
-// baseURL is empty or not an absolute http(s) URL, the result equals Scan(body).
-// Absolute references are unaffected by the base in either entry point.
-func ScanWithBase(body, baseURL string) []string {
-	return scan(body, parseBase(baseURL))
+// ScanDoc behaves like Scan but resolves relative references against the
+// document's own <base href> when that is an absolute http(s) URL. Without
+// one, relatives resolve against the render origin, so they are dropped. The
+// <base> element itself is never reported.
+func ScanDoc(body string) []string {
+	return scan(body, true)
 }
 
-// scan is the shared implementation behind Scan and ScanWithBase. A nil base
-// drops relative references; a non-nil base resolves them to their real origin.
-func scan(body string, base *url.URL) []string {
+// scan is the shared implementation behind Scan and ScanDoc. followDocBase
+// decides whether relatives resolve through the document's own base or are
+// dropped.
+func scan(body string, followDocBase bool) []string {
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		doc = nil
+	}
+	var base *url.URL
+	if followDocBase && doc != nil {
+		base = docBase(doc)
+	}
+
 	seen := make(map[string]struct{})
 	add := func(raw string) {
 		origin := resolveOrigin(raw, base)
@@ -44,10 +52,7 @@ func scan(body string, base *url.URL) []string {
 			seen[origin] = struct{}{}
 		}
 	}
-
-	// Parse the HTML document
-	doc, err := html.Parse(strings.NewReader(body))
-	if err == nil {
+	if doc != nil {
 		walkHTML(doc, add)
 	}
 
@@ -65,7 +70,7 @@ func scan(body string, base *url.URL) []string {
 }
 
 // parseBase returns the parsed base URL when baseURL is a non-empty absolute
-// http(s) URL, and nil otherwise. A nil base makes ScanWithBase equal Scan.
+// http(s) URL, and nil otherwise.
 func parseBase(baseURL string) *url.URL {
 	if baseURL == "" {
 		return nil
@@ -80,9 +85,49 @@ func parseBase(baseURL string) *url.URL {
 	return u
 }
 
-// walkHTML traverses the HTML node tree and calls add for each URL attribute found.
+// docBase returns the document's base URL when it is an absolute http(s) URL,
+// and nil otherwise. As in the browser, the first base element with an href
+// wins even if the href is empty, and a base inside SVG, MathML or <template>
+// doesn't count. A protocol-relative href takes https, like resolveOrigin.
+func docBase(doc *html.Node) *url.URL {
+	href, ok := firstBaseHref(doc)
+	if !ok {
+		return nil
+	}
+	href = strings.TrimSpace(href)
+	if strings.HasPrefix(href, "//") {
+		href = "https:" + href
+	}
+	return parseBase(href)
+}
+
+// firstBaseHref returns the href of the base element docBase uses. The html
+// parser lowercases tag and attribute names, so exact matches suffice.
+func firstBaseHref(n *html.Node) (string, bool) {
+	if n.Type == html.ElementNode && n.Namespace == "" {
+		switch n.Data {
+		case "template":
+			return "", false
+		case "base":
+			for _, attr := range n.Attr {
+				if attr.Key == "href" && attr.Namespace == "" {
+					return attr.Val, true
+				}
+			}
+		}
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if href, ok := firstBaseHref(c); ok {
+			return href, true
+		}
+	}
+	return "", false
+}
+
+// walkHTML traverses the HTML node tree and calls add for each URL attribute
+// found. <base> is skipped because it fetches nothing itself.
 func walkHTML(n *html.Node, add func(string)) {
-	if n.Type == html.ElementNode {
+	if n.Type == html.ElementNode && n.Data != "base" {
 		for _, attr := range n.Attr {
 			switch {
 			case attr.Key == "src" || attr.Key == "action":
