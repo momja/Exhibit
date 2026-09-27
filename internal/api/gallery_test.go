@@ -565,7 +565,7 @@ func TestEditPageNeverOffersTheRenderOrigin(t *testing.T) {
 		CreatedAt: time.Now()}
 	src := `<img src="https://render.test/a/abc123/assets/0f.png">` +
 		`<script src="https://cdn.example.com/lib.js"></script>`
-	page, err := renderEditPage(a, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "")
+	page, err := renderEditPage(a, nil, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let unapproved = ["https://cdn.example.com"];`)
