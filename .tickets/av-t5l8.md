@@ -1,6 +1,6 @@
 ---
 id: av-t5l8
-status: open
+status: closed
 deps: []
 links: [av-8gyd]
 created: 2026-08-17T06:37:12Z
@@ -36,3 +36,9 @@ The open question is delivery: leave it bundled with av-8gyd, or cherry-pick it 
 - `widget_blob_id` remains absent from `updatableArtifactColumns`; the attach goes through a dedicated store method.
 - A test covers the attach path directly, so a future allowlist edit cannot silently break it again.
 
+
+## Notes
+
+**2026-09-28T03:47:33Z**
+
+Regression fixed on main in 4d7cd52 (via av-8gyd). Verified: go test ./internal/api/ passes, widget_blob_id still off the PATCH allowlist, all three save paths (API, set_widget, Generate button) share PUT /api/artifacts/{id}/widget. The Store interface comment for SetWidgetBlobID was stale (claimed an empty blobID detaches); corrected.
