@@ -419,8 +419,14 @@ func (ro *Router) sessionGate(next http.Handler) http.Handler {
 		}
 		// Only a top-level navigation can survive a trip to the provider.
 		// A fetch (htmx fragment, page JS) gets a status its caller can
-		// act on instead of an opaque redirect to an HTML login page.
+		// act on instead of an opaque redirect to an HTML login page. For an
+		// htmx fragment that status carries HX-Refresh, so the pane reloads
+		// into the login flow instead of swapping the bare 401 body into
+		// itself (htmx 4 swaps error responses).
 		if r.Method != http.MethodGet || r.Header.Get("HX-Request") != "" {
+			if r.Header.Get("HX-Request") != "" {
+				w.Header().Set("HX-Refresh", "true")
+			}
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}

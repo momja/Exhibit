@@ -26,6 +26,13 @@
  * is now carrying the whole meaning; the words live in aria-label/title. */
 .icon-btn{width:36px;height:36px;padding:0;justify-content:center;flex:0 0 auto;font-size:17px}
 .icon-btn i{line-height:1}
+/* A swapped-in fragment error (av-3cdp): a /partials/* lookup for an artifact
+ * that is gone answers 404 with the fragmentError partial, and htmx 4 swaps
+ * 4xx responses — so the pane shows this notice instead of keeping a stale
+ * view with no explanation. Lives here because every gallery page loads this
+ * sheet while each of the four panes sits under a different page sheet. */
+.frag-error{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-4) var(--space-5);background:#fee;border:1px solid #fbb;border-radius:var(--radius-md);color:#900;font-size:13px}
+.frag-error i{line-height:1}
 /* A control that is present but cannot act — /profile's delete button until
  * av-4wyq lands. It stays legible rather than ghosted, because the reason
  * beside it is the point and an unreadable control just sends the reader

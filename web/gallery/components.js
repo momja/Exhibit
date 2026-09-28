@@ -151,7 +151,7 @@
   }
   // Tiles also arrive by htmx swap (the edit page's preview, the agent pane),
   // so pick those up as they land rather than only at first paint.
-  document.addEventListener('htmx:afterSwap', function(e) { watchAll(e.target); });
+  document.addEventListener('htmx:after:swap', function(e) { watchAll(e.target); });
 
   window.addEventListener('message', function(e) {
     var d = e.data;

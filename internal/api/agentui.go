@@ -105,21 +105,21 @@ func (ro *Router) agentPreviewPartial(w http.ResponseWriter, r *http.Request) {
 	if id := r.URL.Query().Get("artifact"); id != "" {
 		a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 		if err != nil {
-			serverError(w, r, "agent preview lookup", err)
+			fragmentServerError(w, r, "agent preview lookup", err)
 			return
 		}
 		if a == nil {
-			// A fragment 404 is plain text on purpose: htmx leaves the pane
-			// untouched on an error response, so the visitor keeps the preview
-			// they had rather than watching it blank out.
-			http.Error(w, "artifact not found", http.StatusNotFound)
+			// The pane swaps this 404's user-facing fragment in place of the
+			// preview it had, so the visitor learns the artifact is gone
+			// instead of staring at its stale body.
+			fragmentNotFound(w)
 			return
 		}
 		artifact = a
 	}
 	fragment, err := renderPage("agentPreview", ro.newAgentPreviewData(r, artifact))
 	if err != nil {
-		serverError(w, r, "agent preview render", err)
+		fragmentServerError(w, r, "agent preview render", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

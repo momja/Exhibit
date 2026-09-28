@@ -6,6 +6,6 @@
     "build": "node build.mjs"
   },
   "devDependencies": {
-    "htmx.org": "^2.0.7"
+    "htmx.org": "^4.0.0"
   }
 }
