@@ -588,39 +588,7 @@ func TestPatchUnreadableOldBodyWritesNothing(t *testing.T) {
 	assert.Equal(t, `"wu9d"`, artifactField(t, r, id, "title"))
 }
 
-func TestRefetchArtifactOverwritesBody(t *testing.T) {
-	r := newTestRouter(t)
-
-	// The upstream page changes between create and refetch.
-	page := `<html><head><title>v1</title></head><body><h1>first</h1></body></html>`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		io.WriteString(w, page)
-	}))
-	defer srv.Close()
-
-	id := createArtifact(t, r, map[string]any{"url": srv.URL, "network_allowlist": []string{}})
-	// URL ingest injects the <base href> fallback into the stored body.
-	require.Equal(t,
-		`<html><head><base href="`+srv.URL+`"><title>v1</title></head><body><h1>first</h1></body></html>`,
-		getArtifactBody(t, r, id))
-
-	// Upstream now serves new content that also references an external origin.
-	page = `<html><head><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head><body><h1>second</h1></body></html>`
-
-	req := httptest.NewRequest("POST", "/api/artifacts/"+id+"/refetch", nil)
-	req.Header.Set("Authorization", authHeader())
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	var updated map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&updated))
-	// The stored body is overwritten with the fresh snapshot.
-	assert.Equal(t, page, getArtifactBody(t, r, id))
-	// The allowlist is re-scanned from the new content.
-	assert.Contains(t, updated["network_allowlist"], "https://cdn.jsdelivr.net")
-}
+// NOTE: refetch behavior is covered in refetch_test.go (av-reo3, av-b17a).
 
 func TestRefetchArtifactWithoutSourceURL(t *testing.T) {
 	r := newTestRouter(t)

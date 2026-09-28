@@ -413,6 +413,13 @@ type Store interface {
 	// caller-writable: the generic update map is a decoded PATCH body, and
 	// this id is minted server-side.
 	SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error
+	// ReplaceSourceBlob points an artifact at a new body blob and returns the
+	// blob ids it enqueued for deletion. The refetch write path (av-reo3):
+	// the fresh body is stored first under a new id, then the row is repointed
+	// here, so a crash mid-refetch leaves the artifact on its previous body
+	// rather than half a new one. Separate from UpdateArtifact for the same
+	// reason SetWidgetBlobID is: source_blob_id is not caller-writable.
+	ReplaceSourceBlob(ctx context.Context, ownerID int64, id, newBlobID, sourceText string) ([]string, error)
 	// DeleteArtifact removes the artifact and returns the blob ids it queued
 	// for deletion; DeleteWidget does the same for the widget an artifact
 	// detaches. Both enqueue inside the transaction that dropped the

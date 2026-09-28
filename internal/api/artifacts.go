@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -722,10 +723,39 @@ func sameOrigins(a, b []string) bool {
 	return true
 }
 
-// refetchArtifact re-fetches the current HTML/CSS/JS from an artifact's source
-// URL and overwrites the stored body with that fresh snapshot. This is a
-// destructive snapshot replace — not versioned, no history. The network
-// allowlist is re-scanned from the new content; the title is left untouched.
+// refetchArtifactResponse is the POST /api/artifacts/:id/refetch body. The
+// artifact is always present; network_footprint/footprint_changed carry the
+// same contract as the PATCH path, so newly observed origins reach the
+// approval flow's UI instead of being written to the allowlist (av-b17a).
+// Snapshot reports what the re-run of the ingest pipeline did, mirroring
+// create.
+type refetchArtifactResponse struct {
+	Artifact         *store.Artifact `json:"artifact"`
+	NetworkFootprint []string        `json:"network_footprint"`
+	FootprintChanged bool            `json:"footprint_changed"`
+	Snapshot         *snapshotReport `json:"snapshot,omitempty"`
+}
+
+// refetchArtifact re-fetches an artifact's source URL and replaces the stored
+// body with that fresh snapshot (av-reo3, av-b17a).
+//
+// Three protocol-level guards run before anything is written, and each leaves
+// the artifact byte-identical: a non-2xx status (the server is saying "this
+// is not the resource"), an empty body, and a non-HTML content type. None of
+// these can be an artifact, and all three are read off the response — never
+// inferred from the content. A source that serves a *different but valid*
+// page is serving a different page: that refetch succeeds, because telling
+// "replaced" from "redesigned" would mean judging intent from content,
+// which this system does not do.
+//
+// The write itself is new-blob-then-repoint, never an in-place overwrite: the
+// fresh body lands under a new blob id, the row is repointed to it, and the
+// old id is condemned through the deletion queue. A crash mid-refetch leaves
+// the artifact on its previous body. The allowlist is never written — new
+// origins surface via the footprint for explicit approval (spec §6.2) — and
+// the same snapshot pipeline as ingest runs, so a vendored artifact stays
+// vendored. A refetch that produces no assets leaves the existing asset
+// generation untouched: no assets is not superseded assets.
 func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
@@ -752,29 +782,134 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+	// The server answered with something that is not the resource. Store the
+	// error page and the artifact becomes the error page.
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		http.Error(w, fmt.Sprintf("refetch: source returned %s; artifact unchanged", resp.Status), http.StatusBadRequest)
+		return
+	}
 	fetched, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		http.Error(w, "failed to read URL content: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	if len(fetched) == 0 {
+		http.Error(w, "refetch: source returned an empty body; artifact unchanged", http.StatusBadRequest)
+		return
+	}
+	// Read off the header, not the bytes: anything explicitly not-HTML is
+	// not a page. An absent header is allowed through — that is a missing
+	// claim, not a contrary one — and the status and empty guards above
+	// still hold.
+	if ctype := resp.Header.Get("Content-Type"); ctype != "" {
+		if mt, _, merr := mime.ParseMediaType(ctype); merr != nil || (mt != "text/html" && mt != "application/xhtml+xml") {
+			http.Error(w, fmt.Sprintf("refetch: source returned content type %q; artifact unchanged", ctype), http.StatusBadRequest)
+			return
+		}
+	}
 
-	// Overwrite the existing blob with the fresh snapshot.
-	if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, a.SourceBlobID, bytes.NewReader(fetched)); err != nil {
-		serverError(w, r, "refetch update body", err)
+	// Read the previous body before anything is written, for the footprint
+	// diff below. A missing body still proceeds — the rewrite repairs it —
+	// and counts as changed, the way the PATCH path treats an unknown
+	// baseline (av-wu9d). Any other read failure aborts before writing.
+	var oldBody string
+	baselineLost := false
+	rc, gerr := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
+	switch {
+	case errors.Is(gerr, fs.ErrNotExist):
+		baselineLost = true
+		slog.WarnContext(r.Context(), "refetch found no previous body; rewriting with no footprint baseline",
+			slog.String("id", id), slog.String("blob_id", a.SourceBlobID))
+	case gerr != nil:
+		serverError(w, r, "read previous artifact body", gerr)
+		return
+	default:
+		prev, perr := io.ReadAll(rc)
+		rc.Close()
+		if perr != nil {
+			serverError(w, r, "read previous artifact body", perr)
+			return
+		}
+		oldBody = string(prev)
+	}
+
+	// The same snapshot pipeline as ingest (av-b17a): vendor into a
+	// self-contained document, inject the <base href> fallback, and report
+	// what vendoring did. Refetching a page must not silently de-vendor it.
+	collector := newAssetCollector(ro.cfg.RenderOrigin, id)
+	newBody, runtimeAssets, snapReport := snapshotBody(r.Context(), a.SourceURL, string(fetched), collector.sink)
+	newBody = snapshot.InjectBaseHref(newBody, a.SourceURL)
+	footprint := networkFootprint(newBody, ro.cfg.RenderOrigin)
+	if snapReport != nil {
+		snapReport.ResidualOrigins = footprint
+	}
+
+	respond := func(artifact *store.Artifact, changed bool) {
+		if footprint == nil {
+			footprint = []string{}
+		}
+		writeJSON(w, http.StatusOK, refetchArtifactResponse{
+			Artifact:         artifact,
+			NetworkFootprint: footprint,
+			FootprintChanged: changed,
+			Snapshot:         snapReport,
+		})
+	}
+
+	// An unchanged refetch writes nothing: no new blob, no repoint, no new
+	// asset generation. (A page whose markup assets were re-vendored under
+	// fresh random ids legitimately diffs here and takes the write path —
+	// correctness first, dedupe later.)
+	if !baselineLost && newBody == oldBody {
+		slog.DebugContext(r.Context(), "artifact refetch unchanged",
+			slog.String("id", id), slog.Int("body_bytes", len(newBody)))
+		respond(a, false)
+		return
+	}
+	changed := baselineLost || !sameOrigins(footprint, networkFootprint(oldBody, ro.cfg.RenderOrigin))
+
+	// New blob first, then repoint: nothing is destroyed until the
+	// replacement is durably in place. If the repoint below fails, the row
+	// still names the old body and the orphaned new blob is untracked but
+	// harmless — the same tradeoff the create path makes.
+	newBlobID := uuid.New().String()
+	if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, newBlobID, bytes.NewReader([]byte(newBody))); err != nil {
+		serverError(w, r, "refetch store body", err)
+		return
+	}
+	queued, err := ro.cfg.Store.ReplaceSourceBlob(r.Context(), ownerID, id, newBlobID, store.ExtractSearchText(newBody))
+	if err != nil {
+		writeArtifactError(w, r, "refetch repoint body", err)
 		return
 	}
 
-	// Re-scan the network footprint and bump updated_at. Title is preserved.
-	updates := map[string]any{
-		"network_allowlist": ro.withoutRenderOrigin(scanner.Scan(string(fetched))),
-		"source_text":       store.ExtractSearchText(string(fetched)),
-	}
-	if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, updates); err != nil {
-		writeArtifactError(w, r, "refetch update artifact", err)
-		return
+	// Assets only when the pipeline produced some. An asset-less refetch
+	// must not retire the existing generation: ReplaceArtifactAssets with
+	// an empty set would delete every asset row and condemn every payload
+	// blob, which is strictly worse than leaving them. (av-reo3 assets trap.)
+	if collected := collector.merge(runtimeAssets); len(collected) > 0 {
+		if err := ro.persistRuntimeAssets(r.Context(), ownerID, id, collected); err != nil {
+			slog.WarnContext(r.Context(), "store refetched runtime assets",
+				slog.String("artifact_id", id), slog.String("err", err.Error()))
+			if snapReport != nil {
+				snapReport.Failures = append(snapReport.Failures, snapshotFailure{
+					Kind: "asset_store", Detail: err.Error(),
+				})
+			}
+		}
 	}
 
-	slog.InfoContext(r.Context(), "artifact refetched", slog.String("id", id), slog.Int("body_bytes", len(fetched)))
+	// The rows are repointed and the old bytes condemned; now remove them.
+	// A failure here is warned, not returned: the artifact is already
+	// updated, and the queue row survives for the next startup drain —
+	// failing the request over a delayed unlink would report a failure that
+	// is not one.
+	if err := ro.reclaimBlobs(r.Context(), queued); err != nil {
+		slog.WarnContext(r.Context(), "reclaim superseded refetch blobs",
+			slog.String("artifact_id", id), slog.String("err", err.Error()))
+	}
+
+	slog.InfoContext(r.Context(), "artifact refetched", slog.String("id", id), slog.Int("body_bytes", len(newBody)))
 
 	a, err = ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
@@ -785,7 +920,7 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "reload artifact after refetch", errors.New("artifact vanished after refetch"))
 		return
 	}
-	writeJSON(w, http.StatusOK, a)
+	respond(a, changed)
 }
 
 func (ro *Router) deleteArtifact(w http.ResponseWriter, r *http.Request) {

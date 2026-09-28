@@ -934,8 +934,10 @@ window.ExhibitNetworkPrompt.install({
 async function refetchSource() {
   const warning = 'Re-fetch a fresh snapshot from the source URL?\n\n' +
     SOURCE_URL + '\n\n' +
-    'This overwrites the stored content with whatever the URL returns now and ' +
-    're-scans its network allowlist. It is NOT versioned and cannot be undone. ' +
+    'This replaces the stored content with whatever the URL returns now and ' +
+    'reports what network the new content contacts. The allowlist is never ' +
+    'changed — new origins need your approval before they load. ' +
+    'It is NOT versioned and cannot be undone. ' +
     "The artifact's saved state/data may break if the new content changed.";
   if (!confirm(warning)) return;
   const st = document.getElementById('al-status');
@@ -947,6 +949,18 @@ async function refetchSource() {
     if (!r.ok) {
       const txt = await r.text().catch(() => '');
       st.textContent = '✗ Error: ' + (txt.trim() || r.statusText);
+      return;
+    }
+    const data = await r.json().catch(() => ({}));
+    // The refetch response carries the same footprint contract as the edit
+    // save: new origins are reported, never approved. Name them before the
+    // reload takes the page away, so the approval prompt at runtime (or the
+    // edit page's allowlist settings) is not the first the user hears of it.
+    const footprint = data.network_footprint || [];
+    if (data.footprint_changed && footprint.length > 0) {
+      st.textContent = '✓ Updated — now contacts: ' + footprint.join(', ') +
+        '. Reloading; unapproved origins will ask for approval.';
+      setTimeout(() => window.location.reload(), 2500);
       return;
     }
     st.textContent = '✓ Updated — reloading…';
