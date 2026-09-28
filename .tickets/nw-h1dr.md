@@ -1,6 +1,6 @@
 ---
 id: nw-h1dr
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-09-28T00:00:00Z
