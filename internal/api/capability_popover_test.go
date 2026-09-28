@@ -329,9 +329,10 @@ func TestCapabilityClusterPartialReflectsCurrentAllowlist(t *testing.T) {
 	}
 }
 
-// An unknown artifact answers with a plain 404 rather than an empty badge:
-// htmx leaves the target alone on an error response, so the visitor keeps
-// the badge they had instead of watching it blank out.
+// An unknown artifact answers 404 with the user-facing fragmentError
+// partial, which htmx swaps into the toolbar in place of the stale badge —
+// the visitor learns the artifact is gone instead of staring at its old
+// posture.
 func TestCapabilityClusterPartialUnknownArtifactIsNotFound(t *testing.T) {
 	r := newTestRouter(t)
 
@@ -340,6 +341,8 @@ func TestCapabilityClusterPartialUnknownArtifactIsNotFound(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), `class="frag-error"`)
+	assert.Contains(t, w.Body.String(), "Artifact not found. It may have been deleted.")
 	assert.NotContains(t, w.Body.String(), "capability-cluster")
 }
 

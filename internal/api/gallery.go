@@ -488,19 +488,19 @@ func (ro *Router) capabilityClusterPartial(w http.ResponseWriter, r *http.Reques
 	viewerID := ownerIDFromCtx(r.Context())
 	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(viewerID), r.URL.Query().Get("artifact"))
 	if err != nil {
-		serverError(w, r, "capability cluster partial lookup", err)
+		fragmentServerError(w, r, "capability cluster partial lookup", err)
 		return
 	}
 	if a == nil {
-		// Plain-text 404: htmx leaves the target untouched on an error
-		// response, so the visitor keeps the badge they had.
-		http.Error(w, "artifact not found", http.StatusNotFound)
+		// The toolbar swaps this 404's user-facing fragment in place of the
+		// badge it had, so the visitor learns the artifact is gone.
+		fragmentNotFound(w)
 		return
 	}
 	creds := ro.pageCredentials(r).forArtifactOwnedBy(viewerID, a.OwnerID)
 	fragment, err := renderPage("capabilityCluster", newCapabilityView(a, !creds.ReadOnly))
 	if err != nil {
-		serverError(w, r, "capability cluster partial render", err)
+		fragmentServerError(w, r, "capability cluster partial render", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
