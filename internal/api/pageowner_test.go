@@ -97,6 +97,12 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 		ownPath: "/partials/card-widget?artifact={id}", foreignPath: "/partials/card-widget?artifact={id}"},
 	{route: "/partials/tag-panel", ownerScoped: true,
 		ownPath: "/partials/tag-panel?artifact={id}", foreignPath: "/partials/tag-panel?artifact={id}"},
+	// The capability badge + popover (av-mf1x). Owner-scoped like the detail
+	// page it is swapped into: another tenant without a grant gets the 404
+	// the page gives them, while a recipient with a grant reads the posture
+	// minus the Manage link (asserted in capability_popover_test.go).
+	{route: "/partials/capability-cluster", ownerScoped: true,
+		ownPath: "/partials/capability-cluster?artifact={id}", foreignPath: "/partials/capability-cluster?artifact={id}"},
 	// The owner's share panel (av-6xjd). Owner-scoped for a reason beyond the
 	// usual one: the fragment lists *who else* an artifact was given to, and a
 	// guest list is exactly the thing a recipient — let alone another tenant —

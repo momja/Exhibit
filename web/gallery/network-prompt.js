@@ -155,6 +155,13 @@
         // about origins the fresh load is about to raise on its own.
         queue.length = 0;
         report('Applying…');
+        // The artifact's posture just changed, and the toolbar's capability
+        // badge still describes the allowlist as it was at page load
+        // (av-mf1x). Fire before the reload so the fragment re-fetch runs
+        // while the frame refetches. A page with no capability-cluster
+        // target — the agent page shares this module — hears nothing, which
+        // is correct: there is no badge there to refresh.
+        document.body.dispatchEvent(new CustomEvent('exhibit:capabilities-changed'));
         reload();
       });
     },

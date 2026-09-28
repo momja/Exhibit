@@ -64,7 +64,17 @@
        this artifact may reach is a fact about the tool running in the visitor's
        own browser — the one piece of the owner's configuration a recipient has
        a direct stake in, and what the CSP-block explanation points back at. */}}
-  {{template "capabilityCluster" .Capability}}
+  {{/* The cluster is an htmx target (av-mf1x): after a runtime origin
+       approval the prompt fires exhibit:capabilities-changed on <body> and
+       htmx re-fetches the fragment, so the toolbar stops describing the
+       allowlist as it was at page load. innerHTML, because the fragment
+       renders the capabilityCluster partial itself. For a recipient htmx is
+       not loaded and these attributes are inert — they cannot approve
+       anything, so there is nothing to refresh. */}}
+  <div id="capability-cluster"
+       hx-get="/partials/capability-cluster?artifact={{.ID}}"
+       hx-trigger="exhibit:capabilities-changed from:body"
+       hx-swap="innerHTML">{{template "capabilityCluster" .Capability}}</div>
   {{if not .ReadOnly}}
   <a href="/artifacts/{{.ID}}/edit#security-panel">Manage in allowlist settings →</a>
   {{/* Opens the share modal (av-esa1). A button rather than a link because the

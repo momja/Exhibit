@@ -361,10 +361,14 @@ it won over a hand-rolled fetch-and-swap helper. The rules it must follow:
   (the v4 event name).
 
 Shipped consumers: the agent surface's preview pane, re-rendered after every
-agent save (`architecture.md` §3.7, `docs/agent.md`); and the artifact edit
+agent save (`architecture.md` §3.7, `docs/agent.md`); the artifact edit
 page's widget panel, which swaps `/partials/card-widget` after a save so the
 tile refreshes without a reload that would drop the CodeMirror buffer beside it
-(`docs/widgets.md`).
+(`docs/widgets.md`); and the detail page's capability badge + popover, which
+swap `/partials/capability-cluster` when the runtime network prompt fires
+`exhibit:capabilities-changed` after an origin approval (av-mf1x) — the frame
+reloads transparently under the widened CSP, and the toolbar follows without
+a page reload.
 
 **Home-screen app shell (av-fdcx).** Every app-origin page head includes the shared
 `pwaHead` partial: the `manifest.json` link plus the `apple-*` tags iOS reads instead

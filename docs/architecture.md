@@ -1112,7 +1112,12 @@ is the agent surface's preview pane (§3.7); the wiring (trigger, target, swap)
 sits in the markup, so page JS only dispatches the event that says "something
 changed". `/partials/card-widget` is the second: the edit page's widget panel
 swaps it after a save, refreshing the tile without a reload that would drop
-the CodeMirror buffer beside it.
+the CodeMirror buffer beside it. `/partials/capability-cluster` is the same
+shape on the detail page (av-mf1x): after a runtime origin approval the
+prompt reloads the frame transparently under the widened CSP and fires
+`exhibit:capabilities-changed`, and the toolbar badge + popover re-render
+from the same partial — so the chrome beside the frame stops describing the
+allowlist as it was at page load.
 
 **Card widgets (av-fafu).** Each card leads with a tile: either the artifact's
 widget in a sandboxed frame from `RENDER_ORIGIN/w/:id`, or — when it has none —

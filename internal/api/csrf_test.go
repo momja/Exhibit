@@ -98,6 +98,12 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/partials/agent-preview"},
 	{route: "/partials/card-widget"},
 	{route: "/partials/tag-panel"},
+	// The capability badge + popover (av-mf1x), re-rendered after a runtime
+	// origin approval. A read for the same reason: the posture it reports is
+	// rendered from the artifact's allowlist, and every mutation that widens
+	// that allowlist goes through POST /api/artifacts/:id/origins — an unsafe
+	// method this list does not cover and Lax withholds the cookie from.
+	{route: "/partials/capability-cluster"},
 	// The owner's share panel, re-rendered after a change (av-6xjd). It reads
 	// that artifact's share rows and renders them; every mutation the panel
 	// makes goes to /api/shares or the artifact PATCH, under an unsafe method
