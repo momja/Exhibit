@@ -1,6 +1,6 @@
 ---
 id: av-diue
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-09-28T06:05:45Z
