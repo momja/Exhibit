@@ -567,7 +567,9 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
   worker. None of these are part of a release — they're things a deployer adds around
   the image.
 - **Build-time only:** Go toolchain, Node + esbuild (to bundle CodeMirror and vendor
-  the Phosphor icon and htmx assets — see `build_assets.md`), `goose` (migrations are embedded
+  the Phosphor icon and htmx assets — see `build_assets.md`), python3 +
+  fonttools/brotli (to subset the Phosphor font to the `web/icons/icons.txt`
+  registry — see `build_assets.md` §6), `goose` (migrations are embedded
   and run from the binary). Dev-only: golangci-lint (`make lint`, not vendored) and
   ESLint for the editor workspace (§5).
 

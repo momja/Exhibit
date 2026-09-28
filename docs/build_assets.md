@@ -15,6 +15,9 @@ we produce it fresh whenever the binary is built.
 > **Node is a build-time-only dependency.** The build generates the assets into
 > `internal/api/assets/`; nothing under that directory is committed to git. Production
 > carries only the built bytes.
+>
+> One workspace needs more than Node: `web/icons` subsets the Phosphor font with
+> python3 + fonttools/brotli (§7) — a build-time-only dependency like Node itself.
 
 This keeps generated output out of version control (no stale bundles, no noisy diffs on
 dependency bumps) while preserving the deployment promise: one small image, one process,
@@ -55,8 +58,10 @@ Same script in every context:
 
 The `Dockerfile` is a three-stage build:
 
-1. **`assets` stage** (`node:22-bookworm-slim`) — copies `web/` and `scripts/`, runs
-   `scripts/build-assets.sh`, producing `internal/api/assets/`.
+1. **`assets` stage** (`node:22-bookworm-slim`) — apt-installs `python3`,
+   `python3-fonttools`, and `python3-brotli` for the icon subset step (§7), then
+   copies `web/` and `scripts/` and runs `scripts/build-assets.sh`, producing
+   `internal/api/assets/`.
 2. **`builder` stage** (`golang:1.25`) — copies the source, then overlays the freshly
    built assets with `COPY --from=assets /app/internal/api/assets/ ./internal/api/assets/`
    so `go:embed` finds them at compile time, then `go build`.
@@ -80,7 +85,30 @@ No build-plumbing edits required:
 `docker build`. Add the built output path to `.gitignore` if it lands outside the
 already-ignored `internal/api/assets/` tree (it shouldn't).
 
-## 6. Why "generate, don't commit" is safe
+## 6. The Phosphor icon registry
+
+The icons workspace (`web/icons`) does two load-time trims while vendoring: it
+rewrites upstream's `font-display: block` to `swap`, and it subsets the font and
+stylesheet to exactly the icon classes listed in `web/icons/icons.txt` (~50 of
+1530 — woff2 147KB → 6KB, CSS 78KB → 5KB). The set is **explicit, not scraped**:
+adding an icon means adding one `ph-*` line to that file and rebuilding assets
+(`make assets`).
+
+The failure modes are loud by design:
+
+- A registry name matching no upstream rule fails the build
+  (`icons.txt: .ph-… matches no upstream rule`) — a typo breaks the build,
+  never ships tofu.
+- A template, script, or stylesheet naming an unregistered icon fails
+  `TestIconRegistryCoversUsage`, which names the missing icon and the fix.
+- A registry or template edit without a rebuild fails `TestServedCSSCoversUsage`
+  against the embedded CSS.
+
+Subsetting needs python3 + fonttools/brotli. The Dockerfile's asset stage installs
+them (§4); a local checkout without them warns and ships the full font with the
+swap rewrite still applied, so `make assets` keeps working everywhere.
+
+## 7. Why "generate, don't commit" is safe
 
 The design fails **loud**, never silent:
 
