@@ -275,12 +275,15 @@ func TestSessionAuthenticatesPagesAndAPI(t *testing.T) {
 	assert.Equal(t, "/auth/login?next=%2Fartifacts%2Fxyz", w.Header().Get("Location"))
 
 	// Unauthenticated htmx fragment: a status, not a redirect to an HTML
-	// page it would happily swap into the document.
+	// page it would happily swap into the document. HX-Refresh reloads the
+	// page into the login flow instead of swapping the bare 401 body
+	// (htmx 4 swaps error responses; av-3cdp).
 	req := httptest.NewRequest("GET", "/partials/card-widget?id=xyz", nil)
 	req.Header.Set("HX-Request", "true")
 	w = httptest.NewRecorder()
 	ro.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, "true", w.Header().Get("HX-Refresh"))
 
 	session := runLogin(t, ro)
 

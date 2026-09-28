@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -331,14 +332,10 @@ func (ro *Router) widgetSource(r *http.Request, a *store.Artifact) string {
 	return string(body)
 }
 
-// cardWidgetPartial re-renders one artifact's tile as a standalone fragment
 // fragmentNotFound answers a /partials/* lookup for an artifact that is gone
 // (deleted, or outside the caller's library) with a 404 carrying the
 // user-facing fragmentError partial. htmx 4 swaps 4xx responses, so the pane
 // shows this notice instead of keeping a stale view with no explanation.
-// 401/5xx stay non-swapping via the pages' htmx-config meta tag: those bodies
-// are plain text, and a 500 may carry internal error strings (serverError
-// writes err.Error()), so they must never land in a pane.
 func fragmentNotFound(w http.ResponseWriter) {
 	fragment, err := renderPage("fragmentError", "Artifact not found. It may have been deleted.")
 	if err != nil {
@@ -350,6 +347,28 @@ func fragmentNotFound(w http.ResponseWriter) {
 	fmt.Fprint(w, fragment)
 }
 
+// fragmentServerError answers a /partials/* failure (a store or render error
+// behind the fragment) with a 500 carrying the generic fragmentError partial.
+// htmx swaps it into the pane in place of the stale view. The real error is
+// logged server-side only: unlike serverError it never reaches the response
+// body, so no internal string can land in the DOM through a swap.
+func fragmentServerError(w http.ResponseWriter, r *http.Request, label string, err error) {
+	slog.ErrorContext(r.Context(), label,
+		slog.String("err", err.Error()),
+		slog.String("method", r.Method),
+		slog.String("path", r.URL.Path),
+	)
+	fragment, ferr := renderPage("fragmentError", "Something went wrong.")
+	if ferr != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusInternalServerError)
+	fmt.Fprint(w, fragment)
+}
+
+// cardWidgetPartial re-renders one artifact's tile as a standalone fragment
 // (av-fafu). The edit page's widget panel swaps it in after a save so the
 // preview updates without a page reload — which would drop the CodeMirror
 // buffer beside it — and without page JS assembling markup the cardWidget
@@ -361,7 +380,7 @@ func fragmentNotFound(w http.ResponseWriter) {
 func (ro *Router) cardWidgetPartial(w http.ResponseWriter, r *http.Request) {
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), r.URL.Query().Get("artifact"))
 	if err != nil {
-		serverError(w, r, "card widget partial lookup", err)
+		fragmentServerError(w, r, "card widget partial lookup", err)
 		return
 	}
 	if a == nil {
@@ -376,7 +395,7 @@ func (ro *Router) cardWidgetPartial(w http.ResponseWriter, r *http.Request) {
 	}
 	fragment, err := renderPage("cardWidget", view)
 	if err != nil {
-		serverError(w, r, "card widget partial render", err)
+		fragmentServerError(w, r, "card widget partial render", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -389,7 +408,7 @@ func (ro *Router) tagPanelPartial(w http.ResponseWriter, r *http.Request) {
 	ownerID := ownerIDFromCtx(r.Context())
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, r.URL.Query().Get("artifact"))
 	if err != nil {
-		serverError(w, r, "tag panel partial lookup", err)
+		fragmentServerError(w, r, "tag panel partial lookup", err)
 		return
 	}
 	if a == nil {
@@ -398,12 +417,12 @@ func (ro *Router) tagPanelPartial(w http.ResponseWriter, r *http.Request) {
 	}
 	library, err := ro.cfg.Store.ListTags(r.Context(), ownerID)
 	if err != nil {
-		serverError(w, r, "tag panel partial list tags", err)
+		fragmentServerError(w, r, "tag panel partial list tags", err)
 		return
 	}
 	fragment, err := renderPage("tagPanelBody", newTagPanelView(a, library))
 	if err != nil {
-		serverError(w, r, "tag panel partial render", err)
+		fragmentServerError(w, r, "tag panel partial render", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -426,7 +445,7 @@ func (ro *Router) sharePanelPartial(w http.ResponseWriter, r *http.Request) {
 	ownerID := ownerIDFromCtx(r.Context())
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, r.URL.Query().Get("artifact"))
 	if err != nil {
-		serverError(w, r, "share panel partial lookup", err)
+		fragmentServerError(w, r, "share panel partial lookup", err)
 		return
 	}
 	if a == nil {
@@ -438,12 +457,12 @@ func (ro *Router) sharePanelPartial(w http.ResponseWriter, r *http.Request) {
 	}
 	view, err := ro.sharePanel(r, a)
 	if err != nil {
-		serverError(w, r, "share panel partial shares", err)
+		fragmentServerError(w, r, "share panel partial shares", err)
 		return
 	}
 	fragment, err := renderPage("sharePanelBody", view)
 	if err != nil {
-		serverError(w, r, "share panel partial render", err)
+		fragmentServerError(w, r, "share panel partial render", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

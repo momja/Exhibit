@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -161,6 +162,22 @@ func TestTagPanelPartial(t *testing.T) {
 	missing := get("no-such-artifact")
 	assert.Equal(t, http.StatusNotFound, missing.Code)
 	assert.Contains(t, missing.Body.String(), `class="frag-error"`)
+}
+
+// A store failure behind a fragment answers 500 with the generic error
+// notice, never the internal error string: htmx swaps it into the pane, so
+// internals must not reach the body (av-3cdp).
+func TestFragmentServerErrorHidesInternals(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/partials/tag-panel?artifact=x", nil)
+	fragmentServerError(w, r, "test label", errors.New("sqlite: disk I/O error"))
+
+	require.Equal(t, http.StatusInternalServerError, w.Code)
+	body := w.Body.String()
+	assert.Equal(t, "text/html; charset=utf-8", w.Header().Get("Content-Type"))
+	assert.Contains(t, body, `class="frag-error"`)
+	assert.Contains(t, body, "Something went wrong.")
+	assert.NotContains(t, body, "disk I/O error")
 }
 
 // Search filters eagerly as the user types: an inline input with a debounce

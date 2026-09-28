@@ -105,7 +105,7 @@ func (ro *Router) agentPreviewPartial(w http.ResponseWriter, r *http.Request) {
 	if id := r.URL.Query().Get("artifact"); id != "" {
 		a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 		if err != nil {
-			serverError(w, r, "agent preview lookup", err)
+			fragmentServerError(w, r, "agent preview lookup", err)
 			return
 		}
 		if a == nil {
@@ -119,7 +119,7 @@ func (ro *Router) agentPreviewPartial(w http.ResponseWriter, r *http.Request) {
 	}
 	fragment, err := renderPage("agentPreview", ro.newAgentPreviewData(r, artifact))
 	if err != nil {
-		serverError(w, r, "agent preview render", err)
+		fragmentServerError(w, r, "agent preview render", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
