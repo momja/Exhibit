@@ -13,10 +13,7 @@
 <link rel="stylesheet" href="/assets/gallery/edit.css">
 {{/* htmx drives the widget panel's preview swap (av-fafu); self-hosted from
      the app origin like every other asset, never a CDN. */}}
-{{/* htmx 4 swaps 4xx/5xx responses by default. The fragment 404s carry the
-     user-facing fragmentError partial and are meant to swap; 401/5xx stay
-     pinned to no-swap — those bodies are plain text, and a 500 may carry
-     internal error strings (av-3cdp). */}}
+{{/* 404s swap the fragmentError notice; 401/5xx never swap (av-3cdp). */}}
 <meta name="htmx-config" content='{"noSwap":[204,304,401,"5xx"]}'>
 <script src="/assets/htmx/htmx.min.js"></script>
 </head>
