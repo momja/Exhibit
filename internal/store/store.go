@@ -342,10 +342,12 @@ type Store interface {
 	GetArtifactReadableBy(ctx context.Context, viewerID ViewerID, id string) (*Artifact, error)
 	ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error)
 	UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error
-	// SetWidgetBlobID attaches (or, with an empty blobID, detaches) the
-	// artifact's gallery-card widget body. Separate from UpdateArtifact
-	// because widget_blob_id is not caller-writable: the generic update map is
-	// a decoded PATCH body, and this id is minted server-side.
+	// SetWidgetBlobID attaches the artifact's gallery-card widget body, and
+	// refuses an empty blobID: detaching is DeleteWidget's job, because
+	// dropping the reference and enqueuing the bytes has to happen in one
+	// transaction. Separate from UpdateArtifact because widget_blob_id is not
+	// caller-writable: the generic update map is a decoded PATCH body, and
+	// this id is minted server-side.
 	SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error
 	// DeleteArtifact removes the artifact and returns the blob ids it queued
 	// for deletion; DeleteWidget does the same for the widget an artifact
