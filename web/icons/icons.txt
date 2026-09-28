@@ -1,0 +1,62 @@
+# Phosphor icon registry (av-diue).
+#
+# Every ph-* icon class the app may render must be listed here, one per
+# line. The icon build (build.mjs) subsets the vendored font + stylesheet
+# to exactly this set, and TestIconRegistryCoversUsage fails if a template,
+# script, or stylesheet names an icon that is missing below.
+#
+# Adding an icon = add its class here, then rebuild assets (make assets).
+# Unknown names fail the build loudly; sort order is cosmetic.
+
+ph-arrow-clockwise
+ph-arrow-counter-clockwise
+ph-arrow-down
+ph-arrow-left
+ph-arrow-square-out
+ph-arrow-up
+ph-arrows-clockwise
+ph-camera
+ph-caret-down
+ph-caret-right
+ph-chat-circle
+ph-check
+ph-check-circle
+ph-circle-notch
+ph-clipboard
+ph-clipboard-text
+ph-code
+ph-copy
+ph-database
+ph-dots-three-vertical
+ph-download-simple
+ph-frame-corners
+ph-gear
+ph-globe
+ph-globe-hemisphere-west
+ph-hard-drives
+ph-key
+ph-magnifying-glass
+ph-microphone
+ph-monitor
+ph-paper-plane-right
+ph-pencil-simple
+ph-plus
+ph-prohibit
+ph-robot
+ph-scissors
+ph-share-network
+ph-shield-check
+ph-sign-in
+ph-sign-out
+ph-sliders
+ph-sparkle
+ph-stop
+ph-trash
+ph-user-circle
+ph-user-plus
+ph-users-three
+ph-warning
+ph-warning-circle
+ph-warning-octagon
+ph-x
+ph-x-circle
