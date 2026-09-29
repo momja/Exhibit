@@ -18,10 +18,14 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Exhibit">{{end}}
 
-{{/* tagPills renders an artifact's tags as static pills, each led by a dot
-     in the tag's color. Tags are edited on the edit page (tagPanelBody).
+{{/* tagDots renders a gallery card's tags as color alone (av-uvc6): one dot
+     per tag, in the card's single meta row beside the title. The name is not
+     drawn but is not lost either: it is the dot's title for a pointer and
+     sr-only text for a screen reader, which reads the list as a list of tag
+     names. Each li is a little wider than the dot it draws so the tooltip has
+     something to land on. Tags are edited on the edit page (tagPanelBody).
      Data: {Tags []tagView}. */}}
-{{define "tagPills"}}{{if .Tags}}<ul class="tag-pills">{{range .Tags}}<li class="tag-pill" data-tag-id="{{.ID}}"><span class="tag-dot" style="background:{{.Color}}" aria-hidden="true"></span><span class="tag-pill-label">{{.Name}}</span></li>{{end}}</ul>{{end}}{{end}}
+{{define "tagDots"}}{{if .Tags}}<ul class="tag-dots" aria-label="Tags">{{range .Tags}}<li class="tag-dot-item" data-tag-id="{{.ID}}" style="--tag-color:{{.Color}}" title="{{.Name}}"><span class="sr-only">{{.Name}}</span></li>{{end}}</ul>{{end}}{{end}}
 
 {{/* colorSwatches renders the shared preset-color palette used by both the
      edit-tag modal and the Tags panel's create-new fields. Swatches are
@@ -100,14 +104,21 @@
      sandboxed (empty allowlist, neither capability approved) collapses to a
      single muted ph-shield-check + "Sandboxed"; otherwise each grant gets its
      own neutral glyph, in a fixed order: network count, then downloads,
-     clipboard, external links, camera, microphone. The trigger is tabindex=0 + role=button so it's reachable by
+     clipboard, external links, camera, microphone.
+
+     The gallery card renders the Compact form (av-uvc6): no "Sandboxed"
+     label, the sharing glyph after the capability glyphs, and nothing at all
+     when neither has anything to say (capabilityView.HasTrigger). Glyphs
+     alone carry no accessible name, so the compact trigger names itself.
+
+     The trigger is tabindex=0 + role=button so it's reachable by
      keyboard independent of the card/toolbar around it; aria-describedby
      wires it to the popover div by id. The popover opens only on explicit
      activation (click/tap, or Enter/Space while focused) via components.js;
      hover/focus alone just apply a CSS affordance highlight
      (.capability-cluster:hover/:focus-visible) without opening anything.
      Data: capabilityView (gallery.go). */}}
-{{define "capabilityCluster"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved) (not .LinksApproved) (not .CameraApproved) (not .MicrophoneApproved)}}<div class="capability-wrap"><div class="capability-cluster{{if not $sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger>{{if $sandboxed}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{if .LinksApproved}}<span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span>{{end}}{{if .CameraApproved}}<span class="capability-glyph"><i class="ph ph-camera"></i></span>{{end}}{{if .MicrophoneApproved}}<span class="capability-glyph"><i class="ph ph-microphone"></i></span>{{end}}{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}
+{{define "capabilityCluster"}}{{if .HasTrigger}}<div class="capability-wrap"><div class="capability-cluster{{if not .Sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger{{if .Compact}} aria-label="{{if .Share.Level}}Sandbox posture and sharing{{else}}Sandbox posture{{end}}"{{end}}>{{if .Sandboxed}}{{if not .Compact}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{end}}{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{if .LinksApproved}}<span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span>{{end}}{{if .CameraApproved}}<span class="capability-glyph"><i class="ph ph-camera"></i></span>{{end}}{{if .MicrophoneApproved}}<span class="capability-glyph"><i class="ph ph-microphone"></i></span>{{end}}{{end}}{{if .Share.Level}}<span class="capability-glyph capability-share capability-share-{{.Share.Level}}"><i class="ph {{.Share.Icon}}"></i></span>{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}{{end}}
 
 {{/* panelCaret is the open/closed caret pair every .details-panel summary
      leads with (the edit page's security, artifact source, and gallery widget
@@ -145,23 +156,13 @@
      (spec 6.2) — capabilityCluster's aria-describedby target. One row per
      active grant (network origins in monospace, then downloads, clipboard,
      external links, camera, microphone); the no-grants state collapses to a single "Fully contained"
-     reassurance row instead. The footer "Manage" link is omitted whenever
+     reassurance row instead. A shared artifact on a gallery card adds a
+     Sharing section (av-uvc6) naming the strongest share level and the full
+     sentence of everything true, which the card's badge used to carry as
+     visible text and a title. The footer "Manage" link is omitted whenever
      ShowManage is false (the no-owner-session / share case). Data:
      capabilityView (gallery.go). */}}
-{{define "capabilityPopover"}}{{$sandboxed := and (not .NetworkAllowlist) (not .DownloadsApproved) (not .ClipboardApproved) (not .LinksApproved) (not .CameraApproved) (not .MicrophoneApproved)}}<div class="capability-popover" id="capability-popover-{{.ArtifactID}}"><div class="capability-popover-header">Sandbox posture</div>{{if $sandboxed}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-shield-check"></i></span><span>Fully contained — no network, download, clipboard, external link, camera, or microphone access</span></div>{{else}}{{if .NetworkAllowlist}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-globe"></i></span><div><div class="capability-popover-label">Network — {{len .NetworkAllowlist}} origin{{if ne (len .NetworkAllowlist) 1}}s{{end}}</div><div class="capability-popover-origins">{{range .NetworkAllowlist}}<code>{{.}}</code>{{end}}</div></div></div>{{end}}{{if .DownloadsApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-download-simple"></i></span><span>Downloads — Can save files to your device</span></div>{{end}}{{if .ClipboardApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-clipboard"></i></span><span>Clipboard — Can read and write your clipboard</span></div>{{end}}{{if .LinksApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span><span>External links — Can open links in new tabs</span></div>{{end}}{{if .CameraApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-camera"></i></span><span>Camera — Can capture video from your camera</span></div>{{end}}{{if .MicrophoneApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-microphone"></i></span><span>Microphone — Can capture audio from your microphone</span></div>{{end}}{{end}}{{if .ShowManage}}<a class="capability-popover-manage" href="/artifacts/{{.ArtifactID}}/edit#security-panel">Manage security settings →</a>{{end}}</div>{{end}}
-
-{{/* shareBadge is the gallery card's sharing marker (av-6xjd). One badge
-     naming the strongest thing true — the states are a ladder ordered by how
-     much authority has left the owner's hands, not four independent flags —
-     and NOTHING at all for a private artifact, which is the common case: a
-     library of forty cards must not render forty badges, and marking the
-     default trains people to ignore the marker.
-
-     It is ambient, never hover-only, because the failure it exists for is the
-     share made months ago that nobody has thought about since. The title
-     carries the full sentence, naming every fact that is true, since the label
-     can only carry the strongest one. Data: shareBadgeView (gallery.go). */}}
-{{define "shareBadge"}}{{if .Level}}<span class="share-badge share-badge-{{.Level}}" title="{{.Detail}}"><i class="ph {{.Icon}}" aria-hidden="true"></i>{{.Label}}</span>{{end}}{{end}}
+{{define "capabilityPopover"}}<div class="capability-popover" id="capability-popover-{{.ArtifactID}}"><div class="capability-popover-header">Sandbox posture</div>{{if .Sandboxed}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-shield-check"></i></span><span>Fully contained — no network, download, clipboard, external link, camera, or microphone access</span></div>{{else}}{{if .NetworkAllowlist}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-globe"></i></span><div><div class="capability-popover-label">Network — {{len .NetworkAllowlist}} origin{{if ne (len .NetworkAllowlist) 1}}s{{end}}</div><div class="capability-popover-origins">{{range .NetworkAllowlist}}<code>{{.}}</code>{{end}}</div></div></div>{{end}}{{if .DownloadsApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-download-simple"></i></span><span>Downloads — Can save files to your device</span></div>{{end}}{{if .ClipboardApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-clipboard"></i></span><span>Clipboard — Can read and write your clipboard</span></div>{{end}}{{if .LinksApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span><span>External links — Can open links in new tabs</span></div>{{end}}{{if .CameraApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-camera"></i></span><span>Camera — Can capture video from your camera</span></div>{{end}}{{if .MicrophoneApproved}}<div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-microphone"></i></span><span>Microphone — Can capture audio from your microphone</span></div>{{end}}{{end}}{{if .Share.Level}}<div class="capability-popover-section"><div class="capability-popover-header">Sharing</div><div class="capability-popover-row"><span class="capability-glyph"><i class="ph {{.Share.Icon}}"></i></span><div><div class="capability-popover-label">{{.Share.Label}}</div><div>{{.Share.Detail}}</div></div></div></div>{{end}}{{if .ShowManage}}<a class="capability-popover-manage" href="/artifacts/{{.ArtifactID}}/edit#security-panel">Manage security settings →</a>{{end}}</div>{{end}}
 
 {{/* sharePanel is the owner's sharing surface on the artifact detail page
      (av-6xjd). Rendered only when detailPageData.Share is non-nil, which is

@@ -519,13 +519,15 @@ Sharing is a first-class resource, not an export-to-file action.
   the user unsure it worked.
 - **Enumeration is not optional.** You cannot audit what you cannot list, and a
   grant carrying live state makes that worse rather than better. Every gallery
-  card shows **one badge naming the strongest thing true** — a shared data
-  board, a public link, or N people — and a private artifact shows *none*,
+  card shows **one glyph naming the strongest thing true** — a shared data
+  board, a public link, or named people — and a private artifact shows *none*,
   because the absence is the signal and forty badges on forty cards is a marker
   people learn to ignore. It is ambient rather than hover-only: the failure to
   design against is the share made months ago that nobody has thought about
   since, and a marker you have to go looking for does not help somebody who has
-  forgotten.
+  forgotten. The glyph sits beside the card's sandbox-posture glyphs and opens
+  the same popover, whose Sharing section says in words everything that is
+  true (av-uvc6).
 - **A share lives until it is deleted.** There is no expiring link: revocation is
   deleting the row, and that is the only lifetime the product promises. An expiry
   column existed unused from the first migration and was removed (av-8ipt) rather
@@ -577,7 +579,7 @@ names of people with accounts here and submit once — they open the same
 `/artifacts/:id` you do, because a grant is not a link. Or switch the public
 link on and hand out `/s/:shareId`, openable by anyone in any browser with no
 account and no dependency on the originating assistant. Either way the artifact
-grows a badge on its gallery card, so a month later the library itself is the
+grows a sharing glyph on its gallery card, so a month later the library itself is the
 answer to "what have I shared". Export to a single self-contained `.html` is
 the third route, and needs no service at all.
 

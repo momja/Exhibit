@@ -1153,17 +1153,36 @@ by hand. The per-name grant report sits *outside* the swapped region for the
 one reason that matters: the swap that follows a grant would otherwise wipe
 "tpyo — no such account" before anybody read it.
 
-On the gallery card, `shareBadge` renders **one badge naming the strongest
+On the gallery card, `shareBadgeView` picks **one mark naming the strongest
 thing true**, from the two denormalized rollups (§3.3) rather than a join: a
 grant on a `shared` artifact ("Shared data", somebody can change the owner's
 data) outranks a public link ("Public link", anyone with a URL can read it),
 which outranks grants alone ("Shared with N"). A private artifact gets **no
 marker at all** — the absence is the signal, since a library of forty cards
 must not render forty badges and marking the default trains people to ignore
-the marker. The badge is ambient rather than hover-only, because the failure it
-exists for is the share made months ago that nobody has thought about since;
-the `title` carries the full sentence, naming every fact that is true, since
-the label can only carry the strongest one.
+the marker. The mark is ambient rather than hover-only, because the failure it
+exists for is the share made months ago that nobody has thought about since.
+
+Since av-uvc6 the mark is a glyph inside the card's `capabilityCluster`, after
+the posture glyphs, rather than a labelled badge of its own. One trigger, one
+popover: the popover gains a Sharing section carrying the level and the full
+sentence naming every fact that is true, which the badge's `title` used to
+hold. The fold is the card's alone (`newCardCapabilityView`). The detail
+toolbar renders the same cluster to recipients too, and who else holds a grant
+is not part of what a grant carries, so its popover has no Sharing section.
+
+**The card itself (av-uvc6)** is the tile plus one 26px meta row: the title,
+the artifact's tags as color dots (each name is the dot's `title` and
+`sr-only` text), the posture and sharing glyphs, and an Edit pencil revealed on
+hover or focus and always shown on a touch screen. There is no created date,
+and the card form of the cluster (`capabilityView.Compact`) drops the
+"Sandboxed" label, so a sandboxed, private artifact carries no marks at all;
+that absence reads the same way the missing share mark does. Search moved into
+the app bar, and the grid runs the full window width. On a card the popover
+spans the card's width rather than hanging off the trigger, because a trigger
+near a narrow card's right edge would push a fixed-width popover off the
+window. The layout comes from the paper-canvas density study's frame
+01-tight.
 
 Ingest has its own page, `GET /new` (`new.tmpl`), rather than a form stacked on
 top of the library index (av-qo0j). It presents three routes in as peers, all

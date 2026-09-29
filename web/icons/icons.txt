@@ -35,6 +35,7 @@ ph-globe
 ph-globe-hemisphere-west
 ph-hard-drives
 ph-key
+ph-link-simple
 ph-magnifying-glass
 ph-microphone
 ph-monitor

@@ -1,82 +1,114 @@
 /* Gallery index (library) page stylesheet. Served from the app origin at
  * /assets/gallery/index.css. Loads after tokens.css (design tokens incl.
  * --brand-blue) and components.css (shared .btn/.card/.field/... classes);
- * only index-page-specific rules live here. */
+ * only index-page-specific rules live here.
+ *
+ * Layout follows the paper-canvas frame 01-tight (av-uvc6): search in the app
+ * bar, a full-width grid of flat cards with 6px gaps, and one meta row under
+ * each tile. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
-header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:12px 24px;display:flex;align-items:center;gap:16px}
+header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:0 16px;display:flex;align-items:center;gap:12px}
 /* The heading stays for screen-reader heading navigation but is not drawn:
  * the logo beside it already says which app this is (nw-h1dr). */
 header h1{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-header .logo{height:28px;width:auto;display:block;flex:0 0 auto}
+header .logo{height:24px;width:auto;display:block;flex:0 0 auto}
 header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;gap:5px}
-main{padding:24px;max-width:1200px;margin:0 auto}
-.search-row{display:flex;align-items:center;gap:8px;margin-bottom:20px;position:relative}
-.search-row .search-icon{position:absolute;left:10px;color:#aaa;font-size:16px;pointer-events:none}
-/* min-width:0: a flex item defaults to min-width:auto, and an input's intrinsic
- * width is ~229px, so without this the box will not shrink in a narrow window. */
-.search-row input{flex:1;min-width:0;padding:9px 12px 9px 34px;border:1px solid #ddd;border-radius:6px;font-size:var(--field-font-size);outline:none}
+
+/* Search in the app bar. It takes up to 340px and gives way first when the
+ * bar runs out of room, so on a phone it fills whatever the logo and the two
+ * icon buttons leave. min-width:0 on both the row and the input: a flex item
+ * defaults to min-width:auto, and an input's intrinsic width is ~229px, so
+ * without it the box will not shrink in a narrow window. */
+.search-row{position:relative;display:flex;align-items:center;flex:0 1 340px;min-width:0}
+.search-row .search-icon{position:absolute;left:9px;color:#999;font-size:14px;pointer-events:none}
+.search-row input{flex:1;min-width:0;height:var(--header-control-size);padding:0 30px 0 29px;border:1px solid #d6d6d6;border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:#fff;color:var(--color-ink)}
 .search-row input:focus{border-color:var(--brand-blue)}
 /* The `/` key cap (av-6mdw) sits inside the box's right edge while the box is
  * idle. It hides on focus (the shortcut has done its job) and once there is a
  * query, which is also when the clear button claims the row's right edge, so
  * the two never show together. pointer-events:none lets a click on it land on
- * the input. Touch devices have no key to press, so they never see it. */
-.search-kbd{position:absolute;right:10px;top:50%;transform:translateY(-50%);min-width:20px;padding:1px 6px;border:1px solid #ccc;border-bottom-width:2px;border-radius:4px;background:#fafafa;color:#888;font:12px/16px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;pointer-events:none}
+ * the input. Touch devices have no key to press, so they never see it. It
+ * fits the input's 30px right padding, the same slot the clear button uses. */
+.search-kbd{position:absolute;right:6px;top:50%;transform:translateY(-50%);min-width:20px;padding:1px 6px;border:1px solid #ccc;border-bottom-width:2px;border-radius:4px;background:#fafafa;color:#888;font:12px/16px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;pointer-events:none}
 .search-row input:focus~.search-kbd,.search-row input:not(:placeholder-shown)~.search-kbd{display:none}
 @media (pointer:coarse){.search-kbd{display:none}}
-.search-clear{flex:0 0 auto;align-self:stretch;font-size:14px}
+/* The clear control sits inside the box's right edge, where it takes no room
+ * from the input when there is nothing to clear. */
+.search-clear{position:absolute;right:4px;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:var(--radius-pill);background:none;color:#888;font-size:13px;cursor:pointer}
+.search-clear:hover{background:var(--color-hover-fill);color:var(--color-ink)}
 .search-clear[hidden]{display:none!important}
-/* min() inside the minmax: a bare 260px is a floor even when the container is
+
+/* On a phone the admin link drops its word (still its accessible name) so
+ * search keeps a usable width. Same clip as .sr-only; the square box matches
+ * the icon buttons beside it. */
+@media (max-width:600px){
+  header .btn:not(.icon-btn):has(.header-link-label){flex:0 0 auto;width:var(--header-control-size);height:var(--header-control-size);padding:0;justify-content:center;font-size:17px}
+  .header-link-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+}
+
+main{padding:10px 12px}
+/* min() inside the minmax: a bare 226px is a floor even when the container is
  * narrower, pushing the grid past the viewport in a small window. */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(226px,100%),1fr));gap:6px}
 .grid.grid-loading{opacity:.5;transition:opacity .1s ease}
-/* The .card surface (background/radius/padding/shadow) is components.css;
- * the gallery card adds its grid-item behavior and hover lift. */
-.card{display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:box-shadow .12s ease}
-.card:hover{box-shadow:var(--shadow-card-hover)}
-.card-title{font-size:15px;font-weight:600;color:var(--brand-blue);text-decoration:none;word-break:break-word}
+
+/* The card is flat: a 1px border and a 2px radius instead of components.css's
+ * rounded, shadowed, padded surface. Everything inside it bleeds to that
+ * border, so the widget well drops the negative margins it uses to escape a
+ * padded card.
+ *
+ * No overflow:hidden. The capability popover drops out of the card's bottom
+ * edge, and clipping the card would clip it. The tile rounds its own top
+ * corners instead. position:relative is what the popover anchors to (below). */
+.card{position:relative;display:flex;flex-direction:column;padding:0;border:1px solid #cfcfcf;border-radius:2px;box-shadow:none;cursor:pointer}
+.card:hover,.card:focus-within{border-color:var(--brand-blue);box-shadow:0 0 0 1px var(--brand-blue)}
+.card .card-widget{margin:0;border-radius:1px 1px 0 0;border-bottom-color:#e6e6e6}
+
+/* The meta row: one 26px line, title first and everything else packed after
+ * it at the right. Only the title shrinks; it ellipses rather than wraps, so
+ * every card in a row stays the same height. */
+.card-meta{display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;min-width:0}
+.card-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;font-weight:600;color:var(--color-ink);text-decoration:none}
+.card:hover .card-title,.card:focus-within .card-title{color:var(--brand-blue)}
 .card-title:hover{text-decoration:underline}
-/* Title row: the title beside its hover-revealed Edit chip (av-8u7p). The
- * chip is a flex sibling rather than an absolutely positioned corner button
- * so its hit box never sits on top of the title link's — a corner chip stays
- * painted above a title anchor that remains clickable underneath it.
- * min-width:0 lets the title shrink and wrap instead of pushing the chip out
- * of the card. */
-.card-headrow{display:flex;align-items:flex-start;gap:var(--space-3)}
-.card-headrow .card-title{flex:1;min-width:0}
-/* The chip holds its space at rest and animates only opacity, the same way
- * the capability popover does, so revealing it never reflows the card.
- * It is labelled, not icon-only: a bare pencil is targetable by voice
- * control via its accessible name, but that name is undiscoverable when
- * nothing on screen states it. --color-ink-soft measures 12.6:1 on the card
- * against 3.5:1 for a muted glyph, which would be carrying the control's
- * whole meaning at the floor of WCAG 1.4.11. */
-.card-edit{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:1px solid var(--color-border);border-radius:var(--radius-pill);color:var(--color-ink-soft);font-size:11px;font-weight:500;text-decoration:none;opacity:0;pointer-events:none;transition:opacity .12s ease,border-color .12s ease,color .12s ease}
-/* :focus-within covers the chip's own focus too — it is a descendant of the
- * card — so hover and focus-within are the whole rule. */
-.card:hover .card-edit,.card:focus-within .card-edit{opacity:1;pointer-events:auto}
-.card-edit:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
-.card-edit i{font-size:12px;line-height:1}
+
+/* Tags as color only (av-uvc6). Each item is a 9x14 box drawing a 7px dot, so
+ * the name's tooltip has more than 7px to land on. The inset ring keeps a
+ * white or near-white tag color from vanishing into the card. */
+.tag-dots{display:inline-flex;align-items:center;flex:0 0 auto;list-style:none}
+.tag-dot-item{display:flex;align-items:center;justify-content:center;width:9px;height:14px}
+.tag-dot-item::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--tag-color,#888);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+
+/* The posture/sharing trigger on a card: smaller glyphs than the detail
+ * toolbar's, and its popover anchors to the card rather than to the trigger.
+ * A trigger sits near a card's right edge, and a 260px popover hung off it
+ * would run out of the first column's card and off the window. Spanning the
+ * card instead keeps it on screen at every column width, phone included. */
+.card .capability-wrap{position:static;flex:0 0 auto}
+.card .capability-cluster{gap:4px;padding:3px 6px;margin:-3px -6px}
+.card .capability-cluster .capability-glyph{font-size:13px}
+.card .capability-cluster .capability-count{font-size:10.5px;margin-left:-2px}
+.card .capability-popover{left:-1px;right:-1px;width:auto;max-width:none;margin-top:4px;cursor:default}
+
+/* Edit, revealed on hover or focus (av-8u7p, av-uvc6). At rest it is a 1px
+ * sliver whose negative margin cancels the row's gap, so the glyphs before it
+ * sit flush right with no reserved hole. It is never display:none or
+ * visibility:hidden: those would drop it from the accessibility tree and a
+ * screen reader listing links would not find it. Tabbing to it focuses the
+ * card, which is what reveals it. */
+.card-edit{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:1px;height:20px;margin-left:-6px;overflow:hidden;border-radius:var(--radius-pill);color:var(--brand-blue);font-size:13px;text-decoration:none;opacity:0}
+.card:hover .card-edit,.card:focus-within .card-edit{width:22px;margin:0 -4px 0 -2px;opacity:1}
+.card-edit:hover,.card-edit:focus-visible{background:var(--color-hover-fill)}
+.card-edit i{line-height:1}
 /* Touch has no hover, so a hover-gated control is simply unreachable there —
  * and using a library across devices is a core flow (spec 8.3). Both queries
  * are needed, not one: a hover-less input does not always report
  * hover:none (some report neither none nor hover), and on those the coarse
- * pointer is what identifies it. Either match reveals the chip; the cost of
- * a false positive is a chip that is always visible, against a false
+ * pointer is what identifies it. Either match shows the pencil; the cost of
+ * a false positive is a pencil that is always visible, against a false
  * negative's unreachable control. */
-@media (hover:none),(pointer:coarse){.card-edit{opacity:1;pointer-events:auto}}
-.card-meta{font-size:12px;color:#888}
-/* Footer row: created date opposite the capability posture cluster
- * (av-isb3), separated from the card body by a hairline. The sharing marker
- * (av-6xjd) joins that right-hand pair when it renders at all, so the auto
- * margin on the date is what keeps those two together rather than letting
- * space-between spread three items evenly across the row. */
-.card-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:2px;padding-top:8px;border-top:1px solid var(--color-hairline)}
-.card-footer .card-meta{margin:0;margin-right:auto}
-.card-actions{display:flex;gap:12px;font-size:13px}
-.card-actions a{color:#555;text-decoration:none}
-.card-actions a:hover{color:var(--brand-blue)}
-.card:hover .card-title{color:var(--brand-blue)}
+@media (hover:none),(pointer:coarse){.card-edit{width:22px;margin:0 -4px 0 -2px;opacity:1}}
+
 .empty{color:#888;font-size:14px;padding:20px 0}
 .empty a{color:var(--brand-blue)}

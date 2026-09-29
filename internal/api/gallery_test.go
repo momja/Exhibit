@@ -26,56 +26,45 @@ func galleryAsset(t *testing.T, r *Router, path string) string {
 	return w.Body.String()
 }
 
-func TestGalleryIndexRendersTagPills(t *testing.T) {
+func TestGalleryIndexRendersTagDots(t *testing.T) {
 	r := newTestRouter(t)
 
-	dark := createTestTag(t, r, "charts", "#FFFFFF")  // light bg -> dark text
-	light := createTestTag(t, r, "urgent", "#111111") // dark bg -> light text
+	white := createTestTag(t, r, "charts", "#FFFFFF")
+	dark := createTestTag(t, r, "urgent", "#111111")
 	id := createTestArtifact(t, r, "Tagged")
 
-	for _, tag := range []struct{ id string }{{dark.ID}, {light.ID}} {
+	for _, tag := range []struct{ id string }{{white.ID}, {dark.ID}} {
 		w := doJSON(t, r, "POST", "/api/tags/"+tag.id+"/artifacts/"+id, nil)
 		require.Equal(t, http.StatusNoContent, w.Code)
 	}
 
 	untaggedID := createTestArtifact(t, r, "Untagged")
+	page := getPage(t, r, "/")
 
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-	page := w.Body.String()
+	// av-uvc6: a tag on a card is its color alone. The name is not drawn,
+	// but it is the dot's tooltip and the screen reader's text, so the
+	// list still reads as tag names to anyone who cannot see the colors.
+	assert.Contains(t, page, `<ul class="tag-dots" aria-label="Tags">`)
+	assert.Contains(t, page, `<li class="tag-dot-item" data-tag-id="`+white.ID+`" style="--tag-color:#ffffff" title="charts"><span class="sr-only">charts</span></li>`)
+	assert.Contains(t, page, `<li class="tag-dot-item" data-tag-id="`+dark.ID+`" style="--tag-color:#111111" title="urgent"><span class="sr-only">urgent</span></li>`)
+	// The pill row and its visible label are gone from the card.
+	assert.NotContains(t, page, `class="tag-pill`)
+	assert.NotContains(t, page, `tag-pill-label`)
 
-	// Tagged card: a pill list keyed to the artifact, with per-tag hooks.
-	// Pills are neutral (single low-saturation color) with the tag color
-	// carried by a leading dot — not a filled-color pill — so a row of tags
-	// reads as metadata, not as headers bigger than the card title.
-	assert.Contains(t, page, `<li class="tag-pill" data-tag-id="`+dark.ID+`">`)
-	assert.Contains(t, page, `<span class="tag-dot" style="background:#ffffff" aria-hidden="true"></span>`)
-	assert.Contains(t, page, `<span class="tag-pill-label">charts</span>`)
-	assert.Contains(t, page, `<span class="tag-dot" style="background:#111111" aria-hidden="true"></span>`)
-	assert.Contains(t, page, `<span class="tag-pill-label">urgent</span>`)
-	// The filled-color pill style is gone.
-	assert.NotContains(t, page, `style="background:#ffffff;color:`)
-	assert.NotContains(t, page, `style="background:#111111;color:`)
-
-	// Untagged card: no pill row and no add control.
-	assert.Equal(t, 1, strings.Count(page, `<ul class="tag-pills">`), "only the tagged card renders a pill row")
+	// Untagged card: no dot list and no add control.
+	assert.Equal(t, 1, strings.Count(page, `<ul class="tag-dots"`), "only the tagged card renders a dot list")
 	assert.Contains(t, page, `/artifacts/`+untaggedID+`/edit`)
 	assert.NotContains(t, page, `tag-add-btn`)
 
-	// Tags are smaller than the title: pill 11px vs card-title 15px, so the row
-	// never outweighs the artifact name it belongs to.
-	css := galleryAsset(t, r, "/assets/gallery/components.css")
-	assert.Contains(t, css, `.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px`)
-	// The dot and label flow together as one flex group; symmetric padding
-	// centers that group so the right side isn't padded more than the left.
-	// The dot is NOT absolutely positioned — it is a normal flex item.
-	assert.Contains(t, css, `.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#888;transition:opacity .12s ease}`)
-	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/index.css"), `.card-title{font-size:15px;font-weight:600`)
+	// A white tag must not vanish into the white card: the dot carries an
+	// inset ring whatever its color. The name stays reachable as sr-only
+	// text, which components.css defines for every page.
+	css := galleryAsset(t, r, "/assets/gallery/index.css")
+	assert.Contains(t, css, `.tag-dot-item::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--tag-color,#888);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}`)
+	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/components.css"), `.sr-only{position:absolute;width:1px;height:1px;`)
 }
 
-// Gallery tags are static: pills only, no controls, modals or tag writes.
+// Gallery tags are static: dots only, no controls, modals or tag writes.
 func TestGalleryTagsAreStatic(t *testing.T) {
 	r := newTestRouter(t)
 	tag := createTestTag(t, r, "charts", "#FFFFFF")
@@ -90,7 +79,7 @@ func TestGalleryTagsAreStatic(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
-	assert.Contains(t, page, `<li class="tag-pill" data-tag-id="`+tag.ID+`"><span class="tag-dot" style="background:#ffffff" aria-hidden="true"></span><span class="tag-pill-label">charts</span></li>`)
+	assert.Contains(t, page, `<li class="tag-dot-item" data-tag-id="`+tag.ID+`" style="--tag-color:#ffffff" title="charts"><span class="sr-only">charts</span></li>`)
 	for _, gone := range []string{"tag-pill-edit", "tag-pill-detach", "tag-add-btn", "tag-edit-modal", "tag-add-modal", "DEFAULT_TAG_COLOR"} {
 		assert.NotContains(t, page, gone)
 	}
@@ -263,69 +252,63 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.NotContains(t, page, `>Details</a>`)
 	assert.NotContains(t, page, `class="card-actions"`)
 
-	// av-8u7p: the one card action that is not the detail page. It leads with
-	// the visible word 'Edit' in its accessible name so that label is a prefix
-	// of the name (WCAG 2.5.3) while the name still identifies the artifact.
-	assert.Contains(t, page, `<a class="card-edit" href="/artifacts/`+id+`/edit" aria-label="Edit Openless"><i class="ph ph-pencil-simple"></i>Edit</a>`)
+	// av-8u7p, av-uvc6: the one card action that is not the detail page, a
+	// pencil at the end of the meta row. Its accessible name leads with
+	// "Edit" and names the artifact; the title is the word a pointer sees.
+	assert.Contains(t, page, `<a class="card-edit" href="/artifacts/`+id+`/edit" aria-label="Edit Openless" title="Edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i></a>`)
+
+	// av-uvc6: one meta row under the tile, and no created date on it.
+	assert.Contains(t, page, `<div class="card-meta"><a class="card-title" href="/artifacts/`+id+`">Openless</a>`)
+	assert.NotContains(t, page, `card-footer`)
+	assert.NotContains(t, page, time.Now().Format("Jan 2, 2006"))
 
 	// The removed 'Open ↗' action and any new-tab opener are gone from cards.
 	assert.NotContains(t, page, "Open ↗")
 	assert.NotContains(t, page, `target="_blank"`)
 }
 
-// av-8u7p: the card's Edit chip is hover-revealed, but 'hover-revealed' must
-// not mean 'unreachable'. These are the three rules that keep it operable for
-// people who never hover: keyboard focus reveals it, coarse pointers show it
-// unconditionally, and it holds its space so revealing it never reflows the
-// card under someone's cursor.
-func TestGalleryCardEditChipStaysReachableWithoutHover(t *testing.T) {
+// av-8u7p, av-uvc6: the card's Edit pencil is hover-revealed, but
+// 'hover-revealed' must not mean 'unreachable'. Keyboard focus reveals it,
+// coarse pointers show it unconditionally, and at rest it stays in the
+// accessibility tree rather than being display:none'd out of it.
+func TestGalleryCardEditStaysReachableWithoutHover(t *testing.T) {
 	r := newTestRouter(t)
 	css := galleryAsset(t, r, "/assets/gallery/index.css")
 
-	// Keyboard: focus anywhere within the card reveals the chip, so it is not
-	// a hover-only control for anyone tabbing through the grid. :focus-within
-	// already covers the chip's own focus, so there is no separate
-	// :focus-visible clause to keep in sync.
-	assert.Contains(t, css, `.card:hover .card-edit,.card:focus-within .card-edit{opacity:1;pointer-events:auto}`)
+	// Keyboard: focus anywhere within the card reveals the pencil, so it is
+	// not a hover-only control for anyone tabbing through the grid.
+	assert.Contains(t, css, `.card:hover .card-edit,.card:focus-within .card-edit{width:22px;margin:0 -4px 0 -2px;opacity:1}`)
 
-	// Touch: hover does not exist, so the chip is always visible there. Both
-	// queries are load-bearing — a hover-less input does not reliably report
-	// hover:none (Chrome's touch emulation reports neither hover:none nor
-	// hover:hover), and the coarse pointer is what identifies those.
-	assert.Contains(t, css, `@media (hover:none),(pointer:coarse){.card-edit{opacity:1;pointer-events:auto}}`)
+	// Touch: hover does not exist, so the pencil is always visible there.
+	// Both queries are load-bearing: a hover-less input does not reliably
+	// report hover:none (Chrome's touch emulation reports neither
+	// hover:none nor hover:hover), and the coarse pointer identifies those.
+	assert.Contains(t, css, `@media (hover:none),(pointer:coarse){.card-edit{width:22px;margin:0 -4px 0 -2px;opacity:1}}`)
 
-	// The chip is a flex sibling of the title, not an absolutely positioned
-	// corner button — that is what keeps its hit box off the title link's.
-	assert.Contains(t, css, `.card-headrow{display:flex;align-items:flex-start;gap:var(--space-3)}`)
-	assert.NotContains(t, css, `.card-edit{position:absolute`)
-
-	// It reserves its space at rest (only opacity animates), so revealing it
-	// cannot shift the title out from under a cursor mid-click.
-	assert.Contains(t, css, `.card-edit{flex:0 0 auto;`)
-	assert.Contains(t, css, `height:24px;`)
+	// At rest it is collapsed, not removed: never display:none or
+	// visibility:hidden, either of which would drop the link from a screen
+	// reader's list of links.
+	assert.Contains(t, css, `.card-edit{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:1px;`)
+	rest := css[strings.Index(css, `.card-edit{`):]
+	rest = rest[:strings.Index(rest, "}")]
+	assert.NotContains(t, rest, "display:none")
+	assert.NotContains(t, rest, "visibility:hidden")
 }
 
-// av-isb3: the gallery card footer shows a neutral, informational capability
-// posture cluster opposite the created date — never a green/amber verdict
-// (spec 6.2 treats the allowlist as transparency, not a grade). A fully
-// sandboxed artifact (no allowlist entries, no capability grants) collapses
-// to exactly one muted ph-shield-check + "Sandboxed" mark.
-func TestGalleryCardShowsSandboxedWhenNoGrants(t *testing.T) {
+// av-isb3, av-uvc6: the gallery card's posture glyphs are neutral and
+// informational, never a green/amber verdict (spec 6.2 treats the allowlist
+// as transparency, not a grade). A sandboxed artifact that is not shared has
+// nothing to report, so its card renders no trigger and no label at all: the
+// absence is the signal, as it is for sharing (spec 7).
+func TestGalleryCardShowsNoMarksWhenSandboxedAndPrivate(t *testing.T) {
 	r := newTestRouter(t)
-	id := createTestArtifact(t, r, "Plain")
+	createTestArtifact(t, r, "Plain")
+	page := getPage(t, r, "/")
 
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-	page := w.Body.String()
-
-	assert.Contains(t, page, `<div class="capability-cluster" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger>`)
-	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed`)
-	assert.NotContains(t, page, "has-grants")
-	assert.NotContains(t, page, "ph-globe")
-	assert.NotContains(t, page, "ph-download-simple")
-	assert.NotContains(t, page, "ph-clipboard")
+	assert.NotContains(t, page, "capability-cluster")
+	assert.NotContains(t, page, "capability-popover")
+	assert.NotContains(t, page, "Sandboxed")
+	assert.NotContains(t, page, "ph-shield-check")
 
 	// The badge is neutral: no color-as-verdict classes/hex from the old
 	// green/amber design ever appear.
@@ -349,7 +332,8 @@ func TestGalleryCardShowsNetworkCount(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
-	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger>`)
+	// Glyphs alone name nothing, so the compact card trigger names itself.
+	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger aria-label="Sandbox posture">`)
 	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">2</span>`)
 	assert.NotContains(t, page, "Sandboxed")
 }
@@ -370,7 +354,7 @@ func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
-	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger>`)
+	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger aria-label="Sandbox posture">`)
 	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>`)
 	assert.NotContains(t, page, "ph-clipboard")
 	assert.NotContains(t, page, "ph-globe")

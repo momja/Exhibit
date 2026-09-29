@@ -270,7 +270,10 @@ func TestGalleryHeaderCarriesBothIconControls(t *testing.T) {
 	assert.Contains(t, page, `href="/new" aria-label="Add artifact" title="Add artifact"`)
 	assert.Contains(t, page, "ph-user-circle")
 	assert.Contains(t, page, `class="btn btn-sec" href="/admin/users"`,
-		"the admin link is unchanged, label included")
+		"the admin link keeps its box")
+	// The word stays in the markup, and so in the accessible name, even where
+	// a phone hides it visually to leave search room (av-uvc6).
+	assert.Contains(t, page, `<span class="header-link-label">Accounts</span></a>`)
 
 	// Sized as peers: one class, applied to both, so they cannot drift apart.
 	assert.Equal(t, 2, strings.Count(page, "icon-btn"),

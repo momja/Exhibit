@@ -13,9 +13,8 @@ home-screen widget shows a slice of its app.
 │      109.8 km               │     sandboxed iframe, pointer-events: none
 │      ▁▂▁▂▃▃█                │
 ├─────────────────────────────┤
-│ Run Log                     │   ← the card, unchanged
-│ Aug 1, 2026     ⛨ Sandboxed │
-└─────────────────────────────┘
+│ Run Log                   ● │   ← the card's one meta row: title, tag
+└─────────────────────────────┘     dots, posture and sharing glyphs
        a click anywhere opens the artifact
 ```
 

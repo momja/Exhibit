@@ -19,8 +19,8 @@ import (
 // here, before any build, with the fix named.
 //
 // Two halves, two failure modes:
-//   - TestIconRegistryCoversUsage: a template/script/stylesheet names an icon
-//     missing from the registry. Fix: add the class to web/icons/icons.txt.
+//   - TestIconRegistryCoversUsage: a template/script/stylesheet, or a Go file
+//     in this package, names an icon missing from the registry. Fix: add the class to web/icons/icons.txt.
 //   - TestServedCSSCoversUsage: the embedded CSS predates the usage (assets
 //     not rebuilt). Fix: rebuild assets (make assets).
 // Weight-family classes (ph-bold etc.) live in weights we don't vendor, so
@@ -44,10 +44,26 @@ var (
 )
 
 // iconUsage collects every ph-* icon class named by templates, scripts, and
-// stylesheets under the usage roots.
+// stylesheets under the usage roots, plus this package's own Go source: a
+// view model can pick an icon too (shareBadgeView.Icon), and that one
+// shipped blank once because nothing here read Go (av-uvc6).
 func iconUsage(t *testing.T) map[string]bool {
 	t.Helper()
 	used := map[string]bool{}
+	goFiles, err := filepath.Glob("*.go")
+	require.NoError(t, err)
+	for _, p := range goFiles {
+		if strings.HasSuffix(p, "_test.go") {
+			continue
+		}
+		body, err := os.ReadFile(p)
+		require.NoError(t, err)
+		for _, m := range iconClassRe.FindAllSubmatch(body, -1) {
+			if !iconFamily[string(m[1])] {
+				used[string(m[1])] = true
+			}
+		}
+	}
 	for _, root := range iconUsageRoots {
 		err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
