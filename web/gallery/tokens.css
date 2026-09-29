@@ -34,6 +34,7 @@
 	--color-hairline:#e0e0e0;     /* panel dividers */
 	--color-hairline-strong:#d9d9d9; /* header underline */
 	--color-border:#ddd;          /* control borders */
+	--color-hover-fill:#e8e8e8;   /* pill behind a hovered icon control */
 
 	/* feedback */
 	--color-danger:#e00;

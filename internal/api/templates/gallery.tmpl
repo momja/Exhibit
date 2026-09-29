@@ -19,6 +19,14 @@
        still has an h1 to navigate by. A visible "Exhibit" beside the logo
        named the product, not the page (nw-h1dr). */}}
   <h1>Gallery</h1>
+  {{/* Search sits in the app bar beside the logo (av-uvc6) rather than in a
+       row of its own above the grid: the library opens on the control you
+       use to find things in it, and the grid gets the height back. */}}
+  <div class="search-row" role="search">
+    <i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
+    <input type="text" id="search-input" name="q" placeholder="Search artifacts…" value="{{.Query}}" autocomplete="off" aria-label="Search artifacts">
+    <button class="search-clear" type="button" id="search-clear" aria-label="Clear search" hidden><i class="ph ph-x" aria-hidden="true"></i></button>
+  </div>
   <span class="spacer"></span>
   {{/* Administration is a secondary control, and it appears only for an
        admin (av-utap). The hiding is a courtesy to everyone else, not a
@@ -28,8 +36,11 @@
 
        It keeps its label while the two controls after it lose theirs. Being
        conditional and rare is exactly why: collapsing it to a third anonymous
-       glyph would leave a row of icons that says nothing. */}}
-  {{if .IsAdmin}}<a class="btn btn-sec" href="/admin/users"><i class="ph ph-users-three"></i> Accounts</a>{{end}}
+       glyph would leave a row of icons that says nothing. The one exception
+       is a phone, where the header also holds search (av-uvc6) and the label
+       would crush the box to a few letters: there the word is hidden visually
+       but stays the link's name, and the title says it on hover. */}}
+  {{if .IsAdmin}}<a class="btn btn-sec" href="/admin/users" title="Accounts"><i class="ph ph-users-three" aria-hidden="true"></i><span class="header-link-label">Accounts</span></a>{{end}}
   {{/* Two icon-only peers (av-qo05) — same box, same weight, so neither reads
        as the "real" one. The header's subject is the library below it, and a
        wide primary button made the header the loudest thing on a page it is
@@ -50,41 +61,22 @@
   <a class="btn btn-sec icon-btn" href="/profile" aria-label="Your account" title="Your account"><i class="ph ph-user-circle" aria-hidden="true"></i></a>
 </header>
 <main>
-{{/* Search leads the page: with the upload card gone, the library opens on
-     the control you use to find things in it rather than below the fold. */}}
-<div class="search-row">
-  <i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
-  <input type="text" id="search-input" name="q" placeholder="Search artifacts…" value="{{.Query}}" autocomplete="off">
-  <button class="btn btn-sm search-clear" type="button" id="search-clear" aria-label="Clear search" hidden><i class="ph ph-x"></i></button>
-</div>
+{{/* One card is the tile plus a single meta row (av-uvc6): title, tag dots,
+     the posture and sharing glyphs, and Edit. No created date and no
+     "Sandboxed" label; a sandboxed, private artifact carries no marks at all.
 
-{{/* The whole card opens the artifact's detail/viewer page — the card body
-     and the title link are the affordances. The separate 'Details' link was
-     removed: it navigated to the same page as the title click, so it was
-     redundant. The earlier 'Open ↗' new-tab action was already gone.
+     The whole card opens the artifact's detail/viewer page — the card body
+     and the title link are the affordances (index.js).
 
-     The one card action that is NOT the detail page — Edit — rides in the
-     title row as a hover/focus-revealed chip (av-8u7p). It sits beside the
-     title rather than over it so the two links' hit boxes never overlap, and
-     it carries a visible 'Edit' label: a bare pencil is reachable by voice
-     control through its accessible name, but that name is undiscoverable
-     when nothing on screen states it. The aria-label leads with that same
-     word, so the visible label is a prefix of the accessible name (WCAG
-     2.5.3) while the name still says which artifact it edits. */}}
+     The one card action that is NOT the detail page — Edit — is a pencil at
+     the row's end, revealed on hover or focus (av-8u7p, av-uvc6). It stays in
+     the accessibility tree while hidden, so a screen reader listing links
+     still finds it, and its accessible name leads with "Edit" and names the
+     artifact; the title attribute is the word a pointer user sees. */}}
 <div class="grid">{{if not .Cards}}<p class="empty">No artifacts yet. <a href="/new">Add your first artifact</a>.</p>{{end}}{{range .Cards}}
 <div class="card" data-href="/artifacts/{{.ArtifactID}}">
   {{template "cardWidget" .Widget}}
-  <div class="card-headrow"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a><a class="card-edit" href="/artifacts/{{.ArtifactID}}/edit" aria-label="Edit {{.Title}}"><i class="ph ph-pencil-simple"></i>Edit</a></div>
-  {{template "tagPills" .}}
-  <div class="card-footer">
-    <div class="card-meta">{{.Created}}</div>
-    {{/* The sharing marker (av-6xjd) sits beside the sandbox-posture cluster
-         because they answer the same shape of question about the card — what
-         has left the owner's hands — and renders nothing at all for a private
-         artifact, which is most of them. */}}
-    {{template "shareBadge" .Share}}
-    {{template "capabilityCluster" .Capability}}
-  </div>
+  <div class="card-meta"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>{{template "tagDots" .}}{{template "capabilityCluster" .Capability}}<a class="card-edit" href="/artifacts/{{.ArtifactID}}/edit" aria-label="Edit {{.Title}}" title="Edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i></a></div>
 </div>{{end}}</div>
 </main>
 

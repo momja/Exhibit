@@ -136,29 +136,18 @@ input,select,textarea{font-size:var(--field-font-size)}
  * (spec 6.2). Sandboxed (no .has-grants) stays fully muted; once a grant
  * exists the cluster reads slightly darker (mid-slate) so the glyphs read as
  * present information rather than a warning. */
-.capability-cluster{display:inline-flex;align-items:center;gap:var(--space-3);font-size:12px;color:var(--color-muted);cursor:pointer;border-radius:var(--radius-sm);padding:2px var(--space-2);margin:-2px calc(var(--space-2) * -1);transition:background-color .1s ease,color .1s ease}
+/* Hover paints a gray pill behind the glyphs (av-uvc6), the cue that they
+ * open something on click; it stays while the popover is open. */
+.capability-cluster{display:inline-flex;align-items:center;gap:var(--space-3);font-size:12px;color:var(--color-muted);cursor:pointer;border-radius:var(--radius-pill);padding:2px var(--space-2);margin:-2px calc(var(--space-2) * -1);transition:background-color .1s ease,color .1s ease}
 .capability-cluster.has-grants{color:var(--color-ink-soft)}
-.capability-cluster:hover,.capability-cluster:focus-visible{background-color:var(--color-ground);color:var(--color-ink-soft)}
+.capability-cluster:hover,.capability-cluster:focus-visible,.capability-wrap.is-open .capability-cluster{background-color:var(--color-hover-fill);color:var(--color-ink-soft)}
+/* The sharing glyph (av-uvc6, formerly the card's share badge, av-6xjd).
+ * Ambient, and darkening along the share ladder; still no red, since a
+ * deliberate share is not a fault. */
+.capability-cluster .capability-share-granted{color:var(--color-ink-soft)}
+.capability-cluster .capability-share-public,.capability-cluster .capability-share-shared-data{color:var(--color-ink)}
 .capability-cluster .capability-glyph{display:inline-flex;align-items:center;font-size:14px;line-height:1}
 .capability-cluster .capability-count{color:var(--color-ink);font-weight:600}
-
-/* The card's sharing marker (av-6xjd). Same inline weight as the capability
- * cluster beside it and the same neutral treatment — it reports a state, it
- * does not judge one. It is AMBIENT: always visible, never revealed on hover,
- * because the thing it exists to catch is the share nobody has thought about
- * since. There is deliberately no rule for a private artifact — that badge is
- * not rendered at all, and marking the default would train people to stop
- * seeing the marker.
- *
- * The three levels are a ladder ordered by how much authority has left the
- * owner's hands, and the ink darkens along it. Still no red: an artifact
- * shared on purpose is not a fault, and a warning colour on a deliberate act
- * is a colour people learn to ignore. */
-.share-badge{display:inline-flex;align-items:center;gap:var(--space-2);font-size:12px;line-height:1;white-space:nowrap;color:var(--color-muted)}
-.share-badge i{font-size:14px}
-.share-badge-granted{color:var(--color-ink-soft)}
-.share-badge-public,.share-badge-shared-data{color:var(--color-ink)}
-.share-badge-shared-data{font-weight:600}
 
 /* capability-wrap positions the popover (av-41se) relative to its trigger.
  * The popover opens only on explicit activation — click/tap, or Enter/Space
@@ -177,6 +166,7 @@ input,select,textarea{font-size:var(--field-font-size)}
 .capability-popover-row:last-child{margin-bottom:0}
 .capability-popover-label{color:var(--color-ink);font-weight:600;margin-bottom:var(--space-1)}
 .capability-popover-origins code{display:block;background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm);margin-top:var(--space-1);font-family:monospace;word-break:break-all}
+.capability-popover-section{padding-top:var(--space-4);border-top:1px solid var(--color-hairline)}
 .capability-popover-manage{display:block;margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--color-hairline);color:var(--brand-blue);text-decoration:none}
 .capability-popover-manage:hover{text-decoration:underline}
 
@@ -186,9 +176,10 @@ input,select,textarea{font-size:var(--field-font-size)}
 .muted{color:var(--color-muted)}
 .faint{color:var(--color-faint)}
 .text-sm{font-size:12px}
+/* Present for a screen reader, not drawn. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 /* --- tags: a neutral pill led by a dot in the tag's color --------------- */
-.tag-pills{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}
 .tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px;font-weight:500;line-height:1;background:#f1f1f1;color:#555}
 .tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#888;transition:opacity .12s ease}
 .tag-pill-label{overflow-wrap:anywhere}

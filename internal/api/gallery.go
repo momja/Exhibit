@@ -640,6 +640,18 @@ func newCapabilityView(a *store.Artifact, showManage bool) capabilityView {
 	}
 }
 
+// newCardCapabilityView is the gallery card's form of the same view
+// (av-uvc6): glyphs only, with the artifact's sharing folded into the one
+// trigger and its popover. The card is the only surface that carries
+// sharing here. The detail page renders this cluster for recipients too, and
+// who else holds a grant is not part of what a grant carries (spec 7).
+func newCardCapabilityView(a *store.Artifact) capabilityView {
+	v := newCapabilityView(a, true)
+	v.Compact = true
+	v.Share = newShareBadgeView(a)
+	return v
+}
+
 // capabilityView is the data the capabilityCluster (badge, av-isb3) and
 // capabilityPopover (av-41se) partials render. It's shared verbatim by the
 // gallery card and the artifact detail/viewer page so the popover looks and
@@ -659,6 +671,29 @@ type capabilityView struct {
 	CameraApproved     bool
 	MicrophoneApproved bool
 	ShowManage         bool
+	// Compact is the gallery card's form (av-uvc6): glyphs with no
+	// "Sandboxed" label, and no trigger at all for a sandboxed artifact that
+	// is not shared. There, as for sharing, the absence is the signal. The
+	// detail toolbar keeps the labelled form.
+	Compact bool
+	// Share folds the card's sharing marker (av-6xjd) into the same trigger
+	// and popover: its glyph follows the capability glyphs, and the popover
+	// gains a Sharing section. Zero everywhere but the gallery card.
+	Share shareBadgeView
+}
+
+// Sandboxed reports the posture with nothing granted: an empty allowlist and
+// no capability approved. Both partials branch on it, so it is defined once.
+func (v capabilityView) Sandboxed() bool {
+	return len(v.NetworkAllowlist) == 0 && !v.DownloadsApproved && !v.ClipboardApproved &&
+		!v.LinksApproved && !v.CameraApproved && !v.MicrophoneApproved
+}
+
+// HasTrigger reports whether the cluster renders at all. Only the compact
+// form can come up empty: a sandboxed, private artifact has nothing to report
+// on a card.
+func (v capabilityView) HasTrigger() bool {
+	return !v.Compact || !v.Sandboxed() || v.Share.Level != ""
 }
 
 // widgetView is a card's tile (av-fafu). Exactly one of its two states
@@ -704,7 +739,9 @@ type sharePanelView struct {
 }
 
 // shareBadgeView is the gallery card's sharing marker (av-6xjd, designed on
-// av-v991's 2026-08-06 note).
+// av-v991's 2026-08-06 note). Since av-uvc6 it renders inside the card's
+// capability cluster: Icon is a glyph in the trigger, and Label and Detail
+// head the popover's Sharing section.
 //
 // **One badge, naming the strongest thing true**, because the states are a
 // ladder ordered by how much authority has left the owner's hands, not four
@@ -730,10 +767,10 @@ type shareBadgeView struct {
 	Level string
 	Icon  string
 	Label string
-	// Detail is the full sentence, on the badge's title. Unlike Label it names
-	// *every* fact that is true, since the label can only carry the strongest
-	// one and "public link" would otherwise hide the three people who also
-	// hold grants.
+	// Detail is the full sentence, in the popover's Sharing section. Unlike
+	// Label it names *every* fact that is true, since the label can only
+	// carry the strongest one and "public link" would otherwise hide the
+	// three people who also hold grants.
 	Detail string
 }
 
@@ -767,28 +804,27 @@ func newShareBadgeView(a *store.Artifact) shareBadgeView {
 	// also one, is still stated in Detail.
 	case grants > 0 && a.ShareStateMode == store.ShareStateShared:
 		badge.Level, badge.Icon, badge.Label = "shared-data", "ph-users-three", "Shared data"
+	// A link, not a globe: the card's cluster puts this glyph beside the
+	// capability glyphs, where a globe already means network origins.
 	case link:
-		badge.Level, badge.Icon, badge.Label = "public", "ph-globe", "Public link"
+		badge.Level, badge.Icon, badge.Label = "public", "ph-link-simple", "Public link"
 	default:
 		badge.Level, badge.Icon, badge.Label = "granted", "ph-user-circle", "Shared with "+strconv.Itoa(grants)
 	}
 	return badge
 }
 
-// galleryCard is one artifact card on the index page. The tagPills partial
-// reads Tags from it directly; the capabilityCluster
-// partial reads Capability to render the card-footer posture badge + popover
-// (av-isb3, av-41se); Widget renders the card's tile (av-fafu); Share renders
-// the sharing marker (av-6xjd), and renders nothing at all when the artifact
-// is private.
+// galleryCard is one artifact card on the index page. The tagDots partial
+// reads Tags from it directly; the capabilityCluster partial reads Capability
+// to render the posture and sharing glyphs and their popover (av-isb3,
+// av-41se, av-uvc6), and nothing at all for a sandboxed, private artifact;
+// Widget renders the card's tile (av-fafu).
 type galleryCard struct {
 	ArtifactID string
 	Title      string
-	Created    string
 	Tags       []tagView
 	Capability capabilityView
 	Widget     widgetView
-	Share      shareBadgeView
 }
 
 // newWidgetView builds a card's tile view model, minting the tile frame's
@@ -833,11 +869,9 @@ func renderGalleryPage(arts []*store.Artifact, query string, creds pageCredentia
 		cards[i] = galleryCard{
 			ArtifactID: a.ID,
 			Title:      a.Title,
-			Created:    a.CreatedAt.Format("Jan 2, 2006"),
 			Tags:       tagViews(a.Tags),
-			Capability: newCapabilityView(a, true),
+			Capability: newCardCapabilityView(a),
 			Widget:     newWidgetView(a, urls),
-			Share:      newShareBadgeView(a),
 		}
 	}
 	return renderPage("gallery", galleryPageData{

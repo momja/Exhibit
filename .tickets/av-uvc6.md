@@ -1,6 +1,6 @@
 ---
 id: av-uvc6
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-09-29T05:12:59Z

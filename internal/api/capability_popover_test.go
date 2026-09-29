@@ -20,12 +20,14 @@ import (
 
 // The trigger is a focusable control independent of whatever page embeds it
 // (card or toolbar): tabindex=0, role=button, aria-haspopup, and
-// aria-describedby pointing at this artifact's popover id.
+// aria-describedby pointing at this artifact's popover id. Read off the
+// detail toolbar, which renders the trigger for every artifact; a card
+// renders none for a sandboxed, private one (av-uvc6).
 func TestCapabilityPopoverTriggerIsFocusable(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Focusable")
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/artifacts/"+id, nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -37,12 +39,13 @@ func TestCapabilityPopoverTriggerIsFocusable(t *testing.T) {
 }
 
 // No grants at all collapses the popover body to a single reassurance row
-// instead of per-capability rows.
+// instead of per-capability rows. The detail toolbar is where a sandboxed,
+// private artifact's popover lives; its card has none (av-uvc6).
 func TestCapabilityPopoverSandboxedShowsFullyContained(t *testing.T) {
 	r := newTestRouter(t)
-	createTestArtifact(t, r, "Plain")
+	id := createTestArtifact(t, r, "Plain")
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/artifacts/"+id, nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -204,6 +207,10 @@ func TestCapabilityPopoverCameraAndMicrophoneRowsPerFlag(t *testing.T) {
 func TestCapabilityPopoverManageLinkOnGalleryAndDetail(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Managed")
+	// A grant, so the card has a posture to report and renders its trigger.
+	require.Equal(t, http.StatusOK, doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+		"downloads_approved": true,
+	}).Code)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()

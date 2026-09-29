@@ -294,6 +294,7 @@ func TestTheCardBadgeNamesTheStrongestThingTrue(t *testing.T) {
 		name   string
 		a      store.Artifact
 		level  string
+		icon   string
 		label  string
 		detail string
 	}{
@@ -301,20 +302,22 @@ func TestTheCardBadgeNamesTheStrongestThingTrue(t *testing.T) {
 		{
 			name:  "one grant",
 			a:     store.Artifact{ShareGrantCount: 1, ShareStateMode: store.ShareStateOwn},
-			level: "granted", label: "Shared with 1",
+			level: "granted", icon: "ph-user-circle", label: "Shared with 1",
 			detail: "1 person can open this artifact. Each keeps their own data.",
 		},
 		{
 			name:  "the public link outranks grants, and still names them",
 			a:     store.Artifact{ShareGrantCount: 3, SharePublicLink: link, ShareStateMode: store.ShareStateOwn},
-			level: "public", label: "Public link",
+			// A link, not a globe: the globe beside it in the card's
+			// cluster means network origins (av-uvc6).
+			level: "public", icon: "ph-link-simple", label: "Public link",
 			detail: "3 people can open this artifact. Each keeps their own data. " +
 				"Anyone with its public link can open it and read the owner's saved data.",
 		},
 		{
 			name:  "writing the owner's data outranks anyone reading it",
 			a:     store.Artifact{ShareGrantCount: 2, SharePublicLink: link, ShareStateMode: store.ShareStateShared},
-			level: "shared-data", label: "Shared data",
+			level: "shared-data", icon: "ph-users-three", label: "Shared data",
 			detail: "2 people can open this artifact, and everyone using it reads and writes " +
 				"one shared copy of its data. Anyone with its public link can open it and read the owner's saved data.",
 		},
@@ -322,27 +325,56 @@ func TestTheCardBadgeNamesTheStrongestThingTrue(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := newShareBadgeView(&tc.a)
 			assert.Equal(t, tc.level, got.Level)
+			assert.Equal(t, tc.icon, got.Icon)
 			assert.Equal(t, tc.label, got.Label)
 			assert.Equal(t, tc.detail, got.Detail)
 		})
 	}
 }
 
-// The badge is AMBIENT — in the card's markup, not behind a hover or a click —
-// because the share nobody remembers is exactly the one a marker you have to
-// go looking for will not surface.
-func TestASharedArtifactsCardCarriesItsBadgeInTheMarkup(t *testing.T) {
+// The share marker is AMBIENT, a glyph in the card's markup rather than
+// something revealed by hover, because the share nobody remembers is exactly
+// the one a marker you have to go looking for will not surface. Since av-uvc6
+// it is a glyph in the posture trigger, and the popover's Sharing section
+// carries the words the badge used to show.
+func TestASharedArtifactsCardCarriesItsMarkInTheMarkup(t *testing.T) {
 	ro := newTestRouter(t)
 	artifactID := seedShareableArtifact(t, ro, "Tool")
 
 	before := getPage(t, ro, "/")
-	assert.NotContains(t, before, "share-badge",
+	assert.NotContains(t, before, "capability-share",
 		"a private artifact gets no marker; the absence is the signal")
+	assert.NotContains(t, before, "capability-cluster",
+		"sandboxed and private, the card has nothing to report")
 
 	mintLink(t, ro, artifactID, false)
 	after := getPage(t, ro, "/")
-	assert.Contains(t, after, `class="share-badge share-badge-public"`)
-	assert.Contains(t, after, "Public link")
+
+	// The trigger renders for sharing alone: no capability glyphs, no
+	// "Sandboxed" label, the link glyph, and a name that says what it opens.
+	assert.Contains(t, after, `<div class="capability-cluster" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+artifactID+`" data-capability-trigger aria-label="Sandbox posture and sharing"><span class="capability-glyph capability-share capability-share-public"><i class="ph ph-link-simple"></i></span></div>`)
+	assert.NotContains(t, after, "Sandboxed")
+
+	// The popover keeps its posture receipt and adds a Sharing section with
+	// the strongest level and every fact that is true.
+	assert.Contains(t, after, "Fully contained")
+	assert.Contains(t, after, `<div class="capability-popover-section"><div class="capability-popover-header">Sharing</div><div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-link-simple"></i></span><div><div class="capability-popover-label">Public link</div><div>Anyone with its public link can open it and read the owner&#39;s saved data.</div></div></div></div>`)
+	assert.NotContains(t, after, "share-badge", "the separate badge is gone from the card")
+}
+
+// Sharing stays off the detail page's cluster. That page renders the cluster
+// to recipients too, and how many other people hold a grant is not part of
+// what a grant carries (spec 7), so the Sharing section is a card-only fold.
+func TestTheDetailClusterCarriesNoSharingSection(t *testing.T) {
+	ro := newTestRouter(t)
+	artifactID := seedShareableArtifact(t, ro, "Tool")
+	mintLink(t, ro, artifactID, false)
+
+	page := getPage(t, ro, "/artifacts/"+artifactID)
+	assert.Contains(t, page, `class="capability-cluster`)
+	assert.Contains(t, page, "Sandboxed", "the toolbar keeps its labelled form")
+	assert.NotContains(t, page, "capability-share")
+	assert.NotContains(t, page, `<div class="capability-popover-header">Sharing</div>`)
 }
 
 // --- helpers ------------------------------------------------------------
