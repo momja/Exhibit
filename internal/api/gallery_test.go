@@ -189,6 +189,27 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 	assert.NotContains(t, page, `>Search</button>`)
 }
 
+// `/` focuses search (av-6mdw). The key's behavior is index.search.test.mjs's
+// to prove; this is the markup half the node harness cannot see. The key cap
+// has to come after the input, because index.css hides it with sibling
+// selectors off the input's focus and placeholder state, and a cap placed
+// before the input would stay on screen over the query.
+func TestGallerySearchAdvertisesSlashShortcut(t *testing.T) {
+	r := newTestRouter(t)
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	page := w.Body.String()
+
+	assert.Contains(t, page, `aria-keyshortcuts="/"`, "screen readers learn the shortcut from the input")
+	kbd := `<kbd class="search-kbd" aria-hidden="true">/</kbd>`
+	require.Contains(t, page, kbd)
+	input := strings.Index(page, `id="search-input"`)
+	require.GreaterOrEqual(t, input, 0)
+	assert.Greater(t, strings.Index(page, kbd), input, "the key cap must be the input's later sibling")
+}
+
 // The exhibit header must read as distinct from the white content cards below
 // it: it is sticky (stays visible while scrolling) and carries a real shadow +
 // stronger border rather than the same near-invisible hairline the cards use.

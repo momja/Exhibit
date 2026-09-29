@@ -24,6 +24,15 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inl
 .search-row .search-icon{position:absolute;left:9px;color:#999;font-size:14px;pointer-events:none}
 .search-row input{flex:1;min-width:0;height:var(--header-control-size);padding:0 30px 0 29px;border:1px solid #d6d6d6;border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:#fff;color:var(--color-ink)}
 .search-row input:focus{border-color:var(--brand-blue)}
+/* The `/` key cap (av-6mdw) sits inside the box's right edge while the box is
+ * idle. It hides on focus (the shortcut has done its job) and once there is a
+ * query, which is also when the clear button claims the row's right edge, so
+ * the two never show together. pointer-events:none lets a click on it land on
+ * the input. Touch devices have no key to press, so they never see it. It
+ * fits the input's 30px right padding, the same slot the clear button uses. */
+.search-kbd{position:absolute;right:6px;top:50%;transform:translateY(-50%);min-width:20px;padding:1px 6px;border:1px solid #ccc;border-bottom-width:2px;border-radius:4px;background:#fafafa;color:#888;font:12px/16px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;pointer-events:none}
+.search-row input:focus~.search-kbd,.search-row input:not(:placeholder-shown)~.search-kbd{display:none}
+@media (pointer:coarse){.search-kbd{display:none}}
 /* The clear control sits inside the box's right edge, where it takes no room
  * from the input when there is nothing to clear. */
 .search-clear{position:absolute;right:4px;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:var(--radius-pill);background:none;color:#888;font-size:13px;cursor:pointer}
