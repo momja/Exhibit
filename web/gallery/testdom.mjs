@@ -58,6 +58,7 @@ function makeElement(id) {
       return el.dispatchEvent({ type: "click", target: target || el, id: el.id });
     },
     focus() { el.focused = true; },
+    select() { el.selected = true; },
     setAttribute() {},
     getAttribute() { return null; },
     appendChild(child) { el.children.push(child); return child; },
@@ -171,8 +172,11 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
       (windowListeners.message || []).map((fn) => fn({ data, source, origin: "null" }))
     );
 
-  const pressKey = (key) =>
-    (documentListeners.keydown || []).forEach((fn) => fn({ key }));
+  // init carries whatever else the handler reads off the event: a target, a
+  // modifier flag, a preventDefault to observe. A bare key is enough for the
+  // Escape handlers, which look at nothing else.
+  const pressKey = (key, init = {}) =>
+    (documentListeners.keydown || []).forEach((fn) => fn({ key, ...init }));
 
   // Lets already-resolved promises finish before a test looks. A handler that
   // fetches and then acts on the answer is two awaits deep, and awaiting only

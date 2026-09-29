@@ -17,6 +17,14 @@ main{padding:24px;max-width:1200px;margin:0 auto}
  * width is ~229px, so without this the box will not shrink in a narrow window. */
 .search-row input{flex:1;min-width:0;padding:9px 12px 9px 34px;border:1px solid #ddd;border-radius:6px;font-size:var(--field-font-size);outline:none}
 .search-row input:focus{border-color:var(--brand-blue)}
+/* The `/` key cap (av-6mdw) sits inside the box's right edge while the box is
+ * idle. It hides on focus (the shortcut has done its job) and once there is a
+ * query, which is also when the clear button claims the row's right edge, so
+ * the two never show together. pointer-events:none lets a click on it land on
+ * the input. Touch devices have no key to press, so they never see it. */
+.search-kbd{position:absolute;right:10px;top:50%;transform:translateY(-50%);min-width:20px;padding:1px 6px;border:1px solid #ccc;border-bottom-width:2px;border-radius:4px;background:#fafafa;color:#888;font:12px/16px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;pointer-events:none}
+.search-row input:focus~.search-kbd,.search-row input:not(:placeholder-shown)~.search-kbd{display:none}
+@media (pointer:coarse){.search-kbd{display:none}}
 .search-clear{flex:0 0 auto;align-self:stretch;font-size:14px}
 .search-clear[hidden]{display:none!important}
 /* min() inside the minmax: a bare 260px is a floor even when the container is

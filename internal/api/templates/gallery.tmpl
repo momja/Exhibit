@@ -51,10 +51,18 @@
 </header>
 <main>
 {{/* Search leads the page: with the upload card gone, the library opens on
-     the control you use to find things in it rather than below the fold. */}}
+     the control you use to find things in it rather than below the fold.
+
+     `/` focuses it from anywhere on the page (av-6mdw, index.js). The key cap
+     after the input is how a sighted user learns that; aria-keyshortcuts is
+     how a screen reader does, so the cap itself is aria-hidden. It must stay
+     the input's later sibling: index.css hides it with `input:focus ~` and
+     `input:not(:placeholder-shown) ~`, so it disappears once the box is in use
+     with no script involved. */}}
 <div class="search-row">
   <i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
-  <input type="text" id="search-input" name="q" placeholder="Search artifacts…" value="{{.Query}}" autocomplete="off">
+  <input type="text" id="search-input" name="q" placeholder="Search artifacts…" value="{{.Query}}" autocomplete="off" aria-keyshortcuts="/">
+  <kbd class="search-kbd" aria-hidden="true">/</kbd>
   <button class="btn btn-sm search-clear" type="button" id="search-clear" aria-label="Clear search" hidden><i class="ph ph-x"></i></button>
 </div>
 

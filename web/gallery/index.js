@@ -24,6 +24,26 @@
   });
   input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); runSearch(); } });
   if (clear) clear.addEventListener('click', function() { input.value = ''; syncClear(); input.focus(); clearTimeout(timer); runSearch(); });
+
+  // `/` jumps to search from anywhere on the page (av-6mdw), the convention
+  // GitHub, YouTube and MDN share. The existing query is selected so typing
+  // replaces it, and preventDefault keeps the slash itself out of the box
+  // (focus moves before the character is inserted) and stops Firefox opening
+  // its quick-find bar. A slash already headed into a field is that field's,
+  // and a modified slash is some other shortcut's. Shift is allowed through:
+  // layouts such as German type `/` as Shift+7.
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+    if (isTextEntry(e.target)) return;
+    e.preventDefault();
+    input.focus();
+    input.select();
+  });
+  function isTextEntry(el) {
+    if (!el) return false;
+    return el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT';
+  }
+
   function syncClear() { if (clear) clear.hidden = !input.value; }
   function runSearch() {
     const q = input.value.trim();
