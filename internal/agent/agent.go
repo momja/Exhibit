@@ -605,24 +605,17 @@ func (s *Session) handleLine(line []byte) {
 		ID       string `json:"id"`
 		ToolName string `json:"toolName"`
 		IsError  bool   `json:"isError"`
-		// Usage is message_update's cumulative usage of the assistant
-		// response in flight (av-2yws).
-		Usage *Usage `json:"usage"`
-		// Message is message_end's authoritative final message. Only the
-		// envelope is read: role decides the row's source, provider/model
-		// name the spend, usage is the meter.
-		Message struct {
-			Role     string `json:"role"`
-			Provider string `json:"provider"`
-			Model    string `json:"model"`
-			Usage    *Usage `json:"usage"`
-		} `json:"message"`
-		// Result carries tool_execution_end's details (the exhibit tools'
-		// signals) and compaction_end's usage — two events, one wire key.
-		Result struct {
-			Details map[string]any `json:"details"`
-			Usage   *Usage         `json:"usage"`
-		} `json:"result"`
+		// Usage, Message and Result are raw, and that is load-bearing. This
+		// one probe parses every line Pi emits, and shapes collide across
+		// event types: "message" is a *string* on an extension_ui_request
+		// notification and an *object* on message_end, and a tool's result
+		// can carry anything at all. A typed field here made json.Unmarshal
+		// fail on the whole line, which silently dropped guard signals
+		// before guardSignalOf ever saw them. Whatever is not understood
+		// must cost the extraction, never the line.
+		Usage   json.RawMessage `json:"usage"`
+		Message json.RawMessage `json:"message"`
+		Result  json.RawMessage `json:"result"`
 	}
 	if err := json.Unmarshal(line, &probe); err != nil {
 		slog.Debug("unparseable pi output", slog.String("session_id", s.ID), slog.String("line", truncate(string(line), 200)))
@@ -652,16 +645,31 @@ func (s *Session) handleLine(line []byte) {
 		s.lastActive = time.Now()
 		s.mu.Unlock()
 	case "message_update":
-		if probe.Usage != nil {
-			s.noteStreamingUsage(*probe.Usage)
+		if u, ok := decodeUsage(probe.Usage); ok {
+			s.noteStreamingUsage(u)
 		}
 	case "message_end":
-		if probe.Message.Usage != nil {
-			s.noteMessageUsage(probe.Message.Role, probe.Message.Provider, probe.Message.Model, *probe.Message.Usage)
+		// The authoritative final message: role decides the row's source,
+		// provider/model name the spend, usage is the meter.
+		var msg struct {
+			Role     string          `json:"role"`
+			Provider string          `json:"provider"`
+			Model    string          `json:"model"`
+			Usage    json.RawMessage `json:"usage"`
+		}
+		if json.Unmarshal(probe.Message, &msg) == nil {
+			if u, ok := decodeUsage(msg.Usage); ok {
+				s.noteMessageUsage(msg.Role, msg.Provider, msg.Model, u)
+			}
 		}
 	case "compaction_end":
-		if probe.Result.Usage != nil {
-			s.noteCompactionUsage(*probe.Result.Usage)
+		var res struct {
+			Usage json.RawMessage `json:"usage"`
+		}
+		if json.Unmarshal(probe.Result, &res) == nil {
+			if u, ok := decodeUsage(res.Usage); ok {
+				s.noteCompactionUsage(u)
+			}
 		}
 	case "agent_settled":
 		s.mu.Lock()
@@ -676,14 +684,17 @@ func (s *Session) handleLine(line []byte) {
 			go s.persistTranscript(artifactID)
 		}
 	case "tool_execution_end":
-		if !probe.IsError {
-			switch probe.Result.Details["exhibit"] {
+		var res struct {
+			Details map[string]any `json:"details"`
+		}
+		if !probe.IsError && json.Unmarshal(probe.Result, &res) == nil {
+			switch res.Details["exhibit"] {
 			case "artifact_saved":
-				s.noteArtifactSaved(probe.Result.Details)
+				s.noteArtifactSaved(res.Details)
 			case "state_changed":
-				s.noteStateChanged(probe.Result.Details)
+				s.noteStateChanged(res.Details)
 			case "widget_saved":
-				s.noteWidgetSaved(probe.Result.Details)
+				s.noteWidgetSaved(res.Details)
 			}
 		}
 	}

@@ -137,9 +137,9 @@ func (s *Session) handleGuardSignal(verb, detail string) {
 // report must not disturb the session, and the next screen reports again.
 func (s *Session) noteGuardUsage(detail string) {
 	var report struct {
-		Provider string `json:"provider"`
-		Model    string `json:"model"`
-		Usage    Usage  `json:"usage"`
+		Provider string          `json:"provider"`
+		Model    string          `json:"model"`
+		Usage    json.RawMessage `json:"usage"`
 	}
 	if err := json.Unmarshal([]byte(detail), &report); err != nil {
 		slog.Warn("guardrail usage report did not parse",
@@ -147,7 +147,13 @@ func (s *Session) noteGuardUsage(detail string) {
 			slog.String("detail", truncate(detail, 300)))
 		return
 	}
-	s.RecordGuardrailUsage(report.Provider, report.Model, report.Usage)
+	usage, ok := decodeUsage(report.Usage)
+	if !ok {
+		slog.Warn("guardrail usage report carried no usage",
+			slog.String("session_id", s.ID), slog.String("detail", truncate(detail, 300)))
+		return
+	}
+	s.RecordGuardrailUsage(report.Provider, report.Model, usage)
 }
 
 // noteGuardBlocked replaces the extension's signal with the event the chat UI

@@ -60,6 +60,53 @@ type Usage struct {
 	} `json:"cost"`
 }
 
+// decodeUsage parses one usage block leniently. Numbers arrive as whatever
+// the provider reported and travel through JS serialization — a token count
+// can legitimately appear as 100.0 or 1e3 — so they are read as floats and
+// rounded. A block that is not an object at all is not a usage block: the
+// caller skips the extraction and keeps the line.
+func decodeUsage(raw json.RawMessage) (Usage, bool) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return Usage{}, false
+	}
+	var wire struct {
+		Input       json.Number `json:"input"`
+		Output      json.Number `json:"output"`
+		CacheRead   json.Number `json:"cacheRead"`
+		CacheWrite  json.Number `json:"cacheWrite"`
+		TotalTokens json.Number `json:"totalTokens"`
+		Cost        struct {
+			Input      float64 `json:"input"`
+			Output     float64 `json:"output"`
+			CacheRead  float64 `json:"cacheRead"`
+			CacheWrite float64 `json:"cacheWrite"`
+			Total      float64 `json:"total"`
+		} `json:"cost"`
+	}
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		return Usage{}, false
+	}
+	u := Usage{
+		Input:       numInt(wire.Input),
+		Output:      numInt(wire.Output),
+		CacheRead:   numInt(wire.CacheRead),
+		CacheWrite:  numInt(wire.CacheWrite),
+		TotalTokens: numInt(wire.TotalTokens),
+	}
+	u.Cost = wire.Cost
+	return u, true
+}
+
+// numInt rounds one reported count to whole tokens. Malformed and negative
+// counts record as zero rather than as a credit.
+func numInt(n json.Number) int64 {
+	f, err := n.Float64()
+	if err != nil || f <= 0 {
+		return 0
+	}
+	return int64(math.Round(f))
+}
+
 // costMicros converts Pi's dollar float to integer millionths. Integers so a
 // spend cap compares exact sums instead of accumulated float error; micros so
 // the conversion loses nothing a cap could hide behind. NaN and negatives are

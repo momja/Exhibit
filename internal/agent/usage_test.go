@@ -158,3 +158,40 @@ func TestCostMicrosNeverGoesNegative(t *testing.T) {
 	assert.Equal(t, int64(0), costMicros(0))
 	assert.Equal(t, int64(0), costMicros(-1))
 }
+
+// The metering probe must keep every line it fails to understand. Guard
+// signals ride extension_ui_request notifications whose "message" is a
+// *string*, where message_end's is an object — a typed probe field once made
+// the whole-line unmarshal fail, silently dropping every guard signal before
+// guardSignalOf saw them, so nothing ever blocked. Whatever is not
+// understood costs the extraction, never the line.
+func TestTheMeteringProbeKeepsLinesItCannotFullyParse(t *testing.T) {
+	s, db := newMeteringSession(t, false)
+
+	events := feed(t, s, `{"type":"extension_ui_request","id":"1","method":"notify",`+
+		`"message":"exhibit_guard:usage {\"provider\":\"p\",\"model\":\"m\",`+
+		`\"usage\":{\"input\":10,\"output\":2,\"cost\":{\"total\":0.001}}}","notifyType":"info"}`)
+	assert.Empty(t, events, "a usage signal is metered, never forwarded")
+	totals := sessionTotals(t, db, s)
+	assert.Equal(t, store.UsageTotals{InputTokens: 10, OutputTokens: 2, CostMicros: 1_000}, totals,
+		"the usage signal inside the notification is still metered")
+
+	events = feed(t, s, `{"type":"extension_ui_request","id":"2","method":"notify",`+
+		`"message":"exhibit_guard:blocked p(violates)=0.99","notifyType":"warning"}`)
+	require.NotNil(t, find(events, "exhibit_guard_blocked"),
+		"a block signal must survive the probe — this is what stops the prompt")
+}
+
+// Reported counts travel through JS serialization and can arrive as 100.0 or
+// 1e3. They are tokens all the same.
+func TestUsageBlocksTolerateNumericShapes(t *testing.T) {
+	s, db := newMeteringSession(t, true)
+
+	feed(t, s, `{"type":"message_update","usage":{"input":100.0,"output":1e3,"cacheRead":0,"cacheWrite":0,`+
+		`"totalTokens":1100,"cost":{"total":0.5}},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"a"}}`)
+	s.flushInFlightUsage()
+
+	totals := sessionTotals(t, db, s)
+	assert.Equal(t, int64(100), totals.InputTokens)
+	assert.Equal(t, int64(1000), totals.OutputTokens)
+}
