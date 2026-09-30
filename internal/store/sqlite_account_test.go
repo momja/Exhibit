@@ -130,6 +130,14 @@ var accountTables = map[string]accountTable{
 	// account deletion that left this table empty would be the actual leak.
 	"pending_blob_deletions": {reachNone,
 		"ids of bytes already condemned, written as the rows naming them were deleted; the drain retires them", ""},
+
+	// The usage ledger (av-2yws). It is accounting, and accounting that
+	// self-shredded when the account left would not be accounting: the money
+	// was spent whether or not the person is still here, and the operator's
+	// own bills do not stop referencing it. Deliberately no owner cascade —
+	// rows name the owner id they were attributed to and keep naming it.
+	"agent_usage": {reachNone,
+		"the spend ledger; the money was spent and the rows are accounting, not the person's data", ""},
 }
 
 // schemaTables is every table the live database reports, which is the only

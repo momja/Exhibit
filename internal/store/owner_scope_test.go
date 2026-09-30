@@ -538,6 +538,14 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"RecordBlobSize":  "keyed by blob id; a length belongs to the bytes, not to an owner (av-fw1b)",
 		"ForgetBlobSizes": "keyed by blob id, and only removes rows no owner's rows reference (av-fw1b)",
 
+		// The usage ledger (av-2yws), in the same two shapes seen above.
+		// RecordAgentUsage carries its owner in AgentUsage.OwnerID exactly as
+		// SetAgentKey carries its own; InstanceAgentSpend is the operator's
+		// total exposure across every owner — the instance ceiling's meter,
+		// and no more one owner's than ListUsers is.
+		"RecordAgentUsage":   "carries the owner in AgentUsage.OwnerID",
+		"InstanceAgentSpend": "the operator's total across all owners; what the instance ceiling meters (av-99f4)",
+
 		// The blob deletion queue's mutual exclusion (av-8gyd), keyed by blob
 		// id on the same grounds and one step further: it reads and writes no
 		// row at all. It excludes a writer of bytes from the drain about to

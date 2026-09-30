@@ -225,16 +225,86 @@ argument is left alone — at both seams. BYOK is unfiltered: there the
 identifiers describe a key the caller typed.
 
 The `usage` block beside them (token counts and cost) is deliberately kept: it
-names no model, and it is what metering will read (av-hyo6).
+names no model, and it is what metering reads (av-2yws, below).
 
-### No spend cap
+### Token metering (av-2yws)
 
-Platform mode makes every session bill the instance's provider account with
-nothing bounding it — `internal/agent` reads no token usage off Pi's stream, so
-an instance can neither attribute spend to an owner nor stop a session that
-runs away. The startup log says so. Metering and a per-owner budget are
-av-hyo6; until they exist, do not put a platform-mode instance in front of
-untrusted signups.
+Every session's spend lands in the `agent_usage` ledger as rows arrive — one
+row per recorded usage event, carrying the owner, session, provider, model,
+input/output/cache-read/cache-write tokens separately, a cost estimate, and
+two tags: **who pays** (`platform` for the instance's credential and guardrail
+screening, `user` for a BYO-key session) and **what spent it** (`model`,
+`tool`, `compaction`, `guardrail`). Per-session rows aggregate to per-owner
+totals over a period; the reverse is not recoverable, so the rows are fine
+grained on purpose.
+
+What the rows come from, and when Pi reports it:
+
+- **Assistant messages** — `message_end` carries the message's authoritative
+  `usage`; `message_update` carries the same numbers cumulatively *during*
+  the response (possibly zero until completion). Recorded as `model` spend.
+- **Tool-reported usage** — rolled into toolResult messages (nested tool
+  calls fold into their caller), recorded as `tool` spend. Usage sources that
+  emit no event at all (Pi's cache warmer, anything else counted only in the
+  totals) are caught at every settle: the session reconciles against
+  `get_session_stats` — Pi's own cumulative total — and records the gap, so
+  the ledger's sum equals Pi's total.
+- **Compaction** — `compaction_end` carries the summary call's `usage`.
+- **Guardrail screening** (av-gust) — *not* reported by Pi at all: model
+  calls made inside hooks appear in no event and in no session total. When
+  the guard's signal reaches Go it records the spend tagged `guardrail`.
+
+Attribution survives aborts, idle-reap kills, and mid-turn deaths: rows land
+as usage arrives, and whatever a killed response had reported so far is
+flushed when the process exits. That is the point — those are the sessions
+that spent money and produced nothing. Rows survive account deletion; the
+money was spent either way. What is *not* metered is anything Pi itself does
+not report (a provider that never returns usage for a failed request is
+invisible here too).
+
+**This is not a bill.** Tokens are the meter and are exact. The cost column is
+Pi's own price-table estimate of what the spend cost — good enough to bound
+spend and attribute rough cost, never shown to a user as an amount owed, and
+zero for a model Pi has no price for (the tokens still say what happened).
+The mapping from tokens to anything a user is sold is pricing's problem, and
+pricing changes without a migration.
+
+### The spend cap (av-99f4)
+
+Layered ceilings over platform-paid spend, each failing differently:
+
+| Env | Ceiling |
+|-----|---------|
+| `AGENT_SPEND_CAP_OWNER_CENTS` | per-owner budget, calendar month (UTC) — the product-level limit a plan will map onto (av-2p8z) |
+| `AGENT_SPEND_CAP_SESSION_CENTS` | one conversation's lifetime — catches a loop without waiting for the month to drain |
+| `AGENT_SPEND_CAP_INSTANCE_CENTS` | the operator's total exposure, guardrail screening included, calendar month — the backstop; logged loudly when reached |
+| `AGENT_SPEND_CAP_TURN_SECONDS` | wall-clock per turn — the fallback that bounds one pathological response without needing token counts |
+
+With none of them set, nothing is enforced and behaviour is exactly what it
+was before this existed. But a platform credential (`AGENT_API_KEY`) with no
+cap at all **fails at startup** — absence of the feature is unlimited,
+absence of a limit the feature requires is a refusal to boot. A BYO-key
+session is never limited by the operator's defaults on any instance: it
+spends its owner's own tokens. Guardrail spend is the operator's money even
+there; it counts against the instance ceiling only.
+
+Enforcement points: before a session spawns, before every turn of a running
+session, and continuously during a response (Pi's cumulative usage is live
+input; the run is aborted the moment it crosses). A refusal is one canned
+message naming the limit and when it resets — as the prompt's HTTP error for
+a turn refused before it starts, as an `exhibit_spend_cap` chat notice for a
+run stopped in flight. A stopped session leaves the artifact on its last
+successful save and its transcript intact: stopping is recoverable in a way
+silently continuing is not. Enforcement is local sums over local rows and
+local config — it holds with every external service unreachable.
+
+**The granularity the protocol actually permits, stated rather than implied:
+enforcement is per model request.** `before_provider_request` can rewrite a
+request but cannot cancel one, so nothing finer exists below it. A request
+bills its input before any usage for it can be reported, so the honest bound
+is: *spend already in flight when a budget crosses is at most one request*.
+The `AGENT_SPEND_CAP_TURN_SECONDS` ceiling covers the residual case — a
+provider that reports usage only at completion and one endless response.
 
 ## Usage-policy guardrail (av-gust)
 
@@ -427,6 +497,13 @@ capture leaves the sandbox only as data posted to that host.
 | `AGENT_PROVIDER` | which provider that key is for; required with `AGENT_API_KEY`, and an unknown one fails at startup |
 | `AGENT_MODEL` | optional model for platform sessions; the operator's choice, never surfaced |
 | `GUARDRAIL_PROVIDER` / `GUARDRAIL_MODEL` / `GUARDRAIL_API_KEY` | the usage-policy guardrail's model and key; all three or none, and a partial set fails at startup |
+| `AGENT_SPEND_CAP_OWNER_CENTS` | per-owner agent budget per calendar month (UTC); see the spend cap above |
+| `AGENT_SPEND_CAP_SESSION_CENTS` | per-session agent ceiling |
+| `AGENT_SPEND_CAP_INSTANCE_CENTS` | instance-wide agent ceiling per calendar month (guardrail spend included) |
+| `AGENT_SPEND_CAP_TURN_SECONDS` | wall-clock ceiling per turn (0/unset is off) |
+
+A platform credential with none of the `AGENT_SPEND_CAP_*` set fails at
+startup (av-99f4).
 
 `internal/mockllm` is a deterministic OpenAI-compatible chat-completions
 handler — scripted create / update / re-read tool calls, color transforms,

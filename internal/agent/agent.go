@@ -163,6 +163,12 @@ type CreateOpts struct {
 	// write_artifact, which is exactly the wrong thing here: the artifact's
 	// own source must not change.
 	WidgetOnly bool
+	// PlatformPaid marks a session running on the instance's own credential
+	// (av-siqf) rather than a BYO key: it is who the provider bills, and so
+	// the one question av-99f4's enforcement keys off (a BYO-key session
+	// spends its owner's money and is never limited here). Recorded on the
+	// usage rows as paid_by either way (av-2yws).
+	PlatformPaid bool
 }
 
 // Create decrypted-key session: spawns the pi subprocess and starts its reader.
@@ -267,6 +273,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	s := &Session{
 		ID:                id,
 		OwnerID:           opts.OwnerID,
+		provider:          opts.Provider,
+		model:             opts.Model,
+		paidBy:            paidByFor(opts.PlatformPaid),
 		grant:             grant,
 		nonce:             nonce,
 		hideModelIdentity: m.cfg.HideModelIdentity,
@@ -379,6 +388,15 @@ type Session struct {
 	ID      string
 	OwnerID int64
 
+	// provider and model are the configured credential's, kept for the usage
+	// ledger (av-2yws) — rows record what spent the money even though
+	// platform mode strips it from everything a user sees. paidBy is who the
+	// provider bills: PaidByPlatform for the instance's credential, PaidByUser
+	// for a BYO key.
+	provider string
+	model    string
+	paidBy   string
+
 	// grant is the session's API credential and the single source of truth
 	// for which artifact it may touch. In create mode it starts unbound and
 	// the API's create handler binds it — the session never derives its
@@ -417,6 +435,15 @@ type Session struct {
 	// prompt's response, so Prompt reads it once the response arrives; promptMu
 	// guarantees there is only one prompt it can belong to.
 	guardBlocked bool
+
+	// Usage accounting (av-2yws). usageCur is the cumulative usage of the
+	// assistant response in flight (Pi reports it per response, streaming);
+	// usageRecorded is the sum of durable ledger rows for this session's own
+	// model/tool/compaction spend — the base the settle reconciliation
+	// diffs Pi's totals against.
+	usageCur       Usage
+	usageCurActive bool
+	usageRecorded  store.UsageTotals
 
 	done chan struct{}
 }
@@ -578,8 +605,23 @@ func (s *Session) handleLine(line []byte) {
 		ID       string `json:"id"`
 		ToolName string `json:"toolName"`
 		IsError  bool   `json:"isError"`
-		Result   struct {
+		// Usage is message_update's cumulative usage of the assistant
+		// response in flight (av-2yws).
+		Usage *Usage `json:"usage"`
+		// Message is message_end's authoritative final message. Only the
+		// envelope is read: role decides the row's source, provider/model
+		// name the spend, usage is the meter.
+		Message struct {
+			Role     string `json:"role"`
+			Provider string `json:"provider"`
+			Model    string `json:"model"`
+			Usage    *Usage `json:"usage"`
+		} `json:"message"`
+		// Result carries tool_execution_end's details (the exhibit tools'
+		// signals) and compaction_end's usage — two events, one wire key.
+		Result struct {
 			Details map[string]any `json:"details"`
+			Usage   *Usage         `json:"usage"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(line, &probe); err != nil {
@@ -609,11 +651,27 @@ func (s *Session) handleLine(line []byte) {
 		s.streaming = true
 		s.lastActive = time.Now()
 		s.mu.Unlock()
+	case "message_update":
+		if probe.Usage != nil {
+			s.noteStreamingUsage(*probe.Usage)
+		}
+	case "message_end":
+		if probe.Message.Usage != nil {
+			s.noteMessageUsage(probe.Message.Role, probe.Message.Provider, probe.Message.Model, *probe.Message.Usage)
+		}
+	case "compaction_end":
+		if probe.Result.Usage != nil {
+			s.noteCompactionUsage(*probe.Result.Usage)
+		}
 	case "agent_settled":
 		s.mu.Lock()
 		s.streaming = false
 		s.lastActive = time.Now()
 		s.mu.Unlock()
+		// The settle is where the ledger is squared with Pi's own totals —
+		// usage sources that emit no event (tool-reported usage, cache
+		// warming) are recorded here as the difference (av-2yws).
+		go s.reconcileUsage()
 		if artifactID := s.ArtifactID(); artifactID != "" {
 			go s.persistTranscript(artifactID)
 		}
@@ -765,6 +823,10 @@ func (s *Session) drainStderr(stderr io.Reader) {
 
 // finish marks the session closed after subprocess exit and tells subscribers.
 func (s *Session) finish() {
+	// Whatever the response in flight had reported is flushed first: a
+	// subprocess killed mid-turn never sends message_end, and that spend is
+	// exactly the spend this ticket exists to attribute (av-2yws).
+	s.flushInFlightUsage()
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -793,4 +855,13 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// paidByFor names the provider-billing side of a session for the usage
+// ledger.
+func paidByFor(platformPaid bool) string {
+	if platformPaid {
+		return store.PaidByPlatform
+	}
+	return store.PaidByUser
 }

@@ -64,6 +64,10 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `GUARDRAIL_PROVIDER` | *(unset)* | Pi provider id of the model that screens agent messages for usage-policy violations. Unset (all three `GUARDRAIL_*`) = no guardrail; see [§4.2](#42-screening-agent-messages-usage-policy-guardrail) |
 | `GUARDRAIL_MODEL` | *(unset)* | That model's id: a classifier such as `jev-latest` or any chat model. Required with the other two |
 | `GUARDRAIL_API_KEY` | *(unset)* | Key for the guardrail's provider, separate from the agent's. Setting only some of the three is a startup failure |
+| `AGENT_SPEND_CAP_OWNER_CENTS` | *(unset)* | Per-owner agent budget, calendar month (UTC). See [§4.1](#41-letting-the-instance-supply-the-agent-key-platform-mode) — platform mode requires at least one cap |
+| `AGENT_SPEND_CAP_SESSION_CENTS` | *(unset)* | Per-conversation agent ceiling (its whole lifetime) |
+| `AGENT_SPEND_CAP_INSTANCE_CENTS` | *(unset)* | Everything the instance pays for per calendar month — the backstop; guardrail spend included |
+| `AGENT_SPEND_CAP_TURN_SECONDS` | *(0)* | Wall-clock ceiling on one agent turn; the fallback for a response that never reports usage until it ends |
 | `LOGIN_USERNAME` | *(unset)* | Names an account for the bootstrap / break-glass login — how you get in on an empty instance, or after losing a password. Accounts themselves are created with the `user add` subcommand, not here; see [§3.2](#32-log-in-with-a-username-and-password) |
 | `LOGIN_PASSWORD_HASH` | *(unset)* | The **bcrypt hash** of that password, not the password. Produce it with the `hash-password` subcommand. Set with `LOGIN_USERNAME`; it stays accepted for that account for as long as both are set (§3.2) |
 | `OIDC_ISSUER` | *(unset)* | Identity provider to delegate login to. Unset = no OIDC |
@@ -530,18 +534,37 @@ Existing per-user keys are left alone: they are not read while platform mode is
 on, not deleted, and unsetting the variable restores each user's own key exactly
 as it was.
 
-> [!WARNING]
-> **There is no spend cap.** Every agent session bills your provider account,
-> and Exhibit currently measures nothing: it cannot attribute a session's cost
-> to a user, and it cannot stop one that runs away. Usage billing meters after
-> the fact, so a bad day is money already spent.
->
-> Only enable this on an instance whose users you control. Do not put it in
-> front of open signups, or behind a public-mode gallery, until per-owner
-> metering and budgets exist.
+**Platform mode requires a spend cap.** At least one `AGENT_SPEND_CAP_*` must be
+set or the server refuses to start (av-99f4): absence of the feature is
+unlimited, absence of a limit the feature requires is a refusal to boot.
 
-The startup log repeats this warning so the instance says it out loud every
-time it boots.
+```bash
+AGENT_SPEND_CAP_OWNER_CENTS=2000       # per-user budget, calendar month (UTC)
+AGENT_SPEND_CAP_SESSION_CENTS=500      # one conversation's lifetime
+AGENT_SPEND_CAP_INSTANCE_CENTS=100000  # everything you pay for, per month
+AGENT_SPEND_CAP_TURN_SECONDS=600       # optional: bound one runaway turn
+```
+
+> [!IMPORTANT]
+> **What the cap does and does not promise.** Enforcement is per model request:
+> a request already in flight when a budget crosses is at most one request's
+> cost spent past the line — `before_provider_request` can rewrite a request
+> but cannot cancel one, and nothing finer exists below it.
+> `AGENT_SPEND_CAP_TURN_SECONDS` is the belt for the one case token counts
+> cannot see: a response whose provider reports usage only when it ends.
+>
+> Usage is metered per user in the `agent_usage` table — exact tokens, and a
+> cost estimate beside them that is Pi's price table, **not a bill**. BYO-key
+> sessions on any instance are never limited by these values; they spend their
+> owner's own tokens.
+>
+> An exhausted budget refuses new sessions and stops running ones with a
+> message naming the limit and its reset, leaving the artifact on its last
+> saved state. Enforcement is local sums over local rows — it holds with every
+> external service unreachable.
+
+The startup log names the mode so the instance says it out loud every time it
+boots.
 
 ### 4.2 Screening agent messages (usage-policy guardrail)
 
