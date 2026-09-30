@@ -61,7 +61,7 @@ FROM node:22-bookworm-slim
 # its extension hooks behave (an `input` handler returning `handled` skips the
 # model), and an unpinned upgrade could change that with nothing failing.
 # Bump deliberately and run `go test ./internal/api -run Guardrail` against it.
-ARG PI_VERSION=0.87.1
+ARG PI_VERSION=0.99.1
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates \
