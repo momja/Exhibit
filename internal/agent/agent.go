@@ -397,6 +397,12 @@ type Session struct {
 	stdin io.WriteCloser
 
 	writeMu sync.Mutex // serializes stdin writes
+	// promptMu keeps one prompt in flight at a time, from send to response.
+	// Pi runs a prompt's input hook (the guardrail screen) before answering
+	// it, and the guard's signal names no prompt, so serializing is what ties
+	// guardBlocked to the one prompt that set it (av-gust). A second send
+	// waits at most one screen.
+	promptMu sync.Mutex
 
 	mu          sync.Mutex // guards everything below
 	pendingData []DataBlock
@@ -408,7 +414,8 @@ type Session struct {
 	lastActive  time.Time
 	// guardBlocked records that the guard extension handled the prompt in
 	// flight instead of running it (av-gust). Pi emits that signal before the
-	// prompt's response, so Prompt reads it once the response arrives.
+	// prompt's response, so Prompt reads it once the response arrives; promptMu
+	// guarantees there is only one prompt it can belong to.
 	guardBlocked bool
 
 	done chan struct{}
@@ -453,6 +460,9 @@ func (s *Session) Subscribe() (<-chan []byte, func()) {
 // preview — is fenced onto the end of the same user-role message, so no
 // untrusted text ever reaches the model as an instruction.
 func (s *Session) Prompt(ctx context.Context, message string, images []ImageContent, data []DataBlock) error {
+	s.promptMu.Lock()
+	defer s.promptMu.Unlock()
+
 	s.mu.Lock()
 	steer := s.streaming
 	// The session's opening block rides the first prompt. It is held, not

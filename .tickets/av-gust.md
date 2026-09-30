@@ -17,7 +17,7 @@ Found by pasting a system prompt from a roleplaying site: the agent took on the 
 
 ## Scope decision (2026-09-29)
 
-**Off-topic use is allowed.** Users pay for the service and can use the agent as they like; cost is bounded by the spend cap ([[av-99f4]]), not by a topic rule. This ticket enforces a **usage policy** (prohibited content), not topicality.
+**Off-topic use is allowed.** Users pay for the service and can use the agent as they like; bounding cost is the job of the spend cap ([[av-99f4]], not yet built), not of a topic rule. This ticket enforces a **usage policy** (prohibited content), not topicality.
 
 **This lands the scaffold, not every layer.** One screen, on user input, configured by the operator. Screening saves and replies, strikes, and dedicated decision-model vendors (Jev, OpenAI Decisions API) can reuse the same seam later if traffic shows they are needed.
 
