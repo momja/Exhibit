@@ -155,9 +155,7 @@ func (u Usage) row(s *Session, source string) store.AgentUsage {
 }
 
 // noteStreamingUsage folds one cumulative streaming report into the response
-// in flight. It runs on the read loop, so it must not block: the cap check it
-// triggers goes off in a goroutine (and the report is also the live input to
-// the mid-response check in spendcap.go).
+// in flight. It runs on the read loop, so it must not block.
 func (s *Session) noteStreamingUsage(u Usage) {
 	s.mu.Lock()
 	s.usageCur = s.usageCur.max(u)
@@ -222,9 +220,14 @@ func (s *Session) recordUsage(row store.AgentUsage) {
 		slog.Warn("agent usage row failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 		return
 	}
-	s.mu.Lock()
-	s.usageRecorded.Add(row)
-	s.mu.Unlock()
+	// Guardrail rows stay out of the reconcile base: Pi's session totals never
+	// count them (hook model calls report nowhere), so folding them in would
+	// subtract operator spend from the session's own gap.
+	if row.Source != store.UsageSourceGuardrail {
+		s.mu.Lock()
+		s.usageRecorded.Add(row)
+		s.mu.Unlock()
+	}
 	// Spend enforcement (av-99f4) checks the caps here.
 }
 
@@ -236,10 +239,19 @@ func (s *Session) recordUsage(row store.AgentUsage) {
 // such as cache warming). It is recorded as one tool-sourced row so the
 // ledger's sum equals Pi's total. Runs at every settle, off the read loop,
 // because it makes an RPC round trip.
+//
+// Pi's totals are compared against what was recorded when the read loop
+// reached the stats response, not when this goroutine got around to it: a row
+// landing in between belongs to usage the snapshot does not include, and
+// subtracting it would hide spend the snapshot does. Both sides are
+// cumulative, so a field where the ledger runs ahead of Pi is carried into
+// the next comparison rather than lost.
 func (s *Session) reconcileUsage() {
+	s.reconcileMu.Lock()
+	defer s.reconcileMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	resp, err := s.roundTrip(ctx, map[string]any{"type": "get_session_stats"})
+	resp, err := s.call(ctx, map[string]any{"type": "get_session_stats"})
 	if err != nil {
 		slog.Warn("usage reconcile skipped", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 		return
@@ -255,7 +267,7 @@ func (s *Session) reconcileUsage() {
 			Cost float64 `json:"cost"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(resp, &r); err != nil {
+	if err := json.Unmarshal(resp.line, &r); err != nil {
 		return
 	}
 	stats := store.UsageTotals{
@@ -265,15 +277,7 @@ func (s *Session) reconcileUsage() {
 		CacheWriteTokens: r.Data.Tokens.CacheWrite,
 		CostMicros:       costMicros(r.Data.Cost),
 	}
-
-	// The in-flight response is flushed first so its spend is recorded
-	// exactly once — the delta computed below is against durable rows, and
-	// finish() must not re-record what reconcile already folded in.
-	s.flushInFlightUsage()
-
-	s.mu.Lock()
-	recorded := s.usageRecorded
-	s.mu.Unlock()
+	recorded := resp.recorded
 
 	delta := store.UsageTotals{
 		InputTokens:      max(0, stats.InputTokens-recorded.InputTokens),
@@ -301,7 +305,7 @@ func (s *Session) reconcileUsage() {
 }
 
 // flushInFlightUsage records whatever the response in flight has reported so
-// far. Called when a session settles, and from finish() — a subprocess killed
+// far. Called on the read loop when a session settles, and from finish() — a subprocess killed
 // mid-response never sends message_end, and that response's usage is exactly
 // the spend that produced nothing, which is the spend most worth attributing.
 func (s *Session) flushInFlightUsage() {

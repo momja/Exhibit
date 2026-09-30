@@ -22,7 +22,7 @@ func newDetachedSession(t *testing.T, artifactID string) *Session {
 		ID:      "test-session",
 		grant:   grant,
 		subs:    map[chan []byte]struct{}{},
-		pending: map[string]chan json.RawMessage{},
+		pending: map[string]chan rpcResponse{},
 		done:    make(chan struct{}),
 	}
 }

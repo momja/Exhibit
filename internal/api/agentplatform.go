@@ -80,19 +80,17 @@ func PlatformKeyFromEnv() (*PlatformKey, error) {
 // is here rather than at the call site so that no way of constructing a
 // platform-mode instance can omit it.
 //
-// Nothing bounds the spend: the manager reads no token usage off Pi's event
-// stream, so an instance in platform mode can neither attribute a session's
-// cost to an owner nor stop one that runs away, and usage billing meters after
-// the fact. Metering and a per-owner cap are av-hyo6; until they exist this
-// configuration belongs on a controlled instance and not in front of open
-// signups. The operator is told that at boot rather than discovering it on an
+// Nothing bounds the spend: sessions are metered per owner (av-2yws), but
+// nothing stops one that runs away, and usage billing meters after the fact.
+// The per-owner cap is av-99f4; until it exists this configuration belongs on
+// a controlled instance and not in front of open signups. The operator is told that at boot rather than discovering it on an
 // invoice.
 //
 // Neither the provider nor the model is named, for the same reason no response
 // names them: a log line is read by the operator, who set them, but it is also
 // the thing most likely to be pasted into a support thread.
 func (pk *PlatformKey) logStartup() {
-	slog.Warn("platform agent mode enabled: every agent session runs on this instance's own provider credential and bills its account; there is no spend cap and no per-owner metering, so do not expose this to untrusted signups")
+	slog.Warn("platform agent mode enabled: every agent session runs on this instance's own provider credential and bills its account; usage is metered per owner but there is no spend cap, so do not expose this to untrusted signups")
 }
 
 // platformMode reports whether this instance supplies the agent credential.

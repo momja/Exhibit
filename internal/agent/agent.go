@@ -283,7 +283,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		cmd:               cmd,
 		stdin:             stdin,
 		subs:              map[chan []byte]struct{}{},
-		pending:           map[string]chan json.RawMessage{},
+		pending:           map[string]chan rpcResponse{},
 		done:              make(chan struct{}),
 		lastActive:        time.Now(),
 	}
@@ -426,7 +426,7 @@ type Session struct {
 	pendingData []DataBlock
 	subs        map[chan []byte]struct{}
 	backlog     [][]byte
-	pending     map[string]chan json.RawMessage
+	pending     map[string]chan rpcResponse
 	streaming   bool
 	closed      bool
 	lastActive  time.Time
@@ -444,8 +444,21 @@ type Session struct {
 	usageCur       Usage
 	usageCurActive bool
 	usageRecorded  store.UsageTotals
+	// reconcileMu keeps one settle reconciliation running at a time, so each
+	// one's stats snapshot is taken after the previous one's gap row landed.
+	reconcileMu sync.Mutex
 
 	done chan struct{}
+}
+
+// rpcResponse is one correlated Pi response plus the session's recorded usage
+// at the moment the read loop reached it. Pi writes its stdout in order, so
+// every usage event it emitted before answering has been recorded by then, and
+// none it emitted after has: that snapshot is the baseline a get_session_stats
+// answer can be compared against (av-2yws).
+type rpcResponse struct {
+	line     json.RawMessage
+	recorded store.UsageTotals
 }
 
 // ArtifactID is the artifact this session is scoped to, or "" while a
@@ -541,14 +554,20 @@ func (s *Session) Abort(ctx context.Context) error {
 
 // roundTrip sends one RPC command and waits for its correlated response.
 func (s *Session) roundTrip(ctx context.Context, cmd map[string]any) (json.RawMessage, error) {
+	resp, err := s.call(ctx, cmd)
+	return resp.line, err
+}
+
+// call is roundTrip keeping the recorded-usage snapshot beside the response.
+func (s *Session) call(ctx context.Context, cmd map[string]any) (rpcResponse, error) {
 	id := uuid.New().String()
 	cmd["id"] = id
-	ch := make(chan json.RawMessage, 1)
+	ch := make(chan rpcResponse, 1)
 
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return nil, fmt.Errorf("session closed")
+		return rpcResponse{}, fmt.Errorf("session closed")
 	}
 	s.pending[id] = ch
 	s.mu.Unlock()
@@ -560,13 +579,13 @@ func (s *Session) roundTrip(ctx context.Context, cmd map[string]any) (json.RawMe
 
 	line, err := json.Marshal(cmd)
 	if err != nil {
-		return nil, err
+		return rpcResponse{}, err
 	}
 	s.writeMu.Lock()
 	_, err = s.stdin.Write(append(line, '\n'))
 	s.writeMu.Unlock()
 	if err != nil {
-		return nil, fmt.Errorf("write to pi: %w", err)
+		return rpcResponse{}, fmt.Errorf("write to pi: %w", err)
 	}
 
 	timeout := time.NewTimer(2 * time.Minute)
@@ -575,11 +594,11 @@ func (s *Session) roundTrip(ctx context.Context, cmd map[string]any) (json.RawMe
 	case resp := <-ch:
 		return resp, nil
 	case <-s.done:
-		return nil, fmt.Errorf("agent process exited")
+		return rpcResponse{}, fmt.Errorf("agent process exited")
 	case <-timeout.C:
-		return nil, fmt.Errorf("timed out waiting for pi response")
+		return rpcResponse{}, fmt.Errorf("timed out waiting for pi response")
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return rpcResponse{}, ctx.Err()
 	}
 }
 
@@ -630,10 +649,11 @@ func (s *Session) handleLine(line []byte) {
 	if probe.Type == "response" && probe.ID != "" {
 		s.mu.Lock()
 		ch := s.pending[probe.ID]
+		recorded := s.usageRecorded
 		s.mu.Unlock()
 		if ch != nil {
 			// copy: line's backing array is reused by the reader
-			ch <- json.RawMessage(bytes.Clone(line))
+			ch <- rpcResponse{line: json.RawMessage(bytes.Clone(line)), recorded: recorded}
 		}
 		return
 	}
@@ -678,7 +698,10 @@ func (s *Session) handleLine(line []byte) {
 		s.mu.Unlock()
 		// The settle is where the ledger is squared with Pi's own totals —
 		// usage sources that emit no event (tool-reported usage, cache
-		// warming) are recorded here as the difference (av-2yws).
+		// warming) are recorded here as the difference (av-2yws). The
+		// response in flight is flushed here, on the read loop, so the flush
+		// can only ever see this turn's response and never a later one's.
+		s.flushInFlightUsage()
 		go s.reconcileUsage()
 		if artifactID := s.ArtifactID(); artifactID != "" {
 			go s.persistTranscript(artifactID)

@@ -250,3 +250,17 @@ func TestPlatformKeyFromEnv(t *testing.T) {
 		})
 	}
 }
+
+// Platform mode is who the provider bills, and the session has to know it:
+// the usage ledger records paid_by from this flag, and a platform session
+// booked as the user's own tokens would sit outside every operator meter.
+func TestPlatformModeSessionsArePlatformPaid(t *testing.T) {
+	r := newTestRouter(t)
+	r.cfg.Agent = &agent.Manager{} // only its presence is read here
+	enablePlatformMode(r)
+
+	req := httptest.NewRequest("POST", "/api/agent/sessions", strings.NewReader("{}"))
+	opts, ok := r.agentSessionOpts(httptest.NewRecorder(), req)
+	require.True(t, ok)
+	assert.True(t, opts.PlatformPaid, "a session on the instance's key is platform-paid")
+}
