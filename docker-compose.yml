@@ -19,6 +19,12 @@ services:
       - AGENT_API_KEY=${AGENT_API_KEY:-}
       - AGENT_PROVIDER=${AGENT_PROVIDER:-}
       - AGENT_MODEL=${AGENT_MODEL:-}
+      # Spend caps (av-99f4): platform mode needs at least one of these set or
+      # the server refuses to start. Empty means unset (no limit).
+      - AGENT_SPEND_CAP_OWNER_CENTS=${AGENT_SPEND_CAP_OWNER_CENTS:-}
+      - AGENT_SPEND_CAP_SESSION_CENTS=${AGENT_SPEND_CAP_SESSION_CENTS:-}
+      - AGENT_SPEND_CAP_INSTANCE_CENTS=${AGENT_SPEND_CAP_INSTANCE_CENTS:-}
+      - AGENT_SPEND_CAP_TURN_SECONDS=${AGENT_SPEND_CAP_TURN_SECONDS:-}
       # Usage-policy guardrail, all three or none (§4.2):
       - GUARDRAIL_PROVIDER=${GUARDRAIL_PROVIDER:-}
       - GUARDRAIL_MODEL=${GUARDRAIL_MODEL:-}
