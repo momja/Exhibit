@@ -395,6 +395,10 @@ behaving as it does in the pinned version.
   sessions, and on every settled turn persists the full Pi message list to
   `agent_transcripts` keyed by artifact — colophon-style provenance
   (`GET /api/artifacts/:id/transcripts`), the foundation for future remixing.
+- An owner holds at most **10 open sessions** (widget-generate sessions
+  counted): at the limit the oldest idle one is evicted, and only when all
+  ten are mid-run is a new one refused (429). The chat page closes its
+  session on `pagehide`, so reloads do not stack sessions against the limit.
 - When a save-tool call succeeds, the session emits a synthetic
   `exhibit_artifact_saved` event; a `set_state`/`delete_state` call emits the
   analogous `exhibit_state_changed` event, and `set_widget`/`edit_widget` the

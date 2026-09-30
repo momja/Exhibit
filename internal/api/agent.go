@@ -188,6 +188,19 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 	return agent.CreateOpts{OwnerID: ownerID, Provider: k.Provider, Model: k.Model, APIKey: apiKey}, true
 }
 
+// writeAgentCreateError answers a refused Create. The session limit
+// (av-99f4) is a refusal with a message, not a fault: it answers 429 so the
+// chat treats it as a limit. Everything else is the 500 it has always been.
+// One mapping for both creators — the chat surface and the widget button —
+// so they cannot disagree about what a limit looks like.
+func writeAgentCreateError(w http.ResponseWriter, r *http.Request, op string, err error) {
+	if errors.Is(err, agent.ErrSessionLimit) {
+		writeError(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
+	serverError(w, r, op, err)
+}
+
 // inlinedArtifactSource reads the artifact body a session opens with, so the
 // agent does not spend its first tool call fetching what the handler is
 // holding anyway (av-e0yj). The result is untrusted, exactly like the title
@@ -246,7 +259,7 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)
 	if err != nil {
-		serverError(w, r, "create agent session", err)
+		writeAgentCreateError(w, r, "create agent session", err)
 		return
 	}
 	// The ticket rides along with the id: creating a session and connecting

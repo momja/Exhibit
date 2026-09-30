@@ -306,8 +306,8 @@ func TestTheCardBadgeNamesTheStrongestThingTrue(t *testing.T) {
 			detail: "1 person can open this artifact. Each keeps their own data.",
 		},
 		{
-			name:  "the public link outranks grants, and still names them",
-			a:     store.Artifact{ShareGrantCount: 3, SharePublicLink: link, ShareStateMode: store.ShareStateOwn},
+			name: "the public link outranks grants, and still names them",
+			a:    store.Artifact{ShareGrantCount: 3, SharePublicLink: link, ShareStateMode: store.ShareStateOwn},
 			// A link, not a globe: the globe beside it in the card's
 			// cluster means network origins (av-uvc6).
 			level: "public", icon: "ph-link-simple", label: "Public link",

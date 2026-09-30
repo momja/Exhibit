@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/momja/Exhibit/internal/agent"
@@ -31,6 +33,21 @@ func TestPlatformModeWithoutACapDoesNotBoot(t *testing.T) {
 
 	var ownerBudget int64 = 1
 	assert.NoError(t, RequireSpendCaps(pk, agent.SpendCaps{OwnerMicrosPerMonth: &ownerBudget}))
+}
+
+// The session limit (av-99f4) is a refusal with a message, not a fault: 429,
+// and the message says what to do about it. Anything else keeps its 500.
+func TestASessionLimitRefusesWith429AndItsMessage(t *testing.T) {
+	req := httptest.NewRequest("POST", "/api/agent/sessions", nil)
+
+	w := httptest.NewRecorder()
+	writeAgentCreateError(w, req, "create agent session", agent.ErrSessionLimit)
+	assert.Equal(t, http.StatusTooManyRequests, w.Code)
+	assert.Contains(t, w.Body.String(), "all of yours are busy")
+
+	w = httptest.NewRecorder()
+	writeAgentCreateError(w, req, "create agent session", errors.New("spawn failed"))
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 // The pre-spawn refusal end to end through the route both session creators
