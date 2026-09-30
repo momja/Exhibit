@@ -16,8 +16,8 @@ func TestExtractSearchText(t *testing.T) {
 		excludes []string
 	}{
 		{
-			name:   "visible text is kept, markup dropped",
-			source: `<h1>Weather <b>Dashboard</b></h1><p>Current conditions</p>`,
+			name:     "visible text is kept, markup dropped",
+			source:   `<h1>Weather <b>Dashboard</b></h1><p>Current conditions</p>`,
 			contains: []string{"Weather", "Dashboard", "Current conditions"},
 		},
 		{

@@ -69,10 +69,12 @@ func TestOwnerAgentSpendIsBoundedToThePeriod(t *testing.T) {
 	assert.Equal(t, int64(400_000), totals.CostMicros)
 }
 
-// The per-session ceiling meters what the conversation cost the operator —
-// guardrail screening included — and is owner-scoped like every sum (av-ep8k):
-// another owner's session id is not a window onto this one.
-func TestSessionAgentSpendCountsTheWholeConversation(t *testing.T) {
+// The per-session ceiling meters the conversation's own agent spend and
+// stops a looping conversation without waiting for the owner's month to
+// drain. Guardrail rows are excluded — screening is the operator's overhead,
+// bounded by the instance ceiling, never a property of one conversation —
+// and the sum is owner-scoped like every sum (av-ep8k).
+func TestSessionAgentSpendCountsTheConversationsOwnSpend(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
@@ -82,7 +84,8 @@ func TestSessionAgentSpendCountsTheWholeConversation(t *testing.T) {
 
 	totals, err := s.SessionAgentSpend(ctx, 7, "s1")
 	require.NoError(t, err)
-	assert.Equal(t, int64(700_000), totals.CostMicros, "guardrail spend is part of what the conversation cost")
+	assert.Equal(t, int64(500_000), totals.CostMicros,
+		"the conversation's own spend, with guardrail overhead left to the instance ceiling")
 
 	totals, err = s.SessionAgentSpend(ctx, 8, "s1")
 	require.NoError(t, err)

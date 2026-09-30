@@ -288,23 +288,26 @@ session is never limited by the operator's defaults on any instance: it
 spends its owner's own tokens. Guardrail spend is the operator's money even
 there; it counts against the instance ceiling only.
 
-Enforcement points: before a session spawns, before every turn of a running
-session, and continuously during a response (Pi's cumulative usage is live
-input; the run is aborted the moment it crosses). A refusal is one canned
-message naming the limit and when it resets — as the prompt's HTTP error for
-a turn refused before it starts, as an `exhibit_spend_cap` chat notice for a
-run stopped in flight. A stopped session leaves the artifact on its last
-successful save and its transcript intact: stopping is recoverable in a way
-silently continuing is not. Enforcement is local sums over local rows and
-local config — it holds with every external service unreachable.
+Enforcement is **between runs** (the product decision of 2026-09-30:
+sessions finish). Before a session spawns, and before every prompt of a
+running one, the limits are asked; a refusal is one canned message naming the
+limit and when it resets, and the run in flight is never interrupted — it
+runs to settle, and the next prompt is the one refused. Two hard stops remain
+as failure backstops: the instance ceiling (the operator's money running out
+cannot wait for anybody's turn) and `AGENT_SPEND_CAP_TURN_SECONDS`. A
+stopped run leaves the artifact on its last successful save and its
+transcript intact: stopping is recoverable in a way silently continuing is
+not. Enforcement is local sums over local rows and local config — it holds
+with every external service unreachable.
 
-**The granularity the protocol actually permits, stated rather than implied:
-enforcement is per model request.** `before_provider_request` can rewrite a
-request but cannot cancel one, so nothing finer exists below it. A request
-bills its input before any usage for it can be reported, so the honest bound
-is: *spend already in flight when a budget crosses is at most one request*.
-The `AGENT_SPEND_CAP_TURN_SECONDS` ceiling covers the residual case — a
-provider that reports usage only at completion and one endless response.
+**The bound, stated rather than implied: at most one full run per open
+session spends past the budget, so at most ten runs — one per session a
+single owner can hold.** A run is one prompt through settle, including every
+tool call inside it. Nothing enforces inside a run (and `before_provider_request`
+could not anyway: it can rewrite a request but not cancel one), so the
+`AGENT_SPEND_CAP_TURN_SECONDS` ceiling is the belt for the one case token
+counts cannot see: a response whose provider reports usage only when it
+ends, or one that simply never ends.
 
 ## Usage-policy guardrail (av-gust)
 

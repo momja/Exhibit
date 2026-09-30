@@ -1340,13 +1340,13 @@ func (s *SQLiteStore) OwnerAgentSpend(ctx context.Context, ownerID int64, since 
 		ownerID, since.UTC().Format(datetimeLayout))
 }
 
-// SessionAgentSpend is everything recorded against one session — any payer,
-// guardrail included — what the per-session ceiling meters. Owner-scoped like
-// every sum: the session id is the enforcement key, but the owner predicate
-// rides along so one owner's conversation can never be metered against
-// another's budget (av-ep8k).
+// SessionAgentSpend is one session's own agent spend — what the per-session
+// ceiling meters — owner-scoped like every sum (av-ep8k). Guardrail rows are
+// excluded for the same reason they are excluded from the owner's budget:
+// screening is the operator's cost of doing business, never a property of
+// one conversation, and only the instance ceiling bounds it.
 func (s *SQLiteStore) SessionAgentSpend(ctx context.Context, ownerID int64, sessionID string) (UsageTotals, error) {
-	return s.usageTotals(ctx, "owner_id=? AND session_id=?", ownerID, sessionID)
+	return s.usageTotals(ctx, "owner_id=? AND session_id=? AND source != 'guardrail'", ownerID, sessionID)
 }
 
 // InstanceAgentSpend is every platform-paid row since a time, guardrail

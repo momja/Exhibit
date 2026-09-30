@@ -72,8 +72,8 @@ func TestGuardUsageSignalIsMeteredNotABlock(t *testing.T) {
 	assert.False(t, s.guardBlocked)
 	assert.Empty(t, s.backlog)
 
-	totals := sessionTotals(t, db, s)
-	assert.Equal(t, int64(12), totals.InputTokens+totals.OutputTokens, "the screen's spend lands in the ledger")
+	assert.Equal(t, int64(0), sessionTotals(t, db, s).CostMicros,
+		"screening is not one conversation's spend — the session ceiling never sees it")
 	instance, err := db.InstanceAgentSpend(context.Background(), time.Time{})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1_000), instance.CostMicros,

@@ -448,11 +448,9 @@ type Session struct {
 	usageCurActive bool
 	usageRecorded  store.UsageTotals
 
-	// Spend cap state (av-99f4). capped is the refusal that stopped this
-	// session, or nil; turnTimer is the per-turn wall-clock ceiling.
-	capped       *CapRefusal
-	turnTimer    *time.Timer
-	lastCapCheck time.Time
+	// Spend cap state (av-99f4). turnTimer is the per-turn wall-clock
+	// ceiling, the one hard stop besides the instance ceiling.
+	turnTimer *time.Timer
 
 	done chan struct{}
 }

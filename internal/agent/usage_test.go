@@ -172,8 +172,9 @@ func TestTheMeteringProbeKeepsLinesItCannotFullyParse(t *testing.T) {
 		`"message":"exhibit_guard:usage {\"provider\":\"p\",\"model\":\"m\",`+
 		`\"usage\":{\"input\":10,\"output\":2,\"cost\":{\"total\":0.001}}}","notifyType":"info"}`)
 	assert.Empty(t, events, "a usage signal is metered, never forwarded")
-	totals := sessionTotals(t, db, s)
-	assert.Equal(t, store.UsageTotals{InputTokens: 10, OutputTokens: 2, CostMicros: 1_000}, totals,
+	instance, err := db.InstanceAgentSpend(context.Background(), time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, store.UsageTotals{InputTokens: 10, OutputTokens: 2, CostMicros: 1_000}, instance,
 		"the usage signal inside the notification is still metered")
 
 	events = feed(t, s, `{"type":"extension_ui_request","id":"2","method":"notify",`+

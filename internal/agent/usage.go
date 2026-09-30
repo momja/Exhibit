@@ -155,15 +155,14 @@ func (u Usage) row(s *Session, source string) store.AgentUsage {
 }
 
 // noteStreamingUsage folds one cumulative streaming report into the response
-// in flight. It runs on the read loop, so it must not block: the cap check it
-// triggers goes off in a goroutine (and the report is also the live input to
-// the mid-response check in spendcap.go).
+// in flight. It runs on the read loop and must not block; the report is
+// bookkeeping only — nothing enforces against it mid-response (graceful
+// stops, av-99f4), it is what the kill-mid-turn flush finds later.
 func (s *Session) noteStreamingUsage(u Usage) {
 	s.mu.Lock()
 	s.usageCur = s.usageCur.max(u)
 	s.usageCurActive = true
 	s.mu.Unlock()
-	s.checkCapsStreaming()
 }
 
 // noteMessageUsage closes out one message that carried usage. Assistant
@@ -225,7 +224,10 @@ func (s *Session) recordUsage(row store.AgentUsage) {
 	s.mu.Lock()
 	s.usageRecorded.Add(row)
 	s.mu.Unlock()
-	s.checkCaps()
+	// The instance ceiling is the one limit that will stop a run in flight
+	// (av-99f4): the operator's money running out cannot wait for anybody's
+	// turn to end. Every other limit is enforced between runs.
+	s.checkInstanceCap()
 }
 
 // reconcileUsage closes the gap between what the event stream showed and

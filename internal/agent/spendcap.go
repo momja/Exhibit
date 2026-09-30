@@ -22,30 +22,40 @@ import (
 //   - Owner budget — a per-owner ceiling per calendar month (UTC), the
 //     product-level limit a plan will map onto (av-2p8z holds the plan data;
 //     per-owner overrides land there, and this reads a configured default
-//     until they do). Checked before a session spawns and before every turn.
+//     until they do). Enforced between runs: before a session spawns and
+//     before every prompt.
 //   - Session ceiling — one conversation's lifetime, catching a loop without
-//     waiting for the month to drain.
+//     waiting for the month to drain. Also enforced between runs.
 //   - Instance ceiling — the operator's total exposure per calendar month,
 //     guardrail screening included, and the only layer that bounds a failure
-//     nobody predicted. Logged loudly when reached.
+//     nobody predicted. Logged loudly when reached. The one budget layer
+//     that will also stop a run in progress (below).
 //
 // All three meter platform-paid spend only. A BYO-key session spends its
 // owner's own tokens and is never limited by the operator's defaults, on any
 // instance — so enforcement simply does not run for one (see
-// Session.enforceCaps).
+// Session.capBeforePrompt).
+//
+// # Graceful stops (product decision, 2026-09-30)
+//
+// Sessions finish what they started. A run in progress when the owner's
+// budget or the session's ceiling crosses is *not* cut off: it runs to
+// settle, and the next prompt is refused with the message naming the limit
+// and its reset. Nothing is ever stopped mid-thought over a budget.
+//
+// Two hard stops remain, as failure backstops rather than budgets: the
+// per-turn wall-clock ceiling (AGENT_SPEND_CAP_TURN_SECONDS) and the
+// instance ceiling — the operator's own money running out is the one thing
+// that cannot wait for anybody's turn to end.
 //
 // # Enforcement granularity: what the protocol actually permits
 //
 // `before_provider_request` cannot cancel a request — it may replace the
-// payload, nothing more — so the finest enforcement is per model request,
-// which is better than it sounds: Pi reports usage per assistant response,
-// cumulatively *during* the response, so the running total is visible before
-// the next request can spend and the run is aborted the moment it crosses.
-// The honest bound (docs/agent.md): **spend already in flight when a budget
-// crosses is at most one request** — a request bills its input before any
-// usage for it can be reported. For the residual case (a provider that
-// reports usage only at completion, one endless response) the wall-clock
-// ceiling per turn below aborts on time instead of on tokens.
+// payload, nothing more — and enforcement between runs is the policy anyway,
+// so the honest bound (docs/agent.md) is: **at most one full run per open
+// session spends past the budget, so at most 10 runs — one per session a
+// single owner can hold.** A run is one prompt through settle, including
+// every tool call inside it.
 //
 // # Fail closed, fail nowhere else
 //
@@ -184,10 +194,10 @@ func (e *CapRefusal) Message() string {
 	switch e.Which {
 	case "owner":
 		return fmt.Sprintf("Agent budget reached: %s of your %s monthly agent budget is used. "+
-			"It resets on %s. This conversation has been stopped.", used, limit, formatReset(e.ResetAt))
+			"It resets on %s. Your message was not sent.", used, limit, formatReset(e.ResetAt))
 	case "instance":
-		return fmt.Sprintf("The instance's monthly agent budget is exhausted (%s of %s used). "+
-			"New agent sessions are refused until it resets on %s.", used, limit, formatReset(e.ResetAt))
+		return fmt.Sprintf("The instance's monthly agent budget is exhausted (%s of %s used); "+
+			"agent runs stop until it resets on %s.", used, limit, formatReset(e.ResetAt))
 	case "session":
 		return fmt.Sprintf("This conversation reached its spend ceiling (%s of %s). "+
 			"Start a new conversation to keep going.", used, limit)
@@ -241,21 +251,8 @@ func (m *Manager) probeCaps(ctx context.Context, ownerID int64, sessionID string
 		}
 	}
 	if caps.InstanceMicrosPerMonth != nil {
-		totals, err := m.st.InstanceAgentSpend(ctx, since)
-		if err != nil {
-			return m.unresolvedCaps(ctx, ownerID, err)
-		}
-		if totals.CostMicros >= *caps.InstanceMicrosPerMonth {
-			// Logged loudly here rather than at each caller: this is the
-			// backstop tripping — a mistake in the other layers or a failure
-			// nobody predicted — and an operator wants to know before the
-			// next support thread does.
-			slog.Error("instance agent spend ceiling reached",
-				slog.Int64("used_micros", totals.CostMicros),
-				slog.Int64("limit_micros", *caps.InstanceMicrosPerMonth),
-				slog.String("resets_at", formatReset(reset)))
-			return &CapRefusal{Which: "instance", LimitMicros: *caps.InstanceMicrosPerMonth,
-				UsedMicros: totals.CostMicros, ResetAt: reset}
+		if refusal := m.probeInstanceCap(ctx); refusal != nil {
+			return refusal
 		}
 	}
 	return nil
@@ -282,64 +279,63 @@ func (m *Manager) ProbeCaps(ctx context.Context, ownerID int64) *CapRefusal {
 	return m.probeCaps(ctx, ownerID, "")
 }
 
-// checkCaps is the between-turns check, beside the readLoop as the ticket
-// asks: a session that is already running is the one that runs away. It goes
-// off in a goroutine because the read loop must not block on SQL, and because
-// stopping the run needs an RPC round trip the loop itself would deadlock on.
-func (s *Session) checkCaps() {
-	if s.paidBy != store.PaidByPlatform || !s.mgr.cfg.Caps.AnySet() {
+// checkInstanceCap is the one in-flight enforcement left: the operator's own
+// money running out cannot wait for anybody's turn to end, so the instance
+// ceiling is a hard stop even mid-run (the product decision of 2026-09-30
+// removed every other one — a run in progress always finishes). It goes off
+// in a goroutine because the read loop must not block on SQL, and because
+// stopping the run needs an RPC round trip the loop itself would deadlock
+// on.
+func (s *Session) checkInstanceCap() {
+	if s.paidBy != store.PaidByPlatform || s.mgr.cfg.Caps.InstanceMicrosPerMonth == nil {
 		return
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if refusal := s.mgr.probeCaps(ctx, s.OwnerID, s.ID); refusal != nil {
-			s.stopForCap(refusal)
+		if refusal := s.mgr.probeInstanceCap(ctx); refusal != nil {
+			s.stopRunForCap(refusal)
 		}
 	}()
 }
 
-// checkCapsStreaming is the mid-response check: the cumulative usage Pi
-// streams during one assistant response is live input, so a runaway response
-// is stopped while it is still generating rather than after it lands. It is
-// throttled to one probe per capCheckInterval — streaming deltas are
-// high-frequency and the answer only has to beat the *next* request.
-func (s *Session) checkCapsStreaming() {
-	if s.paidBy != store.PaidByPlatform || !s.mgr.cfg.Caps.AnySet() {
-		return
+// probeInstanceCap answers only the instance layer — the backstop's own
+// question, asked without an owner or a session because neither bounds it.
+func (m *Manager) probeInstanceCap(ctx context.Context) *CapRefusal {
+	caps := m.cfg.Caps
+	if caps.InstanceMicrosPerMonth == nil {
+		return nil
 	}
-	s.mu.Lock()
-	if time.Since(s.lastCapCheck) < capCheckInterval {
-		s.mu.Unlock()
-		return
+	totals, err := m.st.InstanceAgentSpend(ctx, monthStart(time.Now()))
+	if err != nil {
+		return m.unresolvedCaps(ctx, 0, err)
 	}
-	s.lastCapCheck = time.Now()
-	s.mu.Unlock()
-	s.checkCaps()
+	if totals.CostMicros < *caps.InstanceMicrosPerMonth {
+		return nil
+	}
+	reset := nextMonth(time.Now())
+	slog.Error("instance agent spend ceiling reached",
+		slog.Int64("used_micros", totals.CostMicros),
+		slog.Int64("limit_micros", *caps.InstanceMicrosPerMonth),
+		slog.String("resets_at", formatReset(reset)))
+	return &CapRefusal{Which: "instance", LimitMicros: *caps.InstanceMicrosPerMonth,
+		UsedMicros: totals.CostMicros, ResetAt: reset}
 }
 
-const capCheckInterval = 2 * time.Second
-
-// stopForCap stops a running session at the first opportunity after it
-// crossed a budget. The refusal sticks: every later prompt gets the same
-// message, so a session cannot spend its way back under by racing the next
-// turn. The artifact is untouched — whatever the last successful save left is
-// what stands — and the transcript stays persisted.
+// stopRunForCap is a hard stop: the run in flight is aborted and the chat is
+// told once, in the canned wording. It is not a lasting verdict — the next
+// prompt re-asks the limits (which will refuse it while the budget holds),
+// so a session can pick back up when a budget resets.
 //
-// The canned notice goes out only when there is a run to stop: a turn refused
-// before it starts carries the same message in its HTTP response instead, and
-// the chat must not be told twice.
-func (s *Session) stopForCap(refusal *CapRefusal) {
+// The artifact is untouched — whatever the last successful save left is what
+// stands — and the transcript stays persisted: stopping is recoverable in a
+// way silently continuing is not.
+func (s *Session) stopRunForCap(refusal *CapRefusal) {
 	s.mu.Lock()
-	if s.capped != nil {
-		s.mu.Unlock()
-		return
-	}
-	s.capped = refusal
 	running := s.streaming
 	s.mu.Unlock()
 
-	slog.Warn("agent session stopped at spend cap",
+	slog.Warn("agent run stopped at spend cap",
 		slog.String("session_id", s.ID), slog.String("owner_id", strconv.FormatInt(s.OwnerID, 10)),
 		slog.String("cap", refusal.Which), slog.String("message", refusal.Message()))
 	if !running {
@@ -361,32 +357,27 @@ func (s *Session) stopForCap(refusal *CapRefusal) {
 	}()
 }
 
-// capBeforePrompt is the between-turns gate on starting *new* spend: a
-// session already running must not begin another turn over budget. It is
-// synchronous, because a refused prompt must never reach the subprocess.
+// capBeforePrompt is the between-runs gate on starting *new* spend: it asks
+// every configured layer and refuses the prompt when any of them is reached,
+// with the message naming the limit and its reset. A run in progress is
+// never touched — this is the graceful-stop boundary. It is synchronous,
+// because a refused prompt must never reach the subprocess (or pay for the
+// guardrail screen inside it).
 func (s *Session) capBeforePrompt() error {
-	s.mu.Lock()
-	capped := s.capped
-	s.mu.Unlock()
-	if capped != nil {
-		return capped
-	}
 	if s.paidBy != store.PaidByPlatform || !s.mgr.cfg.Caps.AnySet() {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if refusal := s.mgr.probeCaps(ctx, s.OwnerID, s.ID); refusal != nil {
-		s.stopForCap(refusal)
 		return refusal
 	}
 	return nil
 }
 
-// armTurnClock starts the wall-clock ceiling for one turn (the fallback for
-// a response whose provider reports usage only at completion). Cleared at
-// turn_end and agent_settled; a fire stops the session like a budget
-// crossing does.
+// armTurnClock starts the wall-clock ceiling for one turn — the hard stop
+// for a response whose provider reports usage only at completion, or one
+// that simply never ends. Cleared at turn_end and agent_settled.
 func (s *Session) armTurnClock() {
 	seconds := s.mgr.cfg.Caps.TurnSeconds
 	if seconds <= 0 || s.paidBy != store.PaidByPlatform {
@@ -397,7 +388,7 @@ func (s *Session) armTurnClock() {
 		s.turnTimer.Stop()
 	}
 	s.turnTimer = time.AfterFunc(time.Duration(seconds)*time.Second, func() {
-		s.stopForCap(&CapRefusal{Which: "turn", Seconds: seconds})
+		s.stopRunForCap(&CapRefusal{Which: "turn", Seconds: seconds})
 	})
 	s.mu.Unlock()
 }

@@ -546,12 +546,13 @@ AGENT_SPEND_CAP_TURN_SECONDS=600       # optional: bound one runaway turn
 ```
 
 > [!IMPORTANT]
-> **What the cap does and does not promise.** Enforcement is per model request:
-> a request already in flight when a budget crosses is at most one request's
-> cost spent past the line — `before_provider_request` can rewrite a request
-> but cannot cancel one, and nothing finer exists below it.
-> `AGENT_SPEND_CAP_TURN_SECONDS` is the belt for the one case token counts
-> cannot see: a response whose provider reports usage only when it ends.
+> **What the cap does and does not promise.** Enforcement is between runs:
+> a run in progress when the budget crosses finishes, and the next prompt is
+> refused with the limit and its reset. The honest bound is **at most one
+> full run per open session — so at most ten runs — past the budget**; a run
+> is one prompt through settle, including every tool call inside it.
+> `AGENT_SPEND_CAP_TURN_SECONDS` and the instance ceiling are the two hard
+> stops that can still interrupt a run, as failure backstops.
 >
 > Usage is metered per user in the `agent_usage` table — exact tokens, and a
 > cost estimate beside them that is Pi's price table, **not a bill**. BYO-key

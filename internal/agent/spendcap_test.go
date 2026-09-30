@@ -67,7 +67,7 @@ func TestCapRefusalMessagesNameTheLimitAndItsReset(t *testing.T) {
 	assert.Contains(t, session.Message(), "Start a new conversation")
 
 	instance := &CapRefusal{Which: "instance", LimitMicros: 100_000_000, UsedMicros: 101_000_000, ResetAt: reset}
-	assert.Contains(t, instance.Message(), "New agent sessions are refused")
+	assert.Contains(t, instance.Message(), "agent runs stop until it resets")
 
 	unresolved := &CapRefusal{Which: "unresolved"}
 	assert.Contains(t, unresolved.Message(), "could not be checked")
@@ -104,20 +104,22 @@ func TestProbeCapsRefusesAnOwnerOverTheBudget(t *testing.T) {
 }
 
 // The per-session ceiling stops a looping conversation on its own, without
-// waiting for the owner's month to drain — and the whole conversation's cost,
-// guardrail screening included, is what it meters.
+// waiting for the owner's month to drain. Guardrail screening does not count
+// against a conversation — it is the operator's overhead, bounded by the
+// instance ceiling.
 func TestSessionCeilingStopsALoopingConversation(t *testing.T) {
 	s, db := newMeteringSession(t, true)
 	s.mgr.cfg.Caps = SpendCaps{SessionMicros: microsPtr(1_000_000)}
 	seedSpend(t, db, s.OwnerID, s.ID, store.PaidByPlatform, store.UsageSourceModel, 800_000)
+	seedSpend(t, db, s.OwnerID, s.ID, store.PaidByPlatform, store.UsageSourceGuardrail, 5_000_000)
 
-	assert.NoError(t, s.capBeforePrompt(), "under the ceiling, a running conversation continues")
+	assert.NoError(t, s.capBeforePrompt(), "under the ceiling — screening is not the conversation's spend")
 
-	// The loop keeps going — model spend plus its guardrail screening — and
-	// the ceiling stops it on its own, without waiting for the owner's month.
-	seedSpend(t, db, s.OwnerID, s.ID, store.PaidByPlatform, store.UsageSourceGuardrail, 300_000)
-	refusal := s.mgr.probeCaps(context.Background(), s.OwnerID, s.ID)
-	require.NotNil(t, refusal, "a looping conversation is stopped at the session ceiling")
+	seedSpend(t, db, s.OwnerID, s.ID, store.PaidByPlatform, store.UsageSourceTool, 300_000)
+	err := s.capBeforePrompt()
+	require.Error(t, err, "a looping conversation is refused at the session ceiling")
+	var refusal *CapRefusal
+	require.ErrorAs(t, err, &refusal)
 	assert.Equal(t, "session", refusal.Which)
 	assert.Contains(t, refusal.Message(), "Start a new conversation")
 }
@@ -152,39 +154,66 @@ func TestBYOKSessionsAreNeverLimited(t *testing.T) {
 	assert.NoError(t, s.capBeforePrompt(), "a user spending their own tokens is not throttled")
 }
 
-// A session a cap stopped stays stopped, and says so in one voice: the canned
-// notice on the stream for the run that was stopped, the same message from
-// every later prompt, and no second run aborted.
-func TestStopForCapSticksAndNotices(t *testing.T) {
-	s, _ := newMeteringSession(t, true)
+// The product decision of 2026-09-30: sessions finish. A budget crossing
+// mid-run never interrupts the run in flight — no notice, no abort — and the
+// refusal lands on the *next* prompt, naming the limit and its reset.
+func TestABudgetCrossingDoesNotInterruptTheRunInFlight(t *testing.T) {
+	s, db := newMeteringSession(t, true)
+	s.mgr.cfg.Caps = SpendCaps{OwnerMicrosPerMonth: microsPtr(1_000_000)}
 	s.streaming = true
 
 	events, unsubscribe := s.Subscribe()
 	defer unsubscribe()
 
-	refusal := &CapRefusal{Which: "owner", LimitMicros: 100, UsedMicros: 150,
-		ResetAt: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)}
-	s.stopForCap(refusal)
-	s.stopForCap(&CapRefusal{Which: "session"}) // the second cap does not re-notice
+	seedSpend(t, db, s.OwnerID, s.ID, store.PaidByPlatform, store.UsageSourceModel, 2_000_000)
+	s.recordUsage(store.AgentUsage{OwnerID: s.OwnerID, SessionID: s.ID, PaidBy: store.PaidByPlatform,
+		Source: store.UsageSourceModel, CostMicros: 1})
 
-	var notices int
 	for {
 		select {
 		case raw := <-events:
-			if strings.Contains(string(raw), "exhibit_spend_cap") {
-				notices++
-				assert.Contains(t, string(raw), "monthly agent budget")
-			}
+			t.Fatalf("nothing may interrupt the run in flight, got: %s", raw)
 		default:
 			goto done
 		}
 	}
 done:
-	assert.Equal(t, 1, notices, "exactly one canned notice")
+	err := s.capBeforePrompt()
+	require.Error(t, err, "the next prompt is refused")
+	var refusal *CapRefusal
+	require.ErrorAs(t, err, &refusal)
+	assert.Equal(t, "owner", refusal.Which)
+	assert.Contains(t, refusal.Message(), "resets on", "the message names the limit and its reset")
+	assert.Contains(t, refusal.Message(), "was not sent")
+}
 
-	err := s.Prompt(context.Background(), "keep going", nil, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, refusal, "every later prompt fails with the same refusal, not a generic error")
+// The instance ceiling is the one budget layer that is still a hard stop:
+// the operator's money running out cannot wait for anybody's turn to end. It
+// aborts the run, says so once, and the next prompt is refused the same way.
+func TestTheInstanceCeilingStopsARunningRun(t *testing.T) {
+	s, _ := newMeteringSession(t, true)
+	s.mgr.cfg.Caps = SpendCaps{InstanceMicrosPerMonth: microsPtr(1_000_000)}
+	s.streaming = true
+
+	events, unsubscribe := s.Subscribe()
+	defer unsubscribe()
+
+	s.recordUsage(store.AgentUsage{OwnerID: s.OwnerID, SessionID: s.ID, PaidBy: store.PaidByPlatform,
+		Source: store.UsageSourceModel, CostMicros: 1_200_000})
+
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case raw := <-events:
+			if strings.Contains(string(raw), "exhibit_spend_cap") {
+				assert.Contains(t, string(raw), "agent runs stop until it resets")
+				assert.Error(t, s.capBeforePrompt(), "the next prompt is refused while the ceiling holds")
+				return
+			}
+		case <-deadline:
+			t.Fatal("the instance ceiling must stop a running run")
+		}
+	}
 }
 
 // Enforcement holds with every external service unreachable — and the failure
