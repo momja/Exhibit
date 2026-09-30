@@ -525,11 +525,17 @@ type Session struct {
 	// Usage accounting (av-2yws). usageCur is the cumulative usage of the
 	// assistant response in flight (Pi reports it per response, streaming);
 	// usageRecorded is the sum of durable ledger rows for this session's own
-	// model/tool/compaction spend — the base the settle reconciliation
-	// diffs Pi's totals against.
+	// model/tool/compaction spend — guardrail rows excluded, since Pi's
+	// totals never count them. usageBaselines holds, per in-flight
+	// get_session_stats request id, usageRecorded as of the moment Pi's
+	// answer was read: the base the settle reconciliation diffs against.
 	usageCur       Usage
 	usageCurActive bool
 	usageRecorded  store.UsageTotals
+	usageBaselines map[string]*store.UsageTotals
+	// reconcileMu serializes settle reconciliations, so one's baseline
+	// always includes the row the one before it recorded.
+	reconcileMu sync.Mutex
 
 	// Spend cap state (av-99f4). turnTimer is the per-turn wall-clock
 	// ceiling, the one hard stop besides the instance ceiling.
@@ -637,7 +643,12 @@ func (s *Session) Abort(ctx context.Context) error {
 
 // roundTrip sends one RPC command and waits for its correlated response.
 func (s *Session) roundTrip(ctx context.Context, cmd map[string]any) (json.RawMessage, error) {
-	id := uuid.New().String()
+	return s.roundTripID(ctx, uuid.New().String(), cmd)
+}
+
+// roundTripID is roundTrip with a caller-chosen request id, for a caller that
+// must register state against the id before the response can arrive.
+func (s *Session) roundTripID(ctx context.Context, id string, cmd map[string]any) (json.RawMessage, error) {
 	cmd["id"] = id
 	ch := make(chan json.RawMessage, 1)
 
@@ -726,6 +737,12 @@ func (s *Session) handleLine(line []byte) {
 	if probe.Type == "response" && probe.ID != "" {
 		s.mu.Lock()
 		ch := s.pending[probe.ID]
+		// A stats response is the instant Pi's totals were taken. Every usage
+		// event Pi emitted before it has already been recorded by this loop,
+		// so this is the one moment the ledger and the snapshot agree.
+		if baseline := s.usageBaselines[probe.ID]; baseline != nil {
+			*baseline = s.usageRecorded
+		}
 		s.mu.Unlock()
 		if ch != nil {
 			// copy: line's backing array is reused by the reader
@@ -777,6 +794,11 @@ func (s *Session) handleLine(line []byte) {
 		s.lastActive = time.Now()
 		s.mu.Unlock()
 		s.clearTurnClock()
+		// Whatever the settled run left in flight is flushed here, on the read
+		// loop, before the reconcile starts: flushed later, from the reconcile
+		// goroutine, it could catch the *next* run's partial response and
+		// record it twice (av-2yws).
+		s.flushInFlightUsage()
 		// The settle is where the ledger is squared with Pi's own totals —
 		// usage sources that emit no event (tool-reported usage, cache
 		// warming) are recorded here as the difference (av-2yws).

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -195,4 +196,105 @@ func TestUsageBlocksTolerateNumericShapes(t *testing.T) {
 	totals := sessionTotals(t, db, s)
 	assert.Equal(t, int64(100), totals.InputTokens)
 	assert.Equal(t, int64(1000), totals.OutputTokens)
+}
+
+// statsPipe stands in for a subprocess that answers RPC requests: every line
+// written to it is handed to the test, which plays Pi's reply.
+type statsPipe struct{ requests chan map[string]any }
+
+func (p statsPipe) Write(b []byte) (int, error) {
+	var cmd map[string]any
+	if err := json.Unmarshal(b, &cmd); err != nil {
+		return 0, err
+	}
+	p.requests <- cmd
+	return len(b), nil
+}
+func (statsPipe) Close() error { return nil }
+
+// reconcileWith runs one settle reconciliation against a scripted
+// get_session_stats answer, delivered through handleLine as the read loop
+// delivers it. between then runs further read-loop work — the next run's
+// rows, landing after Pi took its totals — racing the reconcile goroutine.
+func reconcileWith(t *testing.T, s *Session, stats string, between func()) {
+	t.Helper()
+	pipe := statsPipe{requests: make(chan map[string]any, 1)}
+	s.stdin = pipe
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.reconcileUsage()
+	}()
+	var req map[string]any
+	select {
+	case req = <-pipe.requests:
+	case <-time.After(5 * time.Second):
+		t.Fatal("reconcile sent no get_session_stats")
+	}
+	require.Equal(t, "get_session_stats", req["type"])
+	s.handleLine([]byte(`{"type":"response","id":"` + req["id"].(string) + `","command":"get_session_stats","success":true,"data":` + stats + `}`))
+	if between != nil {
+		between()
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("reconcile did not finish")
+	}
+}
+
+// Guardrail spend is not in Pi's totals, so it must not count as
+// already-recorded when the settle squares the ledger with them — or it hides
+// that much of a real tool-reported gap.
+func TestGuardrailSpendDoesNotHideAToolGap(t *testing.T) {
+	s, db := newMeteringSession(t, true)
+
+	feed(t, s, `{"type":"message_end","message":{"role":"assistant",`+
+		`"usage":{"input":100,"output":10,"cacheRead":0,"cacheWrite":0,"totalTokens":110,"cost":{"total":0.01}}}}`)
+	var guardUsage Usage
+	guardUsage.Input = 40
+	guardUsage.Cost.Total = 0.004
+	s.RecordGuardrailUsage("exhibit-guard", "guard-model", guardUsage)
+
+	// Pi counts the assistant message plus 40 tokens of tool usage no event
+	// carried.
+	reconcileWith(t, s, `{"tokens":{"input":140,"output":10,"cacheRead":0,"cacheWrite":0},"cost":0.014}`, nil)
+
+	assert.Equal(t, store.UsageTotals{InputTokens: 140, OutputTokens: 10, CostMicros: 14_000},
+		sessionTotals(t, db, s), "the model row plus the whole 40-token tool gap")
+	instance, err := db.InstanceAgentSpend(context.Background(), time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, store.UsageTotals{InputTokens: 180, OutputTokens: 10, CostMicros: 18_000}, instance,
+		"and the guardrail row once more on top, at the instance level")
+}
+
+// A next run can record rows between Pi taking its totals and the reconcile
+// reading them. Those rows are not in the snapshot, so they must not offset
+// the gap the snapshot shows.
+func TestUsageRecordedAfterTheSnapshotDoesNotHideItsGap(t *testing.T) {
+	s, db := newMeteringSession(t, true)
+
+	feed(t, s, `{"type":"message_end","message":{"role":"assistant",`+
+		`"usage":{"input":100,"output":10,"cacheRead":0,"cacheWrite":0,"totalTokens":110,"cost":{"total":0.01}}}}`)
+
+	reconcileWith(t, s, `{"tokens":{"input":150,"output":10,"cacheRead":0,"cacheWrite":0},"cost":0.015}`, func() {
+		feed(t, s, `{"type":"message_end","message":{"role":"assistant",`+
+			`"usage":{"input":80,"output":8,"cacheRead":0,"cacheWrite":0,"totalTokens":88,"cost":{"total":0.008}}}}`)
+	})
+
+	assert.Equal(t, store.UsageTotals{InputTokens: 230, OutputTokens: 18, CostMicros: 23_000},
+		sessionTotals(t, db, s), "first run + its 50-token gap + the next run")
+}
+
+// The settle flushes the run's in-flight response on the read loop, before
+// the reconcile starts, so the reconcile can never flush a later run's.
+func TestSettleFlushesInFlightUsageBeforeReconciling(t *testing.T) {
+	s, db := newMeteringSession(t, true)
+
+	feed(t, s, `{"type":"message_update","usage":{"input":60,"output":3,"cacheRead":0,"cacheWrite":0,`+
+		`"totalTokens":63,"cost":{"total":0.003}},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"a"}}`)
+	feed(t, s, `{"type":"agent_settled"}`)
+
+	assert.Equal(t, store.UsageTotals{InputTokens: 60, OutputTokens: 3, CostMicros: 3_000},
+		sessionTotals(t, db, s), "the settled run's partial response is recorded at settle")
 }

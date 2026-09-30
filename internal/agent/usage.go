@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -221,9 +222,14 @@ func (s *Session) recordUsage(row store.AgentUsage) {
 		slog.Warn("agent usage row failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 		return
 	}
-	s.mu.Lock()
-	s.usageRecorded.Add(row)
-	s.mu.Unlock()
+	// Guardrail spend never appears in Pi's session totals, so counting it
+	// here would make the reconcile below mistake it for already-recorded
+	// model or tool spend and skip that much of a real gap.
+	if row.Source != store.UsageSourceGuardrail {
+		s.mu.Lock()
+		s.usageRecorded.Add(row)
+		s.mu.Unlock()
+	}
 	// The instance ceiling is the one limit that will stop a run in flight
 	// (av-99f4): the operator's money running out cannot wait for anybody's
 	// turn to end. Every other limit is enforced between runs.
@@ -238,10 +244,32 @@ func (s *Session) recordUsage(row store.AgentUsage) {
 // such as cache warming). It is recorded as one tool-sourced row so the
 // ledger's sum equals Pi's total. Runs at every settle, off the read loop,
 // because it makes an RPC round trip.
+//
+// The snapshot is diffed against what was recorded when Pi's answer was
+// read, not when this goroutine gets to it: by then a next run may have
+// recorded rows the snapshot does not contain, and those would hide an equal
+// amount of the gap. The read loop captures that baseline (handleLine).
 func (s *Session) reconcileUsage() {
+	s.reconcileMu.Lock()
+	defer s.reconcileMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	resp, err := s.roundTrip(ctx, map[string]any{"type": "get_session_stats"})
+
+	id := uuid.New().String()
+	var recorded store.UsageTotals
+	s.mu.Lock()
+	if s.usageBaselines == nil {
+		s.usageBaselines = map[string]*store.UsageTotals{}
+	}
+	s.usageBaselines[id] = &recorded
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.usageBaselines, id)
+		s.mu.Unlock()
+	}()
+
+	resp, err := s.roundTripID(ctx, id, map[string]any{"type": "get_session_stats"})
 	if err != nil {
 		slog.Warn("usage reconcile skipped", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 		return
@@ -268,15 +296,8 @@ func (s *Session) reconcileUsage() {
 		CostMicros:       costMicros(r.Data.Cost),
 	}
 
-	// The in-flight response is flushed first so its spend is recorded
-	// exactly once — the delta computed below is against durable rows, and
-	// finish() must not re-record what reconcile already folded in.
-	s.flushInFlightUsage()
-
-	s.mu.Lock()
-	recorded := s.usageRecorded
-	s.mu.Unlock()
-
+	// recorded was filled in by the read loop before the response reached
+	// this goroutine (the channel send orders the two).
 	delta := store.UsageTotals{
 		InputTokens:      max(0, stats.InputTokens-recorded.InputTokens),
 		OutputTokens:     max(0, stats.OutputTokens-recorded.OutputTokens),

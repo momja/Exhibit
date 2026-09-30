@@ -315,8 +315,9 @@ An operator who sets `GUARDRAIL_*` gets every user message screened for
 usage-policy violations before the agent model sees it. It protects the
 instance's provider account in platform mode, where a provider that sees
 repeated violations can suspend the key every session runs on. It is not a
-topic filter: off-topic use is allowed. It does not meter or cap spend
-either; that is the per-owner spend cap (av-99f4), which is not built yet.
+topic filter: off-topic use is allowed. Nor is it a spend control: what each
+screen costs is recorded in the ledger tagged `guardrail` (below), and the
+limits over it are the spend cap's (av-99f4, above).
 
 - **A second Pi extension.** `internal/agent/ext/guard.ts` is embedded and
   materialized beside `exhibit.ts`, and loaded with its own `-e` only when a
