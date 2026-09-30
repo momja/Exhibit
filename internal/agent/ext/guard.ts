@@ -7,6 +7,13 @@
  * `ctx.ui.notify` whose message starts with GUARD_SIGNAL. The host decides
  * what the user is told; nothing this file writes is shown to anyone.
  *
+ * Signals, each `GUARD_SIGNAL + verb + " " + detail`:
+ *   blocked  the message was refused; detail is for the host's log
+ *   error    no verdict could be reached, so the message was refused
+ *   usage    what one screen spent, as JSON {provider, model, usage}; sent
+ *            after every screen that got a model answer, allowed or not,
+ *            because Pi meters nothing an extension hook spends
+ *
  * This is a usage-policy screen, not a topic screen. Off-topic use is
  * allowed; prohibited content is not.
  *
@@ -116,9 +123,11 @@ export interface ScreenRegistry {
 
 /**
  * Screens one message. Throws when no verdict could be reached; the caller
- * treats that as a block.
+ * treats that as a block. report receives the model call's usage whenever the
+ * provider returned one, before the answer is judged, so a screen that spent
+ * money and then answered garbage still reports what it spent.
  */
-export async function screen(registry: ScreenRegistry, cfg: GuardConfig, message: string, signal?: AbortSignal): Promise<Verdict> {
+export async function screen(registry: ScreenRegistry, cfg: GuardConfig, message: string, signal?: AbortSignal, report: (usage: unknown) => void = () => {}): Promise<Verdict> {
 	const options = { apiKey: cfg.apiKey, signal };
 
 	const classifier = registry.getModelOfType("classifier", cfg.provider, cfg.model);
@@ -133,6 +142,7 @@ export async function screen(registry: ScreenRegistry, cfg: GuardConfig, message
 				},
 			},
 		}, options);
+		if (result?.usage) report(result.usage);
 		if (result?.stopReason !== "stop") {
 			throw new Error(`classifier ${result?.stopReason ?? "failed"}: ${result?.errorMessage ?? "no detail"}`);
 		}
@@ -147,6 +157,7 @@ export async function screen(registry: ScreenRegistry, cfg: GuardConfig, message
 		systemPrompt: chatScreenPrompt(cfg.policy),
 		messages: [{ role: "user", content: JSON.stringify({ message }), timestamp: Date.now() }],
 	}, options);
+	if (reply?.usage) report(reply.usage);
 	if (reply?.stopReason === "error" || reply?.stopReason === "aborted") {
 		throw new Error(`screen ${reply.stopReason}: ${reply.errorMessage ?? "no detail"}`);
 	}
@@ -172,7 +183,8 @@ export default function (pi: ExtensionAPI) {
 		const words = userWords(event.text, cfg.dataFence);
 		let verdict: Verdict;
 		try {
-			verdict = await screen(ctx.modelRegistry as unknown as ScreenRegistry, cfg, words, AbortSignal.timeout(SCREEN_TIMEOUT_MS));
+			verdict = await screen(ctx.modelRegistry as unknown as ScreenRegistry, cfg, words, AbortSignal.timeout(SCREEN_TIMEOUT_MS),
+				(usage) => ctx.ui.notify(`${GUARD_SIGNAL}usage ${JSON.stringify({ provider: cfg.provider, model: cfg.model, usage })}`, "info"));
 		} catch (err) {
 			ctx.ui.notify(`${GUARD_SIGNAL}error ${err instanceof Error ? err.message : String(err)}`, "error");
 			return { action: "handled" };

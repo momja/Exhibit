@@ -28,8 +28,10 @@ import (
 // oracle for probing the screen.
 const GuardrailBlockedReply = "This request isn't allowed under this instance's usage policy."
 
-// guardSignal prefixes the notify message ext/guard.ts sends when it handles a
-// prompt. It must match GUARD_SIGNAL there.
+// guardSignal prefixes every notify message ext/guard.ts sends. It must match
+// GUARD_SIGNAL there. The word after it says what the signal is: "blocked" and
+// "error" mean the extension handled the prompt instead of running it; "usage"
+// reports what one screen spent and says nothing about the verdict.
 const guardSignal = "exhibit_guard:"
 
 // Guardrail is the screening model's configuration. A nil *Guardrail means no
@@ -89,22 +91,47 @@ func (g *Guardrail) env(nonce string) []string {
 	}
 }
 
-// guardVerdict recognizes the extension's signal in one line of Pi output. It
-// returns the detail after the prefix ("blocked p(violates)=0.93", "error
-// ...") and true, or false for any other line.
-func guardVerdict(line []byte) (string, bool) {
+// guardSignalOf recognizes one of the extension's signals in a line of Pi
+// output, returning its verb, the detail after it, and true; false for any
+// other line. The verb is matched exactly by the caller: treating every
+// guard signal as a block would refuse each allowed message the moment the
+// screen reported its usage.
+func guardSignalOf(line []byte) (verb, detail string, ok bool) {
 	var probe struct {
 		Type    string `json:"type"`
 		Method  string `json:"method"`
 		Message string `json:"message"`
 	}
 	if json.Unmarshal(line, &probe) != nil {
-		return "", false
+		return "", "", false
 	}
 	if probe.Type != "extension_ui_request" || probe.Method != "notify" || !strings.HasPrefix(probe.Message, guardSignal) {
-		return "", false
+		return "", "", false
 	}
-	return strings.TrimPrefix(probe.Message, guardSignal), true
+	verb, detail, _ = strings.Cut(strings.TrimPrefix(probe.Message, guardSignal), " ")
+	return verb, detail, true
+}
+
+// handleGuardSignal acts on one guard signal. None of them is forwarded to
+// the browser: a block becomes the host's fixed reply, and the rest is
+// operator detail.
+func (s *Session) handleGuardSignal(verb, detail string) {
+	switch verb {
+	case "blocked", "error":
+		s.noteGuardBlocked(verb + " " + detail)
+	case "usage":
+		s.noteGuardUsage(detail)
+	default:
+		slog.Warn("unknown guardrail signal", slog.String("session_id", s.ID), slog.String("verb", verb))
+	}
+}
+
+// noteGuardUsage receives what one screen spent, as the JSON guard.ts sends:
+// {"provider","model","usage"}, usage in Pi's shape. The guardrail runs on the
+// instance's key whatever key the session uses, so this is operator spend.
+// Metering (av-2yws) records it; until then it is logged for the operator.
+func (s *Session) noteGuardUsage(detail string) {
+	slog.Debug("guardrail screen usage", slog.String("session_id", s.ID), slog.String("usage", truncate(detail, 300)))
 }
 
 // noteGuardBlocked replaces the extension's signal with the event the chat UI

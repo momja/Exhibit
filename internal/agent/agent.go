@@ -587,8 +587,8 @@ func (s *Session) handleLine(line []byte) {
 		return
 	}
 
-	if detail, ok := guardVerdict(line); ok {
-		s.noteGuardBlocked(detail)
+	if verb, detail, ok := guardSignalOf(line); ok {
+		s.handleGuardSignal(verb, detail)
 		return
 	}
 

@@ -269,6 +269,14 @@ either; that is the per-owner spend cap (av-99f4), which is not built yet.
   carrying `agent.GuardrailBlockedReply`. No extension or model text reaches
   the user on a block. The chat renders it as a system message; the edit
   page's Generate button reports it as a failure.
+- **Every screen reports what it spent.** Pi meters nothing an extension
+  hook spends, so after each screen that got a model answer (allowed,
+  blocked, or unparseable) the extension sends `exhibit_guard:usage` with
+  `{provider, model, usage}` in Pi's usage shape. `handleGuardSignal` matches
+  the word after the prefix exactly: only `blocked` and `error` are refusals,
+  and a usage report is swallowed and handed to `noteGuardUsage`. It is
+  operator spend even in a BYO-key session, since the guardrail always runs
+  on the instance's key.
 - **Fail closed.** A screen that errors, times out (15 s), or answers anything
   unparseable blocks with the same reply, so the reply is no oracle for
   probing whether the screen is up.

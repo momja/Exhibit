@@ -150,3 +150,29 @@ func TestGuardrailScreensTheUsersWordsNotTheArtifact(t *testing.T) {
 		assert.NotContains(t, m, "UNTRUSTED DATA", "a data block reached the screen")
 	}
 }
+
+// Every screen reports its usage to the host, allowed ones included. Only a
+// block may render the refusal: an allowed turn runs, and its stream carries
+// neither the refusal nor the raw signal.
+func TestGuardrailAllowedPromptShowsNoRefusal(t *testing.T) {
+	h := newPiHarnessWith(t, false, mockGuardrail)
+	r := h.router
+	id := createArtifact(t, r, map[string]any{"title": "Counter", "body": greenButtonArtifact})
+
+	session := startSessionFor(t, r, id)
+	s := r.cfg.Agent.Get(defaultOwnerID, session)
+	require.NotNil(t, s)
+	events, unsubscribe := s.Subscribe()
+	defer unsubscribe()
+
+	w := doJSON(t, r, "POST", "/api/agent/sessions/"+session+"/prompt",
+		map[string]any{"message": "make the button green"})
+	require.Equal(t, http.StatusAccepted, w.Code)
+
+	seen := awaitEvent(t, events, func(l string) bool { return strings.Contains(l, `"agent_settled"`) },
+		"the allowed turn to settle")
+	stream := strings.Join(seen, "\n")
+	assert.NotContains(t, stream, "exhibit_guard_blocked", "an allowed prompt must not show the refusal")
+	assert.NotContains(t, stream, "exhibit_guard:", "guard signals are never forwarded")
+	assert.NotEmpty(t, screenedMessages(h), "the prompt was never screened")
+}

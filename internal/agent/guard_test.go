@@ -38,10 +38,16 @@ func TestGuardrailFromEnv(t *testing.T) {
 	})
 }
 
-func TestGuardVerdict(t *testing.T) {
-	detail, ok := guardVerdict([]byte(`{"type":"extension_ui_request","id":"1","method":"notify","message":"exhibit_guard:blocked p(violates)=0.910","notifyType":"warning"}`))
+func TestGuardSignalOf(t *testing.T) {
+	verb, detail, ok := guardSignalOf([]byte(`{"type":"extension_ui_request","id":"1","method":"notify","message":"exhibit_guard:blocked p(violates)=0.910","notifyType":"warning"}`))
 	assert.True(t, ok)
-	assert.Equal(t, "blocked p(violates)=0.910", detail)
+	assert.Equal(t, "blocked", verb)
+	assert.Equal(t, "p(violates)=0.910", detail)
+
+	verb, detail, ok = guardSignalOf([]byte(`{"type":"extension_ui_request","method":"notify","message":"exhibit_guard:usage {\"model\":\"m\"}"}`))
+	assert.True(t, ok)
+	assert.Equal(t, "usage", verb)
+	assert.Equal(t, `{"model":"m"}`, detail)
 
 	for _, line := range []string{
 		`{"type":"extension_ui_request","method":"notify","message":"something else"}`,
@@ -49,9 +55,24 @@ func TestGuardVerdict(t *testing.T) {
 		`{"type":"message_update","message":"exhibit_guard:blocked"}`,
 		`not json`,
 	} {
-		_, ok := guardVerdict([]byte(line))
+		_, _, ok := guardSignalOf([]byte(line))
 		assert.False(t, ok, line)
 	}
+}
+
+// Only a block or an error is a refusal. A usage report arrives after every
+// screen, allowed ones included, and must neither mark the prompt blocked nor
+// reach the browser.
+func TestGuardUsageSignalIsNotABlock(t *testing.T) {
+	s := &Session{subs: map[chan []byte]struct{}{}}
+	s.handleGuardSignal("usage", `{"provider":"p","model":"m","usage":{"input":10}}`)
+	assert.False(t, s.guardBlocked)
+	assert.Empty(t, s.backlog)
+
+	s.handleGuardSignal("blocked", "p(violates)=0.99")
+	assert.True(t, s.guardBlocked)
+	require.Len(t, s.backlog, 1)
+	assert.Contains(t, string(s.backlog[0]), "exhibit_guard_blocked")
 }
 
 // The guard extension's env names the fence the system prompt promises, so

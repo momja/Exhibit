@@ -11,7 +11,9 @@ const FENCE = "-----BEGIN EXHIBIT UNTRUSTED DATA abc123-----";
 
 const cfg = { provider: "p", model: "m", apiKey: "guard-key", dataFence: FENCE, policy: "POLICY" };
 
-function chatRegistry(replyText: string | null, { stopReason = "stop" } = {}) {
+const USAGE = { input: 120, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 121, cost: { input: 0.000005, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.000005 } };
+
+function chatRegistry(replyText: string | null, { stopReason = "stop", usage = undefined as any } = {}) {
 	const calls: any[] = [];
 	return {
 		calls,
@@ -20,7 +22,7 @@ function chatRegistry(replyText: string | null, { stopReason = "stop" } = {}) {
 		classify: async () => { throw new Error("classify must not be called for a chat model"); },
 		complete: async (model: any, context: any, options: any) => {
 			calls.push({ model, context, options });
-			return { stopReason, content: replyText === null ? [] : [{ type: "text", text: replyText }] };
+			return { stopReason, usage, content: replyText === null ? [] : [{ type: "text", text: replyText }] };
 		},
 	};
 }
@@ -89,6 +91,30 @@ describe("screen with a chat model", () => {
 	});
 });
 
+describe("screen reports usage", () => {
+	it("reports the chat model's usage", async () => {
+		const seen: unknown[] = [];
+		await screen(chatRegistry("ALLOW", { usage: USAGE }), cfg, "x", undefined, (u) => seen.push(u));
+		assert.deepEqual(seen, [USAGE]);
+	});
+	it("reports usage even when the reply is unparseable", async () => {
+		const seen: unknown[] = [];
+		await assert.rejects(screen(chatRegistry("hmm", { usage: USAGE }), cfg, "x", undefined, (u) => seen.push(u)));
+		assert.deepEqual(seen, [USAGE], "the screen spent money before it answered garbage");
+	});
+	it("reports the classifier's usage", async () => {
+		const seen: unknown[] = [];
+		await screen(classifierRegistry({ stopReason: "stop", usage: USAGE, answers: { violates: { type: "bool", probability: 0.1 } } }),
+			cfg, "x", undefined, (u) => seen.push(u));
+		assert.deepEqual(seen, [USAGE]);
+	});
+	it("reports nothing when the provider returned no usage", async () => {
+		const seen: unknown[] = [];
+		await screen(chatRegistry("ALLOW"), cfg, "x", undefined, (u) => seen.push(u));
+		assert.deepEqual(seen, []);
+	});
+});
+
 describe("screen with a classifier model", () => {
 	const answer = (probability: number) => ({ stopReason: "stop", answers: { violates: { type: "bool", probability } } });
 
@@ -152,6 +178,19 @@ describe("input hook", () => {
 		const r = await load(env)({ type: "input", text: "x", source: "rpc" }, c);
 		assert.deepEqual(r, { action: "handled" });
 		assert.ok(c.notes[0].startsWith(GUARD_SIGNAL + "error"));
+	});
+	it("reports usage on an allowed message, and nothing else", async () => {
+		const c = ctx(chatRegistry("ALLOW", { usage: USAGE }));
+		const r = await load(env)({ type: "input", text: "hi", source: "rpc" }, c);
+		assert.deepEqual(r, { action: "continue" });
+		assert.equal(c.notes.length, 1);
+		assert.ok(c.notes[0].startsWith(GUARD_SIGNAL + "usage "));
+		assert.deepEqual(JSON.parse(c.notes[0].slice((GUARD_SIGNAL + "usage ").length)), { provider: "p", model: "m", usage: USAGE });
+	});
+	it("reports usage before the block on a blocked message", async () => {
+		const c = ctx(chatRegistry("BLOCK", { usage: USAGE }));
+		await load(env)({ type: "input", text: "bad", source: "rpc" }, c);
+		assert.deepEqual(c.notes.map((n) => n.split(" ")[0]), [GUARD_SIGNAL + "usage", GUARD_SIGNAL + "blocked"]);
 	});
 	it("skips text an extension injected", async () => {
 		const c = ctx(chatRegistry("BLOCK"));
