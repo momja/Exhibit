@@ -211,6 +211,15 @@ function resetSession() {
   setStreaming(false);
 }
 
+// Leaving the page closes the session too (av-99f4): the idle reaper would
+// otherwise hold it for 30 minutes, and ten reloads would stack sessions
+// against the per-owner limit. `keepalive` lets the request outlive the page.
+window.addEventListener('pagehide', () => {
+  if (sessionId) {
+    apiFetch('/api/agent/sessions/' + sessionId, {method: 'DELETE', keepalive: true}).catch(() => {});
+  }
+});
+
 async function ensureSession() {
   if (sessionId) return true;
   const body = artifact ? {artifact_id: artifact.id} : {};

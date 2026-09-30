@@ -197,9 +197,17 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
     return dispatchOnDocument("visibilitychange");
   };
 
+  // Drives a window-level event. pagehide is the one that matters: it is how
+  // the chat closes its session when the page is left, and a test cannot
+  // close a tab any other way.
+  const dispatchOnWindow = async (type) => {
+    await Promise.all((windowListeners[type] || []).map((fn) => fn({ type })));
+    await settle();
+  };
+
   return {
     byId, frame, window, document, context,
-    postFromFrame, pressKey, dispatchOnDocument, setVisibility,
+    postFromFrame, pressKey, dispatchOnDocument, setVisibility, dispatchOnWindow,
     // Runs whatever setInterval callbacks the script registered, once each.
     // Real timers in a test are a race; this makes "a tick happened" a thing
     // the test states rather than waits for.

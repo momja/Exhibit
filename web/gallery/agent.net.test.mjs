@@ -132,6 +132,21 @@ test("the host announces itself to each swapped-in preview frame", () => {
     "each new preview frame must be told the host is listening");
 });
 
+// av-99f4: leaving the page closes the session, so reloads do not stack
+// sessions against the per-owner limit — and the request goes out with
+// keepalive, because an ordinary fetch would be cancelled with the page.
+test("leaving the page closes the chat session", async () => {
+  const page = loadAgent({ responses: [
+    { ok: true, status: 200, json: async () => ({ configured: false }) },  // boot's key status
+    { ok: true, status: 201, json: async () => ({ id: "sess-1", sse_ticket: "tkt" }) }
+  ] });
+  await page.context.ensureSession();
+  await page.dispatchOnWindow("pagehide");
+
+  const closed = page.api.calls.filter((c) => c.method === "DELETE" && c.path === "/api/agent/sessions/sess-1");
+  assert.equal(closed.length, 1, "the open session must be closed on leave");
+});
+
 // av-gust: the usage-policy guardrail. A blocked message never starts a turn,
 // so the chat's only sign of it is this event, carrying the server's fixed
 // reply. It must render as a message and leave the streaming state alone.
