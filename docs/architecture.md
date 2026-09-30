@@ -1369,6 +1369,13 @@ absent the surface degrades to disabled; nothing else changes.
   user opened — bounded, visible in the preview and transcript, and stated
   plainly in `security.md` §5.3.
 
+- **Usage-policy guardrail (av-gust):** with `GUARDRAIL_*` set, a second Pi
+  extension (`ext/guard.ts`) screens each user message on an
+  operator-chosen model, through Pi's `input` hook, before the agent model
+  sees it. A block is `handled` inside Pi and surfaces as one fixed reply the
+  host owns; a failed screen blocks too. It is a screen that raises the cost of
+  prohibited requests, not a wall (`security.md` §5.4).
+
 See `docs/agent.md` for the full flow, including snippet mode (the render
 surface's element picker that feeds an element screenshot + descriptor back
 into the prompt as multimodal context).

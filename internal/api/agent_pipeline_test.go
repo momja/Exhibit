@@ -148,6 +148,13 @@ func newPlatformPiHarness(t *testing.T) *piHarness { return newPiHarnessMode(t, 
 
 func newPiHarnessMode(t *testing.T, platform bool) *piHarness {
 	t.Helper()
+	return newPiHarnessWith(t, platform, nil)
+}
+
+// newPiHarnessWith is the rig with an optional usage-policy guardrail
+// (av-gust) loaded into every session.
+func newPiHarnessWith(t *testing.T, platform bool, guardrail *agent.Guardrail) *piHarness {
+	t.Helper()
 	piBin, err := exec.LookPath("pi")
 	if err != nil {
 		t.Skip("pi binary not installed; skipping the agent pipeline test")
@@ -169,6 +176,7 @@ func newPiHarnessMode(t *testing.T, platform bool) *piHarness {
 		Credentials:       creds,
 		MockLLMURL:        llm.URL,
 		HideModelIdentity: platform,
+		Guardrail:         guardrail,
 	}, r.cfg.Store)
 	require.NoError(t, err)
 	r.cfg.Agent = mgr

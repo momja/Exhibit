@@ -1,6 +1,6 @@
 ---
 id: av-gust
-status: in_progress
+status: closed
 deps: []
 links: [av-99f4]
 created: 2026-08-09T16:18:19Z

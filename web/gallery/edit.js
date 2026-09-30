@@ -528,6 +528,11 @@ async function deleteArtifact() {
             }).catch(function(){});
             return;
           }
+          // The usage-policy guardrail (av-gust) refused the request.
+          if (ev.type === 'exhibit_guard_blocked') {
+            finish('✗ ' + ev.message);
+            return;
+          }
           // The turn ended without a widget: the model declined, errored, or
           // ran out of room. Say so rather than leaving the button spinning.
           if (ev.type === 'exhibit_session_closed') {
