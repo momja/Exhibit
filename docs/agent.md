@@ -278,7 +278,7 @@ either; that is the per-owner spend cap (av-99f4), which is not built yet.
 
 Not screened: images, the agent's replies, and what it saves. Pi is pinned in
 the Dockerfile because all of this depends on the `input` hook's `handled`
-behaving as it does in the pinned version; `TestPinnedPiMatchesTheOneTested` fails when the local `pi` differs, since the pipeline tests only prove anything on the version that ships.
+behaving as it does in the pinned version.
 
 ## Sessions, streaming, transcripts
 
