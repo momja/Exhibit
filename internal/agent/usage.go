@@ -163,7 +163,7 @@ func (s *Session) noteStreamingUsage(u Usage) {
 	s.usageCur = s.usageCur.max(u)
 	s.usageCurActive = true
 	s.mu.Unlock()
-	// Spend enforcement (av-99f4) checks the caps here.
+	s.checkCapsStreaming()
 }
 
 // noteMessageUsage closes out one message that carried usage. Assistant
@@ -225,7 +225,7 @@ func (s *Session) recordUsage(row store.AgentUsage) {
 	s.mu.Lock()
 	s.usageRecorded.Add(row)
 	s.mu.Unlock()
-	// Spend enforcement (av-99f4) checks the caps here.
+	s.checkCaps()
 }
 
 // reconcileUsage closes the gap between what the event stream showed and

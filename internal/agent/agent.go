@@ -63,6 +63,9 @@ type Config struct {
 	// Guardrail, when set, loads ext/guard.ts into every session to screen
 	// each user message for usage-policy violations on its own model (av-gust).
 	Guardrail *Guardrail
+	// Caps are the operator's spend ceilings (av-99f4), enforced for
+	// platform-paid sessions only. The zero value enforces nothing.
+	Caps SpendCaps
 }
 
 // providerEnv maps a provider name to the env var pi reads its key from.
@@ -445,6 +448,12 @@ type Session struct {
 	usageCurActive bool
 	usageRecorded  store.UsageTotals
 
+	// Spend cap state (av-99f4). capped is the refusal that stopped this
+	// session, or nil; turnTimer is the per-turn wall-clock ceiling.
+	capped       *CapRefusal
+	turnTimer    *time.Timer
+	lastCapCheck time.Time
+
 	done chan struct{}
 }
 
@@ -490,6 +499,12 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	s.promptMu.Lock()
 	defer s.promptMu.Unlock()
 
+	// The between-turns gate (av-99f4), inside promptMu so two concurrent
+	// prompts cannot both pass it. It runs before the send because a session
+	// over budget must not pay for the guardrail screen either.
+	if err := s.capBeforePrompt(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	steer := s.streaming
 	// The session's opening block rides the first prompt. It is held, not
@@ -671,11 +686,16 @@ func (s *Session) handleLine(line []byte) {
 				s.noteCompactionUsage(u)
 			}
 		}
+	case "turn_start":
+		s.armTurnClock()
+	case "turn_end":
+		s.clearTurnClock()
 	case "agent_settled":
 		s.mu.Lock()
 		s.streaming = false
 		s.lastActive = time.Now()
 		s.mu.Unlock()
+		s.clearTurnClock()
 		// The settle is where the ledger is squared with Pi's own totals —
 		// usage sources that emit no event (tool-reported usage, cache
 		// warming) are recorded here as the difference (av-2yws).
@@ -837,6 +857,7 @@ func (s *Session) finish() {
 	// Whatever the response in flight had reported is flushed first: a
 	// subprocess killed mid-turn never sends message_end, and that spend is
 	// exactly the spend this ticket exists to attribute (av-2yws).
+	s.clearTurnClock()
 	s.flushInFlightUsage()
 	s.mu.Lock()
 	if s.closed {

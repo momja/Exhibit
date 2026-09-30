@@ -175,6 +175,17 @@ func main() {
 	if err != nil {
 		fatal("configure the agent guardrail", err)
 	}
+	// Spend caps (av-99f4): ceilings over what the agent may spend, metered
+	// from Pi's usage reports (av-2yws). Absence is unlimited for an instance
+	// that pays for nothing — but a platform credential with no cap at all
+	// must not boot, so the sequencing is structural rather than remembered.
+	spendCaps, err := agent.SpendCapsFromEnv()
+	if err != nil {
+		fatal("configure the agent spend caps", err)
+	}
+	if err := api.RequireSpendCaps(platformAgentKey, spendCaps); err != nil {
+		fatal("configure the agent spend caps", err)
+	}
 	// Agent sessions authenticate with a per-session credential scoped to one
 	// artifact, never the service token (av-e0yj). One registry, shared: the
 	// manager issues from it, the API resolves and enforces against it.
@@ -195,6 +206,7 @@ func main() {
 			// persisted transcript too (av-siqf).
 			HideModelIdentity: platformAgentKey != nil,
 			Guardrail:         guardrail,
+			Caps:              spendCaps,
 		}, st)
 		if err != nil {
 			fatal("init agent manager", err)

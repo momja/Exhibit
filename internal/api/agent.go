@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -161,7 +162,14 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 	// once entered a key keeps that row untouched, and turning the variable
 	// off restores their BYOK session with it.
 	if pk := ro.cfg.PlatformAgentKey; pk != nil {
-		return agent.CreateOpts{OwnerID: ownerID, Provider: pk.Provider, Model: pk.Model, APIKey: pk.APIKey}, true
+		// The pre-spawn spend check (av-99f4), at the one home both session
+		// creators share — a refused spawn never reaches the subprocess and
+		// the message names the limit and its reset.
+		if refusal := ro.cfg.Agent.ProbeCaps(r.Context(), ownerID); refusal != nil {
+			writeError(w, http.StatusTooManyRequests, refusal.Message())
+			return agent.CreateOpts{}, false
+		}
+		return agent.CreateOpts{OwnerID: ownerID, Provider: pk.Provider, Model: pk.Model, APIKey: pk.APIKey, PlatformPaid: true}, true
 	}
 	k, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerID)
 	if err != nil {
@@ -337,6 +345,15 @@ func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
 		data = append(data, agent.SnippetBlock(i, len(descriptors), descriptor))
 	}
 	if err := s.Prompt(r.Context(), req.Message, images, data); err != nil {
+		// A spend cap saying no is a refusal with a message about a limit and
+		// its reset (av-99f4), not a gateway failure: it answers 429 so the
+		// chat treats it as a limit, and the message is the canned wording the
+		// stopped-run notice uses.
+		var refusal *agent.CapRefusal
+		if errors.As(err, &refusal) {
+			writeError(w, http.StatusTooManyRequests, refusal.Message())
+			return
+		}
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}

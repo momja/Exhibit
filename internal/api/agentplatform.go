@@ -80,19 +80,33 @@ func PlatformKeyFromEnv() (*PlatformKey, error) {
 // is here rather than at the call site so that no way of constructing a
 // platform-mode instance can omit it.
 //
-// Nothing bounds the spend: the manager reads no token usage off Pi's event
-// stream, so an instance in platform mode can neither attribute a session's
-// cost to an owner nor stop one that runs away, and usage billing meters after
-// the fact. Metering and a per-owner cap are av-hyo6; until they exist this
-// configuration belongs on a controlled instance and not in front of open
-// signups. The operator is told that at boot rather than discovering it on an
-// invoice.
+// What used to be warned here — that nothing bounds the spend — is gone:
+// usage is metered per owner (av-2yws) and the spend cap bounds it
+// (av-99f4), whose RequireSpendCaps refuses to boot a platform credential
+// with no cap at all. This line remains because the bill is still real.
 //
 // Neither the provider nor the model is named, for the same reason no response
 // names them: a log line is read by the operator, who set them, but it is also
 // the thing most likely to be pasted into a support thread.
 func (pk *PlatformKey) logStartup() {
-	slog.Warn("platform agent mode enabled: every agent session runs on this instance's own provider credential and bills its account; there is no spend cap and no per-owner metering, so do not expose this to untrusted signups")
+	slog.Warn("platform agent mode enabled: every agent session runs on this instance's own provider credential and bills its account; spend is metered per owner and bounded by the configured spend caps")
+}
+
+// RequireSpendCaps is the startup rule av-99f4 makes structural: a platform
+// credential with no cap at all must not boot. Absence of the feature is
+// unlimited — a BYOK instance with no caps configured is untouched — but
+// absence of a limit the feature requires is a refusal to boot, because the
+// resource being spent is money and the failure is unbounded rather than
+// merely large. This supersedes the startup warning logStartup used to carry
+// for exactly this case.
+func RequireSpendCaps(pk *PlatformKey, caps agent.SpendCaps) error {
+	if pk == nil || caps.AnySet() {
+		return nil
+	}
+	return fmt.Errorf("AGENT_API_KEY is set but no spend cap is: set at least one of " +
+		"AGENT_SPEND_CAP_OWNER_CENTS, AGENT_SPEND_CAP_SESSION_CENTS, AGENT_SPEND_CAP_INSTANCE_CENTS " +
+		"(AGENT_SPEND_CAP_TURN_SECONDS also bounds a runaway turn) — a platform credential without a cap " +
+		"bills the instance without bound")
 }
 
 // platformMode reports whether this instance supplies the agent credential.
