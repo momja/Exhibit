@@ -113,8 +113,8 @@ func guardSignalOf(line []byte) (verb, detail string, ok bool) {
 }
 
 // handleGuardSignal acts on one guard signal. None of them is forwarded to
-// the browser: a block becomes the host's fixed reply, and the rest is
-// operator detail.
+// the browser: a block becomes the host's fixed reply, a usage report is
+// metered, and the rest is operator detail.
 func (s *Session) handleGuardSignal(verb, detail string) {
 	switch verb {
 	case "blocked", "error":
@@ -127,11 +127,27 @@ func (s *Session) handleGuardSignal(verb, detail string) {
 }
 
 // noteGuardUsage receives what one screen spent, as the JSON guard.ts sends:
-// {"provider","model","usage"}, usage in Pi's shape. The guardrail runs on the
-// instance's key whatever key the session uses, so this is operator spend.
-// Metering (av-2yws) records it; until then it is logged for the operator.
+// {"provider","model","usage"}, usage in Pi's shape. The guardrail runs on
+// the instance's key whatever key the session uses, so this is operator
+// spend — recorded through the metering seam (av-2yws) tagged `guardrail`,
+// which is what counts it against the instance ceiling without charging it
+// to an owner's budget (av-99f4).
+//
+// A report that does not parse is logged and dropped: one malformed screen
+// report must not disturb the session, and the next screen reports again.
 func (s *Session) noteGuardUsage(detail string) {
-	slog.Debug("guardrail screen usage", slog.String("session_id", s.ID), slog.String("usage", truncate(detail, 300)))
+	var report struct {
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+		Usage    Usage  `json:"usage"`
+	}
+	if err := json.Unmarshal([]byte(detail), &report); err != nil {
+		slog.Warn("guardrail usage report did not parse",
+			slog.String("session_id", s.ID), slog.String("err", err.Error()),
+			slog.String("detail", truncate(detail, 300)))
+		return
+	}
+	s.RecordGuardrailUsage(report.Provider, report.Model, report.Usage)
 }
 
 // noteGuardBlocked replaces the extension's signal with the event the chat UI

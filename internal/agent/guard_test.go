@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -62,12 +64,21 @@ func TestGuardSignalOf(t *testing.T) {
 
 // Only a block or an error is a refusal. A usage report arrives after every
 // screen, allowed ones included, and must neither mark the prompt blocked nor
-// reach the browser.
-func TestGuardUsageSignalIsNotABlock(t *testing.T) {
-	s := &Session{subs: map[chan []byte]struct{}{}}
-	s.handleGuardSignal("usage", `{"provider":"p","model":"m","usage":{"input":10}}`)
+// reach the browser — but it is the meter's input (av-2yws): one guardrail
+// row per screen, tagged as operator spend.
+func TestGuardUsageSignalIsMeteredNotABlock(t *testing.T) {
+	s, db := newMeteringSession(t, false)
+	s.handleGuardSignal("usage", `{"provider":"p","model":"m","usage":{"input":10,"output":2,"cost":{"total":0.001}}}`)
 	assert.False(t, s.guardBlocked)
 	assert.Empty(t, s.backlog)
+
+	totals := sessionTotals(t, db, s)
+	assert.Equal(t, int64(12), totals.InputTokens+totals.OutputTokens, "the screen's spend lands in the ledger")
+	instance, err := db.InstanceAgentSpend(context.Background(), time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1_000), instance.CostMicros,
+		"operator money whatever key the session runs on — here a BYO one")
+	assert.Equal(t, int64(0), ownerTotals(t, db).CostMicros, "and never the owner's budget")
 
 	s.handleGuardSignal("blocked", "p(violates)=0.99")
 	assert.True(t, s.guardBlocked)
