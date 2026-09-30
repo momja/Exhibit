@@ -57,10 +57,16 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/server 
 # itself (internal/agent), so this stays safe to run without it configured.
 FROM node:22-bookworm-slim
 
+# Pi is pinned, not latest: the usage-policy guardrail (av-gust) depends on how
+# its extension hooks behave (an `input` handler returning `handled` skips the
+# model), and an unpinned upgrade could change that with nothing failing.
+# Bump deliberately and run `go test ./internal/api -run Guardrail` against it.
+ARG PI_VERSION=0.99.1
+
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates \
 	&& rm -rf /var/lib/apt/lists/* \
-	&& npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+	&& npm install -g --ignore-scripts @earendil-works/pi-coding-agent@${PI_VERSION}
 
 COPY --from=builder /bin/server /server
 

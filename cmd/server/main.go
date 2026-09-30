@@ -169,6 +169,12 @@ func main() {
 	if err != nil {
 		fatal("configure the platform agent key", err)
 	}
+	// Usage-policy guardrail (av-gust): GUARDRAIL_* unset is no guardrail;
+	// partly set is fatal, because the operator believes one is running.
+	guardrail, err := agent.GuardrailFromEnv()
+	if err != nil {
+		fatal("configure the agent guardrail", err)
+	}
 	// Agent sessions authenticate with a per-session credential scoped to one
 	// artifact, never the service token (av-e0yj). One registry, shared: the
 	// manager issues from it, the API resolves and enforces against it.
@@ -188,11 +194,13 @@ func main() {
 			// own identifiers are stripped from the event stream and the
 			// persisted transcript too (av-siqf).
 			HideModelIdentity: platformAgentKey != nil,
+			Guardrail:         guardrail,
 		}, st)
 		if err != nil {
 			fatal("init agent manager", err)
 		}
-		slog.Info("agent support enabled", slog.String("pi_bin", path), slog.Bool("mock_llm", mockLLMURL != ""))
+		slog.Info("agent support enabled", slog.String("pi_bin", path), slog.Bool("mock_llm", mockLLMURL != ""),
+			slog.Bool("guardrail", guardrail != nil))
 	}
 
 	// Identity (av-30rj). Unset OIDC_ISSUER is the default and the whole of

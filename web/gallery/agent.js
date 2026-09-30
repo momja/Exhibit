@@ -397,6 +397,11 @@ function handleAgentEvent(ev) {
       addMsg('sys', note);
       break;
     }
+    case 'exhibit_guard_blocked':
+      // The usage-policy guardrail (av-gust) refused the message before the
+      // agent saw it. The text is the server's fixed reply, never model output.
+      addMsg('sys', ev.message);
+      break;
     case 'extension_error':
       addMsg('err', 'Extension error: ' + (ev.error || 'unknown'));
       break;

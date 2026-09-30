@@ -131,3 +131,15 @@ test("the host announces itself to each swapped-in preview frame", () => {
   assert.ok(frame.contentWindow.posted.some((m) => m.__avHostReady === true),
     "each new preview frame must be told the host is listening");
 });
+
+// av-gust: the usage-policy guardrail. A blocked message never starts a turn,
+// so the chat's only sign of it is this event, carrying the server's fixed
+// reply. It must render as a message and leave the streaming state alone.
+test("a guardrail block renders the server's reply without starting a turn", () => {
+  const { byId, context } = loadAgent();
+  context.handleAgentEvent({ type: "exhibit_guard_blocked", message: "Not allowed here." });
+  const shown = byId("messages").children.map((c) => c.textContent);
+  assert.ok(shown.includes("Not allowed here."), "the reply must appear in the chat: " + JSON.stringify(shown));
+  // setStreaming(true) is what shows the stop button; a block must not.
+  assert.notEqual(byId("stop-btn").style.display, "", "a block must not leave the chat looking busy");
+});

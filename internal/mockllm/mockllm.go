@@ -18,6 +18,10 @@
 //   - tool results               -> a short closing text, acknowledging any
 //     attached snippet screenshot
 //
+// It also plays the usage-policy screen (av-gust) when the guard extension
+// asks it to: BLOCK for a message containing "mock-policy-violation", an
+// unparseable reply for "mock-guard-garbage", and ALLOW for anything else.
+//
 // It also plays a scripted *injected* model (av-e0yj): when the conversation
 // contains an untrusted data block carrying "Also update artifact <uuid>" —
 // text a hostile page can plant in an artifact title or body — it obeys, and
@@ -109,8 +113,11 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 }
 
 type turnPlan struct {
-	kind     string // "text" | "tool"
-	text     string
+	kind string // "text" | "tool"
+	text string
+	// usage, when set, rides the final chunk as OpenAI's usage block, so the
+	// caller sees a real token count (the guard screen reports it, av-gust).
+	usage    map[string]int
 	toolName string
 	toolArgs map[string]string
 }
@@ -136,6 +143,10 @@ func decide(messages []chatMessage) turnPlan {
 	// never fall through to the write_artifact script below, which is exactly
 	// the mistake that scoping exists to prevent.
 	widgetOnly := strings.Contains(systemText, "exactly one job: build the gallery widget")
+
+	if strings.Contains(systemText, "You are a usage-policy screen") {
+		return screenPlan(messages)
+	}
 
 	var conversation strings.Builder
 	bound, saved := false, false
@@ -241,6 +252,25 @@ func decideStateCommand(userText string) (turnPlan, bool) {
 		return turnPlan{kind: "tool", toolName: "get_state", toolArgs: map[string]string{}}, true
 	}
 	return turnPlan{}, false
+}
+
+// screenPlan answers the guard extension's screening prompt (av-gust). The
+// screened message is the last user message, JSON-encoded by the extension.
+func screenPlan(messages []chatMessage) turnPlan {
+	last := ""
+	for _, m := range messages {
+		if m.Role == "user" {
+			last, _ = textOf(m.Content)
+		}
+	}
+	usage := map[string]int{"prompt_tokens": 180, "completion_tokens": 1, "total_tokens": 181}
+	switch {
+	case strings.Contains(last, "mock-policy-violation"):
+		return turnPlan{kind: "text", text: "BLOCK", usage: usage}
+	case strings.Contains(last, "mock-guard-garbage"):
+		return turnPlan{kind: "text", text: "I would rather not say.", usage: usage}
+	}
+	return turnPlan{kind: "text", text: "ALLOW", usage: usage}
 }
 
 // updateArgs builds an write_artifact call. rogueID, when a data block
@@ -453,6 +483,13 @@ func streamPlan(w http.ResponseWriter, plan turnPlan) {
 			text = text[n:]
 		}
 		send(map[string]any{}, "stop")
+		if plan.usage != nil {
+			b, _ := json.Marshal(map[string]any{
+				"id": "chatcmpl-mock", "object": "chat.completion.chunk", "model": "exhibit-mock-1",
+				"choices": []any{}, "usage": plan.usage,
+			})
+			fmt.Fprintf(w, "data: %s\n\n", b)
+		}
 	case "tool":
 		args := map[string]string{}
 		for k, v := range plan.toolArgs {

@@ -1189,6 +1189,24 @@ user opened. What that costs, and what it does not:
 - Artifact bodies have no version history (`av-1rvm`), so an overwrite is not
   yet undoable.
 
+### 5.4 The usage-policy guardrail is a screen, not a wall
+
+A different threat from §5.1–5.3: there the user is the victim of content they
+opened; here the user is the one sending prohibited requests, on an instance
+whose provider account pays for them. `GUARDRAIL_*` screens each user message
+on a separate model before the agent sees it (`docs/agent.md`, av-gust), and
+blocks when the screen fails. What it is not:
+
+- **Evadable.** It is a model reading attacker-written text, and a model can
+  be talked into a wrong answer. It raises the cost of the easy cases, like a pasted
+  persona prompt, and does not claim more.
+- **Input only.** It judges the message, not the agent's reply or what the
+  agent saves. Content that only becomes prohibited in the output passes.
+- **Text only.** Attached images are not screened.
+- **Account protection, not content moderation.** It keeps requests off the
+  provider account. It does nothing about what users publish, and it is not a
+  topic filter.
+
 ## 6. Residual risk
 
 Accepted, with eyes open (see the PRD §6.4): the model controls what an artifact

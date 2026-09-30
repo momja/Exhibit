@@ -13,6 +13,16 @@ services:
       - APP_ORIGIN=${APP_ORIGIN:-http://localhost:8080}
       - RENDER_ORIGIN=${RENDER_ORIGIN:-http://localhost:8081}
       - AUTH_TOKEN=${AUTH_TOKEN:-dev-token}
+      # Optional agent settings, read from .env. Empty means unset for all of
+      # them, so an instance that sets none behaves exactly as before.
+      # Platform mode (docs/deployment.md §4.1):
+      - AGENT_API_KEY=${AGENT_API_KEY:-}
+      - AGENT_PROVIDER=${AGENT_PROVIDER:-}
+      - AGENT_MODEL=${AGENT_MODEL:-}
+      # Usage-policy guardrail, all three or none (§4.2):
+      - GUARDRAIL_PROVIDER=${GUARDRAIL_PROVIDER:-}
+      - GUARDRAIL_MODEL=${GUARDRAIL_MODEL:-}
+      - GUARDRAIL_API_KEY=${GUARDRAIL_API_KEY:-}
       # Artifact bodies go to DATA_DIR/blobs unless a bucket is named (av-52ll).
       # To keep them in the MinIO below instead: bring MinIO up FIRST and create
       # the bucket, then uncomment these and start the app. The app verifies the

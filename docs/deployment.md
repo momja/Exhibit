@@ -61,6 +61,9 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `AGENT_API_KEY` | *(unset)* | The instance's **own** provider key for the AI agent. Unset = bring-your-own-key, the default and what every existing instance does. Set = platform mode; read [§4.1](#41-letting-the-instance-supply-the-agent-key-platform-mode) before you set it |
 | `AGENT_PROVIDER` | *(unset)* | Which provider `AGENT_API_KEY` belongs to — `anthropic`, `openai`, `google`, `openrouter`, `opencode-go`. **Required** when the key is set; missing or unrecognized is a startup failure, not a surprise at the first session |
 | `AGENT_MODEL` | *(unset)* | Model for platform-mode sessions. Optional — empty leaves it to the provider's default. Your choice, and never shown to users |
+| `GUARDRAIL_PROVIDER` | *(unset)* | Pi provider id of the model that screens agent messages for usage-policy violations. Unset (all three `GUARDRAIL_*`) = no guardrail; see [§4.2](#42-screening-agent-messages-usage-policy-guardrail) |
+| `GUARDRAIL_MODEL` | *(unset)* | That model's id: a classifier such as `jev-latest` or any chat model. Required with the other two |
+| `GUARDRAIL_API_KEY` | *(unset)* | Key for the guardrail's provider, separate from the agent's. Setting only some of the three is a startup failure |
 | `LOGIN_USERNAME` | *(unset)* | Names an account for the bootstrap / break-glass login — how you get in on an empty instance, or after losing a password. Accounts themselves are created with the `user add` subcommand, not here; see [§3.2](#32-log-in-with-a-username-and-password) |
 | `LOGIN_PASSWORD_HASH` | *(unset)* | The **bcrypt hash** of that password, not the password. Produce it with the `hash-password` subcommand. Set with `LOGIN_USERNAME`; it stays accepted for that account for as long as both are set (§3.2) |
 | `OIDC_ISSUER` | *(unset)* | Identity provider to delegate login to. Unset = no OIDC |
@@ -540,7 +543,37 @@ as it was.
 The startup log repeats this warning so the instance says it out loud every
 time it boots.
 
-### 4.2 No AI agent features
+### 4.2 Screening agent messages (usage-policy guardrail)
+
+In platform mode every agent message is sent on your provider account, and a
+provider that sees repeated usage-policy violations can suspend it, taking the
+agent away from every user. Set all three `GUARDRAIL_*` variables and each
+message a user sends is screened on a model you choose *before* the agent sees
+it:
+
+```bash
+GUARDRAIL_PROVIDER=typesafe     # any Pi provider id
+GUARDRAIL_MODEL=jev-latest      # a classifier model, or any chat model
+GUARDRAIL_API_KEY=...           # this provider's key; never the agent's
+```
+
+A classifier model (TypeSafe's Jev, also served by `openrouter`,
+`cloudflare-workers-ai`, `vercel-ai-gateway` and `opencode`) answers one yes/no
+question with a probability and is the cheap, fast choice. Any chat model works
+too; it is asked to answer ALLOW or BLOCK.
+
+A blocked message never reaches the agent, and the user sees one fixed reply.
+If the screen fails (the provider is down, or the model answers something
+unparseable), the message is blocked the same way, because a guardrail that
+lets messages through when it breaks is not one. The log records why.
+
+What it screens: each message's own words, not the artifact source attached
+to it, and not images. It screens against a built-in policy drafted from
+Anthropic's and OpenAI's prohibited uses (`internal/agent/ext/guard.ts`).
+Off-topic use is allowed; only prohibited content is blocked. It does not
+screen what the agent writes back, or what it saves into an artifact.
+
+### 4.3 No AI agent features
 
 Nothing to configure — if `pi` isn't on `PATH`, the agent surface disables itself
 automatically. To shrink the image too, drop the AI stuff at build time by

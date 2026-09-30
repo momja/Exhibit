@@ -136,7 +136,14 @@ func newNonce() (string, error) {
 // after them is explicitly framed as data. Nothing about a block is
 // interpolated into an instruction sentence — the model learns what a label
 // means from the system prompt, not from prose wrapped around the content.
+//
+// The nonce is redacted from the message too. The user can read it (the model
+// sees its own system prompt and can repeat it), and a fence line typed into
+// the message would let them hide text from the usage-policy guardrail, which
+// screens only what precedes the first fence (av-gust). The agent and the
+// screen must see the same words.
 func composePrompt(nonce, message string, blocks []DataBlock) string {
+	message = redactFenceID(message, nonce)
 	if len(blocks) == 0 {
 		return message
 	}

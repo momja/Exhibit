@@ -236,6 +236,58 @@ runs away. The startup log says so. Metering and a per-owner budget are
 av-hyo6; until they exist, do not put a platform-mode instance in front of
 untrusted signups.
 
+## Usage-policy guardrail (av-gust)
+
+An operator who sets `GUARDRAIL_*` gets every user message screened for
+usage-policy violations before the agent model sees it. It protects the
+instance's provider account in platform mode, where a provider that sees
+repeated violations can suspend the key every session runs on. It is not a
+topic filter: off-topic use is allowed. It does not meter or cap spend
+either; that is the per-owner spend cap (av-99f4), which is not built yet.
+
+- **A second Pi extension.** `internal/agent/ext/guard.ts` is embedded and
+  materialized beside `exhibit.ts`, and loaded with its own `-e` only when a
+  guardrail is configured. It imports nothing from `exhibit.ts`, and its whole
+  contract is `EXHIBIT_GUARD_*` in the sidecar's environment, so it could leave
+  this repository as a Pi package.
+- **Its own model and key.** The key travels as a per-request `apiKey` option,
+  which takes precedence over Pi's own credential lookup, so the guardrail and
+  the agent can use the same vendor without sharing a key. The model resolves
+  from Pi's catalog: a classifier model is asked one `bool` question through
+  `modelRegistry.classify()` and blocks at p ≥ 0.5; anything else is a chat
+  model asked to answer ALLOW or BLOCK, with the message JSON-encoded as data.
+- **Pi's `input` hook.** The handler screens the text before the model runs. A
+  block returns `handled`: no turn starts, the agent model is never called,
+  and the message never enters its context, so a blocked persona prompt cannot
+  prime later turns.
+- **The user's words only.** `EXHIBIT_GUARD_DATA_FENCE` names the opening fence
+  line, and everything after it is dropped before screening: stored artifact
+  source is not something the user just typed.
+- **The host owns the reply.** The extension signals a block with one
+  `ctx.ui.notify` whose message starts `exhibit_guard:`. `Session.handleLine`
+  swallows that line, logs its detail, and broadcasts `exhibit_guard_blocked`
+  carrying `agent.GuardrailBlockedReply`. No extension or model text reaches
+  the user on a block. The chat renders it as a system message; the edit
+  page's Generate button reports it as a failure.
+- **Every screen reports what it spent.** Pi meters nothing an extension
+  hook spends, so after each screen that got a model answer (allowed,
+  blocked, or unparseable) the extension sends `exhibit_guard:usage` with
+  `{provider, model, usage}` in Pi's usage shape. `handleGuardSignal` matches
+  the word after the prefix exactly: only `blocked` and `error` are refusals,
+  and a usage report is swallowed and handed to `noteGuardUsage`. It is
+  operator spend even in a BYO-key session, since the guardrail always runs
+  on the instance's key.
+- **Fail closed.** A screen that errors, times out (15 s), or answers anything
+  unparseable blocks with the same reply, so the reply is no oracle for
+  probing whether the screen is up.
+- **The opening data block survives a block.** It rides the first prompt; a
+  blocked first prompt never reached the model, so `Prompt` keeps it for the
+  next one rather than dropping the artifact source from the session.
+
+Not screened: images, the agent's replies, and what it saves. Pi is pinned in
+the Dockerfile because all of this depends on the `input` hook's `handled`
+behaving as it does in the pinned version.
+
 ## Sessions, streaming, transcripts
 
 - `POST /api/agent/sessions` (optional `artifact_id` scopes the session to an
@@ -374,9 +426,12 @@ capture leaves the sandbox only as data posted to that host.
 | `AGENT_API_KEY` | the instance's own provider key — set it to enable platform mode; unset is BYOK |
 | `AGENT_PROVIDER` | which provider that key is for; required with `AGENT_API_KEY`, and an unknown one fails at startup |
 | `AGENT_MODEL` | optional model for platform sessions; the operator's choice, never surfaced |
+| `GUARDRAIL_PROVIDER` / `GUARDRAIL_MODEL` / `GUARDRAIL_API_KEY` | the usage-policy guardrail's model and key; all three or none, and a partial set fails at startup |
 
 `internal/mockllm` is a deterministic OpenAI-compatible chat-completions
 handler — scripted create / update / re-read tool calls, color transforms,
+the guardrail's screen (BLOCK for "mock-policy-violation", an unparseable
+reply for "mock-guard-garbage", ALLOW otherwise),
 snippet acknowledgment, a handful of literal state commands ("list state",
 "set state K to V", "delete state K", "clear all state") mapped to the
 matching state tool call, the widget-only branch, and a scripted *injected*
