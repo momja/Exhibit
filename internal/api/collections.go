@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -30,8 +29,7 @@ type createCollectionRequest struct {
 
 func (ro *Router) createCollection(w http.ResponseWriter, r *http.Request) {
 	var req createCollectionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Name == "" {
@@ -119,8 +117,7 @@ type createTagRequest struct {
 
 func (ro *Router) createTag(w http.ResponseWriter, r *http.Request) {
 	var req createTagRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Name == "" {
@@ -159,8 +156,7 @@ type updateTagRequest struct {
 
 func (ro *Router) updateTag(w http.ResponseWriter, r *http.Request) {
 	var req updateTagRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Name != nil && *req.Name == "" {

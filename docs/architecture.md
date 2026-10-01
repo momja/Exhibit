@@ -249,13 +249,30 @@ false in practice. A non-origin entry is a `400` naming the value rather than a
 silent truncation to its host — truncating would grant a whole origin from an
 entry the user approved as a single file.
 
-Middleware chain (via `chi`): request logging → auth → owner scoping (`owner_id`)
-→ handler. Auth accepts two credentials, in that order of preference: a session
-cookie, when this instance has a login at all (§3.8), and otherwise the static
-bearer token — the API/CLI credential, and the only credential a single-user
-instance has. The owner is whatever the session resolved to, or `1`. Auth and
-ownership are *one layer* every mutating route passes through, which is what
-makes multi-user a middleware-and-data change rather than a rewrite.
+Middleware chain (via `chi`): request logging → body limit → auth → owner
+scoping (`owner_id`) → handler. Auth accepts two credentials, in that order of
+preference: a session cookie, when this instance has a login at all (§3.8), and
+otherwise the static bearer token — the API/CLI credential, and the only
+credential a single-user instance has. The owner is whatever the session
+resolved to, or `1`. Auth and ownership are *one layer* every mutating route
+passes through, which is what makes multi-user a middleware-and-data change
+rather than a rewrite.
+
+**Every request body is bounded** (av-ombn). `limitRequestBody` sits on the
+root of the app router, ahead of every group, so no route can be registered
+outside it. A body declared over `MAX_REQUEST_BODY_BYTES` (32 MiB by default)
+is answered `413` before any handler runs, without reading a byte of it; one of
+undeclared length is wrapped in `http.MaxBytesReader`, which stops one byte past
+the limit. Handlers read bodies only through `decodeJSON`, which turns that
+overrun into the same `413` instead of the `400` a malformed body gets. Two
+tests hold the shape: a parser walk fails on any other read of `r.Body` in the
+package, and a route walk fails when a write route exists that
+`bodylimit_test.go` has not listed and decided. The number comes from what a
+write costs: one peaks at about ten times its body (the decoded string, a copy
+at `Blob.Put`, three parse trees), so a maximal write is ~320 MiB. The
+listeners come from `api.NewServer`, with header, read and idle timeouts and a
+header-size cap. There is no write timeout, because the agent's SSE stream is a
+single response that stays open as long as the chat page does.
 
 **Public mode (av-wmp6)** is the one case where a request with no credential
 gets past that layer, and it is deliberately narrow. When `PUBLIC_MODE_ENABLED`
@@ -1289,6 +1306,15 @@ absent the surface degrades to disabled; nothing else changes.
   prompt sent to a stranger's session runs its tool calls on *that session's*
   credential, so the injected instruction lands in the victim's artifact —
   av-e0yj's containment defeated rather than evaded.
+- **Oversized writes fail where the model can read why (av-ombn):** the
+  sidecar's environment carries the API's body limit as
+  `EXHIBIT_MAX_BODY_BYTES`, so a tool refuses a write over it before sending
+  anything. A `413` from the API, or from a proxy in front of it, produces the
+  same error: the stored copy is unchanged, and resending the same content
+  will fail the same way. A connection dropped mid-upload says it got no
+  answer and names the size it was sending, since that is the likely cause
+  and nothing confirms the write either way. The API's `413` is still the
+  enforcement; the extension's check only makes the failure legible.
 - **Untrusted text stays out of the system role:** the artifact's source and
   title reach the model in a user-role message inside a nonce-fenced data
   block, never interpolated into the system prompt. The source is inlined at

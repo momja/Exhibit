@@ -14,11 +14,15 @@ import assert from "node:assert/strict";
 
 let exhibitMod = null;
 
+/** What the service passes as EXHIBIT_MAX_BODY_BYTES in these tests. */
+const BODY_LIMIT = 64 * 1024;
+
 before(async () => {
 	process.env.EXHIBIT_API_URL = "http://exhibit.test";
 	process.env.EXHIBIT_TOKEN = "test-token";
 	process.env.EXHIBIT_ARTIFACT_ID = "artifact-1";
 	process.env.EXHIBIT_DATA_NONCE = "nonce1";
+	process.env.EXHIBIT_MAX_BODY_BYTES = String(BODY_LIMIT);
 	exhibitMod = await import("./exhibit.ts");
 });
 
@@ -225,5 +229,120 @@ describe("edit_widget tool", () => {
 		} finally {
 			globalThis.fetch = origFetch;
 		}
+	});
+});
+
+describe("oversized writes (av-ombn)", () => {
+	/** Runs fn with fetch replaced; restores it whatever happens. */
+	async function withFetch(fetch, fn) {
+		const origFetch = globalThis.fetch;
+		globalThis.fetch = fetch;
+		try {
+			await fn();
+		} finally {
+			globalThis.fetch = origFetch;
+		}
+	}
+
+	it("write_artifact refuses a body over the limit without sending it", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		const { calls, fetch } = makeFetch({ body: "<p>x</p>", patchResult: PATCH_OK });
+		await withFetch(fetch, async () => {
+			await assert.rejects(
+				pi.tools.get("write_artifact").execute("call-1", { body: "x".repeat(BODY_LIMIT + 1) }),
+				(err) => {
+					assert.match(err.message, /refused: this write is \d+ bytes and the instance accepts at most 65536 bytes per request/);
+					assert.match(err.message, /Nothing was saved; what is stored is unchanged/);
+					assert.match(err.message, /sending the same content again will fail the same way/);
+					return true;
+				},
+			);
+			assert.equal(calls.length, 0, "nothing sent");
+		});
+	});
+
+	it("edit_artifact refuses an edit that grows the body past the limit, after reading but without writing", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		const { calls, fetch } = makeFetch({ body: "<h1>Hi</h1>", patchResult: PATCH_OK });
+		await withFetch(fetch, async () => {
+			await assert.rejects(
+				pi.tools.get("edit_artifact").execute("call-1", {
+					edits: [{ oldText: "<h1>Hi</h1>", newText: "<h1>" + "x".repeat(2 * BODY_LIMIT) + "</h1>" }],
+				}),
+				/refused: this write is 128\.\d KiB and the instance accepts at most 64\.0 KiB per request\. Nothing was saved/,
+			);
+			assert.ok(calls.some((c) => c.method === "GET"), "read the current source");
+			assert.ok(!calls.some((c) => c.method === "PATCH"), "no PATCH issued");
+		});
+	});
+
+	it("set_state refuses an oversized value without sending it", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		const calls = [];
+		await withFetch(async (url, opts) => {
+			calls.push({ url, method: opts?.method });
+			throw new Error("unexpected fetch");
+		}, async () => {
+			await assert.rejects(
+				pi.tools.get("set_state").execute("call-1", { key: "k", value: "v".repeat(BODY_LIMIT) }),
+				/PUT \/api\/artifacts\/artifact-1\/state refused: .*Nothing was saved/,
+			);
+			assert.equal(calls.length, 0, "nothing sent");
+		});
+	});
+
+	it("turns the API's 413 into the same message, with the limit the API names", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		// Under the limit this session was told about, over the one the API
+		// enforces: what happens if the two ever disagree.
+		await withFetch(async () => ({
+			ok: false,
+			status: 413,
+			text: async () => JSON.stringify({ error: "request body too large", limit_bytes: 2048 }),
+		}), async () => {
+			await assert.rejects(
+				pi.tools.get("write_artifact").execute("call-1", { body: "y".repeat(4096) }),
+				/PATCH \/api\/artifacts\/artifact-1 refused: this write is 4\.0 KiB and the instance accepts at most 2\.0 KiB per request\. Nothing was saved/,
+			);
+		});
+	});
+
+	it("still says it was too large when a 413 names no limit (a proxy in front of the API)", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		await withFetch(async () => ({
+			ok: false,
+			status: 413,
+			text: async () => "<html><body><h1>413 Request Entity Too Large</h1></body></html>",
+		}), async () => {
+			await assert.rejects(
+				pi.tools.get("write_artifact").execute("call-1", { body: "y".repeat(4096) }),
+				/refused: this write is 4\.0 KiB, more than the instance accepts\. Nothing was saved/,
+			);
+		});
+	});
+
+	it("names the size when the connection drops mid-upload instead of answering", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		await withFetch(async () => {
+			const cause = Object.assign(new Error("write EPIPE"), { code: "EPIPE" });
+			throw Object.assign(new TypeError("fetch failed"), { cause });
+		}, async () => {
+			await assert.rejects(
+				pi.tools.get("write_artifact").execute("call-1", { body: "y".repeat(4096) }),
+				/PATCH \/api\/artifacts\/artifact-1 got no response \(EPIPE\) while sending 4\.0 KiB\. Nothing confirms whether it was saved/,
+			);
+		});
 	});
 });

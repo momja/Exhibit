@@ -55,6 +55,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `ADDR` | `:8080` | App listen address |
 | `RENDER_ADDR` | `:8081` | Render listen address |
 | `SINGLE_LISTENER` | `false` | Serve both origins from `ADDR` alone, choosing between them by the request's `Host` header. For platforms whose proxy routes by port and cannot map two hostnames to two ports (Fly.io); see [§5.1](#51-one-port-two-hostnames). Accepts `true`/`1`/`yes`/`on`. `RENDER_ADDR` is unused when it is on |
+| `MAX_REQUEST_BODY_BYTES` | `33554432` (32 MiB) | The largest request body any route accepts, in bytes. A bigger one is refused `413` before it is read. The default fits a snapshot that vendored a wasm runtime, exported and pasted back, with room to spare. A write peaks at about ten times its size in memory, so lower it on a small machine. Anything but a positive number is a **startup failure**; there is no value that turns the limit off |
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
 | `PI_BIN` | `pi` | AI agent executable — unset/missing just disables that feature |
 | `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
@@ -620,6 +621,23 @@ Bring your own (Caddy, nginx, Traefik, a cloud LB). Exhibit speaks plain HTTP;
 point your proxy's two hostnames at `APP_ORIGIN`/`RENDER_ORIGIN` and terminate
 TLS there. They must be different hostnames — that's the artifact sandbox
 boundary, not just cosmetics.
+
+**Let request bodies through.** Exhibit caps a request body at
+`MAX_REQUEST_BODY_BYTES` (32 MiB by default) itself, so the proxy does not need
+a cap of its own, and a smaller one becomes the real limit. nginx is the case to
+check: its `client_max_body_size` defaults to `1m`, which refuses any artifact
+over a megabyte before Exhibit sees it, with nginx's own error page in place of
+Exhibit's message. Set it to at least Exhibit's limit:
+
+```nginx
+client_max_body_size 32m;
+```
+
+Exhibit also bounds the connection itself: 10 seconds to send the request
+headers, 64 KiB of them at most, and 5 minutes to send the whole request. The
+last is what a 32 MiB upload needs on a slow (~1 Mbit/s) uplink. Responses have
+no time limit, because the AI agent streams its replies over a connection that
+stays open as long as the chat page does.
 
 ### 5.1 One port, two hostnames
 
