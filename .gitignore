@@ -33,6 +33,7 @@ node_modules/
 /internal/api/assets/
 
 /.pi/
+/.zed/
 
 # Local Claude Code settings — no longer tracked in git history.
 /.claude/

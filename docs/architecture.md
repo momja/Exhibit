@@ -1315,8 +1315,8 @@ absent the surface degrades to disabled; nothing else changes.
   (`internal/agent/redact.go`), keeping the `usage` block beside them, which
   names no model and is what metering will read. Availability stays a
   separate signal: no `pi` binary is still a 503 in either mode. **No spend
-  cap exists** — nothing reads token usage off the stream — so this belongs
-  on a controlled instance until av-hyo6 lands; the startup log says so.
+  cap exists** — usage is metered (av-2yws) but nothing refuses it — so this
+  belongs on a controlled instance until av-99f4 lands; the startup log says so.
 - **Streaming:** the service fans Pi's event stream out to the browser via
   SSE (`/api/agent/sessions/:id/events`); prompts arriving mid-run become Pi
   steering messages. Transcripts are persisted per artifact

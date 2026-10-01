@@ -262,6 +262,62 @@ type AgentKey struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// Agent usage metering (av-2yws). One AgentUsage row is one recorded usage
+// event; rows aggregate to per-session and per-owner totals. Tokens are the
+// meter and are exact; CostMicros is Pi's price-table estimate of what the
+// spend cost, kept because a spend cap is denominated in money (av-99f4) —
+// it is not a bill.
+const (
+	// PaidByPlatform is spend on the instance's own provider credential:
+	// platform-mode sessions and guardrail screening (the latter runs on the
+	// operator's key even inside a BYO-key session). PaidByUser is a BYO-key
+	// session spending its owner's own tokens.
+	PaidByPlatform = "platform"
+	PaidByUser     = "user"
+
+	// What generated the spend. Guardrail is tagged apart so screening
+	// overhead is visible and policy can treat it differently (av-gust).
+	UsageSourceModel      = "model"
+	UsageSourceTool       = "tool"
+	UsageSourceCompaction = "compaction"
+	UsageSourceGuardrail  = "guardrail"
+)
+
+// AgentUsage is one recorded usage event, attributed to the owner and session
+// that spent it (av-2yws).
+type AgentUsage struct {
+	OwnerID   int64
+	SessionID string
+	Provider  string
+	Model     string
+	PaidBy    string // PaidByPlatform or PaidByUser
+	Source    string // UsageSource*
+
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	CostMicros       int64
+}
+
+// UsageTotals is an aggregate over recorded usage rows.
+type UsageTotals struct {
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	CostMicros       int64
+}
+
+// Add folds one event into a running total.
+func (t *UsageTotals) Add(u AgentUsage) {
+	t.InputTokens += u.InputTokens
+	t.OutputTokens += u.OutputTokens
+	t.CacheReadTokens += u.CacheReadTokens
+	t.CacheWriteTokens += u.CacheWriteTokens
+	t.CostMicros += u.CostMicros
+}
+
 // OwnerID and ViewerID name the two principals the state methods below take.
 // Both hold a users.id value and are numerically interchangeable as plain
 // int64, which is exactly what let a caller transpose them and still
@@ -527,6 +583,29 @@ type Store interface {
 	SaveTranscript(ctx context.Context, ownerID int64, artifactID, sessionID, messagesJSON string) error
 	// ListTranscripts returns messagesJSON per session for an artifact.
 	ListTranscripts(ctx context.Context, ownerID int64, artifactID string) (map[string]string, error)
+
+	// Agent usage metering (av-2yws). RecordAgentUsage appends one usage
+	// event. The three sums below are the three questions spend enforcement
+	// asks (av-99f4), each with its filtering rule baked in, so no gate
+	// composes them itself and gets one case wrong:
+	//
+	//   OwnerAgentSpend — one owner's platform-paid agent spend since a
+	//   time: what the per-owner budget meters. BYO-key rows (their own
+	//   money) and guardrail overhead (the operator's cost of doing
+	//   business, backstopped by the instance ceiling) are excluded.
+	//
+	//   SessionAgentSpend — everything recorded against one session of one
+	//   owner, any payer and guardrail included: what the per-session
+	//   ceiling meters.
+	//
+	//   InstanceAgentSpend — every platform-paid row since a time,
+	//   guardrail included, whatever session it came from: the operator's
+	//   total exposure, what the instance ceiling meters (owner-less by
+	//   design — see the owner-scope exemption beside it).
+	RecordAgentUsage(ctx context.Context, u AgentUsage) error
+	OwnerAgentSpend(ctx context.Context, ownerID int64, since time.Time) (UsageTotals, error)
+	SessionAgentSpend(ctx context.Context, ownerID int64, sessionID string) (UsageTotals, error)
+	InstanceAgentSpend(ctx context.Context, since time.Time) (UsageTotals, error)
 
 	// Shares. A share is minted and revoked by the artifact's owner, so those
 	// two are owner-scoped; resolving one to serve it is not (below).

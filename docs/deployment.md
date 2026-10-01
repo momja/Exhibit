@@ -532,15 +532,18 @@ as it was.
 
 > [!WARNING]
 > **There is no spend cap.** Every agent session bills your provider account,
-> and Exhibit currently measures nothing: it cannot attribute a session's cost
-> to a user, and it cannot stop one that runs away. Usage billing meters after
-> the fact, so a bad day is money already spent.
+> and nothing stops one that runs away. Usage billing meters after the fact,
+> so a bad day is money already spent.
 >
 > Only enable this on an instance whose users you control. Do not put it in
 > front of open signups, or behind a public-mode gallery, until per-owner
-> metering and budgets exist.
+> budgets exist (av-99f4).
 
-The startup log repeats this warning so the instance says it out loud every
+Usage is metered per user in the `agent_usage` table: exact tokens, and beside
+them a cost estimate from Pi's price table, which is **not a bill**. The meter
+records; it refuses nothing.
+
+The startup log repeats the warning so the instance says it out loud every
 time it boots.
 
 ### 4.2 Screening agent messages (usage-policy guardrail)

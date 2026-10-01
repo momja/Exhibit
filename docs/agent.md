@@ -225,16 +225,58 @@ argument is left alone — at both seams. BYOK is unfiltered: there the
 identifiers describe a key the caller typed.
 
 The `usage` block beside them (token counts and cost) is deliberately kept: it
-names no model, and it is what metering will read (av-hyo6).
+names no model, and it is what metering reads (av-2yws, below).
 
-### No spend cap
+### Token metering (av-2yws)
 
-Platform mode makes every session bill the instance's provider account with
-nothing bounding it — `internal/agent` reads no token usage off Pi's stream, so
-an instance can neither attribute spend to an owner nor stop a session that
-runs away. The startup log says so. Metering and a per-owner budget are
-av-hyo6; until they exist, do not put a platform-mode instance in front of
-untrusted signups.
+Every session's spend lands in the `agent_usage` ledger as rows arrive — one
+row per recorded usage event, carrying the owner, session, provider, model,
+input/output/cache-read/cache-write tokens separately, a cost estimate, and
+two tags: **who pays** (`platform` for the instance's credential and guardrail
+screening, `user` for a BYO-key session) and **what spent it** (`model`,
+`tool`, `compaction`, `guardrail`). Per-session rows aggregate to per-owner
+totals over a period; the reverse is not recoverable, so the rows are fine
+grained on purpose.
+
+What the rows come from, and when Pi reports it:
+
+- **Assistant messages** — `message_end` carries the message's authoritative
+  `usage`; `message_update` carries the same numbers cumulatively *during*
+  the response (possibly zero until completion). Recorded as `model` spend.
+- **Tool-reported usage** — rolled into toolResult messages (nested tool
+  calls fold into their caller), recorded as `tool` spend. Usage sources that
+  emit no event at all (Pi's cache warmer, anything else counted only in the
+  totals) are caught at every settle: the session reconciles against
+  `get_session_stats` — Pi's own cumulative total — and records the gap, so
+  the ledger's sum equals Pi's total.
+- **Compaction** — `compaction_end` carries the summary call's `usage`.
+- **Guardrail screening** (av-gust) — *not* reported by Pi at all: model
+  calls made inside hooks appear in no event and in no session total. When
+  the guard's signal reaches Go it records the spend tagged `guardrail`.
+
+Attribution survives aborts, idle-reap kills, and mid-turn deaths: rows land
+as usage arrives, and whatever a killed response had reported so far is
+flushed when the process exits. That is the point — those are the sessions
+that spent money and produced nothing. Rows survive account deletion; the
+money was spent either way. What is *not* metered is anything Pi itself does
+not report (a provider that never returns usage for a failed request is
+invisible here too).
+
+**This is not a bill.** Tokens are the meter and are exact. The cost column is
+Pi's own price-table estimate of what the spend cost — good enough to bound
+spend and attribute rough cost, never shown to a user as an amount owed, and
+zero for a model Pi has no price for (the tokens still say what happened).
+The mapping from tokens to anything a user is sold is pricing's problem, and
+pricing changes without a migration.
+
+### No spend cap yet (av-99f4)
+
+Metering records spend; nothing refuses it. Platform mode still bills every
+session to the instance's provider account with no ceiling, and no
+`AGENT_SPEND_CAP_*` variable exists: setting one limits nothing and nothing
+checks for one at startup. The per-owner spend cap is av-99f4 and is not built.
+Until it is, do not put a platform-mode instance in front of untrusted
+signups. The startup log says so.
 
 ## Usage-policy guardrail (av-gust)
 
@@ -242,8 +284,9 @@ An operator who sets `GUARDRAIL_*` gets every user message screened for
 usage-policy violations before the agent model sees it. It protects the
 instance's provider account in platform mode, where a provider that sees
 repeated violations can suspend the key every session runs on. It is not a
-topic filter: off-topic use is allowed. It does not meter or cap spend
-either; that is the per-owner spend cap (av-99f4), which is not built yet.
+topic filter: off-topic use is allowed. Bounding spend is not its job either;
+that is the per-owner spend cap (av-99f4), which is not built yet. What the
+screen itself spends is metered, as its own `guardrail` rows (below).
 
 - **A second Pi extension.** `internal/agent/ext/guard.ts` is embedded and
   materialized beside `exhibit.ts`, and loaded with its own `-e` only when a

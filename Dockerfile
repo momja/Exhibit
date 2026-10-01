@@ -57,9 +57,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/server 
 # itself (internal/agent), so this stays safe to run without it configured.
 FROM node:22-bookworm-slim
 
-# Pi is pinned, not latest: the usage-policy guardrail (av-gust) depends on how
-# its extension hooks behave (an `input` handler returning `handled` skips the
-# model), and an unpinned upgrade could change that with nothing failing.
+# Pi is pinned (av-2yws): metering reads Pi's usage-event shape, and the
+# usage-policy guardrail (av-gust) depends on how its extension hooks behave
+# (an `input` handler returning `handled` skips the model). An unpinned
+# upgrade could change either with nothing failing.
 # Bump deliberately and run `go test ./internal/api -run Guardrail` against it.
 ARG PI_VERSION=0.99.1
 

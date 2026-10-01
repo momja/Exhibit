@@ -106,6 +106,8 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 	ctx := context.Background()
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id > 23",
+		// 030's metering ledger (av-2yws) — the table carries its indexes.
+		"DROP TABLE IF EXISTS agent_usage",
 		"DROP TABLE IF EXISTS pending_blob_deletions",
 		"DROP TABLE IF EXISTS artifact_assets",
 		"DROP VIEW IF EXISTS blob_references",
@@ -204,6 +206,7 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	// shares.recipient_id blocks that column's DROP.
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id >= 28",
+		"DROP TABLE IF EXISTS agent_usage",
 		"DROP TRIGGER IF EXISTS shares_counts_sync_update",
 		"DROP TRIGGER IF EXISTS shares_counts_sync_delete",
 		"DROP TRIGGER IF EXISTS shares_counts_sync_insert",

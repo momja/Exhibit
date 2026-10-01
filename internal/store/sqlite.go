@@ -1298,6 +1298,65 @@ func (s *SQLiteStore) ListTranscripts(ctx context.Context, ownerID int64, artifa
 	return out, rows.Err()
 }
 
+// RecordAgentUsage appends one usage event to the metering ledger (av-2yws).
+// recorded_at is left to the schema's default so rows carry the database's
+// clock — the sums below compare against it, and two clocks is one more way
+// for a period boundary to disagree with itself.
+func (s *SQLiteStore) RecordAgentUsage(ctx context.Context, u AgentUsage) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO agent_usage (owner_id, session_id, provider, model, paid_by, source,
+		     input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_micros)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		u.OwnerID, u.SessionID, u.Provider, u.Model, u.PaidBy, u.Source,
+		u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CostMicros)
+	return err
+}
+
+const usageSumColumns = `COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0),
+    COALESCE(SUM(cache_read_tokens), 0), COALESCE(SUM(cache_write_tokens), 0),
+    COALESCE(SUM(cost_micros), 0)`
+
+// usageTotals runs one aggregate over the ledger. A row-less table sums to
+// zero rather than no-row, so every caller gets a usable total.
+func (s *SQLiteStore) usageTotals(ctx context.Context, where string, args ...any) (UsageTotals, error) {
+	var t UsageTotals
+	err := s.db.QueryRowContext(ctx,
+		"SELECT "+usageSumColumns+" FROM agent_usage WHERE "+where, args...).
+		Scan(&t.InputTokens, &t.OutputTokens, &t.CacheReadTokens, &t.CacheWriteTokens, &t.CostMicros)
+	return t, err
+}
+
+// datetimeLayout is the shape SQLite's datetime('now') stores, and so the
+// shape a since-bound has to be formatted in to compare as a string.
+const datetimeLayout = "2006-01-02 15:04:05"
+
+// OwnerAgentSpend is one owner's platform-paid agent spend since a time —
+// what the per-owner budget meters (av-99f4). BYO-key rows are the owner's
+// own money and guardrail rows are the operator's overhead, so neither
+// counts against the owner's budget.
+func (s *SQLiteStore) OwnerAgentSpend(ctx context.Context, ownerID int64, since time.Time) (UsageTotals, error) {
+	return s.usageTotals(ctx,
+		"owner_id=? AND paid_by='platform' AND source != 'guardrail' AND recorded_at >= ?",
+		ownerID, since.UTC().Format(datetimeLayout))
+}
+
+// SessionAgentSpend is everything recorded against one session — any payer,
+// guardrail included — what the per-session ceiling meters. Owner-scoped like
+// every sum: the session id is the enforcement key, but the owner predicate
+// rides along so one owner's conversation can never be metered against
+// another's budget (av-ep8k).
+func (s *SQLiteStore) SessionAgentSpend(ctx context.Context, ownerID int64, sessionID string) (UsageTotals, error) {
+	return s.usageTotals(ctx, "owner_id=? AND session_id=?", ownerID, sessionID)
+}
+
+// InstanceAgentSpend is every platform-paid row since a time, guardrail
+// included whatever session it came from: the operator's total exposure,
+// what the instance ceiling meters.
+func (s *SQLiteStore) InstanceAgentSpend(ctx context.Context, since time.Time) (UsageTotals, error) {
+	return s.usageTotals(ctx, "paid_by='platform' AND recorded_at >= ?",
+		since.UTC().Format(datetimeLayout))
+}
+
 // CreateShare mints a share of an artifact, so it is gated on owning that
 // artifact — otherwise a share row would be a way to publish someone else's
 // library, through the deliberately unauthenticated /s/:id path or, now, by

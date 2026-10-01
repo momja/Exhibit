@@ -161,7 +161,7 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 	// once entered a key keeps that row untouched, and turning the variable
 	// off restores their BYOK session with it.
 	if pk := ro.cfg.PlatformAgentKey; pk != nil {
-		return agent.CreateOpts{OwnerID: ownerID, Provider: pk.Provider, Model: pk.Model, APIKey: pk.APIKey}, true
+		return agent.CreateOpts{OwnerID: ownerID, Provider: pk.Provider, Model: pk.Model, APIKey: pk.APIKey, PlatformPaid: true}, true
 	}
 	k, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerID)
 	if err != nil {

@@ -163,6 +163,12 @@ type CreateOpts struct {
 	// write_artifact, which is exactly the wrong thing here: the artifact's
 	// own source must not change.
 	WidgetOnly bool
+	// PlatformPaid marks a session running on the instance's own credential
+	// (av-siqf) rather than a BYO key: it is who the provider bills, and so
+	// the one question av-99f4's enforcement keys off (a BYO-key session
+	// spends its owner's money and is never limited here). Recorded on the
+	// usage rows as paid_by either way (av-2yws).
+	PlatformPaid bool
 }
 
 // Create decrypted-key session: spawns the pi subprocess and starts its reader.
@@ -267,6 +273,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	s := &Session{
 		ID:                id,
 		OwnerID:           opts.OwnerID,
+		provider:          opts.Provider,
+		model:             opts.Model,
+		paidBy:            paidByFor(opts.PlatformPaid),
 		grant:             grant,
 		nonce:             nonce,
 		hideModelIdentity: m.cfg.HideModelIdentity,
@@ -274,7 +283,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		cmd:               cmd,
 		stdin:             stdin,
 		subs:              map[chan []byte]struct{}{},
-		pending:           map[string]chan json.RawMessage{},
+		pending:           map[string]chan rpcResponse{},
 		done:              make(chan struct{}),
 		lastActive:        time.Now(),
 	}
@@ -379,6 +388,15 @@ type Session struct {
 	ID      string
 	OwnerID int64
 
+	// provider and model are the configured credential's, kept for the usage
+	// ledger (av-2yws) — rows record what spent the money even though
+	// platform mode strips it from everything a user sees. paidBy is who the
+	// provider bills: PaidByPlatform for the instance's credential, PaidByUser
+	// for a BYO key.
+	provider string
+	model    string
+	paidBy   string
+
 	// grant is the session's API credential and the single source of truth
 	// for which artifact it may touch. In create mode it starts unbound and
 	// the API's create handler binds it — the session never derives its
@@ -408,7 +426,7 @@ type Session struct {
 	pendingData []DataBlock
 	subs        map[chan []byte]struct{}
 	backlog     [][]byte
-	pending     map[string]chan json.RawMessage
+	pending     map[string]chan rpcResponse
 	streaming   bool
 	closed      bool
 	lastActive  time.Time
@@ -418,7 +436,29 @@ type Session struct {
 	// guarantees there is only one prompt it can belong to.
 	guardBlocked bool
 
+	// Usage accounting (av-2yws). usageCur is the cumulative usage of the
+	// assistant response in flight (Pi reports it per response, streaming);
+	// usageRecorded is the sum of durable ledger rows for this session's own
+	// model/tool/compaction spend — the base the settle reconciliation
+	// diffs Pi's totals against.
+	usageCur       Usage
+	usageCurActive bool
+	usageRecorded  store.UsageTotals
+	// reconcileMu keeps one settle reconciliation running at a time, so each
+	// one's stats snapshot is taken after the previous one's gap row landed.
+	reconcileMu sync.Mutex
+
 	done chan struct{}
+}
+
+// rpcResponse is one correlated Pi response plus the session's recorded usage
+// at the moment the read loop reached it. Pi writes its stdout in order, so
+// every usage event it emitted before answering has been recorded by then, and
+// none it emitted after has: that snapshot is the baseline a get_session_stats
+// answer can be compared against (av-2yws).
+type rpcResponse struct {
+	line     json.RawMessage
+	recorded store.UsageTotals
 }
 
 // ArtifactID is the artifact this session is scoped to, or "" while a
@@ -514,14 +554,20 @@ func (s *Session) Abort(ctx context.Context) error {
 
 // roundTrip sends one RPC command and waits for its correlated response.
 func (s *Session) roundTrip(ctx context.Context, cmd map[string]any) (json.RawMessage, error) {
+	resp, err := s.call(ctx, cmd)
+	return resp.line, err
+}
+
+// call is roundTrip keeping the recorded-usage snapshot beside the response.
+func (s *Session) call(ctx context.Context, cmd map[string]any) (rpcResponse, error) {
 	id := uuid.New().String()
 	cmd["id"] = id
-	ch := make(chan json.RawMessage, 1)
+	ch := make(chan rpcResponse, 1)
 
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return nil, fmt.Errorf("session closed")
+		return rpcResponse{}, fmt.Errorf("session closed")
 	}
 	s.pending[id] = ch
 	s.mu.Unlock()
@@ -533,13 +579,13 @@ func (s *Session) roundTrip(ctx context.Context, cmd map[string]any) (json.RawMe
 
 	line, err := json.Marshal(cmd)
 	if err != nil {
-		return nil, err
+		return rpcResponse{}, err
 	}
 	s.writeMu.Lock()
 	_, err = s.stdin.Write(append(line, '\n'))
 	s.writeMu.Unlock()
 	if err != nil {
-		return nil, fmt.Errorf("write to pi: %w", err)
+		return rpcResponse{}, fmt.Errorf("write to pi: %w", err)
 	}
 
 	timeout := time.NewTimer(2 * time.Minute)
@@ -548,11 +594,11 @@ func (s *Session) roundTrip(ctx context.Context, cmd map[string]any) (json.RawMe
 	case resp := <-ch:
 		return resp, nil
 	case <-s.done:
-		return nil, fmt.Errorf("agent process exited")
+		return rpcResponse{}, fmt.Errorf("agent process exited")
 	case <-timeout.C:
-		return nil, fmt.Errorf("timed out waiting for pi response")
+		return rpcResponse{}, fmt.Errorf("timed out waiting for pi response")
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return rpcResponse{}, ctx.Err()
 	}
 }
 
@@ -578,9 +624,17 @@ func (s *Session) handleLine(line []byte) {
 		ID       string `json:"id"`
 		ToolName string `json:"toolName"`
 		IsError  bool   `json:"isError"`
-		Result   struct {
-			Details map[string]any `json:"details"`
-		} `json:"result"`
+		// Usage, Message and Result are raw, and that is load-bearing. This
+		// one probe parses every line Pi emits, and shapes collide across
+		// event types: "message" is a *string* on an extension_ui_request
+		// notification and an *object* on message_end, and a tool's result
+		// can carry anything at all. A typed field here made json.Unmarshal
+		// fail on the whole line, which silently dropped guard signals
+		// before guardSignalOf ever saw them. Whatever is not understood
+		// must cost the extraction, never the line.
+		Usage   json.RawMessage `json:"usage"`
+		Message json.RawMessage `json:"message"`
+		Result  json.RawMessage `json:"result"`
 	}
 	if err := json.Unmarshal(line, &probe); err != nil {
 		slog.Debug("unparseable pi output", slog.String("session_id", s.ID), slog.String("line", truncate(string(line), 200)))
@@ -595,10 +649,11 @@ func (s *Session) handleLine(line []byte) {
 	if probe.Type == "response" && probe.ID != "" {
 		s.mu.Lock()
 		ch := s.pending[probe.ID]
+		recorded := s.usageRecorded
 		s.mu.Unlock()
 		if ch != nil {
 			// copy: line's backing array is reused by the reader
-			ch <- json.RawMessage(bytes.Clone(line))
+			ch <- rpcResponse{line: json.RawMessage(bytes.Clone(line)), recorded: recorded}
 		}
 		return
 	}
@@ -609,23 +664,60 @@ func (s *Session) handleLine(line []byte) {
 		s.streaming = true
 		s.lastActive = time.Now()
 		s.mu.Unlock()
+	case "message_update":
+		if u, ok := decodeUsage(probe.Usage); ok {
+			s.noteStreamingUsage(u)
+		}
+	case "message_end":
+		// The authoritative final message: role decides the row's source,
+		// provider/model name the spend, usage is the meter.
+		var msg struct {
+			Role     string          `json:"role"`
+			Provider string          `json:"provider"`
+			Model    string          `json:"model"`
+			Usage    json.RawMessage `json:"usage"`
+		}
+		if json.Unmarshal(probe.Message, &msg) == nil {
+			if u, ok := decodeUsage(msg.Usage); ok {
+				s.noteMessageUsage(msg.Role, msg.Provider, msg.Model, u)
+			}
+		}
+	case "compaction_end":
+		var res struct {
+			Usage json.RawMessage `json:"usage"`
+		}
+		if json.Unmarshal(probe.Result, &res) == nil {
+			if u, ok := decodeUsage(res.Usage); ok {
+				s.noteCompactionUsage(u)
+			}
+		}
 	case "agent_settled":
 		s.mu.Lock()
 		s.streaming = false
 		s.lastActive = time.Now()
 		s.mu.Unlock()
+		// The settle is where the ledger is squared with Pi's own totals —
+		// usage sources that emit no event (tool-reported usage, cache
+		// warming) are recorded here as the difference (av-2yws). The
+		// response in flight is flushed here, on the read loop, so the flush
+		// can only ever see this turn's response and never a later one's.
+		s.flushInFlightUsage()
+		go s.reconcileUsage()
 		if artifactID := s.ArtifactID(); artifactID != "" {
 			go s.persistTranscript(artifactID)
 		}
 	case "tool_execution_end":
-		if !probe.IsError {
-			switch probe.Result.Details["exhibit"] {
+		var res struct {
+			Details map[string]any `json:"details"`
+		}
+		if !probe.IsError && json.Unmarshal(probe.Result, &res) == nil {
+			switch res.Details["exhibit"] {
 			case "artifact_saved":
-				s.noteArtifactSaved(probe.Result.Details)
+				s.noteArtifactSaved(res.Details)
 			case "state_changed":
-				s.noteStateChanged(probe.Result.Details)
+				s.noteStateChanged(res.Details)
 			case "widget_saved":
-				s.noteWidgetSaved(probe.Result.Details)
+				s.noteWidgetSaved(res.Details)
 			}
 		}
 	}
@@ -765,6 +857,10 @@ func (s *Session) drainStderr(stderr io.Reader) {
 
 // finish marks the session closed after subprocess exit and tells subscribers.
 func (s *Session) finish() {
+	// Whatever the response in flight had reported is flushed first: a
+	// subprocess killed mid-turn never sends message_end, and that spend is
+	// exactly the spend this ticket exists to attribute (av-2yws).
+	s.flushInFlightUsage()
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -793,4 +889,13 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// paidByFor names the provider-billing side of a session for the usage
+// ledger.
+func paidByFor(platformPaid bool) string {
+	if platformPaid {
+		return store.PaidByPlatform
+	}
+	return store.PaidByUser
 }
