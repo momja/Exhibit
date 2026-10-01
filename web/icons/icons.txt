@@ -21,7 +21,6 @@ ph-caret-right
 ph-chat-circle
 ph-check
 ph-check-circle
-ph-circle-notch
 ph-clipboard
 ph-clipboard-text
 ph-code

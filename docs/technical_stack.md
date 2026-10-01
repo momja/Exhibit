@@ -420,6 +420,15 @@ no CDN:
 
 Either path, the rule is fixed: **Phosphor Icons, self-hosted, no external icon CDN.**
 
+**Anything that rotates is a path, not a glyph (av-c7hu).** Browsers snap a
+glyph's baseline to whole device pixels, so a spinning webfont icon turns about
+a point a fraction of a pixel off its own center and wobbles; on the agent
+page's spinner the ring sat 0.13-0.21px above its pivot. That spinner is
+therefore Phosphor's `circle-notch` path inlined as an SVG (`spinnerIcon` in
+`web/gallery/agent.js`), centered in its viewBox at any pixel ratio. A static
+icon is unaffected and stays a glyph. The details caret in `components.css`
+dodges the same offset by swapping two glyphs instead of rotating one.
+
 ## 10. Auth
 
 Two credentials, checked in that order by one `chi` middleware:
