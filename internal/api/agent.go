@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -161,6 +162,13 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 	// once entered a key keeps that row untouched, and turning the variable
 	// off restores their BYOK session with it.
 	if pk := ro.cfg.PlatformAgentKey; pk != nil {
+		// The pre-spawn spend check (av-99f4), at the one home both session
+		// creators share — a refused spawn never reaches the subprocess and
+		// the message names the limit and its reset.
+		if refusal := ro.cfg.Agent.ProbeCaps(r.Context(), ownerID); refusal != nil {
+			writeError(w, http.StatusTooManyRequests, refusal.Message())
+			return agent.CreateOpts{}, false
+		}
 		return agent.CreateOpts{OwnerID: ownerID, Provider: pk.Provider, Model: pk.Model, APIKey: pk.APIKey, PlatformPaid: true}, true
 	}
 	k, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerID)
@@ -178,6 +186,19 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 		return agent.CreateOpts{}, false
 	}
 	return agent.CreateOpts{OwnerID: ownerID, Provider: k.Provider, Model: k.Model, APIKey: apiKey}, true
+}
+
+// writeAgentCreateError answers a refused Create. The session limit
+// (av-99f4) is a refusal with a message, not a fault: it answers 429 so the
+// chat treats it as a limit. Everything else is the 500 it has always been.
+// One mapping for both creators — the chat surface and the widget button —
+// so they cannot disagree about what a limit looks like.
+func writeAgentCreateError(w http.ResponseWriter, r *http.Request, op string, err error) {
+	if errors.Is(err, agent.ErrSessionLimit) {
+		writeError(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
+	serverError(w, r, op, err)
 }
 
 // inlinedArtifactSource reads the artifact body a session opens with, so the
@@ -238,7 +259,7 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)
 	if err != nil {
-		serverError(w, r, "create agent session", err)
+		writeAgentCreateError(w, r, "create agent session", err)
 		return
 	}
 	// The ticket rides along with the id: creating a session and connecting
@@ -337,6 +358,15 @@ func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
 		data = append(data, agent.SnippetBlock(i, len(descriptors), descriptor))
 	}
 	if err := s.Prompt(r.Context(), req.Message, images, data); err != nil {
+		// A spend cap saying no is a refusal with a message about a limit and
+		// its reset (av-99f4), not a gateway failure: it answers 429 so the
+		// chat treats it as a limit, and the message is the canned wording the
+		// stopped-run notice uses.
+		var refusal *agent.CapRefusal
+		if errors.As(err, &refusal) {
+			writeError(w, http.StatusTooManyRequests, refusal.Message())
+			return
+		}
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}

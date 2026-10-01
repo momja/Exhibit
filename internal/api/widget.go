@@ -179,7 +179,7 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)
 	if err != nil {
-		serverError(w, r, "create widget agent session", err)
+		writeAgentCreateError(w, r, "create widget agent session", err)
 		return
 	}
 	if err := s.Prompt(r.Context(), generateWidgetPrompt, nil, nil); err != nil {

@@ -594,14 +594,14 @@ type Store interface {
 	//   money) and guardrail overhead (the operator's cost of doing
 	//   business, backstopped by the instance ceiling) are excluded.
 	//
-	//   SessionAgentSpend — everything recorded against one session of one
-	//   owner, any payer and guardrail included: what the per-session
-	//   ceiling meters.
+	//   SessionAgentSpend — one session's own agent spend, guardrail rows
+	//   excluded: what the per-session ceiling meters.
 	//
 	//   InstanceAgentSpend — every platform-paid row since a time,
 	//   guardrail included, whatever session it came from: the operator's
 	//   total exposure, what the instance ceiling meters (owner-less by
-	//   design — see the owner-scope exemption beside it).
+	//   design — see the owner-scope exemption beside it). Guardrail spend
+	//   is counted here and nowhere else.
 	RecordAgentUsage(ctx context.Context, u AgentUsage) error
 	OwnerAgentSpend(ctx context.Context, ownerID int64, since time.Time) (UsageTotals, error)
 	SessionAgentSpend(ctx context.Context, ownerID int64, sessionID string) (UsageTotals, error)

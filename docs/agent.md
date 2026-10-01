@@ -269,14 +269,45 @@ zero for a model Pi has no price for (the tokens still say what happened).
 The mapping from tokens to anything a user is sold is pricing's problem, and
 pricing changes without a migration.
 
-### No spend cap yet (av-99f4)
+### The spend cap (av-99f4)
 
-Metering records spend; nothing refuses it. Platform mode still bills every
-session to the instance's provider account with no ceiling, and no
-`AGENT_SPEND_CAP_*` variable exists: setting one limits nothing and nothing
-checks for one at startup. The per-owner spend cap is av-99f4 and is not built.
-Until it is, do not put a platform-mode instance in front of untrusted
-signups. The startup log says so.
+Layered ceilings over platform-paid spend, each failing differently:
+
+| Env | Ceiling |
+|-----|---------|
+| `AGENT_SPEND_CAP_OWNER_CENTS` | per-owner budget, calendar month (UTC) — the product-level limit a plan will map onto (av-2p8z) |
+| `AGENT_SPEND_CAP_SESSION_CENTS` | one conversation's lifetime — catches a loop without waiting for the month to drain |
+| `AGENT_SPEND_CAP_INSTANCE_CENTS` | the operator's total exposure, guardrail screening included, calendar month — the backstop; logged loudly when reached |
+| `AGENT_SPEND_CAP_TURN_SECONDS` | wall-clock per turn — the fallback that bounds one pathological response without needing token counts |
+
+With none of them set, nothing is enforced and behaviour is exactly what it
+was before this existed. But a platform credential (`AGENT_API_KEY`) with no
+cap at all **fails at startup** — absence of the feature is unlimited,
+absence of a limit the feature requires is a refusal to boot. A BYO-key
+session is never limited by the operator's defaults on any instance: it
+spends its owner's own tokens. Guardrail spend is the operator's money even
+there; it counts against the instance ceiling only.
+
+Enforcement is **between runs** (the product decision of 2026-09-30:
+sessions finish). Before a session spawns, and before every prompt of a
+running one, the limits are asked; a refusal is one canned message naming the
+limit and when it resets, and the run in flight is never interrupted — it
+runs to settle, and the next prompt is the one refused. Two hard stops remain
+as failure backstops: the instance ceiling (the operator's money running out
+cannot wait for anybody's turn) and `AGENT_SPEND_CAP_TURN_SECONDS`. A
+stopped run leaves the artifact on its last successful save and its
+transcript intact: stopping is recoverable in a way silently continuing is
+not. Enforcement is local sums over local rows and local config — it holds
+with every external service unreachable.
+
+**The bound, stated rather than implied: at most one full run per open
+session spends past the budget, so at most ten runs — one per session a
+single owner can hold.** A run is one prompt through settle, including every
+tool call inside it. Nothing enforces inside a run (and `before_provider_request`
+could not anyway: it can rewrite a request but not cancel one), so the
+`AGENT_SPEND_CAP_TURN_SECONDS` ceiling is the belt for the one case token
+counts cannot see: a response whose provider reports usage only when it
+ends, or one that simply never ends.
 
 ## Usage-policy guardrail (av-gust)
 
@@ -284,9 +315,9 @@ An operator who sets `GUARDRAIL_*` gets every user message screened for
 usage-policy violations before the agent model sees it. It protects the
 instance's provider account in platform mode, where a provider that sees
 repeated violations can suspend the key every session runs on. It is not a
-topic filter: off-topic use is allowed. Bounding spend is not its job either;
-that is the per-owner spend cap (av-99f4), which is not built yet. What the
-screen itself spends is metered, as its own `guardrail` rows (below).
+topic filter: off-topic use is allowed. Nor is it a spend control: what each
+screen costs is recorded in the ledger tagged `guardrail` (below), and the
+limits over it are the spend cap's (av-99f4, above).
 
 - **A second Pi extension.** `internal/agent/ext/guard.ts` is embedded and
   materialized beside `exhibit.ts`, and loaded with its own `-e` only when a
@@ -365,6 +396,10 @@ behaving as it does in the pinned version.
   sessions, and on every settled turn persists the full Pi message list to
   `agent_transcripts` keyed by artifact — colophon-style provenance
   (`GET /api/artifacts/:id/transcripts`), the foundation for future remixing.
+- An owner holds at most **10 open sessions** (widget-generate sessions
+  counted): at the limit the oldest idle one is evicted, and only when all
+  ten are mid-run is a new one refused (429). The chat page closes its
+  session on `pagehide`, so reloads do not stack sessions against the limit.
 - When a save-tool call succeeds, the session emits a synthetic
   `exhibit_artifact_saved` event; a `set_state`/`delete_state` call emits the
   analogous `exhibit_state_changed` event, and `set_widget`/`edit_widget` the
@@ -470,6 +505,13 @@ capture leaves the sandbox only as data posted to that host.
 | `AGENT_PROVIDER` | which provider that key is for; required with `AGENT_API_KEY`, and an unknown one fails at startup |
 | `AGENT_MODEL` | optional model for platform sessions; the operator's choice, never surfaced |
 | `GUARDRAIL_PROVIDER` / `GUARDRAIL_MODEL` / `GUARDRAIL_API_KEY` | the usage-policy guardrail's model and key; all three or none, and a partial set fails at startup |
+| `AGENT_SPEND_CAP_OWNER_CENTS` | per-owner agent budget per calendar month (UTC); see the spend cap above |
+| `AGENT_SPEND_CAP_SESSION_CENTS` | per-session agent ceiling |
+| `AGENT_SPEND_CAP_INSTANCE_CENTS` | instance-wide agent ceiling per calendar month (guardrail spend included) |
+| `AGENT_SPEND_CAP_TURN_SECONDS` | wall-clock ceiling per turn (0/unset is off) |
+
+A platform credential with none of the `AGENT_SPEND_CAP_*` set fails at
+startup (av-99f4).
 
 `internal/mockllm` is a deterministic OpenAI-compatible chat-completions
 handler — scripted create / update / re-read tool calls, color transforms,

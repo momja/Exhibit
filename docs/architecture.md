@@ -1313,10 +1313,11 @@ absent the surface degrades to disabled; nothing else changes.
   and the persisted transcript) are verbatim passthroughs — so platform mode
   strips those three fields from Pi's message envelopes at both
   (`internal/agent/redact.go`), keeping the `usage` block beside them, which
-  names no model and is what metering will read. Availability stays a
-  separate signal: no `pi` binary is still a 503 in either mode. **No spend
-  cap exists** — usage is metered (av-2yws) but nothing refuses it — so this
-  belongs on a controlled instance until av-99f4 lands; the startup log says so.
+  names no model and is what metering reads (av-2yws). Availability stays a
+  separate signal: no `pi` binary is still a 503 in either mode. **Platform
+  mode requires a spend cap:** with no `AGENT_SPEND_CAP_*` set the server
+  refuses to start (av-99f4; `docs/agent.md` has the limits and when each
+  is enforced).
 - **Streaming:** the service fans Pi's event stream out to the browser via
   SSE (`/api/agent/sessions/:id/events`); prompts arriving mid-run become Pi
   steering messages. Transcripts are persisted per artifact

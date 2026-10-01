@@ -173,8 +173,9 @@ func TestTheMeteringProbeKeepsLinesItCannotFullyParse(t *testing.T) {
 		`"message":"exhibit_guard:usage {\"provider\":\"p\",\"model\":\"m\",`+
 		`\"usage\":{\"input\":10,\"output\":2,\"cost\":{\"total\":0.001}}}","notifyType":"info"}`)
 	assert.Empty(t, events, "a usage signal is metered, never forwarded")
-	totals := sessionTotals(t, db, s)
-	assert.Equal(t, store.UsageTotals{InputTokens: 10, OutputTokens: 2, CostMicros: 1_000}, totals,
+	instance, err := db.InstanceAgentSpend(context.Background(), time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, store.UsageTotals{InputTokens: 10, OutputTokens: 2, CostMicros: 1_000}, instance,
 		"the usage signal inside the notification is still metered")
 
 	events = feed(t, s, `{"type":"extension_ui_request","id":"2","method":"notify",`+
@@ -247,9 +248,12 @@ func TestGuardrailSpendDoesNotHideTheReconcileGap(t *testing.T) {
 
 	s.reconcileUsage()
 
-	assert.Equal(t, store.UsageTotals{InputTokens: 200, OutputTokens: 10, CostMicros: 25_000},
-		sessionTotals(t, db, s),
-		"the 50-token tool gap is recorded beside the guardrail's own 50")
+	assert.Equal(t, store.UsageTotals{InputTokens: 150, OutputTokens: 10, CostMicros: 20_000},
+		sessionTotals(t, db, s), "the model row plus the whole 50-token tool gap")
+	instance, err := db.InstanceAgentSpend(context.Background(), time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, store.UsageTotals{InputTokens: 200, OutputTokens: 10, CostMicros: 25_000}, instance,
+		"and the guardrail's own 50 on top, at the instance level")
 }
 
 // The stats snapshot is compared against what was recorded when the read loop

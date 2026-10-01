@@ -155,13 +155,14 @@ func (u Usage) row(s *Session, source string) store.AgentUsage {
 }
 
 // noteStreamingUsage folds one cumulative streaming report into the response
-// in flight. It runs on the read loop, so it must not block.
+// in flight. It runs on the read loop and must not block; the report is
+// bookkeeping only — nothing enforces against it mid-response (graceful
+// stops, av-99f4), it is what the kill-mid-turn flush finds later.
 func (s *Session) noteStreamingUsage(u Usage) {
 	s.mu.Lock()
 	s.usageCur = s.usageCur.max(u)
 	s.usageCurActive = true
 	s.mu.Unlock()
-	// Spend enforcement (av-99f4) checks the caps here.
 }
 
 // noteMessageUsage closes out one message that carried usage. Assistant
@@ -220,15 +221,18 @@ func (s *Session) recordUsage(row store.AgentUsage) {
 		slog.Warn("agent usage row failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 		return
 	}
-	// Guardrail rows stay out of the reconcile base: Pi's session totals never
-	// count them (hook model calls report nowhere), so folding them in would
-	// subtract operator spend from the session's own gap.
+	// Guardrail spend never appears in Pi's session totals, so counting it
+	// here would make the reconcile below mistake it for already-recorded
+	// model or tool spend and skip that much of a real gap.
 	if row.Source != store.UsageSourceGuardrail {
 		s.mu.Lock()
 		s.usageRecorded.Add(row)
 		s.mu.Unlock()
 	}
-	// Spend enforcement (av-99f4) checks the caps here.
+	// The instance ceiling is the one limit that will stop a run in flight
+	// (av-99f4): the operator's money running out cannot wait for anybody's
+	// turn to end. Every other limit is enforced between runs.
+	s.checkInstanceCap()
 }
 
 // reconcileUsage closes the gap between what the event stream showed and

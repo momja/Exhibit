@@ -63,6 +63,9 @@ type Config struct {
 	// Guardrail, when set, loads ext/guard.ts into every session to screen
 	// each user message for usage-policy violations on its own model (av-gust).
 	Guardrail *Guardrail
+	// Caps are the operator's spend ceilings (av-99f4), enforced for
+	// platform-paid sessions only. The zero value enforces nothing.
+	Caps SpendCaps
 }
 
 // providerEnv maps a provider name to the env var pi reads its key from.
@@ -77,6 +80,17 @@ var providerEnv = map[string]string{
 
 // KnownProvider reports whether the manager can route a key to provider.
 func KnownProvider(p string) bool { _, ok := providerEnv[p]; return ok }
+
+// MaxOwnerSessions is how many sessions one owner may hold open at once
+// (av-99f4). It is what makes the spend-cap overshoot bound finite: at most
+// one full run per open session, so at most MaxOwnerSessions runs past the
+// budget. Widget-generate sessions count like any other.
+const MaxOwnerSessions = 10
+
+// ErrSessionLimit is Create refusing: the owner is at MaxOwnerSessions and
+// every one of them is mid-run. Its message is what the user sees, so it says
+// what to do — close one, or wait for a running one to finish.
+var ErrSessionLimit = fmt.Errorf("this instance keeps at most %d agent conversations open per account, and all of yours are busy — close one or wait for a running one to finish", MaxOwnerSessions)
 
 // Manager owns all live sessions.
 type Manager struct {
@@ -179,6 +193,14 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}
 	if opts.Provider == "exhibit-mock" && m.cfg.MockLLMURL == "" {
 		return nil, fmt.Errorf("mock provider is not enabled on this server")
+	}
+	// The session limit (av-99f4), enforced here for both creators. At the
+	// limit the owner's oldest *idle* session is evicted — the chat page
+	// closes its session on pagehide, but a user who reloads before that
+	// lands must not be locked out for the idle timeout — and a new session
+	// is refused only when every one of them is mid-run.
+	if !m.admitOwner(opts.OwnerID) {
+		return nil, ErrSessionLimit
 	}
 
 	id := uuid.New().String()
@@ -303,7 +325,23 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 
 	m.mu.Lock()
 	m.sessions[id] = s
+	// Two Creates can pass admitOwner at once; the loser gives up its slot
+	// here, so "at most MaxOwnerSessions" holds even under a race.
+	others, evicted := m.ownerSessionsLocked(opts.OwnerID, id)
+	if others >= MaxOwnerSessions {
+		if evicted != nil {
+			delete(m.sessions, evicted.ID)
+		}
+	}
 	m.mu.Unlock()
+	if others >= MaxOwnerSessions {
+		if evicted != nil {
+			evicted.kill()
+		} else {
+			m.Close(opts.OwnerID, id)
+			return nil, ErrSessionLimit
+		}
+	}
 	slog.InfoContext(ctx, "agent session started",
 		slog.String("session_id", id),
 		slog.String("provider", opts.Provider),
@@ -358,6 +396,54 @@ func (m *Manager) Close(ownerID int64, id string) {
 	if s != nil {
 		s.kill()
 	}
+}
+
+// admitOwner enforces MaxOwnerSessions for one more session of ownerID,
+// making room by evicting the owner's oldest idle session at the limit. It
+// says no only when every session is mid-run: a busy conversation is not
+// ours to kill, while an idle one costs its owner nothing to lose — and the
+// alternative (refusing outright) would lock a reload-storming user out for
+// the whole idle timeout.
+func (m *Manager) admitOwner(ownerID int64) bool {
+	m.mu.Lock()
+	count, oldest := m.ownerSessionsLocked(ownerID, "")
+	if count < MaxOwnerSessions {
+		m.mu.Unlock()
+		return true
+	}
+	if oldest == nil {
+		m.mu.Unlock()
+		return false
+	}
+	delete(m.sessions, oldest.ID)
+	m.mu.Unlock()
+	// What reap does for a stale session: the credential dies with the
+	// process, and finish() flushes whatever it had spent.
+	oldest.kill()
+	return true
+}
+
+// ownerSessionsLocked counts ownerID's open sessions and finds the oldest
+// idle one (not streaming) among them, excluding skipID. Caller holds m.mu.
+func (m *Manager) ownerSessionsLocked(ownerID int64, skipID string) (count int, oldestIdle *Session) {
+	var oldestAt time.Time
+	for _, s := range m.sessions {
+		if s.OwnerID != ownerID || s.ID == skipID {
+			continue
+		}
+		count++
+		s.mu.Lock()
+		idle := !s.streaming
+		last := s.lastActive
+		s.mu.Unlock()
+		if !idle {
+			continue
+		}
+		if oldestIdle == nil || last.Before(oldestAt) {
+			oldestIdle, oldestAt = s, last
+		}
+	}
+	return count, oldestIdle
 }
 
 // reap closes sessions idle longer than the configured timeout.
@@ -439,14 +525,18 @@ type Session struct {
 	// Usage accounting (av-2yws). usageCur is the cumulative usage of the
 	// assistant response in flight (Pi reports it per response, streaming);
 	// usageRecorded is the sum of durable ledger rows for this session's own
-	// model/tool/compaction spend — the base the settle reconciliation
-	// diffs Pi's totals against.
+	// model/tool/compaction spend — guardrail rows excluded, since Pi's
+	// totals never count them.
 	usageCur       Usage
 	usageCurActive bool
 	usageRecorded  store.UsageTotals
 	// reconcileMu keeps one settle reconciliation running at a time, so each
 	// one's stats snapshot is taken after the previous one's gap row landed.
 	reconcileMu sync.Mutex
+
+	// Spend cap state (av-99f4). turnTimer is the per-turn wall-clock
+	// ceiling, the one hard stop besides the instance ceiling.
+	turnTimer *time.Timer
 
 	done chan struct{}
 }
@@ -503,6 +593,12 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	s.promptMu.Lock()
 	defer s.promptMu.Unlock()
 
+	// The between-turns gate (av-99f4), inside promptMu so two concurrent
+	// prompts cannot both pass it. It runs before the send because a session
+	// over budget must not pay for the guardrail screen either.
+	if err := s.capBeforePrompt(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	steer := s.streaming
 	// The session's opening block rides the first prompt. It is held, not
@@ -691,11 +787,16 @@ func (s *Session) handleLine(line []byte) {
 				s.noteCompactionUsage(u)
 			}
 		}
+	case "turn_start":
+		s.armTurnClock()
+	case "turn_end":
+		s.clearTurnClock()
 	case "agent_settled":
 		s.mu.Lock()
 		s.streaming = false
 		s.lastActive = time.Now()
 		s.mu.Unlock()
+		s.clearTurnClock()
 		// The settle is where the ledger is squared with Pi's own totals —
 		// usage sources that emit no event (tool-reported usage, cache
 		// warming) are recorded here as the difference (av-2yws). The
@@ -860,6 +961,7 @@ func (s *Session) finish() {
 	// Whatever the response in flight had reported is flushed first: a
 	// subprocess killed mid-turn never sends message_end, and that spend is
 	// exactly the spend this ticket exists to attribute (av-2yws).
+	s.clearTurnClock()
 	s.flushInFlightUsage()
 	s.mu.Lock()
 	if s.closed {

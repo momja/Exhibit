@@ -211,6 +211,15 @@ function resetSession() {
   setStreaming(false);
 }
 
+// Leaving the page closes the session too (av-99f4): the idle reaper would
+// otherwise hold it for 30 minutes, and ten reloads would stack sessions
+// against the per-owner limit. `keepalive` lets the request outlive the page.
+window.addEventListener('pagehide', () => {
+  if (sessionId) {
+    apiFetch('/api/agent/sessions/' + sessionId, {method: 'DELETE', keepalive: true}).catch(() => {});
+  }
+});
+
 async function ensureSession() {
   if (sessionId) return true;
   const body = artifact ? {artifact_id: artifact.id} : {};
@@ -401,6 +410,13 @@ function handleAgentEvent(ev) {
       // The usage-policy guardrail (av-gust) refused the message before the
       // agent saw it. The text is the server's fixed reply, never model output.
       addMsg('sys', ev.message);
+      break;
+    case 'exhibit_spend_cap':
+      // The server stopped the run at a spend limit (av-99f4). The message
+      // is the canned wording naming the limit and when it resets; a turn
+      // refused before it started arrives as the prompt's error instead.
+      addMsg('err', ev.message || 'Agent spend limit reached.');
+      setStreaming(false);
       break;
     case 'extension_error':
       addMsg('err', 'Extension error: ' + (ev.error || 'unknown'));
