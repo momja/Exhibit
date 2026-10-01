@@ -564,8 +564,9 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
 
 ## 13. Build-time vs runtime dependencies
 
-- **Runtime (shipped):** the Go binary + embedded assets, SQLite (embedded), a mounted
-  data volume. That's the whole product surface.
+- **Runtime (shipped):** the Go binary + embedded assets, SQLite (embedded), Node and
+  the pinned `pi` agent harness (the image's runtime base, §1 "Agent harness"), and a
+  mounted data volume. That's the whole product surface.
 - **Runtime (operator-supplied, optional):** a TLS-terminating proxy of their choice,
   Litestream + an S3-compatible bucket (or MinIO) for backup, a Chromium thumbnail
   worker. None of these are part of a release — they're things a deployer adds around

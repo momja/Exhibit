@@ -1,7 +1,7 @@
 # Exhibit — Agent Integration (Pi harness)
 
-Proof-of-concept build-and-modify-with-AI surface (epic `Exh-yvhp`, grown out of
-`av-q3wo`). A chat page lets the user create new artifacts and modify existing
+The build-and-modify-with-AI surface (epic `Exh-yvhp`, grown out of `av-q3wo`),
+and the main way artifacts are made. A chat page lets the user create new artifacts and modify existing
 ones through an LLM agent, using **their own API key**, with everything the
 agent saves flowing through the normal ingest path.
 
@@ -9,8 +9,8 @@ agent saves flowing through the normal ingest path.
 
 Pi (`pi-mono`, Mario Zechner's agent harness) runs as a **sidecar subprocess**,
 one per chat session, spawned by the Go service as
-`pi --mode rpc --no-session --no-builtin-tools -e exhibit.ts` — the same
-"optional satellite" pattern as the thumbnail worker (architecture §3.6). The
+`pi --mode rpc --no-session --no-builtin-tools -e exhibit.ts`. The image
+ships `pi`; unlike the satellites in architecture §3.6 it is not optional. The
 service talks strict JSONL over stdin/stdout (Pi's RPC mode) and fans events
 out to the browser over SSE.
 
@@ -498,7 +498,7 @@ capture leaves the sandbox only as data posted to that host.
 
 | Env | Meaning |
 |-----|---------|
-| `PI_BIN` | pi executable (default `pi`; agent surface disabled if missing) |
+| `PI_BIN` | pi executable (default `pi`). If missing, the server boots and every agent route answers `503`: a broken install, not a configuration |
 | `EXHIBIT_SECRET` | optional server secret for key encryption (else `data/secret.key` is generated) |
 | `MOCK_LLM_URL` | dev/test only: enables the `exhibit-mock` provider pointing at `cmd/mockllm` |
 | `AGENT_API_KEY` | the instance's own provider key — set it to enable platform mode; unset is BYOK |
