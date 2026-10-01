@@ -169,6 +169,7 @@ session needs:
 | `EXHIBIT_ARTIFACT_ID` | the session's artifact (empty in create mode) |
 | `EXHIBIT_DATA_NONCE` | fence id for untrusted tool output |
 | `EXHIBIT_SESSION_ID` | this session's id |
+| `EXHIBIT_MAX_BODY_BYTES` | the API's request body limit (`MAX_REQUEST_BODY_BYTES`). Every tool's write checks against it before sending, so an oversized write fails with a message the model can act on instead of an upload the API refuses (av-ombn) |
 
 Supported providers: Anthropic, OpenAI, Google Gemini, OpenRouter, OpenCode
 Go, plus `exhibit-mock` when `MOCK_LLM_URL` is set.
