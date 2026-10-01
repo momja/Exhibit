@@ -51,7 +51,7 @@ func TestCapabilityPopoverSandboxedShowsFullyContained(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	page := w.Body.String()
 
-	assert.Contains(t, page, "Fully contained — no network, download, clipboard, external link, camera, or microphone access")
+	assert.Contains(t, page, "Fully contained — no network, download, clipboard, external link, camera, microphone, or location access")
 	assert.NotContains(t, page, "capability-popover-label")
 	assert.NotContains(t, page, "capability-popover-origins")
 }
@@ -160,21 +160,23 @@ func TestCapabilityPopoverLinksRowPerFlag(t *testing.T) {
 	assert.NotContains(t, page, "Fully contained")
 }
 
-// av-mv3k: camera and microphone are two grants, not one "media" grant — each
-// gets its own popover row and cluster glyph, and approving one must not
-// display the other. A media-only grant must never collapse to "Fully
-// contained" either.
-func TestCapabilityPopoverCameraAndMicrophoneRowsPerFlag(t *testing.T) {
+// av-mv3k, av-f446: camera, microphone and location are three grants, not one
+// "media" grant — each gets its own popover row and cluster glyph, and
+// approving one must not display the others. A grant of any one of them must
+// never collapse to "Fully contained" either.
+func TestCapabilityPopoverDeviceAndLocationRowsPerFlag(t *testing.T) {
 	cases := []struct {
 		field  string
 		glyph  string
 		row    string
-		absent string
+		absent []string
 	}{
 		{"camera_approved", `<span class="capability-glyph"><i class="ph ph-camera"></i></span>`,
-			"Camera — Can capture video from your camera", "Microphone —"},
+			"Camera — Can capture video from your camera", []string{"Microphone —", "Location —"}},
 		{"microphone_approved", `<span class="capability-glyph"><i class="ph ph-microphone"></i></span>`,
-			"Microphone — Can capture audio from your microphone", "Camera —"},
+			"Microphone — Can capture audio from your microphone", []string{"Camera —", "Location —"}},
+		{"geolocation_approved", `<span class="capability-glyph"><i class="ph ph-map-pin"></i></span>`,
+			"Location — Can read your location", []string{"Camera —", "Microphone —"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.field, func(t *testing.T) {
@@ -194,8 +196,10 @@ func TestCapabilityPopoverCameraAndMicrophoneRowsPerFlag(t *testing.T) {
 			popoverStart := strings.Index(page, `<div class="capability-popover" id="`)
 			require.True(t, clusterStart >= 0 && popoverStart > clusterStart, "cluster must precede its popover")
 			assert.Contains(t, page[clusterStart:popoverStart], tc.glyph, "capability-cluster must render the glyph")
-			// One grant is one grant: the sibling device stays unmentioned.
-			assert.NotContains(t, page, tc.absent)
+			// One grant is one grant: the siblings stay unmentioned.
+			for _, absent := range tc.absent {
+				assert.NotContains(t, page, absent)
+			}
 			assert.NotContains(t, page, "Fully contained")
 		})
 	}

@@ -5,10 +5,11 @@
  * cannot be established by reading markup, and reading markup is exactly how
  * the same claim would be got wrong — every dialog this page can raise is still
  * in the document for a recipient (one definition apiece, resolved by id from
- * five different bridges), and what changes is only whether anything opens one.
- * So the test loads the shipped detail.js and plays the artifact's side of the
- * postMessage boundary: a blocked origin, a download, a clipboard call, an
- * external link, a getUserMedia. Every recorded API call is then inspected.
+ * six different bridges and gates), and what changes is only whether anything
+ * opens one. So the test loads the shipped detail.js and plays the artifact's
+ * side of the postMessage boundary: a blocked origin, a download, a clipboard
+ * call, an external link, a getUserMedia, a getCurrentPosition. Every recorded
+ * API call is then inspected.
  *
  * The other half is AC#4, and it is the reason the ticket exists rather than a
  * detail of it. A shared artifact is frozen at whatever its owner approved. A
@@ -51,6 +52,7 @@ const HIDDEN = {
   "clip-modal": { hidden: true },
   "link-modal": { hidden: true },
   "media-modal": { hidden: true },
+  "geo-modal": { hidden: true },
   "capability-warning-banner": { hidden: true },
   "origin-blocked-banner": { hidden: true }
 };
@@ -77,6 +79,7 @@ function loadDetail({ readOnly, approvals = {} } = {}) {
     linksApproved: false,
     cameraApproved: false,
     microphoneApproved: false,
+    geolocationApproved: false,
     ...approvals,
     apiFetch: api.apiFetch,
     apiStateFetch: api.apiStateFetch,
@@ -104,6 +107,7 @@ const download = () => ({
 const clipboardRead = () => ({ __avClipboard: true, artifactId: ID, id: "c1", op: "read" });
 const externalLink = () => ({ __avNavigate: true, artifactId: ID, url: "https://example.com/docs" });
 const cameraRequest = () => ({ __avMedia: true, artifactId: ID, id: "m1", video: true, audio: false });
+const locationRequest = () => ({ __avGeolocation: true, artifactId: ID, id: 1 });
 
 // --- AC#4: explain, do not ask ----------------------------------------
 
@@ -243,20 +247,21 @@ test("a recipient's session issues no API call at all across every bridge", asyn
   await postFromFrame(clipboardRead());
   await postFromFrame(externalLink());
   await postFromFrame(cameraRequest());
+  await postFromFrame(locationRequest());
 
   // The state bridge is deliberately absent from this battery, and since
   // av-v991 the reason is the opposite of what it was: a recipient's storage
   // write is *meant* to go out. It travels through apiStateFetch, the one
   // exception carved out of READ_ONLY, because the data an artifact saves while
   // somebody uses it belongs to whoever typed it. What this battery is about is
-  // the five bridges that write the OWNER's per-artifact authority, and folding
+  // the six bridges that write the OWNER's per-artifact authority, and folding
   // a legitimate state write into it would make the assertion say something
   // false.
   assert.deepEqual(api.calls, [],
     "every route these bridges write to is owner-scoped and would answer 404; " +
     "sending them is how a recipient learns the tool is broken instead of that " +
     "it is not theirs");
-  for (const id of ["net-modal", "dl-modal", "clip-modal", "link-modal", "media-modal"]) {
+  for (const id of ["net-modal", "dl-modal", "clip-modal", "link-modal", "media-modal", "geo-modal"]) {
     assert.equal(byId(id).hidden, true, id + " must not open for a visitor who cannot answer it");
   }
 });

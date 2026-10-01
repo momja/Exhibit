@@ -6,6 +6,9 @@
  * per-origin DELETE. That split between two write paths is exactly the kind of
  * thing a substring assertion on the file would not notice going wrong.
  *
+ * The last test covers a neighbour on the same Save: the location select
+ * (av-f446), which must ship only when it was touched.
+ *
  * Loads the built, embedded copy of edit.js — the bytes the browser is served.
  */
 import { test } from "node:test";
@@ -29,7 +32,7 @@ function loadEdit({ blocked = [BLOCKED], allowlist = [], responses = [] } = {}) 
     TOKEN: "", READ_ONLY: false, ID,
     allowlist, unapproved: [], blocked,
     downloadsApproved: false, clipboardApproved: false, linksApproved: false,
-    cameraApproved: false, microphoneApproved: false,
+    cameraApproved: false, microphoneApproved: false, geolocationApproved: false,
     apiFetch: api.apiFetch,
     alert: () => {}, confirm: () => true
   }, {
@@ -106,4 +109,21 @@ test("an origin forgotten and then re-allowed keeps the allow", async () => {
   await saveButton(page)();
 
   assert.deepEqual(originCalls(page.api), []);
+});
+
+// The bootstrap value goes stale the moment the viewer approves location in
+// another tab, so an untouched select must not ship it: a Save that wrote it
+// back would revoke a newer approval nobody asked to revoke.
+test("the location select ships only when it was touched", async () => {
+  const untouched = loadEdit({ blocked: [] });
+  await saveButton(untouched)();
+  const [first] = untouched.api.calls.filter((c) => c.method === "PATCH");
+  assert.equal("geolocation_approved" in JSON.parse(first.body), false);
+
+  const touched = loadEdit({ blocked: [] });
+  await touched.byId("geo-select").dispatchEvent({ type: "change", target: { value: "true" } });
+  await saveButton(touched)();
+  const [second] = touched.api.calls.filter((c) => c.method === "PATCH");
+  assert.equal(JSON.parse(second.body).geolocation_approved, true);
+  assert.match(touched.byId("security-summary-text").textContent, /location: always allow/);
 });
