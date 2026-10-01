@@ -7,7 +7,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -245,31 +244,18 @@ func (s *Session) recordUsage(row store.AgentUsage) {
 // ledger's sum equals Pi's total. Runs at every settle, off the read loop,
 // because it makes an RPC round trip.
 //
-// The snapshot is diffed against what was recorded when Pi's answer was
-// read, not when this goroutine gets to it: by then a next run may have
-// recorded rows the snapshot does not contain, and those would hide an equal
-// amount of the gap. The read loop captures that baseline (handleLine).
+// Pi's totals are compared against what was recorded when the read loop
+// reached the stats response, not when this goroutine got around to it: a row
+// landing in between belongs to usage the snapshot does not include, and
+// subtracting it would hide spend the snapshot does. Both sides are
+// cumulative, so a field where the ledger runs ahead of Pi is carried into
+// the next comparison rather than lost.
 func (s *Session) reconcileUsage() {
 	s.reconcileMu.Lock()
 	defer s.reconcileMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
-	id := uuid.New().String()
-	var recorded store.UsageTotals
-	s.mu.Lock()
-	if s.usageBaselines == nil {
-		s.usageBaselines = map[string]*store.UsageTotals{}
-	}
-	s.usageBaselines[id] = &recorded
-	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		delete(s.usageBaselines, id)
-		s.mu.Unlock()
-	}()
-
-	resp, err := s.roundTripID(ctx, id, map[string]any{"type": "get_session_stats"})
+	resp, err := s.call(ctx, map[string]any{"type": "get_session_stats"})
 	if err != nil {
 		slog.Warn("usage reconcile skipped", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 		return
@@ -285,7 +271,7 @@ func (s *Session) reconcileUsage() {
 			Cost float64 `json:"cost"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(resp, &r); err != nil {
+	if err := json.Unmarshal(resp.line, &r); err != nil {
 		return
 	}
 	stats := store.UsageTotals{
@@ -295,9 +281,8 @@ func (s *Session) reconcileUsage() {
 		CacheWriteTokens: r.Data.Tokens.CacheWrite,
 		CostMicros:       costMicros(r.Data.Cost),
 	}
+	recorded := resp.recorded
 
-	// recorded was filled in by the read loop before the response reached
-	// this goroutine (the channel send orders the two).
 	delta := store.UsageTotals{
 		InputTokens:      max(0, stats.InputTokens-recorded.InputTokens),
 		OutputTokens:     max(0, stats.OutputTokens-recorded.OutputTokens),
@@ -324,7 +309,7 @@ func (s *Session) reconcileUsage() {
 }
 
 // flushInFlightUsage records whatever the response in flight has reported so
-// far. Called when a session settles, and from finish() — a subprocess killed
+// far. Called on the read loop when a session settles, and from finish() — a subprocess killed
 // mid-response never sends message_end, and that response's usage is exactly
 // the spend that produced nothing, which is the spend most worth attributing.
 func (s *Session) flushInFlightUsage() {

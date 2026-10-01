@@ -198,103 +198,113 @@ func TestUsageBlocksTolerateNumericShapes(t *testing.T) {
 	assert.Equal(t, int64(1000), totals.OutputTokens)
 }
 
-// statsPipe stands in for a subprocess that answers RPC requests: every line
-// written to it is handed to the test, which plays Pi's reply.
-type statsPipe struct{ requests chan map[string]any }
+// statsResponder stands in for a subprocess that answers get_session_stats.
+// Each request is handed to respond, which feeds the session whatever lines
+// the test wants the read loop to see around the answer.
+type statsResponder struct {
+	s       *Session
+	respond func(id string)
+}
 
-func (p statsPipe) Write(b []byte) (int, error) {
-	var cmd map[string]any
+func (p statsResponder) Write(b []byte) (int, error) {
+	var cmd struct {
+		ID string `json:"id"`
+	}
 	if err := json.Unmarshal(b, &cmd); err != nil {
 		return 0, err
 	}
-	p.requests <- cmd
+	go p.respond(cmd.ID)
 	return len(b), nil
 }
-func (statsPipe) Close() error { return nil }
+func (statsResponder) Close() error { return nil }
 
-// reconcileWith runs one settle reconciliation against a scripted
-// get_session_stats answer, delivered through handleLine as the read loop
-// delivers it. between then runs further read-loop work — the next run's
-// rows, landing after Pi took its totals — racing the reconcile goroutine.
-func reconcileWith(t *testing.T, s *Session, stats string, between func()) {
-	t.Helper()
-	pipe := statsPipe{requests: make(chan map[string]any, 1)}
-	s.stdin = pipe
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		s.reconcileUsage()
-	}()
-	var req map[string]any
-	select {
-	case req = <-pipe.requests:
-	case <-time.After(5 * time.Second):
-		t.Fatal("reconcile sent no get_session_stats")
-	}
-	require.Equal(t, "get_session_stats", req["type"])
-	s.handleLine([]byte(`{"type":"response","id":"` + req["id"].(string) + `","command":"get_session_stats","success":true,"data":` + stats + `}`))
-	if between != nil {
-		between()
-	}
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("reconcile did not finish")
-	}
+func statsLine(id string, input, output int64, cost float64) string {
+	b, _ := json.Marshal(map[string]any{
+		"type": "response", "id": id, "command": "get_session_stats", "success": true,
+		"data": map[string]any{
+			"tokens": map[string]any{"input": input, "output": output, "cacheRead": 0, "cacheWrite": 0},
+			"cost":   cost,
+		},
+	})
+	return string(b)
 }
 
-// Guardrail spend is not in Pi's totals, so it must not count as
-// already-recorded when the settle squares the ledger with them — or it hides
-// that much of a real tool-reported gap.
-func TestGuardrailSpendDoesNotHideAToolGap(t *testing.T) {
+// Guardrail rows are operator spend Pi never counts, so they must not be
+// subtracted from Pi's totals: a screen that cost as much as the tool usage
+// the settle is looking for would otherwise hide that tool usage entirely.
+func TestGuardrailSpendDoesNotHideTheReconcileGap(t *testing.T) {
 	s, db := newMeteringSession(t, true)
+	s.stdin = statsResponder{s: s, respond: func(id string) {
+		// Pi's total: the assistant message (100/10) plus tool usage (50/0).
+		s.handleLine([]byte(statsLine(id, 150, 10, 0.02)))
+	}}
 
+	var guardUsage Usage
+	guardUsage.Input = 50
+	guardUsage.Cost.Total = 0.005
+	s.RecordGuardrailUsage("exhibit-guard", "guard-model", guardUsage)
 	feed(t, s, `{"type":"message_end","message":{"role":"assistant",`+
 		`"usage":{"input":100,"output":10,"cacheRead":0,"cacheWrite":0,"totalTokens":110,"cost":{"total":0.01}}}}`)
-	var guardUsage Usage
-	guardUsage.Input = 40
-	guardUsage.Cost.Total = 0.004
-	s.RecordGuardrailUsage("exhibit-guard", "guard-model", guardUsage)
 
-	// Pi counts the assistant message plus 40 tokens of tool usage no event
-	// carried.
-	reconcileWith(t, s, `{"tokens":{"input":140,"output":10,"cacheRead":0,"cacheWrite":0},"cost":0.014}`, nil)
+	s.reconcileUsage()
 
-	assert.Equal(t, store.UsageTotals{InputTokens: 140, OutputTokens: 10, CostMicros: 14_000},
-		sessionTotals(t, db, s), "the model row plus the whole 40-token tool gap")
+	assert.Equal(t, store.UsageTotals{InputTokens: 150, OutputTokens: 10, CostMicros: 20_000},
+		sessionTotals(t, db, s), "the model row plus the whole 50-token tool gap")
 	instance, err := db.InstanceAgentSpend(context.Background(), time.Time{})
 	require.NoError(t, err)
-	assert.Equal(t, store.UsageTotals{InputTokens: 180, OutputTokens: 10, CostMicros: 18_000}, instance,
-		"and the guardrail row once more on top, at the instance level")
+	assert.Equal(t, store.UsageTotals{InputTokens: 200, OutputTokens: 10, CostMicros: 25_000}, instance,
+		"and the guardrail's own 50 on top, at the instance level")
 }
 
-// A next run can record rows between Pi taking its totals and the reconcile
-// reading them. Those rows are not in the snapshot, so they must not offset
-// the gap the snapshot shows.
-func TestUsageRecordedAfterTheSnapshotDoesNotHideItsGap(t *testing.T) {
+// The stats snapshot is compared against what was recorded when the read loop
+// reached it. A response that finishes after Pi answered is not in Pi's
+// numbers, so counting it against them would suppress the gap the snapshot
+// actually shows.
+func TestReconcileIgnoresRowsRecordedAfterTheSnapshot(t *testing.T) {
 	s, db := newMeteringSession(t, true)
+	s.stdin = statsResponder{s: s, respond: func(id string) {
+		// Pi's total at answer time: one assistant message (100/10) plus 40
+		// tokens of tool usage no event reported.
+		s.handleLine([]byte(statsLine(id, 140, 10, 0.012)))
+		// A steered follow-up response lands before the reconcile goroutine
+		// reads its result.
+		s.handleLine([]byte(`{"type":"message_end","message":{"role":"assistant",` +
+			`"usage":{"input":500,"output":50,"cacheRead":0,"cacheWrite":0,"totalTokens":550,"cost":{"total":0.05}}}}`))
+	}}
 
 	feed(t, s, `{"type":"message_end","message":{"role":"assistant",`+
 		`"usage":{"input":100,"output":10,"cacheRead":0,"cacheWrite":0,"totalTokens":110,"cost":{"total":0.01}}}}`)
 
-	reconcileWith(t, s, `{"tokens":{"input":150,"output":10,"cacheRead":0,"cacheWrite":0},"cost":0.015}`, func() {
-		feed(t, s, `{"type":"message_end","message":{"role":"assistant",`+
-			`"usage":{"input":80,"output":8,"cacheRead":0,"cacheWrite":0,"totalTokens":88,"cost":{"total":0.008}}}}`)
-	})
+	s.reconcileUsage()
 
-	assert.Equal(t, store.UsageTotals{InputTokens: 230, OutputTokens: 18, CostMicros: 23_000},
-		sessionTotals(t, db, s), "first run + its 50-token gap + the next run")
+	assert.Equal(t, store.UsageTotals{InputTokens: 640, OutputTokens: 60, CostMicros: 62_000},
+		sessionTotals(t, db, s),
+		"both responses once, plus the 40-token gap the snapshot showed")
 }
 
-// The settle flushes the run's in-flight response on the read loop, before
-// the reconcile starts, so the reconcile can never flush a later run's.
-func TestSettleFlushesInFlightUsageBeforeReconciling(t *testing.T) {
+// The settle flushes the response in flight on the read loop, before the
+// reconcile goroutine starts, so a later response's partial numbers can never
+// be flushed as this turn's and then recorded again at its own message_end.
+func TestSettleFlushesOnlyTheSettledTurn(t *testing.T) {
 	s, db := newMeteringSession(t, true)
+	answered := make(chan string, 1)
+	s.stdin = statsResponder{s: s, respond: func(id string) { answered <- id }}
 
-	feed(t, s, `{"type":"message_update","usage":{"input":60,"output":3,"cacheRead":0,"cacheWrite":0,`+
-		`"totalTokens":63,"cost":{"total":0.003}},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"a"}}`)
+	feed(t, s, `{"type":"message_update","usage":{"input":30,"output":3,"cacheRead":0,"cacheWrite":0,`+
+		`"totalTokens":33,"cost":{"total":0.003}},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"a"}}`)
 	feed(t, s, `{"type":"agent_settled"}`)
+	id := <-answered
 
-	assert.Equal(t, store.UsageTotals{InputTokens: 60, OutputTokens: 3, CostMicros: 3_000},
-		sessionTotals(t, db, s), "the settled run's partial response is recorded at settle")
+	// A new turn streams and completes while the reconcile is still waiting.
+	feed(t, s, `{"type":"message_update","usage":{"input":200,"output":20,"cacheRead":0,"cacheWrite":0,`+
+		`"totalTokens":220,"cost":{"total":0.02}},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"b"}}`)
+	feed(t, s, `{"type":"message_end","message":{"role":"assistant",`+
+		`"usage":{"input":200,"output":20,"cacheRead":0,"cacheWrite":0,"totalTokens":220,"cost":{"total":0.02}}}}`)
+	s.handleLine([]byte(statsLine(id, 30, 3, 0.003)))
+
+	// The reconcile holds reconcileMu until its gap row (if any) has landed.
+	s.reconcileMu.Lock()
+	s.reconcileMu.Unlock() //nolint:staticcheck // waiting for the reconcile, not guarding anything
+	assert.Equal(t, store.UsageTotals{InputTokens: 230, OutputTokens: 23, CostMicros: 23_000},
+		sessionTotals(t, db, s), "each response recorded exactly once")
 }

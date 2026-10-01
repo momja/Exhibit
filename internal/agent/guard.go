@@ -18,8 +18,9 @@ import (
 // host's half: configuration, and turning the extension's signal into the one
 // reply a blocked user sees.
 //
-// It enforces a usage policy, not a topic. Off-topic use is allowed, and this
-// neither meters nor caps spend; that is the spend cap (av-99f4), not yet built.
+// It enforces a usage policy, not a topic. Off-topic use is allowed, and
+// bounding spend is the spend cap's job (av-99f4, not yet built). The screen's
+// own spend is metered separately, as guardrail rows (noteGuardUsage).
 
 // GuardrailBlockedReply is the only thing a user is told when a message is
 // blocked or could not be screened. It is fixed and lives here, in the host,
