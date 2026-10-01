@@ -138,13 +138,16 @@ Renderer construction:
   iframe in an opaque origin. This is what prevents an artifact from touching the app's
   cookies/storage and what lets two artifacts coexist without reading each other, even on
   a shared render origin.
-- The embedding page adds **no** `allow=` delegation: a Permissions Policy
-  allowlist keys on the frame's src origin, which is opaque here, so the
-  delegation matches nothing (measured — Chrome refuses `allow="camera"` on a
+- The embedding page adds **no** `allow=` delegation. For the camera and the
+  clipboard it would do nothing (measured — Chrome refuses `allow="camera"` on a
   sandboxed frame even with its auto-accept flag set). Clipboard is re-granted
   by the render preamble's capability bridge instead; camera and microphone
   cannot be re-granted by anyone here (a `MediaStreamTrack` is not transferable
   in any shipping engine), so they are gated and spent on the top-level render.
+  Location is the exception that proves the rule is a choice: Chromium 149 does
+  honor `allow="geolocation"` on the opaque frame, but the frame then spends the
+  *app origin's* location grant (WebKit 26.5 refuses it either way). So location
+  is gated and spent on the top-level render too (av-f446, `security.md` §4).
 - Inject a generated **per-artifact CSP** (`connect-src`/`script-src`/`worker-src`/
   `style-src`/`img-src`/`font-src`/`media-src` built from the artifact's allowlist) into
   the served document. The browser enforces the network boundary; this is the wall behind
@@ -158,12 +161,13 @@ Renderer construction:
   run without approval. `worker-src` is emitted explicitly rather than inherited from
   `script-src`: when it is missing the worker fails silently, constructing fine but
   never executing its body.
-- Set a per-artifact **`Permissions-Policy`** naming `camera` and `microphone`
-  only, built from the artifact's two device approvals. This is what makes a
-  device grant per-artifact rather than per-render-origin: browser permissions
-  are granted to an origin, and one render origin serves the whole library, so
-  without it the first artifact allowed the camera would have allowed it for all
-  of them. See `architecture.md` §3.2.
+- Set a per-artifact **`Permissions-Policy`** naming `camera`, `microphone` and
+  `geolocation` only, built from the artifact's two device approvals and its
+  location approval. This is what makes those grants per-artifact rather than
+  per-render-origin: browser permissions are granted to an origin, and one
+  render origin serves the whole library, so without it the first artifact
+  allowed the camera would have allowed it for all of them. See
+  `architecture.md` §3.2.
 - Inject the **render preamble** — the **storage shim** (§6 here) with the artifact's
   current state inlined, plus the out-of-line **asset manifest** (av-20fk) that
   redirects the page's own `fetch` of a vendored payload to that artifact's asset

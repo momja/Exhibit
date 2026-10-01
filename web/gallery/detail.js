@@ -14,21 +14,23 @@
  *                        the Update-from-source button only renders when set)
  *   OPEN_URL           - the app-origin route that mints a fresh render token
  *                        and redirects to it: the "Open in new tab" destination,
- *                        where capture devices actually work (av-mv3k), and what
- *                        the network prompt reloads the frame through (av-kmwj)
+ *                        where capture devices and location actually work
+ *                        (av-mv3k, av-f446), and what the network prompt reloads
+ *                        the frame through (av-kmwj)
  *   downloadsApproved  - persisted first-use download approval (mutable)
  *   clipboardApproved  - persisted first-use clipboard approval (mutable)
  *   linksApproved      - persisted first-use external-link approval (mutable)
  *   cameraApproved     - persisted first-use camera approval (mutable)
  *   microphoneApproved - persisted first-use microphone approval (mutable)
+ *   geolocationApproved - persisted first-use location approval (mutable)
  */
 
 // Whether this visitor may grant this artifact anything (av-awr4).
 //
-// Four first-use prompts on this page write per-artifact authority — downloads,
-// clipboard, external links, and the camera/microphone gate, all through PATCH
-// /api/artifacts/:id — and a fifth, the network prompt, through POST
-// …/origins. Every one of them is the owner's decision to make, enforced by
+// Five first-use prompts on this page write per-artifact authority — downloads,
+// clipboard, external links, the camera/microphone gate and the location gate,
+// all through PATCH /api/artifacts/:id — and a sixth, the network prompt,
+// through POST …/origins. Every one of them is the owner's decision to make, enforced by
 // owner-scoped queries that have always refused anybody else. So a recipient
 // who was offered them would click Allow and watch nothing happen, and would
 // reasonably conclude the tool is broken rather than that it is not theirs.
@@ -270,6 +272,18 @@ const CAPABILITY_COPY = {
       'and a device permission is granted to an origin. Opening the artifact directly gives ' +
       'it a real origin, where it reaches them under the approval you already granted.',
     resourceLabel: 'Device'
+  },
+  // av-f446. Unlike the devices above, a browser *could* hand this frame a
+  // location (Chromium does, given an allow= delegation), so the copy does not
+  // say it can't. What it says is the actual reason: the grant would belong to
+  // the library rather than to this artifact.
+  geolocation: {
+    detail: 'This artifact asked for your location. The embedded preview does not pass ' +
+      "your location to artifacts: its sandboxed frame has no stable origin of its own, so " +
+      "your browser's location permission could only be granted to the library, not to " +
+      'this artifact. Opening the artifact directly gives it a real origin, where it reads ' +
+      'your location under the approval you already granted.',
+    resourceLabel: 'Request'
   },
   // av-kmwj. The artifact asked for an origin its allowlist already permits and
   // the browser blocked it anyway, which means the request did not end where it
@@ -707,42 +721,138 @@ document.addEventListener('keydown', function(e) {
 document.getElementById('media-allow').addEventListener('click', async function() {
   const req = pendingMedia;
   if (!req) return;
-  // Claim the tab in the click's own task, before the PATCH. A window.open that
-  // waits on a roundtrip first is an unsolicited popup: Safari blocks it
-  // outright, and Chrome allows it only while the transient activation is still
-  // live, so a slow PATCH loses the tab and the artifact is then told it was
-  // opened directly when nothing opened. The placeholder is navigated once the
-  // approval is persisted and closed if it isn't.
-  //
-  // 'noopener' can't be used here — it returns null, leaving nothing to
-  // navigate — so the opener is severed by hand instead, while the tab is still
-  // about:blank and therefore same-origin enough for the property to be
-  // writable. It stays severed across the navigation. This is not decoration:
-  // the top-level render runs the artifact's own script, and an opener handle
-  // would let it navigate the library tab out from under the user.
+  // Only settle the transaction if the pending request is still the one the
+  // user approved — a dismissal or a newer request must not be answered by
+  // opening a tab for this one after the fact.
+  if (!(await approveAndOpenDirectly(() => setMediaApproved(req), () => pendingMedia === req))) return;
+  document.getElementById('media-modal').hidden = true;
+  pendingMedia = null;
+  // No banner: the user is already looking at the place the grant works.
+  replyMedia(req.id, false,
+    'Capture devices are unavailable in the embedded preview; the artifact was opened directly',
+    'NotSupportedError');
+});
+
+// The Allow half of both gates (camera/microphone, location): persist the
+// grant, then open the artifact top-level, which is where the browser honors
+// it through the render document's Permissions-Policy header. approve writes
+// the approval and reports success; stillPending reports whether the request
+// the user approved is still the one on screen. Returns whether a tab opened.
+//
+// The tab is claimed in the click's own task, before the PATCH. A window.open
+// that waits on a roundtrip first is an unsolicited popup: Safari blocks it
+// outright, and Chrome allows it only while the transient activation is still
+// live, so a slow PATCH loses the tab and the artifact is then told it was
+// opened directly when nothing opened. The placeholder is navigated once the
+// approval is persisted and closed if it isn't.
+//
+// 'noopener' can't be used here — it returns null, leaving nothing to navigate
+// — so the opener is severed by hand instead, while the tab is still
+// about:blank and therefore same-origin enough for the property to be writable.
+// It stays severed across the navigation. This is not decoration: the
+// top-level render runs the artifact's own script, and an opener handle would
+// let it navigate the library tab out from under the user.
+async function approveAndOpenDirectly(approve, stillPending) {
   const tab = window.open('', '_blank');
   if (tab) {
     try { tab.opener = null; } catch (err) { /* cross-origin already; nothing to sever */ }
   }
-  if (!(await setMediaApproved(req))) {
+  if (!(await approve()) || !stillPending()) {
     if (tab) tab.close();
-    return;
+    return false;
   }
-  // Only settle the transaction if the pending request is still the one the
-  // user approved — a dismissal or a newer request must not be answered by
-  // opening a tab for this one after the fact.
-  if (pendingMedia !== req) {
-    if (tab) tab.close();
-    return;
-  }
-  document.getElementById('media-modal').hidden = true;
-  pendingMedia = null;
-  // No banner: the user is already looking at the place the grant works.
   if (tab) tab.location = OPEN_URL;
   else window.open(OPEN_URL, '_blank', 'noopener');
-  replyMedia(req.id, false,
-    'Capture devices are unavailable in the embedded preview; the artifact was opened directly',
-    'NotSupportedError');
+  return true;
+}
+
+// Geolocation gate (av-f446): the camera gate's shape, for location, with one
+// difference in the reason. A browser could deliver a position into this
+// frame, and Chromium does given allow="geolocation", but it would spend this
+// page's own location grant. The browser's prompt would name the library, not
+// the tool, and the library would hold the visitor's location on the
+// artifact's behalf. The frame therefore carries no delegation, and the
+// approval is spent on the top-level render, whose Permissions-Policy header
+// is built from it.
+//
+// Every path settles the frame's request, so the artifact's error callback
+// runs instead of an app waiting forever on a position that is not coming.
+// pendingGeolocation holds the request as an object rather than its id: a
+// reloaded frame numbers its requests from 1 again, and an id compared by value
+// could mistake a new request for the one the user approved.
+let pendingGeolocation = null;
+
+window.addEventListener('message', function(e) {
+  const d = e.data;
+  if (!d || d.__avGeolocation !== true || d.artifactId !== ID) return;
+  const frame = document.querySelector('iframe');
+  if (!frame || e.source !== frame.contentWindow) return;
+  const req = { id: d.id };
+  if (geolocationApproved) {
+    // Nothing to decide. The approval exists; it just isn't spent in this
+    // frame. Ask the frame to raise the banner, which offers the top-level
+    // render.
+    replyGeolocation(req.id, true, 'Location is unavailable in the embedded preview; open the artifact directly');
+    return;
+  }
+  // Not ours to approve: settle it as the denial Block would produce. The
+  // owner's approval would not have handed over the visitor's location anyway;
+  // the browser asks its own question on the visitor's machine.
+  if (!mayApprove()) {
+    replyGeolocation(req.id, false, 'User denied Geolocation');
+    return;
+  }
+  // A second request while the prompt is open displaces the first. Artifacts
+  // commonly call getCurrentPosition and watchPosition back to back, and one
+  // prompt for both is right, but the displaced one still gets its error
+  // callback.
+  if (pendingGeolocation) replyGeolocation(pendingGeolocation.id, false, 'User denied Geolocation');
+  pendingGeolocation = req;
+  document.getElementById('geo-modal').hidden = false;
+  document.getElementById('geo-block').focus();
+});
+
+// Settles one pending geolocation request inside the frame, which then runs
+// the artifact's error callback. targetOrigin is '*' because the frame's
+// origin is opaque. banner asks the frame to raise the capability banner, as
+// replyMedia's does; there is never a position to send.
+function replyGeolocation(id, banner, error) {
+  const frame = document.querySelector('iframe');
+  if (!frame) return;
+  frame.contentWindow.postMessage({ __avGeolocationResult: true, id: id, banner: banner, error: error }, '*');
+}
+
+async function setGeolocationApproved() {
+  if (!(await setCapabilityApproved('geolocation_approved', true, 'location'))) return false;
+  geolocationApproved = true;
+  return true;
+}
+
+// deny=true settles the pending request so the artifact's error callback runs
+// with PERMISSION_DENIED, the code a refused location request reports.
+function closeGeoModal(deny) {
+  document.getElementById('geo-modal').hidden = true;
+  if (deny && pendingGeolocation) replyGeolocation(pendingGeolocation.id, false, 'User denied Geolocation');
+  pendingGeolocation = null;
+  const frame = document.querySelector('iframe');
+  if (frame) frame.focus();
+}
+
+document.getElementById('geo-block').addEventListener('click', function() { closeGeoModal(true); });
+document.getElementById('geo-modal').addEventListener('click', function(e) {
+  if (e.target.id === 'geo-modal') closeGeoModal(true);
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && !document.getElementById('geo-modal').hidden) closeGeoModal(true);
+});
+document.getElementById('geo-allow').addEventListener('click', async function() {
+  const req = pendingGeolocation;
+  if (!req) return;
+  if (!(await approveAndOpenDirectly(setGeolocationApproved, () => pendingGeolocation === req))) return;
+  document.getElementById('geo-modal').hidden = true;
+  pendingGeolocation = null;
+  // No banner: the user is already looking at the place the approval works.
+  replyGeolocation(req.id, false, 'Location is unavailable in the embedded preview; the artifact was opened directly');
 });
 
 // What a blocked origin becomes when the visitor cannot approve it (av-awr4).

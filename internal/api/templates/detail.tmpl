@@ -260,6 +260,27 @@
     </div>
   </div>
 </div>
+{{/* Location first-use approval (av-f446). The camera prompt's sibling, and
+     spent the same way: Allow persists geolocation_approved and opens the
+     top-level render, whose Permissions-Policy header that flag builds.
+
+     The copy does not say browsers *cannot* do this, because one can: Chromium
+     hands a position to this frame given an allow= delegation. It says what is
+     true of this page, that the preview does not share location. The reason
+     lives in security.md §4: that delegation would spend the library's own
+     location permission on the artifact's behalf. */}}
+<div id="geo-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="geo-title">
+    <h2 id="geo-title">Allow location access?</h2>
+    <p><strong>{{.Title}}</strong> wants to know your location.</p>
+    <p>The embedded preview does not share your location with artifacts, so allowing opens the artifact in its own tab, where it can ask for it. Your browser will ask for its own permission there. The approval is remembered for this artifact and can be revoked at any time from its security settings.</p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="geo-block">Block</button>
+      <button type="button" class="btn" id="geo-allow"><i class="ph ph-map-pin"></i> Allow and open</button>
+    </div>
+  </div>
+</div>
 
 {{template "networkPrompt"}}
 <script>
@@ -291,7 +312,8 @@ const ID = {{.ID}};
 const SOURCE_URL = {{.SourceURL}};
 {{/* The app-origin route that mints a render token and redirects to it, used
      by the two page scripts that need a render URL they did not receive in the
-     markup: the media gate opens it on approval (av-mv3k), and the network
+     markup: the media and location gates open it on approval (av-mv3k,
+     av-f446), and the network
      prompt reloads the frame through it (av-kmwj). Deliberately not FrameURL
      for either — that token is minted once, when this page rendered, and
      expires in ten minutes, so a page left open longer would land on a 404.
@@ -306,6 +328,7 @@ let clipboardApproved = {{if .Capability.ClipboardApproved}}true{{else}}false{{e
 let linksApproved = {{if .Capability.LinksApproved}}true{{else}}false{{end}};
 let cameraApproved = {{if .Capability.CameraApproved}}true{{else}}false{{end}};
 let microphoneApproved = {{if .Capability.MicrophoneApproved}}true{{else}}false{{end}};
+let geolocationApproved = {{if .Capability.GeolocationApproved}}true{{else}}false{{end}};
 </script>
 <script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/components.js"></script>

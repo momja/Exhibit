@@ -26,34 +26,35 @@ func permissionsPolicy(t *testing.T, header, feature string) (string, bool) {
 	return "", false
 }
 
-// The header names exactly camera and microphone, and each is (self) only when
-// the artifact's approval says so. Nothing else is named: this header answers
-// one question, and every other Permissions-Policy feature keeps its default
-// rather than acquiring a second policy surface beside the CSP.
+// The header names exactly camera, microphone and geolocation, and each is
+// (self) only when the artifact's approval says so. Nothing else is named: this
+// header answers one question, and every other Permissions-Policy feature keeps
+// its default rather than acquiring a second policy surface beside the CSP.
 func TestBuildPermissionsPolicy(t *testing.T) {
-	cases := []struct {
-		camera, microphone  bool
-		wantCamera, wantMic string
-	}{
-		{false, false, "()", "()"},
-		{true, false, "(self)", "()"},
-		{false, true, "()", "(self)"},
-		{true, true, "(self)", "(self)"},
+	want := func(allowed bool) string {
+		if allowed {
+			return "(self)"
+		}
+		return "()"
 	}
-	for _, tc := range cases {
-		pp := buildPermissionsPolicy(tc.camera, tc.microphone)
-		cam, ok := permissionsPolicy(t, pp, "camera")
-		if !ok || cam != tc.wantCamera {
-			t.Fatalf("camera=%v,mic=%v: got %q, want camera=%s", tc.camera, tc.microphone, pp, tc.wantCamera)
+	// Every combination, so no approval can turn out to move another.
+	for mask := 0; mask < 8; mask++ {
+		devices := devicePolicy{Camera: mask&1 != 0, Microphone: mask&2 != 0, Geolocation: mask&4 != 0}
+		pp := buildPermissionsPolicy(devices)
+		for feature, allowed := range map[string]bool{
+			"camera":      devices.Camera,
+			"microphone":  devices.Microphone,
+			"geolocation": devices.Geolocation,
+		} {
+			got, ok := permissionsPolicy(t, pp, feature)
+			if !ok || got != want(allowed) {
+				t.Fatalf("%+v: got %q, want %s=%s", devices, pp, feature, want(allowed))
+			}
 		}
-		mic, ok := permissionsPolicy(t, pp, "microphone")
-		if !ok || mic != tc.wantMic {
-			t.Fatalf("camera=%v,mic=%v: got %q, want microphone=%s", tc.camera, tc.microphone, pp, tc.wantMic)
-		}
-		// Two features, not three: an added feature here is a policy decision,
-		// never a side effect.
-		if n := strings.Count(pp, "="); n != 2 {
-			t.Fatalf("Permissions-Policy must name camera and microphone only, got %q", pp)
+		// Three features, not four: an added feature here is a policy
+		// decision, never a side effect.
+		if n := strings.Count(pp, "="); n != 3 {
+			t.Fatalf("Permissions-Policy must name camera, microphone and geolocation only, got %q", pp)
 		}
 	}
 }
@@ -77,6 +78,9 @@ func TestServeArtifactDeniesDevicesUntilApproved(t *testing.T) {
 	if mic, _ := permissionsPolicy(t, pp, "microphone"); mic != "()" {
 		t.Fatalf("an unapproved artifact must be denied the microphone, got %q", pp)
 	}
+	if geo, _ := permissionsPolicy(t, pp, "geolocation"); geo != "()" {
+		t.Fatalf("an unapproved artifact must be denied location, got %q", pp)
+	}
 
 	// Approving one device must not hand over the other: two grants, not one.
 	if err := st.UpdateArtifact(ctx, 1, "abc", map[string]any{"camera_approved": true}); err != nil {
@@ -91,6 +95,42 @@ func TestServeArtifactDeniesDevicesUntilApproved(t *testing.T) {
 	if mic, _ := permissionsPolicy(t, pp, "microphone"); mic != "()" {
 		t.Fatalf("approving the camera must not permit the microphone, got %q", pp)
 	}
+	if geo, _ := permissionsPolicy(t, pp, "geolocation"); geo != "()" {
+		t.Fatalf("approving the camera must not permit location, got %q", pp)
+	}
+}
+
+// Location is the same per-origin grant (av-f446), so it gets the same
+// per-document answer: an unapproved artifact is served geolocation=(), which
+// Chromium and WebKit both enforce on a top-level render even with the origin's
+// permission already granted (measured), and approving it permits location and
+// nothing else.
+func TestServeArtifactDeniesGeolocationUntilApproved(t *testing.T) {
+	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
+	ctx := context.Background()
+
+	w := httptest.NewRecorder()
+	rd.ServeArtifact(w, renderRequest("/a/abc", "abc", 1))
+	pp := w.Header().Get("Permissions-Policy")
+	if geo, _ := permissionsPolicy(t, pp, "geolocation"); geo != "()" {
+		t.Fatalf("an unapproved artifact must be denied location, got %q", pp)
+	}
+
+	if err := st.UpdateArtifact(ctx, 1, "abc", map[string]any{"geolocation_approved": true}); err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	rd.ServeArtifact(w, renderRequest("/a/abc", "abc", 1))
+	pp = w.Header().Get("Permissions-Policy")
+	if geo, _ := permissionsPolicy(t, pp, "geolocation"); geo != "(self)" {
+		t.Fatalf("an approved artifact must be permitted location, got %q", pp)
+	}
+	if cam, _ := permissionsPolicy(t, pp, "camera"); cam != "()" {
+		t.Fatalf("approving location must not permit the camera, got %q", pp)
+	}
+	if mic, _ := permissionsPolicy(t, pp, "microphone"); mic != "()" {
+		t.Fatalf("approving location must not permit the microphone, got %q", pp)
+	}
 }
 
 // A share publishes the artifact as its owner sees it, so it carries the
@@ -99,7 +139,10 @@ func TestServeArtifactDeniesDevicesUntilApproved(t *testing.T) {
 func TestServeShareCarriesOwnerApprovals(t *testing.T) {
 	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
 	ctx := context.Background()
-	if err := st.UpdateArtifact(ctx, 1, "abc", map[string]any{"microphone_approved": true}); err != nil {
+	if err := st.UpdateArtifact(ctx, 1, "abc", map[string]any{
+		"microphone_approved":  true,
+		"geolocation_approved": true,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.CreateShare(ctx, 1, &store.Share{ID: "sh1", ArtifactID: "abc"}); err != nil {
@@ -119,6 +162,9 @@ func TestServeShareCarriesOwnerApprovals(t *testing.T) {
 	if mic, _ := permissionsPolicy(t, pp, "microphone"); mic != "(self)" {
 		t.Fatalf("a share must carry the owner's microphone approval, got %q", pp)
 	}
+	if geo, _ := permissionsPolicy(t, pp, "geolocation"); geo != "(self)" {
+		t.Fatalf("a share must carry the owner's location approval, got %q", pp)
+	}
 	if cam, _ := permissionsPolicy(t, pp, "camera"); cam != "()" {
 		t.Fatalf("a share must not widen what the owner approved, got %q", pp)
 	}
@@ -127,14 +173,15 @@ func TestServeShareCarriesOwnerApprovals(t *testing.T) {
 // A widget's authority is a strict subset of its artifact's: it renders
 // unattended in a card behind pointer-events:none, where there is no gesture to
 // attribute a device prompt to. So an approved artifact's tile is still denied
-// both devices.
+// both devices and location.
 func TestServeWidgetDeniesDevicesEvenWhenArtifactApproved(t *testing.T) {
 	rd := newWidgetRenderer(t, "abc", "<html><head></head><body>tool</body></html>",
 		"<html><head></head><body>tile</body></html>")
 	ctx := context.Background()
 	if err := rd.cfg.Store.UpdateArtifact(ctx, 1, "abc", map[string]any{
-		"camera_approved":     true,
-		"microphone_approved": true,
+		"camera_approved":      true,
+		"microphone_approved":  true,
+		"geolocation_approved": true,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -149,6 +196,9 @@ func TestServeWidgetDeniesDevicesEvenWhenArtifactApproved(t *testing.T) {
 	}
 	if mic, _ := permissionsPolicy(t, pp, "microphone"); mic != "()" {
 		t.Fatalf("a widget must be denied the microphone whatever its artifact holds, got %q", pp)
+	}
+	if geo, _ := permissionsPolicy(t, pp, "geolocation"); geo != "()" {
+		t.Fatalf("a widget must be denied location whatever its artifact holds, got %q", pp)
 	}
 }
 
@@ -207,5 +257,43 @@ func TestShimMediaGateIsFramedOnly(t *testing.T) {
 	media := strings.Index(doc, "__avMedia")
 	if guard < 0 || media < guard {
 		t.Fatalf("the media gate must sit inside the framed guard: guard=%d media=%d", guard, media)
+	}
+}
+
+// The geolocation gate (av-f446): the frame carries no allow= delegation, so
+// the preamble replaces navigator.geolocation with calls that hand the
+// decision to the host and then run the artifact's error callback. The frame
+// side's behaviour is driven in web/gallery/render.geolocation.test.mjs; this
+// pins what has to be in the bytes for that to be the code that ships.
+func TestShimInstallsGeolocationGate(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+
+	for _, marker := range []string{"__avGeolocation", "__avGeolocationResult"} {
+		if !strings.Contains(doc, marker) {
+			t.Fatalf("shim missing the geolocation gate message %s", marker)
+		}
+	}
+	for _, method := range []string{"getCurrentPosition", "watchPosition", "clearWatch"} {
+		if !strings.Contains(doc, method+": function(") {
+			t.Fatalf("shim must replace navigator.geolocation.%s", method)
+		}
+	}
+	// No path reports a position. A future edit that made it look like one
+	// would be claiming a capability the frame does not have.
+	if strings.Contains(doc, "coords") {
+		t.Fatalf("the geolocation gate must never fabricate a position")
+	}
+}
+
+// Framed-only, like the media gate: opened top-level the document has a real
+// origin where navigator.geolocation works natively under the artifact's own
+// Permissions-Policy header, and gating it there would break the one context
+// where the approval is spent.
+func TestShimGeolocationGateIsFramedOnly(t *testing.T) {
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	guard := strings.Index(doc, "if (window.parent !== window) {")
+	geo := strings.Index(doc, "__avGeolocation")
+	if guard < 0 || geo < guard {
+		t.Fatalf("the geolocation gate must sit inside the framed guard: guard=%d geo=%d", guard, geo)
 	}
 }

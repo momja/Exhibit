@@ -92,9 +92,10 @@ The only way data changes. Route groups:
   `internal/origin` before it is stored — see below; the store translates it
   into `decision='allow'` rows and deliberately leaves any `decision='block'`
   rows alone, §3.3), `downloads_approved` / `clipboard_approved` /
-  `links_approved` / `camera_approved` / `microphone_approved` (the per-artifact
-  first-use capability approvals, §6 — the first three spent by a host bridge,
-  the two device flags by the frame's gate and the render document's
+  `links_approved` / `camera_approved` / `microphone_approved` /
+  `geolocation_approved` (the per-artifact first-use capability approvals, §6
+  — the first three spent by a host bridge, the two device flags and the
+  location flag by the frame's gates and the render document's
   `Permissions-Policy`; named once in `store.ApprovalColumns` so the handler's
   strict-bool check and the store's cannot drift), `share_state_mode` (whose
   state rows a recipient writes — their own, or the owner's shared copy;
@@ -336,25 +337,26 @@ executable document with the correct security envelope:
   *from a remote origin* still requires that origin on the allowlist — the network
   boundary is unchanged; only inlined/local, no-egress sources are permitted by
   default.
-- Sets a per-artifact **`Permissions-Policy`** naming `camera` and
-  `microphone`, built from the artifact's two device approvals (av-mv3k):
-  `(self)` when approved, `()` when not. This is the one capability approval that
-  is enforced on a *top-level* render rather than only bridged in the frame, and
+- Sets a per-artifact **`Permissions-Policy`** naming `camera`,
+  `microphone` and `geolocation`, built from the artifact's two device
+  approvals (av-mv3k) and its location approval (av-f446): `(self)` when
+  approved, `()` when not. These are the capability approvals that are
+  enforced on a *top-level* render rather than only bridged in the frame, and
   the reason is that a browser permission is granted per **origin** while every
   artifact shares one render origin — without it, a visitor who allowed the
   camera for one artifact opened directly has allowed it for every artifact on
   that origin, with no per-artifact decision in the loop. Permissions Policy is
   per *document*, so it splits that single origin grant back into one decision
   per artifact, enforced by the browser even when the origin's permission is
-  already granted. Only those two features are named; every other
+  already granted. Only those three features are named; every other
   Permissions-Policy feature keeps its default, so this header answers one
   question and does not become a second policy surface beside the CSP. A widget
-  render is denied both devices whatever its artifact holds (§5.5's "strict
+  render is denied all three whatever its artifact holds (§5.5's "strict
   subset", applied to a header).
 - Injects the **render preamble** as the first `<head>` script(s) — the **storage
   shim** with the artifact's state **inlined** into it so `getItem` is correct
   synchronously, plus the download/clipboard/external-link **capability
-  bridges**, the camera/microphone **capability gate**, the `data:` fetch
+  bridges**, the camera/microphone and location **capability gates**, the `data:` fetch
   **compatibility shim**, the **out-of-line asset manifest**, and the **network
   permission reporter** — then the artifact body. (Umbrella/family taxonomy:
   `security.md` §4.)
@@ -1065,8 +1067,8 @@ owns their own library.
 The part that is not about hiding buttons: **three host-frame prompts write
 per-artifact authority**, and all three would have rendered for a recipient and
 404'd on submit — the network permission prompt through `POST …/origins`, the
-download/clipboard/link first-use approvals and the camera/microphone gate
-through `PATCH /api/artifacts/:id`. A recipient's session raises none of them.
+download/clipboard/link first-use approvals and the camera/microphone and
+location gates through `PATCH /api/artifacts/:id`. A recipient's session raises none of them.
 The artifact's request is settled the way a denial has always settled it, so
 nothing hangs; and a blocked *origin* — the one case where silence leaves a tool
 visibly doing nothing — is explained instead, in the page's own chrome, naming
@@ -1817,6 +1819,15 @@ flowchart TD
     gmPrompt -->|deny| gmNo["Promise rejects (NotAllowedError)"]
     gmTop(["top-level render / share"]) --> gmNative["native getUserMedia, enforced by the<br/>artifact's Permissions-Policy header"]
 
+    load --> geo["navigator.geolocation<br/>getCurrentPosition / watchPosition"]
+    geo --> geoInt["location GATE replaces the API;<br/>the frame has no allow= delegation"]
+    geoInt --> geoQ{"location<br/>already approved?"}
+    geoQ -->|yes| geoBanner["error callback + &quot;open it directly&quot; banner"]
+    geoQ -->|first attempt| geoPrompt{"host prompts<br/>(artifact wants your location)"}
+    geoPrompt -->|approve| geoOK["PATCH geolocation_approved &rarr;<br/>open top-level &rarr; error callback here"]
+    geoPrompt -->|deny| geoNo["error callback (PERMISSION_DENIED)"]
+    geoTop(["top-level render / share"]) --> geoNative["native geolocation, enforced by the<br/>artifact's Permissions-Policy header"]
+
     load --> lk["external http(s) anchor<br/>clicked (target=_blank or plain)"]
     lk --> lkInt["link bridge intercepts;<br/>postMessage URL to host"]
     lkInt --> lkQ{"already approved?"}
@@ -1898,6 +1909,18 @@ again. There is no allowlist interaction; a device is local I/O, and captured
 bytes leave the frame only where the artifact's CSP already lets anything leave
 — `connect-src` for a fetch, XHR or WebSocket, `form-action` for a submission,
 `img-src` and the rest for a URL the artifact smuggles them into.
+
+Location (`geolocation_approved`, av-f446) is a gate of the same shape: the
+frame posts the request, the host prompts and on approval opens the top-level
+render, and the frame runs the artifact's error callback with
+`PERMISSION_DENIED`. Unlike a camera, a position *could* reach the frame.
+Chromium honors `allow="geolocation"` on the opaque-origin frame, and
+coordinates are plain numbers a host bridge could post in. Both routes spend
+the app origin's own location permission, though, so the library would hold
+the visitor's location on an artifact's behalf and the browser's prompt would
+name Exhibit rather than the tool. The top-level render keeps the permission
+on the render origin under the per-artifact header. `security.md` §4 has the
+measurements.
 
 External-link navigation rides the same bridge (`links_approved`). The sandbox
 deliberately omits `allow-popups`, so a `target="_blank"` anchor is dropped and a

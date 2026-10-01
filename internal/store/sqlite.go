@@ -124,7 +124,7 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	var a Artifact
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareGrantCount, &a.SharePublicLink)
+	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.GeolocationApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareGrantCount, &a.SharePublicLink)
 	if err != nil {
 		return nil, err
 	}
@@ -145,8 +145,8 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 // are trigger-maintained rollups of the shares table (migration 029), like
 // tags_text — a caller that could set them could tell the gallery an artifact
 // is private while three accounts hold grants on it.
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, widget_blob_id, share_state_mode, share_grant_count, share_link"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.widget_blob_id, a.share_state_mode, a.share_grant_count, a.share_link"
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, share_state_mode, share_grant_count, share_link"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.widget_blob_id, a.share_state_mode, a.share_grant_count, a.share_link"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
@@ -154,9 +154,9 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 		now = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, widget_blob_id, source_text, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.LinksApproved, a.CameraApproved, a.MicrophoneApproved, a.WidgetBlobID, a.SourceText,
+		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, source_text, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.LinksApproved, a.CameraApproved, a.MicrophoneApproved, a.GeolocationApproved, a.WidgetBlobID, a.SourceText,
 		now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
 	if err != nil {
@@ -373,17 +373,18 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 // (architecture.md §6). They are named once, here, because two layers have to
 // agree about them — the API rejects a non-bool in a PATCH body with a 400
 // (internal/api/artifacts.go) and the UPDATE below refuses to store one — and a
-// sixth capability that reached only one of those two lists would be accepted
-// by the handler and then stored as a value no later read can scan.
+// capability added later that reached only one of those two lists would be
+// accepted by the handler and then stored as a value no later read can scan.
 //
 // The order is the order the UI shows them in: downloads, clipboard, links,
-// camera, microphone.
+// camera, microphone, location.
 var ApprovalColumns = []string{
 	"downloads_approved",
 	"clipboard_approved",
 	"links_approved",
 	"camera_approved",
 	"microphone_approved",
+	"geolocation_approved",
 }
 
 // approvalArtifactColumns is ApprovalColumns as a set, for the per-key check in
@@ -415,15 +416,16 @@ var approvalArtifactColumns = func() map[string]bool {
 // SetWidgetBlobID. This map answers "what may a PATCH body write", and that is
 // the only question it answers.
 var updatableArtifactColumns = map[string]bool{
-	"title":               true,
-	"tier":                true,
-	"source_url":          true,
-	"source_text":         true,
-	"downloads_approved":  true,
-	"clipboard_approved":  true,
-	"links_approved":      true,
-	"camera_approved":     true,
-	"microphone_approved": true,
+	"title":                true,
+	"tier":                 true,
+	"source_url":           true,
+	"source_text":          true,
+	"downloads_approved":   true,
+	"clipboard_approved":   true,
+	"links_approved":       true,
+	"camera_approved":      true,
+	"microphone_approved":  true,
+	"geolocation_approved": true,
 	// Whose state a recipient writes (av-6xjd). It became writable here when
 	// the owner got a control for it; the value is checked below rather than
 	// merely allowed, because unlike a title this column is read as an enum by
