@@ -1,6 +1,6 @@
 ---
 id: av-c7hu
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-01T03:13:09Z

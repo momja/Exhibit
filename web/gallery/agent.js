@@ -45,6 +45,24 @@ function el(tag, cls, text) {
   if (text !== undefined) e.textContent = text;
   return e;
 }
+// The thinking spinner is Phosphor's circle-notch drawn as a path rather than
+// the webfont glyph (av-c7hu). Browsers snap a glyph's baseline to whole device
+// pixels, which left the ring up to 0.2px off the box center it rotates about,
+// so it wobbled as it turned. A path is never snapped: its ring is centered in
+// the viewBox, so the box center is the ring's center at any pixel ratio.
+const CIRCLE_NOTCH_PATH = 'M232,128a104,104,0,0,1-208,0c0-41,23.81-78.36,60.66-95.27a8,8,0,0,1,6.68,14.54C60.15,61.59,40,93.27,40,128a88,88,0,0,0,176,0c0-34.73-20.15-66.41-51.34-80.73a8,8,0,0,1,6.68-14.54C208.19,49.64,232,87,232,128Z';
+function spinnerIcon() {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('class', 'thinking-spinner');
+  svg.setAttribute('viewBox', '0 0 256 256');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(ns, 'path');
+  path.setAttribute('fill', 'currentColor');
+  path.setAttribute('d', CIRCLE_NOTCH_PATH);
+  svg.appendChild(path);
+  return svg;
+}
 function addMsg(cls, text) {
   const m = el('div', 'msg ' + cls, text);
   messagesEl.appendChild(m);
@@ -326,7 +344,7 @@ function handleAgentEvent(ev) {
         messagesEl.scrollTop = messagesEl.scrollHeight;
       } else if (d.type === 'thinking_start' && !thinkingEl) {
         thinkingEl = el('div', 'thinking');
-        thinkingEl.appendChild(el('i', 'ph ph-circle-notch'));
+        thinkingEl.appendChild(spinnerIcon());
         thinkingEl.appendChild(document.createTextNode('thinking…'));
         messagesEl.appendChild(thinkingEl);
       } else if (d.type === 'text_end') {
