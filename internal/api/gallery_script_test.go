@@ -40,6 +40,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"detail.recipient.test.mjs",
 		"detail.statesync.test.mjs",
 		"edit.origins.test.mjs",
+		"edit.versions.test.mjs",
 		"share.test.mjs",
 		"tags.test.mjs",
 		"agent.net.test.mjs",
