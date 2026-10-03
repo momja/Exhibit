@@ -138,6 +138,11 @@ func maskKey(k string) string {
 
 type createAgentSessionRequest struct {
 	ArtifactID string `json:"artifact_id"`
+	// ResumeSessionID continues a conversation kept with ArtifactID instead of
+	// starting one (av-b4yh). It needs the artifact because a conversation is
+	// kept per artifact, which is also what makes "another owner's" and "not
+	// there" the same 404.
+	ResumeSessionID string `json:"resume_session_id"`
 }
 
 // agentSessionOpts builds the CreateOpts for a new session from whichever
@@ -223,7 +228,45 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.ResumeSessionID != "" {
+		if req.ArtifactID == "" {
+			writeError(w, http.StatusBadRequest, "resume_session_id needs artifact_id")
+			return
+		}
+		t, err := ro.cfg.Store.GetTranscript(r.Context(), opts.OwnerID, req.ArtifactID, req.ResumeSessionID)
+		if err != nil {
+			serverError(w, r, "get conversation to resume", err)
+			return
+		}
+		if t == nil {
+			writeError(w, http.StatusNotFound, "conversation not found")
+			return
+		}
+		if !t.Resumable {
+			writeError(w, http.StatusConflict,
+				"that conversation was kept before conversations could be continued, so it can only be read")
+			return
+		}
+		// A conversation that is still running is continued by attaching to it:
+		// a second process on the same conversation would be two writers of one
+		// record. The next tab to ask gets the one that exists.
+		if live := ro.cfg.Agent.Get(opts.OwnerID, t.SessionID); live != nil {
+			ticket, err := ro.sseTickets.Issue(live.ID, opts.OwnerID)
+			if err != nil {
+				serverError(w, r, "issue sse ticket", err)
+				return
+			}
+			writeJSON(w, http.StatusOK, ro.sessionResponse(live, opts, ticket))
+			return
+		}
+		opts.Resume = t
+	}
+
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)
+	if errors.Is(err, agent.ErrSessionLive) {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
 	if err != nil {
 		writeAgentCreateError(w, r, "create agent session", err)
 		return
@@ -238,6 +281,12 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "issue sse ticket", err)
 		return
 	}
+	writeJSON(w, http.StatusCreated, ro.sessionResponse(s, opts, ticket))
+}
+
+// sessionResponse is what a client is told about a session it is about to
+// stream from.
+func (ro *Router) sessionResponse(s *agent.Session, opts agent.CreateOpts, ticket string) map[string]any {
 	resp := map[string]any{
 		"id":          s.ID,
 		"artifact_id": s.ArtifactID(),
@@ -250,7 +299,7 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 		resp["provider"] = opts.Provider
 		resp["model"] = opts.Model
 	}
-	writeJSON(w, http.StatusCreated, resp)
+	return resp
 }
 
 // agentSessionTicket mints a fresh SSE ticket for an existing session. A ticket

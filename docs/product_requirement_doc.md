@@ -610,6 +610,26 @@ Nothing in the history is ever discarded, and the artifact's network allowlist a
 capability approvals are not part of it — returning to an old version never widens
 what the artifact may reach.
 
+### 8.6 Pick a conversation back up
+
+The conversations you had with the agent about an artifact are kept with it, each
+tied to the version of the artifact it was last working against (§8.5). From the
+agent's chat window, History lists them and shows any one as it went.
+
+**The default is a new conversation.** The chat opens as one, on an artifact with any
+number of conversations kept: nothing is picked back up on its own, and neither is
+anything resumed by looking — reading a conversation in History starts nothing. An
+earlier conversation is continued only by choosing it there and saying so.
+
+Continuing one is a decision about the artifact, so it is put to you as one. If the
+artifact has moved on since, you choose: **roll back** to that version and continue —
+the artifact's code and saved data return as that version left them, recorded as a
+new version so nothing is lost — or **continue without rolling back**, which leaves
+the artifact alone. Rolling back is what the conversation was about, so it is the
+primary choice; leaving the artifact as it is is the way out of it, and never the
+primary one. Either way the agent is told the artifact may have changed and reads it
+again before it changes anything.
+
 ## 9. Explicit non-goals
 
 - **No tier-3 backends / no PaaS.** No running servers, SSR, or databases per artifact.
