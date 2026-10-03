@@ -86,9 +86,16 @@ func TestGuardUsageSignalIsMeteredNotABlock(t *testing.T) {
 	assert.Contains(t, string(s.backlog[0]), "exhibit_guard_blocked")
 }
 
-// The guard extension's env names the fence the system prompt promises, so
-// its cut and composePrompt's blocks agree.
-func TestGuardrailEnvCarriesTheDataFence(t *testing.T) {
+// A prompt carries the user's own words and nothing else — stored content
+// reaches the model only as tool results (av-5s7g) — so the screen is told to
+// cut nothing: what it judges is the whole message.
+func TestGuardrailEnvNamesNoDataFence(t *testing.T) {
 	g := &Guardrail{Provider: "p", Model: "m", APIKey: "k"}
-	assert.Contains(t, g.env("n0nce"), "EXHIBIT_GUARD_DATA_FENCE="+beginFence("n0nce"))
+	env := g.env()
+	assert.Contains(t, env, "EXHIBIT_GUARD_PROVIDER=p")
+	assert.Contains(t, env, "EXHIBIT_GUARD_MODEL=m")
+	assert.Contains(t, env, "EXHIBIT_GUARD_API_KEY=k")
+	for _, kv := range env {
+		assert.NotContains(t, kv, "EXHIBIT_GUARD_DATA_FENCE")
+	}
 }

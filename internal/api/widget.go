@@ -182,8 +182,6 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 		return // agentSessionOpts wrote the reason (no pi binary, no key, …)
 	}
 	opts.ArtifactID = id
-	opts.ArtifactTitle = a.Title
-	opts.ArtifactBody = ro.inlinedArtifactSource(r, a)
 	opts.WidgetOnly = true
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)

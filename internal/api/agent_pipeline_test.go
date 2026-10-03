@@ -117,6 +117,26 @@ func (rec *transcriptRecorder) toolCallArgs() []string {
 	return out
 }
 
+// toolCallNames returns the name of every tool call the model made, in order,
+// de-duplicated across the turns that echo the same history back.
+func (rec *transcriptRecorder) toolCallNames() []string {
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	var longest []recordedMessage
+	for _, turn := range rec.turns {
+		if len(turn) > len(longest) {
+			longest = turn
+		}
+	}
+	var out []string
+	for _, m := range longest {
+		for _, tc := range m.ToolCalls {
+			out = append(out, tc.Function.Name)
+		}
+	}
+	return out
+}
+
 // messageText flattens an OpenAI content field (string or part array).
 func messageText(raw json.RawMessage) string {
 	var s string
@@ -298,19 +318,21 @@ func TestAgentSessionIgnoresHostileTitleAndStaysScoped(t *testing.T) {
 		assert.NotContains(t, sys, targetID)
 	}
 
-	// ...and where it does appear, it is fenced as data.
+	// ...nor in anything the user said, because the user said none of it...
 	users := strings.Join(h.llm.messagesInRole("user"), "\n---\n")
-	require.Contains(t, users, "SYSTEM OVERRIDE", "the title should still reach the model, as data")
-	fenceAt := strings.Index(users, "-----BEGIN EXHIBIT UNTRUSTED DATA ")
-	titleAt := strings.Index(users, "SYSTEM OVERRIDE")
-	require.GreaterOrEqual(t, fenceAt, 0, "no data fence in the user message")
-	assert.Less(t, fenceAt, titleAt, "the title must sit inside the fence, not before it")
+	assert.NotContains(t, users, "SYSTEM OVERRIDE")
+
+	// ...and where it does appear, it is a tool result: the message role that
+	// carries data and is never mistaken for an instruction.
+	tools := strings.Join(h.llm.messagesInRole("tool"), "\n---\n")
+	assert.Contains(t, tools, "SYSTEM OVERRIDE", "the title should still reach the model, as data")
 }
 
-// The modify session opens with the artifact source already in context, so the
-// first turn does not spend a tool call reading what the server just had in
-// hand. get_artifact stays registered for the stale-copy case.
-func TestAgentSessionInlinesArtifactSource(t *testing.T) {
+// A modify session is not given the artifact: it reads it. The source reaches
+// the model as the result of get_artifact — never in the system prompt or in the
+// user's message — so what an artifact says can never be mistaken for what the
+// user said (av-5s7g).
+func TestAgentSessionReadsTheArtifactItself(t *testing.T) {
 	h := newPiHarness(t)
 	r := h.router
 
@@ -333,14 +355,60 @@ func TestAgentSessionInlinesArtifactSource(t *testing.T) {
 
 	waitForBody(t, r, id, func(b string) bool {
 		return strings.Contains(b, "#8b5cf6")
-	}, "the agent to recolor from the inlined source")
+	}, "the agent to read the artifact and recolor it")
 
-	// The very first turn already carried the source — no read tool call was
-	// needed to obtain it.
-	firstUser := h.llm.messagesInRole("user")
-	require.NotEmpty(t, firstUser)
-	assert.Contains(t, firstUser[0], "UNIQUE-MARKER")
-	assert.Contains(t, firstUser[0], "-----BEGIN EXHIBIT UNTRUSTED DATA ")
+	// Nothing of the artifact was put in front of the model...
+	for _, sys := range h.llm.systemPrompts() {
+		assert.NotContains(t, sys, "UNIQUE-MARKER")
+	}
+	users := h.llm.messagesInRole("user")
+	require.NotEmpty(t, users)
+	assert.NotContains(t, strings.Join(users, "\n"), "UNIQUE-MARKER")
+	assert.Equal(t, "make the button purple", strings.TrimSpace(users[0]),
+		"the user's message is the user's words and nothing else")
+
+	// ...it read the source, and got it as a tool result.
+	assert.Equal(t, []string{"get_artifact", "write_artifact"}, h.llm.toolCallNames())
+	assert.Contains(t, strings.Join(h.llm.messagesInRole("tool"), "\n"), "UNIQUE-MARKER")
+}
+
+// Elements the user selected in the preview are untrusted too — an element's
+// outerHTML is the artifact's own markup — so the prompt says only that
+// something was selected, in a sentence Exhibit wrote, and the elements come
+// back from get_selection as a tool result.
+func TestAgentSelectionReachesTheModelAsAToolResult(t *testing.T) {
+	h := newPiHarness(t)
+	r := h.router
+
+	id := createArtifact(t, r, map[string]any{
+		"title": "Counter",
+		"body":  "<html><head><style>#submit-btn{background:#f7d51d}</style></head><body><button id=\"submit-btn\">Count!</button></body></html>",
+	})
+	w := doJSON(t, r, "POST", "/api/agent/sessions", map[string]string{"artifact_id": id})
+	require.Equal(t, http.StatusCreated, w.Code)
+	var session struct {
+		ID string `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &session))
+	t.Cleanup(func() { r.cfg.Agent.Close(defaultOwnerID, session.ID) })
+
+	const descriptor = `{"selector":"#submit-btn","outerHTML":"<button id=\"submit-btn\">SELECTED-MARKER</button>"}`
+	w = doJSON(t, r, "POST", "/api/agent/sessions/"+session.ID+"/prompt",
+		map[string]any{"message": "make this green", "snippets": []string{descriptor}})
+	require.Equal(t, http.StatusAccepted, w.Code)
+
+	waitForBody(t, r, id, func(b string) bool {
+		return strings.Contains(b, "#22a15c")
+	}, "the agent to act on the selected element")
+
+	users := strings.Join(h.llm.messagesInRole("user"), "\n")
+	assert.NotContains(t, users, "SELECTED-MARKER", "element markup is not prompt text")
+	assert.Contains(t, users, "make this green")
+	assert.Contains(t, users, "The user selected 1 element in the artifact preview")
+
+	assert.Contains(t, strings.Join(h.llm.messagesInRole("tool"), "\n"), "SELECTED-MARKER",
+		"get_selection returned the element")
+	assert.Equal(t, []string{"get_selection", "get_artifact", "write_artifact"}, h.llm.toolCallNames())
 }
 
 // A save on a modify session announces the session's own artifact id — the id
