@@ -1200,39 +1200,6 @@ func (s *SQLiteStore) DeleteAgentKey(ctx context.Context, ownerID int64) error {
 	return err
 }
 
-func (s *SQLiteStore) SaveTranscript(ctx context.Context, ownerID int64, artifactID, sessionID, messagesJSON string) error {
-	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
-		return err
-	}
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO agent_transcripts (artifact_id, session_id, messages, updated_at)
-         VALUES (?, ?, ?, datetime('now'))
-         ON CONFLICT(artifact_id, session_id) DO UPDATE SET
-             messages=excluded.messages, updated_at=excluded.updated_at`,
-		artifactID, sessionID, messagesJSON)
-	return err
-}
-
-func (s *SQLiteStore) ListTranscripts(ctx context.Context, ownerID int64, artifactID string) (map[string]string, error) {
-	rows, err := s.db.QueryContext(ctx,
-		"SELECT session_id, messages FROM agent_transcripts WHERE artifact_id=? AND "+ownedArtifact+
-			" ORDER BY updated_at",
-		artifactID, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := make(map[string]string)
-	for rows.Next() {
-		var sid, msgs string
-		if err := rows.Scan(&sid, &msgs); err != nil {
-			return nil, err
-		}
-		out[sid] = msgs
-	}
-	return out, rows.Err()
-}
-
 // RecordAgentUsage appends one usage event to the metering ledger (av-2yws).
 // recorded_at is left to the schema's default so rows carry the database's
 // clock — the sums below compare against it, and two clocks is one more way

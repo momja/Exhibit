@@ -60,7 +60,13 @@ FROM node:22-bookworm-slim
 # usage-policy guardrail (av-gust) depends on how its extension hooks behave
 # (an `input` handler returning `handled` skips the model). An unpinned
 # upgrade could change either with nothing failing.
-# Bump deliberately and run `go test ./internal/api -run Guardrail` against it.
+# Conversations are kept as Pi's own session file and later resumed from it
+# (av-y7td, av-b4yh), so that file's format, `--session`, the working-directory
+# check Pi makes on resume, and the `agent_settled` event are part of the same
+# contract.
+# Bump deliberately and run `go test ./internal/api` (with `pi` on PATH — the
+# agent pipeline tests, Guardrail and the conversation tests among them)
+# against it.
 ARG PI_VERSION=0.99.1
 
 RUN apt-get update \

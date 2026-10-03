@@ -219,13 +219,18 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	defer func() {
 		if !spawned {
 			m.cfg.Credentials.Revoke(grant) // no live subprocess ⇒ no live token
+			_ = os.RemoveAll(workDir)       // and nothing to keep the directory for
 		}
 	}()
 	sysPrompt := buildSystemPrompt(m.cfg.SystemPrompt, opts)
+	sessionFile := filepath.Join(workDir, sessionFileName)
 
 	args := []string{
 		"--mode", "rpc",
-		"--no-session",
+		// Pi records the conversation in its own session file, which is what
+		// the service keeps (persistTranscript) and what a resumed session
+		// starts from.
+		"--session", sessionFile,
 		"--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files",
 		"--no-builtin-tools",
 		"-e", m.extPath,
@@ -240,7 +245,13 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}
 
 	cmd := exec.Command(m.cfg.PiBin, args...) //nolint:gosec // args are server-constructed
-	cmd.Dir = workDir
+	// Every session runs from the same directory, and it is the root. A session
+	// file records the directory it ran in, and Pi refuses to resume one whose
+	// directory no longer exists — which a per-session directory never survives:
+	// it is removed when the session ends (removeScratch), and a conversation is
+	// resumed long after. The session has no use for a working directory of its
+	// own anyway: it has no built-in tools and loads no context files.
+	cmd.Dir = sessionCwd
 	// Minimal environment: enough for node + jiti, the exhibit callback
 	// contract, and exactly one provider key. Deliberately NOT os.Environ():
 	// the server's own env must not leak other credentials into a session.
@@ -294,6 +305,8 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		model:             opts.Model,
 		paidBy:            paidByFor(opts.PlatformPaid),
 		workDir:           workDir,
+		sessionFile:       sessionFile,
+		readDone:          make(chan struct{}),
 		grant:             grant,
 		hideModelIdentity: m.cfg.HideModelIdentity,
 		mgr:               m,
@@ -471,11 +484,20 @@ type Session struct {
 	model    string
 	paidBy   string
 
-	// workDir is the session's private directory, which is also the
-	// subprocess's working directory. It is where the server hands the
-	// subprocess the one thing that cannot travel in a prompt: the elements
-	// the user selected (selection.json).
+	// workDir is the session's private scratch directory — the subprocess's
+	// HOME, its session file, and where the server hands it the one thing that
+	// cannot travel in a prompt: the elements the user selected
+	// (selection.json). It is removed when the session ends.
 	workDir string
+	// sessionFile is where Pi records the conversation, in workDir.
+	sessionFile string
+	// persistMu serializes persistTranscript, so two settles close together
+	// cannot store the older read after the newer one; persisting counts the
+	// ones in flight, so the scratch directory outlives them.
+	persistMu  sync.Mutex
+	persisting sync.WaitGroup
+	// readDone closes when everything the subprocess printed has been handled.
+	readDone chan struct{}
 	// grant is the session's API credential and the single source of truth
 	// for which artifact it may touch. In create mode it starts unbound and
 	// the API's create handler binds it — the session never derives its
@@ -500,6 +522,7 @@ type Session struct {
 	promptMu sync.Mutex
 
 	mu         sync.Mutex // guards everything below
+	title      string     // the conversation's first prompt, shortened
 	subs       map[chan []byte]struct{}
 	backlog    [][]byte
 	pending    map[string]chan rpcResponse
@@ -577,6 +600,12 @@ func (s *Session) Subscribe() (<-chan []byte, func()) {
 // tool is told its path through EXHIBIT_SELECTION_FILE.
 const selectionFile = "selection.json"
 
+// sessionFileName is Pi's session file in the work directory.
+const sessionFileName = "session.jsonl"
+
+// sessionCwd is the working directory of every session's subprocess.
+const sessionCwd = "/"
+
 // Prompt sends a user prompt, optionally with images and the elements the user
 // selected in the artifact preview. If the agent is mid-stream the message is
 // queued as a steering message.
@@ -636,7 +665,20 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	if !r.Success {
 		return fmt.Errorf("prompt rejected: %s", r.Error)
 	}
+	s.nameFromFirstPrompt(message)
 	return nil
+}
+
+// nameFromFirstPrompt names the conversation after the first prompt the agent
+// actually received. A prompt the guardrail refused never reached it, so it
+// names nothing: the stored conversation would otherwise carry a title whose
+// words are not in it.
+func (s *Session) nameFromFirstPrompt(message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.title == "" && !s.guardBlocked {
+		s.title = ConversationTitle(message)
+	}
 }
 
 // writeSelection makes selection.json say exactly what the user selected with
@@ -722,6 +764,7 @@ func (s *Session) call(ctx context.Context, cmd map[string]any) (rpcResponse, er
 // readLoop consumes pi's stdout: correlates responses, tracks streaming
 // state, detects artifact saves, and broadcasts every event to subscribers.
 func (s *Session) readLoop(stdout io.Reader) {
+	defer close(s.readDone)
 	reader := bufio.NewReaderSize(stdout, 1<<20)
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -826,7 +869,11 @@ func (s *Session) handleLine(line []byte) {
 		s.flushInFlightUsage()
 		go s.reconcileUsage()
 		if artifactID := s.ArtifactID(); artifactID != "" {
-			go s.persistTranscript(artifactID)
+			s.persisting.Add(1)
+			go func() {
+				defer s.persisting.Done()
+				s.persistTranscript(artifactID)
+			}()
 		}
 	case "tool_execution_end":
 		var res struct {
@@ -847,10 +894,9 @@ func (s *Session) handleLine(line []byte) {
 	s.broadcast(s.redact(bytes.Clone(line)))
 }
 
-// redact applies the platform-mode filter to one document on its way out of
-// this process — an event line, or the message list of a transcript. It is
-// the one place the manager's HideModelIdentity setting is consulted, so the
-// two seams that publish Pi's protocol cannot disagree about it.
+// redact applies the platform-mode filter to one event line on its way out of
+// this process. It is the one place the manager's HideModelIdentity setting is
+// consulted.
 func (s *Session) redact(doc []byte) []byte {
 	if !s.hideModelIdentity {
 		return doc
@@ -925,32 +971,65 @@ func (s *Session) noteWidgetSaved(details map[string]any) {
 	s.broadcast(ev)
 }
 
-// persistTranscript stores the session's full message list with the artifact
-// (colophon-style provenance, av-q3wo). Runs after each settled turn so the
-// transcript tracks the conversation as it grows.
+// persistTranscript stores the conversation with the artifact, tied to the
+// version the artifact is at (av-y7td). Runs after each settled turn, so what is
+// kept tracks the conversation as it grows, and is exactly what Pi would start
+// from if the conversation were resumed: its own session file, read back.
 func (s *Session) persistTranscript(artifactID string) {
+	s.persistMu.Lock()
+	defer s.persistMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	resp, err := s.roundTrip(ctx, map[string]any{"type": "get_messages"})
+
+	file, err := readSessionFile(s.sessionFile)
 	if err != nil {
-		slog.Warn("transcript fetch failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
+		slog.Warn("transcript read failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 		return
 	}
-	var r struct {
-		Data struct {
-			Messages json.RawMessage `json:"messages"`
-		} `json:"data"`
+	if file == "" {
+		return // Pi has written nothing yet
 	}
-	if err := json.Unmarshal(resp, &r); err != nil || len(r.Data.Messages) == 0 {
-		return
-	}
+	s.mu.Lock()
+	title := s.title
+	s.mu.Unlock()
 	// The session's owner, not the artifact's: a transcript can only attach to
 	// an artifact this session's owner actually holds, so an artifact id the
 	// model invented (or lifted from another library) fails with ErrNotFound
 	// instead of writing across the tenant boundary.
-	if err := s.mgr.st.SaveTranscript(ctx, s.OwnerID, artifactID, s.ID, string(s.redact(r.Data.Messages))); err != nil {
+	err = s.mgr.st.SaveTranscript(ctx, s.OwnerID, store.Transcript{
+		ArtifactID: artifactID, SessionID: s.ID, Title: title, SessionFile: file,
+	})
+	if err != nil {
 		slog.Warn("transcript save failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 	}
+}
+
+// maxSessionFileBytes bounds what is kept of one conversation. A session file
+// holds every tool result in full — each read of the artifact is a copy of it —
+// so it grows with the artifact as well as with the talk, and a conversation
+// that outgrows this stops being kept rather than growing the database without
+// limit. The live session is unaffected.
+const maxSessionFileBytes = 64 << 20
+
+// readSessionFile returns Pi's session file as written so far. Pi appends one
+// line per entry, so a read that races an append can end partway through a
+// line, and half a line is not an entry: only whole lines are returned.
+func readSessionFile(path string) (string, error) {
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	end := bytes.LastIndexByte(b, '\n')
+	if end < 0 {
+		return "", nil
+	}
+	if end+1 > maxSessionFileBytes {
+		return "", fmt.Errorf("session file is %d bytes, over the %d kept", end+1, maxSessionFileBytes)
+	}
+	return string(b[:end+1]), nil
 }
 
 func (s *Session) broadcast(line []byte) {
@@ -997,6 +1076,20 @@ func (s *Session) finish() {
 	close(s.done)
 	ev, _ := json.Marshal(map[string]string{"type": "exhibit_session_closed"})
 	s.broadcast(ev)
+	go s.removeScratch()
+}
+
+// removeScratch deletes the session's work directory once nothing can still
+// need it: the process has exited, everything it printed has been read, and the
+// last settled turn is stored. The conversation's home is the database; the
+// directory held a working copy, and leaving it behind would keep a conversation
+// on disk after the account that owned it was erased.
+func (s *Session) removeScratch() {
+	<-s.readDone
+	s.persisting.Wait()
+	if err := os.RemoveAll(s.workDir); err != nil {
+		slog.Warn("remove session scratch directory", slog.String("session_id", s.ID), slog.String("err", err.Error()))
+	}
 }
 
 func (s *Session) kill() {
