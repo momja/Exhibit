@@ -433,14 +433,15 @@ func streamPlan(w http.ResponseWriter, plan turnPlan) {
 	switch plan.kind {
 	case "text":
 		send(map[string]any{"role": "assistant", "content": ""}, nil)
-		// stream in a few pieces for realism
-		text := plan.text
+		// stream in a few pieces for realism — cut between characters, never
+		// inside one, since half a UTF-8 sequence is not valid JSON text
+		text := []rune(plan.text)
 		for len(text) > 0 {
 			n := 24
 			if n > len(text) {
 				n = len(text)
 			}
-			send(map[string]any{"content": text[:n]}, nil)
+			send(map[string]any{"content": string(text[:n])}, nil)
 			text = text[n:]
 		}
 		send(map[string]any{}, "stop")

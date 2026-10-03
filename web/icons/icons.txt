@@ -23,6 +23,7 @@ ph-check
 ph-check-circle
 ph-clipboard
 ph-clipboard-text
+ph-clock-counter-clockwise
 ph-code
 ph-copy
 ph-database

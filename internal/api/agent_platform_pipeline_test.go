@@ -81,8 +81,9 @@ func TestBYOKSessionResponseStillNamesTheModel(t *testing.T) {
 	r.cfg.Agent.Close(defaultOwnerID, resp["id"].(string))
 }
 
-// The stream and the transcript are where the abstraction actually holds or
-// fails, so both are read back and searched for the identifiers Pi emits.
+// The stream and the conversation as served are where the abstraction actually
+// holds or fails, so both are read back and searched for the identifiers Pi
+// emits.
 func TestPlatformModeStreamAndTranscriptNameNoModel(t *testing.T) {
 	h := newPlatformPiHarness(t)
 	r := h.router
@@ -136,8 +137,16 @@ func TestPlatformModeStreamAndTranscriptNameNoModel(t *testing.T) {
 
 	transcripts := waitForTranscript(t, r, id)
 	for _, leak := range []string{"exhibit-mock", `"provider"`, `"model"`, `"api"`} {
-		assert.NotContains(t, transcripts, leak, "the persisted transcript must not name the model")
+		assert.NotContains(t, transcripts, leak, "the conversation as served must not name the model")
 	}
+
+	// The stored file is Pi's own and does name it — which is what makes the
+	// assertion above a test of the projection rather than of Pi having
+	// stopped saying so. It never leaves the server: only the projection does.
+	kept, err := r.cfg.Store.GetTranscript(context.Background(), defaultOwnerID, id, session)
+	require.NoError(t, err)
+	require.NotNil(t, kept)
+	assert.Contains(t, kept.SessionFile, "exhibit-mock")
 }
 
 // BYOK is the control: the same rig without platform mode still reports what
@@ -197,11 +206,11 @@ func startSessionFor(t *testing.T, r *Router, artifactID string) string {
 	return session.ID
 }
 
-// waitForTranscript reads an artifact's persisted agent transcripts back
-// through the API, as the colophon UI does, once one holding an assistant
-// message has landed. Persistence runs off the settled turn in its own
-// goroutine, and an empty list would satisfy every "does not contain"
-// assertion for the wrong reason.
+// waitForTranscript reads an artifact's kept conversation back through the API,
+// as the chat page's history does, once one holding an assistant message has
+// landed. Persistence runs off the settled turn in its own goroutine, and an
+// empty one would satisfy every "does not contain" assertion for the wrong
+// reason.
 func waitForTranscript(t *testing.T, r *Router, artifactID string) string {
 	t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
@@ -209,12 +218,22 @@ func waitForTranscript(t *testing.T, r *Router, artifactID string) string {
 	for time.Now().Before(deadline) {
 		w := doJSON(t, r, "GET", "/api/artifacts/"+artifactID+"/transcripts", nil)
 		require.Equal(t, http.StatusOK, w.Code)
-		body = w.Body.String()
-		if strings.Contains(body, "assistant") {
-			return body
+		var list struct {
+			Transcripts []struct {
+				SessionID string `json:"session_id"`
+			} `json:"transcripts"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &list))
+		for _, tr := range list.Transcripts {
+			one := doJSON(t, r, "GET", "/api/artifacts/"+artifactID+"/transcripts/"+tr.SessionID, nil)
+			require.Equal(t, http.StatusOK, one.Code)
+			body = one.Body.String()
+			if strings.Contains(body, `"role":"assistant"`) {
+				return body
+			}
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-	t.Fatalf("no transcript with an assistant message was persisted; last response:\n%s", body)
+	t.Fatalf("no conversation with an assistant message was kept; last response:\n%s", body)
 	return ""
 }

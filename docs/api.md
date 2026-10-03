@@ -326,8 +326,14 @@ POST   /api/agent/sessions/:id/prompt        Send a prompt {"message", "images"?
 POST   /api/agent/sessions/:id/abort         Abort the current run
 DELETE /api/agent/sessions/:id               End the session (and drops its tickets)
 GET    /api/agent/sessions/:id/events        SSE event stream (?ticket= auth — EventSource can't set headers)
-GET    /api/artifacts/:id/transcripts        Agent conversations persisted with an artifact
+GET    /api/artifacts/:id/transcripts        Conversations kept with an artifact -> {"head_seq", "transcripts": [{session_id, title, version_seq, resumable, updated_at}]}
+GET    /api/artifacts/:id/transcripts/:sid   One conversation as what was said in it -> {…summary, "head_seq", "messages": [{role, text}]}
 ```
+
+A conversation is kept as Pi's own session file and tied to the artifact
+version it was last working against (`version_seq`, read against `head_seq`);
+only a projection of what a person saw is ever returned, never the file. See
+`docs/agent.md`.
 
 Every `sse_ticket` is session-bound, single-use, and valid for 30 seconds
 (av-rgp1; full contract: `architecture.md` §3.7, `security.md` §6). A client
