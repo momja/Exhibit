@@ -1,7 +1,11 @@
 /* Shared gallery component behavior — served from the app origin at
- * /assets/gallery/components.js, loaded on every page that uses the
- * capability-cluster component (index.tmpl, detail.tmpl) alongside
- * components.css. Currently just the capability posture popover (av-41se).
+ * /assets/gallery/components.js, loaded on every page that uses a shared
+ * component (index.tmpl, detail.tmpl, edit.tmpl, agent.tmpl) alongside
+ * components.css. Three behaviors, each in its own block below: the capability
+ * posture popover (av-41se), the widget tile health watcher (av-fafu), and the
+ * version viewer's unsaved-changes notice (av-vw7r).
+ *
+ * The capability posture popover:
  *
  * The popover opens only on explicit activation, never on hover or on mere
  * keyboard focus: click/tap, or Enter/Space while the trigger is focused.
@@ -169,5 +173,40 @@
       setFailed(frames[i], d.status !== 'ready');
       return;
     }
+  });
+})();
+
+/* Version viewer notice (av-vw7r) — the one thing a version's frame is heard for.
+ *
+ * A version is shown running, with the data it left behind, and nothing done in
+ * it is saved. The render shim therefore refuses every write, and a tool that
+ * saves quietly looks exactly like one that has — so the first write it refuses
+ * is reported here (__avVersionUnsaved, sent by internal/render's warnUnsaved)
+ * and this reveals the viewer's own banner. The banner is already in the page,
+ * hidden, with its sentence written (the versionViewer partial): page chrome,
+ * never the artifact's DOM, which the artifact could forge.
+ *
+ * What makes it safe to listen to a frame that runs somebody's code is how little
+ * this does with what it hears. The message carries nothing that is read, and its
+ * whole effect is un-hiding a fixed sentence, so a notice the artifact forges by
+ * hand is no worse than the notice appearing. It is not a bridge: nothing here
+ * reaches the API, and the chat page's state, network and picker bridges still
+ * listen to the live artifact frame and nothing else — a version frame stays a
+ * frame the page takes no orders from.
+ *
+ * Identity is the source window, as for every frame message on these pages (a
+ * sandboxed frame's origin is the string "null" and proves nothing). It is the
+ * viewer's frame in particular, looked up when the message arrives because an
+ * htmx swap replaces the viewer: a message from the live artifact frame, or from
+ * a viewer that has since been closed, is not a version's to send.
+ */
+(function() {
+  window.addEventListener('message', function(e) {
+    var d = e.data;
+    if (!d || d.__avVersionUnsaved !== true) return;
+    var frame = document.querySelector('#version-viewer .version-viewer-frame');
+    if (!frame || e.source !== frame.contentWindow) return;
+    var notice = document.getElementById('version-viewer-unsaved');
+    if (notice) notice.hidden = false;
   });
 })();

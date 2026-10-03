@@ -1036,6 +1036,15 @@ func (rd *Renderer) ServeAsset(w http.ResponseWriter, r *http.Request) {
 // it is loaded). The state it reads is the snapshot the render surface inlined,
 // and a setItem still behaves like Storage within the frame — it just cannot
 // outlive it.
+//
+// It does not drop those writes silently, though. A tool that saves quietly
+// looks exactly like one that has, so the first write the view refuses is
+// reported to the host (warnUnsaved below), which says so in its own chrome. It
+// is the one message from a version frame that the host listens for, and it is
+// not a write: it names no key and carries no value. The host hears it through a
+// listener of its own whose only effect is revealing a fixed sentence, not
+// through the bridges that serve the artifact frame, so a notice forged by hand
+// is no worse than the notice appearing.
 const shimTemplate = `<script>
 (function() {
   var ARTIFACT_ID = %q;
@@ -1074,12 +1083,32 @@ const shimTemplate = `<script>
   function persistState(op, key, value) {
     if (WIDGET) return;                    // a widget renders state, never edits it
     if (ANONYMOUS) return;                 // no principal to persist for; the API would refuse
-    if (VERSION_VIEW) return;              // a version view shows data it must never change
+    if (VERSION_VIEW) {                    // a version view shows data it must never change,
+      warnUnsaved();                       //   and says so, rather than looking as if it saved
+      return;
+    }
     if (window.parent === window) return; // top-level: no host to persist through
     var msg = { __avState: true, artifactId: ARTIFACT_ID, op: op };
     if (key !== undefined) msg.key = key;
     if (value !== undefined) msg.value = value;
     window.parent.postMessage(msg, API_ORIGIN);
+  }
+
+  // The notice a version view sends in place of a write: this frame was asked to
+  // persist something and did not. It is exactly the condition under which the
+  // live shim would have posted __avState, so "a change that would have been
+  // saved" has one definition rather than two that could drift.
+  //
+  // The message is empty on purpose — no op, no key, no value. The host has one
+  // use for it, revealing a sentence of its own, so it needs to know that a write
+  // was refused and nothing about what it was. Sent once per load: a tool that
+  // autosaves would otherwise post it on every tick, and the host's notice stays
+  // up until the view closes. Top-level there is no host to tell.
+  var warnedUnsaved = false;
+  function warnUnsaved() {
+    if (warnedUnsaved || window.parent === window) return;
+    warnedUnsaved = true;
+    window.parent.postMessage({ __avVersionUnsaved: true }, API_ORIGIN);
   }
 
   // makeStorage builds one Storage-shaped object over its OWN cache. Each Web

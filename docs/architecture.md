@@ -490,9 +490,12 @@ executable document with the correct security envelope:
   different element from its artifact frame (§3.5), which is what covers a message
   the artifact forges itself; and the response's own CSP `sandbox` gives it an
   opaque origin however it is loaded, so top-level it still has no IndexedDB or
-  cookies. The current version is not served (it has no snapshot, and the
-  artifact's own page shows it); every refusal is the 404 a bad token gets.
-  `security.md` §1.9 has the argument.
+  cookies. It does not refuse in silence, though: the first write the shim declines
+  is reported to the host as an empty `__avVersionUnsaved` notice (once per load,
+  no op, key or value), so the page can say that nothing is saved until the
+  version is the active one (§3.5). The current version is not served (it has no
+  snapshot, and the artifact's own page shows it); every refusal is the 404 a bad
+  token gets. `security.md` §1.9 has the argument.
 - Serves an artifact's **widget** at `/w/:id` (av-fafu) — the glanceable tile its
   gallery card renders. This is the same read path with the same CSP, built from
   the same allowlist, and the same state inlined; it differs only in which blob it
@@ -1219,6 +1222,26 @@ code sends — including one forged by hand rather than sent through the shim �
 not heard. The edit page has no artifact bridge at all. `agent.js` owns only what
 *Back to current* means (re-render the pane for the artifact as it is, by the same
 fetch an agent save uses) and ending a view when a conversation is continued.
+
+**Telling a person that nothing is saved.** The bar says it is a preview from the
+start; the moment the tool inside actually tries to save, the viewer says it again,
+louder. The fragment carries a hidden `.banner.banner-warn` between the bar and the
+frame — the capability warning's own classes (the banner family moved from
+`detail.css` to `components.css` so the chat and edit pages draw the same thing,
+rather than a second copy of it) — whose text says that changes are not saved while
+previewing vN and that making vN the active version is what changes that. The way
+there is named as the page offers it, so `Restorable` also picks the verb: *Restore*
+beside the view on the edit page, *Roll back* for the chat's History card. The frame
+reports the first refused write as `__avVersionUnsaved` and `components.js` — the shared
+layer both pages already load, beside the CSS it styles — reveals the banner. That
+listener is the *only* thing a version frame is heard for. It identifies the viewer's
+own frame by source window, looks it up when the message arrives (a swap replaces the
+viewer), and its whole effect is un-hiding the banner, so it is not one of the bridges
+above and does not make the frame one the page takes orders from. The banner is part of the
+fragment, so it is as stale-proof as the rest of it: closing the viewer, restoring, or
+viewing another version replaces it, and a fresh view starts with it hidden. What was
+done in the preview is discarded, not carried into a restore, so the notice describes
+what restore will do rather than promising anything about the changes just made.
 
 Where state changes *after* load and a full reload would cost too much — it
 would drop a live iframe, an editor buffer, or an SSE stream — the page swaps

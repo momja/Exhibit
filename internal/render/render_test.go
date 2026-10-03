@@ -514,8 +514,15 @@ func TestShimPersistStateGuardsTopLevelForEveryOp(t *testing.T) {
 	if start < 0 {
 		t.Fatalf("shim missing persistState: %s", doc)
 	}
-	// Wide enough for the three mode guards that precede the top-level one.
-	body := doc[start : start+420]
+	// Everything persistState does before it posts to the host: the mode guards
+	// (widget, anonymous, version view) and then the top-level one. Bounded by the
+	// post itself rather than by a length, so a guard that gains a line does not
+	// push the one this test is about out of range.
+	post := strings.Index(doc[start:], "window.parent.postMessage(msg, API_ORIGIN)")
+	if post < 0 {
+		t.Fatalf("persistState no longer posts the write to the host: %s", doc[start:start+420])
+	}
+	body := doc[start : start+post]
 	if !strings.Contains(body, "if (window.parent === window) return;") {
 		t.Fatalf("persistState must guard every op (set/delete/clear) behind one top-level check: %s", body)
 	}

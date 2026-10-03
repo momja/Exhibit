@@ -658,7 +658,8 @@ performed. Nothing about the document's principal would refuse it. So:
 
 1. **The shim does not write** — `VERSION_VIEW` stops `persistState` and refuses a
    resync, because a snapshot is how the data *was* and a resync is the host posting
-   in how it *is*. Honest: the document does not claim to save.
+   in how it *is*. Honest: the document does not claim to save, and it says so when
+   it declines to (below).
 2. **The host does not hear it.** The chat page's bridges listen to `#pv-frame` and
    nothing else, and the version viewer's frame is a different element carrying no
    such id (the partial's comment and a test hold that line). While a version
@@ -674,13 +675,54 @@ performed. Nothing about the document's principal would refuse it. So:
    other artifact there — places an old version could keep data that no restore
    would ever undo. With the directive it gets an opaque origin and those throw.
 
+**It says so when it refuses (the one message the host does listen for).** A tool that
+saves quietly looks exactly like one that has, so the shim does not drop a write in
+silence: the first write it refuses — `persistState` reaching the version branch, the
+same condition under which the live shim would have posted `__avState`, so "a change
+that would have been saved" has one definition — is reported to the host as
+`__avVersionUnsaved`, once per load, and the host reveals a banner that is already in
+the page. It is drawn as the capability warning is (§1.1 — the same `.banner-warn`, the
+same collapsed Details), in the page's own chrome and never in the artifact's DOM,
+which the artifact could forge, and it says that nothing is saved until the version is
+the active one and names the way there: *Restore* on the edit page, *Roll back* in the
+chat. What the person did in the preview is discarded, not carried into the
+restore — a restore puts back exactly what the version left, which is what makes
+"what you viewed is what you get" a property rather than a hope.
+
+That is a deliberate hole in "the host does not hear it", and what makes it safe to
+make is how little the hole carries:
+
+- **The message holds nothing.** No op, no key, no value — the artifact's code chooses
+  all three, and the host needs to know only that a write was refused, never what it
+  was. It is pinned to the app origin like every message the frame sends, and sent once
+  (a tool that autosaves would otherwise post on every tick).
+- **The listener is not a bridge.** It lives in `components.js`, apart from every bridge
+  that serves the artifact frame, identifies the viewer's own frame by *source window*
+  (a sandboxed frame's origin is the string `"null"` and proves nothing), and has one
+  effect: un-hiding a fixed sentence. Nothing in the message chooses what is revealed,
+  where, or what is written, so a notice the artifact forges is no worse than the
+  notice appearing.
+- **Nothing about the three barriers changed.** The version frame still carries no
+  `#pv-frame`, so no state, network or picker bridge listens to it, and the CSP sandbox
+  still gives it no real origin. A forged `__avState` is still not heard. The notice
+  cannot be spent as a write because it is not shaped like one and nothing that writes
+  reads it.
+
+It fires on the first write the view refuses *whoever caused it*: a tool that writes
+defaults at startup raises the notice as the view opens. That is accurate — it tried to
+save and could not — and distinguishing a person's change from a tool's own would take a
+guess about intent this product does not otherwise make.
+
 Verified end to end in a browser rather than argued: in a version view the artifact
 counts (it works inside its frame), live data is unchanged, no write request leaves
 the page, viewing it again shows the original snapshot, and a hand-forged state
 message does nothing — while the *same* message from the artifact frame is persisted
 (so the version frame is protected by what it is, not by the test), and the live
 document opened top-level has a real origin and IndexedDB where the version has
-neither.
+neither. The first change that would have been saved raises the notice on both pages
+(hidden until then, one notice however many changes, gone with the viewer), a notice
+that did not come from the version frame does nothing, and restoring afterwards puts
+back exactly what the version left rather than what was clicked in the preview.
 
 What it deliberately is not. It is the artifact running, so it can use the network
 its allowlist permits — the allowlist is the artifact's current one, which is not
@@ -694,7 +736,10 @@ rather than raising prompts that would write per-artifact authority.
 
 Pinned by `internal/render/version_test.go` (what is served, the scope matrix, the
 owner-only line, the headers), `internal/rendertoken` (the scope), the shim harness
-in `web/gallery/render.shim.test.mjs` (run, not read), and
+in `web/gallery/render.shim.test.mjs` (run, not read — including that the notice is
+sent once, empty, to the app origin, and by a version view alone),
+`web/gallery/components.versionviewer.test.mjs` (the listener: only the viewer's own
+frame, only the notice's own shape, one fixed effect), and
 `internal/api/versionviewer_test.go`, whose last cases ask the *real* render handler
 for the URL the app minted.
 

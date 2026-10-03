@@ -75,6 +75,44 @@ func TestTheVersionViewerShowsAnEarlierVersionRunning(t *testing.T) {
 	assert.Contains(t, withRestore, `data-action="restore" data-seq="1"`)
 }
 
+// A tool that tries to save in a preview is told it did not (av-vw7r). The words
+// are the page's, written into the fragment and hidden until the frame reports a
+// refused write, so what is checked here is that the banner is there, hidden,
+// drawn as the capability warning is, and says the true thing for the page that
+// asked: that nothing is saved until the version is the active one, and which
+// button makes it so.
+func TestTheVersionViewerHasAHiddenWarningForAToolThatTriesToSave(t *testing.T) {
+	r, id := versionedFixture(t)
+
+	chat := getPage(t, r, "/partials/version-viewer?artifact="+id+"&seq=2")
+	edit := getPage(t, r, "/partials/version-viewer?artifact="+id+"&seq=2&restorable=1")
+
+	for name, frag := range map[string]string{"chat": chat, "edit page": edit} {
+		// components.js reveals this id, and the id is the whole contract between
+		// the two: a template that spells it differently is a notice that never shows.
+		assert.Contains(t, frag, `id="version-viewer-unsaved"`, name)
+		// The capability warning's own classes and role, so it is the same warning
+		// in the same style (and picks up any change to it).
+		assert.Contains(t, frag, `class="banner banner-warn" id="version-viewer-unsaved" role="alert" hidden>`, name)
+		assert.Contains(t, frag, `<i class="ph ph-warning" aria-hidden="true"></i>`, name)
+		assert.Contains(t, frag, "Changes aren't saved while you preview v2.", name)
+		assert.Contains(t, frag, "to make it the active version.", name)
+		assert.Contains(t, frag, `<details class="banner-details">`, name)
+	}
+
+	// Each page names the way back to a version as it offers it: the edit page's
+	// Restore sits beside the view, the chat's rollback is its History card's.
+	assert.Contains(t, edit, "Restore v2 to make it the active version.")
+	assert.NotContains(t, edit, "Roll back to v2")
+	assert.Contains(t, chat, "Roll back to v2 to make it the active version.")
+	assert.NotContains(t, chat, "Restore v2 to make")
+
+	// The warning sits between the bar and the frame, so it reads as part of what
+	// the person is looking at and not as a banner for the whole page.
+	assert.Less(t, strings.Index(edit, `class="version-viewer-bar"`), strings.Index(edit, `id="version-viewer-unsaved"`))
+	assert.Less(t, strings.Index(edit, `id="version-viewer-unsaved"`), strings.Index(edit, `class="version-viewer-body"`))
+}
+
 // The URL the fragment mints is a version document on the render origin, under a
 // token for that version alone — which is what keeps the token the live document
 // hands the artifact from opening history.

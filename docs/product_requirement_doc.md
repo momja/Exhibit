@@ -613,6 +613,12 @@ changing anything. A view is a preview: you can click around in it and the tool 
 but nothing you do there is saved, and it never touches the artifact's real data, so
 looking is always safe and "this is what I will get" is something you have seen rather
 than been told.
+The moment the tool tries to save something in a preview, you are told: a warning, in
+the same style as the one for a request the sandbox cannot complete, says that changes
+are not saved while you preview that version, and that they will be once it is the
+active one — restore it, or roll back to it. What you did in the preview is discarded,
+never carried into the version when you restore it, so a restore still puts back
+exactly what the version left.
 Nothing in the history is ever discarded, and the artifact's network allowlist and
 capability approvals are not part of it — returning to an old version never widens
 what the artifact may reach.

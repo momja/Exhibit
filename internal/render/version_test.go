@@ -113,8 +113,17 @@ func TestAVersionDocumentCannotPersistAnything(t *testing.T) {
 
 	w := serveVersion(rd, "abc", 1, versionToken("abc", 1, 1))
 	body := w.Body.String()
-	if !strings.Contains(body, "var VERSION_VIEW = true;") || !strings.Contains(body, "if (VERSION_VIEW) return;") {
+	// The branch has to come before the post: persistState in a version view
+	// reports the refusal and returns, and never reaches the __avState message.
+	// What it does is run in render.shim.test.mjs; this holds the order the run
+	// depends on.
+	branch := strings.Index(body, "if (VERSION_VIEW) {")
+	write := strings.Index(body, "window.parent.postMessage(msg, API_ORIGIN)")
+	if !strings.Contains(body, "var VERSION_VIEW = true;") || branch < 0 || write < 0 || branch > write {
 		t.Fatalf("the shim must not write through in a version view: %s", body)
+	}
+	if !strings.Contains(body, "window.parent.postMessage({ __avVersionUnsaved: true }, API_ORIGIN)") {
+		t.Fatalf("a version view must say that it did not save, and say nothing else: %s", body)
 	}
 	csp := w.Header().Get("Content-Security-Policy")
 	if !strings.Contains(csp, "sandbox allow-scripts allow-forms") || strings.Contains(csp, "allow-same-origin") {

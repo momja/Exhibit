@@ -84,10 +84,24 @@
      - The bar says it is a preview and that nothing is saved, so what is
        shown is never mistaken for the artifact as it is.
 
+     And it says so again, louder, the moment the tool actually tries to save.
+     A tool that saves quietly looks exactly like one that has, so the first
+     write the view refuses is reported by the frame (__avVersionUnsaved: no
+     key, no value) and components.js reveals the banner below — in the page's
+     own chrome, in the same style as the capability warning, and never in the
+     artifact's DOM, which the artifact could forge. That message is the one
+     thing the page listens to this frame for, and the listener's whole effect is
+     showing this sentence, so a notice the artifact forges is no worse than the
+     notice appearing. It stays up until the viewer is replaced, because a
+     warning that fades is one the person may not have read.
+
      The close button carries only data-action="close-version-viewer": what
      closing means is the page's (the chat re-renders its preview pane; the
      edit page empties the slot), so each page's script owns it. Restorable is
-     the edit page asking for the restore beside the view, where it is decided. */}}
+     the edit page asking for the restore beside the view, where it is decided;
+     it also decides what the notice tells a person to press, since each page
+     names the way back to a version differently (the edit page's Restore, the
+     chat card's Roll back). */}}
 {{define "versionViewer"}}<div class="version-viewer" id="version-viewer">
   <div class="version-viewer-bar" role="status">
     <i class="ph ph-eye" aria-hidden="true"></i>
@@ -98,6 +112,16 @@
     <div class="version-viewer-actions">
       {{if .Restorable}}<button type="button" class="btn btn-sm" data-action="restore" data-seq="{{.Seq}}"><i class="ph ph-arrow-counter-clockwise"></i> Restore v{{.Seq}}</button>{{end}}
       <button type="button" class="btn btn-sm btn-sec" data-action="close-version-viewer">Back to current</button>
+    </div>
+  </div>
+  <div class="banner banner-warn" id="version-viewer-unsaved" role="alert" hidden>
+    <i class="ph ph-warning" aria-hidden="true"></i>
+    <div class="banner-body">
+      <span>Changes aren't saved while you preview v{{.Seq}}. {{if .Restorable}}Restore{{else}}Roll back to{{end}} v{{.Seq}} to make it the active version.</span>
+      <details class="banner-details">
+        <summary>Details</summary>
+        <p>This is v{{.Seq}} as it was, running with the data it left behind. Nothing you change in it is sent to the server, and it is discarded when you leave the preview. Once v{{.Seq}} is the active version, changes you make are saved as usual.</p>
+      </details>
     </div>
   </div>
   <div class="version-viewer-body"><iframe class="version-viewer-frame" src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" title="{{.Title}}, version {{.Seq}}"></iframe></div>
