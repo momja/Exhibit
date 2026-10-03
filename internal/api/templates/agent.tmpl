@@ -197,9 +197,43 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
   <h2 class="history-title">{{.Title}}</h2>
   <p class="history-meta">{{template "conversationMeta" .}}</p>
 </div>
-<div class="history-messages">
+<div class="history-messages" id="history-messages">
   {{range .Messages}}{{if eq .Role "tool"}}<div class="tool-chip {{if .Failed}}fail{{else}}done{{end}}"><i class="ph {{if .Failed}}ph-x-circle{{else}}ph-check-circle{{end}}"></i> {{.Text}}</div>{{else}}<div class="msg {{.Role}}">{{.Text}}{{if .Images}}<span class="history-images">{{.Images}} image{{if ne .Images 1}}s{{end}} attached</span>{{end}}</div>{{end}}{{else}}<p class="history-empty">Nothing was said in this conversation.</p>{{end}}
-</div>{{end}}
+</div>
+{{template "agentResume" .}}{{end}}
+
+{{/* agentResume is how a stored conversation is continued — and the one place a
+     person decides what happens to the artifact when they do (av-b4yh).
+
+     The conversation was last working against one version of the artifact and
+     the artifact may have moved on. If it has, continuing offers two things and
+     states what each costs. Rolling back is the primary action: it puts the
+     artifact's code and saved data back as that version left them, recorded as
+     a new version so nothing is lost, and the click on a button that says so is
+     the confirmation — nothing changes before it. Continuing without rolling
+     back is the escape: a plain secondary button, never the default, which
+     leaves the artifact alone and starts the agent from it as it is, told that
+     it may have changed.
+
+     Everything else is a note, not a missing button: a conversation kept before
+     they could be continued says so, and so does an instance with no agent.
+     Data: agentTranscriptData; agent.js (resumeConversation) does the rest. */}}
+{{define "agentResume"}}{{if not .Resumable}}<p class="resume-note">This conversation was kept before conversations could be continued, so it can only be read.</p>
+{{else if not .AgentEnabled}}<p class="resume-note">Agent support is off on this server, so conversations can only be read.</p>
+{{else if or .Current (eq .VersionSeq 0)}}<div class="resume-card" id="resume-card">
+  <button type="button" class="btn" data-resume="{{.SessionID}}" data-rollback="0"><i class="ph ph-chat-circle"></i> Continue this conversation</button>
+  <p class="resume-status" id="resume-status" role="status" aria-live="polite"></p>
+</div>
+{{else}}<div class="resume-card" id="resume-card">
+  <p class="resume-lede">This conversation was last working against <strong>v{{.VersionSeq}}</strong>. The artifact is now at <strong>v{{.HeadSeq}}</strong>.</p>
+  <button type="button" class="btn" data-resume="{{.SessionID}}" data-rollback="{{.VersionSeq}}"><i class="ph ph-arrow-counter-clockwise"></i> Roll back to v{{.VersionSeq}} and continue</button>
+  <p class="resume-explain">Puts the artifact’s code and saved data back as v{{.VersionSeq}} left them. It is recorded as a new version, so nothing is lost, and you can undo it from the Versions list.</p>
+  <button type="button" class="btn btn-sec" data-resume="{{.SessionID}}" data-rollback="0">Continue without rolling back</button>
+  <p class="resume-explain">Leaves the artifact as it is now. The agent is told it may have changed, and reads it again before changing anything.</p>
+  <button type="button" class="resume-cancel"
+          hx-get="/partials/agent-history?artifact={{.ArtifactID | urlquery}}" hx-target="#history" hx-swap="innerHTML">Cancel</button>
+  <p class="resume-status" id="resume-status" role="status" aria-live="polite"></p>
+</div>{{end}}{{end}}
 
 {{/* conversationMeta is the one line under a conversation's title: the artifact
      version it was last working against (and whether that is still the one

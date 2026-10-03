@@ -457,6 +457,56 @@ once the process has exited, everything it printed has been read, and the last
 settled turn is stored. The conversation's home is the database; a copy left on
 disk would outlive the account that owned it.
 
+### Resuming a conversation (av-b4yh)
+
+`POST /api/agent/sessions` with `{"artifact_id", "resume_session_id"}` starts a
+session from a stored conversation instead of a blank one.
+
+- The manager writes the stored session file into the new session's scratch
+  directory and spawns Pi with the same `--session` flag, so Pi has the
+  conversation exactly as it was at its last settled turn (a turn that was still
+  running when the last session ended never finished, and is not continued).
+- The session **keeps the conversation's identity**: same id, so the same
+  `agent_transcripts` row keeps growing and the versions it writes carry the same
+  `session_id`; the title is kept rather than rederived.
+- Its **spend stays one conversation's**. The usage ledger and the session
+  ceiling (av-2yws, av-99f4) count by session id, so a resumed conversation goes
+  on against the same total — resuming is no way to reset a ceiling — and the new
+  process starts its tally of what is recorded from the ledger's own. Pi's totals
+  count the whole conversation, and every settle reconciles the ledger against
+  them; starting that tally from zero would make the first settle record the
+  earlier turns a second time.
+- The system prompt is the *current* one. Pi sends the prompt it was spawned
+  with, not the copy in the file — measured, not assumed — so an instruction
+  improved since is in force and nothing stale is replayed beside it. Pi also
+  takes `--provider`/`--model` from the command line over the file's recorded
+  model, so an owner who has switched keys resumes on the new one.
+- The first prompt after a resume carries one fixed sentence (`resumedNotice`):
+  the artifact may have changed since the agent last read it, so read it again
+  before changing anything. It is sent whether or not the artifact was rolled
+  back, because either way what the model remembers of it may be stale. A prompt
+  the usage-policy guardrail refuses never reaches the model, so the sentence
+  waits for the first prompt that does.
+- A conversation that is still running is continued by **attaching** to it
+  (200, with a fresh SSE ticket) — a second process on one conversation would be
+  two writers of one record. Losing a race for the same conversation is a 409.
+- Refusals: no `artifact_id` is a 400; a conversation that is not the owner's, or
+  is not there, is a 404 (the same answer for both); a conversation kept before
+  session files existed is a 409 — it can be read and not continued.
+
+**Rolling back is the page's decision, not the endpoint's.** Resuming never
+changes the artifact. The chat page puts the choice to the person (below), then
+starts the session, then — only if they chose to roll back — calls the ordinary
+`POST /api/artifacts/:id/versions/:seq/restore`. The session starts first so a
+refusal (no key, no agent) costs nothing: nothing has been rolled back yet.
+
+Replaying a stored conversation into a new session is safe for the reason the
+tool-result boundary exists (`security.md` §5.2): the file holds what Pi
+recorded, in the roles it recorded them — what the artifact said is a tool
+result and stays one. Nothing a model can call writes it: the manager stores it,
+Pi alone writes it, and the session's scoped credential cannot reach the route
+(`Exh-v6v4` carries the note on keeping it that way).
+
 ## Chat UI
 
 `GET /agent` (create) and `GET /agent?artifact=<id>` (modify; also linked from
@@ -474,8 +524,32 @@ title, when it last ran, and the version it was last working against ("Based on
 v4 · current" while the artifact is still at it). Selecting one shows it
 read-only, in the same bubbles and tool chips the live chat draws. Both views
 are server-rendered fragments (`/partials/agent-history`,
-`/partials/agent-transcript`) swapped into `#history` by htmx; `agent.js` only
-opens and closes the pane.
+`/partials/agent-transcript`) swapped into `#history` by htmx; `agent.js` opens
+and closes the pane and runs the one thing a fragment cannot, which is
+continuing a conversation.
+
+**Continuing.** Under the transcript is a card that is the whole decision. If the
+artifact is still at the version the conversation was last working against, it is
+one button, *Continue this conversation*. If it has moved on, the card says which
+version the conversation was working against and which the artifact is at, and
+offers:
+
+- **Roll back to vN and continue** — the primary button. It puts the artifact's
+  code and saved data back as vN left them (a restore, recorded as a new version,
+  so nothing is lost and it can be undone from the Versions list), then continues.
+  The card states this beside the button; nothing changes before the click.
+- **Continue without rolling back** — the escape, a plain secondary button and
+  never the default. The artifact is left as it is, and the agent re-reads it.
+- **Cancel** — back to the list.
+
+`resumeConversation` starts the conversation first and rolls back second, so a
+refusal (no key, no agent) leaves the artifact alone, and a rollback that fails
+closes the session it started and says the conversation was not continued. It
+refuses to switch while the agent is mid-turn, replaces the page's chat with the
+conversation being continued, and re-renders the preview if it rolled back. A
+conversation that cannot be continued — kept before session files existed, or on
+an instance with no agent — shows a note where the card would be, not a missing
+button.
 
 **The brief handoff (nw-d1dd).** A create session usually arrives from `/new`,
 whose Build-with-agent panel is now the page's default and is a *form* rather
@@ -636,8 +710,8 @@ render-surface capability any embedding host can drive, not agent code).
 
 - One configured key per owner (not per provider); model list is a datalist
   hint, not validated against Pi's registry.
-- Sessions are in-memory: a server restart drops live chats (transcripts
-  already persisted survive).
+- Sessions are in-memory: a server restart drops live chats (the conversations
+  already kept survive, and can be continued from History).
 - The snippet rasterizer is best-effort (bounded at 300 nodes / 2000px,
   degrades to descriptor-only on failure).
 - No runtime allowlist-approval prompt in the chat (the artifact page's
