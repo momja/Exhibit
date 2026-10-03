@@ -49,3 +49,7 @@ Found while investigating a source domain that had been live a day earlier — t
 **2026-08-18T01:12:37Z**
 
 Narrowed after review. Dropped the content-based guards (parking-page detection, shrinkage refusal): a source that serves a different page IS serving a different page, and separating 'replaced' from 'redesigned' means inferring intent from content, which this system does not do. What survives is protocol-level (non-2xx, empty, non-HTML) plus the part that actually matters — the overwrite is in place and irreversible. Since an unwanted update cannot be distinguished from a wanted one, recoverability rather than prevention is the answer.
+
+**2026-10-03T06:00:00Z**
+
+[[av-bavj]] makes the overwrite recoverable: a refetch writes a new blob and records a version, so the previous body is kept and one restore away. The protocol-level checks (non-2xx, empty body, non-HTML) and the asset-generation trap described above are not addressed by it.

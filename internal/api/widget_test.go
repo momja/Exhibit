@@ -56,16 +56,27 @@ func TestWidgetPutGetRoundTrip(t *testing.T) {
 	assert.NotContains(t, w.Body.String(), `"widget_blob_id":""`)
 }
 
-// Re-saving must not mint a new blob: the widget's render URL is embedded in
-// gallery cards, so it has to stay stable across edits.
-func TestWidgetSaveReusesBlobID(t *testing.T) {
+// Every save is a version with a blob of its own — the previous tile belongs to
+// the version that had it — while the render URL, which is keyed by the
+// artifact, never moves: the gallery card's iframe src stays stable.
+func TestWidgetSaveWritesANewBlobAndKeepsTheRenderURL(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Run Log")
 
-	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>v1</b>").Code)
-	first := artifactField(t, r, id, "widget_blob_id")
+	first := putWidgetReq(t, r, id, "<b>v1</b>")
+	require.Equal(t, http.StatusOK, first.Code)
+	firstBlob := artifactField(t, r, id, "widget_blob_id")
+	second := putWidgetReq(t, r, id, "<b>v2</b>")
+	require.Equal(t, http.StatusOK, second.Code)
+
+	assert.NotEqual(t, firstBlob, artifactField(t, r, id, "widget_blob_id"))
+	assert.Contains(t, first.Body.String(), `"widget_url":"http://render.test/w/`+id+`"`)
+	assert.Contains(t, second.Body.String(), `"widget_url":"http://render.test/w/`+id+`"`)
+
+	// Saving the tile it already has records nothing.
+	before := versionCount(t, r, id)
 	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>v2</b>").Code)
-	assert.Equal(t, first, artifactField(t, r, id, "widget_blob_id"))
+	assert.Equal(t, before, versionCount(t, r, id))
 }
 
 // A widget rides the artifact's allowlist, so it gets no approval flow of its
@@ -230,12 +241,14 @@ func TestEditPageSectionsAreSymmetricPanels(t *testing.T) {
 		`<details class="details-panel" id="assets-panel">`,
 		`<details class="details-panel" id="source-panel" open>`,
 		`<details class="details-panel" id="widget-panel">`,
+		`<details class="details-panel" id="versions-panel">`,
 	} {
 		assert.Contains(t, page, panel)
 	}
 	// One caret definition, rendered by every summary (panelCaret partial) —
-	// tags, security, state (av-hg5f), assets (av-20fk), source, and widget.
-	assert.Equal(t, 6, strings.Count(page, `class="ph ph-caret-right details-caret details-caret-closed"`))
+	// tags, security, state (av-hg5f), assets (av-20fk), source, widget, and
+	// versions.
+	assert.Equal(t, 7, strings.Count(page, `class="ph ph-caret-right details-caret details-caret-closed"`))
 	// Both source fields are real textareas the editor island mounts over, so
 	// the widget source is not a second-class field.
 	assert.Contains(t, page, `<textarea id="body">`)

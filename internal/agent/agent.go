@@ -216,7 +216,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	// The credential is what actually confines this session: it resolves to
 	// (owner, artifact) and the API refuses everything else. The subprocess
 	// never sees the operator's service token (av-e0yj).
-	grant, err := m.cfg.Credentials.Issue(opts.OwnerID, opts.ArtifactID)
+	grant, err := m.cfg.Credentials.Issue(opts.OwnerID, opts.ArtifactID, id)
 	if err != nil {
 		return nil, err
 	}
@@ -608,6 +608,9 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	s.lastActive = time.Now()
 	s.guardBlocked = false
 	s.mu.Unlock()
+	// The artifact versions the agent writes while answering this are labelled
+	// with it (api.versionProvenance reads it off the grant).
+	s.grant.SetPrompt(message)
 
 	cmd := map[string]any{"type": "prompt", "message": composePrompt(s.nonce, message, blocks)}
 	if len(images) > 0 {

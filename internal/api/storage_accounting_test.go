@@ -39,8 +39,9 @@ func deleteWidgetReq(t *testing.T, r *Router, id string) *httptest.ResponseRecor
 }
 
 // The whole life of one artifact, in the order a person does it: ingest, edit,
-// add a tile, drop the tile, delete the artifact. The number has to be right at
-// every step, and zero at the end.
+// add a tile, replace the tile, drop the tile, delete the artifact. History is
+// kept, so every replaced body and tile stays charged until the artifact goes —
+// and the number has to be right at every step, and zero at the end.
 func TestStorageTotalFollowsTheArtifactLifecycle(t *testing.T) {
 	r := newTestRouter(t)
 	require.Zero(t, storageUsed(t, r), "an empty library holds nothing")
@@ -53,23 +54,24 @@ func TestStorageTotalFollowsTheArtifactLifecycle(t *testing.T) {
 
 	const edited = "<html><body>a tool, with rather more words in it than before</body></html>"
 	patchArtifact(t, r, id, map[string]any{"body": edited})
-	assert.Equal(t, int64(len(edited)), storageUsed(t, r),
-		"an edit rewrites the body in place, so its length replaces rather than adds to the old one")
+	assert.Equal(t, int64(len(body)+len(edited)), storageUsed(t, r),
+		"an edit writes a new blob, and the replaced body is still version 1's")
 
 	const widget = "<html><body><b>42 km</b></body></html>"
 	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, widget).Code)
-	assert.Equal(t, int64(len(edited)+len(widget)), storageUsed(t, r), "the tile is stored bytes too")
+	assert.Equal(t, int64(len(body)+len(edited)+len(widget)), storageUsed(t, r), "the tile is stored bytes too")
 
 	const widget2 = "<html><body><b>43 km this week</b></body></html>"
 	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, widget2).Code)
-	assert.Equal(t, int64(len(edited)+len(widget2)), storageUsed(t, r),
-		"a widget save reuses its blob id, so saving twice stores one tile")
+	assert.Equal(t, int64(len(body)+len(edited)+len(widget)+len(widget2)), storageUsed(t, r),
+		"a widget save is a new version with a blob of its own, so the first tile is kept")
 
 	require.Equal(t, http.StatusNoContent, deleteWidgetReq(t, r, id).Code)
-	assert.Equal(t, int64(len(edited)), storageUsed(t, r), "detaching the tile stops charging for it")
+	assert.Equal(t, int64(len(body)+len(edited)+len(widget)+len(widget2)), storageUsed(t, r),
+		"removing the tile is a new version; the versions that had it still hold its bytes")
 
 	require.Equal(t, http.StatusNoContent, deleteArtifactReq(t, r, id).Code)
-	assert.Zero(t, storageUsed(t, r), "and deleting the artifact takes the total back to zero")
+	assert.Zero(t, storageUsed(t, r), "deleting the artifact takes the total back to zero")
 }
 
 // Deleting the account takes the total to zero — the acceptance criterion

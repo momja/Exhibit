@@ -58,7 +58,7 @@ func TestAgentCredentialCannotWriteAnotherArtifact(t *testing.T) {
 	idA := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
 	idB := createArtifact(t, r, map[string]any{"title": "B", "body": "<html><body>b</body></html>"})
 
-	grant, err := reg.Issue(1, idA)
+	grant, err := reg.Issue(1, idA, "")
 	require.NoError(t, err)
 	tok := grant.Token()
 
@@ -87,7 +87,7 @@ func TestAgentCredentialCannotChangeShareStateMode(t *testing.T) {
 	r, reg := newScopedTestRouter(t)
 
 	id := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
-	grant, err := reg.Issue(1, id)
+	grant, err := reg.Issue(1, id, "")
 	require.NoError(t, err)
 
 	w := doWithToken(t, r, "PATCH", "/api/artifacts/"+id, grant.Token(),
@@ -116,7 +116,7 @@ func TestAgentCredentialCannotReadAnotherArtifact(t *testing.T) {
 	idA := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
 	idB := createArtifact(t, r, map[string]any{"title": "B", "body": "<html><body>secret</body></html>"})
 
-	grant, err := reg.Issue(1, idA)
+	grant, err := reg.Issue(1, idA, "")
 	require.NoError(t, err)
 
 	w := doWithToken(t, r, "GET", "/api/artifacts/"+idA+"?body=true", grant.Token(), nil)
@@ -135,7 +135,7 @@ func TestAgentCredentialReachesNothingButItsArtifact(t *testing.T) {
 
 	id := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
 	other := createArtifact(t, r, map[string]any{"title": "B", "body": "<html><body>b</body></html>"})
-	grant, err := reg.Issue(1, id)
+	grant, err := reg.Issue(1, id, "")
 	require.NoError(t, err)
 	tok := grant.Token()
 
@@ -180,7 +180,7 @@ func TestAgentCredentialReachesItsOwnArtifactSubResources(t *testing.T) {
 	r, reg := newScopedTestRouter(t)
 
 	id := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
-	grant, err := reg.Issue(1, id)
+	grant, err := reg.Issue(1, id, "")
 	require.NoError(t, err)
 	tok := grant.Token()
 
@@ -215,7 +215,7 @@ func TestAgentCredentialReachesItsOwnArtifactSubResources(t *testing.T) {
 func TestAgentCredentialBindsOnFirstCreate(t *testing.T) {
 	r, reg := newScopedTestRouter(t)
 
-	grant, err := reg.Issue(1, "")
+	grant, err := reg.Issue(1, "", "")
 	require.NoError(t, err)
 	tok := grant.Token()
 	require.Empty(t, grant.Scope().ArtifactID)
@@ -250,7 +250,7 @@ func TestUnboundAgentCredentialCannotTouchExistingArtifacts(t *testing.T) {
 	r, reg := newScopedTestRouter(t)
 
 	id := createArtifact(t, r, map[string]any{"title": "Existing", "body": "<html><body>x</body></html>"})
-	grant, err := reg.Issue(1, "")
+	grant, err := reg.Issue(1, "", "")
 	require.NoError(t, err)
 
 	w := doWithToken(t, r, "GET", "/api/artifacts/"+id, grant.Token(), nil)
@@ -264,7 +264,7 @@ func TestRevokedAgentCredentialIsUnauthorized(t *testing.T) {
 	r, reg := newScopedTestRouter(t)
 
 	id := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
-	grant, err := reg.Issue(1, id)
+	grant, err := reg.Issue(1, id, "")
 	require.NoError(t, err)
 
 	w := doWithToken(t, r, "GET", "/api/artifacts/"+id, grant.Token(), nil)
@@ -337,7 +337,7 @@ func TestPercentEncodedArtifactIDResolvesConsistently(t *testing.T) {
 	r, reg := newScopedTestRouter(t)
 
 	id := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
-	grant, err := reg.Issue(1, id)
+	grant, err := reg.Issue(1, id, "")
 	require.NoError(t, err)
 
 	var encoded strings.Builder

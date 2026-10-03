@@ -137,6 +137,10 @@ type Artifact struct {
 	// the blob store remains the body's source of truth — so this field is
 	// write-only from the caller's perspective.
 	SourceText string `json:"-"`
+	// Provenance says what produced the artifact's first version. Like
+	// SourceText it is write-only: PutArtifact reads it, nothing scans it back.
+	// The zero value is an ordinary ingest ("initial").
+	Provenance Provenance `json:"-"`
 }
 
 type Collection struct {
@@ -398,20 +402,24 @@ type Store interface {
 	GetArtifactReadableBy(ctx context.Context, viewerID ViewerID, id string) (*Artifact, error)
 	ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error)
 	UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error
-	// SetWidgetBlobID attaches the artifact's gallery-card widget body, and
-	// refuses an empty blobID: detaching is DeleteWidget's job, because
-	// dropping the reference and enqueuing the bytes has to happen in one
-	// transaction. Separate from UpdateArtifact because widget_blob_id is not
-	// caller-writable: the generic update map is a decoded PATCH body, and
-	// this id is minted server-side.
-	SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error
 	// DeleteArtifact removes the artifact and returns the blob ids it queued
-	// for deletion; DeleteWidget does the same for the widget an artifact
-	// detaches. Both enqueue inside the transaction that dropped the
-	// reference, and only for a blob no remaining row names (blobqueue.go).
-	// The caller hands what comes back to DrainBlobDeletions.
+	// for deletion. It enqueues inside the transaction that dropped the
+	// reference, and only for a blob no remaining row names (blobqueue.go) —
+	// every version of the artifact is among the rows dropped, so every blob
+	// only they named is queued. The caller hands what comes back to
+	// DrainBlobDeletions.
 	DeleteArtifact(ctx context.Context, ownerID int64, id string) ([]string, error)
-	DeleteWidget(ctx context.Context, ownerID int64, artifactID string) ([]string, error)
+
+	// Version history (migration 031, versions.go). Every change to an
+	// artifact's body or widget goes through CommitVersion or RestoreVersion —
+	// there is no other writer of source_blob_id or widget_blob_id — and each
+	// snapshots the state of the version it replaces in the same transaction.
+	// All four are owner-scoped like the rest of the artifact's children:
+	// another owner's artifact has no history to read and cannot be written to.
+	ListVersions(ctx context.Context, ownerID int64, artifactID string) ([]Version, error)
+	GetVersion(ctx context.Context, ownerID int64, artifactID string, seq int) (*Version, error)
+	CommitVersion(ctx context.Context, ownerID int64, artifactID string, c VersionChange) (*Version, error)
+	RestoreVersion(ctx context.Context, ownerID int64, artifactID string, seq int, p Provenance, sourceText string) (*Version, error)
 
 	// Out-of-line assets (av-20fk): the binary payloads a page fetches at run
 	// time, stored as blobs of their own rather than base64 inside the body.

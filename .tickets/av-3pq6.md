@@ -34,3 +34,7 @@ Keep prior versions of an artifact's source body instead of destructively overwr
 **2026-08-17T04:44:04Z**
 
 av-20fk (out-of-line asset blobs) makes this ticket's keep-all-versions retention cheaper, not costlier: the multi-MB vendored snapshot body this section worries about becomes small text, with the binary payload in a separate asset generation shared across every version that references it. Generations are minted only by ingest/refetch, never by an edit, and are content-addressed — so an unchanged refetch mints none. Retention rule to adopt there: keep any generation a retained version references. No pruning policy needed on either side for now.
+
+**2026-10-03T06:00:00Z**
+
+Superseded in design by [[av-bavj]]: versions are rows in `artifact_versions` (not content-addressed), the head is a version, and each carries the saved state it left behind. Thumbnails, a running preview and a diff were left out of the first cut; this ticket can stay open for those.

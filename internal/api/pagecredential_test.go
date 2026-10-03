@@ -101,6 +101,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/artifacts/{artifactID}/origins", path: "/api/artifacts/{id}/origins"},
 	{route: "/api/artifacts/{artifactID}/widget", path: "/api/artifacts/{id}/widget"},
 	{route: "/api/artifacts/{artifactID}/shares", path: "/api/artifacts/{id}/shares"},
+	{route: "/api/artifacts/{artifactID}/versions", path: "/api/artifacts/{id}/versions"},
 	{route: "/api/artifacts/{artifactID}/transcripts", path: "/api/artifacts/{id}/transcripts"},
 	{route: "/api/agent/key", path: "/api/agent/key"},
 	// SSE. With no agent manager configured it answers "not enabled" and

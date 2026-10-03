@@ -131,17 +131,24 @@ func TestDeletingAnArtifactDropsItsBytes(t *testing.T) {
 	assert.Equal(t, int64(40), usage(t, s, 1), "both of the artifact's blobs stop counting")
 }
 
-// Detaching a widget is the same story one column down: DeleteWidget removes
-// the reference, so the tile's bytes stop being charged even though the
-// artifact stays.
-func TestDetachingAWidgetDropsItsBytes(t *testing.T) {
+// A replaced body or widget is still charged: an older version names it, and
+// history is the owner's to keep or delete. Deleting the artifact is what ends
+// the charge, for the head and for every version alike.
+func TestVersionsKeepReplacedBytesCharged(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	putSized(t, s, "a1", 1, "a1-body", 1000, "a1-widget", 200)
 
-	_, err := s.DeleteWidget(ctx, 1, "a1")
+	newBody := "a1-body-2"
+	noWidget := ""
+	_, err := s.CommitVersion(ctx, 1, "a1", VersionChange{BodyBlobID: &newBody, WidgetBlobID: &noWidget})
 	require.NoError(t, err)
-	assert.Equal(t, int64(1000), usage(t, s, 1))
+	require.NoError(t, s.RecordBlobSize(ctx, newBody, 50))
+	assert.Equal(t, int64(1250), usage(t, s, 1), "the old body and widget are held by version 1")
+
+	_, err = s.DeleteArtifact(ctx, 1, "a1")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), usage(t, s, 1), "every version's bytes stop being charged with the artifact")
 }
 
 // ForgetBlobSizes is a prune, not a delete by id: a length still referenced by

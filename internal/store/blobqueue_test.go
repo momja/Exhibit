@@ -213,9 +213,9 @@ func TestSharedBlobIsQueuedOnlyWhenItsLastReferenceGoes(t *testing.T) {
 }
 
 // The refcount spans columns, not just rows: an id used as one artifact's body
-// and another's widget is referenced twice, and detaching the widget must not
-// condemn the body.
-func TestDetachingAWidgetSharedWithABodyQueuesNothing(t *testing.T) {
+// and another's widget is referenced twice, and deleting one of them must not
+// condemn the blob the other still names.
+func TestDeletingABodySharedWithAWidgetQueuesNothing(t *testing.T) {
 	fx := newQueueFixture(t)
 	ctx := context.Background()
 
@@ -227,21 +227,15 @@ func TestDetachingAWidgetSharedWithABodyQueuesNothing(t *testing.T) {
 		ID: "a2", OwnerID: 1, Title: "tile", SourceBlobID: "own-body", WidgetBlobID: "dual-use", Tier: Tier1,
 	}))
 
-	queued, err := fx.store.DeleteWidget(ctx, 1, "a2")
+	queued, err := fx.store.DeleteArtifact(ctx, 1, "a1")
 	require.NoError(t, err)
-	assert.Empty(t, queued, "a1's body is still that blob")
+	assert.Empty(t, queued, "a2's widget is still that blob")
 	require.FileExists(t, fx.path("dual-use"))
 
-	// Detaching is still idempotent, and an artifact that has no widget
-	// queues nothing rather than failing.
-	queued, err = fx.store.DeleteWidget(ctx, 1, "a2")
-	require.NoError(t, err)
-	assert.Empty(t, queued)
-
 	// Once the other reference goes, the id is condemned exactly once.
-	queued, err = fx.store.DeleteArtifact(ctx, 1, "a1")
+	queued, err = fx.store.DeleteArtifact(ctx, 1, "a2")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"dual-use"}, queued)
+	assert.ElementsMatch(t, []string{"dual-use", "own-body"}, queued)
 }
 
 // Erasing an account is the third delete path, and the one that condemns a

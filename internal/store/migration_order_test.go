@@ -106,6 +106,10 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 	ctx := context.Background()
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id > 23",
+		// 031's version history (artifact versions): the trigger first, since it
+		// names columns of the table it fires on, then the table.
+		"DROP TRIGGER IF EXISTS artifacts_initial_version",
+		"DROP TABLE IF EXISTS artifact_versions",
 		// 030's metering ledger (av-2yws) — the table carries its indexes.
 		"DROP TABLE IF EXISTS agent_usage",
 		"DROP TABLE IF EXISTS pending_blob_deletions",
@@ -206,6 +210,21 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	// shares.recipient_id blocks that column's DROP.
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id >= 28",
+		// 031 comes off first (artifact versions). Its blob_references names the
+		// versions table, and SQLite re-parses a view when a table it selects
+		// from is altered, so the view goes back to its 026 form before the
+		// ALTERs below.
+		"DROP TRIGGER IF EXISTS artifacts_initial_version",
+		"DROP VIEW IF EXISTS blob_references",
+		"DROP TABLE IF EXISTS artifact_versions",
+		`CREATE VIEW blob_references AS
+             SELECT source_blob_id AS blob_id, owner_id FROM artifacts WHERE source_blob_id != ''
+             UNION ALL
+             SELECT widget_blob_id AS blob_id, owner_id FROM artifacts WHERE widget_blob_id != ''
+             UNION ALL
+             SELECT aa.blob_id AS blob_id, a.owner_id AS owner_id
+               FROM artifact_assets aa JOIN artifacts a ON a.id = aa.artifact_id WHERE aa.blob_id != ''`,
+		// 030's metering ledger (av-2yws).
 		"DROP TABLE IF EXISTS agent_usage",
 		"DROP TRIGGER IF EXISTS shares_counts_sync_update",
 		"DROP TRIGGER IF EXISTS shares_counts_sync_delete",
