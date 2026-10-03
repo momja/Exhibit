@@ -80,15 +80,16 @@ func GuardrailFromEnv() (*Guardrail, error) {
 	return g, nil
 }
 
-// env is the guard extension's contract. The data fence tells it where the
-// user's own words end and the fenced artifact source begins, so stored
-// content is never screened as though the user had just typed it.
-func (g *Guardrail) env(nonce string) []string {
+// env is the guard extension's contract. It names no data fence: a prompt
+// carries the user's own words and nothing else (stored content reaches the
+// model only as tool results, av-5s7g), so the whole message is what the user
+// typed and the screen and the agent see the same words. The extension's
+// optional EXHIBIT_GUARD_DATA_FENCE stays unset.
+func (g *Guardrail) env() []string {
 	return []string{
 		"EXHIBIT_GUARD_PROVIDER=" + g.Provider,
 		"EXHIBIT_GUARD_MODEL=" + g.Model,
 		"EXHIBIT_GUARD_API_KEY=" + g.APIKey,
-		"EXHIBIT_GUARD_DATA_FENCE=" + beginFence(nonce),
 	}
 }
 

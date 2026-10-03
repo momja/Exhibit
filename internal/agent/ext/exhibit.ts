@@ -2,11 +2,12 @@
  * Exhibit tools extension for Pi (Exh-hvaf, av-lvi1).
  *
  * Loaded by the exhibit service into every agent session it spawns
- * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model ten
+ * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model eleven
  * tools — create_artifact / write_artifact / edit_artifact / get_artifact for the document,
- * get_state / set_state / delete_state for the artifact's stored state, and
- * set_widget / edit_widget / get_widget for the artifact's gallery-card widget (av-fafu) —
- * all of which go through the exhibit HTTP API, so agent output enters the
+ * get_state / set_state / delete_state for the artifact's stored state,
+ * set_widget / edit_widget / get_widget for the artifact's gallery-card widget (av-fafu), and
+ * get_selection for the elements the user picked in the preview — all of which
+ * (get_selection aside, which reads a file the service wrote) go through the exhibit HTTP API, so agent output enters the
  * library through the same single write path as every other ingest (scan,
  * footprint, explicit allowlist approval) and every other state edit (the
  * edit page's state inspector, av-hg5f). The extension never touches the
@@ -21,9 +22,13 @@
  * a per-session credential the API resolves to (owner, artifact) and refuses
  * outside, so a rewritten extension gets a 403, not another artifact.
  *
- * Untrusted output (get_artifact) comes back inside the same fenced envelope
- * the service uses for prompts, carrying EXHIBIT_DATA_NONCE — the fence id the
- * system prompt tells the model to trust.
+ * Untrusted text (an artifact's source, title, state and widget, and the
+ * user's selected elements) reaches the model only as the result of one of these
+ * tools. A tool result is its own message role, so the boundary between data
+ * and instruction is the conversation's structure, not a delimiter inside the
+ * string (av-5s7g) — which is why nothing here wraps, escapes or fences a
+ * result. The system prompt says that tool results are data; `labeled` only
+ * says which tool's data it is.
  *
  * When EXHIBIT_MOCK_LLM_URL is set, it additionally registers an
  * OpenAI-compatible "exhibit-mock" provider pointed at that URL — a
@@ -31,13 +36,18 @@
  * pipeline (key entry → spawn → tool calls → ingest → SSE) can run
  * without real provider credentials.
  */
+import { readFile } from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { applyEdits } from "./edit.ts";
 
 const API = process.env.EXHIBIT_API_URL || "http://127.0.0.1:8080";
 const TOKEN = process.env.EXHIBIT_TOKEN || "";
-const NONCE = process.env.EXHIBIT_DATA_NONCE || "";
+// Where the service puts the elements the user selected with the current
+// prompt (agent.Session.writeSelection). It is a file rather than a request
+// because the service's only channel to this process is the prompt, and an
+// element's markup is untrusted — it must reach the model as a tool result.
+const SELECTION_FILE = process.env.EXHIBIT_SELECTION_FILE || "";
 
 /**
  * The artifact this session may touch. Seeded from the environment for a
@@ -82,18 +92,21 @@ function formatState(state: Record<string, string>): string {
 		.join("\n\n");
 }
 
-/** Wrap untrusted text in the session's data fence — same format the service
- * uses when it inlines the artifact source into a prompt. Occurrences of the
- * fence id inside the content are redacted so nothing in the artifact can
- * close the fence and pose as an instruction. */
-function fenced(label: string, content: string): string {
-	const safe = NONCE ? content.split(NONCE).join("«redacted fence id»") : content;
-	return (
-		`-----BEGIN EXHIBIT UNTRUSTED DATA ${NONCE}-----\n` +
-		`label: ${label}\n\n` +
-		safe +
-		`\n-----END EXHIBIT UNTRUSTED DATA ${NONCE}-----`
-	);
+/** Say which tool's data a result is, in Exhibit's own words. The label is a
+ * constant at every call site; the content after it is the untrusted part. */
+function labeled(label: string, content: string): string {
+	return `${label}\n\n${content}`;
+}
+
+// A title is one line of display text. It is the most attacker-controllable
+// field on a URL-ingested artifact, so a read returns it as a single bounded
+// line: no newline to start a paragraph that looks like a message, and no
+// length to bury the real content under.
+const MAX_TITLE_CHARS = 200;
+
+function oneLine(title: string): string {
+	const flat = String(title ?? "").replace(/\s+/g, " ").trim();
+	return flat.length > MAX_TITLE_CHARS ? flat.slice(0, MAX_TITLE_CHARS) + "…" : flat;
 }
 
 function requireBoundArtifact(): string {
@@ -187,7 +200,10 @@ export default function (pi: ExtensionAPI) {
 		// artifact starts with nothing approved (av-hrtv).
 		const approved: string[] = a.network_allowlist || [];
 		const footprint: string[] = (r.network_footprint || []).filter((o: string) => !approved.includes(o));
-		let text = `Updated artifact ${a.id || target} ("${a.title || ""}").`;
+		// No title: a save's result is not the place to read the stored title back
+		// — it is untrusted on a URL-ingested artifact, and the model has no use
+		// for it here (it knows what it just wrote).
+		let text = `Updated artifact ${a.id || target}.`;
 		if (footprint.length > 0) {
 			text += ` Network footprint (blocked until the user approves): ${footprint.join(", ")}.`;
 		}
@@ -299,19 +315,20 @@ export default function (pi: ExtensionAPI) {
 		name: "get_artifact",
 		label: "Read artifact",
 		description:
-			"Re-read this session's artifact: its current HTML source and metadata (title, " +
-			"network allowlist). The source is already in context at the start of the session, " +
-			"so use this only to pick up changes made since — your own save, or an edit made " +
-			"elsewhere.",
+			"Read this session's artifact: its current HTML source and metadata (title, " +
+			"network allowlist). The source is NOT in your context until you call this, so read " +
+			"it before you change it — and read it again after anything may have changed it: " +
+			"your own save, or an edit made elsewhere (by the user, or earlier in this " +
+			"conversation's history).",
 		parameters: Type.Object({}),
 		async execute() {
 			const target = requireBoundArtifact();
 			const a = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "?body=true");
 			let meta =
-				`id: ${a.id}\ntitle: ${a.title}\n` +
+				`id: ${a.id}\ntitle: ${oneLine(a.title)}\n` +
 				`allowlist: [${(a.network_allowlist || []).join(", ")}]`;
 			meta += "\n" + (await assetSummary(target));
-			return ok(fenced("current source of the artifact this session is editing", meta + "\n\n" + (a.body || "")), {
+			return ok(labeled("current source of the artifact this session is editing:", meta + "\n\n" + (a.body || "")), {
 				exhibit: "artifact_read",
 				artifactId: target,
 			});
@@ -526,9 +543,7 @@ export default function (pi: ExtensionAPI) {
 			const path = "/api/artifacts/" + encodeURIComponent(target) + "/widget";
 			try {
 				const r = await api("GET", path);
-				// The widget is artifact content like the source is, so it comes
-				// back fenced rather than spliced into the model's instructions.
-				return ok(fenced("current gallery widget of the artifact this session is editing", r.body || ""), {
+				return ok(labeled("current gallery widget of the artifact this session is editing:", r.body || ""), {
 					exhibit: "widget_read",
 					artifactId: target,
 				});
@@ -546,6 +561,39 @@ export default function (pi: ExtensionAPI) {
 				}
 				throw err;
 			}
+		},
+	});
+
+	pi.registerTool({
+		name: "get_selection",
+		label: "Read selection",
+		description:
+			"Read the element(s) the user selected in the artifact preview with their latest " +
+			"message: each is the exact element they mean, given as a selector, its text and its " +
+			"outerHTML. Call this when the message says elements were selected. Reports that " +
+			"nothing is selected otherwise.",
+		parameters: Type.Object({}),
+		async execute() {
+			let elements: string[] = [];
+			if (SELECTION_FILE) {
+				try {
+					elements = JSON.parse(await readFile(SELECTION_FILE, "utf8"));
+				} catch (err) {
+					// No file is the ordinary answer: the service removes it for a
+					// prompt that selected nothing.
+					if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+				}
+			}
+			if (elements.length === 0) {
+				return ok("Nothing is selected.", { exhibit: "selection_read", count: 0 });
+			}
+			const blocks = elements.map((e, i) =>
+				elements.length > 1 ? `--- element ${i + 1} of ${elements.length} ---\n${e}` : e,
+			);
+			return ok(labeled("element(s) the user selected in the artifact preview:", blocks.join("\n\n")), {
+				exhibit: "selection_read",
+				count: elements.length,
+			});
 		},
 	});
 }
