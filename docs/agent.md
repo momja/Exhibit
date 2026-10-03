@@ -549,6 +549,15 @@ one button, *Continue this conversation*. If it has moved on, the card says whic
 version the conversation was working against and which the artifact is at, and
 offers:
 
+- **View vN in the preview first** — a link above the buttons. It swaps that version,
+  running and with the data it had, into the preview pane beside the card, under a
+  bar saying it is a preview and that nothing done in it is saved, with *Back to
+  current*. It is how a person confirms the rollback is what they want: it shows the
+  same code and the same data the rollback would put back. It changes nothing — the
+  frame is the render surface's version document (`security.md` §1.9), and while it
+  shows there is no `#pv-frame` for the page's bridges to hear. It ends when the
+  conversation is continued, or on *Back to current*, or when an agent save
+  re-renders the pane.
 - **Roll back to vN and continue** — the primary button. It puts the artifact's
   code and saved data back as vN left them (a restore, recorded as a new version,
   so nothing is lost and it can be undone from the Versions list), then continues.

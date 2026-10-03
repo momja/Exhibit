@@ -36,7 +36,7 @@ const API_ORIGIN = "https://app.test";
 // the surrounding <script> tags. Go raw strings carry no escapes, so the first
 // backtick after the opener closes the literal; the format verbs are then
 // filled in the order render.go's Sprintf fills them.
-function shimSource({ cache = {}, anonymous = false, widget = false } = {}) {
+function shimSource({ cache = {}, anonymous = false, widget = false, versionView = false } = {}) {
   const go = readFileSync(RENDER_GO, "utf8");
   const opener = "const shimTemplate = `";
   const start = go.indexOf(opener);
@@ -50,6 +50,7 @@ function shimSource({ cache = {}, anonymous = false, widget = false } = {}) {
     JSON.stringify(API_ORIGIN),    // %q API_ORIGIN
     String(widget),                // %t WIDGET
     String(anonymous),             // %t ANONYMOUS
+    String(versionView),           // %t VERSION_VIEW
     "[]",                          // %s ALLOWED_ORIGINS
     "[]",                          // %s BLOCKED_ORIGINS
     JSON.stringify(cache),         // %s the inlined state
@@ -272,4 +273,56 @@ test("a resync replaces a value; it does not merge one", async () => {
   assert.equal(storage.getItem("list"), '["milk","eggs"]',
     "last write wins, whole value at a time — 'bread' is gone, and no channel " +
     "at this layer could have saved it");
+});
+
+// --- a version view -----------------------------------------------------------
+// A version is shown running, beside the data it left behind, and nothing it does
+// may outlive the frame. The shim is one of three independent reasons that holds
+// (the host and the response's own sandbox are the others), and the one that
+// can be run here.
+
+test("a version view reads the snapshot and its writes stop at the cache", () => {
+  const { storage, posted } = loadShim({ cache: { score: "10" }, versionView: true });
+
+  assert.equal(storage.getItem("score"), "10", "it shows the data the version left");
+
+  // The artifact works inside its own frame — a counter still counts — ...
+  storage.setItem("score", "11");
+  storage.setItem("added", "x");
+  assert.equal(storage.getItem("score"), "11");
+  assert.equal(storage.getItem("added"), "x");
+  storage.removeItem("added");
+  assert.equal(storage.getItem("added"), null);
+  storage.clear();
+  assert.equal(storage.length, 0);
+
+  // ... and tells nobody.
+  assert.deepEqual(posted.filter((m) => m.__avState), [],
+    "no write may reach the host, whichever op it was");
+});
+
+// The snapshot is how the data was; a resync is the host posting in how it is
+// now. Applying one would overwrite the thing the view exists to show.
+test("a version view cannot be resynced over its snapshot", async () => {
+  const { storage, posted, dispatched, fromHost } = loadShim({ cache: { score: "10" }, versionView: true });
+
+  await fromHost(sync({ score: "99", extra: "x" }));
+
+  assert.equal(storage.getItem("score"), "10", "the snapshot stands");
+  assert.equal(storage.getItem("extra"), null);
+  assert.deepEqual(dispatched, [], "and no storage event reports a change that did not happen");
+  assert.deepEqual(posted.filter((m) => m.__avStateSynced), [], "nor is a sync acknowledged");
+});
+
+// The control for the two above: the ordinary render, same harness, same
+// messages — so they are about VERSION_VIEW and not about this file's setup.
+test("an ordinary render still writes through and still resyncs", async () => {
+  const { storage, posted, fromHost, flat } = loadShim({ cache: { score: "10" } });
+
+  storage.setItem("score", "11");
+  assert.deepEqual(posted.filter((m) => m.__avState).map(flat),
+    [{ __avState: true, artifactId: ARTIFACT_ID, op: "set", key: "score", value: "11" }]);
+
+  await fromHost(sync({ score: "99" }));
+  assert.equal(storage.getItem("score"), "99");
 });

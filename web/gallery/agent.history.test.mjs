@@ -244,3 +244,75 @@ test("when a session ends under the page the next message starts a new one", asy
   assert.deepEqual(JSON.parse(starts[0].body), { artifact_id: "art-1" });
   assert.equal(posts(page.api, "/api/agent/sessions/conv-2/prompt").length, 1);
 });
+
+// --- Looking at an earlier version (av-vw7r) ------------------------------------------
+// "View vN" in the History card is an htmx swap into the preview pane — the card's
+// markup carries the whole request — so what script owns is small: what "Back to
+// current" means, and a conversation that is continued ending a view. The frame
+// in the pane is deliberately not #pv-frame, which is what keeps this page's
+// bridges from hearing it; that is a property of the fragment's markup and is
+// pinned by the Go template tests, where the markup is real.
+
+// Counts the pane being asked to re-render for the artifact as it is: the same
+// event an agent save fires, which the pane's hx-trigger turns into a fetch.
+function countRefreshes(page) {
+  const seen = { n: 0 };
+  page.document.body.addEventListener("exhibit:artifact-saved", () => { seen.n++; });
+  return seen;
+}
+
+test("Back to current re-renders the pane for the artifact as it is", async () => {
+  const page = await boot([]);
+  const refreshes = countRefreshes(page);
+
+  await page.byId("pane-preview").click({
+    closest: (sel) => (sel === '[data-action="close-version-viewer"]' ? { dataset: {} } : null)
+  });
+
+  assert.equal(refreshes.n, 1);
+  assert.equal(page.api.calls.filter((c) => c.method !== "GET").length, 0, "looking and stopping looking write nothing");
+});
+
+test("a click elsewhere in the pane leaves it alone", async () => {
+  const page = await boot([]);
+  const refreshes = countRefreshes(page);
+  await page.byId("pane-preview").click({ closest: () => null });
+  assert.equal(refreshes.n, 0);
+});
+
+// A version that was only looked at gives way when its conversation is
+// continued: the pane would otherwise sit showing v2 beside a chat that is about
+// the artifact as it is now (or, after a rollback, about the new v5).
+test("continuing a conversation ends a view of a version", async () => {
+  const page = await boot([STARTED]);
+  const refreshes = countRefreshes(page);
+  page.context.viewingVersion = () => true;
+  page.byId("history-messages").innerHTML = '<div class="msg user">make it purple</div>';
+
+  await page.context.resumeConversation("conv-1", 0);
+
+  assert.equal(refreshes.n, 1, "the pane returns to the artifact");
+  assert.equal(posts(page.api, "/restore").length, 0, "and the artifact itself was not touched");
+});
+
+test("continuing when no version is showing does not reload the pane", async () => {
+  const page = await boot([STARTED]);
+  const refreshes = countRefreshes(page);
+  page.context.viewingVersion = () => false;
+
+  await page.context.resumeConversation("conv-1", 0);
+
+  assert.equal(refreshes.n, 0, "nothing changed, so the artifact in the pane is not restarted");
+});
+
+test("a rollback re-renders the pane once, whether or not a version was showing", async () => {
+  for (const viewing of [true, false]) {
+    const page = await boot([STARTED, json(200, {})]);
+    const refreshes = countRefreshes(page);
+    page.context.viewingVersion = () => viewing;
+
+    await page.context.resumeConversation("conv-1", 2);
+
+    assert.equal(refreshes.n, 1, "viewing=" + viewing);
+  }
+});

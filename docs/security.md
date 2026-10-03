@@ -147,8 +147,10 @@ anyone who learned that id.
 **The credential is a signed URL token instead** (`internal/rendertoken`,
 av-c5aq):
 
-- **Scope: one artifact, one owner, ten minutes.** Nothing wider is ever minted
-  — no owner-wide token, no collection token, no long-lived one. The narrow
+- **Scope: one document, one owner, ten minutes** — the document being an
+  artifact's live render or, for a version view, one version of it (§1.9). Nothing
+  wider is ever minted — no owner-wide token, no collection token, no long-lived
+  one. The narrow
   scope is what makes a URL-borne credential acceptable: the artifact *can* read
   its own token out of `location.href`, and that gains it only the access it
   already has, to itself, for a few more minutes.
@@ -568,7 +570,7 @@ which document it is:
 
 | Route | `frame-ancestors` |
 |-------|-------------------|
-| `/a/:id`, `/w/:id` | `<APP_ORIGIN>` — always, whatever is configured |
+| `/a/:id`, `/w/:id`, `/a/:id/versions/:seq` | `<APP_ORIGIN>` — always, whatever is configured |
 | `/s/:shareID`, `EMBED_ORIGINS` unset | `*` — any site may frame it |
 | `/s/:shareID`, `EMBED_ORIGINS` set | `<APP_ORIGIN> <the configured origins>` |
 
@@ -616,6 +618,85 @@ a control worth stealing a click into. An operator who still wants framing
 closed — a corporate deployment where a share is internal-only, say — has
 `EMBED_ORIGINS` for it, and setting it to their own app origin refuses everyone
 else.
+
+### 1.9 Looking at an earlier version: history has its own credential, and nothing persists (av-vw7r)
+
+`GET RENDER_ORIGIN/a/:id/versions/:seq` serves one earlier version of an artifact:
+its body as it was, running, beside the data that version left behind. It exists so
+a person can see what a rollback or a restore would give them before choosing it
+(`product_requirement_doc.md` §8.5), from the History card in the chat and from the
+edit page's Versions panel.
+
+It needs its own treatment because of what it can reach. A version is not the
+artifact as it is: it is code the owner has since rewritten and data the owner has
+since cleared. The live document never shows either, so nothing that reasoned about
+the live document — the token's scope, the state it inlines — covers this one.
+Three decisions follow, each with a test that fails without it.
+
+**History has its own credential.** A render token is an HMAC that mixes in the name
+of the document it is for (§1.3 — an artifact id, until now). For a version that name
+is `rendertoken.VersionScope(id, seq)`, so a token minted for the live document does
+not verify on a version's route, a version's token does not verify on the live
+document, and a token for one version does not open another. This is the point of
+it: the artifact can read its own live token out of `location.href`, and under §1.3
+that grants it only what it already has. History is more than it already has, so the
+token it can read must not be able to ask for it — otherwise an artifact with a
+network allowlist could hand its token to an origin that then fetched the owner's
+old data. It costs no claim and no wire change; the scoping is the signature, as it
+is for the artifact id. Version tokens are minted only for the owner (a grant does
+not carry history, and the fragment that mints them is owner-scoped), and the render
+surface refuses one that names anybody else or nobody, so a future minting call site
+cannot widen it. Every refusal is the same `404` a bad token gets, the current
+version included.
+
+**Nothing it does persists, for three independent reasons.** The anonymous render
+(§1.3) already has a shim that does not write, and its argument for putting that in
+the preamble ends "the API's auth remains the enforcement". That argument does not
+hold here, and this is the difference worth stating: the page that frames a version
+is the *owner's own*, authenticated as the owner, so a write that reached it would be
+performed. Nothing about the document's principal would refuse it. So:
+
+1. **The shim does not write** — `VERSION_VIEW` stops `persistState` and refuses a
+   resync, because a snapshot is how the data *was* and a resync is the host posting
+   in how it *is*. Honest: the document does not claim to save.
+2. **The host does not hear it.** The chat page's bridges listen to `#pv-frame` and
+   nothing else, and the version viewer's frame is a different element carrying no
+   such id (the partial's comment and a test hold that line). While a version
+   shows there is no artifact frame, so a message its code sends — including a
+   `__avState` message forged by hand, which no shim flag can stop — is not heard.
+   The edit page has no artifact bridge at all. This is structural, not a flag a
+   handler must remember to check, and it is the half that makes the claim true of
+   hostile code.
+3. **The document has no real origin, however it is loaded.** The response carries a
+   CSP `sandbox allow-scripts allow-forms` of its own. The frame is sandboxed too,
+   but a version URL opened top-level would otherwise be a real-origin document on
+   the render origin, with IndexedDB, cookies and the Cache API shared with every
+   other artifact there — places an old version could keep data that no restore
+   would ever undo. With the directive it gets an opaque origin and those throw.
+
+Verified end to end in a browser rather than argued: in a version view the artifact
+counts (it works inside its frame), live data is unchanged, no write request leaves
+the page, viewing it again shows the original snapshot, and a hand-forged state
+message does nothing — while the *same* message from the artifact frame is persisted
+(so the version frame is protected by what it is, not by the test), and the live
+document opened top-level has a real origin and IndexedDB where the version has
+neither.
+
+What it deliberately is not. It is the artifact running, so it can use the network
+its allowlist permits — the allowlist is the artifact's current one, which is not
+versioned — and an old version holding a snapshot is therefore exposed exactly as the
+live artifact is, to origins the owner already approved. It is denied both devices
+whatever the artifact's approvals say (a camera approval is a decision about the
+artifact as it is now, and a preview is not the place a device is first reached), and
+it is framed by the app origin alone. Its bridges are present in the document but
+nothing hosts them for it, so downloads, clipboard and links do nothing in a preview
+rather than raising prompts that would write per-artifact authority.
+
+Pinned by `internal/render/version_test.go` (what is served, the scope matrix, the
+owner-only line, the headers), `internal/rendertoken` (the scope), the shim harness
+in `web/gallery/render.shim.test.mjs` (run, not read), and
+`internal/api/versionviewer_test.go`, whose last cases ask the *real* render handler
+for the URL the app minted.
 
 ## 2. CSP: the allowlist is the wall
 

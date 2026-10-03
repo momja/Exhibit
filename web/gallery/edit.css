@@ -144,6 +144,7 @@ input.state-input{max-width:340px}
 .asset-meta { flex: 0 0 auto; white-space: nowrap; }
 
 /* --- versions panel ------------------------------------------------------ */
+#version-viewer-slot:not(:empty) { margin-bottom: var(--space-6); }
 .version-row {
   display: flex;
   align-items: center;

@@ -606,6 +606,13 @@ code over data shaped for newer code.
 
 Restoring asks first, because it changes both at once, and says what it keeps:
 what you restore over becomes a version of its own, so the restore can be undone.
+
+You can look before you decide. Any earlier version can be **viewed** — running, with
+the data it left behind, which is exactly what restoring it would put back — without
+changing anything. A view is a preview: you can click around in it and the tool works,
+but nothing you do there is saved, and it never touches the artifact's real data, so
+looking is always safe and "this is what I will get" is something you have seen rather
+than been told.
 Nothing in the history is ever discarded, and the artifact's network allowlist and
 capability approvals are not part of it — returning to an old version never widens
 what the artifact may reach.
@@ -621,8 +628,9 @@ number of conversations kept: nothing is picked back up on its own, and neither 
 anything resumed by looking — reading a conversation in History starts nothing. An
 earlier conversation is continued only by choosing it there and saying so.
 
-Continuing one is a decision about the artifact, so it is put to you as one. If the
-artifact has moved on since, you choose: **roll back** to that version and continue —
+Continuing one is a decision about the artifact, so it is put to you as one — and you
+can look at the version it would return to first (§8.5), in the preview beside the
+conversation, before choosing. If the artifact has moved on since, you choose: **roll back** to that version and continue —
 the artifact's code and saved data return as that version left them, recorded as a
 new version so nothing is lost — or **continue without rolling back**, which leaves
 the artifact alone. Rolling back is what the conversation was about, so it is the

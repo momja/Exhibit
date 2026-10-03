@@ -14,6 +14,13 @@
 // minutes. That property is the whole design: it is why the scope must never be
 // widened to an owner, a collection, or a long lifetime.
 //
+// The document is part of the scope too. A token for an artifact's live document
+// and a token for one earlier version of it are different credentials (see
+// VersionScope), because history holds what the live document never shows: the
+// code as it used to be and the data it used to hold, including data the owner
+// has since cleared. A token the artifact can read out of its own location.href
+// must not be able to ask for that.
+//
 // The token is an HMAC-SHA256 tag, not a JWT: there is one issuer, one
 // verifier, one algorithm, and a claim set this package defines in full, so a
 // signature-suite negotiation would be pure attack surface.
@@ -192,6 +199,21 @@ func NewRandomSigner() *Signer {
 		panic("rendertoken: no entropy for signing key: " + err.Error())
 	}
 	return NewSigner(key)
+}
+
+// VersionScope names the document a token is scoped to when it opens one earlier
+// version of an artifact instead of the artifact itself. It goes wherever an
+// artifact id would — Mint's and Verify's first argument — because the tag
+// already mixes that argument in rather than carrying it (see Verify): a token
+// minted for the live document fails to verify on a version's route, and the
+// reverse, and a token for one version fails on every other. The scoping is the
+// signature itself, so there is no claim for a verifier to forget to compare and
+// the wire format is unchanged.
+//
+// An artifact id is a UUID and never contains the separator, so no artifact's
+// version scope can equal another artifact's id.
+func VersionScope(artifactID string, seq int) string {
+	return artifactID + "/v/" + strconv.Itoa(seq)
 }
 
 // Mint returns a token authorizing ownerID to render artifactID for TTL, as

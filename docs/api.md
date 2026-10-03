@@ -389,9 +389,12 @@ Deleting here cannot touch the identity provider that issued the login. The same
 ```
 GET  /a/:artifactID    Serve artifact (render origin only)
 GET  /w/:artifactID    Serve the artifact's gallery widget (render origin only)
+GET  /a/:artifactID/versions/:seq   Serve one earlier version, to look at (render origin only)
 GET  /s/:shareID       Serve shared artifact (render origin only)
 ```
 
 The render surface sets `Content-Security-Policy` from the artifact's approved origins (its `decision='allow'` rows in `artifact_network_origins`), injects the storage shim with the artifact's state inlined, and serves the document `Cache-Control: no-store`. The iframe has `sandbox="allow-scripts"` without `allow-same-origin`, giving it an opaque origin.
+
+`/a/:artifactID/versions/:seq` serves an earlier version's body beside the data that version left behind (what `POST …/versions/:seq/restore` would put back), so it can be looked at before it is restored. It takes its own token — scoped to that version and the owner, minted by the app origin's `/partials/version-viewer` fragment — so the artifact's own token does not open history and a version's does not open the live document. It writes nothing and nothing done in it persists; the current version and anything not yours are `404`. See `security.md` §1.9.
 
 `/w/:artifactID` is the same read path with the same CSP and the same inlined state — it differs only in which blob it serves and in getting the **narrowed preamble**: state writes stop at the in-memory cache and the capability bridges are not injected at all. It 404s for an artifact with no widget (`widgets.md`).

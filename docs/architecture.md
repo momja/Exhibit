@@ -475,6 +475,24 @@ executable document with the correct security envelope:
   origin; and a share render holds no privileged control a stolen click could
   spend (`security.md` §1.8).
 
+- Serves **one earlier version** of an artifact at `/a/:id/versions/:seq`
+  (av-vw7r) — its body as it was, beside the data that version left behind (the
+  snapshot a restore would put back, `Store.GetVersionView`) — so a person can
+  look at what a rollback or restore would give them before choosing it. It is the
+  one render document that is not the artifact as it is, and it is held to a
+  stricter envelope for what it can reach: history holds code since rewritten and
+  data since cleared. It carries a token scoped to *that version*
+  (`rendertoken.VersionScope`, mixed into the MAC like an artifact id, so a token
+  for the live document fails here and the reverse), only ever minted for the owner
+  and refused if it names anybody else. Nothing it does persists, for three
+  independent reasons: the shim's `VERSION_VIEW` flag stops write-through and
+  refuses a resync over the snapshot; the host treats a version frame as a
+  different element from its artifact frame (§3.5), which is what covers a message
+  the artifact forges itself; and the response's own CSP `sandbox` gives it an
+  opaque origin however it is loaded, so top-level it still has no IndexedDB or
+  cookies. The current version is not served (it has no snapshot, and the
+  artifact's own page shows it); every refusal is the 404 a bad token gets.
+  `security.md` §1.9 has the argument.
 - Serves an artifact's **widget** at `/w/:id` (av-fafu) — the glanceable tile its
   gallery card renders. This is the same read path with the same CSP, built from
   the same allowlist, and the same state inlined; it differs only in which blob it
@@ -869,6 +887,13 @@ written by the time the next version replaced it.
   live state with the snapshot that version left behind, and snapshots the state
   it is replacing first — so a restore can itself be undone. Nothing in the
   history is discarded. Restoring the head is `ErrAlreadyCurrent` (409).
+- **A version can be looked at without being restored** (av-vw7r).
+  `GetVersionView` returns a version's body blob and the state snapshot it left,
+  read in one owner-scoped query and writing nothing; the head is
+  `ErrAlreadyCurrent`, as for a restore, because its data is the live rows. It is
+  the *same* snapshot `RestoreVersion` puts back, which is what makes "what you
+  viewed is what you get" a property of the code rather than of care: a test
+  restores a viewed version and compares.
 - **Not versioned:** the allowlist, capability approvals, shares, tags and
   collections, and the title. They are the owner's decisions *about* the artifact,
   not its content; a restore never changes what the artifact is allowed to reach.
@@ -1166,11 +1191,34 @@ through the same authenticated state routes (§3.1) on Save, so Cancel simply
 rebuilds the working copy from what the server last confirmed.
 
 The edit page also lists the artifact's **versions** (§3.3b) in a panel of its
-own: server-rendered, newest first, each with what produced it and when, and a
-Restore button on every version but the current one. Restoring asks first — it
-changes the code and the saved data at once — and says that what it replaces is
+own: server-rendered, newest first, each with what produced it and when, and View
+and Restore buttons on every version but the current one. Restoring asks first —
+it changes the code and the saved data at once — and says that what it replaces is
 kept; it reloads the page on success, because the editors above hold the text of
 the version it just replaced.
+
+**Looking at a version first** (av-vw7r) is the `versionViewer` partial, swapped by
+htmx from `GET /partials/version-viewer?artifact=&seq=` into a slot above the list
+here and into the agent page's preview pane from the History card — the same
+fragment in both, so a version is shown one way. It is a bar (what it is, "a
+preview — nothing you do here is saved", and *Back to current*) over a frame whose
+`src` is the render surface's version document (§3.2), minted at swap time because
+a page may sit open past a token's ten minutes. The edit page asks for a Restore
+beside the view (`restorable=1`), because that is where the decision is made; the
+chat's is made in the History card, which also carries whether to continue the
+conversation, so its pane offers none. The fragment is owner-scoped like the other
+partials — another owner's artifact is the 404 a missing one is — and refuses the
+current version with its own message.
+
+What keeps a version frame from persisting anything *on the host's side* is
+structural rather than a flag: the chat page's bridges (state, snippet picker,
+network prompt) listen to `previewFrame()`, i.e. `#pv-frame`, and nothing else, and
+the viewer's frame is a different element with no such id. While a version is
+showing there is no artifact frame for them to hear, so a message the version's
+code sends — including one forged by hand rather than sent through the shim — is
+not heard. The edit page has no artifact bridge at all. `agent.js` owns only what
+*Back to current* means (re-render the pane for the artifact as it is, by the same
+fetch an agent save uses) and ending a view when a conversation is continued.
 
 Where state changes *after* load and a full reload would cost too much — it
 would drop a live iframe, an editor buffer, or an SSE stream — the page swaps
