@@ -259,7 +259,7 @@ func TestTheCardPutsTheRollbackToThePersonAndKeepsTheEscapeSecondary(t *testing.
 	assert.Contains(t, frag, "recorded as a new version, so nothing is lost")
 	assert.Contains(t, frag, "undo it from the Versions list")
 
-	// The escape is a plain secondary button — never the default — and leaves the
+	// The escape is a plain secondary button — never the primary one — and leaves the
 	// artifact alone.
 	escape := `<button type="button" class="btn btn-sec" data-resume="sess-1" data-rollback="0">Continue without rolling back</button>`
 	assert.Contains(t, frag, escape)

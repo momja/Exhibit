@@ -516,6 +516,21 @@ gallery: chat + streaming on the left, sandboxed preview iframe (same
 page also hosts the same `__avState` bridge as the detail page, so artifact
 state written in the preview persists.
 
+**A new conversation is the default.** Opening the page — on an artifact with a
+dozen conversations kept, or with none — starts nothing and continues nothing. No
+session exists until the first message, and that message begins a new conversation
+(`POST /api/agent/sessions` with the artifact and no `resume_session_id`), whatever
+has been kept: the model is handed none of it and the "artifact may have changed"
+sentence is not sent, because there is nothing it remembers that could be stale. The
+same holds when a session ends under the page (idle, or the server restarted) — the
+next message starts a new one rather than quietly bringing the old one back. A
+conversation is continued from History alone, by choosing it and pressing the button;
+`resume_session_id` is sent from that one function (`resumeConversation`), and
+reading a conversation there starts nothing. A redesign of this pane keeps all of
+that: `agent.history.test.mjs` pins the page's side (open, first message, ended
+session) and `TestAChatOnAnArtifactThatHasHistoryStartsANewConversation` the
+server's, against a real Pi.
+
 **History.** Once the page is about an artifact, the chat has a History button.
 It opens a pane that takes the place of the messages and the composer — a
 conversation you are only reading must not sit above a box that would talk to
@@ -539,7 +554,7 @@ offers:
   so nothing is lost and it can be undone from the Versions list), then continues.
   The card states this beside the button; nothing changes before the click.
 - **Continue without rolling back** — the escape, a plain secondary button and
-  never the default. The artifact is left as it is, and the agent re-reads it.
+  never the primary one. The artifact is left as it is, and the agent re-reads it.
 - **Cancel** — back to the list.
 
 `resumeConversation` starts the conversation first and rolls back second, so a

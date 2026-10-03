@@ -239,6 +239,36 @@ func TestResumingARunningConversationAttachesToIt(t *testing.T) {
 	assert.NotEmpty(t, got.SSETicket, "the caller can stream from it")
 }
 
+// A new conversation is the default. A session created without a conversation to
+// continue starts a new one whatever the artifact has kept: nothing said before
+// reaches the model, there is no "the artifact may have changed" note (it
+// remembers nothing that could be stale), and what was kept is left exactly as it
+// was. Continuing a conversation is asked for by name; it is never what opening a
+// chat does.
+func TestAChatOnAnArtifactThatHasHistoryStartsANewConversation(t *testing.T) {
+	h := newPiHarness(t)
+	r := h.router
+	id := createArtifact(t, r, map[string]any{"title": "Counter", "body": counterBody})
+	earlier := conversation(t, h, id, "make the button purple")
+	closeAndWait(t, r, earlier)
+	before := keptConversation(t, r, id, earlier, 1)
+
+	fresh := conversation(t, h, id, "now make it red")
+	assert.NotEqual(t, earlier, fresh, "a new conversation, not the one that was kept")
+
+	// The model was asked to continue this chat and nothing else.
+	users := messagesWithRole(lastTurn(t, h.llm), "user")
+	assert.Equal(t, []string{"now make it red"}, users)
+
+	// The kept conversation is exactly as it was, with the new one beside it.
+	after := keptConversation(t, r, id, earlier, 1)
+	assert.Equal(t, before.SessionFile, after.SessionFile)
+	assert.True(t, before.UpdatedAt.Equal(after.UpdatedAt), "it was not touched")
+	list, err := r.cfg.Store.ListTranscripts(context.Background(), defaultOwnerID, id)
+	require.NoError(t, err)
+	assert.Len(t, list, 2)
+}
+
 // The guardrail screens a prompt before the model sees it, so a refused first
 // prompt on a resumed conversation carried the "the artifact may have changed"
 // note to nobody. The model is still owed it, and the refused words are not in

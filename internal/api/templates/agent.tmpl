@@ -2,7 +2,13 @@
      live sandboxed preview of the session's artifact on the right. Data:
      agentPageData (agentui.go). ?artifact=<id> opens the page in modify mode
      bound to that artifact. Streaming arrives over SSE from the session's Pi
-     sidecar. */}}
+     sidecar.
+
+     The chat is always a new conversation: no session exists until the first
+     message, and that message starts one — however many conversations the
+     artifact has kept. An earlier one is continued only from the History pane
+     (agentResume), by choosing it; nothing on this page resumes one on its own,
+     and a redesign of it must not. */}}
 {{define "agent"}}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -211,7 +217,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
      artifact's code and saved data back as that version left them, recorded as
      a new version so nothing is lost, and the click on a button that says so is
      the confirmation — nothing changes before it. Continuing without rolling
-     back is the escape: a plain secondary button, never the default, which
+     back is the escape: a plain secondary button, never the primary one, which
      leaves the artifact alone and starts the agent from it as it is, told that
      it may have changed.
 

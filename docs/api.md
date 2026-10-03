@@ -320,7 +320,7 @@ DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 PUT    /api/agent/key                        Store provider API key {"provider","model","api_key"} (encrypted at rest)
 GET    /api/agent/key                        Key status (masked hint only — the key is never returned)
 DELETE /api/agent/key                        Remove the stored key
-POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact, "resume_session_id"?: continue a kept conversation of that artifact} -> {"id","sse_ticket",…}
+POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact, "resume_session_id"?: continue a kept conversation of that artifact; omitted, the session is a new conversation} -> {"id","sse_ticket",…}
 POST   /api/agent/sessions/:id/ticket        Mint a fresh SSE ticket for this session (the reconnect path)
 POST   /api/agent/sessions/:id/prompt        Send a prompt {"message", "images"?: [{data, mime_type}], "snippets"?: [descriptor]}
 POST   /api/agent/sessions/:id/abort         Abort the current run
