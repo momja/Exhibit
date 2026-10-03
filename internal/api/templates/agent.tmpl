@@ -221,6 +221,12 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
      leaves the artifact alone and starts the agent from it as it is, told that
      it may have changed.
 
+     Before choosing, the person can look at the version they would return to:
+     "View vN" swaps it, running and with the data it had, into the preview pane
+     beside this card (the versionViewer partial). It is a look and nothing
+     more — nothing done in it is saved — and the card's own buttons remain the
+     only things that change the artifact.
+
      Everything else is a note, not a missing button: a conversation kept before
      they could be continued says so, and so does an instance with no agent.
      Data: agentTranscriptData; agent.js (resumeConversation) does the rest. */}}
@@ -232,6 +238,9 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 </div>
 {{else}}<div class="resume-card" id="resume-card">
   <p class="resume-lede">This conversation was last working against <strong>v{{.VersionSeq}}</strong>. The artifact is now at <strong>v{{.HeadSeq}}</strong>.</p>
+  <button type="button" class="resume-view"
+          hx-get="/partials/version-viewer?artifact={{.ArtifactID | urlquery}}&amp;seq={{.VersionSeq}}" hx-target="#pane-preview" hx-swap="innerHTML"
+          onclick="showPane('preview')"><i class="ph ph-eye"></i> View v{{.VersionSeq}} in the preview first</button>
   <button type="button" class="btn" data-resume="{{.SessionID}}" data-rollback="{{.VersionSeq}}"><i class="ph ph-arrow-counter-clockwise"></i> Roll back to v{{.VersionSeq}} and continue</button>
   <p class="resume-explain">Puts the artifact’s code and saved data back as v{{.VersionSeq}} left them. It is recorded as a new version, so nothing is lost, and you can undo it from the Versions list.</p>
   <button type="button" class="btn btn-sec" data-resume="{{.SessionID}}" data-rollback="0">Continue without rolling back</button>

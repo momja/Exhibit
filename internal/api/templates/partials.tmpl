@@ -65,6 +65,68 @@
      tests assert on the contiguous class attr. Data: string (the message). */}}
 {{define "fragmentError"}}<div class="frag-error"><i class="ph ph-warning-circle"></i><span>{{.}}</span></div>{{end}}
 
+{{/* versionViewer is an earlier version of an artifact, shown running in a frame
+     beneath a bar that says what it is — to be looked at before deciding
+     whether to return to it, and never to keep. It is swapped into the chat's
+     preview pane from the History card and into the edit page's Versions
+     panel, so the two show one thing the same way. Rendered by
+     GET /partials/version-viewer (versionviewer.go). Data: versionViewerData.
+
+     Three properties are the point, and each is held somewhere other than here:
+     - The frame is the render surface's version document: the code as it was,
+       with the data that version left behind, under a token for that version
+       alone. Nothing done in it is saved — its shim does not write through and
+       its response is sandboxed by its own CSP (render.ServeVersion).
+     - It carries no id="pv-frame". The chat page's bridges (state, snippet
+       picker, network prompt) listen to that element and nothing else, so a
+       version frame is not the page's artifact frame and a message it sends,
+       forged or not, is not heard. Do not give it that id.
+     - The bar says it is a preview and that nothing is saved, so what is
+       shown is never mistaken for the artifact as it is.
+
+     And it says so again, louder, the moment the tool actually tries to save.
+     A tool that saves quietly looks exactly like one that has, so the first
+     write the view refuses is reported by the frame (__avVersionUnsaved: no
+     key, no value) and components.js reveals the banner below — in the page's
+     own chrome, in the same style as the capability warning, and never in the
+     artifact's DOM, which the artifact could forge. That message is the one
+     thing the page listens to this frame for, and the listener's whole effect is
+     showing this sentence, so a notice the artifact forges is no worse than the
+     notice appearing. It stays up until the viewer is replaced, because a
+     warning that fades is one the person may not have read.
+
+     The close button carries only data-action="close-version-viewer": what
+     closing means is the page's (the chat re-renders its preview pane; the
+     edit page empties the slot), so each page's script owns it. Restorable is
+     the edit page asking for the restore beside the view, where it is decided;
+     it also decides what the notice tells a person to press, since each page
+     names the way back to a version differently (the edit page's Restore, the
+     chat card's Roll back). */}}
+{{define "versionViewer"}}<div class="version-viewer" id="version-viewer">
+  <div class="version-viewer-bar" role="status">
+    <i class="ph ph-eye" aria-hidden="true"></i>
+    <div class="version-viewer-text">
+      <div class="version-viewer-what">Viewing <strong>v{{.Seq}}</strong> <span class="version-viewer-meta">· {{.Label}}{{if .Message}} — {{.Message}}{{end}} · <time datetime="{{.WhenISO}}">{{.When}}</time></span></div>
+      <div class="version-viewer-note">A preview — nothing you do here is saved.</div>
+    </div>
+    <div class="version-viewer-actions">
+      {{if .Restorable}}<button type="button" class="btn btn-sm" data-action="restore" data-seq="{{.Seq}}"><i class="ph ph-arrow-counter-clockwise"></i> Restore v{{.Seq}}</button>{{end}}
+      <button type="button" class="btn btn-sm btn-sec" data-action="close-version-viewer">Back to current</button>
+    </div>
+  </div>
+  <div class="banner banner-warn" id="version-viewer-unsaved" role="alert" hidden>
+    <i class="ph ph-warning" aria-hidden="true"></i>
+    <div class="banner-body">
+      <span>Changes aren't saved while you preview v{{.Seq}}. {{if .Restorable}}Restore{{else}}Roll back to{{end}} v{{.Seq}} to make it the active version.</span>
+      <details class="banner-details">
+        <summary>Details</summary>
+        <p>This is v{{.Seq}} as it was, running with the data it left behind. Nothing you change in it is sent to the server, and it is discarded when you leave the preview. Once v{{.Seq}} is the active version, changes you make are saved as usual.</p>
+      </details>
+    </div>
+  </div>
+  <div class="version-viewer-body"><iframe class="version-viewer-frame" src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" title="{{.Title}}, version {{.Seq}}"></iframe></div>
+</div>{{end}}
+
 {{/* tagPanelBody is the edit page's Tags panel body: current tags with
      edit/remove controls, plus an add-or-create row. Shared by the page render
      and /partials/tag-panel. Data: tagPanelView (gallery.go). */}}
