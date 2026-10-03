@@ -1186,8 +1186,11 @@ user opened. What that costs, and what it does not:
   approval attaches to the artifact, not to a version of its body (`av-hrtv`).
   §6 states why re-gating on a rewrite is rejected and what actually bounds the
   risk.
-- Artifact bodies have no version history (`av-1rvm`), so an overwrite is not
-  yet undoable.
+- Every write an agent makes is recorded as a version (`architecture.md` §3.3b),
+  labelled with the session and the message it was answering, so a bad write is
+  undoable. Restoring is the owner's: `versions` is absent from
+  `agentSubResources`, so a session steered by text Exhibit did not author can
+  neither read the history nor change it.
 
 ### 5.4 The usage-policy guardrail is a screen, not a wall
 

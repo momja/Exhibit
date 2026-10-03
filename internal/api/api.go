@@ -476,6 +476,11 @@ func (ro *Router) setupRoutes() {
 				r.Patch("/", ro.updateArtifact)
 				r.Post("/refetch", ro.refetchArtifact)
 				r.Delete("/", ro.deleteArtifact)
+				// Version history (store/versions.go). Written as a side effect
+				// of every change to the body or widget, so the only mutation
+				// here is the restore. Owner-only; not in agentSubResources.
+				r.Get("/versions", ro.listVersions)
+				r.Post("/versions/{seq}/restore", ro.restoreVersion)
 				// State: written by the host frame on the artifact's behalf
 				// (the sandboxed iframe bridges writes via postMessage), and
 				// by the edit page's state inspector (av-hg5f). DELETE is the

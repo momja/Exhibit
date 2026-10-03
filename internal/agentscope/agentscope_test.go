@@ -12,9 +12,9 @@ import (
 func TestIssuedTokensAreDistinctAndResolveToTheirScope(t *testing.T) {
 	reg := NewRegistry()
 
-	a, err := reg.Issue(1, "artifact-a")
+	a, err := reg.Issue(1, "artifact-a", "")
 	require.NoError(t, err)
-	b, err := reg.Issue(1, "artifact-b")
+	b, err := reg.Issue(1, "artifact-b", "")
 	require.NoError(t, err)
 
 	assert.NotEqual(t, a.Token(), b.Token())
@@ -25,7 +25,7 @@ func TestIssuedTokensAreDistinctAndResolveToTheirScope(t *testing.T) {
 
 func TestUnknownAndEmptyTokensResolveToNothing(t *testing.T) {
 	reg := NewRegistry()
-	g, err := reg.Issue(1, "artifact-a")
+	g, err := reg.Issue(1, "artifact-a", "")
 	require.NoError(t, err)
 
 	assert.Nil(t, reg.Resolve(""))
@@ -43,7 +43,7 @@ func TestUnknownAndEmptyTokensResolveToNothing(t *testing.T) {
 // cannot walk from artifact to artifact by creating more of them.
 func TestBindArtifactOnlyNarrows(t *testing.T) {
 	reg := NewRegistry()
-	g, err := reg.Issue(1, "")
+	g, err := reg.Issue(1, "", "")
 	require.NoError(t, err)
 	require.Empty(t, g.Scope().ArtifactID)
 
@@ -58,7 +58,7 @@ func TestBindArtifactOnlyNarrows(t *testing.T) {
 // A grant issued for an artifact is already bound and cannot be rebound.
 func TestBoundGrantIgnoresRebinding(t *testing.T) {
 	reg := NewRegistry()
-	g, err := reg.Issue(1, "artifact-a")
+	g, err := reg.Issue(1, "artifact-a", "")
 	require.NoError(t, err)
 
 	g.BindArtifact("artifact-b")
@@ -68,7 +68,7 @@ func TestBoundGrantIgnoresRebinding(t *testing.T) {
 // A credential must not outlive the session it belongs to.
 func TestRevokeRetiresTheToken(t *testing.T) {
 	reg := NewRegistry()
-	g, err := reg.Issue(1, "artifact-a")
+	g, err := reg.Issue(1, "artifact-a", "")
 	require.NoError(t, err)
 	require.NotNil(t, reg.Resolve(g.Token()))
 
@@ -82,7 +82,7 @@ func TestRevokeRetiresTheToken(t *testing.T) {
 // may be binding one; both run concurrently under -race.
 func TestGrantIsSafeForConcurrentUse(t *testing.T) {
 	reg := NewRegistry()
-	g, err := reg.Issue(1, "")
+	g, err := reg.Issue(1, "", "")
 	require.NoError(t, err)
 
 	var wg sync.WaitGroup

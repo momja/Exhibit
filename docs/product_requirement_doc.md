@@ -178,6 +178,18 @@ artifact_network_origins(
   source,                  -- provenance: user | legacy | runtime
   created_at, updated_at
 )
+-- the artifact's history (§8.5): one row per version, never rewritten. The head
+-- is a version too; artifacts.source_blob_id / widget_blob_id mirror it. Blobs
+-- are never overwritten, so an older version's bytes are exactly what they were.
+-- state_json is the saved data the version LEFT BEHIND, snapshotted in the same
+-- transaction that created the next version (NULL only for the head).
+artifact_versions(
+  artifact_id, seq,
+  origin,                  -- initial | edit | agent | refetch | restore
+  message, session_id,     -- what produced it: a prompt, a URL, the agent chat
+  body_blob_id, widget_blob_id,
+  state_json, created_at
+)
 -- what each stored blob weighs, and who references it (av-fw1b). The length
 -- is a fact about the bytes, so it carries no owner; ownership comes from the
 -- rows that name the blob, and a shared one is charged in full to each owner
@@ -550,8 +562,8 @@ The artifact is already a file on disk after a Claude Code / Gemini CLI session.
 skill or special output format is needed — the file *is* the artifact. It enters the
 library through the web UI: drag/drop or paste the HTML, or paste a **URL** — the
 service fetches the page once and stores it as an owned file (the URL is recorded as
-`source_url`, and the user can later re-fetch it on demand as a snapshot update — no
-version history, with a warning that stored state may not survive the new body). A URL
+`source_url`, and the user can later re-fetch it on demand as a snapshot update, which
+is recorded as a new version — the page it replaces is kept and one restore away, §8.5). A URL
 ingest can also **vendor** the page's assets into the stored file — images, styles,
 scripts, fonts, and the binary payloads it fetches from JavaScript at runtime — so the
 artifact stays "just a file" after the source site rots. On ingest the service scans the
@@ -582,6 +594,21 @@ account and no dependency on the originating assistant. Either way the artifact
 grows a sharing glyph on its gallery card, so a month later the library itself is the
 answer to "what have I shared". Export to a single self-contained `.html` is
 the third route, and needs no service at all.
+
+### 8.5 Return to an earlier version
+
+An artifact keeps its history. Every change to its source or widget — a manual
+save, an agent edit, a refetch, a restore — is a version, and the edit page lists
+them with what produced each one. Each version also remembers the data the tool had
+saved by the time the next version replaced it, so **restoring puts back a pair that
+belongs together**: the code as it was and the data as that code left it, not old
+code over data shaped for newer code.
+
+Restoring asks first, because it changes both at once, and says what it keeps:
+what you restore over becomes a version of its own, so the restore can be undone.
+Nothing in the history is ever discarded, and the artifact's network allowlist and
+capability approvals are not part of it — returning to an old version never widens
+what the artifact may reach.
 
 ## 9. Explicit non-goals
 

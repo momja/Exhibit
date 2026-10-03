@@ -43,3 +43,9 @@ Open questions, deliberately unresolved:
 
 To be defined once the shape is settled. Blocking question before any implementation: is this the undo/safety ticket, the portability/export ticket, or both?
 
+
+## Notes
+
+**2026-10-03T06:00:00Z**
+
+The undo half is answered by [[av-bavj]]: state is snapshotted as one JSON object on the version being replaced, in the same transaction as every change, and restored with the version (restore is itself undoable). Still open here: user-facing export/import of state (portability), and a snapshot before the destructive state operations (clear, erase-all, agent `delete_state`), which are not version changes.

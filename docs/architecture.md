@@ -111,13 +111,24 @@ The only way data changes. Route groups:
   `footprint_changed` comes back true: the comparison is unknown, so the gate
   runs. Any other failure to read the previous body aborts the PATCH before
   anything is written, the bundled fields included (av-wu9d).
+  A body that differs from the stored one is written to a **new blob** and
+  recorded as a new version (§3.3b); a body identical to it is not written at all.
   Tag and collection membership use the dedicated `POST/DELETE
   /api/artifacts/:id/tags/:tagID` and `.../collections/:colID` routes.
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
-  `source_url` and replaces the stored body. A snapshot, not a versioned update.
+  `source_url` and makes the result the artifact's body, as a new version: the
+  page it replaces is kept and can be restored. A refetch that returns what the
+  artifact already holds records nothing.
+- `GET /api/artifacts/:id/versions`, `POST /api/artifacts/:id/versions/:seq/restore`
+  — the artifact's version history, newest first, and the one operation on it
+  (§3.3b). There is no route that creates a version: every change to the body or
+  widget records one as it is made, so a client cannot forget to. Restore is
+  owner-only and absent from `agentSubResources`: returning an artifact to an
+  earlier state — code *and* saved data — is a person's decision, and a session
+  steered by text Exhibit did not author must not make it.
 - `DELETE /api/artifacts/:id` — deletes the artifact and associated rows (tags,
-  collections, shares, state cascade via FK) **and its bytes**: the body blob,
-  and the widget blob when it has one (av-7jcq). The order is row first, then
+  collections, shares, state, versions cascade via FK) **and its bytes**: every
+  version's body blob and widget blob (av-7jcq). The order is row first, then
   bytes, because the two failure modes are not equally bad — a failed *row*
   delete after the bytes are gone leaves a live artifact whose only copy of
   itself no longer exists, which nothing on the instance can repair; a failed
@@ -126,9 +137,8 @@ The only way data changes. Route groups:
   deletion that left the file on disk must not claim otherwise. What it no
   longer means is a permanent leak — the store queued those ids in the delete's
   own transaction (§3.3a), so the drain is retried until it succeeds.
-  `DELETE /api/artifacts/:id/widget` removes the detached widget's blob the
-  same way, in the same order — detaching is the only exit a widget blob has,
-  since the id is otherwise reused for the artifact's life.
+  `DELETE /api/artifacts/:id/widget` removes the widget as a new version; the
+  bytes stay with the versions that had it and go with the artifact.
 - `GET/PUT /api/artifacts/:id/state`, `DELETE /api/artifacts/:id/state[/:key]` — the
   artifact's state rows (§6). Reads are normally satisfied by render-time inlining, not
   this route; `PUT` is called by the **host frame** on the storage shim's behalf (the
@@ -188,7 +198,8 @@ The only way data changes. Route groups:
   allowlist and no state apart from it. `PUT` scans the widget and reports which of
   its origins the *artifact's* allowlist doesn't cover — those are already blocked
   at render, so this explains a blank tile rather than gating one, and (as
-  everywhere) never seeds the allowlist. See `widgets.md`.
+  everywhere) never seeds the allowlist. A save is a new version with a blob of
+  its own; saving the tile it already has records nothing. See `widgets.md`.
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle. One route
   mints both kinds because they are one resource told apart by `recipient_id`
   (av-lrae), and the request says which by what it names. `recipients` — an
@@ -741,8 +752,9 @@ like an artifact that does not exist — 404, never 403, for the reason above.
 
   An artifact's **widget** (av-fafu) is a body too, so it lives here as a second blob
   with only its id (`artifacts.widget_blob_id`, empty for "no widget") on the row.
-  The id is minted once and reused on every save, keeping the widget's render URL —
-  which gallery cards embed — stable across edits.
+  Neither a body nor a widget is ever overwritten: a change writes a new blob and
+  a new version names it (§3.3b). The widget's render URL — which gallery cards
+  embed — is keyed by the artifact, not the blob, so it is stable regardless.
 
 - **Storage accounting** → `blob_sizes` (a blob's length) plus the
   `blob_references` view (which owner's rows name which blob), migration 021,
@@ -815,6 +827,59 @@ like an artifact that does not exist — 404, never 403, for the reason above.
 Because handlers never touch SQLite or the filesystem directly, swapping the metadata
 engine (libSQL/Turso) is a backend implementation change behind a stable interface —
 and the blob backend already is one.
+
+### 3.3b Version history
+
+An artifact is not one mutable thing. Every change to its body or widget — a
+manual save, an agent write, a refetch, a widget save or removal, a restore — is
+recorded as a **version**, so any earlier state can be returned to. The history
+is more than a diff of text: a version also carries the saved data the code had
+written by the time the next version replaced it.
+
+- **The head is a version.** `artifact_versions(artifact_id, seq, origin, message,
+  session_id, body_blob_id, widget_blob_id, state_json, created_at)`, one row per
+  version, seq increasing from 1. `artifacts.source_blob_id` and `widget_blob_id`
+  remain as the head's denormalized pointers because the render path reads them,
+  and are written only by `store.CommitVersion` / `RestoreVersion`, in the same
+  transaction as the version row they mirror. There is no second way to change an
+  artifact's content. Version 1 exists for every artifact by an `AFTER INSERT`
+  trigger (the migration backfills the ones that predate it), so "the head is the
+  highest seq" holds without any code path having to remember to create one.
+- **Blobs are never overwritten.** A change writes a new blob; an older version's
+  bytes are exactly what they were. A blob two versions share (a widget that did
+  not change) is named by both rows and stays alive while either does — the
+  deletion queue's refcount (§3.3a) and the `blob_references` view (§3.3, storage
+  accounting) both count version rows, so history is charged to its owner and
+  every version's bytes go with the artifact.
+- **State is snapshotted right before every change.** `CommitVersion` reads the
+  owner's `artifact_state` rows and records them as one JSON object on the
+  version it is replacing, in the same transaction that creates the next one. So
+  "the state as it stood right before the change" is exact, no caller has to
+  remember to take it, and `state_json` is NULL only for the head (its state is
+  the live rows). It is one atomic object rather than rows because a restore
+  must return to a single coherent moment, which is the opposite of what the
+  live per-key table is shaped for. Only the owner's rows are captured: on a
+  `shared`-mode artifact they are the board everyone plays on, and a recipient's
+  own-mode rows are theirs and never enter the owner's history.
+- **A change names only what it changes.** A nil body or widget pointer is read
+  from the head *inside* the transaction, so a widget save and a body save racing
+  each other cannot undo one another.
+- **Restore pushes a copy; it does not rewind.** `RestoreVersion` makes an
+  earlier version's body and widget the head as a *new* version, replaces the
+  live state with the snapshot that version left behind, and snapshots the state
+  it is replacing first — so a restore can itself be undone. Nothing in the
+  history is discarded. Restoring the head is `ErrAlreadyCurrent` (409).
+- **Not versioned:** the allowlist, capability approvals, shares, tags and
+  collections, and the title. They are the owner's decisions *about* the artifact,
+  not its content; a restore never changes what the artifact is allowed to reach.
+  The footprint gate (`footprint_changed`) is how a restored body's origins get
+  re-reviewed.
+- **Provenance.** `origin` is `initial|edit|agent|refetch|restore`; `message` is a
+  one-line label (the prompt an agent was answering, a refetch's URL, "Restored
+  v3"); `session_id` names the agent chat. An agent write reads the last two off
+  its grant (`agentscope.Grant`), which the server holds — never off the request.
+- **Retention.** Everything is kept. It counts toward the owner's storage, and
+  goes when the artifact does.
 
 ### 3.3a Blob deletion queue (av-8gyd)
 
@@ -1099,6 +1164,13 @@ exists to undo. Its shell renders server-side and its contents are fetched on
 first open (state is cold data the rest of the page never needs); edits apply
 through the same authenticated state routes (§3.1) on Save, so Cancel simply
 rebuilds the working copy from what the server last confirmed.
+
+The edit page also lists the artifact's **versions** (§3.3b) in a panel of its
+own: server-rendered, newest first, each with what produced it and when, and a
+Restore button on every version but the current one. Restoring asks first — it
+changes the code and the saved data at once — and says that what it replaces is
+kept; it reloads the page on success, because the editors above hold the text of
+the version it just replaced.
 
 Where state changes *after* load and a full reload would cost too much — it
 would drop a live iframe, an editor buffer, or an SSE stream — the page swaps
