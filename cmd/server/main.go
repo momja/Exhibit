@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -78,6 +77,14 @@ func main() {
 		fatal("configure embed origins", err)
 	}
 
+	// The largest request body any route accepts (av-ombn). Unset is the
+	// default, never unbounded; a value that is not a positive number of bytes
+	// is fatal rather than replaced by the default the operator did not write.
+	maxBodyBytes, err := api.MaxRequestBodyBytesFromEnv()
+	if err != nil {
+		fatal("configure the request body limit", err)
+	}
+
 	slog.Info("exhibit starting",
 		slog.String("app_origin", appOrigin),
 		slog.String("render_origin", renderOrigin),
@@ -86,6 +93,7 @@ func main() {
 		slog.String("log_level", levelName(level)),
 		slog.Bool("debug", level <= slog.LevelDebug),
 		slog.Bool("public_mode", publicMode.Enabled),
+		slog.Int64("max_request_body_bytes", maxBodyBytes),
 	)
 	if len(embedOrigins) > 0 {
 		// Logged because it widens a security header, and an operator reading
@@ -207,6 +215,9 @@ func main() {
 			HideModelIdentity: platformAgentKey != nil,
 			Guardrail:         guardrail,
 			Caps:              spendCaps,
+			// The ceiling the API enforces, so a tool can refuse an oversized
+			// write before sending it rather than after (av-ombn).
+			MaxRequestBodyBytes: maxBodyBytes,
 		}, st)
 		if err != nil {
 			fatal("init agent manager", err)
@@ -250,22 +261,23 @@ func main() {
 	}
 
 	router := api.NewRouter(api.Config{
-		Store:            st,
-		Blob:             bl,
-		AppOrigin:        appOrigin,
-		RenderOrigin:     renderOrigin,
-		AuthToken:        authToken,
-		Agent:            agentMgr,
-		AgentCredentials: agentCreds,
-		Secrets:          box,
-		MockEnabled:      mockLLMURL != "",
-		PlatformAgentKey: platformAgentKey,
-		Identity:         identity,
-		LocalCredential:  localCredential,
-		LocalUsers:       localUsers > 0,
-		Public:           publicMode,
-		Entitlements:     entitlements,
-		EmbedOrigins:     embedOrigins,
+		Store:               st,
+		Blob:                bl,
+		AppOrigin:           appOrigin,
+		RenderOrigin:        renderOrigin,
+		AuthToken:           authToken,
+		Agent:               agentMgr,
+		AgentCredentials:    agentCreds,
+		Secrets:             box,
+		MockEnabled:         mockLLMURL != "",
+		PlatformAgentKey:    platformAgentKey,
+		Identity:            identity,
+		LocalCredential:     localCredential,
+		LocalUsers:          localUsers > 0,
+		Public:              publicMode,
+		Entitlements:        entitlements,
+		EmbedOrigins:        embedOrigins,
+		MaxRequestBodyBytes: maxBodyBytes,
 	})
 
 	// One listener or two (av-xath). Two is the default and the shape an
@@ -290,7 +302,7 @@ func main() {
 			slog.String("app_origin", appOrigin),
 			slog.String("render_origin", renderOrigin),
 		)
-		if err := http.ListenAndServe(addr, h); err != nil {
+		if err := api.NewServer(addr, h).ListenAndServe(); err != nil {
 			fatal("server", err)
 		}
 		return
@@ -298,12 +310,12 @@ func main() {
 
 	go func() {
 		slog.Info("render server listening", slog.String("addr", renderAddr))
-		if err := http.ListenAndServe(renderAddr, router.RenderHandler()); err != nil {
+		if err := api.NewServer(renderAddr, router.RenderHandler()).ListenAndServe(); err != nil {
 			fatal("render server", err)
 		}
 	}()
 	slog.Info("app server listening", slog.String("addr", addr))
-	if err := http.ListenAndServe(addr, router); err != nil {
+	if err := api.NewServer(addr, router).ListenAndServe(); err != nil {
 		fatal("app server", err)
 	}
 }

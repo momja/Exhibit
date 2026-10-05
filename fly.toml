@@ -95,7 +95,9 @@
 # distroless, and a render holds the whole artifact body in memory before it
 # compresses it. A snapshot that vendored a wasm runtime is tens of megabytes.
 # 512 MB is enough to boot and not enough to render one of those while an agent
-# session runs a node subprocess alongside it.
+# session runs a node subprocess alongside it. Writes count too: one peaks at
+# about ten times its request body, ~320 MB at the default
+# MAX_REQUEST_BODY_BYTES of 32 MiB. Lower that if you shrink this.
 [[vm]]
   size = "shared-cpu-1x"
   memory = "1gb"
