@@ -20,6 +20,7 @@
  *   linksApproved      - persisted first-use external-link approval (mutable)
  *   cameraApproved     - persisted first-use camera approval (mutable)
  *   microphoneApproved - persisted first-use microphone approval (mutable)
+ *   geolocationApproved - persisted first-use location approval (mutable)
  */
 
 // --- CodeMirror islands ----------------------------------------------------
@@ -83,19 +84,21 @@ mountEditorWhenOpen('widget-panel', 'widget-src');
 // posture summary, which is also derived from these working copies.
 
 // Dirty flags for the grants the *host frame* can also change while this page
-// is open (av-r0dk, av-mv3k): their bootstrap value goes stale the moment the
-// viewer approves in another tab, so an unconditional write on Save would
-// revoke a newer grant nobody asked to revoke. Only a select the user actually
-// touched ships.
+// is open (av-r0dk, av-mv3k, av-f446): their bootstrap value goes stale the
+// moment the viewer approves in another tab, so an unconditional write on Save
+// would revoke a newer grant nobody asked to revoke. Only a select the user
+// actually touched ships.
 let linksApprovedDirty = false;
 let cameraApprovedDirty = false;
 let microphoneApprovedDirty = false;
+let geolocationApprovedDirty = false;
 
 document.getElementById('dl-select').value = String(downloadsApproved);
 document.getElementById('clip-select').value = String(clipboardApproved);
 document.getElementById('link-select').value = String(linksApproved);
 document.getElementById('cam-select').value = String(cameraApproved);
 document.getElementById('mic-select').value = String(microphoneApproved);
+document.getElementById('geo-select').value = String(geolocationApproved);
 document.getElementById('dl-select').addEventListener('change', function(e) {
   downloadsApproved = e.target.value === 'true';
   renderSecurityPanel();
@@ -117,6 +120,11 @@ document.getElementById('cam-select').addEventListener('change', function(e) {
 document.getElementById('mic-select').addEventListener('change', function(e) {
   microphoneApproved = e.target.value === 'true';
   microphoneApprovedDirty = true;
+  renderSecurityPanel();
+});
+document.getElementById('geo-select').addEventListener('change', function(e) {
+  geolocationApproved = e.target.value === 'true';
+  geolocationApprovedDirty = true;
   renderSecurityPanel();
 });
 
@@ -242,7 +250,8 @@ function renderSecurityPanel() {
     ' · clipboard: ' + (clipboardApproved ? 'always allow' : 'ask first') +
     ' · links: ' + (linksApproved ? 'always allow' : 'ask first') +
     ' · camera: ' + (cameraApproved ? 'always allow' : 'ask first') +
-    ' · microphone: ' + (microphoneApproved ? 'always allow' : 'ask first');
+    ' · microphone: ' + (microphoneApproved ? 'always allow' : 'ask first') +
+    ' · location: ' + (geolocationApproved ? 'always allow' : 'ask first');
 }
 renderSecurityPanel();
 
@@ -260,13 +269,14 @@ async function save() {
     downloads_approved: downloadsApproved,
     clipboard_approved: clipboardApproved
   };
-  // These three ship only when their select was actually changed (see the
+  // These four ship only when their select was actually changed (see the
   // dirty flags above): the bootstrap value is stale if the host granted the
   // capability in another tab, and an unconditional write would revoke that
   // newer grant on an unrelated save.
   if (linksApprovedDirty) payload.links_approved = linksApproved;
   if (cameraApprovedDirty) payload.camera_approved = cameraApproved;
   if (microphoneApprovedDirty) payload.microphone_approved = microphoneApproved;
+  if (geolocationApprovedDirty) payload.geolocation_approved = geolocationApproved;
   const resp = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
     body: JSON.stringify(payload)

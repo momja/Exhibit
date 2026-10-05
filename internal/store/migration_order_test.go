@@ -106,6 +106,8 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 	ctx := context.Background()
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id > 23",
+		// 031's geolocation approval (av-f446).
+		"ALTER TABLE artifacts DROP COLUMN geolocation_approved",
 		// 030's metering ledger (av-2yws) — the table carries its indexes.
 		"DROP TABLE IF EXISTS agent_usage",
 		"DROP TABLE IF EXISTS pending_blob_deletions",
@@ -155,8 +157,8 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 			"SELECT COUNT(*) FROM sqlite_master WHERE name = ?", obj).Scan(&n))
 		assert.Equal(t, 1, n, "%s was not created by the upgrade", obj)
 	}
-	// ...and so did 027, whose columns the rewind above took back off.
-	for _, col := range []string{"camera_approved", "microphone_approved", "share_state_mode"} {
+	// ...and so did 027 and 031, whose columns the rewind above took back off.
+	for _, col := range []string{"camera_approved", "microphone_approved", "geolocation_approved", "share_state_mode"} {
 		var n int
 		require.NoError(t, upgraded.db.QueryRowContext(ctx,
 			"SELECT COUNT(*) FROM pragma_table_info('artifacts') WHERE name = ?", col).Scan(&n))
@@ -206,6 +208,7 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	// shares.recipient_id blocks that column's DROP.
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id >= 28",
+		"ALTER TABLE artifacts DROP COLUMN geolocation_approved",
 		"DROP TABLE IF EXISTS agent_usage",
 		"DROP TRIGGER IF EXISTS shares_counts_sync_update",
 		"DROP TRIGGER IF EXISTS shares_counts_sync_delete",
