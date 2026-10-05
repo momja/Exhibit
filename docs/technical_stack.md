@@ -420,6 +420,15 @@ no CDN:
 
 Either path, the rule is fixed: **Phosphor Icons, self-hosted, no external icon CDN.**
 
+**Anything that rotates is a path, not a glyph (av-c7hu).** Browsers snap a
+glyph's baseline to whole device pixels, so a spinning webfont icon turns about
+a point a fraction of a pixel off its own center and wobbles; on the agent
+page's spinner the ring sat 0.13-0.21px above its pivot. That spinner is
+therefore Phosphor's `circle-notch` path inlined as an SVG (`spinnerIcon` in
+`web/gallery/agent.js`), centered in its viewBox at any pixel ratio. A static
+icon is unaffected and stays a glyph. The details caret in `components.css`
+dodges the same offset by swapping two glyphs instead of rotating one.
+
 ## 10. Auth
 
 Two credentials, checked in that order by one `chi` middleware:
@@ -564,8 +573,9 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
 
 ## 13. Build-time vs runtime dependencies
 
-- **Runtime (shipped):** the Go binary + embedded assets, SQLite (embedded), a mounted
-  data volume. That's the whole product surface.
+- **Runtime (shipped):** the Go binary + embedded assets, SQLite (embedded), Node and
+  the pinned `pi` agent harness (the image's runtime base, §1 "Agent harness"), and a
+  mounted data volume. That's the whole product surface.
 - **Runtime (operator-supplied, optional):** a TLS-terminating proxy of their choice,
   Litestream + an S3-compatible bucket (or MinIO) for backup, a Chromium thumbnail
   worker. None of these are part of a release — they're things a deployer adds around

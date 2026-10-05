@@ -46,15 +46,14 @@ COPY --from=assets /app/internal/api/assets/ ./internal/api/assets/
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
 
 # --- Runtime stage ---
-# TODO: install this conditionally. Don't install by default for all deploys
 # Node-based (not distroless): the agent surface (docs/agent.md) spawns `pi`
 # — Mario Zechner's pi-mono agent harness — as a subprocess of the server
 # itself, so it must live in this image. Pi is npm-only (no standalone
 # binary) and its bin script is a `#!/usr/bin/env node` shebang, which needs
 # a real userland (node + env) that distroless/static doesn't provide. The
 # server itself stays a static Go binary; only the agent surface pulls in
-# this larger base. If `pi` is ever removed from PATH the surface disables
-# itself (internal/agent), so this stays safe to run without it configured.
+# this larger base. The agent is part of the product, so every image ships
+# `pi`; there is no agent-free build.
 FROM node:22-bookworm-slim
 
 # Pi is pinned (av-2yws): metering reads Pi's usage-event shape, and the

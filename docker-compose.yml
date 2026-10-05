@@ -16,8 +16,8 @@ services:
       # Largest request body any route accepts, in bytes (av-ombn). Empty means
       # the default, 32 MiB; there is no value that removes the limit.
       - MAX_REQUEST_BODY_BYTES=${MAX_REQUEST_BODY_BYTES:-}
-      # Optional agent settings, read from .env. Empty means unset for all of
-      # them, so an instance that sets none behaves exactly as before.
+      # Agent settings, read from .env. Each one is optional: with none set the
+      # agent runs on each user's own key (docs/deployment.md §4).
       # Platform mode (docs/deployment.md §4.1):
       - AGENT_API_KEY=${AGENT_API_KEY:-}
       - AGENT_PROVIDER=${AGENT_PROVIDER:-}
