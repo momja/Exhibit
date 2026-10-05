@@ -13,8 +13,8 @@ services:
       - APP_ORIGIN=${APP_ORIGIN:-http://localhost:8080}
       - RENDER_ORIGIN=${RENDER_ORIGIN:-http://localhost:8081}
       - AUTH_TOKEN=${AUTH_TOKEN:-dev-token}
-      # Optional agent settings, read from .env. Empty means unset for all of
-      # them, so an instance that sets none behaves exactly as before.
+      # Agent settings, read from .env. Each one is optional: with none set the
+      # agent runs on each user's own key (docs/deployment.md §4).
       # Platform mode (docs/deployment.md §4.1):
       - AGENT_API_KEY=${AGENT_API_KEY:-}
       - AGENT_PROVIDER=${AGENT_PROVIDER:-}

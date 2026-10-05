@@ -56,7 +56,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `RENDER_ADDR` | `:8081` | Render listen address |
 | `SINGLE_LISTENER` | `false` | Serve both origins from `ADDR` alone, choosing between them by the request's `Host` header. For platforms whose proxy routes by port and cannot map two hostnames to two ports (Fly.io); see [§5.1](#51-one-port-two-hostnames). Accepts `true`/`1`/`yes`/`on`. `RENDER_ADDR` is unused when it is on |
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
-| `PI_BIN` | `pi` | AI agent executable — unset/missing just disables that feature |
+| `PI_BIN` | `pi` | Path to the AI agent executable. The Docker image installs it; set this only when running from source with `pi` somewhere other than `PATH` |
 | `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
 | `AGENT_API_KEY` | *(unset)* | The instance's **own** provider key for the AI agent. Unset = bring-your-own-key, the default and what every existing instance does. Set = platform mode; read [§4.1](#41-letting-the-instance-supply-the-agent-key-platform-mode) before you set it |
 | `AGENT_PROVIDER` | *(unset)* | Which provider `AGENT_API_KEY` belongs to — `anthropic`, `openai`, `google`, `openrouter`, `opencode-go`. **Required** when the key is set; missing or unrecognized is a startup failure, not a surprise at the first session |
@@ -505,10 +505,11 @@ surface.
 on the disabled control rather than as a surprise after the confirmation. If
 that account is the one you want gone, promote somebody else first.
 
-## 4. AI agent (optional)
+## 4. AI agent
 
-Nothing to configure for the default: if `pi` is on `PATH` the agent surface
-works, and each user brings their own provider key, entered in the UI and
+The agent is how most artifacts get built and changed, and the Docker image
+ships everything it needs. Nothing to configure for the default: each user
+brings their own provider key, entered in the UI and
 encrypted at rest under `EXHIBIT_SECRET`. That is the right shape for a
 self-hosted library, where the operator is the user and the key is theirs.
 
@@ -597,22 +598,13 @@ Anthropic's and OpenAI's prohibited uses (`internal/agent/ext/guard.ts`).
 Off-topic use is allowed; only prohibited content is blocked. It does not
 screen what the agent writes back, or what it saves into an artifact.
 
-### 4.3 No AI agent features
+### 4.3 If `pi` is missing
 
-Nothing to configure — if `pi` isn't on `PATH`, the agent surface disables itself
-automatically. To shrink the image too, drop the AI stuff at build time by
-swapping `Dockerfile`'s runtime stage:
-
-```dockerfile
-FROM gcr.io/distroless/static-debian12
-COPY --from=builder /bin/server /server
-VOLUME ["/data"]
-ENV DATA_DIR=/data ADDR=:8080 RENDER_ADDR=:8081
-EXPOSE 8080 8081
-ENTRYPOINT ["/server"]
-```
-
-(Keep the `assets` and `builder` stages as-is.)
+The server still starts without `pi` on `PATH`, logs
+`pi binary not found; agent support disabled`, and answers every agent call
+with `503`. The pages still offer the agent, so users meet a disabled banner
+and refused requests. Treat that log line as a broken install and fix the
+image or `PI_BIN`. Running without the agent is not a supported configuration.
 
 ## 5. Reverse proxy / TLS
 

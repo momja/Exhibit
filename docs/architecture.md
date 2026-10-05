@@ -1239,11 +1239,13 @@ already expect.
 
 ### 3.7 Agent sidecar (Pi harness, Exh-yvhp)
 
-The build/modify-with-AI surface follows the same satellite philosophy but is
-spawned by the service rather than composed by the operator: each chat session
-runs one `pi --mode rpc` subprocess (Pi, Mario Zechner's agent harness —
-JSONL over stdin/stdout), managed by `internal/agent`. If the `pi` binary is
-absent the surface degrades to disabled; nothing else changes.
+The build/modify-with-AI surface is part of the product, not a satellite: the
+image ships `pi`, and the agent is the main way artifacts are built and changed.
+Each chat session runs one `pi --mode rpc` subprocess (Pi, Mario Zechner's agent
+harness — JSONL over stdin/stdout), spawned and managed by `internal/agent`. If
+the `pi` binary is missing the server still boots and answers every agent route
+`503`; that is a broken install the service tolerates, not a supported
+configuration, and the pages keep offering the agent.
 
 - **Single write path preserved:** the sidecar is loaded with built-in tools
   disabled and exactly one extension (`internal/agent/ext/exhibit.ts`) whose
@@ -1997,8 +1999,7 @@ specifies — server-side state is the whole mechanism.
 - **Not a multi-service deployment.** One Go process answers both origins; SQLite is
   embedded; the only extra processes are optional satellites composed by the operator,
   plus short-lived per-session Pi sidecars the service itself spawns for the agent
-  surface (§3.7) — spawned on demand, reaped on idle, absent entirely when `pi` is
-  not installed.
+  surface (§3.7) — spawned on demand, reaped on idle.
 - **Not a predictor.** No pre-render static/LLM analysis gates behavior. Policy and
   interception sit at the runtime boundary and observe.
 - **Not the owner of TLS or backup targets.** The release is the image plus a config
