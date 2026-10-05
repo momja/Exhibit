@@ -12,4 +12,4 @@
 ALTER TABLE artifacts ADD COLUMN geolocation_approved INTEGER NOT NULL DEFAULT 0;
 
 -- +goose Down
--- SQLite cannot easily DROP a column without recreating the table; leave as a no-op.
+ALTER TABLE artifacts DROP COLUMN geolocation_approved;
