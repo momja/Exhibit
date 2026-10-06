@@ -360,8 +360,8 @@ credential scoped to one artifact**, not the service token: it may
 tool it has — and every other route answers 403. Its owner comes from the
 same credential, so the owner-scoped store calls bound it to one tenant on top
 of that. `snippets` entries are element descriptors
-captured inside the artifact — untrusted text the server fences as data rather
-than splicing into `message`. See `docs/security.md` §5. The chat UI lives at `/agent`
+captured inside the artifact — untrusted text the model reads as the result of
+its `get_selection` tool rather than as part of `message`. See `docs/security.md` §5. The chat UI lives at `/agent`
 (`/agent?artifact=<id>` to modify an existing artifact); snippet mode
 (Ctrl+Shift+S) lets you click an element in the live preview and attach its
 screenshot + selector to your next prompt. See [docs/agent.md](./docs/agent.md).

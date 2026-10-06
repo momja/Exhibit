@@ -125,9 +125,10 @@ func TestGuardrailFailsClosed(t *testing.T) {
 	assert.Zero(t, agentTurns(h))
 }
 
-// Stored artifact source is fenced data the user did not just type. The
-// screen judges the user's words, so an artifact whose body happens to
-// contain prohibited-looking text can still be edited.
+// Stored artifact source is not something the user just typed, and it never
+// rides in the prompt: the agent reads it as a tool result (av-5s7g). The
+// screen judges the user's words, so an artifact whose body happens to contain
+// prohibited-looking text can still be edited.
 func TestGuardrailScreensTheUsersWordsNotTheArtifact(t *testing.T) {
 	h := newPiHarnessWith(t, false, mockGuardrail)
 	r := h.router
@@ -147,7 +148,7 @@ func TestGuardrailScreensTheUsersWordsNotTheArtifact(t *testing.T) {
 	for _, m := range screened {
 		assert.Contains(t, m, "make the button green")
 		assert.NotContains(t, m, "mock-policy-violation", "the stored body reached the screen")
-		assert.NotContains(t, m, "UNTRUSTED DATA", "a data block reached the screen")
+		assert.NotContains(t, m, "get_artifact", "no tool output reached the screen")
 	}
 }
 
