@@ -56,10 +56,11 @@ for (const name of ["code", "message"]) {
 
 // A frame: a window whose parent is the host, a navigator, and the
 // capability-banner hook the preamble defines earlier in the same function.
-function loadGate({ geolocation = true, positionError = true } = {}) {
+function loadGate({ geolocation = true, positionError = true, versionView = false } = {}) {
   const posted = [];
   const listeners = {};
   const warnings = [];
+  const tasks = [];
   const parent = { postMessage(msg, target) { posted.push({ msg, target }); } };
   const window = {
     parent,
@@ -74,6 +75,8 @@ function loadGate({ geolocation = true, positionError = true } = {}) {
   const navigator = geolocation ? { geolocation: nativeGeolocation } : {};
   const globals = {
     window, navigator, API_ORIGIN, ARTIFACT_ID,
+    VERSION_VIEW: versionView,
+    setTimeout(fn) { tasks.push(fn); },
     warnCapability: (capability, resource) => warnings.push([capability, resource])
   };
   if (positionError) globals.GeolocationPositionError = GeolocationPositionError;
@@ -82,7 +85,8 @@ function loadGate({ geolocation = true, positionError = true } = {}) {
   // A message as the host would send it: from the app origin, from the parent.
   const fromHost = (data, { origin = API_ORIGIN, source = parent } = {}) =>
     (listeners.message || []).forEach((fn) => fn({ data, origin, source }));
-  return { navigator, nativeGeolocation, posted, warnings, reachedNative, fromHost };
+  const flushTasks = () => { while (tasks.length) tasks.shift()(); };
+  return { navigator, nativeGeolocation, posted, warnings, reachedNative, fromHost, flushTasks };
 }
 
 function recorder() {
@@ -216,4 +220,55 @@ test("without GeolocationPositionError the error is still shaped like one", () =
   assert.equal(err.code, 1);
   assert.equal(err.PERMISSION_DENIED, 1);
   assert.equal(err.message, "User denied Geolocation", "the default message is Chromium's own");
+});
+
+test("a version preview denies location asynchronously without asking its host", () => {
+  const { navigator, posted, warnings, reachedNative, flushTasks } = loadGate({ versionView: true });
+  const success = recorder();
+  const error = recorder();
+
+  navigator.geolocation.getCurrentPosition(success.fn, error.fn, { timeout: 5 });
+  assert.deepEqual(error.calls, [], "a geolocation callback must not run synchronously");
+  assert.deepEqual(posted, [], "a historical preview cannot ask the host for capabilities");
+  assert.deepEqual(reachedNative, [], "nor can it reach the browser's location grant");
+
+  flushTasks();
+  flushTasks();
+  assert.equal(error.calls.length, 1, "the denial settles exactly once without any host reply");
+  const [err] = error.calls;
+  assert.equal(err.code, err.PERMISSION_DENIED);
+  assert.ok(err instanceof GeolocationPositionError);
+  assert.equal(err.message, "Geolocation is unavailable in a version preview");
+  assert.deepEqual(success.calls, []);
+  assert.deepEqual(warnings, []);
+});
+
+test("a version preview returns watch ids and honors clearWatch before its denial", () => {
+  const { navigator, posted, reachedNative, flushTasks } = loadGate({ versionView: true });
+  const kept = recorder();
+  const cleared = recorder();
+  const keptId = navigator.geolocation.watchPosition(() => {}, kept.fn);
+  const clearedId = navigator.geolocation.watchPosition(() => {}, cleared.fn);
+  assert.ok(Number.isInteger(keptId) && keptId > 0);
+  assert.ok(Number.isInteger(clearedId) && clearedId > 0);
+  assert.notEqual(keptId, clearedId);
+
+  navigator.geolocation.clearWatch(clearedId);
+  flushTasks();
+  assert.equal(kept.calls.length, 1);
+  assert.equal(kept.calls[0].code, kept.calls[0].PERMISSION_DENIED);
+  assert.deepEqual(cleared.calls, []);
+  assert.deepEqual(posted, []);
+  assert.deepEqual(reachedNative, []);
+});
+
+test("a version preview retains callback validation and tolerates a missing error callback", () => {
+  const { navigator, posted, flushTasks } = loadGate({ versionView: true });
+  assert.throws(() => navigator.geolocation.getCurrentPosition(null), {
+    name: "TypeError", message: /parameter 1 is not a function/
+  });
+  assert.throws(() => navigator.geolocation.watchPosition(undefined), { name: "TypeError" });
+  navigator.geolocation.getCurrentPosition(() => {});
+  assert.doesNotThrow(flushTasks);
+  assert.deepEqual(posted, []);
 });

@@ -667,11 +667,33 @@ async function resumeConversation(conversationId, rollbackTo) {
   addMsg('sys', (rollbackTo ? 'Rolled back to v' + rollbackTo + '. ' : '') +
     'Continuing this conversation. The agent will read the artifact again before it changes anything.');
   closeHistory();
-  if (rollbackTo) {
-    refreshPreview();
-    nudgePreview();
-  }
+  // The pane shows the artifact the conversation now continues on. After a
+  // rollback that is a new version, and when a version was being looked at first
+  // it is the artifact as it is — either way the pane re-renders, and a version
+  // that was only ever looked at gives way rather than sitting beside a
+  // conversation that is no longer about it.
+  if (rollbackTo || viewingVersion()) refreshPreview();
+  if (rollbackTo) nudgePreview();
 }
+
+// --- Looking at an earlier version (av-vw7r) -----------------------------------
+// The History card's "View vN" swaps the version, running and with the data it
+// had, into the preview pane (the versionViewer fragment). It is a look and
+// nothing else: the frame is the render surface's version document, which
+// persists nothing, and it is deliberately not #pv-frame — every bridge on this
+// page (state, snippet picker, network prompt) listens to previewFrame() alone,
+// so while a version is showing there is no artifact frame for them to hear, and
+// a message the version's code sends, forged or not, is not heard by anything.
+// That is a structural property of which element carries which id, and why it is
+// not a flag some handler has to remember to check.
+//
+// All that is left for script is what "back" means here: re-render the pane for
+// the artifact as it is, by the same fragment fetch an agent save uses.
+function viewingVersion() { return !!document.getElementById('version-viewer'); }
+
+document.getElementById('pane-preview').addEventListener('click', (e) => {
+  if (e.target.closest('[data-action="close-version-viewer"]')) refreshPreview();
+});
 
 // A swap replaces the iframe, so the artifact reloads from scratch: any
 // snippet pick in flight is against a document that no longer exists. Drop the

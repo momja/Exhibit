@@ -32,6 +32,44 @@ func TestMintedTokenVerifiesAndCarriesTheOwner(t *testing.T) {
 	}
 }
 
+// History holds what the live document never shows, so a token for the live
+// document must not open it. The scope is mixed into the signature, so this is a
+// property of the tag and not of any field a verifier could forget to compare:
+// each of these is the same bytes presented to a different document.
+func TestATokenOpensTheDocumentItWasMintedForAndNoOther(t *testing.T) {
+	s := NewRandomSigner()
+	live := s.Mint("artifact-1", 7)
+	v2 := s.Mint(VersionScope("artifact-1", 2), 7)
+
+	if _, err := s.Verify(v2, VersionScope("artifact-1", 2)); err != nil {
+		t.Fatalf("a version's own token must open it: %v", err)
+	}
+	if c, _ := s.Verify(v2, VersionScope("artifact-1", 2)); c.OwnerID != 7 || c.ViewerID != 7 {
+		t.Fatalf("a version token names the owner and, by default, the owner as viewer; got %+v", c)
+	}
+	for name, tc := range map[string]struct{ tok, scope string }{
+		"the live token on a version":                        {live, VersionScope("artifact-1", 2)},
+		"a version token on the live doc":                    {v2, "artifact-1"},
+		"a version token on another one":                     {v2, VersionScope("artifact-1", 3)},
+		"a version token on another artifact's same version": {v2, VersionScope("artifact-2", 2)},
+	} {
+		if _, err := s.Verify(tc.tok, tc.scope); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: err = %v, want ErrInvalid", name, err)
+		}
+	}
+}
+
+// An artifact id is a UUID, so a version's scope can never be read as some other
+// artifact's id — the separator is not in the alphabet an id is made of.
+func TestAVersionScopeIsNotAnArtifactID(t *testing.T) {
+	if got := VersionScope("abc", 12); got != "abc/v/12" {
+		t.Fatalf("VersionScope = %q", got)
+	}
+	if VersionScope("abc", 1) == VersionScope("abc", 11) || VersionScope("ab", 11) == VersionScope("abc", 1) {
+		t.Fatal("two different (artifact, version) pairs must have two different scopes")
+	}
+}
+
 // av-wmp6. The anonymous claim is what a public instance mints for a visitor
 // with no credential, and the render surface subtracts state on the strength of
 // it — so it has to survive the round trip intact, and the owner beside it must

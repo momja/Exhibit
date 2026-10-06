@@ -208,7 +208,7 @@ func TestServeWidgetDeniesDevicesEvenWhenArtifactApproved(t *testing.T) {
 // hands the decision to the host and then *settles*, rather than hanging on a
 // stream that is never coming.
 func TestShimInstallsMediaGate(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	// The message shape the host's media listener validates, and the reply the
 	// frame correlates by request id.
@@ -252,7 +252,7 @@ func TestShimInstallsMediaGate(t *testing.T) {
 // Permissions-Policy header, and gating it there would break the one context
 // where the capability is reachable.
 func TestShimMediaGateIsFramedOnly(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 	guard := strings.Index(doc, "if (window.parent !== window) {")
 	media := strings.Index(doc, "__avMedia")
 	if guard < 0 || media < guard {
@@ -266,7 +266,7 @@ func TestShimMediaGateIsFramedOnly(t *testing.T) {
 // side's behaviour is driven in web/gallery/render.geolocation.test.mjs; this
 // pins what has to be in the bytes for that to be the code that ships.
 func TestShimInstallsGeolocationGate(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	for _, marker := range []string{"__avGeolocation", "__avGeolocationResult"} {
 		if !strings.Contains(doc, marker) {
@@ -290,7 +290,7 @@ func TestShimInstallsGeolocationGate(t *testing.T) {
 // Permissions-Policy header, and gating it there would break the one context
 // where the approval is spent.
 func TestShimGeolocationGateIsFramedOnly(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 	guard := strings.Index(doc, "if (window.parent !== window) {")
 	geo := strings.Index(doc, "__avGeolocation")
 	if guard < 0 || geo < guard {

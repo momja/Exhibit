@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -115,6 +116,14 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	// must not be able to read off somebody's library.
 	{route: "/partials/share-panel", ownerScoped: true,
 		ownPath: "/partials/share-panel?artifact={id}", foreignPath: "/partials/share-panel?artifact={id}"},
+	// An earlier version of an artifact (av-vw7r). History holds what the live
+	// document never shows — code since rewritten, data since cleared — so it is
+	// the most private thing a fragment can carry: another tenant gets the 404 a
+	// missing artifact gets, and the frame it mints names the owner and the
+	// version, nobody else (assertFramesName verifies it against the version's
+	// scope).
+	{route: "/partials/version-viewer", ownerScoped: true,
+		ownPath: "/partials/version-viewer?artifact={id}&seq=1", foreignPath: "/partials/version-viewer?artifact={id}&seq=1"},
 
 	// A page that reads nothing. Ingest is entirely a client-side
 	// conversation with POST /api/artifacts, which authenticates itself, so
@@ -253,6 +262,14 @@ func seedOwnedArtifact(t *testing.T, ro *Router, owner int64, id, title, bodyMar
 		Tier: store.Tier1, SourceText: bodyMarker,
 	}))
 	require.NoError(t, ro.cfg.Store.SetState(ctx, store.OwnerID(owner), id, store.ViewerID(owner), "note", stateMarker))
+	// An edit on top of it, which makes what is above an earlier version — one
+	// the version viewer (av-vw7r) can look at, with the state it left, and one
+	// there is something to refuse a stranger.
+	headBlobID := id + "-head-blob"
+	require.NoError(t, ro.cfg.Blob.Put(ctx, headBlobID,
+		strings.NewReader("<html><body><h1>"+bodyMarker+" (edited)</h1></body></html>")))
+	_, err := ro.cfg.Store.CommitVersion(ctx, owner, id, store.VersionChange{BodyBlobID: &headBlobID})
+	require.NoError(t, err)
 	// A conversation kept with it, so the history fragments (av-y7td) have
 	// something of the artifact's to render and something to refuse a stranger.
 	require.NoError(t, ro.cfg.Store.SaveTranscript(ctx, owner, store.Transcript{
@@ -289,22 +306,44 @@ func responseText(w *httptest.ResponseRecorder) string {
 // renderURLPattern finds the render-origin URLs a page points its frames and
 // redirects at. It stops at "&" so a cache-busting parameter (rendered as
 // "&amp;" in markup) is not swallowed into the token.
+//
+// An earlier version's document (av-vw7r) is /a/<id>/versions/<seq>, and is
+// matched too: a pattern that only knew the live shapes would walk straight past
+// the one render URL whose token is scoped differently, and say nothing.
 var renderURLPattern = regexp.MustCompile(
-	`https://render\.test/([aw])/([^/?"'\s&]+)\?` + rendertoken.Param + `=([^"'\s&]+)`)
+	`https://render\.test/([aw])/([^/?"'\s&]+)(?:/versions/(\d+))?\?` + rendertoken.Param + `=([^"'\s&]+)`)
 
 type renderCredential struct {
 	url        string
 	artifactID string
-	token      string
+	// version is the version a document shows, "" for the live document. It
+	// decides what the token is verified against: a version's token is scoped to
+	// that version, not to the artifact.
+	version string
+	token   string
+}
+
+// scope is what the credential's token was minted for.
+func (c renderCredential) scope() string {
+	if c.version == "" {
+		return c.artifactID
+	}
+	seq, _ := strconv.Atoi(c.version)
+	return rendertoken.VersionScope(c.artifactID, seq)
 }
 
 func renderCredentialsIn(text string) []renderCredential {
 	var out []renderCredential
 	for _, m := range renderURLPattern.FindAllStringSubmatch(text, -1) {
+		path := m[1] + "/" + m[2]
+		if m[3] != "" {
+			path += "/versions/" + m[3]
+		}
 		out = append(out, renderCredential{
-			url:        "https://render.test/" + m[1] + "/" + m[2] + "?" + rendertoken.Param + "=" + m[3],
+			url:        "https://render.test/" + path + "?" + rendertoken.Param + "=" + m[4],
 			artifactID: m[2],
-			token:      m[3],
+			version:    m[3],
+			token:      m[4],
 		})
 	}
 	return out
@@ -317,7 +356,7 @@ func renderCredentialsIn(text string) []renderCredential {
 func assertFramesName(t *testing.T, ro *Router, w *httptest.ResponseRecorder, want int64, where string) {
 	t.Helper()
 	for _, c := range renderCredentialsIn(responseText(w)) {
-		claims, err := ro.tokens.Verify(c.token, c.artifactID)
+		claims, err := ro.tokens.Verify(c.token, c.scope())
 		require.NoError(t, err, "%s minted an unverifiable token", where)
 		assert.Equal(t, want, claims.OwnerID,
 			"%s minted a frame token naming owner %d instead of the requester (%d). "+
@@ -440,6 +479,7 @@ func TestNoRenderURLOnASecondOwnersPageServesAnotherOwnersArtifactOrState(t *tes
 		"/agent?artifact=" + in.artifactOne,
 		"/partials/agent-preview?artifact=" + in.artifactOne,
 		"/partials/card-widget?artifact=" + in.artifactOne,
+		"/partials/version-viewer?artifact=" + in.artifactOne + "&seq=1",
 	} {
 		page := in.get(t, path, in.cookieTwo)
 		for _, c := range renderCredentialsIn(responseText(page)) {

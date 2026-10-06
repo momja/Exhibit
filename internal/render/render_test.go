@@ -306,7 +306,7 @@ func TestBuildCSPFormActionMirrorsAllowlist(t *testing.T) {
 // mention fetch (it shims data: URL fetches, av-02xs) but must never invoke it
 // with a URL — its only network-adjacent call is nativeFetch.apply passthrough.
 func TestShimWritesViaPostMessageNotFetch(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 	if !strings.Contains(doc, "window.parent.postMessage") {
 		t.Fatalf("shim should write via postMessage to the host frame: %s", doc)
 	}
@@ -323,7 +323,7 @@ func TestShimWritesViaPostMessageNotFetch(t *testing.T) {
 // mitigation trialed in av-02xs was removed as ineffective — assert it stays
 // gone so it can't silently degrade artifact rendering again.
 func TestShimFramedDataURLFetchWrapper(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 	if !strings.Contains(doc, "window.fetch = function(input, init)") {
 		t.Fatalf("framed shim must wrap fetch for data: URLs: %s", doc)
 	}
@@ -343,7 +343,7 @@ func TestShimFramedDataURLFetchWrapper(t *testing.T) {
 		t.Fatalf("ineffective canvas mitigation must not ship in the shim: %s", doc)
 	}
 
-	widgetDoc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, true, false, nil)
+	widgetDoc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, true, false, false, nil)
 	if strings.Contains(widgetDoc, "window.fetch = function(input, init)") {
 		t.Fatalf("widget renders must not carry the fetch shim: %s", widgetDoc)
 	}
@@ -353,7 +353,7 @@ func TestShimFramedDataURLFetchWrapper(t *testing.T) {
 // rather than fetching asynchronously (which the artifact's own init would race).
 func TestInjectShimInlinesStateWithoutAsyncHydrate(t *testing.T) {
 	state := map[string]string{"tkgraph:config:v1": `{"lastSource":"github"}`}
-	doc := injectPreamble("<html><head></head><body></body></html>", "abc", "https://app.test", state, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<html><head></head><body></body></html>", "abc", "https://app.test", state, originPolicy{}, false, false, false, nil)
 
 	// The state value is embedded directly in the shim's cache.
 	if !strings.Contains(doc, "lastSource") || !strings.Contains(doc, "github") {
@@ -372,7 +372,7 @@ func TestInjectShimInlinesStateWithoutAsyncHydrate(t *testing.T) {
 
 // A nil/empty state must produce a valid empty-object cache, never `null`.
 func TestInjectShimNilStateIsEmptyObject(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 	if !strings.Contains(doc, "var cache = {}") {
 		t.Fatalf("nil state should inline an empty object, got: %s", doc)
 	}
@@ -408,7 +408,7 @@ func TestShimStorageNamespacesAreIndependent(t *testing.T) {
 	// A key inlined into the persisted namespace — the collision case: an
 	// artifact writing sessionStorage['draft'] must not see or overwrite it.
 	doc := injectPreamble("<head></head>", "abc", "https://app.test",
-		map[string]string{"draft": "saved"}, originPolicy{}, false, false, nil)
+		map[string]string{"draft": "saved"}, originPolicy{}, false, false, false, nil)
 
 	local := storageInstall(t, doc, "localStorage")
 	session := storageInstall(t, doc, "sessionStorage")
@@ -446,7 +446,7 @@ func TestShimStorageNamespacesAreIndependent(t *testing.T) {
 // localStorage keeps its unconditional install: it serves the inlined reads
 // top-level too (its own top-level write problem is av-blzu).
 func TestShimSessionStorageInstallIsFramedOnly(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	guard := strings.Index(doc, "if (window.parent !== window) {")
 	if guard < 0 {
@@ -466,7 +466,7 @@ func TestShimSessionStorageInstallIsFramedOnly(t *testing.T) {
 // operation is tagged with an explicit op so the host bridge — and the two
 // listeners that consume it — can tell them apart with no ambiguity.
 func TestShimRemoveItemAndClearUseExplicitOp(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	if !strings.Contains(doc, "persist('delete', key)") {
 		t.Fatalf("removeItem must post an explicit 'delete' op, not a '' sentinel: %s", doc)
@@ -487,7 +487,7 @@ func TestShimRemoveItemAndClearUseExplicitOp(t *testing.T) {
 // with no persist call at all, so the wipe looked successful until the next
 // render re-inlined every original key.
 func TestShimClearWritesThrough(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	clearIdx := strings.Index(doc, "clear: function() {")
 	if clearIdx < 0 {
@@ -507,14 +507,22 @@ func TestShimClearWritesThrough(t *testing.T) {
 // per operation, so clear() and removeItem() called with no host frame stay
 // cache-only and never throw — matching every other bridge's guard.
 func TestShimPersistStateGuardsTopLevelForEveryOp(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	fn := "function persistState(op, key, value) {"
 	start := strings.Index(doc, fn)
 	if start < 0 {
 		t.Fatalf("shim missing persistState: %s", doc)
 	}
-	body := doc[start : start+300]
+	// Everything persistState does before it posts to the host: the mode guards
+	// (widget, anonymous, version view) and then the top-level one. Bounded by the
+	// post itself rather than by a length, so a guard that gains a line does not
+	// push the one this test is about out of range.
+	post := strings.Index(doc[start:], "window.parent.postMessage(msg, API_ORIGIN)")
+	if post < 0 {
+		t.Fatalf("persistState no longer posts the write to the host: %s", doc[start:start+420])
+	}
+	body := doc[start : start+post]
 	if !strings.Contains(body, "if (window.parent === window) return;") {
 		t.Fatalf("persistState must guard every op (set/delete/clear) behind one top-level check: %s", body)
 	}
@@ -526,7 +534,7 @@ func TestShimPersistStateGuardsTopLevelForEveryOp(t *testing.T) {
 // must never gain a network path for this (blob payloads come from a
 // createObjectURL registry, not a connect-src-governed fetch).
 func TestShimInstallsDownloadBridge(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	// The message shape the host's download listener validates.
 	if !strings.Contains(doc, "__avDownload") {
@@ -555,7 +563,7 @@ func TestShimInstallsDownloadBridge(t *testing.T) {
 // pages get no bridge in v1. Widget renders never carry this block at all
 // (av-fafu) — see widget_test.go.
 func TestShimDownloadBridgeIsFramedOnly(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 	if !strings.Contains(doc, "if (window.parent !== window) {") {
 		t.Fatalf("download bridge must be guarded to framed (gallery-embedded) contexts: %s", doc)
 	}
@@ -568,7 +576,7 @@ func TestShimDownloadBridgeIsFramedOnly(t *testing.T) {
 // (blob:/data:) still win over navigation, and same-origin/hash/mailto/
 // javascript: links are left to their native behavior.
 func TestShimInstallsLinkNavigationBridge(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	if !strings.Contains(doc, "__avNavigate") {
 		t.Fatalf("shim missing the link navigation bridge message: %s", doc)
@@ -596,7 +604,7 @@ func TestShimInstallsLinkNavigationBridge(t *testing.T) {
 // host frame (naming the 'module-worker' capability), pinned to the app origin
 // like every other bridge — so the host can warn.
 func TestShimInstallsModuleWorkerInterceptor(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	// The generic message shape the host's banner listener validates.
 	if !strings.Contains(doc, "__avCapabilityWarning") {
@@ -639,7 +647,7 @@ func TestShimInstallsModuleWorkerInterceptor(t *testing.T) {
 // (which have a real origin and run module workers fine) neither install it nor
 // warn.
 func TestShimModuleWorkerInterceptorIsFramedOnly(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 	// The interceptor block sits inside the framed guard; the diagnostic marker
 	// must appear after the guard opens.
 	guard := strings.Index(doc, "if (window.parent !== window) {")
@@ -655,7 +663,7 @@ func TestShimModuleWorkerInterceptorIsFramedOnly(t *testing.T) {
 // the download bridge it installs framed-only (guarded by the same
 // window.parent check), so top-level/share renders are unaffected.
 func TestShimInstallsClipboardBridge(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	// The message shape the host's clipboard listener validates.
 	if !strings.Contains(doc, "__avClipboard") {
@@ -682,7 +690,7 @@ func TestShimInstallsClipboardBridge(t *testing.T) {
 // save's createWritable routes through the download bridge. Like the other
 // bridges, framed-only (co-located inside the window.parent guard).
 func TestShimInstallsFSAPickerPolyfill(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	// All three FSA entry points are replaced on window.
 	for _, name := range []string{"showOpenFilePicker", "showDirectoryPicker", "showSaveFilePicker"} {
@@ -726,7 +734,7 @@ func TestShimInstallsFSAPickerPolyfill(t *testing.T) {
 // surface single-path and the sandbox token set unchanged (downloads_test.go
 // still asserts sandbox="allow-scripts" with no allow-downloads).
 func TestShimFSASaveReusesDownloadBridge(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	// The save writable triggers a download via a detached anchor click, the
 	// same vector the download bridge intercepts.
@@ -786,7 +794,7 @@ func TestBuildCSPCarriesTheAbsoluteAssetSource(t *testing.T) {
 // could forge). The reporter listens for securitypolicyviolation and posts the
 // origin to the parent, pinned to the app origin like every other bridge.
 func TestPreambleReportsCSPViolationsToHost(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	if !strings.Contains(doc, "securitypolicyviolation") {
 		t.Fatalf("preamble must listen for CSP violations: %s", doc)
@@ -811,7 +819,7 @@ func TestPreambleReportsCSPViolationsToHost(t *testing.T) {
 // idempotent on the host, where a duplicated report would queue a second
 // prompt for an origin the user just answered.
 func TestPreambleBuffersReportsUntilTheHostIsListening(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	for _, want := range []string{"__avHostReady", "queuedReports", "hostReady"} {
 		if !strings.Contains(doc, want) {
@@ -836,7 +844,7 @@ func TestPreambleBuffersReportsUntilTheHostIsListening(t *testing.T) {
 // approved its origin — no allowlist entry reaches frame-src — so prompting
 // there would promise a fix that never arrives.
 func TestPreambleReportsOnlyAllowlistGovernedDirectives(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 
 	// The -elem/-attr variants matter: browsers report those as the effective
 	// directive even when the policy only spells out the parent.
@@ -858,7 +866,7 @@ func TestPreambleReportsOnlyAllowlistGovernedDirectives(t *testing.T) {
 // appear in the CSP — that is built from allow decisions alone.
 func TestPreambleInlinesBlockedOriginsWithoutWideningCSP(t *testing.T) {
 	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil,
-		originPolicy{Blocked: []string{"https://tracker.example.com"}}, false, false, nil)
+		originPolicy{Blocked: []string{"https://tracker.example.com"}}, false, false, false, nil)
 
 	if !strings.Contains(doc, `["https://tracker.example.com"]`) {
 		t.Fatalf("blocked origins must be inlined for suppression: %s", doc)
@@ -882,7 +890,7 @@ func TestPreambleInlinesBlockedOriginsWithoutWideningCSP(t *testing.T) {
 // An artifact with no block decisions must still inline a valid empty array,
 // never `null` — null.forEach would throw and take the whole preamble with it.
 func TestPreambleNilBlockedIsEmptyArray(t *testing.T) {
-	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, nil)
+	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{}, false, false, false, nil)
 	if !strings.Contains(doc, "var BLOCKED_ORIGINS = [];") {
 		t.Fatalf("nil blocked list should inline an empty array, got: %s", doc)
 	}
@@ -901,7 +909,7 @@ func TestPreambleNilBlockedIsEmptyArray(t *testing.T) {
 // capability banner instead.
 func TestPreambleDoesNotPromptForAnAlreadyAllowedOrigin(t *testing.T) {
 	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil,
-		originPolicy{Allowed: []string{"https://picsum.photos"}}, false, false, nil)
+		originPolicy{Allowed: []string{"https://picsum.photos"}}, false, false, false, nil)
 
 	if !strings.Contains(doc, `var ALLOWED_ORIGINS = ["https://picsum.photos"];`) {
 		t.Fatalf("the CSP's own origins must be inlined for the reporter to recognise them: %s", doc)
@@ -927,7 +935,7 @@ func TestPreambleInlinesAllowedAndBlockedSeparately(t *testing.T) {
 	doc := injectPreamble("<head></head>", "abc", "https://app.test", nil, originPolicy{
 		Allowed: []string{"https://cdn.example.com"},
 		Blocked: []string{"https://tracker.example.com"},
-	}, false, false, nil)
+	}, false, false, false, nil)
 
 	if !strings.Contains(doc, `var ALLOWED_ORIGINS = ["https://cdn.example.com"];`) {
 		t.Fatalf("allowed origins must inline on their own: %s", doc)

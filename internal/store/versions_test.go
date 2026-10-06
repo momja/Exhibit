@@ -213,6 +213,65 @@ func TestRestoreVersionPushesACopyAndReplacesTheState(t *testing.T) {
 	assert.Len(t, vs, 3, "nothing was discarded")
 }
 
+// Looking at a version is not restoring it, and shows the same thing: the code
+// as it was and the data that version left behind. That is the snapshot a
+// restore puts back, which is what makes "this is what I will get" true of what
+// a person was shown.
+func TestAVersionIsViewedWithTheDataItLeftBehind(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	putVersioned(t, s, "a1")
+	require.NoError(t, s.SetState(ctx, 1, "a1", 1, "score", "10"))
+
+	_, err := s.CommitVersion(ctx, 1, "a1", VersionChange{BodyBlobID: strPtr("a1-body-2")})
+	require.NoError(t, err)
+	require.NoError(t, s.SetState(ctx, 1, "a1", 1, "score", "99"))
+	require.NoError(t, s.SetState(ctx, 1, "a1", 1, "extra", "x"))
+
+	view, err := s.GetVersionView(ctx, 1, "a1", 1)
+	require.NoError(t, err)
+	assert.Equal(t, "a1-body-1", view.BodyBlobID)
+	assert.Equal(t, map[string]string{"score": "10"}, view.State,
+		"the data version 1 left, not the data the artifact holds now")
+
+	// Viewing wrote nothing: the live state and the history are as they were.
+	assert.Equal(t, map[string]string{"score": "99", "extra": "x"}, stateOf(t, s, "a1"))
+	vs, err := s.ListVersions(ctx, 1, "a1")
+	require.NoError(t, err)
+	assert.Len(t, vs, 2)
+
+	// And it is exactly what restoring that version then puts back.
+	_, err = s.RestoreVersion(ctx, 1, "a1", 1, Provenance{Origin: VersionRestore}, "first")
+	require.NoError(t, err)
+	assert.Equal(t, view.State, stateOf(t, s, "a1"))
+}
+
+// The head has no snapshot — its data is the live rows, which the artifact's own
+// page already shows — so there is no earlier state to look at. The same answer
+// a restore gives, and for the same reason.
+func TestTheCurrentVersionIsNotViewedAsAnEarlierOne(t *testing.T) {
+	s := newTestStore(t)
+	putVersioned(t, s, "a1")
+	_, err := s.GetVersionView(context.Background(), 1, "a1", 1)
+	assert.ErrorIs(t, err, ErrAlreadyCurrent)
+}
+
+// Another owner's artifact and a version that was never made answer alike.
+func TestViewingAVersionThatIsNotThereOrNotTheOwnersIsNotFound(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	putVersioned(t, s, "a1")
+	_, err := s.CommitVersion(ctx, 1, "a1", VersionChange{BodyBlobID: strPtr("a1-body-2")})
+	require.NoError(t, err)
+
+	_, err = s.GetVersionView(ctx, 1, "a1", 42)
+	assert.ErrorIs(t, err, ErrNotFound)
+	_, err = s.GetVersionView(ctx, 2, "a1", 1)
+	assert.ErrorIs(t, err, ErrNotFound, "another owner has no view of it")
+	_, err = s.GetVersionView(ctx, 1, "no-such-artifact", 1)
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
 func TestRestoringTheHeadIsRefused(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

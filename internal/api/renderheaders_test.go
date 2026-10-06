@@ -26,6 +26,10 @@ func TestRenderOriginWithholdsTheReferrer(t *testing.T) {
 	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>42 km</b>").Code)
 	shareID := createShare(t, r, id)
 	tok := r.tokens.Mint(id, defaultOwnerID)
+	// Saving the widget above was version 2, so version 1 is an earlier one and
+	// can be looked at.
+	versionTok := r.tokens.Mint(rendertoken.VersionScope(id, 1), defaultOwnerID)
+	neverMadeTok := r.tokens.Mint(rendertoken.VersionScope(id, 99), defaultOwnerID)
 
 	cases := []struct {
 		name, route, target string
@@ -44,6 +48,17 @@ func TestRenderOriginWithholdsTheReferrer(t *testing.T) {
 		// success and the miss must withhold the Referer like every row here.
 		{"share widget", "/s/{shareID}/widget", "/s/" + shareID + "/widget", http.StatusOK},
 		{"share widget, unknown id", "/s/{shareID}/widget", "/s/does-not-exist/widget", http.StatusNotFound},
+		// An earlier version (av-vw7r) carries its own token, scoped to that
+		// version. Its misses matter as much as its success: the URL that was
+		// refused still carried a credential, and the artifact's own token —
+		// which the artifact can read — opens nothing here.
+		{"version", "/a/{artifactID}/versions/{seq}",
+			"/a/" + id + "/versions/1?" + rendertoken.Param + "=" + versionTok, http.StatusOK},
+		{"version, no token", "/a/{artifactID}/versions/{seq}", "/a/" + id + "/versions/1", http.StatusNotFound},
+		{"version, the artifact's own token", "/a/{artifactID}/versions/{seq}",
+			"/a/" + id + "/versions/1?" + rendertoken.Param + "=" + tok, http.StatusNotFound},
+		{"version, never made", "/a/{artifactID}/versions/{seq}",
+			"/a/" + id + "/versions/99?" + rendertoken.Param + "=" + neverMadeTok, http.StatusNotFound},
 		// The asset route (av-20fk) takes no render token — its unguessable
 		// asset id is the credential — but it is still on this surface and
 		// still must not put the URL that reached it into a third party's
