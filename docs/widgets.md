@@ -38,10 +38,9 @@ home-screen widget shows a slice of its app.
   sandbox, same per-artifact CSP built from the same allowlist. No download
   bridge, no clipboard bridge, no file-picker polyfill, no element picker. The
   subtraction reaches the response headers too: a widget render's
-  `Permissions-Policy` denies the camera and the microphone whatever its
-  artifact holds (av-mv3k), because a tile draws unattended behind
-  `pointer-events: none`, where there is no gesture a device prompt could
-  belong to.
+  `Permissions-Policy` denies the camera, the microphone and location whatever
+  its artifact holds (av-mv3k, av-f446), because a tile draws unattended behind
+  `pointer-events: none`, where there is no gesture a prompt could belong to.
 - **Optional.** No widget means the card renders a **default tile** — a
   monogram on a tint derived from the artifact's id, plain server-rendered
   markup with no frame to load.

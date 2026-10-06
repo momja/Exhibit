@@ -635,14 +635,15 @@ func newCapabilityView(a *store.Artifact, showManage bool) capabilityView {
 		allowlist = []string{}
 	}
 	return capabilityView{
-		ArtifactID:         a.ID,
-		NetworkAllowlist:   allowlist,
-		DownloadsApproved:  a.DownloadsApproved,
-		ClipboardApproved:  a.ClipboardApproved,
-		LinksApproved:      a.LinksApproved,
-		CameraApproved:     a.CameraApproved,
-		MicrophoneApproved: a.MicrophoneApproved,
-		ShowManage:         showManage,
+		ArtifactID:          a.ID,
+		NetworkAllowlist:    allowlist,
+		DownloadsApproved:   a.DownloadsApproved,
+		ClipboardApproved:   a.ClipboardApproved,
+		LinksApproved:       a.LinksApproved,
+		CameraApproved:      a.CameraApproved,
+		MicrophoneApproved:  a.MicrophoneApproved,
+		GeolocationApproved: a.GeolocationApproved,
+		ShowManage:          showManage,
 	}
 }
 
@@ -669,14 +670,15 @@ func newCardCapabilityView(a *store.Artifact) capabilityView {
 // partial without the link, and TestCapabilityPopoverManageLinkGatedByShowManage
 // exercises exactly that.
 type capabilityView struct {
-	ArtifactID         string
-	NetworkAllowlist   []string
-	DownloadsApproved  bool
-	ClipboardApproved  bool
-	LinksApproved      bool
-	CameraApproved     bool
-	MicrophoneApproved bool
-	ShowManage         bool
+	ArtifactID          string
+	NetworkAllowlist    []string
+	DownloadsApproved   bool
+	ClipboardApproved   bool
+	LinksApproved       bool
+	CameraApproved      bool
+	MicrophoneApproved  bool
+	GeolocationApproved bool
+	ShowManage          bool
 	// Compact is the gallery card's form (av-uvc6): glyphs with no
 	// "Sandboxed" label, and no trigger at all for a sandboxed artifact that
 	// is not shared. There, as for sharing, the absence is the signal. The
@@ -692,7 +694,7 @@ type capabilityView struct {
 // no capability approved. Both partials branch on it, so it is defined once.
 func (v capabilityView) Sandboxed() bool {
 	return len(v.NetworkAllowlist) == 0 && !v.DownloadsApproved && !v.ClipboardApproved &&
-		!v.LinksApproved && !v.CameraApproved && !v.MicrophoneApproved
+		!v.LinksApproved && !v.CameraApproved && !v.MicrophoneApproved && !v.GeolocationApproved
 }
 
 // HasTrigger reports whether the cluster renders at all. Only the compact
@@ -995,14 +997,15 @@ type editPageData struct {
 	// "Allow" rows. Unapproved is never merged into Allowlist server-side;
 	// that would auto-seed the allowlist from the scan, which spec §6.2
 	// forbids.
-	Allowlist          []string
-	Blocked            []string
-	Unapproved         []string
-	DownloadsApproved  bool
-	ClipboardApproved  bool
-	LinksApproved      bool
-	CameraApproved     bool
-	MicrophoneApproved bool
+	Allowlist           []string
+	Blocked             []string
+	Unapproved          []string
+	DownloadsApproved   bool
+	ClipboardApproved   bool
+	LinksApproved       bool
+	CameraApproved      bool
+	MicrophoneApproved  bool
+	GeolocationApproved bool
 	// The gallery widget (av-fafu): its source for the editor, and the same
 	// tile view the library renders for the live preview beside it. WidgetSrc
 	// is "" when the artifact has no widget, which is also when Widget renders
@@ -1079,26 +1082,27 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 	// a blocked origin is a decision already made and belongs in Blocked.
 	unapproved := diffOrigins(networkFootprint(src, urls.origin), allowlist, blocked)
 	return renderPage("edit", editPageData{
-		Favicon:            template.URL(exhibitLogoDataURI),
-		ID:                 a.ID,
-		Title:              a.Title,
-		Src:                src,
-		pageCredentials:    creds,
-		Allowlist:          allowlist,
-		Blocked:            blocked,
-		Unapproved:         unapproved,
-		WidgetSrc:          widgetSrc,
-		Widget:             newWidgetView(a, urls),
-		CanGenerateWidget:  canGenerate,
-		GenerateHint:       generateHint,
-		TagPanel:           newTagPanelView(a, library),
-		Presets:            color.Presets,
-		Versions:           newVersionViews(versions),
-		DownloadsApproved:  a.DownloadsApproved,
-		ClipboardApproved:  a.ClipboardApproved,
-		LinksApproved:      a.LinksApproved,
-		CameraApproved:     a.CameraApproved,
-		MicrophoneApproved: a.MicrophoneApproved,
+		Favicon:             template.URL(exhibitLogoDataURI),
+		ID:                  a.ID,
+		Title:               a.Title,
+		Src:                 src,
+		pageCredentials:     creds,
+		Allowlist:           allowlist,
+		Blocked:             blocked,
+		Unapproved:          unapproved,
+		WidgetSrc:           widgetSrc,
+		Widget:              newWidgetView(a, urls),
+		CanGenerateWidget:   canGenerate,
+		GenerateHint:        generateHint,
+		TagPanel:            newTagPanelView(a, library),
+		Versions:            newVersionViews(versions),
+		Presets:             color.Presets,
+		DownloadsApproved:   a.DownloadsApproved,
+		ClipboardApproved:   a.ClipboardApproved,
+		LinksApproved:       a.LinksApproved,
+		CameraApproved:      a.CameraApproved,
+		MicrophoneApproved:  a.MicrophoneApproved,
+		GeolocationApproved: a.GeolocationApproved,
 	})
 }
 
