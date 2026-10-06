@@ -111,7 +111,8 @@ func TestASharedArtifactsWidgetRendersTheSameBoard(t *testing.T) {
 	if err := rd.cfg.Blob.Put(ctx, "abc-widget", strings.NewReader("<html><head></head><body>w</body></html>")); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetWidgetBlobID(ctx, 1, "abc", "abc-widget"); err != nil {
+	widgetBlob := "abc-widget"
+	if _, err := st.CommitVersion(ctx, 1, "abc", store.VersionChange{WidgetBlobID: &widgetBlob}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.SetState(ctx, 1, "abc", 1, "position", "the board"); err != nil {

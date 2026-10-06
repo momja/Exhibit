@@ -420,6 +420,11 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:        now,
 		SourceText:       store.ExtractSearchText(req.Body),
 	}
+	// An agent that creates an artifact is the author of its first version; an
+	// ordinary ingest leaves the default ("initial").
+	if g := agentGrantFromCtx(r.Context()); g != nil {
+		a.Provenance = versionProvenance(r, store.VersionInitial)
+	}
 
 	if err := ro.cfg.Store.PutArtifact(r.Context(), a); err != nil {
 		serverError(w, r, "store artifact", err)
@@ -581,19 +586,21 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle body update: capture the previous body before overwriting (so the
-	// post-edit can be diffed against it), write the new blob, and re-scan.
+	// Handle body update: read the previous body (so the post-edit can be diffed
+	// against it), and when the body actually changed record it as a new
+	// version. The previous body is never overwritten — the version history
+	// names it — so the new one goes to a blob of its own.
 	var newBody, oldBody string
 	bodySet, baselineLost := false, false
 	if bodyVal, ok := updates["body"]; ok {
 		if bodyStr, ok := bodyVal.(string); ok && bodyStr != "" {
 			newBody = bodyStr
 			bodySet = true
-			// Read the previous body before it is overwritten so the edit
-			// dialog can tell whether the network footprint actually changed.
-			// A missing body can't be compared, but this rewrite repairs it,
-			// so go ahead and report the footprint as changed. Any other read
-			// failure aborts before anything is written. (av-wu9d)
+			// Read the previous body so the edit dialog can tell whether the
+			// network footprint actually changed. A missing body can't be
+			// compared, but this rewrite repairs it, so go ahead and report the
+			// footprint as changed. Any other read failure aborts before anything
+			// is written. (av-wu9d)
 			rc, gerr := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
 			switch {
 			case errors.Is(gerr, fs.ErrNotExist):
@@ -612,18 +619,31 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 				}
 				oldBody = string(prev)
 			}
-			if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, a.SourceBlobID, bytes.NewReader([]byte(newBody))); err != nil {
-				serverError(w, r, "update artifact body", err)
-				return
+			// A save of the document as it already is records nothing: there is
+			// nothing to return to.
+			if baselineLost || newBody != oldBody {
+				blobID := uuid.New().String()
+				if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader([]byte(newBody))); err != nil {
+					serverError(w, r, "update artifact body", err)
+					return
+				}
+				// Do NOT auto-add newly scanned origins to the allowlist — approval
+				// is an explicit user action. Existing approved origins are kept as
+				// they are; origins introduced by the edited body surface via the
+				// footprint / runtime prompt and must be approved before they gain
+				// network access. See spec §6.2.
+				text := store.ExtractSearchText(newBody)
+				if _, err := ro.cfg.Store.CommitVersion(r.Context(), ownerID, id, store.VersionChange{
+					Provenance: versionProvenance(r, store.VersionEdit),
+					BodyBlobID: &blobID,
+					SourceText: &text,
+				}); err != nil {
+					writeArtifactError(w, r, "record artifact version", err)
+					return
+				}
+				slog.DebugContext(r.Context(), "artifact body rewritten",
+					slog.String("id", id), slog.Int("body_bytes", len(newBody)))
 			}
-			slog.DebugContext(r.Context(), "artifact body rewritten",
-				slog.String("id", id), slog.Int("body_bytes", len(newBody)))
-			// Do NOT auto-add newly scanned origins to the allowlist — approval
-			// is an explicit user action. Existing approved origins are kept as
-			// they are; origins introduced by the edited body surface via the
-			// footprint / runtime prompt and must be approved before they gain
-			// network access. See spec §6.2.
-			updates["source_text"] = store.ExtractSearchText(newBody)
 		}
 		delete(updates, "body")
 	}
@@ -723,9 +743,10 @@ func sameOrigins(a, b []string) bool {
 }
 
 // refetchArtifact re-fetches the current HTML/CSS/JS from an artifact's source
-// URL and overwrites the stored body with that fresh snapshot. This is a
-// destructive snapshot replace — not versioned, no history. The network
-// allowlist is re-scanned from the new content; the title is left untouched.
+// URL and makes it the artifact's body, as a new version — the body it replaces
+// is kept, so an unwanted update can be undone. A refetch that returns the
+// document the artifact already holds records nothing. The network allowlist is
+// re-scanned from the new content; the title is left untouched.
 func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
@@ -758,16 +779,27 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Overwrite the existing blob with the fresh snapshot.
-	if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, a.SourceBlobID, bytes.NewReader(fetched)); err != nil {
-		serverError(w, r, "refetch update body", err)
-		return
+	// A body that cannot be read counts as different, so the refetch repairs it.
+	if current, err := ro.readBlobString(r.Context(), a.SourceBlobID); err != nil || current != string(fetched) {
+		blobID := uuid.New().String()
+		if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader(fetched)); err != nil {
+			serverError(w, r, "refetch update body", err)
+			return
+		}
+		text := store.ExtractSearchText(string(fetched))
+		p := versionProvenance(r, store.VersionRefetch)
+		p.Message = a.SourceURL
+		if _, err := ro.cfg.Store.CommitVersion(r.Context(), ownerID, id, store.VersionChange{
+			Provenance: p, BodyBlobID: &blobID, SourceText: &text,
+		}); err != nil {
+			writeArtifactError(w, r, "refetch record version", err)
+			return
+		}
 	}
 
 	// Re-scan the network footprint and bump updated_at. Title is preserved.
 	updates := map[string]any{
 		"network_allowlist": ro.withoutRenderOrigin(scanner.Scan(string(fetched))),
-		"source_text":       store.ExtractSearchText(string(fetched)),
 	}
 	if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, updates); err != nil {
 		writeArtifactError(w, r, "refetch update artifact", err)

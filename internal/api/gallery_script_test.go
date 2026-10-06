@@ -41,6 +41,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"detail.statesync.test.mjs",
 		"detail.geolocation.test.mjs",
 		"edit.origins.test.mjs",
+		"edit.versions.test.mjs",
 		"share.test.mjs",
 		"tags.test.mjs",
 		"agent.net.test.mjs",

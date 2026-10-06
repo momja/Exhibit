@@ -250,6 +250,32 @@
     </div>
   </details>
 
+  {{/* Version history. Every change to the source or the widget is kept, along
+       with the saved data the code had written when the next change replaced
+       it, so a restore puts back a pair that belongs together. Server-rendered:
+       the list is cold data, and the only script is the restore button's
+       (versions.js). Restoring reloads the page, because the source editor above
+       holds the old text. */}}
+  <details class="details-panel" id="versions-panel">
+    <summary>{{template "panelCaret"}} Versions ({{len .Versions}})</summary>
+    <div class="panel-body">
+      <p class="text-sm muted">
+        Every change to this artifact's source or widget is kept, together with the data it
+        had saved at that point. Restoring a version puts both back as a new version — nothing
+        is discarded, and what you restore over is kept too.
+      </p>
+      <div id="versions-rows">
+        {{range .Versions}}<div class="version-row" data-seq="{{.Seq}}">
+          <span class="version-seq">v{{.Seq}}</span>
+          <span class="version-what"><strong>{{.Label}}</strong>{{if .Message}} <span class="muted">— {{.Message}}</span>{{end}}</span>
+          <time class="text-sm muted version-when" datetime="{{.WhenISO}}">{{.When}}</time>
+          {{if .Current}}<span class="text-sm muted">current</span>{{else}}<button type="button" class="btn btn-sm btn-sec" data-action="restore" data-seq="{{.Seq}}"><i class="ph ph-arrow-counter-clockwise"></i> Restore</button>{{end}}
+        </div>{{end}}
+      </div>
+      <span id="versions-status" class="text-sm muted"></span>
+    </div>
+  </details>
+
   <div class="btn-row">
     <button class="btn" onclick="save()"><i class="ph ph-check"></i> Save</button>
     <a href="/artifacts/{{.ID}}"><button class="btn btn-sec" type="button"><i class="ph ph-x"></i> Cancel</button></a>
@@ -297,6 +323,7 @@ let geolocationApproved = {{if .GeolocationApproved}}true{{else}}false{{end}};
 <script src="/assets/gallery/state-api.js"></script>
 <script src="/assets/gallery/state.js"></script>
 <script src="/assets/gallery/assets.js"></script>
+<script src="/assets/gallery/versions.js"></script>
 <script src="/assets/gallery/tags.js"></script>
 </body>
 </html>{{end}}
