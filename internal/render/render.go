@@ -341,7 +341,7 @@ func (rd *Renderer) serveDefaultTile(w http.ResponseWriter, a *store.Artifact, f
 		"style-src 'unsafe-inline'",
 		strings.Join(append([]string{"frame-ancestors"}, frameAncestors...), " "),
 	}, "; "))
-	w.Header().Set("Permissions-Policy", buildPermissionsPolicy(false, false))
+	w.Header().Set("Permissions-Policy", buildPermissionsPolicy(devicePolicy{}))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// no-store like every render document: the monogram follows the title,
 	// and adding a widget must replace this tile on the next load.
@@ -532,13 +532,16 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	}
 	w.Header().Set("Content-Security-Policy", csp)
 	// A widget's authority is a strict subset of its artifact's (av-fafu), so a
-	// tile is denied both devices whatever the artifact holds — it renders
+	// tile is denied devices and location whatever the artifact holds — it renders
 	// unattended, behind pointer-events:none, in a card the user did not open.
 	// A version view is denied them for the opposite reason: it is opened on
 	// purpose, but it is a look at code the artifact used to have, and an
 	// approval is a decision about the artifact as it is now.
-	devices := doc.kind == kindArtifact
-	permissions := buildPermissionsPolicy(a.CameraApproved && devices, a.MicrophoneApproved && devices)
+	devices := devicePolicy{}
+	if doc.kind == kindArtifact {
+		devices = devicePolicyOf(a)
+	}
+	permissions := buildPermissionsPolicy(devices)
 	w.Header().Set("Permissions-Policy", permissions)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// The render doc is dynamic: it inlines the artifact's live state and the
@@ -793,12 +796,33 @@ func buildCSP(allowlist []string, appOrigin, assetBase string, frameAncestors ..
 	}, "; ")
 }
 
+// devicePolicy is the part of an artifact's approvals that a render
+// document's Permissions-Policy header is built from: the capabilities a
+// browser grants per origin, which is why each needs a per-document answer
+// (below). The zero value denies all of them, and is what a widget and the
+// default tile get.
+type devicePolicy struct {
+	Camera      bool // av-mv3k
+	Microphone  bool // av-mv3k
+	Geolocation bool // av-f446
+}
+
+// devicePolicyOf reads an artifact's device approvals. It is the one place the
+// header learns which artifact columns it is built from.
+func devicePolicyOf(a *store.Artifact) devicePolicy {
+	return devicePolicy{
+		Camera:      a.CameraApproved,
+		Microphone:  a.MicrophoneApproved,
+		Geolocation: a.GeolocationApproved,
+	}
+}
+
 // buildPermissionsPolicy generates the per-artifact Permissions-Policy header
-// for a render document from the artifact's camera/microphone approvals
-// (av-mv3k). It names those two features and nothing else: every other
-// Permissions-Policy feature keeps its browser default, so this header answers
-// one question and cannot quietly become a second policy surface beside the
-// CSP.
+// for a render document from the artifact's camera, microphone (av-mv3k) and
+// geolocation (av-f446) approvals. It names those three features and nothing
+// else: every other Permissions-Policy feature keeps its browser default, so
+// this header answers one question and cannot quietly become a second policy
+// surface beside the CSP.
 //
 // It exists because a browser permission is granted **per origin**, and every
 // artifact on this instance shares one render origin. Without this header, a
@@ -807,21 +831,24 @@ func buildCSP(allowlist []string, appOrigin, assetBase string, frameAncestors ..
 // anywhere in the loop — precisely the situation the ingest allowlist exists to
 // prevent for the network. Permissions Policy is per *document*, so it splits
 // the origin's single grant back into one decision per artifact, and it is the
-// browser that enforces it: `camera=()` makes getUserMedia reject even when the
-// origin's permission is already granted.
+// browser that enforces it: `camera=()` makes getUserMedia reject, and
+// `geolocation=()` makes getCurrentPosition fail, even when the origin's
+// permission is already granted.
 //
 // Note this governs the *top-level* render (a direct open, a share) — the one
-// context where an artifact can reach a device at all. In the embedded frame
-// the opaque origin is refused one no matter what any policy says, which is
-// what the media gate in bridgeScript exists to report; both halves read these
-// same two flags, so the decision the host prompt records is the decision this
-// header enforces.
+// context where Exhibit lets an artifact reach a device or a location. In the
+// embedded frame a capture device is refused to the opaque origin whatever any
+// policy says, and location is refused because the frame carries no allow=
+// delegation (security.md §4, Location, records why there is none). The media
+// and geolocation gates in bridgeScript report the attempt instead, and every
+// half reads these same flags, so the decision the host prompt records is the
+// decision this header enforces.
 //
 // 'self' rather than the render origin spelled out: the document's own origin
 // is exactly what is being permitted, and writing it as a literal would make
 // this header depend on RENDER_ORIGIN being configured to the host the document
 // was actually served from.
-func buildPermissionsPolicy(camera, microphone bool) string {
+func buildPermissionsPolicy(devices devicePolicy) string {
 	feature := func(name string, allowed bool) string {
 		if allowed {
 			return name + "=(self)"
@@ -829,8 +856,9 @@ func buildPermissionsPolicy(camera, microphone bool) string {
 		return name + "=()"
 	}
 	return strings.Join([]string{
-		feature("camera", camera),
-		feature("microphone", microphone),
+		feature("camera", devices.Camera),
+		feature("microphone", devices.Microphone),
+		feature("geolocation", devices.Geolocation),
 	}, ", ")
 }
 
@@ -977,8 +1005,9 @@ func (rd *Renderer) ServeAsset(w http.ResponseWriter, r *http.Request) {
 // memory for the life of the frame — and bridges the capabilities the sandbox
 // denies — downloads (the sandbox omits allow-downloads) and clipboard
 // read/write (opaque-origin permissions policy) — to the host frame, where
-// they run only after user approval, and gates the one it denies that the host
-// cannot re-grant either (camera/microphone, av-mv3k). Framed-only, it also
+// they run only after user approval, and gates the ones it denies that the
+// host does not re-grant (camera/microphone, av-mv3k; location, av-f446).
+// Framed-only, it also
 // (av-02xs) shims
 // fetch() of data: URLs into locally constructed Responses — WebKit refuses
 // large data: fetches from an opaque-origin sandbox, which Safari artifacts
@@ -1286,8 +1315,8 @@ const shimTemplate = `<script>
 // bridgeScript is the capability half of the render preamble: the bridges and
 // polyfills that give an artifact back what the opaque-origin sandbox takes
 // away (downloads, clipboard, external links, file pickers) and the gates and
-// diagnostics for what it cannot give back at all (camera/microphone, module
-// workers).
+// diagnostics for what it does not give back (camera/microphone, location,
+// module workers).
 //
 // It is a separate string, spliced into shimTemplate's trailing %s, because a
 // widget render omits it entirely rather than shipping it disabled (av-fafu).
@@ -1788,6 +1817,135 @@ const bridgeScript = `
           },
           configurable: true
         });
+      } catch (err) {}
+    }
+
+    // ---- Geolocation gate (av-f446) ----
+    // The camera gate's sibling, with one difference worth knowing before
+    // anyone edits it: here the gate is a choice, not a measured necessity.
+    //
+    // Measured (Chromium 149, WebKit 26.5, playwright, pre-granted location):
+    // with no allow= on the iframe, which is how every Exhibit frame ships,
+    // this frame's getCurrentPosition fails on permissions policy in Chromium
+    // and on the opaque origin in WebKit. WebKit refuses the opaque origin
+    // even with allow="geolocation". Chromium does not: with that delegation
+    // the frame gets a real position, but it spends the EMBEDDING page's
+    // grant. The browser asks on behalf of the app origin, and the library
+    // itself ends up holding the visitor's location for an artifact's sake.
+    // A host bridge has the same shape, since coordinates are plain numbers
+    // and would cross postMessage fine. security.md §4 (Location) records
+    // why neither was built.
+    //
+    // So this does what the camera gate does. The artifact's request goes to
+    // the host, which owns the per-artifact first-use approval and offers the
+    // top-level render, where the artifact reads its location natively under
+    // that same approval (it builds the document's Permissions-Policy
+    // header). The artifact's error callback then runs with PERMISSION_DENIED.
+    // Nothing here ever reports a position, and nothing is left pending: an
+    // artifact waiting on a callback that never comes looks like a hang.
+    var geoSeq = 0;
+    var geoPending = {};
+
+    // GeolocationPositionError has no public constructor, so the error is
+    // built: own code and message over the real prototype where one exists,
+    // which keeps instanceof and the PERMISSION_DENIED constant an artifact
+    // compares code against both working.
+    var geoError = function(message) {
+      var err;
+      try {
+        err = Object.create(GeolocationPositionError.prototype);
+      } catch (e) {
+        err = { PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 };
+      }
+      Object.defineProperty(err, 'code', { value: 1, enumerable: true });
+      Object.defineProperty(err, 'message', { value: message, enumerable: true });
+      return err;
+    };
+
+    window.addEventListener('message', function(e) {
+      // Same identity check as the media reply: the host answers from the app
+      // origin, targeting '*' because this frame's origin is opaque.
+      if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+      var d = e.data;
+      if (!d || d.__avGeolocationResult !== true) return;
+      var p = geoPending[d.id];
+      if (!p) return;
+      delete geoPending[d.id];
+      // The host asks for the banner when it has nothing else to offer: the
+      // artifact is already approved, so there is no prompt to show, and the
+      // top-level render is where the approval can be spent.
+      if (d.banner && typeof warnCapability === 'function') warnCapability('geolocation', null);
+      if (typeof p.error === 'function') {
+        try { p.error(geoError(d.error || 'User denied Geolocation')); } catch (err) {}
+      }
+    });
+
+    // Options (accuracy, timeout, maximumAge) stay in the frame: the host
+    // reads no location, so they would be data with no reader.
+    var requestGeolocation = function(method, success, error) {
+      if (typeof success !== 'function') {
+        // What the native call throws, so an artifact's own bug does not read
+        // as a denial.
+        throw new TypeError("Failed to execute '" + method + "' on 'Geolocation': " +
+          'The callback provided as parameter 1 is not a function.');
+      }
+      var id = ++geoSeq;
+      geoPending[id] = { error: error };
+      if (VERSION_VIEW) {
+        // The version viewer takes no capability requests. Deny locally rather
+        // than wait forever for a host reply, and keep the callback asynchronous
+        // so clearWatch can cancel it before it runs, just as with a live watch.
+        setTimeout(function() {
+          var p = geoPending[id];
+          if (!p) return;
+          delete geoPending[id];
+          if (typeof p.error === 'function') {
+            try { p.error(geoError('Geolocation is unavailable in a version preview')); } catch (err) {}
+          }
+        }, 0);
+        return id;
+      }
+      window.parent.postMessage({ __avGeolocation: true, artifactId: ARTIFACT_ID, id: id }, API_ORIGIN);
+      return id;
+    };
+
+    var geolocationGate = {
+      getCurrentPosition: function(success, error) {
+        requestGeolocation('getCurrentPosition', success, error);
+      },
+      // A watch here is one request and one error callback: there is no
+      // position stream to keep alive. The id is still a real one, so the
+      // artifact's own bookkeeping and its clearWatch call keep working.
+      watchPosition: function(success, error) {
+        return requestGeolocation('watchPosition', success, error);
+      },
+      // Nothing is running, so there is nothing to stop. Dropping the pending
+      // callback is what the spec asks of a cleared watch: no callback after
+      // clearWatch. The host's prompt is unaffected and settles the same id
+      // into nothing.
+      clearWatch: function(id) {
+        delete geoPending[id];
+      }
+    };
+
+    // Replace the three methods on the existing object, as the media gate does,
+    // so anything else an engine hangs off navigator.geolocation stays put.
+    // Absent entirely (navigator.geolocation is [SecureContext], so an
+    // http:// render origin has none), supply the gate as the object, rather
+    // than leave an artifact to die on property access.
+    var geo = navigator.geolocation;
+    if (geo) {
+      ['getCurrentPosition', 'watchPosition', 'clearWatch'].forEach(function(name) {
+        try { geo[name] = geolocationGate[name]; } catch (err) {}
+        if (geo[name] !== geolocationGate[name]) {
+          try {
+            Object.defineProperty(geo, name, { value: geolocationGate[name], writable: true, configurable: true });
+          } catch (err) {}
+        }
+      });
+    } else {
+      try {
+        Object.defineProperty(navigator, 'geolocation', { value: geolocationGate, configurable: true });
       } catch (err) {}
     }
 

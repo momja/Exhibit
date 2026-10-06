@@ -105,9 +105,9 @@ func TestAVersionIsServedAsItWasWithTheDataItLeft(t *testing.T) {
 // opaque origin however it is loaded, and it holds no device.
 func TestAVersionDocumentCannotPersistAnything(t *testing.T) {
 	rd, st := newVersionedRenderer(t)
-	// An artifact whose owner approved the camera: a version of it is still not
-	// handed one, because that approval is about the artifact as it is now.
-	if err := st.UpdateArtifact(context.Background(), 1, "abc", map[string]any{"camera_approved": true}); err != nil {
+	// An artifact whose owner approved all devices and location: a version is
+	// still denied each, because that approval is about the artifact as it is now.
+	if err := st.UpdateArtifact(context.Background(), 1, "abc", map[string]any{"camera_approved": true, "microphone_approved": true, "geolocation_approved": true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -129,8 +129,8 @@ func TestAVersionDocumentCannotPersistAnything(t *testing.T) {
 	if !strings.Contains(csp, "sandbox allow-scripts allow-forms") || strings.Contains(csp, "allow-same-origin") {
 		t.Fatalf("a version document must be sandboxed by its own CSP, with no real origin: %q", csp)
 	}
-	if pp := w.Header().Get("Permissions-Policy"); !strings.Contains(pp, "camera=()") || !strings.Contains(pp, "microphone=()") {
-		t.Fatalf("a version view is denied both devices, approved or not: %q", pp)
+	if pp := w.Header().Get("Permissions-Policy"); !strings.Contains(pp, "camera=()") || !strings.Contains(pp, "microphone=()") || !strings.Contains(pp, "geolocation=()") {
+		t.Fatalf("a version view is denied all devices and location, approved or not: %q", pp)
 	}
 	if cc := w.Header().Get("Cache-Control"); cc != "no-store" {
 		t.Fatalf("a version document must not be cached, got %q", cc)

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Artifact version history (migration 031).
+// Artifact version history (migration 032).
 //
 // A version is a point in an artifact's life that can be returned to. It is
 // the body and the widget as they were, plus the state the code had written by

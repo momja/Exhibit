@@ -38,6 +38,7 @@ ph-hard-drives
 ph-key
 ph-link-simple
 ph-magnifying-glass
+ph-map-pin
 ph-microphone
 ph-monitor
 ph-paper-plane-right

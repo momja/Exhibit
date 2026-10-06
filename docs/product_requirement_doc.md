@@ -158,6 +158,7 @@ artifacts(
   downloads_approved,      -- first-use approval for the host-mediated download bridge
   camera_approved,         -- likewise for the camera; also builds the render
   microphone_approved,     --   document's Permissions-Policy (§6.3)
+  geolocation_approved,    -- likewise for location, and the same header
   widget_blob_id,          -- the card's widget document; empty = default tile (§5.5)
   share_state_mode,        -- whose state a recipient writes: their own, or the
                            -- owner's shared board. One answer per ARTIFACT, not
@@ -448,8 +449,8 @@ is the browser-level CSP generated from the allowlist; the scan just front-loads
 ### 6.3 Local capabilities: approve per capability, at first use
 
 Network egress is the allowlist's business (§6.2). The capabilities the sandbox
-*denies outright* — downloads, clipboard, opening external links, and the camera
-and microphone — are a second, smaller decision, made the first time an artifact
+*denies outright* — downloads, clipboard, opening external links, the camera
+and microphone, and location — are a second, smaller decision, made the first time an artifact
 reaches for one: the host frame prompts, naming the artifact and what it asked
 for, and the answer is stored per artifact and revocable from its security
 settings. Denial never breaks the artifact; it sees the same failure a blocked
@@ -466,6 +467,12 @@ otherwise allow it for every artifact forever, with no per-artifact decision
 anywhere. An artifact that was never approved reaches no device, in the preview
 or opened directly. That is the promise §6.2 makes about the network, applied to
 hardware — nothing is reachable until the user says so, about *this* tool.
+
+Location follows the same two rules for a slightly different reason. One
+browser could pass a location into the preview, but only on the library's own
+permission, which would make Exhibit itself the thing holding where you are on
+behalf of a tool you may have pasted in a minute ago. So an approved artifact
+reads your location in its own tab too, and an unapproved one reads it nowhere.
 
 ### 6.4 Residual risk
 
