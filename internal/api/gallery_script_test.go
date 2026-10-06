@@ -45,6 +45,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"share.test.mjs",
 		"tags.test.mjs",
 		"agent.net.test.mjs",
+		"agent.history.test.mjs",
 		"components.popover.test.mjs",
 		"index.search.test.mjs",
 		// Not a page script: render.shim.test.mjs runs the render preamble,

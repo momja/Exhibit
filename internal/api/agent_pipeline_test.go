@@ -33,6 +33,9 @@ import (
 type piHarness struct {
 	router *Router
 	llm    *transcriptRecorder
+	// workRoot is the agent manager's scratch root: the extension, and one
+	// directory per running session.
+	workRoot string
 }
 
 // transcriptRecorder wraps the mock LLM and keeps each conversation it was
@@ -189,9 +192,10 @@ func newPiHarnessWith(t *testing.T, platform bool, guardrail *agent.Guardrail) *
 	t.Cleanup(llm.Close)
 
 	creds := agentscope.NewRegistry()
+	workRoot := t.TempDir()
 	mgr, err := agent.New(agent.Config{
 		PiBin:             piBin,
-		WorkRoot:          t.TempDir(),
+		WorkRoot:          workRoot,
 		APIBaseURL:        app.URL,
 		Credentials:       creds,
 		MockLLMURL:        llm.URL,
@@ -208,7 +212,7 @@ func newPiHarnessWith(t *testing.T, platform bool, guardrail *agent.Guardrail) *
 		r.cfg.PlatformAgentKey = &PlatformKey{
 			Provider: "exhibit-mock", Model: "exhibit-mock-1", APIKey: "platform-mock-key",
 		}
-		return &piHarness{router: r, llm: rec}
+		return &piHarness{router: r, llm: rec, workRoot: workRoot}
 	}
 
 	w := doJSON(t, r, "PUT", "/api/agent/key", map[string]string{
@@ -216,7 +220,7 @@ func newPiHarnessWith(t *testing.T, platform bool, guardrail *agent.Guardrail) *
 	})
 	require.Equal(t, http.StatusOK, w.Code)
 
-	return &piHarness{router: r, llm: rec}
+	return &piHarness{router: r, llm: rec, workRoot: workRoot}
 }
 
 // artifactBody reads an artifact's stored source back through the API.

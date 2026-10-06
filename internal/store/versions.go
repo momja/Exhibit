@@ -126,6 +126,17 @@ func (s *SQLiteStore) ListVersions(ctx context.Context, ownerID int64, artifactI
 	return out, rows.Err()
 }
 
+// HeadVersionSeq returns the sequence number of an artifact's current version.
+// It is 0 for an artifact that is not the owner's, like every other read here
+// that has nothing to say about somebody else's.
+func (s *SQLiteStore) HeadVersionSeq(ctx context.Context, ownerID int64, artifactID string) (int, error) {
+	var seq sql.NullInt64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = ? AND `+ownedArtifact,
+		artifactID, ownerID).Scan(&seq)
+	return int(seq.Int64), err
+}
+
 // GetVersion returns one version, or (nil, nil) when it does not exist or the
 // artifact is another owner's.
 func (s *SQLiteStore) GetVersion(ctx context.Context, ownerID int64, artifactID string, seq int) (*Version, error) {

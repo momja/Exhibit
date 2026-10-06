@@ -425,6 +425,10 @@ func (ro *Router) setupRoutes() {
 		// doesn't already have — so they sit with the pages, outside the
 		// API's auth group and under the same owner resolution.
 		r.Get("/partials/agent-preview", ro.agentPreviewPartial)
+		// The chat page's history pane (av-y7td): the conversations kept with
+		// the artifact, and one of them read back.
+		r.Get("/partials/agent-history", ro.agentHistoryPartial)
+		r.Get("/partials/agent-transcript", ro.agentTranscriptPartial)
 		r.Get("/partials/card-widget", ro.cardWidgetPartial)
 		// The edit page's Tags panel, re-rendered after each tag change.
 		r.Get("/partials/tag-panel", ro.tagPanelPartial)
@@ -551,8 +555,13 @@ func (ro *Router) setupRoutes() {
 				// neither of those can answer — what is true right now — and
 				// you cannot audit what you cannot list.
 				r.Get("/shares", ro.listArtifactShares)
-				// Agent conversations persisted with this artifact
+				// Agent conversations kept with this artifact (av-y7td): the
+				// list, and one as what was said in it. Owner-only, and
+				// absent from agentSubResources, so a session steered by text
+				// Exhibit did not author cannot read the conversations before
+				// it.
 				r.Get("/transcripts", ro.listTranscripts)
+				r.Get("/transcripts/{sessionID}", ro.getTranscript)
 			})
 		})
 

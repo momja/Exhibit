@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -506,20 +505,4 @@ func (ro *Router) agentEvents(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-}
-
-// listTranscripts returns the agent conversations persisted with an artifact
-// (colophon provenance, av-q3wo).
-func (ro *Router) listTranscripts(w http.ResponseWriter, r *http.Request) {
-	id := urlParamID(r, "artifactID")
-	ts, err := ro.cfg.Store.ListTranscripts(r.Context(), ownerIDFromCtx(r.Context()), id)
-	if err != nil {
-		serverError(w, r, "list transcripts", err)
-		return
-	}
-	out := make([]map[string]any, 0, len(ts))
-	for sid, msgs := range ts {
-		out = append(out, map[string]any{"session_id": sid, "messages": json.RawMessage(msgs)})
-	}
-	writeJSON(w, http.StatusOK, out)
 }

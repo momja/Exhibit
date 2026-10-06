@@ -106,6 +106,12 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 	ctx := context.Background()
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id > 23",
+		// 033's conversation record (av-y7td): three columns on a table that
+		// predates all of this, so they are taken back off rather than dropped
+		// with it.
+		"ALTER TABLE agent_transcripts DROP COLUMN version_seq",
+		"ALTER TABLE agent_transcripts DROP COLUMN session_file",
+		"ALTER TABLE agent_transcripts DROP COLUMN title",
 		// 032's version history (artifact versions): the trigger first, since it
 		// names columns of the table it fires on, then the table.
 		"DROP TRIGGER IF EXISTS artifacts_initial_version",
@@ -212,7 +218,11 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	// shares.recipient_id blocks that column's DROP.
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id >= 28",
-		// 032 comes off first (artifact versions). Its blob_references names the
+		// 033 first (av-y7td): the columns it added to agent_transcripts.
+		"ALTER TABLE agent_transcripts DROP COLUMN version_seq",
+		"ALTER TABLE agent_transcripts DROP COLUMN session_file",
+		"ALTER TABLE agent_transcripts DROP COLUMN title",
+		// 032 comes off next (artifact versions). Its blob_references names the
 		// versions table, and SQLite re-parses a view when a table it selects
 		// from is altered, so the view goes back to its 026 form before the
 		// ALTERs below.

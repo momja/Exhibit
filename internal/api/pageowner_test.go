@@ -93,6 +93,12 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 		ownPath: "/agent?artifact={id}", foreignPath: "/agent?artifact={id}"},
 	{route: "/partials/agent-preview", ownerScoped: true,
 		ownPath: "/partials/agent-preview?artifact={id}", foreignPath: "/partials/agent-preview?artifact={id}"},
+	// The history pane (av-y7td): what was said in earlier conversations about
+	// an artifact, which is the owner's and nobody else's.
+	{route: "/partials/agent-history", ownerScoped: true,
+		ownPath: "/partials/agent-history?artifact={id}", foreignPath: "/partials/agent-history?artifact={id}"},
+	{route: "/partials/agent-transcript", ownerScoped: true,
+		ownPath: "/partials/agent-transcript?artifact={id}&session=s", foreignPath: "/partials/agent-transcript?artifact={id}&session=s"},
 	{route: "/partials/card-widget", ownerScoped: true,
 		ownPath: "/partials/card-widget?artifact={id}", foreignPath: "/partials/card-widget?artifact={id}"},
 	{route: "/partials/tag-panel", ownerScoped: true,
@@ -161,6 +167,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/api/artifacts/{artifactID}/shares", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/versions", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/transcripts", why: "API group, covered by owner_scope_test.go"},
+	{route: "/api/artifacts/{artifactID}/transcripts/{sessionID}", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/agent/key", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/collections/", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/tags/", why: "API group, covered by owner_scope_test.go"},
@@ -246,6 +253,10 @@ func seedOwnedArtifact(t *testing.T, ro *Router, owner int64, id, title, bodyMar
 		Tier: store.Tier1, SourceText: bodyMarker,
 	}))
 	require.NoError(t, ro.cfg.Store.SetState(ctx, store.OwnerID(owner), id, store.ViewerID(owner), "note", stateMarker))
+	// A conversation kept with it, so the history fragments (av-y7td) have
+	// something of the artifact's to render and something to refuse a stranger.
+	require.NoError(t, ro.cfg.Store.SaveTranscript(ctx, owner, store.Transcript{
+		ArtifactID: id, SessionID: "s", Title: "a conversation", SessionFile: "{}\n"}))
 	return id
 }
 
@@ -463,6 +474,8 @@ func TestSingleUserPagesStillRenderOwnerOnesLibrary(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Single User Shelf")
 	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>tile</b>").Code)
+	require.NoError(t, r.cfg.Store.SaveTranscript(context.Background(), defaultOwnerID, store.Transcript{
+		ArtifactID: id, SessionID: "s", Title: "a conversation", SessionFile: "{}\n"}))
 
 	for _, row := range appOriginGETOwnerScope {
 		if !row.ownerScoped {
