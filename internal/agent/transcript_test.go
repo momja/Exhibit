@@ -124,14 +124,14 @@ func TestAConversationIsNamedForItsFirstPromptThatReachedTheAgent(t *testing.T) 
 	s, _ := newMeteringSession(t, false)
 
 	s.guardBlocked = true
-	s.nameFromFirstPrompt("something the guardrail refused")
+	s.promptLanded("something the guardrail refused")
 	assert.Empty(t, s.title)
 
 	s.guardBlocked = false
-	s.nameFromFirstPrompt("make the button green")
+	s.promptLanded("make the button green")
 	assert.Equal(t, "make the button green", s.title)
 
-	s.nameFromFirstPrompt("now make it blue")
+	s.promptLanded("now make it blue")
 	assert.Equal(t, "make the button green", s.title, "the first prompt names it, once")
 }
 
