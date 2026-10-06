@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -54,8 +53,7 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 	artifactID := urlParamID(r, "artifactID")
 
 	var req setStateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Key == nil {

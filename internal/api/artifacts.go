@@ -307,8 +307,7 @@ func (ro *Router) persistRuntimeAssets(ctx context.Context, ownerID int64, artif
 
 func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	var req createArtifactRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -510,8 +509,7 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	ownerID := ownerIDFromCtx(r.Context())
 
 	var updates map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &updates) {
 		return
 	}
 

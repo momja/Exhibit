@@ -32,6 +32,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -67,6 +68,13 @@ type Config struct {
 	// Caps are the operator's spend ceilings (av-99f4), enforced for
 	// platform-paid sessions only. The zero value enforces nothing.
 	Caps SpendCaps
+	// MaxRequestBodyBytes is the largest request body the exhibit API
+	// accepts (av-ombn), handed to the extension as EXHIBIT_MAX_BODY_BYTES so
+	// a tool refuses an oversized write before sending it, with a message the
+	// model can act on. The API's 413 stays the enforcement; this only makes
+	// the failure legible. Zero passes nothing, and the extension then learns
+	// of the limit from the 413 alone.
+	MaxRequestBodyBytes int64
 }
 
 // providerEnv maps a provider name to the env var pi reads its key from.
@@ -276,6 +284,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}
 	if m.cfg.MockLLMURL != "" {
 		cmd.Env = append(cmd.Env, "EXHIBIT_MOCK_LLM_URL="+m.cfg.MockLLMURL)
+	}
+	if m.cfg.MaxRequestBodyBytes > 0 {
+		cmd.Env = append(cmd.Env, "EXHIBIT_MAX_BODY_BYTES="+strconv.FormatInt(m.cfg.MaxRequestBodyBytes, 10))
 	}
 	if m.cfg.Guardrail != nil {
 		cmd.Env = append(cmd.Env, m.cfg.Guardrail.env()...)

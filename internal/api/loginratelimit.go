@@ -335,7 +335,7 @@ func (ro *Router) loginRateLimit(next http.Handler) http.Handler {
 		// that case itself, with the message the handler would have rendered.
 		// An unreadable form is not a password guess and is not charged.
 		if err := r.ParseForm(); err != nil {
-			ro.renderLogin(w, r, http.StatusBadRequest, "", "", "Could not read that form. Try again.")
+			ro.renderLogin(w, r, bodyReadStatus(err), "", "", "Could not read that form. Try again.")
 			return
 		}
 		username := r.PostFormValue("username")

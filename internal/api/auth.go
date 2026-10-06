@@ -245,7 +245,7 @@ func (ro *Router) authCallback(w http.ResponseWriter, r *http.Request) {
 // forge here is a login it must already know the password to complete.
 func (ro *Router) authLocal(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		ro.renderLogin(w, r, http.StatusBadRequest, "", "", "Could not read that form. Try again.")
+		ro.renderLogin(w, r, bodyReadStatus(err), "", "", "Could not read that form. Try again.")
 		return
 	}
 	username := r.PostFormValue("username")

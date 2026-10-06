@@ -39,6 +39,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"detail.net.test.mjs",
 		"detail.recipient.test.mjs",
 		"detail.statesync.test.mjs",
+		"detail.geolocation.test.mjs",
 		"edit.origins.test.mjs",
 		"edit.versions.test.mjs",
 		"share.test.mjs",
@@ -53,6 +54,8 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		// that the shim's bytes contain a substring and cannot assert that a
 		// resync fires one storage event per changed key.
 		"render.shim.test.mjs",
+		// The same, for the geolocation gate's section of bridgeScript.
+		"render.geolocation.test.mjs",
 	}
 	cmd := exec.Command(node, append([]string{"--test"}, suites...)...)
 	cmd.Dir = dir

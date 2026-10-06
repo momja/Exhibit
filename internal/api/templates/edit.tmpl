@@ -135,6 +135,15 @@
             <option value="true">Always allow</option>
           </select>
         </label>
+        {{/* Location (av-f446) is enforced the same way as the two devices:
+             the render document's Permissions-Policy header. */}}
+        <label class="row">
+          <span class="spacer">Location</span>
+          <select id="geo-select" class="select">
+            <option value="false">Ask first</option>
+            <option value="true">Always allow</option>
+          </select>
+        </label>
       </div>
     </div>
   </details>
@@ -307,6 +316,7 @@ let clipboardApproved = {{if .ClipboardApproved}}true{{else}}false{{end}};
 let linksApproved = {{if .LinksApproved}}true{{else}}false{{end}};
 let cameraApproved = {{if .CameraApproved}}true{{else}}false{{end}};
 let microphoneApproved = {{if .MicrophoneApproved}}true{{else}}false{{end}};
+let geolocationApproved = {{if .GeolocationApproved}}true{{else}}false{{end}};
 </script>
 <script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/edit.js"></script>

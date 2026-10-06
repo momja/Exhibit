@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Agent conversations kept with the artifact they worked on (migration 032).
+// Agent conversations kept with the artifact they worked on (migration 033).
 //
 // A conversation is stored as Pi writes it: its session file, which is also
 // the one format `pi --session` starts from, so keeping it is what makes a
@@ -24,7 +24,7 @@ type Transcript struct {
 	Title string `json:"title"`
 	// VersionSeq is the artifact's head version when the conversation last
 	// settled: the code and saved data it was last working against. 0 means
-	// unknown, which only conversations kept before migration 032 are.
+	// unknown, which only conversations kept before migration 033 are.
 	VersionSeq int `json:"version_seq"`
 	// Resumable reports whether a session can be started from it. Only a
 	// conversation kept with a session file can; an older one holds a dump of

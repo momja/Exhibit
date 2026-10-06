@@ -57,16 +57,93 @@ const SELECTION_FILE = process.env.EXHIBIT_SELECTION_FILE || "";
  */
 let boundArtifactId = process.env.EXHIBIT_ARTIFACT_ID || "";
 
+/**
+ * The largest request body the exhibit API accepts (av-ombn), passed down by
+ * the service. Zero when it was not: the API's 413 is then the only signal.
+ */
+const MAX_BODY_BYTES = Number(process.env.EXHIBIT_MAX_BODY_BYTES) || 0;
+
+/** A byte count the way the API's own 413 states one (humanize.Bytes). */
+function humanBytes(n: number): string {
+	if (n < 1024) return `${n} B`;
+	let div = 1024;
+	let exp = 0;
+	for (let m = n / 1024; m >= 1024; m /= 1024) {
+		div *= 1024;
+		exp++;
+	}
+	return `${(n / div).toFixed(1)} ${"KMGTPE"[exp]}iB`;
+}
+
+/**
+ * A write refused for its size, whether this file refused it before sending
+ * or the API answered 413. Worded for the model: the stored copy is exactly
+ * as it was, and the same call will fail the same way, so the next step is to
+ * shrink the content rather than retry it.
+ */
+function tooLargeError(method: string, path: string, size: number, limit: number): Error {
+	let sizeText = humanBytes(size);
+	let limitText = humanBytes(limit);
+	if (sizeText === limitText) {
+		// A write a few bytes over would otherwise read "32.0 MiB, at most
+		// 32.0 MiB", which looks like it should have fit.
+		sizeText = `${size} bytes`;
+		limitText = `${limit} bytes`;
+	}
+	const over = limit > 0
+		? `this write is ${sizeText} and the instance accepts at most ${limitText} per request`
+		: `this write is ${sizeText}, more than the instance accepts`;
+	return new Error(
+		`exhibit API ${method} ${path} refused: ${over}. Nothing was saved; what is stored is unchanged, ` +
+			"and sending the same content again will fail the same way. Make it smaller first. Large " +
+			"inline data (base64-encoded images, fonts or wasm) is the usual cause.",
+	);
+}
+
+/** The limit a 413 names, or 0 when it came from something other than the
+ * exhibit API (a proxy in front of it, say) and names none. */
+function limitFrom413(text: string): number {
+	try {
+		const n = Number(JSON.parse(text)?.limit_bytes);
+		return n > 0 ? n : 0;
+	} catch {
+		return 0;
+	}
+}
+
 async function api(method: string, path: string, body?: unknown): Promise<any> {
-	const resp = await fetch(API + path, {
-		method,
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: "Bearer " + TOKEN,
-		},
-		body: body === undefined ? undefined : JSON.stringify(body),
-	});
+	const payload = body === undefined ? undefined : JSON.stringify(body);
+	// Bytes on the wire, which is what the limit counts. The string's length
+	// is in UTF-16 units and would undercount anything outside ASCII.
+	const size = payload === undefined ? 0 : Buffer.byteLength(payload, "utf8");
+	if (MAX_BODY_BYTES > 0 && size > MAX_BODY_BYTES) {
+		throw tooLargeError(method, path, size, MAX_BODY_BYTES);
+	}
+	let resp: Response;
+	try {
+		resp = await fetch(API + path, {
+			method,
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: "Bearer " + TOKEN,
+			},
+			body: payload,
+		});
+	} catch (err) {
+		// No response at all. Besides the usual causes, a proxy that refuses a
+		// large body can close the connection mid-upload instead of answering
+		// 413, which lands here as EPIPE or ECONNRESET. Hence the size.
+		const cause = (err as any)?.cause?.code || (err as any)?.cause?.message || (err instanceof Error ? err.message : String(err));
+		const sending = size > 0 ? ` while sending ${humanBytes(size)}` : "";
+		throw new Error(
+			`exhibit API ${method} ${path} got no response (${cause})${sending}. ` +
+				"Nothing confirms whether it was saved; read it back before assuming either way.",
+		);
+	}
 	const text = await resp.text();
+	if (resp.status === 413) {
+		throw tooLargeError(method, path, size, limitFrom413(text));
+	}
 	if (!resp.ok) {
 		throw new Error(`exhibit API ${method} ${path} -> ${resp.status}: ${text.slice(0, 300)}`);
 	}
