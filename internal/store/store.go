@@ -92,6 +92,14 @@ type Artifact struct {
 	// the render origin. Neither affects the CSP.
 	CameraApproved     bool `json:"camera_approved"`
 	MicrophoneApproved bool `json:"microphone_approved"`
+	// GeolocationApproved is the same first-use approval for the geolocation
+	// gate (av-f446): navigator.geolocation in the frame, which asks the host
+	// and then calls the artifact's error callback. Enforced where the device
+	// approvals are, and for the same reason: a browser's location grant is
+	// per-origin, so this builds the top-level render's Permissions-Policy
+	// header rather than anything the frame can be handed. It does not affect
+	// the CSP, and approving it approves no capture device.
+	GeolocationApproved bool `json:"geolocation_approved"`
 	// WidgetBlobID is the blob holding this artifact's widget — the small,
 	// informative document its gallery card renders (av-fafu). Empty means the
 	// artifact has no widget and its card falls back to the default tile. The
@@ -410,7 +418,7 @@ type Store interface {
 	// DrainBlobDeletions.
 	DeleteArtifact(ctx context.Context, ownerID int64, id string) ([]string, error)
 
-	// Version history (migration 031, versions.go). Every change to an
+	// Version history (migration 032, versions.go). Every change to an
 	// artifact's body or widget goes through CommitVersion or RestoreVersion —
 	// there is no other writer of source_blob_id or widget_blob_id — and each
 	// snapshots the state of the version it replaces in the same transaction.

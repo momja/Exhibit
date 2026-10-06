@@ -272,8 +272,7 @@ type createUserRequest struct {
 // makes it, rather than a rule two code paths each implement.
 func (ro *Router) createAdminUser(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	name := auth.NormalizeLoginName(req.Username)
@@ -407,8 +406,7 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req updateUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	// Resolved once, up front: every branch below needs the account to exist,

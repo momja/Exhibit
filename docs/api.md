@@ -69,6 +69,22 @@ curl -X POST http://localhost:8080/api/artifacts \
   -d '{"title":"My Tool","body":"<html>...</html>","network_allowlist":["https://cdn.jsdelivr.net"]}'
 ```
 
+**Request size.** Every request body, on every route, is capped at
+`MAX_REQUEST_BODY_BYTES`: 32 MiB unless the operator changed it
+(`deployment.md` §2). A larger one gets a `413` before the server reads any of
+it:
+
+```json
+{"error": "request body too large: this instance accepts at most 32.0 MiB per request",
+ "limit_bytes": 33554432}
+```
+
+The cap counts the request as sent, JSON escaping included, so a pasted
+document has a little less room than the figure. A body sent without a
+`Content-Length` (chunked) is read up to the cap and then refused the same way.
+A URL ingest is not bound by it: its request carries only the URL, and the page
+the server fetches has its own 10 MiB cap, below.
+
 **Ingest from a URL** — send `url` instead of `body` and the server fetches the
 page (bounded to 10 MiB). The title falls back to the page's `<title>`. Because
 the fetched page's relative references (`js/app.js`, `/assets/x.png`,

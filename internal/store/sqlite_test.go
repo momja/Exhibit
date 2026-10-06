@@ -717,9 +717,46 @@ func TestMediaApprovals(t *testing.T) {
 	}
 }
 
+// geolocation_approved (av-f446) is a seventh grant, independent of the other
+// six: approving location approves no capture device, and approving a device
+// approves no location. Same default-false, round-trip, flip, and non-bool
+// rejection as its siblings.
+func TestGeolocationApproval(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "geo-1", OwnerID: 1, SourceBlobID: "b1"}))
+	got, err := s.GetArtifact(ctx, 1, "geo-1")
+	require.NoError(t, err)
+	assert.False(t, got.GeolocationApproved, "new artifacts must not be pre-approved for location")
+
+	require.NoError(t, s.UpdateArtifact(ctx, 1, "geo-1", map[string]any{"geolocation_approved": true}))
+	got, err = s.GetArtifact(ctx, 1, "geo-1")
+	require.NoError(t, err)
+	assert.True(t, got.GeolocationApproved)
+	assert.False(t, got.CameraApproved, "a location grant must not carry the camera with it")
+	assert.False(t, got.MicrophoneApproved, "a location grant must not carry the microphone with it")
+	assert.False(t, got.DownloadsApproved)
+	assert.False(t, got.ClipboardApproved)
+	assert.False(t, got.LinksApproved)
+
+	// And the other way round: devices approved, location revoked.
+	require.NoError(t, s.UpdateArtifact(ctx, 1, "geo-1", map[string]any{
+		"camera_approved": true, "microphone_approved": true, "geolocation_approved": false,
+	}))
+	got, err = s.GetArtifact(ctx, 1, "geo-1")
+	require.NoError(t, err)
+	assert.False(t, got.GeolocationApproved, "a device grant must not carry location with it")
+	assert.True(t, got.CameraApproved)
+	assert.True(t, got.MicrophoneApproved)
+
+	err = s.UpdateArtifact(ctx, 1, "geo-1", map[string]any{"geolocation_approved": "yes"})
+	assert.Error(t, err, "geolocation_approved must reject a non-bool")
+}
+
 // Every capability-approval column named for the API's strict-bool check must
 // also be one the store accepts and refuses a non-bool for. The two lists live
-// in one place precisely so a sixth capability cannot reach the handler's
+// in one place precisely so a new capability cannot reach the handler's
 // validation and miss the store's — this pins that they stay one list.
 func TestApprovalColumnsAreUpdatableAndBoolChecked(t *testing.T) {
 	s := newTestStore(t)

@@ -1,6 +1,6 @@
 ---
 id: av-ombn
-status: in_progress
+status: closed
 deps: []
 links: [av-ghvs]
 created: 2026-08-12T02:51:45Z
@@ -29,3 +29,19 @@ Related: av-4bzn (agent sessions have no resource bounds).
 - The limit is documented alongside the ingest limits and is large enough for a legitimately vendored artifact.
 - A test asserts an over-limit body is rejected without being fully read into memory.
 
+
+## Notes
+
+**2026-10-01T03:12:51Z**
+
+Limit: 32 MiB (33554432 bytes), env MAX_REQUEST_BODY_BYTES, one limit for every route.
+
+Why this number. The largest legitimate body is ~16.3 MB: a snapshot that vendored a wasm runtime, exported to one file (av-vnkt) and pasted back. Since av-20fk a URL ingest keeps those payloads out of line, but a paste of the exported file still carries them. 32 MiB is about twice that, and the headroom is needed: JSON escaping is paid on top, and a Go client escapes <, > and & to six bytes, so a markup-heavy 16 MiB document arrives as a 30 MiB request (measured).
+
+Why not more. Peak heap for a write measured at ~10x the request: 160 MiB for a 16 MiB base64-heavy body, 166 MiB for 16.8 MiB of script, 315 MiB for a 30 MiB markup body. A maximal write at the default is ~320 MiB, which fits the 1 GB fly.toml provisions beside one agent sidecar. Smaller machines lower the env var.
+
+Why one limit, not per route. The document writes (artifact POST/PATCH, widget PUT) are the only routes that amplify. The rest decode a few fields, so a smaller ceiling on them would not lower the worst case.
+
+Server: ReadHeaderTimeout 10s, ReadTimeout 5m (32 MiB at ~0.9 Mbit/s), IdleTimeout 2m, MaxHeaderBytes 64 KiB. WriteTimeout stays 0 because the agent SSE stream is one long response; measured that ReadTimeout does not cancel it on Go 1.26.
+
+Agent tools: EXHIBIT_MAX_BODY_BYTES goes to the Pi sidecar so a tool refuses an oversized write before sending it. A 413 from the API or a proxy produces the same message, and a dropped connection names the size it was sending. Measured that Node fetch gets the 413 cleanly from Go's server, but threw EPIPE mid-upload against another server, which is why the pre-check exists.

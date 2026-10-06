@@ -787,8 +787,8 @@ Five properties of the reporter are load-bearing:
   whole feature.
 
   The same session raises none of the other first-use prompts either
-  (downloads, clipboard, external links, camera/microphone — all `PATCH
-  /api/artifacts/:id`). Those settle as denials, which is a failure the
+  (downloads, clipboard, external links, camera/microphone, location — all
+  `PATCH /api/artifacts/:id`). Those settle as denials, which is a failure the
   artifact already handles and the sandbox already produced before any bridge
   existed; only the network case needs saying out loud, because only it leaves
   the tool looking broken rather than refused. A capability the *owner* already
@@ -813,8 +813,8 @@ Five properties of the reporter are load-bearing:
   there failed silently. Both pages now install one module
   (`network-prompt.js`) over one dialog partial, so a later fix to either
   cannot land on one surface and miss the other. Its remaining gap is the
-  *other* bridges: downloads, clipboard, external links and
-  camera/microphone are still absent there, and each is a distinct capability
+  *other* bridges: downloads, clipboard, external links, camera/microphone
+  and location are still absent there, and each is a distinct capability
   with its own approval, so they belong together in one piece of work rather
   than arriving one at a time.
 
@@ -850,7 +850,7 @@ After ingest the stored copy never phones home. Updating it is an explicit user
 action (`POST /api/artifacts/:id/refetch`). There are no live-linked imports and
 no automatic refresh.
 
-## 4. Local I/O defaults: clipboard, files, and capture devices
+## 4. Local I/O defaults: clipboard, files, capture devices, and location
 
 **Render preamble taxonomy** (canonical vocabulary for all docs). The JS
 injected into the rendered frame as the first `<head>` script(s) — replacing
@@ -875,7 +875,9 @@ are four families:
   (clipboard, downloads, external links) by proxying the op to the trusted host
   under first-use approval. Not persistence. This section.
 - **Capability gate** — for a capability the sandbox denies and the host
-  *cannot re-grant either* (camera/microphone, av-mv3k). It captures the same
+  *cannot re-grant either* (camera/microphone, av-mv3k), or chooses not to
+  (location, av-f446, where re-granting would hand the artifact the app
+  origin's own permission; see Location below). It captures the same
   per-artifact first-use decision a bridge does, then settles the call with the
   failure the artifact would have seen anyway and points at the context where
   the decision can be spent. Worth its own name precisely because it is the one
@@ -995,9 +997,9 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     sandbox does not govern. Like downloads, the bridge installs only when a
     host frame exists; top-level renders and share pages navigate natively.
 - **Camera and microphone** — approved per device, per artifact
-  (`camera_approved`, `microphone_approved`), and the one capability in this
-  section that is **decided but not delivered in the frame**. Both halves of
-  that sentence are measured facts, not policy preferences:
+  (`camera_approved`, `microphone_approved`), and **decided but not delivered
+  in the frame**, as location is below. Here both halves of that sentence are
+  measured facts, not policy preferences:
   - **The frame cannot reach a device.** `getUserMedia` from the sandbox's
     opaque origin throws `SecurityError: Invalid security origin` before any
     permission is consulted. An `allow="camera; microphone"` delegation does not
@@ -1038,9 +1040,9 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     their hardware. **Widgets carry neither**, whatever their artifact holds: a
     tile renders unattended behind `pointer-events: none`, where there is no
     gesture to attribute a device prompt to.
-  - The header names camera and microphone and nothing else, so every other
-    Permissions-Policy feature keeps its browser default rather than turning
-    this into a second policy surface beside the CSP.
+  - The header names camera, microphone and geolocation (below) and nothing
+    else, so every other Permissions-Policy feature keeps its browser default
+    rather than turning this into a second policy surface beside the CSP.
   - **Not attempted: synthesizing a stream.** The frame could be fed video
     frames (`ImageBitmap` → canvas → `captureStream`) and PCM (an
     `AudioContext` destination) to produce a `MediaStream` object in the
@@ -1048,6 +1050,59 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     constraints, no `applyConstraints`, no `getSettings`, and a `stop()` that
     reaches no hardware. It is a rendering feature, and it belongs to its own
     ticket rather than smuggled in behind a permission one.
+- **Location** (av-f446). Approved per artifact (`geolocation_approved`) and
+  handled like the capture devices: a gate in the frame, a first-use prompt in
+  the host, and the approval spent on the top-level render through
+  `Permissions-Policy: geolocation=…`. The reason is different, and it is the
+  part to read before changing anything here: location is not structurally
+  out of reach the way a camera is. Measured in Chromium 149 and WebKit 26.5
+  under Playwright, with a fake location pre-granted, against Exhibit's frame
+  (`sandbox="allow-scripts allow-forms"`, opaque origin):
+  - With no `allow=` on the iframe, which is how Exhibit ships it, the frame's
+    `getCurrentPosition` fails in both engines. Chromium reports the
+    permissions policy; WebKit reports that the origin has no permission.
+  - WebKit refuses the opaque origin even with `allow="geolocation"`.
+  - Chromium does not. With the delegation the frame gets a real position, and
+    it gets it on the *embedding page's* grant: with the location granted only
+    to the render origin the frame is refused, and with it granted only to the
+    app origin the frame succeeds. The browser's prompt would name the
+    library's host, and the library's origin would end up holding the
+    visitor's location for the artifact's benefit.
+  - The render document's own `geolocation=()` still refuses the frame in
+    Chromium even with the delegation in place, so a delegated design could
+    keep the per-artifact header. That is not what decided it.
+
+  So unlike a `MediaStreamTrack`, a position could reach the frame two ways: by
+  delegation in Chromium, or by a host bridge that reads it on the app origin
+  and posts the numbers in. Neither was built, for one reason. Both make the
+  app origin, the one origin this design keeps clear of artifact code, the
+  holder of a sensitive permission granted on an artifact's behalf. The
+  visitor would be answering a prompt that names Exhibit, about a tool they
+  may have pasted in five minutes ago. The top-level render keeps the
+  permission on the render origin, where the browser's own prompt and the
+  per-artifact header both apply to the document that actually reads the
+  location. A delegation would also need an `allow=` on the frame, and this
+  section's rule is that approval never adds anything to the sandbox.
+
+  A future bridge would need an answer to that, not just code: a `watchPosition`
+  stream relayed through the host, and a visitor told plainly that the library
+  itself is reading their location. Until then the gate stands:
+  - The frame replaces `getCurrentPosition`, `watchPosition` and `clearWatch`
+    (or supplies `navigator.geolocation` outright where it is absent, as on an
+    `http://` render origin other than localhost, since the API is
+    secure-context only). A request posts to the host and later runs the
+    artifact's error callback with `PERMISSION_DENIED`. No path reports a position, and none leaves a
+    callback pending; a cleared watch gets no callback, as the spec requires.
+    Options stay in the frame, because the host reads no location.
+  - Unapproved, the host prompts and **Allow** persists only
+    `geolocation_approved` and opens the top-level render. Approved, the next
+    request raises the capability banner instead. A recipient is answered with
+    a denial and never prompted, like every other approval on this page.
+  - Shares carry the owner's approval; widgets and the default tile get
+    `geolocation=()` whatever the artifact holds.
+  - The consequence matches the devices: an artifact never approved for
+    location cannot read it anywhere, including opened directly with the
+    browser's permission already granted for the render origin (verified).
 
 ## 5. The agent sidecar: an API client driven by untrusted text
 

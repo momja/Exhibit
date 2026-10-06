@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -89,8 +88,7 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
 
 	var req putWidgetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Body == "" {

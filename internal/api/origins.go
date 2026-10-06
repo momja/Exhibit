@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -45,8 +44,7 @@ func (ro *Router) setOriginDecision(w http.ResponseWriter, r *http.Request) {
 	artifactID := urlParamID(r, "artifactID")
 
 	var req originDecisionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	// The same origin rule the allowlist goes through at ingest and on PATCH
