@@ -13,7 +13,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -254,8 +253,7 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req deleteAccountRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Confirm != deleteAccountConfirmation {

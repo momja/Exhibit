@@ -44,10 +44,11 @@ func newShareWidgetFixture(t *testing.T) (*Renderer, *store.SQLiteStore, string,
 	}
 	if err := st.PutArtifact(ctx, &store.Artifact{
 		ID: "abc", OwnerID: 1, Title: "t", SourceBlobID: "abc-body", Tier: 1,
-		WidgetBlobID:       "abc-widget",
-		NetworkAllowlist:   []string{"https://api.example.com"},
-		CameraApproved:     true,
-		MicrophoneApproved: true,
+		WidgetBlobID:        "abc-widget",
+		NetworkAllowlist:    []string{"https://api.example.com"},
+		CameraApproved:      true,
+		MicrophoneApproved:  true,
+		GeolocationApproved: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -121,8 +122,9 @@ func TestShareWidgetServesTheWidgetWithOwnerState(t *testing.T) {
 
 // One allowlist, one CSP — and the share's framing, not /w/:id's. A shared
 // widget's point is embedding off the gallery, so it carries the same
-// frame-ancestors the shared artifact does. Devices stay denied whatever the
-// artifact holds: a tile draws unattended, where no device prompt could belong.
+// frame-ancestors the shared artifact does. Devices and location stay denied
+// whatever the artifact holds: a tile draws unattended, where no prompt could
+// belong.
 func TestShareWidgetUsesArtifactCSPAndShareFraming(t *testing.T) {
 	rd, _, link, _ := newShareWidgetFixture(t)
 
@@ -137,8 +139,8 @@ func TestShareWidgetUsesArtifactCSPAndShareFraming(t *testing.T) {
 	if fa := frameAncestors(t, csp); fa != "*" {
 		t.Fatalf("shared widget must carry the share framing policy, got %q", fa)
 	}
-	if pp := w.Header().Get("Permissions-Policy"); pp != "camera=(), microphone=()" {
-		t.Fatalf("shared widget must deny both devices despite the artifact's approvals, got %q", pp)
+	if pp := w.Header().Get("Permissions-Policy"); pp != "camera=(), microphone=(), geolocation=()" {
+		t.Fatalf("shared widget must deny both devices and location despite the artifact's approvals, got %q", pp)
 	}
 }
 

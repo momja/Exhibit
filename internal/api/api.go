@@ -103,6 +103,12 @@ type Config struct {
 	// shares-only decision is argued: see render.Config.EmbedOrigins. Read
 	// from the environment by EmbedOriginsFromEnv (embedorigins.go).
 	EmbedOrigins []string
+	// MaxRequestBodyBytes bounds every request body the app surface accepts
+	// (av-ombn); a larger one is answered 413. Zero means
+	// DefaultMaxRequestBodyBytes, never "unbounded". Read from the
+	// environment by MaxRequestBodyBytesFromEnv (bodylimit.go), which also
+	// carries the measurements behind the default.
+	MaxRequestBodyBytes int64
 }
 
 // Router wraps chi.Mux and holds the config.
@@ -352,6 +358,10 @@ func (ro *Router) setupRoutes() {
 	ro.Use(logging.RequestMiddleware)
 	ro.Use(middleware.Recoverer)
 	ro.Use(compressor())
+	// Every request body is bounded (av-ombn), and this is the one place that
+	// says so: registered on the root, ahead of every group, a route added
+	// anywhere below inherits it without having to remember it.
+	ro.Use(limitRequestBody(ro.cfg.maxRequestBodyBytes()))
 	// Login gate for the server-rendered pages (av-30rj). A pass-through
 	// unless an identity provider is configured, so a single-user instance
 	// is unaffected.

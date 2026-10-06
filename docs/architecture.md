@@ -92,9 +92,10 @@ The only way data changes. Route groups:
   `internal/origin` before it is stored — see below; the store translates it
   into `decision='allow'` rows and deliberately leaves any `decision='block'`
   rows alone, §3.3), `downloads_approved` / `clipboard_approved` /
-  `links_approved` / `camera_approved` / `microphone_approved` (the per-artifact
-  first-use capability approvals, §6 — the first three spent by a host bridge,
-  the two device flags by the frame's gate and the render document's
+  `links_approved` / `camera_approved` / `microphone_approved` /
+  `geolocation_approved` (the per-artifact first-use capability approvals, §6
+  — the first three spent by a host bridge, the two device flags and the
+  location flag by the frame's gates and the render document's
   `Permissions-Policy`; named once in `store.ApprovalColumns` so the handler's
   strict-bool check and the store's cannot drift), `share_state_mode` (whose
   state rows a recipient writes — their own, or the owner's shared copy;
@@ -260,13 +261,30 @@ false in practice. A non-origin entry is a `400` naming the value rather than a
 silent truncation to its host — truncating would grant a whole origin from an
 entry the user approved as a single file.
 
-Middleware chain (via `chi`): request logging → auth → owner scoping (`owner_id`)
-→ handler. Auth accepts two credentials, in that order of preference: a session
-cookie, when this instance has a login at all (§3.8), and otherwise the static
-bearer token — the API/CLI credential, and the only credential a single-user
-instance has. The owner is whatever the session resolved to, or `1`. Auth and
-ownership are *one layer* every mutating route passes through, which is what
-makes multi-user a middleware-and-data change rather than a rewrite.
+Middleware chain (via `chi`): request logging → body limit → auth → owner
+scoping (`owner_id`) → handler. Auth accepts two credentials, in that order of
+preference: a session cookie, when this instance has a login at all (§3.8), and
+otherwise the static bearer token — the API/CLI credential, and the only
+credential a single-user instance has. The owner is whatever the session
+resolved to, or `1`. Auth and ownership are *one layer* every mutating route
+passes through, which is what makes multi-user a middleware-and-data change
+rather than a rewrite.
+
+**Every request body is bounded** (av-ombn). `limitRequestBody` sits on the
+root of the app router, ahead of every group, so no route can be registered
+outside it. A body declared over `MAX_REQUEST_BODY_BYTES` (32 MiB by default)
+is answered `413` before any handler runs, without reading a byte of it; one of
+undeclared length is wrapped in `http.MaxBytesReader`, which stops one byte past
+the limit. Handlers read bodies only through `decodeJSON`, which turns that
+overrun into the same `413` instead of the `400` a malformed body gets. Two
+tests hold the shape: a parser walk fails on any other read of `r.Body` in the
+package, and a route walk fails when a write route exists that
+`bodylimit_test.go` has not listed and decided. The number comes from what a
+write costs: one peaks at about ten times its body (the decoded string, a copy
+at `Blob.Put`, three parse trees), so a maximal write is ~320 MiB. The
+listeners come from `api.NewServer`, with header, read and idle timeouts and a
+header-size cap. There is no write timeout, because the agent's SSE stream is a
+single response that stays open as long as the chat page does.
 
 **Public mode (av-wmp6)** is the one case where a request with no credential
 gets past that layer, and it is deliberately narrow. When `PUBLIC_MODE_ENABLED`
@@ -347,25 +365,26 @@ executable document with the correct security envelope:
   *from a remote origin* still requires that origin on the allowlist — the network
   boundary is unchanged; only inlined/local, no-egress sources are permitted by
   default.
-- Sets a per-artifact **`Permissions-Policy`** naming `camera` and
-  `microphone`, built from the artifact's two device approvals (av-mv3k):
-  `(self)` when approved, `()` when not. This is the one capability approval that
-  is enforced on a *top-level* render rather than only bridged in the frame, and
+- Sets a per-artifact **`Permissions-Policy`** naming `camera`,
+  `microphone` and `geolocation`, built from the artifact's two device
+  approvals (av-mv3k) and its location approval (av-f446): `(self)` when
+  approved, `()` when not. These are the capability approvals that are
+  enforced on a *top-level* render rather than only bridged in the frame, and
   the reason is that a browser permission is granted per **origin** while every
   artifact shares one render origin — without it, a visitor who allowed the
   camera for one artifact opened directly has allowed it for every artifact on
   that origin, with no per-artifact decision in the loop. Permissions Policy is
   per *document*, so it splits that single origin grant back into one decision
   per artifact, enforced by the browser even when the origin's permission is
-  already granted. Only those two features are named; every other
+  already granted. Only those three features are named; every other
   Permissions-Policy feature keeps its default, so this header answers one
   question and does not become a second policy surface beside the CSP. A widget
-  render is denied both devices whatever its artifact holds (§5.5's "strict
+  render is denied all three whatever its artifact holds (§5.5's "strict
   subset", applied to a header).
 - Injects the **render preamble** as the first `<head>` script(s) — the **storage
   shim** with the artifact's state **inlined** into it so `getItem` is correct
   synchronously, plus the download/clipboard/external-link **capability
-  bridges**, the camera/microphone **capability gate**, the `data:` fetch
+  bridges**, the camera/microphone and location **capability gates**, the `data:` fetch
   **compatibility shim**, the **out-of-line asset manifest**, and the **network
   permission reporter** — then the artifact body. (Umbrella/family taxonomy:
   `security.md` §4.)
@@ -1130,8 +1149,8 @@ owns their own library.
 The part that is not about hiding buttons: **three host-frame prompts write
 per-artifact authority**, and all three would have rendered for a recipient and
 404'd on submit — the network permission prompt through `POST …/origins`, the
-download/clipboard/link first-use approvals and the camera/microphone gate
-through `PATCH /api/artifacts/:id`. A recipient's session raises none of them.
+download/clipboard/link first-use approvals and the camera/microphone and
+location gates through `PATCH /api/artifacts/:id`. A recipient's session raises none of them.
 The artifact's request is settled the way a denial has always settled it, so
 nothing hangs; and a blocked *origin* — the one case where silence leaves a tool
 visibly doing nothing — is explained instead, in the page's own chrome, naming
@@ -1363,6 +1382,15 @@ configuration, and the pages keep offering the agent.
   prompt sent to a stranger's session runs its tool calls on *that session's*
   credential, so the injected instruction lands in the victim's artifact —
   av-e0yj's containment defeated rather than evaded.
+- **Oversized writes fail where the model can read why (av-ombn):** the
+  sidecar's environment carries the API's body limit as
+  `EXHIBIT_MAX_BODY_BYTES`, so a tool refuses a write over it before sending
+  anything. A `413` from the API, or from a proxy in front of it, produces the
+  same error: the stored copy is unchanged, and resending the same content
+  will fail the same way. A connection dropped mid-upload says it got no
+  answer and names the size it was sending, since that is the likely cause
+  and nothing confirms the write either way. The API's `413` is still the
+  enforcement; the extension's check only makes the failure legible.
 - **Untrusted text reaches the model only as a tool result** (av-5s7g): the
   artifact's source, title, state and widget, and the elements the user
   selected, come back from `get_artifact` / `get_state` / `get_widget` /
@@ -1920,6 +1948,15 @@ flowchart TD
     gmPrompt -->|deny| gmNo["Promise rejects (NotAllowedError)"]
     gmTop(["top-level render / share"]) --> gmNative["native getUserMedia, enforced by the<br/>artifact's Permissions-Policy header"]
 
+    load --> geo["navigator.geolocation<br/>getCurrentPosition / watchPosition"]
+    geo --> geoInt["location GATE replaces the API;<br/>the frame has no allow= delegation"]
+    geoInt --> geoQ{"location<br/>already approved?"}
+    geoQ -->|yes| geoBanner["error callback + &quot;open it directly&quot; banner"]
+    geoQ -->|first attempt| geoPrompt{"host prompts<br/>(artifact wants your location)"}
+    geoPrompt -->|approve| geoOK["PATCH geolocation_approved &rarr;<br/>open top-level &rarr; error callback here"]
+    geoPrompt -->|deny| geoNo["error callback (PERMISSION_DENIED)"]
+    geoTop(["top-level render / share"]) --> geoNative["native geolocation, enforced by the<br/>artifact's Permissions-Policy header"]
+
     load --> lk["external http(s) anchor<br/>clicked (target=_blank or plain)"]
     lk --> lkInt["link bridge intercepts;<br/>postMessage URL to host"]
     lkInt --> lkQ{"already approved?"}
@@ -2001,6 +2038,18 @@ again. There is no allowlist interaction; a device is local I/O, and captured
 bytes leave the frame only where the artifact's CSP already lets anything leave
 — `connect-src` for a fetch, XHR or WebSocket, `form-action` for a submission,
 `img-src` and the rest for a URL the artifact smuggles them into.
+
+Location (`geolocation_approved`, av-f446) is a gate of the same shape: the
+frame posts the request, the host prompts and on approval opens the top-level
+render, and the frame runs the artifact's error callback with
+`PERMISSION_DENIED`. Unlike a camera, a position *could* reach the frame.
+Chromium honors `allow="geolocation"` on the opaque-origin frame, and
+coordinates are plain numbers a host bridge could post in. Both routes spend
+the app origin's own location permission, though, so the library would hold
+the visitor's location on an artifact's behalf and the browser's prompt would
+name Exhibit rather than the tool. The top-level render keeps the permission
+on the render origin under the per-artifact header. `security.md` §4 has the
+measurements.
 
 External-link navigation rides the same bridge (`links_approved`). The sandbox
 deliberately omits `allow-popups`, so a `target="_blank"` anchor is dropped and a

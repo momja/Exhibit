@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -27,8 +26,7 @@ type putAgentKeyRequest struct {
 
 func (ro *Router) putAgentKey(w http.ResponseWriter, r *http.Request) {
 	var req putAgentKeyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	req.Provider = strings.TrimSpace(req.Provider)
@@ -207,8 +205,7 @@ func writeAgentCreateError(w http.ResponseWriter, r *http.Request, op string, er
 
 func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 	var req createAgentSessionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	opts, ok := ro.agentSessionOpts(w, r)
@@ -342,8 +339,7 @@ func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req agentPromptRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if strings.TrimSpace(req.Message) == "" {
