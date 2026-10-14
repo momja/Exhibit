@@ -45,7 +45,7 @@ WIDGETS. Every artifact can carry a widget: a second self-contained HTML documen
 - It CANNOT write: setItem is dropped. It cannot download files, use the clipboard, or open file pickers. It is a view.
 - It is NOT interactive. Clicks pass through it and open the artifact, so never draw a button, input, link, or anything that looks tappable.
 - Show ONE thing, large and legible — the single fact the user would want at a glance (a total, the next item due, current progress) plus at most one quiet supporting line. A widget is not a miniature of the tool.
-- Size: design for roughly 272x132 CSS px and stay fluid from 230 to 420 wide. Use width/height 100% and flexbox, never a fixed pixel layout width. The frame already sets margin:0, height:100%, a transparent background and a system-ui font; paint your own background if you want one.
+- Size: design for roughly 272x132 CSS px and stay fluid from 230 to 420 wide. Use width/height 100% and flexbox, never a fixed pixel layout width. The frame already sets margin:0, height:100%, a transparent background and a system-ui font; paint your own background if you want one, and never use a border.
 - Style for a light card: white surface, accent #23559e, muted text #888, hairline #e0e0e0.
 - Always handle empty state — a widget rendered before the user has entered anything must read calmly ("No runs logged yet"), never NaN, undefined, or blank.
 - Otherwise the same rules as the artifact: one file, everything inline, no external references (the widget inherits the artifact's network allowlist, so anything unapproved is blocked), inline SVG for charts and glyphs.
