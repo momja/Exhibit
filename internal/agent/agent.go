@@ -190,7 +190,22 @@ type CreateOpts struct {
 	// spends its owner's money and is never limited here). Recorded on the
 	// usage rows as paid_by either way (av-2yws).
 	PlatformPaid bool
+	// Resume continues a conversation kept earlier instead of starting one
+	// (av-b4yh). The session takes the conversation's identity — same id, so the
+	// same stored record keeps growing, the same label on the versions it
+	// writes, and the same usage ledger entry its spend ceiling counts — and Pi
+	// starts from the stored session file, so the model has the conversation as
+	// it was. The prompt is the current one, not the stored one: an instruction
+	// improved since is in force, and the file's copy is not replayed.
+	// Everything else about the session is as for any other: a fresh
+	// credential, the owner's current key, the artifact as it is now.
+	Resume *store.Transcript
 }
+
+// ErrSessionLive means a resume named a conversation that already has a live
+// session. The API answers a request for a live conversation with that session,
+// so this is only what losing a race for the same conversation looks like.
+var ErrSessionLive = errors.New("that conversation is already running")
 
 // Create decrypted-key session: spawns the pi subprocess and starts its reader.
 func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error) {
@@ -211,7 +226,24 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}
 
 	id := uuid.New().String()
-	workDir := filepath.Join(m.cfg.WorkRoot, id)
+	title := ""
+	var recorded store.UsageTotals
+	if opts.Resume != nil {
+		id, title = opts.Resume.SessionID, opts.Resume.Title
+		// Pi's own totals count the whole conversation, the turns before this
+		// process included, and every settle reconciles the ledger against
+		// them (usage.go). The ledger already holds those turns, so this
+		// process's count of what is recorded starts from them — from zero the
+		// first settle would record them a second time.
+		var err error
+		if recorded, err = m.st.SessionAgentSpend(ctx, opts.OwnerID, id); err != nil {
+			return nil, fmt.Errorf("read the conversation's recorded usage: %w", err)
+		}
+	}
+	// The scratch directory belongs to this process, not to the conversation: a
+	// conversation can be resumed again while the process that last ran it is
+	// still being cleaned up, and the two must not share a directory.
+	workDir := filepath.Join(m.cfg.WorkRoot, uuid.New().String())
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create session dir: %w", err)
 	}
@@ -232,6 +264,17 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}()
 	sysPrompt := buildSystemPrompt(m.cfg.SystemPrompt, opts)
 	sessionFile := filepath.Join(workDir, sessionFileName)
+	resumeNotice := ""
+	if opts.Resume != nil {
+		// What the database holds is the conversation as of its last settled
+		// turn, which is the right place to resume from: a turn that was still
+		// running when the last session ended never finished, and is not
+		// something to continue.
+		if err := os.WriteFile(sessionFile, []byte(opts.Resume.SessionFile), 0o600); err != nil {
+			return nil, fmt.Errorf("restore session file: %w", err)
+		}
+		resumeNotice = resumedNotice
+	}
 
 	args := []string{
 		"--mode", "rpc",
@@ -317,6 +360,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		paidBy:            paidByFor(opts.PlatformPaid),
 		workDir:           workDir,
 		sessionFile:       sessionFile,
+		title:             title,
+		resumeNotice:      resumeNotice,
+		usageRecorded:     recorded,
 		readDone:          make(chan struct{}),
 		grant:             grant,
 		hideModelIdentity: m.cfg.HideModelIdentity,
@@ -336,6 +382,11 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}()
 
 	m.mu.Lock()
+	if _, live := m.sessions[id]; live {
+		m.mu.Unlock()
+		s.kill()
+		return nil, ErrSessionLive
+	}
 	m.sessions[id] = s
 	// Two Creates can pass admitOwner at once; the loser gives up its slot
 	// here, so "at most MaxOwnerSessions" holds even under a race.
@@ -359,6 +410,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		slog.String("provider", opts.Provider),
 		slog.String("model", opts.Model),
 		slog.String("artifact_id", opts.ArtifactID),
+		slog.Bool("resumed", opts.Resume != nil),
 	)
 	return s, nil
 }
@@ -532,14 +584,17 @@ type Session struct {
 	// waits at most one screen.
 	promptMu sync.Mutex
 
-	mu         sync.Mutex // guards everything below
-	title      string     // the conversation's first prompt, shortened
-	subs       map[chan []byte]struct{}
-	backlog    [][]byte
-	pending    map[string]chan rpcResponse
-	streaming  bool
-	closed     bool
-	lastActive time.Time
+	mu    sync.Mutex // guards everything below
+	title string     // the conversation's first prompt, shortened
+	// resumeNotice is the sentence the first prompt of a resumed conversation
+	// carries (prompt.go); it is held until a prompt has actually landed.
+	resumeNotice string
+	subs         map[chan []byte]struct{}
+	backlog      [][]byte
+	pending      map[string]chan rpcResponse
+	streaming    bool
+	closed       bool
+	lastActive   time.Time
 	// guardBlocked records that the guard extension handled the prompt in
 	// flight instead of running it (av-gust): the model never saw it. Pi emits
 	// that signal before the prompt's response, so Prompt can read it once the
@@ -653,6 +708,12 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	if len(selection) > 0 {
 		text += "\n\n" + selectionNotice(len(selection))
 	}
+	s.mu.Lock()
+	notice := s.resumeNotice
+	s.mu.Unlock()
+	if notice != "" {
+		text += "\n\n" + notice
+	}
 
 	cmd := map[string]any{"type": "prompt", "message": text}
 	if len(images) > 0 {
@@ -676,20 +737,25 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	if !r.Success {
 		return fmt.Errorf("prompt rejected: %s", r.Error)
 	}
-	s.nameFromFirstPrompt(message)
+	s.promptLanded(message)
 	return nil
 }
 
-// nameFromFirstPrompt names the conversation after the first prompt the agent
-// actually received. A prompt the guardrail refused never reached it, so it
-// names nothing: the stored conversation would otherwise carry a title whose
-// words are not in it.
-func (s *Session) nameFromFirstPrompt(message string) {
+// promptLanded records what a prompt reaching the agent settles: the
+// conversation takes its name from the first one, and a resumed conversation
+// has now been told it was resumed. A prompt the guardrail refused never
+// reached the agent, so it settles neither — its words are not in the stored
+// conversation, and the sentence it carried was never read.
+func (s *Session) promptLanded(message string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.title == "" && !s.guardBlocked {
+	if s.guardBlocked {
+		return
+	}
+	if s.title == "" {
 		s.title = ConversationTitle(message)
 	}
+	s.resumeNotice = ""
 }
 
 // writeSelection makes selection.json say exactly what the user selected with

@@ -33,6 +33,16 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .history-title{font-size:15px;font-weight:600;line-height:1.35}
 .history-messages{display:flex;flex-direction:column;gap:10px;padding:16px}
 .history-images{display:block;font-size:11.5px;opacity:.8;margin-top:4px}
+/* Continuing a conversation (av-b4yh): the choice sits under the transcript and
+ * stays in view while a long one scrolls. The rollback is the primary button;
+ * the way out of it is a plain secondary one. */
+.resume-card{position:sticky;bottom:0;margin-top:auto;display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:14px 16px;background:#fff;border-top:1px solid #e0e0e0;box-shadow:0 -4px 12px rgba(0,0,0,.04)}
+.resume-lede{font-size:13px;line-height:1.45;color:#222}
+.resume-explain{font-size:12px;line-height:1.45;color:#666;margin:0 0 8px}
+.resume-cancel{border:none;background:transparent;color:#666;font:inherit;font-size:13px;cursor:pointer;padding:4px 0}
+.resume-cancel:hover{color:var(--brand-blue)}
+.resume-status{font-size:12.5px;color:#a00;min-height:1em}
+.resume-note{padding:14px 16px;border-top:1px solid #e0e0e0;font-size:12.5px;color:#666;line-height:1.5}
 .msg{max-width:92%;padding:9px 12px;border-radius:10px;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
 .msg.user{align-self:flex-end;background:var(--brand-blue);color:#fff;border-bottom-right-radius:3px}
 .msg.assistant{align-self:flex-start;background:#f1f2f4;border-bottom-left-radius:3px}

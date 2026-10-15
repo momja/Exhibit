@@ -108,3 +108,11 @@ func selectionNotice(n int) string {
 	}
 	return fmt.Sprintf("(The user selected %d elements in the artifact preview — read them with get_selection.)", n)
 }
+
+// resumedNotice is the sentence the first prompt of a resumed conversation
+// carries. Everything the model remembers of the artifact was true when the
+// conversation last ran; it may have been edited since, or rolled back, and a
+// model given a long history is inclined to trust what it already holds. It is
+// fixed text, authored here, so it can sit in the user's message like the
+// selection notice does — nothing in it comes from the artifact.
+const resumedNotice = "(This conversation is being continued. The artifact may have changed since you last read it — read it again with get_artifact before you change anything.)"

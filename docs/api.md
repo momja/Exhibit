@@ -336,7 +336,7 @@ DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 PUT    /api/agent/key                        Store provider API key {"provider","model","api_key"} (encrypted at rest)
 GET    /api/agent/key                        Key status (masked hint only — the key is never returned)
 DELETE /api/agent/key                        Remove the stored key
-POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact} -> {"id","sse_ticket",…}
+POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact, "resume_session_id"?: continue a kept conversation of that artifact; omitted, the session is a new conversation} -> {"id","sse_ticket",…}
 POST   /api/agent/sessions/:id/ticket        Mint a fresh SSE ticket for this session (the reconnect path)
 POST   /api/agent/sessions/:id/prompt        Send a prompt {"message", "images"?: [{data, mime_type}], "snippets"?: [descriptor]}
 POST   /api/agent/sessions/:id/abort         Abort the current run
@@ -348,8 +348,12 @@ GET    /api/artifacts/:id/transcripts/:sid   One conversation as what was said i
 
 A conversation is kept as Pi's own session file and tied to the artifact
 version it was last working against (`version_seq`, read against `head_seq`);
-only a projection of what a person saw is ever returned, never the file. See
-`docs/agent.md`.
+only a projection of what a person saw is ever returned, never the file. A
+resumable one can be continued with `resume_session_id` above (200 when it is
+already running and the call attaches to it; 404 when it is not the caller's or
+not there; 409 when it was kept before conversations could be resumed). Resuming
+never changes the artifact — rolling it back is a separate
+`POST /api/artifacts/:id/versions/:seq/restore`. See `docs/agent.md`.
 
 Every `sse_ticket` is session-bound, single-use, and valid for 30 seconds
 (av-rgp1; full contract: `architecture.md` §3.7, `security.md` §6). A client

@@ -1411,6 +1411,20 @@ configuration, and the pages keep offering the agent.
   prompt, every tool result in full and the model's identity. Pi is pinned to
   an exact version for this reason: its file format is now part of this
   service's contract.
+- **A conversation can be resumed** (av-b4yh), and only when asked for by name:
+  `POST /api/agent/sessions` without `resume_session_id` is a new conversation
+  whatever the artifact has kept, and the chat page sends the field from one place —
+  the History pane's Continue buttons. With it, the service writes the stored file
+  into a fresh scratch directory and starts Pi from it, under the conversation's own
+  id so the same record keeps growing. The system prompt is the current one; the first prompt carries a fixed
+  sentence saying the artifact may have changed and should be read again. Whether
+  to roll the artifact back to the version the conversation was working against
+  is the *page's* decision, put to the person and carried out through the
+  ordinary version-restore route — resuming itself never touches the artifact.
+  Every session runs from `/`, because a session file records its working
+  directory and Pi refuses one whose directory is gone; the scratch directory
+  (HOME, the file, the selection) is deleted when the process is done, since the
+  conversation's home is the database.
 - **BYO key, sealed at rest:** the user's provider key is stored AES-256-GCM
   encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
   handed to the subprocess only through its (minimal, built-from-scratch)

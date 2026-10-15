@@ -1234,6 +1234,26 @@ No attempt is made to sanitize or strip instruction-shaped text. It is natural
 language; a filter for it would be theatre, and shipping one would invite
 trusting it.
 
+**Resuming a conversation replays it, and the boundary survives the replay**
+(av-b4yh). A stored conversation is Pi's own session file, handed back to Pi in
+the roles it recorded: the user's words as the user's, the model's as the
+model's, and everything the artifact said as tool results. Nothing was ever
+spliced into a message, so there is nothing to re-establish — which is what the
+nonce design could not have said, its secret belonging to a process that is
+gone. Two properties keep it that way. The file is written by exactly one
+party, Pi, and stored by another, the manager; no tool a model can call writes
+it, and a session's scoped credential cannot reach the route that reads it back
+(`agentSubResources`), so a session steered by hostile text cannot plant a
+history that the user later continues. And the system prompt is the current
+one, not the file's, so the contract on how to read a tool result is always the
+latest wording. When the persistence write moves behind the HTTP API
+(`Exh-v6v4`) it must be authorized as the service for the same reason.
+
+The first prompt after a resume also carries one fixed sentence, authored by
+Exhibit: the artifact may have changed since it was last read, so read it
+again. That is about staleness, not trust — rolling back, or an edit made in
+between, leaves the model holding a source that is no longer the artifact.
+
 ### 5.3 Residual risk, stated plainly
 
 Scoping bounds the blast radius to **one artifact, not to zero.** Delimiting

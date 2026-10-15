@@ -131,11 +131,14 @@ type agentHistoryData struct {
 
 // agentTranscriptData feeds the "agentTranscript" partial: one conversation,
 // read-only, with the version it was last working against beside the one the
-// artifact is at now.
+// artifact is at now — and, when it can be continued, the choice of how.
 type agentTranscriptData struct {
 	conversationView
 	HeadSeq  int
 	Messages []agent.TranscriptMessage
+	// AgentEnabled says this instance can run an agent at all, which is what
+	// continuing a conversation needs and reading one does not.
+	AgentEnabled bool
 }
 
 // agentHistoryPartial lists the conversations kept with an artifact, for the
@@ -182,6 +185,7 @@ func (ro *Router) agentTranscriptPartial(w http.ResponseWriter, r *http.Request)
 		conversationView: newConversationView(*t, head),
 		HeadSeq:          head,
 		Messages:         agent.Messages(t),
+		AgentEnabled:     ro.cfg.Agent != nil,
 	})
 }
 

@@ -603,6 +603,76 @@ function syncHistoryButton() { historyBtn.hidden = !artifact; }
 function openHistory() { chatEl.classList.add('history-open'); }
 function closeHistory() { chatEl.classList.remove('history-open'); }
 
+// --- Continuing a conversation (av-b4yh) ------------------------------------
+// The buttons live in the server-rendered fragment (agentResume), so one
+// delegated listener on the pane that fragments are swapped into serves them
+// all. rollbackTo is the version to put the artifact back to, or 0 to leave it
+// alone: the fragment is where the person was shown what each choice does.
+document.getElementById('history').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-resume]');
+  if (btn) resumeConversation(btn.dataset.resume, Number(btn.dataset.rollback) || 0);
+});
+
+async function resumeConversation(conversationId, rollbackTo) {
+  const statusEl = document.getElementById('resume-status');
+  const say = (text) => { if (statusEl) statusEl.textContent = text; };
+  if (!artifact) return;
+  if (streaming) {
+    say('The agent is still working. Stop it, or wait for it to finish, before switching conversations.');
+    return;
+  }
+  say('Starting…');
+
+  // Start the conversation before touching the artifact, so a refusal — no key,
+  // no agent — costs nothing: the page's own chat is still there and nothing
+  // has been rolled back.
+  const res = await apiFetch('/api/agent/sessions', {
+    method: 'POST',
+    body: JSON.stringify({artifact_id: artifact.id, resume_session_id: conversationId})
+  });
+  const started = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    say(started.error || 'Could not continue this conversation.');
+    if (res.status === 412) openKeyModal();
+    return;
+  }
+  // A conversation that is already running (this page's own, or a second tab's)
+  // is attached to rather than restarted; otherwise the page's live session
+  // gives way to the one being continued.
+  if (started.id !== sessionId) {
+    const previous = sessionId;
+    closeEvents();
+    if (previous) apiFetch('/api/agent/sessions/' + previous, {method: 'DELETE'}).catch(() => {});
+    sessionId = started.id;
+    connectEvents(started.sse_ticket);
+  }
+
+  if (rollbackTo) {
+    const back = await apiFetch(
+      '/api/artifacts/' + encodeURIComponent(artifact.id) + '/versions/' + rollbackTo + '/restore',
+      {method: 'POST'});
+    // 409 is the artifact already being at that version: nothing to put back.
+    if (!back.ok && back.status !== 409) {
+      const why = await back.json().catch(() => ({}));
+      resetSession();   // it was not continued, so do not leave an agent running for it
+      say('Could not roll back: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
+      return;
+    }
+  }
+
+  // What was said, as the fragment drew it, becomes the chat: the conversation
+  // being continued, with the next message after it.
+  const past = document.getElementById('history-messages');
+  messagesEl.innerHTML = past ? past.innerHTML : '';
+  addMsg('sys', (rollbackTo ? 'Rolled back to v' + rollbackTo + '. ' : '') +
+    'Continuing this conversation. The agent will read the artifact again before it changes anything.');
+  closeHistory();
+  if (rollbackTo) {
+    refreshPreview();
+    nudgePreview();
+  }
+}
+
 // A swap replaces the iframe, so the artifact reloads from scratch: any
 // snippet pick in flight is against a document that no longer exists. Drop the
 // mode rather than leave the button lit over a dead selection.
