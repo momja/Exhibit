@@ -429,6 +429,10 @@ func (ro *Router) setupRoutes() {
 		// the artifact, and one of them read back.
 		r.Get("/partials/agent-history", ro.agentHistoryPartial)
 		r.Get("/partials/agent-transcript", ro.agentTranscriptPartial)
+		// An earlier version of an artifact, shown running before a person
+		// decides whether to return to it: swapped into the chat's preview pane
+		// from the History card, and into the edit page's Versions panel.
+		r.Get("/partials/version-viewer", ro.versionViewerPartial)
 		r.Get("/partials/card-widget", ro.cardWidgetPartial)
 		// The edit page's Tags panel, re-rendered after each tag change.
 		r.Get("/partials/tag-panel", ro.tagPanelPartial)
@@ -681,6 +685,10 @@ func (ro *Router) RenderHandler() http.Handler {
 	// why those two go together — and it must never redirect, because the CSP
 	// source permitting it is path-scoped.
 	r.Get("/a/{artifactID}/assets/{assetID}", renderer.ServeAsset)
+	// One earlier version of an artifact, to look at and not to keep: its body
+	// beside the data it left behind, under a token scoped to that version and
+	// with nothing it does persisting. See ServeVersion.
+	r.Get("/a/{artifactID}/versions/{seq}", renderer.ServeVersion)
 	// Serve an artifact's gallery-card widget (av-fafu) — same origin, same
 	// per-artifact CSP, narrower preamble.
 	r.Get("/w/{artifactID}", renderer.ServeWidget)

@@ -5,6 +5,7 @@ package render
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -152,6 +153,16 @@ func (rd *Renderer) ServeArtifact(w http.ResponseWriter, r *http.Request) {
 // token is wrong" and "there is no such artifact" must look identical from
 // outside, or the surface becomes an id oracle for other tenants' libraries.
 func (rd *Renderer) authorize(w http.ResponseWriter, r *http.Request, id string) (*store.Artifact, rendertoken.Claims, bool) {
+	return rd.authorizeScope(w, r, id, id)
+}
+
+// authorizeScope is authorize for a token scoped to something other than the
+// artifact's live document: scope is what the token was minted for and is what
+// the signature is checked against, while id is still the artifact it must
+// resolve to. The live routes pass the id for both; a version's route passes
+// rendertoken.VersionScope, which is what keeps a token for one from opening
+// the other.
+func (rd *Renderer) authorizeScope(w http.ResponseWriter, r *http.Request, id, scope string) (*store.Artifact, rendertoken.Claims, bool) {
 	if rd.cfg.Tokens == nil {
 		// No signer configured: nothing can present a valid token, so nothing
 		// may render. Failing closed is the point — an open render surface is
@@ -159,7 +170,7 @@ func (rd *Renderer) authorize(w http.ResponseWriter, r *http.Request, id string)
 		http.Error(w, "not found", http.StatusNotFound)
 		return nil, rendertoken.Claims{}, false
 	}
-	viewer, err := rd.cfg.Tokens.Verify(r.URL.Query().Get(rendertoken.Param), id)
+	viewer, err := rd.cfg.Tokens.Verify(r.URL.Query().Get(rendertoken.Param), scope)
 	if err != nil {
 		slog.InfoContext(r.Context(), "render token rejected",
 			slog.String("artifact_id", id), slog.String("err", err.Error()))
@@ -312,7 +323,7 @@ func (rd *Renderer) ServeShareWidget(w http.ResponseWriter, r *http.Request) {
 	// the shared artifact. Same disclosure as that document — the owner's live
 	// numbers to anyone holding the link — in a more scrapable shape, which is
 	// inherent to publishing a tile.
-	rd.serveDoc(w, r, a, a.WidgetBlobID, true,
+	rd.serveDoc(w, r, a, document{blobID: a.WidgetBlobID, kind: kindWidget},
 		rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
 		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 }
@@ -356,12 +367,97 @@ func (rd *Renderer) ServeWidget(w http.ResponseWriter, r *http.Request) {
 	}
 	// Token-gated like /a/:id, and framed only by the gallery card that owns
 	// it, so the app origin alone here too.
-	rd.serveDoc(w, r, a, a.WidgetBlobID, true, viewer, nil)
+	rd.serveDoc(w, r, a, document{blobID: a.WidgetBlobID, kind: kindWidget}, viewer, nil)
+}
+
+// ServeVersion serves one earlier version of an artifact, to be looked at and
+// not kept: its body as it was, beside the data that version left behind — the
+// same snapshot a restore would put back, so what a person sees here is what
+// restoring it gives them.
+//
+// It is the render surface's one document that is not the artifact as it is, and
+// it is held to a stricter envelope than the others because of what it can
+// reach. History holds what the live document never shows: code that has since
+// been rewritten and data the owner has since cleared. So:
+//
+//   - The token is scoped to this version (rendertoken.VersionScope). A token for
+//     the live document — which the artifact can read out of its own location.href
+//     — does not open history, and a version's token does not open the live
+//     document. Version tokens are only ever minted for the owner, and a token
+//     naming anybody else's principal is refused here too: the page that offers
+//     this is the owner's, and a recipient's grant does not carry history.
+//   - Nothing it does persists. See kindVersion: the shim does not write
+//     through, and the response is sandboxed by its own headers, so even opened
+//     top-level — where a document has a real origin and real IndexedDB — it
+//     gets neither.
+//   - It is framed by the app origin alone, like every token-gated document.
+//
+// The current version is not served: it has no snapshot, and the artifact's own
+// page already shows it. Every refusal is the same 404 a bad token gets.
+func (rd *Renderer) ServeVersion(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "artifactID")
+	seq, err := strconv.Atoi(chi.URLParam(r, "seq"))
+	if err != nil || seq < 1 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	a, viewer, ok := rd.authorizeScope(w, r, id, rendertoken.VersionScope(id, seq))
+	if !ok {
+		return
+	}
+	// Belt to the minting site's braces, as authorize's owner check is: nothing
+	// mints a version token for anyone but the owner, and this keeps that true
+	// if a future call site gets it wrong.
+	if viewer.Anonymous || viewer.ViewerID != viewer.OwnerID {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	view, err := rd.cfg.Store.GetVersionView(r.Context(), viewer.OwnerID, a.ID, seq)
+	switch {
+	case errors.Is(err, store.ErrNotFound), errors.Is(err, store.ErrAlreadyCurrent):
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	case err != nil:
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	rd.serveDoc(w, r, a, document{blobID: view.BodyBlobID, kind: kindVersion, state: view.State}, viewer, nil)
 }
 
 // serveArtifactDoc serves the artifact's own body — the full, interactive tool.
 func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, viewer rendertoken.Claims, frameAncestors []string) {
-	rd.serveDoc(w, r, a, a.SourceBlobID, false, viewer, frameAncestors)
+	rd.serveDoc(w, r, a, document{blobID: a.SourceBlobID, kind: kindArtifact}, viewer, frameAncestors)
+}
+
+// docKind says which of the render surface's documents serveDoc is composing.
+// The security envelope is the same for all of them — the artifact's CSP, the
+// opaque-origin sandbox, no-store — because it is a property of the artifact and
+// not of the document. The kind only selects what *narrows* from it.
+type docKind int
+
+const (
+	// kindArtifact is the artifact's own body: the full, interactive tool.
+	kindArtifact docKind = iota
+	// kindWidget is its gallery tile (av-fafu): a view of the artifact's state
+	// that cannot edit it, with no capability bridges and no devices.
+	kindWidget
+	// kindVersion is an earlier body shown with the data it left behind: to look
+	// at, and never to keep. It reads state and never writes it — the shim does
+	// not write through, the document is sandboxed by its own CSP, and it is
+	// denied both devices — but it is otherwise the artifact: it runs, and what
+	// it does inside its own frame works. It is the tool as it was, not a
+	// picture of it.
+	kindVersion
+)
+
+// document is one thing for serveDoc to render: a blob of the artifact's, in a
+// kind. state is the data a version view inlines — the snapshot that version
+// left behind — and is unused by the other kinds, which read the viewer's live
+// rows.
+type document struct {
+	blobID string
+	kind   docKind
+	state  map[string]string
 }
 
 // serveDoc reads blobID, wraps it in the artifact's security envelope (CSP from
@@ -386,8 +482,9 @@ func (rd *Renderer) serveArtifactDoc(w http.ResponseWriter, r *http.Request, a *
 // decision is visible at each of them: the two token-gated routes hand over
 // nil, and the share route hands over what shareFrameAncestors resolved. Both
 // serveDoc and buildCSP hold no policy about framing at all.
-func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, blobID string, widget bool, viewer rendertoken.Claims, frameAncestors []string) {
-	rc, err := rd.cfg.Blob.Get(r.Context(), blobID)
+func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, doc document, viewer rendertoken.Claims, frameAncestors []string) {
+	widget, versionView := doc.kind == kindWidget, doc.kind == kindVersion
+	rc, err := rd.cfg.Blob.Get(r.Context(), doc.blobID)
 	if err != nil {
 		http.Error(w, "artifact body not found", http.StatusNotFound)
 		return
@@ -421,13 +518,27 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	}
 
 	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin, assetBase, frameAncestors...)
+	if versionView {
+		// The page that embeds a version frame gives it sandbox="allow-scripts
+		// allow-forms" and nothing reaches the frame's storage from there — but
+		// "nothing persists" is this document's whole promise, so it is also made
+		// by the document. Without this a version URL opened top-level would have
+		// a real origin, and with it real IndexedDB, cookies and Cache API shared
+		// with every other artifact on the render origin: places an old version
+		// could keep data that no restore would ever undo. The directive gives it
+		// an opaque origin however it is loaded, and is the same two tokens the
+		// frame is given.
+		csp += "; " + versionSandbox
+	}
 	w.Header().Set("Content-Security-Policy", csp)
 	// A widget's authority is a strict subset of its artifact's (av-fafu), so a
-	// tile is denied every device and location whatever the artifact holds. It
-	// renders unattended, behind pointer-events:none, in a card the user did
-	// not open.
+	// tile is denied devices and location whatever the artifact holds — it renders
+	// unattended, behind pointer-events:none, in a card the user did not open.
+	// A version view is denied them for the opposite reason: it is opened on
+	// purpose, but it is a look at code the artifact used to have, and an
+	// approval is a decision about the artifact as it is now.
 	devices := devicePolicy{}
-	if !widget {
+	if doc.kind == kindArtifact {
 		devices = devicePolicyOf(a)
 	}
 	permissions := buildPermissionsPolicy(devices)
@@ -463,8 +574,17 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// looking at it and 'own' inlines each viewer's own. It is the same
 	// function the write path resolves through, which is what keeps a shared
 	// artifact from being read off one set of rows and written to another.
+	//
+	// A version view is the exception to all of the above and the simplest case:
+	// its data is not anybody's live rows but the snapshot that version left
+	// behind, which the caller read in the same query as the body. It is the
+	// owner's by construction (ServeVersion refuses any other principal), so
+	// there is no viewer to select between.
 	var state map[string]string
-	if !viewer.Anonymous {
+	switch {
+	case versionView:
+		state = doc.state
+	case !viewer.Anonymous:
 		s, err := rd.cfg.Store.GetState(r.Context(), store.OwnerID(a.OwnerID), a.ID,
 			a.StatePrincipal(store.ViewerID(viewer.ViewerID)))
 		if err != nil {
@@ -489,13 +609,14 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		origins = originPolicy{Allowed: a.NetworkAllowlist}
 	}
 
-	doc := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, manifest)
+	out := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest)
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
 		slog.Int64("owner", viewer.OwnerID),
 		slog.Int64("principal", viewer.ViewerID),
 		slog.Bool("anonymous", viewer.Anonymous),
 		slog.Bool("widget", widget),
+		slog.Bool("version", versionView),
 		slog.Int("body_bytes", len(bodyBytes)),
 		slog.Int("allowlist", len(a.NetworkAllowlist)),
 		slog.Int("blocked", len(origins.Blocked)),
@@ -503,8 +624,15 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		slog.String("csp", csp),
 		slog.String("permissions_policy", permissions),
 	)
-	fmt.Fprint(w, doc)
+	fmt.Fprint(w, out)
 }
+
+// versionSandbox is the CSP sandbox directive a version document carries. The
+// tokens are the ones the app's frame for it carries (allow-scripts, so the tool
+// runs; allow-forms, so a form in it can be filled in and its submission stays
+// governed by form-action), and deliberately not allow-same-origin: that
+// omission is the whole point.
+const versionSandbox = "sandbox allow-scripts allow-forms"
 
 // originPolicy is what the network permission reporter needs to know about an
 // artifact's origin decisions (av-kmwj). Two lists rather than one, because the
@@ -922,12 +1050,37 @@ func (rd *Renderer) ServeAsset(w http.ResponseWriter, r *http.Request) {
 // swallowed .catch and the tool would look like it saved). Not persisting is
 // honest; persisting into a void is not. The API's auth remains the
 // enforcement — this only stops the frame from lying to the visitor about it.
+//
+// VERSION_VIEW (a version view) is the third narrowing and the one where the API's
+// auth is NOT the enforcement, which is why it cannot lean on the argument
+// above. The host that frames a version is the owner's own page, authenticated
+// as the owner, so a write that reached it would be performed; nothing about
+// the document's principal would refuse it. What keeps a version view from
+// persisting anything is therefore three independent things, each of which is
+// enough alone for the writes this shim makes: this flag (the shim does not
+// post them), the host (it treats a version frame as a different element from
+// its artifact frame, and only listens to the latter — which also covers a
+// message the artifact forges itself rather than sending through this shim),
+// and the response's own CSP sandbox (the document has no real origin, however
+// it is loaded). The state it reads is the snapshot the render surface inlined,
+// and a setItem still behaves like Storage within the frame — it just cannot
+// outlive it.
+//
+// It does not drop those writes silently, though. A tool that saves quietly
+// looks exactly like one that has, so the first write the view refuses is
+// reported to the host (warnUnsaved below), which says so in its own chrome. It
+// is the one message from a version frame that the host listens for, and it is
+// not a write: it names no key and carries no value. The host hears it through a
+// listener of its own whose only effect is revealing a fixed sentence, not
+// through the bridges that serve the artifact frame, so a notice forged by hand
+// is no worse than the notice appearing.
 const shimTemplate = `<script>
 (function() {
   var ARTIFACT_ID = %q;
   var API_ORIGIN = %q;
   var WIDGET = %t;
   var ANONYMOUS = %t;
+  var VERSION_VIEW = %t;
 
   // The artifact's origin decisions, inlined rather than fetched for the same
   // reason the state cache is: the reporter below has to know them before the
@@ -959,11 +1112,32 @@ const shimTemplate = `<script>
   function persistState(op, key, value) {
     if (WIDGET) return;                    // a widget renders state, never edits it
     if (ANONYMOUS) return;                 // no principal to persist for; the API would refuse
+    if (VERSION_VIEW) {                    // a version view shows data it must never change,
+      warnUnsaved();                       //   and says so, rather than looking as if it saved
+      return;
+    }
     if (window.parent === window) return; // top-level: no host to persist through
     var msg = { __avState: true, artifactId: ARTIFACT_ID, op: op };
     if (key !== undefined) msg.key = key;
     if (value !== undefined) msg.value = value;
     window.parent.postMessage(msg, API_ORIGIN);
+  }
+
+  // The notice a version view sends in place of a write: this frame was asked to
+  // persist something and did not. It is exactly the condition under which the
+  // live shim would have posted __avState, so "a change that would have been
+  // saved" has one definition rather than two that could drift.
+  //
+  // The message is empty on purpose — no op, no key, no value. The host has one
+  // use for it, revealing a sentence of its own, so it needs to know that a write
+  // was refused and nothing about what it was. Sent once per load: a tool that
+  // autosaves would otherwise post it on every tick, and the host's notice stays
+  // up until the view closes. Top-level there is no host to tell.
+  var warnedUnsaved = false;
+  function warnUnsaved() {
+    if (warnedUnsaved || window.parent === window) return;
+    warnedUnsaved = true;
+    window.parent.postMessage({ __avVersionUnsaved: true }, API_ORIGIN);
   }
 
   // makeStorage builds one Storage-shaped object over its OWN cache. Each Web
@@ -1089,7 +1263,12 @@ const shimTemplate = `<script>
   // none, so there is nothing to keep in step; top-level there is no host.
   // Widgets do get this — receiving an update is a read, and reading state to
   // show one fact from it is the whole of what a widget does.
-  if (window.parent !== window && !ANONYMOUS) {
+  //
+  // A version view does not, and for the opposite reason: its cache is a
+  // snapshot of how the data *was*, and a resync is the host posting in how it
+  // is *now*. Applying one would overwrite the very thing the view exists to
+  // show, so it is refused here whatever a host might send.
+  if (window.parent !== window && !ANONYMOUS && !VERSION_VIEW) {
     // Whether anything in this frame is listening for 'storage'. The shim can
     // guarantee getItem returns fresh data; it cannot re-render an artifact
     // that read storage once at startup and never looked again. So the host is
@@ -1712,6 +1891,20 @@ const bridgeScript = `
       }
       var id = ++geoSeq;
       geoPending[id] = { error: error };
+      if (VERSION_VIEW) {
+        // The version viewer takes no capability requests. Deny locally rather
+        // than wait forever for a host reply, and keep the callback asynchronous
+        // so clearWatch can cancel it before it runs, just as with a live watch.
+        setTimeout(function() {
+          var p = geoPending[id];
+          if (!p) return;
+          delete geoPending[id];
+          if (typeof p.error === 'function') {
+            try { p.error(geoError('Geolocation is unavailable in a version preview')); } catch (err) {}
+          }
+        }, 0);
+        return id;
+      }
       window.parent.postMessage({ __avGeolocation: true, artifactId: ARTIFACT_ID, id: id }, API_ORIGIN);
       return id;
     };
@@ -2144,12 +2337,18 @@ const widgetHealthScript = `<script>
 // pass a nil state with it — there is no principal to have any — and the shim
 // stops writing through, so the frame's storage lives and dies with the frame.
 //
+// versionView marks a version view: the state passed with it is the snapshot that
+// version left behind, and the shim does not write through (see shimTemplate).
+// Unlike the two above it narrows the shim and nothing else — the bridges, the
+// picker and the rest are the full preamble's, because a version is shown
+// running, and what a person does in it works within its own frame.
+//
 // origins is the artifact's origin decisions (av-kmwj), inlined so the network
 // permission reporter can tell an undecided origin from one it must not offer
 // to fix. It sits beside state because it is the same kind of thing: per-render
 // data the shim must hold before the artifact's first line runs, not a mode
 // flag.
-func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous bool, assetManifest map[string]string) string {
+func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string) string {
 	if state == nil {
 		state = map[string]string{}
 	}
@@ -2183,7 +2382,7 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 	if widget {
 		bridges = ""
 	}
-	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, widget, anonymous, allowedJSON, blockedJSON, stateJSON, bridges)
+	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, widget, anonymous, versionView, allowedJSON, blockedJSON, stateJSON, bridges)
 	if widget {
 		// No snippet picker: it exists so the user can point at an element in
 		// the *artifact* preview and hand it to the agent. A widget frame is

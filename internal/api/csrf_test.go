@@ -114,6 +114,13 @@ var appOriginGETRoutes = []getRoute{
 	// makes goes to /api/shares or the artifact PATCH, under an unsafe method
 	// Lax withholds the cookie from.
 	{route: "/partials/share-panel"},
+	// An earlier version of an artifact, shown running before a person decides
+	// whether to return to it (av-vw7r). A read that mints a short-lived token
+	// and changes nothing: the frame it carries is a render document that
+	// persists nothing, and the restore it sits beside is a POST to
+	// /api/artifacts/:id/versions/:seq/restore — an unsafe method Lax withholds
+	// the cookie from.
+	{route: "/partials/version-viewer"},
 	// Static assets, the manifest, the share redirect, and the instance's
 	// public identity (av-4ac9) — public reads, credential or not.
 	{route: "/assets/*"},

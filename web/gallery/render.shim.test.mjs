@@ -36,7 +36,7 @@ const API_ORIGIN = "https://app.test";
 // the surrounding <script> tags. Go raw strings carry no escapes, so the first
 // backtick after the opener closes the literal; the format verbs are then
 // filled in the order render.go's Sprintf fills them.
-function shimSource({ cache = {}, anonymous = false, widget = false } = {}) {
+function shimSource({ cache = {}, anonymous = false, widget = false, versionView = false } = {}) {
   const go = readFileSync(RENDER_GO, "utf8");
   const opener = "const shimTemplate = `";
   const start = go.indexOf(opener);
@@ -50,6 +50,7 @@ function shimSource({ cache = {}, anonymous = false, widget = false } = {}) {
     JSON.stringify(API_ORIGIN),    // %q API_ORIGIN
     String(widget),                // %t WIDGET
     String(anonymous),             // %t ANONYMOUS
+    String(versionView),           // %t VERSION_VIEW
     "[]",                          // %s ALLOWED_ORIGINS
     "[]",                          // %s BLOCKED_ORIGINS
     JSON.stringify(cache),         // %s the inlined state
@@ -67,6 +68,10 @@ function shimSource({ cache = {}, anonymous = false, widget = false } = {}) {
 // shim installs its host-facing halves under.
 function loadShim(opts = {}) {
   const posted = [];
+  // Where each posted message was addressed, in step with `posted`. The shim pins
+  // every message to the app origin, and a message that reached the wrong window
+  // is the failure a test of its shape alone cannot see.
+  const targets = [];
   const listeners = {};
   const dispatched = [];
 
@@ -92,7 +97,7 @@ function loadShim(opts = {}) {
     }
   }
 
-  const parent = { postMessage: (msg) => posted.push(msg) };
+  const parent = { postMessage: (msg, target) => { posted.push(msg); targets.push(target); } };
   const window = {
     parent,
     onstorage: null,
@@ -106,6 +111,14 @@ function loadShim(opts = {}) {
       return true;
     }
   };
+
+  // A top-level document is its own parent: there is no host frame to post to.
+  // Its postMessage is recorded too, so "posted nothing" is a claim about the
+  // window the shim would have addressed rather than about a stub nobody calls.
+  if (opts.topLevel) {
+    window.parent = window;
+    window.postMessage = (msg, target) => { posted.push(msg); targets.push(target); };
+  }
 
   const context = vm.createContext({
     window, Object, JSON, String, Promise, console,
@@ -127,7 +140,7 @@ function loadShim(opts = {}) {
   // comparison about the message rather than about which realm made it.
   const flat = (msg) => ({ ...msg });
 
-  return { window, posted, dispatched, fromHost, flat, storage: window.localStorage };
+  return { window, posted, targets, dispatched, fromHost, flat, storage: window.localStorage };
 }
 
 const sync = (state) => ({ __avStateSync: true, artifactId: ARTIFACT_ID, state });
@@ -272,4 +285,121 @@ test("a resync replaces a value; it does not merge one", async () => {
   assert.equal(storage.getItem("list"), '["milk","eggs"]',
     "last write wins, whole value at a time — 'bread' is gone, and no channel " +
     "at this layer could have saved it");
+});
+
+// --- a version view -----------------------------------------------------------
+// A version is shown running, beside the data it left behind, and nothing it does
+// may outlive the frame. The shim is one of three independent reasons that holds
+// (the host and the response's own sandbox are the others), and the one that
+// can be run here.
+
+test("a version view reads the snapshot and its writes stop at the cache", () => {
+  const { storage, posted } = loadShim({ cache: { score: "10" }, versionView: true });
+
+  assert.equal(storage.getItem("score"), "10", "it shows the data the version left");
+
+  // The artifact works inside its own frame — a counter still counts — ...
+  storage.setItem("score", "11");
+  storage.setItem("added", "x");
+  assert.equal(storage.getItem("score"), "11");
+  assert.equal(storage.getItem("added"), "x");
+  storage.removeItem("added");
+  assert.equal(storage.getItem("added"), null);
+  storage.clear();
+  assert.equal(storage.length, 0);
+
+  // ... and tells nobody.
+  assert.deepEqual(posted.filter((m) => m.__avState), [],
+    "no write may reach the host, whichever op it was");
+});
+
+// The snapshot is how the data was; a resync is the host posting in how it is
+// now. Applying one would overwrite the thing the view exists to show.
+test("a version view cannot be resynced over its snapshot", async () => {
+  const { storage, posted, dispatched, fromHost } = loadShim({ cache: { score: "10" }, versionView: true });
+
+  await fromHost(sync({ score: "99", extra: "x" }));
+
+  assert.equal(storage.getItem("score"), "10", "the snapshot stands");
+  assert.equal(storage.getItem("extra"), null);
+  assert.deepEqual(dispatched, [], "and no storage event reports a change that did not happen");
+  assert.deepEqual(posted.filter((m) => m.__avStateSynced), [], "nor is a sync acknowledged");
+});
+
+// A tool that saves quietly looks exactly like one that has, so the view does not
+// drop a write in silence: the first one it refuses is reported to the host, which
+// says so in its own chrome. The report is a notice, not a write — it must carry
+// nothing about what was written, because the host has one use for it (revealing a
+// fixed sentence) and the artifact's code is what chooses the key and the value.
+test("a version view tells the host once that a write was refused, and nothing about it", () => {
+  const { storage, posted, targets, flat } = loadShim({ cache: { score: "10" }, versionView: true });
+
+  storage.setItem("a-distinctive-key", "a-distinctive-value");
+  storage.setItem("score", "12");
+  storage.removeItem("score");
+  storage.clear();
+
+  assert.deepEqual(posted.map(flat), [{ __avVersionUnsaved: true }],
+    "one notice however many writes — a tool that autosaves must not post one per " +
+    "tick — and not a field of it names the key, the value or the op");
+  assert.deepEqual(targets, [API_ORIGIN], "pinned to the app origin like every message this frame sends");
+});
+
+// Each way of writing is a way of persisting, so each is a way of being told.
+// removeItem and clear are the ones a refactor of "what counts as a write" drops.
+for (const [name, write] of [
+  ["setItem", (s) => s.setItem("k", "v")],
+  ["removeItem", (s) => s.removeItem("score")],
+  ["clear", (s) => s.clear()]
+]) {
+  test(`a refused ${name} is reported`, () => {
+    const { storage, posted, flat } = loadShim({ cache: { score: "10" }, versionView: true });
+    write(storage);
+    assert.deepEqual(posted.map(flat), [{ __avVersionUnsaved: true }]);
+  });
+}
+
+test("a version view that is only read says nothing", () => {
+  const { storage, posted } = loadShim({ cache: { score: "10" }, versionView: true });
+
+  storage.getItem("score");
+  storage.key(0);
+  void storage.length;
+
+  assert.deepEqual(posted, [], "looking at a version is not an attempt to change it");
+});
+
+// Opened top-level — a version URL on its own — there is no host frame to tell,
+// and the shim must not post into the void or throw at the artifact.
+test("a version view with no host frame has nobody to tell", () => {
+  const { storage, posted } = loadShim({ cache: { score: "10" }, versionView: true, topLevel: true });
+
+  storage.setItem("score", "11");
+
+  assert.equal(storage.getItem("score"), "11", "it still behaves like Storage in its own frame");
+  assert.deepEqual(posted, []);
+});
+
+// The notice is the version view's alone. A widget and an anonymous render also
+// refuse writes, but for reasons the person looking at them has no decision to
+// make about, and the ordinary render writes through.
+test("only a version view sends the notice", () => {
+  for (const opts of [{ widget: true }, { anonymous: true }, {}]) {
+    const { storage, posted } = loadShim({ cache: { score: "10" }, ...opts });
+    storage.setItem("score", "11");
+    assert.deepEqual(posted.filter((m) => m.__avVersionUnsaved), [], JSON.stringify(opts));
+  }
+});
+
+// The control for the two above: the ordinary render, same harness, same
+// messages — so they are about VERSION_VIEW and not about this file's setup.
+test("an ordinary render still writes through and still resyncs", async () => {
+  const { storage, posted, fromHost, flat } = loadShim({ cache: { score: "10" } });
+
+  storage.setItem("score", "11");
+  assert.deepEqual(posted.filter((m) => m.__avState).map(flat),
+    [{ __avState: true, artifactId: ARTIFACT_ID, op: "set", key: "score", value: "11" }]);
+
+  await fromHost(sync({ score: "99" }));
+  assert.equal(storage.getItem("score"), "99");
 });

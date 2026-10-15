@@ -82,6 +82,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/partials/tag-panel", path: "/partials/tag-panel?artifact={id}"},
 	{route: "/partials/capability-cluster", path: "/partials/capability-cluster?artifact={id}"},
 	{route: "/partials/share-panel", path: "/partials/share-panel?artifact={id}"},
+	{route: "/partials/version-viewer", path: "/partials/version-viewer?artifact={id}&seq=1"},
 
 	// Static and public surfaces. They embed nothing per-request, which is
 	// exactly the claim being checked.
@@ -203,6 +204,18 @@ func newPageCredentialRouter(t *testing.T, idp auth.IdentityProvider, opts ...fu
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
 	require.NotEmpty(t, created.Artifact.ID)
+
+	// An edit on top of it, so the version viewer's row (av-vw7r) has an earlier
+	// version to render a frame for rather than the current one's refusal — a
+	// walk that only ever saw the refusal would pass without having looked at the
+	// page it is there to check.
+	edit, _ := json.Marshal(map[string]any{"body": "<html><body><h1>edited</h1></body></html>"})
+	req = httptest.NewRequest("PATCH", "/api/artifacts/"+created.Artifact.ID, bytes.NewReader(edit))
+	req.Header.Set("Authorization", "Bearer "+pageCredentialToken)
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	ro.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	return ro, created.Artifact.ID
 }
 

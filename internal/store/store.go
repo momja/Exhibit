@@ -429,6 +429,9 @@ type Store interface {
 	// 0 when it has none to name (not the owner's, or not there).
 	HeadVersionSeq(ctx context.Context, ownerID int64, artifactID string) (int, error)
 	GetVersion(ctx context.Context, ownerID int64, artifactID string, seq int) (*Version, error)
+	// GetVersionView is what looking at an earlier version shows — its body and
+	// the data it left behind — and writes nothing. The head is ErrAlreadyCurrent.
+	GetVersionView(ctx context.Context, ownerID int64, artifactID string, seq int) (*VersionView, error)
 	CommitVersion(ctx context.Context, ownerID int64, artifactID string, c VersionChange) (*Version, error)
 	RestoreVersion(ctx context.Context, ownerID int64, artifactID string, seq int, p Provenance, sourceText string) (*Version, error)
 

@@ -111,6 +111,22 @@ func (u renderURLs) artifact(id string) string {
 	return u.origin + "/a/" + id + "?" + rendertoken.Param + "=" + u.mint(id)
 }
 
+// version returns the tokened URL of one earlier version of an artifact, for an
+// iframe src. The token is scoped to that version (rendertoken.VersionScope), so
+// it opens that document and no other: not the artifact's live document, whose
+// token the artifact itself can read out of its location.href, and not another
+// version.
+//
+// It is minted as the owner and never as a viewer. History is the owner's — what
+// the code used to be, and the data it used to hold, including data since
+// cleared — and a grant carries none of it, so there is no recipient or
+// anonymous spelling of this to get wrong; the render surface refuses a version
+// token that names anybody else all the same.
+func (u renderURLs) version(id string, seq int) string {
+	scope := rendertoken.VersionScope(id, seq)
+	return u.origin + "/a/" + id + "/versions/" + strconv.Itoa(seq) + "?" + rendertoken.Param + "=" + u.signer.Mint(scope, u.ownerID)
+}
+
 // widget returns the tokened URL of an artifact's widget document.
 func (u renderURLs) widget(id string) string {
 	return u.origin + "/w/" + id + "?" + rendertoken.Param + "=" + u.mint(id)

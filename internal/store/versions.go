@@ -150,6 +150,45 @@ func (s *SQLiteStore) GetVersion(ctx context.Context, ownerID int64, artifactID 
 	return v, err
 }
 
+// VersionView is an earlier version as it is looked at without being restored:
+// the code as it was, and the data that version left behind. It is exactly the
+// pair RestoreVersion would put back, read from the same snapshot, so what a
+// person is shown is what a restore gives them.
+type VersionView struct {
+	BodyBlobID string
+	State      map[string]string
+}
+
+// GetVersionView returns what looking at an earlier version shows, and changes
+// nothing.
+//
+// The head is ErrAlreadyCurrent, as it is for a restore: its data is the live
+// rows rather than a snapshot, and the artifact's own page already shows it, so
+// there is no earlier state to look at. Another owner's artifact and a version
+// that was never made are both ErrNotFound.
+func (s *SQLiteStore) GetVersionView(ctx context.Context, ownerID int64, artifactID string, seq int) (*VersionView, error) {
+	var body string
+	var snapshot sql.NullString
+	err := s.db.QueryRowContext(ctx,
+		`SELECT body_blob_id, state_json FROM artifact_versions
+		  WHERE artifact_id = ? AND seq = ? AND `+ownedArtifact,
+		artifactID, seq, ownerID).Scan(&body, &snapshot)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !snapshot.Valid {
+		return nil, ErrAlreadyCurrent
+	}
+	var state map[string]string
+	if err := json.Unmarshal([]byte(snapshot.String), &state); err != nil {
+		return nil, fmt.Errorf("decode state snapshot: %w", err)
+	}
+	return &VersionView{BodyBlobID: body, State: state}, nil
+}
+
 // CommitVersion makes a change to an artifact's body or widget the new head.
 // It returns the new version.
 func (s *SQLiteStore) CommitVersion(ctx context.Context, ownerID int64, artifactID string, c VersionChange) (*Version, error) {
