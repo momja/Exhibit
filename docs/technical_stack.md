@@ -441,6 +441,25 @@ keyboard and a landscape tablet is wide and still touched. The standing rule whe
 adding a control: size it from the token, never a literal `px` — a hardcoded size
 opts it out of the bump silently, and the symptom only shows up on a phone.
 
+**Dark mode follows the system (av-xie4).** There is no in-app toggle: every
+app-origin page reads `prefers-color-scheme`. `tokens.css` declares
+`color-scheme: light dark` on `:root`, so native controls, scrollbars and form
+fields follow, and it holds the whole dark palette in one
+`@media (prefers-color-scheme: dark)` block that redefines the same tokens. A
+page sheet takes every color from a token and never writes a literal, which is
+what makes a new component dark-ready for free; a color the palette lacks is a
+new token with a value in both places. In the dark the accent is a light blue
+with dark text on its fills (`--color-on-accent`), because no single blue
+reads both as link text on a dark panel and under white button text. The
+CodeMirror bundle swaps One Dark in and out through a `Compartment` on the
+media query's `change` event, so the editor follows a live setting change
+without losing its buffer. The render origin is untouched: an artifact owns
+its colors. A frame whose color-scheme differs from the page's is drawn on an
+opaque canvas, so an artifact or widget that declares no scheme keeps a light
+background on a dark page. The widget base stylesheet therefore leaves
+`color-scheme` to the widget, and the agent's prompt asks artifacts and
+widgets to declare `light dark` themselves (`docs/widgets.md`).
+
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent
 icon vocabulary without re-deciding. Load it **self-hosted on the app origin, never from a
