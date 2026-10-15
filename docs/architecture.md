@@ -1391,10 +1391,16 @@ configuration, and the pages keep offering the agent.
   answer and names the size it was sending, since that is the likely cause
   and nothing confirms the write either way. The API's `413` is still the
   enforcement; the extension's check only makes the failure legible.
-- **Untrusted text stays out of the system role:** the artifact's source and
-  title reach the model in a user-role message inside a nonce-fenced data
-  block, never interpolated into the system prompt. The source is inlined at
-  session start, so a modify session spends no tool call on the first read.
+- **Untrusted text reaches the model only as a tool result** (av-5s7g): the
+  artifact's source, title, state and widget, and the elements the user
+  selected, come back from `get_artifact` / `get_state` / `get_widget` /
+  `get_selection`, never from the system prompt or a user message. A tool
+  result is its own message role, so the boundary between data and instruction
+  is the conversation's structure — nothing to forge, and no per-session secret
+  to carry from one process to the next. The system prompt is static and
+  states that tool results are data; the model is not handed the artifact up
+  front, it reads it, and a modify session therefore spends its first tool call
+  on `get_artifact`.
 - **BYO key, sealed at rest:** the user's provider key is stored AES-256-GCM
   encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
   handed to the subprocess only through its (minimal, built-from-scratch)

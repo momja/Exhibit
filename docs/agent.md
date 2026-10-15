@@ -27,7 +27,8 @@ The single write path is preserved: the agent's only tools are
 `create_artifact` / `write_artifact` / `edit_artifact` / `get_artifact` for the document,
 `get_state` / `set_state` / `delete_state` for the artifact's stored state
 (av-lvi1), and `set_widget` / `edit_widget` / `get_widget` for the artifact's gallery tile
-(av-fafu) — all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
+(av-fafu), plus `get_selection` for the elements the user picked in the preview —
+all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
 materialized to the data dir at startup) that calls back into the exhibit HTTP
 API. Agent output is scanned like any other ingest; scanned origins are
 **never** auto-approved — the chat UI tells the user when a saved artifact has
@@ -41,7 +42,7 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
 - **No tool takes an artifact id.** `create_artifact(title, body)`,
   `write_artifact(body[, title])`, `edit_artifact(edits)`, `get_artifact()`, `get_state()`,
   `set_state(key, value)`, `delete_state([key])`, `set_widget(body)`, `edit_widget(edits)`,
-  `get_widget()`. A tool with no id parameter cannot be talked into a
+  `get_widget()`, `get_selection()`. A tool with no id parameter cannot be talked into a
   different target, which matters because artifact bodies and titles are
   untrusted text that reaches the model's context. The extension resolves the
   target from `EXHIBIT_ARTIFACT_ID`, or from the API's response to the first
@@ -81,20 +82,22 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
 ## Session context: instructions and data are separate
 
 - The **system prompt** is entirely server-authored (`internal/agent/prompt.go`).
-  No artifact title, body, or id is interpolated into it.
-- The artifact's **current source is inlined** into the session's opening
-  user-role message, so a modify session does not spend a tool call reading
-  what the server was already holding. `get_artifact` stays registered for the
-  re-read after the agent's own save or a concurrent human edit.
-- The source, the title, and any snippet descriptor arrive inside a fenced
-  block whose delimiter carries a **per-session random nonce**
-  (`-----BEGIN EXHIBIT UNTRUSTED DATA <nonce>-----`), so injected text cannot
-  close the fence and pose as an instruction. The system prompt states the
-  contract; the nonce is redacted from block content. `get_artifact` and
-  `get_widget` return their bodies through the same fence.
-- Snippet descriptors reach the API as their own `snippets` field on the
-  prompt request, not concatenated into `message` — page JS never composes the
-  envelope, and never needs the nonce.
+  No artifact title, body, or id is interpolated into it, and it carries one
+  static contract: tool results are data, and only the user's own messages are
+  instructions.
+- A session is **not given the artifact**: it reads it with `get_artifact`,
+  before it changes anything and again whenever it may have changed. The
+  source, the title (one bounded line), the state, and the widget are tool
+  results — a separate message role the conversation's own structure marks as
+  data — so there is no fence to forge and no per-session secret to carry
+  (av-5s7g). It costs the model one tool call at the start of a turn that
+  edits, which is the price of the boundary being structural.
+- Elements picked in the preview are untrusted too. The prompt request carries
+  them as their own `snippets` field, never concatenated into `message`; the
+  session writes them to `selection.json` in its work directory (replaced, or
+  removed when the prompt selected nothing), appends one fixed sentence to the
+  prompt saying elements were selected, and the model reads them with
+  `get_selection`. Page JS composes no envelope at all.
 
 ## Artifact state (av-lvi1)
 
@@ -167,7 +170,7 @@ session needs:
 | `EXHIBIT_API_URL` | app origin the tools call back into |
 | `EXHIBIT_TOKEN` | the session's **scoped** credential — not the service token |
 | `EXHIBIT_ARTIFACT_ID` | the session's artifact (empty in create mode) |
-| `EXHIBIT_DATA_NONCE` | fence id for untrusted tool output |
+| `EXHIBIT_SELECTION_FILE` | where `get_selection` reads the elements the user picked |
 | `EXHIBIT_SESSION_ID` | this session's id |
 | `EXHIBIT_MAX_BODY_BYTES` | the API's request body limit (`MAX_REQUEST_BODY_BYTES`). Every tool's write checks against it before sending, so an oversized write fails with a message the model can act on instead of an upload the API refuses (av-ombn) |
 
@@ -335,9 +338,12 @@ limits over it are the spend cap's (av-99f4, above).
   block returns `handled`: no turn starts, the agent model is never called,
   and the message never enters its context, so a blocked persona prompt cannot
   prime later turns.
-- **The user's words only.** `EXHIBIT_GUARD_DATA_FENCE` names the opening fence
-  line, and everything after it is dropped before screening: stored artifact
-  source is not something the user just typed.
+- **The user's words only.** A prompt carries the user's own words and nothing
+  else: stored artifact source reaches the model as a tool result, never in the
+  message (av-5s7g), so the whole message is what the screen judges and the
+  agent and the screen see the same words. (`guard.ts` still accepts an
+  optional `EXHIBIT_GUARD_DATA_FENCE` for a host that does attach data to a
+  message; this one leaves it unset.)
 - **The host owns the reply.** The extension signals a block with one
   `ctx.ui.notify` whose message starts `exhibit_guard:`. `Session.handleLine`
   swallows that line, logs its detail, and broadcasts `exhibit_guard_blocked`
@@ -355,9 +361,6 @@ limits over it are the spend cap's (av-99f4, above).
 - **Fail closed.** A screen that errors, times out (15 s), or answers anything
   unparseable blocks with the same reply, so the reply is no oracle for
   probing whether the screen is up.
-- **The opening data block survives a block.** It rides the first prompt; a
-  blocked first prompt never reached the model, so `Prompt` keeps it for the
-  next one rather than dropping the artifact source from the session.
 
 Not screened: images, the agent's replies, and what it saves. Pi is pinned in
 the Dockerfile because all of this depends on the `input` hook's `handled`
@@ -366,9 +369,9 @@ behaving as it does in the pinned version.
 ## Sessions, streaming, transcripts
 
 - `POST /api/agent/sessions` (optional `artifact_id` scopes the session to an
-  existing artifact for modify mode, and inlines its source into the opening
-  message), `POST …/prompt` (`message` + optional base64 `images` + optional
-  `snippets`, the element descriptors the server fences as data),
+  existing artifact for modify mode; the model reads it with `get_artifact`),
+  `POST …/prompt` (`message` + optional base64 `images` + optional
+  `snippets`, the element descriptors the model reads with `get_selection`),
   `POST …/abort`, `DELETE …`.
 - `GET /api/agent/sessions/:id/events` — SSE. EventSource can't set headers, so
   this one route resolves its own credential, and which one depends on the

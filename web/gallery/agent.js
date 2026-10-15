@@ -490,8 +490,8 @@ async function send() {
   const images = pendingSnippets.filter(s => s.image).map(s => ({data: s.image.data, mime_type: s.image.mimeType}));
   // A snippet descriptor carries the picked element's outerHTML — artifact
   // content, i.e. untrusted. It travels as its own field so the server can
-  // fence it as data (av-e0yj); splicing it into `message` here would hand it
-  // to the model as part of the user's instruction.
+  // hand it to the model as a tool result (av-5s7g); splicing it into `message`
+  // here would hand it to the model as part of the user's instruction.
   const snippets = pendingSnippets.map(s => describeSnippet(s.descriptor));
 
   const bubble = addMsg('user', text);
