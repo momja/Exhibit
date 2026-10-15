@@ -10,6 +10,8 @@ This file provides instructions and context for AI coding agents working on this
 
 ## UI Conventions
 - **Icons:** all new UI uses **Phosphor Icons**, self-hosted / embedded on the app origin (never a third-party CDN). See `docs/technical_stack.md` §1 (stack table) and §9 (Gallery UI) for the load method and markup pattern.
+- **Page scripts:** new scripts in `web/gallery/`, and any script you substantially rewrite, are native ES modules loaded with `<script type="module">`. They import what they use by relative path. There is no bundler, and the build still copies files verbatim. See `docs/technical_stack.md` §9.
+- **Updating a page after load:** when a change alters what part of a page shows, the server re-renders that region from its template partial and htmx swaps it in. Page JS dispatches the event that says something changed and does not build the markup. See `docs/technical_stack.md` §9.
 
 ## Version Control
 - Always keep the main worktree clean and on `main`. The only exception is creation/modification of tickets. Those may be committed directly to main.

@@ -1119,11 +1119,13 @@ first open (state is cold data the rest of the page never needs); edits apply
 through the same authenticated state routes (§3.1) on Save, so Cancel simply
 rebuilds the working copy from what the server last confirmed.
 
-Where state changes *after* load and a full reload would cost too much — it
-would drop a live iframe, an editor buffer, or an SSE stream — the page swaps
-in a **server-rendered fragment** instead, driven by **htmx** (vendored from
-`web/htmx/`, served from the app origin at `/assets/htmx/htmx.min.js`, never a
-CDN). Fragment routes live under `/partials/*` beside the page routes rather
+When state changes *after* load, the page swaps in a **server-rendered
+fragment**, driven by **htmx** (vendored from `web/htmx/`, served from the app
+origin at `/assets/htmx/htmx.min.js`, never a CDN). That is the default for any
+region a change touches. A full reload would drop a live iframe, an editor
+buffer, or an SSE stream, and markup rebuilt in page JS would be a second
+definition of the component; `technical_stack.md` §9 has the rules.
+Fragment routes live under `/partials/*` beside the page routes rather
 than in the API group: they render the same named template partial the full
 page render used — the point is that each component has exactly one definition
 — and carry no authority their page doesn't already have. The first consumer
