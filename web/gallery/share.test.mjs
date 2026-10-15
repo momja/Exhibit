@@ -33,12 +33,13 @@ function loadShare({ link = "", embed = "", responses = [], confirmed = true, gr
   const api = recordingApi(responses);
   const events = [];
   const copied = [];
+  const prompts = [];
   const page = loadPageScript([SHARE_JS], {
     ID,
     TOKEN: "",
     READ_ONLY: false,
     apiFetch: api.apiFetch,
-    confirm: () => confirmed,
+    confirm: (message) => { prompts.push(message); return confirmed; },
     CustomEvent,
     navigator: { clipboard: { writeText: (t) => { copied.push(t); return Promise.resolve(); } } }
   }, {
@@ -75,7 +76,7 @@ function loadShare({ link = "", embed = "", responses = [], confirmed = true, gr
     });
   };
 
-  return { ...page, api, events, copied, click, change, clickRevoke };
+  return { ...page, api, events, copied, prompts, click, change, clickRevoke };
 }
 
 const paths = (api) => api.calls.map((c) => c.method + " " + c.path);
@@ -227,6 +228,8 @@ test("switching to 'own' with grantees asks first, naming how many people it aff
 
   await page.change("share-state-mode", { value: "own" });
 
+  assert.equal(page.prompts.length, 1, "one confirmation before the write");
+  assert.match(page.prompts[0], /3 people/, "the owner is told how many people the switch affects");
   assert.deepEqual(paths(page.api), ["PATCH /api/artifacts/" + ID]);
   assert.deepEqual(JSON.parse(page.api.calls[0].body), { share_state_mode: "own" });
 });
@@ -249,6 +252,7 @@ test("switching to 'own' with nobody else on the artifact asks nothing", async (
 
   await page.change("share-state-mode", { value: "own" });
 
+  assert.deepEqual(page.prompts, [], "no grantee, no question");
   assert.deepEqual(paths(page.api), ["PATCH /api/artifacts/" + ID],
     "there is nobody whose data the switch could orphan");
 });
@@ -258,6 +262,7 @@ test("switching to 'shared' never asks, whatever the confirm would answer", asyn
 
   await page.change("share-state-mode", { value: "shared" });
 
+  assert.deepEqual(page.prompts, []);
   assert.deepEqual(paths(page.api), ["PATCH /api/artifacts/" + ID],
     "only 'own' can orphan anyone; 'shared' just adds everyone to the owner's board");
 });
