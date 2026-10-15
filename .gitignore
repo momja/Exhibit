@@ -14,10 +14,8 @@ $RECYCLE.BIN/
 .fseventsd/
 .apdisk
 
-# Beads / Dolt files (added by bd init)
-.dolt/
+# Local dev data and the built server binary.
 *.db
-.beads-credential-key
 data/
 server
 
