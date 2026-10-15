@@ -114,6 +114,10 @@ func ownerCases() []ownerCase {
 		{"SetWidgetBlobID", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			return false, s.SetWidgetBlobID(ctx, o, id, "widget-blob-"+id)
 		}},
+		{"ReplaceSourceBlob", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, err := s.ReplaceSourceBlob(ctx, o, id, "refetched-blob-"+id, "refetched text")
+			return false, err
+		}},
 		{"DeleteWidget", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			_, err := s.DeleteWidget(ctx, o, id)
 			return false, err

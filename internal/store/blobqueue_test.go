@@ -244,6 +244,45 @@ func TestDetachingAWidgetSharedWithABodyQueuesNothing(t *testing.T) {
 	assert.Equal(t, []string{"dual-use"}, queued)
 }
 
+// A refetch repoints a body rather than overwriting it (av-reo3), so the
+// superseded id goes through the same refcounted enqueue: condemned when the
+// repoint takes its last reference, kept while another artifact still names it.
+func TestReplacingABodyQueuesTheOldBlobOnlyWhenUnreferenced(t *testing.T) {
+	fx := newQueueFixture(t)
+	ctx := context.Background()
+
+	fx.putBody(t, "shared-body", "<html>the same tool twice</html>")
+	for _, id := range []string{"a1", "a2"} {
+		require.NoError(t, fx.store.PutArtifact(ctx, &Artifact{
+			ID: id, OwnerID: 1, Title: id, SourceBlobID: "shared-body", Tier: Tier1,
+		}))
+	}
+
+	fx.putBody(t, "refetched-1", "<html>new</html>")
+	queued, err := fx.store.ReplaceSourceBlob(ctx, 1, "a1", "refetched-1", "new")
+	require.NoError(t, err)
+	assert.Empty(t, queued, "a2 still names the old bytes")
+	a1, err := fx.store.GetArtifact(ctx, 1, "a1")
+	require.NoError(t, err)
+	assert.Equal(t, "refetched-1", a1.SourceBlobID)
+
+	fx.putBody(t, "refetched-2", "<html>newer</html>")
+	queued, err = fx.store.ReplaceSourceBlob(ctx, 1, "a2", "refetched-2", "newer")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"shared-body"}, queued, "the last reference is gone")
+
+	// The intent is durable before the unlink, so a crash here is finished
+	// by the next startup.
+	fx.restart(t)
+	require.FileExists(t, fx.path("shared-body"))
+	n, err := fx.store.DrainAllBlobDeletions(ctx, fx.blobs)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+	assert.NoFileExists(t, fx.path("shared-body"))
+	require.FileExists(t, fx.path("refetched-1"))
+	require.FileExists(t, fx.path("refetched-2"))
+}
+
 // Erasing an account is the third delete path, and the one that condemns a
 // whole library at once. A crash between its commit and its unlinks is
 // finished by the same startup drain.

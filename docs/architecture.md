@@ -115,7 +115,24 @@ The only way data changes. Route groups:
   Tag and collection membership use the dedicated `POST/DELETE
   /api/artifacts/:id/tags/:tagID` and `.../collections/:colID` routes.
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
-  `source_url` and replaces the stored body. A snapshot, not a versioned update.
+  `source_url` and replaces the stored body. A snapshot, not a versioned update
+  (av-reo3, av-b17a). A response the protocol says is not the page (a non-2xx
+  status, an empty body, a content type other than HTML) is refused with the
+  artifact left byte-identical. Nothing past that is judged: a source serving a
+  different page is serving a different page, and telling "replaced" from
+  "redesigned" would mean reading intent into content. The write is a new blob
+  and a repoint, never an overwrite in place. The row moves to the new bytes in
+  the transaction that queues the old ones for deletion (§3.3a), so a crash
+  before that commit leaves the previous body intact. Every refetch runs the
+  ingest pipeline (§3.4a), vendoring included, whether or not the artifact was
+  ingested with snapshot on, since nothing records that choice. It never writes
+  the allowlist: the response carries `network_footprint` and
+  `footprint_changed` as `PATCH` does, plus `undecided_origins` (the footprint
+  less every origin already allowed or refused), `updated` (whether anything
+  was written) and the `snapshot` report. Body and out-of-line assets are compared
+  separately, because a runtime payload never appears in the body, and a
+  refetch that collected no assets leaves the existing ones in place rather
+  than reading the empty set as their replacement.
 - `DELETE /api/artifacts/:id` — deletes the artifact and associated rows (tags,
   collections, shares, state cascade via FK) **and its bytes**: the body blob,
   and the widget blob when it has one (av-7jcq). The order is row first, then
@@ -843,8 +860,9 @@ permanently, with nothing able to name it afterwards. The fix is not to go
 looking for strays later — the deleting code already knows which blobs it meant
 to remove, so it writes that down:
 
-- The transaction that removes an artifact, or detaches a widget, or erases an
-  account also inserts those blob ids into `pending_blob_deletions`. One
+- The transaction that removes an artifact, detaches a widget, repoints a
+  refetched body (av-reo3), or erases an account also inserts those blob ids
+  into `pending_blob_deletions`. One
   transaction, so the intent is recorded exactly when the last reference
   disappears — which is also the last moment anything could name them. "Those
   blob ids" includes an artifact's out-of-line assets (av-20fk), which is the
@@ -935,7 +953,7 @@ user to approve an origin a fully vendored artifact never contacts.
 ### 3.4a Snapshot vendorer (URL ingest)
 
 `internal/snapshot`, invoked by `POST /api/artifacts` when the request carries
-`url` and `snapshot: true`. It runs **after fetch and before `Blob.put`** and turns a
+`url` and `snapshot: true`, and by every refetch (§3.1). It runs **after fetch and before `Blob.put`** and turns a
 fetched page into a self-contained file so the artifact honours the "it's just a file"
 promise even after the source site rots:
 

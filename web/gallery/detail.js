@@ -934,10 +934,10 @@ window.ExhibitNetworkPrompt.install({
 async function refetchSource() {
   const warning = 'Re-fetch a fresh snapshot from the source URL?\n\n' +
     SOURCE_URL + '\n\n' +
-    'This replaces the stored content with whatever the URL returns now and ' +
-    'reports what network the new content contacts. The allowlist is never ' +
-    'changed — new origins need your approval before they load. ' +
-    'It is NOT versioned and cannot be undone. ' +
+    'This replaces the stored content with whatever the URL returns now, and ' +
+    'saves its images, styles, scripts and runtime files into the artifact. ' +
+    'The allowlist is never changed: new origins need your approval before ' +
+    'they load. It is NOT versioned and cannot be undone. ' +
     "The artifact's saved state/data may break if the new content changed.";
   if (!confirm(warning)) return;
   const st = document.getElementById('al-status');
@@ -952,20 +952,44 @@ async function refetchSource() {
       return;
     }
     const data = await r.json().catch(() => ({}));
-    // The refetch response carries the same footprint contract as the edit
-    // save: new origins are reported, never approved. Name them before the
-    // reload takes the page away, so the approval prompt at runtime (or the
-    // edit page's allowlist settings) is not the first the user hears of it.
-    const footprint = data.network_footprint || [];
-    if (data.footprint_changed && footprint.length > 0) {
-      st.textContent = '✓ Updated — now contacts: ' + footprint.join(', ') +
-        '. Reloading; unapproved origins will ask for approval.';
-      setTimeout(() => window.location.reload(), 2500);
+    if (data.updated === false) {
+      st.textContent = '✓ Already up to date.';
       return;
     }
-    st.textContent = '✓ Updated — reloading…';
-    window.location.reload();
+    const note = refetchNote(data);
+    if (!note) {
+      st.textContent = '✓ Updated — reloading…';
+      window.location.reload();
+      return;
+    }
+    // Something here needs reading, so the page stays until the user is done
+    // with it rather than reloading out from under them.
+    st.textContent = '✓ Updated. ' + note + ' ';
+    const reload = document.createElement('button');
+    reload.type = 'button';
+    reload.textContent = 'Reload';
+    reload.addEventListener('click', () => window.location.reload());
+    st.appendChild(reload);
   } catch (e) {
     st.textContent = '✗ Error: ' + e.message;
   }
+}
+
+// refetchNote names what a refetch left for the user to act on: new origins
+// nobody has allowed or refused yet (the response reports them and never
+// approves them, av-b17a), and assets that could not be saved into the file.
+// Empty when there is nothing to say.
+function refetchNote(data) {
+  const unapproved = data.footprint_changed ? (data.undecided_origins || []) : [];
+  const failures = (data.snapshot && data.snapshot.failures) || [];
+  const parts = [];
+  if (unapproved.length > 0) {
+    parts.push('It now contacts ' + unapproved.join(', ') +
+      ', which will ask for approval when used.');
+  }
+  if (failures.length > 0) {
+    parts.push(failures.length + (failures.length === 1 ? ' asset' : ' assets') +
+      ' could not be saved into the file and still load from the source site.');
+  }
+  return parts.join(' ');
 }

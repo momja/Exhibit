@@ -28,7 +28,12 @@ a URL with a path or query, credentials, a wildcard, a CSP keyword, a
 `data:`/`blob:` source — is a `400` naming the offending value, not a silently
 truncated row: a path-bearing entry approved as one file would otherwise grant
 its whole origin (av-i7hd).
-POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts)
+POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts).
+                                   400, artifact unchanged, when the source answers
+                                   non-2xx, empty, or not HTML. Never writes the
+                                   allowlist; returns {artifact, updated,
+                                   network_footprint, footprint_changed,
+                                   undecided_origins, snapshot}
 DELETE /api/artifacts/:id          Delete artifact, its associated rows, and its blobs
                                    (body + widget) — except a blob another artifact
                                    still references. 500 if a blob could not be removed:

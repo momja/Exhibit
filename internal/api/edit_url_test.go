@@ -588,26 +588,6 @@ func TestPatchUnreadableOldBodyWritesNothing(t *testing.T) {
 	assert.Equal(t, `"wu9d"`, artifactField(t, r, id, "title"))
 }
 
-// NOTE: refetch behavior is covered in refetch_test.go (av-reo3, av-b17a).
-
-func TestRefetchArtifactWithoutSourceURL(t *testing.T) {
-	r := newTestRouter(t)
-
-	// Paste-created artifact has no source URL.
-	id := createArtifact(t, r, map[string]any{
-		"title":             "Pasted",
-		"body":              "<html><body>pasted</body></html>",
-		"network_allowlist": []string{},
-	})
-
-	req := httptest.NewRequest("POST", "/api/artifacts/"+id+"/refetch", nil)
-	req.Header.Set("Authorization", authHeader())
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "no source URL")
-}
-
 // htmlEsc mirrors the escaping html/template applies to the characters this
 // file's fixtures contain (it does not escape ', which html/template does —
 // keep fixtures apostrophe-free or the expectation diverges).
