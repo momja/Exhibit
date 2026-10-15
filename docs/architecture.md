@@ -1401,6 +1401,16 @@ configuration, and the pages keep offering the agent.
   states that tool results are data; the model is not handed the artifact up
   front, it reads it, and a modify session therefore spends its first tool call
   on `get_artifact`.
+- **Conversations are kept as Pi records them** (av-y7td): each session runs
+  with `--session`, and on every settled turn the service reads Pi's session
+  file back and stores it in the conversation's `agent_transcripts` row, with
+  the artifact version it was last working against (read in the same
+  statement) and a title. It is the format `pi --session` starts from, so
+  keeping it is what makes a conversation resumable. Only a projection of what
+  a person saw leaves the server (`agent.Messages`) — the file holds the system
+  prompt, every tool result in full and the model's identity. Pi is pinned to
+  an exact version for this reason: its file format is now part of this
+  service's contract.
 - **BYO key, sealed at rest:** the user's provider key is stored AES-256-GCM
   encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
   handed to the subprocess only through its (minimal, built-from-scratch)
@@ -1428,8 +1438,7 @@ configuration, and the pages keep offering the agent.
   is enforced).
 - **Streaming:** the service fans Pi's event stream out to the browser via
   SSE (`/api/agent/sessions/:id/events`); prompts arriving mid-run become Pi
-  steering messages. Transcripts are persisted per artifact
-  (`agent_transcripts`) as colophon-style provenance for future remixing.
+  steering messages. Conversations are kept per artifact (above).
 - **Stream auth is a ticket, not the token (av-rgp1):** this is the one route
   a browser cannot send an `Authorization` header on, because `EventSource`
   has no way to set one. It therefore takes a **session SSE ticket** in the

@@ -7,24 +7,25 @@ import (
 
 // Model abstraction (av-siqf).
 //
-// Two of this package's seams hand Pi's own protocol to the browser verbatim:
-// readLoop broadcasts every line the subprocess emits, and persistTranscript
-// stores Pi's message list as the artifact's colophon. Neither filters
-// anything, so what the browser learns about the model is a property of Pi's
-// protocol rather than of any handler — and Pi's protocol is explicit about it.
-// Every assistant message it emits carries the triple below:
+// One of this package's seams hands Pi's own protocol to the browser verbatim:
+// readLoop broadcasts every line the subprocess emits. It filters nothing, so
+// what the browser learns about the model is a property of Pi's protocol rather
+// than of any handler — and Pi's protocol is explicit about it. Every assistant
+// message it emits carries the triple below:
 //
 //	{"role":"assistant", "api":"openai-completions",
 //	 "provider":"anthropic", "model":"claude-sonnet-4-5", ...}
 //
 // which reaches a subscriber on message_start, message_end, turn_end and
-// agent_end, and is persisted in agent_transcripts.messages.
+// agent_end. The stored conversation holds the same triple, but it is not a
+// seam: it leaves the server only as a projection (transcript.go) that names
+// fields explicitly, none of them these.
 //
 // On a BYOK instance that is the caller's own credential described back to
 // them and nothing is hidden. In platform mode the instance supplies the key
-// and reports nothing about it, so the identifiers are stripped at both seams;
-// otherwise "the agent page names no provider or model" would be a statement
-// about one page while the network tab said otherwise.
+// and reports nothing about it, so the identifiers are stripped from the event
+// stream; otherwise "the agent page names no provider or model" would be a
+// statement about one page while the network tab said otherwise.
 //
 // What is deliberately *not* stripped is the `usage` block beside them (token
 // counts and cost). It names no model, it is what the metering work will read
@@ -34,7 +35,7 @@ import (
 var modelIdentityFields = []string{"api", "provider", "model"}
 
 // redactModelIdentity strips the model identifiers from one JSON document —
-// an event line or a message list — leaving everything else as it was.
+// an event line — leaving everything else as it was.
 //
 // The match is structural rather than by key name alone: a field is removed
 // only from an object that also carries a "role", which is Pi's message

@@ -96,6 +96,11 @@ var appOriginGETRoutes = []getRoute{
 	// is the worst thing on this instance to make forgeable.
 	{route: "/profile"},
 	{route: "/partials/agent-preview"},
+	// The history pane (av-y7td): reads of what was said in earlier
+	// conversations. Resuming one is a POST to /api/agent/sessions, which Lax
+	// withholds the cookie from.
+	{route: "/partials/agent-history"},
+	{route: "/partials/agent-transcript"},
 	{route: "/partials/card-widget"},
 	{route: "/partials/tag-panel"},
 	// The capability badge + popover (av-mf1x), re-rendered after a runtime
@@ -139,6 +144,7 @@ var appOriginGETRoutes = []getRoute{
 	// a POST.
 	{route: "/api/artifacts/{artifactID}/versions"},
 	{route: "/api/artifacts/{artifactID}/transcripts"},
+	{route: "/api/artifacts/{artifactID}/transcripts/{sessionID}"},
 	{route: "/api/agent/key"},
 	// SSE. It subscribes to a live session's event stream; it starts no turn
 	// and persists nothing.

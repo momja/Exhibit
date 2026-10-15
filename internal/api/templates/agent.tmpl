@@ -39,7 +39,19 @@
 </div>
 <div class="layout">
   <div class="chat" id="pane-chat">
+    {{/* The chat's own controls. History lists the conversations kept with this
+         artifact (av-y7td) in a pane that takes the place of the messages and
+         the composer while it is open — a conversation you are only reading
+         must not sit above a box that would talk to the live one. The pane's
+         contents are server-rendered fragments, swapped into #history; the
+         button stays hidden until the page knows which artifact it is about. */}}
+    <div class="chat-bar">
+      <button type="button" class="hist-btn" id="history-btn" hidden
+              hx-get="/partials/agent-history" hx-vals='js:{artifact: previewArtifactId()}'
+              hx-target="#history" hx-swap="innerHTML" onclick="openHistory()"><i class="ph ph-clock-counter-clockwise"></i> History</button>
+    </div>
     <div id="messages"></div>
+    <div id="history"></div>
     <div class="composer">
       <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> Preview updated — tap Preview to view</button>
       <div id="snippet-chips"></div>
@@ -155,3 +167,41 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
     <div id="frame-wrap">
       {{if .HasArtifact}}<iframe id="pv-frame" src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>The artifact preview appears here once the agent saves one.</span></div>{{end}}
     </div>{{end}}
+
+{{/* agentHistory is the history pane's list: every conversation kept with the
+     artifact, newest first, each saying what it was about, when, and which
+     version of the artifact it was last working against. Rendered by
+     GET /partials/agent-history (transcripts.go) into #history, which is the
+     only place it exists. Data: agentHistoryData. */}}
+{{define "agentHistory"}}<div class="history-bar">
+  <button type="button" class="history-back" onclick="closeHistory()"><i class="ph ph-arrow-left"></i> Chat</button>
+  <h2>Previous conversations</h2>
+</div>
+{{if .Items}}<ul class="history-list">
+  {{range .Items}}<li><button type="button" class="history-item"
+      hx-get="/partials/agent-transcript?artifact={{.ArtifactID | urlquery}}&amp;session={{.SessionID | urlquery}}"
+      hx-target="#history" hx-swap="innerHTML">
+    <span class="history-item-title">{{.Title}}</span>
+    <span class="history-item-meta">{{template "conversationMeta" .}}</span>
+  </button></li>{{end}}
+</ul>{{else}}<p class="history-empty">No earlier conversations about this artifact yet. Each one you have with the agent is kept here.</p>{{end}}{{end}}
+
+{{/* agentTranscript is one stored conversation, read-only: the same bubbles and
+     tool chips the live chat draws, from the projection of what was said
+     (agent.Messages) — never the stored session file. Data: agentTranscriptData. */}}
+{{define "agentTranscript"}}<div class="history-bar">
+  <button type="button" class="history-back"
+          hx-get="/partials/agent-history?artifact={{.ArtifactID | urlquery}}" hx-target="#history" hx-swap="innerHTML"><i class="ph ph-arrow-left"></i> Conversations</button>
+</div>
+<div class="history-head">
+  <h2 class="history-title">{{.Title}}</h2>
+  <p class="history-meta">{{template "conversationMeta" .}}</p>
+</div>
+<div class="history-messages">
+  {{range .Messages}}{{if eq .Role "tool"}}<div class="tool-chip {{if .Failed}}fail{{else}}done{{end}}"><i class="ph {{if .Failed}}ph-x-circle{{else}}ph-check-circle{{end}}"></i> {{.Text}}</div>{{else}}<div class="msg {{.Role}}">{{.Text}}{{if .Images}}<span class="history-images">{{.Images}} image{{if ne .Images 1}}s{{end}} attached</span>{{end}}</div>{{end}}{{else}}<p class="history-empty">Nothing was said in this conversation.</p>{{end}}
+</div>{{end}}
+
+{{/* conversationMeta is the one line under a conversation's title: the artifact
+     version it was last working against (and whether that is still the one
+     the artifact is at), and when it last ran. */}}
+{{define "conversationMeta"}}{{if .VersionSeq}}Based on v{{.VersionSeq}}{{if .Current}} · current{{end}} · {{end}}<time datetime="{{.WhenISO}}">{{.When}}</time>{{end}}

@@ -76,6 +76,8 @@ var appOriginGETRoutePaths = []pageRoute{
 	// htmx fragments: page markup by another name, so they are held to the
 	// same rule as the pages they are swapped into.
 	{route: "/partials/agent-preview", path: "/partials/agent-preview?artifact={id}"},
+	{route: "/partials/agent-history", path: "/partials/agent-history?artifact={id}"},
+	{route: "/partials/agent-transcript", path: "/partials/agent-transcript?artifact={id}&session=s"},
 	{route: "/partials/card-widget", path: "/partials/card-widget?artifact={id}"},
 	{route: "/partials/tag-panel", path: "/partials/tag-panel?artifact={id}"},
 	{route: "/partials/capability-cluster", path: "/partials/capability-cluster?artifact={id}"},
@@ -103,6 +105,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/artifacts/{artifactID}/shares", path: "/api/artifacts/{id}/shares"},
 	{route: "/api/artifacts/{artifactID}/versions", path: "/api/artifacts/{id}/versions"},
 	{route: "/api/artifacts/{artifactID}/transcripts", path: "/api/artifacts/{id}/transcripts"},
+	{route: "/api/artifacts/{artifactID}/transcripts/{sessionID}", path: "/api/artifacts/{id}/transcripts/s"},
 	{route: "/api/agent/key", path: "/api/agent/key"},
 	// SSE. With no agent manager configured it answers "not enabled" and
 	// returns, so walking it does not park the test on an open stream.

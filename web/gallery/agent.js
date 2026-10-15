@@ -459,6 +459,9 @@ function toolLabel(name, args) {
     case 'edit_artifact': return 'Editing artifact';
     case 'edit_widget': return 'Editing widget';
     case 'get_artifact': return 'Reading artifact source';
+    case 'set_widget': return 'Saving widget';
+    case 'get_widget': return 'Reading widget';
+    case 'get_selection': return 'Reading selected elements';
     case 'get_state': return 'Reading artifact state';
     case 'set_state': return 'Setting state key "' + (args.key || '') + '"';
     case 'delete_state': return args.key ? 'Deleting state key "' + args.key + '"' : 'Erasing all state';
@@ -580,8 +583,25 @@ function previewArtifactId() { return artifact ? artifact.id : ''; }
 // owns. Both save events route through here: the pane is re-rendered whole, so
 // it does not need to know which of the two documents changed.
 function refreshPreview() {
+  syncHistoryButton();
   document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'));
 }
+
+// --- History (av-y7td) -------------------------------------------------------
+// The conversations kept with this artifact, in a pane that takes the place of
+// the messages and the composer while it is open. Its contents are
+// server-rendered fragments (agentHistory, agentTranscript) that htmx swaps
+// into #history, so all that is left for script is showing and hiding it, and
+// knowing when there is an artifact to have a history of.
+const chatEl = document.getElementById('pane-chat');
+const historyBtn = document.getElementById('history-btn');
+
+// History is of an artifact, so there is none until the session has one: the
+// button appears when the page opened on an artifact or the agent has made one.
+function syncHistoryButton() { historyBtn.hidden = !artifact; }
+
+function openHistory() { chatEl.classList.add('history-open'); }
+function closeHistory() { chatEl.classList.remove('history-open'); }
 
 // A swap replaces the iframe, so the artifact reloads from scratch: any
 // snippet pick in flight is against a document that no longer exists. Drop the
@@ -755,6 +775,7 @@ function briefToMessage(brief) {
 
 // --- Boot -------------------------------------------------------------------
 (async function boot() {
+  syncHistoryButton();
   const configured = await refreshKeyStatus();
   const brief = takeBrief();
   if (artifact) {

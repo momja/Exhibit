@@ -251,7 +251,7 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	require.NoError(t, s.CreateShare(ctx, member.ID, &Share{ID: "member-share", ArtifactID: deletedArtifact}))
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))
 	require.NoError(t, s.SetAgentKey(ctx, &AgentKey{OwnerID: member.ID, Provider: "anthropic", KeyCiphertext: "sealed"}))
-	require.NoError(t, s.SaveTranscript(ctx, member.ID, deletedArtifact, "sess-1", `[{"role":"user"}]`))
+	require.NoError(t, s.SaveTranscript(ctx, member.ID, Transcript{ArtifactID: deletedArtifact, SessionID: "sess-1", SessionFile: "{}\n"}))
 	// The recorded lengths of the two blobs the artifact above names, so the
 	// blob_sizes residue is asserted against rows that were really there.
 	require.NoError(t, s.RecordBlobSize(ctx, "member-body", 4096))

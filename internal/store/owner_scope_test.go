@@ -69,7 +69,7 @@ func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 		SourceText:       id + " seedsearchterm",
 	}))
 	require.NoError(t, s.SetState(ctx, OwnerID(owner), id, ViewerID(owner), "seed", "value"))
-	require.NoError(t, s.SaveTranscript(ctx, owner, id, "session-"+id, `[{"role":"user"}]`))
+	require.NoError(t, s.SaveTranscript(ctx, owner, Transcript{ArtifactID: id, SessionID: "session-" + id, Title: "seed", SessionFile: "{}\n"}))
 	require.NoError(t, s.CreateShare(ctx, owner, &Share{ID: "share-" + id, ArtifactID: id}))
 	require.NoError(t, s.CreateTag(ctx, &Tag{ID: "tag-" + id, OwnerID: owner, Name: "tag-" + id}))
 	require.NoError(t, s.CreateCollection(ctx, &Collection{ID: "col-" + id, OwnerID: owner, Name: "col-" + id}))
@@ -181,11 +181,19 @@ func ownerCases() []ownerCase {
 			return false, s.ClearState(ctx, OwnerID(o), id, ViewerID(o))
 		}},
 		{"SaveTranscript", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.SaveTranscript(ctx, o, id, "planted-session", `[{"role":"user"}]`)
+			return false, s.SaveTranscript(ctx, o, Transcript{ArtifactID: id, SessionID: "planted-session", SessionFile: "{}\n"})
 		}},
 		{"ListTranscripts", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			ts, err := s.ListTranscripts(ctx, o, id)
 			return len(ts) == 0, err
+		}},
+		{"GetTranscript", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			t, err := s.GetTranscript(ctx, o, id, "session-"+id)
+			return t == nil, err
+		}},
+		{"HeadVersionSeq", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			seq, err := s.HeadVersionSeq(ctx, o, id)
+			return seq == 0, err
 		}},
 		{"CreateShare", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			// A grant rather than a second anonymous link, because the

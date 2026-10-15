@@ -425,6 +425,9 @@ type Store interface {
 	// All four are owner-scoped like the rest of the artifact's children:
 	// another owner's artifact has no history to read and cannot be written to.
 	ListVersions(ctx context.Context, ownerID int64, artifactID string) ([]Version, error)
+	// HeadVersionSeq is the sequence number of the artifact's current version;
+	// 0 when it has none to name (not the owner's, or not there).
+	HeadVersionSeq(ctx context.Context, ownerID int64, artifactID string) (int, error)
 	GetVersion(ctx context.Context, ownerID int64, artifactID string, seq int) (*Version, error)
 	CommitVersion(ctx context.Context, ownerID int64, artifactID string, c VersionChange) (*Version, error)
 	RestoreVersion(ctx context.Context, ownerID int64, artifactID string, seq int, p Provenance, sourceText string) (*Version, error)
@@ -594,11 +597,15 @@ type Store interface {
 	SetAgentKey(ctx context.Context, k *AgentKey) error
 	GetAgentKey(ctx context.Context, ownerID int64) (*AgentKey, error)
 	DeleteAgentKey(ctx context.Context, ownerID int64) error
-	// SaveTranscript upserts the agent conversation that produced an
-	// artifact (messagesJSON is the Pi session's message list).
-	SaveTranscript(ctx context.Context, ownerID int64, artifactID, sessionID, messagesJSON string) error
-	// ListTranscripts returns messagesJSON per session for an artifact.
-	ListTranscripts(ctx context.Context, ownerID int64, artifactID string) (map[string]string, error)
+	// Agent conversations kept with an artifact (av-y7td), one per session.
+	// SaveTranscript upserts one, stamping it with the artifact's head
+	// version as of that moment; an artifact that is not the owner's is
+	// ErrNotFound. ListTranscripts returns them newest first as summaries —
+	// never the stored file, which can be megabytes. GetTranscript returns one
+	// whole, or (nil, nil) when it does not exist or is not the owner's.
+	SaveTranscript(ctx context.Context, ownerID int64, t Transcript) error
+	ListTranscripts(ctx context.Context, ownerID int64, artifactID string) ([]Transcript, error)
+	GetTranscript(ctx context.Context, ownerID int64, artifactID, sessionID string) (*Transcript, error)
 
 	// Agent usage metering (av-2yws). RecordAgentUsage appends one usage
 	// event. The three sums below are the three questions spend enforcement
