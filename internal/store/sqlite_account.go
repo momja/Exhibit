@@ -175,16 +175,16 @@ func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string
 	return queued, nil
 }
 
-// artifactBlobIDs is every blob id an owner's artifacts name: the body of each,
-// the widget of any that has one, and every out-of-line asset any of them
-// vendored (av-20fk).
+// artifactBlobIDs is every blob id an owner's artifacts name: the body and
+// widget of each artifact and of every version of it, and every out-of-line
+// asset any of them vendored (av-20fk).
 //
-// The first two are rewritten in place across the artifact's life (an edit
-// reuses source_blob_id, a widget save reuses widget_blob_id), so those are the
-// complete set and not the newest of a series. Assets are different in kind and
-// are the reason this reads two queries rather than one: they are rows, not
-// columns, there are arbitrarily many of them per artifact, and they are by far
-// the largest bytes an account holds — a vendored wasm module is most of what a
+// A change writes a new blob rather than overwriting the old one, so an
+// artifact's current body is only the newest of a series, and the older ones
+// are named by version rows alone. Assets are different in kind and are the
+// reason this reads separate queries: they are rows, not columns, there are
+// arbitrarily many of them per artifact, and they are by far the largest bytes
+// an account holds — a vendored wasm module is most of what a
 // snapshot weighs. Leaving them out would mean an erased account's payloads
 // stayed on the volume with nothing left in the database able to name them,
 // which is precisely the permanent leak the deletion queue exists to make
@@ -211,6 +211,30 @@ func artifactBlobIDs(ctx context.Context, tx *sql.Tx, userID int64) ([]string, e
 		}
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Every version's blobs, through the artifacts they belong to.
+	versionRows, err := tx.QueryContext(ctx,
+		`SELECT v.body_blob_id, v.widget_blob_id FROM artifact_versions v
+           JOIN artifacts a ON a.id = v.artifact_id
+          WHERE a.owner_id = ?`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer versionRows.Close()
+	for versionRows.Next() {
+		var body, widget string
+		if err := versionRows.Scan(&body, &widget); err != nil {
+			return nil, err
+		}
+		for _, id := range []string{body, widget} {
+			if id != "" {
+				ids = append(ids, id)
+			}
+		}
+	}
+	if err := versionRows.Err(); err != nil {
 		return nil, err
 	}
 

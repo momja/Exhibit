@@ -56,8 +56,10 @@ type BlobDeleter interface {
 // future table starts referencing blobs: a column left out here is a blob
 // deleted while something still points at it.
 //
-// Two tables name blobs today — an artifact's own body and widget, and the
-// out-of-line assets of av-20fk. Assets are the reason the count cannot be
+// Three tables name blobs today — an artifact's own body and widget, every
+// version's body and widget (a version names the blobs it was made of, which is
+// what keeps them alive after the head moves on), and the out-of-line assets of
+// av-20fk. Assets are the reason the count cannot be
 // skipped: they are content-addressed per owner, so one library's two
 // artifacts that both load the same ffmpeg.wasm share a single blob, and an
 // unconditional enqueue on deleting either would strip the payload out of the
@@ -65,6 +67,8 @@ type BlobDeleter interface {
 const blobReferenceCount = `
     SELECT (SELECT COUNT(*) FROM artifacts
              WHERE source_blob_id = ?1 OR widget_blob_id = ?1)
+         + (SELECT COUNT(*) FROM artifact_versions
+             WHERE body_blob_id = ?1 OR widget_blob_id = ?1)
          + (SELECT COUNT(*) FROM artifact_assets WHERE blob_id = ?1)`
 
 // releaseReferencedBlobSQL retires a queue row whose blob has acquired a

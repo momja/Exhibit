@@ -77,11 +77,10 @@ func TestDeleteArtifactRemovesItsWidgetFromDisk(t *testing.T) {
 	}
 }
 
-// Editing rewrites the body in place rather than minting a new id, so deleting
-// an edited artifact still has exactly one file to remove — and it is the one
-// holding the *edited* bytes. If an edit ever starts minting a new blob id,
-// this test still passes but deleteArtifactBlobs stops being complete, which
-// is why artifactBlobIDs states the assumption in its doc comment.
+// An edit mints a new blob and leaves the old one to the version that named
+// it, so an edited artifact has one file per version — and deleting the
+// artifact must take every one of them, not only the head's. Anything less
+// leaks the history of everything an owner ever deleted.
 func TestDeleteArtifactAfterEditLeavesNoBlobBehind(t *testing.T) {
 	r, blobDir := newTestRouterWithBlobDir(t)
 
@@ -92,20 +91,23 @@ func TestDeleteArtifactAfterEditLeavesNoBlobBehind(t *testing.T) {
 	})
 	before := artifactField(t, r, id, "source_blob_id")
 	patchArtifact(t, r, id, map[string]any{"body": "<html><body>v2</body></html>"})
-	require.Equal(t, before, artifactField(t, r, id, "source_blob_id"),
-		"an edit is expected to rewrite the body in place")
+	require.NotEqual(t, before, artifactField(t, r, id, "source_blob_id"),
+		"an edit writes a new blob; the old one belongs to version 1")
+	entries, err := os.ReadDir(blobDir)
+	require.NoError(t, err)
+	require.Len(t, entries, 2, "the replaced body is kept")
 
 	require.Equal(t, http.StatusNoContent, deleteArtifactReq(t, r, id).Code)
 
-	entries, err := os.ReadDir(blobDir)
+	entries, err = os.ReadDir(blobDir)
 	require.NoError(t, err)
 	assert.Empty(t, entries, "no blob may outlive the only artifact that referenced it")
 }
 
-// Detaching a widget is the other place a blob loses its last reference: the
-// column is cleared and the id is never reissued, so nothing can name those
-// bytes again.
-func TestDeleteWidgetRemovesItsBlobFromDisk(t *testing.T) {
+// Removing a widget is a new version, not a deletion of bytes: the version that
+// had the tile still names it, so restoring that version brings the tile back.
+// The bytes go when the artifact does.
+func TestRemovingAWidgetKeepsItsBytesForTheVersionThatHadIt(t *testing.T) {
 	r, blobDir := newTestRouterWithBlobDir(t)
 
 	id := createArtifact(t, r, map[string]any{
@@ -123,10 +125,12 @@ func TestDeleteWidgetRemovesItsBlobFromDisk(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
 
+	assert.Equal(t, `""`, artifactField(t, r, id, "widget_blob_id"), "the artifact has no widget now")
+	require.FileExists(t, widgetPath, "but the version that had it still does")
+
+	require.Equal(t, http.StatusNoContent, deleteArtifactReq(t, r, id).Code)
 	_, err := os.Stat(widgetPath)
-	assert.True(t, os.IsNotExist(err), "the detached widget's bytes must be gone, got %v", err)
-	// The artifact itself is untouched — only its tile was removed.
-	require.FileExists(t, blobPath(t, r, blobDir, id, "source_blob_id"))
+	assert.True(t, os.IsNotExist(err), "deleting the artifact takes the widget's bytes, got %v", err)
 }
 
 // av-8gyd. The bytes go without an operator doing anything, so the queue that

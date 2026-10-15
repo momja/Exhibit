@@ -121,6 +121,8 @@ func TestArtifactRoutes404ForAnotherOwner(t *testing.T) {
 		{"DELETE widget", "DELETE", "/api/artifacts/%s/widget", nil},
 		{"POST widget/generate", "POST", "/api/artifacts/%s/widget/generate", nil},
 		{"GET transcripts", "GET", "/api/artifacts/%s/transcripts", nil},
+		{"GET versions", "GET", "/api/artifacts/%s/versions", nil},
+		{"POST restore version", "POST", "/api/artifacts/%s/versions/1/restore", nil},
 	}
 
 	for _, tc := range cases {

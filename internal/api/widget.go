@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // An artifact's widget (av-fafu) is a second self-contained HTML document: the
@@ -78,9 +80,10 @@ func (ro *Router) getWidget(w http.ResponseWriter, r *http.Request) {
 
 // putWidget stores (or replaces) an artifact's widget document.
 //
-// The blob id is minted once and reused on every later save, so a widget's
-// render URL is stable across edits — the gallery card's iframe src never has
-// to change, and no blob is orphaned per revision.
+// A save is a new version of the artifact, with a blob of its own: the widget a
+// version had is never overwritten, so restoring that version brings its tile
+// back with it. Saving a widget byte-identical to the current one records
+// nothing — there is nothing to return to.
 func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
 
@@ -104,17 +107,23 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blobID := a.WidgetBlobID
-	if blobID == "" {
-		blobID = uuid.New().String()
+	current := ""
+	if a.WidgetBlobID != "" {
+		// A widget whose blob cannot be read counts as different, so the save
+		// repairs it.
+		current, _ = ro.readBlobString(r.Context(), a.WidgetBlobID)
 	}
-	if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader([]byte(req.Body))); err != nil {
-		serverError(w, r, "store widget body", err)
-		return
-	}
-	if a.WidgetBlobID == "" {
-		if err := ro.cfg.Store.SetWidgetBlobID(r.Context(), ownerID, id, blobID); err != nil {
-			writeArtifactError(w, r, "attach widget", err)
+	if a.WidgetBlobID == "" || current != req.Body {
+		blobID := uuid.New().String()
+		if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader([]byte(req.Body))); err != nil {
+			serverError(w, r, "store widget body", err)
+			return
+		}
+		if _, err := ro.cfg.Store.CommitVersion(r.Context(), ownerID, id, store.VersionChange{
+			Provenance:   versionProvenance(r, store.VersionEdit),
+			WidgetBlobID: &blobID,
+		}); err != nil {
+			writeArtifactError(w, r, "save widget version", err)
 			return
 		}
 	}
@@ -226,30 +235,33 @@ func (ro *Router) widgetGenerateAvailability(r *http.Request) (bool, string) {
 	return true, ""
 }
 
-// deleteWidget detaches the widget and removes its bytes; the card falls back
-// to the default tile.
-//
-// Same order as deleteArtifact, for the same reason (artifacts.go,
-// reclaimBlobs): clear the column first, so a failure at the second step
-// leaves an unreferenced file rather than a card pointing at a body that is
-// gone. Detaching is the only exit a widget blob has — the id is otherwise
-// reused for the life of the artifact — so once the column is empty nothing
-// can name those bytes again. That is why the store clears the column and
-// queues the id in one transaction (av-8gyd): the queue row is what can still
-// name them if this process dies before the next line runs.
+// deleteWidget removes the artifact's widget; the card falls back to the
+// default tile. Like a save it is a new version, so restoring an earlier one
+// brings the tile back. The bytes stay: the version that had the widget still
+// names them.
 func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
-	queued, err := ro.cfg.Store.DeleteWidget(r.Context(), ownerIDFromCtx(r.Context()), id)
+	ownerID := ownerIDFromCtx(r.Context())
+	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
 	if err != nil {
-		writeArtifactError(w, r, "detach widget", err)
+		serverError(w, r, "delete widget artifact lookup", err)
 		return
 	}
-	if len(queued) > 0 {
+	if a == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	// An artifact with no widget is already what the caller asked for.
+	if a.WidgetBlobID != "" {
+		none := ""
+		if _, err := ro.cfg.Store.CommitVersion(r.Context(), ownerID, id, store.VersionChange{
+			Provenance:   versionProvenance(r, store.VersionEdit),
+			WidgetBlobID: &none,
+		}); err != nil {
+			writeArtifactError(w, r, "remove widget", err)
+			return
+		}
 		slog.InfoContext(r.Context(), "widget removed", slog.String("artifact_id", id))
-	}
-	if err := ro.reclaimBlobs(r.Context(), queued); err != nil {
-		serverError(w, r, "delete widget blob", err)
-		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

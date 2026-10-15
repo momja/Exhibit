@@ -16,7 +16,7 @@ import (
 // (av-e0yj); "" leaves it unbound, as a create-mode session starts.
 func newDetachedSession(t *testing.T, artifactID string) *Session {
 	t.Helper()
-	grant, err := agentscope.NewRegistry().Issue(1, artifactID)
+	grant, err := agentscope.NewRegistry().Issue(1, artifactID, "")
 	require.NoError(t, err)
 	return &Session{
 		ID:      "test-session",

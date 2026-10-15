@@ -111,11 +111,27 @@ func ownerCases() []ownerCase {
 			_, err := s.DeleteArtifact(ctx, o, id)
 			return false, err
 		}},
-		{"SetWidgetBlobID", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.SetWidgetBlobID(ctx, o, id, "widget-blob-"+id)
+		{"ListVersions", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			v, err := s.ListVersions(ctx, o, id)
+			return len(v) == 0, err
 		}},
-		{"DeleteWidget", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			_, err := s.DeleteWidget(ctx, o, id)
+		{"GetVersion", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			v, err := s.GetVersion(ctx, o, id, 1)
+			return v == nil, err
+		}},
+		{"CommitVersion", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			blob := "version-blob-" + id
+			_, err := s.CommitVersion(ctx, o, id, VersionChange{BodyBlobID: &blob})
+			return false, err
+		}},
+		{"RestoreVersion", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, err := s.RestoreVersion(ctx, o, id, 1, Provenance{}, "")
+			if errors.Is(err, ErrAlreadyCurrent) {
+				// The owner reached the artifact; a fresh one's only version is its
+				// head, so there was nothing to return to. Ownership is what this
+				// case asserts, and it held.
+				err = nil
+			}
 			return false, err
 		}},
 		{"ListOriginDecisions", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {

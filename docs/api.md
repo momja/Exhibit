@@ -147,6 +147,42 @@ As with any ingest, residual origins surface in `network_footprint` for
 **explicit** approval — the snapshot never seeds the `network_allowlist`, so a
 snapshotted artifact stays network-inert until you approve its residual origins.
 
+## Versions
+
+Every change to an artifact's body or widget — a `PATCH` that changes `body`, a
+refetch, a widget `PUT`/`DELETE`, an agent write, a restore — is recorded as a
+version. There is no route that creates one. A save that changes nothing
+(identical body, identical widget, a title-only `PATCH`) records nothing.
+
+A version carries the body and widget as they were and, once it has been
+replaced, the saved data (`localStorage` state) the code had written by then —
+snapshotted in the same transaction that created the next version.
+
+`GET /api/artifacts/:id/versions` — newest first:
+
+```json
+{"versions": [
+  {"artifact_id": "…", "seq": 3, "origin": "agent", "message": "make it count down",
+   "session_id": "…", "has_state": false, "current": true, "created_at": "…"},
+  {"artifact_id": "…", "seq": 2, "origin": "edit", "message": "", "session_id": "",
+   "has_state": true, "current": false, "created_at": "…"}
+]}
+```
+
+`origin` is `initial`, `edit`, `agent`, `refetch` or `restore`. `has_state` is
+true for every version but the current one.
+
+`POST /api/artifacts/:id/versions/:seq/restore` returns the artifact to that
+version: its body and widget become the current ones and the saved data it left
+behind replaces the live state, all as a **new** version (`origin: restore`) —
+nothing in the history is discarded, and the state being replaced is snapshotted
+first, so a restore can be undone. `409` when `:seq` is already the current
+version or its source is no longer stored; `404` for an unknown version or an
+artifact that is not yours. The allowlist and capability approvals are not
+versioned and are not touched.
+
+Both routes are owner-only and unavailable to an agent session's credential.
+
 ## Network origin decisions
 
 ```
@@ -259,8 +295,10 @@ not cover. Unlike an ingest footprint these are not awaiting approval — they a
 already blocked at render — so the field exists to explain a blank tile, not to
 gate one. As everywhere else, the scan never seeds the allowlist.
 
-The widget's blob id is minted once and reused on every later save, so an
-artifact's widget URL is stable across edits.
+Each save is a new version of the artifact with a blob of its own (see
+**Versions**); the widget URL is keyed by the artifact, so it is stable across
+edits. `DELETE` removes the widget as a new version, and saving a tile identical
+to the current one records nothing.
 
 `POST …/widget/generate` starts a one-shot agent session scoped to writing this
 artifact's tile and returns immediately:

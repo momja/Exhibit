@@ -135,6 +135,9 @@ var appOriginGETRoutes = []getRoute{
 	// Who can open an artifact (av-6xjd): the enumeration read. Minting and
 	// revoking live under /api/shares, on unsafe methods.
 	{route: "/api/artifacts/{artifactID}/shares"},
+	// Version history: a read of an artifact's earlier versions. The restore is
+	// a POST.
+	{route: "/api/artifacts/{artifactID}/versions"},
 	{route: "/api/artifacts/{artifactID}/transcripts"},
 	{route: "/api/agent/key"},
 	// SSE. It subscribes to a live session's event stream; it starts no turn

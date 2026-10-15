@@ -143,6 +143,19 @@ input.state-input{max-width:340px}
 }
 .asset-meta { flex: 0 0 auto; white-space: nowrap; }
 
+/* --- versions panel ------------------------------------------------------ */
+.version-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.version-row:last-child { border-bottom: 0; }
+.version-seq { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--color-muted); min-width: 2.5em; }
+.version-what { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.version-when { flex: 0 0 auto; white-space: nowrap; }
+
 /* --- tags panel: controls always visible (no hover on touch) ----------- */
 .tag-edit-list{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin-bottom:12px}
 .tag-pill-editable{height:26px;padding:0 3px 0 9px;font-size:12px}
