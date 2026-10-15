@@ -18,12 +18,17 @@
      * NO NETWORK. Inline styles, inline SVG, system font stack.
 --------------------------------------------------------------------------- */
 *,*::before,*::after{box-sizing:border-box}
+/* Light and dark follow the system setting, as the gallery card does. */
+:root{color-scheme:light dark;--ink:#111;--ink-soft:#333;--muted:#888;--faint:#c9c9c9;--accent:#23559e;--hairline:#e0e0e0}
+@media (prefers-color-scheme:dark){
+	:root{--ink:#e8eaed;--ink-soft:#ccd0d6;--muted:#8d929b;--faint:#5a5f68;--accent:#7eaaf0;--hairline:#2f333a}
+}
 html,body{margin:0;height:100%}
 body{
 	font:400 13px/1.4 system-ui,sans-serif;
-	color:#111;
-	/* No background: the gallery card behind us is already #fff, and the host
-	   sets `background:transparent`. Painting one would only risk a seam. */
+	color:var(--ink);
+	/* No background: the gallery card shows through (the host sets
+	   `background:transparent`). Painting one would only risk a seam. */
 	-webkit-font-smoothing:antialiased;
 }
 
@@ -53,29 +58,29 @@ body{
 }
 .author{
 	margin-top:2px;
-	font-size:11.5px;line-height:1.25;color:#888;
+	font-size:11.5px;line-height:1.25;color:var(--muted);
 	white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 
 .progress{display:flex;align-items:center;gap:9px;margin-top:9px}
-.bar{flex:1;min-width:0;height:7px;border-radius:999px;background:#e0e0e0;overflow:hidden}
-.fill{height:100%;border-radius:999px;background:#23559e}
+.bar{flex:1;min-width:0;height:7px;border-radius:999px;background:var(--hairline);overflow:hidden}
+.fill{height:100%;border-radius:999px;background:var(--accent)}
 .pct{
-	flex:none;font-size:13px;font-weight:650;color:#23559e;
+	flex:none;font-size:13px;font-weight:650;color:var(--accent);
 	font-variant-numeric:tabular-nums;letter-spacing:-.01em;
 }
-.pages{margin-top:4px;font-size:11px;line-height:1.2;color:#888;font-variant-numeric:tabular-nums}
+.pages{margin-top:4px;font-size:11px;line-height:1.2;color:var(--muted);font-variant-numeric:tabular-nums}
 
 /* --- the empty state ----------------------------------------------------- */
 .empty{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;text-align:center}
-.empty svg{width:21px;height:21px;color:#c9c9c9}
-.empty .headline{font-size:13.5px;font-weight:550;line-height:1.2;color:#333}
-.empty .sub{font-size:11px;line-height:1.2;color:#888}
+.empty svg{width:21px;height:21px;color:var(--faint)}
+.empty .headline{font-size:13.5px;font-weight:550;line-height:1.2;color:var(--ink-soft)}
+.empty .sub{font-size:11px;line-height:1.2;color:var(--muted)}
 
 /* --- footer -------------------------------------------------------------- */
 .foot{
-	flex:none;margin-top:7px;padding-top:6px;border-top:1px solid #e0e0e0;
-	font-size:10.5px;line-height:1.25;color:#888;font-variant-numeric:tabular-nums;
+	flex:none;margin-top:7px;padding-top:6px;border-top:1px solid var(--hairline);
+	font-size:10.5px;line-height:1.25;color:var(--muted);font-variant-numeric:tabular-nums;
 	white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 

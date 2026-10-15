@@ -5,13 +5,28 @@
 <title>Marathon Training Plan — widget</title>
 <style>
   /* The host sets html,body{margin:0;height:100%;background:transparent} before
-     this document. The gallery card is already white, so the widget paints no
-     background of its own and simply sits on it.
+     this document. The widget paints no background of its own and simply sits
+     on the gallery card, which is white or dark with the system setting, so
+     every color below is a variable with a value for each.
 
      Viewport is nominally 272x132 but must survive 230–420 x 120–170: every
      size below is either relative or clamped against the viewport height. */
 
   * { box-sizing: border-box; }
+
+  :root {
+    color-scheme: light dark;
+    --ink: #1a1a1a; --ink-mid: #444; --muted: #888; --accent: #23559e;
+    --hairline: #e0e0e0; --track: #e8e8e8;
+    --easy: #3f8f5f; --tempo: #b8791f; --intervals: #b34a4a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e8eaed; --ink-mid: #b8bcc4; --muted: #8d929b; --accent: #7eaaf0;
+      --hairline: #2f333a; --track: #33373e;
+      --easy: #6cc08a; --tempo: #e0a84a; --intervals: #e57d7d;
+    }
+  }
 
   .widget {
     height: 100%;
@@ -21,7 +36,7 @@
     padding: 13px 15px;
     overflow: hidden;
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    color: #1a1a1a;
+    color: var(--ink);
     line-height: 1.3;
   }
 
@@ -40,7 +55,7 @@
     font-weight: 600;
     letter-spacing: 0.09em;
     text-transform: uppercase;
-    color: #888;
+    color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -66,7 +81,7 @@
     font-size: 0.45em;
     font-weight: 500;
     letter-spacing: 0;
-    color: #888;
+    color: var(--muted);
   }
   .headline.is-words .unit { display: none; }
 
@@ -76,7 +91,7 @@
     gap: 7px;
     margin-top: 4px;
     font-size: 12.5px;
-    color: #444;
+    color: var(--ink-mid);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -86,7 +101,7 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #23559e;
+    background: var(--accent);
   }
   .detail.no-dot .dot { display: none; }
 
@@ -98,9 +113,9 @@
     flex: none;
     margin-top: 8px;
     padding-top: 7px;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--hairline);
     font-size: 10.5px;      /* the full progress line still fits at the 230px minimum */
-    color: #888;
+    color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -119,12 +134,12 @@
 
     <div class="ring is-hidden" id="ring">
       <svg viewBox="0 0 48 48" width="46" height="46" aria-hidden="true">
-        <circle cx="24" cy="24" r="20" fill="none" stroke="#e8e8e8" stroke-width="4"/>
-        <circle id="arc" cx="24" cy="24" r="20" fill="none" stroke="#23559e" stroke-width="4"
+        <circle cx="24" cy="24" r="20" fill="none" style="stroke:var(--track)" stroke-width="4"/>
+        <circle id="arc" cx="24" cy="24" r="20" fill="none" style="stroke:var(--accent)" stroke-width="4"
                 stroke-linecap="round" stroke-dasharray="125.66" stroke-dashoffset="125.66"
                 transform="rotate(-90 24 24)"/>
         <text id="arcText" x="24" y="24.5" text-anchor="middle" dominant-baseline="central"
-              font-size="12" font-weight="600" fill="#23559e">0%</text>
+              font-size="12" font-weight="600" style="fill:var(--accent)">0%</text>
       </svg>
     </div>
   </div>
@@ -193,7 +208,7 @@
   var TOTAL_SESSIONS = PLAN_WEEKS * 4;
 
   var TYPE_LABEL = { easy: 'Easy', tempo: 'Tempo', intervals: 'Intervals', long: 'Long run' };
-  var TYPE_COLOR = { easy: '#3f8f5f', tempo: '#b8791f', intervals: '#b34a4a', long: '#23559e' };
+  var TYPE_COLOR = { easy: 'var(--easy)', tempo: 'var(--tempo)', intervals: 'var(--intervals)', long: 'var(--accent)' };
   var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   var DAYS_S = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var MONTHS_S = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -272,7 +287,7 @@
         big: String(-offset),
         unit: -offset === 1 ? 'day' : 'days',
         detail: DAYS[start.getDay()] + ' ' + start.getDate() + ' ' + MONTHS_S[start.getMonth()],
-        dot: '#888',
+        dot: 'var(--muted)',
         foot: PLAN_WEEKS + ' weeks · race day ' + raceLabel,
         pct: pct
       };
