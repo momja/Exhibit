@@ -50,7 +50,8 @@
 	--color-ink-mid:#555;         /* body copy that steps back */
 	--color-muted:#888;           /* metadata, secondary text */
 	--color-label:#7b828e;        /* small-caps field and column labels */
-	--color-faint:#aaa;           /* placeholder / empty hints */
+	--color-faint:#aaa;           /* empty-state glyphs, optional-field hints */
+	--color-placeholder:#757575;  /* field placeholders (the browser's own light default) */
 	--color-ground:#f0f0f0;       /* page background */
 	--color-panel:#fff;           /* cards, header, modals */
 	--color-subtle:#f8f8f8;       /* a well inside a panel (scan results, chips) */
@@ -60,6 +61,8 @@
 	--color-card-border:#cfcfcf;  /* the gallery's flat cards */
 	--color-hover-fill:#e8e8e8;   /* pill behind a hovered icon control */
 	--color-press-fill:rgba(0,0,0,.12); /* a pressed control on a tinted chip */
+	--color-code-on-tint:#fff3;   /* inline code inside a tinted banner */
+	--color-on-accent-edge:rgba(255,255,255,.5); /* an edge drawn on an accent fill */
 	--color-tag-ring:rgba(0,0,0,.12);   /* keeps a ground-colored tag dot visible */
 
 	/* The 404 page's slate ramp. */
@@ -106,6 +109,7 @@
 	--shadow-card-hover:0 2px 8px rgba(0,0,0,.12);
 	--shadow-modal:0 4px 24px rgba(0,0,0,.25);
 	--shadow-raised:0 1px 2px rgba(0,0,0,.14);
+	--shadow-sheet:0 -4px 24px rgba(0,0,0,.25); /* a bottom sheet over the page */
 	--overlay:rgba(0,0,0,.4);
 
 	/* Every form control sizes itself from one of these, never a literal px:
@@ -167,9 +171,10 @@
 		--color-ink:#e8eaed;
 		--color-ink-soft:#ccd0d6;
 		--color-ink-mid:#abb0b8;
-		--color-muted:#8d929b;
+		--color-muted:#9aa0a9;
 		--color-label:#9097a2;
-		--color-faint:#6b7079;
+		--color-faint:#878c95;
+		--color-placeholder:#878c95;
 		--color-ground:#16181c;
 		--color-panel:#202328;
 		--color-subtle:#1a1d21;
@@ -179,6 +184,8 @@
 		--color-card-border:#363b42;
 		--color-hover-fill:#2e3239;
 		--color-press-fill:rgba(255,255,255,.14);
+		--color-code-on-tint:rgba(255,255,255,.08);
+		--color-on-accent-edge:rgba(14,23,38,.35);
 		--color-tag-ring:rgba(255,255,255,.28);
 
 		--color-slate-ink:#cdd2da;
@@ -220,6 +227,7 @@
 		--shadow-card-hover:0 2px 8px rgba(0,0,0,.5);
 		--shadow-modal:0 6px 28px rgba(0,0,0,.6);
 		--shadow-raised:0 1px 2px rgba(0,0,0,.5);
+		--shadow-sheet:0 -6px 28px rgba(0,0,0,.6);
 		--overlay:rgba(0,0,0,.6);
 	}
 }

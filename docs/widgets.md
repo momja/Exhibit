@@ -178,7 +178,7 @@ markup, so the tile starts from a sane floor and can override anything.
   transparent, and put colors in custom properties with dark values under
   `@media (prefers-color-scheme: dark)`. Light: text `#111`, muted `#888`,
   accent `#23559e`, hairline `#e0e0e0`. Dark: text `#e8eaed`, muted
-  `#8d929b`, accent `#7eaaf0`, hairline `#2f333a`.
+  `#9aa0a9`, accent `#7eaaf0`, hairline `#2f333a`.
 - A widget that declares no `color-scheme` is drawn on an opaque light canvas
   when the gallery is dark, because a frame whose scheme differs from its
   embedder's is not composited transparently. Older light-only widgets

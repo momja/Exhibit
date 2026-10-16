@@ -121,6 +121,7 @@ input,select,textarea{font-size:var(--field-font-size)}
 /* And a surface: with color-scheme set, an unstyled field takes the browser's
  * own dark field gray, which sits apart from every panel it is drawn on.
  * :where() keeps this at zero specificity so any rule naming a field wins. */
+::placeholder{color:var(--color-placeholder)}
 :where(input:not([type=checkbox],[type=radio],[type=color],[type=range],[type=file]),select,textarea){background-color:var(--color-panel);color:var(--color-ink)}
 
 .field{width:100%;padding:var(--space-3) var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}

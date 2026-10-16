@@ -19,7 +19,7 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .msg.assistant{align-self:flex-start;background:var(--color-ground);border-bottom-left-radius:3px}
 .msg.sys{align-self:center;background:var(--color-warn-tint);border:1px solid var(--color-warn-tint-border);color:var(--color-warn-ink);font-size:12.5px;max-width:100%}
 .msg.err{align-self:center;background:var(--color-danger-tint);border:1px solid var(--color-danger-tint-border);color:var(--color-danger-ink);font-size:12.5px;max-width:100%}
-.msg .snip-thumb{display:block;max-width:180px;max-height:110px;border-radius:6px;border:1px solid rgba(255,255,255,.5);margin-top:6px}
+.msg .snip-thumb{display:block;max-width:180px;max-height:110px;border-radius:6px;border:1px solid var(--color-on-accent-edge);margin-top:6px}
 .tool-chip{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--color-ink-mid);background:var(--color-subtle);border:1px solid var(--color-hairline);border-radius:999px;padding:4px 12px}
 .tool-chip.done{color:var(--color-success);border-color:var(--color-success-tint-border);background:var(--color-success-tint)}
 .tool-chip.fail{color:var(--color-danger-ink);border-color:var(--color-danger-tint-border);background:var(--color-danger-soft)}
@@ -57,6 +57,9 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .snip-btn:disabled{color:var(--color-faint);cursor:default}
 .snip-btn.active{background:var(--brand-blue);color:var(--color-on-accent);border-color:var(--brand-blue)}
 .snip-btn .kbd{color:var(--color-faint);font-size:11px}
+/* On the accent fill the hint takes the button's own ink; faint gray on blue
+ * is unreadable in either scheme. */
+.snip-btn.active .kbd{color:inherit}
 .snip-more{display:none}
 /* Widget strip (av-fafu): the artifact's gallery tile, shown above the live
  * preview so a set_widget call lands somewhere the user is already watching.
@@ -126,7 +129,7 @@ header h1{font-size:16px;font-weight:600;flex:1}
   .preview-bar a .lbl{display:none}
   .snip-btn{order:-1;flex:1;justify-content:center;height:42px;font-size:15px;font-weight:500;background:var(--brand-blue);border-color:var(--brand-blue);color:var(--color-on-accent)}
   .snip-btn:disabled{background:var(--color-accent-disabled);border-color:var(--color-accent-disabled);color:var(--color-on-accent-disabled)}
-  .snip-btn.active{background:var(--brand-blue-hover);box-shadow:inset 0 0 0 2px rgba(255,255,255,.6)}
+  .snip-btn.active{background:var(--brand-blue-hover);box-shadow:inset 0 0 0 2px var(--color-on-accent-edge)}
   .snip-btn .kbd{display:none}
   .snip-more{display:inline}
 }

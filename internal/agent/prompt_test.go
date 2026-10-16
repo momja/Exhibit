@@ -165,4 +165,5 @@ func TestSystemPromptAsksForLightAndDark(t *testing.T) {
 	assert.Contains(t, prompt, "keep the background transparent so the card shows through")
 	assert.Contains(t, prompt, "Never hardcode a text color that only reads on one of them.")
 	assert.NotContains(t, prompt, "Style for a light card")
+	assert.NotContains(t, prompt, "paint your own background", "a widget that paints its own surface does not follow the card")
 }
