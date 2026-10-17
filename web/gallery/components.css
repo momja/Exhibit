@@ -9,12 +9,12 @@
  * stylesheets, where they were triplicated verbatim; values are unchanged. */
 
 /* --- buttons ---------------------------------------------------------- */
-.btn{display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-3) 18px;background:var(--brand-blue);color:var(--color-panel);border:none;border-radius:var(--radius-md);font-size:14px;cursor:pointer;font-weight:500}
+.btn{display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-3) 18px;background:var(--brand-blue);color:var(--color-on-accent);border:none;border-radius:var(--radius-md);font-size:14px;cursor:pointer;font-weight:500}
 .btn:hover{background:var(--brand-blue-hover)}
 .btn-sm{padding:5px var(--space-5);font-size:13px}
 .btn-sec{background:var(--color-panel);color:var(--color-ink-soft);border:1px solid var(--color-border)}
 .btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:var(--color-panel)}
-.btn-danger{background:var(--color-danger);color:var(--color-panel);border:none}
+.btn-danger{background:var(--color-danger);color:var(--color-on-danger);border:none}
 .btn-danger:hover{background:var(--color-danger-hover)}
 /* Square, label-less .btn — the gallery header's "Add artifact" and profile
  * controls (av-qo05). A modifier rather than a page rule because it is the
@@ -31,7 +31,7 @@
  * 4xx responses — so the pane shows this notice instead of keeping a stale
  * view with no explanation. Lives here because every gallery page loads this
  * sheet while each of the four panes sits under a different page sheet. */
-.frag-error{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-4) var(--space-5);background:#fee;border:1px solid #fbb;border-radius:var(--radius-md);color:#900;font-size:13px}
+.frag-error{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-4) var(--space-5);background:var(--color-danger-tint);border:1px solid var(--color-danger-tint-border);border-radius:var(--radius-md);color:var(--color-danger-ink);font-size:13px}
 .frag-error i{line-height:1}
 /* A control that is present but cannot act — /profile's delete button until
  * av-4wyq lands. It stays legible rather than ghosted, because the reason
@@ -77,8 +77,10 @@ body>header .btn:not(.icon-btn){padding-top:var(--space-1);padding-bottom:var(--
 .card-widget{position:relative;height:132px;margin:calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;border-radius:var(--radius-lg) var(--radius-lg) 0 0;overflow:hidden;background:var(--color-panel);border-bottom:1px solid var(--color-hairline)}
 .card-widget-frame{position:absolute;inset:0;z-index:1;display:block;width:100%;height:100%;border:0;background:transparent;pointer-events:none}
 /* Default tile: a monogram on a tint derived from the artifact id (--tile-hue
- * comes from the server, so the same artifact always wears the same face). */
-.card-widget-default{position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,hsl(var(--tile-hue) 58% 96%),hsl(calc(var(--tile-hue) + 28) 52% 89%))}
+ * comes from the server, so the same artifact always wears the same face).
+ * The saturation/lightness halves are tokens, so the tile darkens with the
+ * page while keeping its hue. */
+.card-widget-default{position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,hsl(var(--tile-hue) var(--tile-face-top)),hsl(calc(var(--tile-hue) + 28) var(--tile-face-bottom)))}
 /* With a live frame the monogram is a fallback, not a backdrop: widgets render
  * on a transparent background by contract, so leaving it painted underneath
  * would show through the widget. It comes back — and the frame goes — only
@@ -86,7 +88,7 @@ body>header .btn:not(.icon-btn){padding-top:var(--space-1);padding-bottom:var(--
 .card-widget.has-frame .card-widget-default{display:none}
 .card-widget.has-frame.widget-failed .card-widget-default{display:flex}
 .card-widget.has-frame.widget-failed .card-widget-frame{display:none}
-.card-widget-monogram{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:hsl(var(--tile-hue) 60% 100% / .72);box-shadow:0 1px 4px hsl(var(--tile-hue) 40% 30% / .16);color:hsl(var(--tile-hue) 42% 34%);font-size:22px;font-weight:600;letter-spacing:.5px}
+.card-widget-monogram{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:hsl(var(--tile-hue) var(--tile-mono-fill));box-shadow:0 1px 4px hsl(var(--tile-hue) var(--tile-mono-shadow));color:hsl(var(--tile-hue) var(--tile-mono-ink));font-size:22px;font-weight:600;letter-spacing:.5px}
 
 /* Collapsible section (<details>/<summary>) with a muted summary line — the
  * edit page's security section (av-p0a1) was the first user; the artifact
@@ -116,6 +118,11 @@ body>header .btn:not(.icon-btn){padding-top:var(--space-1);padding-bottom:var(--
 /* Floor for controls no rule below names: an unstyled input inherits the UA's
  * ~13.33px, under the zoom threshold just as surely as a chosen 14px. */
 input,select,textarea{font-size:var(--field-font-size)}
+/* And a surface: with color-scheme set, an unstyled field takes the browser's
+ * own dark field gray, which sits apart from every panel it is drawn on.
+ * :where() keeps this at zero specificity so any rule naming a field wins. */
+::placeholder{color:var(--color-placeholder)}
+:where(input:not([type=checkbox],[type=radio],[type=color],[type=range],[type=file]),select,textarea){background-color:var(--color-panel);color:var(--color-ink)}
 
 .field{width:100%;padding:var(--space-3) var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
 .field:focus{border-color:var(--brand-blue)}
@@ -180,13 +187,13 @@ input,select,textarea{font-size:var(--field-font-size)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 /* --- tags: a neutral pill led by a dot in the tag's color --------------- */
-.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px;font-weight:500;line-height:1;background:#f1f1f1;color:#555}
-.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#888;transition:opacity .12s ease}
+.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px;font-weight:500;line-height:1;background:var(--color-ground);color:var(--color-ink-mid)}
+.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--color-muted);transition:opacity .12s ease}
 .tag-pill-label{overflow-wrap:anywhere}
 /* Tag color picker: presets + custom. */
 .color-presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
 .color-swatch{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
-.color-swatch.selected{border-color:#333}
+.color-swatch.selected{border-color:var(--color-ink-soft)}
 .color-custom-row{display:flex;gap:8px;align-items:center;margin-top:8px}
-.color-custom-row input[type=color]{width:36px;height:30px;padding:0;border:1px solid #ddd;border-radius:6px;cursor:pointer}
+.color-custom-row input[type=color]{width:36px;height:30px;padding:0;border:1px solid var(--color-border);border-radius:6px;cursor:pointer}
 .color-custom-row input[type=text]{flex:1}

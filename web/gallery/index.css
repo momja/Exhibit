@@ -7,8 +7,8 @@
  * bar, a full-width grid of flat cards with 6px gaps, and one meta row under
  * each tile. */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:#f0f0f0;color:#111;min-height:100vh}
-header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #d9d9d9;box-shadow:0 1px 6px rgba(0,0,0,.07);padding:0 16px;display:flex;align-items:center;gap:12px}
+body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
+header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header);padding:0 16px;display:flex;align-items:center;gap:12px}
 /* The heading stays for screen-reader heading navigation but is not drawn:
  * the logo beside it already says which app this is (nw-h1dr). */
 header h1{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -21,8 +21,8 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inl
  * defaults to min-width:auto, and an input's intrinsic width is ~229px, so
  * without it the box will not shrink in a narrow window. */
 .search-row{position:relative;display:flex;align-items:center;flex:0 1 340px;min-width:0}
-.search-row .search-icon{position:absolute;left:9px;color:#999;font-size:14px;pointer-events:none}
-.search-row input{flex:1;min-width:0;height:var(--header-control-size);padding:0 30px 0 29px;border:1px solid #d6d6d6;border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:#fff;color:var(--color-ink)}
+.search-row .search-icon{position:absolute;left:9px;color:var(--color-muted);font-size:14px;pointer-events:none}
+.search-row input{flex:1;min-width:0;height:var(--header-control-size);padding:0 30px 0 29px;border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
 .search-row input:focus{border-color:var(--brand-blue)}
 /* The `/` key cap (av-6mdw) sits inside the box's right edge while the box is
  * idle. It hides on focus (the shortcut has done its job) and once there is a
@@ -30,12 +30,12 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inl
  * the two never show together. pointer-events:none lets a click on it land on
  * the input. Touch devices have no key to press, so they never see it. It
  * fits the input's 30px right padding, the same slot the clear button uses. */
-.search-kbd{position:absolute;right:6px;top:50%;transform:translateY(-50%);min-width:20px;padding:1px 6px;border:1px solid #ccc;border-bottom-width:2px;border-radius:4px;background:#fafafa;color:#888;font:12px/16px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;pointer-events:none}
+.search-kbd{position:absolute;right:6px;top:50%;transform:translateY(-50%);min-width:20px;padding:1px 6px;border:1px solid var(--color-border);border-bottom-width:2px;border-radius:4px;background:var(--color-subtle);color:var(--color-muted);font:12px/16px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;pointer-events:none}
 .search-row input:focus~.search-kbd,.search-row input:not(:placeholder-shown)~.search-kbd{display:none}
 @media (pointer:coarse){.search-kbd{display:none}}
 /* The clear control sits inside the box's right edge, where it takes no room
  * from the input when there is nothing to clear. */
-.search-clear{position:absolute;right:4px;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:var(--radius-pill);background:none;color:#888;font-size:13px;cursor:pointer}
+.search-clear{position:absolute;right:4px;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:var(--radius-pill);background:none;color:var(--color-muted);font-size:13px;cursor:pointer}
 .search-clear:hover{background:var(--color-hover-fill);color:var(--color-ink)}
 .search-clear[hidden]{display:none!important}
 
@@ -61,9 +61,9 @@ main{padding:10px 12px}
  * No overflow:hidden. The capability popover drops out of the card's bottom
  * edge, and clipping the card would clip it. The tile rounds its own top
  * corners instead. position:relative is what the popover anchors to (below). */
-.card{position:relative;display:flex;flex-direction:column;padding:0;border:1px solid #cfcfcf;border-radius:2px;box-shadow:none;cursor:pointer}
+.card{position:relative;display:flex;flex-direction:column;padding:0;border:1px solid var(--color-card-border);border-radius:2px;box-shadow:none;cursor:pointer}
 .card:hover,.card:focus-within{border-color:var(--brand-blue);box-shadow:0 0 0 1px var(--brand-blue)}
-.card .card-widget{margin:0;border-radius:1px 1px 0 0;border-bottom-color:#e6e6e6}
+.card .card-widget{margin:0;border-radius:1px 1px 0 0;border-bottom-color:var(--color-hairline)}
 
 /* The meta row: one 26px line, title first and everything else packed after
  * it at the right. Only the title shrinks; it ellipses rather than wraps, so
@@ -78,7 +78,7 @@ main{padding:10px 12px}
  * white or near-white tag color from vanishing into the card. */
 .tag-dots{display:inline-flex;align-items:center;flex:0 0 auto;list-style:none}
 .tag-dot-item{display:flex;align-items:center;justify-content:center;width:9px;height:14px}
-.tag-dot-item::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--tag-color,#888);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.tag-dot-item::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--tag-color,var(--color-muted));box-shadow:inset 0 0 0 1px var(--color-tag-ring)}
 
 /* The posture/sharing trigger on a card: smaller glyphs than the detail
  * toolbar's, and its popover anchors to the card rather than to the trigger.
@@ -110,5 +110,5 @@ main{padding:10px 12px}
  * negative's unreachable control. */
 @media (hover:none),(pointer:coarse){.card-edit{width:22px;margin:0 -4px 0 -2px;opacity:1}}
 
-.empty{color:#888;font-size:14px;padding:20px 0}
+.empty{color:var(--color-muted);font-size:14px;padding:20px 0}
 .empty a{color:var(--brand-blue)}
