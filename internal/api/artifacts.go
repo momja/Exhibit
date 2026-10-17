@@ -262,34 +262,9 @@ func (ro *Router) persistRuntimeAssets(ctx context.Context, ownerID int64, artif
 		unlock := ro.cfg.Store.LockBlobs(blobIDs...)
 		defer unlock()
 
-		rows := make([]store.ArtifactAsset, 0, len(collected))
-		for i, c := range collected {
-			// The markup pass already minted one, because the URL it wrote into
-			// the document contains it; the runtime pass takes one here.
-			assetID := c.AssetID
-			if assetID == "" {
-				minted, err := store.NewAssetID()
-				if err != nil {
-					return nil, err
-				}
-				assetID = minted
-			}
-			// Through the write funnel like every other blob, so the payload is
-			// charged to whoever stored it (av-fw1b). An asset is the one blob
-			// whose length is not the artifact's own, and it is by far the
-			// largest — a vendored wasm module is most of what a snapshot
-			// weighs — so a write that skipped the funnel here would leave the
-			// number wrong by more than everything else combined.
-			if err := putBlob(ctx, ro.cfg.Store, ro.cfg.Blob, blobIDs[i], bytes.NewReader(c.Body)); err != nil {
-				return nil, fmt.Errorf("store asset %s: %w", c.SourceURL, err)
-			}
-			rows = append(rows, store.ArtifactAsset{
-				ID:          assetID,
-				SourceURL:   c.SourceURL,
-				BlobID:      blobIDs[i],
-				ContentType: c.ContentType,
-				SizeBytes:   int64(len(c.Body)),
-			})
+		rows, err := ro.writeRuntimeAssets(ctx, ownerID, collected)
+		if err != nil {
+			return nil, err
 		}
 		return ro.cfg.Store.ReplaceArtifactAssets(ctx, ownerID, artifactID, generationID, rows)
 	}()
@@ -304,6 +279,42 @@ func (ro *Router) persistRuntimeAssets(ctx context.Context, ownerID int64, artif
 			slog.String("artifact_id", artifactID), slog.String("err", err.Error()))
 	}
 	return nil
+}
+
+// writeRuntimeAssets stages asset blobs without changing any artifact rows.
+// The caller holds the blob locks through the transaction that references them.
+func (ro *Router) writeRuntimeAssets(ctx context.Context, ownerID int64, collected []snapshot.RuntimeAsset) ([]store.ArtifactAsset, error) {
+	rows := make([]store.ArtifactAsset, 0, len(collected))
+	for _, c := range collected {
+		// The markup pass already minted one, because the URL it wrote into
+		// the document contains it; the runtime pass takes one here.
+		assetID := c.AssetID
+		if assetID == "" {
+			minted, err := store.NewAssetID()
+			if err != nil {
+				return nil, err
+			}
+			assetID = minted
+		}
+		// Through the write funnel like every other blob, so the payload is
+		// charged to whoever stored it (av-fw1b). An asset is the one blob
+		// whose length is not the artifact's own, and it is by far the
+		// largest — a vendored wasm module is most of what a snapshot
+		// weighs — so a write that skipped the funnel here would leave the
+		// number wrong by more than everything else combined.
+		blobID := store.AssetBlobID(ownerID, c.Body)
+		if err := putBlob(ctx, ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader(c.Body)); err != nil {
+			return nil, fmt.Errorf("store asset %s: %w", c.SourceURL, err)
+		}
+		rows = append(rows, store.ArtifactAsset{
+			ID:          assetID,
+			SourceURL:   c.SourceURL,
+			BlobID:      blobID,
+			ContentType: c.ContentType,
+			SizeBytes:   int64(len(c.Body)),
+		})
+	}
+	return rows, nil
 }
 
 func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
@@ -873,15 +884,31 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	// in both body and assets and always takes the write path. Runtime
 	// payloads are compared by content, and are what can change on their own.
 	collected := collector.merge(runtimeAssets)
-	assetsChanged := false
-	if len(collected) > 0 {
-		current, err := ro.cfg.Store.ListArtifactAssets(r.Context(), ownerID, id)
-		if err != nil {
-			serverError(w, r, "list assets for refetch", err)
-			return
-		}
-		assetsChanged = !sameAssetGeneration(ownerID, collected, current)
+	current, err := ro.cfg.Store.ListArtifactAssets(r.Context(), ownerID, id)
+	if err != nil {
+		serverError(w, r, "list assets for refetch", err)
+		return
 	}
+	// Incomplete discovery cannot prove that an omitted payload was superseded:
+	// a failed stylesheet, for example, hides the fonts it used to reference.
+	// Refuse before writing if any failure would make us lose a saved asset.
+	if len(snapReport.Failures) > 0 {
+		refreshed := make(map[string]bool, len(collected))
+		for _, asset := range collected {
+			refreshed[asset.SourceURL] = true
+		}
+		for _, asset := range current {
+			if !refreshed[asset.SourceURL] {
+				http.Error(w, fmt.Sprintf("refetch: could not refresh saved asset %s; artifact unchanged", asset.SourceURL), http.StatusBadRequest)
+				return
+			}
+		}
+	}
+	if snapReport.Error != "" && len(current) > 0 {
+		http.Error(w, "refetch: snapshot failed; artifact unchanged: "+snapReport.Error, http.StatusBadRequest)
+		return
+	}
+	assetsChanged := len(collected) > 0 && !sameAssetGeneration(ownerID, collected, current)
 	bodyChanged := baselineLost || newBody != oldBody
 
 	respond := func(artifact *store.Artifact, updated, footprintChanged bool) {
@@ -902,55 +929,14 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var queued []string
-	footprintChanged := false
-	if bodyChanged {
-		footprintChanged = baselineLost || !sameOrigins(footprint, networkFootprint(oldBody, ro.cfg.RenderOrigin))
-
-		// New blob first, then repoint: nothing is destroyed until the
-		// replacement is durably in place.
-		newBlobID := uuid.New().String()
-		if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, newBlobID, bytes.NewReader([]byte(newBody))); err != nil {
-			serverError(w, r, "refetch store body", err)
-			return
-		}
-		queued, err = ro.cfg.Store.ReplaceSourceBlob(r.Context(), ownerID, id, newBlobID, store.ExtractSearchText(newBody))
-		if err != nil {
-			// The row still names the old body. Take the new bytes and their
-			// recorded length back out through the drain, whose reference
-			// recheck keeps them if the repoint did land after all.
-			if derr := ro.reclaimBlobs(r.Context(), []string{newBlobID}); derr != nil {
-				slog.WarnContext(r.Context(), "remove unused refetch body",
-					slog.String("artifact_id", id), slog.String("blob_id", newBlobID), slog.String("err", derr.Error()))
-			}
-			writeArtifactError(w, r, "refetch repoint body", err)
-			return
-		}
-	}
-
-	updated := bodyChanged
+	footprintChanged := bodyChanged && (baselineLost || !sameOrigins(footprint, networkFootprint(oldBody, ro.cfg.RenderOrigin)))
+	var replacementAssets []snapshot.RuntimeAsset
 	if assetsChanged {
-		if err := ro.persistRuntimeAssets(r.Context(), ownerID, id, collected); err != nil {
-			slog.WarnContext(r.Context(), "store refetched runtime assets",
-				slog.String("artifact_id", id), slog.String("err", err.Error()))
-			if snapReport != nil {
-				snapReport.Failures = append(snapReport.Failures, snapshotFailure{
-					Kind: "asset_store", Detail: err.Error(),
-				})
-			}
-		} else {
-			updated = true
-		}
+		replacementAssets = collected
 	}
-
-	// The rows are repointed and the old bytes condemned; now remove them.
-	// A failure here is warned, not returned: the artifact is already
-	// updated, and the queue row survives for the next startup drain —
-	// failing the request over a delayed unlink would report a failure that
-	// is not one.
-	if err := ro.reclaimBlobs(r.Context(), queued); err != nil {
-		slog.WarnContext(r.Context(), "reclaim superseded refetch blobs",
-			slog.String("artifact_id", id), slog.String("err", err.Error()))
+	if err := ro.storeRefetchedSnapshot(r.Context(), ownerID, id, newBody, bodyChanged, replacementAssets); err != nil {
+		writeArtifactError(w, r, "refetch store snapshot", err)
+		return
 	}
 
 	slog.InfoContext(r.Context(), "artifact refetched", slog.String("id", id),
@@ -966,7 +952,7 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "reload artifact after refetch", errors.New("artifact vanished after refetch"))
 		return
 	}
-	respond(a, updated, footprintChanged)
+	respond(a, true, footprintChanged)
 }
 
 // sameAssetGeneration reports whether storing collected would reproduce the

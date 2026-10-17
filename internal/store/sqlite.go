@@ -739,32 +739,15 @@ func (s *SQLiteStore) attachAllowlists(ctx context.Context, arts []*Artifact) er
 	return rows.Err()
 }
 
-// ReplaceSourceBlob points an artifact at a new body blob and returns the
-// blob ids it enqueued for deletion, for the caller to drain (blobqueue.go).
-//
-// This is the refetch write path (av-reo3), and it exists for the same reason
-// SetWidgetBlobID notes source_blob_id is not caller-writable: repointing at
-// an arbitrary blob id is not something a PATCH body may do, so the service's
-// own writer needs a method of its own. Unlike an in-place Blob.Put over the
-// old id, the previous body stays readable until the repoint commits — a
-// crash mid-refetch leaves the artifact on its previous body rather than half
-// a new one — and the superseded bytes are condemned through the deletion
-// queue rather than unlinked outright, so a crash between commit and drain is
-// finished by the next startup.
-//
-// The repoint, the source_text refresh and the enqueue share one transaction:
-// the intent to delete the old bytes becomes durable at the same instant the
-// last row naming them disappears (av-8gyd).
-//
-// Forward seam for av-3pq6: a version-history insert for the superseded body
-// belongs inside this transaction, before the enqueue — while the old blob id
-// is still named. Until then the old bytes are condemned here, not kept.
-func (s *SQLiteStore) ReplaceSourceBlob(ctx context.Context, ownerID int64, id, newBlobID, sourceText string) ([]string, error) {
+// ReplaceArtifactSnapshot commits a refetch as one unit. A body naming freshly
+// minted markup asset URLs must never become visible without those asset rows.
+// Superseded bytes are queued only after every reference has been switched.
+func (s *SQLiteStore) ReplaceArtifactSnapshot(ctx context.Context, ownerID int64, id string, snapshot ArtifactSnapshot) ([]string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = tx.Rollback() }() // no-op once committed
+	defer func() { _ = tx.Rollback() }()
 
 	var old string
 	err = tx.QueryRowContext(ctx,
@@ -776,12 +759,26 @@ func (s *SQLiteStore) ReplaceSourceBlob(ctx context.Context, ownerID int64, id, 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE artifacts SET source_blob_id=?, source_text=?, updated_at=datetime('now') WHERE id=? AND owner_id=?",
-		newBlobID, sourceText, id, ownerID); err != nil {
+	var superseded []string
+	if snapshot.SourceBlobID != "" {
+		if _, err := tx.ExecContext(ctx,
+			"UPDATE artifacts SET source_blob_id=?, source_text=? WHERE id=? AND owner_id=?",
+			snapshot.SourceBlobID, snapshot.SourceText, id, ownerID); err != nil {
+			return nil, err
+		}
+		superseded = append(superseded, old)
+	}
+	if snapshot.Assets != nil {
+		oldAssets, err := replaceArtifactAssets(ctx, tx, id, snapshot.GenerationID, snapshot.Assets)
+		if err != nil {
+			return nil, err
+		}
+		superseded = append(superseded, oldAssets...)
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE artifacts SET updated_at=datetime('now') WHERE id=? AND owner_id=?", id, ownerID); err != nil {
 		return nil, err
 	}
-	queued, err := enqueueUnreferencedBlobs(ctx, tx, old)
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, superseded...)
 	if err != nil {
 		return nil, err
 	}

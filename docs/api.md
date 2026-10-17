@@ -30,8 +30,10 @@ truncated row: a path-bearing entry approved as one file would otherwise grant
 its whole origin (av-i7hd).
 POST   /api/artifacts/:id/refetch  Re-fetch body from source_url (URL-ingested artifacts).
                                    400, artifact unchanged, when the source answers
-                                   non-2xx, empty, or not HTML. Never writes the
-                                   allowlist; returns {artifact, updated,
+                                   non-2xx, empty, or not HTML, or a saved asset
+                                   cannot be refreshed. Body and assets commit
+                                   atomically; storage failure leaves both unchanged.
+                                   Never writes the allowlist; returns {artifact, updated,
                                    network_footprint, footprint_changed,
                                    undecided_origins, snapshot}
 DELETE /api/artifacts/:id          Delete artifact, its associated rows, and its blobs

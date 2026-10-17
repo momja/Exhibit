@@ -121,10 +121,13 @@ The only way data changes. Route groups:
   artifact left byte-identical. Nothing past that is judged: a source serving a
   different page is serving a different page, and telling "replaced" from
   "redesigned" would mean reading intent into content. The write is a new blob
-  and a repoint, never an overwrite in place. The row moves to the new bytes in
-  the transaction that queues the old ones for deletion (§3.3a), so a crash
-  before that commit leaves the previous body intact. Every refetch runs the
-  ingest pipeline (§3.4a), vendoring included, whether or not the artifact was
+  and a repoint, never an overwrite in place. All new blobs are staged first;
+  `ReplaceArtifactSnapshot` switches the body, search text and asset generation
+  in the transaction that queues superseded blobs for deletion (§3.3a). A failed
+  blob write or transaction leaves the previous snapshot intact. Unused staged
+  blobs are queued with a reference check, so cleanup preserves shared assets.
+  Every refetch runs the ingest pipeline (§3.4a), vendoring included, whether
+  or not the artifact was
   ingested with snapshot on, since nothing records that choice. It never writes
   the allowlist: the response carries `network_footprint` and
   `footprint_changed` as `PATCH` does, plus `undecided_origins` (the footprint
@@ -132,7 +135,12 @@ The only way data changes. Route groups:
   was written) and the `snapshot` report. Body and out-of-line assets are compared
   separately, because a runtime payload never appears in the body, and a
   refetch that collected no assets leaves the existing ones in place rather
-  than reading the empty set as their replacement.
+  than reading the empty set as their replacement. If a failed fetch leaves any
+  previously saved asset missing from the new collection, the entire refetch
+  returns 400 before writing anything, even when other assets were fetched
+  successfully. This includes dependencies hidden by a failed stylesheet or
+  script fetch. A snapshot-level error also refuses
+  replacement when saved assets exist.
 - `DELETE /api/artifacts/:id` — deletes the artifact and associated rows (tags,
   collections, shares, state cascade via FK) **and its bytes**: the body blob,
   and the widget blob when it has one (av-7jcq). The order is row first, then

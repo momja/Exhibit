@@ -259,7 +259,7 @@ func TestReplacingABodyQueuesTheOldBlobOnlyWhenUnreferenced(t *testing.T) {
 	}
 
 	fx.putBody(t, "refetched-1", "<html>new</html>")
-	queued, err := fx.store.ReplaceSourceBlob(ctx, 1, "a1", "refetched-1", "new")
+	queued, err := fx.store.ReplaceArtifactSnapshot(ctx, 1, "a1", ArtifactSnapshot{SourceBlobID: "refetched-1", SourceText: "new"})
 	require.NoError(t, err)
 	assert.Empty(t, queued, "a2 still names the old bytes")
 	a1, err := fx.store.GetArtifact(ctx, 1, "a1")
@@ -267,7 +267,7 @@ func TestReplacingABodyQueuesTheOldBlobOnlyWhenUnreferenced(t *testing.T) {
 	assert.Equal(t, "refetched-1", a1.SourceBlobID)
 
 	fx.putBody(t, "refetched-2", "<html>newer</html>")
-	queued, err = fx.store.ReplaceSourceBlob(ctx, 1, "a2", "refetched-2", "newer")
+	queued, err = fx.store.ReplaceArtifactSnapshot(ctx, 1, "a2", ArtifactSnapshot{SourceBlobID: "refetched-2", SourceText: "newer"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"shared-body"}, queued, "the last reference is gone")
 
@@ -281,6 +281,33 @@ func TestReplacingABodyQueuesTheOldBlobOnlyWhenUnreferenced(t *testing.T) {
 	assert.NoFileExists(t, fx.path("shared-body"))
 	require.FileExists(t, fx.path("refetched-1"))
 	require.FileExists(t, fx.path("refetched-2"))
+}
+
+func TestDuplicateStagedBlobCleanupKeepsRereferencedBytes(t *testing.T) {
+	fx := newQueueFixture(t)
+	ctx := t.Context()
+	seedAssetArtifact(t, fx, "a1")
+	fx.putBody(t, "staged-asset", "payload")
+	first, err := fx.store.QueueUnreferencedBlobs(ctx, []string{"staged-asset", "a1-body"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"staged-asset"}, first, "skip the live body")
+	second, err := fx.store.QueueUnreferencedBlobs(ctx, []string{"staged-asset"})
+	require.NoError(t, err)
+	assert.Equal(t, first, second)
+	_, err = fx.store.DrainBlobDeletions(ctx, fx.blobs, first)
+	require.NoError(t, err)
+	assert.NoFileExists(t, fx.path("staged-asset"))
+
+	// Another writer reuses this content address after the first cleanup
+	// retired its queue row, but before the second cleanup starts.
+	fx.putBody(t, "staged-asset", "payload")
+	_, err = fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "live-generation",
+		[]ArtifactAsset{asset("live-id", "https://cdn.test/app.wasm", "staged-asset")})
+	require.NoError(t, err)
+	_, err = fx.store.DrainBlobDeletions(ctx, fx.blobs, second)
+	require.NoError(t, err)
+	require.FileExists(t, fx.path("staged-asset"), "a stale drain list cannot delete live bytes")
+	require.FileExists(t, fx.path("a1-body"))
 }
 
 // Erasing an account is the third delete path, and the one that condemns a

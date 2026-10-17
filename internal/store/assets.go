@@ -120,15 +120,30 @@ func (s *SQLiteStore) ReplaceArtifactAssets(ctx context.Context, ownerID int64, 
 		return nil, err
 	}
 
+	superseded, err := replaceArtifactAssets(ctx, tx, artifactID, generationID, assets)
+	if err != nil {
+		return nil, err
+	}
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, superseded...)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return queued, nil
+}
+
+// replaceArtifactAssets changes rows only. The caller checks ownership and
+// queues superseded blobs after all of its reference changes are complete.
+func replaceArtifactAssets(ctx context.Context, tx *sql.Tx, artifactID, generationID string, assets []ArtifactAsset) ([]string, error) {
 	superseded, err := assetBlobIDs(ctx, tx, artifactID)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.ExecContext(ctx,
-		"DELETE FROM artifact_assets WHERE artifact_id=?", artifactID); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM artifact_assets WHERE artifact_id=?", artifactID); err != nil {
 		return nil, err
 	}
-
 	for _, a := range assets {
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO artifact_assets
@@ -138,17 +153,7 @@ func (s *SQLiteStore) ReplaceArtifactAssets(ctx context.Context, ownerID int64, 
 			return nil, fmt.Errorf("insert asset %s: %w", a.SourceURL, err)
 		}
 	}
-
-	// After the inserts, so a payload carried over unchanged between
-	// generations counts as still referenced and its bytes are never queued.
-	queued, err := enqueueUnreferencedBlobs(ctx, tx, superseded...)
-	if err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return queued, nil
+	return superseded, nil
 }
 
 // ListArtifactAssets returns one artifact's assets, newest generation first by

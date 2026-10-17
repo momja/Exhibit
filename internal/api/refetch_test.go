@@ -12,12 +12,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
+	"sync/atomic"
+
+	"github.com/momja/Exhibit/internal/blob"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -413,7 +419,7 @@ type failingRepointStore struct {
 	store.Store
 }
 
-func (failingRepointStore) ReplaceSourceBlob(context.Context, int64, string, string, string) ([]string, error) {
+func (failingRepointStore) ReplaceArtifactSnapshot(context.Context, int64, string, store.ArtifactSnapshot) ([]string, error) {
 	return nil, errors.New("disk full")
 }
 
@@ -451,4 +457,141 @@ func blobFileNames(t *testing.T, dir string) []string {
 		names[i] = e.Name()
 	}
 	return names
+}
+
+// A storage failure must never publish the fresh markup asset URLs before
+// their rows exist. Exercise both a blob failure and a transaction failure.
+type failingAssetBlob struct{ blob.Store }
+
+func (b failingAssetBlob) Put(ctx context.Context, id string, body io.Reader) error {
+	if strings.HasPrefix(id, "asset-") {
+		return errors.New("asset disk full")
+	}
+	return b.Store.Put(ctx, id, body)
+}
+
+func TestRefetchMarkupAssetsCommitWithBody(t *testing.T) {
+	for _, failure := range []string{"blob write", "transaction", "none"} {
+		t.Run(failure, func(t *testing.T) {
+			withUnguardedFetcher(t)
+			r, blobDir := newTestRouterWithBlobDir(t)
+			u := imageFixture(t)
+			id := createSnapshotArtifact(t, r, u.URL+"/page.html", []string{})
+			before := getArtifactBody(t, r, id)
+			assetsBefore := listAssets(t, r, id)
+			filesBefore := blobFileNames(t, blobDir)
+			realStore, realBlob := r.cfg.Store, r.cfg.Blob
+			switch failure {
+			case "blob write":
+				r.cfg.Blob = failingAssetBlob{Store: realBlob}
+			case "transaction":
+				r.cfg.Store = failingRepointStore{Store: realStore}
+			}
+			w := doRefetch(t, r, id)
+			r.cfg.Store, r.cfg.Blob = realStore, realBlob
+			after := getArtifactBody(t, r, id)
+			if failure != "none" {
+				require.Equal(t, http.StatusInternalServerError, w.Code, w.Body.String())
+				assert.Equal(t, before, after)
+				assert.Equal(t, assetsBefore, listAssets(t, r, id))
+				assert.Equal(t, filesBefore, blobFileNames(t, blobDir), "unused staged bytes reclaimed; live bytes retained")
+			} else {
+				require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+				assert.NotEqual(t, before, after)
+			}
+			assetPath := regexp.MustCompile(`/a/[^" ]+/assets/[^" ]+`).FindString(after)
+			require.NotEmpty(t, assetPath)
+			got := renderGet(t, r, assetPath)
+			require.Equal(t, http.StatusOK, got.Code)
+			assert.Equal(t, bigPNG(), got.Body.Bytes())
+		})
+	}
+}
+
+func TestRefetchFailedSavedAssetKeepsWholeSnapshot(t *testing.T) {
+	for _, bodyChanged := range []bool{false, true} {
+		t.Run(fmt.Sprint("body changed=", bodyChanged), func(t *testing.T) {
+			withUnguardedFetcher(t)
+			r, blobDir := newTestRouterWithBlobDir(t)
+			var fail atomic.Bool
+			u := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				switch req.URL.Path {
+				case "/page.html":
+					w.Header().Set("Content-Type", "text/html")
+					io.WriteString(w, `<html><head><script>fetch('/a.wasm');fetch('/b.wasm')</script></head><body>`)
+					if fail.Load() && bodyChanged {
+						io.WriteString(w, "new body")
+					}
+					io.WriteString(w, `</body></html>`)
+				case "/a.wasm":
+					w.Header().Set("Content-Type", "application/wasm")
+					io.WriteString(w, "wasm-a")
+				case "/b.wasm":
+					if fail.Load() {
+						http.Error(w, "unavailable", http.StatusServiceUnavailable)
+						return
+					}
+					w.Header().Set("Content-Type", "application/wasm")
+					io.WriteString(w, "wasm-b")
+				}
+			}))
+			t.Cleanup(u.Close)
+			id := createSnapshotArtifact(t, r, u.URL+"/page.html", []string{})
+			bodyBefore := getArtifactBody(t, r, id)
+			blobBefore := refetchBlobID(t, r, id)
+			assetsBefore := listAssets(t, r, id)
+			require.Len(t, assetsBefore, 2)
+			filesBefore := blobFileNames(t, blobDir)
+			fail.Store(true)
+			w := doRefetch(t, r, id)
+			require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+			assert.Contains(t, w.Body.String(), "artifact unchanged")
+			assert.Contains(t, w.Body.String(), "/b.wasm")
+			assert.Equal(t, bodyBefore, getArtifactBody(t, r, id))
+			assert.Equal(t, blobBefore, refetchBlobID(t, r, id))
+			assert.Equal(t, assetsBefore, listAssets(t, r, id))
+			assert.Equal(t, filesBefore, blobFileNames(t, blobDir))
+		})
+	}
+}
+
+// A failed parent fetch can hide a saved asset without failing that asset's
+// own URL. It still must not authorize deleting the last saved copy.
+func TestRefetchFailedStylesheetKeepsSavedFont(t *testing.T) {
+	withUnguardedFetcher(t)
+	r, blobDir := newTestRouterWithBlobDir(t)
+	var fail atomic.Bool
+	u := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/page.html":
+			w.Header().Set("Content-Type", "text/html")
+			io.WriteString(w, `<html><head><link rel="stylesheet" href="/style.css"></head><body><img src="/image.png"></body></html>`)
+		case "/style.css":
+			if fail.Load() {
+				http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "text/css")
+			io.WriteString(w, `@font-face { font-family: test; src: url('/font.woff2'); }`)
+		case "/font.woff2":
+			w.Header().Set("Content-Type", "font/woff2")
+			io.WriteString(w, strings.Repeat("font", 4096))
+		case "/image.png":
+			w.Header().Set("Content-Type", "image/png")
+			w.Write(bigPNG())
+		}
+	}))
+	t.Cleanup(u.Close)
+	id := createSnapshotArtifact(t, r, u.URL+"/page.html", []string{})
+	bodyBefore := getArtifactBody(t, r, id)
+	assetsBefore := listAssets(t, r, id)
+	require.Len(t, assetsBefore, 2)
+	filesBefore := blobFileNames(t, blobDir)
+	fail.Store(true)
+	w := doRefetch(t, r, id)
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "/font.woff2")
+	assert.Equal(t, bodyBefore, getArtifactBody(t, r, id))
+	assert.Equal(t, assetsBefore, listAssets(t, r, id))
+	assert.Equal(t, filesBefore, blobFileNames(t, blobDir))
 }
