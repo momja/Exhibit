@@ -29,16 +29,17 @@ const LINK_ID = "share-link-row-id";
 // its absence is what "the link is off" looks like in the markup. `embed`
 // is the widget snippet the template renders when the artifact has both a
 // link and a widget (av-ei5h); empty is the no-widget panel.
-function loadShare({ link = "", embed = "", responses = [], confirmed = true } = {}) {
+function loadShare({ link = "", embed = "", responses = [], confirmed = true, grantCount = 0 } = {}) {
   const api = recordingApi(responses);
   const events = [];
   const copied = [];
+  const prompts = [];
   const page = loadPageScript([SHARE_JS], {
     ID,
     TOKEN: "",
     READ_ONLY: false,
     apiFetch: api.apiFetch,
-    confirm: () => confirmed,
+    confirm: (message) => { prompts.push(message); return confirmed; },
     CustomEvent,
     navigator: { clipboard: { writeText: (t) => { copied.push(t); return Promise.resolve(); } } }
   }, {
@@ -50,7 +51,11 @@ function loadShare({ link = "", embed = "", responses = [], confirmed = true } =
     "share-add-input": { value: "" },
     "share-link-toggle": { dataset: link ? { shareId: link } : {} },
     "share-link-url": { value: "http://render.test/s/" + link, select() {} },
-    "share-widget-embed": { value: embed, select() {} }
+    "share-widget-embed": { value: embed, select() {} },
+    // data-grant-count is the template's render of len(.Shares.Grants) —
+    // what setStateMode reads to decide whether switching away from 'shared'
+    // needs a confirm (av-tlpv).
+    "share-state-mode": { dataset: { grantCount: String(grantCount) } }
   });
 
   // The panel fires exhibit:shares-changed and htmx re-fetches the fragment.
@@ -71,7 +76,7 @@ function loadShare({ link = "", embed = "", responses = [], confirmed = true } =
     });
   };
 
-  return { ...page, api, events, copied, click, change, clickRevoke };
+  return { ...page, api, events, copied, prompts, click, change, clickRevoke };
 }
 
 const paths = (api) => api.calls.map((c) => c.method + " " + c.path);
@@ -211,6 +216,55 @@ test("the state mode applies immediately, through the artifact PATCH", async () 
   assert.deepEqual(page.events, ["exhibit:shares-changed"],
     "the re-render is what confirms the stored value; a select left showing the " +
     "click rather than the answer would lie about a rejected write");
+});
+
+// av-tlpv — switching away from 'shared' resolves every grantee off the
+// owner's rows and onto their own (StatePrincipal, internal/store/store.go).
+// Nothing is deleted, but a grantee's own row was never written, so their
+// next visit looks like the artifact forgot everything they did there.
+
+test("switching to 'own' with grantees asks first, naming how many people it affects", async () => {
+  const page = loadShare({ grantCount: 3 });
+
+  await page.change("share-state-mode", { value: "own" });
+
+  assert.equal(page.prompts.length, 1, "one confirmation before the write");
+  assert.match(page.prompts[0], /3 people/, "the owner is told how many people the switch affects");
+  assert.deepEqual(paths(page.api), ["PATCH /api/artifacts/" + ID]);
+  assert.deepEqual(JSON.parse(page.api.calls[0].body), { share_state_mode: "own" });
+});
+
+test("cancelling that confirm sends nothing, and still re-renders the select from the server", async () => {
+  const page = loadShare({ grantCount: 3, confirmed: false });
+
+  await page.change("share-state-mode", { value: "own" });
+
+  assert.deepEqual(page.api.calls, [],
+    "a cancelled switch must not reach the API — the mode the server holds is unchanged");
+  assert.deepEqual(page.events, ["exhibit:shares-changed"],
+    "the select shows whatever the click implied until something re-renders it from " +
+    "the stored value; a cancel has no PATCH response to do that, so it asks for the " +
+    "same re-render a successful save gets");
+});
+
+test("switching to 'own' with nobody else on the artifact asks nothing", async () => {
+  const page = loadShare({ grantCount: 0 });
+
+  await page.change("share-state-mode", { value: "own" });
+
+  assert.deepEqual(page.prompts, [], "no grantee, no question");
+  assert.deepEqual(paths(page.api), ["PATCH /api/artifacts/" + ID],
+    "there is nobody whose data the switch could orphan");
+});
+
+test("switching to 'shared' never asks, whatever the confirm would answer", async () => {
+  const page = loadShare({ grantCount: 3, confirmed: false });
+
+  await page.change("share-state-mode", { value: "shared" });
+
+  assert.deepEqual(page.prompts, []);
+  assert.deepEqual(paths(page.api), ["PATCH /api/artifacts/" + ID],
+    "only 'own' can orphan anyone; 'shared' just adds everyone to the owner's board");
 });
 
 // --- failure ------------------------------------------------------------

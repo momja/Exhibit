@@ -1162,7 +1162,11 @@ and more to the point the list *is* the guest list, which a grant does not
 carry. Three independent halves in it — the people currently granted (one field
 taking several names, one submit, each name reported back), the public link (a
 toggle, plus a one-step "replace link" that says the old URL stops working),
-and one control for `share_state_mode`.
+and one control for `share_state_mode`. That control asks before switching
+from `shared` to `own` while anyone holds a grant (av-tlpv): nothing is deleted,
+but each grantee wrote the owner's rows and never their own, so their next
+visit reads an empty board. The confirmation names how many people that is.
+Switching to `shared`, or with no grants, applies without asking.
 
 Its body is an htmx target: a mutation ends by firing `exhibit:shares-changed`
 and `/partials/share-panel` re-renders the same named partial the full page
