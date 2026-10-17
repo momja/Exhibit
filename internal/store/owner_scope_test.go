@@ -114,6 +114,10 @@ func ownerCases() []ownerCase {
 		{"SetWidgetBlobID", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			return false, s.SetWidgetBlobID(ctx, o, id, "widget-blob-"+id)
 		}},
+		{"ReplaceArtifactSnapshot", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, err := s.ReplaceArtifactSnapshot(ctx, o, id, ArtifactSnapshot{SourceBlobID: "refetched-blob-" + id, SourceText: "refetched text"})
+			return false, err
+		}},
 		{"DeleteWidget", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			_, err := s.DeleteWidget(ctx, o, id)
 			return false, err
@@ -465,9 +469,10 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// the last record of whose it was. There is no owner left to scope by,
 		// and nothing to leak: the queue holds ids of bytes already condemned,
 		// never a way to reach a live artifact.
-		"PendingBlobDeletions":  "queued ids outlive the rows that owned them; there is no owner left",
-		"DrainBlobDeletions":    "removes bytes already condemned; the ids come from the caller's own delete",
-		"DrainAllBlobDeletions": "a janitor over the whole queue, owned by no one",
+		"QueueUnreferencedBlobs": "failed-write cleanup by server-minted blob id; skips every blob still referenced by any owner",
+		"PendingBlobDeletions":   "queued ids outlive the rows that owned them; there is no owner left",
+		"DrainBlobDeletions":     "removes bytes already condemned; the ids come from the caller's own delete",
+		"DrainAllBlobDeletions":  "a janitor over the whole queue, owned by no one",
 
 		// Identity and sessions (av-30rj). These methods *establish* who the
 		// owner is; they cannot take one as input without assuming the answer

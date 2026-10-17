@@ -347,6 +347,16 @@ type ListOptions struct {
 	Offset      int
 }
 
+// ArtifactSnapshot is a staged refetch ready to commit. Empty SourceBlobID
+// preserves the body and source text. Nil Assets preserves the asset generation;
+// otherwise GenerationID names the replacement generation.
+type ArtifactSnapshot struct {
+	SourceBlobID string
+	SourceText   string
+	GenerationID string
+	Assets       []ArtifactAsset
+}
+
 // Store is the seam between handlers and persistence (architecture §3.3).
 //
 // # Owner scoping (av-ep8k)
@@ -413,6 +423,11 @@ type Store interface {
 	// caller-writable: the generic update map is a decoded PATCH body, and
 	// this id is minted server-side.
 	SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error
+	// ReplaceArtifactSnapshot atomically switches the body, asset generation,
+	// search text and timestamp, and queues superseded blobs for deletion.
+	// All new blobs must already be stored. An empty SourceBlobID keeps the
+	// body; nil Assets keeps the current generation.
+	ReplaceArtifactSnapshot(ctx context.Context, ownerID int64, id string, snapshot ArtifactSnapshot) ([]string, error)
 	// DeleteArtifact removes the artifact and returns the blob ids it queued
 	// for deletion; DeleteWidget does the same for the widget an artifact
 	// detaches. Both enqueue inside the transaction that dropped the
@@ -440,6 +455,10 @@ type Store interface {
 	ArtifactAssetsUnscoped(ctx context.Context, artifactID string) ([]ArtifactAsset, error)
 	GetArtifactAssetUnscoped(ctx context.Context, artifactID, assetID string) (*ArtifactAsset, error)
 	DeleteArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) ([]string, error)
+
+	// QueueUnreferencedBlobs condemns unused staged blobs after a failed write.
+	// Referenced blobs are skipped, including shared content-addressed assets.
+	QueueUnreferencedBlobs(ctx context.Context, ids []string) ([]string, error)
 
 	// The blob deletion queue (av-8gyd). Rows and bytes live in two stores
 	// that cannot commit together, so the *intent* to remove the bytes is

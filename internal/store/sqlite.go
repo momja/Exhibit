@@ -739,6 +739,55 @@ func (s *SQLiteStore) attachAllowlists(ctx context.Context, arts []*Artifact) er
 	return rows.Err()
 }
 
+// ReplaceArtifactSnapshot commits a refetch as one unit. A body naming freshly
+// minted markup asset URLs must never become visible without those asset rows.
+// Superseded bytes are queued only after every reference has been switched.
+func (s *SQLiteStore) ReplaceArtifactSnapshot(ctx context.Context, ownerID int64, id string, snapshot ArtifactSnapshot) ([]string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var old string
+	err = tx.QueryRowContext(ctx,
+		"SELECT source_blob_id FROM artifacts WHERE id=? AND owner_id=?",
+		id, ownerID).Scan(&old)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	var superseded []string
+	if snapshot.SourceBlobID != "" {
+		if _, err := tx.ExecContext(ctx,
+			"UPDATE artifacts SET source_blob_id=?, source_text=? WHERE id=? AND owner_id=?",
+			snapshot.SourceBlobID, snapshot.SourceText, id, ownerID); err != nil {
+			return nil, err
+		}
+		superseded = append(superseded, old)
+	}
+	if snapshot.Assets != nil {
+		oldAssets, err := replaceArtifactAssets(ctx, tx, id, snapshot.GenerationID, snapshot.Assets)
+		if err != nil {
+			return nil, err
+		}
+		superseded = append(superseded, oldAssets...)
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE artifacts SET updated_at=datetime('now') WHERE id=? AND owner_id=?", id, ownerID); err != nil {
+		return nil, err
+	}
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, superseded...)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return queued, nil
+}
+
 // DeleteArtifact removes the artifact — its tags, collections, shares, origin
 // decisions and state going with it by ON DELETE CASCADE — and returns the
 // blob ids it enqueued for deletion, for the caller to drain (blobqueue.go).

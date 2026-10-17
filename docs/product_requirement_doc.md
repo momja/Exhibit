@@ -558,7 +558,9 @@ skill or special output format is needed — the file *is* the artifact. It ente
 library through the web UI: drag/drop or paste the HTML, or paste a **URL** — the
 service fetches the page once and stores it as an owned file (the URL is recorded as
 `source_url`, and the user can later re-fetch it on demand as a snapshot update — no
-version history, with a warning that stored state may not survive the new body). A URL
+version history, with a warning that stored state may not survive the new body; an
+error status, an empty response, or one that is not HTML leaves the artifact as it
+was). A URL
 ingest can also **vendor** the page's assets into the stored file — images, styles,
 scripts, fonts, and the binary payloads it fetches from JavaScript at runtime — so the
 artifact stays "just a file" after the source site rots. On ingest the service scans the
