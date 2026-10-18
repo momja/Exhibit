@@ -39,3 +39,7 @@ Prototype review decisions (demo: paper canvas frame 07-pip-demo):
 - No toasts. Placement changes are announced to screen readers only, through an aria-live region.
 - Sandbox posture is option D: the title is a button with a posture glyph (grey shield when contained, accent globe + origin count with grants) and a caret. It opens an info card with the created date, the Sandbox posture receipt (same rows as capabilityPopover), Sharing (owner only) and Manage security settings (owner only). The separate posture button is gone, and the created date and Manage allowlist link leave the ⋮ menu. The card stays one server-rendered partial that htmx re-renders on exhibit:capabilities-changed.
 - Banners (capability warning, state changed) still need a home; toasts are ruled out.
+
+**2026-10-18T22:26:00Z**
+
+Popup placement (supersedes the 'hang off their own trigger' line in the previous note): the info card is flush with the pill's corner-side edge and matches the pill's width (280px minimum, never wider than the window less 8px each side). The ⋮ menu still hangs off its own button. Both open 8px off the pill toward the screen centre, choose that side from the docked corner rather than the pill's geometry (on a phone the pill spans most of the width), and cap their height at the room left before the 12px window inset, scrolling past that. Verified in all four corners at 1280×800, 1024×420, 900×300 and 390×844, contained and with grants.
