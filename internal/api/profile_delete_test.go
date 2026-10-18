@@ -144,7 +144,7 @@ func (in *deleteInstance) seedLibrary(t *testing.T) string {
 	ctx := context.Background()
 	require.NoError(t, in.st.SetAgentKey(ctx, &store.AgentKey{
 		OwnerID: in.member.ID, Provider: "anthropic", KeyCiphertext: "sealed"}))
-	require.NoError(t, in.st.SaveTranscript(ctx, in.member.ID, id, "sess-1", `[{"role":"user"}]`))
+	require.NoError(t, in.st.SaveTranscript(ctx, in.member.ID, store.Transcript{ArtifactID: id, SessionID: "sess-1", SessionFile: "{}\n"}))
 	return id
 }
 

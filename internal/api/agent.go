@@ -1,10 +1,8 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -138,6 +136,11 @@ func maskKey(k string) string {
 
 type createAgentSessionRequest struct {
 	ArtifactID string `json:"artifact_id"`
+	// ResumeSessionID continues a conversation kept with ArtifactID instead of
+	// starting one (av-b4yh). It needs the artifact because a conversation is
+	// kept per artifact, which is also what makes "another owner's" and "not
+	// there" the same 404.
+	ResumeSessionID string `json:"resume_session_id"`
 }
 
 // agentSessionOpts builds the CreateOpts for a new session from whichever
@@ -200,37 +203,6 @@ func writeAgentCreateError(w http.ResponseWriter, r *http.Request, op string, er
 	serverError(w, r, op, err)
 }
 
-// inlinedArtifactSource reads the artifact body a session opens with, so the
-// agent does not spend its first tool call fetching what the handler is
-// holding anyway (av-e0yj). The result is untrusted, exactly like the title
-// beside it, and the session fences both as data rather than as instructions.
-//
-// A read failure is not fatal — the agent can still call get_artifact — so
-// this returns "" and logs rather than failing the session. An oversized body
-// is treated the same way: get_artifact is the fallback for a body too large
-// to inline.
-const maxInlinedArtifactSourceBytes = 10 << 20 // 10 MiB
-
-func (ro *Router) inlinedArtifactSource(r *http.Request, a *store.Artifact) string {
-	rc, err := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
-	if err != nil {
-		slog.WarnContext(r.Context(), "agent session opened without inlined body",
-			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
-		return ""
-	}
-	defer rc.Close()
-	body, err := io.ReadAll(io.LimitReader(rc, maxInlinedArtifactSourceBytes+1))
-	if err != nil {
-		slog.WarnContext(r.Context(), "agent session opened without inlined body",
-			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
-		return ""
-	}
-	if len(body) > maxInlinedArtifactSourceBytes {
-		return ""
-	}
-	return string(body)
-}
-
 func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 	var req createAgentSessionRequest
 	if !decodeJSON(w, r, &req) {
@@ -251,11 +223,47 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "artifact not found")
 			return
 		}
-		opts.ArtifactTitle = a.Title
-		opts.ArtifactBody = ro.inlinedArtifactSource(r, a)
+	}
+
+	if req.ResumeSessionID != "" {
+		if req.ArtifactID == "" {
+			writeError(w, http.StatusBadRequest, "resume_session_id needs artifact_id")
+			return
+		}
+		t, err := ro.cfg.Store.GetTranscript(r.Context(), opts.OwnerID, req.ArtifactID, req.ResumeSessionID)
+		if err != nil {
+			serverError(w, r, "get conversation to resume", err)
+			return
+		}
+		if t == nil {
+			writeError(w, http.StatusNotFound, "conversation not found")
+			return
+		}
+		if !t.Resumable {
+			writeError(w, http.StatusConflict,
+				"that conversation was kept before conversations could be continued, so it can only be read")
+			return
+		}
+		// A conversation that is still running is continued by attaching to it:
+		// a second process on the same conversation would be two writers of one
+		// record. The next tab to ask gets the one that exists.
+		if live := ro.cfg.Agent.Get(opts.OwnerID, t.SessionID); live != nil {
+			ticket, err := ro.sseTickets.Issue(live.ID, opts.OwnerID)
+			if err != nil {
+				serverError(w, r, "issue sse ticket", err)
+				return
+			}
+			writeJSON(w, http.StatusOK, ro.sessionResponse(live, opts, ticket))
+			return
+		}
+		opts.ResumeSessionID = t.SessionID
 	}
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)
+	if errors.Is(err, agent.ErrSessionLive) {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
 	if err != nil {
 		writeAgentCreateError(w, r, "create agent session", err)
 		return
@@ -270,6 +278,12 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "issue sse ticket", err)
 		return
 	}
+	writeJSON(w, http.StatusCreated, ro.sessionResponse(s, opts, ticket))
+}
+
+// sessionResponse is what a client is told about a session it is about to
+// stream from.
+func (ro *Router) sessionResponse(s *agent.Session, opts agent.CreateOpts, ticket string) map[string]any {
 	resp := map[string]any{
 		"id":          s.ID,
 		"artifact_id": s.ArtifactID(),
@@ -282,7 +296,7 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 		resp["provider"] = opts.Provider
 		resp["model"] = opts.Model
 	}
-	writeJSON(w, http.StatusCreated, resp)
+	return resp
 }
 
 // agentSessionTicket mints a fresh SSE ticket for an existing session. A ticket
@@ -307,9 +321,9 @@ func (ro *Router) agentSessionTicket(w http.ResponseWriter, r *http.Request) {
 // agentPromptRequest keeps the user's words and the untrusted material apart
 // on the wire. Message is what the person typed and is the only part that
 // reaches the model as an instruction; every Snippets entry is an element
-// descriptor captured from inside the artifact (selector, text, outerHTML) and
-// is fenced as data by the session. Page JS therefore never composes the
-// envelope — the fence id it would need stays server-side (av-e0yj).
+// descriptor captured from inside the artifact (selector, text, outerHTML), which
+// the session hands to the model as a tool result (get_selection) rather than as
+// prompt text. Page JS therefore composes no envelope at all (av-e0yj).
 type agentPromptRequest struct {
 	Message string `json:"message"`
 	Images  []struct {
@@ -350,11 +364,7 @@ func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
 		}
 		descriptors = append(descriptors, descriptor)
 	}
-	data := make([]agent.DataBlock, 0, len(descriptors))
-	for i, descriptor := range descriptors {
-		data = append(data, agent.SnippetBlock(i, len(descriptors), descriptor))
-	}
-	if err := s.Prompt(r.Context(), req.Message, images, data); err != nil {
+	if err := s.Prompt(r.Context(), req.Message, images, descriptors); err != nil {
 		// A spend cap saying no is a refusal with a message about a limit and
 		// its reset (av-99f4), not a gateway failure: it answers 429 so the
 		// chat treats it as a limit, and the message is the canned wording the
@@ -544,20 +554,4 @@ func (ro *Router) agentEvents(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-}
-
-// listTranscripts returns the agent conversations persisted with an artifact
-// (colophon provenance, av-q3wo).
-func (ro *Router) listTranscripts(w http.ResponseWriter, r *http.Request) {
-	id := urlParamID(r, "artifactID")
-	ts, err := ro.cfg.Store.ListTranscripts(r.Context(), ownerIDFromCtx(r.Context()), id)
-	if err != nil {
-		serverError(w, r, "list transcripts", err)
-		return
-	}
-	out := make([]map[string]any, 0, len(ts))
-	for sid, msgs := range ts {
-		out = append(out, map[string]any{"session_id": sid, "messages": json.RawMessage(msgs)})
-	}
-	writeJSON(w, http.StatusOK, out)
 }

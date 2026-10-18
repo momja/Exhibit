@@ -2,7 +2,13 @@
      live sandboxed preview of the session's artifact on the right. Data:
      agentPageData (agentui.go). ?artifact=<id> opens the page in modify mode
      bound to that artifact. Streaming arrives over SSE from the session's Pi
-     sidecar. */}}
+     sidecar.
+
+     The chat is always a new conversation: no session exists until the first
+     message, and that message starts one — however many conversations the
+     artifact has kept. An earlier one is continued only from the History pane
+     (agentResume), by choosing it; nothing on this page resumes one on its own,
+     and a redesign of it must not. */}}
 {{define "agent"}}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -39,7 +45,19 @@
 </div>
 <div class="layout">
   <div class="chat" id="pane-chat">
+    {{/* The chat's own controls. History lists the conversations kept with this
+         artifact (av-y7td) in a pane that takes the place of the messages and
+         the composer while it is open — a conversation you are only reading
+         must not sit above a box that would talk to the live one. The pane's
+         contents are server-rendered fragments, swapped into #history; the
+         button stays hidden until the page knows which artifact it is about. */}}
+    <div class="chat-bar">
+      <button type="button" class="hist-btn" id="history-btn" hidden
+              hx-get="/partials/agent-history" hx-vals='js:{artifact: previewArtifactId()}'
+              hx-target="#history" hx-swap="innerHTML" onclick="openHistory()"><i class="ph ph-clock-counter-clockwise"></i> History</button>
+    </div>
     <div id="messages"></div>
+    <div id="history"></div>
     <div class="composer">
       <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> Preview updated — tap Preview to view</button>
       <div id="snippet-chips"></div>
@@ -155,3 +173,84 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
     <div id="frame-wrap">
       {{if .HasArtifact}}<iframe id="pv-frame" src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>The artifact preview appears here once the agent saves one.</span></div>{{end}}
     </div>{{end}}
+
+{{/* agentHistory is the history pane's list: every conversation kept with the
+     artifact, newest first, each saying what it was about, when, and which
+     version of the artifact it was last working against. Rendered by
+     GET /partials/agent-history (transcripts.go) into #history, which is the
+     only place it exists. Data: agentHistoryData. */}}
+{{define "agentHistory"}}<div class="history-bar">
+  <button type="button" class="history-back" onclick="closeHistory()"><i class="ph ph-arrow-left"></i> Chat</button>
+  <h2>Previous conversations</h2>
+</div>
+{{if .Items}}<ul class="history-list">
+  {{range .Items}}<li><button type="button" class="history-item"
+      hx-get="/partials/agent-transcript?artifact={{.ArtifactID | urlquery}}&amp;session={{.SessionID | urlquery}}"
+      hx-target="#history" hx-swap="innerHTML">
+    <span class="history-item-title">{{.Title}}</span>
+    <span class="history-item-meta">{{template "conversationMeta" .}}</span>
+  </button></li>{{end}}
+</ul>{{else}}<p class="history-empty">No earlier conversations about this artifact yet. Each one you have with the agent is kept here.</p>{{end}}{{end}}
+
+{{/* agentTranscript is one stored conversation, read-only: the same bubbles and
+     tool chips the live chat draws, from the projection of what was said
+     (agent.Messages) — never the stored session file. Data: agentTranscriptData. */}}
+{{define "agentTranscript"}}<div class="history-bar">
+  <button type="button" class="history-back"
+          hx-get="/partials/agent-history?artifact={{.ArtifactID | urlquery}}" hx-target="#history" hx-swap="innerHTML"><i class="ph ph-arrow-left"></i> Conversations</button>
+</div>
+<div class="history-head">
+  <h2 class="history-title">{{.Title}}</h2>
+  <p class="history-meta">{{template "conversationMeta" .}}</p>
+</div>
+<div class="history-messages" id="history-messages">
+  {{range .Messages}}{{if eq .Role "tool"}}<div class="tool-chip {{if .Failed}}fail{{else}}done{{end}}"><i class="ph {{if .Failed}}ph-x-circle{{else}}ph-check-circle{{end}}"></i> {{.Text}}</div>{{else}}<div class="msg {{.Role}}">{{.Text}}{{if .Images}}<span class="history-images">{{.Images}} image{{if ne .Images 1}}s{{end}} attached</span>{{end}}</div>{{end}}{{else}}<p class="history-empty">Nothing was said in this conversation.</p>{{end}}
+</div>
+{{template "agentResume" .}}{{end}}
+
+{{/* agentResume is how a stored conversation is continued — and the one place a
+     person decides what happens to the artifact when they do (av-b4yh).
+
+     The conversation was last working against one version of the artifact and
+     the artifact may have moved on. If it has, continuing offers two things and
+     states what each costs. Rolling back is the primary action: it puts the
+     artifact's code and saved data back as that version left them, recorded as
+     a new version so nothing is lost, and the click on a button that says so is
+     the confirmation — nothing changes before it. Continuing without rolling
+     back is the escape: a plain secondary button, never the primary one, which
+     leaves the artifact alone and starts the agent from it as it is, told that
+     it may have changed.
+
+     Before choosing, the person can look at the version they would return to:
+     "View vN" swaps it, running and with the data it had, into the preview pane
+     beside this card (the versionViewer partial). It is a look and nothing
+     more — nothing done in it is saved — and the card's own buttons remain the
+     only things that change the artifact.
+
+     Everything else is a note, not a missing button: a conversation kept before
+     they could be continued says so, and so does an instance with no agent.
+     Data: agentTranscriptData; agent.js (resumeConversation) does the rest. */}}
+{{define "agentResume"}}{{if not .Resumable}}<p class="resume-note">This conversation was kept before conversations could be continued, so it can only be read.</p>
+{{else if not .AgentEnabled}}<p class="resume-note">Agent support is off on this server, so conversations can only be read.</p>
+{{else if or .Current (eq .VersionSeq 0)}}<div class="resume-card" id="resume-card">
+  <button type="button" class="btn" data-resume="{{.SessionID}}" data-rollback="0"><i class="ph ph-chat-circle"></i> Continue this conversation</button>
+  <p class="resume-status" id="resume-status" role="status" aria-live="polite"></p>
+</div>
+{{else}}<div class="resume-card" id="resume-card">
+  <p class="resume-lede">This conversation was last working against <strong>v{{.VersionSeq}}</strong>. The artifact is now at <strong>v{{.HeadSeq}}</strong>.</p>
+  <button type="button" class="resume-view"
+          hx-get="/partials/version-viewer?artifact={{.ArtifactID | urlquery}}&amp;seq={{.VersionSeq}}" hx-target="#pane-preview" hx-swap="innerHTML"
+          onclick="showPane('preview')"><i class="ph ph-eye"></i> View v{{.VersionSeq}} in the preview first</button>
+  <button type="button" class="btn" data-resume="{{.SessionID}}" data-rollback="{{.VersionSeq}}"><i class="ph ph-arrow-counter-clockwise"></i> Roll back to v{{.VersionSeq}} and continue</button>
+  <p class="resume-explain">Puts the artifact’s code and saved data back as v{{.VersionSeq}} left them. It is recorded as a new version, so nothing is lost, and you can undo it from the Versions list.</p>
+  <button type="button" class="btn btn-sec" data-resume="{{.SessionID}}" data-rollback="0">Continue without rolling back</button>
+  <p class="resume-explain">Leaves the artifact as it is now. The agent is told it may have changed, and reads it again before changing anything.</p>
+  <button type="button" class="resume-cancel"
+          hx-get="/partials/agent-history?artifact={{.ArtifactID | urlquery}}" hx-target="#history" hx-swap="innerHTML">Cancel</button>
+  <p class="resume-status" id="resume-status" role="status" aria-live="polite"></p>
+</div>{{end}}{{end}}
+
+{{/* conversationMeta is the one line under a conversation's title: the artifact
+     version it was last working against (and whether that is still the one
+     the artifact is at), and when it last ran. */}}
+{{define "conversationMeta"}}{{if .VersionSeq}}Based on v{{.VersionSeq}}{{if .Current}} · current{{end}} · {{end}}<time datetime="{{.WhenISO}}">{{.When}}</time>{{end}}

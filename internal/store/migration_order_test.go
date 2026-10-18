@@ -106,8 +106,17 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 	ctx := context.Background()
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id > 23",
-		// 031's geolocation approval (av-f446).
-		"ALTER TABLE artifacts DROP COLUMN geolocation_approved",
+		// 033's conversation record (av-y7td): three columns on a table that
+		// predates all of this, so they are taken back off rather than dropped
+		// with it.
+		"ALTER TABLE agent_transcripts DROP COLUMN version_seq",
+		"ALTER TABLE agent_transcripts DROP COLUMN session_file",
+		"ALTER TABLE agent_transcripts DROP COLUMN title",
+		// 032's version history (artifact versions): the trigger first, since it
+		// names columns of the table it fires on, then the table.
+		"DROP TRIGGER IF EXISTS artifacts_initial_version",
+		"DROP TABLE IF EXISTS artifact_version_assets",
+		"DROP TABLE IF EXISTS artifact_versions",
 		// 030's metering ledger (av-2yws) — the table carries its indexes.
 		"DROP TABLE IF EXISTS agent_usage",
 		"DROP TABLE IF EXISTS pending_blob_deletions",
@@ -120,6 +129,8 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 		// After the view, not before: the one being dropped names
 		// artifact_assets, and SQLite resolves a view's body when the table it
 		// selects from is altered.
+		// 031's geolocation approval, after restoring the view.
+		"ALTER TABLE artifacts DROP COLUMN geolocation_approved",
 		"ALTER TABLE artifacts DROP COLUMN camera_approved",
 		"ALTER TABLE artifacts DROP COLUMN microphone_approved",
 		// 029's share rollups (av-6xjd), and the triggers before the columns
@@ -208,7 +219,28 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	// shares.recipient_id blocks that column's DROP.
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id >= 28",
+		// 033 first (av-y7td): the columns it added to agent_transcripts.
+		"ALTER TABLE agent_transcripts DROP COLUMN version_seq",
+		"ALTER TABLE agent_transcripts DROP COLUMN session_file",
+		"ALTER TABLE agent_transcripts DROP COLUMN title",
+		// 032 comes off next (artifact versions). Its blob_references names the
+		// versions table, and SQLite re-parses a view when a table it selects
+		// from is altered, so the view goes back to its 026 form before the
+		// ALTERs below.
+		"DROP TRIGGER IF EXISTS artifacts_initial_version",
+		"DROP VIEW IF EXISTS blob_references",
+		"DROP TABLE IF EXISTS artifact_version_assets",
+		"DROP TABLE IF EXISTS artifact_versions",
+		`CREATE VIEW blob_references AS
+             SELECT source_blob_id AS blob_id, owner_id FROM artifacts WHERE source_blob_id != ''
+             UNION ALL
+             SELECT widget_blob_id AS blob_id, owner_id FROM artifacts WHERE widget_blob_id != ''
+             UNION ALL
+             SELECT aa.blob_id AS blob_id, a.owner_id AS owner_id
+               FROM artifact_assets aa JOIN artifacts a ON a.id = aa.artifact_id WHERE aa.blob_id != ''`,
+		// 031's geolocation approval (av-f446).
 		"ALTER TABLE artifacts DROP COLUMN geolocation_approved",
+		// 030's metering ledger (av-2yws).
 		"DROP TABLE IF EXISTS agent_usage",
 		"DROP TRIGGER IF EXISTS shares_counts_sync_update",
 		"DROP TRIGGER IF EXISTS shares_counts_sync_delete",

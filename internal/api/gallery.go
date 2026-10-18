@@ -111,6 +111,22 @@ func (u renderURLs) artifact(id string) string {
 	return u.origin + "/a/" + id + "?" + rendertoken.Param + "=" + u.mint(id)
 }
 
+// version returns the tokened URL of one earlier version of an artifact, for an
+// iframe src. The token is scoped to that version (rendertoken.VersionScope), so
+// it opens that document and no other: not the artifact's live document, whose
+// token the artifact itself can read out of its location.href, and not another
+// version.
+//
+// It is minted as the owner and never as a viewer. History is the owner's — what
+// the code used to be, and the data it used to hold, including data since
+// cleared — and a grant carries none of it, so there is no recipient or
+// anonymous spelling of this to get wrong; the render surface refuses a version
+// token that names anybody else all the same.
+func (u renderURLs) version(id string, seq int) string {
+	scope := rendertoken.VersionScope(id, seq)
+	return u.origin + "/a/" + id + "/versions/" + strconv.Itoa(seq) + "?" + rendertoken.Param + "=" + u.signer.Mint(scope, u.ownerID)
+}
+
 // widget returns the tokened URL of an artifact's widget document.
 func (u renderURLs) widget(id string) string {
 	return u.origin + "/w/" + id + "?" + rendertoken.Param + "=" + u.mint(id)
@@ -250,8 +266,14 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	versions, err := ro.cfg.Store.ListVersions(r.Context(), ownerID, id)
+	if err != nil {
+		serverError(w, r, "gallery edit versions", err)
+		return
+	}
+
 	canGenerate, generateHint := ro.widgetGenerateAvailability(r)
-	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint)
+	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint, versions)
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
@@ -1014,9 +1036,55 @@ type editPageData struct {
 	// TagPanel feeds the Tags panel; Presets feeds the edit-tag modal.
 	TagPanel tagPanelView
 	Presets  []string
+	// Versions is the artifact's history, newest first, for the Versions panel.
+	Versions []versionView
 }
 
-func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string) (string, error) {
+// versionView is one row of the Versions panel.
+type versionView struct {
+	Seq     int
+	Label   string
+	Message string
+	// When is the timestamp in a form a person reads; WhenISO is the same
+	// instant for the <time> element's machine-readable attribute.
+	When    string
+	WhenISO string
+	Current bool
+	// HasState says the version carries a snapshot of the saved data it left
+	// behind, which a restore puts back along with the code.
+	HasState bool
+}
+
+// versionOriginLabels say what produced a version, in the panel's words.
+var versionOriginLabels = map[string]string{
+	store.VersionInitial: "Created",
+	store.VersionEdit:    "Edited",
+	store.VersionAgent:   "Agent",
+	store.VersionRefetch: "Refetched",
+	store.VersionRestore: "Restored",
+}
+
+func newVersionViews(versions []store.Version) []versionView {
+	out := make([]versionView, 0, len(versions))
+	for _, v := range versions {
+		label := versionOriginLabels[v.Origin]
+		if label == "" {
+			label = v.Origin
+		}
+		out = append(out, versionView{
+			Seq:      v.Seq,
+			Label:    label,
+			Message:  v.Message,
+			When:     v.CreatedAt.UTC().Format("2006-01-02 15:04 UTC"),
+			WhenISO:  v.CreatedAt.UTC().Format(time.RFC3339),
+			Current:  v.Current,
+			HasState: v.HasState,
+		})
+	}
+	return out
+}
+
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version) (string, error) {
 	allowlist, blocked := []string{}, []string{}
 	for _, d := range decisions {
 		switch d.Decision {
@@ -1043,6 +1111,7 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 		CanGenerateWidget:   canGenerate,
 		GenerateHint:        generateHint,
 		TagPanel:            newTagPanelView(a, library),
+		Versions:            newVersionViews(versions),
 		Presets:             color.Presets,
 		DownloadsApproved:   a.DownloadsApproved,
 		ClipboardApproved:   a.ClipboardApproved,

@@ -112,18 +112,19 @@ The only way data changes. Route groups:
   `footprint_changed` comes back true: the comparison is unknown, so the gate
   runs. Any other failure to read the previous body aborts the PATCH before
   anything is written, the bundled fields included (av-wu9d).
+  A body that differs from the stored one is written to a **new blob** and
+  recorded as a new version (§3.3b); a body identical to it is not written at all.
   Tag and collection membership use the dedicated `POST/DELETE
   /api/artifacts/:id/tags/:tagID` and `.../collections/:colID` routes.
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
-  `source_url` and replaces the stored body. A snapshot, not a versioned update
-  (av-reo3, av-b17a). A response the protocol says is not the page (a non-2xx
+  `source_url` and records the fresh snapshot as a new version (av-reo3, av-b17a). A response the protocol says is not the page (a non-2xx
   status, an empty body, a content type other than HTML) is refused with the
   artifact left byte-identical. Nothing past that is judged: a source serving a
   different page is serving a different page, and telling "replaced" from
   "redesigned" would mean reading intent into content. The write is a new blob
   and a repoint, never an overwrite in place. All new blobs are staged first;
   `ReplaceArtifactSnapshot` switches the body, search text and asset generation
-  in the transaction that queues superseded blobs for deletion (§3.3a). A failed
+  in the transaction that records the version (§3.3b). A failed
   blob write or transaction leaves the previous snapshot intact. Unused staged
   blobs are queued with a reference check, so cleanup preserves shared assets.
   Every refetch runs the ingest pipeline (§3.4a), vendoring included, whether
@@ -141,9 +142,16 @@ The only way data changes. Route groups:
   successfully. This includes dependencies hidden by a failed stylesheet or
   script fetch. A snapshot-level error also refuses
   replacement when saved assets exist.
+- `GET /api/artifacts/:id/versions`, `POST /api/artifacts/:id/versions/:seq/restore`
+  — the artifact's version history, newest first, and the one operation on it
+  (§3.3b). There is no route that creates a version: every change to the body or
+  widget records one as it is made, so a client cannot forget to. Restore is
+  owner-only and absent from `agentSubResources`: returning an artifact to an
+  earlier state — code *and* saved data — is a person's decision, and a session
+  steered by text Exhibit did not author must not make it.
 - `DELETE /api/artifacts/:id` — deletes the artifact and associated rows (tags,
-  collections, shares, state cascade via FK) **and its bytes**: the body blob,
-  and the widget blob when it has one (av-7jcq). The order is row first, then
+  collections, shares, state, versions cascade via FK) **and its bytes**: every
+  version's body blob and widget blob (av-7jcq). The order is row first, then
   bytes, because the two failure modes are not equally bad — a failed *row*
   delete after the bytes are gone leaves a live artifact whose only copy of
   itself no longer exists, which nothing on the instance can repair; a failed
@@ -152,9 +160,8 @@ The only way data changes. Route groups:
   deletion that left the file on disk must not claim otherwise. What it no
   longer means is a permanent leak — the store queued those ids in the delete's
   own transaction (§3.3a), so the drain is retried until it succeeds.
-  `DELETE /api/artifacts/:id/widget` removes the detached widget's blob the
-  same way, in the same order — detaching is the only exit a widget blob has,
-  since the id is otherwise reused for the artifact's life.
+  `DELETE /api/artifacts/:id/widget` removes the widget as a new version; the
+  bytes stay with the versions that had it and go with the artifact.
 - `GET/PUT /api/artifacts/:id/state`, `DELETE /api/artifacts/:id/state[/:key]` — the
   artifact's state rows (§6). Reads are normally satisfied by render-time inlining, not
   this route; `PUT` is called by the **host frame** on the storage shim's behalf (the
@@ -214,7 +221,8 @@ The only way data changes. Route groups:
   allowlist and no state apart from it. `PUT` scans the widget and reports which of
   its origins the *artifact's* allowlist doesn't cover — those are already blocked
   at render, so this explains a blank tile rather than gating one, and (as
-  everywhere) never seeds the allowlist. See `widgets.md`.
+  everywhere) never seeds the allowlist. A save is a new version with a blob of
+  its own; saving the tile it already has records nothing. See `widgets.md`.
 - `POST /api/shares`, `DELETE /api/shares/:id` — share lifecycle. One route
   mints both kinds because they are one resource told apart by `recipient_id`
   (av-lrae), and the request says which by what it names. `recipients` — an
@@ -508,6 +516,27 @@ executable document with the correct security envelope:
   origin; and a share render holds no privileged control a stolen click could
   spend (`security.md` §1.8).
 
+- Serves **one earlier version** of an artifact at `/a/:id/versions/:seq`
+  (av-vw7r) — its body as it was, beside the data that version left behind (the
+  snapshot a restore would put back, `Store.GetVersionView`) — so a person can
+  look at what a rollback or restore would give them before choosing it. It is the
+  one render document that is not the artifact as it is, and it is held to a
+  stricter envelope for what it can reach: history holds code since rewritten and
+  data since cleared. It carries a token scoped to *that version*
+  (`rendertoken.VersionScope`, mixed into the MAC like an artifact id, so a token
+  for the live document fails here and the reverse), only ever minted for the owner
+  and refused if it names anybody else. Nothing it does persists, for three
+  independent reasons: the shim's `VERSION_VIEW` flag stops write-through and
+  refuses a resync over the snapshot; the host treats a version frame as a
+  different element from its artifact frame (§3.5), which is what covers a message
+  the artifact forges itself; and the response's own CSP `sandbox` gives it an
+  opaque origin however it is loaded, so top-level it still has no IndexedDB or
+  cookies. It does not refuse in silence, though: the first write the shim declines
+  is reported to the host as an empty `__avVersionUnsaved` notice (once per load,
+  no op, key or value), so the page can say that nothing is saved until the
+  version is the active one (§3.5). The current version is not served (it has no
+  snapshot, and the artifact's own page shows it); every refusal is the 404 a bad
+  token gets. `security.md` §1.9 has the argument.
 - Serves an artifact's **widget** at `/w/:id` (av-fafu) — the glanceable tile its
   gallery card renders. This is the same read path with the same CSP, built from
   the same allowlist, and the same state inlined; it differs only in which blob it
@@ -785,8 +814,9 @@ like an artifact that does not exist — 404, never 403, for the reason above.
 
   An artifact's **widget** (av-fafu) is a body too, so it lives here as a second blob
   with only its id (`artifacts.widget_blob_id`, empty for "no widget") on the row.
-  The id is minted once and reused on every save, keeping the widget's render URL —
-  which gallery cards embed — stable across edits.
+  Neither a body nor a widget is ever overwritten: a change writes a new blob and
+  a new version names it (§3.3b). The widget's render URL — which gallery cards
+  embed — is keyed by the artifact, not the blob, so it is stable regardless.
 
 - **Storage accounting** → `blob_sizes` (a blob's length) plus the
   `blob_references` view (which owner's rows name which blob), migration 021,
@@ -860,6 +890,66 @@ Because handlers never touch SQLite or the filesystem directly, swapping the met
 engine (libSQL/Turso) is a backend implementation change behind a stable interface —
 and the blob backend already is one.
 
+### 3.3b Version history
+
+An artifact is not one mutable thing. Every change to its body or widget — a
+manual save, an agent write, a refetch, a widget save or removal, a restore — is
+recorded as a **version**, so any earlier state can be returned to. The history
+is more than a diff of text: a version also carries the saved data the code had
+written by the time the next version replaced it.
+
+- **The head is a version.** `artifact_versions(artifact_id, seq, origin, message,
+  session_id, body_blob_id, widget_blob_id, state_json, created_at)`, one row per
+  version, seq increasing from 1. `artifacts.source_blob_id` and `widget_blob_id`
+  remain as the head's denormalized pointers because the render path reads them,
+  and are written only by `store.CommitVersion` / `RestoreVersion`, in the same
+  transaction as the version row they mirror. There is no second way to change an
+  artifact's content. Version 1 exists for every artifact by an `AFTER INSERT`
+  trigger (the migration backfills the ones that predate it), so "the head is the
+  highest seq" holds without any code path having to remember to create one.
+- **Blobs are never overwritten.** A change writes a new blob; an older version's
+  bytes are exactly what they were. A blob two versions share (a widget that did
+  not change) is named by both rows and stays alive while either does — the
+  deletion queue's refcount (§3.3a) and the `blob_references` view (§3.3, storage
+  accounting) both count version rows, so history is charged to its owner and
+  every version's bytes go with the artifact.
+- **State is snapshotted right before every change.** `CommitVersion` reads the
+  owner's `artifact_state` rows and records them as one JSON object on the
+  version it is replacing, in the same transaction that creates the next one. So
+  "the state as it stood right before the change" is exact, no caller has to
+  remember to take it, and `state_json` is NULL only for the head (its state is
+  the live rows). It is one atomic object rather than rows because a restore
+  must return to a single coherent moment, which is the opposite of what the
+  live per-key table is shaped for. Only the owner's rows are captured: on a
+  `shared`-mode artifact they are the board everyone plays on, and a recipient's
+  own-mode rows are theirs and never enter the owner's history.
+- **A change names only what it changes.** A nil body or widget pointer is read
+  from the head *inside* the transaction, so a widget save and a body save racing
+  each other cannot undo one another.
+- **Restore pushes a copy; it does not rewind.** `RestoreVersion` makes an
+  earlier version's body and widget the head as a *new* version, replaces the
+  live state with the snapshot that version left behind, and snapshots the state
+  it is replacing first — so a restore can itself be undone. Nothing in the
+  history is discarded. Restoring the head is `ErrAlreadyCurrent` (409).
+- **A version can be looked at without being restored** (av-vw7r).
+  `GetVersionView` returns a version's body blob and the state snapshot it left,
+  read with owner-scoped queries and writing nothing; the head is
+  `ErrAlreadyCurrent`, as for a restore, because its data is the live rows. It is
+  the *same* snapshot `RestoreVersion` puts back, which is what makes "what you
+  viewed is what you get" a property of the code rather than of care: a test
+  restores a viewed version and compares.
+- **Not versioned:** the allowlist, capability approvals, shares, tags and
+  collections, and the title. They are the owner's decisions *about* the artifact,
+  not its content; a restore never changes what the artifact is allowed to reach.
+  The footprint gate (`footprint_changed`) is how a restored body's origins get
+  re-reviewed.
+- **Provenance.** `origin` is `initial|edit|agent|refetch|restore`; `message` is a
+  one-line label (the prompt an agent was answering, a refetch's URL, "Restored
+  v3"); `session_id` names the agent chat. An agent write reads the last two off
+  its grant (`agentscope.Grant`), which the server holds — never off the request.
+- **Retention.** Everything is kept. It counts toward the owner's storage, and
+  goes when the artifact does.
+
 ### 3.3a Blob deletion queue (av-8gyd)
 
 Rows and bytes live in two stores that cannot commit together, and the row has
@@ -931,7 +1021,26 @@ a bug in the drain can reach nothing but condemned bytes, and it costs nothing
 when idle because it is normally empty. Reclamation is automatic and invisible:
 there is no operator command, and nothing to run by hand.
 
-### 3.4 Ingest scanner
+#Historical versions retain their exact out-of-line asset metadata in
+`artifact_version_assets`. A refetch records a version even when only a runtime
+payload changed. Restore replaces the current asset rows with the selected
+version's snapshot, and version previews use that same snapshot. Asset URLs
+remain readable while any version retains them. The reference-count and
+storage-accounting queries include these rows; artifact and account deletion
+reclaim every retained payload.
+
+Fresh version blobs are queued for reference-checked cleanup before their bytes
+are written. Successful attachment protects them; failed saves and interrupted
+processes leave durable cleanup intent for the next drain.
+
+The storage shim stamps each write with its rendered version sequence. The host
+forwards it as `X-Exhibit-Version`; the state mutation checks that sequence in
+the same transaction as the write. A delayed set, delete, or clear from a
+superseded frame receives 409 and cannot overwrite restored data. The detail
+page offers reload and the agent pane refreshes. Direct API and inspector edits
+remain deliberate writes and may omit this frame precondition.
+
+## 3.4 Ingest scanner
 
 Invoked by `POST /api/artifacts`. Parses the document with a real HTML tokenizer
 (`x/net/html`) to extract referenced origins (`src`/`href`/`action`/`<link>`/ESM
@@ -1144,6 +1253,56 @@ exists to undo. Its shell renders server-side and its contents are fetched on
 first open (state is cold data the rest of the page never needs); edits apply
 through the same authenticated state routes (§3.1) on Save, so Cancel simply
 rebuilds the working copy from what the server last confirmed.
+
+The edit page also lists the artifact's **versions** (§3.3b) in a panel of its
+own: server-rendered, newest first, each with what produced it and when, and View
+and Restore buttons on every version but the current one. Restoring asks first —
+it changes the code and the saved data at once — and says that what it replaces is
+kept; it reloads the page on success, because the editors above hold the text of
+the version it just replaced.
+
+**Looking at a version first** (av-vw7r) is the `versionViewer` partial, swapped by
+htmx from `GET /partials/version-viewer?artifact=&seq=` into a slot above the list
+here and into the agent page's preview pane from the History card — the same
+fragment in both, so a version is shown one way. It is a bar (what it is, "a
+preview — nothing you do here is saved", and *Back to current*) over a frame whose
+`src` is the render surface's version document (§3.2), minted at swap time because
+a page may sit open past a token's ten minutes. The edit page asks for a Restore
+beside the view (`restorable=1`), because that is where the decision is made; the
+chat's is made in the History card, which also carries whether to continue the
+conversation, so its pane offers none. The fragment is owner-scoped like the other
+partials — another owner's artifact is the 404 a missing one is — and refuses the
+current version with its own message.
+
+What keeps a version frame from persisting anything *on the host's side* is
+structural rather than a flag: the chat page's bridges (state, snippet picker,
+network prompt) listen to `previewFrame()`, i.e. `#pv-frame`, and nothing else, and
+the viewer's frame is a different element with no such id. While a version is
+showing there is no artifact frame for them to hear, so a message the version's
+code sends — including one forged by hand rather than sent through the shim — is
+not heard. The edit page has no artifact bridge at all. `agent.js` owns only what
+*Back to current* means (re-render the pane for the artifact as it is, by the same
+fetch an agent save uses) and ending a view when a conversation is continued.
+
+**Telling a person that nothing is saved.** The bar says it is a preview from the
+start; the moment the tool inside actually tries to save, the viewer says it again,
+louder. The fragment carries a hidden `.banner.banner-warn` between the bar and the
+frame — the capability warning's own classes (the banner family moved from
+`detail.css` to `components.css` so the chat and edit pages draw the same thing,
+rather than a second copy of it) — whose text says that changes are not saved while
+previewing vN and that making vN the active version is what changes that. The way
+there is named as the page offers it, so `Restorable` also picks the verb: *Restore*
+beside the view on the edit page, *Roll back* for the chat's History card. The frame
+reports the first refused write as `__avVersionUnsaved` and `components.js` — the shared
+layer both pages already load, beside the CSS it styles — reveals the banner. That
+listener is the *only* thing a version frame is heard for. It identifies the viewer's
+own frame by source window, looks it up when the message arrives (a swap replaces the
+viewer), and its whole effect is un-hiding the banner, so it is not one of the bridges
+above and does not make the frame one the page takes orders from. The banner is part of the
+fragment, so it is as stale-proof as the rest of it: closing the viewer, restoring, or
+viewing another version replaces it, and a fresh view starts with it hidden. What was
+done in the preview is discarded, not carried into a restore, so the notice describes
+what restore will do rather than promising anything about the changes just made.
 
 When state changes *after* load, the page swaps in a **server-rendered
 fragment**, driven by **htmx** (vendored from `web/htmx/`, served from the app
@@ -1374,10 +1533,40 @@ configuration, and the pages keep offering the agent.
   answer and names the size it was sending, since that is the likely cause
   and nothing confirms the write either way. The API's `413` is still the
   enforcement; the extension's check only makes the failure legible.
-- **Untrusted text stays out of the system role:** the artifact's source and
-  title reach the model in a user-role message inside a nonce-fenced data
-  block, never interpolated into the system prompt. The source is inlined at
-  session start, so a modify session spends no tool call on the first read.
+- **Untrusted text reaches the model only as a tool result** (av-5s7g): the
+  artifact's source, title, state and widget, and the elements the user
+  selected, come back from `get_artifact` / `get_state` / `get_widget` /
+  `get_selection`, never from the system prompt or a user message. A tool
+  result is its own message role, so the boundary between data and instruction
+  is the conversation's structure — nothing to forge, and no per-session secret
+  to carry from one process to the next. The system prompt is static and
+  states that tool results are data; the model is not handed the artifact up
+  front, it reads it, and a modify session therefore spends its first tool call
+  on `get_artifact`.
+- **Conversations are kept as Pi records them** (av-y7td): each session runs
+  with `--session`, and on every settled turn the service reads Pi's session
+  file back and stores it in the conversation's `agent_transcripts` row, with
+  the artifact version it was last working against (read in the same
+  statement) and a title. It is the format `pi --session` starts from, so
+  keeping it is what makes a conversation resumable. Only a projection of what
+  a person saw leaves the server (`agent.Messages`) — the file holds the system
+  prompt, every tool result in full and the model's identity. Pi is pinned to
+  an exact version for this reason: its file format is now part of this
+  service's contract.
+- **A conversation can be resumed** (av-b4yh), and only when asked for by name:
+  `POST /api/agent/sessions` without `resume_session_id` is a new conversation
+  whatever the artifact has kept, and the chat page sends the field from one place —
+  the History pane's Continue buttons. With it, the service writes the stored file
+  into a fresh scratch directory and starts Pi from it, under the conversation's own
+  id so the same record keeps growing. The system prompt is the current one; the first prompt carries a fixed
+  sentence saying the artifact may have changed and should be read again. Whether
+  to roll the artifact back to the version the conversation was working against
+  is the *page's* decision, put to the person and carried out through the
+  ordinary version-restore route — resuming itself never touches the artifact.
+  Every session runs from `/`, because a session file records its working
+  directory and Pi refuses one whose directory is gone; the scratch directory
+  (HOME, the file, the selection) is deleted when the process is done, since the
+  conversation's home is the database.
 - **BYO key, sealed at rest:** the user's provider key is stored AES-256-GCM
   encrypted under a server secret (`internal/secrets`, `agent_keys` table) and
   handed to the subprocess only through its (minimal, built-from-scratch)
@@ -1405,8 +1594,7 @@ configuration, and the pages keep offering the agent.
   is enforced).
 - **Streaming:** the service fans Pi's event stream out to the browser via
   SSE (`/api/agent/sessions/:id/events`); prompts arriving mid-run become Pi
-  steering messages. Transcripts are persisted per artifact
-  (`agent_transcripts`) as colophon-style provenance for future remixing.
+  steering messages. Conversations are kept per artifact (above).
 - **Stream auth is a ticket, not the token (av-rgp1):** this is the one route
   a browser cannot send an `Authorization` header on, because `EventSource`
   has no way to set one. It therefore takes a **session SSE ticket** in the

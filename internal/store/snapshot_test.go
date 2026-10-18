@@ -49,7 +49,7 @@ func TestSnapshotAssetFailureRollsBackBodyAndDeletionQueue(t *testing.T) {
 		Assets: []ArtifactAsset{asset("new-id", "https://cdn.test/a.wasm", "new-asset")},
 	})
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"a1-body", "old-asset"}, queued)
+	assert.Empty(t, queued, "the previous version retains its body and assets")
 	after, err = fx.store.GetArtifact(ctx, 1, "a1")
 	require.NoError(t, err)
 	assert.Equal(t, "new-body", after.SourceBlobID)
@@ -63,9 +63,9 @@ func TestSnapshotAssetFailureRollsBackBodyAndDeletionQueue(t *testing.T) {
 	fx.restart(t)
 	n, err = fx.store.DrainAllBlobDeletions(ctx, fx.blobs)
 	require.NoError(t, err)
-	assert.Equal(t, 2, n)
-	assert.NoFileExists(t, fx.path("a1-body"))
-	assert.NoFileExists(t, fx.path("old-asset"))
+	assert.Zero(t, n)
+	assert.FileExists(t, fx.path("a1-body"))
+	assert.FileExists(t, fx.path("old-asset"))
 	require.FileExists(t, fx.path("new-body"))
 	require.FileExists(t, fx.path("new-asset"))
 }

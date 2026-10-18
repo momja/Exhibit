@@ -50,6 +50,7 @@ const (
 )
 
 type Artifact struct {
+	VersionSeq   int       `json:"version_seq"`
 	ID           string    `json:"id"`
 	OwnerID      int64     `json:"owner_id"`
 	Title        string    `json:"title"`
@@ -145,6 +146,10 @@ type Artifact struct {
 	// the blob store remains the body's source of truth — so this field is
 	// write-only from the caller's perspective.
 	SourceText string `json:"-"`
+	// Provenance says what produced the artifact's first version. Like
+	// SourceText it is write-only: PutArtifact reads it, nothing scans it back.
+	// The zero value is an ordinary ingest ("initial").
+	Provenance Provenance `json:"-"`
 }
 
 type Collection struct {
@@ -351,6 +356,7 @@ type ListOptions struct {
 // preserves the body and source text. Nil Assets preserves the asset generation;
 // otherwise GenerationID names the replacement generation.
 type ArtifactSnapshot struct {
+	Provenance
 	SourceBlobID string
 	SourceText   string
 	GenerationID string
@@ -416,25 +422,36 @@ type Store interface {
 	GetArtifactReadableBy(ctx context.Context, viewerID ViewerID, id string) (*Artifact, error)
 	ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error)
 	UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error
-	// SetWidgetBlobID attaches the artifact's gallery-card widget body, and
-	// refuses an empty blobID: detaching is DeleteWidget's job, because
-	// dropping the reference and enqueuing the bytes has to happen in one
-	// transaction. Separate from UpdateArtifact because widget_blob_id is not
-	// caller-writable: the generic update map is a decoded PATCH body, and
-	// this id is minted server-side.
-	SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error
 	// ReplaceArtifactSnapshot atomically switches the body, asset generation,
 	// search text and timestamp, and queues superseded blobs for deletion.
 	// All new blobs must already be stored. An empty SourceBlobID keeps the
 	// body; nil Assets keeps the current generation.
 	ReplaceArtifactSnapshot(ctx context.Context, ownerID int64, id string, snapshot ArtifactSnapshot) ([]string, error)
 	// DeleteArtifact removes the artifact and returns the blob ids it queued
-	// for deletion; DeleteWidget does the same for the widget an artifact
-	// detaches. Both enqueue inside the transaction that dropped the
-	// reference, and only for a blob no remaining row names (blobqueue.go).
-	// The caller hands what comes back to DrainBlobDeletions.
+	// for deletion. It enqueues inside the transaction that dropped the
+	// reference, and only for a blob no remaining row names (blobqueue.go) —
+	// every version of the artifact is among the rows dropped, so every blob
+	// only they named is queued. The caller hands what comes back to
+	// DrainBlobDeletions.
 	DeleteArtifact(ctx context.Context, ownerID int64, id string) ([]string, error)
-	DeleteWidget(ctx context.Context, ownerID int64, artifactID string) ([]string, error)
+
+	// Version history (migration 032, versions.go). Every change to an
+	// artifact's body or widget goes through CommitVersion or RestoreVersion —
+	// there is no other writer of source_blob_id or widget_blob_id — and each
+	// snapshots the state of the version it replaces in the same transaction.
+	// All four are owner-scoped like the rest of the artifact's children:
+	// another owner's artifact has no history to read and cannot be written to.
+	VersionAssets(ctx context.Context, ownerID int64, artifactID string, seq int) ([]ArtifactAsset, error)
+	ListVersions(ctx context.Context, ownerID int64, artifactID string) ([]Version, error)
+	// HeadVersionSeq is the sequence number of the artifact's current version;
+	// 0 when it has none to name (not the owner's, or not there).
+	HeadVersionSeq(ctx context.Context, ownerID int64, artifactID string) (int, error)
+	GetVersion(ctx context.Context, ownerID int64, artifactID string, seq int) (*Version, error)
+	// GetVersionView is what looking at an earlier version shows — its body and
+	// the data it left behind — and writes nothing. The head is ErrAlreadyCurrent.
+	GetVersionView(ctx context.Context, ownerID int64, artifactID string, seq int) (*VersionView, error)
+	CommitVersion(ctx context.Context, ownerID int64, artifactID string, c VersionChange) (*Version, error)
+	RestoreVersion(ctx context.Context, ownerID int64, artifactID string, seq int, p Provenance, sourceText string) (*Version, error)
 
 	// Out-of-line assets (av-20fk): the binary payloads a page fetches at run
 	// time, stored as blobs of their own rather than base64 inside the body.
@@ -596,20 +613,24 @@ type Store interface {
 	// asked to have removed, so an unreachable artifact is a silent no-op
 	// rather than an error.
 	GetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) (map[string]string, error)
-	SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string) error
-	DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string) error
-	ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) error
+	SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string, version ...int) error
+	DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string, version ...int) error
+	ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string, version ...int) error
 
 	// Agent (Exh-yvhp). SetAgentKey upserts the owner's single configured
 	// provider key; GetAgentKey returns nil when none is set.
 	SetAgentKey(ctx context.Context, k *AgentKey) error
 	GetAgentKey(ctx context.Context, ownerID int64) (*AgentKey, error)
 	DeleteAgentKey(ctx context.Context, ownerID int64) error
-	// SaveTranscript upserts the agent conversation that produced an
-	// artifact (messagesJSON is the Pi session's message list).
-	SaveTranscript(ctx context.Context, ownerID int64, artifactID, sessionID, messagesJSON string) error
-	// ListTranscripts returns messagesJSON per session for an artifact.
-	ListTranscripts(ctx context.Context, ownerID int64, artifactID string) (map[string]string, error)
+	// Agent conversations kept with an artifact (av-y7td), one per session.
+	// SaveTranscript upserts one, stamping it with the artifact's head
+	// version as of that moment; an artifact that is not the owner's is
+	// ErrNotFound. ListTranscripts returns them newest first as summaries —
+	// never the stored file, which can be megabytes. GetTranscript returns one
+	// whole, or (nil, nil) when it does not exist or is not the owner's.
+	SaveTranscript(ctx context.Context, ownerID int64, t Transcript) error
+	ListTranscripts(ctx context.Context, ownerID int64, artifactID string) ([]Transcript, error)
+	GetTranscript(ctx context.Context, ownerID int64, artifactID, sessionID string) (*Transcript, error)
 
 	// Agent usage metering (av-2yws). RecordAgentUsage appends one usage
 	// event. The three sums below are the three questions spend enforcement

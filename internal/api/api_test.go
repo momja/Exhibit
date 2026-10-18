@@ -29,6 +29,15 @@ func newTestRouter(t *testing.T) *Router {
 // answering for a file it left in place.
 func newTestRouterWithBlobDir(t *testing.T) (*Router, string) {
 	t.Helper()
+	ro, blobDir, _ := newTestRouterAt(t)
+	return ro, blobDir
+}
+
+// newTestRouterAt is newTestRouterWithBlobDir plus the path of the database
+// file, for the tests that need a row the API can no longer produce — a
+// conversation kept before the schema grew a column, say.
+func newTestRouterAt(t *testing.T) (*Router, string, string) {
+	t.Helper()
 
 	f, err := os.CreateTemp("", "test-api-*.db")
 	require.NoError(t, err)
@@ -56,7 +65,7 @@ func newTestRouterWithBlobDir(t *testing.T) (*Router, string) {
 		RenderOrigin: "http://render.test",
 		AuthToken:    "secret",
 		Secrets:      box,
-	}), blobDir
+	}), blobDir, f.Name()
 }
 
 func authHeader() string { return "Bearer secret" }

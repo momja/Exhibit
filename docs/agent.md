@@ -9,7 +9,7 @@ agent saves flowing through the normal ingest path.
 
 Pi (`pi-mono`, Mario Zechner's agent harness) runs as a **sidecar subprocess**,
 one per chat session, spawned by the Go service as
-`pi --mode rpc --no-session --no-builtin-tools -e exhibit.ts`. The image
+`pi --mode rpc --session <scratch>/session.jsonl --no-builtin-tools -e exhibit.ts`. The image
 ships `pi`; unlike the satellites in architecture §3.6 it is not optional. The
 service talks strict JSONL over stdin/stdout (Pi's RPC mode) and fans events
 out to the browser over SSE.
@@ -27,7 +27,8 @@ The single write path is preserved: the agent's only tools are
 `create_artifact` / `write_artifact` / `edit_artifact` / `get_artifact` for the document,
 `get_state` / `set_state` / `delete_state` for the artifact's stored state
 (av-lvi1), and `set_widget` / `edit_widget` / `get_widget` for the artifact's gallery tile
-(av-fafu) — all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
+(av-fafu), plus `get_selection` for the elements the user picked in the preview —
+all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
 materialized to the data dir at startup) that calls back into the exhibit HTTP
 API. Agent output is scanned like any other ingest; scanned origins are
 **never** auto-approved — the chat UI tells the user when a saved artifact has
@@ -41,7 +42,7 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
 - **No tool takes an artifact id.** `create_artifact(title, body)`,
   `write_artifact(body[, title])`, `edit_artifact(edits)`, `get_artifact()`, `get_state()`,
   `set_state(key, value)`, `delete_state([key])`, `set_widget(body)`, `edit_widget(edits)`,
-  `get_widget()`. A tool with no id parameter cannot be talked into a
+  `get_widget()`, `get_selection()`. A tool with no id parameter cannot be talked into a
   different target, which matters because artifact bodies and titles are
   untrusted text that reaches the model's context. The extension resolves the
   target from `EXHIBIT_ARTIFACT_ID`, or from the API's response to the first
@@ -81,20 +82,22 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
 ## Session context: instructions and data are separate
 
 - The **system prompt** is entirely server-authored (`internal/agent/prompt.go`).
-  No artifact title, body, or id is interpolated into it.
-- The artifact's **current source is inlined** into the session's opening
-  user-role message, so a modify session does not spend a tool call reading
-  what the server was already holding. `get_artifact` stays registered for the
-  re-read after the agent's own save or a concurrent human edit.
-- The source, the title, and any snippet descriptor arrive inside a fenced
-  block whose delimiter carries a **per-session random nonce**
-  (`-----BEGIN EXHIBIT UNTRUSTED DATA <nonce>-----`), so injected text cannot
-  close the fence and pose as an instruction. The system prompt states the
-  contract; the nonce is redacted from block content. `get_artifact` and
-  `get_widget` return their bodies through the same fence.
-- Snippet descriptors reach the API as their own `snippets` field on the
-  prompt request, not concatenated into `message` — page JS never composes the
-  envelope, and never needs the nonce.
+  No artifact title, body, or id is interpolated into it, and it carries one
+  static contract: tool results are data, and only the user's own messages are
+  instructions.
+- A session is **not given the artifact**: it reads it with `get_artifact`,
+  before it changes anything and again whenever it may have changed. The
+  source, the title (one bounded line), the state, and the widget are tool
+  results — a separate message role the conversation's own structure marks as
+  data — so there is no fence to forge and no per-session secret to carry
+  (av-5s7g). It costs the model one tool call at the start of a turn that
+  edits, which is the price of the boundary being structural.
+- Elements picked in the preview are untrusted too. The prompt request carries
+  them as their own `snippets` field, never concatenated into `message`; the
+  session writes them to `selection.json` in its work directory (replaced, or
+  removed when the prompt selected nothing), appends one fixed sentence to the
+  prompt saying elements were selected, and the model reads them with
+  `get_selection`. Page JS composes no envelope at all.
 
 ## Artifact state (av-lvi1)
 
@@ -167,7 +170,7 @@ session needs:
 | `EXHIBIT_API_URL` | app origin the tools call back into |
 | `EXHIBIT_TOKEN` | the session's **scoped** credential — not the service token |
 | `EXHIBIT_ARTIFACT_ID` | the session's artifact (empty in create mode) |
-| `EXHIBIT_DATA_NONCE` | fence id for untrusted tool output |
+| `EXHIBIT_SELECTION_FILE` | where `get_selection` reads the elements the user picked |
 | `EXHIBIT_SESSION_ID` | this session's id |
 | `EXHIBIT_MAX_BODY_BYTES` | the API's request body limit (`MAX_REQUEST_BODY_BYTES`). Every tool's write checks against it before sending, so an oversized write fails with a message the model can act on instead of an upload the API refuses (av-ombn) |
 
@@ -199,17 +202,19 @@ that control self-hosts, where BYOK gives it to them in full. Concretely:
 - The agent page renders no key button, no key modal, no provider `<select>`
   and no model input — absent, not disabled — and its bootstrap sets
   `BYOK = false` so the page never calls the key route.
-- Pi's own identifiers are stripped from the event stream and the persisted
-  transcript (below).
+- Pi's own identifiers are stripped from the event stream, and a stored
+  conversation is served only as a projection that carries none (below).
 - Availability is a separate, unchanged signal: a missing `pi` binary still
   disables the surface in either mode.
 
 ### What Pi emits, and what is filtered
 
-Every assistant message Pi emits carries the model's identity, and both of this
-service's publishing seams pass Pi's protocol through verbatim — the SSE
-broadcast and `agent_transcripts.messages`. Captured from a real
-`pi --mode rpc` turn (v0.84.1):
+Every assistant message Pi emits carries the model's identity, and one of this
+service's publishing seams passes Pi's protocol through verbatim — the SSE
+broadcast. (A stored conversation holds the same fields, but is served only as
+a projection that names fields explicitly; see Conversations below.) Captured
+from a real
+`pi --mode rpc` turn (Pi 0.87.1, the version the Dockerfile pins):
 
 ```json
 {"type":"turn_end","message":{"role":"assistant","content":[…],
@@ -222,8 +227,8 @@ It appears on `message_start`, `message_end`, `turn_end` and `agent_end`. So
 network tab said otherwise. In platform mode `internal/agent/redact.go` strips
 `api`/`provider`/`model` from Pi's **message envelopes** — objects carrying a
 `role`, and nothing else, so a `model` field inside artifact data or a tool
-argument is left alone — at both seams. BYOK is unfiltered: there the
-identifiers describe a key the caller typed.
+argument is left alone. BYOK is unfiltered: there the identifiers describe a
+key the caller typed.
 
 The `usage` block beside them (token counts and cost) is deliberately kept: it
 names no model, and it is what metering reads (av-2yws, below).
@@ -335,9 +340,12 @@ limits over it are the spend cap's (av-99f4, above).
   block returns `handled`: no turn starts, the agent model is never called,
   and the message never enters its context, so a blocked persona prompt cannot
   prime later turns.
-- **The user's words only.** `EXHIBIT_GUARD_DATA_FENCE` names the opening fence
-  line, and everything after it is dropped before screening: stored artifact
-  source is not something the user just typed.
+- **The user's words only.** A prompt carries the user's own words and nothing
+  else: stored artifact source reaches the model as a tool result, never in the
+  message (av-5s7g), so the whole message is what the screen judges and the
+  agent and the screen see the same words. (`guard.ts` still accepts an
+  optional `EXHIBIT_GUARD_DATA_FENCE` for a host that does attach data to a
+  message; this one leaves it unset.)
 - **The host owns the reply.** The extension signals a block with one
   `ctx.ui.notify` whose message starts `exhibit_guard:`. `Session.handleLine`
   swallows that line, logs its detail, and broadcasts `exhibit_guard_blocked`
@@ -355,9 +363,6 @@ limits over it are the spend cap's (av-99f4, above).
 - **Fail closed.** A screen that errors, times out (15 s), or answers anything
   unparseable blocks with the same reply, so the reply is no oracle for
   probing whether the screen is up.
-- **The opening data block survives a block.** It rides the first prompt; a
-  blocked first prompt never reached the model, so `Prompt` keeps it for the
-  next one rather than dropping the artifact source from the session.
 
 Not screened: images, the agent's replies, and what it saves. Pi is pinned in
 the Dockerfile because all of this depends on the `input` hook's `handled`
@@ -366,9 +371,9 @@ behaving as it does in the pinned version.
 ## Sessions, streaming, transcripts
 
 - `POST /api/agent/sessions` (optional `artifact_id` scopes the session to an
-  existing artifact for modify mode, and inlines its source into the opening
-  message), `POST …/prompt` (`message` + optional base64 `images` + optional
-  `snippets`, the element descriptors the server fences as data),
+  existing artifact for modify mode; the model reads it with `get_artifact`),
+  `POST …/prompt` (`message` + optional base64 `images` + optional
+  `snippets`, the element descriptors the model reads with `get_selection`),
   `POST …/abort`, `DELETE …`.
 - `GET /api/agent/sessions/:id/events` — SSE. EventSource can't set headers, so
   this one route resolves its own credential, and which one depends on the
@@ -393,10 +398,8 @@ behaving as it does in the pinned version.
   accepted for neither: it is not a page credential.
 
 - `internal/agent` tracks streaming state (prompts sent mid-stream become Pi
-  steering messages), keeps an event backlog for late subscribers, reaps idle
-  sessions, and on every settled turn persists the full Pi message list to
-  `agent_transcripts` keyed by artifact — colophon-style provenance
-  (`GET /api/artifacts/:id/transcripts`), the foundation for future remixing.
+  steering messages), keeps an event backlog for late subscribers, and reaps
+  idle sessions. On every settled turn it keeps the conversation (below).
 - An owner holds at most **10 open sessions** (widget-generate sessions
   counted): at the limit the oldest idle one is evicted, and only when all
   ten are mid-run is a new one refused (429). The chat page closes its
@@ -408,6 +411,107 @@ behaving as it does in the pinned version.
   from the credential's scope rather than from the tool result. The chat UI
   uses any of them to re-render the live preview (see below).
 
+## Conversations (av-y7td)
+
+A conversation is kept as Pi itself records it. Each session is spawned with
+`--session <workDir>/session.jsonl`, so Pi appends its own session file — every
+entry, in order, compacted or not — and on every `agent_settled` the service
+reads that file back and stores it in the conversation's `agent_transcripts`
+row (`internal/agent` `persistTranscript`). Pi's session file is the one format
+`pi --session` starts from, so keeping it is what makes a conversation
+resumable; it is stored as it is rather than translated into anything of ours.
+
+The row also records which version of the artifact the conversation was last
+working against — the artifact's head version when the file was stored, read in
+the same statement (`store.SaveTranscript`) — and a title, the first prompt
+shortened. Storing is an upsert per (artifact, session), so a conversation is
+one record that grows; a conversation that outgrows 64 MiB (each read of the
+artifact is a full copy in the file) stops being kept rather than growing the
+database without limit, and the live session carries on.
+
+What leaves the server is a **projection**, never the file. A session file holds
+the system prompt, every tool result in full, the model's reasoning and the
+provider and model that answered. `agent.Messages` builds what a person saw —
+what they said, what the assistant said, which tools it used — from named
+fields, so a field Pi adds later is not published by default and platform mode's
+unreported model stays unreported. Tool labels match the live chat's.
+
+- `GET /api/artifacts/:id/transcripts` — the conversations, newest first, as
+  summaries (`session_id`, `title`, `version_seq`, `resumable`, `updated_at`)
+  with the artifact's `head_seq` beside them.
+- `GET /api/artifacts/:id/transcripts/:sessionID` — one, with its `messages`.
+- Both are owner-only, answer another owner's artifact as an empty list / a
+  404, and are absent from `agentSubResources`: an agent session cannot read
+  the conversations before it.
+
+Conversations kept before this existed hold a message dump and no file. They
+list and read like the rest (`resumable: false`, `version_seq: 0`) and can only
+be read.
+
+**Every session runs from `/`.** A session file's header records the directory it
+ran in, and Pi refuses to resume a file whose directory is gone ("Stored session
+working directory does not exist") — which a per-session directory never survives,
+because it is removed when the session ends. A session has no use for a working
+directory of its own: no built-in tools, no context files. Its scratch directory
+(`HOME`, the session file, `selection.json`) is a different thing, and is deleted
+once the process has exited, everything it printed has been read, and the last
+settled turn is stored. The conversation's home is the database; a copy left on
+disk would outlive the account that owned it.
+
+### Resuming a conversation (av-b4yh)
+
+`POST /api/agent/sessions` with `{"artifact_id", "resume_session_id"}` starts a
+session from a stored conversation instead of a blank one.
+
+- The manager writes the stored session file into the new session's scratch
+  directory and spawns Pi with the same `--session` flag, so Pi has the
+  conversation exactly as it was at its last settled turn (a turn that was still
+  running when the last session ended never finished, and is not continued).
+- The session **keeps the conversation's identity**: same id, so the same
+  `agent_transcripts` row keeps growing and the versions it writes carry the same
+  `session_id`; the title is kept rather than rederived.
+- Its **spend stays one conversation's**. The usage ledger and the session
+  ceiling (av-2yws, av-99f4) count by session id, so a resumed conversation goes
+  on against the same total — resuming is no way to reset a ceiling — and the new
+  process starts its tally of what is recorded from the ledger's own. Pi's totals
+  count the whole conversation, and every settle reconciles the ledger against
+  them; starting that tally from zero would make the first settle record the
+  earlier turns a second time.
+- The system prompt is the *current* one. Pi sends the prompt it was spawned
+  with, not the copy in the file — measured, not assumed — so an instruction
+  improved since is in force and nothing stale is replayed beside it. Pi also
+  takes `--provider`/`--model` from the command line over the file's recorded
+  model, so an owner who has switched keys resumes on the new one.
+- The first prompt after a resume carries one fixed sentence (`resumedNotice`):
+  the artifact may have changed since the agent last read it, so read it again
+  before changing anything. It is sent whether or not the artifact was rolled
+  back, because either way what the model remembers of it may be stale. A prompt
+  the usage-policy guardrail refuses never reaches the model, so the sentence
+  waits for the first prompt that does.
+- A conversation that is still running is continued by **attaching** to it
+  (200, with a fresh SSE ticket) — a second process on one conversation would be
+  two writers of one record. Losing a race for the same conversation is a 409.
+  A closing conversation also returns 409 until its final settled turn has
+  been stored. The manager reserves the conversation before loading its saved
+  file and usage baseline, so a resume cannot overwrite that final turn with
+  an earlier snapshot. Closing sessions no longer occupy a live-session slot.
+- Refusals: no `artifact_id` is a 400; a conversation that is not the owner's, or
+  is not there, is a 404 (the same answer for both); a conversation kept before
+  session files existed is a 409 — it can be read and not continued.
+
+**Rolling back is the page's decision, not the endpoint's.** Resuming never
+changes the artifact. The chat page puts the choice to the person (below), then
+starts the session, then — only if they chose to roll back — calls the ordinary
+`POST /api/artifacts/:id/versions/:seq/restore`. The session starts first so a
+refusal (no key, no agent) costs nothing: nothing has been rolled back yet.
+
+Replaying a stored conversation into a new session is safe for the reason the
+tool-result boundary exists (`security.md` §5.2): the file holds what Pi
+recorded, in the roles it recorded them — what the artifact said is a tool
+result and stays one. Nothing a model can call writes it: the manager stores it,
+Pi alone writes it, and the session's scoped credential cannot reach the route
+(`Exh-v6v4` carries the note on keeping it that way).
+
 ## Chat UI
 
 `GET /agent` (create) and `GET /agent?artifact=<id>` (modify; also linked from
@@ -416,6 +520,69 @@ gallery: chat + streaming on the left, sandboxed preview iframe (same
 `sandbox="allow-scripts"`, opaque origin, render-origin CSP) on the right. The
 page also hosts the same `__avState` bridge as the detail page, so artifact
 state written in the preview persists.
+
+**A new conversation is the default.** Opening the page — on an artifact with a
+dozen conversations kept, or with none — starts nothing and continues nothing. No
+session exists until the first message, and that message begins a new conversation
+(`POST /api/agent/sessions` with the artifact and no `resume_session_id`), whatever
+has been kept: the model is handed none of it and the "artifact may have changed"
+sentence is not sent, because there is nothing it remembers that could be stale. The
+same holds when a session ends under the page (idle, or the server restarted) — the
+next message starts a new one rather than quietly bringing the old one back. A
+conversation is continued from History alone, by choosing it and pressing the button;
+`resume_session_id` is sent from that one function (`resumeConversation`), and
+reading a conversation there starts nothing. A redesign of this pane keeps all of
+that: `agent.history.test.mjs` pins the page's side (open, first message, ended
+session) and `TestAChatOnAnArtifactThatHasHistoryStartsANewConversation` the
+server's, against a real Pi.
+
+**History.** Once the page is about an artifact, the chat has a History button.
+It opens a pane that takes the place of the messages and the composer — a
+conversation you are only reading must not sit above a box that would talk to
+the live one — listing the conversations kept with the artifact, each with its
+title, when it last ran, and the version it was last working against ("Based on
+v4 · current" while the artifact is still at it). Selecting one shows it
+read-only, in the same bubbles and tool chips the live chat draws. Both views
+are server-rendered fragments (`/partials/agent-history`,
+`/partials/agent-transcript`) swapped into `#history` by htmx; `agent.js` opens
+and closes the pane and runs the one thing a fragment cannot, which is
+continuing a conversation.
+
+**Continuing.** Under the transcript is a card that is the whole decision. If the
+artifact is still at the version the conversation was last working against, it is
+one button, *Continue this conversation*. If it has moved on, the card says which
+version the conversation was working against and which the artifact is at, and
+offers:
+
+- **View vN in the preview first** — a link above the buttons. It swaps that version,
+  running and with the data it had, into the preview pane beside the card, under a
+  bar saying it is a preview and that nothing done in it is saved, with *Back to
+  current*. It is how a person confirms the rollback is what they want: it shows the
+  same code and the same data the rollback would put back. It changes nothing — the
+  frame is the render surface's version document (`security.md` §1.9), and while it
+  shows there is no `#pv-frame` for the page's bridges to hear. You can use the tool
+  in it; if you do something it would have saved, a warning under the bar says that
+  changes are not saved while you preview vN and that rolling back to vN is what makes
+  it the active version. What you did there is discarded, not carried into the
+  rollback — the rollback puts back what vN left. It ends when the
+  conversation is continued, or on *Back to current*, or when an agent save
+  re-renders the pane.
+- **Roll back to vN and continue** — the primary button. It puts the artifact's
+  code and saved data back as vN left them (a restore, recorded as a new version,
+  so nothing is lost and it can be undone from the Versions list), then continues.
+  The card states this beside the button; nothing changes before the click.
+- **Continue without rolling back** — the escape, a plain secondary button and
+  never the primary one. The artifact is left as it is, and the agent re-reads it.
+- **Cancel** — back to the list.
+
+`resumeConversation` starts the conversation first and rolls back second, so a
+refusal (no key, no agent) leaves the artifact alone, and a rollback that fails
+closes the session it started and says the conversation was not continued. It
+refuses to switch while the agent is mid-turn, replaces the page's chat with the
+conversation being continued, and re-renders the preview if it rolled back. A
+conversation that cannot be continued — kept before session files existed, or on
+an instance with no agent — shows a note where the card would be, not a missing
+button.
 
 **The brief handoff (nw-d1dd).** A create session usually arrives from `/new`,
 whose Build-with-agent panel is now the page's default and is a *form* rather
@@ -542,7 +709,12 @@ UI. Steps, in order:
 1. **Transcripts through the API** (`Exh-v6v4`): `Session.persistTranscript`
    currently calls `store.SaveTranscript` directly — the one write bypassing
    the HTTP API. Becomes `PUT /api/artifacts/:id/transcripts`; after this the
-   agent has zero store access and is extractable.
+   agent has zero store access and is extractable. Authorize that write as
+   the *service*, never with the session's scoped credential: a stored
+   conversation is replayed into Pi when it is resumed (av-b4yh), so a session
+   able to write its own history could plant instructions in a conversation the
+   user later continues. Today the write is the manager's, server code that no
+   model output reaches, and Pi alone writes the file.
 2. **Exhibit-side seams** (`Exh-hz3g`): an `AGENT_URL` config that, when set,
    points the gallery "Agent" link and the detail-page "Modify with agent"
    action at the external agent UI; plus an additional configured embedder
@@ -571,8 +743,8 @@ render-surface capability any embedding host can drive, not agent code).
 
 - One configured key per owner (not per provider); model list is a datalist
   hint, not validated against Pi's registry.
-- Sessions are in-memory: a server restart drops live chats (transcripts
-  already persisted survive).
+- Sessions are in-memory: a server restart drops live chats (the conversations
+  already kept survive, and can be continued from History).
 - The snippet rasterizer is best-effort (bounded at 300 nodes / 2000px,
   degrades to descriptor-only on failure).
 - No runtime allowlist-approval prompt in the chat (the artifact page's

@@ -207,7 +207,12 @@ func (s *SQLiteStore) GetArtifactAssetUnscoped(ctx context.Context, artifactID, 
 		`SELECT id, artifact_id, generation_id, source_url, blob_id,
                 content_type, size_bytes, created_at
            FROM artifact_assets
-          WHERE artifact_id = ? AND id = ?`, artifactID, assetID)
+          WHERE artifact_id = ?1 AND id = ?2
+          UNION ALL
+         SELECT id, artifact_id, generation_id, source_url, blob_id,
+                content_type, size_bytes, created_at
+           FROM artifact_version_assets
+          WHERE artifact_id = ?1 AND id = ?2 LIMIT 1`, artifactID, assetID)
 
 	var a ArtifactAsset
 	var createdAt any
@@ -298,4 +303,18 @@ func scanAssets(rows *sql.Rows) ([]ArtifactAsset, error) {
 		out = append(out, a)
 	}
 	return out, rows.Err()
+}
+
+// VersionAssets returns the payload metadata captured when this version was
+// superseded. It is owner-scoped and never reads the live generation.
+func (s *SQLiteStore) VersionAssets(ctx context.Context, ownerID int64, artifactID string, seq int) ([]ArtifactAsset, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, artifact_id, generation_id, source_url, blob_id, content_type, size_bytes, created_at
+		 FROM artifact_version_assets WHERE artifact_id = ? AND seq = ? AND `+ownedArtifact+`
+		 ORDER BY created_at, source_url`, artifactID, seq, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAssets(rows)
 }

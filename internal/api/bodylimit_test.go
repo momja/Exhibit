@@ -69,6 +69,7 @@ var writeRoutes = []struct {
 	{"PATCH", "/api/artifacts/{artifactID}/", true},
 	{"DELETE", "/api/artifacts/{artifactID}/", false},
 	{"POST", "/api/artifacts/{artifactID}/refetch", false},
+	{"POST", "/api/artifacts/{artifactID}/versions/{seq}/restore", false},
 	{"PUT", "/api/artifacts/{artifactID}/state", true},
 	{"DELETE", "/api/artifacts/{artifactID}/state", false},
 	{"DELETE", "/api/artifacts/{artifactID}/assets/{assetID}", false},
@@ -206,6 +207,7 @@ func seedBodyLimitFixtures(t *testing.T, ro *Router) *strings.Replacer {
 		"{userID}", "1",
 		"{assetID}", "missing",
 		"{sessionID}", "missing",
+		"{seq}", "1",
 		"{shareID}", "missing",
 	)
 }

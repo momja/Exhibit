@@ -124,7 +124,7 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	var a Artifact
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.GeolocationApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareGrantCount, &a.SharePublicLink)
+	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.GeolocationApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareGrantCount, &a.SharePublicLink, &a.VersionSeq)
 	if err != nil {
 		return nil, err
 	}
@@ -145,15 +145,20 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 // are trigger-maintained rollups of the shares table (migration 029), like
 // tags_text — a caller that could set them could tell the gallery an artifact
 // is private while three accounts hold grants on it.
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, share_state_mode, share_grant_count, share_link"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.widget_blob_id, a.share_state_mode, a.share_grant_count, a.share_link"
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, share_state_mode, share_grant_count, share_link, (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = artifacts.id)"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.widget_blob_id, a.share_state_mode, a.share_grant_count, a.share_link, (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = a.id)"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx,
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	_, err = tx.ExecContext(ctx,
 		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, source_text, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.LinksApproved, a.CameraApproved, a.MicrophoneApproved, a.GeolocationApproved, a.WidgetBlobID, a.SourceText,
@@ -162,9 +167,23 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	if err != nil {
 		return err
 	}
+	// Version 1 already exists: the artifacts_initial_version trigger wrote it
+	// from the row just inserted. An ingest that was not an ordinary one says so
+	// here (an agent that created the artifact), the single time that row is
+	// touched after creation.
+	if p := a.Provenance; p.Origin != "" {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE artifact_versions SET origin = ?, message = ?, session_id = ? WHERE artifact_id = ? AND seq = 1`,
+			p.Origin, p.Message, p.SessionID, a.ID); err != nil {
+			return err
+		}
+	}
 	// The allowlist passed in is the set of origins the caller has approved;
 	// it lands as allow rows in the child table (exhibit-x87).
-	return s.ReplaceAllowedOrigins(ctx, a.OwnerID, a.ID, a.NetworkAllowlist, "user")
+	if err := replaceAllowedOriginsTx(ctx, tx, a.ID, a.NetworkAllowlist, "user"); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // ownsArtifact reports whether ownerID owns artifactID. It is the one place
@@ -413,8 +432,9 @@ var approvalArtifactColumns = func() map[string]bool {
 // id was.
 //
 // The server's own writer therefore does not come through here at all — see
-// SetWidgetBlobID. This map answers "what may a PATCH body write", and that is
-// the only question it answers.
+// CommitVersion, the only writer of source_blob_id and widget_blob_id. This map
+// answers "what may a PATCH body write", and that is the only question it
+// answers.
 var updatableArtifactColumns = map[string]bool{
 	"title":                true,
 	"tier":                 true,
@@ -432,44 +452,6 @@ var updatableArtifactColumns = map[string]bool{
 	// the render path, and an unrecognized value there is a branch nobody
 	// wrote.
 	"share_state_mode": true,
-}
-
-// SetWidgetBlobID points an artifact at the blob holding its widget document.
-// It exists because widget_blob_id is deliberately not caller-writable (above)
-// while the widget PUT handler must still write it: routing that through the
-// generic update map would mean the same allowlist decided both what a PATCH
-// body may set and what the service itself may set, and narrowing it for the
-// first reason would break the second. The id is minted server-side once per
-// artifact and reused on every later save, so a widget's render URL stays
-// stable across edits — which is why this runs on the first save only.
-//
-// It attaches; it does not detach. Clearing the column condemns bytes, and
-// enqueuing those for deletion has to happen in the same transaction that
-// dropped the last reference to them (av-8gyd) — which this method has no way
-// to do. DeleteWidget is that operation, and being the only one is what makes
-// "a detached widget blob is always enqueued" true by construction rather than
-// by every caller remembering.
-//
-// Owner-scoped like every other artifact write: another owner's id is
-// ErrNotFound, never a refusal that confirms the row exists (§3.3).
-func (s *SQLiteStore) SetWidgetBlobID(ctx context.Context, ownerID int64, id, blobID string) error {
-	if blobID == "" {
-		return fmt.Errorf("set widget blob id: blob id is required (detaching is DeleteWidget's job)")
-	}
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE artifacts SET widget_blob_id = ?, updated_at = ? WHERE id = ? AND owner_id = ?`,
-		blobID, time.Now().UTC(), id, ownerID)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
 }
 
 func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error {
@@ -666,6 +648,13 @@ func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, ownerID int64, 
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after Commit
 
+	if err := replaceAllowedOriginsTx(ctx, tx, artifactID, origins, source); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func replaceAllowedOriginsTx(ctx context.Context, tx *sql.Tx, artifactID string, origins []string, source string) error {
 	// Only allow rows are in scope. Block rows are decisions this caller
 	// doesn't know about ("don't ask again", exhibit-fr7) and survive.
 	if _, err := tx.ExecContext(ctx,
@@ -701,7 +690,7 @@ func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, ownerID int64, 
 			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 // attachAllowlists hydrates NetworkAllowlist on a batch of artifacts from
@@ -759,24 +748,21 @@ func (s *SQLiteStore) ReplaceArtifactSnapshot(ctx context.Context, ownerID int64
 	if err != nil {
 		return nil, err
 	}
-	var superseded []string
+	change := VersionChange{Provenance: snapshot.Provenance}
 	if snapshot.SourceBlobID != "" {
-		if _, err := tx.ExecContext(ctx,
-			"UPDATE artifacts SET source_blob_id=?, source_text=? WHERE id=? AND owner_id=?",
-			snapshot.SourceBlobID, snapshot.SourceText, id, ownerID); err != nil {
-			return nil, err
-		}
-		superseded = append(superseded, old)
+		change.BodyBlobID = &snapshot.SourceBlobID
+		change.SourceText = &snapshot.SourceText
 	}
+	if _, err := commitVersionTx(ctx, tx, ownerID, id, change); err != nil {
+		return nil, err
+	}
+	var superseded []string
 	if snapshot.Assets != nil {
 		oldAssets, err := replaceArtifactAssets(ctx, tx, id, snapshot.GenerationID, snapshot.Assets)
 		if err != nil {
 			return nil, err
 		}
 		superseded = append(superseded, oldAssets...)
-	}
-	if _, err := tx.ExecContext(ctx, "UPDATE artifacts SET updated_at=datetime('now') WHERE id=? AND owner_id=?", id, ownerID); err != nil {
-		return nil, err
 	}
 	queued, err := enqueueUnreferencedBlobs(ctx, tx, superseded...)
 	if err != nil {
@@ -789,14 +775,15 @@ func (s *SQLiteStore) ReplaceArtifactSnapshot(ctx context.Context, ownerID int64
 }
 
 // DeleteArtifact removes the artifact — its tags, collections, shares, origin
-// decisions and state going with it by ON DELETE CASCADE — and returns the
-// blob ids it enqueued for deletion, for the caller to drain (blobqueue.go).
+// decisions, state and versions going with it by ON DELETE CASCADE — and
+// returns the blob ids it enqueued for deletion, for the caller to drain
+// (blobqueue.go).
 //
-// Reading the two blob ids, dropping the row and enqueuing what is now
+// Reading the blob ids, dropping the row and enqueuing what is now
 // unreferenced happen in one transaction, which is what makes the intent to
 // delete those bytes durable at the same instant the last reference to them
 // disappears. Nothing outside this transaction could reconstruct that list
-// afterwards: once the row is gone, nothing names the blobs.
+// afterwards: once the rows are gone, nothing names the blobs.
 func (s *SQLiteStore) DeleteArtifact(ctx context.Context, ownerID int64, id string) ([]string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -816,8 +803,13 @@ func (s *SQLiteStore) DeleteArtifact(ctx context.Context, ownerID int64, id stri
 	if err != nil {
 		return nil, err
 	}
-	// Read before the delete: ON DELETE CASCADE takes the asset rows with the
-	// artifact, and once they are gone nothing names those blobs (av-20fk).
+	// Read before the delete: ON DELETE CASCADE takes the version and asset rows
+	// with the artifact, and once they are gone nothing names those blobs
+	// (av-20fk). An older version's body is a blob no other row names.
+	versionBlobs, err := versionBlobIDs(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
 	assetBlobs, err := assetBlobIDs(ctx, tx, id)
 	if err != nil {
 		return nil, err
@@ -826,53 +818,8 @@ func (s *SQLiteStore) DeleteArtifact(ctx context.Context, ownerID int64, id stri
 		"DELETE FROM artifacts WHERE id=? AND owner_id=?", id, ownerID); err != nil {
 		return nil, err
 	}
-	queued, err := enqueueUnreferencedBlobs(ctx, tx, append([]string{body, widget}, assetBlobs...)...)
-	if err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return queued, nil
-}
-
-// DeleteWidget detaches an artifact's widget and returns the blob id it
-// enqueued for deletion, if any — the caller drains it (blobqueue.go).
-//
-// Detaching is the only exit a widget blob has: the id is minted once and
-// reused on every later save so the tile's render URL stays stable, so once
-// this clears the column nothing can name those bytes again. That is exactly
-// why the clear and the enqueue share a transaction.
-//
-// An artifact with no widget is not an error — the caller's intent, "this
-// artifact must have no widget", is already satisfied — and enqueues nothing.
-// ErrNotFound is reserved for an artifact this owner cannot see.
-func (s *SQLiteStore) DeleteWidget(ctx context.Context, ownerID int64, artifactID string) ([]string, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }() // no-op once committed
-
-	var widget string
-	err = tx.QueryRowContext(ctx,
-		"SELECT widget_blob_id FROM artifacts WHERE id=? AND owner_id=?",
-		artifactID, ownerID).Scan(&widget)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	if widget == "" {
-		return nil, nil
-	}
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE artifacts SET widget_blob_id='', updated_at=datetime('now') WHERE id=? AND owner_id=?",
-		artifactID, ownerID); err != nil {
-		return nil, err
-	}
-	queued, err := enqueueUnreferencedBlobs(ctx, tx, widget)
+	condemned := append([]string{body, widget}, versionBlobs...)
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, append(condemned, assetBlobs...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -1244,10 +1191,13 @@ func (s *SQLiteStore) GetStateAsViewer(ctx context.Context, viewerID ViewerID, a
 // SetStateAsViewer is the write av-awr4 found missing. Without it 'own' mode —
 // the default — leaves a recipient reading state they can never change, so a
 // shared tool forgets everything the moment its frame reloads.
-func (s *SQLiteStore) SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string) error {
+func (s *SQLiteStore) SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string, version ...int) error {
 	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
 	if err != nil {
 		return err
+	}
+	if len(version) > 0 {
+		return s.mutateVersionedState(ctx, owner, artifactID, principal, &key, &value, version[0])
 	}
 	return s.SetState(ctx, owner, artifactID, principal, key, value)
 }
@@ -1257,13 +1207,16 @@ func (s *SQLiteStore) SetStateAsViewer(ctx context.Context, viewerID ViewerID, a
 // idempotent contract the owner-scoped deletes already keep, extended to the
 // wider "cannot reach it" case for the same reason: the caller asked for a key
 // not to exist, and there it does not.
-func (s *SQLiteStore) DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string) error {
+func (s *SQLiteStore) DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string, version ...int) error {
 	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
 	if errors.Is(err, ErrNotFound) {
 		return nil
 	}
 	if err != nil {
 		return err
+	}
+	if len(version) > 0 {
+		return s.mutateVersionedState(ctx, owner, artifactID, principal, &key, nil, version[0])
 	}
 	return s.DeleteState(ctx, owner, artifactID, principal, key)
 }
@@ -1273,13 +1226,16 @@ func (s *SQLiteStore) DeleteStateAsViewer(ctx context.Context, viewerID ViewerID
 // ShareStateShared is the board they are playing on. Either way it is the
 // erase-all av-q0ub defined: one viewer's state, never the artifact's, and
 // never another viewer's.
-func (s *SQLiteStore) ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) error {
+func (s *SQLiteStore) ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string, version ...int) error {
 	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
 	if errors.Is(err, ErrNotFound) {
 		return nil
 	}
 	if err != nil {
 		return err
+	}
+	if len(version) > 0 {
+		return s.mutateVersionedState(ctx, owner, artifactID, principal, nil, nil, version[0])
 	}
 	return s.ClearState(ctx, owner, artifactID, principal)
 }
@@ -1314,39 +1270,6 @@ func (s *SQLiteStore) GetAgentKey(ctx context.Context, ownerID int64) (*AgentKey
 func (s *SQLiteStore) DeleteAgentKey(ctx context.Context, ownerID int64) error {
 	_, err := s.db.ExecContext(ctx, "DELETE FROM agent_keys WHERE owner_id=?", ownerID)
 	return err
-}
-
-func (s *SQLiteStore) SaveTranscript(ctx context.Context, ownerID int64, artifactID, sessionID, messagesJSON string) error {
-	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
-		return err
-	}
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO agent_transcripts (artifact_id, session_id, messages, updated_at)
-         VALUES (?, ?, ?, datetime('now'))
-         ON CONFLICT(artifact_id, session_id) DO UPDATE SET
-             messages=excluded.messages, updated_at=excluded.updated_at`,
-		artifactID, sessionID, messagesJSON)
-	return err
-}
-
-func (s *SQLiteStore) ListTranscripts(ctx context.Context, ownerID int64, artifactID string) (map[string]string, error) {
-	rows, err := s.db.QueryContext(ctx,
-		"SELECT session_id, messages FROM agent_transcripts WHERE artifact_id=? AND "+ownedArtifact+
-			" ORDER BY updated_at",
-		artifactID, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := make(map[string]string)
-	for rows.Next() {
-		var sid, msgs string
-		if err := rows.Scan(&sid, &msgs); err != nil {
-			return nil, err
-		}
-		out[sid] = msgs
-	}
-	return out, rows.Err()
 }
 
 // RecordAgentUsage appends one usage event to the metering ledger (av-2yws).
