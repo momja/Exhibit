@@ -6,9 +6,9 @@
  * The header block is index.css's verbatim, so the chrome above the fold is
  * pixel-identical to the gallery's rather than a near-miss copy.
  *
- * The --nf-* locals are the artboard's slate ramp. They stay page-local
- * rather than moving into tokens.css: nothing else in the app uses them, and
- * tokens.css is the shared vocabulary, not a catch-all. Two are darker than
+ * The --nf-* locals are the artboard's slate ramp, named for their role on
+ * this page. Their values live in tokens.css (--color-slate-*) so the dark
+ * palette can reach them from its one block (av-xie4). Two are darker than
  * the exported design (muted #8b919c -> #6f7581, placeholder #9aa0aa ->
  * #7d838e): the originals sit near 3:1 on --color-ground, which misses WCAG
  * AA at 11-13px.
@@ -26,12 +26,12 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inl
  * the middle of the wall, not against the header — and clamps down rather
  * than pushing the fold on short viewports. */
 .exhibit-404{
-  --nf-slate:#3a3f49;        /* secondary button label, requested path */
-  --nf-body:#565c68;         /* body copy */
-  --nf-medium:#6b717c;       /* wall label medium line */
-  --nf-muted:#6f7581;        /* 11-13px muted labels */
-  --nf-placeholder:#7d838e;  /* search placeholder + its icon */
-  --nf-rule:#d6dae0;         /* wall label rule */
+  --nf-slate:var(--color-slate-ink); /* secondary button label, requested path */
+  --nf-body:var(--color-slate-body); /* body copy */
+  --nf-medium:var(--color-slate-medium); /* wall label medium line */
+  --nf-muted:var(--color-slate-muted); /* 11-13px muted labels */
+  --nf-placeholder:var(--color-slate-placeholder); /* search placeholder + its icon */
+  --nf-rule:var(--color-slate-rule); /* wall label rule */
   max-width:1216px;margin:0 auto;
   padding:clamp(48px,18vh,168px) 24px clamp(56px,12vh,128px);
   display:grid;grid-template-columns:minmax(0,604px) minmax(0,576px);align-items:start;

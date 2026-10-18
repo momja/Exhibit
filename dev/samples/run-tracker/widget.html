@@ -8,6 +8,14 @@
      Everything below paints inside that box and must survive 230–420 x 120–170. */
   *{box-sizing:border-box}
 
+  /* Light and dark follow the system setting, as the gallery card does. The
+     background stays transparent, so every color here has to read on both a
+     white card and a dark one. */
+  :root{color-scheme:light dark;--ink:#16181c;--muted:#888;--accent:#23559e;--accent-soft:#bccbe1;--hairline:#e0e0e0}
+  @media (prefers-color-scheme:dark){
+    :root{--ink:#e8eaed;--muted:#9aa0a9;--accent:#7eaaf0;--accent-soft:#3a4c68;--hairline:#2f333a}
+  }
+
   .w{
     width:100%;
     height:100%;
@@ -15,8 +23,7 @@
     display:flex;
     flex-direction:column;
     padding:12px 14px;
-    background:#fff;
-    color:#16181c;
+    color:var(--ink);
     font:400 13px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased;
     /* Nothing here is interactive — the host swallows pointer events and a click
@@ -29,7 +36,7 @@
     font-size:11px;
     line-height:1;
     letter-spacing:.03em;
-    color:#888;
+    color:var(--muted);
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
@@ -55,7 +62,7 @@
   .hero .unit{
     font-size:clamp(11px, calc(1.4vh + 3.4vw), 15px);
     font-weight:500;
-    color:#888;
+    color:var(--muted);
   }
 
   .spark{
@@ -71,7 +78,7 @@
     flex:0 0 auto;
     font-size:11.5px;
     line-height:1.25;
-    color:#888;
+    color:var(--muted);
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
@@ -87,8 +94,8 @@
     justify-content:center;
     gap:3px;
   }
-  .empty .t{font-size:15px;font-weight:600;color:#16181c}
-  .empty .s{font-size:12px;color:#888}
+  .empty .t{font-size:15px;font-weight:600;color:var(--ink)}
+  .empty .s{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -109,9 +116,10 @@
    * ========================================================================== */
   var KEY = 'exhibit.run-tracker.v1';
   var DAY = 86400000;
-  var ACCENT = '#23559e';
-  var ACCENT_SOFT = '#bccbe1';   // de-emphasis tint for past weeks
-  var HAIRLINE = '#e0e0e0';
+  // CSS variables, so the chart follows the color scheme with the text.
+  var ACCENT = 'var(--accent)';
+  var ACCENT_SOFT = 'var(--accent-soft)';   // de-emphasis tint for past weeks
+  var HAIRLINE = 'var(--hairline)';
 
   var root = document.getElementById('w');
 
@@ -212,7 +220,7 @@
     var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="' + w + '" height="' + h
             + '" preserveAspectRatio="none" aria-hidden="true">';
     svg += '<line x1="0" y1="' + baseY + '" x2="' + span + '" y2="' + baseY
-        + '" stroke="' + HAIRLINE + '" stroke-width="1"/>';
+        + '" style="stroke:' + HAIRLINE + '" stroke-width="1"/>';
 
     for (var i = 0; i < n; i++) {
       if (max <= 0 || weeks[i] <= 0) continue;   // an empty week draws nothing
@@ -220,7 +228,7 @@
       var x = i * (bw + gap);
       var y = baseY - bh;
       var fill = (i === n - 1) ? ACCENT : ACCENT_SOFT;   // current week in the accent
-      svg += '<path d="' + barPath(x, y, bw, bh, 3) + '" fill="' + fill + '"/>';
+      svg += '<path d="' + barPath(x, y, bw, bh, 3) + '" style="fill:' + fill + '"/>';
     }
     svg += '</svg>';
     host.innerHTML = svg;
