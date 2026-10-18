@@ -47,6 +47,7 @@ function shimSource({ cache = {}, anonymous = false, widget = false } = {}) {
 
   const values = [
     JSON.stringify(ARTIFACT_ID),   // %q ARTIFACT_ID
+    "1",                          // %d VERSION_SEQ
     JSON.stringify(API_ORIGIN),    // %q API_ORIGIN
     String(widget),                // %t WIDGET
     String(anonymous),             // %t ANONYMOUS
@@ -60,7 +61,7 @@ function shimSource({ cache = {}, anonymous = false, widget = false } = {}) {
   let i = 0;
   return go.slice(from, end)
     .replace(/<\/?script>/g, "")
-    .replace(/%[qts]/g, () => values[i++]);
+    .replace(/%[qdts]/g, () => values[i++]);
 }
 
 // A frame: a window whose parent is somebody else, which is the condition the
@@ -191,7 +192,7 @@ test("clear() reports itself to the host, as it always did", () => {
   const { storage, posted, flat } = loadShim({ cache: { note: "old" } });
   storage.clear();
   assert.deepEqual(posted.filter((m) => m.__avState).map(flat),
-    [{ __avState: true, artifactId: ARTIFACT_ID, op: "clear" }]);
+    [{ __avState: true, artifactId: ARTIFACT_ID, version: 1, op: "clear" }]);
 });
 
 // --- what the frame reports back -----------------------------------------

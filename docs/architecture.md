@@ -1005,6 +1005,13 @@ Fresh version blobs are queued for reference-checked cleanup before their bytes
 are written. Successful attachment protects them; failed saves and interrupted
 processes leave durable cleanup intent for the next drain.
 
+The storage shim stamps each write with its rendered version sequence. The host
+forwards it as `X-Exhibit-Version`; the state mutation checks that sequence in
+the same transaction as the write. A delayed set, delete, or clear from a
+superseded frame receives 409 and cannot overwrite restored data. The detail
+page offers reload and the agent pane refreshes. Direct API and inspector edits
+remain deliberate writes and may omit this frame precondition.
+
 ## 3.4 Ingest scanner
 
 Invoked by `POST /api/artifacts`. Parses the document with a real HTML tokenizer

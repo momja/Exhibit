@@ -29,6 +29,17 @@
   };
 
   window.ExhibitState = {
+    // Frame writes carry the content generation they loaded. The server checks
+    // it with the mutation, so a delayed write cannot undo a restore.
+    write: function(api, path, opts, version) {
+      if (Number.isInteger(version) && version > 0) {
+        opts = Object.assign({}, opts, {
+          headers: Object.assign({}, opts.headers, {'X-Exhibit-Version': String(version)})
+        });
+      }
+      return api(path, opts);
+    },
+
     // Read/write endpoint for the whole state map.
     url: base,
 
