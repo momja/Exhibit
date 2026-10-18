@@ -256,7 +256,7 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, ro.sessionResponse(live, opts, ticket))
 			return
 		}
-		opts.Resume = t
+		opts.ResumeSessionID = t.SessionID
 	}
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)

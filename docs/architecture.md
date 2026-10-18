@@ -1339,15 +1339,36 @@ edit page's preview, the agent preview pane, and the fragment route. See
 `widgets.md`.
 
 **Sharing: the owner's panel and the card's badge (av-6xjd).** The detail page
-carries a collapsed `sharePanel` below the artifact frame, rendered only when
+carries a `sharePanel` modal opened by Share, rendered only when
 `detailPageData.Share` is non-nil — which is only for the owner, and via the
 same `pageCredentials.forArtifactOwnedBy` flag every other owner-only control
 on that page hangs off. A recipient does not get it: the controls would 404,
 and more to the point the list *is* the guest list, which a grant does not
-carry. Three independent halves in it — the people currently granted (one field
-taking several names, one submit, each name reported back), the public link (a
-toggle, plus a one-step "replace link" that says the old URL stops working),
-and one control for `share_state_mode`.
+carry. Its three sections cover the people currently granted (one field
+taking several names, one submit, each name reported back), choices for
+`share_state_mode` (av-tlpv), and public link access (a toggle and a one-step
+"replace link" that says the old URL stops working), in that order.
+Named recipients can write state according to the chosen mode; public
+link visitors see the owner's existing state in either mode and cannot write
+it back. The cards name who can view and update data, and the link explanation
+states its exposure before it is enabled. A collapsed “What happens when I
+switch?” disclosure explains which existing rows each person sees afterward.
+
+The sharing script is a native ES module. It reads the artifact ID from its
+server-rendered panel and imports the compatibility API bridge, which delegates
+to the credential client still used by classic pages.
+
+Sharing changes apply immediately through the existing API routes. The people
+field submits on Enter using a native form, including mobile keyboard submit.
+Revocations, public-link creation/removal/replacement, and saved-data mode each
+save independently. Enabling link access creates the link and displays its URL
+in the refreshed fragment. Done only dismisses the modal; the save status sits
+beside it. The uncommon iframe embed controls start inside a collapsed
+disclosure.
+
+The guest list scrolls independently with a height proportional to the
+viewport. If the remaining modal content does not fit the window, the overlay
+scrolls outside the white dialog rather than adding a scrollbar to its body.
 
 Its body is an htmx target: a mutation ends by firing `exhibit:shares-changed`
 and `/partials/share-panel` re-renders the same named partial the full page
@@ -1355,9 +1376,15 @@ used. A reload is not an option here — this page holds a live artifact frame,
 and showing the new guest list must not restart the tool the owner is looking
 at — and rebuilding the rows in page JS would be a second definition of the
 list, in a second language, over recipient names it would then have to escape
-by hand. The per-name grant report sits *outside* the swapped region for the
-one reason that matters: the swap that follows a grant would otherwise wipe
-"tpyo — no such account" before anybody read it.
+by hand. Mutation failures remain visible for correction and retry instead of
+claiming that the change was saved. Fragment updates preserve the unsent
+people field and the user's place in the guest list. A missing artifact's 404
+fragment replaces the controls with a notice; Done still dismisses it. For this
+editor, server/network refresh failures preserve the existing controls, disabled
+until a close/reopen retries only the fragment GET. This is an exception to the
+normal error-fragment swap for 5xx responses, so an already-saved mutation is not
+replayed and unsent recipient names remain available. The save status remains
+in the accessibility tree even while empty.
 
 On the gallery card, `shareBadgeView` picks **one mark naming the strongest
 thing true**, from the two denormalized rollups (§3.3) rather than a join: a

@@ -358,7 +358,8 @@ version it was last working against (`version_seq`, read against `head_seq`);
 only a projection of what a person saw is ever returned, never the file. A
 resumable one can be continued with `resume_session_id` above (200 when it is
 already running and the call attaches to it; 404 when it is not the caller's or
-not there; 409 when it was kept before conversations could be resumed). Resuming
+not there; 409 when it was kept before conversations could be resumed, or its
+preceding process is still finishing persistence). Resuming
 never changes the artifact — rolling it back is a separate
 `POST /api/artifacts/:id/versions/:seq/restore`. See `docs/agent.md`.
 

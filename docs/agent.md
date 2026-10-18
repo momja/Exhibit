@@ -491,6 +491,10 @@ session from a stored conversation instead of a blank one.
 - A conversation that is still running is continued by **attaching** to it
   (200, with a fresh SSE ticket) — a second process on one conversation would be
   two writers of one record. Losing a race for the same conversation is a 409.
+  A closing conversation also returns 409 until its final settled turn has
+  been stored. The manager reserves the conversation before loading its saved
+  file and usage baseline, so a resume cannot overwrite that final turn with
+  an earlier snapshot. Closing sessions no longer occupy a live-session slot.
 - Refusals: no `artifact_id` is a 400; a conversation that is not the owner's, or
   is not there, is a 404 (the same answer for both); a conversation kept before
   session files existed is a 409 — it can be read and not continued.

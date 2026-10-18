@@ -24,35 +24,29 @@ iframe{width:100%;height:100%;border:none;display:block}
 .allowlist{padding:8px 20px;background:var(--color-warn-tint);border-bottom:1px solid var(--color-warn-tint-border);font-size:13px;flex-shrink:0}
 .allowlist code{background:var(--color-code-on-tint);padding:1px 5px;border-radius:3px;font-size:12px}
 .allowlist input{border:1px solid var(--color-border);border-radius:4px;padding:3px 8px;font-size:var(--field-font-size);width:240px;margin:0 6px}
-/* The owner's share panel (av-6xjd). It sits below the artifact frame as a
- * collapsed .details-panel, so the artifact keeps the page: closed it is one
- * line of chrome, and opening it takes height from the frame (the flex:1
- * child) rather than laying a modal over the tool somebody is using.
- * flex-shrink:0 holds it at its content height, the way the toolbar and the
- * banners hold theirs.
- *
- * Rendered only for the owner, so none of this reaches a recipient's page. */
-.share-modal{width:620px}
-#share-body{max-height:min(60vh,520px);overflow-y:auto}
-.share-cols{display:flex;gap:24px;flex-wrap:wrap}
-.share-col{flex:1 1 280px;display:flex;flex-direction:column;gap:8px;min-width:0}
+/* Owner-only sharing controls and static saved-data illustrations. */
+/* Center when the dialog fits; on short windows the backdrop owns scrolling,
+   so the title, content, and Done button remain one reachable surface. */
+#share-panel{align-items:flex-start;overflow-y:auto;padding:16px}
+#share-panel .share-modal{width:560px;max-width:100%;max-height:none;display:flex;flex:0 0 auto;flex-direction:column;margin:auto}
+#share-title{display:flex;align-items:center;gap:8px;margin-bottom:var(--space-6);flex-shrink:0}
+#share-title .ph{flex-shrink:0}
+#share-body{overflow:visible;min-height:0}
+.share-cols{display:flex;flex-direction:column;gap:16px}
+.share-col{flex:0 0 auto;display:flex;flex-direction:column;gap:8px;min-width:0}
 .share-col h3{margin:0}
 .share-add{display:flex;gap:8px;align-items:center}
 .share-add .field{flex:1;min-width:0}
-.share-grants{list-style:none;display:flex;flex-direction:column;gap:4px}
-.share-grant{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;border-bottom:1px solid var(--color-hairline)}
-.share-grant:last-child{border-bottom:none}
+/* A long guest list must not push the link and saved-data settings far away.
+   Its limit follows the window rather than a fixed number of people. */
+#share-panel .share-people-list{display:flex;flex-direction:column;max-block-size:30dvh;min-block-size:0;overflow-y:auto;scrollbar-gutter:stable}
+#share-panel .share-people-list:focus-visible{outline:2px solid var(--brand-blue);outline-offset:3px;border-radius:4px}
+.share-grants{list-style:none;display:flex;flex-direction:column}
+.share-grant{display:flex;align-items:center;gap:8px;min-block-size:45px;font-size:13px;line-height:20px;padding:8px 0;border-bottom:1px solid var(--color-hairline)}
+.share-grant .btn{flex-shrink:0;justify-content:center;line-height:16px}
 .share-grant-name{overflow-wrap:anywhere}
 .share-link-row{display:flex;gap:8px;align-items:center}
 .share-link-row .field{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:var(--field-code-font-size)}
-/* The per-name grant report. It lives outside the htmx-swapped region — the
- * swap that follows a grant would otherwise wipe it before it could be read —
- * and each row names one submitted handle and what became of it. A name that
- * resolved to nothing is muted rather than red: a typo is an answer, not a
- * fault, and the panel's job is to say which of your friends can now open it. */
-.share-results{display:flex;flex-direction:column;gap:2px;margin-top:8px;font-size:12px;color:var(--color-muted)}
-.share-results code{background:var(--color-ground);padding:1px 5px;border-radius:3px}
-.share-result-granted{color:var(--color-ink)}
 .modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:100}
 .modal-overlay[hidden]{display:none}
 .modal{background:var(--color-panel);border-radius:10px;padding:20px;width:380px;max-width:90vw;box-shadow:var(--shadow-modal)}
@@ -119,3 +113,42 @@ iframe{width:100%;height:100%;border:none;display:block}
   .toolbar a[href$="#security-panel"]{order:2}
   #al-status{order:3;padding:0 20px 8px}
 }
+
+/* Saved-data choices persist as soon as a selection is confirmed. */
+.state-sharing{flex:0 0 auto;min-width:0;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--color-hairline);padding-top:16px}
+#share-state-mode{border:0;min-width:0}
+.state-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.state-choice{position:relative;cursor:pointer;min-width:0}
+.state-choice input{position:absolute;opacity:0;width:1px;height:1px}
+.state-choice>span{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;gap:8px;padding:14px 10px;border:1px solid var(--color-border);border-radius:8px;font-size:var(--field-font-size);color:var(--color-ink-soft);height:100%}
+.state-choice input:checked+span{border-color:var(--brand-blue);background:color-mix(in srgb,var(--brand-blue) 9%,var(--color-panel));color:var(--brand-blue);box-shadow:inset 0 0 0 1px var(--brand-blue)}
+.state-choice input:focus-visible+span{outline:2px solid var(--brand-blue);outline-offset:3px}
+.state-choice input:disabled+span{opacity:.6;cursor:wait}
+.state-choice strong{font-size:var(--field-font-size);font-weight:600}
+.state-choice-description{font-size:12px;line-height:1.4;color:var(--color-ink-soft)}
+.state-mode-glyph{display:flex;flex-direction:column;width:108px;margin-bottom:4px;color:var(--brand-blue)}
+.state-glyph-people,.state-glyph-separate{display:grid;grid-template-columns:repeat(3,1fr)}
+.state-mode-glyph i{font-size:22px;line-height:1}
+.state-mode-glyph svg{display:block;width:108px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;opacity:.6}
+.state-glyph-data{display:grid;text-align:center}
+@media(max-width:480px){
+  .state-choice>span{padding:12px 8px}
+  .state-choice strong{font-size:var(--field-font-size)}
+  .state-mode-glyph{width:90px}
+  .state-mode-glyph svg{width:90px}
+}
+
+.state-how-it-works>summary{display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none;color:var(--brand-blue);font-size:var(--field-font-size);padding:4px 0}
+.state-how-it-works>summary::-webkit-details-marker{display:none}
+.state-how-it-works>summary:focus-visible{outline:2px solid var(--brand-blue);outline-offset:3px;border-radius:4px}
+.state-how-it-works .state-how-open,.state-how-it-works[open] .state-how-closed{display:none}
+.state-how-it-works[open] .state-how-open{display:inline}
+.state-how-it-works[open]>summary{margin-bottom:10px}
+
+.share-col+.share-col{border-top:1px solid var(--color-hairline);padding-top:16px}
+/* The last guest row already supplies the section divider. */
+.share-col:has(.share-grant)+.share-col{border-top:0;padding-top:0}
+.modal .share-help{margin:0;font-size:12px;line-height:1.5;color:var(--color-ink-soft)}
+#share-panel .modal-actions{justify-content:flex-end;flex-wrap:nowrap;border-top:1px solid var(--color-hairline);padding-top:14px}
+#share-panel .modal-actions .btn{flex-shrink:0;min-height:36px;justify-content:center}
+#share-panel #share-status{flex:1;min-width:0;color:var(--color-ink-soft);overflow-wrap:anywhere}

@@ -340,6 +340,6 @@ let geolocationApproved = {{if .Capability.GeolocationApproved}}true{{else}}fals
 {{/* The share panel's script, loaded only where the panel exists. It resolves
      everything by id inside #share-panel and tolerates the panel's absence, so
      the guard is a courtesy rather than the control. */}}
-{{if .Share}}<script src="/assets/gallery/share.js"></script>{{end}}
+{{if .Share}}<script type="module" src="/assets/gallery/share.js"></script>{{end}}
 </body>
 </html>{{end}}
