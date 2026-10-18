@@ -933,7 +933,7 @@ written by the time the next version replaced it.
   history is discarded. Restoring the head is `ErrAlreadyCurrent` (409).
 - **A version can be looked at without being restored** (av-vw7r).
   `GetVersionView` returns a version's body blob and the state snapshot it left,
-  read in one owner-scoped query and writing nothing; the head is
+  read with owner-scoped queries and writing nothing; the head is
   `ErrAlreadyCurrent`, as for a restore, because its data is the live rows. It is
   the *same* snapshot `RestoreVersion` puts back, which is what makes "what you
   viewed is what you get" a property of the code rather than of care: a test

@@ -243,3 +243,24 @@ func TestAnotherOwnersVersionIsNotFound(t *testing.T) {
 		t.Fatalf("the control: the real owner opens their own version, got %d", w.Code)
 	}
 }
+
+func TestVersionPreviewUsesHistoricalAssetGeneration(t *testing.T) {
+	rd, st := newTestRenderer(t, "abc", "<html><body>tool</body></html>")
+	ctx := t.Context()
+	old := store.ArtifactAsset{ID: "old-payload", SourceURL: "https://cdn.test/tool.wasm", BlobID: "old-blob", ContentType: "application/wasm"}
+	if _, err := st.ReplaceArtifactAssets(ctx, 1, "abc", "old-generation", []store.ArtifactAsset{old}); err != nil {
+		t.Fatal(err)
+	}
+	fresh := old
+	fresh.ID, fresh.BlobID = "new-payload", "new-blob"
+	if _, err := st.ReplaceArtifactSnapshot(ctx, 1, "abc", store.ArtifactSnapshot{GenerationID: "new-generation", Assets: []store.ArtifactAsset{fresh}}); err != nil {
+		t.Fatal(err)
+	}
+	w := serveVersion(rd, "abc", 1, versionToken("abc", 1, 1))
+	if w.Code != http.StatusOK {
+		t.Fatalf("preview: %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "/a/abc/assets/old-payload") || strings.Contains(w.Body.String(), "/a/abc/assets/new-payload") {
+		t.Fatal("a version preview must load the payloads captured with its code")
+	}
+}

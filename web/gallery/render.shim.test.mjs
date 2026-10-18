@@ -399,7 +399,7 @@ test("an ordinary render still writes through and still resyncs", async () => {
 
   storage.setItem("score", "11");
   assert.deepEqual(posted.filter((m) => m.__avState).map(flat),
-    [{ __avState: true, artifactId: ARTIFACT_ID, op: "set", key: "score", value: "11" }]);
+    [{ __avState: true, artifactId: ARTIFACT_ID, version: 1, op: "set", key: "score", value: "11" }]);
 
   await fromHost(sync({ score: "99" }));
   assert.equal(storage.getItem("score"), "99");
