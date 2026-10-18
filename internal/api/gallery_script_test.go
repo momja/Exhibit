@@ -56,7 +56,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		// The same, for the geolocation gate's section of bridgeScript.
 		"render.geolocation.test.mjs",
 	}
-	cmd := exec.Command(node, append([]string{"--test"}, suites...)...)
+	cmd := exec.Command(node, append([]string{"--experimental-vm-modules", "--test"}, suites...)...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {

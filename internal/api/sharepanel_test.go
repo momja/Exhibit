@@ -207,7 +207,7 @@ func TestOnlyTheOwnerGetsTheSharePanel(t *testing.T) {
 	assert.Contains(t, owner, `id="share-open"`)
 	assert.Contains(t, owner, `id="share-link-toggle"`)
 	assert.Contains(t, owner, `id="share-add-input"`)
-	assert.Contains(t, owner, "/assets/gallery/share.js")
+	assert.Contains(t, owner, `<script type="module" src="/assets/gallery/share.js"></script>`)
 
 	recipient := responseText(in.get(t, "/artifacts/"+in.granted, in.cookieTwo))
 	assert.NotContains(t, recipient, `id="share-panel"`)
@@ -247,10 +247,41 @@ func TestTheFragmentRendersTheSameListTheFullPageDoes(t *testing.T) {
 
 	fragment := getPage(t, ro, "/partials/share-panel?artifact="+artifactID)
 	page := getPage(t, ro, "/artifacts/"+artifactID)
-	for _, marker := range []string{"alice", `id="share-link-url"`, `id="share-state-mode"`} {
+	assert.Contains(t, page, `id="share-add-form" method="post" action="/api/shares"`)
+	assert.Contains(t, page, `id="share-close">Done</button>`)
+	assert.Contains(t, page, `hx-trigger="exhibit:shares-changed from:body"`)
+	assert.Contains(t, page, `enterkeyhint="done"`)
+	assert.Contains(t, page, `class="share-people-list" tabindex="0" role="region" aria-label="People with access"`)
+	for _, obsolete := range []string{`id="share-save"`, `id="share-add-btn"`, `id="share-pending-grants"`, `id="share-link-pending"`,
+		"Press Enter to add people to the list.",
+		"Share with existing accounts. They can use this artifact and update saved data according to the mode below.",
+		"Saving will publish", "Save changes"} {
+		assert.NotContains(t, page, obsolete)
+		assert.NotContains(t, fragment, obsolete)
+	}
+	for _, marker := range []string{"alice", `id="share-link-url"`, `id="share-state-mode"`, `class="state-mode-glyph"`, `id="state-how-it-works"`} {
 		assert.Contains(t, fragment, marker)
 		assert.Contains(t, page, marker)
 	}
+}
+
+// The server renders the saved choice and both static explanations.
+func TestTheStateModeChoicesTrackSavedMode(t *testing.T) {
+	ro := newTestRouter(t)
+	artifactID := seedShareableArtifact(t, ro, "Tool")
+	page := getPage(t, ro, "/artifacts/"+artifactID)
+	assert.Contains(t, page, `data-saved-mode="own"`)
+	assert.Contains(t, page, `id="state-how-it-works">`)
+	assert.Contains(t, page, "What Happens When I Switch?")
+	assert.Contains(t, page, "Everyone can view and update the same saved data. Changes affect everyone.")
+	assert.Contains(t, page, "Public visitors cannot save changes back to your data.")
+	assert.Contains(t, page, "Anyone with the link can view your existing saved data, in either data mode.")
+	assert.Contains(t, page, `id="share-close">Done</button>`)
+	assert.NotContains(t, page, `data-counter=`)
+	assert.NotContains(t, page, "see how it works")
+	assert.Equal(t, http.StatusOK, patchArtifactStatus(t, ro, artifactID, `{"share_state_mode":"shared"}`))
+	page = getPage(t, ro, "/partials/share-panel?artifact="+artifactID)
+	assert.Contains(t, page, `data-saved-mode="shared"`)
 }
 
 // --- the shared tile ----------------------------------------------------
@@ -275,6 +306,9 @@ func TestThePanelEmbedsTheWidgetWheneverTheLinkExists(t *testing.T) {
 	got := panel()
 	assert.Contains(t, got, `id="share-widget-embed"`,
 		"a link to an artifact with no widget embeds its default tile")
+	assert.Contains(t, got, `<details class="state-how-it-works" id="share-widget-details">`,
+		"embed controls start collapsed behind a native disclosure")
+	assert.Contains(t, got, "Embed tile</summary>")
 	assert.Contains(t, got, `/widget`, "the snippet must name the shared-widget route")
 	assert.Contains(t, got, `&lt;iframe`, "the snippet is an iframe, escaped into the value attribute")
 
