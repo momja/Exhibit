@@ -162,7 +162,7 @@ func TestWriteSelectionReplacesAndClears(t *testing.T) {
 // (av-xie4). A widget is drawn transparent over a card that is white in one
 // mode and dark in the other, so dark-only text vanishes on half the screens.
 func TestSystemPromptAsksForLightAndDark(t *testing.T) {
-	prompt := buildSystemPrompt("", "n0nce", CreateOpts{})
+	prompt := buildSystemPrompt("", CreateOpts{})
 	assert.Contains(t, prompt, "Support both light and dark mode")
 	assert.Contains(t, prompt, "color-scheme: light dark")
 	assert.Contains(t, prompt, "@media (prefers-color-scheme: dark)")
