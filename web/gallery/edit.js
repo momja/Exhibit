@@ -341,11 +341,11 @@ function showApproval(footprint) {
   }).join('');
   scanDiv.style.display = 'block';
   scanDiv.innerHTML = '<strong>Edited artifact wants to contact these origins.</strong>' +
-    '<div style="color:#888;margin:4px 0 8px">The most secure option will <em>always</em> be to disable all external origins. Origin approval is never automatic.</div>' +
+    '<div class="muted" style="margin:4px 0 8px">The most secure option will <em>always</em> be to disable all external origins. Origin approval is never automatic.</div>' +
     rows +
     '<div class="btn-row" style="margin-top:10px">' +
     '<button class="btn btn-sm" onclick="approveOrigins()">Approve selected &amp; enable</button>' +
-    '<button class="btn btn-sm" style="background:#888" onclick="finishEdit()">Keep all blocked</button>' +
+    '<button class="btn btn-sm" style="background:var(--color-muted)" onclick="finishEdit()">Keep all blocked</button>' +
     '</div>';
 }
 

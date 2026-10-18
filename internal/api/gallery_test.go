@@ -60,7 +60,7 @@ func TestGalleryIndexRendersTagDots(t *testing.T) {
 	// inset ring whatever its color. The name stays reachable as sr-only
 	// text, which components.css defines for every page.
 	css := galleryAsset(t, r, "/assets/gallery/index.css")
-	assert.Contains(t, css, `.tag-dot-item::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--tag-color,#888);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}`)
+	assert.Contains(t, css, `.tag-dot-item::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--tag-color,var(--color-muted));box-shadow:inset 0 0 0 1px var(--color-tag-ring)}`)
 	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/components.css"), `.sr-only{position:absolute;width:1px;height:1px;`)
 }
 
@@ -222,7 +222,8 @@ func TestGalleryHeaderHasVisualSeparation(t *testing.T) {
 	// the cards use. A bare 1px #e0e0e0 border alone read as flush with content.
 	css := galleryAsset(t, r, "/assets/gallery/index.css")
 	assert.Contains(t, css, `header{position:sticky;top:0;z-index:20`)
-	assert.Contains(t, css, `box-shadow:0 1px 6px rgba(0,0,0,.07)`) // grep-friendly: 'box-shadow'
+	assert.Contains(t, css, `box-shadow:var(--shadow-header)`) // grep-friendly: 'box-shadow'
+	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/tokens.css"), `--shadow-header:0 1px 6px rgba(0,0,0,.07)`)
 }
 
 // The artifact card's open affordances are the card body (click anywhere

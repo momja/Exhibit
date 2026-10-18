@@ -68,6 +68,10 @@ func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 		NetworkAllowlist: []string{"https://seed.example.com"},
 		SourceText:       id + " seedsearchterm",
 	}))
+	_, err := s.db.ExecContext(ctx, `INSERT INTO artifact_version_assets
+		(artifact_id, seq, id, generation_id, source_url, blob_id, content_type, size_bytes, created_at)
+		VALUES (?, 1, ?, 'seed', 'https://seed.test/a.wasm', 'asset-blob', 'application/wasm', 1, datetime('now'))`, id, "asset-"+id)
+	require.NoError(t, err)
 	require.NoError(t, s.SetState(ctx, OwnerID(owner), id, ViewerID(owner), "seed", "value"))
 	require.NoError(t, s.SaveTranscript(ctx, owner, id, "session-"+id, `[{"role":"user"}]`))
 	require.NoError(t, s.CreateShare(ctx, owner, &Share{ID: "share-" + id, ArtifactID: id}))
@@ -111,6 +115,10 @@ func ownerCases() []ownerCase {
 			_, err := s.DeleteArtifact(ctx, o, id)
 			return false, err
 		}},
+		{"VersionAssets", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			v, err := s.VersionAssets(ctx, o, id, 1)
+			return len(v) == 0, err
+		}},
 		{"ListVersions", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			v, err := s.ListVersions(ctx, o, id)
 			return len(v) == 0, err
@@ -132,6 +140,10 @@ func ownerCases() []ownerCase {
 				// case asserts, and it held.
 				err = nil
 			}
+			return false, err
+		}},
+		{"ReplaceArtifactSnapshot", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, err := s.ReplaceArtifactSnapshot(ctx, o, id, ArtifactSnapshot{SourceBlobID: "refetched-blob-" + id, SourceText: "refetched text"})
 			return false, err
 		}},
 		{"ListOriginDecisions", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
@@ -481,9 +493,10 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// the last record of whose it was. There is no owner left to scope by,
 		// and nothing to leak: the queue holds ids of bytes already condemned,
 		// never a way to reach a live artifact.
-		"PendingBlobDeletions":  "queued ids outlive the rows that owned them; there is no owner left",
-		"DrainBlobDeletions":    "removes bytes already condemned; the ids come from the caller's own delete",
-		"DrainAllBlobDeletions": "a janitor over the whole queue, owned by no one",
+		"QueueUnreferencedBlobs": "failed-write cleanup by server-minted blob id; skips every blob still referenced by any owner",
+		"PendingBlobDeletions":   "queued ids outlive the rows that owned them; there is no owner left",
+		"DrainBlobDeletions":     "removes bytes already condemned; the ids come from the caller's own delete",
+		"DrainAllBlobDeletions":  "a janitor over the whole queue, owned by no one",
 
 		// Identity and sessions (av-30rj). These methods *establish* who the
 		// owner is; they cannot take one as input without assuming the answer

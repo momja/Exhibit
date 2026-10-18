@@ -351,6 +351,17 @@ type ListOptions struct {
 	Offset      int
 }
 
+// ArtifactSnapshot is a staged refetch ready to commit. Empty SourceBlobID
+// preserves the body and source text. Nil Assets preserves the asset generation;
+// otherwise GenerationID names the replacement generation.
+type ArtifactSnapshot struct {
+	Provenance
+	SourceBlobID string
+	SourceText   string
+	GenerationID string
+	Assets       []ArtifactAsset
+}
+
 // Store is the seam between handlers and persistence (architecture §3.3).
 //
 // # Owner scoping (av-ep8k)
@@ -410,6 +421,11 @@ type Store interface {
 	GetArtifactReadableBy(ctx context.Context, viewerID ViewerID, id string) (*Artifact, error)
 	ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error)
 	UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error
+	// ReplaceArtifactSnapshot atomically switches the body, asset generation,
+	// search text and timestamp, and queues superseded blobs for deletion.
+	// All new blobs must already be stored. An empty SourceBlobID keeps the
+	// body; nil Assets keeps the current generation.
+	ReplaceArtifactSnapshot(ctx context.Context, ownerID int64, id string, snapshot ArtifactSnapshot) ([]string, error)
 	// DeleteArtifact removes the artifact and returns the blob ids it queued
 	// for deletion. It enqueues inside the transaction that dropped the
 	// reference, and only for a blob no remaining row names (blobqueue.go) —
@@ -424,6 +440,7 @@ type Store interface {
 	// snapshots the state of the version it replaces in the same transaction.
 	// All four are owner-scoped like the rest of the artifact's children:
 	// another owner's artifact has no history to read and cannot be written to.
+	VersionAssets(ctx context.Context, ownerID int64, artifactID string, seq int) ([]ArtifactAsset, error)
 	ListVersions(ctx context.Context, ownerID int64, artifactID string) ([]Version, error)
 	GetVersion(ctx context.Context, ownerID int64, artifactID string, seq int) (*Version, error)
 	CommitVersion(ctx context.Context, ownerID int64, artifactID string, c VersionChange) (*Version, error)
@@ -448,6 +465,10 @@ type Store interface {
 	ArtifactAssetsUnscoped(ctx context.Context, artifactID string) ([]ArtifactAsset, error)
 	GetArtifactAssetUnscoped(ctx context.Context, artifactID, assetID string) (*ArtifactAsset, error)
 	DeleteArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) ([]string, error)
+
+	// QueueUnreferencedBlobs condemns unused staged blobs after a failed write.
+	// Referenced blobs are skipped, including shared content-addressed assets.
+	QueueUnreferencedBlobs(ctx context.Context, ids []string) ([]string, error)
 
 	// The blob deletion queue (av-8gyd). Rows and bytes live in two stores
 	// that cannot commit together, so the *intent* to remove the bytes is
