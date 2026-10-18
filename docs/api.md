@@ -421,3 +421,9 @@ The render surface sets `Content-Security-Policy` from the artifact's approved o
 `/a/:artifactID/versions/:seq` serves an earlier version's body beside the data that version left behind (what `POST …/versions/:seq/restore` would put back), so it can be looked at before it is restored. It takes its own token — scoped to that version and the owner, minted by the app origin's `/partials/version-viewer` fragment — so the artifact's own token does not open history and a version's does not open the live document. It writes nothing and nothing done in it persists — and when the tool in it tries to save, the document tells the host with an empty `__avVersionUnsaved` message (once per load; no op, key or value) so the page can say that nothing is saved until the version is the active one; the current version and anything not yours are `404`. See `security.md` §1.9.
 
 `/w/:artifactID` is the same read path with the same CSP and the same inlined state — it differs only in which blob it serves and in getting the **narrowed preamble**: state writes stop at the in-memory cache and the capability bridges are not injected at all. It 404s for an artifact with no widget (`widgets.md`).
+
+Frame state writes carry `X-Exhibit-Version: N`, the version sequence rendered
+with their code. `PUT` and `DELETE` state routes check it atomically with the
+mutation and return 409 (`code: "version_changed"`) for a superseded frame. This
+prevents delayed writes from overwriting restored state. Explicit API edits and
+the state inspector may omit the header.

@@ -53,6 +53,10 @@ func serverError(w http.ResponseWriter, r *http.Request, label string, err error
 // outside the caller's library exactly as it reports one that doesn't exist,
 // and the handler must not undo that by answering differently (av-ep8k).
 func writeArtifactError(w http.ResponseWriter, r *http.Request, label string, err error) {
+	if errors.Is(err, store.ErrVersionChanged) {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "version_changed"})
+		return
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return

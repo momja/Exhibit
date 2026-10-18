@@ -269,10 +269,10 @@ func TestRefetchValidReplacementRepointsBlob(t *testing.T) {
 	assert.Contains(t, resp.UndecidedOrigins, "https://api.example.com")
 	assert.True(t, resp.FootprintChanged)
 
-	// New blob, old bytes drained: the repoint retired the previous body.
+	// New blob; the previous version retains the old bytes.
 	blobAfter := refetchBlobID(t, r, id)
 	require.NotEqual(t, blobBefore, blobAfter)
-	assert.NoFileExists(t, filepath.Join(blobDir, blobBefore))
+	assert.FileExists(t, filepath.Join(blobDir, blobBefore), "the previous version retains its source")
 	require.FileExists(t, filepath.Join(blobDir, blobAfter))
 }
 
@@ -364,13 +364,13 @@ func TestRefetchPicksUpAChangedRuntimeAsset(t *testing.T) {
 	// The body did not change, so it was not rewritten.
 	assert.Equal(t, blobBefore, refetchBlobID(t, r, id))
 
-	// The asset now serves the new bytes, and the old payload is drained.
+	// The current asset serves new bytes; history retains the previous payload.
 	assetsAfter := listAssets(t, r, id)
 	require.Len(t, assetsAfter, 1)
 	assert.Equal(t, u.srv.URL+"/build/app.wasm", assetsAfter[0].SourceURL)
 	assert.Equal(t, store.AssetBlobID(defaultOwnerID, []byte(rebuilt)), assetsAfter[0].BlobID)
 	assert.Equal(t, int64(len(rebuilt)), assetsAfter[0].SizeBytes)
-	assert.NoFileExists(t, filepath.Join(blobDir, assetsBefore[0].BlobID))
+	assert.FileExists(t, filepath.Join(blobDir, assetsBefore[0].BlobID), "the previous version retains its payload")
 }
 
 // TestRefetchWithoutAssetsKeepsExistingAssets (av-reo3 assets trap): a

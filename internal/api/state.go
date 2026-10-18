@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -61,12 +62,16 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := *req.Key
+	version, ok := stateWriteVersion(w, r)
+	if !ok {
+		return
+	}
 
 	if !ro.artifactExists(w, r, artifactID, "set state") {
 		return
 	}
 
-	if err := ro.cfg.Store.SetStateAsViewer(r.Context(), stateViewer(r), artifactID, key, req.Value); err != nil {
+	if err := ro.cfg.Store.SetStateAsViewer(r.Context(), stateViewer(r), artifactID, key, req.Value, version...); err != nil {
 		writeArtifactError(w, r, "set state", err)
 		return
 	}
@@ -114,6 +119,10 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	viewer := stateViewer(r)
+	version, ok := stateWriteVersion(w, r)
+	if !ok {
+		return
+	}
 
 	// Absent key: erase everything *this viewer* holds on the artifact.
 	// Destructive and irreversible — there is no version history for state —
@@ -121,8 +130,8 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	// origin decisions, capability approvals all survive), and no other
 	// viewer's rows.
 	if !query.Has("key") {
-		if err := ro.cfg.Store.ClearStateAsViewer(r.Context(), viewer, artifactID); err != nil {
-			serverError(w, r, "clear state", err)
+		if err := ro.cfg.Store.ClearStateAsViewer(r.Context(), viewer, artifactID, version...); err != nil {
+			writeArtifactError(w, r, "clear state", err)
 			return
 		}
 		slog.InfoContext(r.Context(), "state cleared", slog.String("artifact_id", artifactID))
@@ -131,8 +140,8 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	key := query.Get("key")
-	if err := ro.cfg.Store.DeleteStateAsViewer(r.Context(), viewer, artifactID, key); err != nil {
-		serverError(w, r, "delete state", err)
+	if err := ro.cfg.Store.DeleteStateAsViewer(r.Context(), viewer, artifactID, key, version...); err != nil {
+		writeArtifactError(w, r, "delete state", err)
 		return
 	}
 
@@ -165,4 +174,18 @@ func (ro *Router) artifactExists(w http.ResponseWriter, r *http.Request, artifac
 		return false
 	}
 	return true
+}
+
+// Unversioned API edits are deliberate owner/agent actions. Frame writes carry
+// the version embedded with their code and are conditional on it still being current.
+func stateWriteVersion(w http.ResponseWriter, r *http.Request) ([]int, bool) {
+	if r.Header.Get("X-Exhibit-Version") == "" {
+		return nil, true
+	}
+	version, err := strconv.Atoi(r.Header.Get("X-Exhibit-Version"))
+	if err != nil || version < 1 {
+		writeError(w, http.StatusBadRequest, "invalid state version")
+		return nil, false
+	}
+	return []int{version}, true
 }

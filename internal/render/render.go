@@ -613,7 +613,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		origins = originPolicy{Allowed: a.NetworkAllowlist}
 	}
 
-	out := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest)
+	out := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, a.VersionSeq)
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
 		slog.Int64("owner", viewer.OwnerID),
@@ -1081,6 +1081,7 @@ func (rd *Renderer) ServeAsset(w http.ResponseWriter, r *http.Request) {
 const shimTemplate = `<script>
 (function() {
   var ARTIFACT_ID = %q;
+  var VERSION_SEQ = %d;
   var API_ORIGIN = %q;
   var WIDGET = %t;
   var ANONYMOUS = %t;
@@ -1121,7 +1122,7 @@ const shimTemplate = `<script>
       return;
     }
     if (window.parent === window) return; // top-level: no host to persist through
-    var msg = { __avState: true, artifactId: ARTIFACT_ID, op: op };
+    var msg = { __avState: true, artifactId: ARTIFACT_ID, version: VERSION_SEQ, op: op };
     if (key !== undefined) msg.key = key;
     if (value !== undefined) msg.value = value;
     window.parent.postMessage(msg, API_ORIGIN);
@@ -2363,7 +2364,7 @@ const widgetHealthScript = `<script>
 // to fix. It sits beside state because it is the same kind of thing: per-render
 // data the shim must hold before the artifact's first line runs, not a mode
 // flag.
-func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string) string {
+func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, versionSeq ...int) string {
 	if state == nil {
 		state = map[string]string{}
 	}
@@ -2397,7 +2398,11 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 	if widget {
 		bridges = ""
 	}
-	shim := fmt.Sprintf(shimTemplate, artifactID, appOrigin, widget, anonymous, versionView, allowedJSON, blockedJSON, stateJSON, bridges)
+	version := 0
+	if len(versionSeq) > 0 {
+		version = versionSeq[0]
+	}
+	shim := fmt.Sprintf(shimTemplate, artifactID, version, appOrigin, widget, anonymous, versionView, allowedJSON, blockedJSON, stateJSON, bridges)
 	if widget {
 		// No snippet picker: it exists so the user can point at an element in
 		// the *artifact* preview and hand it to the agent. A widget frame is

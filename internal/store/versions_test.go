@@ -385,3 +385,15 @@ func TestRestoreRecoversMatchingAssetGeneration(t *testing.T) {
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a1-body", "old-asset", "new-asset"}, queued)
 }
+
+func TestRenderedVersionSequenceAdvancesOnRestore(t *testing.T) {
+	s := newTestStore(t)
+	putVersioned(t, s, "a1")
+	_, err := s.CommitVersion(t.Context(), 1, "a1", VersionChange{BodyBlobID: strPtr("body-2")})
+	require.NoError(t, err)
+	_, err = s.RestoreVersion(t.Context(), 1, "a1", 1, Provenance{}, "")
+	require.NoError(t, err)
+	a, err := s.GetArtifact(t.Context(), 1, "a1")
+	require.NoError(t, err)
+	assert.Equal(t, 3, a.VersionSeq, "restoring identical old bytes still gets a new state-write generation")
+}
