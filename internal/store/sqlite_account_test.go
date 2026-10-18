@@ -272,6 +272,9 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 		}})
 	require.NoError(t, err)
 
+	_, err = s.CommitVersion(ctx, member.ID, deletedArtifact, VersionChange{})
+	require.NoError(t, err)
+
 	return accountFixture{s: s, admin: admin, member: member}
 }
 
