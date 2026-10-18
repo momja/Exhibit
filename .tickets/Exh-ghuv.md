@@ -21,3 +21,25 @@ Propose five interface options on the paper canvas, pick one, implement it in de
 
 Desktop detail page chrome is a single bar no taller than --header-height (40px). Every existing action remains reachable for an owner, and a recipient sees the same reduced set as today. Mobile bottom-sheet behaviour unchanged. Page-script tests and Go template tests pass. Screenshots in docs updated.
 
+
+## Notes
+
+**2026-10-18T17:31:27Z**
+
+Decision (2026-10-18): option 4, the floating pill, extended to picture-in-picture behaviour. Artifact full-bleed. The pill has a grip as its only drag area, snaps to the four corners using a projected throw, and can be flicked past the left/right edge to stash as a slim edge tab (hover reveals it; click or drag restores it). Position is remembered per browser. Rationale: content first, so the artifact is not a second-class object embedded in Exhibit, and the pill can later become an agent tool palette. This supersedes the 40px single-bar acceptance criterion. Open question: where banners (capability warning, state changed) live, proposed as toasts anchored to the pill plus a dot on the stashed tab.
+
+**2026-10-18T22:21:37Z**
+
+Prototype review decisions (demo: paper canvas frame 07-pip-demo):
+- Pill order: back button, divider, grip, title, divider, action buttons, ⋮ menu. The grip is mid-pill, so its hover shape is an 8px rounded rect; the back button at the end is a full circle, concentric with the outline.
+- No placeholder slots or edge highlights while dragging. Release springs to the nearest corner, using the throw's velocity to pick it.
+- Stashing is positional only: it happens when the pointer is released within 20px of the left or right window edge. Velocity never stashes. While in that zone the pill fades to 55% opacity as the only cue.
+- The drag lift scales about the grab point (transform-origin = pointer offset, position via the translate property), so the pill stays under the pointer.
+- The ⋮ menu and the info card hang off their own trigger and open toward the screen centre.
+- No toasts. Placement changes are announced to screen readers only, through an aria-live region.
+- Sandbox posture is option D: the title is a button with a posture glyph (grey shield when contained, accent globe + origin count with grants) and a caret. It opens an info card with the created date, the Sandbox posture receipt (same rows as capabilityPopover), Sharing (owner only) and Manage security settings (owner only). The separate posture button is gone, and the created date and Manage allowlist link leave the ⋮ menu. The card stays one server-rendered partial that htmx re-renders on exhibit:capabilities-changed.
+- Banners (capability warning, state changed) still need a home; toasts are ruled out.
+
+**2026-10-18T22:26:00Z**
+
+Popup placement (supersedes the 'hang off their own trigger' line in the previous note): the info card is flush with the pill's corner-side edge and matches the pill's width (280px minimum, never wider than the window less 8px each side). The ⋮ menu still hangs off its own button. Both open 8px off the pill toward the screen centre, choose that side from the docked corner rather than the pill's geometry (on a phone the pill spans most of the width), and cap their height at the room left before the 12px window inset, scrolling past that. Verified in all four corners at 1280×800, 1024×420, 900×300 and 390×844, contained and with grants.

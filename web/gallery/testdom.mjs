@@ -1,10 +1,10 @@
 /* A DOM small enough to read, real enough to run a page script against.
  *
  * The gallery's page scripts are plain files served verbatim from the app
- * origin, with no bundler and no module system, so there is nothing to import
- * and mock. This loads one of them into a `vm` context over the stubs below,
- * which is what lets a test drive the *shipped* bytes — the same file a browser
- * gets — through a whole interaction rather than grepping it for a substring.
+ * origin, with no bundler. This loads classic scripts and native ES modules
+ * into a `vm` context over the stubs below. A test drives the *shipped* bytes —
+ * the same file a browser gets — through a whole interaction rather than
+ * grepping it for a substring.
  *
  * It is deliberately not jsdom. What these scripts do is narrow (look an
  * element up by id, listen, set textContent, toggle `hidden`, post a message
@@ -17,6 +17,7 @@
  */
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { dirname, resolve } from "node:path";
 
 // An element. Created on first lookup and cached, so a script and its test
 // address the same object without either declaring the page's markup.
@@ -62,6 +63,7 @@ function makeElement(id) {
     setAttribute() {},
     getAttribute() { return null; },
     appendChild(child) { el.children.push(child); return child; },
+    replaceChildren(...children) { el.children = children; },
     remove() {},
     querySelector() { return null; },
     querySelectorAll() { return []; },
@@ -164,6 +166,26 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
     vm.runInContext(readFileSync(path, "utf8"), context, { filename: path });
   }
 
+  // Modules run in the same page context as the classic scripts, with native
+  // linking so tests exercise the actual imported files and module scope.
+  const modules = new Map();
+  async function loadModule(modulePath) {
+    if (!vm.SourceTextModule) throw new Error('Module tests require node --experimental-vm-modules');
+    const readModule = (filename) => {
+      if (!modules.has(filename)) modules.set(filename, new vm.SourceTextModule(
+        readFileSync(filename, 'utf8'), { context, identifier: filename }));
+      return modules.get(filename);
+    };
+    const entry = readModule(resolve(modulePath));
+    await entry.link((specifier, referencing) => {
+      if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
+        throw new Error('Page modules must use relative imports: ' + specifier);
+      }
+      return readModule(resolve(dirname(referencing.identifier), specifier));
+    });
+    await entry.evaluate();
+  }
+
   // Delivers a message as if the artifact frame had posted it. `source`
   // defaults to the frame's window, so a test that wants to prove the identity
   // check works passes something else.
@@ -206,7 +228,7 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
   };
 
   return {
-    byId, frame, window, document, context,
+    byId, frame, window, document, context, loadModule,
     postFromFrame, pressKey, dispatchOnDocument, setVisibility, dispatchOnWindow,
     // Runs whatever setInterval callbacks the script registered, once each.
     // Real timers in a test are a race; this makes "a tick happened" a thing
