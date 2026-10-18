@@ -149,7 +149,7 @@ test("a rollback that fails ends the session it started and says the conversatio
 // 409 is the artifact already being at that version — nothing to put back, and
 // no reason to stop the person getting on with it.
 test("an artifact already at that version is not a failure", async () => {
-  const page = await loadWith([STARTED, json(409, { error: "that version is already the current one" })]);
+  const page = await loadWith([STARTED, json(409, { error: "that version is already the current one", code: "already_current" })]);
   await page.context.resumeConversation("conv-1", 2);
 
   assert.equal(page.byId("pane-chat").classList.contains("history-open"), false);
@@ -243,4 +243,12 @@ test("when a session ends under the page the next message starts a new one", asy
   assert.equal(starts.length, 1);
   assert.deepEqual(JSON.parse(starts[0].body), { artifact_id: "art-1" });
   assert.equal(posts(page.api, "/api/agent/sessions/conv-2/prompt").length, 1);
+});
+
+
+test("a missing historical blob is a failed rollback even with HTTP 409", async () => {
+  const page = await loadWith([STARTED, json(409, { error: "that version's source is no longer stored" }), json(204, {})]);
+  await page.context.resumeConversation("conv-1", 2);
+  assert.match(page.byId("resume-status").textContent, /Could not roll back.*not continued/);
+  assert.equal(page.byId("pane-chat").classList.contains("history-open"), true);
 });

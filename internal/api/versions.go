@@ -126,7 +126,9 @@ func (ro *Router) restoreVersion(w http.ResponseWriter, r *http.Request) {
 	}, store.ExtractSearchText(body))
 	switch {
 	case errors.Is(err, store.ErrAlreadyCurrent):
-		writeError(w, http.StatusConflict, "that version is already the current one")
+		writeJSON(w, http.StatusConflict, map[string]string{
+			"error": "that version is already the current one", "code": "already_current",
+		})
 		return
 	case err != nil:
 		writeArtifactError(w, r, "restore version", err)

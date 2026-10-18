@@ -441,6 +441,12 @@ func (m *Manager) Get(ownerID int64, id string) *Session {
 	if s == nil || s.OwnerID != ownerID {
 		return nil
 	}
+	s.mu.Lock()
+	closed := s.closed
+	s.mu.Unlock()
+	if closed {
+		return nil
+	}
 	return s
 }
 
@@ -1164,6 +1170,13 @@ func (s *Session) finish() {
 func (s *Session) removeScratch() {
 	<-s.readDone
 	s.persisting.Wait()
+	// A dead process must not be offered as a resumable live session. Wait
+	// until its final transcript is stored before freeing its identity.
+	s.mgr.mu.Lock()
+	if s.mgr.sessions[s.ID] == s {
+		delete(s.mgr.sessions, s.ID)
+	}
+	s.mgr.mu.Unlock()
 	if err := os.RemoveAll(s.workDir); err != nil {
 		slog.Warn("remove session scratch directory", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 	}
