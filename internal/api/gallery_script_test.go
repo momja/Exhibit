@@ -37,6 +37,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 	// with a typo'd name is a missing test rather than a silent no-op.
 	suites := []string{
 		"detail.net.test.mjs",
+		"detail.refetch.test.mjs",
 		"detail.recipient.test.mjs",
 		"detail.statesync.test.mjs",
 		"detail.geolocation.test.mjs",

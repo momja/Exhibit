@@ -14,6 +14,13 @@
 --------------------------------------------------------------------------- */
 html,body{margin:0;height:100%}
 
+/* Light and dark follow the system setting, as the gallery card does. The wash
+   starts transparent so the card's own surface is the top of the gradient. */
+:root{color-scheme:light dark;--ink:#111;--muted:#888;--accent:#23559e;--wash:#f7f9fc;--tile:#eaf1fa;--tile-ring:rgba(35,85,158,.10);--badge:#fff}
+@media (prefers-color-scheme:dark){
+	:root{--ink:#e8eaed;--muted:#9aa0a9;--accent:#7eaaf0;--wash:rgba(126,170,240,.06);--tile:#1f2c42;--tile-ring:rgba(126,170,240,.22);--badge:#263652}
+}
+
 .card{
 	box-sizing:border-box;
 	position:relative;
@@ -25,9 +32,9 @@ html,body{margin:0;height:100%}
 	align-items:center;
 	gap:14px;
 	padding:16px 18px;
-	background:linear-gradient(170deg,#fff 0%,#f7f9fc 100%);
+	background:linear-gradient(170deg,transparent 0%,var(--wash) 100%);
 	font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
-	color:#111;
+	color:var(--ink);
 	/* Belt and braces: the host disables pointer events, and nothing here is
 	   clickable in the first place. */
 	cursor:default;
@@ -40,8 +47,8 @@ html,body{margin:0;height:100%}
 	width:56px;
 	height:56px;
 	border-radius:16px;
-	background:#eaf1fa;
-	box-shadow:inset 0 0 0 1px rgba(35,85,158,.10);
+	background:var(--tile);
+	box-shadow:inset 0 0 0 1px var(--tile-ring);
 	display:flex;
 	align-items:center;
 	justify-content:center;
@@ -55,13 +62,13 @@ html,body{margin:0;height:100%}
 	font-weight:600;
 	letter-spacing:-.012em;
 	line-height:1.22;
-	color:#111;
+	color:var(--ink);
 }
 .subtitle{
 	margin:5px 0 0;
 	font-size:12.5px;
 	line-height:1.3;
-	color:#888;
+	color:var(--muted);
 }
 
 /* A faint oversized echo of the same glyph, bleeding off the right edge.
@@ -92,14 +99,14 @@ html,body{margin:0;height:100%}
 		     and its slash kept short — a full-diameter slash reads as a
 		     prohibition sign rather than a percent at this size. -->
 		<svg width="38" height="38" viewBox="0 0 32 32" fill="none"
-			stroke="#23559e" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+			style="stroke:var(--accent)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
 			<path d="M3.6 14.5 16.1 4.8l12.1 9.5"/>
 			<path d="M6.6 12.6v13.9h18.9V12.5"/>
 			<path d="M13.2 26.6v-6.3a2.7 2.7 0 0 1 5.5.1v6.2"/>
-			<circle cx="25.2" cy="24.8" r="6.7" fill="#fff" stroke-width="1.7"/>
+			<circle cx="25.2" cy="24.8" r="6.7" style="fill:var(--badge)" stroke-width="1.7"/>
 			<path d="M27.4 22.1 23.1 27.6" stroke-width="1.7"/>
-			<circle cx="23.3" cy="22.7" r="1.15" fill="#23559e" stroke="none"/>
-			<circle cx="27.2" cy="26.9" r="1.15" fill="#23559e" stroke="none"/>
+			<circle cx="23.3" cy="22.7" r="1.15" style="fill:var(--accent)" stroke="none"/>
+			<circle cx="27.2" cy="26.9" r="1.15" style="fill:var(--accent)" stroke="none"/>
 		</svg>
 	</div>
 
@@ -109,7 +116,7 @@ html,body{margin:0;height:100%}
 	</div>
 
 	<svg class="watermark" viewBox="0 0 32 32" fill="none" aria-hidden="true"
-		stroke="#23559e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+		style="stroke:var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 		<path d="M3.9 14.7 16.1 5.1l11.8 9.3"/>
 		<path d="M6.7 12.9v13.7h18.7V12.8"/>
 		<path d="M13.3 26.6v-6.2a2.7 2.7 0 0 1 5.4.1v6.1"/>

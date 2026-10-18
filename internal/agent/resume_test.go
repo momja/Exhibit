@@ -77,3 +77,15 @@ func TestTheResumeNoticeWaitsForAPromptThatReachesTheAgent(t *testing.T) {
 	s.promptLanded("one that went through")
 	assert.Empty(t, s.resumeNotice, "said once, to the model")
 }
+
+func TestAClosedSessionIsNotOfferedAsLive(t *testing.T) {
+	m := newLimitedManager(t)
+	s := &Session{ID: "ended", OwnerID: 7, closed: true}
+	m.mu.Lock()
+	m.sessions[s.ID] = s
+	m.mu.Unlock()
+	assert.Nil(t, m.Get(7, s.ID), "a resume must start a process instead of attaching to a dead one")
+	m.mu.Lock()
+	delete(m.sessions, s.ID)
+	m.mu.Unlock()
+}

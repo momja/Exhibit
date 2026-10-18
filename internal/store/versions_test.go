@@ -333,3 +333,55 @@ func TestDeleteAccountQueuesOlderVersionBlobs(t *testing.T) {
 	assert.Contains(t, queued, "blob-bobs", "the replaced body")
 	assert.Contains(t, queued, "bobs-body-2", "and the head's")
 }
+
+func TestPutArtifactProvenanceFailureRollsBackCreation(t *testing.T) {
+	s := newTestStore(t)
+	_, err := s.db.Exec(`CREATE TRIGGER fail_provenance BEFORE UPDATE ON artifact_versions
+		BEGIN SELECT RAISE(ABORT, 'provenance unavailable'); END`)
+	require.NoError(t, err)
+	err = s.PutArtifact(t.Context(), &Artifact{
+		ID: "failed", OwnerID: 1, Title: "Failed", SourceBlobID: "body", Tier: Tier1,
+		Provenance: Provenance{Origin: VersionAgent},
+	})
+	require.Error(t, err)
+	a, err := s.GetArtifact(t.Context(), 1, "failed")
+	require.NoError(t, err)
+	assert.Nil(t, a, "a failed create must leave nothing to duplicate on retry")
+	vs, err := s.ListVersions(t.Context(), 1, "failed")
+	require.NoError(t, err)
+	assert.Empty(t, vs)
+}
+
+func TestRestoreRecoversMatchingAssetGeneration(t *testing.T) {
+	fx := newQueueFixture(t)
+	ctx := t.Context()
+	seedAssetArtifact(t, fx, "a1")
+	fx.putBody(t, "old-asset", "old payload")
+	_, err := fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "old-generation",
+		[]ArtifactAsset{asset("old-id", "https://cdn.test/a.wasm", "old-asset")})
+	require.NoError(t, err)
+	fx.putBody(t, "new-asset", "new payload")
+	queued, err := fx.store.ReplaceArtifactSnapshot(ctx, 1, "a1", ArtifactSnapshot{
+		GenerationID: "new-generation",
+		Assets:       []ArtifactAsset{asset("new-id", "https://cdn.test/a.wasm", "new-asset")},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, queued, "historical payloads remain referenced")
+	vs, err := fx.store.ListVersions(ctx, 1, "a1")
+	require.NoError(t, err)
+	require.Len(t, vs, 2, "an asset-only refetch creates a version")
+
+	_, err = fx.store.RestoreVersion(ctx, 1, "a1", 1, Provenance{Origin: VersionRestore}, "")
+	require.NoError(t, err)
+	current, err := fx.store.ListArtifactAssets(ctx, 1, "a1")
+	require.NoError(t, err)
+	require.Len(t, current, 1)
+	assert.Equal(t, "old-id", current[0].ID)
+	assert.Equal(t, "old-asset", current[0].BlobID)
+	old, err := fx.store.GetArtifactAssetUnscoped(ctx, "a1", "new-id")
+	require.NoError(t, err)
+	require.NotNil(t, old, "the superseded version's asset URL remains readable")
+	queued, err = fx.store.DeleteArtifact(ctx, 1, "a1")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"a1-body", "old-asset", "new-asset"}, queued)
+}

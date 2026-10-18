@@ -155,6 +155,7 @@ func (s *SQLiteStore) GetVersion(ctx context.Context, ownerID int64, artifactID 
 // pair RestoreVersion would put back, read from the same snapshot, so what a
 // person is shown is what a restore gives them.
 type VersionView struct {
+	Assets     []ArtifactAsset
 	BodyBlobID string
 	State      map[string]string
 }
@@ -186,7 +187,11 @@ func (s *SQLiteStore) GetVersionView(ctx context.Context, ownerID int64, artifac
 	if err := json.Unmarshal([]byte(snapshot.String), &state); err != nil {
 		return nil, fmt.Errorf("decode state snapshot: %w", err)
 	}
-	return &VersionView{BodyBlobID: body, State: state}, nil
+	assets, err := s.VersionAssets(ctx, ownerID, artifactID, seq)
+	if err != nil {
+		return nil, err
+	}
+	return &VersionView{BodyBlobID: body, State: state, Assets: assets}, nil
 }
 
 // CommitVersion makes a change to an artifact's body or widget the new head.
@@ -245,6 +250,17 @@ func (s *SQLiteStore) RestoreVersion(ctx context.Context, ownerID int64, artifac
 	if err != nil {
 		return nil, err
 	}
+	// Match the payloads to the restored code, including runtime fetches whose
+	// URLs are unchanged between generations.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM artifact_assets WHERE artifact_id = ?`, artifactID); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO artifact_assets (artifact_id, id, generation_id, source_url, blob_id, content_type, size_bytes, created_at)
+		 SELECT artifact_id, id, generation_id, source_url, blob_id, content_type, size_bytes, created_at
+		 FROM artifact_version_assets WHERE artifact_id = ? AND seq = ?`, artifactID, seq); err != nil {
+		return nil, err
+	}
 	if err := replaceStateTx(ctx, tx, ownerID, artifactID, state.String); err != nil {
 		return nil, err
 	}
@@ -279,6 +295,14 @@ func commitVersionTx(ctx context.Context, tx *sql.Tx, ownerID int64, artifactID 
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE artifact_versions SET state_json = ? WHERE artifact_id = ? AND seq = ?`,
 		snapshot, artifactID, headSeq); err != nil {
+		return nil, err
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO artifact_version_assets
+		 (artifact_id, seq, id, generation_id, source_url, blob_id, content_type, size_bytes, created_at)
+		 SELECT artifact_id, ?, id, generation_id, source_url, blob_id, content_type, size_bytes, created_at
+		 FROM artifact_assets WHERE artifact_id = ?`, headSeq, artifactID); err != nil {
 		return nil, err
 	}
 
@@ -373,7 +397,8 @@ func replaceStateTx(ctx context.Context, tx *sql.Tx, ownerID int64, artifactID, 
 // asset blobs.
 func versionBlobIDs(ctx context.Context, tx *sql.Tx, artifactID string) ([]string, error) {
 	rows, err := tx.QueryContext(ctx,
-		`SELECT body_blob_id, widget_blob_id FROM artifact_versions WHERE artifact_id = ?`, artifactID)
+		`SELECT body_blob_id, widget_blob_id FROM artifact_versions WHERE artifact_id = ?
+         UNION ALL SELECT blob_id, '' FROM artifact_version_assets WHERE artifact_id = ?`, artifactID, artifactID)
 	if err != nil {
 		return nil, err
 	}

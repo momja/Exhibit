@@ -651,12 +651,15 @@ async function resumeConversation(conversationId, rollbackTo) {
     const back = await apiFetch(
       '/api/artifacts/' + encodeURIComponent(artifact.id) + '/versions/' + rollbackTo + '/restore',
       {method: 'POST'});
-    // 409 is the artifact already being at that version: nothing to put back.
-    if (!back.ok && back.status !== 409) {
+    if (!back.ok) {
       const why = await back.json().catch(() => ({}));
-      resetSession();   // it was not continued, so do not leave an agent running for it
-      say('Could not roll back: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
-      return;
+      // A missing historical blob is also a 409. Only the explicit
+      // already-current response means there was nothing to put back.
+      if (back.status !== 409 || why.code !== 'already_current') {
+        resetSession();
+        say('Could not roll back: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
+        return;
+      }
     }
   }
 

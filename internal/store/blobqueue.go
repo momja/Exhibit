@@ -69,26 +69,8 @@ const blobReferenceCount = `
              WHERE source_blob_id = ?1 OR widget_blob_id = ?1)
          + (SELECT COUNT(*) FROM artifact_versions
              WHERE body_blob_id = ?1 OR widget_blob_id = ?1)
-         + (SELECT COUNT(*) FROM artifact_assets WHERE blob_id = ?1)`
-
-// releaseReferencedBlobSQL retires a queue row whose blob has acquired a
-// reference again since it was condemned, without touching the bytes.
-//
-// That happens because the intent to delete and the delete itself are two
-// steps with a gap between them, and a blob id can become live again inside
-// it. Asset blobs are content-addressed per owner (av-20fk), so re-ingesting
-// the same payload recreates the *same* id: delete an artifact, re-ingest its
-// wasm, and the queue is still holding the id the new asset row now names. The
-// gap is not always short either — a drain that fails leaves its row for the
-// next startup, which may be days and many ingests later.
-//
-// The refcount is the same one the enqueue was conditional on, embedded rather
-// than repeated so the two can never disagree about what a reference is. It
-// runs inside the DELETE so the check and the retirement are one statement and
-// there is nothing to interleave between them.
-const releaseReferencedBlobSQL = `
-    DELETE FROM pending_blob_deletions
-     WHERE blob_id = ?1 AND (` + blobReferenceCount + `) > 0`
+         + (SELECT COUNT(*) FROM artifact_assets WHERE blob_id = ?1)
+         + (SELECT COUNT(*) FROM artifact_version_assets WHERE blob_id = ?1)`
 
 // enqueueUnreferencedBlobs records the intent to delete each of ids whose last
 // reference has just gone, and returns the subset it enqueued.
@@ -156,6 +138,25 @@ func (s *SQLiteStore) PendingBlobDeletions(ctx context.Context) ([]string, error
 	return ids, rows.Err()
 }
 
+// QueueUnreferencedBlobs records cleanup of blobs staged by a failed mutation.
+// Returning only enqueued ids is essential: the drain assumes its input is
+// condemned, and some staged content addresses may already belong to live rows.
+func (s *SQLiteStore) QueueUnreferencedBlobs(ctx context.Context, ids []string) ([]string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, ids...)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return queued, nil
+}
+
 // DrainBlobDeletions removes the bytes of each queued id and then its queue
 // row, in that order, and returns how many rows it retired.
 //
@@ -204,19 +205,29 @@ func (s *SQLiteStore) DrainBlobDeletions(ctx context.Context, blobs BlobDeleter,
 			unlock := s.LockBlobs(id)
 			defer unlock()
 
-			// Live again: retire the intent, keep the bytes. Reported as drained
-			// because the row left the queue, which is what the count is about.
-			res, err := s.db.ExecContext(ctx, releaseReferencedBlobSQL, id)
-			if err != nil {
+			// Check the references independently of the queue row. Two failed
+			// writes can condemn the same content address and hold duplicate
+			// drain lists. The first drain may retire the row before another
+			// writer makes the blob live and the second drain reaches it.
+			var references int
+			if err := s.db.QueryRowContext(ctx, blobReferenceCount, id).Scan(&references); err != nil {
 				if firstErr == nil {
 					firstErr = fmt.Errorf("recheck references to blob %s: %w", id, err)
 				}
-				return // the row stays; better a delayed delete than a wrong one
+				return
 			}
-			if n, err := res.RowsAffected(); err == nil && n > 0 {
-				slog.InfoContext(ctx, "queued blob is referenced again; keeping its bytes",
-					slog.String("blob_id", id))
-				drained++
+			if references > 0 {
+				res, err := s.db.ExecContext(ctx, "DELETE FROM pending_blob_deletions WHERE blob_id=?", id)
+				if err != nil {
+					if firstErr == nil {
+						firstErr = fmt.Errorf("dequeue referenced blob %s: %w", id, err)
+					}
+					return
+				}
+				if n, err := res.RowsAffected(); err == nil && n > 0 {
+					drained++
+				}
+				slog.InfoContext(ctx, "queued blob is referenced again; keeping its bytes", slog.String("blob_id", id))
 				return
 			}
 

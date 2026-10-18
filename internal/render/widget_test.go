@@ -159,6 +159,19 @@ func TestWidgetPreambleAddsBaseStylesheet(t *testing.T) {
 	}
 }
 
+// The base stylesheet must leave color-scheme to the widget (av-xie4). A
+// declaration here would make every legacy light-card widget transparent on a
+// dark gallery, with its dark text on a dark card; leaving it out lets the
+// browser keep such a frame on its own opaque light canvas.
+func TestWidgetBaseStylesheetLeavesColorSchemeToTheWidget(t *testing.T) {
+	if strings.Contains(widgetBaseCSS, "color-scheme") {
+		t.Fatalf("widget base stylesheet must not declare a color-scheme: %s", widgetBaseCSS)
+	}
+	if !strings.Contains(widgetBaseCSS, "color:CanvasText") {
+		t.Fatalf("widget base text must follow the widget's own scheme: %s", widgetBaseCSS)
+	}
+}
+
 // An artifact with no widget has no widget document to serve. The gallery
 // renders its default tile instead and never points a frame here, so a 404 is
 // the honest answer rather than an empty 200.

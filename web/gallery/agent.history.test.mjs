@@ -149,7 +149,7 @@ test("a rollback that fails ends the session it started and says the conversatio
 // 409 is the artifact already being at that version — nothing to put back, and
 // no reason to stop the person getting on with it.
 test("an artifact already at that version is not a failure", async () => {
-  const page = await loadWith([STARTED, json(409, { error: "that version is already the current one" })]);
+  const page = await loadWith([STARTED, json(409, { error: "that version is already the current one", code: "already_current" })]);
   await page.context.resumeConversation("conv-1", 2);
 
   assert.equal(page.byId("pane-chat").classList.contains("history-open"), false);
@@ -315,4 +315,11 @@ test("a rollback re-renders the pane once, whether or not a version was showing"
 
     assert.equal(refreshes.n, 1, "viewing=" + viewing);
   }
+});
+
+test("a missing historical blob is a failed rollback even with HTTP 409", async () => {
+  const page = await loadWith([STARTED, json(409, { error: "that version's source is no longer stored" }), json(204, {})]);
+  await page.context.resumeConversation("conv-1", 2);
+  assert.match(page.byId("resume-status").textContent, /Could not roll back.*not continued/);
+  assert.equal(page.byId("pane-chat").classList.contains("history-open"), true);
 });

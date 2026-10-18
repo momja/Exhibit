@@ -157,3 +157,17 @@ func TestWriteSelectionReplacesAndClears(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, entries, "no temporary file is left behind")
 }
+
+// Artifacts and widgets follow the system color scheme like the library does
+// (av-xie4). A widget is drawn transparent over a card that is white in one
+// mode and dark in the other, so dark-only text vanishes on half the screens.
+func TestSystemPromptAsksForLightAndDark(t *testing.T) {
+	prompt := buildSystemPrompt("", "n0nce", CreateOpts{})
+	assert.Contains(t, prompt, "Support both light and dark mode")
+	assert.Contains(t, prompt, "color-scheme: light dark")
+	assert.Contains(t, prompt, "@media (prefers-color-scheme: dark)")
+	assert.Contains(t, prompt, "leave the background transparent so the card shows through")
+	assert.Contains(t, prompt, "Never hardcode a text color that only reads on one of them.")
+	assert.NotContains(t, prompt, "Style for a light card")
+	assert.NotContains(t, prompt, "paint your own background", "a widget that paints its own surface does not follow the card")
+}

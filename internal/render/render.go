@@ -421,7 +421,7 @@ func (rd *Renderer) ServeVersion(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	rd.serveDoc(w, r, a, document{blobID: view.BodyBlobID, kind: kindVersion, state: view.State}, viewer, nil)
+	rd.serveDoc(w, r, a, document{blobID: view.BodyBlobID, kind: kindVersion, state: view.State, assets: view.Assets}, viewer, nil)
 }
 
 // serveArtifactDoc serves the artifact's own body — the full, interactive tool.
@@ -455,6 +455,7 @@ const (
 // left behind — and is unused by the other kinds, which read the viewer's live
 // rows.
 type document struct {
+	assets []store.ArtifactAsset
 	blobID string
 	kind   docKind
 	state  map[string]string
@@ -502,7 +503,10 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// CSP gains that path so the redirected fetch is permitted. Read failure
 	// is not fatal: the artifact renders, and its fetch reaches the network
 	// exactly as it would have before any of this existed.
-	assets, err := rd.cfg.Store.ArtifactAssetsUnscoped(r.Context(), a.ID)
+	assets := doc.assets
+	if !versionView {
+		assets, err = rd.cfg.Store.ArtifactAssetsUnscoped(r.Context(), a.ID)
+	}
 	if err != nil {
 		slog.WarnContext(r.Context(), "render asset read failed",
 			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
@@ -2268,9 +2272,20 @@ const bridgeScript = `
 // surface shows through; a widget that wants its own background paints one. It
 // is emitted before the widget's own markup, so anything the widget declares
 // wins.
+//
+// It deliberately declares no color-scheme (av-xie4). The gallery declares
+// `light dark`, and a browser draws a frame whose used color-scheme differs
+// from its embedder's on an opaque canvas instead of a transparent one. So a
+// widget written for a light card, with dark text and no color-scheme of its
+// own, keeps the white surface it was designed on when the gallery is dark,
+// rather than going transparent and putting dark text on a dark card. A
+// widget that declares `color-scheme: light dark` itself matches the
+// gallery in both modes and stays transparent. CanvasText is the default ink
+// of whichever scheme the widget ends up in, so it is black on the light
+// canvas and light on a dark card.
 const widgetBaseCSS = `<style>
 html,body{margin:0;padding:0;height:100%;background:transparent;overflow:hidden}
-body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#111;-webkit-font-smoothing:antialiased}
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:CanvasText;-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}
 </style>`
 

@@ -1,13 +1,18 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -105,9 +110,13 @@ func (ro *Router) restoreVersion(w http.ResponseWriter, r *http.Request) {
 	// The search shadow of the body being restored. The blob store is not
 	// reachable from SQL, so it is read here, which also means a version whose
 	// bytes are gone is refused before anything changes.
-	body, err := ro.readBlobString(r.Context(), target.BodyBlobID)
+	body, err := ro.readVersionBody(r.Context(), ownerID, id, target)
 	if err != nil {
-		writeError(w, http.StatusConflict, "that version's source is no longer stored")
+		if errors.Is(err, fs.ErrNotExist) {
+			writeError(w, http.StatusConflict, "that version's source or assets are no longer stored")
+		} else {
+			serverError(w, r, "read restore version content", err)
+		}
 		return
 	}
 
@@ -117,11 +126,71 @@ func (ro *Router) restoreVersion(w http.ResponseWriter, r *http.Request) {
 	}, store.ExtractSearchText(body))
 	switch {
 	case errors.Is(err, store.ErrAlreadyCurrent):
-		writeError(w, http.StatusConflict, "that version is already the current one")
+		writeJSON(w, http.StatusConflict, map[string]string{
+			"error": "that version is already the current one", "code": "already_current",
+		})
 		return
 	case err != nil:
 		writeArtifactError(w, r, "restore version", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, v)
+}
+
+// storeVersionContent records cleanup intent before publishing fresh bytes.
+// A failed commit or a process interruption therefore cannot orphan a save.
+func (ro *Router) storeVersionContent(ctx context.Context, ownerID int64, id, content string, widget bool, provenance store.Provenance) error {
+	blobID := uuid.New().String()
+	err := func() error {
+		unlock := ro.cfg.Store.LockBlobs(blobID)
+		defer unlock()
+		if _, err := ro.cfg.Store.QueueUnreferencedBlobs(ctx, []string{blobID}); err != nil {
+			return err
+		}
+		if err := putBlob(ctx, ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewBufferString(content)); err != nil {
+			return err
+		}
+		change := store.VersionChange{Provenance: provenance}
+		if widget {
+			change.WidgetBlobID = &blobID
+		} else {
+			text := store.ExtractSearchText(content)
+			change.BodyBlobID, change.SourceText = &blobID, &text
+		}
+		_, err := ro.cfg.Store.CommitVersion(ctx, ownerID, id, change)
+		return err
+	}()
+	// Referenced bytes are kept and dequeued; failed saves are reclaimed.
+	if cleanupErr := ro.reclaimBlobs(context.WithoutCancel(ctx), []string{blobID}); cleanupErr != nil {
+		slog.WarnContext(ctx, "reclaim staged version blob", slog.String("err", cleanupErr.Error()))
+	}
+	return err
+}
+
+// readVersionBody also checks the other bytes a restore would publish. Refuse
+// an incomplete version before changing either its content or its saved data.
+func (ro *Router) readVersionBody(ctx context.Context, ownerID int64, id string, target *store.Version) (string, error) {
+	body, err := ro.readBlobString(ctx, target.BodyBlobID)
+	if err != nil {
+		return "", err
+	}
+	assets, err := ro.cfg.Store.VersionAssets(ctx, ownerID, id, target.Seq)
+	if err != nil {
+		return "", err
+	}
+	ids := []string{target.WidgetBlobID}
+	for _, asset := range assets {
+		ids = append(ids, asset.BlobID)
+	}
+	for _, blobID := range ids {
+		if blobID == "" {
+			continue
+		}
+		rc, err := ro.cfg.Blob.Get(ctx, blobID)
+		if err != nil {
+			return "", err
+		}
+		_ = rc.Close()
+	}
+	return body, nil
 }

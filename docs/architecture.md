@@ -117,9 +117,31 @@ The only way data changes. Route groups:
   Tag and collection membership use the dedicated `POST/DELETE
   /api/artifacts/:id/tags/:tagID` and `.../collections/:colID` routes.
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
-  `source_url` and makes the result the artifact's body, as a new version: the
-  page it replaces is kept and can be restored. A refetch that returns what the
-  artifact already holds records nothing.
+  `source_url` and records the fresh snapshot as a new version (av-reo3, av-b17a). A response the protocol says is not the page (a non-2xx
+  status, an empty body, a content type other than HTML) is refused with the
+  artifact left byte-identical. Nothing past that is judged: a source serving a
+  different page is serving a different page, and telling "replaced" from
+  "redesigned" would mean reading intent into content. The write is a new blob
+  and a repoint, never an overwrite in place. All new blobs are staged first;
+  `ReplaceArtifactSnapshot` switches the body, search text and asset generation
+  in the transaction that records the version (§3.3b). A failed
+  blob write or transaction leaves the previous snapshot intact. Unused staged
+  blobs are queued with a reference check, so cleanup preserves shared assets.
+  Every refetch runs the ingest pipeline (§3.4a), vendoring included, whether
+  or not the artifact was
+  ingested with snapshot on, since nothing records that choice. It never writes
+  the allowlist: the response carries `network_footprint` and
+  `footprint_changed` as `PATCH` does, plus `undecided_origins` (the footprint
+  less every origin already allowed or refused), `updated` (whether anything
+  was written) and the `snapshot` report. Body and out-of-line assets are compared
+  separately, because a runtime payload never appears in the body, and a
+  refetch that collected no assets leaves the existing ones in place rather
+  than reading the empty set as their replacement. If a failed fetch leaves any
+  previously saved asset missing from the new collection, the entire refetch
+  returns 400 before writing anything, even when other assets were fetched
+  successfully. This includes dependencies hidden by a failed stylesheet or
+  script fetch. A snapshot-level error also refuses
+  replacement when saved assets exist.
 - `GET /api/artifacts/:id/versions`, `POST /api/artifacts/:id/versions/:seq/restore`
   — the artifact's version history, newest first, and the one operation on it
   (§3.3b). There is no route that creates a version: every change to the body or
@@ -936,8 +958,9 @@ permanently, with nothing able to name it afterwards. The fix is not to go
 looking for strays later — the deleting code already knows which blobs it meant
 to remove, so it writes that down:
 
-- The transaction that removes an artifact, or detaches a widget, or erases an
-  account also inserts those blob ids into `pending_blob_deletions`. One
+- The transaction that removes an artifact, detaches a widget, repoints a
+  refetched body (av-reo3), or erases an account also inserts those blob ids
+  into `pending_blob_deletions`. One
   transaction, so the intent is recorded exactly when the last reference
   disappears — which is also the last moment anything could name them. "Those
   blob ids" includes an artifact's out-of-line assets (av-20fk), which is the
@@ -998,7 +1021,19 @@ a bug in the drain can reach nothing but condemned bytes, and it costs nothing
 when idle because it is normally empty. Reclamation is automatic and invisible:
 there is no operator command, and nothing to run by hand.
 
-### 3.4 Ingest scanner
+#Historical versions retain their exact out-of-line asset metadata in
+`artifact_version_assets`. A refetch records a version even when only a runtime
+payload changed. Restore replaces the current asset rows with the selected
+version's snapshot, and version previews use that same snapshot. Asset URLs
+remain readable while any version retains them. The reference-count and
+storage-accounting queries include these rows; artifact and account deletion
+reclaim every retained payload.
+
+Fresh version blobs are queued for reference-checked cleanup before their bytes
+are written. Successful attachment protects them; failed saves and interrupted
+processes leave durable cleanup intent for the next drain.
+
+## 3.4 Ingest scanner
 
 Invoked by `POST /api/artifacts`. Parses the document with a real HTML tokenizer
 (`x/net/html`) to extract referenced origins (`src`/`href`/`action`/`<link>`/ESM
@@ -1028,7 +1063,7 @@ user to approve an origin a fully vendored artifact never contacts.
 ### 3.4a Snapshot vendorer (URL ingest)
 
 `internal/snapshot`, invoked by `POST /api/artifacts` when the request carries
-`url` and `snapshot: true`. It runs **after fetch and before `Blob.put`** and turns a
+`url` and `snapshot: true`, and by every refetch (§3.1). It runs **after fetch and before `Blob.put`** and turns a
 fetched page into a self-contained file so the artifact honours the "it's just a file"
 promise even after the source site rots:
 
@@ -1262,11 +1297,13 @@ viewing another version replaces it, and a fresh view starts with it hidden. Wha
 done in the preview is discarded, not carried into a restore, so the notice describes
 what restore will do rather than promising anything about the changes just made.
 
-Where state changes *after* load and a full reload would cost too much — it
-would drop a live iframe, an editor buffer, or an SSE stream — the page swaps
-in a **server-rendered fragment** instead, driven by **htmx** (vendored from
-`web/htmx/`, served from the app origin at `/assets/htmx/htmx.min.js`, never a
-CDN). Fragment routes live under `/partials/*` beside the page routes rather
+When state changes *after* load, the page swaps in a **server-rendered
+fragment**, driven by **htmx** (vendored from `web/htmx/`, served from the app
+origin at `/assets/htmx/htmx.min.js`, never a CDN). That is the default for any
+region a change touches. A full reload would drop a live iframe, an editor
+buffer, or an SSE stream, and markup rebuilt in page JS would be a second
+definition of the component; `technical_stack.md` §9 has the rules.
+Fragment routes live under `/partials/*` beside the page routes rather
 than in the API group: they render the same named template partial the full
 page render used — the point is that each component has exactly one definition
 — and carry no authority their page doesn't already have. The first consumer
