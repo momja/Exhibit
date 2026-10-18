@@ -1,243 +1,277 @@
-/* The owner's share panel (av-6xjd). Served from the app origin at
- * /assets/gallery/share.js, loaded by detail.tmpl only where the panel is
- * rendered — which is only for the artifact's owner.
- *
- * Globals from the page's inline bootstrap:
- *   ID                - the artifact id
- *   TOKEN / READ_ONLY - this visitor's API credential (av-5imk), spent by
- *                       api.js's apiFetch, never by a header built here
- *
- * Every mutation goes through the HTTP API — the single write path — and the
- * panel then fires `exhibit:shares-changed`, which htmx turns into a re-fetch
- * of /partials/share-panel. That is why nothing in this file builds a grant row:
- * the server owns that markup, in one definition shared with the full page
- * render, and recipient names are attacker-influenced text that html/template
- * escapes and hand-built markup would not.
- *
- * Listeners are delegated from #share-panel, which is stable — htmx replaces
- * the contents of #share-body inside it, so anything bound to an element in
- * there would be bound to a node that no longer exists after the first change.
+/* Owner-only sharing controls. Every action persists immediately; htmx refreshes
+ * the server-rendered panel after a mutation. Keep the request locked through
+ * that refresh so a second action cannot use an obsolete share id or mode.
  */
-(function() {
+import { apiFetch } from './api-module.js';
+
+function initializeSharePanel() {
   const panel = document.getElementById('share-panel');
   if (!panel) return;
-
+  const artifactID = panel.querySelector('.share-cols').dataset.artifactId;
   const byId = (id) => document.getElementById(id);
-
-  // --- opening and closing (av-esa1) -------------------------------------
-  //
-  // The same three ways out the page's capability dialogs offer: the button,
-  // the backdrop, and Escape. They are spelled here rather than shared with
-  // detail.js because this script is loaded only where the panel exists, and
-  // a shared opener would have to be resolved by whichever of the two files
-  // happened to load first.
-  //
-  // Nothing here refetches on open. The panel body is server-rendered with the
-  // page and htmx keeps it current on every change, so what is behind the
-  // button is already right — and a fetch-on-open would show a spinner over
-  // data the page had in its hand the whole time.
-  function open_() {
-    panel.hidden = false;
-    const first = panel.querySelector('input, select, button');
-    if (first) first.focus();
-  }
-
-  function close_() {
-    panel.hidden = true;
-    status('');
-    const opener = byId('share-open');
-    if (opener) opener.focus();
-  }
-
-  const opener = byId('share-open');
-  if (opener) opener.addEventListener('click', open_);
-  const closer = byId('share-close');
-  if (closer) closer.addEventListener('click', close_);
-  // Backdrop only: the check is on the overlay itself, so a click that lands
-  // on the dialog inside it does not close the panel mid-edit.
-  panel.addEventListener('click', function(e) {
-    if (e.target === panel) close_();
+  const readSaved = () => ({
+    mode: byId('share-state-mode').dataset.savedMode,
+    linkID: byId('share-link-toggle').dataset.shareId || ''
   });
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && !panel.hidden) close_();
-  });
+  let saved = readSaved();
+  let busy = false;
+  let needsRefresh = false;
+  let recipients = '';
+  let composing = false;
+  let focusAfterRefresh = '';
+  let mutationStatus = '';
+  const disclosureState = new Map();
+  let peopleScrollTop = 0;
 
-  // The status line and the per-name results live OUTSIDE the swapped region,
-  // which is the whole reason they are separate elements: a bulk grant's
-  // report is exactly what the swap that follows the grant would otherwise
-  // wipe before anyone could read it.
-  function status(text) {
-    const el = byId('share-status');
-    if (el) el.textContent = text;
+  function status(message) {
+    byId('share-status').textContent = message;
   }
 
-  // Tells htmx to re-render the panel from the server. Every mutation ends
-  // here rather than patching the DOM, so what the panel shows is what the
-  // database says and not what this file believes it just did.
-  function changed() {
-    document.body.dispatchEvent(new CustomEvent('exhibit:shares-changed'));
+  function controls() {
+    panel.querySelectorAll('#share-body input, #share-body button').forEach((control) => {
+      control.disabled = busy || needsRefresh;
+    });
+    byId('share-close').disabled = busy;
   }
 
-  async function post(body) {
-    return apiFetch('/api/shares', { method: 'POST', body: JSON.stringify(body) });
+  function restoreFields() {
+    byId('share-state-own').checked = saved.mode === 'own';
+    byId('share-state-shared').checked = saved.mode === 'shared';
+    byId('share-link-toggle').checked = !!saved.linkID;
+    byId('share-add-input').value = recipients;
   }
 
-  // --- grants ------------------------------------------------------------
-
-  // One field, several names, one submit. Commas, whitespace and newlines all
-  // separate, because a list pasted out of a chat is not going to arrive in
-  // the one format this field asked for.
-  function splitNames(raw) {
-    return raw.split(/[,\n]+/).map((n) => n.trim()).filter((n) => n !== '');
-  }
-
-  // The per-name report, and the reason the whole grant is not all-or-nothing:
-  // "alice, bob, tpyo" must not refuse three people over one typo, and must
-  // not succeed without ever mentioning the typo.
-  const GRANT_MESSAGE = {
-    granted: 'now has access',
-    already_shared: 'already had access',
-    unknown: 'no account with that name or address',
-    ambiguous: 'that address matches more than one account',
-    self: 'is you — you already own this artifact'
-  };
-
-  function reportGrants(results) {
-    const list = byId('share-add-results');
-    if (!list) return;
-    list.innerHTML = '';
-    results.forEach(function(r) {
-      const row = document.createElement('div');
-      row.className = 'share-result share-result-' + r.status;
-      const name = document.createElement('code');
-      // textContent: the name is echoed straight back from what was typed.
-      name.textContent = r.name;
-      row.appendChild(name);
-      const msg = document.createElement('span');
-      msg.textContent = ' — ' + (GRANT_MESSAGE[r.status] || r.status);
-      row.appendChild(msg);
-      list.appendChild(row);
+  function rememberDisclosures() {
+    const people = panel.querySelector('.share-people-list');
+    if (people) peopleScrollTop = people.scrollTop;
+    ['state-how-it-works', 'share-widget-details'].forEach((id) => {
+      const disclosure = byId(id);
+      if (disclosure) disclosureState.set(id, disclosure.open);
     });
   }
 
-  async function grant() {
+  function refresh() {
+    rememberDisclosures();
+    needsRefresh = true;
+    busy = true;
+    controls();
+    document.body.dispatchEvent(new CustomEvent('exhibit:shares-changed'));
+  }
+
+  function close() {
+    if (busy) return;
+    recipients = '';
+    composing = false;
     const input = byId('share-add-input');
-    const names = splitNames(input ? input.value : '');
+    if (input) input.value = '';
+    panel.hidden = true;
+    byId('share-open').focus();
+  }
+
+  byId('share-open').addEventListener('click', function() {
+    panel.hidden = false;
+    if (needsRefresh) refresh();
+    else {
+      status('');
+      (byId('share-add-input') || byId('share-close')).focus();
+    }
+  });
+  byId('share-close').addEventListener('click', close);
+  panel.addEventListener('click', function(e) { if (e.target === panel) close(); });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && !panel.hidden) close();
+  });
+
+  async function request(path, options) {
+    const response = await apiFetch(path, options);
+    // A concurrent revoke already achieved this DELETE's intended result.
+    if (response && response.status === 404 && options.method === 'DELETE') return response;
+    if (!response || !response.ok) throw new Error('request failed');
+    return response;
+  }
+  const post = (body) => request('/api/shares', { method: 'POST', body: JSON.stringify(body) });
+
+  async function mutate(operation, failureMessage, focus = '') {
+    if (busy || needsRefresh) return;
+    busy = true;
+    focusAfterRefresh = focus;
+    controls();
+    status('Saving changes…');
+    try {
+      const message = await operation();
+      mutationStatus = message || '✓ Changes saved';
+      status(mutationStatus);
+    } catch (error) {
+      mutationStatus = failureMessage;
+      status(mutationStatus);
+      // Even a failed bulk grant may have saved some names before its error.
+      // Reconcile with the server and retain the input for a safe retry.
+      restoreFields();
+    }
+    refresh();
+  }
+
+  // The single text field uses native implicit form submission: desktop Enter
+  // and the mobile keyboard action follow the same path without a hidden Add
+  // control. Composition Enter belongs to the IME and must not submit a grant.
+  panel.addEventListener('compositionstart', function(e) {
+    if (e.target.id === 'share-add-input') composing = true;
+  });
+  panel.addEventListener('compositionend', function(e) {
+    if (e.target.id === 'share-add-input') composing = false;
+  });
+  panel.addEventListener('keydown', function(e) {
+    if (e.target.id === 'share-add-input' && e.key === 'Enter' &&
+        (composing || e.isComposing || e.keyCode === 229)) e.preventDefault();
+  });
+  panel.addEventListener('input', function(e) {
+    if (e.target.id !== 'share-add-input' || busy || needsRefresh) return;
+    recipients = e.target.value;
+    status('');
+  });
+  panel.addEventListener('submit', function(e) {
+    if (e.target.id !== 'share-add-form') return;
+    e.preventDefault();
+    if (composing || busy || needsRefresh) return;
+    recipients = byId('share-add-input').value;
+    const names = [...new Map(recipients.split(/[,\n]+/).map((name) => name.trim())
+      .filter(Boolean).map((name) => [name.toLowerCase(), name])).values()];
     if (names.length === 0) return;
-    status('Giving access…');
-    const r = await post({ artifact_id: ID, recipients: names })
-      .catch(function() { return null; });
-    if (!r || !r.ok) {
-      status('✗ Could not give access' + (r ? ' (' + r.status + ')' : ''));
+    return mutate(async () => {
+      const response = await post({ artifact_id: artifactID, recipients: names });
+      const data = await response.json();
+      if (!Array.isArray(data.results) || data.results.length !== names.length) throw new Error('missing grant results');
+      const errors = [];
+      const unresolved = [];
+      for (const result of data.results) {
+        if (['granted', 'already_shared', 'self'].includes(result.status)) continue;
+        unresolved.push(result.name);
+        errors.push(result.name + ': ' + (result.status === 'unknown'
+          ? 'no account with that name or address'
+          : result.status === 'ambiguous' ? 'that address matches more than one account' : 'could not grant access'));
+      }
+      recipients = unresolved.join(', ');
+      return errors.length ? 'Check these names: ' + errors.join('; ') + '.' : '';
+    }, 'Could not grant access. Your names are still in the field; try again.', 'share-add-input');
+  });
+
+  panel.addEventListener('change', function(e) {
+    if (busy || needsRefresh) {
+      restoreFields();
       return;
     }
-    const data = await r.json().catch(() => ({}));
-    reportGrants(data.results || []);
-    status('');
-    changed();
-  }
-
-  async function revoke(shareID) {
-    status('Revoking…');
-    const r = await apiFetch('/api/shares/' + encodeURIComponent(shareID), { method: 'DELETE' })
-      .catch(function() { return null; });
-    if (!r || !r.ok) { status('✗ Could not revoke access'); return; }
-    status('');
-    changed();
-  }
-
-  // --- the public link ---------------------------------------------------
-
-  // A toggle, not a create button: on mints the artifact's one anonymous link,
-  // off deletes it and the URL dies. The checkbox is re-rendered from the
-  // server by the swap, so a failed write leaves it showing the truth rather
-  // than the state the click implied.
-  async function setLink(on) {
-    if (!on) {
-      const shareID = linkID();
-      if (!shareID) { changed(); return; }
-      status('Removing the link…');
-      const r = await apiFetch('/api/shares/' + encodeURIComponent(shareID), { method: 'DELETE' })
-        .catch(function() { return null; });
-      status(r && r.ok ? '' : '✗ Could not remove the link');
-      changed();
-      return;
+    if (e.target.id === 'share-link-toggle') {
+      const enabled = !!e.target.checked;
+      if (enabled === !!saved.linkID) return;
+      return mutate(async () => {
+        if (enabled) {
+          const response = await post({ artifact_id: artifactID });
+          const data = await response.json();
+          if (!data.share || !data.share.id) throw new Error('missing link id');
+          saved.linkID = data.share.id;
+        } else {
+          await request('/api/shares/' + encodeURIComponent(saved.linkID), { method: 'DELETE' });
+          saved.linkID = '';
+        }
+      }, 'Could not change link access. Your previous setting is restored; try again.');
     }
-    status('Creating a link…');
-    const r = await post({ artifact_id: ID }).catch(function() { return null; });
-    status(r && r.ok ? '' : '✗ Could not create a link');
-    changed();
-  }
+    if (e.target.name === 'share-state-mode') {
+      const mode = e.target.value;
+      if (!['own', 'shared'].includes(mode) || mode === saved.mode) return;
+      return mutate(async () => {
+        await request('/api/artifacts/' + encodeURIComponent(artifactID), { method: 'PATCH', body: JSON.stringify({ share_state_mode: mode }) });
+        saved.mode = mode;
+      }, 'Could not change the data mode. Your previous setting is restored; try again.');
+    }
+  });
 
-  // Replace is ONE request, not a delete followed by a create. The failure
-  // between those two halves leaves the artifact with no link at all, which is
-  // worse than either the old link or a new one — so the server does both in a
-  // transaction and this asks for it in one call.
-  async function replaceLink() {
-    if (!confirm('Replace this link?\n\nA new link is created and the current one stops working immediately. Anyone still holding the old link loses access.')) return;
-    status('Replacing the link…');
-    const r = await post({ artifact_id: ID, replace: true }).catch(function() { return null; });
-    status(r && r.ok ? '✓ New link created — the old one no longer works' : '✗ Could not replace the link');
-    changed();
-  }
-
-  function linkID() {
-    const toggle = byId('share-link-toggle');
-    return toggle ? toggle.dataset.shareId : '';
-  }
-
-  // One copier for both readonly rows: the link URL and the widget embed
-  // snippet (av-ei5h) are both copy-only fields, and copying decides
-  // nothing, so it writes nothing either way.
   function copyField(id, what) {
     const field = byId(id);
     if (!field) return;
     field.select();
-    // The app origin is not sandboxed, so this is the ordinary clipboard API
-    // and not the host bridge the artifact frame has to use.
-    navigator.clipboard.writeText(field.value)
-      .then(function() { status('✓ ' + what + ' copied'); })
-      .catch(function() { status('Select the ' + what.toLowerCase() + ' and copy it.'); });
-  }
-
-  // --- whose data --------------------------------------------------------
-
-  // One control per artifact, applied immediately: it is a single answer to a
-  // single question, and a Save button beside one select is a second thing to
-  // press for no gain. The swap that follows re-renders it from the stored
-  // value, so a rejected write corrects itself on screen.
-  async function setStateMode(mode) {
-    status('Saving…');
-    const r = await apiFetch('/api/artifacts/' + ID, {
-      method: 'PATCH',
-      body: JSON.stringify({ share_state_mode: mode })
-    }).catch(function() { return null; });
-    status(r && r.ok ? '✓ Saved' : '✗ Could not change how data is shared');
-    changed();
+    if (!navigator.clipboard) {
+      status('Select the ' + what.toLowerCase() + ' and copy it.');
+      return;
+    }
+    return navigator.clipboard.writeText(field.value)
+      .then(() => status('✓ ' + what + ' copied'))
+      .catch(() => status('Select the ' + what.toLowerCase() + ' and copy it.'));
   }
 
   panel.addEventListener('click', function(e) {
+    if (busy || needsRefresh) return;
     const target = e.target;
-    const revokeBtn = target.closest ? target.closest('[data-action="revoke"]') : null;
-    if (revokeBtn) return revoke(revokeBtn.dataset.shareId);
-    if (target.id === 'share-add-btn') return grant();
-    if (target.id === 'share-link-replace') return replaceLink();
-    if (target.id === 'share-link-copy') return copyField('share-link-url', 'Link');
-    if (target.id === 'share-widget-copy') return copyField('share-widget-embed', 'Embed code');
-    return undefined;
+    const revoke = target.closest ? target.closest('[data-action="revoke"]') : null;
+    if (revoke) {
+      return mutate(() => request('/api/shares/' + encodeURIComponent(revoke.dataset.shareId), { method: 'DELETE' })
+        .then(() => ''), 'Could not revoke access. This person still appears in the list; try again.');
+    }
+    const button = target.closest ? target.closest('button') : target;
+    if (!button) return;
+    if (button.id === 'share-link-replace') {
+      return mutate(async () => {
+        const response = await post({ artifact_id: artifactID, replace: true });
+        const data = await response.json();
+        if (!data.share || !data.share.id) throw new Error('missing link id');
+        saved.linkID = data.share.id;
+      }, 'Could not replace the link. Try again.');
+    }
+    if (button.id === 'share-link-copy') return copyField('share-link-url', 'Link');
+    if (button.id === 'share-widget-copy') return copyField('share-widget-embed', 'Embed code');
   });
 
-  panel.addEventListener('change', function(e) {
-    const target = e.target;
-    if (target.id === 'share-link-toggle') return setLink(!!target.checked);
-    if (target.id === 'share-state-mode') return setStateMode(target.value);
-    return undefined;
-  });
-
-  panel.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && e.target && e.target.id === 'share-add-input') {
+  // htmx 4 exposes response metadata under detail.ctx and uses colon-separated
+  // event names. Preserve the panel on server/network errors so reopening can
+  // retry the GET without replaying the mutation. A 404 replaces stale controls
+  // with the server's missing-artifact notice.
+  function refreshFailed() {
+    busy = false;
+    needsRefresh = true;
+    controls();
+    status('The sharing panel could not refresh. Close and reopen it to retry.');
+  }
+  panel.addEventListener('htmx:after:request', function(e) {
+    if (e.target.id !== 'share-body') return;
+    const response = e.detail.ctx.response;
+    if (response.status >= 500) {
       e.preventDefault();
-      grant();
+      refreshFailed();
     }
   });
-})();
+  panel.addEventListener('htmx:error', function(e) {
+    if (e.target.id === 'share-body') refreshFailed();
+  });
+  panel.addEventListener('htmx:before:swap', function(e) {
+    if (e.target.id === 'share-body') rememberDisclosures();
+  });
+  panel.addEventListener('htmx:after:swap', function(e) {
+    if (e.target.id !== 'share-body') return;
+    busy = false;
+    needsRefresh = false;
+    if (!byId('share-state-mode')) {
+      // An error fragment has no settings to restore or recipient field.
+      recipients = '';
+      composing = false;
+      focusAfterRefresh = '';
+      mutationStatus = '';
+      status('');
+      controls();
+      if (!panel.hidden) byId('share-close').focus();
+      return;
+    }
+    saved = readSaved();
+    status(mutationStatus);
+    restoreFields();
+    for (const [id, open] of disclosureState) {
+      const disclosure = byId(id);
+      if (disclosure) disclosure.open = open;
+    }
+    const people = panel.querySelector('.share-people-list');
+    if (people) people.scrollTop = peopleScrollTop;
+    controls();
+    if (!panel.hidden && focusAfterRefresh) byId(focusAfterRefresh).focus();
+    focusAfterRefresh = '';
+  });
+}
+
+initializeSharePanel();

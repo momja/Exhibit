@@ -1,278 +1,385 @@
-/* av-6xjd — the owner's share panel, driven the way a browser drives it.
- *
- * The Go tests can assert that an id is in the rendered markup and that the
- * server answers a request correctly. They cannot assert that clicking the
- * public-link toggle sends a DELETE rather than a POST, that a bulk submit is
- * one request rather than three, or that "Replace link" is a single call and
- * not a delete followed by a create — and each of those passes a markup
- * assertion while being wrong. That gap is what let a whole feature reach a
- * merged PR without reaching main (see gallery_script_test.go).
- *
- * Loads internal/api/assets/gallery/share.js — the built, embedded copy the
- * browser is served — so an edit under web/gallery that was never rebuilt
- * fails here rather than shipping.
- */
-import { test } from "node:test";
-import assert from "node:assert/strict";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi } from "./testdom.mjs";
+/* Exercise the built sharing script through its native form and htmx events. */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { loadPageScript, recordingApi } from './testdom.mjs';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const SHARE_JS = path.join(here, "../../internal/api/assets/gallery/share.js");
+const SHARE_JS = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../internal/api/assets/gallery/share.js');
+const ID = 'art-1';
+const response = (data = {}) => ({ ok: true, status: 200, json: async () => data });
+const grant = (...names) => response({ results: names.map((name) => ({ name, status: 'granted' })) });
+const paths = (api) => api.calls.map((c) => c.method + ' ' + c.path);
 
-const ID = "art-1";
-const LINK_ID = "share-link-row-id";
-
-// loadShare renders the panel for its owner. `link` is the share id the
-// template puts on the toggle when the artifact already has a public link —
-// its absence is what "the link is off" looks like in the markup. `embed`
-// is the widget snippet the template renders when the artifact has both a
-// link and a widget (av-ei5h); empty is the no-widget panel.
-function loadShare({ link = "", embed = "", responses = [], confirmed = true } = {}) {
+async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) {
   const api = recordingApi(responses);
   const events = [];
   const copied = [];
-  const page = loadPageScript([SHARE_JS], {
-    ID,
-    TOKEN: "",
-    READ_ONLY: false,
-    apiFetch: api.apiFetch,
-    confirm: () => confirmed,
-    CustomEvent,
-    navigator: { clipboard: { writeText: (t) => { copied.push(t); return Promise.resolve(); } } }
+  const page = loadPageScript([], {
+    ID: 'unused-page-global', apiFetch: api.apiFetch, CustomEvent,
+    navigator: { clipboard: { writeText: async (text) => { copied.push(text); } } }
   }, {
-    // The template renders the overlay hidden (av-esa1). Seeding it here is
-    // what the harness's `initial` is for: without it every test would start
-    // with the modal already open, and "it opens when clicked" would be a
-    // claim the harness had made true before the script ran.
-    "share-panel": { hidden: true },
-    "share-add-input": { value: "" },
-    "share-link-toggle": { dataset: link ? { shareId: link } : {} },
-    "share-link-url": { value: "http://render.test/s/" + link, select() {} },
-    "share-widget-embed": { value: embed, select() {} }
+    'share-panel': { hidden: false },
+    'share-add-input': { value: '' },
+    'share-link-toggle': { dataset: link ? { shareId: link } : {}, checked: !!link },
+    'share-state-mode': { dataset: { savedMode: stateMode } },
+    'share-state-own': { checked: stateMode === 'own' },
+    'share-state-shared': { checked: stateMode === 'shared' },
+    'share-link-url': { value: 'http://render.test/s/' + link },
+    'share-widget-embed': { value: '<iframe src="example"></iframe>' },
+    'state-how-it-works': { open: false },
+    'share-widget-details': { open: false }
   });
-
-  // The panel fires exhibit:shares-changed and htmx re-fetches the fragment.
-  // There is no htmx here, so the event is what is asserted: it is the whole
-  // contract between this script and the server-rendered list.
-  page.document.body.addEventListener("exhibit:shares-changed", (e) => events.push(e.type));
-
-  const panel = page.byId("share-panel");
-  const click = (id) => panel.dispatchEvent({ type: "click", target: { id } });
-  const change = (id, props) =>
-    panel.dispatchEvent({ type: "change", target: Object.assign({ id }, props) });
-  const clickRevoke = (shareID) => {
-    const btn = page.byId("revoke-" + shareID);
-    btn.dataset.shareId = shareID;
-    return panel.dispatchEvent({
-      type: "click",
-      target: { closest: (sel) => (sel === '[data-action="revoke"]' ? btn : null) }
-    });
+  page.document.body.addEventListener('exhibit:shares-changed', () => events.push('changed'));
+  const panel = page.byId('share-panel');
+  const controls = ['share-add-input', 'share-state-own', 'share-state-shared', 'share-link-toggle', 'share-link-replace']
+    .map(page.byId);
+  panel.querySelectorAll = () => controls;
+  const people = { scrollTop: 0 };
+  panel.querySelector = (selector) => selector === '.share-people-list' ? people
+    : selector === '.share-cols' ? { dataset: { artifactId: ID } } : null;
+  const click = (id, icon = false) => {
+    const button = page.byId(id);
+    const target = icon ? { closest: () => button } : Object.assign(button, { closest: () => button });
+    if (['share-close', 'share-open'].includes(id)) return button.dispatchEvent({ type: 'click', target: button });
+    target.closest = (selector) => selector === 'button' ? button : null;
+    return panel.dispatchEvent({ type: 'click', target });
   };
-
-  return { ...page, api, events, copied, click, change, clickRevoke };
+  const mode = (value) => {
+    page.byId('share-state-own').checked = value === 'own';
+    page.byId('share-state-shared').checked = value === 'shared';
+    return panel.dispatchEvent({ type: 'change', target: { name: 'share-state-mode', value } });
+  };
+  const linkOn = (checked) => {
+    page.byId('share-link-toggle').checked = checked;
+    return panel.dispatchEvent({ type: 'change', target: page.byId('share-link-toggle') });
+  };
+  const names = (value) => {
+    page.byId('share-add-input').value = value;
+    return panel.dispatchEvent({ type: 'input', target: page.byId('share-add-input') });
+  };
+  const submit = () => panel.dispatchEvent({ type: 'submit', target: page.byId('share-add-form'), preventDefault() {} });
+  const enter = async (options = {}) => {
+    let prevented = false;
+    await panel.dispatchEvent({ type: 'keydown', key: 'Enter', target: page.byId('share-add-input'),
+      preventDefault() { prevented = true; }, ...options });
+    // A browser implicitly submits this one-field form unless Enter is consumed.
+    if (!prevented) await submit();
+  };
+  const composition = (type) => panel.dispatchEvent({ type, target: page.byId('share-add-input') });
+  const revoke = (id) => panel.dispatchEvent({ type: 'click', target: {
+    closest: (selector) => selector === '[data-action="revoke"]' ? { dataset: { shareId: id } } : null
+  } });
+  const refresh = async (saved = {}) => {
+    await panel.dispatchEvent({ type: 'htmx:before:swap', target: page.byId('share-body') });
+    if ('stateMode' in saved) stateMode = saved.stateMode;
+    if ('link' in saved) link = saved.link;
+    page.byId('share-state-mode').dataset.savedMode = stateMode;
+    page.byId('share-link-toggle').dataset = link ? { shareId: link } : {};
+    page.byId('share-link-url').value = link ? 'http://render.test/s/' + link : '';
+    // Simulate the fresh nodes' default state and radio reconciliation by htmx.
+    page.byId('share-add-input').value = '';
+    page.byId('share-state-own').checked = false;
+    page.byId('share-state-shared').checked = false;
+    page.byId('share-widget-details').open = false;
+    page.byId('state-how-it-works').open = false;
+    people.scrollTop = 0;
+    return panel.dispatchEvent({ type: 'htmx:after:swap', target: page.byId('share-body') });
+  };
+  const refreshError = async (status = 500) => {
+    let prevented = false;
+    await panel.dispatchEvent({ type: 'htmx:after:request', target: page.byId('share-body'),
+      detail: { ctx: { response: { status } } }, preventDefault() { prevented = true; } });
+    return prevented;
+  };
+  await page.loadModule(SHARE_JS);
+  return { ...page, panel, api, events, copied, controls, people, click, mode, linkOn, names, enter, submit,
+    composition, revoke, refresh, refreshError };
 }
 
-const paths = (api) => api.calls.map((c) => c.method + " " + c.path);
-
-// --- granting -----------------------------------------------------------
-
-test("several names go out as ONE request, and every one gets a result", async () => {
-  const page = loadShare({
-    responses: [{
-      ok: true, status: 200, json: async () => ({
-        results: [
-          { name: "alice", status: "granted", share_id: "s1" },
-          { name: "bob", status: "already_shared" },
-          { name: "tpyo", status: "unknown" }
-        ]
-      })
-    }]
-  });
-  page.byId("share-add-input").value = "alice, bob\ntpyo";
-
-  await page.click("share-add-btn");
-
-  assert.deepEqual(paths(page.api), ["POST /api/shares"],
-    "'gave friends access, dropped the link' is one gesture; three requests would " +
-    "make one bad name fail some of them and not others");
-  assert.deepEqual(JSON.parse(page.api.calls[0].body),
-    { artifact_id: ID, recipients: ["alice", "bob", "tpyo"] },
-    "commas and newlines both separate — a list pasted out of a chat does not " +
-    "arrive in the one format the field asked for");
-
-  const rows = page.byId("share-add-results").children;
-  assert.equal(rows.length, 3, "per name, not per request");
-  assert.equal(rows[0].children[0].textContent, "alice");
-  assert.match(rows[2].children[1].textContent, /no account with that name/,
-    "a name nobody holds must be named back: 'added' for a typo leaves the owner " +
-    "believing their friend has access when the friend has none");
-  assert.deepEqual(page.events, ["exhibit:shares-changed"]);
+test('Enter grants immediately; only htmx replaces the saved guest list', async () => {
+  const page = await loadShare({ responses: [grant('alice')] });
+  const serverRow = { name: 'server-rendered alice' };
+  page.byId('share-grants').children = [serverRow];
+  await page.names(' alice ');
+  await page.enter();
+  assert.deepEqual(paths(page.api), ['POST /api/shares']);
+  assert.deepEqual(JSON.parse(page.api.calls[0].body), { artifact_id: ID, recipients: ['alice'] });
+  assert.deepEqual(page.events, ['changed']);
+  assert.equal(page.byId('share-panel').hidden, false);
+  assert.equal(page.byId('share-status').textContent, '✓ Changes saved');
+  assert.equal(page.byId('share-add-input').disabled, true);
+  await page.refresh();
+  assert.equal(page.byId('share-add-input').value, '');
+  assert.equal(page.byId('share-add-input').disabled, false);
+  assert.equal(page.byId('share-add-input').focused, true);
+  assert.strictEqual(page.byId('share-grants').children[0], serverRow);
 });
 
-test("an empty field sends nothing", async () => {
-  const page = loadShare();
-  page.byId("share-add-input").value = "   ";
+test('native form submit supports the mobile keyboard and deduplicates pasted names', async () => {
+  const page = await loadShare({ responses: [grant('ALICE', 'bob')] });
+  await page.names('alice, bob, ALICE');
+  await page.submit();
+  assert.deepEqual(JSON.parse(page.api.calls[0].body).recipients, ['ALICE', 'bob']);
+});
 
-  await page.click("share-add-btn");
-
+test('IME Enter, active composition, and blank submits do not grant access', async () => {
+  const page = await loadShare();
+  await page.names('alice');
+  await page.enter({ isComposing: true });
+  await page.enter({ keyCode: 229 });
+  await page.composition('compositionstart');
+  await page.enter();
+  await page.submit();
+  await page.composition('compositionend');
+  await page.names(' , ');
+  await page.submit();
   assert.deepEqual(page.api.calls, []);
 });
 
-test("Enter in the field submits it, since typing names and reaching for a button is two gestures", async () => {
-  const page = loadShare();
-  page.byId("share-add-input").value = "alice";
-
-  await page.byId("share-panel").dispatchEvent({
-    type: "keydown", key: "Enter", target: { id: "share-add-input" }, preventDefault() {}
-  });
-
-  assert.deepEqual(paths(page.api), ["POST /api/shares"]);
+test('link access saves immediately and its URL is supplied by the fragment', async () => {
+  const page = await loadShare({ responses: [response({ share: { id: 'public' } }), response()] });
+  await page.linkOn(true);
+  assert.deepEqual(paths(page.api), ['POST /api/shares']);
+  assert.deepEqual(JSON.parse(page.api.calls[0].body), { artifact_id: ID });
+  await page.linkOn(true);
+  assert.equal(page.api.calls.length, 1, 'blocked until the fragment replaces the obsolete link id');
+  await page.refresh({ link: 'public' });
+  assert.equal(page.byId('share-link-url').value, 'http://render.test/s/public');
+  await page.linkOn(false);
+  assert.deepEqual(paths(page.api), ['POST /api/shares', 'DELETE /api/shares/public']);
+  await page.refresh({ link: '' });
+  assert.equal(page.byId('share-link-toggle').checked, false);
 });
 
-test("a revoke names the share row, not the person", async () => {
-  const page = loadShare();
-
-  await page.clickRevoke("grant-7");
-
-  assert.deepEqual(paths(page.api), ["DELETE /api/shares/grant-7"]);
-  assert.deepEqual(page.events, ["exhibit:shares-changed"]);
+test('mode, revoke, and replacement each persist without a Save action', async () => {
+  const page = await loadShare({ link: 'public', responses: [response(), response(), response({ share: { id: 'rotated' } })] });
+  await page.mode('shared');
+  await page.refresh({ stateMode: 'shared' });
+  await page.revoke('old-grant');
+  await page.refresh();
+  await page.click('share-link-replace', true);
+  assert.deepEqual(paths(page.api), ['PATCH /api/artifacts/' + ID, 'DELETE /api/shares/old-grant', 'POST /api/shares']);
+  assert.deepEqual(JSON.parse(page.api.calls[0].body), { share_state_mode: 'shared' });
+  assert.deepEqual(JSON.parse(page.api.calls[2].body), { artifact_id: ID, replace: true });
+  await page.refresh({ link: 'rotated' });
+  await page.linkOn(false);
+  assert.equal(paths(page.api).at(-1), 'DELETE /api/shares/rotated');
 });
 
-// --- the public link ----------------------------------------------------
-
-test("the toggle mints on and deletes off — the same control, both directions", async () => {
-  const on = loadShare();
-  await on.change("share-link-toggle", { checked: true });
-  assert.deepEqual(paths(on.api), ["POST /api/shares"]);
-  assert.deepEqual(JSON.parse(on.api.calls[0].body), { artifact_id: ID },
-    "minting is not a rotation, and it does not ask for one — replace on an " +
-    "artifact that has no link would still work, but sending it here would mean " +
-    "the toggle and the rotate button were the same request");
-
-  const off = loadShare({ link: LINK_ID });
-  await off.change("share-link-toggle", { checked: false });
-  assert.deepEqual(paths(off.api), ["DELETE /api/shares/" + LINK_ID],
-    "off deletes the row and the URL dies; nothing accumulates a list of links " +
-    "whose destinations nobody remembers");
+test('the mutation lock prevents duplicates both during the API request and before the swap', async () => {
+  let resolve;
+  const pendingResponse = new Promise((done) => { resolve = done; });
+  const page = await loadShare({ responses: [pendingResponse] });
+  await page.names('alice');
+  const first = page.submit();
+  await page.submit();
+  await page.mode('shared');
+  await page.linkOn(true);
+  await page.revoke('grant-1');
+  await page.click('share-close');
+  assert.equal(page.api.calls.length, 1);
+  assert.equal(page.byId('share-panel').hidden, false);
+  assert.equal(page.byId('share-close').disabled, true);
+  resolve(grant('alice'));
+  await first;
+  await page.submit();
+  assert.equal(page.api.calls.length, 1);
+  await page.refresh();
+  assert.equal(page.byId('share-close').disabled, false);
 });
 
-test("Replace is one request, so the artifact is never briefly linkless", async () => {
-  const page = loadShare({ link: LINK_ID });
-
-  await page.click("share-link-replace");
-
-  assert.deepEqual(paths(page.api), ["POST /api/shares"],
-    "a delete followed by a create leaves no link at all when the second half fails");
-  assert.deepEqual(JSON.parse(page.api.calls[0].body), { artifact_id: ID, replace: true });
-  assert.match(page.byId("share-status").textContent, /old one no longer works/,
-    "the whole reason this is a button and not two toggles is that the user must " +
-    "know the previous URL stopped working");
+test('failed grants retain typed names and can be retried after reconciliation', async () => {
+  const page = await loadShare({ responses: [{ ok: false, status: 500 }, grant('alice')] });
+  await page.names('alice');
+  await page.submit();
+  assert.match(page.byId('share-status').textContent, /Could not grant access/);
+  await page.refresh();
+  assert.equal(page.byId('share-add-input').value, 'alice');
+  await page.submit();
+  await page.refresh();
+  assert.equal(page.byId('share-add-input').value, '');
+  assert.equal(page.api.calls.length, 2);
 });
 
-test("Replace asks first, because the old link stops working immediately", async () => {
-  const page = loadShare({ link: LINK_ID, confirmed: false });
+test('per-person errors retain only unresolved names while saved people arrive from htmx', async () => {
+  const page = await loadShare({ responses: [response({ results: [
+    { name: 'alice', status: 'granted' }, { name: 'typo', status: 'unknown' },
+    { name: 'ambiguous@example.org', status: 'ambiguous' }
+  ] })] });
+  await page.names('alice, typo, ambiguous@example.org');
+  await page.submit();
+  await page.refresh();
+  assert.equal(page.byId('share-add-input').value, 'typo, ambiguous@example.org');
+  assert.match(page.byId('share-status').textContent, /typo: no account/);
+  assert.match(page.byId('share-status').textContent, /ambiguous@example.org: that address matches more than one account/);
+});
 
-  await page.click("share-link-replace");
+test('failed mode and link changes restore saved choices and permit retry', async () => {
+  const page = await loadShare({ responses: [{ ok: false, status: 500 }, response(), { ok: false, status: 500 }, response({ share: { id: 'new' } })] });
+  await page.mode('shared');
+  assert.equal(page.byId('share-state-own').checked, true);
+  assert.match(page.byId('share-status').textContent, /Could not change the data mode/);
+  await page.refresh();
+  await page.mode('shared');
+  await page.refresh({ stateMode: 'shared' });
+  await page.linkOn(true);
+  assert.equal(page.byId('share-link-toggle').checked, false);
+  assert.match(page.byId('share-status').textContent, /Could not change link access/);
+  await page.refresh();
+  await page.linkOn(true);
+  await page.refresh({ link: 'new' });
+  assert.equal(page.byId('share-link-toggle').checked, true);
+});
 
+test('failed revoke and rotation retain the saved list and old link', async () => {
+  const page = await loadShare({ link: 'public', responses: [{ ok: false, status: 500 }, { ok: false, status: 500 }] });
+  const rows = [{ name: 'alice' }];
+  page.byId('share-grants').children = rows;
+  await page.revoke('grant-1');
+  assert.strictEqual(page.byId('share-grants').children, rows);
+  assert.match(page.byId('share-status').textContent, /Could not revoke access/);
+  await page.refresh();
+  await page.click('share-link-replace');
+  await page.refresh();
+  assert.equal(page.byId('share-link-url').value, 'http://render.test/s/public');
+  assert.match(page.byId('share-status').textContent, /Could not replace the link/);
+});
+
+test('refresh failure preserves controls and reopening retries only the fragment request', async () => {
+  const page = await loadShare({ responses: [response({ share: { id: 'public' } })] });
+  await page.linkOn(true);
+  assert.equal(await page.refreshError(), true, 'v4 error response must not replace the usable panel');
+  assert.match(page.byId('share-status').textContent, /Close and reopen/);
+  assert.equal(page.byId('share-close').disabled, false);
+  assert.equal(page.byId('share-link-toggle').disabled, true);
+  await page.linkOn(false);
+  await page.click('share-close');
+  await page.click('share-open');
+  assert.deepEqual(page.events, ['changed', 'changed']);
+  assert.equal(page.api.calls.length, 1);
+  await page.refresh({ link: 'public' });
+  assert.equal(page.byId('share-link-toggle').disabled, false);
+});
+
+test('network refresh errors also permit closing and retrying', async () => {
+  const page = await loadShare();
+  await page.mode('shared');
+  await page.panel.dispatchEvent({ type: 'htmx:error', target: page.byId('share-body') });
+  assert.match(page.byId('share-status').textContent, /could not refresh/);
+  await page.click('share-close');
+  assert.equal(page.byId('share-panel').hidden, true);
+});
+
+test('unfinished input, list position, and open disclosures survive a fragment swap', async () => {
+  const page = await loadShare({ link: 'public' });
+  await page.names('bob');
+  page.byId('share-widget-details').open = true;
+  page.byId('state-how-it-works').open = true;
+  page.people.scrollTop = 170;
+  await page.mode('shared');
+  await page.refresh({ stateMode: 'shared' });
+  assert.equal(page.byId('share-add-input').value, 'bob');
+  assert.equal(page.byId('share-widget-details').open, true);
+  assert.equal(page.byId('state-how-it-works').open, true);
+  assert.equal(page.people.scrollTop, 170);
+  assert.equal(page.byId('share-state-shared').checked, true);
+});
+
+test('Done closes without replaying changes or keeping unsent names for the next opening', async () => {
+  const page = await loadShare();
+  await page.mode('shared');
+  await page.refresh({ stateMode: 'shared' });
+  await page.names('unsent');
+  await page.click('share-close');
+  assert.equal(page.byId('share-panel').hidden, true);
+  assert.equal(page.byId('share-open').focused, true);
+  await page.click('share-open');
+  assert.equal(page.byId('share-add-input').value, '');
+  assert.equal(page.byId('share-state-shared').checked, true);
+  assert.deepEqual(paths(page.api), ['PATCH /api/artifacts/' + ID]);
+});
+
+test('Escape and backdrop close the idle panel; interior clicks keep it open', async () => {
+  const page = await loadShare();
+  await page.click('share-open');
+  page.pressKey('Escape');
+  assert.equal(page.byId('share-panel').hidden, true);
+  await page.click('share-open');
+  await page.panel.dispatchEvent({ type: 'click', target: { id: 'inside' } });
+  assert.equal(page.byId('share-panel').hidden, false);
+  await page.panel.dispatchEvent({ type: 'click', target: page.panel });
+  assert.equal(page.byId('share-panel').hidden, true);
+});
+
+test('both copy controls work when their Phosphor icon is clicked', async () => {
+  const page = await loadShare({ link: 'public' });
+  await page.click('share-link-copy', true);
+  await page.click('share-widget-copy', true);
+  assert.deepEqual(page.copied, ['http://render.test/s/public', '<iframe src="example"></iframe>']);
+});
+
+test('HTTP origins without a clipboard API offer manual copying', async () => {
+  const page = await loadShare({ link: 'public' });
+  page.window.navigator.clipboard = undefined;
+  await page.click('share-link-copy');
+  assert.equal(page.byId('share-link-url').selected, true);
+  assert.match(page.byId('share-status').textContent, /Select the link and copy it/);
+  await page.click('share-widget-copy');
+  assert.equal(page.byId('share-widget-embed').selected, true);
+  assert.match(page.byId('share-status').textContent, /Select the embed code and copy it/);
   assert.deepEqual(page.api.calls, []);
-  assert.deepEqual(page.events, []);
 });
 
-test("Copy puts the link on the clipboard from the app origin", async () => {
-  const page = loadShare({ link: LINK_ID });
-
-  await page.click("share-link-copy");
-
-  assert.deepEqual(page.copied, ["http://render.test/s/" + LINK_ID]);
-  assert.deepEqual(page.api.calls, [], "copying decides nothing, so it writes nothing");
+// A deleted artifact returns a server-rendered notice instead of editor fields.
+// Exercise the nulls a real DOM returns, rather than the harness's lazy nodes.
+test('a missing-artifact fragment replaces stale controls and Done remains usable', async () => {
+  const page = await loadShare();
+  await page.names('alice');
+  await page.submit();
+  assert.equal(page.byId('share-close').disabled, true);
+  assert.equal(await page.refreshError(404), false, 'allow the server error fragment to swap');
+  const absent = new Set(['share-state-mode', 'share-state-own', 'share-state-shared',
+    'share-add-input', 'share-link-toggle', 'state-how-it-works', 'share-widget-details']);
+  page.document.getElementById = (id) => absent.has(id) ? null : page.byId(id);
+  page.panel.querySelectorAll = () => [];
+  page.panel.querySelector = () => null;
+  await page.panel.dispatchEvent({ type: 'htmx:after:swap', target: page.byId('share-body') });
+  assert.equal(page.byId('share-close').disabled, false);
+  assert.equal(page.byId('share-close').focused, true);
+  assert.equal(page.byId('share-status').textContent, '');
+  await page.click('share-close');
+  assert.equal(page.panel.hidden, true);
+  await page.click('share-open');
+  assert.equal(page.panel.hidden, false);
+  assert.deepEqual(page.events, ['changed'], 'reopening a missing artifact must not loop through retries');
+  page.pressKey('Escape');
+  assert.equal(page.panel.hidden, true);
 });
 
-test("Copy puts the widget embed snippet on the clipboard", async () => {
-  const snippet = '<iframe src="http://render.test/s/' + LINK_ID + '/widget" width="320" height="132" style="border:0"></iframe>';
-  const page = loadShare({ link: LINK_ID, embed: snippet });
-
-  await page.click("share-widget-copy");
-
-  assert.deepEqual(page.copied, [snippet]);
-  assert.deepEqual(page.api.calls, [], "copying decides nothing, so it writes nothing");
+test('concurrent grant and public-link revocations treat DELETE 404 as success', async () => {
+  const page = await loadShare({ link: 'public', responses: [
+    { ok: false, status: 404 }, { ok: false, status: 404 }
+  ] });
+  await page.revoke('already-gone');
+  await page.refresh();
+  assert.equal(page.byId('share-status').textContent, '✓ Changes saved');
+  await page.linkOn(false);
+  await page.refresh({ link: '' });
+  assert.equal(page.byId('share-status').textContent, '✓ Changes saved');
+  assert.equal(page.byId('share-link-toggle').checked, false);
+  assert.deepEqual(paths(page.api), ['DELETE /api/shares/already-gone', 'DELETE /api/shares/public']);
 });
 
-// --- whose data ---------------------------------------------------------
-
-test("the state mode applies immediately, through the artifact PATCH", async () => {
-  const page = loadShare();
-
-  await page.change("share-state-mode", { value: "shared" });
-
-  assert.deepEqual(paths(page.api), ["PATCH /api/artifacts/" + ID]);
-  assert.deepEqual(JSON.parse(page.api.calls[0].body), { share_state_mode: "shared" });
-  assert.deepEqual(page.events, ["exhibit:shares-changed"],
-    "the re-render is what confirms the stored value; a select left showing the " +
-    "click rather than the answer would lie about a rejected write");
-});
-
-// --- failure ------------------------------------------------------------
-
-test("a refused write is reported, not passed off as done", async () => {
-  const page = loadShare({
-    link: LINK_ID,
-    responses: [{ ok: false, status: 403, json: async () => ({}) }]
-  });
-
-  await page.change("share-link-toggle", { checked: false });
-
-  assert.match(page.byId("share-status").textContent, /Could not remove the link/);
-  assert.deepEqual(page.events, ["exhibit:shares-changed"],
-    "the panel still re-renders on a failure, so what it shows is the server's " +
-    "state rather than the one the click implied");
-});
-
-/* av-esa1 — the panel is a modal now, so how it opens and closes is behaviour
- * rather than markup. The Go template test can see that #share-open is in the
- * page; only running the script proves the button is wired to the overlay, and
- * that Escape and the backdrop reach it too.
- *
- * The backdrop case is the one worth having. It is the difference between
- * `e.target === panel` and a check that also matches clicks inside the dialog,
- * and getting it wrong throws away whatever the owner had half-typed in the
- * username field the moment they click a label. */
-
-test("the panel starts closed and the toolbar button opens it", () => {
-  const page = loadShare();
-  const panel = page.byId("share-panel");
-  assert.equal(panel.hidden, true, "the modal must hold no layout until asked for");
-
-  page.byId("share-open").dispatchEvent({ type: "click", target: { id: "share-open" } });
-  assert.equal(panel.hidden, false);
-});
-
-test("Done, the backdrop, and Escape each close it — a click inside does not", () => {
-  const page = loadShare();
-  const panel = page.byId("share-panel");
-  const open = () =>
-    page.byId("share-open").dispatchEvent({ type: "click", target: { id: "share-open" } });
-
-  open();
-  page.byId("share-close").dispatchEvent({ type: "click", target: { id: "share-close" } });
-  assert.equal(panel.hidden, true, "the Done button closes it");
-
-  open();
-  panel.dispatchEvent({ type: "click", target: panel });
-  assert.equal(panel.hidden, true, "a click on the backdrop closes it");
-
-  open();
-  page.pressKey("Escape");
-  assert.equal(panel.hidden, true, "Escape closes it");
-
-  open();
-  panel.dispatchEvent({ type: "click", target: { id: "share-add-submit" } });
-  assert.equal(panel.hidden, false, "a click inside the dialog must not close it");
-});
-
-test("Escape does nothing while the panel is already closed", () => {
-  const page = loadShare();
-  page.pressKey("Escape");
-  assert.equal(page.byId("share-panel").hidden, true);
+test('404 responses to grants and mode changes still report failure', async () => {
+  const page = await loadShare({ responses: [{ ok: false, status: 404 }, { ok: false, status: 404 }] });
+  await page.names('alice');
+  await page.submit();
+  await page.refresh();
+  assert.match(page.byId('share-status').textContent, /Could not grant access/);
+  assert.equal(page.byId('share-add-input').value, 'alice');
+  await page.mode('shared');
+  await page.refresh();
+  assert.match(page.byId('share-status').textContent, /Could not change the data mode/);
+  assert.equal(page.byId('share-state-own').checked, true);
 });
