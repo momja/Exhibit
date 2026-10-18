@@ -1,6 +1,6 @@
 ---
 id: Exh-4ufo
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-18T23:31:58Z
@@ -15,4 +15,3 @@ Add The-PR-Agent/pr-agent to Exhibit as a GitHub Action with automatic pull requ
 ## Acceptance Criteria
 
 Workflow reviews ready pull requests and updates; collaborator slash commands work; required secrets and rollout are documented; workflow passes actionlint.
-
