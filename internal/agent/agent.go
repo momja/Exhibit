@@ -110,6 +110,7 @@ type Manager struct {
 
 	mu       sync.Mutex
 	sessions map[string]*Session
+	starting map[string]bool // conversation identities reserved before loading history
 }
 
 // New materializes the extension (exhibit.ts plus its edit-engine import,
@@ -190,7 +191,7 @@ type CreateOpts struct {
 	// spends its owner's money and is never limited here). Recorded on the
 	// usage rows as paid_by either way (av-2yws).
 	PlatformPaid bool
-	// Resume continues a conversation kept earlier instead of starting one
+	// ResumeSessionID continues a conversation kept earlier instead of starting one
 	// (av-b4yh). The session takes the conversation's identity — same id, so the
 	// same stored record keeps growing, the same label on the versions it
 	// writes, and the same usage ledger entry its spend ceiling counts — and Pi
@@ -199,7 +200,7 @@ type CreateOpts struct {
 	// improved since is in force, and the file's copy is not replayed.
 	// Everything else about the session is as for any other: a fresh
 	// credential, the owner's current key, the artifact as it is now.
-	Resume *store.Transcript
+	ResumeSessionID string
 }
 
 // ErrSessionLive means a resume named a conversation that already has a live
@@ -216,6 +217,24 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	if opts.Provider == "exhibit-mock" && m.cfg.MockLLMURL == "" {
 		return nil, fmt.Errorf("mock provider is not enabled on this server")
 	}
+	var resume *store.Transcript
+	if opts.ResumeSessionID != "" {
+		// Claim the identity before reading either history or its usage seed.
+		// A snapshot read by the caller can already be stale by the time the
+		// preceding process finishes saving and releases this conversation.
+		if !m.reserveConversation(opts.ResumeSessionID) {
+			return nil, ErrSessionLive
+		}
+		defer m.releaseConversationStart(opts.ResumeSessionID)
+		var err error
+		resume, err = m.st.GetTranscript(ctx, opts.OwnerID, opts.ArtifactID, opts.ResumeSessionID)
+		if err != nil {
+			return nil, fmt.Errorf("read the conversation to resume: %w", err)
+		}
+		if resume == nil || !resume.Resumable {
+			return nil, fmt.Errorf("conversation is no longer available to resume")
+		}
+	}
 	// The session limit (av-99f4), enforced here for both creators. At the
 	// limit the owner's oldest *idle* session is evicted — the chat page
 	// closes its session on pagehide, but a user who reloads before that
@@ -228,8 +247,8 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	id := uuid.New().String()
 	title := ""
 	var recorded store.UsageTotals
-	if opts.Resume != nil {
-		id, title = opts.Resume.SessionID, opts.Resume.Title
+	if resume != nil {
+		id, title = resume.SessionID, resume.Title
 		// Pi's own totals count the whole conversation, the turns before this
 		// process included, and every settle reconciles the ledger against
 		// them (usage.go). The ledger already holds those turns, so this
@@ -240,9 +259,8 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 			return nil, fmt.Errorf("read the conversation's recorded usage: %w", err)
 		}
 	}
-	// The scratch directory belongs to this process, not to the conversation: a
-	// conversation can be resumed again while the process that last ran it is
-	// still being cleaned up, and the two must not share a directory.
+	// The scratch directory belongs to this process, not to the conversation.
+	// Every resumed process starts with a fresh working copy of its saved file.
 	workDir := filepath.Join(m.cfg.WorkRoot, uuid.New().String())
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create session dir: %w", err)
@@ -265,12 +283,12 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	sysPrompt := buildSystemPrompt(m.cfg.SystemPrompt, opts)
 	sessionFile := filepath.Join(workDir, sessionFileName)
 	resumeNotice := ""
-	if opts.Resume != nil {
+	if resume != nil {
 		// What the database holds is the conversation as of its last settled
 		// turn, which is the right place to resume from: a turn that was still
 		// running when the last session ended never finished, and is not
 		// something to continue.
-		if err := os.WriteFile(sessionFile, []byte(opts.Resume.SessionFile), 0o600); err != nil {
+		if err := os.WriteFile(sessionFile, []byte(resume.SessionFile), 0o600); err != nil {
 			return nil, fmt.Errorf("restore session file: %w", err)
 		}
 		resumeNotice = resumedNotice
@@ -393,7 +411,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	others, evicted := m.ownerSessionsLocked(opts.OwnerID, id)
 	if others >= MaxOwnerSessions {
 		if evicted != nil {
-			delete(m.sessions, evicted.ID)
+			evicted.markStopping()
 		}
 	}
 	m.mu.Unlock()
@@ -410,9 +428,31 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		slog.String("provider", opts.Provider),
 		slog.String("model", opts.Model),
 		slog.String("artifact_id", opts.ArtifactID),
-		slog.Bool("resumed", opts.Resume != nil),
+		slog.Bool("resumed", resume != nil),
 	)
 	return s, nil
+}
+
+// reserveConversation excludes both a process draining its final writes and a
+// competing startup. The global mutex protects only registry operations, never
+// database reads, process startup, or waiting for persistence.
+func (m *Manager) reserveConversation(id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.sessions[id] != nil || m.starting[id] {
+		return false
+	}
+	if m.starting == nil {
+		m.starting = make(map[string]bool)
+	}
+	m.starting[id] = true
+	return true
+}
+
+func (m *Manager) releaseConversationStart(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.starting, id)
 }
 
 // Get returns one of ownerID's live sessions, or nil.
@@ -442,7 +482,7 @@ func (m *Manager) Get(ownerID int64, id string) *Session {
 		return nil
 	}
 	s.mu.Lock()
-	closed := s.closed
+	closed := s.closed || s.stopping
 	s.mu.Unlock()
 	if closed {
 		return nil
@@ -450,7 +490,8 @@ func (m *Manager) Get(ownerID int64, id string) *Session {
 	return s
 }
 
-// Close terminates one of ownerID's sessions and forgets it. Scoped for the
+// Close terminates one of ownerID's sessions. Its identity stays reserved until
+// the reader and final persistence finish. Scoped for the
 // same reason Get is, and more sharply: closing kills a subprocess, so an
 // unscoped Close is a one-request denial of service against anybody whose
 // session id leaks. Another owner's id is a no-op.
@@ -458,7 +499,7 @@ func (m *Manager) Close(ownerID int64, id string) {
 	m.mu.Lock()
 	s := m.sessions[id]
 	if s != nil && s.OwnerID == ownerID {
-		delete(m.sessions, id)
+		s.markStopping()
 	} else {
 		s = nil
 	}
@@ -485,7 +526,7 @@ func (m *Manager) admitOwner(ownerID int64) bool {
 		m.mu.Unlock()
 		return false
 	}
-	delete(m.sessions, oldest.ID)
+	oldest.markStopping()
 	m.mu.Unlock()
 	// What reap does for a stale session: the credential dies with the
 	// process, and finish() flushes whatever it had spent.
@@ -501,8 +542,12 @@ func (m *Manager) ownerSessionsLocked(ownerID int64, skipID string) (count int, 
 		if s.OwnerID != ownerID || s.ID == skipID {
 			continue
 		}
-		count++
 		s.mu.Lock()
+		if s.closed || s.stopping {
+			s.mu.Unlock()
+			continue
+		}
+		count++
 		idle := !s.streaming
 		last := s.lastActive
 		s.mu.Unlock()
@@ -519,23 +564,28 @@ func (m *Manager) ownerSessionsLocked(ownerID int64, skipID string) (count int, 
 // reap closes sessions idle longer than the configured timeout.
 func (m *Manager) reap() {
 	for range time.Tick(time.Minute) {
-		cutoff := time.Now().Add(-m.cfg.IdleTimeout)
-		m.mu.Lock()
-		var stale []*Session
-		for id, s := range m.sessions {
-			s.mu.Lock()
-			idle := s.lastActive.Before(cutoff) && !s.streaming
-			s.mu.Unlock()
-			if idle {
-				stale = append(stale, s)
-				delete(m.sessions, id)
-			}
+		m.reapIdle(time.Now().Add(-m.cfg.IdleTimeout))
+	}
+}
+
+func (m *Manager) reapIdle(cutoff time.Time) {
+	m.mu.Lock()
+	var stale []*Session
+	for _, s := range m.sessions {
+		s.mu.Lock()
+		idle := !s.closed && !s.stopping && s.lastActive.Before(cutoff) && !s.streaming
+		if idle {
+			s.stopping = true
 		}
-		m.mu.Unlock()
-		for _, s := range stale {
-			slog.Info("reaping idle agent session", slog.String("session_id", s.ID))
-			s.kill()
+		s.mu.Unlock()
+		if idle {
+			stale = append(stale, s)
 		}
+	}
+	m.mu.Unlock()
+	for _, s := range stale {
+		slog.Info("reaping idle agent session", slog.String("session_id", s.ID))
+		s.kill()
 	}
 }
 
@@ -600,6 +650,7 @@ type Session struct {
 	pending      map[string]chan rpcResponse
 	streaming    bool
 	closed       bool
+	stopping     bool // unavailable to callers, but still draining its final writes
 	lastActive   time.Time
 	// guardBlocked records that the guard extension handled the prompt in
 	// flight instead of running it (av-gust): the model never saw it. Pi emits
@@ -1183,11 +1234,18 @@ func (s *Session) removeScratch() {
 }
 
 func (s *Session) kill() {
+	s.markStopping()
 	s.mgr.cfg.Credentials.Revoke(s.grant)
 	_ = s.stdin.Close()
 	if s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
 	}
+}
+
+func (s *Session) markStopping() {
+	s.mu.Lock()
+	s.stopping = true
+	s.mu.Unlock()
 }
 
 func truncate(s string, n int) string {

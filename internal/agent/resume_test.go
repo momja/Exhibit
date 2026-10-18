@@ -36,10 +36,16 @@ func TestAResumedSessionDoesNotRecordTheEarlierTurnsAgain(t *testing.T) {
 	screen.Source, screen.PaidBy, screen.InputTokens, screen.OutputTokens, screen.CostMicros =
 		store.UsageSourceGuardrail, store.PaidByPlatform, 180, 1, 900
 	require.NoError(t, m.st.RecordAgentUsage(ctx, screen))
+	require.NoError(t, m.st.PutArtifact(ctx, &store.Artifact{
+		ID: "art-1", OwnerID: owner, Title: "Counter", SourceBlobID: "body", Tier: 1,
+	}))
+	require.NoError(t, m.st.SaveTranscript(ctx, owner, store.Transcript{
+		ArtifactID: "art-1", SessionID: conversation, Title: "make it purple", SessionFile: "{}\n",
+	}))
 
 	s, err := m.Create(ctx, CreateOpts{
 		OwnerID: owner, Provider: "anthropic", APIKey: "k", ArtifactID: "art-1",
-		Resume: &store.Transcript{SessionID: conversation, Title: "make it purple", SessionFile: "{}\n"},
+		ResumeSessionID: conversation,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, conversation, s.ID, "a conversation keeps its identity")
