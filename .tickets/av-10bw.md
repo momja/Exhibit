@@ -1,6 +1,6 @@
 ---
 id: av-10bw
-status: open
+status: in_progress
 deps: [av-fw1b]
 links: [av-2p8z]
 created: 2026-08-18T05:57:15Z
