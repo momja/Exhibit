@@ -50,6 +50,7 @@ const (
 )
 
 type Artifact struct {
+	VersionSeq   int       `json:"version_seq"`
 	ID           string    `json:"id"`
 	OwnerID      int64     `json:"owner_id"`
 	Title        string    `json:"title"`
@@ -606,9 +607,9 @@ type Store interface {
 	// asked to have removed, so an unreachable artifact is a silent no-op
 	// rather than an error.
 	GetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) (map[string]string, error)
-	SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string) error
-	DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string) error
-	ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) error
+	SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string, version ...int) error
+	DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string, version ...int) error
+	ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string, version ...int) error
 
 	// Agent (Exh-yvhp). SetAgentKey upserts the owner's single configured
 	// provider key; GetAgentKey returns nil when none is set.

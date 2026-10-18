@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/momja/Exhibit/internal/store"
@@ -363,6 +364,42 @@ func TestFailedVersionCommitReclaimsStagedContent(t *testing.T) {
 			require.Equal(t, http.StatusInternalServerError, w.Code)
 			assert.Equal(t, before, blobFileNames(t, blobDir))
 			assert.Equal(t, 1, versionCount(t, r, id))
+		})
+	}
+}
+
+func TestSupersededFrameCannotOverwriteRestoredState(t *testing.T) {
+	for _, operation := range []string{"set", "delete", "clear"} {
+		t.Run(operation, func(t *testing.T) {
+			r := newTestRouter(t)
+			id := createArtifact(t, r, map[string]any{"title": "T", "body": "<html>one</html>"})
+			putState(t, r, id, "score", "10")
+			patchArtifact(t, r, id, map[string]any{"body": "<html>two</html>"})
+			putState(t, r, id, "score", "99")
+			require.Equal(t, http.StatusOK, restoreReq(t, r, id, 1).Code)
+			path, method, body := "/api/artifacts/"+id+"/state", "PUT", `{"key":"score","value":"stale"}`
+			if operation != "set" {
+				method, body = "DELETE", ""
+			}
+			if operation == "delete" {
+				path += "?key=score"
+			}
+			req := httptest.NewRequest(method, path, strings.NewReader(body))
+			req.Header.Set("Authorization", authHeader())
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Exhibit-Version", "2")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+			assert.Equal(t, map[string]string{"score": "10"}, getState(t, r, id))
+			// The newly rendered generation can keep using the same API.
+			req = httptest.NewRequest(method, path, strings.NewReader(body))
+			req.Header.Set("Authorization", authHeader())
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Exhibit-Version", "3")
+			w = httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
 		})
 	}
 }

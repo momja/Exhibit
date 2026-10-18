@@ -101,9 +101,15 @@ document.addEventListener('keydown', function(e) {
 // avoidable.
 let pendingStateWrites = 0;
 
-function sendStateWrite(path, opts) {
+function sendStateWrite(path, opts, version) {
   pendingStateWrites++;
-  return apiStateFetch(path, opts)
+  return window.ExhibitState.write(apiStateFetch, path, opts, version)
+    .then(function (res) {
+      if (res && res.status === 409) {
+        const banner = document.getElementById('state-changed-banner');
+        if (banner) banner.hidden = false;
+      }
+    })
     .catch(function () {})
     .then(function () { pendingStateWrites--; });
 }
@@ -117,16 +123,16 @@ window.addEventListener('message', function(e) {
   // definition — the ".." path-traversal bug (av-hh1o) had to be fixed in
   // three copies of it.
   if (d.op === 'clear') {
-    sendStateWrite(window.ExhibitState.deleteURL(ID), { method: 'DELETE' });
+    sendStateWrite(window.ExhibitState.deleteURL(ID), { method: 'DELETE' }, d.version);
   } else if (d.op === 'delete') {
-    sendStateWrite(window.ExhibitState.deleteURL(ID, d.key), { method: 'DELETE' });
+    sendStateWrite(window.ExhibitState.deleteURL(ID, d.key), { method: 'DELETE' }, d.version);
   } else if (d.op === 'set' || d.op === undefined) {
     // Only a recognized write reaches the API. An unknown op used to fall
     // through to this branch, so a future typo would silently become a write.
     sendStateWrite(window.ExhibitState.url(ID), {
       method: 'PUT',
       body: JSON.stringify({ key: d.key, value: d.value })
-    });
+    }, d.version);
   }
 });
 

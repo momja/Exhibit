@@ -124,7 +124,7 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	var a Artifact
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.GeolocationApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareGrantCount, &a.SharePublicLink)
+	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.GeolocationApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareGrantCount, &a.SharePublicLink, &a.VersionSeq)
 	if err != nil {
 		return nil, err
 	}
@@ -145,8 +145,8 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 // are trigger-maintained rollups of the shares table (migration 029), like
 // tags_text — a caller that could set them could tell the gallery an artifact
 // is private while three accounts hold grants on it.
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, share_state_mode, share_grant_count, share_link"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.widget_blob_id, a.share_state_mode, a.share_grant_count, a.share_link"
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, share_state_mode, share_grant_count, share_link, (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = artifacts.id)"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.widget_blob_id, a.share_state_mode, a.share_grant_count, a.share_link, (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = a.id)"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
@@ -1191,10 +1191,13 @@ func (s *SQLiteStore) GetStateAsViewer(ctx context.Context, viewerID ViewerID, a
 // SetStateAsViewer is the write av-awr4 found missing. Without it 'own' mode —
 // the default — leaves a recipient reading state they can never change, so a
 // shared tool forgets everything the moment its frame reloads.
-func (s *SQLiteStore) SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string) error {
+func (s *SQLiteStore) SetStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key, value string, version ...int) error {
 	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
 	if err != nil {
 		return err
+	}
+	if len(version) > 0 {
+		return s.mutateVersionedState(ctx, owner, artifactID, principal, &key, &value, version[0])
 	}
 	return s.SetState(ctx, owner, artifactID, principal, key, value)
 }
@@ -1204,13 +1207,16 @@ func (s *SQLiteStore) SetStateAsViewer(ctx context.Context, viewerID ViewerID, a
 // idempotent contract the owner-scoped deletes already keep, extended to the
 // wider "cannot reach it" case for the same reason: the caller asked for a key
 // not to exist, and there it does not.
-func (s *SQLiteStore) DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string) error {
+func (s *SQLiteStore) DeleteStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID, key string, version ...int) error {
 	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
 	if errors.Is(err, ErrNotFound) {
 		return nil
 	}
 	if err != nil {
 		return err
+	}
+	if len(version) > 0 {
+		return s.mutateVersionedState(ctx, owner, artifactID, principal, &key, nil, version[0])
 	}
 	return s.DeleteState(ctx, owner, artifactID, principal, key)
 }
@@ -1220,13 +1226,16 @@ func (s *SQLiteStore) DeleteStateAsViewer(ctx context.Context, viewerID ViewerID
 // ShareStateShared is the board they are playing on. Either way it is the
 // erase-all av-q0ub defined: one viewer's state, never the artifact's, and
 // never another viewer's.
-func (s *SQLiteStore) ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string) error {
+func (s *SQLiteStore) ClearStateAsViewer(ctx context.Context, viewerID ViewerID, artifactID string, version ...int) error {
 	owner, principal, err := s.stateTarget(ctx, viewerID, artifactID)
 	if errors.Is(err, ErrNotFound) {
 		return nil
 	}
 	if err != nil {
 		return err
+	}
+	if len(version) > 0 {
+		return s.mutateVersionedState(ctx, owner, artifactID, principal, nil, nil, version[0])
 	}
 	return s.ClearState(ctx, owner, artifactID, principal)
 }
