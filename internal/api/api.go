@@ -425,6 +425,14 @@ func (ro *Router) setupRoutes() {
 		// doesn't already have — so they sit with the pages, outside the
 		// API's auth group and under the same owner resolution.
 		r.Get("/partials/agent-preview", ro.agentPreviewPartial)
+		// The chat page's history pane (av-y7td): the conversations kept with
+		// the artifact, and one of them read back.
+		r.Get("/partials/agent-history", ro.agentHistoryPartial)
+		r.Get("/partials/agent-transcript", ro.agentTranscriptPartial)
+		// An earlier version of an artifact, shown running before a person
+		// decides whether to return to it: swapped into the chat's preview pane
+		// from the History card, and into the edit page's Versions panel.
+		r.Get("/partials/version-viewer", ro.versionViewerPartial)
 		r.Get("/partials/card-widget", ro.cardWidgetPartial)
 		// The edit page's Tags panel, re-rendered after each tag change.
 		r.Get("/partials/tag-panel", ro.tagPanelPartial)
@@ -486,6 +494,11 @@ func (ro *Router) setupRoutes() {
 				r.Patch("/", ro.updateArtifact)
 				r.Post("/refetch", ro.refetchArtifact)
 				r.Delete("/", ro.deleteArtifact)
+				// Version history (store/versions.go). Written as a side effect
+				// of every change to the body or widget, so the only mutation
+				// here is the restore. Owner-only; not in agentSubResources.
+				r.Get("/versions", ro.listVersions)
+				r.Post("/versions/{seq}/restore", ro.restoreVersion)
 				// State: written by the host frame on the artifact's behalf
 				// (the sandboxed iframe bridges writes via postMessage), and
 				// by the edit page's state inspector (av-hg5f). DELETE is the
@@ -546,8 +559,13 @@ func (ro *Router) setupRoutes() {
 				// neither of those can answer — what is true right now — and
 				// you cannot audit what you cannot list.
 				r.Get("/shares", ro.listArtifactShares)
-				// Agent conversations persisted with this artifact
+				// Agent conversations kept with this artifact (av-y7td): the
+				// list, and one as what was said in it. Owner-only, and
+				// absent from agentSubResources, so a session steered by text
+				// Exhibit did not author cannot read the conversations before
+				// it.
 				r.Get("/transcripts", ro.listTranscripts)
+				r.Get("/transcripts/{sessionID}", ro.getTranscript)
 			})
 		})
 
@@ -667,6 +685,10 @@ func (ro *Router) RenderHandler() http.Handler {
 	// why those two go together — and it must never redirect, because the CSP
 	// source permitting it is path-scoped.
 	r.Get("/a/{artifactID}/assets/{assetID}", renderer.ServeAsset)
+	// One earlier version of an artifact, to look at and not to keep: its body
+	// beside the data it left behind, under a token scoped to that version and
+	// with nothing it does persisting. See ServeVersion.
+	r.Get("/a/{artifactID}/versions/{seq}", renderer.ServeVersion)
 	// Serve an artifact's gallery-card widget (av-fafu) — same origin, same
 	// per-artifact CSP, narrower preamble.
 	r.Get("/w/{artifactID}", renderer.ServeWidget)

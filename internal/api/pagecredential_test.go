@@ -76,10 +76,13 @@ var appOriginGETRoutePaths = []pageRoute{
 	// htmx fragments: page markup by another name, so they are held to the
 	// same rule as the pages they are swapped into.
 	{route: "/partials/agent-preview", path: "/partials/agent-preview?artifact={id}"},
+	{route: "/partials/agent-history", path: "/partials/agent-history?artifact={id}"},
+	{route: "/partials/agent-transcript", path: "/partials/agent-transcript?artifact={id}&session=s"},
 	{route: "/partials/card-widget", path: "/partials/card-widget?artifact={id}"},
 	{route: "/partials/tag-panel", path: "/partials/tag-panel?artifact={id}"},
 	{route: "/partials/capability-cluster", path: "/partials/capability-cluster?artifact={id}"},
 	{route: "/partials/share-panel", path: "/partials/share-panel?artifact={id}"},
+	{route: "/partials/version-viewer", path: "/partials/version-viewer?artifact={id}&seq=1"},
 
 	// Static and public surfaces. They embed nothing per-request, which is
 	// exactly the claim being checked.
@@ -101,7 +104,9 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/artifacts/{artifactID}/origins", path: "/api/artifacts/{id}/origins"},
 	{route: "/api/artifacts/{artifactID}/widget", path: "/api/artifacts/{id}/widget"},
 	{route: "/api/artifacts/{artifactID}/shares", path: "/api/artifacts/{id}/shares"},
+	{route: "/api/artifacts/{artifactID}/versions", path: "/api/artifacts/{id}/versions"},
 	{route: "/api/artifacts/{artifactID}/transcripts", path: "/api/artifacts/{id}/transcripts"},
+	{route: "/api/artifacts/{artifactID}/transcripts/{sessionID}", path: "/api/artifacts/{id}/transcripts/s"},
 	{route: "/api/agent/key", path: "/api/agent/key"},
 	// SSE. With no agent manager configured it answers "not enabled" and
 	// returns, so walking it does not park the test on an open stream.
@@ -199,6 +204,18 @@ func newPageCredentialRouter(t *testing.T, idp auth.IdentityProvider, opts ...fu
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
 	require.NotEmpty(t, created.Artifact.ID)
+
+	// An edit on top of it, so the version viewer's row (av-vw7r) has an earlier
+	// version to render a frame for rather than the current one's refusal — a
+	// walk that only ever saw the refusal would pass without having looked at the
+	// page it is there to check.
+	edit, _ := json.Marshal(map[string]any{"body": "<html><body><h1>edited</h1></body></html>"})
+	req = httptest.NewRequest("PATCH", "/api/artifacts/"+created.Artifact.ID, bytes.NewReader(edit))
+	req.Header.Set("Authorization", "Bearer "+pageCredentialToken)
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	ro.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	return ro, created.Artifact.ID
 }
 

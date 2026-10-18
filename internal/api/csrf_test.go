@@ -96,6 +96,11 @@ var appOriginGETRoutes = []getRoute{
 	// is the worst thing on this instance to make forgeable.
 	{route: "/profile"},
 	{route: "/partials/agent-preview"},
+	// The history pane (av-y7td): reads of what was said in earlier
+	// conversations. Resuming one is a POST to /api/agent/sessions, which Lax
+	// withholds the cookie from.
+	{route: "/partials/agent-history"},
+	{route: "/partials/agent-transcript"},
 	{route: "/partials/card-widget"},
 	{route: "/partials/tag-panel"},
 	// The capability badge + popover (av-mf1x), re-rendered after a runtime
@@ -109,6 +114,13 @@ var appOriginGETRoutes = []getRoute{
 	// makes goes to /api/shares or the artifact PATCH, under an unsafe method
 	// Lax withholds the cookie from.
 	{route: "/partials/share-panel"},
+	// An earlier version of an artifact, shown running before a person decides
+	// whether to return to it (av-vw7r). A read that mints a short-lived token
+	// and changes nothing: the frame it carries is a render document that
+	// persists nothing, and the restore it sits beside is a POST to
+	// /api/artifacts/:id/versions/:seq/restore — an unsafe method Lax withholds
+	// the cookie from.
+	{route: "/partials/version-viewer"},
 	// Static assets, the manifest, the share redirect, and the instance's
 	// public identity (av-4ac9) — public reads, credential or not.
 	{route: "/assets/*"},
@@ -135,7 +147,11 @@ var appOriginGETRoutes = []getRoute{
 	// Who can open an artifact (av-6xjd): the enumeration read. Minting and
 	// revoking live under /api/shares, on unsafe methods.
 	{route: "/api/artifacts/{artifactID}/shares"},
+	// Version history: a read of an artifact's earlier versions. The restore is
+	// a POST.
+	{route: "/api/artifacts/{artifactID}/versions"},
 	{route: "/api/artifacts/{artifactID}/transcripts"},
+	{route: "/api/artifacts/{artifactID}/transcripts/{sessionID}"},
 	{route: "/api/agent/key"},
 	// SSE. It subscribes to a live session's event stream; it starts no turn
 	// and persists nothing.

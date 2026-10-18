@@ -68,8 +68,12 @@ func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 		NetworkAllowlist: []string{"https://seed.example.com"},
 		SourceText:       id + " seedsearchterm",
 	}))
+	_, err := s.db.ExecContext(ctx, `INSERT INTO artifact_version_assets
+		(artifact_id, seq, id, generation_id, source_url, blob_id, content_type, size_bytes, created_at)
+		VALUES (?, 1, ?, 'seed', 'https://seed.test/a.wasm', 'asset-blob', 'application/wasm', 1, datetime('now'))`, id, "asset-"+id)
+	require.NoError(t, err)
 	require.NoError(t, s.SetState(ctx, OwnerID(owner), id, ViewerID(owner), "seed", "value"))
-	require.NoError(t, s.SaveTranscript(ctx, owner, id, "session-"+id, `[{"role":"user"}]`))
+	require.NoError(t, s.SaveTranscript(ctx, owner, Transcript{ArtifactID: id, SessionID: "session-" + id, Title: "seed", SessionFile: "{}\n"}))
 	require.NoError(t, s.CreateShare(ctx, owner, &Share{ID: "share-" + id, ArtifactID: id}))
 	require.NoError(t, s.CreateTag(ctx, &Tag{ID: "tag-" + id, OwnerID: owner, Name: "tag-" + id}))
 	require.NoError(t, s.CreateCollection(ctx, &Collection{ID: "col-" + id, OwnerID: owner, Name: "col-" + id}))
@@ -111,15 +115,35 @@ func ownerCases() []ownerCase {
 			_, err := s.DeleteArtifact(ctx, o, id)
 			return false, err
 		}},
-		{"SetWidgetBlobID", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.SetWidgetBlobID(ctx, o, id, "widget-blob-"+id)
+		{"VersionAssets", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			v, err := s.VersionAssets(ctx, o, id, 1)
+			return len(v) == 0, err
+		}},
+		{"ListVersions", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			v, err := s.ListVersions(ctx, o, id)
+			return len(v) == 0, err
+		}},
+		{"GetVersion", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			v, err := s.GetVersion(ctx, o, id, 1)
+			return v == nil, err
+		}},
+		{"CommitVersion", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			blob := "version-blob-" + id
+			_, err := s.CommitVersion(ctx, o, id, VersionChange{BodyBlobID: &blob})
+			return false, err
+		}},
+		{"RestoreVersion", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, err := s.RestoreVersion(ctx, o, id, 1, Provenance{}, "")
+			if errors.Is(err, ErrAlreadyCurrent) {
+				// The owner reached the artifact; a fresh one's only version is its
+				// head, so there was nothing to return to. Ownership is what this
+				// case asserts, and it held.
+				err = nil
+			}
+			return false, err
 		}},
 		{"ReplaceArtifactSnapshot", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			_, err := s.ReplaceArtifactSnapshot(ctx, o, id, ArtifactSnapshot{SourceBlobID: "refetched-blob-" + id, SourceText: "refetched text"})
-			return false, err
-		}},
-		{"DeleteWidget", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			_, err := s.DeleteWidget(ctx, o, id)
 			return false, err
 		}},
 		{"ListOriginDecisions", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
@@ -169,11 +193,19 @@ func ownerCases() []ownerCase {
 			return false, s.ClearState(ctx, OwnerID(o), id, ViewerID(o))
 		}},
 		{"SaveTranscript", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			return false, s.SaveTranscript(ctx, o, id, "planted-session", `[{"role":"user"}]`)
+			return false, s.SaveTranscript(ctx, o, Transcript{ArtifactID: id, SessionID: "planted-session", SessionFile: "{}\n"})
 		}},
 		{"ListTranscripts", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			ts, err := s.ListTranscripts(ctx, o, id)
 			return len(ts) == 0, err
+		}},
+		{"GetTranscript", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			t, err := s.GetTranscript(ctx, o, id, "session-"+id)
+			return t == nil, err
+		}},
+		{"HeadVersionSeq", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			seq, err := s.HeadVersionSeq(ctx, o, id)
+			return seq == 0, err
 		}},
 		{"CreateShare", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			// A grant rather than a second anonymous link, because the

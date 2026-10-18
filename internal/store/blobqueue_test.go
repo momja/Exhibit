@@ -213,9 +213,9 @@ func TestSharedBlobIsQueuedOnlyWhenItsLastReferenceGoes(t *testing.T) {
 }
 
 // The refcount spans columns, not just rows: an id used as one artifact's body
-// and another's widget is referenced twice, and detaching the widget must not
-// condemn the body.
-func TestDetachingAWidgetSharedWithABodyQueuesNothing(t *testing.T) {
+// and another's widget is referenced twice, and deleting one of them must not
+// condemn the blob the other still names.
+func TestDeletingABodySharedWithAWidgetQueuesNothing(t *testing.T) {
 	fx := newQueueFixture(t)
 	ctx := context.Background()
 
@@ -227,21 +227,15 @@ func TestDetachingAWidgetSharedWithABodyQueuesNothing(t *testing.T) {
 		ID: "a2", OwnerID: 1, Title: "tile", SourceBlobID: "own-body", WidgetBlobID: "dual-use", Tier: Tier1,
 	}))
 
-	queued, err := fx.store.DeleteWidget(ctx, 1, "a2")
+	queued, err := fx.store.DeleteArtifact(ctx, 1, "a1")
 	require.NoError(t, err)
-	assert.Empty(t, queued, "a1's body is still that blob")
+	assert.Empty(t, queued, "a2's widget is still that blob")
 	require.FileExists(t, fx.path("dual-use"))
 
-	// Detaching is still idempotent, and an artifact that has no widget
-	// queues nothing rather than failing.
-	queued, err = fx.store.DeleteWidget(ctx, 1, "a2")
-	require.NoError(t, err)
-	assert.Empty(t, queued)
-
 	// Once the other reference goes, the id is condemned exactly once.
-	queued, err = fx.store.DeleteArtifact(ctx, 1, "a1")
+	queued, err = fx.store.DeleteArtifact(ctx, 1, "a2")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"dual-use"}, queued)
+	assert.ElementsMatch(t, []string{"dual-use", "own-body"}, queued)
 }
 
 // A refetch repoints a body rather than overwriting it (av-reo3), so the
@@ -269,7 +263,7 @@ func TestReplacingABodyQueuesTheOldBlobOnlyWhenUnreferenced(t *testing.T) {
 	fx.putBody(t, "refetched-2", "<html>newer</html>")
 	queued, err = fx.store.ReplaceArtifactSnapshot(ctx, 1, "a2", ArtifactSnapshot{SourceBlobID: "refetched-2", SourceText: "newer"})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"shared-body"}, queued, "the last reference is gone")
+	assert.Empty(t, queued, "both artifacts retain the previous version")
 
 	// The intent is durable before the unlink, so a crash here is finished
 	// by the next startup.
@@ -277,8 +271,8 @@ func TestReplacingABodyQueuesTheOldBlobOnlyWhenUnreferenced(t *testing.T) {
 	require.FileExists(t, fx.path("shared-body"))
 	n, err := fx.store.DrainAllBlobDeletions(ctx, fx.blobs)
 	require.NoError(t, err)
-	assert.Equal(t, 1, n)
-	assert.NoFileExists(t, fx.path("shared-body"))
+	assert.Zero(t, n)
+	assert.FileExists(t, fx.path("shared-body"))
 	require.FileExists(t, fx.path("refetched-1"))
 	require.FileExists(t, fx.path("refetched-2"))
 }

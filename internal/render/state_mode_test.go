@@ -111,7 +111,8 @@ func TestASharedArtifactsWidgetRendersTheSameBoard(t *testing.T) {
 	if err := rd.cfg.Blob.Put(ctx, "abc-widget", strings.NewReader("<html><head></head><body>w</body></html>")); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetWidgetBlobID(ctx, 1, "abc", "abc-widget"); err != nil {
+	widgetBlob := "abc-widget"
+	if _, err := st.CommitVersion(ctx, 1, "abc", store.VersionChange{WidgetBlobID: &widgetBlob}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.SetState(ctx, 1, "abc", 1, "position", "the board"); err != nil {
@@ -173,7 +174,8 @@ func TestClearDeletesTheCachesKeysRatherThanRebindingIt(t *testing.T) {
 
 // The resync receiver is framed-only and principal-only, the same two
 // conditions persistState carries — a top-level document has no host to hear
-// from, and an anonymous one has no rows to keep in step.
+// from, and an anonymous one has no rows to keep in step — and absent from a
+// version view, whose cache is how the data was and not how it is.
 func TestTheResyncReceiverIsShippedInTheRenderedDocument(t *testing.T) {
 	rd, _ := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
 	doc := serve(t, rd, "abc")
@@ -183,7 +185,7 @@ func TestTheResyncReceiverIsShippedInTheRenderedDocument(t *testing.T) {
 		"__avStateSynced",
 		"function applyStateSync(",
 		"new StorageEvent('storage'",
-		"if (window.parent !== window && !ANONYMOUS) {",
+		"if (window.parent !== window && !ANONYMOUS && !VERSION_VIEW) {",
 	} {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("the render document must carry %q: %s", want, doc)

@@ -154,6 +154,42 @@ As with any ingest, residual origins surface in `network_footprint` for
 **explicit** approval — the snapshot never seeds the `network_allowlist`, so a
 snapshotted artifact stays network-inert until you approve its residual origins.
 
+## Versions
+
+Every change to an artifact's body or widget — a `PATCH` that changes `body`, a
+refetch, a widget `PUT`/`DELETE`, an agent write, a restore — is recorded as a
+version. There is no route that creates one. A save that changes nothing
+(identical body, identical widget, a title-only `PATCH`) records nothing.
+
+A version carries the body and widget as they were and, once it has been
+replaced, the saved data (`localStorage` state) the code had written by then —
+snapshotted in the same transaction that created the next version.
+
+`GET /api/artifacts/:id/versions` — newest first:
+
+```json
+{"versions": [
+  {"artifact_id": "…", "seq": 3, "origin": "agent", "message": "make it count down",
+   "session_id": "…", "has_state": false, "current": true, "created_at": "…"},
+  {"artifact_id": "…", "seq": 2, "origin": "edit", "message": "", "session_id": "",
+   "has_state": true, "current": false, "created_at": "…"}
+]}
+```
+
+`origin` is `initial`, `edit`, `agent`, `refetch` or `restore`. `has_state` is
+true for every version but the current one.
+
+`POST /api/artifacts/:id/versions/:seq/restore` returns the artifact to that
+version: its body and widget become the current ones and the saved data it left
+behind replaces the live state, all as a **new** version (`origin: restore`) —
+nothing in the history is discarded, and the state being replaced is snapshotted
+first, so a restore can be undone. `409` when `:seq` is already the current
+version or its source is no longer stored; `404` for an unknown version or an
+artifact that is not yours. The allowlist and capability approvals are not
+versioned and are not touched.
+
+Both routes are owner-only and unavailable to an agent session's credential.
+
 ## Network origin decisions
 
 ```
@@ -266,8 +302,10 @@ not cover. Unlike an ingest footprint these are not awaiting approval — they a
 already blocked at render — so the field exists to explain a blank tile, not to
 gate one. As everywhere else, the scan never seeds the allowlist.
 
-The widget's blob id is minted once and reused on every later save, so an
-artifact's widget URL is stable across edits.
+Each save is a new version of the artifact with a blob of its own (see
+**Versions**); the widget URL is keyed by the artifact, so it is stable across
+edits. `DELETE` removes the widget as a new version, and saving a tile identical
+to the current one records nothing.
 
 `POST …/widget/generate` starts a one-shot agent session scoped to writing this
 artifact's tile and returns immediately:
@@ -305,14 +343,25 @@ DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 PUT    /api/agent/key                        Store provider API key {"provider","model","api_key"} (encrypted at rest)
 GET    /api/agent/key                        Key status (masked hint only — the key is never returned)
 DELETE /api/agent/key                        Remove the stored key
-POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact} -> {"id","sse_ticket",…}
+POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact, "resume_session_id"?: continue a kept conversation of that artifact; omitted, the session is a new conversation} -> {"id","sse_ticket",…}
 POST   /api/agent/sessions/:id/ticket        Mint a fresh SSE ticket for this session (the reconnect path)
 POST   /api/agent/sessions/:id/prompt        Send a prompt {"message", "images"?: [{data, mime_type}], "snippets"?: [descriptor]}
 POST   /api/agent/sessions/:id/abort         Abort the current run
 DELETE /api/agent/sessions/:id               End the session (and drops its tickets)
 GET    /api/agent/sessions/:id/events        SSE event stream (?ticket= auth — EventSource can't set headers)
-GET    /api/artifacts/:id/transcripts        Agent conversations persisted with an artifact
+GET    /api/artifacts/:id/transcripts        Conversations kept with an artifact -> {"head_seq", "transcripts": [{session_id, title, version_seq, resumable, updated_at}]}
+GET    /api/artifacts/:id/transcripts/:sid   One conversation as what was said in it -> {…summary, "head_seq", "messages": [{role, text}]}
 ```
+
+A conversation is kept as Pi's own session file and tied to the artifact
+version it was last working against (`version_seq`, read against `head_seq`);
+only a projection of what a person saw is ever returned, never the file. A
+resumable one can be continued with `resume_session_id` above (200 when it is
+already running and the call attaches to it; 404 when it is not the caller's or
+not there; 409 when it was kept before conversations could be resumed, or its
+preceding process is still finishing persistence). Resuming
+never changes the artifact — rolling it back is a separate
+`POST /api/artifacts/:id/versions/:seq/restore`. See `docs/agent.md`.
 
 Every `sse_ticket` is session-bound, single-use, and valid for 30 seconds
 (av-rgp1; full contract: `architecture.md` §3.7, `security.md` §6). A client
@@ -329,8 +378,8 @@ credential scoped to one artifact**, not the service token: it may
 tool it has — and every other route answers 403. Its owner comes from the
 same credential, so the owner-scoped store calls bound it to one tenant on top
 of that. `snippets` entries are element descriptors
-captured inside the artifact — untrusted text the server fences as data rather
-than splicing into `message`. See `docs/security.md` §5. The chat UI lives at `/agent`
+captured inside the artifact — untrusted text the model reads as the result of
+its `get_selection` tool rather than as part of `message`. See `docs/security.md` §5. The chat UI lives at `/agent`
 (`/agent?artifact=<id>` to modify an existing artifact); snippet mode
 (Ctrl+Shift+S) lets you click an element in the live preview and attach its
 screenshot + selector to your next prompt. See [docs/agent.md](./docs/agent.md).
@@ -364,9 +413,18 @@ Deleting here cannot touch the identity provider that issued the login. The same
 ```
 GET  /a/:artifactID    Serve artifact (render origin only)
 GET  /w/:artifactID    Serve the artifact's gallery widget (render origin only)
+GET  /a/:artifactID/versions/:seq   Serve one earlier version, to look at (render origin only)
 GET  /s/:shareID       Serve shared artifact (render origin only)
 ```
 
 The render surface sets `Content-Security-Policy` from the artifact's approved origins (its `decision='allow'` rows in `artifact_network_origins`), injects the storage shim with the artifact's state inlined, and serves the document `Cache-Control: no-store`. The iframe has `sandbox="allow-scripts"` without `allow-same-origin`, giving it an opaque origin.
 
+`/a/:artifactID/versions/:seq` serves an earlier version's body beside the data that version left behind (what `POST …/versions/:seq/restore` would put back), so it can be looked at before it is restored. It takes its own token — scoped to that version and the owner, minted by the app origin's `/partials/version-viewer` fragment — so the artifact's own token does not open history and a version's does not open the live document. It writes nothing and nothing done in it persists — and when the tool in it tries to save, the document tells the host with an empty `__avVersionUnsaved` message (once per load; no op, key or value) so the page can say that nothing is saved until the version is the active one; the current version and anything not yours are `404`. See `security.md` §1.9.
+
 `/w/:artifactID` is the same read path with the same CSP and the same inlined state — it differs only in which blob it serves and in getting the **narrowed preamble**: state writes stop at the in-memory cache and the capability bridges are not injected at all. It 404s for an artifact with no widget (`widgets.md`).
+
+Frame state writes carry `X-Exhibit-Version: N`, the version sequence rendered
+with their code. `PUT` and `DELETE` state routes check it atomically with the
+mutation and return 409 (`code: "version_changed"`) for a superseded frame. This
+prevents delayed writes from overwriting restored state. Explicit API edits and
+the state inspector may omit the header.

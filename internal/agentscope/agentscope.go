@@ -42,9 +42,34 @@ type Scope struct {
 // request while the create handler may be binding it.
 type Grant struct {
 	token string
+	// sessionID names the chat the credential was minted for. It is fixed at
+	// issue, by the server, so a version an agent writes can record which
+	// conversation produced it without anything the model emits being able to
+	// say otherwise.
+	sessionID string
 
 	mu    sync.Mutex
 	scope Scope
+	// prompt is the user's latest message, set by the session as each arrives.
+	// It labels the versions the agent writes while answering it.
+	prompt string
+}
+
+// SessionID is the chat this credential belongs to.
+func (g *Grant) SessionID() string { return g.sessionID }
+
+// SetPrompt records the user message the session is now answering.
+func (g *Grant) SetPrompt(p string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.prompt = p
+}
+
+// Prompt returns the user message the session is answering, or "".
+func (g *Grant) Prompt() string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.prompt
 }
 
 // Token is the bearer value handed to the session's subprocess.
@@ -90,13 +115,13 @@ func NewRegistry() *Registry {
 }
 
 // Issue mints a credential scoped to one owner and, when artifactID is
-// non-empty, one artifact.
-func (r *Registry) Issue(ownerID int64, artifactID string) (*Grant, error) {
+// non-empty, one artifact, for the chat session named by sessionID.
+func (r *Registry) Issue(ownerID int64, artifactID, sessionID string) (*Grant, error) {
 	tok, err := newToken()
 	if err != nil {
 		return nil, err
 	}
-	g := &Grant{token: tok, scope: Scope{OwnerID: ownerID, ArtifactID: artifactID}}
+	g := &Grant{token: tok, sessionID: sessionID, scope: Scope{OwnerID: ownerID, ArtifactID: artifactID}}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.grants[tok] = g

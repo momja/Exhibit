@@ -179,6 +179,18 @@ artifact_network_origins(
   source,                  -- provenance: user | legacy | runtime
   created_at, updated_at
 )
+-- the artifact's history (§8.5): one row per version, never rewritten. The head
+-- is a version too; artifacts.source_blob_id / widget_blob_id mirror it. Blobs
+-- are never overwritten, so an older version's bytes are exactly what they were.
+-- state_json is the saved data the version LEFT BEHIND, snapshotted in the same
+-- transaction that created the next version (NULL only for the head).
+artifact_versions(
+  artifact_id, seq,
+  origin,                  -- initial | edit | agent | refetch | restore
+  message, session_id,     -- what produced it: a prompt, a URL, the agent chat
+  body_blob_id, widget_blob_id,
+  state_json, created_at
+)
 -- what each stored blob weighs, and who references it (av-fw1b). The length
 -- is a fact about the bytes, so it carries no owner; ownership comes from the
 -- rows that name the blob, and a shared one is charged in full to each owner
@@ -557,10 +569,10 @@ The artifact is already a file on disk after a Claude Code / Gemini CLI session.
 skill or special output format is needed — the file *is* the artifact. It enters the
 library through the web UI: drag/drop or paste the HTML, or paste a **URL** — the
 service fetches the page once and stores it as an owned file (the URL is recorded as
-`source_url`, and the user can later re-fetch it on demand as a snapshot update — no
-version history, with a warning that stored state may not survive the new body; an
-error status, an empty response, or one that is not HTML leaves the artifact as it
-was). A URL
+`source_url`, and the user can later re-fetch it on demand as a snapshot update,
+recorded as a new version — the page it replaces is kept and one restore away, §8.5.
+An error status, an empty response, or one that is not HTML leaves the artifact
+as it was). A URL
 ingest can also **vendor** the page's assets into the stored file — images, styles,
 scripts, fonts, and the binary payloads it fetches from JavaScript at runtime — so the
 artifact stays "just a file" after the source site rots. On ingest the service scans the
@@ -591,6 +603,55 @@ account and no dependency on the originating assistant. Either way the artifact
 grows a sharing glyph on its gallery card, so a month later the library itself is the
 answer to "what have I shared". Export to a single self-contained `.html` is
 the third route, and needs no service at all.
+
+### 8.5 Return to an earlier version
+
+An artifact keeps its history. Every change to its source or widget — a manual
+save, an agent edit, a refetch, a restore — is a version, and the edit page lists
+them with what produced each one. Each version also remembers the data the tool had
+saved by the time the next version replaced it, so **restoring puts back a pair that
+belongs together**: the code as it was and the data as that code left it, not old
+code over data shaped for newer code.
+
+Restoring asks first, because it changes both at once, and says what it keeps:
+what you restore over becomes a version of its own, so the restore can be undone.
+
+You can look before you decide. Any earlier version can be **viewed** — running, with
+the data it left behind, which is exactly what restoring it would put back — without
+changing anything. A view is a preview: you can click around in it and the tool works,
+but nothing you do there is saved, and it never touches the artifact's real data, so
+looking is always safe and "this is what I will get" is something you have seen rather
+than been told.
+The moment the tool tries to save something in a preview, you are told: a warning, in
+the same style as the one for a request the sandbox cannot complete, says that changes
+are not saved while you preview that version, and that they will be once it is the
+active one — restore it, or roll back to it. What you did in the preview is discarded,
+never carried into the version when you restore it, so a restore still puts back
+exactly what the version left.
+Nothing in the history is ever discarded, and the artifact's network allowlist and
+capability approvals are not part of it — returning to an old version never widens
+what the artifact may reach.
+
+### 8.6 Pick a conversation back up
+
+The conversations you had with the agent about an artifact are kept with it, each
+tied to the version of the artifact it was last working against (§8.5). From the
+agent's chat window, History lists them and shows any one as it went.
+
+**The default is a new conversation.** The chat opens as one, on an artifact with any
+number of conversations kept: nothing is picked back up on its own, and neither is
+anything resumed by looking — reading a conversation in History starts nothing. An
+earlier conversation is continued only by choosing it there and saying so.
+
+Continuing one is a decision about the artifact, so it is put to you as one — and you
+can look at the version it would return to first (§8.5), in the preview beside the
+conversation, before choosing. If the artifact has moved on since, you choose: **roll back** to that version and continue —
+the artifact's code and saved data return as that version left them, recorded as a
+new version so nothing is lost — or **continue without rolling back**, which leaves
+the artifact alone. Rolling back is what the conversation was about, so it is the
+primary choice; leaving the artifact as it is is the way out of it, and never the
+primary one. Either way the agent is told the artifact may have changed and reads it
+again before it changes anything.
 
 ## 9. Explicit non-goals
 

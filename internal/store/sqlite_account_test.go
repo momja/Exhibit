@@ -86,6 +86,12 @@ var accountTables = map[string]accountTable{
 		"SELECT COUNT(*) FROM artifact_network_origins WHERE artifact_id = '" + deletedArtifact + "'"},
 	"agent_transcripts": {reachCascade, "cascades from artifacts(id)",
 		"SELECT COUNT(*) FROM agent_transcripts WHERE artifact_id = '" + deletedArtifact + "'"},
+	"artifact_version_assets": {reachCascade, "cascades from artifact_versions; retained payloads are included in blob_references",
+		"SELECT COUNT(*) FROM artifact_version_assets WHERE artifact_id = '" + deletedArtifact + "'"},
+	"artifact_versions": {reachCascade,
+		"cascades from artifacts(id) — and DeleteArtifact and DeleteAccount read every version's blob ids " +
+			"out first, since an older version's body is named by no other row",
+		"SELECT COUNT(*) FROM artifact_versions WHERE artifact_id = '" + deletedArtifact + "'"},
 	"artifact_assets": {reachCascade,
 		"cascades from artifacts(id) — and DeleteArtifact reads the blob ids out first, " +
 			"because once these rows are gone nothing names those bytes (av-20fk)",
@@ -247,7 +253,7 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	require.NoError(t, s.CreateShare(ctx, member.ID, &Share{ID: "member-share", ArtifactID: deletedArtifact}))
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))
 	require.NoError(t, s.SetAgentKey(ctx, &AgentKey{OwnerID: member.ID, Provider: "anthropic", KeyCiphertext: "sealed"}))
-	require.NoError(t, s.SaveTranscript(ctx, member.ID, deletedArtifact, "sess-1", `[{"role":"user"}]`))
+	require.NoError(t, s.SaveTranscript(ctx, member.ID, Transcript{ArtifactID: deletedArtifact, SessionID: "sess-1", SessionFile: "{}\n"}))
 	// The recorded lengths of the two blobs the artifact above names, so the
 	// blob_sizes residue is asserted against rows that were really there.
 	require.NoError(t, s.RecordBlobSize(ctx, "member-body", 4096))
@@ -264,6 +270,9 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 			ContentType: "application/wasm",
 			SizeBytes:   4,
 		}})
+	require.NoError(t, err)
+
+	_, err = s.CommitVersion(ctx, member.ID, deletedArtifact, VersionChange{})
 	require.NoError(t, err)
 
 	return accountFixture{s: s, admin: admin, member: member}

@@ -9,14 +9,14 @@
 // A session is a mixture of two kinds of text and keeps them apart on purpose
 // (av-e0yj). Instructions — the system prompt and the user's own messages —
 // are authored by Exhibit and by the person at the keyboard. Everything else
-// (artifact sources, artifact titles, picked page elements) is untrusted: URL
-// ingest stores remote pages verbatim, so a hostile page can end up writing
-// it. Untrusted text never occupies the system role and never gets spliced
-// into a sentence; it travels in a fenced data block whose delimiter carries a
-// per-session random nonce, so text inside a block cannot close the fence and
-// impersonate an instruction. Containment, not the fence, is the actual wall:
-// the session authenticates with an agentscope credential that reaches exactly
-// one artifact.
+// (artifact sources, artifact titles, stored state, picked page elements) is
+// untrusted: URL ingest stores remote pages verbatim, so a hostile page can end
+// up writing it. Untrusted text never occupies the system or user role and
+// never gets spliced into a sentence; it reaches the model only as the result
+// of a tool the model calls, which the conversation's own structure marks as
+// data. Containment, not that marking, is the actual wall: the session
+// authenticates with an agentscope credential that reaches exactly one
+// artifact.
 package agent
 
 import (
@@ -25,6 +25,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -109,6 +110,7 @@ type Manager struct {
 
 	mu       sync.Mutex
 	sessions map[string]*Session
+	starting map[string]bool // conversation identities reserved before loading history
 }
 
 // New materializes the extension (exhibit.ts plus its edit-engine import,
@@ -170,14 +172,12 @@ type CreateOpts struct {
 	Model    string
 	APIKey   string // decrypted, handed to the subprocess env only
 	// ArtifactID non-empty means modify mode: the session is scoped to that
-	// artifact and its source is inlined into the first prompt. Empty means
-	// create mode — the session binds to whatever its first create returns.
+	// artifact, and the agent reads its source with get_artifact — nothing about
+	// the artifact is put in the prompt, because a URL-ingested artifact carries
+	// the remote page's title and markup verbatim and untrusted text reaches the
+	// model only as a tool result. Empty means create mode — the session binds
+	// to whatever its first create returns.
 	ArtifactID string
-	// ArtifactTitle and ArtifactBody are untrusted (a URL-ingested artifact
-	// carries the remote page's title and markup verbatim). They reach the
-	// model only inside a fenced data block, never in the system prompt.
-	ArtifactTitle string
-	ArtifactBody  string
 	// WidgetOnly scopes the session to building this artifact's gallery
 	// widget and nothing else (av-fafu) — the one-shot sessions behind the
 	// edit page's "Generate widget" button. It exists because the ordinary
@@ -191,7 +191,22 @@ type CreateOpts struct {
 	// spends its owner's money and is never limited here). Recorded on the
 	// usage rows as paid_by either way (av-2yws).
 	PlatformPaid bool
+	// ResumeSessionID continues a conversation kept earlier instead of starting one
+	// (av-b4yh). The session takes the conversation's identity — same id, so the
+	// same stored record keeps growing, the same label on the versions it
+	// writes, and the same usage ledger entry its spend ceiling counts — and Pi
+	// starts from the stored session file, so the model has the conversation as
+	// it was. The prompt is the current one, not the stored one: an instruction
+	// improved since is in force, and the file's copy is not replayed.
+	// Everything else about the session is as for any other: a fresh
+	// credential, the owner's current key, the artifact as it is now.
+	ResumeSessionID string
 }
+
+// ErrSessionLive means a resume named a conversation that already has a live
+// session. The API answers a request for a live conversation with that session,
+// so this is only what losing a race for the same conversation looks like.
+var ErrSessionLive = errors.New("that conversation is already running")
 
 // Create decrypted-key session: spawns the pi subprocess and starts its reader.
 func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error) {
@@ -201,6 +216,24 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}
 	if opts.Provider == "exhibit-mock" && m.cfg.MockLLMURL == "" {
 		return nil, fmt.Errorf("mock provider is not enabled on this server")
+	}
+	var resume *store.Transcript
+	if opts.ResumeSessionID != "" {
+		// Claim the identity before reading either history or its usage seed.
+		// A snapshot read by the caller can already be stale by the time the
+		// preceding process finishes saving and releases this conversation.
+		if !m.reserveConversation(opts.ResumeSessionID) {
+			return nil, ErrSessionLive
+		}
+		defer m.releaseConversationStart(opts.ResumeSessionID)
+		var err error
+		resume, err = m.st.GetTranscript(ctx, opts.OwnerID, opts.ArtifactID, opts.ResumeSessionID)
+		if err != nil {
+			return nil, fmt.Errorf("read the conversation to resume: %w", err)
+		}
+		if resume == nil || !resume.Resumable {
+			return nil, fmt.Errorf("conversation is no longer available to resume")
+		}
 	}
 	// The session limit (av-99f4), enforced here for both creators. At the
 	// limit the owner's oldest *idle* session is evicted — the chat page
@@ -212,19 +245,31 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}
 
 	id := uuid.New().String()
-	workDir := filepath.Join(m.cfg.WorkRoot, id)
+	title := ""
+	var recorded store.UsageTotals
+	if resume != nil {
+		id, title = resume.SessionID, resume.Title
+		// Pi's own totals count the whole conversation, the turns before this
+		// process included, and every settle reconciles the ledger against
+		// them (usage.go). The ledger already holds those turns, so this
+		// process's count of what is recorded starts from them — from zero the
+		// first settle would record them a second time.
+		var err error
+		if recorded, err = m.st.SessionAgentSpend(ctx, opts.OwnerID, id); err != nil {
+			return nil, fmt.Errorf("read the conversation's recorded usage: %w", err)
+		}
+	}
+	// The scratch directory belongs to this process, not to the conversation.
+	// Every resumed process starts with a fresh working copy of its saved file.
+	workDir := filepath.Join(m.cfg.WorkRoot, uuid.New().String())
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create session dir: %w", err)
 	}
 
-	nonce, err := newNonce()
-	if err != nil {
-		return nil, err
-	}
 	// The credential is what actually confines this session: it resolves to
 	// (owner, artifact) and the API refuses everything else. The subprocess
 	// never sees the operator's service token (av-e0yj).
-	grant, err := m.cfg.Credentials.Issue(opts.OwnerID, opts.ArtifactID)
+	grant, err := m.cfg.Credentials.Issue(opts.OwnerID, opts.ArtifactID, id)
 	if err != nil {
 		return nil, err
 	}
@@ -232,13 +277,29 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	defer func() {
 		if !spawned {
 			m.cfg.Credentials.Revoke(grant) // no live subprocess ⇒ no live token
+			_ = os.RemoveAll(workDir)       // and nothing to keep the directory for
 		}
 	}()
-	sysPrompt := buildSystemPrompt(m.cfg.SystemPrompt, nonce, opts)
+	sysPrompt := buildSystemPrompt(m.cfg.SystemPrompt, opts)
+	sessionFile := filepath.Join(workDir, sessionFileName)
+	resumeNotice := ""
+	if resume != nil {
+		// What the database holds is the conversation as of its last settled
+		// turn, which is the right place to resume from: a turn that was still
+		// running when the last session ended never finished, and is not
+		// something to continue.
+		if err := os.WriteFile(sessionFile, []byte(resume.SessionFile), 0o600); err != nil {
+			return nil, fmt.Errorf("restore session file: %w", err)
+		}
+		resumeNotice = resumedNotice
+	}
 
 	args := []string{
 		"--mode", "rpc",
-		"--no-session",
+		// Pi records the conversation in its own session file, which is what
+		// the service keeps (persistTranscript) and what a resumed session
+		// starts from.
+		"--session", sessionFile,
 		"--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files",
 		"--no-builtin-tools",
 		"-e", m.extPath,
@@ -253,7 +314,13 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}
 
 	cmd := exec.Command(m.cfg.PiBin, args...) //nolint:gosec // args are server-constructed
-	cmd.Dir = workDir
+	// Every session runs from the same directory, and it is the root. A session
+	// file records the directory it ran in, and Pi refuses to resume one whose
+	// directory no longer exists — which a per-session directory never survives:
+	// it is removed when the session ends (removeScratch), and a conversation is
+	// resumed long after. The session has no use for a working directory of its
+	// own anyway: it has no built-in tools and loads no context files.
+	cmd.Dir = sessionCwd
 	// Minimal environment: enough for node + jiti, the exhibit callback
 	// contract, and exactly one provider key. Deliberately NOT os.Environ():
 	// the server's own env must not leak other credentials into a session.
@@ -270,10 +337,10 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		"EXHIBIT_TOKEN=" + grant.Token(),
 		// The tools' target, so none of them needs an id parameter.
 		"EXHIBIT_ARTIFACT_ID=" + opts.ArtifactID,
-		// Fence id for untrusted tool output (get_artifact), matching the
-		// contract stated in the system prompt.
-		"EXHIBIT_DATA_NONCE=" + nonce,
 		"EXHIBIT_SESSION_ID=" + id,
+		// Where get_selection finds the elements the user picked (Prompt writes
+		// it): one definition of the path, so the two sides cannot disagree.
+		"EXHIBIT_SELECTION_FILE=" + filepath.Join(workDir, selectionFile),
 		envKey + "=" + opts.APIKey,
 	}
 	if m.cfg.MockLLMURL != "" {
@@ -283,7 +350,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		cmd.Env = append(cmd.Env, "EXHIBIT_MAX_BODY_BYTES="+strconv.FormatInt(m.cfg.MaxRequestBodyBytes, 10))
 	}
 	if m.cfg.Guardrail != nil {
-		cmd.Env = append(cmd.Env, m.cfg.Guardrail.env(nonce)...)
+		cmd.Env = append(cmd.Env, m.cfg.Guardrail.env()...)
 	}
 
 	stdin, err := cmd.StdinPipe()
@@ -309,8 +376,13 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		provider:          opts.Provider,
 		model:             opts.Model,
 		paidBy:            paidByFor(opts.PlatformPaid),
+		workDir:           workDir,
+		sessionFile:       sessionFile,
+		title:             title,
+		resumeNotice:      resumeNotice,
+		usageRecorded:     recorded,
+		readDone:          make(chan struct{}),
 		grant:             grant,
-		nonce:             nonce,
 		hideModelIdentity: m.cfg.HideModelIdentity,
 		mgr:               m,
 		cmd:               cmd,
@@ -320,13 +392,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		done:              make(chan struct{}),
 		lastActive:        time.Now(),
 	}
-	// Modify mode opens with the artifact's current source already in
-	// context, so the agent does not spend a tool call reading what the
-	// server just had in hand. get_artifact stays available for the re-read
-	// after a save or a concurrent human edit.
-	if opts.ArtifactID != "" {
-		s.pendingData = []DataBlock{artifactSourceBlock(opts.ArtifactID, opts.ArtifactTitle, opts.ArtifactBody)}
-	}
+	// Publish the session before its process-exit cleanup can retire it. That
+	// cleanup takes the same mutex, including when Pi exits during startup.
+	m.mu.Lock()
 	go s.readLoop(stdout)
 	go s.drainStderr(stderr)
 	go func() {
@@ -334,14 +402,18 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		s.finish()
 	}()
 
-	m.mu.Lock()
+	if _, live := m.sessions[id]; live {
+		m.mu.Unlock()
+		s.kill()
+		return nil, ErrSessionLive
+	}
 	m.sessions[id] = s
 	// Two Creates can pass admitOwner at once; the loser gives up its slot
 	// here, so "at most MaxOwnerSessions" holds even under a race.
 	others, evicted := m.ownerSessionsLocked(opts.OwnerID, id)
 	if others >= MaxOwnerSessions {
 		if evicted != nil {
-			delete(m.sessions, evicted.ID)
+			evicted.markStopping()
 		}
 	}
 	m.mu.Unlock()
@@ -358,8 +430,31 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		slog.String("provider", opts.Provider),
 		slog.String("model", opts.Model),
 		slog.String("artifact_id", opts.ArtifactID),
+		slog.Bool("resumed", resume != nil),
 	)
 	return s, nil
+}
+
+// reserveConversation excludes both a process draining its final writes and a
+// competing startup. The global mutex protects only registry operations, never
+// database reads, process startup, or waiting for persistence.
+func (m *Manager) reserveConversation(id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.sessions[id] != nil || m.starting[id] {
+		return false
+	}
+	if m.starting == nil {
+		m.starting = make(map[string]bool)
+	}
+	m.starting[id] = true
+	return true
+}
+
+func (m *Manager) releaseConversationStart(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.starting, id)
 }
 
 // Get returns one of ownerID's live sessions, or nil.
@@ -388,10 +483,17 @@ func (m *Manager) Get(ownerID int64, id string) *Session {
 	if s == nil || s.OwnerID != ownerID {
 		return nil
 	}
+	s.mu.Lock()
+	closed := s.closed || s.stopping
+	s.mu.Unlock()
+	if closed {
+		return nil
+	}
 	return s
 }
 
-// Close terminates one of ownerID's sessions and forgets it. Scoped for the
+// Close terminates one of ownerID's sessions. Its identity stays reserved until
+// the reader and final persistence finish. Scoped for the
 // same reason Get is, and more sharply: closing kills a subprocess, so an
 // unscoped Close is a one-request denial of service against anybody whose
 // session id leaks. Another owner's id is a no-op.
@@ -399,7 +501,7 @@ func (m *Manager) Close(ownerID int64, id string) {
 	m.mu.Lock()
 	s := m.sessions[id]
 	if s != nil && s.OwnerID == ownerID {
-		delete(m.sessions, id)
+		s.markStopping()
 	} else {
 		s = nil
 	}
@@ -426,7 +528,7 @@ func (m *Manager) admitOwner(ownerID int64) bool {
 		m.mu.Unlock()
 		return false
 	}
-	delete(m.sessions, oldest.ID)
+	oldest.markStopping()
 	m.mu.Unlock()
 	// What reap does for a stale session: the credential dies with the
 	// process, and finish() flushes whatever it had spent.
@@ -442,8 +544,12 @@ func (m *Manager) ownerSessionsLocked(ownerID int64, skipID string) (count int, 
 		if s.OwnerID != ownerID || s.ID == skipID {
 			continue
 		}
-		count++
 		s.mu.Lock()
+		if s.closed || s.stopping {
+			s.mu.Unlock()
+			continue
+		}
+		count++
 		idle := !s.streaming
 		last := s.lastActive
 		s.mu.Unlock()
@@ -460,23 +566,28 @@ func (m *Manager) ownerSessionsLocked(ownerID int64, skipID string) (count int, 
 // reap closes sessions idle longer than the configured timeout.
 func (m *Manager) reap() {
 	for range time.Tick(time.Minute) {
-		cutoff := time.Now().Add(-m.cfg.IdleTimeout)
-		m.mu.Lock()
-		var stale []*Session
-		for id, s := range m.sessions {
-			s.mu.Lock()
-			idle := s.lastActive.Before(cutoff) && !s.streaming
-			s.mu.Unlock()
-			if idle {
-				stale = append(stale, s)
-				delete(m.sessions, id)
-			}
+		m.reapIdle(time.Now().Add(-m.cfg.IdleTimeout))
+	}
+}
+
+func (m *Manager) reapIdle(cutoff time.Time) {
+	m.mu.Lock()
+	var stale []*Session
+	for _, s := range m.sessions {
+		s.mu.Lock()
+		idle := !s.closed && !s.stopping && s.lastActive.Before(cutoff) && !s.streaming
+		if idle {
+			s.stopping = true
 		}
-		m.mu.Unlock()
-		for _, s := range stale {
-			slog.Info("reaping idle agent session", slog.String("session_id", s.ID))
-			s.kill()
+		s.mu.Unlock()
+		if idle {
+			stale = append(stale, s)
 		}
+	}
+	m.mu.Unlock()
+	for _, s := range stale {
+		slog.Info("reaping idle agent session", slog.String("session_id", s.ID))
+		s.kill()
 	}
 }
 
@@ -494,13 +605,25 @@ type Session struct {
 	model    string
 	paidBy   string
 
+	// workDir is the session's private scratch directory — the subprocess's
+	// HOME, its session file, and where the server hands it the one thing that
+	// cannot travel in a prompt: the elements the user selected
+	// (selection.json). It is removed when the session ends.
+	workDir string
+	// sessionFile is where Pi records the conversation, in workDir.
+	sessionFile string
+	// persistMu serializes persistTranscript, so two settles close together
+	// cannot store the older read after the newer one; persisting counts the
+	// ones in flight, so the scratch directory outlives them.
+	persistMu  sync.Mutex
+	persisting sync.WaitGroup
+	// readDone closes when everything the subprocess printed has been handled.
+	readDone chan struct{}
 	// grant is the session's API credential and the single source of truth
 	// for which artifact it may touch. In create mode it starts unbound and
 	// the API's create handler binds it — the session never derives its
 	// artifact from tool output, which the model's arguments shape.
 	grant *agentscope.Grant
-	// nonce fences untrusted text in this session's prompts.
-	nonce string
 	// hideModelIdentity is the manager's platform-mode setting, copied at
 	// construction so the two seams that publish Pi's protocol read it off
 	// the session itself rather than reaching back through the manager
@@ -519,18 +642,23 @@ type Session struct {
 	// waits at most one screen.
 	promptMu sync.Mutex
 
-	mu          sync.Mutex // guards everything below
-	pendingData []DataBlock
-	subs        map[chan []byte]struct{}
-	backlog     [][]byte
-	pending     map[string]chan rpcResponse
-	streaming   bool
-	closed      bool
-	lastActive  time.Time
+	mu    sync.Mutex // guards everything below
+	title string     // the conversation's first prompt, shortened
+	// resumeNotice is the sentence the first prompt of a resumed conversation
+	// carries (prompt.go); it is held until a prompt has actually landed.
+	resumeNotice string
+	subs         map[chan []byte]struct{}
+	backlog      [][]byte
+	pending      map[string]chan rpcResponse
+	streaming    bool
+	closed       bool
+	stopping     bool // unavailable to callers, but still draining its final writes
+	lastActive   time.Time
 	// guardBlocked records that the guard extension handled the prompt in
-	// flight instead of running it (av-gust). Pi emits that signal before the
-	// prompt's response, so Prompt reads it once the response arrives; promptMu
-	// guarantees there is only one prompt it can belong to.
+	// flight instead of running it (av-gust): the model never saw it. Pi emits
+	// that signal before the prompt's response, so Prompt can read it once the
+	// response arrives; promptMu guarantees there is only one prompt it can
+	// belong to.
 	guardBlocked bool
 
 	// Usage accounting (av-2yws). usageCur is the cumulative usage of the
@@ -592,15 +720,28 @@ func (s *Session) Subscribe() (<-chan []byte, func()) {
 	}
 }
 
-// Prompt sends a user prompt (optionally with images and untrusted data
-// blocks). If the agent is mid-stream the message is queued as a steering
-// message.
+// selectionFile is the file, in the session's work directory, that carries the
+// elements the user selected to the subprocess. The extension's get_selection
+// tool is told its path through EXHIBIT_SELECTION_FILE.
+const selectionFile = "selection.json"
+
+// sessionFileName is Pi's session file in the work directory.
+const sessionFileName = "session.jsonl"
+
+// sessionCwd is the working directory of every session's subprocess.
+const sessionCwd = "/"
+
+// Prompt sends a user prompt, optionally with images and the elements the user
+// selected in the artifact preview. If the agent is mid-stream the message is
+// queued as a steering message.
 //
-// message is the user's own words and travels as-is. Every DataBlock — the
-// artifact source a modify session opens with, an element picked in the
-// preview — is fenced onto the end of the same user-role message, so no
-// untrusted text ever reaches the model as an instruction.
-func (s *Session) Prompt(ctx context.Context, message string, images []ImageContent, data []DataBlock) error {
+// message is the user's own words and travels as-is. A selection is untrusted —
+// an element's markup is the artifact's own, which a URL ingest took verbatim
+// from a remote page — so none of it goes into the prompt: it is handed to the
+// subprocess through a file, the prompt says only that elements were selected
+// (a fixed sentence), and the model reads them with get_selection, which
+// returns them as a tool result.
+func (s *Session) Prompt(ctx context.Context, message string, images []ImageContent, selection []string) error {
 	s.promptMu.Lock()
 	defer s.promptMu.Unlock()
 
@@ -612,15 +753,28 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	}
 	s.mu.Lock()
 	steer := s.streaming
-	// The session's opening block rides the first prompt. It is held, not
-	// cleared, until the prompt actually lands — a rejected send must not
-	// silently drop the artifact source from the conversation.
-	blocks := append(append([]DataBlock{}, s.pendingData...), data...)
 	s.lastActive = time.Now()
 	s.guardBlocked = false
 	s.mu.Unlock()
+	// The artifact versions the agent writes while answering this are labelled
+	// with it (api.versionProvenance reads it off the grant).
+	s.grant.SetPrompt(message)
 
-	cmd := map[string]any{"type": "prompt", "message": composePrompt(s.nonce, message, blocks)}
+	if err := s.writeSelection(selection); err != nil {
+		return err
+	}
+	text := message
+	if len(selection) > 0 {
+		text += "\n\n" + selectionNotice(len(selection))
+	}
+	s.mu.Lock()
+	notice := s.resumeNotice
+	s.mu.Unlock()
+	if notice != "" {
+		text += "\n\n" + notice
+	}
+
+	cmd := map[string]any{"type": "prompt", "message": text}
 	if len(images) > 0 {
 		cmd["images"] = images
 	}
@@ -642,15 +796,49 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	if !r.Success {
 		return fmt.Errorf("prompt rejected: %s", r.Error)
 	}
-	s.mu.Lock()
-	// A blocked prompt never reached the model, so neither did the opening
-	// block it carried: keep it for the next prompt, or a modify session whose
-	// first message was refused would lose the artifact source for good.
-	if !s.guardBlocked {
-		s.pendingData = nil
-	}
-	s.mu.Unlock()
+	s.promptLanded(message)
 	return nil
+}
+
+// promptLanded records what a prompt reaching the agent settles: the
+// conversation takes its name from the first one, and a resumed conversation
+// has now been told it was resumed. A prompt the guardrail refused never
+// reached the agent, so it settles neither — its words are not in the stored
+// conversation, and the sentence it carried was never read.
+func (s *Session) promptLanded(message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.guardBlocked {
+		return
+	}
+	if s.title == "" {
+		s.title = ConversationTitle(message)
+	}
+	s.resumeNotice = ""
+}
+
+// writeSelection makes selection.json say exactly what the user selected with
+// this prompt: the file is replaced, or removed when nothing was selected, so
+// get_selection can never return the previous prompt's elements for a prompt
+// that selected none. Written to a temporary name and renamed, so the
+// subprocess never reads half a file.
+func (s *Session) writeSelection(selection []string) error {
+	path := filepath.Join(s.workDir, selectionFile)
+	if len(selection) == 0 {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("clear selection: %w", err)
+		}
+		return nil
+	}
+	b, err := json.Marshal(selection)
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return fmt.Errorf("write selection: %w", err)
+	}
+	return os.Rename(tmp, path)
 }
 
 // Abort asks pi to stop the current run.
@@ -712,6 +900,7 @@ func (s *Session) call(ctx context.Context, cmd map[string]any) (rpcResponse, er
 // readLoop consumes pi's stdout: correlates responses, tracks streaming
 // state, detects artifact saves, and broadcasts every event to subscribers.
 func (s *Session) readLoop(stdout io.Reader) {
+	defer close(s.readDone)
 	reader := bufio.NewReaderSize(stdout, 1<<20)
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -816,7 +1005,11 @@ func (s *Session) handleLine(line []byte) {
 		s.flushInFlightUsage()
 		go s.reconcileUsage()
 		if artifactID := s.ArtifactID(); artifactID != "" {
-			go s.persistTranscript(artifactID)
+			s.persisting.Add(1)
+			go func() {
+				defer s.persisting.Done()
+				s.persistTranscript(artifactID)
+			}()
 		}
 	case "tool_execution_end":
 		var res struct {
@@ -837,10 +1030,9 @@ func (s *Session) handleLine(line []byte) {
 	s.broadcast(s.redact(bytes.Clone(line)))
 }
 
-// redact applies the platform-mode filter to one document on its way out of
-// this process — an event line, or the message list of a transcript. It is
-// the one place the manager's HideModelIdentity setting is consulted, so the
-// two seams that publish Pi's protocol cannot disagree about it.
+// redact applies the platform-mode filter to one event line on its way out of
+// this process. It is the one place the manager's HideModelIdentity setting is
+// consulted.
 func (s *Session) redact(doc []byte) []byte {
 	if !s.hideModelIdentity {
 		return doc
@@ -915,32 +1107,65 @@ func (s *Session) noteWidgetSaved(details map[string]any) {
 	s.broadcast(ev)
 }
 
-// persistTranscript stores the session's full message list with the artifact
-// (colophon-style provenance, av-q3wo). Runs after each settled turn so the
-// transcript tracks the conversation as it grows.
+// persistTranscript stores the conversation with the artifact, tied to the
+// version the artifact is at (av-y7td). Runs after each settled turn, so what is
+// kept tracks the conversation as it grows, and is exactly what Pi would start
+// from if the conversation were resumed: its own session file, read back.
 func (s *Session) persistTranscript(artifactID string) {
+	s.persistMu.Lock()
+	defer s.persistMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	resp, err := s.roundTrip(ctx, map[string]any{"type": "get_messages"})
+
+	file, err := readSessionFile(s.sessionFile)
 	if err != nil {
-		slog.Warn("transcript fetch failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
+		slog.Warn("transcript read failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 		return
 	}
-	var r struct {
-		Data struct {
-			Messages json.RawMessage `json:"messages"`
-		} `json:"data"`
+	if file == "" {
+		return // Pi has written nothing yet
 	}
-	if err := json.Unmarshal(resp, &r); err != nil || len(r.Data.Messages) == 0 {
-		return
-	}
+	s.mu.Lock()
+	title := s.title
+	s.mu.Unlock()
 	// The session's owner, not the artifact's: a transcript can only attach to
 	// an artifact this session's owner actually holds, so an artifact id the
 	// model invented (or lifted from another library) fails with ErrNotFound
 	// instead of writing across the tenant boundary.
-	if err := s.mgr.st.SaveTranscript(ctx, s.OwnerID, artifactID, s.ID, string(s.redact(r.Data.Messages))); err != nil {
+	err = s.mgr.st.SaveTranscript(ctx, s.OwnerID, store.Transcript{
+		ArtifactID: artifactID, SessionID: s.ID, Title: title, SessionFile: file,
+	})
+	if err != nil {
 		slog.Warn("transcript save failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
 	}
+}
+
+// maxSessionFileBytes bounds what is kept of one conversation. A session file
+// holds every tool result in full — each read of the artifact is a copy of it —
+// so it grows with the artifact as well as with the talk, and a conversation
+// that outgrows this stops being kept rather than growing the database without
+// limit. The live session is unaffected.
+const maxSessionFileBytes = 64 << 20
+
+// readSessionFile returns Pi's session file as written so far. Pi appends one
+// line per entry, so a read that races an append can end partway through a
+// line, and half a line is not an entry: only whole lines are returned.
+func readSessionFile(path string) (string, error) {
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	end := bytes.LastIndexByte(b, '\n')
+	if end < 0 {
+		return "", nil
+	}
+	if end+1 > maxSessionFileBytes {
+		return "", fmt.Errorf("session file is %d bytes, over the %d kept", end+1, maxSessionFileBytes)
+	}
+	return string(b[:end+1]), nil
 }
 
 func (s *Session) broadcast(line []byte) {
@@ -987,14 +1212,42 @@ func (s *Session) finish() {
 	close(s.done)
 	ev, _ := json.Marshal(map[string]string{"type": "exhibit_session_closed"})
 	s.broadcast(ev)
+	go s.removeScratch()
+}
+
+// removeScratch deletes the session's work directory once nothing can still
+// need it: the process has exited, everything it printed has been read, and the
+// last settled turn is stored. The conversation's home is the database; the
+// directory held a working copy, and leaving it behind would keep a conversation
+// on disk after the account that owned it was erased.
+func (s *Session) removeScratch() {
+	<-s.readDone
+	s.persisting.Wait()
+	// A dead process must not be offered as a resumable live session. Wait
+	// until its final transcript is stored before freeing its identity.
+	s.mgr.mu.Lock()
+	if s.mgr.sessions[s.ID] == s {
+		delete(s.mgr.sessions, s.ID)
+	}
+	s.mgr.mu.Unlock()
+	if err := os.RemoveAll(s.workDir); err != nil {
+		slog.Warn("remove session scratch directory", slog.String("session_id", s.ID), slog.String("err", err.Error()))
+	}
 }
 
 func (s *Session) kill() {
+	s.markStopping()
 	s.mgr.cfg.Credentials.Revoke(s.grant)
 	_ = s.stdin.Close()
 	if s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
 	}
+}
+
+func (s *Session) markStopping() {
+	s.mu.Lock()
+	s.stopping = true
+	s.mu.Unlock()
 }
 
 func truncate(s string, n int) string {

@@ -459,6 +459,9 @@ function toolLabel(name, args) {
     case 'edit_artifact': return 'Editing artifact';
     case 'edit_widget': return 'Editing widget';
     case 'get_artifact': return 'Reading artifact source';
+    case 'set_widget': return 'Saving widget';
+    case 'get_widget': return 'Reading widget';
+    case 'get_selection': return 'Reading selected elements';
     case 'get_state': return 'Reading artifact state';
     case 'set_state': return 'Setting state key "' + (args.key || '') + '"';
     case 'delete_state': return args.key ? 'Deleting state key "' + args.key + '"' : 'Erasing all state';
@@ -490,8 +493,8 @@ async function send() {
   const images = pendingSnippets.filter(s => s.image).map(s => ({data: s.image.data, mime_type: s.image.mimeType}));
   // A snippet descriptor carries the picked element's outerHTML — artifact
   // content, i.e. untrusted. It travels as its own field so the server can
-  // fence it as data (av-e0yj); splicing it into `message` here would hand it
-  // to the model as part of the user's instruction.
+  // hand it to the model as a tool result (av-5s7g); splicing it into `message`
+  // here would hand it to the model as part of the user's instruction.
   const snippets = pendingSnippets.map(s => describeSnippet(s.descriptor));
 
   const bubble = addMsg('user', text);
@@ -580,8 +583,120 @@ function previewArtifactId() { return artifact ? artifact.id : ''; }
 // owns. Both save events route through here: the pane is re-rendered whole, so
 // it does not need to know which of the two documents changed.
 function refreshPreview() {
+  syncHistoryButton();
   document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'));
 }
+
+// --- History (av-y7td) -------------------------------------------------------
+// The conversations kept with this artifact, in a pane that takes the place of
+// the messages and the composer while it is open. Its contents are
+// server-rendered fragments (agentHistory, agentTranscript) that htmx swaps
+// into #history, so all that is left for script is showing and hiding it, and
+// knowing when there is an artifact to have a history of.
+const chatEl = document.getElementById('pane-chat');
+const historyBtn = document.getElementById('history-btn');
+
+// History is of an artifact, so there is none until the session has one: the
+// button appears when the page opened on an artifact or the agent has made one.
+function syncHistoryButton() { historyBtn.hidden = !artifact; }
+
+function openHistory() { chatEl.classList.add('history-open'); }
+function closeHistory() { chatEl.classList.remove('history-open'); }
+
+// --- Continuing a conversation (av-b4yh) ------------------------------------
+// The buttons live in the server-rendered fragment (agentResume), so one
+// delegated listener on the pane that fragments are swapped into serves them
+// all. rollbackTo is the version to put the artifact back to, or 0 to leave it
+// alone: the fragment is where the person was shown what each choice does.
+document.getElementById('history').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-resume]');
+  if (btn) resumeConversation(btn.dataset.resume, Number(btn.dataset.rollback) || 0);
+});
+
+async function resumeConversation(conversationId, rollbackTo) {
+  const statusEl = document.getElementById('resume-status');
+  const say = (text) => { if (statusEl) statusEl.textContent = text; };
+  if (!artifact) return;
+  if (streaming) {
+    say('The agent is still working. Stop it, or wait for it to finish, before switching conversations.');
+    return;
+  }
+  say('Starting…');
+
+  // Start the conversation before touching the artifact, so a refusal — no key,
+  // no agent — costs nothing: the page's own chat is still there and nothing
+  // has been rolled back.
+  const res = await apiFetch('/api/agent/sessions', {
+    method: 'POST',
+    body: JSON.stringify({artifact_id: artifact.id, resume_session_id: conversationId})
+  });
+  const started = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    say(started.error || 'Could not continue this conversation.');
+    if (res.status === 412) openKeyModal();
+    return;
+  }
+  // A conversation that is already running (this page's own, or a second tab's)
+  // is attached to rather than restarted; otherwise the page's live session
+  // gives way to the one being continued.
+  if (started.id !== sessionId) {
+    const previous = sessionId;
+    closeEvents();
+    if (previous) apiFetch('/api/agent/sessions/' + previous, {method: 'DELETE'}).catch(() => {});
+    sessionId = started.id;
+    connectEvents(started.sse_ticket);
+  }
+
+  if (rollbackTo) {
+    const back = await apiFetch(
+      '/api/artifacts/' + encodeURIComponent(artifact.id) + '/versions/' + rollbackTo + '/restore',
+      {method: 'POST'});
+    if (!back.ok) {
+      const why = await back.json().catch(() => ({}));
+      // A missing historical blob is also a 409. Only the explicit
+      // already-current response means there was nothing to put back.
+      if (back.status !== 409 || why.code !== 'already_current') {
+        resetSession();
+        say('Could not roll back: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
+        return;
+      }
+    }
+  }
+
+  // What was said, as the fragment drew it, becomes the chat: the conversation
+  // being continued, with the next message after it.
+  const past = document.getElementById('history-messages');
+  messagesEl.innerHTML = past ? past.innerHTML : '';
+  addMsg('sys', (rollbackTo ? 'Rolled back to v' + rollbackTo + '. ' : '') +
+    'Continuing this conversation. The agent will read the artifact again before it changes anything.');
+  closeHistory();
+  // The pane shows the artifact the conversation now continues on. After a
+  // rollback that is a new version, and when a version was being looked at first
+  // it is the artifact as it is — either way the pane re-renders, and a version
+  // that was only ever looked at gives way rather than sitting beside a
+  // conversation that is no longer about it.
+  if (rollbackTo || viewingVersion()) refreshPreview();
+  if (rollbackTo) nudgePreview();
+}
+
+// --- Looking at an earlier version (av-vw7r) -----------------------------------
+// The History card's "View vN" swaps the version, running and with the data it
+// had, into the preview pane (the versionViewer fragment). It is a look and
+// nothing else: the frame is the render surface's version document, which
+// persists nothing, and it is deliberately not #pv-frame — every bridge on this
+// page (state, snippet picker, network prompt) listens to previewFrame() alone,
+// so while a version is showing there is no artifact frame for them to hear, and
+// a message the version's code sends, forged or not, is not heard by anything.
+// That is a structural property of which element carries which id, and why it is
+// not a flag some handler has to remember to check.
+//
+// All that is left for script is what "back" means here: re-render the pane for
+// the artifact as it is, by the same fragment fetch an agent save uses.
+function viewingVersion() { return !!document.getElementById('version-viewer'); }
+
+document.getElementById('pane-preview').addEventListener('click', (e) => {
+  if (e.target.closest('[data-action="close-version-viewer"]')) refreshPreview();
+});
 
 // A swap replaces the iframe, so the artifact reloads from scratch: any
 // snippet pick in flight is against a document that no longer exists. Drop the
@@ -654,20 +769,28 @@ window.addEventListener('message', (e) => {
   if (!d || d.__avState !== true || !artifact || d.artifactId !== artifact.id) return;
   const frame = previewFrame();
   if (!frame || e.source !== frame.contentWindow) return;
+  const write = (path, opts) => window.ExhibitState.write(apiFetch, path, opts, d.version)
+    .then((res) => {
+      if (res && res.status === 409 && frame === previewFrame() && !frame.dataset.versionChanged) {
+        frame.dataset.versionChanged = 'true';
+        addMsg('sys', 'The artifact changed. Reloading its current version before saving more data.');
+        refreshPreview();
+      }
+    }).catch(() => {});
   // URL construction lives in state-api.js so this and detail.js share one
   // definition — the ".." path-traversal bug (av-hh1o) had to be fixed in
   // three copies of it.
   if (d.op === 'clear') {
-    apiFetch(window.ExhibitState.deleteURL(artifact.id), { method: 'DELETE' }).catch(() => {});
+    write(window.ExhibitState.deleteURL(artifact.id), { method: 'DELETE' });
   } else if (d.op === 'delete') {
-    apiFetch(window.ExhibitState.deleteURL(artifact.id, d.key), { method: 'DELETE' }).catch(() => {});
+    write(window.ExhibitState.deleteURL(artifact.id, d.key), { method: 'DELETE' });
   } else if (d.op === 'set' || d.op === undefined) {
     // Only a recognized write reaches the API. An unknown op used to fall
     // through to this branch, so a future typo would silently become a write.
-    apiFetch(window.ExhibitState.url(artifact.id), {
+    write(window.ExhibitState.url(artifact.id), {
       method: 'PUT',
       body: JSON.stringify({key: d.key, value: d.value})
-    }).catch(() => {});
+    });
   }
 });
 
@@ -755,6 +878,7 @@ function briefToMessage(brief) {
 
 // --- Boot -------------------------------------------------------------------
 (async function boot() {
+  syncHistoryButton();
   const configured = await refreshKeyStatus();
   const brief = takeBrief();
   if (artifact) {

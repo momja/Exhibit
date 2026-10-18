@@ -23,11 +23,13 @@ ph-check
 ph-check-circle
 ph-clipboard
 ph-clipboard-text
+ph-clock-counter-clockwise
 ph-code
 ph-copy
 ph-database
 ph-dots-three-vertical
 ph-download-simple
+ph-eye
 ph-frame-corners
 ph-gear
 ph-globe
