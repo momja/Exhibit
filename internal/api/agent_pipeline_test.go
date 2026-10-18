@@ -377,7 +377,11 @@ func TestAgentSessionReadsTheArtifactItself(t *testing.T) {
 		"the user's message is the user's words and nothing else")
 
 	// ...it read the source, and got it as a tool result.
-	assert.Equal(t, []string{"get_artifact", "write_artifact"}, h.llm.toolCallNames())
+	// The write is visible before Pi's next request records its tool result.
+	// Wait for the evidence this assertion checks before closing the session.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, []string{"get_artifact", "write_artifact"}, h.llm.toolCallNames())
+	}, 5*time.Second, 10*time.Millisecond)
 	assert.Contains(t, strings.Join(h.llm.messagesInRole("tool"), "\n"), "UNIQUE-MARKER")
 }
 
@@ -417,7 +421,9 @@ func TestAgentSelectionReachesTheModelAsAToolResult(t *testing.T) {
 
 	assert.Contains(t, strings.Join(h.llm.messagesInRole("tool"), "\n"), "SELECTED-MARKER",
 		"get_selection returned the element")
-	assert.Equal(t, []string{"get_selection", "get_artifact", "write_artifact"}, h.llm.toolCallNames())
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, []string{"get_selection", "get_artifact", "write_artifact"}, h.llm.toolCallNames())
+	}, 5*time.Second, 10*time.Millisecond)
 }
 
 // A save on a modify session announces the session's own artifact id — the id
