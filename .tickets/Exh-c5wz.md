@@ -22,3 +22,9 @@ Keep immutable selection context associated with the accepted prompt being consu
 
 Queued/blocked follow-ups cannot change another turn's selection. Live attachment after an external edit rereads current source on its first accepted prompt. Delayed resume plus navigation cannot show another conversation; attaching does not repeat completed replies/tools. Repeated focused integration runs eliminate the known recorder-observation race.
 
+
+## Notes
+
+**2026-10-18T23:13:17Z**
+
+Release hardening fixes the two recorder-observation test races from #150: source and selected-element context tests now wait for the exact expected tool-call sequence after the save becomes visible. The product context, selection-isolation, live-reread and cursor/navigation items remain open.
