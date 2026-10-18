@@ -401,9 +401,9 @@ func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 }
 
 // av-hwx2: allowlist management moved entirely to the Edit page (av-p0a1).
-// The viewer keeps only the read-only capability cluster (av-isb3/av-41se)
-// and a toolbar "Manage" link to Edit — no inline editor, no add-origin
-// control, and no client-side path that PATCHes network_allowlist.
+// The viewer keeps only the read-only posture receipt (av-isb3/av-41se) and
+// its "Manage" link to Edit — no inline editor, no add-origin control, and no
+// client-side path that PATCHes network_allowlist.
 func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Read Only Tool", Tier: store.Tier1,
 		CreatedAt: time.Now(), NetworkAllowlist: []string{"https://example.com"}}
@@ -414,12 +414,12 @@ func TestDetailPageIsReadOnlyWithManageLink(t *testing.T) {
 	assert.NotContains(t, page, `id="al-display"`)
 	assert.NotContains(t, page, `id="al-input"`)
 	assert.NotContains(t, page, `addOrigin()`)
-	// A visible toolbar link to the Edit page's security panel, in addition
-	// to the one inside the popover.
-	assert.Contains(t, page, `<a href="/artifacts/abc123/edit#security-panel">Manage in allowlist settings →</a>`)
+	// The receipt's link to the Edit page's security panel. Since Exh-ghuv it
+	// is the only one: the toolbar's duplicate went with the toolbar.
 	assert.Contains(t, page, `class="capability-popover-manage" href="/artifacts/abc123/edit#security-panel"`)
-	// The capability cluster (the read-only replacement UI) is still present.
-	assert.Contains(t, page, `class="capability-cluster`)
+	assert.NotContains(t, page, `Manage in allowlist settings`)
+	// The posture (the read-only replacement UI) is still present.
+	assert.Contains(t, page, `class="pip-posture"`)
 
 	// No client-side code path PATCHes network_allowlist from the viewer.
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")

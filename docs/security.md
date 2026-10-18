@@ -927,7 +927,7 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
   - On the artifact's **first** clipboard request the host prompts, naming the
     artifact and the direction (read vs write). Approval persists server-side
     (`clipboard_approved`, PATCHed through the API — the single write path),
-    survives reloads and devices, and is revocable from the toolbar. Denial
+    survives reloads and devices, and is revocable from its security settings. Denial
     rejects the call with a `NotAllowedError` `DOMException` — exactly what a
     real blocked clipboard call throws, so the artifact handles it unchanged.
   - Once approved the host performs the op on the app origin (which holds
@@ -981,7 +981,7 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
   - On the artifact's **first** external-link click the host prompts, naming
     the destination. Approval is persisted server-side (`links_approved`,
     PATCHed through the API), survives reloads and devices, and is revocable
-    from the toolbar. Denial drops the navigation without breaking the
+    from its security settings. Denial drops the navigation without breaking the
     artifact. Once approved the host opens the URL in a new tab from the app
     origin; the click's transient activation covers the postMessage roundtrip.
   - **The sandbox remains the wall.** Approval never adds `allow-popups` or

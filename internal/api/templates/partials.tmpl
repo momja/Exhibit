@@ -120,6 +120,25 @@
      Data: capabilityView (gallery.go). */}}
 {{define "capabilityCluster"}}{{if .HasTrigger}}<div class="capability-wrap"><div class="capability-cluster{{if not .Sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger{{if .Compact}} aria-label="{{if .Share.Level}}Sandbox posture and sharing{{else}}Sandbox posture{{end}}"{{end}}>{{if .Sandboxed}}{{if not .Compact}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{end}}{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{if .LinksApproved}}<span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span>{{end}}{{if .CameraApproved}}<span class="capability-glyph"><i class="ph ph-camera"></i></span>{{end}}{{if .MicrophoneApproved}}<span class="capability-glyph"><i class="ph ph-microphone"></i></span>{{end}}{{if .GeolocationApproved}}<span class="capability-glyph"><i class="ph ph-map-pin"></i></span>{{end}}{{end}}{{if .Share.Level}}<span class="capability-glyph capability-share capability-share-{{.Share.Level}}"><i class="ph {{.Share.Icon}}"></i></span>{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}{{end}}
 
+{{/* postureGlyph is the detail page's posture mark (Exh-ghuv): it sits in
+     front of the artifact's title in the floating controls, and the title is
+     the button that opens the posture receipt. Same rule as the cluster above,
+     in the same neutral color: a shield when fully contained, otherwise one
+     glyph per grant in the cluster's fixed order. No label beside it, because
+     the title it prefixes is the label. The sr-only sentences are the posture
+     in words; the title button names itself from its title and then these
+     (aria-labelledby), so a screen reader hears the artifact first. Data:
+     capabilityView. */}}
+{{define "postureGlyph"}}<span class="pip-posture" data-posture-glyph>{{if .Sandboxed}}<i class="ph ph-shield-check" aria-hidden="true"></i><span class="sr-only">Sandboxed.</span>{{else}}{{if .NetworkAllowlist}}<i class="ph ph-globe" aria-hidden="true"></i><span class="capability-count" aria-hidden="true">{{len .NetworkAllowlist}}</span><span class="sr-only">Network access to {{len .NetworkAllowlist}} origin{{if ne (len .NetworkAllowlist) 1}}s{{end}}.</span>{{end}}{{if .DownloadsApproved}}<i class="ph ph-download-simple" aria-hidden="true"></i><span class="sr-only">Downloads allowed.</span>{{end}}{{if .ClipboardApproved}}<i class="ph ph-clipboard" aria-hidden="true"></i><span class="sr-only">Clipboard allowed.</span>{{end}}{{if .LinksApproved}}<i class="ph ph-arrow-square-out" aria-hidden="true"></i><span class="sr-only">External links allowed.</span>{{end}}{{if .CameraApproved}}<i class="ph ph-camera" aria-hidden="true"></i><span class="sr-only">Camera allowed.</span>{{end}}{{if .MicrophoneApproved}}<i class="ph ph-microphone" aria-hidden="true"></i><span class="sr-only">Microphone allowed.</span>{{end}}{{if .GeolocationApproved}}<i class="ph ph-map-pin" aria-hidden="true"></i><span class="sr-only">Location allowed.</span>{{end}}{{end}}</span>{{end}}
+
+{{/* artifactPosture is what /partials/capability-cluster answers for the
+     detail page: the posture mark and the receipt, one fragment. They live in
+     two places on that page, the mark inside the title button and the receipt
+     inside the info card, so each region takes its half with hx-select. One
+     request shape and one definition of each half, rather than a route per
+     half that could be fetched at different moments and disagree. */}}
+{{define "artifactPosture"}}{{template "postureGlyph" .}}{{template "capabilityPopover" .}}{{end}}
+
 {{/* panelCaret is the open/closed caret pair every .details-panel summary
      leads with (the edit page's security, artifact source, and gallery widget
      sections). Two glyphs swapped by [open] in components.css rather than one

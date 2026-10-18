@@ -3,25 +3,122 @@
  * --brand-blue) and components.css (shared .btn/.badge/... classes); only
  * detail-page-specific rules live here. */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);display:flex;flex-direction:column;height:100vh}
-header{background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header);padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;z-index:20}
-header a{color:var(--brand-blue);text-decoration:none;font-size:13px}
-header h1{font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* Kebab + sheet scrim exist in the markup on every viewport but only mean
- * something below the mobile breakpoint, where the toolbar becomes a sheet
- * (av-g7n7). Above it they stay hidden, so desktop renders as it always has. */
-#sheet-toggle,.sheet-head,.sheet-scrim{display:none}
-.toolbar{background:var(--color-panel);border-bottom:1px solid var(--color-hairline);padding:8px 20px;display:flex;gap:12px;align-items:center;flex-shrink:0;font-size:13px}
-.toolbar a{color:var(--brand-blue);text-decoration:none;display:inline-flex;align-items:center;gap:4px}
-.toolbar button{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;font-size:13px;border:1px solid var(--color-border);border-radius:5px;background:var(--color-panel);cursor:pointer}
-.toolbar button:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
-.toolbar-sep{color:var(--color-border)}
-.panels{display:flex;flex:1;overflow:hidden;gap:0}
+body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);height:100vh;height:100dvh;overflow:hidden}
+/* The artifact fills the window (Exh-ghuv); everything else floats over it. */
+.panels{position:fixed;inset:0}
 iframe{width:100%;height:100%;border:none;display:block}
-/* Module-worker warning banner (av-yvtb): non-blocking, revealed by detail.js
- * when the render shim reports a blocked Worker({type:'module'}). Mirrors the
- * amber .allowlist notice tone. */
-.banner{display:flex;align-items:flex-start;gap:8px;padding:8px 20px;font-size:13px;flex-shrink:0;border-bottom:1px solid var(--color-warn-tint-border);background:var(--color-warn-tint);color:var(--color-warn-ink)}
+/* While the controls are dragged the frame would swallow pointermove. */
+body.pip-dragging .panels{pointer-events:none}
+body.pip-dragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
+
+/* --- the floating controls (Exh-ghuv) -------------------------------------
+ * One pill: back, grip, the title (which opens the info card), share, ⋮.
+ * Every radius inside it is concentric with its outline: inner radius =
+ * outer radius - (border + padding). The control size grows on a touch screen
+ * so each target is a comfortable tap. */
+.pip{
+  --pip-control:30px;
+  --pip-pad:4px;
+  --pip-h:calc(var(--pip-control) + 2 * var(--pip-pad) + 2px);
+  --pip-inset:12px;
+  position:fixed;left:0;top:0;z-index:30;display:flex;align-items:center;gap:2px;max-width:calc(100vw - 2 * var(--pip-inset));
+  height:var(--pip-h);padding:var(--pip-pad);border:1px solid var(--color-hairline-strong);border-radius:calc(var(--pip-h) / 2);
+  background:color-mix(in srgb,var(--color-panel) 88%,transparent);backdrop-filter:blur(14px) saturate(1.5);-webkit-backdrop-filter:blur(14px) saturate(1.5);
+  box-shadow:0 4px 18px rgba(0,0,0,.16),0 0 0 .5px rgba(0,0,0,.04);font-size:13px;
+  /* Bottom-left before pip.js has measured anything, so the first paint is
+     already where the default placement puts it. */
+  translate:var(--pip-inset) calc(100dvh - 100% - var(--pip-inset));
+  transition:scale .16s ease,box-shadow .16s ease,opacity .12s ease}
+@media (pointer:coarse){ .pip{--pip-control:36px} }
+.pip[hidden]{display:none}
+.pip.pip-snapping{transition:translate .42s cubic-bezier(.22,1.28,.36,1),scale .16s ease,box-shadow .16s ease}
+/* LEAVE_MS in pip.js matches this duration. */
+.pip.pip-leaving{transition:translate .22s cubic-bezier(.55,0,.9,.4)}
+.pip.pip-lifted{scale:1.04;box-shadow:0 16px 44px rgba(0,0,0,.3)}
+.pip.pip-will-stash{opacity:.55}
+.pip-btn{width:var(--pip-control);height:var(--pip-control);flex:0 0 auto;border:0;border-radius:50%;background:none;color:var(--color-ink-soft);
+  display:inline-flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none}
+.pip-btn .ph{font-size:17px}
+.pip-btn:hover,.pip-btn:focus-visible,.pip-btn[aria-expanded=true]{background:var(--color-hover-fill)}
+.pip-sep{width:1px;height:18px;flex:0 0 auto;margin:0 3px;background:var(--color-hairline-strong)}
+/* Mid-pill, so its hover shape is an even rounded rect. The back button at the
+   pill's end is a full circle of the inner radius, concentric with the outline. */
+.pip-grip{width:calc(var(--pip-control) * .74);height:var(--pip-control);flex:0 0 auto;border:0;border-radius:var(--radius-md);background:none;
+  display:flex;align-items:center;justify-content:center;cursor:grab;touch-action:none;color:var(--color-faint)}
+.pip-grip::before{content:"";width:8px;height:14px;background-image:radial-gradient(circle,currentColor 1.3px,transparent 1.7px);background-size:4px 4.7px}
+.pip-grip:hover,.pip-grip:focus-visible,body.pip-dragging .pip-grip{background:var(--color-hover-fill);color:var(--color-ink-soft)}
+body.pip-dragging .pip-grip{cursor:grabbing}
+.pip-title{height:var(--pip-control);min-width:0;flex:0 1 auto;display:inline-flex;align-items:center;gap:6px;padding:0 8px 0 9px;
+  border:0;border-radius:calc(var(--pip-control) / 2);background:none;color:var(--color-ink);font:inherit;font-weight:600;cursor:pointer}
+.pip-title:hover,.pip-title:focus-visible,.pip-title[aria-expanded=true]{background:var(--color-hover-fill)}
+.pip-title-text{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* The posture mark: neutral like the cluster it summarizes, never a verdict. */
+#pip-posture,.pip-posture{display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;color:var(--color-muted)}
+.pip-posture .ph{font-size:15px}
+.pip-posture .capability-count{font-size:11.5px;font-weight:650;margin-right:2px}
+.pip-caret{font-size:12px;color:var(--color-muted);flex:0 0 auto}
+@media (max-width:480px){ .pip-title-text{max-width:110px} .pip-sep{display:none} }
+
+/* The info card and the ⋮ menu. pip.js sets the side, width and max height. */
+.pip-popup{position:fixed;z-index:40;padding:6px;background:var(--color-panel);border:1px solid var(--color-hairline-strong);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-modal);overflow-y:auto;overscroll-behavior:contain;transform-origin:var(--pip-popup-origin,bottom left);animation:pip-pop .14s ease;outline:none}
+.pip-popup[hidden]{display:none}
+@keyframes pip-pop{from{opacity:0;scale:.96}}
+.pip-menu{min-width:236px;font-size:13px}
+/* Items nest inside the menu: outer radius - 6px pad - 1px border. */
+.pip-menu a,.pip-menu button{display:flex;width:100%;align-items:center;gap:10px;padding:7px 10px;border:0;border-radius:calc(var(--radius-lg) - 7px);background:none;
+  color:var(--color-ink);font:inherit;text-align:left;text-decoration:none;cursor:pointer}
+.pip-menu .ph{font-size:16px;width:18px;color:var(--color-muted)}
+.pip-menu a:hover,.pip-menu a:focus-visible,.pip-menu button:hover,.pip-menu button:focus-visible{background:var(--color-accent-tint);color:var(--brand-blue);outline:none}
+.pip-menu a:hover .ph,.pip-menu a:focus-visible .ph,.pip-menu button:hover .ph,.pip-menu button:focus-visible .ph{color:var(--brand-blue)}
+.pip-menu hr{border:0;border-top:1px solid var(--color-hairline);margin:5px 4px}
+.pip-info-meta{padding:6px 10px 0;color:var(--color-muted);font-size:11.5px}
+/* The receipt is the shared capabilityPopover partial, which is a hidden
+   hover popover elsewhere; here it is the card's body, always shown. */
+.pip-info .capability-popover{position:static;width:auto;max-width:none;margin:0;visibility:visible;opacity:1;pointer-events:auto;
+  border:0;border-radius:0;box-shadow:none;background:none;padding:8px 10px 6px}
+.pip-info .capability-popover-header{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--color-muted)}
+
+/* The tab left on a side edge when the controls are put away: always visible,
+   and it slides out a little more under the pointer. */
+.pip-tab{position:fixed;z-index:30;width:20px;height:60px;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:none;
+  background:color-mix(in srgb,var(--color-panel) 92%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--color-hairline-strong);box-shadow:0 2px 10px rgba(0,0,0,.18);color:var(--color-ink-soft);
+  transition:width .18s cubic-bezier(.2,1.4,.4,1),box-shadow .18s ease,transform .26s cubic-bezier(.2,1.3,.4,1)}
+.pip-tab[hidden]{display:none}
+.pip-tab[data-edge=left]{left:0;border-left:0;border-radius:0 14px 14px 0}
+.pip-tab[data-edge=right]{right:0;border-right:0;border-radius:14px 0 0 14px}
+.pip-tab .ph{font-size:13px;transition:transform .18s ease}
+.pip-tab[data-edge=right] .ph{transform:scaleX(-1)}
+.pip-tab.pip-tab-entering[data-edge=left]{transform:translateX(-100%)}
+.pip-tab.pip-tab-entering[data-edge=right]{transform:translateX(100%)}
+.pip-tab:hover,.pip-tab:focus-visible{width:32px;box-shadow:0 6px 20px rgba(0,0,0,.25);color:var(--color-ink)}
+.pip-tab[data-edge=left]:hover .ph,.pip-tab[data-edge=left]:focus-visible .ph{transform:translateX(2px)}
+.pip-tab[data-edge=right]:hover .ph,.pip-tab[data-edge=right]:focus-visible .ph{transform:scaleX(-1) translateX(2px)}
+.pip-tab-label{position:absolute;top:50%;translate:0 -50%;white-space:nowrap;pointer-events:none;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
+  background:var(--color-slate-ink);color:var(--color-panel);font-size:12px;font-weight:600;padding:5px 9px;border-radius:6px;opacity:0;transition:opacity .15s ease}
+.pip-tab[data-edge=left] .pip-tab-label{left:calc(100% + 8px)}
+.pip-tab[data-edge=right] .pip-tab-label{right:calc(100% + 8px)}
+.pip-tab:hover .pip-tab-label,.pip-tab:focus-visible .pip-tab-label{opacity:1}
+
+@media (prefers-reduced-motion:reduce){
+  .pip.pip-snapping,.pip.pip-leaving{transition:translate .12s ease}
+  .pip-tab,.pip-popup{transition:none;animation:none}
+}
+
+/* --- notices -----------------------------------------------------------------
+ * The banners and the status line float over the artifact, centred, on the
+ * side of the window away from the controls, and stay until dealt with. */
+.pip-notices{position:fixed;left:50%;top:12px;translate:-50% 0;z-index:25;width:min(640px,calc(100vw - 24px));display:flex;flex-direction:column;gap:8px;pointer-events:none}
+body[data-pip-corner^=t] .pip-notices{top:auto;bottom:12px}
+.pip-notices>*{pointer-events:auto}
+.pip-status{padding:8px 14px;font-size:13px;border-radius:var(--radius-lg);background:var(--color-panel);color:var(--color-ink-soft);
+  border:1px solid var(--color-hairline-strong);box-shadow:0 6px 20px rgba(0,0,0,.16);overflow-wrap:anywhere}
+.pip-status:empty{display:none}
+.pip-status button{margin-left:6px;padding:2px 10px;font:inherit;border:1px solid var(--color-border);border-radius:5px;background:var(--color-panel);color:var(--brand-blue);cursor:pointer}
+/* Unsupported-capability warning (av-yvtb) and its siblings. */
+.banner{display:flex;align-items:flex-start;gap:8px;padding:10px 14px;font-size:13px;border:1px solid var(--color-warn-tint-border);border-radius:var(--radius-lg);
+  box-shadow:0 6px 20px rgba(0,0,0,.16);background:var(--color-warn-tint);color:var(--color-warn-ink)}
 .banner[hidden]{display:none}
 .banner-warn i.ph-warning{color:var(--color-warn-strong);font-size:16px;flex-shrink:0;line-height:1.4}
 .banner-body{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -36,7 +133,7 @@ iframe{width:100%;height:100%;border:none;display:block}
 /* The resync notice (av-v991) reports a fact rather than a problem, so it does
    not borrow the warning banner's yellow — a page that shouts about somebody
    else saving something trains people to dismiss it. */
-.banner-info{border-bottom-color:var(--color-info-tint-border);background:var(--color-info-tint);color:var(--color-info-ink)}
+.banner-info{border-color:var(--color-info-tint-border);background:var(--color-info-tint);color:var(--color-info-ink)}
 .banner-info i.ph{color:var(--brand-blue);font-size:16px;flex-shrink:0;line-height:1.4}
 /* .banner-action is otherwise an anchor; the reload is a button because it acts
    on this page rather than navigating away. */
@@ -82,57 +179,6 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
    modifier rather than a new width for .modal, because widening every dialog
    to suit the busiest one makes the simple ones look emptier than they are. */
 .modal-wide{width:460px}
-
-/* --- mobile: compact header + actions bottom sheet (av-g7n7) -------------
- * On a phone the artifact, not the chrome, owns the screen. The header
- * collapses to one non-wrapping row (back arrow, ellipsized title, kebab)
- * and the whole toolbar — the same DOM, restyled in place, so there is no
- * second copy of the action list to keep in sync — becomes a bottom sheet
- * the kebab slides up over a scrim. 640px matches edit.css. */
-@media (max-width:640px){
-  /* dvh, not vh: the sheet's bottom edge must clear the mobile URL bar. */
-  body{height:100dvh}
-  header{padding:8px 12px;gap:10px}
-  /* The date is demoted to the sheet header; the back link to its arrow. */
-  header .muted,header .back-label{display:none}
-  header a{font-size:18px;line-height:1}
-  #sheet-toggle{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:var(--header-control-size);height:var(--header-control-size);font-size:18px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-panel);color:var(--color-ink-soft);cursor:pointer}
-  /* One pane fits a phone; the sheet's Edit action is the way to the code. */
-
-  .sheet-scrim{display:block;position:fixed;inset:0;background:var(--overlay);z-index:30;opacity:0;pointer-events:none;transition:opacity .2s ease}
-  body.sheet-open .sheet-scrim{opacity:1;pointer-events:auto}
-
-  /* visibility (not just the transform) keeps the closed sheet out of the
-   * tab order; it flips back only after the slide-out finishes. */
-  .toolbar{position:fixed;left:0;right:0;bottom:0;z-index:40;flex-direction:column;align-items:stretch;gap:0;padding:0 0 max(12px,env(safe-area-inset-bottom));border-bottom:none;border-radius:16px 16px 0 0;box-shadow:var(--shadow-sheet);max-height:85dvh;overflow-y:auto;font-size:15px;transform:translateY(100%);visibility:hidden;transition:transform .2s ease,visibility 0s .2s}
-  body.sheet-open .toolbar{transform:none;visibility:visible;transition:transform .2s ease}
-  .toolbar-sep{display:none}
-  .toolbar>a,.toolbar>button{padding:14px 20px;gap:12px;font-size:15px;border:none;border-radius:0;background:none}
-  /* align-items:stretch already gives the row its width; this only undoes the
-   * desktop button's centered label so it lines up with the anchors. */
-  .toolbar>button{justify-content:flex-start;color:var(--brand-blue)}
-
-  .sheet-head{display:flex;position:relative;align-items:baseline;gap:10px;padding:20px 20px 12px;border-bottom:1px solid var(--color-hairline)}
-  .sheet-grip{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:36px;height:4px;border-radius:var(--radius-pill);background:var(--color-border)}
-  .sheet-title{flex:1;min-width:0;font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-  /* Permissions group: the capability popover's rows are exactly the receipt
-   * the sheet wants, but its hover-opened, top:100%/right:0 positioning would
-   * fly off-screen here. So the chip trigger goes away and the popover is
-   * pinned open and inline as the sheet's last group — same markup, no
-   * mobile-only duplicate of the rows. `order` keeps it (and the Manage link
-   * that follows it) below the plain actions without reordering the DOM,
-   * which would also reorder the desktop row. */
-  .capability-wrap{display:block;order:2}
-  .capability-cluster{display:none}
-  .toolbar .capability-popover{position:static;width:auto;max-width:none;visibility:visible;opacity:1;pointer-events:auto;border:none;border-top:1px solid var(--color-hairline);border-radius:0;box-shadow:none;margin:0;padding:16px 20px 8px;font-size:13px}
-  .capability-popover-header{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--color-muted)}
-  /* The toolbar's own Manage link sits right below; one is enough. Scoped by
-   * .toolbar to outrank `.toolbar a{display:inline-flex}` above. */
-  .toolbar .capability-popover-manage{display:none}
-  .toolbar a[href$="#security-panel"]{order:2}
-  #al-status{order:3;padding:0 20px 8px}
-}
 
 /* Saved-data choices persist as soon as a selection is confirmed. */
 .state-sharing{flex:0 0 auto;min-width:0;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--color-hairline);padding-top:16px}

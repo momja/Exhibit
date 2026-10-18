@@ -18,24 +18,56 @@ import (
 // CSS/JS-driven and is instead verified visually (shot-scraper) per the
 // handoff.
 
-// The trigger is a focusable control independent of whatever page embeds it
-// (card or toolbar): tabindex=0, role=button, aria-haspopup, and
-// aria-describedby pointing at this artifact's popover id. Read off the
-// detail toolbar, which renders the trigger for every artifact; a card
-// renders none for a sandboxed, private one (av-uvc6).
+// The card's trigger is a focusable control independent of the card around
+// it: tabindex=0, role=button, aria-haspopup, and aria-describedby pointing
+// at this artifact's popover id. A card renders one only when there is a
+// posture to report (av-uvc6), so this artifact carries a grant.
 func TestCapabilityPopoverTriggerIsFocusable(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Focusable")
+	require.Equal(t, http.StatusOK, doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+		"downloads_approved": true,
+	}).Code)
 
-	req := httptest.NewRequest("GET", "/artifacts/"+id, nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-	page := w.Body.String()
-
+	page := getPage(t, r, "/")
 	assert.Contains(t, page, `tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger`)
 	assert.Contains(t, page, `<div class="capability-popover" id="capability-popover-`+id+`">`)
 	assert.Contains(t, page, `<div class="capability-popover-header">Sandbox posture</div>`)
+}
+
+// On the detail page the receipt is opened by the artifact's title (Exh-ghuv):
+// a real button that names the card it controls, with the posture mark in
+// front of the title text. The receipt itself is the same partial the card
+// uses, rendered for every artifact.
+func TestDetailPageTitleOpensThePostureReceipt(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Titled")
+	page := getPage(t, r, "/artifacts/"+id)
+
+	assert.Contains(t, page, `<button type="button" class="pip-title" id="pip-title" title="About this artifact" aria-labelledby="pip-title-text pip-posture" aria-expanded="false" aria-controls="pip-info">`,
+		"the button names itself title first, then the posture")
+	assert.Contains(t, page, `<div class="pip-popup pip-info" id="pip-info" role="region" aria-label="About this artifact" tabindex="-1" hidden>`)
+	assert.Contains(t, page, `<span class="pip-posture" data-posture-glyph><i class="ph ph-shield-check" aria-hidden="true"></i><span class="sr-only">Sandboxed.</span></span>`,
+		"a sandboxed artifact's mark is the shield, and the title button's name says so")
+	assert.Contains(t, page, `<div class="capability-popover" id="capability-popover-`+id+`">`)
+	assert.Contains(t, page, `<div class="capability-popover-header">Sandbox posture</div>`)
+	assert.NotContains(t, page, "data-capability-trigger",
+		"the title is the trigger here; a second one would be a second way to open the same receipt")
+}
+
+// With grants the mark lists them in the cluster's order, and its sr-only
+// sentences spell them out for the title button's accessible name. The
+// visible count is hidden from that name, since the sentence says it.
+func TestDetailPagePostureMarkListsGrants(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Granted")
+	require.Equal(t, http.StatusOK, doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{
+		"network_allowlist":  []string{"https://a.example.com", "https://b.example.com"},
+		"downloads_approved": true,
+	}).Code)
+	page := getPage(t, r, "/artifacts/"+id)
+
+	assert.Contains(t, page, `<span class="pip-posture" data-posture-glyph><i class="ph ph-globe" aria-hidden="true"></i><span class="capability-count" aria-hidden="true">2</span><span class="sr-only">Network access to 2 origins.</span><i class="ph ph-download-simple" aria-hidden="true"></i><span class="sr-only">Downloads allowed.</span></span>`)
 }
 
 // No grants at all collapses the popover body to a single reassurance row
@@ -228,8 +260,8 @@ func TestCapabilityPopoverManageLinkOnGalleryAndDetail(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code)
 	page2 := w2.Body.String()
 	assert.Contains(t, page2, `<a class="capability-popover-manage" href="/artifacts/`+id+`/edit#security-panel">Manage security settings →</a>`)
-	// The viewer's cluster/popover is the same component, wired the same way.
-	assert.Contains(t, page2, `aria-describedby="capability-popover-`+id+`" data-capability-trigger`)
+	// The viewer's receipt is the same component, opened by the title.
+	assert.Contains(t, page2, `aria-controls="pip-info"`)
 }
 
 // Origins are rendered through html/template's contextual auto-escaping, not
@@ -326,7 +358,7 @@ func TestCapabilityClusterPartialReflectsCurrentAllowlist(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	fragment := getPage(t, r, "/partials/capability-cluster?artifact="+id)
-	assert.Contains(t, fragment, `<span class="capability-count">1</span>`)
+	assert.Contains(t, fragment, `<span class="capability-count" aria-hidden="true">1</span>`)
 	assert.Contains(t, fragment, `<code>https://cdn.example.com</code>`)
 	assert.Contains(t, fragment, `Manage security settings`,
 		"the owner's fragment keeps the popover's footer link, like the owner's page")
@@ -334,7 +366,7 @@ func TestCapabilityClusterPartialReflectsCurrentAllowlist(t *testing.T) {
 	// The fragment renders the same partial the full page render used — one
 	// definition of the badge, which is the whole point of the exercise.
 	page := getPage(t, r, "/artifacts/"+id)
-	for _, marker := range []string{`<span class="capability-count">1</span>`, `<code>https://cdn.example.com</code>`} {
+	for _, marker := range []string{`<span class="capability-count" aria-hidden="true">1</span>`, `<code>https://cdn.example.com</code>`} {
 		assert.Contains(t, fragment, marker)
 		assert.Contains(t, page, marker)
 	}
@@ -375,9 +407,11 @@ func TestCapabilityClusterPartialRecipientReadsPostureWithoutManageLink(t *testi
 }
 
 // The detail page must carry the wiring that turns an approval into a swap:
-// the cluster wrapped in an htmx target fetching the fragment above on the
+// the receipt wrapped in an htmx target fetching the fragment above on the
 // event the runtime prompt fires, with htmx itself served from our own
-// origin (never a CDN).
+// origin (never a CDN). The posture mark in the title takes its own half of
+// the same fragment on the same event (Exh-ghuv), and the receipt's target
+// also selects the error fragment, so a deleted artifact says so.
 func TestDetailPageWiresCapabilityClusterSwapToHtmx(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Swap wiring")
@@ -389,4 +423,20 @@ func TestDetailPageWiresCapabilityClusterSwapToHtmx(t *testing.T) {
 	assert.Contains(t, page, `hx-get="/partials/capability-cluster?artifact=`+id+`"`)
 	assert.Contains(t, page, `hx-trigger="exhibit:capabilities-changed from:body"`)
 	assert.Contains(t, page, `hx-swap="innerHTML"`)
+	assert.Contains(t, page, `hx-select=".capability-popover, .frag-error"`)
+	assert.Contains(t, page, `id="pip-posture"`)
+	assert.Contains(t, page, `hx-select=".pip-posture"`)
+	assert.Equal(t, 2, strings.Count(page, `hx-get="/partials/capability-cluster?artifact=`+id+`"`),
+		"the mark and the receipt refresh from one fragment")
+}
+
+// The fragment carries both halves the page selects from: the posture mark
+// and the receipt.
+func TestCapabilityClusterPartialCarriesMarkAndReceipt(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Both halves")
+	fragment := getPage(t, r, "/partials/capability-cluster?artifact="+id)
+
+	assert.Contains(t, fragment, `<span class="pip-posture" data-posture-glyph>`)
+	assert.Contains(t, fragment, `<div class="capability-popover" id="capability-popover-`+id+`">`)
 }

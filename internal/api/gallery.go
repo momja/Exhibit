@@ -469,13 +469,18 @@ func (ro *Router) sharePanelPartial(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, fragment)
 }
 
-// capabilityClusterPartial re-renders one artifact's capability badge and
-// popover after a runtime origin approval (av-mf1x), so the toolbar stops
-// describing the allowlist as it was at page load. The prompt transparently
-// reloads the frame under the widened CSP; this fragment is what keeps the
-// chrome beside it from disagreeing, without a full reload that would drop
-// the artifact's in-frame state and without page JS rebuilding the badge in
-// a second language.
+// capabilityClusterPartial re-renders one artifact's posture after a runtime
+// origin approval (av-mf1x), so the detail page stops describing the
+// allowlist as it was at page load. The prompt transparently reloads the
+// frame under the widened CSP; this fragment is what keeps the chrome beside
+// it from disagreeing, without a full reload that would drop the artifact's
+// in-frame state and without page JS rebuilding the badge in a second
+// language.
+//
+// It renders artifactPosture: the posture mark that prefixes the title in the
+// floating controls and the receipt in the info card the title opens
+// (Exh-ghuv). Those are two regions of the page, and each selects its half of
+// this one fragment.
 //
 // The read goes through GetArtifactReadableBy, like the detail page itself:
 // the cluster reports what the tool running in the visitor's browser may
@@ -492,13 +497,13 @@ func (ro *Router) capabilityClusterPartial(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if a == nil {
-		// The toolbar swaps this 404's user-facing fragment in place of the
-		// badge it had, so the visitor learns the artifact is gone.
+		// The info card swaps this 404's user-facing fragment in place of the
+		// receipt it had, so the visitor learns the artifact is gone.
 		fragmentNotFound(w)
 		return
 	}
 	creds := ro.pageCredentials(r).forArtifactOwnedBy(viewerID, a.OwnerID)
-	fragment, err := renderPage("capabilityCluster", newCapabilityView(a, !creds.ReadOnly))
+	fragment, err := renderPage("artifactPosture", newCapabilityView(a, !creds.ReadOnly))
 	if err != nil {
 		fragmentServerError(w, r, "capability cluster partial render", err)
 		return

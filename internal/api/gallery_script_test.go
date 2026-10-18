@@ -46,6 +46,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"tags.test.mjs",
 		"agent.net.test.mjs",
 		"components.popover.test.mjs",
+		"pip-placement.test.mjs",
 		"index.search.test.mjs",
 		// Not a page script: render.shim.test.mjs runs the render preamble,
 		// which is a Go string literal it lifts out of render.go. It belongs

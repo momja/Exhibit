@@ -396,17 +396,17 @@ func TestASharedArtifactsCardCarriesItsMarkInTheMarkup(t *testing.T) {
 	assert.NotContains(t, after, "share-badge", "the separate badge is gone from the card")
 }
 
-// Sharing stays off the detail page's cluster. That page renders the cluster
-// to recipients too, and how many other people hold a grant is not part of
-// what a grant carries (spec 7), so the Sharing section is a card-only fold.
+// Sharing stays off the detail page's posture. That page renders it to
+// recipients too, and how many other people hold a grant is not part of what
+// a grant carries (spec 7), so the Sharing section is a card-only fold.
 func TestTheDetailClusterCarriesNoSharingSection(t *testing.T) {
 	ro := newTestRouter(t)
 	artifactID := seedShareableArtifact(t, ro, "Tool")
 	mintLink(t, ro, artifactID, false)
 
 	page := getPage(t, ro, "/artifacts/"+artifactID)
-	assert.Contains(t, page, `class="capability-cluster`)
-	assert.Contains(t, page, "Sandboxed", "the toolbar keeps its labelled form")
+	assert.Contains(t, page, `class="pip-posture"`)
+	assert.Contains(t, page, "Sandboxed", "the title button's name carries the posture")
 	assert.NotContains(t, page, "capability-share")
 	assert.NotContains(t, page, `<div class="capability-popover-header">Sharing</div>`)
 }
