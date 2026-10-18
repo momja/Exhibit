@@ -418,3 +418,9 @@ GET  /s/:shareID       Serve shared artifact (render origin only)
 The render surface sets `Content-Security-Policy` from the artifact's approved origins (its `decision='allow'` rows in `artifact_network_origins`), injects the storage shim with the artifact's state inlined, and serves the document `Cache-Control: no-store`. The iframe has `sandbox="allow-scripts"` without `allow-same-origin`, giving it an opaque origin.
 
 `/w/:artifactID` is the same read path with the same CSP and the same inlined state — it differs only in which blob it serves and in getting the **narrowed preamble**: state writes stop at the in-memory cache and the capability bridges are not injected at all. It 404s for an artifact with no widget (`widgets.md`).
+
+Frame state writes carry `X-Exhibit-Version: N`, the version sequence rendered
+with their code. `PUT` and `DELETE` state routes check it atomically with the
+mutation and return 409 (`code: "version_changed"`) for a superseded frame. This
+prevents delayed writes from overwriting restored state. Explicit API edits and
+the state inspector may omit the header.

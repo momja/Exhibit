@@ -373,3 +373,40 @@ func versionBlobIDs(ctx context.Context, tx *sql.Tx, artifactID string) ([]strin
 	}
 	return ids, rows.Err()
 }
+
+// ErrVersionChanged asks a superseded frame to reload instead of replacing
+// state restored with a newer content version.
+var ErrVersionChanged = errors.New("the artifact changed; reload it before saving")
+
+// mutateVersionedState checks the frame's generation and mutates its state in
+// one transaction, so even a request queued before a restore cannot undo it.
+func (s *SQLiteStore) mutateVersionedState(ctx context.Context, owner OwnerID, artifactID string, viewer ViewerID, key, value *string, version int) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var current int
+	err = tx.QueryRowContext(ctx, `SELECT MAX(v.seq) FROM artifact_versions v
+		JOIN artifacts a ON a.id = v.artifact_id WHERE a.id = ? AND a.owner_id = ?`, artifactID, owner).Scan(&current)
+	if err != nil {
+		return err
+	}
+	if current != version {
+		return ErrVersionChanged
+	}
+	switch {
+	case value != nil:
+		_, err = tx.ExecContext(ctx, `INSERT INTO artifact_state (artifact_id, user_id, key, value, updated_at)
+		 VALUES (?, ?, ?, ?, datetime('now')) ON CONFLICT(artifact_id, user_id, key)
+		 DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`, artifactID, viewer, *key, *value)
+	case key != nil:
+		_, err = tx.ExecContext(ctx, `DELETE FROM artifact_state WHERE artifact_id = ? AND user_id = ? AND key = ?`, artifactID, viewer, *key)
+	default:
+		_, err = tx.ExecContext(ctx, `DELETE FROM artifact_state WHERE artifact_id = ? AND user_id = ?`, artifactID, viewer)
+	}
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
