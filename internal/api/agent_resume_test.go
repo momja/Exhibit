@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/momja/Exhibit/internal/agent"
 	"github.com/momja/Exhibit/internal/agentscope"
@@ -100,6 +101,16 @@ func resume(t *testing.T, r *Router, artifactID, conversationID string) string {
 	t.Helper()
 	w := doJSON(t, r, "POST", "/api/agent/sessions", map[string]string{
 		"artifact_id": artifactID, "resume_session_id": conversationID})
+	// Close makes the process unavailable immediately; its identity remains
+	// reserved while the last settled turn is stored. Retry only that conflict.
+	require.Eventually(t, func() bool {
+		if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "already running") {
+			return true
+		}
+		w = doJSON(t, r, "POST", "/api/agent/sessions", map[string]string{
+			"artifact_id": artifactID, "resume_session_id": conversationID})
+		return w.Code != http.StatusConflict
+	}, 5*time.Second, 20*time.Millisecond, "final conversation persistence did not finish")
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	var got struct {
 		ID string `json:"id"`
