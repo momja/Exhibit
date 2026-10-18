@@ -35,3 +35,5 @@ node_modules/
 
 # Local Claude Code settings — no longer tracked in git history.
 /.claude/
+
+/.paper-canvas/
