@@ -2075,9 +2075,20 @@ const bridgeScript = `
 // surface shows through; a widget that wants its own background paints one. It
 // is emitted before the widget's own markup, so anything the widget declares
 // wins.
+//
+// It deliberately declares no color-scheme (av-xie4). The gallery declares
+// `light dark`, and a browser draws a frame whose used color-scheme differs
+// from its embedder's on an opaque canvas instead of a transparent one. So a
+// widget written for a light card, with dark text and no color-scheme of its
+// own, keeps the white surface it was designed on when the gallery is dark,
+// rather than going transparent and putting dark text on a dark card. A
+// widget that declares `color-scheme: light dark` itself matches the
+// gallery in both modes and stays transparent. CanvasText is the default ink
+// of whichever scheme the widget ends up in, so it is black on the light
+// canvas and light on a dark card.
 const widgetBaseCSS = `<style>
 html,body{margin:0;padding:0;height:100%;background:transparent;overflow:hidden}
-body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#111;-webkit-font-smoothing:antialiased}
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:CanvasText;-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}
 </style>`
 

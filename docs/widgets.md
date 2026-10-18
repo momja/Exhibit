@@ -159,9 +159,9 @@ hasn't scrolled to as failed. Intersection is the same condition
 
 ## Writing a widget
 
-The render preamble sets `html,body{margin:0;height:100%;background:transparent}`
-and a `system-ui` font before the widget's markup, so the tile starts from a
-sane floor and can override anything.
+The render preamble sets `html,body{margin:0;height:100%;background:transparent}`,
+a `system-ui` font and `CanvasText` as the text color before the widget's
+markup, so the tile starts from a sane floor and can override anything.
 
 - Design for roughly **272 × 132 CSS px**, fluid from 230 to 420 wide. Use
   `width/height: 100%` and flexbox; never a fixed pixel layout width.
@@ -173,8 +173,16 @@ sane floor and can override anything.
 - Never draw a button, input, link, or anything that looks tappable.
 - One file, everything inline, no external references, inline SVG for charts
   and glyphs.
-- Style for a light card: `#fff` surface, accent `#23559e`, muted `#888`,
-  hairline `#e0e0e0`.
+- Read on both a light and a dark card: the gallery follows the system color
+  scheme (av-xie4). Declare `color-scheme: light dark`, keep the background
+  transparent, and put colors in custom properties with dark values under
+  `@media (prefers-color-scheme: dark)`. Light: text `#111`, muted `#888`,
+  accent `#23559e`, hairline `#e0e0e0`. Dark: text `#e8eaed`, muted
+  `#9aa0a9`, accent `#7eaaf0`, hairline `#2f333a`.
+- A widget that declares no `color-scheme` is drawn on an opaque light canvas
+  when the gallery is dark, because a frame whose scheme differs from its
+  embedder's is not composited transparently. Older light-only widgets
+  therefore stay readable as white tiles; they just don't match the card.
 
 The agent's system prompt carries this same contract, so `set_widget` output
 follows it without being told each time.

@@ -153,7 +153,12 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx,
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	_, err = tx.ExecContext(ctx,
 		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, source_text, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.LinksApproved, a.CameraApproved, a.MicrophoneApproved, a.GeolocationApproved, a.WidgetBlobID, a.SourceText,
@@ -167,7 +172,7 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	// here (an agent that created the artifact), the single time that row is
 	// touched after creation.
 	if p := a.Provenance; p.Origin != "" {
-		if _, err := s.db.ExecContext(ctx,
+		if _, err := tx.ExecContext(ctx,
 			`UPDATE artifact_versions SET origin = ?, message = ?, session_id = ? WHERE artifact_id = ? AND seq = 1`,
 			p.Origin, p.Message, p.SessionID, a.ID); err != nil {
 			return err
@@ -175,7 +180,10 @@ func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	}
 	// The allowlist passed in is the set of origins the caller has approved;
 	// it lands as allow rows in the child table (exhibit-x87).
-	return s.ReplaceAllowedOrigins(ctx, a.OwnerID, a.ID, a.NetworkAllowlist, "user")
+	if err := replaceAllowedOriginsTx(ctx, tx, a.ID, a.NetworkAllowlist, "user"); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // ownsArtifact reports whether ownerID owns artifactID. It is the one place
@@ -640,6 +648,13 @@ func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, ownerID int64, 
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after Commit
 
+	if err := replaceAllowedOriginsTx(ctx, tx, artifactID, origins, source); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func replaceAllowedOriginsTx(ctx context.Context, tx *sql.Tx, artifactID string, origins []string, source string) error {
 	// Only allow rows are in scope. Block rows are decisions this caller
 	// doesn't know about ("don't ask again", exhibit-fr7) and survive.
 	if _, err := tx.ExecContext(ctx,
@@ -675,7 +690,7 @@ func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, ownerID int64, 
 			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 // attachAllowlists hydrates NetworkAllowlist on a batch of artifacts from
@@ -711,6 +726,52 @@ func (s *SQLiteStore) attachAllowlists(ctx context.Context, arts []*Artifact) er
 		a.NetworkAllowlist = append(a.NetworkAllowlist, origin)
 	}
 	return rows.Err()
+}
+
+// ReplaceArtifactSnapshot commits a refetch as one unit. A body naming freshly
+// minted markup asset URLs must never become visible without those asset rows.
+// Superseded bytes are queued only after every reference has been switched.
+func (s *SQLiteStore) ReplaceArtifactSnapshot(ctx context.Context, ownerID int64, id string, snapshot ArtifactSnapshot) ([]string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var old string
+	err = tx.QueryRowContext(ctx,
+		"SELECT source_blob_id FROM artifacts WHERE id=? AND owner_id=?",
+		id, ownerID).Scan(&old)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	change := VersionChange{Provenance: snapshot.Provenance}
+	if snapshot.SourceBlobID != "" {
+		change.BodyBlobID = &snapshot.SourceBlobID
+		change.SourceText = &snapshot.SourceText
+	}
+	if _, err := commitVersionTx(ctx, tx, ownerID, id, change); err != nil {
+		return nil, err
+	}
+	var superseded []string
+	if snapshot.Assets != nil {
+		oldAssets, err := replaceArtifactAssets(ctx, tx, id, snapshot.GenerationID, snapshot.Assets)
+		if err != nil {
+			return nil, err
+		}
+		superseded = append(superseded, oldAssets...)
+	}
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, superseded...)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return queued, nil
 }
 
 // DeleteArtifact removes the artifact — its tags, collections, shares, origin

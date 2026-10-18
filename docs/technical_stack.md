@@ -323,6 +323,40 @@ hand-rolled HTML escaping the old string-concatenated pages needed.)
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.
 
+**Page scripts are ES modules.** A new page script, or one being substantially
+rewritten, loads as `<script type="module" src="/assets/gallery/<name>.js">`
+and imports what it uses by relative path. A classic script finds its
+dependencies as globals, and the only thing guaranteeing they exist is the
+order of the `<script>` tags in its template. That is why most of a page's
+behavior has ended up in one file. A module names its dependencies, so it can
+hold one component or one concern, and the page script becomes the list of
+modules it imports.
+
+The browser resolves the imports, so the build doesn't change.
+`web/gallery/build.mjs` still copies each file verbatim, and the Go tests that
+assert on served bytes still read the source as written. Its `node --check`
+accepts module syntax, and the app origin serves `.js` as `text/javascript`,
+which a module script requires. The rules for getting there:
+
+- Split along a component or a concern, not a line count. A flow that repeats
+  with different parameters becomes one module that takes those parameters. A
+  cohesive 600-line file stays one file.
+- Shared scripts convert last. A file containing `export` is a syntax error
+  when loaded as a classic script, so `api.js`, `components.js`,
+  `state-api.js` and `network-prompt.js` stay classic while any classic page
+  still loads them. Until then a module uses them as globals. Module scripts
+  are deferred, so they run after every classic script on the page and those
+  globals already exist.
+- A classic page can use a new module by loading it with its own
+  `<script type="module">` tag, as long as the module binds itself to the
+  markup instead of waiting to be called. Nothing classic can import it.
+- Per-request values keep arriving through the inline bootstrap `<script>`
+  described above.
+- `testdom.mjs` loads scripts with `vm.runInContext`, which cannot resolve an
+  `import`. The first module that needs a page-script test extends the harness
+  to load modules through `vm.SourceTextModule`, which Node gates behind
+  `--experimental-vm-modules`, and keeps the test.
+
 **Page scripts are tested by running them (av-kmwj).** `web/gallery/testdom.mjs`
 is a small DOM — element lookup, listeners, `hidden`, `textContent`, and a
 `postMessage` boundary between the host and the artifact frame — that a
@@ -338,9 +372,9 @@ whose entire build step is copying files. The cost is that elements are created
 on demand rather than parsed from the template, so an id the template spells
 differently is the Go template tests' half to catch.
 
-**Partial re-render: htmx 4 (av-6m3e, av-3cdp).** When server-side state changes after
-load, the page re-fetches one server-rendered fragment and swaps it in rather
-than reloading (a reload drops live iframes, editor buffers, and SSE streams)
+**Partial re-render: htmx 4 (av-6m3e, av-3cdp).** This is how a page changes after
+load. When a change alters what a region shows, the page re-fetches that region
+as one server-rendered fragment and swaps it in rather than reloading (a reload drops live iframes, editor buffers, and SSE streams)
 or rebuilding the markup in JS (a second definition of the same component, in a
 second language). htmx buys the attribute vocabulary that keeps that wiring in
 the markup — trigger, target, swap — for ~15 KB and no build step, which is why
@@ -349,11 +383,22 @@ it won over a hand-rolled fetch-and-swap helper. The rules it must follow:
 - Fragments render the **same named `html/template` partial** as the full page,
   so a component has exactly one definition. The fragment routes live under
   `/partials/*` next to the page routes.
+- A mutation ends by dispatching a named event on `<body>`, such as
+  `exhibit:shares-changed` or `exhibit:capabilities-changed`, and the region's
+  `hx-trigger` listens for it `from:body`. The script that made the change
+  knows the event name and nothing about the markup it changes.
 - htmx is **self-hosted on the app origin, never a CDN** — vendored at build
   time by the `web/htmx/` workspace into the embedded assets, exactly like the
   Phosphor icons below, and loaded from `/assets/htmx/htmx.min.js`.
 - Page JS keeps no cached references into a swappable region: after a swap the
   old nodes are gone. Resolve elements on use.
+- Bind behavior inside a swappable region by delegation. One listener on an
+  ancestor the swap leaves in place matches its targets by `data-*` attribute,
+  so swapped-in markup works with no re-binding step after `htmx:after:swap`.
+- State that lives only in the browser stays in page JS. Whether a panel is
+  open, a form's unsaved working copy such as the state inspector's, and
+  anything that changes per keystroke are examples. The server cannot render
+  what it does not hold.
 - A missing artifact is a user-facing error, not a silent no-op: every
   `/partials/*` route answers an unknown id with 404 carrying the shared
   `fragmentError` partial, and a store/render failure with 500 carrying the
@@ -395,6 +440,25 @@ pointer type rather than width, because a narrow desktop window has no on-screen
 keyboard and a landscape tablet is wide and still touched. The standing rule when
 adding a control: size it from the token, never a literal `px` — a hardcoded size
 opts it out of the bump silently, and the symptom only shows up on a phone.
+
+**Dark mode follows the system (av-xie4).** There is no in-app toggle: every
+app-origin page reads `prefers-color-scheme`. `tokens.css` declares
+`color-scheme: light dark` on `:root`, so native controls, scrollbars and form
+fields follow, and it holds the whole dark palette in one
+`@media (prefers-color-scheme: dark)` block that redefines the same tokens. A
+page sheet takes every color from a token and never writes a literal, which is
+what makes a new component dark-ready for free; a color the palette lacks is a
+new token with a value in both places. In the dark the accent is a light blue
+with dark text on its fills (`--color-on-accent`), because no single blue
+reads both as link text on a dark panel and under white button text. The
+CodeMirror bundle swaps One Dark in and out through a `Compartment` on the
+media query's `change` event, so the editor follows a live setting change
+without losing its buffer. The render origin is untouched: an artifact owns
+its colors. A frame whose color-scheme differs from the page's is drawn on an
+opaque canvas, so an artifact or widget that declares no scheme keeps a light
+background on a dark page. The widget base stylesheet therefore leaves
+`color-scheme` to the widget, and the agent's prompt asks artifacts and
+widgets to declare `light dark` themselves (`docs/widgets.md`).
 
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent

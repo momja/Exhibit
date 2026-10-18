@@ -6,7 +6,14 @@
  * --brand-blue / --brand-blue-hover mirror internal/color/brand.go — the Go
  * constant still colors the server-rendered SVG logo, so keep the two in
  * sync. They live here as committed CSS (instead of the old per-template
- * inline <style> injection) so static stylesheets need no Go round-trip. */
+ * inline <style> injection) so static stylesheets need no Go round-trip.
+ *
+ * Dark mode (av-xie4) follows the system setting and has no in-app toggle.
+ * Every color a page sheet uses comes from a token below, and the dark values
+ * are the one prefers-color-scheme block at the end of this file: a new
+ * component gets dark mode by using tokens, and a literal color in a page
+ * sheet is a component that stays light. In the dark block --brand-blue is
+ * the UI accent rather than the logo's blue — the logo keeps its own. */
 /* Opts every cross-document navigation between gallery/detail/edit into the
  * View Transitions API (Exh-pb2k): instead of unloading straight to a blank
  * default-white frame, the browser keeps the outgoing page's snapshot on
@@ -19,32 +26,90 @@
 }
 
 :root{
+	/* Native controls, scrollbars and form fields follow the page. It also
+	 * decides how embedded frames are composited: a frame whose own
+	 * color-scheme differs from this one's is drawn on an opaque canvas
+	 * (see the widget base stylesheet in internal/render). */
+	color-scheme:light dark;
+
 	/* brand / accent */
 	--brand-blue:#23559e;
 	--brand-blue-hover:#1a4076;
 	--color-accent:var(--brand-blue);
+	--color-on-accent:#fff;            /* text and icons on an accent fill */
+	--color-accent-disabled:#b7c3d9;   /* a disabled accent button's fill */
+	--color-on-accent-disabled:#fff;
+	--color-accent-tint:#eef4ff;       /* selected/suggested surfaces */
+	--color-accent-tint-border:#c4d7f7;
+	--color-accent-tint-strong:#dbe7fb;
+	--color-accent-tint-ink:#223344;
 
 	/* neutrals */
 	--color-ink:#111;             /* primary text */
 	--color-ink-soft:#333;        /* headings, strong secondary text */
+	--color-ink-mid:#555;         /* body copy that steps back */
 	--color-muted:#888;           /* metadata, secondary text */
-	--color-faint:#aaa;           /* placeholder / empty hints */
+	--color-label:#7b828e;        /* small-caps field and column labels */
+	--color-faint:#aaa;           /* empty-state glyphs, optional-field hints */
+	--color-placeholder:#757575;  /* field placeholders (the browser's own light default) */
 	--color-ground:#f0f0f0;       /* page background */
 	--color-panel:#fff;           /* cards, header, modals */
+	--color-subtle:#f8f8f8;       /* a well inside a panel (scan results, chips) */
 	--color-hairline:#e0e0e0;     /* panel dividers */
 	--color-hairline-strong:#d9d9d9; /* header underline */
 	--color-border:#ddd;          /* control borders */
+	--color-card-border:#cfcfcf;  /* the gallery's flat cards */
 	--color-hover-fill:#e8e8e8;   /* pill behind a hovered icon control */
+	--color-press-fill:rgba(0,0,0,.12); /* a pressed control on a tinted chip */
+	--color-code-on-tint:#fff3;   /* inline code inside a tinted banner */
+	--color-on-accent-edge:rgba(255,255,255,.5); /* an edge drawn on an accent fill */
+	--color-tag-ring:rgba(0,0,0,.12);   /* keeps a ground-colored tag dot visible */
+
+	/* The 404 page's slate ramp. */
+	--color-slate-ink:#3a3f49;
+	--color-slate-body:#565c68;
+	--color-slate-medium:#6b717c;
+	--color-slate-muted:#6f7581;
+	--color-slate-placeholder:#7d838e;
+	--color-slate-rule:#d6dae0;
 
 	/* feedback */
 	--color-danger:#e00;
 	--color-danger-hover:#c00;
+	--color-on-danger:#fff;
+	--color-danger-tint:#fee;          /* error notices */
+	--color-danger-tint-border:#fbb;
+	--color-danger-ink:#900;
+	--color-danger-soft:#fdf3f3;       /* a quieter refusal (login, failed tool) */
+	--color-warn-tint:#fffbe6;         /* warning banners and notes */
+	--color-warn-tint-border:#ffe58f;
+	--color-warn-strong:#d48806;       /* warning icon, warning control border */
+	--color-warn-ink:#614700;
+	--color-warn-ink-soft:#8a6d00;
+	--color-info-tint:#f0f5ff;         /* a fact, not a problem */
+	--color-info-tint-border:#adc6ff;
+	--color-info-ink:#243c5a;
+	--color-success:#2a7d2a;
+	--color-success-tint:#f2faf2;
+	--color-success-tint-border:#bfe3bf;
+	--color-note-tint:#f3efe6;         /* neutral "custom" chip */
+	--color-note-ink:#7a6535;
+
+	/* Default card tile (components.css): saturation + lightness pairs
+	 * completed by the artifact's --tile-hue. */
+	--tile-face-top:58% 96%;
+	--tile-face-bottom:52% 89%;
+	--tile-mono-fill:60% 100% / .72;
+	--tile-mono-shadow:40% 30% / .16;
+	--tile-mono-ink:42% 34%;
 
 	/* elevation */
 	--shadow-header:0 1px 6px rgba(0,0,0,.07);
 	--shadow-card:0 1px 3px rgba(0,0,0,.08);
 	--shadow-card-hover:0 2px 8px rgba(0,0,0,.12);
 	--shadow-modal:0 4px 24px rgba(0,0,0,.25);
+	--shadow-raised:0 1px 2px rgba(0,0,0,.14);
+	--shadow-sheet:0 -4px 24px rgba(0,0,0,.25); /* a bottom sheet over the page */
 	--overlay:rgba(0,0,0,.4);
 
 	/* Every form control sizes itself from one of these, never a literal px:
@@ -83,5 +148,86 @@
 	:root{
 		--field-font-size:16px;
 		--field-code-font-size:16px;
+	}
+}
+
+/* Dark palette (av-xie4). A cool charcoal rather than black, so panels can sit
+ * one step above the ground and shadows still read. The accent turns from the
+ * logo's deep blue to a light one: no single blue reaches 4.5:1 both as link
+ * text on a dark panel and under white button text, so in the dark the accent
+ * fills take dark text instead (--color-on-accent), as danger fills do. */
+@media (prefers-color-scheme:dark){
+	:root{
+		--brand-blue:#7eaaf0;
+		--brand-blue-hover:#a1c2f5;
+		--color-on-accent:#0e1726;
+		--color-accent-disabled:#2f3b4e;
+		--color-on-accent-disabled:#8592a6;
+		--color-accent-tint:#1c2940;
+		--color-accent-tint-border:#34507a;
+		--color-accent-tint-strong:#2a3c5a;
+		--color-accent-tint-ink:#c8daf6;
+
+		--color-ink:#e8eaed;
+		--color-ink-soft:#ccd0d6;
+		--color-ink-mid:#abb0b8;
+		--color-muted:#9aa0a9;
+		--color-label:#9097a2;
+		--color-faint:#878c95;
+		--color-placeholder:#878c95;
+		--color-ground:#16181c;
+		--color-panel:#202328;
+		--color-subtle:#1a1d21;
+		--color-hairline:#2f333a;
+		--color-hairline-strong:#363b42;
+		--color-border:#41464f;
+		--color-card-border:#363b42;
+		--color-hover-fill:#2e3239;
+		--color-press-fill:rgba(255,255,255,.14);
+		--color-code-on-tint:rgba(255,255,255,.08);
+		--color-on-accent-edge:rgba(14,23,38,.35);
+		--color-tag-ring:rgba(255,255,255,.28);
+
+		--color-slate-ink:#cdd2da;
+		--color-slate-body:#adb3bd;
+		--color-slate-medium:#979da8;
+		--color-slate-muted:#8f96a1;
+		--color-slate-placeholder:#858b96;
+		--color-slate-rule:#363b42;
+
+		--color-danger:#f2726a;
+		--color-danger-hover:#ff9690;
+		--color-on-danger:#1f0b0a;
+		--color-danger-tint:#2e1817;
+		--color-danger-tint-border:#6b2c28;
+		--color-danger-ink:#ffa39d;
+		--color-danger-soft:#2a1716;
+		--color-warn-tint:#2a2310;
+		--color-warn-tint-border:#5e4b14;
+		--color-warn-strong:#e0a82e;
+		--color-warn-ink:#f0d68a;
+		--color-warn-ink-soft:#d6b95e;
+		--color-info-tint:#172238;
+		--color-info-tint-border:#2f4b78;
+		--color-info-ink:#c5d6f2;
+		--color-success:#7bd08a;
+		--color-success-tint:#152619;
+		--color-success-tint-border:#2d5a37;
+		--color-note-tint:#2b2619;
+		--color-note-ink:#d8c38f;
+
+		--tile-face-top:30% 23%;
+		--tile-face-bottom:32% 17%;
+		--tile-mono-fill:30% 32% / .55;
+		--tile-mono-shadow:0% 0% / .35;
+		--tile-mono-ink:60% 80%;
+
+		--shadow-header:0 1px 6px rgba(0,0,0,.4);
+		--shadow-card:0 1px 3px rgba(0,0,0,.4);
+		--shadow-card-hover:0 2px 8px rgba(0,0,0,.5);
+		--shadow-modal:0 6px 28px rgba(0,0,0,.6);
+		--shadow-raised:0 1px 2px rgba(0,0,0,.5);
+		--shadow-sheet:0 -6px 28px rgba(0,0,0,.6);
+		--overlay:rgba(0,0,0,.6);
 	}
 }

@@ -86,6 +86,8 @@ var accountTables = map[string]accountTable{
 		"SELECT COUNT(*) FROM artifact_network_origins WHERE artifact_id = '" + deletedArtifact + "'"},
 	"agent_transcripts": {reachCascade, "cascades from artifacts(id)",
 		"SELECT COUNT(*) FROM agent_transcripts WHERE artifact_id = '" + deletedArtifact + "'"},
+	"artifact_version_assets": {reachCascade, "cascades from artifact_versions; retained payloads are included in blob_references",
+		"SELECT COUNT(*) FROM artifact_version_assets WHERE artifact_id = '" + deletedArtifact + "'"},
 	"artifact_versions": {reachCascade,
 		"cascades from artifacts(id) — and DeleteArtifact and DeleteAccount read every version's blob ids " +
 			"out first, since an older version's body is named by no other row",
