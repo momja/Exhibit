@@ -49,6 +49,22 @@ CREATE TABLE artifact_versions (
     PRIMARY KEY (artifact_id, seq)
 );
 
+-- Retain the exact asset ids and payloads each superseded version used.
+-- Current assets stay in artifact_assets; history snapshots are immutable.
+CREATE TABLE artifact_version_assets (
+    artifact_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    generation_id TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    blob_id TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (artifact_id, seq, id),
+    FOREIGN KEY (artifact_id, seq) REFERENCES artifact_versions(artifact_id, seq) ON DELETE CASCADE
+);
+
 -- Every artifact has a version 1, so "the head is the highest seq" holds for
 -- every artifact without any code path having to remember to create one. The
 -- backfill gives the artifacts that already exist theirs...
@@ -94,7 +110,10 @@ CREATE VIEW blob_references AS
     SELECT v.widget_blob_id AS blob_id, a.owner_id AS owner_id
       FROM artifact_versions v
       JOIN artifacts a ON a.id = v.artifact_id
-     WHERE v.widget_blob_id != '';
+     WHERE v.widget_blob_id != ''
+    UNION ALL
+    SELECT va.blob_id, a.owner_id FROM artifact_version_assets va
+      JOIN artifacts a ON a.id = va.artifact_id WHERE va.blob_id != '';
 
 -- +goose Down
 DROP VIEW blob_references;
@@ -110,4 +129,5 @@ CREATE VIEW blob_references AS
      WHERE aa.blob_id != '';
 
 DROP TRIGGER artifacts_initial_version;
+DROP TABLE artifact_version_assets;
 DROP TABLE artifact_versions;

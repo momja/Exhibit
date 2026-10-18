@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 40.316795 49.983387" role="img" aria-label="Exhibit logo" class="logo" focusable="false">
+  <style>@media (prefers-color-scheme:dark){.logo-wire{stroke:#b4bac4}.logo-nail{fill:#b4bac4}}</style>
   <defs>
     <linearGradient id="linearGradient294">
       <stop style="stop-color:#808080;stop-opacity:1" offset="0"/>
@@ -30,8 +31,8 @@
     <rect style="fill:#23559e;fill-opacity:1;stroke:#000000;stroke-width:1.99229;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" width="12.447359" height="16.068565" x="61.341995" y="67.967896"/>
     <circle style="fill:url(#radialGradient294);stroke:url(#radialGradient292);stroke-width:0;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" cx="58.593651" cy="40.417534" r="2.6903682"/>
     <path style="font-weight:bold;font-size:41.0282px;line-height:0;font-family:'.Diwan Kufi PUA';text-align:center;letter-spacing:2.44032px;text-anchor:middle;fill:#de281d;stroke:#000000;stroke-width:1.98523;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" d="M 60.383501,72.781407 H 37.290736 V 48.036637 H 60.383501 V 52.82273 H 45.481485 v 4.270925 h 13.829928 v 4.786094 H 45.481485 v 6.115565 h 14.902016 z" aria-label="E"/>
-    <path style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:1;stroke-linecap:round;stroke-dasharray:none" d="m 50.96285,47.859368 5.356268,-7.874052 4.90919,8.007163"/>
+    <path class="logo-wire" stroke="#000000" style="fill:none;fill-opacity:1;stroke-width:1;stroke-linecap:round;stroke-dasharray:none" d="m 50.96285,47.859368 5.356268,-7.874052 4.90919,8.007163"/>
     <rect style="fill:#fae317;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-linecap:round;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill" width="23.057453" height="10.245288" x="37.318401" y="73.774017"/>
-    <circle style="fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" cx="56.133476" cy="38.734268" r="2.1087794"/>
+    <circle class="logo-nail" fill="#000000" style="fill-opacity:1;stroke:#000000;stroke-width:0;stroke-linecap:round;stroke-dasharray:none;paint-order:stroke markers fill" cx="56.133476" cy="38.734268" r="2.1087794"/>
   </g>
 </svg>

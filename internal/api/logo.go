@@ -18,6 +18,14 @@ import (
 // an accessible name. It is used two ways: inlined directly in the header,
 // and base64-encoded into the favicon data URI below.
 //
+// The wire and the nail are the only parts drawn in plain black on the page
+// itself rather than on the white frame, so they are the only parts a dark
+// header would swallow (av-xie4). They carry their color as presentation
+// attributes, which CSS outranks, and the SVG's own <style> lightens them
+// under prefers-color-scheme: dark. Inline, that rule follows the page; as
+// an image it follows the browser; the PWA rasterizer ignores it and draws
+// the light mark on its white tile.
+//
 // It is also the single source the PWA icon build step (web/pwa-icons)
 // rasterizes at build time (av-emh4) — one file, two consumers, so the logo
 // artwork and the generated icons never drift apart.

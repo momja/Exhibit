@@ -190,76 +190,18 @@ func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string
 // which is precisely the permanent leak the deletion queue exists to make
 // impossible.
 func artifactBlobIDs(ctx context.Context, tx *sql.Tx, userID int64) ([]string, error) {
-	rows, err := tx.QueryContext(ctx,
-		"SELECT source_blob_id, widget_blob_id FROM artifacts WHERE owner_id = ?", userID)
+	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT blob_id FROM blob_references WHERE owner_id = ?`, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	var ids []string
 	for rows.Next() {
-		var body, widget string
-		if err := rows.Scan(&body, &widget); err != nil {
+		var id string
+		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		if body != "" {
-			ids = append(ids, body)
-		}
-		if widget != "" {
-			ids = append(ids, widget)
-		}
+		ids = append(ids, id)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	// Every version's blobs, through the artifacts they belong to.
-	versionRows, err := tx.QueryContext(ctx,
-		`SELECT v.body_blob_id, v.widget_blob_id FROM artifact_versions v
-           JOIN artifacts a ON a.id = v.artifact_id
-          WHERE a.owner_id = ?`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer versionRows.Close()
-	for versionRows.Next() {
-		var body, widget string
-		if err := versionRows.Scan(&body, &widget); err != nil {
-			return nil, err
-		}
-		for _, id := range []string{body, widget} {
-			if id != "" {
-				ids = append(ids, id)
-			}
-		}
-	}
-	if err := versionRows.Err(); err != nil {
-		return nil, err
-	}
-
-	// The asset blobs, through the artifacts that reference them so the scope
-	// is the same owner predicate. DISTINCT because content addressing is per
-	// owner: two of this account's artifacts loading the same payload name one
-	// blob, and enqueuing it twice would be a second decision about bytes the
-	// first one already condemned.
-	assetRows, err := tx.QueryContext(ctx,
-		`SELECT DISTINCT aa.blob_id FROM artifact_assets aa
-           JOIN artifacts a ON a.id = aa.artifact_id
-          WHERE a.owner_id = ?`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer assetRows.Close()
-
-	for assetRows.Next() {
-		var blobID string
-		if err := assetRows.Scan(&blobID); err != nil {
-			return nil, err
-		}
-		if blobID != "" {
-			ids = append(ids, blobID)
-		}
-	}
-	return ids, assetRows.Err()
+	return ids, rows.Err()
 }

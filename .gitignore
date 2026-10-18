@@ -14,10 +14,8 @@ $RECYCLE.BIN/
 .fseventsd/
 .apdisk
 
-# Beads / Dolt files (added by bd init)
-.dolt/
+# Local dev data and the built server binary.
 *.db
-.beads-credential-key
 data/
 server
 
@@ -37,3 +35,5 @@ node_modules/
 
 # Local Claude Code settings — no longer tracked in git history.
 /.claude/
+
+/.paper-canvas/

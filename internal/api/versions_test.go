@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -213,10 +216,7 @@ func TestAnAgentCredentialCannotReachVersionHistory(t *testing.T) {
 // A refetch is a version, and the body it replaces is kept; one that returns
 // the document the artifact already holds records nothing.
 //
-// Ingest stores the page with an injected <base href>, which a refetch does not
-// (TestRefetchArtifactOverwritesBody pins that), so the first refetch always
-// differs from what ingest stored. The second, of the same page, is the one
-// that is a no-op.
+// Ingest and refetch store the same canonical document, including its base URL.
 func TestRefetchIsAVersionAndAnUnchangedOneIsNot(t *testing.T) {
 	page := "<html><head><title>Live</title></head><body>first</body></html>"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -233,15 +233,15 @@ func TestRefetchIsAVersionAndAnUnchangedOneIsNot(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	}
 	refetch()
-	require.Equal(t, 2, versionCount(t, r, id))
+	require.Equal(t, 1, versionCount(t, r, id))
 	refetch()
-	assert.Equal(t, 2, versionCount(t, r, id), "the same document records nothing")
+	assert.Equal(t, 1, versionCount(t, r, id), "the same document records nothing")
 
 	page = "<html><head><title>Live</title></head><body>second</body></html>"
 	refetch()
 
 	vs := listVersions(t, r, id)
-	require.Len(t, vs, 3)
+	require.Len(t, vs, 2)
 	assert.Equal(t, "refetch", vs[0].Origin)
 	assert.Equal(t, srv.URL, vs[0].Message)
 
@@ -295,4 +295,74 @@ func TestEditPageEscapesVersionMessages(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "<script>alert(1)</script>")
 	assert.Contains(t, rec.Body.String(), "&lt;script&gt;alert(1)&lt;/script&gt;")
+}
+
+func TestWidgetStorageFailureDoesNotCreateAVersion(t *testing.T) {
+	r := newTestRouter(t)
+	id := createArtifact(t, r, map[string]any{"title": "T", "body": "<html>one</html>"})
+	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>old</b>").Code)
+	healthy := r.cfg.Blob
+	failing := &failingGets{Store: healthy}
+	r.cfg.Blob = failing
+	w := putWidgetReq(t, r, id, "<b>new</b>")
+	r.cfg.Blob = healthy
+	require.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Zero(t, failing.puts)
+	assert.Equal(t, 2, versionCount(t, r, id))
+}
+
+func TestRestoreMissingWidgetLeavesCodeAndStateUntouched(t *testing.T) {
+	r := newTestRouter(t)
+	id := createArtifact(t, r, map[string]any{"title": "T", "body": "<html>one</html>"})
+	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>tile</b>").Code)
+	v, err := r.cfg.Store.GetVersion(t.Context(), 1, id, 2)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, deleteWidgetReq(t, r, id).Code)
+	putState(t, r, id, "score", "99")
+	require.NoError(t, r.cfg.Blob.Delete(t.Context(), v.WidgetBlobID))
+	w := restoreReq(t, r, id, 2)
+	require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Equal(t, 3, versionCount(t, r, id))
+	assert.Equal(t, map[string]string{"score": "99"}, getState(t, r, id))
+	assert.Equal(t, `""`, artifactField(t, r, id, "widget_blob_id"))
+}
+
+func TestRestoreStorageFailureReportsServerError(t *testing.T) {
+	r := newTestRouter(t)
+	id := createArtifact(t, r, map[string]any{"title": "T", "body": "<html>one</html>"})
+	patchArtifact(t, r, id, map[string]any{"body": "<html>two</html>"})
+	healthy := r.cfg.Blob
+	r.cfg.Blob = &failingGets{Store: healthy}
+	w := restoreReq(t, r, id, 1)
+	r.cfg.Blob = healthy
+	require.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, 2, versionCount(t, r, id))
+}
+
+type failedVersionStore struct{ store.Store }
+
+func (s failedVersionStore) CommitVersion(context.Context, int64, string, store.VersionChange) (*store.Version, error) {
+	return nil, errors.New("version commit unavailable")
+}
+
+func TestFailedVersionCommitReclaimsStagedContent(t *testing.T) {
+	for _, widget := range []bool{false, true} {
+		t.Run(fmt.Sprint("widget=", widget), func(t *testing.T) {
+			r, blobDir := newTestRouterWithBlobDir(t)
+			id := createArtifact(t, r, map[string]any{"title": "T", "body": "<html>one</html>"})
+			before := blobFileNames(t, blobDir)
+			healthy := r.cfg.Store
+			r.cfg.Store = failedVersionStore{Store: healthy}
+			var w *httptest.ResponseRecorder
+			if widget {
+				w = putWidgetReq(t, r, id, "<b>tile</b>")
+			} else {
+				w = doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{"body": "<html>two</html>"})
+			}
+			r.cfg.Store = healthy
+			require.Equal(t, http.StatusInternalServerError, w.Code)
+			assert.Equal(t, before, blobFileNames(t, blobDir))
+			assert.Equal(t, 1, versionCount(t, r, id))
+		})
+	}
 }

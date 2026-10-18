@@ -109,6 +109,7 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 		// 032's version history (artifact versions): the trigger first, since it
 		// names columns of the table it fires on, then the table.
 		"DROP TRIGGER IF EXISTS artifacts_initial_version",
+		"DROP TABLE IF EXISTS artifact_version_assets",
 		"DROP TABLE IF EXISTS artifact_versions",
 		// 030's metering ledger (av-2yws) — the table carries its indexes.
 		"DROP TABLE IF EXISTS agent_usage",
@@ -218,6 +219,7 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 		// ALTERs below.
 		"DROP TRIGGER IF EXISTS artifacts_initial_version",
 		"DROP VIEW IF EXISTS blob_references",
+		"DROP TABLE IF EXISTS artifact_version_assets",
 		"DROP TABLE IF EXISTS artifact_versions",
 		`CREATE VIEW blob_references AS
              SELECT source_blob_id AS blob_id, owner_id FROM artifacts WHERE source_blob_id != ''

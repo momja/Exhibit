@@ -1,12 +1,11 @@
 package api
 
 import (
-	"bytes"
+	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
-
-	"github.com/google/uuid"
 
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -109,20 +108,16 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 
 	current := ""
 	if a.WidgetBlobID != "" {
-		// A widget whose blob cannot be read counts as different, so the save
-		// repairs it.
-		current, _ = ro.readBlobString(r.Context(), a.WidgetBlobID)
-	}
-	if a.WidgetBlobID == "" || current != req.Body {
-		blobID := uuid.New().String()
-		if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader([]byte(req.Body))); err != nil {
-			serverError(w, r, "store widget body", err)
+		// A missing widget can be repaired; other storage failures abort the save.
+		var err error
+		current, err = ro.readBlobString(r.Context(), a.WidgetBlobID)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			serverError(w, r, "read previous widget body", err)
 			return
 		}
-		if _, err := ro.cfg.Store.CommitVersion(r.Context(), ownerID, id, store.VersionChange{
-			Provenance:   versionProvenance(r, store.VersionEdit),
-			WidgetBlobID: &blobID,
-		}); err != nil {
+	}
+	if a.WidgetBlobID == "" || current != req.Body {
+		if err := ro.storeVersionContent(r.Context(), ownerID, id, req.Body, true, versionProvenance(r, store.VersionEdit)); err != nil {
 			writeArtifactError(w, r, "save widget version", err)
 			return
 		}

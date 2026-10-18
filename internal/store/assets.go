@@ -120,15 +120,30 @@ func (s *SQLiteStore) ReplaceArtifactAssets(ctx context.Context, ownerID int64, 
 		return nil, err
 	}
 
+	superseded, err := replaceArtifactAssets(ctx, tx, artifactID, generationID, assets)
+	if err != nil {
+		return nil, err
+	}
+	queued, err := enqueueUnreferencedBlobs(ctx, tx, superseded...)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return queued, nil
+}
+
+// replaceArtifactAssets changes rows only. The caller checks ownership and
+// queues superseded blobs after all of its reference changes are complete.
+func replaceArtifactAssets(ctx context.Context, tx *sql.Tx, artifactID, generationID string, assets []ArtifactAsset) ([]string, error) {
 	superseded, err := assetBlobIDs(ctx, tx, artifactID)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.ExecContext(ctx,
-		"DELETE FROM artifact_assets WHERE artifact_id=?", artifactID); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM artifact_assets WHERE artifact_id=?", artifactID); err != nil {
 		return nil, err
 	}
-
 	for _, a := range assets {
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO artifact_assets
@@ -138,17 +153,7 @@ func (s *SQLiteStore) ReplaceArtifactAssets(ctx context.Context, ownerID int64, 
 			return nil, fmt.Errorf("insert asset %s: %w", a.SourceURL, err)
 		}
 	}
-
-	// After the inserts, so a payload carried over unchanged between
-	// generations counts as still referenced and its bytes are never queued.
-	queued, err := enqueueUnreferencedBlobs(ctx, tx, superseded...)
-	if err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return queued, nil
+	return superseded, nil
 }
 
 // ListArtifactAssets returns one artifact's assets, newest generation first by
@@ -202,7 +207,12 @@ func (s *SQLiteStore) GetArtifactAssetUnscoped(ctx context.Context, artifactID, 
 		`SELECT id, artifact_id, generation_id, source_url, blob_id,
                 content_type, size_bytes, created_at
            FROM artifact_assets
-          WHERE artifact_id = ? AND id = ?`, artifactID, assetID)
+          WHERE artifact_id = ?1 AND id = ?2
+          UNION ALL
+         SELECT id, artifact_id, generation_id, source_url, blob_id,
+                content_type, size_bytes, created_at
+           FROM artifact_version_assets
+          WHERE artifact_id = ?1 AND id = ?2 LIMIT 1`, artifactID, assetID)
 
 	var a ArtifactAsset
 	var createdAt any
@@ -293,4 +303,18 @@ func scanAssets(rows *sql.Rows) ([]ArtifactAsset, error) {
 		out = append(out, a)
 	}
 	return out, rows.Err()
+}
+
+// VersionAssets returns the payload metadata captured when this version was
+// superseded. It is owner-scoped and never reads the live generation.
+func (s *SQLiteStore) VersionAssets(ctx context.Context, ownerID int64, artifactID string, seq int) ([]ArtifactAsset, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, artifact_id, generation_id, source_url, blob_id, content_type, size_bytes, created_at
+		 FROM artifact_version_assets WHERE artifact_id = ? AND seq = ? AND `+ownedArtifact+`
+		 ORDER BY created_at, source_url`, artifactID, seq, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAssets(rows)
 }
