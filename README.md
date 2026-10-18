@@ -76,6 +76,11 @@ make lint
 See the [official install guide](https://golangci-lint.run/welcome/install/) for
 alternatives (Homebrew, the install script, CI setup).
 
+### Pull request reviews
+
+[PR-Agent](./docs/pr_agent.md) reviews pull requests through GitHub Actions.
+The setup guide covers the required `OPENAI_KEY` secret and PR comment commands.
+
 ## API
 
 The full HTTP API reference — every route plus the ingest, network-allowlist,

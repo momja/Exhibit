@@ -1,0 +1,57 @@
+name: PR Agent
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-agent-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.comment.id }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: >-
+      github.event.sender.type != 'Bot' &&
+      (
+        (github.event_name == 'pull_request_target' && !github.event.pull_request.draft) ||
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.pull_request &&
+          contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+          startsWith(github.event.comment.body, '/')
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+    steps:
+      - name: Check OpenAI secret
+        shell: bash
+        run: |
+          if [ -z "$OPENAI_KEY" ]; then
+            echo "::error::Add the OPENAI_KEY repository secret under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      # PR-Agent reads the diff through GitHub's API. Do not check out or run PR code
+      # in this job: pull_request_target has repository secrets and write access.
+      - name: Review pull request or respond to a command
+        # The-PR-Agent/pr-agent v0.48.0 GitHub Action runtime, pinned by digest.
+        uses: docker://pragent/pr-agent@sha256:80edef71baa3df28c129d858d4b53784abfc14704c235efb32b6c461d5399a6d
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTION_CONFIG__AUTO_REVIEW: "true"
+          GITHUB_ACTION_CONFIG__AUTO_DESCRIBE: "false"
+          GITHUB_ACTION_CONFIG__AUTO_IMPROVE: "false"
+          GITHUB_ACTION_CONFIG__HANDLE_PUSH_TRIGGER: "true"
+          GITHUB_ACTION_CONFIG__PUSH_COMMANDS: '["/review"]'

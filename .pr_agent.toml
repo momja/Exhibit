@@ -1,0 +1,13 @@
+[pr_reviewer]
+persistent_comment = true
+extra_instructions = """
+Focus on actionable correctness, security, and data-loss risks rather than style.
+Preserve Exhibit's app/render origin boundary, artifact sandbox and CSP, and the
+single HTTP API write path. Check Go error handling and SQLite transaction
+boundaries. New database migrations must have a unique version above every
+existing SQL and Go migration. Gallery updates should use server-rendered htmx
+partials; page scripts are native ES modules and icons are self-hosted Phosphor.
+"""
+
+[pr_description]
+publish_description_as_comment = true
