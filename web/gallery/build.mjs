@@ -1,7 +1,7 @@
 // Copies the gallery page assets (index/new/detail/edit/... .css and .js) verbatim
 // into internal/api/assets/gallery, which is go:embed-ed and served from the
 // app origin under /assets/gallery/. No bundling or minification: the files
-// are plain hand-written CSS/JS with no imports, and copying verbatim keeps
+// are plain hand-written CSS/JS, and copying verbatim keeps
 // the served bytes greppable by the Go tests that assert on rule/function
 // presence.
 //
@@ -24,7 +24,7 @@ const files = [
   // them.
   // api.js joins them (av-5imk): it is the one credentialed API client every
   // page script calls instead of building an Authorization header itself.
-  "tokens.css", "components.css", "components.js", "api.js",
+  "tokens.css", "components.css", "components.js", "api.js", "api-module.js",
   "index.css", "index.js",
   "new.css", "new.js",
   "detail.css", "detail.js",

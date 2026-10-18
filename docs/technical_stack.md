@@ -344,18 +344,19 @@ which a module script requires. The rules for getting there:
 - Shared scripts convert last. A file containing `export` is a syntax error
   when loaded as a classic script, so `api.js`, `components.js`,
   `state-api.js` and `network-prompt.js` stay classic while any classic page
-  still loads them. Until then a module uses them as globals. Module scripts
-  are deferred, so they run after every classic script on the page and those
-  globals already exist.
+  still loads them. Until then a module can use them as globals, or import
+  `api-module.js` to call the shared credential client through its compatibility
+  bridge. Module scripts are deferred, so they run after every classic script
+  on the page and those globals already exist.
 - A classic page can use a new module by loading it with its own
   `<script type="module">` tag, as long as the module binds itself to the
   markup instead of waiting to be called. Nothing classic can import it.
 - Per-request values keep arriving through the inline bootstrap `<script>`
   described above.
-- `testdom.mjs` loads scripts with `vm.runInContext`, which cannot resolve an
-  `import`. The first module that needs a page-script test extends the harness
-  to load modules through `vm.SourceTextModule`, which Node gates behind
-  `--experimental-vm-modules`, and keeps the test.
+- `testdom.mjs` loads classic scripts with `vm.runInContext` and native modules
+  with `loadModule()` through `vm.SourceTextModule`, including relative imports.
+  Run the Node suite with `node --experimental-vm-modules --test`; the Go test
+  runner supplies the same flag.
 
 **Page scripts are tested by running them (av-kmwj).** `web/gallery/testdom.mjs`
 is a small DOM — element lookup, listeners, `hidden`, `textContent`, and a
