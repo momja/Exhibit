@@ -1,6 +1,6 @@
 ---
 id: Exh-m4gq
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-18T23:03:59Z
@@ -20,5 +20,11 @@ Make registration and final cleanup agree on ownership of the session identity. 
 
 ## Acceptance Criteria
 
-A deterministic lifecycle regression exercises process completion before registration and proves no closed session remains registered or prevents resume. Duplicate/rejected startup cleanup remains intact. Focused lifecycle race tests and combined-stack Go/script checks pass.
+An immediate-exit lifecycle regression proves no closed session remains registered or prevents resume. Duplicate/rejected startup cleanup remains intact. Focused lifecycle race tests and combined-stack Go/script checks pass.
 
+
+## Notes
+
+**2026-10-18T23:06:28Z**
+
+Registration now holds the manager mutex before process readers/exit observers start, so final cleanup cannot finish before the session is published. Added 64 immediate-exit attempts covering fresh and resumed conversations, checking identity release and scratch cleanup. Focused lifecycle, persistence, admission and concurrent-resume tests passed with the race detector. Propagating this fix and #152 transcript preservation to the final stack for release validation.

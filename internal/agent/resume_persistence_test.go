@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -121,6 +122,41 @@ func TestConcurrentResumeReservesBeforeLoadingHistory(t *testing.T) {
 	_, err := m.Create(context.Background(), resumeOptions(s.ID))
 	assert.ErrorIs(t, err, ErrSessionLive)
 	assert.Nil(t, m.Get(7, "missing"), "other registry operations remain available")
+}
+
+// A failed Pi startup can exit before Create has returned. Repeated attempts
+// must release the identity and scratch directory, including for a resume.
+func TestImmediateProcessExitReleasesConversation(t *testing.T) {
+	m := newLimitedManager(t)
+	ctx := context.Background()
+	require.NoError(t, m.st.PutArtifact(ctx, &store.Artifact{
+		ID: "artifact", OwnerID: 7, Title: "Counter", SourceBlobID: "body", Tier: 1,
+	}))
+	require.NoError(t, m.st.SaveTranscript(ctx, 7, store.Transcript{
+		ArtifactID: "artifact", SessionID: "conversation", SessionFile: "{\"turn\":1}\n",
+	}))
+	script := filepath.Join(t.TempDir(), "exiting-pi")
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\nexit 1\n"), 0o700))
+	m.cfg.PiBin = script
+	for _, resumeID := range []string{"", "conversation"} {
+		t.Run("resume="+resumeID, func(t *testing.T) {
+			for range 32 {
+				s, err := m.Create(ctx, resumeOptions(resumeID))
+				require.NoError(t, err)
+				select {
+				case <-s.Done():
+				case <-time.After(3 * time.Second):
+					t.Fatal("failed startup did not finish")
+				}
+				waitForConversationRelease(t, m, s.ID)
+				require.Eventually(t, func() bool {
+					_, err := os.Stat(s.workDir)
+					return os.IsNotExist(err)
+				}, 3*time.Second, time.Millisecond)
+				assert.Nil(t, m.Get(7, s.ID))
+			}
+		})
+	}
 }
 
 func resumableConversation(t *testing.T, m *Manager, id string) *Session {

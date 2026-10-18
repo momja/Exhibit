@@ -392,6 +392,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		done:              make(chan struct{}),
 		lastActive:        time.Now(),
 	}
+	// Publish the session before its process-exit cleanup can retire it. That
+	// cleanup takes the same mutex, including when Pi exits during startup.
+	m.mu.Lock()
 	go s.readLoop(stdout)
 	go s.drainStderr(stderr)
 	go func() {
@@ -399,7 +402,6 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		s.finish()
 	}()
 
-	m.mu.Lock()
 	if _, live := m.sessions[id]; live {
 		m.mu.Unlock()
 		s.kill()
