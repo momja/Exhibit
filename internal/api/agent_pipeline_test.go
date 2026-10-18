@@ -302,7 +302,12 @@ func TestAgentSessionIgnoresHostileTitleAndStaysScoped(t *testing.T) {
 
 	// The mock obeyed the injection — it emitted a save naming the victim.
 	// Without that, the assertion below would pass for the wrong reason.
-	assert.True(t, containsAny(h.llm.toolCallArgs(), victimID),
+	// The save is visible before Pi sends the tool result back to the model.
+	// Wait for that next request: it is what echoes the attempted arguments
+	// into the recorder, and closing the session earlier loses the evidence.
+	require.Eventually(t, func() bool {
+		return containsAny(h.llm.toolCallArgs(), victimID)
+	}, 5*time.Second, 10*time.Millisecond,
 		"the scripted model never emitted the injected id, so this test proved nothing")
 
 	// Obeying it achieves nothing: the other artifact is untouched, byte for
