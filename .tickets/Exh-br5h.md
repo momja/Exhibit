@@ -42,3 +42,7 @@ Removed Continue and the general comments field. Single-choice rows now commit i
 **2026-10-19T22:50:55Z**
 
 Made option rows visibly clickable with rounded bubble borders, a subtle fill, more spacing and 44px minimum height. Hover and selection highlight the full button. Updated the canvas, docs and desktop/mobile screenshots. Validation: question-template and gallery script suites passed; browser checks confirmed light/dark appearance, no mobile overflow and immediate single-click submission.
+
+**2026-10-19T22:54:42Z**
+
+Confirmed the option labels were left-aligned, then centered the label content horizontally and vertically in both the app and canvas. Updated desktop/mobile screenshots. Validation: asset build and syntax checks passed; measured label and button centers in the live browser at desktop and phone sizes, with zero vertical offset and less than 0.01px horizontal offset.
