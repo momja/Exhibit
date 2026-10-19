@@ -92,7 +92,8 @@ func TestSessionModesReadOnlyWhenSourceIsNeeded(t *testing.T) {
 
 func TestResumeStillRequiresFreshSource(t *testing.T) {
 	assert.Contains(t, resumedNotice, "artifact may have changed")
-	assert.Contains(t, resumedNotice, "get_artifact before you change anything")
+	assert.Contains(t, resumedNotice, "freshly prepared get_artifact tool result for this prompt")
+	assert.Contains(t, resumedNotice, "if none is available, call get_artifact before changing anything")
 }
 
 // A widget-only session (av-fafu — the edit page's "Generate widget" button)
