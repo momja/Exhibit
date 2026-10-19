@@ -726,6 +726,55 @@ real pi sidecar against it (`internal/api/agent_pipeline_test.go` and
 to end with no real credential. The exhibit extension registers the provider only
 when `MOCK_LLM_URL` is set.
 
+### Pi runtime compatibility
+
+The Dockerfile pins **Pi 1.3.0**, verified against npm's
+[`latest` metadata](https://registry.npmjs.org/@earendil-works/pi-coding-agent/latest)
+on 2026-10-19. It requires **Node ≥22.19.0**; the runtime image uses Node 22,
+and npm's `--engine-strict` makes an incompatible runtime fail the image build.
+Source installs should use the Dockerfile's pin too.
+
+The [upstream release notes](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/CHANGELOG.md)
+from 0.99.1 through 1.3.0 retain Exhibit's RPC and session contracts:
+
+- Pi 1.0 requires `--model` when passing `--provider`. When the configured
+  model is empty, Exhibit now omits both flags, preserving Pi 0.99.1's
+  automatic authenticated model selection (it ignored `--provider` alone).
+  The isolated subprocess environment supplies only the configured key.
+  Explicit model selection still uses `--provider` and `--model` together.
+  Both BYOK and platform sessions, including resume, are covered against real Pi.
+- Successful RPC commands still correlate by `id`. A prompt consumed by an
+  `input` handler returns `data.disposition: "handled"`; it starts no agent
+  run and emits no `agent_settled`. The guardrail reports its usage and refusal
+  through its own notification before that response.
+- `agent_settled` remains the end of automatic work. `message_end` carries
+  final assistant usage; `get_session_stats` supplies cumulative totals for
+  reconciliation. Guardrail usage remains separately reported operator spend.
+- Session files remain version 3 JSONL. Exhibit keeps Pi's bytes, restores
+  them with `--session`, and runs from `/` so the recorded directory exists
+  on resume. An actual 0.99.1 transcript is kept under `internal/api/testdata`
+  and resumed with the current Pi in the API suite.
+- Pi 1.3.0 restores active tools on resume. Exhibit's explicit
+  `--no-builtin-tools` still selects the extension's tools on every spawn.
+  Pi 1.2.0 also expanded `before_agent_start` to custom-message runs; Exhibit
+  currently uses no such handler. A future handler reading `event.prompt`
+  must first check `event.messageType === "user"`.
+
+No RPC, tool, or transcript format adapter change was needed for this upgrade.
+Before changing the pin again, build assets and run the API and agent suites
+with the intended Pi installed on `PATH`:
+
+```sh
+sh scripts/build-assets.sh
+pi --version
+go test -count=1 ./internal/api ./internal/agent
+```
+
+The real-Pi cases exercise tool calls, guardrail handled input, settlement,
+conversation persistence and resume, platform event redaction, and token
+metering across turns and resume. They skip if `pi` is absent, so a passing
+run without Pi does not verify an upgrade.
+
 ## Extraction plan (epic `Exh-i0ll`)
 
 The agent is a PoC guest in this repository, not a permanent resident. The

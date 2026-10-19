@@ -1,12 +1,14 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -92,8 +94,16 @@ func TestGuardrailBlocksAPromptBeforeTheAgentRuns(t *testing.T) {
 	assert.Contains(t, stream, agent.GuardrailBlockedReply, "the user sees the host's fixed reply")
 	assert.NotContains(t, stream, "exhibit_guard:", "the extension's raw signal is not forwarded")
 	assert.NotContains(t, stream, "agent_start", "a blocked prompt must not start a turn")
+	assert.NotContains(t, stream, "agent_settled", "handled input starts no run and needs no settle")
 	assert.Zero(t, agentTurns(h), "the blocked prompt must never reach the agent model")
 	assert.NotContains(t, artifactBody(t, r, id), "#22a15c")
+	spend, err := r.cfg.Store.InstanceAgentSpend(context.Background(), time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, store.UsageTotals{InputTokens: 180, OutputTokens: 1}, spend,
+		"the real Pi input hook reports the screen's usage even when it handles the prompt")
+	agentSpend, err := r.cfg.Store.SessionAgentSpend(context.Background(), defaultOwnerID, session)
+	require.NoError(t, err)
+	assert.Equal(t, store.UsageTotals{}, agentSpend, "screening is separate from agent usage")
 
 	// The next, allowed prompt still runs, and still has the artifact source:
 	// the opening data block rode the blocked prompt and must not be lost with it.

@@ -28,7 +28,7 @@ on most systems:
 |------|---------|-----|
 | [Go](https://go.dev/dl/) | 1.25+ | Compiles the server. |
 | [Node.js](https://nodejs.org/) + npm | 22+ | Bundles assets (such as [CodeMirror](https://codemirror.net/), [Phosphor](https://phosphoricons.com/)) at build time via `make assets`, and runs `pi` at runtime. |
-| [`pi`](https://github.com/badlogic/pi-mono) | see `PI_VERSION` in the `Dockerfile` | The AI agent harness the server spawns per chat session. Install with `npm install -g @earendil-works/pi-coding-agent@<PI_VERSION>`. Without it the server starts but every agent feature fails. |
+| [`pi`](https://github.com/earendil-works/pi) | see `PI_VERSION` in the `Dockerfile` | The AI agent harness the server spawns per chat session. Requires Node ≥22.19.0. Install with `npm install -g --engine-strict @earendil-works/pi-coding-agent@<PI_VERSION>`. Without it the server starts but every agent feature fails. |
 
 `make` is also required.
 

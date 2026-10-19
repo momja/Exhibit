@@ -61,7 +61,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
 | `AGENT_API_KEY` | *(unset)* | The instance's **own** provider key for the AI agent. Unset = bring-your-own-key, the default and what every existing instance does. Set = platform mode; read [§4.1](#41-letting-the-instance-supply-the-agent-key-platform-mode) before you set it |
 | `AGENT_PROVIDER` | *(unset)* | Which provider `AGENT_API_KEY` belongs to — `anthropic`, `openai`, `google`, `openrouter`, `opencode-go`. **Required** when the key is set; missing or unrecognized is a startup failure, not a surprise at the first session |
-| `AGENT_MODEL` | *(unset)* | Model for platform-mode sessions. Optional — empty leaves it to the provider's default. Your choice, and never shown to users |
+| `AGENT_MODEL` | *(unset)* | Model for platform-mode sessions. Optional — empty lets Pi select its authenticated default using the configured credential. Your choice, and never shown to users |
 | `GUARDRAIL_PROVIDER` | *(unset)* | Pi provider id of the model that screens agent messages for usage-policy violations. Unset (all three `GUARDRAIL_*`) = no guardrail; see [§4.2](#42-screening-agent-messages-usage-policy-guardrail) |
 | `GUARDRAIL_MODEL` | *(unset)* | That model's id: a classifier such as `jev-latest` or any chat model. Required with the other two |
 | `GUARDRAIL_API_KEY` | *(unset)* | Key for the guardrail's provider, separate from the agent's. Setting only some of the three is a startup failure |

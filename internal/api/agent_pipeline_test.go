@@ -164,6 +164,29 @@ func messageText(raw json.RawMessage) string {
 // self-hosted instance has.
 func newPiHarness(t *testing.T) *piHarness { return newPiHarnessMode(t, false) }
 
+func TestPiRunsWithoutAnExplicitModel(t *testing.T) {
+	for _, platform := range []bool{false, true} {
+		t.Run(fmt.Sprintf("platform=%t", platform), func(t *testing.T) {
+			h := newPiHarnessMode(t, platform)
+			if platform {
+				h.router.cfg.PlatformAgentKey.Model = ""
+			} else {
+				w := doJSON(t, h.router, "PUT", "/api/agent/key", map[string]string{
+					"provider": "exhibit-mock", "model": "",
+				})
+				require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			}
+			id := createArtifact(t, h.router, map[string]any{"title": "Counter", "body": counterBody})
+			session := conversation(t, h, id, "make the button purple")
+			closeAndWait(t, h.router, session)
+			session = resume(t, h.router, id, session)
+			prompt(t, h.router, session, "now make it red")
+			assert.Contains(t, artifactBody(t, h.router, id), "#d64545")
+			assert.Contains(t, keptConversation(t, h.router, id, session, 2).SessionFile, `"provider":"exhibit-mock"`)
+		})
+	}
+}
+
 // newPlatformPiHarness wires the same rig in platform mode (av-siqf): the
 // instance holds the credential, no agent_keys row is written, and the
 // manager strips Pi's model identifiers on the way out.

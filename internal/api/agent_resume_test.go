@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -95,6 +96,47 @@ func TestAConversationKeptBeforeSessionFilesCannotBeResumed(t *testing.T) {
 }
 
 // --- Against a real Pi --------------------------------------------------------
+
+// An upgrade must resume the bytes already in the database, rather than just
+// session files written by the version under test. This fixture is a settled
+// Exhibit read/write/reply turn recorded by Pi 0.99.1 (session format v3).
+func TestPiResumesAConversationPersistedBy0991(t *testing.T) {
+	h := newPiHarness(t)
+	r := h.router
+	file, err := os.ReadFile("testdata/pi-0.99.1-session.jsonl")
+	require.NoError(t, err)
+	var header struct {
+		ID string `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(strings.SplitN(string(file), "\n", 2)[0]), &header))
+	require.NotEmpty(t, header.ID)
+	oldMessages := agent.ProjectSessionFile(string(file))
+	require.GreaterOrEqual(t, len(oldMessages), 4)
+
+	id := createArtifact(t, r, map[string]any{
+		"title": "Current counter", "body": strings.Replace(counterBody, "Count!", "Current!", 1),
+	})
+	require.NoError(t, r.cfg.Store.SaveTranscript(context.Background(), defaultOwnerID, store.Transcript{
+		ArtifactID: id, SessionID: header.ID, Title: "make the button purple",
+		SessionFile: string(file), VersionSeq: 1,
+	}))
+	session := resume(t, r, id, header.ID)
+	require.Equal(t, header.ID, session)
+	prompt(t, r, session, "now make it red")
+	kept := keptConversation(t, r, id, session, 2)
+	assert.Equal(t, "make the button purple", kept.Title)
+	messages := agent.Messages(kept)
+	require.Greater(t, len(messages), len(oldMessages))
+	assert.Equal(t, oldMessages, messages[:len(oldMessages)], "old messages and tool calls survive the upgrade")
+	users := messagesWithRole(lastTurn(t, h.llm), "user")
+	require.Len(t, users, 2)
+	assert.Equal(t, "make the button purple", users[0])
+	assert.Contains(t, users[1], "may have changed since you last read it")
+	body := artifactBody(t, r, id)
+	assert.Contains(t, body, "Current!", "the resumed extension reads its current artifact, not the old tool result")
+	assert.Contains(t, body, "#d64545")
+	assert.Equal(t, 2, kept.VersionSeq)
+}
 
 // resume starts a stored conversation again and returns its session id.
 func resume(t *testing.T, r *Router, artifactID, conversationID string) string {

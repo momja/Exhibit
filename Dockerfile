@@ -67,12 +67,14 @@ FROM node:22-bookworm-slim
 # Bump deliberately and run `go test ./internal/api` (with `pi` on PATH — the
 # agent pipeline tests, Guardrail and the conversation tests among them)
 # against it.
-ARG PI_VERSION=0.99.1
+# Pi 1.3.0 requires Node >=22.19.0. The Node 22 runtime above supplies it;
+# engine-strict below makes an incompatible base fail the image build.
+ARG PI_VERSION=1.3.0
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates \
 	&& rm -rf /var/lib/apt/lists/* \
-	&& npm install -g --ignore-scripts @earendil-works/pi-coding-agent@${PI_VERSION}
+	&& npm install -g --ignore-scripts --engine-strict @earendil-works/pi-coding-agent@${PI_VERSION}
 
 COPY --from=builder /bin/server /server
 
