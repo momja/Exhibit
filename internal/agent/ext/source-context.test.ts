@@ -165,3 +165,28 @@ test('compaction that retains the source base does not inject a second full-sour
  assertPair(result.messages,'SOURCE-r1');assert.equal(result.messages.length,3);
  assert.equal(r.reads,1);assert.equal(r.entries.filter(entry=>entry.customType===SOURCE_READ_ENTRY).length,1);
 });
+
+test('split-turn compaction never appends obsolete preparation after retained reads and edits', async () => {
+ const hooks = new Map(); const entries = []; let known = null; let revision = 'r1'; let reads = 0;
+ const snapshot = value => ({artifactId:'a',sourceRevision:value,artifact:{body:'SOURCE-'+value},
+  result:{content:[{type:'text',text:'SOURCE-'+value}],details:{}}});
+ const pi = {on:(type,fn)=>hooks.set(type,fn),appendEntry:(customType,data)=>entries.push({type:'custom',customType,data})};
+ const ctx = {model,sessionManager:{getBranch:()=>entries},ui:{notify(){}}};
+ installSourceContext(pi,{artifactId:()=> 'a',read:async()=>{reads++;return snapshot(revision);},revision:async()=>revision,
+  current:()=>known,adopt:value=>{known=value;}});
+ await hooks.get('session_start')({},ctx);
+ const user={role:'user',content:[{type:'text',text:'edit'}],timestamp:1};entries.push({type:'message',id:'u1',message:user});
+ await hooks.get('context')({messages:[user]},ctx);
+ revision='r2';known=snapshot(revision);
+ const retained=[{role:'user',content:[{type:'text',text:'compaction summary'}],timestamp:2},
+  {role:'toolResult',toolName:'get_artifact',toolCallId:'real-read',content:[{type:'text',text:'SOURCE-r1'}]},
+  {role:'assistant',content:[{type:'toolCall',id:'edit',name:'edit_artifact',arguments:{edits:[{oldText:'SOURCE-r1',newText:'SOURCE-r2'}]}}]},
+  {role:'toolResult',toolName:'edit_artifact',toolCallId:'edit',content:[{type:'text',text:'Updated artifact'}]}];
+ await hooks.get('session_compact')({},ctx);
+ assert.deepEqual((await hooks.get('context')({messages:retained},ctx)).messages,retained);
+ assert.deepEqual((await hooks.get('context')({messages:retained},ctx)).messages,retained,'later provider requests cannot revive the obsolete fallback');
+ assert.equal(reads,1);assert.equal(known.sourceRevision,'r2');
+ revision='r3';await hooks.get('session_compact')({},ctx);
+ assertPair((await hooks.get('context')({messages:retained},ctx)).messages.slice(-2),'SOURCE-r3');
+ assert.equal(reads,2,'external changes still project the latest validated source');
+});

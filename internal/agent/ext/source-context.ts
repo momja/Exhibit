@@ -107,6 +107,12 @@ export function installSourceContext(pi: ExtensionAPI, options: {
 					// The retained base plus the model's own successful writes
 					// already explains this revision. Do not copy it into context.
 					shownSnapshot = known;
+					// Split-turn compaction can retain a real source read and the
+					// edits after it while dropping this prepared read's user anchor.
+					// That retained context already explains known; never append the
+					// obsolete prepared snapshot after those successful edits.
+					const previous = reads.get(user.id);
+					if (previous && !event.messages.some(message => matches(message, previous))) reads.delete(user.id);
 				} else {
 					let snapshot = known ?? warmed;
 					// A server without OCC tokens still works safely, by reading now.
