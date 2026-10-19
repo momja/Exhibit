@@ -204,6 +204,11 @@
       </p>
       <div id="assets-rows"></div>
       <span id="assets-status" class="text-sm muted"></span>
+      <div class="btn-row">
+        <button type="button" class="btn btn-sm btn-sec" id="assets-export"><i class="ph ph-download-simple" aria-hidden="true"></i> Export assets ZIP</button>
+        <span id="assets-export-status" class="text-sm muted" role="status"></span>
+      </div>
+      <p class="text-sm muted">Downloads all saved assets and a manifest with their source URLs and content types.</p>
     </div>
   </details>
 
@@ -334,6 +339,7 @@ let geolocationApproved = {{if .GeolocationApproved}}true{{else}}false{{end}};
 <script src="/assets/gallery/state.js"></script>
 <script type="module" src="/assets/gallery/state-export.js"></script>
 <script src="/assets/gallery/assets.js"></script>
+<script type="module" src="/assets/gallery/assets-export.js"></script>
 <script type="module" src="/assets/gallery/versions.js"></script>
 <script src="/assets/gallery/tags.js"></script>
 </body>

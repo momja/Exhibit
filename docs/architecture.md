@@ -199,6 +199,14 @@ The only way data changes. Route groups:
   nothing else, so a create or update here would be a second way to put arbitrary
   content behind an artifact's render URL. The delete is the owner's escape hatch
   for the one case no rule decides — a payload whose feature they edited away.
+- `GET /api/artifacts/:id/assets/export` — an owner-only ZIP of the current
+  stored assets (Exh-6fz9), downloaded from the edit page's Stored assets panel.
+  `manifest.json` maps source URLs, content types, sizes, and generation IDs to
+  `assets/<asset-id>/<filename>` entries containing the original bytes. The source
+  filename is sanitized, and the asset ID keeps duplicate filenames separate.
+  An artifact with no assets exports a manifest with an empty list. The archive
+  is completed in a temporary file before sending a response, so a missing or
+  unreadable blob fails the export rather than producing an incomplete download.
 - `GET/POST/DELETE /api/artifacts/:id/origins` — per-origin network decisions
   (av-kmwj). `POST` decides one origin (`allow` | `block`); `DELETE ?origin=…`
   forgets a decision, returning the origin to undecided. This is the runtime
