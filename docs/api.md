@@ -453,6 +453,16 @@ the state inspector may omit the header.
 
 ## Conditional source and widget saves (av-n0gl)
 
+Targeted edits may send `edits: [{"oldText":"unique existing text", "newText":"replacement"}]`
+instead of `body` on artifact `PATCH` or widget `PUT`. These requests always
+require the corresponding `expected_source_revision` or
+`expected_widget_revision`, including for owner/API clients. Each match must be
+exact and unique in the original document, and edits may not overlap or touch.
+All replacements validate before any save. The normal scanning, versioning,
+quota and atomic revision checks still apply. A widget patch returns confirmation
+and its new revision without echoing the entire widget source. Full document
+replacements continue to accept `body`; sending both forms is rejected.
+
 Read `GET /api/artifacts/:id?body=true` for `body` and opaque
 `source_revision` in the same response. Artifact JSON (including create and
 metadata GET) also includes `source_revision` and `widget_revision`.

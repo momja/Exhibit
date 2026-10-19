@@ -644,6 +644,9 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !ro.expandSourceEdits(w, r, a, updates, false) {
+		return
+	}
 	_, bodyPresent := updates["body"]
 	_, preconditionPresent := updates["expected_source_revision"]
 	expected, ok := contentPrecondition(w, r, updates, "expected_source_revision", a.SourceRevision, bodyPresent)

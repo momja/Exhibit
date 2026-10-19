@@ -50,11 +50,17 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
 - **Edits are surgical by default, rewrites by exception.** `edit_artifact`
   carries pi-style `edits[{oldText, newText}]` (exact match first, fuzzy
   quote/dash/whitespace fallback; ambiguous, overlapping, or unmatched edits
-  fail the whole call with no PATCH issued). It reads the latest saved source
-  itself, splices the replacements, and persists through the same PATCH +
-  scan + `artifact_saved` path as `write_artifact`, which remains for full
-  rewrites. Engine: `internal/agent/ext/edit.ts` (pure, node-tested); wiring:
-  `ext/exhibit.ts`.
+  fail the whole call with no PATCH issued). The extension retains the exact
+  source and revision returned by `get_artifact`, resolves replacements against
+  that snapshot, and sends only the exact changed spans plus the revision.
+  The API applies those spans through the same PATCH, scan, version-history,
+  and `artifact_saved` path as a full rewrite. A successful save advances the
+  retained source and revision; there is no hidden reread. A conflict or
+  uncertain save invalidates the snapshot and requires an explicit read before
+  retrying. `edit_widget` follows the same contract for its independent widget
+  snapshot. Full rewrites still use `write_artifact` or `set_widget`, with the
+  revision of the source already read. Engine: `internal/agent/ext/edit.ts`
+  (pure, node-tested); wiring: `ext/exhibit.ts`.
 - **The API refuses anything outside the scope.** The sidecar authenticates
   with a per-session credential (`internal/agentscope`) that resolves to
   (owner, artifact), not the service token. `authMiddleware` allows exactly
