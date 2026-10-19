@@ -2,26 +2,64 @@ package artifacticon
 
 import (
 	"encoding/base64"
+	"encoding/xml"
 	"strings"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/color"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/require"
 )
 
-func TestTagDots(t *testing.T) {
-	tags := []*store.Tag{{Color: "#f00"}, {Color: "#00ff00"}, {Color: `"/><script/>`}, {Color: "#123456"}}
-	for count := 0; count <= len(tags); count++ {
-		uri := DataURI(tags[:count])
-		svg, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(uri, "data:image/svg+xml;base64,"))
-		require.NoError(t, err)
-		require.Equal(t, min(count, 3), strings.Count(string(svg), "<circle"))
-		require.Contains(t, string(svg), `fill="#de281d"`)
-		require.NotContains(t, string(svg), "<script")
-		if count >= 3 {
-			require.Contains(t, string(svg), `cy="11" r="3.5" fill="#ff0000"`)
-			require.Contains(t, string(svg), `cy="16" r="3.5" fill="#00ff00"`)
-			require.Contains(t, string(svg), `cy="21" r="3.5" fill="#6b7280"`)
-		}
+type iconRectangle struct {
+	Fill   string  `xml:"fill,attr"`
+	Width  float64 `xml:"width,attr"`
+	Height float64 `xml:"height,attr"`
+}
+
+func iconRectangles(t *testing.T, tags []*store.Tag) []iconRectangle {
+	t.Helper()
+	svg, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(DataURI(tags), "data:image/svg+xml;base64,"))
+	require.NoError(t, err)
+	var image struct {
+		Rectangles []iconRectangle `xml:"rect"`
 	}
+	require.NoError(t, xml.Unmarshal(svg, &image))
+	require.Len(t, image.Rectangles, 5, "background, three color panels, and a white panel")
+	return image.Rectangles
+}
+
+func TestTagMosaic(t *testing.T) {
+	tags := []*store.Tag{{Color: "#f00"}, {Color: "#00ff00"}, {Color: `"/><script/>`}, {Color: "#123456"}}
+	for count := 1; count <= len(tags); count++ {
+		rects := iconRectangles(t, tags[:count])
+		for i, panel := range rects[1:4] {
+			want := "#fff"
+			if i < count {
+				want = color.Normalize(tags[i].Color)
+			}
+			require.Equal(t, want, panel.Fill)
+		}
+		require.Equal(t, "#fff", rects[4].Fill, "retain the white brand panel")
+	}
+}
+
+func TestUntaggedMosaicUsesBrandPalette(t *testing.T) {
+	rects := iconRectangles(t, nil)
+	require.Equal(t, color.BrandRed, rects[1].Fill)
+	require.Equal(t, color.BrandBlue, rects[2].Fill)
+	require.Equal(t, color.BrandYellow, rects[3].Fill)
+}
+
+func TestTagPanelsHaveBalancedAreas(t *testing.T) {
+	rects := iconRectangles(t, nil)
+	var smallest, largest float64
+	for i, panel := range rects[1:4] {
+		area := panel.Width * panel.Height
+		if i == 0 || area < smallest {
+			smallest = area
+		}
+		largest = max(largest, area)
+	}
+	require.LessOrEqual(t, largest/smallest, 1.2, "each tag should have similar visual weight")
 }

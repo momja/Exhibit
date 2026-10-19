@@ -8,9 +8,9 @@ type: feature
 priority: 2
 assignee: Max Omdal
 ---
-# Artifact favicon with logo E and tag dots
+# Artifact favicon with balanced Mondrian tag colors
 
-Show the E extracted from the Exhibit logo with up to three vertically stacked tag-color dots on sandbox viewer pages and direct render documents. With no tags, show only the E.
+Show a Mondrian mosaic inspired by the Exhibit logo on sandbox viewer pages and direct render documents. Use up to three tag colors in gallery order in similarly sized panels, with a smaller white panel and offset black dividers. Untagged artifacts use the Exhibit brand palette; unused tag panels stay white.
 
 
 ## Notes
@@ -26,3 +26,7 @@ Refined the dots to overlap in a centered vertical stack, per user clarification
 **2026-10-19T19:58:59Z**
 
 Final verification: make assets, go build ./..., full internal/render suite, updated artifacticon/render favicon tests, and focused API favicon tests passed. The first complete API run passed (194s). Repository-wide go test ./... passed every other package but hit an intermittent API failure during concurrent server test activity; a captured full API retry then passed with zero failed tests. Corrected overlapping dot stack is committed in b75ee8c.
+
+**2026-10-19T21:53:20Z**
+
+Replaced the E-and-dots favicon with the user-approved Mondrian design. Balanced tag panels now occupy 49, 48, and 42 square units (about 35%, 35%, 30% of colored area). Fixed grid and tag order retain visual memory. Untagged artifacts use the brand palette; unused panels stay white. Saved the generated SVG preview screenshot. All artifacticon tests, focused render/API favicon tests, go build ./..., and git diff --check passed.

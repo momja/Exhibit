@@ -26,7 +26,7 @@ func TestArtifactViewerFaviconUsesTags(t *testing.T) {
 }
 
 // Static pages and automatic favicon probes retain the full brand mark.
-// Artifact viewers use the E and current tag colors (Exh-qvmf).
+// Artifact viewers use the Mondrian mosaic and current tag colors (Exh-qvmf).
 
 // escapedFaviconURI is exhibitLogoDataURI as html/template emits it inside an
 // href: the data: scheme survives because the value is typed template.URL,

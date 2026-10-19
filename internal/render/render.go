@@ -30,7 +30,7 @@ type Config struct {
 	AppOrigin    string
 	RenderOrigin string
 	// FaviconSVG is the Exhibit brand mark served at /favicon.ico (nw-6184).
-	// Artifact documents get their own E-and-tags icon link. This static
+	// Artifact documents get their own tag-color mosaic icon link. This static
 	// fallback covers automatic browser probes and other render pages. The
 	// api package supplies its compiled-in logo
 	// (internal/api/logo.svg) — one artwork, both origins — and an empty
@@ -125,7 +125,7 @@ func NoReferrer(next http.Handler) http.Handler {
 }
 
 // ServeFavicon answers automatic browser probes with the static brand mark.
-// Artifact documents explicitly link their E-and-tags icon instead.
+// Artifact documents explicitly link their tag-color mosaic icon instead.
 func (rd *Renderer) ServeFavicon(w http.ResponseWriter, r *http.Request) {
 	if rd.cfg.FaviconSVG == "" {
 		http.Error(w, "not found", http.StatusNotFound)
