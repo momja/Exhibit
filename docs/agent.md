@@ -172,7 +172,7 @@ The system prompt encourages the agent to interpret the person's intended
 outcome, clarify vague details, confirm meaningful assumptions, and offer
 helpful suggestions. Questions are short and use everyday language. Option
 descriptions are reserved for differences that help someone choose. The chat
-shows the questions directly, with full-width rows that highlight when selected
+shows the questions directly, with rounded, bordered option buttons that highlight when selected
 and no surrounding card
 or introductory copy. There is no Continue button or general comments field;
 the ordinary chat composer remains available to answer or redirect the agent.

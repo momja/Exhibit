@@ -38,3 +38,7 @@ Renamed the general notes field to Additional Comments in the demo and canvas, a
 **2026-10-19T22:11:52Z**
 
 Removed Continue and the general comments field. Single-choice rows now commit immediately; stacked questions resume after their last committed answer. Something else and open questions send with Enter or the send icon, while multiple-selection questions retain Done. The chat composer stays available and can answer or redirect the whole request through the same owner-scoped tool reply, with saved history and no invented field answers. Added duplicate-send and failure/retry handling, refreshed canvas and desktop/mobile screenshots, and updated agent guidance. Validation: complete agent and mock suites, focused question/API/page/gallery suites, and targeted Go race checks passed. Browser checks covered immediate choice, typed answer, chat redirection, stacked questions and mobile overflow.
+
+**2026-10-19T22:50:55Z**
+
+Made option rows visibly clickable with rounded bubble borders, a subtle fill, more spacing and 44px minimum height. Hover and selection highlight the full button. Updated the canvas, docs and desktop/mobile screenshots. Validation: question-template and gallery script suites passed; browser checks confirmed light/dark appearance, no mobile overflow and immediate single-click submission.
