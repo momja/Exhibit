@@ -342,20 +342,10 @@ func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if strings.TrimSpace(req.Message) == "" {
-		writeError(w, http.StatusBadRequest, "message is required")
+	images, err := req.validate()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-	images := make([]agent.ImageContent, 0, len(req.Images))
-	for _, im := range req.Images {
-		if im.Data == "" {
-			continue
-		}
-		mt := im.MimeType
-		if mt == "" {
-			mt = "image/png"
-		}
-		images = append(images, agent.ImageContent{Type: "image", Data: im.Data, MimeType: mt})
 	}
 	descriptors := make([]string, 0, len(req.Snippets))
 	for _, descriptor := range req.Snippets {
