@@ -141,12 +141,12 @@ test("a refusal to start costs nothing: no rollback, and the pane stays for anot
   assert.equal(page.byId("key-modal").hidden, false, "a missing key opens the key dialog");
 });
 
-test("a rollback that fails ends the session it started and says the conversation was not continued", async () => {
+test("a rollback that fails detaches its candidate and says the conversation was not continued", async () => {
   const page = await loadWith([STARTED, json(500, { error: "boom" }), json(204, {})]);
   await page.context.resumeConversation("conv-1", 2);
 
-  assert.equal(page.api.calls.filter((c) => c.method === "DELETE" && c.path === "/api/agent/sessions/conv-1").length, 1,
-    "no agent is left running for a conversation that was not continued");
+  assert.equal(page.api.calls.filter((c) => c.method === "DELETE" && c.path === "/api/agent/sessions/conv-1").length, 0,
+    "an unclaimed candidate is left to the server lease rather than deleting a sidecar another tab can claim");
   assert.match(page.byId("resume-status").textContent, /Could not roll back: boom/);
   assert.match(page.byId("resume-status").textContent, /not continued/);
   assert.equal(page.byId("pane-chat").classList.contains("history-open"), true);

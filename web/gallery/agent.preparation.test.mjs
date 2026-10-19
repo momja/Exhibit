@@ -5,20 +5,22 @@ import { loadPageScript } from './testdom.mjs';
 const asset = name => fileURLToPath(new URL('../../internal/api/assets/gallery/' + name, import.meta.url));
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const json = body => ({ok: true, status: 201, json: async () => body});
-async function boot(start, {prompt = () => json({})} = {}) {
+async function boot(start, {prompt = () => json({}), restore = () => json({}), ticket = () => json({})} = {}) {
   const calls = [];
   const streams = [];
   const timers = new Map();
   let next = 0;
   const page = loadPageScript([asset('state-api.js'), asset('network-prompt.js')], {
-    TOKEN: '', READ_ONLY: false, BYOK: false, artifact: {id: 'art-1', title: 'A'},
+    TOKEN: '', READ_ONLY: false, BYOK: false, artifact: {id: 'art-1', title: 'A'}, AbortController,
     apiFetch: async (path, options = {}) => {
       calls.push({path, ...options});
       if (path === '/api/agent/sessions') return start(JSON.parse(options.body));
       if (path.endsWith('/prompt')) return prompt(path, JSON.parse(options.body));
+      if (path.endsWith('/restore')) return restore(path, options);
+      if (path.endsWith('/ticket')) return ticket(path, options);
       return json({});
     },
-    apiEventSource: () => { const source = {close() {}}; streams.push(source); return source; },
+    apiEventSource: () => { const source = {closed: false, close() { this.closed = true; }}; streams.push(source); return source; },
     setTimeout: (fn, delay) => { const id = ++next; timers.set(id, {fn, delay}); return id; },
     clearTimeout: id => timers.delete(id),
     matchMedia: () => ({matches: false, addEventListener() {}}),
@@ -113,7 +115,7 @@ test('saving a different key discards pending startup and the next Send starts f
  assert.equal(prompts(page).length,1);assert.equal(prompts(page)[0].path,'/api/agent/sessions/fresh/prompt');
 });
 
-test('navigation during a history startup closes its late response', async () => {
+test('navigation during a History startup ignores its late response without deleting the session', async () => {
  let resolve;
  const page=await boot(()=>new Promise(r=>{resolve=r;}));
  // Delegated fragment buttons use the same module-scoped resume handler.
@@ -121,7 +123,7 @@ test('navigation during a history startup closes its late response', async () =>
  const resuming=page.byId('history').click({closest:()=>button});await flush();
  await page.dispatchOnWindow('pagehide');resolve(json({id:'resumed'}));
  await resuming;await flush();
- assert.equal(deletes(page)[0].path,'/api/agent/sessions/resumed');assert.equal(prompts(page).length,0);
+ assert.equal(deletes(page).length,0);assert.equal(prompts(page).length,0);
 });
 
 
@@ -201,7 +203,7 @@ test('a stalled History POST times out after 90 seconds and unlocks Send without
   assert.equal(JSON.parse(prompts(page)[0].body).message, 'keep this draft');
   finishHistory(json({id: 'old-conversation'}));
   await flush();
-  assert.ok(deletes(page).some(call => call.path === '/api/agent/sessions/old-conversation'));
+  assert.equal(deletes(page).filter(call => call.path === '/api/agent/sessions/old-conversation').length, 0);
   assert.equal(page.streams.length, 1, 'late History startup cannot attach over Send');
 });
 
@@ -225,7 +227,7 @@ test('a stalled History POST times out and a new resume keeps its own transcript
   assert.equal(page.byId('input').value, 'unsent draft');
   finishOld(json({id: 'old-conversation'}));
   await flush();
-  assert.ok(deletes(page).some(call => call.path.endsWith('/old-conversation')));
+  assert.equal(deletes(page).filter(call => call.path.endsWith('/old-conversation')).length, 0);
   assert.equal(page.streams.length, 1);
 });
 
@@ -244,7 +246,7 @@ test('navigation invalidates pending History immediately and restoration can Sen
   assert.equal(JSON.parse(prompts(page)[0].body).message, 'draft after restoring navigation');
   finishOld(json({id: 'old-conversation'}));
   await flush();
-  assert.ok(deletes(page).some(call => call.path.endsWith('/old-conversation')));
+  assert.equal(deletes(page).filter(call => call.path.endsWith('/old-conversation')).length, 0);
 });
 
 test('invalidated History completion and finally cannot unlock a newer pending History request', async () => {
@@ -271,7 +273,7 @@ test('invalidated History completion and finally cannot unlock a newer pending H
   assert.equal(page.streams.length, 0, 'the old conversation was never attached');
   assert.equal(page.byId('input').value, 'untouched draft');
   assert.equal(status, 'Starting…', 'old completion does not overwrite the new request status');
-  assert.ok(deletes(page).some(call => call.path.endsWith('/old-conversation')));
+  assert.equal(deletes(page).filter(call => call.path.endsWith('/old-conversation')).length, 0);
   finishNew(json({id: 'new-conversation'}));
   await next;
   await page.window.send();
@@ -368,7 +370,7 @@ for (const retrySucceeds of [true, false]) {
     finishNew(retrySucceeds ? json({id: 'same-conversation'})
       : {ok: false, status: 500, json: async () => ({error: 'retry failed'})});
     await next;
-    assert.equal(deletes(page).length, retrySucceeds ? 0 : 1, 'an abandoned session is closed if the retry fails');
+    assert.equal(deletes(page).length, 0, 'only the server lease can reclaim abandoned History sessions');
     assert.equal(page.streams.length, retrySucceeds ? 1 : 0);
   });
 }
@@ -395,3 +397,247 @@ for (const ending of ['timeout', 'invalidation']) {
     assert.equal(prompts(page).at(-1).path, '/api/agent/sessions/fresh/prompt');
   });
 }
+
+for (const ending of ['timeout', 'invalidation']) {
+  test(`a late 201 History response after ${ending} preserves the session claimed in another browser context`, async () => {
+    let finishOriginal;
+    let claimed = false;
+    const original = await boot(() => new Promise(resolve => { finishOriginal = resolve; }));
+    const other = await boot(() => ({ok: true, status: 200, json: async () => ({id: 'shared'})}), {
+      prompt: () => { claimed = true; return json({}); }
+    });
+    await original.type('original unsent draft');
+    const pending = original.resume('shared', 0);
+    await flush();
+    if (ending === 'invalidation') original.window.openHistory();
+    await other.resume('shared', 0);
+    await other.type('claim in the other tab');
+    await other.window.send();
+    assert.equal(claimed, true, 'an accepted prompt has canceled the server preparation lease');
+    if (ending === 'timeout') await original.tick(90000);
+    await pending;
+    finishOriginal(json({id: 'shared'}));
+    await flush();
+    assert.equal(deletes(original).length, 0, 'even a created-201 response grants no authority to delete a now-claimed History session');
+    assert.equal(original.streams.length, 0);
+    assert.equal(original.byId('input').value, 'original unsent draft');
+    assert.equal(other.streams[0].closed, false);
+    await other.type('still active');
+    await other.window.send();
+    assert.equal(prompts(other).at(-1).path, '/api/agent/sessions/shared/prompt');
+  });
+}
+
+const restores = page => page.calls.filter(call => call.path.endsWith('/restore'));
+
+test('a stalled rollback times out, detaches locally, and unlocks Send without retrying the uncertain restore', async () => {
+  let finishRestore;
+  const page = await boot(body => json({id: body.resume_session_id || 'fresh'}), {
+    restore: () => new Promise(resolve => { finishRestore = resolve; })
+  });
+  await page.type('preserved draft');
+  page.byId('messages').innerHTML = '<div>previous chat</div>';
+  page.byId('history-messages').innerHTML = '<div>old history transcript</div>';
+  const pending = page.resume('old-conversation', 2);
+  await flush();
+  assert.equal(restores(page).length, 1);
+  assert.equal(restores(page)[0].path, '/api/artifacts/art-1/versions/2/restore');
+  assert.equal(page.streams[0].closed, false);
+  await page.tick(90000);
+  await pending;
+  assert.match(page.byId('resume-status').textContent, /may have completed/);
+  assert.match(page.byId('resume-status').textContent, /not continued/);
+  assert.equal(page.byId('messages').innerHTML, '<div>previous chat</div>');
+  assert.equal(page.byId('input').value, 'preserved draft');
+  assert.equal(page.streams[0].closed, true);
+  assert.equal(deletes(page).length, 0, 'local detach leaves a potentially claimed sidecar running');
+  await page.window.send();
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/fresh/prompt');
+  assert.equal(JSON.parse(prompts(page)[0].body).message, 'preserved draft');
+  assert.equal(restores(page).length, 1, 'an uncertain restore is never automatically retried');
+  finishRestore(json({}));
+  await flush();
+  assert.ok(!page.byId('messages').innerHTML.includes('old history transcript'));
+  assert.equal(page.streams[1].closed, false);
+});
+
+for (const ending of ['timeout', 'invalidation']) {
+  for (const lateSuccess of [true, false]) {
+    test(`late rollback ${lateSuccess ? 'success' : 'failure'} after ${ending} cannot install history or unlock a newer continuation`, async () => {
+      let finishOld;
+      let finishNew;
+      const page = await boot(body => json({id: body.resume_session_id}), {
+        restore: path => new Promise(resolve => {
+          if (path.includes('/versions/2/')) finishOld = resolve;
+          else finishNew = resolve;
+        })
+      });
+      await page.type('unsent draft');
+      page.byId('messages').innerHTML = '<div>existing chat</div>';
+      page.byId('history-messages').innerHTML = '<div>old transcript</div>';
+      const old = page.resume('old-conversation', 2);
+      await flush();
+      if (ending === 'timeout') await page.tick(90000);
+      else page.window.openHistory();
+      await old;
+      page.byId('history-messages').innerHTML = '<div>new transcript</div>';
+      const next = page.resume('new-conversation', 3);
+      await flush();
+      finishOld(lateSuccess ? json({})
+        : {ok: false, status: 500, json: async () => ({error: 'late old restore refusal'})});
+      await flush();
+      await page.resume('third-conversation', 0);
+      await page.window.send();
+      assert.equal(starts(page).length, 2, 'only the new continuation owns the lock');
+      assert.equal(prompts(page).length, 0);
+      assert.equal(restores(page).length, 2, 'neither restore was retried');
+      assert.equal(page.byId('messages').innerHTML, '<div>existing chat</div>');
+      assert.equal(page.byId('resume-status').textContent, 'Starting…');
+      assert.equal(page.byId('input').value, 'unsent draft');
+      assert.equal(page.streams[0].closed, true);
+      assert.equal(page.streams[1].closed, false);
+      assert.equal(deletes(page).length, 0);
+      finishNew(json({}));
+      await next;
+      assert.ok(page.byId('messages').innerHTML.includes('new transcript'));
+      assert.ok(!page.byId('messages').innerHTML.includes('old transcript'));
+      await page.window.send();
+      assert.equal(prompts(page)[0].path, '/api/agent/sessions/new-conversation/prompt');
+    });
+  }
+}
+
+test('server session_closed during rollback releases its continuation and ignores the late restore', async () => {
+  let finishRestore;
+  const page = await boot(body => json({id: body.resume_session_id}), {
+    restore: () => new Promise(resolve => { finishRestore = resolve; })
+  });
+  await page.type('preserved draft');
+  page.byId('history-messages').innerHTML = '<div>old transcript</div>';
+  const old = page.resume('old-conversation', 2);
+  await flush();
+  page.streams[0].onmessage({data: JSON.stringify({type: 'exhibit_session_closed'})});
+  await old;
+  assert.match(page.byId('resume-status').textContent, /may have completed/);
+  assert.equal(page.streams[0].closed, true);
+  assert.equal(deletes(page).length, 0);
+  page.byId('history-messages').innerHTML = '<div>new transcript</div>';
+  await page.resume('new-conversation', 0);
+  finishRestore(json({}));
+  await flush();
+  assert.ok(page.byId('messages').innerHTML.includes('new transcript'));
+  assert.ok(!page.byId('messages').innerHTML.includes('old transcript'));
+  await page.window.send();
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/new-conversation/prompt');
+  assert.equal(restores(page).length, 1);
+});
+
+for (const invalidation of ['navigation', 'key reset']) {
+  test(`${invalidation} during rollback detaches the candidate without deleting a sidecar another tab could claim`, async () => {
+    let finishRestore;
+    const page = await boot(body => json({id: body.resume_session_id || 'fresh'}), {
+      restore: () => new Promise(resolve => { finishRestore = resolve; })
+    });
+    await page.type('preserved draft');
+    const old = page.resume('old-conversation', 2);
+    await flush();
+    if (invalidation === 'navigation') {
+      await page.dispatchOnWindow('pagehide');
+      await page.dispatchOnWindow('pageshow');
+    } else {
+      page.byId('key-provider').value = 'openai';
+      page.byId('key-secret').value = 'new-key';
+      await page.window.saveKey();
+    }
+    await old;
+    assert.equal(deletes(page).length, 0);
+    assert.equal(page.streams[0].closed, true);
+    await page.window.send();
+    assert.equal(prompts(page)[0].path, '/api/agent/sessions/fresh/prompt');
+    finishRestore(json({}));
+    await flush();
+    assert.equal(page.streams[1].closed, false);
+    assert.equal(restores(page).length, 1);
+  });
+}
+
+test('closure of a previous live session does not cancel a newer History startup', async () => {
+  let finishHistory;
+  const page = await boot(body => body.resume_session_id
+    ? new Promise(resolve => { finishHistory = resolve; }) : json({id: 'previous'}));
+  await page.type('initial prompt');
+  await page.window.send();
+  const next = page.resume('next-conversation', 0);
+  await flush();
+  page.streams[0].onmessage({data: JSON.stringify({type: 'exhibit_session_closed'})});
+  await page.resume('third-conversation', 0);
+  assert.equal(starts(page).length, 2, 'the new startup remains the owner of the History lock');
+  finishHistory(json({id: 'next-conversation'}));
+  await next;
+  await page.type('next prompt');
+  await page.window.send();
+  assert.equal(prompts(page).at(-1).path, '/api/agent/sessions/next-conversation/prompt');
+});
+
+test('a stalled rollback error body is bounded and late parsing cannot replace a newer transcript', async () => {
+  let finishErrorBody;
+  const page = await boot(body => json({id: body.resume_session_id}), {
+    restore: () => ({ok: false, status: 500, json: () => new Promise(resolve => { finishErrorBody = resolve; })})
+  });
+  const old = page.resume('old-conversation', 2);
+  await flush();
+  await page.tick(90000);
+  await old;
+  assert.match(page.byId('resume-status').textContent, /may have completed/);
+  page.byId('history-messages').innerHTML = '<div>new transcript</div>';
+  await page.resume('new-conversation', 0);
+  finishErrorBody({error: 'late old refusal'});
+  await flush();
+  assert.ok(page.byId('messages').innerHTML.includes('new transcript'));
+  assert.equal(page.byId('resume-status').textContent, 'Starting…');
+  assert.equal(deletes(page).length, 0);
+  assert.equal(restores(page).length, 1);
+});
+
+test('a server 404 on SSE reconnection releases pending rollback just like session_closed', async () => {
+  let finishRestore;
+  const page = await boot(body => json({id: body.resume_session_id || 'fresh'}), {
+    restore: () => new Promise(resolve => { finishRestore = resolve; }),
+    ticket: () => ({ok: false, status: 404, json: async () => ({error: 'session expired'})})
+  });
+  const old = page.resume('old-conversation', 2);
+  await flush();
+  page.streams[0].onerror();
+  await page.tick(1000);
+  await old;
+  assert.match(page.byId('resume-status').textContent, /may have completed/);
+  await page.type('new prompt');
+  await page.window.send();
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/fresh/prompt');
+  finishRestore(json({}));
+  await flush();
+  assert.equal(deletes(page).length, 0);
+  assert.equal(restores(page).length, 1);
+});
+
+test('late rollback cannot detach a newer attach to the same historical session id', async () => {
+  let finishRestore;
+  const page = await boot(body => json({id: body.resume_session_id}), {
+    restore: () => new Promise(resolve => { finishRestore = resolve; })
+  });
+  const old = page.resume('same-conversation', 2);
+  await flush();
+  page.window.openHistory();
+  const next = page.resume('same-conversation', 0);
+  await old;
+  await next;
+  assert.equal(page.streams[0].closed, true);
+  assert.equal(page.streams[1].closed, false);
+  finishRestore(json({}));
+  await flush();
+  assert.equal(page.streams[1].closed, false);
+  await page.type('continue here');
+  await page.window.send();
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/same-conversation/prompt');
+  assert.equal(deletes(page).length, 0);
+});

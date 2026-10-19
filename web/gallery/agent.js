@@ -262,9 +262,7 @@ function invalidatePreparation() {
   sending = null;
   typingPreparation.reset();
   preparation.discard();
-  const switching = switchingConversation;
-  switchingConversation = null;
-  if (switching) switching.startup.discard();
+  if (switchingConversation) cancelHistoryContinuation(switchingConversation);
 }
 function resetSession() {
   invalidatePreparation();
@@ -354,7 +352,7 @@ function reconnectEvents() {
     if (sessionId !== watching) return;   // session was reset while we waited
     if (!r || !r.ok) {
       // 404 means the session is gone (closed or reaped): stop retrying.
-      if (r && r.status === 404) { sessionId = null; setStreaming(false); return; }
+      if (r && r.status === 404) { handleAgentEvent({type: 'exhibit_session_closed'}); return; }
       reconnectEvents();
       return;
     }
@@ -487,12 +485,18 @@ function handleAgentEvent(ev) {
     case 'extension_error':
       addMsg('err', 'Extension error: ' + (ev.error || 'unknown'));
       break;
-    case 'exhibit_session_closed':
+    case 'exhibit_session_closed': {
+      const ended = sessionId;
+      if (ended && switchingConversation?.candidateId === ended) {
+        cancelHistoryContinuation(switchingConversation,
+          switchingConversation.restoring ? RESTORE_UNCERTAINTY : 'The agent session ended. The conversation was not continued.');
+      }
       setStreaming(false);
-      if (sessionId) addMsg('sys', 'Agent session ended. Your next message starts a new one.');
-      if (eventSource) { eventSource.close(); eventSource = null; }
+      if (ended) addMsg('sys', 'Agent session ended. Your next message starts a new one.');
+      closeEvents();
       sessionId = null;
       break;
+    }
     case 'auto_retry_start':
       addMsg('sys', 'Provider hiccup — retrying (' + ev.attempt + '/' + ev.maxAttempts + ')…');
       break;
@@ -678,18 +682,24 @@ document.getElementById('history').addEventListener('click', (e) => {
   if (btn) resumeConversation(btn.dataset.resume, Number(btn.dataset.rollback) || 0);
 });
 
-// A retry can attach to the same session while an older response is delayed.
-// Defer its cleanup to the new attempt rather than closing its pending session.
-function disposeHistorySession(session) {
-  // 200 only attaches to a sidecar that may belong to another tab. Only a
-  // 201 sidecar was created by this request and belongs to its cleanup.
-  if (!session.createdByRequest || session.id === sessionId) return;
-  if (switchingConversation?.conversationId === session.id) {
-    switchingConversation.lateSessions.set(session.id, session);
-    return;
-  }
-  apiFetch('/api/agent/sessions/' + encodeURIComponent(session.id),
-    {method: 'DELETE', keepalive: leaving}).catch(() => {});
+const RESTORE_UNCERTAINTY = 'The rollback could not be confirmed and may have completed. The conversation was not continued. Check the artifact before trying again.';
+
+function detachHistoryCandidate(attempt) {
+  const candidateId = attempt.candidateId;
+  attempt.candidateId = null;
+  if (!candidateId || sessionId !== candidateId) return;
+  closeEvents();
+  sessionId = null;
+  setStreaming(false);
+}
+
+function cancelHistoryContinuation(attempt, message) {
+  if (switchingConversation !== attempt) return;
+  switchingConversation = null;
+  attempt.startup.discard();
+  if (attempt.restore) attempt.restore.discard();
+  detachHistoryCandidate(attempt);
+  if (message || attempt.restoring) attempt.report(message || RESTORE_UNCERTAINTY);
 }
 
 async function resumeConversation(conversationId, rollbackTo) {
@@ -705,22 +715,28 @@ async function resumeConversation(conversationId, rollbackTo) {
   const artifactId = artifact.id;
   const past = document.getElementById('history-messages');
   const pastMarkup = past ? past.innerHTML : '';
-  const attempt = { conversationId, lateSessions: new Map(), startup: createSessionPreparation({
-    async start() {
-      const res = await apiFetch('/api/agent/sessions', {
-        method: 'POST',
-        body: JSON.stringify({artifact_id: artifactId, resume_session_id: conversationId})
-      });
-      const started = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const error = new Error(started.error || 'Could not continue this conversation.');
-        error.status = res.status;
-        throw error;
-      }
-      return {...started, createdByRequest: res.status === 201};
-    },
-    close: disposeHistorySession
-  }) };
+  const attempt = {
+    candidateId: null, restoring: false, restore: null, report: say,
+    startup: createSessionPreparation({
+      async start() {
+        const res = await apiFetch('/api/agent/sessions', {
+          method: 'POST',
+          body: JSON.stringify({artifact_id: artifactId, resume_session_id: conversationId})
+        });
+        const started = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const error = new Error(started.error || 'Could not continue this conversation.');
+          error.status = res.status;
+          throw error;
+        }
+        return started;
+      },
+      // Even a 201 sidecar may have been claimed by another tab before its
+      // response arrives. Only the server's preparation lease can reap it safely.
+      close() {}
+    })
+  };
+  let completed = false;
   switchingConversation = attempt;
   const isCurrent = () => switchingConversation === attempt && current === lifecycle
     && artifact?.id === artifactId && !leaving;
@@ -735,6 +751,7 @@ async function resumeConversation(conversationId, rollbackTo) {
       return;
     }
     attempt.startup.release();
+    attempt.candidateId = started.id;
     // A conversation that is already running (this page's own, or a second tab's)
     // is attached to rather than restarted; otherwise the page's live session
     // gives way to the one being continued.
@@ -747,21 +764,30 @@ async function resumeConversation(conversationId, rollbackTo) {
     }
 
     if (rollbackTo) {
-      const back = await apiFetch(
-        '/api/artifacts/' + encodeURIComponent(artifactId) + '/versions/' + rollbackTo + '/restore',
-        {method: 'POST'});
-      if (!isCurrent()) return;
-      if (!back.ok) {
-        const why = await back.json().catch(() => ({}));
-        if (!isCurrent()) return;
-        // A missing historical blob is also a 409. Only the explicit
-        // already-current response means there was nothing to put back.
-        if (back.status !== 409 || why.code !== 'already_current') {
-          resetSession();
-          say('Could not roll back: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
-          return;
-        }
-      }
+      attempt.restoring = true;
+      attempt.restore = createSessionPreparation({
+        async start() {
+          const back = await apiFetch(
+            '/api/artifacts/' + encodeURIComponent(artifactId) + '/versions/' + rollbackTo + '/restore',
+            {method: 'POST'});
+          if (!back.ok) {
+            const why = await back.json().catch(() => ({}));
+            // Only this explicit 409 means there was nothing to put back.
+            if (back.status !== 409 || why.code !== 'already_current') {
+              const error = new Error('Could not roll back: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
+              error.restoreRefused = true;
+              throw error;
+            }
+          }
+          return {};
+        },
+        // A timed-out restore is an uncertain mutation, never a request to retry
+        // or to terminate a sidecar another tab may have claimed.
+        close() {}
+      });
+      const restored = await attempt.restore.claim();
+      if (!restored || !isCurrent()) return;
+      attempt.restore.release();
     }
 
     // What was said, as the fragment drew it, becomes the chat: the conversation
@@ -777,15 +803,18 @@ async function resumeConversation(conversationId, rollbackTo) {
     // conversation that is no longer about it.
     if (rollbackTo || viewingVersion()) refreshPreview();
     if (rollbackTo) nudgePreview();
+    completed = true;
   } catch (error) {
     if (isCurrent()) {
-      say(error.message || 'Could not continue this conversation.');
+      say(attempt.restoring && !error.restoreRefused ? RESTORE_UNCERTAINTY
+        : (error.message || 'Could not continue this conversation.'));
       if (error.status === 412) openKeyModal();
     }
   } finally {
+    attempt.startup.discard();
+    if (attempt.restore) attempt.restore.discard();
+    if (!completed) detachHistoryCandidate(attempt);
     if (switchingConversation === attempt) switchingConversation = null;
-    for (const session of attempt.lateSessions.values()) disposeHistorySession(session);
-    attempt.lateSessions.clear();
   }
 }
 
