@@ -39,6 +39,21 @@ const starts = page => page.calls.filter(c => c.path === '/api/agent/sessions');
 const prompts = page => page.calls.filter(c => c.path.endsWith('/prompt'));
 const deletes = page => page.calls.filter(c => c.method === 'DELETE');
 
+test('composer button state follows draft changes and Send while preparation is active', async () => {
+  const page = await boot(() => json({id: 'ready'}));
+  await page.type('   ');
+  assert.equal(page.byId('send-btn').disabled, true);
+  await page.type('change the heading');
+  assert.equal(page.byId('send-btn').disabled, false);
+  await page.tick(300);
+  assert.equal(starts(page).length, 1);
+  assert.equal(page.byId('send-btn').disabled, false);
+  await page.window.send();
+  assert.equal(prompts(page).length, 1);
+  assert.equal(page.byId('input').value, '');
+  assert.equal(page.byId('send-btn').disabled, true);
+});
+
 test('typing prepares once without sending draft text or opening inference; Send claims in-flight startup', async () => {
   let resolve;
   const page = await boot(() => new Promise(r => { resolve = r; }));
