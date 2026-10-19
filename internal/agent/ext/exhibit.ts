@@ -466,7 +466,8 @@ export default function (pi: ExtensionAPI) {
 		revision: async () => (await api("GET", "/api/artifacts/" + encodeURIComponent(requireBoundArtifact()), undefined, AbortSignal.timeout(10_000))).source_revision,
 		adopt: adoptPreparedSource,
 		current: () => sourceSnapshot && sourceSnapshot.body !== null && sourceMetadata
-			? artifactSourceSnapshot({ ...sourceMetadata, body: sourceSnapshot.body, source_revision: sourceSnapshot.revision }, sourceAssets)
+			? artifactSourceSnapshot({ ...sourceMetadata, body: sourceSnapshot.body, source_revision: sourceSnapshot.revision,
+				...(widgetSnapshot ? { widget_revision: widgetSnapshot.revision } : {}) }, sourceAssets)
 			: null,
 	});
 

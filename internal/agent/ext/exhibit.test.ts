@@ -34,6 +34,34 @@ before(async () => {
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe("versioned source reuse", () => {
+	it("preserves the advanced widget cache when compaction reprojects source", async () => {
+		const pi = makePi();
+		const entries = [];
+		pi.appendEntry = (customType, data) => entries.push({ type: "custom", customType, data });
+		exhibitMod.default(pi);
+		const ctx = { model: { api: "openai-completions", provider: "test", id: "m" },
+			sessionManager: { getBranch: () => entries }, ui: { notify() {} } };
+		const { calls, fetch } = makeFetch({ body: "<h1>source</h1>", widgetBody: "<p>old</p>", widgetPutResult: WIDGET_PUT_OK });
+		await withFetch(async (url, opts) => opts.method === "GET" && String(url).endsWith("/artifact-1")
+			? { ok: true, text: async () => JSON.stringify({ source_revision: "source-1" }) }
+			: fetch(url, opts), async () => {
+			await pi.hooks.get("session_start")({}, ctx);
+			const user = { role: "user", content: [{ type: "text", text: "edit widget" }], timestamp: 1 };
+			entries.push({ type: "message", id: "u1", message: user });
+			await pi.hooks.get("context")({ messages: [user] }, ctx);
+			await pi.tools.get("get_widget").execute("read", {});
+			await pi.tools.get("edit_widget").execute("edit1", { edits: [{ oldText: "old", newText: "new" }] });
+			await pi.hooks.get("session_compact")({}, ctx);
+			const summary = { role: "user", content: [{ type: "text", text: "compacted context" }], timestamp: 2 };
+			await pi.hooks.get("context")({ messages: [summary] }, ctx);
+			await pi.tools.get("edit_widget").execute("edit2", { edits: [{ oldText: "new", newText: "latest" }] });
+		});
+		assert.equal(calls.filter(c => c.method === "GET" && c.url.endsWith("/widget")).length, 1);
+		const saves = calls.filter(c => c.method === "PUT").map(c => JSON.parse(c.body));
+		assert.equal(saves[1].expected_widget_revision, "widget-2");
+		assert.deepEqual(saves[1].edits, [{ oldText: "new", newText: "latest" }]);
+	});
+
 	it("adopts prepared source for edits and keeps the advanced base on the next prompt", async () => {
 		const pi = makePi();
 		const entries = [];
