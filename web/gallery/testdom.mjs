@@ -177,11 +177,12 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
   // Modules run in the same page context as the classic scripts, with native
   // linking so tests exercise the actual imported files and module scope.
   const modules = new Map();
-  async function loadModule(modulePath) {
+  // A test can inspect private bindings without adding production exports.
+  async function loadModule(modulePath, inspectBindings = []) {
     if (!vm.SourceTextModule) throw new Error('Module tests require node --experimental-vm-modules');
     const readModule = (filename) => {
       if (!modules.has(filename)) modules.set(filename, new vm.SourceTextModule(
-        readFileSync(filename, 'utf8'), { context, identifier: filename }));
+        readFileSync(filename, 'utf8') + (filename === resolve(modulePath) && inspectBindings.length ? '\nexport { ' + inspectBindings.join(', ') + ' };' : ''), { context, identifier: filename }));
       return modules.get(filename);
     };
     const entry = readModule(resolve(modulePath));

@@ -445,7 +445,7 @@ func TestAgentSelectionReachesTheModelAsAToolResult(t *testing.T) {
 	assert.Contains(t, strings.Join(h.llm.messagesInRole("tool"), "\n"), "SELECTED-MARKER",
 		"get_selection returned the element")
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.Equal(c, []string{"get_selection", "get_artifact", "write_artifact"}, h.llm.toolCallNames())
+		assert.Equal(c, []string{"get_artifact", "get_selection", "write_artifact"}, h.llm.toolCallNames())
 	}, 5*time.Second, 10*time.Millisecond)
 }
 

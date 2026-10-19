@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,13 +15,16 @@ import (
 )
 
 // Run the real Pi provider normalizer, message events and stats RPC. The mock
-// supplies fixed provider usage on each of the read/write/reply requests;
+// supplies fixed usage on every actual provider request. Prepared source reads
+// make no provider request and must contribute no synthetic usage;
 // cached prompt tokens must be separated from input and counted only once.
 func TestPiUsageIsMeteredOnceAcrossTurnsAndResume(t *testing.T) {
 	h := newPlatformPiHarness(t)
 	r := h.router
 	inner := h.llm.inner
+	var requests atomic.Int64
 	h.llm.inner = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		requests.Add(1)
 		response := httptest.NewRecorder()
 		inner.ServeHTTP(response, req)
 		for name, values := range response.Header() {
@@ -33,12 +37,14 @@ func TestPiUsageIsMeteredOnceAcrossTurnsAndResume(t *testing.T) {
 	id := createArtifact(t, r, map[string]any{"title": "Counter", "body": counterBody})
 	session := conversation(t, h, id, "make the button purple")
 
-	check := func(turns int64) {
+	check := func() {
 		t.Helper()
-		want := store.UsageTotals{InputTokens: 600 * turns, OutputTokens: 180 * turns, CacheReadTokens: 120 * turns}
+		count := requests.Load()
+		require.Positive(t, count)
+		want := store.UsageTotals{InputTokens: 200 * count, OutputTokens: 60 * count, CacheReadTokens: 40 * count}
 		totals, err := r.cfg.Store.SessionAgentSpend(context.Background(), defaultOwnerID, session)
 		require.NoError(t, err)
-		assert.Equal(t, want, totals, "each turn made three metered model requests")
+		assert.Equal(t, want, totals, "meter each actual provider request once, excluding prepared source")
 		owner, err := r.cfg.Store.OwnerAgentSpend(context.Background(), defaultOwnerID, time.Time{})
 		require.NoError(t, err)
 		assert.Equal(t, want, owner)
@@ -46,16 +52,16 @@ func TestPiUsageIsMeteredOnceAcrossTurnsAndResume(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, want, instance)
 	}
-	check(1)
+	check()
 	prompt(t, r, session, "now make it red")
 	keptConversation(t, r, id, session, 2)
-	check(2)
+	check()
 	closeAndWait(t, r, session)
 	session = resume(t, r, id, session)
 	prompt(t, r, session, "now make it green")
 	keptConversation(t, r, id, session, 3)
-	check(3)
+	check()
 	// The durable meter also survives closing the resumed process.
 	closeAndWait(t, r, session)
-	check(3)
+	check()
 }

@@ -85,6 +85,46 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
   the grant, not the tool result.
 - The credential is revoked when the subprocess exits.
 
+## Preparing while the user composes
+
+Three non-whitespace characters held for 300 ms prepare one session. Startup
+contains only the bound artifact id. Send claims an existing or pending startup
+and captures its own text and selections before awaiting it. Editing the draft
+while startup finishes cannot change that accepted request. Preparation never
+sends draft text to the server or calls a provider. Browser preparation expires
+90 seconds from startup, including a pending POST; every server session also
+has a fixed 90-second deadline until its first accepted prompt. History startup
+uses the same bounded lifecycle. A prompt being screened at
+the deadline finishes admission: acceptance claims normal idle lifetime;
+refusal expires the unclaimed session. Typing and guard refusals do not renew
+that server deadline. Navigation, key changes, and history switches discard
+unused preparation; late responses are disposed, and old SSE callbacks ignored.
+
+The extension starts an authorized source read at `session_start`. Its `context`
+hook checks `source_revision` before use, refreshes on change, and falls back to
+the ordinary tool on error. Without revision tokens it rereads at Send. The
+source read includes the same bounded title, allowlist, and asset summary as
+`get_artifact`. Persistent custom data entries and their structured projection
+preserve source roles through resume and compaction; see security §5.2.
+
+`ext/source-context.ts` exposes `installSourceContext` with `read`, `revision`,
+`adopt`, and optional `current` callbacks. `readArtifact()` is the shared local
+loader in `exhibit.ts`; `artifactSourceSnapshot(artifact, assetSummary)` formats
+an already-known response without I/O. The loader never adopts a prefetch.
+The edit snapshot layer calls `rememberSource(snapshot.artifact)` from
+`adoptPreparedSource` and remember that displayed snapshot's metadata, preserving
+both source and widget revisions from that authorized response. `current`
+returns an `ArtifactSourceSnapshot` built from the edit cache's latest body,
+revision, and the displayed snapshot's metadata/asset summary via that formatter,
+or null when the cache is invalid. Successful own writes advance that shared
+snapshot; revision validation then reuses the retained source base and known
+edits without fetching source again or injecting another full-source copy.
+A new projection is needed only initially, after external changes, when resume
+needs a fresh read, or when compaction removes the source base. `adopt` runs only
+on a validated current snapshot, never on historical replay. A 409 or uncertain write must
+invalidate the shared cache so the next turn refreshes. This integration does
+not change tool parameters, prompt wording, or owner/artifact scope.
+
 ## Session context: instructions and data are separate
 
 - The **system prompt** is entirely server-authored (`internal/agent/prompt.go`).
@@ -96,13 +136,17 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
   not need `get_artifact` or `get_widget` merely because its own save succeeded.
   It reads when needed source or metadata is missing or compacted away, after
   conflicts or failed source matches, on evidence of an external edit or
-  restore, or to resolve an uncertain save outcome. Resuming still requires
-  a fresh `get_artifact` read as directed by the resume notice below. These
-  instructions do not themselves enforce concurrency. The
+  restore, or to resolve an uncertain save outcome. A resumed session uses fresh
+  prepared source, or reads with `get_artifact` if preparation is unavailable.
+- Artifact reads use `get_artifact`, either on the model's
+  request or through host preparation represented as a matching assistant call
+  and tool result before the first accepted provider request. Source freshness
+  is checked before a new prompt uses it. The
   source, the title (one bounded line), the state, and the widget are tool
   results — a separate message role the conversation's own structure marks as
   data — so there is no fence to forge and no per-session secret to carry
-  (av-5s7g).
+  (av-5s7g). Preparation supplies the same structured boundary without a
+  separate model request to ask for the initial source.
 - Elements picked in the preview are untrusted too. The prompt request carries
   them as their own `snippets` field, never concatenated into `message`; the
   session writes them to `selection.json` in its work directory (replaced, or
@@ -382,7 +426,7 @@ behaving as it does in the pinned version.
 ## Sessions, streaming, transcripts
 
 - `POST /api/agent/sessions` (optional `artifact_id` scopes the session to an
-  existing artifact for modify mode; the model reads it with `get_artifact`),
+  existing artifact for modify mode; source preparation uses the same read as `get_artifact`),
   `POST …/prompt` (`message` + optional base64 `images` + optional
   `snippets`, the element descriptors the model reads with `get_selection`),
   `POST …/abort`, `DELETE …`.
@@ -494,8 +538,8 @@ session from a stored conversation instead of a blank one.
   takes `--provider`/`--model` from the command line over the file's recorded
   model, so an owner who has switched keys resumes on the new one.
 - The first prompt after a resume carries one fixed sentence (`resumedNotice`):
-  the artifact may have changed since the agent last read it, so read it again
-  before changing anything. It is sent whether or not the artifact was rolled
+  the artifact may have changed since the agent last read it. Use this prompt's
+  freshly prepared tool result, or call `get_artifact` if preparation was unavailable. It is sent whether or not the artifact was rolled
   back, because either way what the model remembers of it may be stale. A prompt
   the usage-policy guardrail refuses never reaches the model, so the sentence
   waits for the first prompt that does.
@@ -533,8 +577,8 @@ page also hosts the same `__avState` bridge as the detail page, so artifact
 state written in the preview persists.
 
 **A new conversation is the default.** Opening the page — on an artifact with a
-dozen conversations kept, or with none — starts nothing and continues nothing. No
-session exists until the first message, and that message begins a new conversation
+dozen conversations kept, or with none — starts nothing and continues nothing.
+Deliberate typing can prepare a fresh session; Send claims it or starts one
 (`POST /api/agent/sessions` with the artifact and no `resume_session_id`), whatever
 has been kept: the model is handed none of it and the "artifact may have changed"
 sentence is not sent, because there is nothing it remembers that could be stale. The

@@ -1346,18 +1346,26 @@ separation is the conversation's own structure, not a delimiter inside a string.
   model reads them with `get_selection`.
 - Everything else untrusted — the artifact's source and title (`get_artifact`),
   its stored state (`get_state`), its widget (`get_widget`), the selection — is
-  the **result of a tool the model calls**. A tool result is its own message
-  role in every provider's API, which is the boundary: there is no marker for
-  content to close or forge, and no secret to carry from one process to the
-  next, which is what lets a stored conversation be resumed in a fresh session
+  the **result of an authorized tool read**. Source preparation uses the same
+  `get_artifact` read as the tool, represented by a synthetic assistant call and
+  its matching real tool result; every other read is model-initiated. A tool
+  result is its own message role in every provider's API, which is the boundary:
+  there is no marker for content to close or forge, and no secret to carry from
+  one process to the next, which is what lets a stored conversation be resumed in a fresh session
   with the boundary intact (`architecture.md` §3.7).
 - Source already present in tool results, including preloaded source, remains
   **data**, even when reused across edits. Successful creates, writes and edits
   let the model continue from known source without a redundant read after its
   own save. Missing or compacted context, conflicts, failed source matches,
   evidence of external changes, and uncertain save outcomes require a read.
-  A resumed conversation still carries a fixed notice requiring a fresh
-  `get_artifact` read before changes, because the artifact may have moved on.
+  Resumed sessions use freshly prepared tool results or call `get_artifact`
+  if preparation is unavailable.
+- Deliberate typing may start a session and prefetch source, but sends **no
+  draft text and no provider request**. After Send passes the input guardrail,
+  the extension validates the source revision before projecting that read into
+  the first provider request. Changed source is refreshed; failed preparation
+  leaves `get_artifact` available. Source is never appended with `sendMessage`:
+  Pi converts ordinary custom-message content to the user role.
 - A title is the single most attacker-controllable field on a URL-ingested
   artifact, so `get_artifact` returns it as one bounded line (newlines
   flattened, capped at 200 characters), and a save's result does not read the
@@ -1391,10 +1399,19 @@ one, not the file's, so the contract on how to read a tool result is always the
 latest wording. When the persistence write moves behind the HTTP API
 (`Exh-v6v4`) it must be authorized as the service for the same reason.
 
-The first prompt after a resume also carries one fixed sentence, authored by
-Exhibit: the artifact may have changed since it was last read, so read it
-again. That is about staleness, not trust — rolling back, or an edit made in
-between, leaves the model holding a source that is no longer the artifact.
+Prepared reads persist through Pi's `appendEntry` as custom **data**, excluded
+from context. The extension rehydrates those entries on resume and projects
+only structured assistant/tool-result pairs, anchored to the accepted user
+message. Compaction omits projections whose anchors were removed and validates
+current source again for the next request or overflow retry. Pi alone writes
+its active session file. The public transcript labels a host-prepared read
+“Prepared artifact source,” without attributing a model decision or publishing
+source. Sessions without these entries remain resumable through the same path.
+
+The first prompt after a resume also carries a fixed notice, authored by
+Exhibit: the artifact may have changed since it was last read. Use the freshly
+prepared tool result, or call `get_artifact` if preparation was unavailable.
+That is about staleness, not trust — rolling back, or an edit made in between, leaves the model holding a source that is no longer the artifact.
 
 ### 5.3 Residual risk, stated plainly
 

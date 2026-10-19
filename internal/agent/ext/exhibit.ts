@@ -40,6 +40,7 @@ import { readFile } from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { applyEdits } from "./edit.ts";
+import { installSourceContext, type ArtifactSourceSnapshot } from "./source-context.ts";
 
 const API = process.env.EXHIBIT_API_URL || "http://127.0.0.1:8080";
 const TOKEN = process.env.EXHIBIT_TOKEN || "";
@@ -111,7 +112,7 @@ function limitFrom413(text: string): number {
 	}
 }
 
-async function api(method: string, path: string, body?: unknown): Promise<any> {
+async function api(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<any> {
 	const payload = body === undefined ? undefined : JSON.stringify(body);
 	// Bytes on the wire, which is what the limit counts. The string's length
 	// is in UTF-16 units and would undercount anything outside ASCII.
@@ -128,6 +129,7 @@ async function api(method: string, path: string, body?: unknown): Promise<any> {
 				Authorization: "Bearer " + TOKEN,
 			},
 			body: payload,
+			signal,
 		});
 	} catch (err) {
 		// No response at all. Besides the usual causes, a proxy that refuses a
@@ -212,6 +214,8 @@ export default function (pi: ExtensionAPI) {
 	type Snapshot = { body: string | null; revision: string; missing?: boolean };
 	let sourceSnapshot: Snapshot | null = null;
 	let widgetSnapshot: Snapshot | null = null;
+	let sourceMetadata: any = null;
+	let sourceAssets = "assets: unavailable";
 	function revision(value: unknown): string {
 		if (typeof value !== "string" || !value) throw new Error("The API returned no source revision; read the source again before saving.");
 		return value;
@@ -311,7 +315,10 @@ export default function (pi: ExtensionAPI) {
 		try {
 			r = await api("PATCH", "/api/artifacts/" + encodeURIComponent(target), patch);
 			const savedRevision = revision(r.artifact?.source_revision);
-			if (sourceSnapshot === baseline) sourceSnapshot = { body, revision: savedRevision };
+			if (sourceSnapshot === baseline) {
+				sourceSnapshot = { body, revision: savedRevision };
+				sourceMetadata = { ...sourceMetadata, ...r.artifact };
+			}
 		} catch (error) {
 			sourceSnapshot = null;
 			throw error;
@@ -411,7 +418,7 @@ export default function (pi: ExtensionAPI) {
 	 */
 	async function assetSummary(artifactId: string): Promise<string> {
 		try {
-			const r = await api("GET", "/api/artifacts/" + encodeURIComponent(artifactId) + "/assets");
+			const r = await api("GET", "/api/artifacts/" + encodeURIComponent(artifactId) + "/assets", undefined, AbortSignal.timeout(10_000));
 			const assets = r.assets || [];
 			if (assets.length === 0) return "assets: none";
 			const lines = assets.map(
@@ -429,6 +436,41 @@ export default function (pi: ExtensionAPI) {
 		}
 	}
 
+	// A pure formatter also lets the edit layer expose an advanced known
+	// snapshot after its own write without fetching any source again.
+	function artifactSourceSnapshot(a: any, assets: string): ArtifactSourceSnapshot {
+		const target = requireBoundArtifact();
+		const meta = `id: ${a.id}\ntitle: ${oneLine(a.title)}\n` +
+			`allowlist: [${(a.network_allowlist || []).join(", ")}]\n` + assets;
+		const result = ok(labeled("current source of the artifact this session is editing:", meta + "\n\n" + (a.body || "")), {
+			exhibit: "artifact_read",
+			artifactId: target,
+		});
+		return { artifactId: target, sourceRevision: a.source_revision, artifact: a, assetSummary: assets, result };
+	}
+	// Shared authorized loader. It must NOT adopt a prefetch into the edit
+	// cache: adoption happens only when the tool returns or context projects it.
+	async function readArtifact(): Promise<ArtifactSourceSnapshot> {
+		const target = requireBoundArtifact();
+		const a = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "?body=true", undefined, AbortSignal.timeout(10_000));
+		return artifactSourceSnapshot(a, await assetSummary(target));
+	}
+	function adoptPreparedSource(snapshot: ArtifactSourceSnapshot) {
+		rememberSource(snapshot.artifact);
+		sourceMetadata = snapshot.artifact;
+		sourceAssets = snapshot.assetSummary || "assets: unavailable";
+	}
+	installSourceContext(pi, {
+		artifactId: () => boundArtifactId,
+		read: readArtifact,
+		revision: async () => (await api("GET", "/api/artifacts/" + encodeURIComponent(requireBoundArtifact()), undefined, AbortSignal.timeout(10_000))).source_revision,
+		adopt: adoptPreparedSource,
+		current: () => sourceSnapshot && sourceSnapshot.body !== null && sourceMetadata
+			? artifactSourceSnapshot({ ...sourceMetadata, body: sourceSnapshot.body, source_revision: sourceSnapshot.revision,
+				...(widgetSnapshot ? { widget_revision: widgetSnapshot.revision } : {}) }, sourceAssets)
+			: null,
+	});
+
 	pi.registerTool({
 		name: "get_artifact",
 		label: "Read artifact",
@@ -437,17 +479,9 @@ export default function (pi: ExtensionAPI) {
 			"network allowlist).",
 		parameters: Type.Object({}),
 		async execute() {
-			const target = requireBoundArtifact();
-			const a = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "?body=true");
-			rememberSource(a);
-			let meta =
-				`id: ${a.id}\ntitle: ${oneLine(a.title)}\n` +
-				`allowlist: [${(a.network_allowlist || []).join(", ")}]`;
-			meta += "\n" + (await assetSummary(target));
-			return ok(labeled("current source of the artifact this session is editing:", meta + "\n\n" + (a.body || "")), {
-				exhibit: "artifact_read",
-				artifactId: target,
-			});
+			const snapshot = await readArtifact();
+			adoptPreparedSource(snapshot);
+			return snapshot.result;
 		},
 	});
 

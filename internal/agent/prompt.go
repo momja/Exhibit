@@ -118,4 +118,4 @@ func selectionNotice(n int) string {
 // freshness check belongs at the resume boundary, not after each own save.
 // It is fixed text, authored here, so it can sit in the user's message like the
 // selection notice does — nothing in it comes from the artifact.
-const resumedNotice = "(This conversation is being continued. The artifact may have changed since you last read it — read it again with get_artifact before you change anything.)"
+const resumedNotice = "(This conversation is being continued. The artifact may have changed since you last read it. Use the freshly prepared get_artifact tool result for this prompt; if none is available, call get_artifact before changing anything.)"

@@ -156,6 +156,7 @@ func decide(messages []chatMessage) turnPlan {
 	var conversation strings.Builder
 	created := false
 	lastUserText, lastUserImages := "", 0
+	currentSource, selectionRead := "", false
 	for _, m := range messages {
 		t, images := textOf(m.Content)
 		conversation.WriteString(t)
@@ -163,7 +164,14 @@ func decide(messages []chatMessage) turnPlan {
 		switch m.Role {
 		case "user":
 			lastUserText, lastUserImages = t, images
+			currentSource, selectionRead = "", false
 		case "tool":
+			switch toolNameFor(messages, m.ToolCallID) {
+			case "get_artifact":
+				currentSource = t
+			case "get_selection":
+				selectionRead = true
+			}
 			created = created || strings.Contains(t, "Created artifact ")
 		}
 	}
@@ -182,9 +190,23 @@ func decide(messages []chatMessage) turnPlan {
 		result, _ := textOf(last.Content)
 		switch name {
 		case "get_selection":
-			// Having seen what the user pointed at, read the source to find it.
-			return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]string{}}
+			if currentSource == "" {
+				return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]string{}}
+			}
+			newBody, what := transform(bodyFromSourceResult(currentSource), lastUserText)
+			return turnPlan{kind: "tool", toolName: "write_artifact", toolArgs: updateArgs(newBody, rogueID, what)}
 		case "get_artifact":
+			// A host-prepared source read can precede the first request. It
+			// doesn't replace the user's actual state/widget/selection intent.
+			if widgetOnly {
+				return turnPlan{kind: "tool", toolName: "set_widget", toolArgs: map[string]string{"body": cannedWidget}}
+			}
+			if plan, ok := decideStateCommand(lastUserText); ok {
+				return plan
+			}
+			if selectionRe.MatchString(lastUserText) && !selectionRead {
+				return turnPlan{kind: "tool", toolName: "get_selection", toolArgs: map[string]string{}}
+			}
 			newBody, what := transform(bodyFromSourceResult(result), lastUserText)
 			return turnPlan{kind: "tool", toolName: "write_artifact", toolArgs: updateArgs(newBody, rogueID, what)}
 		case "set_widget", "edit_widget":

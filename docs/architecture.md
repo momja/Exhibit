@@ -1629,6 +1629,14 @@ configuration, and the pages keep offering the agent.
   source is missing or compacted away, after a conflict or failed source match,
   on evidence of an external edit or restore, or when a save's outcome is
   uncertain. This is prompt guidance; it does not itself enforce concurrency.
+  Deliberate typing may prepare a session
+  and prefetch source without sending draft text or making a provider request.
+  After Send passes screening, a revision-checked source read enters context
+  as a synthetic assistant `get_artifact` call and matching actual tool result.
+  Pi persists prepared reads as custom data; the extension projects pairs on
+  resume and after compaction without promoting source into user messages.
+  Never-accepted sessions expire after 90 seconds, independently of normal idle
+  lifetime. See `agent.md` and `security.md` §5.2 for lifecycle and replay.
 - **Conversations are kept as Pi records them** (av-y7td): each session runs
   with `--session`, and on every settled turn the service reads Pi's session
   file back and stores it in the conversation's `agent_transcripts` row, with
@@ -1645,7 +1653,8 @@ configuration, and the pages keep offering the agent.
   the History pane's Continue buttons. With it, the service writes the stored file
   into a fresh scratch directory and starts Pi from it, under the conversation's own
   id so the same record keeps growing. The system prompt is the current one; the first prompt carries a fixed
-  sentence saying the artifact may have changed and should be read again. Whether
+  notice saying the artifact may have changed: use freshly prepared source, or
+  read it with `get_artifact` if preparation was unavailable. Whether
   to roll the artifact back to the version the conversation was working against
   is the *page's* decision, put to the person and carried out through the
   ordinary version-restore route — resuming itself never touches the artifact.

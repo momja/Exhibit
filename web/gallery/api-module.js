@@ -3,3 +3,7 @@
 export function apiFetch(path, options) {
   return window.apiFetch(path, options);
 }
+
+export function apiEventSource(path, ticket) {
+  return window.apiEventSource(path, ticket);
+}
