@@ -60,6 +60,7 @@
     <div id="messages"></div>
     <div id="history"></div>
     <div class="composer">
+      <div id="question-load-error" role="status" hidden>Could not load the questions. <button type="button" id="question-retry">Try again</button></div>
       <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> Preview updated — tap Preview to view</button>
       <div id="snippet-chips"></div>
       <div class="compose-row">
@@ -146,6 +147,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 {{template "directOpenPrompt" .DirectOpen}}
 <script type="module" src="/assets/gallery/direct-open.js"></script>
 <script type="module" src="/assets/gallery/agent-resize.js"></script>
+<script type="module" src="/assets/gallery/agent-questions.js"></script>
 <script type="module" src="/assets/gallery/message-actions.js"></script>
 </body>
 </html>{{end}}
@@ -212,7 +214,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
   <p class="history-meta">{{template "conversationMeta" .}}</p>
 </div>
 <div class="history-messages" id="history-messages">
-  {{range .Messages}}{{if eq .Role "tool"}}<div class="tool-chip {{if .Failed}}fail{{else}}done{{end}}"><i class="ph {{if .Failed}}ph-x-circle{{else}}ph-check-circle{{end}}"></i> {{.Text}}</div>{{else if eq .Role "assistant"}}{{template "agentMessage" .Text}}{{else}}<div class="msg {{.Role}}">{{.Text}}{{if .Images}}<span class="history-images">{{.Images}} image{{if ne .Images 1}}s{{end}} attached</span>{{end}}</div>{{end}}{{else}}<p class="history-empty">Nothing was said in this conversation.</p>{{end}}
+  {{range .Messages}}{{if eq .Role "questions"}}{{template "agentQuestionHistory" .Questions}}{{else if eq .Role "tool"}}<div class="tool-chip {{if .Failed}}fail{{else}}done{{end}}"><i class="ph {{if .Failed}}ph-x-circle{{else}}ph-check-circle{{end}}"></i> {{.Text}}</div>{{else if eq .Role "assistant"}}{{template "agentMessage" .Text}}{{else}}<div class="msg {{.Role}}">{{.Text}}{{if .Images}}<span class="history-images">{{.Images}} image{{if ne .Images 1}}s{{end}} attached</span>{{end}}</div>{{end}}{{else}}<p class="history-empty">Nothing was said in this conversation.</p>{{end}}
 </div>
 {{template "agentResume" .}}{{end}}
 

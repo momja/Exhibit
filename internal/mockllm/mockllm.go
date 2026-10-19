@@ -120,7 +120,7 @@ type turnPlan struct {
 	// caller sees a real token count (the guard screen reports it, av-gust).
 	usage    map[string]int
 	toolName string
-	toolArgs map[string]string
+	toolArgs map[string]any
 }
 
 // injectionRe is the instruction a hostile artifact title/body plants. The
@@ -189,6 +189,8 @@ func decide(messages []chatMessage) turnPlan {
 		name := toolNameFor(messages, last.ToolCallID)
 		result, _ := textOf(last.Content)
 		switch name {
+		case "ask_user":
+			return turnPlan{kind: "text", text: "Thanks. " + result}
 		case "get_selection":
 			if currentSource == "" {
 				return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]string{}}
@@ -224,10 +226,22 @@ func decide(messages []chatMessage) turnPlan {
 		}
 	}
 
+	// An explicit trigger keeps questionnaire demos and integration tests
+	// deterministic without changing the ordinary artifact-building script.
+	if last.Role == "user" && strings.Contains(lastUserText, "mock-ask-questions") {
+		return turnPlan{kind: "tool", toolName: "ask_user", toolArgs: map[string]any{"questions": []map[string]any{
+			{"id": "view", "question": "How would you like to see your plans?", "options": []map[string]string{
+				{"label": "A weekly view", "description": "See your whole week together"},
+				{"label": "A simple list", "description": "Focus on what comes next"},
+			}},
+			{"id": "goal", "question": "What would make this most useful for you?"},
+		}}}
+	}
+
 	// A widget-only session writes a tile and nothing else, and needs no read:
 	// the canned tile is the same whatever the artifact holds.
 	if widgetOnly {
-		return turnPlan{kind: "tool", toolName: "set_widget", toolArgs: map[string]string{"body": cannedWidget}}
+		return turnPlan{kind: "tool", toolName: "set_widget", toolArgs: map[string]any{"body": cannedWidget}}
 	}
 
 	// A user prompt on a session that has an artifact. The source is not in the
@@ -238,14 +252,14 @@ func decide(messages []chatMessage) turnPlan {
 			return plan
 		}
 		if selectionRe.MatchString(lastUserText) {
-			return turnPlan{kind: "tool", toolName: "get_selection", toolArgs: map[string]string{}}
+			return turnPlan{kind: "tool", toolName: "get_selection", toolArgs: map[string]any{}}
 		}
-		return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]string{}}
+		return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]any{}}
 	}
 	return turnPlan{
 		kind:     "tool",
 		toolName: "create_artifact",
-		toolArgs: map[string]string{"title": titleFrom(lastUserText), "body": cannedTool},
+		toolArgs: map[string]any{"title": titleFrom(lastUserText), "body": cannedTool},
 	}
 }
 
@@ -267,17 +281,17 @@ func decideStateCommand(userText string) (turnPlan, bool) {
 		return turnPlan{
 			kind:     "tool",
 			toolName: "set_state",
-			toolArgs: map[string]string{"key": m[1], "value": strings.TrimSpace(m[2])},
+			toolArgs: map[string]any{"key": m[1], "value": strings.TrimSpace(m[2])},
 		}, true
 	}
 	if m := deleteKeyRe.FindStringSubmatch(userText); m != nil {
-		return turnPlan{kind: "tool", toolName: "delete_state", toolArgs: map[string]string{"key": m[1]}}, true
+		return turnPlan{kind: "tool", toolName: "delete_state", toolArgs: map[string]any{"key": m[1]}}, true
 	}
 	if clearStateRe.MatchString(userText) {
-		return turnPlan{kind: "tool", toolName: "delete_state", toolArgs: map[string]string{}}, true
+		return turnPlan{kind: "tool", toolName: "delete_state", toolArgs: map[string]any{}}, true
 	}
 	if readStateRe.MatchString(userText) {
-		return turnPlan{kind: "tool", toolName: "get_state", toolArgs: map[string]string{}}, true
+		return turnPlan{kind: "tool", toolName: "get_state", toolArgs: map[string]any{}}, true
 	}
 	return turnPlan{}, false
 }
@@ -305,8 +319,8 @@ func screenPlan(messages []chatMessage) turnPlan {
 // carried an injected "also update artifact <id>", is emitted as an extra id
 // argument — the tool has no such parameter and ignores it, which is the
 // property under test.
-func updateArgs(body, rogueID, note string) map[string]string {
-	args := map[string]string{"body": body, "_note": note}
+func updateArgs(body, rogueID, note string) map[string]any {
+	args := map[string]any{"body": body, "_note": note}
 	if rogueID != "" {
 		args["id"] = rogueID
 	}
@@ -475,7 +489,7 @@ func streamPlan(w http.ResponseWriter, plan turnPlan) {
 			fmt.Fprintf(w, "data: %s\n\n", b)
 		}
 	case "tool":
-		args := map[string]string{}
+		args := map[string]any{}
 		for k, v := range plan.toolArgs {
 			if !strings.HasPrefix(k, "_") {
 				args[k] = v

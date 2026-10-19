@@ -19,6 +19,8 @@ ph-camera
 ph-caret-down
 ph-caret-right
 ph-chat-circle
+ph-chat-circle-dots
+ph-arrow-right
 ph-check
 ph-check-circle
 ph-clipboard

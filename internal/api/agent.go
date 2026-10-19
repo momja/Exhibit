@@ -355,6 +355,10 @@ func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
 		descriptors = append(descriptors, descriptor)
 	}
 	if err := s.Prompt(r.Context(), req.Message, images, descriptors); err != nil {
+		if errors.Is(err, agent.ErrQuestionPending) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
 		// A spend cap saying no is a refusal with a message about a limit and
 		// its reset (av-99f4), not a gateway failure: it answers 429 so the
 		// chat treats it as a limit, and the message is the canned wording the

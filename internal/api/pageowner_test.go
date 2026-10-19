@@ -165,6 +165,8 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/s/{shareID}/widget", why: "same share-row authorization as /s/{shareID}, serving the widget blob (av-ei5h); it redirects to the render origin and reads no library"},
 	{route: "/api/agent/sessions/{sessionID}/events", scopedByHandler: true, coveredBy: "agent_session_owner_test.go",
 		why: "streams one agent session's events by id; it is owner-scoped, but by authorizeEventStream resolving the owner itself (EventSource sets no headers, so it cannot sit in a group that runs the middlewares)"},
+	{route: "/api/agent/sessions/{sessionID}/questions/{requestID}", scopedByHandler: true, coveredBy: "agentquestions_test.go",
+		why: "reads an in-memory agent session rather than a stored artifact; agentSession uses the request owner with Manager.Get, proven with live questions and two accounts by TestAgentQuestionsArePrivateToSessionOwner"},
 
 	// The authenticated API group, which runs authMiddleware +
 	// ownerMiddleware. Its owner scoping is av-ep8k's, pinned by

@@ -87,6 +87,7 @@ var writeRoutes = []struct {
 	{"POST", "/api/agent/sessions", true},
 	{"POST", "/api/agent/sessions/{sessionID}/ticket", false},
 	{"POST", "/api/agent/sessions/{sessionID}/prompt", false},
+	{"POST", "/api/agent/sessions/{sessionID}/questions/{requestID}", false},
 	{"POST", "/api/agent/sessions/{sessionID}/abort", false},
 	{"DELETE", "/api/agent/sessions/{sessionID}", false},
 	{"POST", "/api/collections/", true},

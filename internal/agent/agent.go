@@ -41,7 +41,7 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-//go:embed ext/exhibit.ts ext/edit.ts ext/guard.ts ext/source-context.ts
+//go:embed ext/exhibit.ts ext/edit.ts ext/guard.ts ext/source-context.ts ext/questions.ts
 var extFS embed.FS
 
 // Config for the Manager.
@@ -120,8 +120,7 @@ type Manager struct {
 	starting      map[string]bool // conversation identities reserved before loading history
 }
 
-// New materializes the extension (exhibit.ts plus its edit-engine import,
-// edit.ts, which pi's jiti loader resolves relative to the extension file)
+// New materializes the extension and its relative imports
 // under cfg.WorkRoot and starts the idle reaper.
 func New(cfg Config, st store.Store) (*Manager, error) {
 	if cfg.Credentials == nil {
@@ -141,14 +140,15 @@ func New(cfg Config, st store.Store) (*Manager, error) {
 	if err := os.WriteFile(extPath, src, 0o644); err != nil {
 		return nil, fmt.Errorf("materialize exhibit extension: %w", err)
 	}
-	// edit.ts is exhibit.ts's only relative import (the edit_artifact engine,
-	// av-f5i5). It must sit beside the extension or the sidecar fails to load.
-	editSrc, err := extFS.ReadFile("ext/edit.ts")
-	if err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(filepath.Join(cfg.WorkRoot, "edit.ts"), editSrc, 0o644); err != nil {
-		return nil, fmt.Errorf("materialize exhibit edit engine: %w", err)
+	// Relative imports must sit beside the extension for Pi's loader.
+	for _, name := range []string{"edit.ts", "questions.ts"} {
+		source, err := extFS.ReadFile("ext/" + name)
+		if err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(filepath.Join(cfg.WorkRoot, name), source, 0o644); err != nil {
+			return nil, fmt.Errorf("materialize exhibit %s: %w", name, err)
+		}
 	}
 	sourceContext, err := extFS.ReadFile("ext/source-context.ts")
 	if err != nil {
@@ -362,6 +362,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}
 	if m.cfg.MockLLMURL != "" {
 		cmd.Env = append(cmd.Env, "EXHIBIT_MOCK_LLM_URL="+m.cfg.MockLLMURL)
+	}
+	if opts.WidgetOnly {
+		cmd.Env = append(cmd.Env, "EXHIBIT_WIDGET_ONLY=1")
 	}
 	if m.cfg.MaxRequestBodyBytes > 0 {
 		cmd.Env = append(cmd.Env, "EXHIBIT_MAX_BODY_BYTES="+strconv.FormatInt(m.cfg.MaxRequestBodyBytes, 10))
@@ -612,7 +615,10 @@ func (m *Manager) reapIdle(cutoff time.Time) {
 	var stale []*Session
 	for _, s := range m.sessions {
 		s.mu.Lock()
-		idle := !s.closed && !s.stopping && s.lastActive.Before(cutoff) && !s.streaming
+		// A model waiting on a person is not doing work. If the browser
+		// disappears without delivering pagehide, this session must still
+		// expire instead of holding a subprocess and an owner slot forever.
+		idle := !s.closed && !s.stopping && s.lastActive.Before(cutoff) && (!s.streaming || s.hasPendingQuestions())
 		if idle {
 			s.stopping = true
 		}
@@ -724,6 +730,7 @@ type Session struct {
 	backlog            [][]byte
 	backlogBytes       int
 	pending            map[string]chan rpcResponse
+	questions          map[string]QuestionRequest
 	streaming          bool
 	closed             bool
 	stopping           bool // unavailable to callers, but still draining its final writes
@@ -824,6 +831,12 @@ const sessionCwd = "/"
 func (s *Session) Prompt(ctx context.Context, message string, images []ImageContent, selection []string) error {
 	s.promptMu.Lock()
 	defer s.promptMu.Unlock()
+	s.mu.Lock()
+	waiting := s.hasPendingQuestions()
+	s.mu.Unlock()
+	if waiting {
+		return ErrQuestionPending
+	}
 
 	s.mu.Lock()
 	if s.closed || s.stopping {
@@ -944,6 +957,7 @@ func (s *Session) writeSelection(selection []string) error {
 // Abort asks pi to stop the current run.
 func (s *Session) Abort(ctx context.Context) error {
 	_, err := s.roundTrip(ctx, map[string]any{"type": "abort"})
+	s.cancelQuestions("")
 	return err
 }
 
@@ -1017,10 +1031,11 @@ func (s *Session) readLoop(stdout io.Reader) {
 
 func (s *Session) handleLine(line []byte) {
 	var probe struct {
-		Type     string `json:"type"`
-		ID       string `json:"id"`
-		ToolName string `json:"toolName"`
-		IsError  bool   `json:"isError"`
+		Type       string `json:"type"`
+		ID         string `json:"id"`
+		ToolName   string `json:"toolName"`
+		ToolCallID string `json:"toolCallId"`
+		IsError    bool   `json:"isError"`
 		// Usage, Message and Result are raw, and that is load-bearing. This
 		// one probe parses every line Pi emits, and shapes collide across
 		// event types: "message" is a *string* on an extension_ui_request
@@ -1047,6 +1062,9 @@ func (s *Session) handleLine(line []byte) {
 	}
 	if verb, detail, ok := guardSignalOf(line); ok {
 		s.handleGuardSignal(verb, detail)
+		return
+	}
+	if probe.Type == "extension_ui_request" && s.receiveQuestions(line) {
 		return
 	}
 
@@ -1101,6 +1119,7 @@ func (s *Session) handleLine(line []byte) {
 	case "turn_end":
 		s.clearTurnClock()
 	case "agent_settled":
+		s.cancelQuestions("")
 		s.mu.Lock()
 		s.streaming = false
 		s.lastActive = time.Now()
@@ -1121,6 +1140,9 @@ func (s *Session) handleLine(line []byte) {
 			}()
 		}
 	case "tool_execution_end":
+		if probe.ToolCallID != "" {
+			s.cancelQuestions(probe.ToolCallID)
+		}
 		var res struct {
 			Details map[string]any `json:"details"`
 		}
@@ -1339,6 +1361,7 @@ func (s *Session) finish() {
 	s.closed = true
 	s.streaming = false
 	s.mu.Unlock()
+	s.cancelQuestions("")
 	// The credential dies with the process that held it.
 	s.mgr.cfg.Credentials.Revoke(s.grant)
 	ev, _ := json.Marshal(map[string]string{"type": "exhibit_session_closed"})

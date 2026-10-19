@@ -29,6 +29,9 @@ type TranscriptMessage struct {
 	Images int `json:"images,omitempty"`
 	// Failed marks a tool that returned an error.
 	Failed bool `json:"failed,omitempty"`
+	// Questions contains only the explicitly projected prompts and answers,
+	// never a tool's arbitrary details or source content.
+	Questions *QuestionRequest `json:"questions,omitempty"`
 }
 
 // titleRunes is the longest a conversation's title gets.
@@ -50,6 +53,7 @@ type piMessage struct {
 	Content    json.RawMessage `json:"content"`
 	ToolCallID string          `json:"toolCallId"`
 	IsError    bool            `json:"isError"`
+	Details    json.RawMessage `json:"details"`
 }
 
 // piBlock is one content block of a message.
@@ -109,9 +113,21 @@ func project(msgs []piMessage) []TranscriptMessage {
 	// A tool's outcome is a message of its own, after the call that asked for
 	// it, so which calls failed is known up front.
 	failed := map[string]bool{}
+	questionResults := map[string]QuestionRequest{}
 	for _, m := range msgs {
 		if m.Role == "toolResult" && m.IsError {
 			failed[m.ToolCallID] = true
+		}
+		if m.Role == "toolResult" && !m.IsError {
+			var result struct {
+				Exhibit string `json:"exhibit"`
+				QuestionRequest
+			}
+			if json.Unmarshal(m.Details, &result) == nil && result.Exhibit == "questions_answered" && validQuestions(result.Questions) {
+				if result.Cancelled || validateAnswers(result.Questions, result.Answers) == nil {
+					questionResults[m.ToolCallID] = result.QuestionRequest
+				}
+			}
 		}
 	}
 
@@ -135,6 +151,20 @@ func project(msgs []piMessage) []TranscriptMessage {
 						out = append(out, TranscriptMessage{Role: "assistant", Text: b.Text})
 					}
 				case "toolCall":
+					if b.Name == "ask_user" {
+						request, ok := questionResults[b.ID]
+						if !ok {
+							args, _ := json.Marshal(b.Arguments)
+							_ = json.Unmarshal(args, &request)
+							request.Cancelled = true
+						}
+						if validQuestions(request.Questions) {
+							request.Pending = false
+							request.ID, request.ToolCallID = "", ""
+							out = append(out, TranscriptMessage{Role: "questions", Questions: &request})
+							continue
+						}
+					}
 					out = append(out, TranscriptMessage{Role: "tool", Text: toolLabel(b.Name, b.Arguments), Failed: failed[b.ID]})
 				}
 			}
@@ -204,6 +234,8 @@ func toolLabel(name string, args map[string]any) string {
 		return "Erasing all state"
 	case "get_selection":
 		return "Reading selected elements"
+	case "ask_user":
+		return "Asking you"
 	}
 	return name
 }

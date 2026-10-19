@@ -2,12 +2,12 @@
  * Exhibit tools extension for Pi (Exh-hvaf, av-lvi1).
  *
  * Loaded by the exhibit service into every agent session it spawns
- * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model eleven
+ * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model twelve
  * tools — create_artifact / write_artifact / edit_artifact / get_artifact for the document,
  * get_state / set_state / delete_state for the artifact's stored state,
  * set_widget / edit_widget / get_widget for the artifact's gallery-card widget (av-fafu), and
- * get_selection for the elements the user picked in the preview — all of which
- * (get_selection aside, which reads a file the service wrote) go through the exhibit HTTP API, so agent output enters the
+ * get_selection for the elements the user picked in the preview, and ask_user
+ * for interactive questions in the chat. Artifact operations go through the exhibit HTTP API, so agent output enters the
  * library through the same single write path as every other ingest (scan,
  * footprint, explicit allowlist approval) and every other state edit (the
  * edit page's state inspector, av-hg5f). The extension never touches the
@@ -41,6 +41,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { applyEdits } from "./edit.ts";
 import { installSourceContext, type ArtifactSourceSnapshot } from "./source-context.ts";
+import { registerQuestions } from "./questions.ts";
 
 const API = process.env.EXHIBIT_API_URL || "http://127.0.0.1:8080";
 const TOKEN = process.env.EXHIBIT_TOKEN || "";
@@ -233,6 +234,8 @@ export default function (pi: ExtensionAPI) {
 			widgetSnapshot = { body: null, revision: a.widget_revision };
 		}
 	}
+	// The one-shot widget action has no chat surface to answer a dialog.
+	if (process.env.EXHIBIT_WIDGET_ONLY !== "1") registerQuestions(pi);
 	if (process.env.EXHIBIT_MOCK_LLM_URL) {
 		pi.registerProvider("exhibit-mock", {
 			name: "Exhibit Mock",

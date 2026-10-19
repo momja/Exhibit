@@ -25,6 +25,7 @@ const MODEL_SUGGESTIONS = {
 let sessionId = null;
 let eventSource = null;
 let streaming = false;
+const pendingQuestions = new Set();
 let keyConfigured = false;
 let configuredProvider = null;   // provider the stored key currently belongs to, or null
 let pendingSnippets = [];   // [{image:{data,mimeType}, descriptor, thumbUrl}]
@@ -368,7 +369,13 @@ let thinkingEl = null;
 let toolChips = {};          // toolCallId -> chip element
 
 function handleAgentEvent(ev) {
+  document.dispatchEvent(new CustomEvent('exhibit:agent-event', {detail: {event: ev, sessionId}}));
   switch (ev.type) {
+    case 'exhibit_questions':
+      if (ev.pending) pendingQuestions.add(ev.requestId);
+      else pendingQuestions.delete(ev.requestId);
+      updateComposer();
+      break;
     case 'agent_start':
       setStreaming(true);
       break;
@@ -514,6 +521,7 @@ function toolLabel(name, args) {
     case 'set_widget': return 'Saving widget';
     case 'get_widget': return 'Reading widget';
     case 'get_selection': return 'Reading selected elements';
+    case 'ask_user': return 'Asking you';
     case 'get_state': return 'Reading artifact state';
     case 'set_state': return 'Setting state key "' + (args.key || '') + '"';
     case 'delete_state': return args.key ? 'Deleting state key "' + args.key + '"' : 'Erasing all state';
@@ -527,6 +535,8 @@ function removeThinking() {
 
 function setStreaming(on) {
   streaming = on;
+  if (!on) pendingQuestions.clear();
+  updateComposer();
   document.getElementById('stop-btn').style.display = on ? '' : 'none';
 }
 
@@ -537,6 +547,7 @@ async function stopAgent() {
 
 // --- Sending ---------------------------------------------------------------
 async function send() {
+  if (pendingQuestions.size) return;
   const text = inputEl.value.trim();
   if (!text || sending || switchingConversation || leaving) return;
   if (!keyConfigured) { openKeyModal(); return; }
@@ -601,7 +612,12 @@ inputEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 function updateComposer() {
-  document.getElementById('send-btn').disabled = !inputEl.value.trim();
+  const waiting = pendingQuestions.size > 0;
+  inputEl.disabled = waiting;
+  document.getElementById('send-btn').disabled = waiting || !inputEl.value.trim();
+  document.getElementById('hint').textContent = waiting
+    ? 'Answer the questions above to continue, or choose “Skip for now”.'
+    : 'Enter to send · Shift+Enter for a new line · Ctrl+Shift+S to snippet an element from the preview';
   inputEl.style.height = 'auto';
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
 }

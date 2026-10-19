@@ -591,6 +591,8 @@ func (ro *Router) setupRoutes() {
 			// owns — the reconnect path, since a ticket is single-use.
 			r.Post("/sessions/{sessionID}/ticket", ro.agentSessionTicket)
 			r.Post("/sessions/{sessionID}/prompt", ro.agentPrompt)
+			r.Get("/sessions/{sessionID}/questions/{requestID}", ro.agentQuestions)
+			r.Post("/sessions/{sessionID}/questions/{requestID}", ro.agentAnswerQuestions)
 			r.Post("/sessions/{sessionID}/abort", ro.agentAbort)
 			r.Delete("/sessions/{sessionID}", ro.closeAgentSession)
 		})
