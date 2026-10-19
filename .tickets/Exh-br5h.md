@@ -46,3 +46,7 @@ Made option rows visibly clickable with rounded bubble borders, a subtle fill, m
 **2026-10-19T22:54:42Z**
 
 Confirmed the option labels were left-aligned, then centered the label content horizontally and vertically in both the app and canvas. Updated desktop/mobile screenshots. Validation: asset build and syntax checks passed; measured label and button centers in the live browser at desktop and phone sizes, with zero vertical offset and less than 0.01px horizontal offset.
+
+**2026-10-19T23:19:30Z**
+
+Corrected the interpretation of the alignment feedback: restored left-aligned labels while retaining vertical centering within each bubble. Updated the canvas and screenshots. Validation: asset build passed; live measurements at desktop and phone widths showed equal 11.5px space above and below each label line box.
