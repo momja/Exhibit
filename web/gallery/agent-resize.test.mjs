@@ -23,7 +23,6 @@ async function load({ saved = null, blockedStorage = false } = {}) {
   const attributes = {};
   layout.clientWidth = 1280;
   layout.style.setProperty = (key, value) => { layout.style[key] = value; };
-  divider.offsetWidth = 8;
   divider.setAttribute = (key, value) => { attributes[key] = value; };
   divider.hasPointerCapture = (id) => captured === id;
   divider.setPointerCapture = (id) => { captured = id; };
@@ -51,8 +50,8 @@ test('drag across the preview clamps both panes and persists on release', async 
   await p.event('pointermove', { clientX: 700 });
   assert.equal(p.width(), 700);
   await p.event('pointermove', { clientX: 2000 });
-  assert.equal(p.width(), 992);
-  assert.equal(p.attributes['aria-valuenow'], '992');
+  assert.equal(p.width(), 1000);
+  assert.equal(p.attributes['aria-valuenow'], '1000');
   await p.event('pointermove', { clientX: 0 });
   assert.equal(p.width(), 280);
   await p.event('pointerup');
@@ -71,7 +70,7 @@ test('keyboard resizing, bounds, reload, and reset', async () => {
   await p.event('keydown', { key: 'Home' });
   assert.equal(p.width(), 280);
   await p.event('keydown', { key: 'End' });
-  assert.equal(p.width(), 992);
+  assert.equal(p.width(), 1000);
   await p.event('dblclick');
   assert.equal(p.width(), 460);
   assert.equal(p.values.get(storageKey), '460');
@@ -80,8 +79,8 @@ test('keyboard resizing, bounds, reload, and reset', async () => {
 test('viewport changes clamp without forgetting the preferred width and mobile stops dragging', async () => {
   const p = await load({ saved: '700' });
   p.resize(641);
-  assert.equal(p.width(), 353);
-  assert.equal(p.attributes['aria-valuemax'], '353');
+  assert.equal(p.width(), 361);
+  assert.equal(p.attributes['aria-valuemax'], '361');
   p.resize(1280);
   assert.equal(p.width(), 700);
   await p.event('pointerdown');

@@ -26,3 +26,7 @@ Implemented a persistent desktop divider with pointer capture, keyboard controls
 **2026-10-19T04:16:52Z**
 
 Final validation: go test ./... passes after regenerating the stale local Phosphor bundle. Browser checks pass for pointer dragging across the artifact, keyboard controls, reload persistence, viewport clamping, and mobile tabs. Four current screenshots are committed with the implementation.
+
+**2026-10-19T04:29:01Z**
+
+Refined the interaction per user feedback: removed the visible resize gutter, grip, and instructional tooltip. The chat keeps its normal hairline border; an invisible hit area straddles that edge with the standard resize cursor. Updated width limits to account for zero gutter space. Five resize interaction tests and the focused Go/page-script suite pass; browser dragging and narrow/mobile layouts verified; screenshots refreshed.

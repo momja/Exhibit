@@ -584,8 +584,9 @@ conversation that cannot be continued — kept before session files existed, or 
 an instance with no agent — shows a note where the card would be, not a missing
 button.
 
-**Resizable chat (Exh-blsd).** On desktop, drag the divider between chat and
-preview to change the chat width. Focus the divider and use Left/Right arrows
+**Resizable chat (Exh-blsd).** On desktop, drag the chat panel's right edge to
+change its width. The edge uses a resize cursor without a visible grip or extra
+bar. Focus the edge and use Left/Right arrows
 (Shift for larger steps), or Home/End for the width limits. Double-click resets
 it to 460 pixels. The browser remembers the preferred width; smaller windows
 clamp it so both panes keep at least 280 pixels. Mobile retains the Chat/Preview

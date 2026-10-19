@@ -12,10 +12,10 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .key-btn:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
 .key-btn.warn{border-color:var(--color-warn-strong);color:var(--color-warn-ink-soft);background:var(--color-warn-tint)}
 .layout{display:flex;flex:1;overflow:hidden}
-.chat{width:clamp(280px,var(--agent-chat-width,460px),calc(100% - 288px));min-width:280px;flex-shrink:0;display:flex;flex-direction:column;background:var(--color-panel)}
-.pane-resizer{flex:0 0 8px;position:relative;cursor:col-resize;touch-action:none;background:var(--color-ground);border-inline:1px solid var(--color-hairline);outline:none}
-.pane-resizer::after{content:"";position:absolute;inset:calc(50% - 20px) 2px;border-radius:2px;background:var(--color-border)}
-.pane-resizer:hover::after,.pane-resizer:focus-visible::after,.layout.is-resizing .pane-resizer::after{background:var(--brand-blue)}
+.chat{width:clamp(280px,var(--agent-chat-width,460px),calc(100% - 280px));min-width:280px;flex-shrink:0;display:flex;flex-direction:column;background:var(--color-panel);border-right:1px solid var(--color-hairline)}
+/* An invisible hit area straddles the panel's normal border without taking
+ * layout space or adding a visible grip. */
+.pane-resizer{flex:0 0 8px;margin-inline:-4px;position:relative;z-index:1;cursor:col-resize;touch-action:none;outline:none}
 .pane-resizer:focus-visible{box-shadow:inset 0 0 0 2px var(--brand-blue)}
 .layout.is-resizing{cursor:col-resize;user-select:none}
 /* Captured pointer events must keep reaching the divider over artifact frames. */

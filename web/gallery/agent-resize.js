@@ -16,7 +16,7 @@ try {
 } catch { /* Storage can be unavailable; resizing still works. */ }
 
 function maximumWidth() {
-  return Math.max(MIN_PANE_WIDTH, layout.clientWidth - divider.offsetWidth - MIN_PANE_WIDTH);
+  return Math.max(MIN_PANE_WIDTH, layout.clientWidth - MIN_PANE_WIDTH);
 }
 
 function applyWidth() {
