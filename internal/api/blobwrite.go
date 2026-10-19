@@ -4,10 +4,22 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/store"
 )
+
+func (ro *Router) storeInitialArtifact(ctx context.Context, a *store.Artifact, body string) error {
+	commit := func() error { return ro.cfg.Store.PutArtifact(ctx, a) }
+	if ro.cfg.Entitlements.Enforced {
+		return ro.storeBlobContent(ctx, a.SourceBlobID, body, commit)
+	}
+	if err := ro.putBlob(ctx, a.SourceBlobID, strings.NewReader(body)); err != nil {
+		return err
+	}
+	return commit()
+}
 
 // The funnel every blob write and blob deletion passes through, so that
 // per-owner storage accounting (av-fw1b) is a property of *writing a blob*
@@ -42,11 +54,25 @@ import (
 // not to do — and would leave the caller unable to tell that their artifact is
 // in fact there.
 func putBlob(ctx context.Context, st store.Store, blobs blob.Store, blobID string, r io.Reader) error {
+	return putMeasuredBlob(ctx, st, blobs, blobID, r, false)
+}
+
+// With quotas enabled, an unrecorded blob cannot be published: its missing
+// length would let later writes spend space that is already occupied. The
+// caller stages bytes and only commits their references after this succeeds.
+func (ro *Router) putBlob(ctx context.Context, blobID string, r io.Reader) error {
+	return putMeasuredBlob(ctx, ro.cfg.Store, ro.cfg.Blob, blobID, r, ro.cfg.Entitlements.Enforced)
+}
+
+func putMeasuredBlob(ctx context.Context, st store.Store, blobs blob.Store, blobID string, r io.Reader, requireSize bool) error {
 	c := &countingReader{r: r}
 	if err := blobs.Put(ctx, blobID, c); err != nil {
 		return err
 	}
 	if err := st.RecordBlobSize(ctx, blobID, c.n); err != nil {
+		if requireSize {
+			return err
+		}
 		slog.WarnContext(ctx, "record blob size: storage accounting will under-report until recomputed",
 			slog.String("blob_id", blobID), slog.Int64("bytes", c.n), slog.String("err", err.Error()))
 	}

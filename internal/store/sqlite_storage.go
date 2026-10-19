@@ -29,6 +29,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
+	"strconv"
 	"strings"
 )
 
@@ -66,6 +68,41 @@ type OwnerStorage struct {
 // query rather than of whoever calls it: there is no way to ask for the other
 // answer. architecture.md §3.3 records the rationale.
 const ownerBlobs = `SELECT DISTINCT blob_id FROM blob_references WHERE owner_id = ?`
+
+// LockStorage uses the same bounded, reference-counted locking as blob writes,
+// in a separate namespace. Like blob locking, it covers this process: Exhibit
+// runs one server against its SQLite database.
+func (s *SQLiteStore) LockStorage(ownerID int64) func() {
+	id := strconv.FormatInt(ownerID, 10)
+	s.storageLocks.lock(id)
+	return func() { s.storageLocks.unlock(id) }
+}
+
+func (s *SQLiteStore) ProjectStorageUsage(ctx context.Context, ownerID int64, blobs map[string]int64) (current, additional int64, err error) {
+	var missing int
+	err = s.db.QueryRowContext(ctx, `
+        SELECT COALESCE(SUM(s.bytes), 0), COUNT(*) - COUNT(s.bytes)
+          FROM (`+ownerBlobs+`) r LEFT JOIN blob_sizes s ON s.blob_id = r.blob_id`, ownerID).Scan(&current, &missing)
+	if err != nil {
+		return 0, 0, err
+	}
+	if missing > 0 {
+		return 0, 0, fmt.Errorf("storage usage unresolved: %d referenced blobs have no recorded size; recompute storage usage", missing)
+	}
+	for id, size := range blobs {
+		if id == "" || size < 0 || size > math.MaxInt64-additional {
+			return 0, 0, fmt.Errorf("invalid projected blob size")
+		}
+		var referenced bool
+		if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM blob_references WHERE owner_id = ? AND blob_id = ?)`, ownerID, id).Scan(&referenced); err != nil {
+			return 0, 0, err
+		}
+		if !referenced {
+			additional += size
+		}
+	}
+	return current, additional, nil
+}
 
 // RecordBlobSize persists a blob's byte length. Called by the write funnel
 // that wraps every Blob.Put, and idempotent by upsert: rewriting a body in

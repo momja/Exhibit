@@ -53,6 +53,11 @@ func serverError(w http.ResponseWriter, r *http.Request, label string, err error
 // outside the caller's library exactly as it reports one that doesn't exist,
 // and the handler must not undo that by answering differently (av-ep8k).
 func writeArtifactError(w http.ResponseWriter, r *http.Request, label string, err error) {
+	var quota *storageQuotaError
+	if errors.As(err, &quota) {
+		quota.respond(w)
+		return
+	}
 	if errors.Is(err, store.ErrVersionChanged) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "version_changed"})
 		return
@@ -254,6 +259,13 @@ func (ro *Router) persistRuntimeAssets(ctx context.Context, ownerID int64, artif
 	for i, c := range collected {
 		blobIDs[i] = store.AssetBlobID(ownerID, c.Body)
 	}
+	if ro.cfg.Entitlements.Enforced {
+		defer func() {
+			if err := ro.reclaimBlobs(context.WithoutCancel(ctx), blobIDs); err != nil {
+				slog.WarnContext(ctx, "reclaim staged ingest assets", slog.String("err", err.Error()))
+			}
+		}()
+	}
 
 	// Held from the first byte written to the commit that references it. A
 	// content address is exactly the id the deletion queue may be holding from
@@ -265,6 +277,11 @@ func (ro *Router) persistRuntimeAssets(ctx context.Context, ownerID int64, artif
 	queued, err := func() ([]string, error) {
 		unlock := ro.cfg.Store.LockBlobs(blobIDs...)
 		defer unlock()
+		if ro.cfg.Entitlements.Enforced {
+			if _, err := ro.cfg.Store.QueueUnreferencedBlobs(ctx, blobIDs); err != nil {
+				return nil, err
+			}
+		}
 
 		rows, err := ro.writeRuntimeAssets(ctx, ownerID, collected)
 		if err != nil {
@@ -307,7 +324,7 @@ func (ro *Router) writeRuntimeAssets(ctx context.Context, ownerID int64, collect
 		// weighs — so a write that skipped the funnel here would leave the
 		// number wrong by more than everything else combined.
 		blobID := store.AssetBlobID(ownerID, c.Body)
-		if err := putBlob(ctx, ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader(c.Body)); err != nil {
+		if err := ro.putBlob(ctx, blobID, bytes.NewReader(c.Body)); err != nil {
 			return nil, fmt.Errorf("store asset %s: %w", c.SourceURL, err)
 		}
 		rows = append(rows, store.ArtifactAsset{
@@ -391,12 +408,13 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blobID := uuid.New().String()
-
-	// Store the artifact body
-	if err := putBlob(r.Context(), ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewReader([]byte(req.Body))); err != nil {
-		serverError(w, r, "store artifact body", err)
+	collected := collector.merge(runtimeAssets)
+	unlock, err := ro.beginStorageWrite(r.Context(), ownerID, snapshotStorageBlobs(ownerID, blobID, req.Body, collected))
+	if err != nil {
+		writeArtifactError(w, r, "check artifact storage quota", err)
 		return
 	}
+	defer unlock()
 
 	// The allowlist holds only origins the user has explicitly approved; it is
 	// NEVER seeded from the scan. The scanned footprint is returned to the
@@ -442,7 +460,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		a.Provenance = versionProvenance(r, store.VersionInitial)
 	}
 
-	if err := ro.cfg.Store.PutArtifact(r.Context(), a); err != nil {
+	if err := ro.storeInitialArtifact(r.Context(), a, req.Body); err != nil {
 		serverError(w, r, "store artifact", err)
 		return
 	}
@@ -450,7 +468,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	// Assets go after the row they reference. Never fatal (av-20fk): a
 	// payload that did not land leaves the page's own fetch to reach the
 	// network, which is exactly where it was before any of this existed.
-	if err := ro.persistRuntimeAssets(r.Context(), ownerID, id, collector.merge(runtimeAssets)); err != nil {
+	if err := ro.persistRuntimeAssets(r.Context(), ownerID, id, collected); err != nil {
 		slog.WarnContext(r.Context(), "store runtime assets",
 			slog.String("artifact_id", id), slog.String("err", err.Error()))
 		if snapReport != nil {
@@ -946,6 +964,15 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	provenance := versionProvenance(r, store.VersionRefetch)
 	provenance.Message = a.SourceURL
 	if err := ro.storeRefetchedSnapshot(r.Context(), ownerID, id, newBody, bodyChanged, replacementAssets, provenance); err != nil {
+		var quota *storageQuotaError
+		if errors.As(err, &quota) {
+			// Report the complete assembled snapshot even when only the body
+			// or the assets changed and would have needed new storage.
+			quota.WriteBytes = 0
+			for _, n := range snapshotStorageBlobs(ownerID, "body", newBody, collected) {
+				quota.WriteBytes += n
+			}
+		}
 		writeArtifactError(w, r, "refetch store snapshot", err)
 		return
 	}

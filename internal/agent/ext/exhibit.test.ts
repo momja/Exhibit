@@ -474,6 +474,34 @@ describe("oversized writes (av-ombn)", () => {
 		});
 	});
 
+	it("reports storage quotas without treating them as per-request limits", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		await withFetch(async () => ({
+			ok: false,
+			status: 413,
+			text: async () => JSON.stringify({
+				code: "storage_quota_exceeded",
+				error: "storage quota exceeded: limit 100 bytes, current usage 90 bytes, refused write 20 bytes (20 additional bytes)",
+				limit_bytes: 100, usage_bytes: 90, write_bytes: 20, additional_bytes: 20,
+			}),
+		}), async () => {
+			for (const [tool, args] of [
+				["create_artifact", { title: "T", body: "<html>new</html>" }],
+				["write_artifact", { body: "<html>new</html>" }],
+				["set_widget", { body: "<html>new</html>" }],
+			]) {
+				await assert.rejects(pi.tools.get(tool).execute("quota", args), (error) => {
+					assert.match(error.message, /limit 100 bytes, current usage 90 bytes, refused write 20 bytes/);
+					assert.match(error.message, /previous versions/);
+					assert.doesNotMatch(error.message, /per request|Make it smaller first/);
+					return true;
+				});
+			}
+		});
+	});
+
 	it("still says it was too large when a 413 names no limit (a proxy in front of the API)", async (t) => {
 		needExhibit(t);
 		const pi = makePi();
