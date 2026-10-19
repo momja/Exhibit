@@ -27,7 +27,7 @@ import (
 // scan never seeds the allowlist (spec §6.2).
 
 type widgetResponse struct {
-	Body           string `json:"body"`
+	Body           string `json:"body,omitempty"`
 	WidgetRevision string `json:"widget_revision"`
 	// NetworkFootprint is every origin the widget body references. Unapproved
 	// lists the subset the artifact's allowlist does not cover — the ones the
@@ -38,7 +38,8 @@ type widgetResponse struct {
 }
 
 type putWidgetRequest struct {
-	Body                   string          `json:"body"`
+	Edits                  json.RawMessage `json:"edits"`
+	Body                   *string         `json:"body"`
 	ExpectedWidgetRevision json.RawMessage `json:"expected_widget_revision"`
 }
 
@@ -94,7 +95,11 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.Body == "" {
+	body := ""
+	if req.Body != nil {
+		body = *req.Body
+	}
+	if body == "" && len(req.Edits) == 0 {
 		http.Error(w, "body is required", http.StatusBadRequest)
 		return
 	}
@@ -119,6 +124,22 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 		}
 		fields["expected_widget_revision"] = value
 	}
+	patching := len(req.Edits) > 0
+	if patching {
+		if req.Body != nil {
+			fields["body"] = body
+		}
+		var edits any
+		if err := json.Unmarshal(req.Edits, &edits); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid edits")
+			return
+		}
+		fields["edits"] = edits
+		if !ro.expandSourceEdits(w, r, a, fields, true) {
+			return
+		}
+		body = fields["body"].(string)
+	}
 	expected, ok := contentPrecondition(w, r, fields, "expected_widget_revision", a.WidgetRevision, true)
 	if !ok {
 		return
@@ -133,26 +154,30 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	version, err := ro.storeVersionContent(r.Context(), ownerID, id, req.Body, true, store.VersionChange{
+	version, err := ro.storeVersionContent(r.Context(), ownerID, id, body, true, store.VersionChange{
 		Provenance: versionProvenance(r, store.VersionEdit), ExpectedWidgetRevision: expected,
-		CheckOnly: a.WidgetBlobID != "" && current == req.Body,
+		CheckOnly: a.WidgetBlobID != "" && current == body,
 	})
 	if err != nil {
 		writeArtifactError(w, r, "save widget version", err)
 		return
 	}
 
-	footprint := networkFootprint(req.Body, ro.cfg.RenderOrigin)
+	footprint := networkFootprint(body, ro.cfg.RenderOrigin)
 	unapproved := diffOrigins(footprint, a.NetworkAllowlist)
 	slog.InfoContext(r.Context(), "widget saved",
 		slog.String("artifact_id", id),
-		slog.Int("body_bytes", len(req.Body)),
+		slog.Int("body_bytes", len(body)),
 		slog.Any("footprint", footprint),
 		slog.Any("unapproved", unapproved),
 	)
 
+	responseBody := body
+	if patching {
+		responseBody = ""
+	}
 	writeJSON(w, http.StatusOK, widgetResponse{
-		Body:             req.Body,
+		Body:             responseBody,
 		WidgetRevision:   store.ContentRevision(version.WidgetBlobID),
 		NetworkFootprint: footprint,
 		Unapproved:       unapproved,

@@ -1,6 +1,6 @@
 ---
 id: Exh-dgno
-status: in_progress
+status: closed
 deps: [av-n0gl]
 links: []
 created: 2026-10-19T05:12:10Z
@@ -18,3 +18,9 @@ Refactor edit_artifact and edit_widget to retain the exact source/revision read,
 
 A targeted edit uses known versioned source and patch payloads rather than full-source GET plus full-body replacement each call. Ambiguous/overlapping/missing matches and stale bases save nothing; success advances the known snapshot; artifact and widget behavior and existing scan/version/scope paths are covered.
 
+
+## Notes
+
+**2026-10-19T05:33:53Z**
+
+Implemented retained source/widget snapshots, exact patch payloads through existing write routes, revision-bound full rewrites, and explicit conflict invalidation. Validation: 31 extension tests; patch API and malformed/no-op tests; real-Pi successive edits with one source read; scoped agent/guardrail/conversation/resume integration checks passed.
