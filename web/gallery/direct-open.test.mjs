@@ -95,6 +95,8 @@ test('a hidden toolbar menu returns focus to More actions', async () => {
   const page = await load();
   await page.trigger.click();
   page.trigger.closest = () => page.byId('pip-menu');
+  const lookup = page.document.getElementById;
+  page.document.getElementById = (id) => id === 'pv-open' ? null : lookup(id);
   await page.cancel.click();
   assert.equal(page.document.activeElement, page.byId('pip-more'));
 });
@@ -216,4 +218,60 @@ test('frame reloads bypass the gate and never create a tab', async () => {
   assert.equal(page.prompt.hidden, true);
   assert.equal(page.tabs.length, 0);
   assert.ok(page.frame.src.startsWith(page.openURL + '?r='));
+});
+
+// A delegated click models a newly rendered agent control, without reloading
+// the module. The dialog remains in the page while the controls are swapped.
+async function clickAgentOpen(page, artifact) {
+  const trigger = page.byId('agent-open-' + (page.agentButtonCount = (page.agentButtonCount || 0) + 1));
+  trigger.dataset = { directOpenArtifact: artifact, directOpenUrl: `/artifacts/${artifact}/open` };
+  const icon = { closest: (selector) => selector === '[data-direct-open-artifact]' ? trigger : null };
+  await page.document.dispatchEvent({ type: 'click', target: icon });
+  return trigger;
+}
+
+test('agent opens after creation and swaps use current artifact and share detail preferences', async () => {
+  const store = storage();
+  const page = await load({ artifact: '', store });
+  const trigger = await clickAgentOpen(page, 'created');
+  assert.equal(page.prompt.hidden, false);
+  await page.cancel.click();
+  assert.equal(page.document.activeElement, trigger);
+  assert.equal(page.tabs.length, 0);
+  await clickAgentOpen(page, 'created');
+  page.checkbox.checked = true;
+  await page.confirm.click();
+  assert.equal(page.tabs.at(-1).location, '/artifacts/created/open');
+  assert.equal(page.tabs.at(-1).opener, null);
+  await clickAgentOpen(page, 'created');
+  assert.equal(page.prompt.hidden, true, 'replacement button uses remembered choice');
+  const detail = await load({ artifact: 'created', store });
+  await detail.trigger.click();
+  assert.equal(detail.prompt.hidden, true, 'detail shares the agent preference');
+  await clickAgentOpen(page, 'different');
+  assert.equal(page.prompt.hidden, false, 'different artifact still asks');
+  page.checkbox.checked = true;
+  // Even if the preview changes while asking, confirm the artifact named by
+  // the clicked control and never remember its choice against the next one.
+  page.prompt.dataset.artifact = 'next';
+  await page.confirm.click();
+  assert.equal(page.tabs.at(-1).location, '/artifacts/different/open');
+  await clickAgentOpen(page, 'next');
+  assert.equal(page.prompt.hidden, false);
+});
+
+test('agent uses a choice remembered from detail and restores focus after a preview swap', async () => {
+  const store = storage();
+  const detail = await load({ store });
+  await detail.trigger.click();
+  detail.checkbox.checked = true;
+  await detail.confirm.click();
+  const agent = await load({ artifact: '', store });
+  await clickAgentOpen(agent, 'art-1');
+  assert.equal(agent.prompt.hidden, true);
+  assert.equal(agent.tabs.at(-1).location, detail.openURL);
+  const old = await clickAgentOpen(agent, 'other');
+  old.isConnected = false;
+  await agent.cancel.click();
+  assert.equal(agent.document.activeElement, agent.byId('pv-open'));
 });
