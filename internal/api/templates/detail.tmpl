@@ -334,6 +334,7 @@ const STATE_WRITABLE = {{if .StateWritable}}true{{else}}false{{end}};
 const SHARED_STATE = {{if .SharedState}}true{{else}}false{{end}};
 const ID = {{.ID}};
 const SOURCE_URL = {{.SourceURL}};
+let sourceRevision = {{.SourceRevision}};
 {{/* The app-origin route that mints a render token and redirects to it, used
      by the two page scripts that need a render URL they did not receive in the
      markup: the media and location gates open it on approval (av-mv3k,

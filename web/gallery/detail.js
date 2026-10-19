@@ -900,7 +900,8 @@ async function refetchSource() {
   st.textContent = 'Fetching…';
   try {
     const r = await apiFetch('/api/artifacts/' + ID + '/refetch', {
-      method: 'POST'
+      method: 'POST',
+      body: JSON.stringify({expected_source_revision: sourceRevision})
     });
     if (!r.ok) {
       const txt = await r.text().catch(() => '');
@@ -912,6 +913,7 @@ async function refetchSource() {
       st.textContent = '✓ Already up to date.';
       return;
     }
+    sourceRevision = data.artifact.source_revision;
     const note = refetchNote(data);
     if (!note) {
       st.textContent = '✓ Updated — reloading…';

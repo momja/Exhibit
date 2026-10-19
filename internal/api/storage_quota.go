@@ -49,11 +49,23 @@ func snapshotStorageBlobs(ownerID int64, bodyID, body string, assets []snapshot.
 // source does not block the owner's other saves. Historical versions keep their
 // bytes: replacing a body or tile adds its whole size, not the size difference.
 func (ro *Router) beginStorageWrite(ctx context.Context, ownerID int64, blobs map[string]int64) (func(), error) {
+	return ro.beginStorageWriteChecked(ctx, ownerID, blobs, nil)
+}
+
+// preflight runs after acquiring the storage lock, so a writer that advanced
+// the content while we waited is rejected before any quota refusal.
+func (ro *Router) beginStorageWriteChecked(ctx context.Context, ownerID int64, blobs map[string]int64, preflight func() error) (func(), error) {
 	noop := func() {}
 	if !ro.cfg.Entitlements.Enforced {
 		return noop, nil
 	}
 	unlock := ro.cfg.Store.LockStorage(ownerID)
+	if preflight != nil {
+		if err := preflight(); err != nil {
+			unlock()
+			return noop, err
+		}
+	}
 	allowance, err := ro.resolveAllowance(ctx, ownerID)
 	if err != nil {
 		unlock()

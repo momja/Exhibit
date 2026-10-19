@@ -112,6 +112,10 @@ The only way data changes. Route groups:
   `footprint_changed` comes back true: the comparison is unknown, so the gate
   runs. Any other failure to read the previous body aborts the PATCH before
   anything is written, the bundled fields included (av-wu9d).
+  Source and widget writes use independent opaque revision preconditions
+  (`docs/api.md`, Conditional source and widget saves). The version transaction
+  checks the token even on unchanged saves, and bundles source-save metadata
+  atomically; refetch checks its pre-fetch source snapshot the same way.
   A body that differs from the stored one is written to a **new blob** and
   recorded as a new version (§3.3b); a body identical to it is not written at all.
   Tag and collection membership use the dedicated `POST/DELETE

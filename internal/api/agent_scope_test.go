@@ -63,7 +63,7 @@ func TestAgentCredentialCannotWriteAnotherArtifact(t *testing.T) {
 	tok := grant.Token()
 
 	// Its own artifact: allowed.
-	w := doWithToken(t, r, "PATCH", "/api/artifacts/"+idA, tok, map[string]any{"body": "<html><body>a2</body></html>"})
+	w := doWithToken(t, r, "PATCH", "/api/artifacts/"+idA, tok, map[string]any{"body": "<html><body>a2</body></html>", "expected_source_revision": contentRevisionForTest(t, r, idA)})
 	require.Equal(t, http.StatusOK, w.Code)
 
 	// Somebody else's: refused, and B is untouched.
@@ -193,7 +193,7 @@ func TestAgentCredentialReachesItsOwnArtifactSubResources(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "count")
 
 	w = doWithToken(t, r, "PUT", "/api/artifacts/"+id+"/widget", tok,
-		map[string]any{"body": "<html><body>tile</body></html>"})
+		map[string]any{"body": "<html><body>tile</body></html>", "expected_widget_revision": widgetSnapshot(t, r, id).WidgetRevision})
 	require.Equal(t, http.StatusOK, w.Code)
 
 	w = doWithToken(t, r, "GET", "/api/artifacts/"+id+"/widget", tok, nil)
@@ -235,7 +235,7 @@ func TestAgentCredentialBindsOnFirstCreate(t *testing.T) {
 
 	// Bound now: it can edit what it made...
 	w = doWithToken(t, r, "PATCH", "/api/artifacts/"+created.Artifact.ID, tok,
-		map[string]any{"body": "<html><body>v2</body></html>"})
+		map[string]any{"body": "<html><body>v2</body></html>", "expected_source_revision": contentRevisionForTest(t, r, created.Artifact.ID)})
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// ...and cannot create another.

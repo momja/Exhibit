@@ -53,6 +53,17 @@ func serverError(w http.ResponseWriter, r *http.Request, label string, err error
 // outside the caller's library exactly as it reports one that doesn't exist,
 // and the handler must not undo that by answering differently (av-ep8k).
 func writeArtifactError(w http.ResponseWriter, r *http.Request, label string, err error) {
+	var resource string
+	if errors.Is(err, store.ErrSourceChanged) {
+		resource = "source"
+	}
+	if errors.Is(err, store.ErrWidgetChanged) {
+		resource = "widget"
+	}
+	if resource != "" {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": resource + "_conflict", "resource": resource})
+		return
+	}
 	var quota *storageQuotaError
 	if errors.As(err, &quota) {
 		quota.respond(w)
@@ -465,6 +476,9 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	a.SourceRevision = store.ContentRevision(a.SourceBlobID)
+	a.WidgetRevision = store.ContentRevision(a.WidgetBlobID)
+
 	// Assets go after the row they reference. Never fatal (av-20fk): a
 	// payload that did not land leaves the page's own fetch to reach the
 	// network, which is exactly where it was before any of this existed.
@@ -523,16 +537,26 @@ func (ro *Router) getArtifact(w http.ResponseWriter, r *http.Request) {
 	// Attach the artifact body if requested
 	if r.URL.Query().Get("body") == "true" {
 		rc, err := ro.cfg.Blob.Get(r.Context(), a.SourceBlobID)
-		if err == nil {
-			body, _ := io.ReadAll(rc)
-			rc.Close()
-			type artifactWithBody struct {
-				*store.Artifact
-				Body string `json:"body"`
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				writeError(w, http.StatusNotFound, "source body not found")
+			} else {
+				serverError(w, r, "get source body", err)
 			}
-			writeJSON(w, http.StatusOK, artifactWithBody{Artifact: a, Body: string(body)})
 			return
 		}
+		body, readErr := io.ReadAll(rc)
+		rc.Close()
+		if readErr != nil {
+			serverError(w, r, "read source body", readErr)
+			return
+		}
+		type artifactWithBody struct {
+			*store.Artifact
+			Body string `json:"body"`
+		}
+		writeJSON(w, http.StatusOK, artifactWithBody{Artifact: a, Body: string(body)})
+		return
 	}
 
 	writeJSON(w, http.StatusOK, a)
@@ -620,6 +644,15 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, bodyPresent := updates["body"]
+	_, preconditionPresent := updates["expected_source_revision"]
+	expected, ok := contentPrecondition(w, r, updates, "expected_source_revision", a.SourceRevision, bodyPresent)
+	if !ok {
+		return
+	}
+	delete(updates, "expected_source_revision")
+	var savedBodyBlobID string
+
 	// Handle body update: read the previous body (so the post-edit can be diffed
 	// against it), and when the body actually changed record it as a new
 	// version. The previous body is never overwritten — the version history
@@ -653,23 +686,43 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 				}
 				oldBody = string(prev)
 			}
-			// A save of the document as it already is records nothing: there is
-			// nothing to return to.
-			if baselineLost || newBody != oldBody {
-				if err := ro.storeVersionContent(r.Context(), ownerID, id, newBody, false, versionProvenance(r, store.VersionEdit)); err != nil {
-					writeArtifactError(w, r, "record artifact version", err)
-					return
+			// Even an identical body must validate the read snapshot atomically.
+			metadata := make(map[string]any, len(updates))
+			for key, value := range updates {
+				if key != "body" {
+					metadata[key] = value
 				}
-				slog.DebugContext(r.Context(), "artifact body rewritten",
-					slog.String("id", id), slog.Int("body_bytes", len(newBody)))
 			}
+			version, err := ro.storeVersionContent(r.Context(), ownerID, id, newBody, false, store.VersionChange{
+				Provenance: versionProvenance(r, store.VersionEdit), ExpectedSourceRevision: expected,
+				CheckOnly: !baselineLost && newBody == oldBody, Updates: metadata,
+			})
+			if err != nil {
+				writeArtifactError(w, r, "record artifact version", err)
+				return
+			}
+			savedBodyBlobID = version.BodyBlobID
+
 		}
 		delete(updates, "body")
 	}
 
-	if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, updates); err != nil {
-		writeArtifactError(w, r, "update artifact", err)
-		return
+	if !bodySet {
+		if bodyPresent || preconditionPresent {
+			// Empty bodies retain the legacy "leave source alone" behavior, but a
+			// supplied precondition still guards this no-op and bundled metadata.
+			version, err := ro.cfg.Store.CommitVersion(r.Context(), ownerID, id, store.VersionChange{
+				ExpectedSourceRevision: expected, CheckOnly: true, Updates: updates,
+			})
+			if err != nil {
+				writeArtifactError(w, r, "check artifact update", err)
+				return
+			}
+			savedBodyBlobID = version.BodyBlobID
+		} else if err := ro.cfg.Store.UpdateArtifact(r.Context(), ownerID, id, updates); err != nil {
+			writeArtifactError(w, r, "update artifact", err)
+			return
+		}
 	}
 
 	a, err = ro.cfg.Store.GetArtifact(r.Context(), ownerID, id)
@@ -680,6 +733,11 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	if a == nil {
 		serverError(w, r, "reload artifact after update", errors.New("artifact vanished after update"))
 		return
+	}
+
+	if savedBodyBlobID != "" {
+		a.SourceBlobID = savedBodyBlobID
+		a.SourceRevision = store.ContentRevision(savedBodyBlobID)
 	}
 
 	// Re-execute the network scan when the body actually changed (a diff
@@ -822,6 +880,17 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fields := map[string]any{}
+	if r.ContentLength != 0 {
+		if !decodeJSON(w, r, &fields) {
+			return
+		}
+	}
+	expected, ok := contentPrecondition(w, r, fields, "expected_source_revision", a.SourceRevision, true)
+	if !ok {
+		return
+	}
+
 	// Fetch the latest content, mirroring the createArtifact fetch pattern.
 	resp, err := http.Get(a.SourceURL) //nolint:noctx
 	if err != nil {
@@ -950,6 +1019,12 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !bodyChanged && !assetsChanged {
+		if _, err := ro.cfg.Store.CommitVersion(r.Context(), ownerID, id, store.VersionChange{
+			ExpectedSourceRevision: expected, CheckOnly: true,
+		}); err != nil {
+			writeArtifactError(w, r, "check unchanged refetch", err)
+			return
+		}
 		slog.DebugContext(r.Context(), "artifact refetch unchanged",
 			slog.String("id", id), slog.Int("body_bytes", len(newBody)))
 		respond(a, false, false)
@@ -963,7 +1038,9 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 	provenance := versionProvenance(r, store.VersionRefetch)
 	provenance.Message = a.SourceURL
-	if err := ro.storeRefetchedSnapshot(r.Context(), ownerID, id, newBody, bodyChanged, replacementAssets, provenance); err != nil {
+	originalBodyBlobID := a.SourceBlobID
+	savedBodyBlobID, err := ro.storeRefetchedSnapshot(r.Context(), ownerID, id, newBody, bodyChanged, replacementAssets, *expected, provenance)
+	if err != nil {
 		var quota *storageQuotaError
 		if errors.As(err, &quota) {
 			// Report the complete assembled snapshot even when only the body
@@ -990,6 +1067,11 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "reload artifact after refetch", errors.New("artifact vanished after refetch"))
 		return
 	}
+	if savedBodyBlobID == "" {
+		savedBodyBlobID = originalBodyBlobID
+	}
+	a.SourceBlobID = savedBodyBlobID
+	a.SourceRevision = store.ContentRevision(savedBodyBlobID)
 	respond(a, true, footprintChanged)
 }
 

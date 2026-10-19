@@ -73,9 +73,10 @@ func TestStorageQuotaRefusesEveryArtifactWriteBeforeStoringBytes(t *testing.T) {
 				switch operation {
 				case "body":
 					method, path = "PATCH", "/api/artifacts/"+id
-					payload = map[string]any{"body": "new body", "title": "Must not change"}
+					payload = map[string]any{"body": "new body", "title": "Must not change", "expected_source_revision": contentRevisionForTest(t, r, id)}
 				case "widget":
 					method, path = "PUT", "/api/artifacts/"+id+"/widget"
+					payload = map[string]any{"body": "new body", "expected_widget_revision": widgetSnapshot(t, r, id).WidgetRevision}
 				case "refetch":
 					path, payload = "/api/artifacts/"+id+"/refetch", nil
 				}

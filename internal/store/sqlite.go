@@ -132,6 +132,8 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 	// NetworkAllowlist is hydrated separately from artifact_network_origins
 	// (attachAllowlists); an artifact with no allow rows carries an empty list,
 	// never nil, so JSON callers always see [].
+	a.SourceRevision = ContentRevision(a.SourceBlobID)
+	a.WidgetRevision = ContentRevision(a.WidgetBlobID)
 	a.NetworkAllowlist = []string{}
 	a.CreatedAt, a.UpdatedAt = anyToTime(createdAt), anyToTime(updatedAt)
 	return &a, nil
@@ -457,6 +459,28 @@ var updatableArtifactColumns = map[string]bool{
 }
 
 func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := updateArtifactTx(ctx, tx, ownerID, id, updates); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func updateArtifactTx(ctx context.Context, tx *sql.Tx, ownerID int64, id string, updates map[string]any) error {
+	if len(updates) > 0 {
+		var found string
+		err := tx.QueryRowContext(ctx, "SELECT id FROM artifacts WHERE id = ? AND owner_id = ?", id, ownerID).Scan(&found)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+	}
 	if len(updates) == 0 {
 		return nil
 	}
@@ -468,13 +492,13 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id stri
 		if !ok {
 			return fmt.Errorf("network_allowlist must be an array of strings")
 		}
-		if err := s.ReplaceAllowedOrigins(ctx, ownerID, id, origins, "user"); err != nil {
+		if err := replaceAllowedOriginsTx(ctx, tx, id, origins, "user"); err != nil {
 			return err
 		}
 		updates = withoutKey(updates, "network_allowlist")
 		if len(updates) == 0 {
 			// Still bump updated_at so an allowlist-only PATCH is visible.
-			return s.execOwned(ctx,
+			return execOwnedTx(ctx, tx,
 				"UPDATE artifacts SET updated_at=datetime('now') WHERE id=? AND owner_id=?", id, ownerID)
 		}
 	}
@@ -513,7 +537,7 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id stri
 	}
 	setClauses = append(setClauses, "updated_at=datetime('now')")
 	args = append(args, id, ownerID)
-	return s.execOwned(ctx,
+	return execOwnedTx(ctx, tx,
 		"UPDATE artifacts SET "+strings.Join(setClauses, ", ")+" WHERE id=? AND owner_id=?", args...)
 }
 
@@ -522,6 +546,21 @@ func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id stri
 // a cross-tenant id and an unknown id both look like from here.
 func (s *SQLiteStore) execOwned(ctx context.Context, query string, args ...any) error {
 	res, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func execOwnedTx(ctx context.Context, tx *sql.Tx, query string, args ...any) error {
+	res, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -750,7 +789,7 @@ func (s *SQLiteStore) ReplaceArtifactSnapshot(ctx context.Context, ownerID int64
 	if err != nil {
 		return nil, err
 	}
-	change := VersionChange{Provenance: snapshot.Provenance}
+	change := VersionChange{Provenance: snapshot.Provenance, ExpectedSourceRevision: snapshot.ExpectedSourceRevision}
 	if snapshot.SourceBlobID != "" {
 		change.BodyBlobID = &snapshot.SourceBlobID
 		change.SourceText = &snapshot.SourceText

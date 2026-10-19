@@ -930,14 +930,15 @@ func renderNewPage(creds pageCredentials) (string, error) {
 type detailPageData struct {
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
-	Favicon    template.URL
-	ID         string
-	Title      string
-	Created    string
-	FrameURL   string
-	OpenURL    string
-	SourceURL  string
-	Capability capabilityView
+	Favicon        template.URL
+	ID             string
+	Title          string
+	Created        string
+	FrameURL       string
+	OpenURL        string
+	SourceURL      string
+	SourceRevision string
+	Capability     capabilityView
 	// ViewerPreference scopes browser preferences to the visitor, including on
 	// shared artifacts. It grants no artifact authority and contains no token.
 	ViewerPreference string
@@ -980,14 +981,15 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		viewerPreference = "anonymous"
 	}
 	return renderPage("detail", detailPageData{
-		Favicon:   template.URL(exhibitLogoDataURI),
-		Share:     share,
-		ID:        a.ID,
-		Title:     a.Title,
-		Created:   a.CreatedAt.Format("Jan 2, 2006 15:04"),
-		FrameURL:  urls.artifact(a.ID),
-		OpenURL:   openURL(a.ID),
-		SourceURL: a.SourceURL,
+		Favicon:        template.URL(exhibitLogoDataURI),
+		Share:          share,
+		ID:             a.ID,
+		Title:          a.Title,
+		Created:        a.CreatedAt.Format("Jan 2, 2006 15:04"),
+		FrameURL:       urls.artifact(a.ID),
+		OpenURL:        openURL(a.ID),
+		SourceURL:      a.SourceURL,
+		SourceRevision: store.ContentRevision(a.SourceBlobID),
 
 		ViewerPreference: viewerPreference,
 		// Read through the same constant the store resolves the mode with, so
@@ -1004,10 +1006,12 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 type editPageData struct {
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
-	Favicon template.URL
-	ID      string
-	Title   string
-	Src     string
+	Favicon        template.URL
+	ID             string
+	Title          string
+	Src            string
+	SourceRevision string
+	WidgetRevision string
 	pageCredentials
 	// An origin has three states here, not two (exhibit-x87): Allowlist holds
 	// the decision='allow' origins (the ones the render CSP is built from);
@@ -1108,6 +1112,8 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 		ID:                  a.ID,
 		Title:               a.Title,
 		Src:                 src,
+		SourceRevision:      store.ContentRevision(a.SourceBlobID),
+		WidgetRevision:      store.ContentRevision(a.WidgetBlobID),
 		pageCredentials:     creds,
 		Allowlist:           allowlist,
 		Blocked:             blocked,

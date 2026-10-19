@@ -139,22 +139,41 @@ func (ro *Router) restoreVersion(w http.ResponseWriter, r *http.Request) {
 
 // storeVersionContent records cleanup intent before publishing fresh bytes.
 // A failed commit or a process interruption therefore cannot orphan a save.
-func (ro *Router) storeVersionContent(ctx context.Context, ownerID int64, id, content string, widget bool, provenance store.Provenance) error {
+func (ro *Router) storeVersionContent(ctx context.Context, ownerID int64, id, content string, widget bool, change store.VersionChange) (*store.Version, error) {
+	if change.CheckOnly {
+		return ro.cfg.Store.CommitVersion(ctx, ownerID, id, change)
+	}
 	blobID := uuid.New().String()
-	unlockStorage, err := ro.beginStorageWrite(ctx, ownerID, map[string]int64{blobID: int64(len(content))})
+	unlockStorage, err := ro.beginVersionStorageWrite(ctx, ownerID, id, map[string]int64{blobID: int64(len(content))}, change)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer unlockStorage()
-	return ro.storeBlobContent(ctx, blobID, content, func() error {
-		change := store.VersionChange{Provenance: provenance}
+	var version *store.Version
+	err = ro.storeBlobContent(ctx, blobID, content, func() error {
 		if widget {
 			change.WidgetBlobID = &blobID
 		} else {
 			text := store.ExtractSearchText(content)
 			change.BodyBlobID, change.SourceText = &blobID, &text
 		}
-		_, err := ro.cfg.Store.CommitVersion(ctx, ownerID, id, change)
+		var err error
+		version, err = ro.cfg.Store.CommitVersion(ctx, ownerID, id, change)
+		return err
+	})
+	return version, err
+}
+
+// Reject stale content before quota accounting. This read-only preflight
+// carries no bundled metadata; the eventual mutation still rechecks the
+// revisions atomically, including when quota enforcement is disabled.
+func (ro *Router) beginVersionStorageWrite(ctx context.Context, ownerID int64, id string, blobs map[string]int64, change store.VersionChange) (func(), error) {
+	return ro.beginStorageWriteChecked(ctx, ownerID, blobs, func() error {
+		_, err := ro.cfg.Store.CommitVersion(ctx, ownerID, id, store.VersionChange{
+			ExpectedSourceRevision: change.ExpectedSourceRevision,
+			ExpectedWidgetRevision: change.ExpectedWidgetRevision,
+			CheckOnly:              true,
+		})
 		return err
 	})
 }

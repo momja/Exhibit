@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
@@ -26,7 +27,8 @@ import (
 // scan never seeds the allowlist (spec §6.2).
 
 type widgetResponse struct {
-	Body string `json:"body"`
+	Body           string `json:"body"`
+	WidgetRevision string `json:"widget_revision"`
 	// NetworkFootprint is every origin the widget body references. Unapproved
 	// lists the subset the artifact's allowlist does not cover — the ones the
 	// browser will block. Both are transparency, not policy.
@@ -36,7 +38,8 @@ type widgetResponse struct {
 }
 
 type putWidgetRequest struct {
-	Body string `json:"body"`
+	Body                   string          `json:"body"`
+	ExpectedWidgetRevision json.RawMessage `json:"expected_widget_revision"`
 }
 
 // getWidget returns the widget's source. A widget-less artifact is a 404: it
@@ -54,7 +57,7 @@ func (ro *Router) getWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.WidgetBlobID == "" {
-		http.Error(w, "artifact has no widget", http.StatusNotFound)
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "artifact has no widget", "body": "", "widget_revision": a.WidgetRevision})
 		return
 	}
 	rc, err := ro.cfg.Blob.Get(r.Context(), a.WidgetBlobID)
@@ -71,6 +74,7 @@ func (ro *Router) getWidget(w http.ResponseWriter, r *http.Request) {
 	footprint := networkFootprint(string(body), ro.cfg.RenderOrigin)
 	writeJSON(w, http.StatusOK, widgetResponse{
 		Body:             string(body),
+		WidgetRevision:   a.WidgetRevision,
 		NetworkFootprint: footprint,
 		Unapproved:       diffOrigins(footprint, a.NetworkAllowlist),
 		WidgetURL:        ro.cfg.RenderOrigin + "/w/" + id,
@@ -106,6 +110,19 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fields := map[string]any{}
+	if len(req.ExpectedWidgetRevision) > 0 {
+		var value any
+		if err := json.Unmarshal(req.ExpectedWidgetRevision, &value); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid expected_widget_revision")
+			return
+		}
+		fields["expected_widget_revision"] = value
+	}
+	expected, ok := contentPrecondition(w, r, fields, "expected_widget_revision", a.WidgetRevision, true)
+	if !ok {
+		return
+	}
 	current := ""
 	if a.WidgetBlobID != "" {
 		// A missing widget can be repaired; other storage failures abort the save.
@@ -116,11 +133,13 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if a.WidgetBlobID == "" || current != req.Body {
-		if err := ro.storeVersionContent(r.Context(), ownerID, id, req.Body, true, versionProvenance(r, store.VersionEdit)); err != nil {
-			writeArtifactError(w, r, "save widget version", err)
-			return
-		}
+	version, err := ro.storeVersionContent(r.Context(), ownerID, id, req.Body, true, store.VersionChange{
+		Provenance: versionProvenance(r, store.VersionEdit), ExpectedWidgetRevision: expected,
+		CheckOnly: a.WidgetBlobID != "" && current == req.Body,
+	})
+	if err != nil {
+		writeArtifactError(w, r, "save widget version", err)
+		return
 	}
 
 	footprint := networkFootprint(req.Body, ro.cfg.RenderOrigin)
@@ -134,6 +153,7 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, widgetResponse{
 		Body:             req.Body,
+		WidgetRevision:   store.ContentRevision(version.WidgetBlobID),
 		NetworkFootprint: footprint,
 		Unapproved:       unapproved,
 		WidgetURL:        ro.cfg.RenderOrigin + "/w/" + id,
@@ -244,17 +264,22 @@ func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	// An artifact with no widget is already what the caller asked for.
-	if a.WidgetBlobID != "" {
-		none := ""
-		if _, err := ro.cfg.Store.CommitVersion(r.Context(), ownerID, id, store.VersionChange{
-			Provenance:   versionProvenance(r, store.VersionEdit),
-			WidgetBlobID: &none,
-		}); err != nil {
-			writeArtifactError(w, r, "remove widget", err)
-			return
-		}
-		slog.InfoContext(r.Context(), "widget removed", slog.String("artifact_id", id))
+	fields := map[string]any{}
+	if token := r.Header.Get("If-Match"); token != "" {
+		fields["expected_widget_revision"] = token
 	}
+	expected, ok := contentPrecondition(w, r, fields, "expected_widget_revision", a.WidgetRevision, true)
+	if !ok {
+		return
+	}
+	none := ""
+	if _, err := ro.cfg.Store.CommitVersion(r.Context(), ownerID, id, store.VersionChange{
+		Provenance: versionProvenance(r, store.VersionEdit), WidgetBlobID: &none,
+		ExpectedWidgetRevision: expected, CheckOnly: a.WidgetBlobID == "",
+	}); err != nil {
+		writeArtifactError(w, r, "remove widget", err)
+		return
+	}
+	w.Header().Set("X-Widget-Revision", store.ContentRevision(""))
 	w.WriteHeader(http.StatusNoContent)
 }

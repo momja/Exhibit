@@ -217,7 +217,7 @@
   <details class="details-panel" id="source-panel" open>
     <summary>{{template "panelCaret"}} Artifact source</summary>
     <div class="panel-body">
-      <textarea id="body">{{.Src}}</textarea>
+      <textarea id="body" data-revision="{{.SourceRevision}}">{{.Src}}</textarea>
       <div id="scan-result"></div>
     </div>
   </details>
@@ -242,7 +242,7 @@
         <p class="text-sm muted">The tile this artifact shows on its library card. It reads the artifact's saved state but cannot change it, and it is not interactive — clicking it opens the artifact.</p>
       </div>
       <div class="widget-source">
-        <textarea id="widget-src" spellcheck="false" placeholder="A complete HTML document for the tile. Leave this empty to keep the default tile.">{{.WidgetSrc}}</textarea>
+        <textarea id="widget-src" data-revision="{{.WidgetRevision}}" spellcheck="false" placeholder="A complete HTML document for the tile. Leave this empty to keep the default tile.">{{.WidgetSrc}}</textarea>
         {{/* Generate takes no prompt: the button IS the request, and the whole
              instruction lives server-side (widget.go's generateWidgetPrompt
              plus the session's WidgetOnly system prompt), so there is nothing

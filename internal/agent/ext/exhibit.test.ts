@@ -55,7 +55,7 @@ function makeFetch({ body, title = "T", patchResult, widgetBody = null, widgetPu
 		calls.push({ url, method: opts?.method, body: opts?.body });
 		const path = String(url).replace("http://exhibit.test", "");
 		if (opts?.method === "GET" && path.startsWith("/api/artifacts/artifact-1?body=true")) {
-			return { ok: true, text: async () => JSON.stringify({ id: "artifact-1", title, network_allowlist: [], body }) };
+			return { ok: true, text: async () => JSON.stringify({ id: "artifact-1", title, network_allowlist: [], body, source_revision:"source-v1", widget_revision:"widget-empty" }) };
 		}
 		if (opts?.method === "GET" && path === "/api/artifacts/artifact-1/assets") {
 			return { ok: true, text: async () => JSON.stringify({ assets: [] }) };
@@ -66,9 +66,9 @@ function makeFetch({ body, title = "T", patchResult, widgetBody = null, widgetPu
 		if (path === "/api/artifacts/artifact-1/widget") {
 			if (opts?.method === "GET") {
 				if (widgetBody === null) {
-					return { ok: false, status: 404, text: async () => "not found" };
+					return { ok: false, status: 404, text: async () => JSON.stringify({body:"", widget_revision:"widget-empty"}) };
 				}
-				return { ok: true, text: async () => JSON.stringify({ body: widgetBody }) };
+				return { ok: true, text: async () => JSON.stringify({ body: widgetBody, widget_revision:"widget-v1" }) };
 			}
 			if (opts?.method === "PUT") {
 				return { ok: true, text: async () => JSON.stringify(widgetPutResult) };
@@ -80,12 +80,13 @@ function makeFetch({ body, title = "T", patchResult, widgetBody = null, widgetPu
 }
 
 const PATCH_OK = {
-	artifact: { id: "artifact-1", title: "T", network_allowlist: [] },
+	artifact: { id: "artifact-1", title: "T", network_allowlist: [], source_revision:"source-v2" },
 	network_footprint: [],
 	footprint_changed: false,
 };
 
 const WIDGET_PUT_OK = {
+ widget_revision:"widget-v2",
 	widget_url: "http://exhibit.test/w/artifact-1",
 	unapproved_origins: [],
 };
@@ -119,6 +120,7 @@ describe("edit_artifact tool", () => {
 			const patch = calls.find((c) => c.method === "PATCH");
 			assert.ok(patch, "PATCH issued");
 			assert.equal(JSON.parse(patch.body).body, "<h1>Yo</h1><p>keep me</p>");
+ assert.equal(JSON.parse(patch.body).expected_source_revision,"source-v1");
 			assert.equal(result.details.exhibit, "artifact_saved", "preview re-render event fires");
 			assert.equal(result.details.action, "updated");
 		} finally {
@@ -189,6 +191,7 @@ describe("edit_widget tool", () => {
 			const put = calls.find((c) => c.method === "PUT");
 			assert.ok(put, "PUT issued");
 			assert.equal(JSON.parse(put.body).body, '<div class="v" id="v">0</div>');
+ assert.equal(JSON.parse(put.body).expected_widget_revision,"widget-v1");
 			assert.equal(result.details.exhibit, "widget_saved", "tile re-render event fires");
 		} finally {
 			globalThis.fetch = origFetch;
@@ -384,9 +387,12 @@ describe("get_selection tool", () => {
 
 describe("oversized writes (av-ombn)", () => {
 	/** Runs fn with fetch replaced; restores it whatever happens. */
-	async function withFetch(fetch, fn) {
-		const origFetch = globalThis.fetch;
-		globalThis.fetch = fetch;
+ async function withFetch(fetch, fn) {
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+   if (opts?.method === "GET") return {ok:true, text:async()=>JSON.stringify({source_revision:"source-v1", widget_revision:"widget-v1", body:"<h1>Hi</h1>"})};
+   return fetch(url, opts);
+  };
 		try {
 			await fn();
 		} finally {
@@ -425,7 +431,6 @@ describe("oversized writes (av-ombn)", () => {
 				}),
 				/refused: this write is 128\.\d KiB and the instance accepts at most 64\.0 KiB per request\. Nothing was saved/,
 			);
-			assert.ok(calls.some((c) => c.method === "GET"), "read the current source");
 			assert.ok(!calls.some((c) => c.method === "PATCH"), "no PATCH issued");
 		});
 	});
@@ -524,3 +529,88 @@ describe("oversized writes (av-ombn)", () => {
 		});
 	});
 });
+
+describe("conditional full-document saves", () => {
+ for (const [readTool, writeTool, resource, method] of [
+  ["get_artifact", "write_artifact", "source", "PATCH"],
+  ["get_widget", "set_widget", "widget", "PUT"],
+ ]) {
+  it(`${writeTool} retains its read token, surfaces a conflict, and never retries automatically`, async(t)=>{
+   needExhibit(t);
+   const pi=makePi();
+   await exhibitMod.default(pi);
+   const calls=[];
+   let current="v1";
+   await withFetch(async(url,opts)=>{
+    calls.push({method:opts.method,body:opts.body});
+    if (opts.method === "GET") {
+     if (String(url).endsWith("/assets")) return {ok:true,text:async()=>JSON.stringify({assets:[]})};
+     return {ok:true,text:async()=>JSON.stringify({id:"artifact-1",body:"<p>old</p>",[resource+"_revision"]:current})};
+    }
+    return {ok:false,status:409,text:async()=>JSON.stringify({code:resource+"_conflict",resource})};
+   },async()=>{
+    await pi.tools.get(readTool).execute("read",{});
+    current="v2"; // Someone else saves after the model read v1.
+    const before=calls.length;
+    await assert.rejects(pi.tools.get(writeTool).execute("write",{body:"<p>mine</p>"}), /Nothing was saved.*Re-read with get_/);
+    assert.equal(calls.length,before+1,"one conditional write, no retry or hidden refresh");
+    assert.equal(calls.at(-1).method,method);
+    assert.equal(JSON.parse(calls.at(-1).body)["expected_"+resource+"_revision"],"v1");
+    await assert.rejects(pi.tools.get(writeTool).execute("write-again",{body:"<p>mine</p>"}), /Re-read with get_/);
+    assert.equal(JSON.parse(calls.at(-1).body)["expected_"+resource+"_revision"],"v1","failed writes never advance the bound revision");
+   });
+  });
+ }
+ it("set_widget creates an absent widget conditionally using its empty-content token",async(t)=>{
+  needExhibit(t);
+  const pi=makePi();
+  await exhibitMod.default(pi);
+  const {calls,fetch}=makeFetch({widgetBody:null,widgetPutResult:WIDGET_PUT_OK});
+  await withFetch(fetch,()=>pi.tools.get("set_widget").execute("new",{body:"<b>new</b>"}));
+  const put=calls.find(c=>c.method === "PUT");
+  assert.equal(JSON.parse(put.body).expected_widget_revision,"widget-empty");
+ });
+ it("success binds the response revision for exactly the body this tool saved",async(t)=>{
+  needExhibit(t);
+  const pi=makePi();
+  await exhibitMod.default(pi);
+  const {calls,fetch}=makeFetch({body:"<p>old</p>",patchResult:PATCH_OK});
+  await withFetch(fetch,async()=>{
+   await pi.tools.get("write_artifact").execute("one",{body:"<p>one</p>"});
+   await pi.tools.get("write_artifact").execute("two",{body:"<p>two</p>"});
+  });
+  const writes=calls.filter(c=>c.method === "PATCH");
+  assert.equal(JSON.parse(writes[0].body).expected_source_revision,"source-v1");
+  assert.equal(JSON.parse(writes[1].body).expected_source_revision,"source-v2");
+ });
+});
+
+// A full-write retry must never adopt another writer's revision implicitly.
+// Tools may require an explicit read; older implementations may fetch one
+// baseline themselves. Both must refuse the same stale retry until a read.
+for (const resource of ['artifact', 'widget']) {
+  it(`does not refresh a ${resource} revision when retrying a failed first full write`, async () => {
+    const pi = makePi(); exhibitMod.default(pi);
+    let current = 'initial'; let reads = 0;
+    const sent = [];
+    await withFetch(async (_url, options) => {
+      if (options.method === 'GET') {
+        reads++;
+        return {ok: true, text: async () => JSON.stringify({body: '<p>original</p>', source_revision: current, widget_revision: current})};
+      }
+      const revision = JSON.parse(options.body)[`expected_${resource === 'artifact' ? 'source' : 'widget'}_revision`];
+      sent.push(revision);
+      current = 'competing';
+      if (revision === current) return {ok: true, text: async () => JSON.stringify({artifact: {source_revision: 'saved'}, widget_revision: 'saved'})};
+      return {ok: false, status: 409, text: async () => '{}'};
+    }, async () => {
+      const tool = pi.tools.get(resource === 'artifact' ? 'write_artifact' : 'set_widget');
+      const save = () => tool.execute('save', {body: '<p>replacement</p>'});
+      await assert.rejects(save(), /409|changed|Read .*before changing/);
+      const readsAfterFailure = reads;
+      await assert.rejects(save(), /409|changed|Read .*before changing/);
+      assert.equal(reads, readsAfterFailure, 'retry never silently fetches a newer revision');
+      assert.ok(sent.every(value => value === 'initial'));
+    });
+  });
+}
