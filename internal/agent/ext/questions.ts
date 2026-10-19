@@ -18,7 +18,7 @@ export function registerQuestions(pi: ExtensionAPI) {
 		parameters: Type.Object({
 			questions: Type.Array(Type.Object({
 				id: Type.String({ minLength: 1, maxLength: 64, description: "Unique short identifier for this question" }),
-				question: Type.String({ minLength: 1, maxLength: 2000, description: "A self-contained question in plain, non-technical language" }),
+				question: Type.String({ minLength: 1, maxLength: 2000, description: "A short, plain-language question or field label. Use Additional Comments for general extra notes." }),
 				options: Type.Optional(Type.Array(optionSchema, { maxItems: 6, description: "Optional suggestions; the user can also write their own answer" })),
 				multiSelect: Type.Optional(Type.Boolean({ description: "Allow choosing several suggestions (default false)" })),
 			}), { minItems: 1, maxItems: 4 }),

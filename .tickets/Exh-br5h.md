@@ -30,3 +30,7 @@ Reworked the question UX after user feedback: removed the nested outer card and 
 **2026-10-19T21:55:29Z**
 
 Removed visible selection controls from question choices. The whole row is clickable and receives the selected highlight; keyboard selection and focus indicators remain available. Updated the canvas design and desktop/mobile screenshots. Validation: gallery script suite and question-template tests passed, and browser checks confirmed full-row selection, arrow-key changes, selected styling in both appearances and no mobile overflow.
+
+**2026-10-19T21:59:36Z**
+
+Renamed the general notes field to Additional Comments in the demo and canvas, and clarified the tool schema guidance to use that label for extra notes. Refreshed desktop/mobile screenshots. Validation: existing question round-trip, extension and mock suites passed; verified the updated label and accessible field name in the live preview.

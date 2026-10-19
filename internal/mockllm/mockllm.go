@@ -234,7 +234,7 @@ func decide(messages []chatMessage) turnPlan {
 				{"label": "Weekly calendar"},
 				{"label": "Simple list"},
 			}},
-			{"id": "goal", "question": "Anything you want to include?"},
+			{"id": "goal", "question": "Additional Comments"},
 		}}}
 	}
 

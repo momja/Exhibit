@@ -36,7 +36,7 @@ func TestAgentQuestionsRoundTripAndHistory(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "How should your plan look?")
 	assert.Contains(t, w.Body.String(), `type="radio"`)
-	assert.Contains(t, w.Body.String(), "Anything you want to include?")
+	assert.Contains(t, w.Body.String(), "Additional Comments")
 	assert.NotContains(t, w.Body.String(), " checked")
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	w = doJSON(t, h.router, http.MethodPost, "/api/agent/sessions/"+session+"/prompt", map[string]string{"message": "an accidental message while answering"})
