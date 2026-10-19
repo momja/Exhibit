@@ -584,3 +584,33 @@ describe("conditional full-document saves", () => {
   assert.equal(JSON.parse(writes[1].body).expected_source_revision,"source-v2");
  });
 });
+
+// A full-write retry must never adopt another writer's revision implicitly.
+// Tools may require an explicit read; older implementations may fetch one
+// baseline themselves. Both must refuse the same stale retry until a read.
+for (const resource of ['artifact', 'widget']) {
+  it(`does not refresh a ${resource} revision when retrying a failed first full write`, async () => {
+    const pi = makePi(); exhibitMod.default(pi);
+    let current = 'initial'; let reads = 0;
+    const sent = [];
+    await withFetch(async (_url, options) => {
+      if (options.method === 'GET') {
+        reads++;
+        return {ok: true, text: async () => JSON.stringify({body: '<p>original</p>', source_revision: current, widget_revision: current})};
+      }
+      const revision = JSON.parse(options.body)[`expected_${resource === 'artifact' ? 'source' : 'widget'}_revision`];
+      sent.push(revision);
+      current = 'competing';
+      if (revision === current) return {ok: true, text: async () => JSON.stringify({artifact: {source_revision: 'saved'}, widget_revision: 'saved'})};
+      return {ok: false, status: 409, text: async () => '{}'};
+    }, async () => {
+      const tool = pi.tools.get(resource === 'artifact' ? 'write_artifact' : 'set_widget');
+      const save = () => tool.execute('save', {body: '<p>replacement</p>'});
+      await assert.rejects(save(), /409|changed|Read .*before changing/);
+      const readsAfterFailure = reads;
+      await assert.rejects(save(), /409|changed|Read .*before changing/);
+      assert.equal(reads, readsAfterFailure, 'retry never silently fetches a newer revision');
+      assert.ok(sent.every(value => value === 'initial'));
+    });
+  });
+}

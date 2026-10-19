@@ -310,7 +310,7 @@ export default function (pi: ExtensionAPI) {
 		let expected = expectedRevision || sourceRevision;
 		if (!expected) {
 			const current = await api("GET", path + "?body=true");
-			expected = revision(current.source_revision, "artifact");
+			expected = sourceRevision = revision(current.source_revision, "artifact");
 		}
 		patch.expected_source_revision = expected;
 		// PATCH /api/artifacts/:id returns {artifact, network_footprint,
@@ -571,7 +571,7 @@ export default function (pi: ExtensionAPI) {
 		let expected = expectedRevision || widgetRevision;
 		if (!expected) {
 			const current = await api("GET", path);
-			expected = revision(current.widget_revision, "widget");
+			expected = widgetRevision = revision(current.widget_revision, "widget");
 		}
 		const r = await api("PUT", path, {body, expected_widget_revision: expected});
 		widgetRevision = revision(r.widget_revision, "widget");
