@@ -603,6 +603,15 @@ conversation that cannot be continued — kept before session files existed, or 
 an instance with no agent — shows a note where the card would be, not a missing
 button.
 
+**Resizable chat (Exh-blsd).** On desktop, drag the chat panel's right edge to
+change its width. The edge uses a resize cursor without a visible grip or extra
+bar. Focus the edge and use Left/Right arrows
+(Shift for larger steps), or Home/End for the width limits. Double-click resets
+it to 460 pixels. The browser remembers the preferred width; smaller windows
+clamp it so both panes keep at least 280 pixels. Mobile retains the Chat/Preview
+tabs and hides the divider. The divider lives outside the preview partial, so
+resizing never reloads the artifact.
+
 **The brief handoff (nw-d1dd).** A create session usually arrives from `/new`,
 whose Build-with-agent panel is now the page's default and is a *form* rather
 than a prompt box: a title and a description today, more answerable fields

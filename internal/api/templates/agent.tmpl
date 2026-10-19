@@ -43,7 +43,7 @@
     <button type="button" class="pane-tab" id="tab-preview" role="tab" aria-selected="false" aria-controls="pane-preview" onclick="showPane('preview')"><i class="ph ph-monitor"></i> Preview <span class="dot" aria-hidden="true"></span></button>
   </div>
 </div>
-<div class="layout">
+<div class="layout" id="agent-layout">
   <div class="chat" id="pane-chat">
     {{/* The chat's own controls. History lists the conversations kept with this
          artifact (av-y7td) in a pane that takes the place of the messages and
@@ -70,6 +70,9 @@
       <div id="hint">Enter to send · Shift+Enter for a new line · Ctrl+Shift+S to snippet an element from the preview</div>
     </div>
   </div>
+  <div class="pane-resizer" id="agent-pane-resizer" role="separator" tabindex="0"
+       aria-label="Resize agent chat" aria-orientation="vertical" aria-controls="pane-chat"
+       aria-valuemin="280" aria-valuenow="460"></div>
   {{/* The pane's contents are a server-rendered fragment (agentPreview), and
        every agent save re-fetches it: the artifact-saved hook fires the
        exhibit:artifact-saved event on <body>, htmx GETs the fragment for the
@@ -140,6 +143,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
      preview pane renders a tile, so it needs it like the gallery does. */}}
 <script src="/assets/gallery/components.js"></script>
 <script src="/assets/gallery/agent.js"></script>
+<script type="module" src="/assets/gallery/agent-resize.js"></script>
 <script type="module" src="/assets/gallery/message-actions.js"></script>
 </body>
 </html>{{end}}
