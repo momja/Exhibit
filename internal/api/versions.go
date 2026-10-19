@@ -144,7 +144,7 @@ func (ro *Router) storeVersionContent(ctx context.Context, ownerID int64, id, co
 		return ro.cfg.Store.CommitVersion(ctx, ownerID, id, change)
 	}
 	blobID := uuid.New().String()
-	unlockStorage, err := ro.beginStorageWrite(ctx, ownerID, map[string]int64{blobID: int64(len(content))})
+	unlockStorage, err := ro.beginVersionStorageWrite(ctx, ownerID, id, map[string]int64{blobID: int64(len(content))}, change)
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +162,20 @@ func (ro *Router) storeVersionContent(ctx context.Context, ownerID int64, id, co
 		return err
 	})
 	return version, err
+}
+
+// Reject stale content before quota accounting. This read-only preflight
+// carries no bundled metadata; the eventual mutation still rechecks the
+// revisions atomically, including when quota enforcement is disabled.
+func (ro *Router) beginVersionStorageWrite(ctx context.Context, ownerID int64, id string, blobs map[string]int64, change store.VersionChange) (func(), error) {
+	return ro.beginStorageWriteChecked(ctx, ownerID, blobs, func() error {
+		_, err := ro.cfg.Store.CommitVersion(ctx, ownerID, id, store.VersionChange{
+			ExpectedSourceRevision: change.ExpectedSourceRevision,
+			ExpectedWidgetRevision: change.ExpectedWidgetRevision,
+			CheckOnly:              true,
+		})
+		return err
+	})
 }
 
 // storeBlobContent keeps staged bytes out of the library until their length

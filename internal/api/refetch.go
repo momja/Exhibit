@@ -24,7 +24,9 @@ func (ro *Router) storeRefetchedSnapshot(ctx context.Context, ownerID int64, id,
 	for _, asset := range collected {
 		staged = append(staged, store.AssetBlobID(ownerID, asset.Body))
 	}
-	unlockStorage, err := ro.beginStorageWrite(ctx, ownerID, snapshotStorageBlobs(ownerID, replacement.SourceBlobID, body, collected))
+	unlockStorage, err := ro.beginVersionStorageWrite(ctx, ownerID, id, snapshotStorageBlobs(ownerID, replacement.SourceBlobID, body, collected), store.VersionChange{
+		ExpectedSourceRevision: &expected,
+	})
 	if err != nil {
 		return "", err
 	}

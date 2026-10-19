@@ -366,3 +366,224 @@ func TestExplicitSourcePreconditionAlsoGuardsEmptyNoopAndMetadata(t *testing.T) 
 		assert.Equal(t, `"original"`, artifactField(t, r, id, "title"))
 	}
 }
+
+// Restore after the handler reads A, before it validates/commits token B.
+// Comparing submitted A to that old snapshot must never skip a write to B.
+func TestContentNoopRejectsDifferentComparisonRevision(t *testing.T) {
+	withUnguardedFetcher(t)
+	for _, operation := range []string{"source", "widget", "delete", "refetch"} {
+		t.Run(operation, func(t *testing.T) {
+			r, dir := newTestRouterWithBlobDir(t)
+			upstream := newMutableUpstream(t)
+			upstream.serves(upstreamBare)
+			id := createArtifact(t, r, map[string]any{"title": "original", "url": upstream.pageURL()})
+			method, path, resource := "PATCH", "/api/artifacts/"+id, "source"
+			_, revision := sourceSnapshot(t, r, id)
+			restoreSeq := 1
+			payload := map[string]any{"body": "<p>A</p>", "title": "must not change"}
+			switch operation {
+			case "source":
+				require.Equal(t, http.StatusOK, doJSON(t, r, "PATCH", path, map[string]any{"body": payload["body"]}).Code)
+			case "widget", "delete":
+				resource, path = "widget", path+"/widget"
+				require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>B</b>").Code)
+				revision, restoreSeq = widgetSnapshot(t, r, id).WidgetRevision, 2
+				if operation == "widget" {
+					method, payload = "PUT", map[string]any{"body": "<b>A</b>"}
+					require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>A</b>").Code)
+				} else {
+					method, payload = "DELETE", nil
+					require.Equal(t, http.StatusNoContent, deleteWidgetReq(t, r, id).Code)
+				}
+			case "refetch":
+				method, path, payload = "POST", path+"/refetch", map[string]any{}
+				upstream.serves(upstreamPage{http.StatusOK, "text/html", "<p>A</p>"})
+				require.Equal(t, http.StatusOK, doRefetch(t, r, id).Code)
+			}
+			if payload != nil {
+				payload["expected_"+resource+"_revision"] = revision
+			}
+			beforeBlobs := quotaBlobContents(t, dir)
+			beforeVersions := len(listVersions(t, r, id))
+			wrapped := &advanceBeforeReloadStore{Store: r.cfg.Store}
+			wrapped.afterRead = func() {
+				_, err := wrapped.Store.RestoreVersion(context.Background(), 1, id, restoreSeq, store.Provenance{}, "")
+				require.NoError(t, err)
+			}
+			r.cfg.Store = wrapped
+			var w *httptest.ResponseRecorder
+			if operation == "delete" {
+				req := httptest.NewRequest(method, path, nil)
+				req.Header.Set("Authorization", authHeader())
+				req.Header.Set("If-Match", revision)
+				w = httptest.NewRecorder()
+				r.ServeHTTP(w, req)
+			} else {
+				w = doJSON(t, r, method, path, payload)
+			}
+			require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+			assert.Contains(t, w.Body.String(), resource+"_conflict")
+			assert.Equal(t, `"original"`, artifactField(t, r, id, "title"))
+			assert.Len(t, listVersions(t, r, id), beforeVersions+1, "only the restore may create a version")
+			assert.Equal(t, beforeBlobs, quotaBlobContents(t, dir))
+			if resource == "widget" {
+				assert.Equal(t, "<b>B</b>", widgetSnapshot(t, r, id).Body)
+			} else {
+				_, current := sourceSnapshot(t, r, id)
+				assert.Equal(t, revision, current)
+			}
+		})
+	}
+}
+
+func TestStaleContentRevisionPrecedesQuotaRefusal(t *testing.T) {
+	withUnguardedFetcher(t)
+	for _, operation := range []string{"source", "widget", "refetch"} {
+		for _, timing := range []string{"already-stale", "advances-after-read", "advances-while-locking"} {
+			t.Run(operation+"/"+timing, func(t *testing.T) {
+				r, dir := newTestRouterWithBlobDir(t)
+				upstream := newMutableUpstream(t)
+				upstream.serves(upstreamBare)
+				id := createArtifact(t, r, map[string]any{"title": "original", "url": upstream.pageURL()})
+				method, path, resource := "PATCH", "/api/artifacts/"+id, "source"
+				_, revision := sourceSnapshot(t, r, id)
+				if operation == "widget" {
+					method, path, resource = "PUT", path+"/widget", "widget"
+					revision = widgetSnapshot(t, r, id).WidgetRevision
+				} else if operation == "refetch" {
+					method, path = "POST", path+"/refetch"
+					upstream.serves(upstreamPage{http.StatusOK, "text/html", "<p>refetched</p>"})
+				}
+				var beforeBlobs map[string]string
+				var beforeVersions int
+				advance := func() {
+					writeMethod, writePath := "PATCH", "/api/artifacts/"+id
+					if resource == "widget" {
+						writeMethod, writePath = "PUT", writePath+"/widget"
+					}
+					w := doJSON(t, r, writeMethod, writePath, map[string]any{"body": "<p>winner</p>"})
+					require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+					r.cfg.Entitlements = enforcing(storageUsed(t, r))
+					beforeBlobs = quotaBlobContents(t, dir)
+					beforeVersions = len(listVersions(t, r, id))
+				}
+				switch timing {
+				case "already-stale":
+					advance()
+				case "advances-after-read":
+					r.cfg.Store = &advanceBeforeReloadStore{Store: r.cfg.Store, afterRead: advance}
+				case "advances-while-locking":
+					r.cfg.Entitlements = enforcing(storageUsed(t, r) + 1<<20)
+					r.cfg.Store = &contentMutationHookStore{Store: r.cfg.Store, beforeLock: advance}
+				}
+				payload := map[string]any{"expected_" + resource + "_revision": revision}
+				if operation != "refetch" {
+					payload["body"] = "<p>loser</p>"
+					if resource == "source" {
+						payload["title"] = "must not change"
+					}
+				}
+				w := doJSON(t, r, method, path, payload)
+				require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+				assert.Contains(t, w.Body.String(), resource+"_conflict")
+				assert.Equal(t, `"original"`, artifactField(t, r, id, "title"))
+				assert.Len(t, listVersions(t, r, id), beforeVersions)
+				assert.Equal(t, beforeBlobs, quotaBlobContents(t, dir))
+				if resource == "widget" {
+					assert.Equal(t, "<p>winner</p>", widgetSnapshot(t, r, id).Body)
+				} else {
+					body, _ := sourceSnapshot(t, r, id)
+					assert.Equal(t, "<p>winner</p>", body)
+				}
+			})
+		}
+	}
+}
+
+// One-shot synchronous hooks place a competing write on either side of quota
+// processing without racing goroutines or relying on scheduler timing.
+type contentMutationHookStore struct {
+	store.Store
+	beforeLock   func()
+	beforeCommit func()
+}
+
+func (s *contentMutationHookStore) LockStorage(ownerID int64) func() {
+	if hook := s.beforeLock; hook != nil {
+		s.beforeLock = nil
+		hook()
+	}
+	return s.Store.LockStorage(ownerID)
+}
+
+func (s *contentMutationHookStore) advance() {
+	if hook := s.beforeCommit; hook != nil {
+		s.beforeCommit = nil
+		hook()
+	}
+}
+
+func (s *contentMutationHookStore) CommitVersion(ctx context.Context, ownerID int64, id string, change store.VersionChange) (*store.Version, error) {
+	if !change.CheckOnly {
+		s.advance()
+	}
+	return s.Store.CommitVersion(ctx, ownerID, id, change)
+}
+
+func (s *contentMutationHookStore) ReplaceArtifactSnapshot(ctx context.Context, ownerID int64, id string, snapshot store.ArtifactSnapshot) ([]string, error) {
+	s.advance()
+	return s.Store.ReplaceArtifactSnapshot(ctx, ownerID, id, snapshot)
+}
+
+func TestContentRevisionRecheckedAfterQuotaApproval(t *testing.T) {
+	withUnguardedFetcher(t)
+	for _, operation := range []string{"source", "widget", "refetch"} {
+		t.Run(operation, func(t *testing.T) {
+			r, dir := newTestRouterWithBlobDir(t)
+			upstream := newMutableUpstream(t)
+			upstream.serves(upstreamBare)
+			id := createArtifact(t, r, map[string]any{"title": "original", "url": upstream.pageURL()})
+			method, path, resource, restoreSeq := "PATCH", "/api/artifacts/"+id, "source", 1
+			if operation == "widget" {
+				method, path, resource, restoreSeq = "PUT", path+"/widget", "widget", 2
+				require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>B</b>").Code)
+			}
+			require.Equal(t, http.StatusOK, doJSON(t, r, method, path, map[string]any{"body": "<p>A</p>"}).Code)
+			_, revision := sourceSnapshot(t, r, id)
+			if resource == "widget" {
+				revision = widgetSnapshot(t, r, id).WidgetRevision
+			}
+			payload := map[string]any{"expected_" + resource + "_revision": revision}
+			if operation == "refetch" {
+				method, path = "POST", path+"/refetch"
+			} else {
+				payload["body"] = "<p>must not be saved</p>"
+				if resource == "source" {
+					payload["title"] = "must not change"
+				}
+			}
+			beforeBlobs := quotaBlobContents(t, dir)
+			beforeVersions := len(listVersions(t, r, id))
+			r.cfg.Entitlements = enforcing(storageUsed(t, r) + 1<<20)
+			wrapped := &contentMutationHookStore{Store: r.cfg.Store}
+			wrapped.beforeCommit = func() {
+				_, err := wrapped.Store.RestoreVersion(context.Background(), 1, id, restoreSeq, store.Provenance{}, "")
+				require.NoError(t, err)
+			}
+			r.cfg.Store = wrapped
+			w := doJSON(t, r, method, path, payload)
+			require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+			assert.Contains(t, w.Body.String(), resource+"_conflict")
+			assert.Nil(t, wrapped.beforeCommit, "the competing restore must run after quota approval")
+			assert.Equal(t, `"original"`, artifactField(t, r, id, "title"))
+			assert.Len(t, listVersions(t, r, id), beforeVersions+1, "only the restore may create a version")
+			assert.Equal(t, beforeBlobs, quotaBlobContents(t, dir), "failed writes must reclaim staged blobs")
+			if resource == "widget" {
+				assert.Equal(t, "<b>B</b>", widgetSnapshot(t, r, id).Body)
+			} else {
+				body, _ := sourceSnapshot(t, r, id)
+				assert.NotContains(t, body, "must not be saved")
+			}
+		})
+	}
+}

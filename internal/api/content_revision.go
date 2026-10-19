@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 	"strings"
+
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // Legacy owner/API clients may omit a token; the handler still protects its
@@ -19,6 +21,17 @@ func contentPrecondition(w http.ResponseWriter, r *http.Request, fields map[stri
 	token, ok := value.(string)
 	if !ok || token == "" {
 		writeError(w, http.StatusBadRequest, name+" must be a non-empty string")
+		return nil, false
+	}
+	// No-op detection and targeted edits use this handler's snapshot. A
+	// different token cannot validate those decisions, even if a concurrent
+	// restore makes that token current again before the transaction checks it.
+	if token != fallback {
+		err := store.ErrSourceChanged
+		if name == "expected_widget_revision" {
+			err = store.ErrWidgetChanged
+		}
+		writeArtifactError(w, r, "check content snapshot", err)
 		return nil, false
 	}
 	return &token, true
