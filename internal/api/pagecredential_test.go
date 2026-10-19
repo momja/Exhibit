@@ -61,6 +61,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/artifacts/{artifactID}", path: "/artifacts/{id}"},
 	{route: "/artifacts/{artifactID}/edit", path: "/artifacts/{id}/edit"},
 	{route: "/artifacts/{artifactID}/open", path: "/artifacts/{id}/open"},
+	{route: "/artifacts/{artifactID}/widget/open", path: "/artifacts/{id}/widget/open"},
 	// The account list (av-utap). It carries a bootstrap like the other pages,
 	// and it is the one whose leak would matter most: its script resets other
 	// people's passwords, so a service token embedded beside the session

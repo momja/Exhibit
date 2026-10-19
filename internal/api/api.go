@@ -400,6 +400,7 @@ func (ro *Router) setupRoutes() {
 		// carrying a token in the markup, which would be stale by the time
 		// anyone clicked it.
 		r.Get("/artifacts/{artifactID}/open", ro.openArtifact)
+		r.Get("/artifacts/{artifactID}/widget/open", ro.openGalleryWidget)
 
 		// Agent chat UI — token embedded in page JS, like the gallery.
 		r.Get("/agent", ro.agentPage)

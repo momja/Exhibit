@@ -37,8 +37,8 @@ function makeElement(id, onFocus = () => {}) {
     className: "",
     classList: {
       _set: new Set(),
-      add(c) { this._set.add(c); },
-      remove(c) { this._set.delete(c); },
+      add(...classes) { classes.forEach((c) => this._set.add(c)); },
+      remove(...classes) { classes.forEach((c) => this._set.delete(c)); },
       contains(c) { return this._set.has(c); },
       toggle(c, on) { if (on) this.add(c); else this.remove(c); }
     },
@@ -192,6 +192,7 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
       return readModule(resolve(dirname(referencing.identifier), specifier));
     });
     await entry.evaluate();
+    return entry.namespace;
   }
 
   // Delivers a message as if the artifact frame had posted it. `source`

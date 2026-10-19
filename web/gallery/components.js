@@ -116,10 +116,25 @@
     frame.dataset.widgetWatched = '1';
 
     var timer = null;
+    var io = null;
+    var stopped = false;
     function startDeadline() {
+      if (stopped) return;
       timer = setTimeout(function() { setFailed(frame, true); }, DEADLINE_MS);
     }
-    frame.addEventListener('__avresolved', function() { clearTimeout(timer); });
+    function stopDeadline() {
+      stopped = true;
+      clearTimeout(timer);
+      if (io) io.disconnect();
+    }
+    function dispose() {
+      stopDeadline();
+      frame.removeEventListener('__avresolved', stopDeadline);
+      frame.removeEventListener('exhibit:widget-dispose', dispose);
+      delete frame.dataset.widgetWatched;
+    }
+    frame.addEventListener('__avresolved', stopDeadline);
+    frame.addEventListener('exhibit:widget-dispose', dispose);
 
     // The clock must not start until the frame is actually allowed to load.
     // A tile inside a closed <details>, or below the fold under
@@ -132,7 +147,7 @@
       startDeadline();
       return;
     }
-    var io = new IntersectionObserver(function(entries) {
+    io = new IntersectionObserver(function(entries) {
       for (var i = 0; i < entries.length; i++) {
         if (!entries[i].isIntersecting) continue;
         io.disconnect();
@@ -156,6 +171,7 @@
   // htmx processes every inserted root. Its swap event targets the request
   // source or only the first inserted card, missing other frames in a batch.
   document.addEventListener('htmx:after:process', function(e) { watchAll(e.target); });
+  document.addEventListener('exhibit:widget-mounted', function(e) { watch(e.target); });
 
   window.addEventListener('message', function(e) {
     var d = e.data;
@@ -165,6 +181,9 @@
     var frames = document.querySelectorAll('.card-widget-frame');
     for (var i = 0; i < frames.length; i++) {
       if (frames[i].contentWindow !== e.source) continue;
+      // Frames can answer before DOMContentLoaded or htmx processing.
+      // Initialize first so the answer also stops any future deadline.
+      watch(frames[i]);
       frames[i].dispatchEvent(new CustomEvent('__avresolved'));
       // A 'ready' also CLEARS the failed state, not just suppresses the
       // deadline: a tile that was marked failed and then answers for itself

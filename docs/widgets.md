@@ -157,6 +157,63 @@ fetched at all; timing it out would mark every healthy widget the visitor
 hasn't scrolled to as failed. Intersection is the same condition
 `loading="lazy"` itself waits on, so the two stay in step.
 
+**Gallery document lifetime (av-1a9m).** Paging limits one response, but after
+scrolling a library every loaded iframe would otherwise keep its document and
+JavaScript running. The gallery keeps documents within 400px above or below the
+viewport and removes frames outside that buffer. The card and monogram remain;
+returning reattaches the same server-created iframe node and reloads the widget
+with current saved state. Widgets are read-only, so no persisted edits are lost.
+Nearby frames are not restarted when more cards arrive. This lifecycle is local
+to each gallery; the edit and agent previews are unchanged.
+
+Initial frame requests still use the render URL minted with the card. Once a
+frame has been unloaded, its next load uses `/artifacts/:id/widget/open` on the
+app origin. That owner-scoped, non-cacheable redirect mints a fresh ten-minute
+render credential and sends the frame back to the render origin. It prevents an
+old page's token from expiring while its widget is offscreen. The sandbox,
+render-origin CSP and read-only storage rules are unchanged.
+
+Unloading also cancels the health deadline and its intersection observer, so
+neither can retain a discarded document or mark a new load as failed. A ready
+report disconnects the health observer even if the widget is still in the
+preload buffer: becoming visible later must not start a failure timer for a
+widget that already answered. A report arriving before DOMContentLoaded or
+htmx processing initializes the watcher before resolving it, so later setup
+cannot restart its deadline. Search releases removed cards and their observers.
+Browsers without `IntersectionObserver` retain native lazy loading.
+
+Measured on 2026-10-19 with the stock run-tracker widget and sample state, at
+1280×800, after scrolling through every card:
+
+| Library | Before: retained frames | After: peak settled frames | After returning to top |
+| --- | ---: | ---: | ---: |
+| 60 artifacts | 60 | 45 | 35 |
+| 250 artifacts | 250 | 50 | 35 |
+
+The 250-card run kept every artifact reachable and reported no widget failures.
+The bound follows viewport geometry and the buffer, rather than library size;
+a larger screen can run more visible widgets. New page insertion can briefly
+add one 24-card batch before intersection callbacks unload its distant frames.
+At 375×812, traversing 250 cards peaked at 10 settled frames and retained 8 at
+either end. At 3840×2160, initial paging filled all 208 visible cards (216
+loaded), with no missing widget frames or health failures.
+The iframe nodes are cached without a browsing context while detached, making
+their documents eligible for collection. The preview browser returned a fixed
+10,000,000 bytes for `performance.memory.usedJSHeapSize` at both library sizes,
+so that API could not provide a meaningful JS heap comparison; no precise heap
+reduction is claimed.
+
+To reproduce the frame measurement, create 60 or 250 artifacts through the HTTP
+API using `dev/samples/run-tracker/artifact.html`, `widget.html` and the expanded
+`state.json`. Scroll until the final page loads, then scroll back to the top.
+Count `document.querySelectorAll('.card-widget-frame').length` after intersection
+callbacks settle. Run the same traversal before and after the change at a fixed
+viewport; the original 60-card timing/heap baseline is retained in the ticket.
+
+![The gallery with bounded widget documents](screenshots/av-1a9m/01-gallery.png)
+
+[Phone screenshot](screenshots/av-1a9m/02-mobile.png)
+
 ## Writing a widget
 
 The render preamble sets `html,body{margin:0;height:100%;background:transparent}`,

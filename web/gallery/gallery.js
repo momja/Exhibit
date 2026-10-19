@@ -1,6 +1,9 @@
 // Shared behavior for server-defined galleries. Endpoints and paging URLs live
 // in their templates; this module owns only typing, shortcuts and request races.
+import { initializeGalleryWidgets } from './gallery-widgets.js';
+
 export function initializeGallery(root) {
+  initializeGalleryWidgets(root);
   const form = root.querySelector('[data-gallery-search]');
   const input = root.querySelector('[data-gallery-query]');
   const clear = root.querySelector('[data-gallery-clear]');

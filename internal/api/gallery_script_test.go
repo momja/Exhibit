@@ -54,6 +54,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"components.popover.test.mjs",
 		"components.versionviewer.test.mjs",
 		"components.widgethealth.test.mjs",
+		"gallery-widgets.test.mjs",
 		"pip-placement.test.mjs",
 		"pip.test.mjs",
 		"index.search.test.mjs",

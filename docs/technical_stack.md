@@ -423,7 +423,12 @@ own with `hx-select`, so one definition of each serves two places on the page
 (Exh-ghuv). The gallery (av-kyhl) also uses htmx to append 24-card pages and
 replace search results through shared gallery partials. Its native module owns
 typing and query revisions; the server supplies each gallery's selection and
-routes (`architecture.md` §3.5).
+routes (`architecture.md` §3.5). The gallery's `gallery-widgets.js` module unloads
+widget documents beyond a 400px viewport buffer and remounts their existing
+server-created iframe nodes on return (av-1a9m). Reloads go through an
+owner-scoped app-origin redirect to obtain a fresh render token; initial loads
+keep their direct render URL. The edit and agent previews keep their own
+lifecycles.
 
 **Home-screen app shell (av-fdcx).** Every app-origin page head includes the shared
 `pwaHead` partial: the `manifest.json` link plus the `apple-*` tags iOS reads instead
