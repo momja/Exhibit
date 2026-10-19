@@ -1,8 +1,8 @@
 ---
 id: av-blzu
-status: open
+status: closed
 deps: []
-links: []
+links: [av-g234]
 created: 2026-07-08T07:06:01Z
 type: feature
 priority: 3
@@ -73,3 +73,7 @@ The notes cite `serveArtifactDoc -> injectShim` and `shimTemplate`. Those names 
 One correction to "Three known load paths today", path 3: it says the share path's `localStorage` "throws SecurityError in the opaque sandbox". Shares are opened top-level, not framed (the app-origin `/s/:id` redirects to the render origin), so a top-level share document has a real origin where native `localStorage` works and persists. See the note added to av-7k7b. That makes the two static views *less* alike than this ticket assumes: the share path gets working device-local storage, while owner direct-open gets a shim whose writes vanish. Worth resolving in the product copy this story is meant to unify — "static view" is the right umbrella, but the two paths differ in whether the visitor's own changes survive a reload, and that is the thing a user will actually notice.
 
 Cheapest honest fix for path 2 may simply be to stop installing the localStorage shim when `window.parent === window` — the same rule sessionStorage already follows (spec §5.2) — so direct-open gets native, persistent, device-local storage instead of a silent no-op. That would leave the banner as a UX nicety rather than the only thing preventing data loss.
+
+**2026-10-19T06:13:10Z**
+
+Closed as won't do (2026-10-19). The ticket predates the current sharing model (grants at /artifacts/:id, the read-only recipient page, share_state_mode, the public link at /s/:id) and its premise — unify owner direct-open and shares under one 'static, non-persisting view' concept — no longer matches the product. Exh-2ppi (PR #163) has since put a confirmation in front of every direct open. The one live defect it described, top-level localStorage writes being silently discarded, is tracked on its own in av-g234.
