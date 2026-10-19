@@ -21,7 +21,7 @@ import { dirname, resolve } from "node:path";
 
 // An element. Created on first lookup and cached, so a script and its test
 // address the same object without either declaring the page's markup.
-function makeElement(id) {
+function makeElement(id, onFocus = () => {}) {
   const listeners = {};
   const el = {
     id,
@@ -58,7 +58,7 @@ function makeElement(id) {
     click(target) {
       return el.dispatchEvent({ type: "click", target: target || el, id: el.id });
     },
-    focus() { el.focused = true; },
+    focus() { el.focused = true; onFocus(el); },
     select() { el.selected = true; },
     setAttribute() {},
     getAttribute() { return null; },
@@ -85,13 +85,15 @@ function makeElement(id) {
 // exactly as it is in the template.
 export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
   const elements = new Map();
+  let activeElement = null;
+  const onFocus = (element) => { activeElement = element; };
   const byId = (id) => {
-    if (!elements.has(id)) elements.set(id, makeElement(id));
+    if (!elements.has(id)) elements.set(id, makeElement(id, onFocus));
     return elements.get(id);
   };
   for (const [id, props] of Object.entries(initial)) Object.assign(byId(id), props);
 
-  const frame = makeElement("artifact-frame");
+  const frame = makeElement("artifact-frame", onFocus);
   // The frame's window is the identity every bridge in detail.js checks
   // (`e.source === frame.contentWindow`), since a sandboxed frame's origin is
   // the string "null" and proves nothing.
@@ -108,11 +110,17 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
     querySelector(sel) { return sel === "iframe" ? frame : null; },
     querySelectorAll() { return []; },
     createElement: (tag) => makeElement(tag),
-    addEventListener(type, fn) { (documentListeners[type] ||= []).push(fn); },
+    addEventListener(type, fn, capture) {
+      const listeners = documentListeners[type] ||= [];
+      if (capture === true) listeners.unshift(fn); else listeners.push(fn);
+    },
+    dispatchEvent(ev) {
+      return Promise.all((documentListeners[ev.type] || []).map((fn) => fn(ev)));
+    },
     removeEventListener(type, fn) {
       documentListeners[type] = (documentListeners[type] || []).filter((f) => f !== fn);
     },
-    get activeElement() { return null; },
+    get activeElement() { return activeElement; },
     // Writable, because a script that resyncs when the tab comes back has to be
     // drivable through both states. A real document reports "visible" for a
     // page nobody backgrounded, so that is the default.
@@ -197,8 +205,14 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
   // init carries whatever else the handler reads off the event: a target, a
   // modifier flag, a preventDefault to observe. A bare key is enough for the
   // Escape handlers, which look at nothing else.
-  const pressKey = (key, init = {}) =>
-    (documentListeners.keydown || []).forEach((fn) => fn({ key, ...init }));
+  const pressKey = (key, init = {}) => {
+    let stopped = false;
+    const event = { key, preventDefault() {}, stopImmediatePropagation() { stopped = true; }, ...init };
+    for (const fn of documentListeners.keydown || []) {
+      fn(event);
+      if (stopped) break;
+    }
+  };
 
   // Lets already-resolved promises finish before a test looks. A handler that
   // fetches and then acts on the answer is two awaits deep, and awaiting only

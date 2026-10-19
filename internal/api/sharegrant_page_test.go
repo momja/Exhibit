@@ -189,7 +189,7 @@ func TestOpenInNewTabWorksForTheRecipientAndNotForAStranger(t *testing.T) {
 	in := newGrantedInstance(t)
 
 	page := in.get(t, "/artifacts/"+in.granted, in.cookieTwo).Body.String()
-	require.Contains(t, page, `href="/artifacts/`+in.granted+`/open"`)
+	require.Contains(t, page, `data-open-url="/artifacts/`+in.granted+`/open"`)
 
 	w := in.get(t, "/artifacts/"+in.granted+"/open", in.cookieTwo)
 	require.Equal(t, http.StatusFound, w.Code)

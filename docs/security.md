@@ -39,6 +39,15 @@ own code convention.
   perform the `PUT /api/artifacts/:id/state`. The artifact itself never holds a
   credential and never reaches the API.
 
+Direct opens from the artifact viewer first show an app-origin confirmation
+(Exh-2ppi), shared by the controls menu, capability banner, and device/location
+approval flows. “Do not ask again for this artifact” is saved only after
+“Open directly” succeeds, in this browser's app-origin storage keyed by viewer
+and artifact. Read-only recipients can remember their own choice; storage
+failure leaves the confirmation enabled. This preference grants no artifact
+capability. Frame reloads still use the fresh-token `/open` redirect without
+confirmation, and external destination approvals follow their existing flow.
+
 ### 1.1 Module workers: an accepted opaque-origin limitation
 
 The opaque origin has one benign casualty. Chrome refuses to fetch a **module**

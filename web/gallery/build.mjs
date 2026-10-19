@@ -27,7 +27,7 @@ const files = [
   "tokens.css", "components.css", "components.js", "api.js", "api-module.js",
   "index.css", "index.js",
   "new.css", "new.js",
-  "detail.css", "detail.js", "pip.js", "pip-placement.js",
+  "detail.css", "detail.js", "direct-open.js", "pip.js", "pip-placement.js",
   // The owner's share panel (av-6xjd) — an island on the detail page, loaded
   // only where the panel renders, which is only for the artifact's owner.
   "share.js",

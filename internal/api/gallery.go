@@ -946,6 +946,9 @@ type detailPageData struct {
 	OpenURL    string
 	SourceURL  string
 	Capability capabilityView
+	// ViewerPreference scopes browser preferences to the visitor, including on
+	// shared artifacts. It grants no artifact authority and contains no token.
+	ViewerPreference string
 	// SharedState is share_state_mode == 'shared': every viewer of this
 	// artifact is on the owner's rows, so somebody else may be writing them
 	// while this page is open. It drives the page's state resync (av-v991) and
@@ -980,6 +983,10 @@ type detailPageData struct {
 // artifact running in the recipient's browser and exactly what the CSP-block
 // explanation refers back to. What goes is the link to change it.
 func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials, share *sharePanelView) (string, error) {
+	viewerPreference := strconv.FormatInt(urls.viewerID, 10)
+	if urls.anonymous {
+		viewerPreference = "anonymous"
+	}
 	return renderPage("detail", detailPageData{
 		Favicon:   template.URL(exhibitLogoDataURI),
 		Share:     share,
@@ -989,6 +996,8 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		FrameURL:  urls.artifact(a.ID),
 		OpenURL:   openURL(a.ID),
 		SourceURL: a.SourceURL,
+
+		ViewerPreference: viewerPreference,
 		// Read through the same constant the store resolves the mode with, so
 		// the page and the render agree about what 'shared' is spelled as.
 		SharedState: a.ShareStateMode == store.ShareStateShared,

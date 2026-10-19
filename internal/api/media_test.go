@@ -140,7 +140,7 @@ func TestDetailPageRendersMediaGate(t *testing.T) {
 	assert.Contains(t, js, "d.__avMedia !== true")
 	assert.Contains(t, js, "setCapabilityApproved('camera_approved', true, 'camera')")
 	assert.Contains(t, js, "setCapabilityApproved('microphone_approved', true, 'microphone')")
-	assert.Contains(t, js, "window.open(OPEN_URL, '_blank', 'noopener')")
+	assert.Contains(t, js, "exhibit:open-directly")
 	// Every path settles the artifact's promise — a getUserMedia left pending is
 	// a hang, which is the failure this gate exists to remove. The three that
 	// are easy to forget: an already-approved request (no prompt to show), a

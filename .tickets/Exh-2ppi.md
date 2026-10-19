@@ -1,6 +1,6 @@
 ---
 id: Exh-2ppi
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-19T01:09:20Z
@@ -35,3 +35,9 @@ Cover every direct-open action from the artifact viewer: toolbar, unsupported-ca
 7. Add focused behavioral coverage for confirmation/cancellation, remembered and artifact/viewer-isolated choice, all direct-open entry points, and iframe reload behavior. Run appropriate existing suites and capture/update screenshots for the modal using available browser tools.
 8. Close this ticket on the implementation branch before creating the PR; keep the main worktree clean on main and never push main.
 
+
+## Notes
+
+**2026-10-19T01:20:38Z**
+
+Implemented the shared app-origin direct-open confirmation with per-viewer/artifact browser preferences, popup and focus handling, and unchanged frame reload/external-link paths. Validation: 212 gallery Node tests, API/render Go suites, full asset build and server build passed. T3 browser checks covered confirmation, dismissal, persistence after reload, camera integration and popup blocking; desktop/mobile screenshots are in docs/screenshots/Exh-2ppi/.

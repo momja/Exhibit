@@ -162,6 +162,9 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 /* A button label that breaks mid-phrase reads as two ambiguous words stacked,
    not as one choice — and these are the words the whole dialog turns on. */
 .modal-actions .btn{white-space:nowrap}
+#direct-open-modal{z-index:110}
+.direct-open-remember{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13px;color:var(--color-ink-mid)}
+.direct-open-remember input{flex-shrink:0}
 /* The network prompt (av-kmwj) offers three answers where every other dialog
    offers two, and three of these labels do not fit 380px. The wider box is a
    modifier rather than a new width for .modal, because widening every dialog

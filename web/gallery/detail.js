@@ -703,43 +703,22 @@ document.getElementById('media-allow').addEventListener('click', async function(
   if (!(await approveAndOpenDirectly(() => setMediaApproved(req), () => pendingMedia === req))) return;
   document.getElementById('media-modal').hidden = true;
   pendingMedia = null;
+  document.querySelector('iframe')?.focus();
   // No banner: the user is already looking at the place the grant works.
   replyMedia(req.id, false,
     'Capture devices are unavailable in the embedded preview; the artifact was opened directly',
     'NotSupportedError');
 });
 
-// The Allow half of both gates (camera/microphone, location): persist the
-// grant, then open the artifact top-level, which is where the browser honors
-// it through the render document's Permissions-Policy header. approve writes
-// the approval and reports success; stillPending reports whether the request
-// the user approved is still the one on screen. Returns whether a tab opened.
-//
-// The tab is claimed in the click's own task, before the PATCH. A window.open
-// that waits on a roundtrip first is an unsolicited popup: Safari blocks it
-// outright, and Chrome allows it only while the transient activation is still
-// live, so a slow PATCH loses the tab and the artifact is then told it was
-// opened directly when nothing opened. The placeholder is navigated once the
-// approval is persisted and closed if it isn't.
-//
-// 'noopener' can't be used here — it returns null, leaving nothing to navigate
-// — so the opener is severed by hand instead, while the tab is still
-// about:blank and therefore same-origin enough for the property to be writable.
-// It stays severed across the navigation. This is not decoration: the
-// top-level render runs the artifact's own script, and an opener handle would
-// let it navigate the library tab out from under the user.
-async function approveAndOpenDirectly(approve, stillPending) {
-  const tab = window.open('', '_blank');
-  if (tab) {
-    try { tab.opener = null; } catch (err) { /* cross-origin already; nothing to sever */ }
-  }
-  if (!(await approve()) || !stillPending()) {
-    if (tab) tab.close();
-    return false;
-  }
-  if (tab) tab.location = OPEN_URL;
-  else window.open(OPEN_URL, '_blank', 'noopener');
-  return true;
+// Both capability gates request the same app-origin confirmation as the
+// toolbar and banner. The module owns the user gesture, placeholder tab and
+// browser preference; this legacy script retains the capability transaction.
+function approveAndOpenDirectly(approve, stillPending) {
+  return new Promise(function (resolve) {
+    document.dispatchEvent(new CustomEvent('exhibit:open-directly', {
+      detail: { approve, stillPending, resolve }
+    }));
+  });
 }
 
 // Geolocation gate (av-f446): the camera gate's shape, for location, with one
@@ -827,6 +806,7 @@ document.getElementById('geo-allow').addEventListener('click', async function() 
   if (!(await approveAndOpenDirectly(setGeolocationApproved, () => pendingGeolocation === req))) return;
   document.getElementById('geo-modal').hidden = true;
   pendingGeolocation = null;
+  document.querySelector('iframe')?.focus();
   // No banner: the user is already looking at the place the approval works.
   replyGeolocation(req.id, false, 'Location is unavailable in the embedded preview; the artifact was opened directly');
 });

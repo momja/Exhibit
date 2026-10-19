@@ -68,7 +68,7 @@ func TestDetailPageMenuFollowsReadOnly(t *testing.T) {
 	recipient, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), recipientCreds, nil)
 	require.NoError(t, err)
 	assert.Contains(t, recipient, `id="pip-menu"`)
-	assert.Contains(t, recipient, ` Open in new tab</a>`)
+	assert.Contains(t, recipient, ` Open in new tab</button>`)
 	assert.Contains(t, recipient, `id="pip-hide"`)
 	for _, item := range []string{`href="/artifacts/abc123/edit"`, `href="/agent?artifact=abc123"`, `/export"`, `refetchSource()`, `id="share-open"`} {
 		assert.NotContains(t, recipient, item)

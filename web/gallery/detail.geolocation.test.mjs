@@ -29,6 +29,7 @@ const ID = "art-1";
 const OPEN_URL = "/artifacts/art-1/open";
 
 const HIDDEN = {
+  "direct-open-modal": { hidden: true, dataset: { artifact: ID, viewer: "1", openUrl: OPEN_URL } },
   "net-modal": { hidden: true },
   "dl-modal": { hidden: true },
   "clip-modal": { hidden: true },
@@ -41,7 +42,7 @@ const HIDDEN = {
 
 // tabs records the placeholder tabs the Allow handlers claim with
 // window.open('', '_blank'); opened records any other window.open.
-function loadDetail({ readOnly = false, approvals = {}, responses = [] } = {}) {
+async function loadDetail({ readOnly = false, approvals = {}, responses = [] } = {}) {
   const api = recordingApi(responses);
   const tabs = [];
   const opened = [];
@@ -73,6 +74,7 @@ function loadDetail({ readOnly = false, approvals = {}, responses = [] } = {}) {
       return null;
     }
   }, HIDDEN);
+  await page.loadModule(path.join(ASSETS, "direct-open.js"));
   return { ...page, api, tabs, opened };
 }
 
@@ -81,7 +83,7 @@ const answers = (frame) => frame.contentWindow.posted.filter((m) => m.__avGeoloc
 const patches = (api) => api.calls.filter((c) => c.method === "PATCH").map((c) => JSON.parse(c.body));
 
 test("an unapproved request prompts, and is not answered until the user decides", async () => {
-  const { byId, frame, api, postFromFrame } = loadDetail();
+  const { byId, frame, api, postFromFrame } = await loadDetail();
 
   await postFromFrame(geoRequest(1));
 
@@ -92,10 +94,12 @@ test("an unapproved request prompts, and is not answered until the user decides"
 });
 
 test("Allow persists location alone, opens the top-level render, and answers the frame", async () => {
-  const { byId, frame, api, tabs, postFromFrame } = loadDetail();
+  const { byId, frame, api, tabs, postFromFrame } = await loadDetail();
 
   await postFromFrame(geoRequest(1));
-  await byId("geo-allow").click();
+  const allowing = byId("geo-allow").click();
+  await byId("direct-open-confirm").click();
+  await allowing;
 
   assert.deepEqual(patches(api), [{ geolocation_approved: true }],
     "approving location writes that flag and no device flag");
@@ -108,10 +112,12 @@ test("Allow persists location alone, opens the top-level render, and answers the
 });
 
 test("after Allow, the next request raises the banner instead of a second prompt", async () => {
-  const { byId, frame, api, postFromFrame } = loadDetail();
+  const { byId, frame, api, postFromFrame } = await loadDetail();
 
   await postFromFrame(geoRequest(1));
-  await byId("geo-allow").click();
+  const allowing = byId("geo-allow").click();
+  await byId("direct-open-confirm").click();
+  await allowing;
   await postFromFrame(geoRequest(2));
 
   assert.equal(byId("geo-modal").hidden, true);
@@ -122,7 +128,7 @@ test("after Allow, the next request raises the banner instead of a second prompt
 });
 
 test("an artifact approved before this page loaded is answered with the banner", async () => {
-  const { byId, frame, api, postFromFrame } = loadDetail({ approvals: { geolocationApproved: true } });
+  const { byId, frame, api, postFromFrame } = await loadDetail({ approvals: { geolocationApproved: true } });
 
   await postFromFrame(geoRequest(7));
 
@@ -132,7 +138,7 @@ test("an artifact approved before this page loaded is answered with the banner",
 });
 
 test("Block answers with a denial and persists nothing", async () => {
-  const { byId, frame, api, tabs, postFromFrame } = loadDetail();
+  const { byId, frame, api, tabs, postFromFrame } = await loadDetail();
 
   await postFromFrame(geoRequest(1));
   await byId("geo-block").click();
@@ -144,7 +150,7 @@ test("Block answers with a denial and persists nothing", async () => {
 });
 
 test("Escape is a Block", async () => {
-  const { byId, frame, pressKey, postFromFrame } = loadDetail();
+  const { byId, frame, pressKey, postFromFrame } = await loadDetail();
 
   await postFromFrame(geoRequest(1));
   pressKey("Escape");
@@ -154,7 +160,7 @@ test("Escape is a Block", async () => {
 });
 
 test("a newer request displaces the pending one, which still gets its answer", async () => {
-  const { byId, frame, postFromFrame } = loadDetail();
+  const { byId, frame, postFromFrame } = await loadDetail();
 
   await postFromFrame(geoRequest(1));
   await postFromFrame(geoRequest(2));
@@ -162,17 +168,21 @@ test("a newer request displaces the pending one, which still gets its answer", a
     "getCurrentPosition then watchPosition is common, and the first must not wait forever");
   assert.equal(byId("geo-modal").hidden, false, "one prompt covers the newest request");
 
-  await byId("geo-allow").click();
+  const allowing = byId("geo-allow").click();
+  await byId("direct-open-confirm").click();
+  await allowing;
   assert.deepEqual(answers(frame).map((a) => a.id), [1, 2]);
 });
 
 test("a request displaced while the PATCH is in flight is not answered by opening a tab", async () => {
-  const { byId, frame, tabs, postFromFrame } = loadDetail();
+  const { byId, frame, tabs, postFromFrame } = await loadDetail();
 
   await postFromFrame(geoRequest(1));
   // The PATCH is still a pending promise when the frame asks again.
   const clicking = byId("geo-allow").click();
+  const confirming = byId("direct-open-confirm").click();
   await postFromFrame(geoRequest(2));
+  await confirming;
   await clicking;
 
   assert.equal(tabs.length, 1);
@@ -183,12 +193,16 @@ test("a request displaced while the PATCH is in flight is not answered by openin
 });
 
 test("a failed PATCH closes the placeholder tab and keeps the prompt", async () => {
-  const { byId, frame, tabs, postFromFrame } = loadDetail({
+  const { byId, frame, tabs, postFromFrame } = await loadDetail({
     responses: [{ ok: false, status: 500, json: async () => ({}) }]
   });
 
   await postFromFrame(geoRequest(1));
-  await byId("geo-allow").click();
+  const allowing = byId("geo-allow").click();
+  await byId("direct-open-confirm").click();
+  // A failed approval keeps the confirmation available for a retry.
+  await byId("direct-open-cancel").click();
+  await allowing;
 
   assert.equal(tabs[0].closed, true);
   assert.equal(tabs[0].location, null);
@@ -197,7 +211,7 @@ test("a failed PATCH closes the placeholder tab and keeps the prompt", async () 
 });
 
 test("a message from anything but the artifact frame is ignored", async () => {
-  const { byId, frame, postFromFrame } = loadDetail();
+  const { byId, frame, postFromFrame } = await loadDetail();
 
   await postFromFrame(geoRequest(1), { postMessage() {} });
   await postFromFrame({ ...geoRequest(1), artifactId: "someone-else" });
@@ -207,7 +221,7 @@ test("a message from anything but the artifact frame is ignored", async () => {
 });
 
 test("a recipient is answered with a denial, never offered the prompt", async () => {
-  const { byId, frame, api, postFromFrame } = loadDetail({ readOnly: true });
+  const { byId, frame, api, postFromFrame } = await loadDetail({ readOnly: true });
 
   await postFromFrame(geoRequest(1));
 
@@ -217,7 +231,7 @@ test("a recipient is answered with a denial, never offered the prompt", async ()
 });
 
 test("a recipient of an approved artifact is pointed at the top-level render", async () => {
-  const { frame, api, postFromFrame } = loadDetail({ readOnly: true, approvals: { geolocationApproved: true } });
+  const { frame, api, postFromFrame } = await loadDetail({ readOnly: true, approvals: { geolocationApproved: true } });
 
   await postFromFrame(geoRequest(1));
 
@@ -229,11 +243,13 @@ test("a recipient of an approved artifact is pointed at the top-level render", a
 // The camera gate's Allow now goes through the same helper, so it gets one
 // end-to-end pass here: the refactor must not have changed what it does.
 test("the camera gate's Allow still persists, opens the render, and answers", async () => {
-  const { byId, frame, api, tabs, postFromFrame } = loadDetail();
+  const { byId, frame, api, tabs, postFromFrame } = await loadDetail();
 
   await postFromFrame({ __avMedia: true, artifactId: ID, id: "m1", video: true, audio: false });
   assert.equal(byId("media-modal").hidden, false);
-  await byId("media-allow").click();
+  const allowing = byId("media-allow").click();
+  await byId("direct-open-confirm").click();
+  await allowing;
 
   assert.deepEqual(patches(api), [{ camera_approved: true }]);
   assert.equal(tabs[0].location, OPEN_URL);

@@ -80,7 +80,7 @@
        hx-swap="innerHTML">{{template "capabilityPopover" .Capability}}</div>
 </div>
 <div class="pip-popup pip-menu" id="pip-menu" hidden>
-  <a href="{{.OpenURL}}" target="_blank"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</a>
+  <button type="button" id="direct-open-toolbar"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</button>
   {{/* Everything from here to the divider belongs to the artifact's OWNER
        (av-awr4). A recipient reached this page through a grant, which is read
        access to the artifact and nothing else, so each of these would answer
@@ -142,7 +142,7 @@
       <p id="capability-warning-detail"></p>
     </details>
   </div>
-  <a class="banner-action" href="{{.OpenURL}}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</a>
+  <button type="button" class="banner-action" id="direct-open-banner"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</button>
 </div>
 {{/* The recipient's answer to a CSP-blocked origin (av-awr4): explain, do not
      ask. Only the artifact's owner may widen its allowlist, so the runtime
@@ -306,6 +306,7 @@
 </div>
 
 {{template "networkPrompt"}}
+{{template "directOpenPrompt" .}}
 <script>
 const TOKEN = {{.Token}};
 {{/* READ_ONLY and TOKEN are one decision, made server-side per request
@@ -360,6 +361,7 @@ let geolocationApproved = {{if .Capability.GeolocationApproved}}true{{else}}fals
      (av-6xvs). Before detail.js, which installs it at load. */}}
 <script src="/assets/gallery/network-prompt.js"></script>
 <script src="/assets/gallery/detail.js"></script>
+<script type="module" src="/assets/gallery/direct-open.js"></script>
 {{/* The share panel's script, loaded only where the panel exists. It resolves
      everything by id inside #share-panel and tolerates the panel's absence, so
      the guard is a courtesy rather than the control. */}}
