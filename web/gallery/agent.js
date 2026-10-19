@@ -514,7 +514,7 @@ async function send() {
   });
   clearSnippets();
   inputEl.value = '';
-  autoGrow();
+  updateComposer();
 
   const r = await apiFetch('/api/agent/sessions/' + sessionId + '/prompt', {
     method: 'POST',
@@ -541,11 +541,12 @@ function describeSnippet(d) {
 inputEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
-function autoGrow() {
+function updateComposer() {
+  document.getElementById('send-btn').disabled = !inputEl.value.trim();
   inputEl.style.height = 'auto';
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
 }
-inputEl.addEventListener('input', autoGrow);
+inputEl.addEventListener('input', updateComposer);
 
 // --- Mobile panes (av-td4y) ------------------------------------------------
 // Below 640px the chat and the preview each take the whole screen and the
@@ -901,7 +902,7 @@ function briefToMessage(brief) {
   // Into the composer first, then sent: with no key configured the modal opens
   // over the text and the user gets it back after saving one, rather than
   // watching what they typed on the last page disappear.
-  if (opening) { inputEl.value = opening; autoGrow(); }
+  if (opening) { inputEl.value = opening; updateComposer(); }
   if (!configured) { briefAwaitingKey = !!opening; openKeyModal(); return; }
   if (opening) send();
 })();
