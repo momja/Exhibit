@@ -2021,6 +2021,39 @@ outright: a household can give one person a larger allowance than another.
   so `DELETE /api/account` removes them with it by construction rather than by
   a delete somebody has to remember (§3.3, av-4wyq).
 
+### 3.8d Storage quotas (av-10bw)
+
+The API checks the complete proposed write before it publishes bytes. Artifact
+creation, body and widget versions, and refetched snapshots acquire
+`Store.LockStorage(ownerID)`, call `Router.resolveAllowance`, and ask
+`Store.ProjectStorageUsage` for current usage and additional bytes. The lock
+lasts through the commit of every reference in the write, so concurrent requests
+cannot both spend the same remaining space. Locks belong to the store and are
+shared by routers using it; they are process-local, like the blob writer locks.
+Take the owner lock before blob locks or database transactions. Fetching and
+vendoring happen before the owner lock.
+
+Projection uses `blob_references`, the same source as storage accounting.
+History retains superseded bodies, widgets and asset generations: those bytes
+are still charged, and only candidate blobs this owner does not already
+reference add to the total. Content-addressed assets are deduplicated within
+the write and within the owner's library, never against another owner. A
+snapshot is assembled before the check, including out-of-line payloads. Its
+`413` identifies the limit, current usage, assembled write size and additional
+bytes without changing either stored bytes or metadata.
+
+With enforcement off the gate takes no lock and reads no entitlement or usage.
+With it on, unresolved entitlements or missing recorded lengths refuse the
+write; size-recording failures prevent fresh references from being committed,
+and unused staged bytes enter the reference-checked deletion queue. Accounting
+reads retain their existing tolerant behavior; the quota projection is strict.
+
+An owner may remain over quota indefinitely. A lowered entitlement never
+reclaims their library. Reads, rendering, exports, metadata edits, unchanged
+saves, restores of retained versions and deletions do not acquire the quota
+gate. Deletion releases references through the existing lifecycle; it is never
+an automatic consequence of a limit.
+
 ## 4. Trust boundaries
 
 Four boundaries, in decreasing trust:

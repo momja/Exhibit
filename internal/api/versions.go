@@ -141,15 +141,12 @@ func (ro *Router) restoreVersion(w http.ResponseWriter, r *http.Request) {
 // A failed commit or a process interruption therefore cannot orphan a save.
 func (ro *Router) storeVersionContent(ctx context.Context, ownerID int64, id, content string, widget bool, provenance store.Provenance) error {
 	blobID := uuid.New().String()
-	err := func() error {
-		unlock := ro.cfg.Store.LockBlobs(blobID)
-		defer unlock()
-		if _, err := ro.cfg.Store.QueueUnreferencedBlobs(ctx, []string{blobID}); err != nil {
-			return err
-		}
-		if err := putBlob(ctx, ro.cfg.Store, ro.cfg.Blob, blobID, bytes.NewBufferString(content)); err != nil {
-			return err
-		}
+	unlockStorage, err := ro.beginStorageWrite(ctx, ownerID, map[string]int64{blobID: int64(len(content))})
+	if err != nil {
+		return err
+	}
+	defer unlockStorage()
+	return ro.storeBlobContent(ctx, blobID, content, func() error {
 		change := store.VersionChange{Provenance: provenance}
 		if widget {
 			change.WidgetBlobID = &blobID
@@ -159,6 +156,22 @@ func (ro *Router) storeVersionContent(ctx context.Context, ownerID int64, id, co
 		}
 		_, err := ro.cfg.Store.CommitVersion(ctx, ownerID, id, change)
 		return err
+	})
+}
+
+// storeBlobContent keeps staged bytes out of the library until their length
+// is recorded and the referencing commit succeeds. Failed saves are reclaimed.
+func (ro *Router) storeBlobContent(ctx context.Context, blobID, content string, commit func() error) error {
+	err := func() error {
+		unlock := ro.cfg.Store.LockBlobs(blobID)
+		defer unlock()
+		if _, err := ro.cfg.Store.QueueUnreferencedBlobs(ctx, []string{blobID}); err != nil {
+			return err
+		}
+		if err := ro.putBlob(ctx, blobID, bytes.NewBufferString(content)); err != nil {
+			return err
+		}
+		return commit()
 	}()
 	// Referenced bytes are kept and dequeued; failed saves are reclaimed.
 	if cleanupErr := ro.reclaimBlobs(context.WithoutCancel(ctx), []string{blobID}); cleanupErr != nil {

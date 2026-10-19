@@ -27,6 +27,11 @@ func (ro *Router) storeRefetchedSnapshot(ctx context.Context, ownerID int64, id,
 	for _, asset := range collected {
 		staged = append(staged, store.AssetBlobID(ownerID, asset.Body))
 	}
+	unlockStorage, err := ro.beginStorageWrite(ctx, ownerID, snapshotStorageBlobs(ownerID, replacement.SourceBlobID, body, collected))
+	if err != nil {
+		return err
+	}
+	defer unlockStorage()
 	queued, err := func() ([]string, error) {
 		unlock := ro.cfg.Store.LockBlobs(staged...)
 		defer unlock()
@@ -34,7 +39,7 @@ func (ro *Router) storeRefetchedSnapshot(ctx context.Context, ownerID int64, id,
 			return nil, err
 		}
 		if bodyChanged {
-			if err := putBlob(ctx, ro.cfg.Store, ro.cfg.Blob, replacement.SourceBlobID, bytes.NewReader([]byte(body))); err != nil {
+			if err := ro.putBlob(ctx, replacement.SourceBlobID, bytes.NewReader([]byte(body))); err != nil {
 				return nil, err
 			}
 		}

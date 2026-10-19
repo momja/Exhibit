@@ -1,6 +1,6 @@
 ---
 id: av-10bw
-status: open
+status: closed
 deps: [av-fw1b]
 links: [av-2p8z]
 created: 2026-08-18T05:57:15Z
@@ -48,3 +48,7 @@ This is the ticket that makes a paid tier mean something. Until a limit exists, 
 **2026-08-18T06:25:14Z**
 
 Being over quota is an expected state, not a corrupt one: a lowered entitlement puts someone over instantly through no action of their own. Added the explicit prohibition — nothing may delete an owner's data to enforce a limit, a limit only ever refuses the next write — with a test, so no later change can read over-quota as an inconsistency to repair by reclaiming data.
+
+**2026-10-19T00:08:41Z**
+
+Implemented projected per-owner storage quotas across artifact create, body rewrites, refetch and widget writes, including agent grants. Checks use the shared entitlement resolver, account for retained versions and deduplicate owned assets, and serialize concurrent writes per owner. Refusals return structured 413 details before writing bytes. Lowered entitlements preserve the library and access; missing accounting fails closed only when enforcement is enabled. Review-agent skill review: no actionable findings.

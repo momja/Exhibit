@@ -936,11 +936,28 @@ every account that nobody has provisioned is unlimited — the same posture
 a half-configured gate should fail where you are watching rather than quietly
 not be a gate.
 
-**Nothing refuses anything yet.** There is no quota: the entitlement is
-recorded, resolvable and visible, and no write stops because of it. What
-switching limits on changes today is that the instance requires a default, and
-that the admin page states which of the two states it is in. The storage figure
-those limits will be compared against is the one in §8.
+**Writes must fit the owner's resolved allowance.** Creates, body edits,
+refetches and widget saves, including writes from the agent, check the projected
+storage total before writing any bytes. The number is the one in §8: version
+history counts, so replacing a document with a smaller one still adds the new
+document's full size. Shared assets count once within an owner's library.
+Snapshots are checked after vendoring, against the assembled document and its
+assets. A refusal returns `413` with the limit, current usage, assembled write
+size and additional bytes; the library is unchanged.
+
+Lowering an allowance below current usage is accepted. It never deletes data,
+and the owner can still list, open, render, export and delete their artifacts.
+Metadata edits and saves that do not change any bytes remain available too.
+Only a write that would add stored content is gated. Deleting an artifact
+releases its history's storage; removing just its widget keeps that widget's
+bytes in the versions that used it.
+
+With limits on, an entitlement or usage that cannot be resolved refuses the
+write with a server error. A referenced blob whose size is missing must be
+measured using the storage recompute command in §8 before further writes can
+be admitted; unknown usage is never treated as free space. Quota checks and
+commits are serialized per owner within the single server process. Run one
+Exhibit server per SQLite database.
 
 ### Setting them by hand
 

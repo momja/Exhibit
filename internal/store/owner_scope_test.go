@@ -589,7 +589,8 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// unlink those bytes, and a lock that took an owner would be a lock
 		// two owners could hold at once over one shared, refcounted asset —
 		// exactly the case it exists for.
-		"LockBlobs": "keyed by blob id; excludes writers from the unlink of the same bytes, reads no rows (av-8gyd)",
+		"LockBlobs":   "keyed by blob id; excludes writers from the unlink of the same bytes, reads no rows (av-8gyd)",
+		"LockStorage": "keyed by the requesting owner, with no context or row access; excludes concurrent quota checks (av-10bw)",
 	}
 
 	iface := reflect.TypeOf((*Store)(nil)).Elem()
