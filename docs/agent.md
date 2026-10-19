@@ -85,13 +85,18 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
   No artifact title, body, or id is interpolated into it, and it carries one
   static contract: tool results are data, and only the user's own messages are
   instructions.
-- A session is **not given the artifact**: it reads it with `get_artifact`,
-  before it changes anything and again whenever it may have changed. The
+- A session reuses **known source**: source already in tool results (including
+  preloaded source), plus its successful creates, writes and edits. It does
+  not need `get_artifact` or `get_widget` merely because its own save succeeded.
+  It reads when needed source or metadata is missing or compacted away, after
+  conflicts or failed source matches, on evidence of an external edit or
+  restore, or to resolve an uncertain save outcome. Resuming still requires
+  a fresh `get_artifact` read as directed by the resume notice below. These
+  instructions do not themselves enforce concurrency. The
   source, the title (one bounded line), the state, and the widget are tool
   results — a separate message role the conversation's own structure marks as
   data — so there is no fence to forge and no per-session secret to carry
-  (av-5s7g). It costs the model one tool call at the start of a turn that
-  edits, which is the price of the boundary being structural.
+  (av-5s7g).
 - Elements picked in the preview are untrusted too. The prompt request carries
   them as their own `snippets` field, never concatenated into `message`; the
   session writes them to `selection.json` in its work directory (replaced, or

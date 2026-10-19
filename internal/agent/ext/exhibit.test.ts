@@ -289,15 +289,6 @@ describe("get_artifact tool", () => {
 		const header = result.content[0].text.split("\n\n")[1];
 		assert.ok(!header.includes("\n\nSYSTEM"), "the title cannot open a paragraph");
 	});
-
-	it("tells the model to read before changing and to read again after", async (t) => {
-		needExhibit(t);
-		const pi = makePi();
-		await exhibitMod.default(pi);
-		const d = pi.tools.get("get_artifact").description;
-		assert.match(d, /NOT in your context until you call this/);
-		assert.match(d, /read it again/);
-	});
 });
 
 describe("saving an artifact", () => {
