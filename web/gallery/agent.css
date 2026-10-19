@@ -176,3 +176,19 @@ header h1{font-size:16px;font-weight:600;flex:1}
   .snip-btn .kbd{display:none}
   .snip-more{display:inline}
 }
+
+/* Keep the action strip below its bubble in live, historical and resumed chat. */
+.agent-message{align-self:flex-start;max-width:92%;min-width:0}
+.agent-message .msg{max-width:100%}
+.message-actions{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:3px;white-space:normal}
+.message-action{position:relative;display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:5px 8px;border:0;border-radius:6px;background:transparent;color:var(--color-muted);font:inherit;font-size:12px;cursor:pointer}
+.message-action:hover{background:var(--color-ground);color:var(--color-ink)}
+.message-action:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
+.message-action:disabled{cursor:wait;opacity:.6}
+.message-action i{font-size:16px}
+/* Labels float above their icons so revealing one never moves other actions. */
+.message-action-label{display:none;position:absolute;bottom:calc(100% + 4px);left:0;z-index:1;padding:5px 8px;border-radius:5px;background:var(--color-ink);color:var(--color-panel);white-space:nowrap;pointer-events:none}
+.message-action:hover .message-action-label,.message-action:focus-visible .message-action-label{display:block}
+.message-action-status{font-size:12px;color:var(--color-muted);padding:0 4px}
+.message-action-status[data-error]{color:var(--color-danger-ink)}
+@media (pointer:coarse){.message-action{min-width:44px;min-height:44px}}
