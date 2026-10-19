@@ -166,3 +166,30 @@ func TestPreparedSourceProjectionNamesHostPreparationAndHidesSource(t *testing.T
 		{Role: "assistant", Text: "Done"},
 	}, ProjectSessionFile(file))
 }
+
+func TestSessionContentsBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		name, input, want string
+		oversized         bool
+	}{
+		{"below", "one\npart", "one\n", false},
+		{"exact", "1234567\n", "1234567\n", false},
+		{"over", "12345678\n", "", true},
+		{"unterminated", "123456789", "", true},
+		{"unfinished after whole line", "a\n1234567", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := readSessionContents(strings.NewReader(tc.input), 8)
+			if tc.oversized {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tc.want, got)
+		})
+	}
+	reader := strings.NewReader(strings.Repeat("x", 1000))
+	_, err := readSessionContents(reader, 8)
+	require.Error(t, err)
+	assert.Equal(t, 991, reader.Len(), "only the budget and one overflow byte are read")
+}

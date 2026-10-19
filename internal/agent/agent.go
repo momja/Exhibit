@@ -96,6 +96,11 @@ func KnownProvider(p string) bool { _, ok := providerEnv[p]; return ok }
 // budget. Widget-generate sessions count like any other.
 const MaxOwnerSessions = 10
 
+// MaxInstanceSessions bounds subprocesses across every owner, including startup.
+const MaxInstanceSessions = 32
+
+var ErrInstanceSessionLimit = errors.New("this instance has reached its agent process limit — close a conversation or try again shortly")
+
 // ErrSessionLimit is Create refusing: the owner is at MaxOwnerSessions and
 // every one of them is mid-run. Its message is what the user sees, so it says
 // what to do — close one, or wait for a running one to finish.
@@ -108,9 +113,11 @@ type Manager struct {
 	extPath   string
 	guardPath string
 
-	mu       sync.Mutex
-	sessions map[string]*Session
-	starting map[string]bool // conversation identities reserved before loading history
+	mu            sync.Mutex
+	sessions      map[string]*Session
+	processOwners map[int64]int
+	processCount  int
+	starting      map[string]bool // conversation identities reserved before loading history
 }
 
 // New materializes the extension (exhibit.ts plus its edit-engine import,
@@ -242,14 +249,16 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 			return nil, fmt.Errorf("conversation is no longer available to resume")
 		}
 	}
-	// The session limit (av-99f4), enforced here for both creators. At the
-	// limit the owner's oldest *idle* session is evicted — the chat page
-	// closes its session on pagehide, but a user who reloads before that
-	// lands must not be locked out for the idle timeout — and a new session
-	// is refused only when every one of them is mid-run.
-	if !m.admitOwner(opts.OwnerID) {
-		return nil, ErrSessionLimit
+	releaseProcess, err := m.reserveProcess(ctx, opts.OwnerID)
+	if err != nil {
+		return nil, err
 	}
+	spawned := false
+	defer func() {
+		if !spawned {
+			releaseProcess()
+		}
+	}()
 
 	id := uuid.New().String()
 	title := ""
@@ -280,7 +289,6 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	if err != nil {
 		return nil, err
 	}
-	spawned := false
 	defer func() {
 		if !spawned {
 			m.cfg.Credentials.Revoke(grant) // no live subprocess ⇒ no live token
@@ -362,6 +370,10 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		cmd.Env = append(cmd.Env, m.cfg.Guardrail.env()...)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -391,12 +403,13 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		resumeNotice:      resumeNotice,
 		usageRecorded:     recorded,
 		readDone:          make(chan struct{}),
+		processExited:     make(chan struct{}),
 		grant:             grant,
 		hideModelIdentity: m.cfg.HideModelIdentity,
 		mgr:               m,
 		cmd:               cmd,
 		stdin:             stdin,
-		subs:              map[chan []byte]struct{}{},
+		subs:              map[*eventSubscriber]struct{}{},
 		pending:           map[string]chan rpcResponse{},
 		done:              make(chan struct{}),
 		lastActive:        time.Now(),
@@ -410,6 +423,8 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	go s.drainStderr(stderr)
 	go func() {
 		_ = cmd.Wait()
+		releaseProcess()
+		close(s.processExited)
 		s.finish()
 	}()
 
@@ -419,23 +434,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		return nil, ErrSessionLive
 	}
 	m.sessions[id] = s
-	// Two Creates can pass admitOwner at once; the loser gives up its slot
-	// here, so "at most MaxOwnerSessions" holds even under a race.
-	others, evicted := m.ownerSessionsLocked(opts.OwnerID, id)
-	if others >= MaxOwnerSessions {
-		if evicted != nil {
-			evicted.markStopping()
-		}
-	}
 	m.mu.Unlock()
-	if others >= MaxOwnerSessions {
-		if evicted != nil {
-			evicted.kill()
-		} else {
-			m.Close(opts.OwnerID, id)
-			return nil, ErrSessionLimit
-		}
-	}
 	slog.InfoContext(ctx, "agent session started",
 		slog.String("session_id", id),
 		slog.String("provider", opts.Provider),
@@ -522,29 +521,56 @@ func (m *Manager) Close(ownerID int64, id string) {
 	}
 }
 
-// admitOwner enforces MaxOwnerSessions for one more session of ownerID,
-// making room by evicting the owner's oldest idle session at the limit. It
-// says no only when every session is mid-run: a busy conversation is not
-// ours to kill, while an idle one costs its owner nothing to lose — and the
-// alternative (refusing outright) would lock a reload-storming user out for
-// the whole idle timeout.
-func (m *Manager) admitOwner(ownerID int64) bool {
-	m.mu.Lock()
-	count, oldest := m.ownerSessionsLocked(ownerID, "")
-	if count < MaxOwnerSessions {
+// reserveProcess counts startup and live processes under one mutex. Capacity
+// is returned only after Wait reaps the process, before final persistence.
+func (m *Manager) reserveProcess(ctx context.Context, ownerID int64) (func(), error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		m.mu.Lock()
+		if m.processOwners == nil {
+			m.processOwners = make(map[int64]int)
+		}
+		if m.processOwners[ownerID] < MaxOwnerSessions && m.processCount < MaxInstanceSessions {
+			m.processOwners[ownerID]++
+			m.processCount++
+			m.mu.Unlock()
+			return func() {
+				m.mu.Lock()
+				m.processOwners[ownerID]--
+				if m.processOwners[ownerID] == 0 {
+					delete(m.processOwners, ownerID)
+				}
+				m.processCount--
+				m.mu.Unlock()
+			}, nil
+		}
+		refusal := ErrSessionLimit
+		if m.processOwners[ownerID] < MaxOwnerSessions {
+			refusal = ErrInstanceSessionLimit
+		}
+		_, oldest := m.ownerSessionsLocked(ownerID, "")
+		if oldest == nil {
+			m.mu.Unlock()
+			return nil, refusal
+		}
+		oldest.mu.Lock()
+		if oldest.streaming || oldest.closed || oldest.stopping {
+			oldest.mu.Unlock()
+			m.mu.Unlock()
+			continue
+		}
+		oldest.stopping = true
+		oldest.mu.Unlock()
 		m.mu.Unlock()
-		return true
+		oldest.kill()
+		select {
+		case <-oldest.processExited:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
-	if oldest == nil {
-		m.mu.Unlock()
-		return false
-	}
-	oldest.markStopping()
-	m.mu.Unlock()
-	// What reap does for a stale session: the credential dies with the
-	// process, and finish() flushes whatever it had spent.
-	oldest.kill()
-	return true
 }
 
 // ownerSessionsLocked counts ownerID's open sessions and finds the oldest
@@ -664,6 +690,8 @@ type Session struct {
 	persisting sync.WaitGroup
 	// readDone closes when everything the subprocess printed has been handled.
 	readDone chan struct{}
+	// processExited closes after Wait returns and its admission slot is released.
+	processExited chan struct{}
 	// grant is the session's API credential and the single source of truth
 	// for which artifact it may touch. In create mode it starts unbound and
 	// the API's create handler binds it — the session never derives its
@@ -692,8 +720,9 @@ type Session struct {
 	// resumeNotice is the sentence the first prompt of a resumed conversation
 	// carries (prompt.go); it is held until a prompt has actually landed.
 	resumeNotice       string
-	subs               map[chan []byte]struct{}
+	subs               map[*eventSubscriber]struct{}
 	backlog            [][]byte
+	backlogBytes       int
 	pending            map[string]chan rpcResponse
 	streaming          bool
 	closed             bool
@@ -743,28 +772,30 @@ type rpcResponse struct {
 // create-mode session has yet to save anything.
 func (s *Session) ArtifactID() string { return s.grant.Scope().ArtifactID }
 
-// maxBacklog bounds replayed events for late SSE subscribers.
-const maxBacklog = 4096
-
 // Done is closed when the subprocess exits.
 func (s *Session) Done() <-chan struct{} { return s.done }
 
-// Subscribe returns a channel receiving every event line (replaying the
-// backlog first) and an unsubscribe func.
+// Subscribe replays retained events, then streams live events. Excess clients
+// receive a closed channel. Unsubscribe releases its queue and worker.
 func (s *Session) Subscribe() (<-chan []byte, func()) {
-	ch := make(chan []byte, 1024)
 	s.mu.Lock()
-	for _, ev := range s.backlog {
-		select {
-		case ch <- ev:
-		default:
-		}
+	defer s.mu.Unlock()
+	sub := newEventSubscriber()
+	if len(s.subs) >= maxSubscribers {
+		close(sub.events)
+		return sub.events, func() {}
 	}
-	s.subs[ch] = struct{}{}
-	s.mu.Unlock()
-	return ch, func() {
+	for _, ev := range s.backlog {
+		sub.enqueue(ev)
+	}
+	s.subs[sub] = struct{}{}
+	go sub.run(s.done)
+	return sub.events, func() {
 		s.mu.Lock()
-		delete(s.subs, ch)
+		sub.stop()
+		// Release retained bytes before making capacity available to a new tab.
+		<-sub.finished
+		delete(s.subs, sub)
 		s.mu.Unlock()
 	}
 }
@@ -970,12 +1001,13 @@ func (s *Session) call(ctx context.Context, cmd map[string]any) (rpcResponse, er
 // state, detects artifact saves, and broadcasts every event to subscribers.
 func (s *Session) readLoop(stdout io.Reader) {
 	defer close(s.readDone)
-	reader := bufio.NewReaderSize(stdout, 1<<20)
+	reader := bufio.NewReaderSize(stdout, 64<<10)
 	for {
-		line, err := reader.ReadBytes('\n')
-		line = bytes.TrimRight(line, "\r\n")
-		if len(line) > 0 {
-			s.handleLine(line)
+		line, oversized, err := readEventLine(reader)
+		if oversized {
+			slog.Warn("discarded oversized pi event", slog.String("session_id", s.ID), slog.Int("limit_bytes", maxEventLineBytes))
+		} else if len(line) > 0 {
+			s.handleLine(bytes.TrimRight(line, "\r\n"))
 		}
 		if err != nil {
 			return
@@ -1228,19 +1260,30 @@ const maxSessionFileBytes = 64 << 20
 // line per entry, so a read that races an append can end partway through a
 // line, and half a line is not an entry: only whole lines are returned.
 func readSessionFile(path string) (string, error) {
-	b, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil
 	}
 	if err != nil {
 		return "", err
 	}
+	defer file.Close()
+	return readSessionContents(file, maxSessionFileBytes)
+}
+
+// Read one overflow byte before inspecting complete lines: an oversized
+// unfinished entry must not bypass the limit or allocate its full contents.
+func readSessionContents(reader io.Reader, limit int64) (string, error) {
+	b, err := io.ReadAll(io.LimitReader(reader, limit+1))
+	if err != nil {
+		return "", err
+	}
+	if int64(len(b)) > limit {
+		return "", fmt.Errorf("session file exceeds the %d bytes kept", limit)
+	}
 	end := bytes.LastIndexByte(b, '\n')
 	if end < 0 {
 		return "", nil
-	}
-	if end+1 > maxSessionFileBytes {
-		return "", fmt.Errorf("session file is %d bytes, over the %d kept", end+1, maxSessionFileBytes)
 	}
 	return string(b[:end+1]), nil
 }
@@ -1248,15 +1291,21 @@ func readSessionFile(path string) (string, error) {
 func (s *Session) broadcast(line []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.backlog = append(s.backlog, line)
-	if len(s.backlog) > maxBacklog {
-		s.backlog = s.backlog[len(s.backlog)-maxBacklog:]
+	if len(line) > maxEventLineBytes {
+		return
 	}
-	for ch := range s.subs {
-		select {
-		case ch <- line:
-		default: // slow subscriber: drop rather than block the read loop
-		}
+	// Own the retained bytes: a trimmed record may otherwise keep a much
+	// larger reader allocation alive than the byte budget accounts for.
+	line = bytes.Clone(line)
+	s.backlog = append(s.backlog, line)
+	s.backlogBytes += len(line)
+	for len(s.backlog) > maxBacklog || s.backlogBytes > maxEventQueueBytes {
+		s.backlogBytes -= len(s.backlog[0])
+		s.backlog[0] = nil
+		s.backlog = s.backlog[1:]
+	}
+	for sub := range s.subs {
+		sub.enqueue(line)
 	}
 }
 
@@ -1292,9 +1341,9 @@ func (s *Session) finish() {
 	s.mu.Unlock()
 	// The credential dies with the process that held it.
 	s.mgr.cfg.Credentials.Revoke(s.grant)
-	close(s.done)
 	ev, _ := json.Marshal(map[string]string{"type": "exhibit_session_closed"})
 	s.broadcast(ev)
+	close(s.done)
 	go s.removeScratch()
 }
 

@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +22,7 @@ func newDetachedSession(t *testing.T, artifactID string) *Session {
 	return &Session{
 		ID:      "test-session",
 		grant:   grant,
-		subs:    map[chan []byte]struct{}{},
+		subs:    map[*eventSubscriber]struct{}{},
 		pending: map[string]chan rpcResponse{},
 		done:    make(chan struct{}),
 	}
@@ -36,17 +37,22 @@ func feed(t *testing.T, s *Session, line string) []map[string]any {
 
 	s.handleLine([]byte(line))
 
+	// Consume the events published so far without assuming synchronous fanout.
+	s.mu.Lock()
+	count := len(s.backlog)
+	s.mu.Unlock()
 	var out []map[string]any
-	for {
+	for i := 0; i < count; i++ {
 		select {
 		case raw := <-events:
 			var ev map[string]any
 			require.NoError(t, json.Unmarshal(raw, &ev))
 			out = append(out, ev)
-		default:
-			return out
+		case <-time.After(time.Second):
+			t.Fatal("published events did not arrive")
 		}
 	}
+	return out
 }
 
 // find returns the first broadcast event of the given type, or nil.

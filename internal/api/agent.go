@@ -196,7 +196,7 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 // One mapping for both creators — the chat surface and the widget button —
 // so they cannot disagree about what a limit looks like.
 func writeAgentCreateError(w http.ResponseWriter, r *http.Request, op string, err error) {
-	if errors.Is(err, agent.ErrSessionLimit) {
+	if errors.Is(err, agent.ErrSessionLimit) || errors.Is(err, agent.ErrInstanceSessionLimit) {
 		writeError(w, http.StatusTooManyRequests, err.Error())
 		return
 	}
@@ -342,20 +342,10 @@ func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if strings.TrimSpace(req.Message) == "" {
-		writeError(w, http.StatusBadRequest, "message is required")
+	images, err := req.validate()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-	images := make([]agent.ImageContent, 0, len(req.Images))
-	for _, im := range req.Images {
-		if im.Data == "" {
-			continue
-		}
-		mt := im.MimeType
-		if mt == "" {
-			mt = "image/png"
-		}
-		images = append(images, agent.ImageContent{Type: "image", Data: im.Data, MimeType: mt})
 	}
 	descriptors := make([]string, 0, len(req.Snippets))
 	for _, descriptor := range req.Snippets {
@@ -533,7 +523,10 @@ func (ro *Router) agentEvents(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		select {
-		case ev := <-events:
+		case ev, open := <-events:
+			if !open {
+				return
+			}
 			fmt.Fprintf(w, "data: %s\n\n", ev)
 			flusher.Flush()
 		case <-heartbeat.C:
@@ -541,17 +534,6 @@ func (ro *Router) agentEvents(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		case <-r.Context().Done():
 			return
-		case <-s.Done():
-			// Drain anything already queued (incl. exhibit_session_closed).
-			for {
-				select {
-				case ev := <-events:
-					fmt.Fprintf(w, "data: %s\n\n", ev)
-				default:
-					flusher.Flush()
-					return
-				}
-			}
 		}
 	}
 }
