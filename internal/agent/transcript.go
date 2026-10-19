@@ -77,13 +77,20 @@ func ProjectSessionFile(file string) []TranscriptMessage {
 	var msgs []piMessage
 	for _, line := range bytes.Split([]byte(file), []byte("\n")) {
 		var entry struct {
-			Type    string    `json:"type"`
-			Message piMessage `json:"message"`
+			Type       string    `json:"type"`
+			CustomType string    `json:"customType"`
+			Message    piMessage `json:"message"`
 		}
-		if json.Unmarshal(line, &entry) != nil || entry.Type != "message" {
+		if json.Unmarshal(line, &entry) != nil {
 			continue
 		}
-		msgs = append(msgs, entry.Message)
+		if entry.Type == "custom" && entry.CustomType == "exhibit_source_read" {
+			// A host-prepared read is recorded explicitly, never attributed to
+			// the model as a tool it chose to call. Snapshot bytes stay private.
+			msgs = append(msgs, piMessage{Role: "prepared_source"})
+		} else if entry.Type == "message" {
+			msgs = append(msgs, entry.Message)
+		}
 	}
 	return project(msgs)
 }
@@ -111,6 +118,8 @@ func project(msgs []piMessage) []TranscriptMessage {
 	out := []TranscriptMessage{}
 	for _, m := range msgs {
 		switch m.Role {
+		case "prepared_source":
+			out = append(out, TranscriptMessage{Role: "tool", Text: "Prepared artifact source"})
 		case "user":
 			text, images := userContent(m.Content)
 			out = append(out, TranscriptMessage{Role: "user", Text: text, Images: images})

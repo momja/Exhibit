@@ -20,17 +20,16 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
 // The order agent.tmpl loads them in.
 const AGENT_JS = [
-  path.join(ASSETS, "api.js"),
   path.join(ASSETS, "state-api.js"),
   path.join(ASSETS, "network-prompt.js"),
-  path.join(ASSETS, "agent.js")
+
 ];
 
 const ID = "art-1";
 
 // artifact is declared by agent.tmpl's inline bootstrap, not by agent.js:
 // `let artifact = {id,title}` when editing an existing one, else null.
-function loadAgent({ responses = [], artifact = { id: ID, title: "Artifact" } } = {}) {
+async function loadAgent({ responses = [], artifact = { id: ID, title: "Artifact" } } = {}) {
   const api = recordingApi(responses);
   const page = loadPageScript(AGENT_JS, {
     // The full bootstrap agent.tmpl renders. BYOK true keeps the key markup in
@@ -45,6 +44,9 @@ function loadAgent({ responses = [], artifact = { id: ID, title: "Artifact" } } 
     "net-modal": { hidden: true },
     "key-modal": { hidden: true }
   });
+  const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
+    ['ensureSession', 'handleAgentEvent']);
+  Object.assign(page.context, page.window, bindings);
   return { ...page, api };
 }
 
@@ -53,8 +55,8 @@ const report = (origin, directive = "img-src") => ({
 });
 const originCalls = (api) => api.calls.filter((c) => c.path.includes("/origins"));
 
-test("the agent page installs the prompt against its own preview frame", () => {
-  const { byId } = loadAgent();
+test("the agent page installs the prompt against its own preview frame", async () => {
+  const { byId } = await loadAgent();
   // Installed at all: the module refuses to install twice and no-ops without
   // the dialog, so a page that forgot the partial would silently have nothing.
   assert.ok(byId("net-modal"), "the shared dialog must be present");
@@ -62,7 +64,7 @@ test("the agent page installs the prompt against its own preview frame", () => {
 });
 
 test("a blocked origin in the preview opens the prompt", async () => {
-  const page = loadAgent();
+  const page = await loadAgent();
   // The preview frame is #pv-frame here, not the detail page's bare <iframe>.
   const frame = page.byId("pv-frame");
   frame.contentWindow = { posted: [], postMessage(m) { this.posted.push(m); } };
@@ -75,7 +77,7 @@ test("a blocked origin in the preview opens the prompt", async () => {
 });
 
 test("Allow writes the decision and re-renders the pane rather than reassigning src", async () => {
-  const page = loadAgent();
+  const page = await loadAgent();
   const frame = page.byId("pv-frame");
   frame.contentWindow = { posted: [], postMessage(m) { this.posted.push(m); } };
   const before = frame.src;
@@ -100,7 +102,7 @@ test("Allow writes the decision and re-renders the pane rather than reassigning 
 // about, and the id the route would need does not exist. Prompting would ask
 // about an origin with nowhere to record the answer.
 test("no prompt before the agent has created an artifact", async () => {
-  const page = loadAgent({ artifact: null });
+  const page = await loadAgent({ artifact: null });
   const frame = page.byId("pv-frame");
   frame.contentWindow = { posted: [], postMessage() {} };
 
@@ -110,7 +112,7 @@ test("no prompt before the agent has created an artifact", async () => {
 });
 
 test("a report for a frame that is not the preview is ignored", async () => {
-  const page = loadAgent();
+  const page = await loadAgent();
   const frame = page.byId("pv-frame");
   frame.contentWindow = { posted: [], postMessage() {} };
 
@@ -118,8 +120,8 @@ test("a report for a frame that is not the preview is ignored", async () => {
   assert.equal(page.byId("net-modal").hidden, true);
 });
 
-test("the host announces itself to each swapped-in preview frame", () => {
-  const page = loadAgent();
+test("the host announces itself to each swapped-in preview frame", async () => {
+  const page = await loadAgent();
   const frame = page.byId("pv-frame");
   frame.contentWindow = { posted: [], postMessage(m) { this.posted.push(m); } };
 
@@ -136,7 +138,7 @@ test("the host announces itself to each swapped-in preview frame", () => {
 // sessions against the per-owner limit — and the request goes out with
 // keepalive, because an ordinary fetch would be cancelled with the page.
 test("leaving the page closes the chat session", async () => {
-  const page = loadAgent({ responses: [
+  const page = await loadAgent({ responses: [
     { ok: true, status: 200, json: async () => ({ configured: false }) },  // boot's key status
     { ok: true, status: 201, json: async () => ({ id: "sess-1", sse_ticket: "tkt" }) }
   ] });
@@ -150,8 +152,8 @@ test("leaving the page closes the chat session", async () => {
 // av-gust: the usage-policy guardrail. A blocked message never starts a turn,
 // so the chat's only sign of it is this event, carrying the server's fixed
 // reply. It must render as a message and leave the streaming state alone.
-test("a guardrail block renders the server's reply without starting a turn", () => {
-  const { byId, context } = loadAgent();
+test("a guardrail block renders the server's reply without starting a turn", async () => {
+  const { byId, context } = await loadAgent();
   context.handleAgentEvent({ type: "exhibit_guard_blocked", message: "Not allowed here." });
   const shown = byId("messages").children.map((c) => c.textContent);
   assert.ok(shown.includes("Not allowed here."), "the reply must appear in the chat: " + JSON.stringify(shown));

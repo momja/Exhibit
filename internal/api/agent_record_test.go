@@ -96,13 +96,13 @@ func TestAConversationIsKeptWithTheVersionItLeftBehind(t *testing.T) {
 	header := strings.SplitN(kept.SessionFile, "\n", 2)[0]
 	assert.Contains(t, header, `"cwd":"/"`)
 	assert.Contains(t, kept.SessionFile, `"role":"user"`)
-	assert.Contains(t, kept.SessionFile, `"name":"get_artifact"`)
+	assert.Contains(t, kept.SessionFile, `"customType":"exhibit_source_read"`)
 
 	// And what a person sees of it is what they saw live.
 	msgs := agent.Messages(kept)
 	require.GreaterOrEqual(t, len(msgs), 4, "%+v", msgs)
 	assert.Equal(t, agent.TranscriptMessage{Role: "user", Text: "make the button purple"}, msgs[0])
-	assert.Equal(t, agent.TranscriptMessage{Role: "tool", Text: "Reading artifact source"}, msgs[1])
+	assert.Equal(t, agent.TranscriptMessage{Role: "tool", Text: "Prepared artifact source"}, msgs[1])
 	assert.Equal(t, agent.TranscriptMessage{Role: "tool", Text: "Writing artifact"}, msgs[2])
 	assert.Equal(t, "assistant", msgs[len(msgs)-1].Role)
 }

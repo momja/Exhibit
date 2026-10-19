@@ -1,3 +1,6 @@
+import { apiFetch, apiEventSource } from './api-module.js';
+import { createSessionPreparation, createTypingPreparation } from './session-preparation.js';
+
 /* Agent chat surface script (Exh-jlbt). Served from the app origin at
  * /assets/gallery/agent.js. The page's inline bootstrap <script> defines the
  * per-request globals this file reads (and reassigns) before it loads:
@@ -228,35 +231,63 @@ async function deleteKey() {
 }
 
 // --- Session + SSE --------------------------------------------------------
+let lifecycle = 0;
+let switchingConversation = false;
+let sending = false;
+let leaving = false;
+const preparation = createSessionPreparation({
+  async start() {
+    const body = artifact ? {artifact_id: artifact.id} : {};
+    const r = await apiFetch('/api/agent/sessions', {method: 'POST', body: JSON.stringify(body)});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const error = new Error(d.error || 'Could not start an agent session.');
+      error.status = r.status;
+      throw error;
+    }
+    return d;
+  },
+  close(session) {
+    apiFetch('/api/agent/sessions/' + encodeURIComponent(session.id),
+      {method: 'DELETE', keepalive: leaving}).catch(() => {});
+  }
+});
+const typingPreparation = createTypingPreparation({
+  prepare: preparation.prepare,
+  ready: () => keyConfigured && !sessionId && !sending && !switchingConversation && !leaving
+    && !document.getElementById('pane-chat').classList.contains('history-open')
+});
+function invalidatePreparation() {
+  lifecycle++;
+  typingPreparation.reset();
+  preparation.discard();
+}
 function resetSession() {
+  invalidatePreparation();
   closeEvents();
-  if (sessionId) { apiFetch('/api/agent/sessions/' + sessionId, {method:'DELETE'}).catch(()=>{}); }
+  if (sessionId) { apiFetch('/api/agent/sessions/' + sessionId, {method:'DELETE', keepalive: leaving}).catch(()=>{}); }
   sessionId = null;
   setStreaming(false);
 }
-
-// Leaving the page closes the session too (av-99f4): the idle reaper would
-// otherwise hold it for 30 minutes, and ten reloads would stack sessions
-// against the per-owner limit. `keepalive` lets the request outlive the page.
-window.addEventListener('pagehide', () => {
-  if (sessionId) {
-    apiFetch('/api/agent/sessions/' + sessionId, {method: 'DELETE', keepalive: true}).catch(() => {});
-  }
-});
+window.addEventListener('pagehide', () => { leaving = true; resetSession(); });
+window.addEventListener('pageshow', () => { leaving = false; });
 
 async function ensureSession() {
   if (sessionId) return true;
-  const body = artifact ? {artifact_id: artifact.id} : {};
-  const r = await apiFetch('/api/agent/sessions', {method:'POST', body: JSON.stringify(body)});
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    addMsg('err', d.error || 'Could not start an agent session.');
-    if (r.status === 412) openKeyModal();
+  const current = lifecycle;
+  try {
+    const d = await preparation.claim();
+    if (!d || current !== lifecycle) return false;
+    preparation.release();
+    sessionId = d.id;
+    connectEvents(d.sse_ticket);
+    return true;
+  } catch (error) {
+    if (current !== lifecycle) return false;
+    addMsg('err', error.message);
+    if (error.status === 412) openKeyModal();
     return false;
   }
-  sessionId = d.id;
-  connectEvents(d.sse_ticket);
-  return true;
 }
 
 // api.js credentials the stream: a single-use, seconds-lived, session-bound
@@ -282,15 +313,19 @@ function closeEvents() {
 }
 
 function connectEvents(ticket) {
-  eventSource = apiEventSource(
-    '/api/agent/sessions/' + encodeURIComponent(sessionId) + '/events', ticket);
-  eventSource.onopen = () => { eventsRetryMs = EVENTS_RETRY_MS; };
-  eventSource.onmessage = (e) => {
+  const watching = sessionId;
+  const source = apiEventSource(
+    '/api/agent/sessions/' + encodeURIComponent(watching) + '/events', ticket);
+  eventSource = source;
+  const current = () => eventSource === source && sessionId === watching;
+  source.onopen = () => { if (current()) eventsRetryMs = EVENTS_RETRY_MS; };
+  source.onmessage = (e) => {
+    if (!current()) return;
     let ev;
     try { ev = JSON.parse(e.data); } catch { return; }
     handleAgentEvent(ev);
   };
-  eventSource.onerror = () => { reconnectEvents(); };
+  source.onerror = () => { if (current()) reconnectEvents(); };
 }
 
 function reconnectEvents() {
@@ -442,6 +477,9 @@ function handleAgentEvent(ev) {
       addMsg('err', ev.message || 'Agent spend limit reached.');
       setStreaming(false);
       break;
+    case 'exhibit_source_prepared':
+      addMsg('sys', 'Prepared artifact source.');
+      break;
     case 'extension_error':
       addMsg('err', 'Extension error: ' + (ev.error || 'unknown'));
       break;
@@ -492,38 +530,48 @@ async function stopAgent() {
 // --- Sending ---------------------------------------------------------------
 async function send() {
   const text = inputEl.value.trim();
-  if (!text) return;
+  if (!text || sending || switchingConversation || leaving) return;
   if (!keyConfigured) { openKeyModal(); return; }
-  if (!(await ensureSession())) return;
+  sending = true;
+  typingPreparation.reset();
+  const acceptedSnippets = pendingSnippets.slice();
+  const current = lifecycle;
+  try {
+    if (!(await ensureSession()) || current !== lifecycle) return;
+    const acceptedSession = sessionId;
 
-  const images = pendingSnippets.filter(s => s.image).map(s => ({data: s.image.data, mime_type: s.image.mimeType}));
-  // A snippet descriptor carries the picked element's outerHTML — artifact
-  // content, i.e. untrusted. It travels as its own field so the server can
-  // hand it to the model as a tool result (av-5s7g); splicing it into `message`
-  // here would hand it to the model as part of the user's instruction.
-  const snippets = pendingSnippets.map(s => describeSnippet(s.descriptor));
+    const images = acceptedSnippets.filter(s => s.image).map(s => ({data: s.image.data, mime_type: s.image.mimeType}));
+    // A snippet descriptor carries the picked element's outerHTML — artifact
+    // content, i.e. untrusted. It travels as its own field so the server can
+    // hand it to the model as a tool result (av-5s7g); splicing it into `message`
+    // here would hand it to the model as part of the user's instruction.
+    const snippets = acceptedSnippets.map(s => describeSnippet(s.descriptor));
 
-  const bubble = addMsg('user', text);
-  pendingSnippets.forEach(s => {
-    if (s.thumbUrl) {
-      const img = document.createElement('img');
-      img.className = 'snip-thumb';
-      img.src = s.thumbUrl;
-      bubble.appendChild(img);
+    const bubble = addMsg('user', text);
+    acceptedSnippets.forEach(s => {
+      if (s.thumbUrl) {
+        const img = document.createElement('img');
+        img.className = 'snip-thumb';
+        img.src = s.thumbUrl;
+        bubble.appendChild(img);
+      }
+    });
+    pendingSnippets = pendingSnippets.filter(s => !acceptedSnippets.includes(s));
+    renderSnippetChips();
+    if (inputEl.value.trim() === text) inputEl.value = '';
+    updateComposer();
+
+    const r = await apiFetch('/api/agent/sessions/' + acceptedSession + '/prompt', {
+      method: 'POST',
+      body: JSON.stringify({message: text, images, snippets})
+    });
+    if (!r.ok && current === lifecycle) {
+      const d = await r.json().catch(() => ({}));
+      addMsg('err', d.error || 'The agent rejected the message.');
     }
-  });
-  clearSnippets();
-  inputEl.value = '';
-  updateComposer();
-
-  const r = await apiFetch('/api/agent/sessions/' + sessionId + '/prompt', {
-    method: 'POST',
-    body: JSON.stringify({message: text, images, snippets})
-  });
-  if (!r.ok) {
-    const d = await r.json().catch(() => ({}));
-    addMsg('err', d.error || 'The agent rejected the message.');
-  }
+  } catch (error) {
+    if (current === lifecycle) addMsg('err', error.message || 'Could not send the message.');
+  } finally { sending = false; }
 }
 
 function describeSnippet(d) {
@@ -546,7 +594,7 @@ function updateComposer() {
   inputEl.style.height = 'auto';
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
 }
-inputEl.addEventListener('input', updateComposer);
+inputEl.addEventListener('input', () => { updateComposer(); typingPreparation.update(inputEl.value); });
 
 // --- Mobile panes (av-td4y) ------------------------------------------------
 // Below 640px the chat and the preview each take the whole screen and the
@@ -607,7 +655,10 @@ const historyBtn = document.getElementById('history-btn');
 // button appears when the page opened on an artifact or the agent has made one.
 function syncHistoryButton() { historyBtn.hidden = !artifact; }
 
-function openHistory() { chatEl.classList.add('history-open'); }
+function openHistory() {
+  invalidatePreparation();
+  chatEl.classList.add('history-open');
+}
 function closeHistory() { chatEl.classList.remove('history-open'); }
 
 // --- Continuing a conversation (av-b4yh) ------------------------------------
@@ -623,67 +674,80 @@ document.getElementById('history').addEventListener('click', (e) => {
 async function resumeConversation(conversationId, rollbackTo) {
   const statusEl = document.getElementById('resume-status');
   const say = (text) => { if (statusEl) statusEl.textContent = text; };
-  if (!artifact) return;
-  if (streaming) {
+  if (!artifact || switchingConversation) return;
+  if (streaming || sending) {
     say('The agent is still working. Stop it, or wait for it to finish, before switching conversations.');
     return;
   }
-  say('Starting…');
+  invalidatePreparation();
+  const current = lifecycle;
+  switchingConversation = true;
+  try {
+    say('Starting…');
 
-  // Start the conversation before touching the artifact, so a refusal — no key,
-  // no agent — costs nothing: the page's own chat is still there and nothing
-  // has been rolled back.
-  const res = await apiFetch('/api/agent/sessions', {
-    method: 'POST',
-    body: JSON.stringify({artifact_id: artifact.id, resume_session_id: conversationId})
-  });
-  const started = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    say(started.error || 'Could not continue this conversation.');
-    if (res.status === 412) openKeyModal();
-    return;
-  }
-  // A conversation that is already running (this page's own, or a second tab's)
-  // is attached to rather than restarted; otherwise the page's live session
-  // gives way to the one being continued.
-  if (started.id !== sessionId) {
-    const previous = sessionId;
-    closeEvents();
-    if (previous) apiFetch('/api/agent/sessions/' + previous, {method: 'DELETE'}).catch(() => {});
-    sessionId = started.id;
-    connectEvents(started.sse_ticket);
-  }
+    // Start the conversation before touching the artifact, so a refusal — no key,
+    // no agent — costs nothing: the page's own chat is still there and nothing
+    // has been rolled back.
+    const res = await apiFetch('/api/agent/sessions', {
+      method: 'POST',
+      body: JSON.stringify({artifact_id: artifact.id, resume_session_id: conversationId})
+    });
+    const started = await res.json().catch(() => ({}));
+    if (current !== lifecycle) {
+      if (res.ok && started.id !== sessionId) apiFetch('/api/agent/sessions/' + encodeURIComponent(started.id),
+        {method: 'DELETE', keepalive: leaving}).catch(() => {});
+      return;
+    }
+    if (!res.ok) {
+      say(started.error || 'Could not continue this conversation.');
+      if (res.status === 412) openKeyModal();
+      return;
+    }
+    // A conversation that is already running (this page's own, or a second tab's)
+    // is attached to rather than restarted; otherwise the page's live session
+    // gives way to the one being continued.
+    if (started.id !== sessionId) {
+      const previous = sessionId;
+      closeEvents();
+      if (previous) apiFetch('/api/agent/sessions/' + previous, {method: 'DELETE'}).catch(() => {});
+      sessionId = started.id;
+      connectEvents(started.sse_ticket);
+    }
 
-  if (rollbackTo) {
-    const back = await apiFetch(
-      '/api/artifacts/' + encodeURIComponent(artifact.id) + '/versions/' + rollbackTo + '/restore',
-      {method: 'POST'});
-    if (!back.ok) {
-      const why = await back.json().catch(() => ({}));
-      // A missing historical blob is also a 409. Only the explicit
-      // already-current response means there was nothing to put back.
-      if (back.status !== 409 || why.code !== 'already_current') {
-        resetSession();
-        say('Could not roll back: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
-        return;
+    if (rollbackTo) {
+      const back = await apiFetch(
+        '/api/artifacts/' + encodeURIComponent(artifact.id) + '/versions/' + rollbackTo + '/restore',
+        {method: 'POST'});
+      if (current !== lifecycle) return;
+      if (!back.ok) {
+        const why = await back.json().catch(() => ({}));
+        // A missing historical blob is also a 409. Only the explicit
+        // already-current response means there was nothing to put back.
+        if (back.status !== 409 || why.code !== 'already_current') {
+          resetSession();
+          say('Could not roll back: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
+          return;
+        }
       }
     }
-  }
 
-  // What was said, as the fragment drew it, becomes the chat: the conversation
-  // being continued, with the next message after it.
-  const past = document.getElementById('history-messages');
-  messagesEl.innerHTML = past ? past.innerHTML : '';
-  addMsg('sys', (rollbackTo ? 'Rolled back to v' + rollbackTo + '. ' : '') +
-    'Continuing this conversation. The agent will read the artifact again before it changes anything.');
-  closeHistory();
-  // The pane shows the artifact the conversation now continues on. After a
-  // rollback that is a new version, and when a version was being looked at first
-  // it is the artifact as it is — either way the pane re-renders, and a version
-  // that was only ever looked at gives way rather than sitting beside a
-  // conversation that is no longer about it.
-  if (rollbackTo || viewingVersion()) refreshPreview();
-  if (rollbackTo) nudgePreview();
+    // What was said, as the fragment drew it, becomes the chat: the conversation
+    // being continued, with the next message after it.
+    const past = document.getElementById('history-messages');
+    messagesEl.innerHTML = past ? past.innerHTML : '';
+    addMsg('sys', (rollbackTo ? 'Rolled back to v' + rollbackTo + '. ' : '') +
+      'Continuing this conversation. The agent will read the artifact again before it changes anything.');
+    closeHistory();
+    // The pane shows the artifact the conversation now continues on. After a
+    // rollback that is a new version, and when a version was being looked at first
+    // it is the artifact as it is — either way the pane re-renders, and a version
+    // that was only ever looked at gives way rather than sitting beside a
+    // conversation that is no longer about it.
+    if (rollbackTo || viewingVersion()) refreshPreview();
+    if (rollbackTo) nudgePreview();
+  } catch (error) {
+    if (current === lifecycle) say(error.message || 'Could not continue this conversation.');
+  } finally { switchingConversation = false; }
 }
 
 // --- Looking at an earlier version (av-vw7r) -----------------------------------
@@ -906,3 +970,7 @@ function briefToMessage(brief) {
   if (!configured) { briefAwaitingKey = !!opening; openKeyModal(); return; }
   if (opening) send();
 })();
+
+// Inline handlers and htmx expressions are the legacy template boundary.
+Object.assign(window, { openKeyModal, closeKeyModal, providerChanged, saveKey, deleteKey,
+  showPane, openHistory, closeHistory, send, stopAgent, toggleSnippet, previewArtifactId });

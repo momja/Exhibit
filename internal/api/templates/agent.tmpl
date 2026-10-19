@@ -142,7 +142,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 {{/* components.js carries the widget-tile health watcher (av-fafu); the
      preview pane renders a tile, so it needs it like the gallery does. */}}
 <script src="/assets/gallery/components.js"></script>
-<script src="/assets/gallery/agent.js"></script>
+<script type="module" src="/assets/gallery/agent.js"></script>
 <script type="module" src="/assets/gallery/agent-resize.js"></script>
 <script type="module" src="/assets/gallery/message-actions.js"></script>
 </body>

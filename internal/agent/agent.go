@@ -41,7 +41,7 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-//go:embed ext/exhibit.ts ext/edit.ts ext/guard.ts
+//go:embed ext/exhibit.ts ext/edit.ts ext/guard.ts ext/source-context.ts
 var extFS embed.FS
 
 // Config for the Manager.
@@ -142,6 +142,13 @@ func New(cfg Config, st store.Store) (*Manager, error) {
 	}
 	if err := os.WriteFile(filepath.Join(cfg.WorkRoot, "edit.ts"), editSrc, 0o644); err != nil {
 		return nil, fmt.Errorf("materialize exhibit edit engine: %w", err)
+	}
+	sourceContext, err := extFS.ReadFile("ext/source-context.ts")
+	if err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(filepath.Join(cfg.WorkRoot, "source-context.ts"), sourceContext, 0o644); err != nil {
+		return nil, fmt.Errorf("materialize source context: %w", err)
 	}
 	// guard.ts is materialized whether or not a guardrail is configured; it is
 	// loaded into a session only when one is (av-gust).
@@ -393,7 +400,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		pending:           map[string]chan rpcResponse{},
 		done:              make(chan struct{}),
 		lastActive:        time.Now(),
+		prepared:          true,
 	}
+	s.preparationTimer = time.AfterFunc(PreparedSessionLifetime, s.expirePreparation)
 	// Publish the session before its process-exit cleanup can retire it. That
 	// cleanup takes the same mutex, including when Pi exits during startup.
 	m.mu.Lock()
@@ -593,6 +602,40 @@ func (m *Manager) reapIdle(cutoff time.Time) {
 	}
 }
 
+// PreparedSessionLifetime bounds unclaimed sidecars even when the browser
+// disappears before it receives their startup response.
+const PreparedSessionLifetime = 90 * time.Second
+
+func (s *Session) expirePreparation() {
+	s.mu.Lock()
+	expired := s.prepared && !s.closed && !s.stopping
+	if expired && s.promptInFlight {
+		s.preparationExpired = true
+		s.mu.Unlock()
+		return
+	}
+	if expired {
+		s.stopping = true
+	}
+	s.mu.Unlock()
+	if expired {
+		s.kill()
+	}
+}
+
+// Finish admission after the input guard has answered. A prompt admitted near
+// the preparation deadline gets to finish screening, but a refusal cannot
+// extend that deadline or claim the normal idle lifetime.
+func (s *Session) finishPromptAdmission() {
+	s.mu.Lock()
+	s.promptInFlight = false
+	expired := s.prepared && s.preparationExpired
+	s.mu.Unlock()
+	if expired {
+		s.expirePreparation()
+	}
+}
+
 // Session is one live pi subprocess plus its event fanout.
 type Session struct {
 	ID      string
@@ -648,14 +691,18 @@ type Session struct {
 	title string     // the conversation's first prompt, shortened
 	// resumeNotice is the sentence the first prompt of a resumed conversation
 	// carries (prompt.go); it is held until a prompt has actually landed.
-	resumeNotice string
-	subs         map[chan []byte]struct{}
-	backlog      [][]byte
-	pending      map[string]chan rpcResponse
-	streaming    bool
-	closed       bool
-	stopping     bool // unavailable to callers, but still draining its final writes
-	lastActive   time.Time
+	resumeNotice       string
+	subs               map[chan []byte]struct{}
+	backlog            [][]byte
+	pending            map[string]chan rpcResponse
+	streaming          bool
+	closed             bool
+	stopping           bool // unavailable to callers, but still draining its final writes
+	lastActive         time.Time
+	prepared           bool
+	promptInFlight     bool
+	preparationExpired bool
+	preparationTimer   *time.Timer
 	// guardBlocked records that the guard extension handled the prompt in
 	// flight instead of running it (av-gust): the model never saw it. Pi emits
 	// that signal before the prompt's response, so Prompt can read it once the
@@ -747,6 +794,15 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	s.promptMu.Lock()
 	defer s.promptMu.Unlock()
 
+	s.mu.Lock()
+	if s.closed || s.stopping {
+		s.mu.Unlock()
+		return fmt.Errorf("agent session closed")
+	}
+	s.promptInFlight = true
+	s.mu.Unlock()
+	defer s.finishPromptAdmission()
+
 	// The between-turns gate (av-99f4), inside promptMu so two concurrent
 	// prompts cannot both pass it. It runs before the send because a session
 	// over budget must not pay for the guardrail screen either.
@@ -813,10 +869,21 @@ func (s *Session) promptLanded(message string) {
 	if s.guardBlocked {
 		return
 	}
+	s.claimPreparationLocked()
 	if s.title == "" {
 		s.title = ConversationTitle(message)
 	}
 	s.resumeNotice = ""
+}
+
+// The caller holds s.mu. agent_start also claims the session: its accepted
+// input must survive even if the HTTP caller disconnects before RPC replies.
+func (s *Session) claimPreparationLocked() {
+	s.prepared = false
+	if s.preparationTimer != nil {
+		s.preparationTimer.Stop()
+		s.preparationTimer = nil
+	}
 }
 
 // writeSelection makes selection.json say exactly what the user selected with
@@ -939,6 +1006,13 @@ func (s *Session) handleLine(line []byte) {
 		return
 	}
 
+	if probe.Type == "extension_ui_request" {
+		var message string
+		if json.Unmarshal(probe.Message, &message) == nil && message == "exhibit_source:prepared" {
+			s.broadcast([]byte(`{"type":"exhibit_source_prepared"}`))
+			return
+		}
+	}
 	if verb, detail, ok := guardSignalOf(line); ok {
 		s.handleGuardSignal(verb, detail)
 		return
@@ -959,6 +1033,7 @@ func (s *Session) handleLine(line []byte) {
 	switch probe.Type {
 	case "agent_start":
 		s.mu.Lock()
+		s.claimPreparationLocked()
 		s.streaming = true
 		s.lastActive = time.Now()
 		s.mu.Unlock()
@@ -1196,6 +1271,12 @@ func (s *Session) drainStderr(stderr io.Reader) {
 
 // finish marks the session closed after subprocess exit and tells subscribers.
 func (s *Session) finish() {
+	s.mu.Lock()
+	if s.preparationTimer != nil {
+		s.preparationTimer.Stop()
+		s.preparationTimer = nil
+	}
+	s.mu.Unlock()
 	// Whatever the response in flight had reported is flushed first: a
 	// subprocess killed mid-turn never sends message_end, and that spend is
 	// exactly the spend this ticket exists to attribute (av-2yws).
@@ -1238,6 +1319,12 @@ func (s *Session) removeScratch() {
 }
 
 func (s *Session) kill() {
+	s.mu.Lock()
+	if s.preparationTimer != nil {
+		s.preparationTimer.Stop()
+		s.preparationTimer = nil
+	}
+	s.mu.Unlock()
 	s.markStopping()
 	s.mgr.cfg.Credentials.Revoke(s.grant)
 	_ = s.stdin.Close()

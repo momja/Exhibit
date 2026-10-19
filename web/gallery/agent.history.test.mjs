@@ -14,15 +14,14 @@ import { loadPageScript, recordingApi } from "./testdom.mjs";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
 const AGENT_JS = [
-  path.join(ASSETS, "api.js"),
   path.join(ASSETS, "state-api.js"),
   path.join(ASSETS, "network-prompt.js"),
-  path.join(ASSETS, "agent.js")
+
 ];
 
-function loadAgent({ artifact = null } = {}) {
+async function loadAgent({ artifact = null } = {}) {
   const api = recordingApi([]);
-  return loadPageScript(AGENT_JS, {
+  const page = loadPageScript(AGENT_JS, {
     TOKEN: "", READ_ONLY: false, BYOK: true, artifact,
     apiFetch: api.apiFetch, apiEventSource: () => ({ close() {} }),
     EventSource: function () { return { close() {} }; },
@@ -30,20 +29,24 @@ function loadAgent({ artifact = null } = {}) {
     matchMedia: () => ({ matches: false, addEventListener() {} }),
     alert: () => {}, confirm: () => true
   }, { "net-modal": { hidden: true }, "key-modal": { hidden: true } });
+  const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
+    ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion']);
+  Object.assign(page.context, page.window, bindings);
+  return page;
 }
 
-test("a page that is not about an artifact has no history to offer", () => {
-  const { byId } = loadAgent({ artifact: null });
+test("a page that is not about an artifact has no history to offer", async () => {
+  const { byId } = await loadAgent({ artifact: null });
   assert.equal(byId("history-btn").hidden, true);
 });
 
-test("a page opened on an artifact offers its history", () => {
-  const { byId } = loadAgent({ artifact: { id: "art-1", title: "Counter" } });
+test("a page opened on an artifact offers its history", async () => {
+  const { byId } = await loadAgent({ artifact: { id: "art-1", title: "Counter" } });
   assert.equal(byId("history-btn").hidden, false);
 });
 
-test("opening the history pane takes over the chat, and closing hands it back", () => {
-  const { byId, context } = loadAgent({ artifact: { id: "art-1", title: "Counter" } });
+test("opening the history pane takes over the chat, and closing hands it back", async () => {
+  const { byId, context } = await loadAgent({ artifact: { id: "art-1", title: "Counter" } });
   const chat = byId("pane-chat");
   assert.equal(chat.classList.contains("history-open"), false);
 
@@ -54,8 +57,8 @@ test("opening the history pane takes over the chat, and closing hands it back", 
   assert.equal(chat.classList.contains("history-open"), false);
 });
 
-test("the button appears once the agent has made an artifact", () => {
-  const { byId, context } = loadAgent({ artifact: null });
+test("the button appears once the agent has made an artifact", async () => {
+  const { byId, context } = await loadAgent({ artifact: null });
   assert.equal(byId("history-btn").hidden, true);
 
   // The save event sets `artifact` and refreshes the preview, which is when the
@@ -86,6 +89,9 @@ async function boot(responses) {
     matchMedia: () => ({ matches: false, addEventListener() {} }),
     alert: () => {}, confirm: () => true
   }, { "net-modal": { hidden: true }, "key-modal": { hidden: true } });
+  const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
+    ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion']);
+  Object.assign(page.context, page.window, bindings);
   await new Promise((resolve) => setTimeout(resolve, 0));
   return { ...page, api };
 }
@@ -257,7 +263,7 @@ test("when a session ends under the page the next message starts a new one", asy
 // event an agent save fires, which the pane's hx-trigger turns into a fetch.
 function countRefreshes(page) {
   const seen = { n: 0 };
-  page.document.body.addEventListener("exhibit:artifact-saved", () => { seen.n++; });
+  page.document.body.addEventListener("exhibit:artifact-saved", async () => { seen.n++; });
   return seen;
 }
 
@@ -286,7 +292,7 @@ test("a click elsewhere in the pane leaves it alone", async () => {
 test("continuing a conversation ends a view of a version", async () => {
   const page = await boot([STARTED]);
   const refreshes = countRefreshes(page);
-  page.context.viewingVersion = () => true;
+  page.byId('version-viewer');
   page.byId("history-messages").innerHTML = '<div class="msg user">make it purple</div>';
 
   await page.context.resumeConversation("conv-1", 0);
@@ -298,7 +304,8 @@ test("continuing a conversation ends a view of a version", async () => {
 test("continuing when no version is showing does not reload the pane", async () => {
   const page = await boot([STARTED]);
   const refreshes = countRefreshes(page);
-  page.context.viewingVersion = () => false;
+  const lookup = page.document.getElementById;
+  page.document.getElementById = id => id === 'version-viewer' ? null : lookup(id);
 
   await page.context.resumeConversation("conv-1", 0);
 
@@ -309,7 +316,8 @@ test("a rollback re-renders the pane once, whether or not a version was showing"
   for (const viewing of [true, false]) {
     const page = await boot([STARTED, json(200, {})]);
     const refreshes = countRefreshes(page);
-    page.context.viewingVersion = () => viewing;
+    const lookup = page.document.getElementById;
+    page.document.getElementById = id => id === 'version-viewer' && !viewing ? null : lookup(id);
 
     await page.context.resumeConversation("conv-1", 2);
 
@@ -326,8 +334,8 @@ test("a missing historical blob is a failed rollback even with HTTP 409", async 
 
 // Streaming writes only the server template's content slot, preserving the
 // action row through deltas and creating a separate row for the next block.
-test('streamed response blocks keep their own message action shells', () => {
-  const { byId, context } = loadAgent();
+test('streamed response blocks keep their own message action shells', async () => {
+  const { byId, context } = await loadAgent();
   const shells = [];
   byId('agent-message-template').content = { firstElementChild: {
     cloneNode() {

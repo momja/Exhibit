@@ -34,6 +34,39 @@ before(async () => {
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe("versioned source reuse", () => {
+	it("adopts prepared source for edits and keeps the advanced base on the next prompt", async () => {
+		const pi = makePi();
+		const entries = [];
+		pi.appendEntry = (customType, data) => entries.push({ type: "custom", customType, data });
+		exhibitMod.default(pi);
+		const ctx = { model: { api: "openai-completions", provider: "test", id: "m" },
+			sessionManager: { getBranch: () => entries }, ui: { notify() {} } };
+		const { calls, fetch } = makeFetch({ body: "<h1>old</h1>", patchResult: PATCH_OK });
+		await withFetch(async (url, opts) => {
+			if (opts.method === "GET" && String(url).endsWith("/artifact-1")) {
+				return { ok: true, text: async () => JSON.stringify({ source_revision: calls.some(c => c.method === "PATCH") ? "source-2" : "source-1" }) };
+			}
+			return fetch(url, opts);
+		}, async () => {
+			await pi.hooks.get("session_start")({}, ctx);
+			await assert.rejects(pi.tools.get("edit_artifact").execute("early", { edits: [{ oldText: "old", newText: "new" }] }), /get_artifact/);
+			const first = { role: "user", content: [{ type: "text", text: "change it" }], timestamp: 1 };
+			entries.push({ type: "message", id: "u1", message: first });
+			const prepared = await pi.hooks.get("context")({ messages: [first] }, ctx);
+			assert.equal(prepared.messages[2].role, "toolResult");
+			await pi.tools.get("edit_artifact").execute("edit", { edits: [{ oldText: "old", newText: "new" }] });
+			const second = { role: "user", content: [{ type: "text", text: "continue" }], timestamp: 2 };
+			entries.push({ type: "message", id: "u2", message: second });
+			const next = await pi.hooks.get("context")({ messages: [first, second] }, ctx);
+			assert.equal(next.messages.filter(m => m.role === "toolResult").length, 1, "retained base is replayed without another full source projection");
+			await pi.tools.get("edit_artifact").execute("edit2", { edits: [{ oldText: "new", newText: "latest" }] });
+		});
+		assert.equal(calls.filter(c => c.url.includes("?body=true")).length, 1);
+		const patches = calls.filter(c => c.method === "PATCH").map(c => JSON.parse(c.body));
+		assert.equal(patches[1].expected_source_revision, "source-2");
+		assert.deepEqual(patches[1].edits, [{ oldText: "new", newText: "latest" }]);
+	});
+
 	it("advances retained source and revision without another read", async () => {
 		const pi = makePi();
 		exhibitMod.default(pi);
@@ -83,12 +116,15 @@ describe("versioned source reuse", () => {
 
 function makePi() {
 	const tools = new Map();
+	const hooks = new Map();
 	return {
-		tools,
+		tools, hooks,
+		appendEntry() {},
 		registerTool(def) {
 			tools.set(def.name, def);
 		},
 		registerProvider() {},
+		on(type, fn) { hooks.set(type, fn); },
 	};
 }
 

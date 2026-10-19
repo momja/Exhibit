@@ -49,6 +49,8 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"share.test.mjs",
 		"tags.test.mjs",
 		"agent.net.test.mjs",
+		"session-preparation.test.mjs",
+		"agent.preparation.test.mjs",
 		"agent.history.test.mjs",
 		"agent-resize.test.mjs",
 		"message-actions.test.mjs",
