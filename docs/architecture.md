@@ -1179,11 +1179,29 @@ and reads an empty library, which is the deliberate fail-closed answer
 
 Hosts two islands of client JS: the **CodeMirror** source
 editor (an esbuild-built, `go:embed`-served bundle) and the **renderer iframe**
-(which actually points at `RENDER_ORIGIN`). The gallery renders server-side,
-but search filters eagerly from the client: a debounced input refetches the
-same server-rendered gallery with the query and swaps only the grid, so the
-FTS5 search query stays authoritative without a full page reload. Filter,
-collection management, and the allowlist editor are full-page server renders.
+(which actually points at `RENDER_ORIGIN`). The gallery renders 24 cards at a
+time (av-kyhl). A revealed “Load more” button requests the next page from
+`/partials/gallery-grid` and htmx replaces only that sentinel, preserving the
+cards and live widget frames already on screen. The store orders by creation
+time and ID, with a one-record lookahead deciding whether another page exists.
+Pages read the current selection using offsets; adding or deleting artifacts
+in another tab can shift page boundaries until the gallery is refreshed.
+Search debounces typing, replaces the grid from offset zero, and updates the
+gallery URL. Search and paging share an htmx request queue per gallery, and
+query revisions reject stale responses even during the debounce or body read.
+Failed requests offer an explicit retry; a failed page leaves earlier cards
+intact. Native iframe lazy loading remains in place; offscreen frame unloading
+is the separate av-1a9m follow-up.
+
+`gallerygrid.go` holds the shared paging behavior. A `galleryDefinition` supplies
+its DOM ID, full-page and fragment paths, store filters and empty-state copy.
+The owner always comes from the request, and subsequent search and page requests
+stay on that gallery's fragment route. Future galleries can select different
+artifact sets through those filters while reusing `gallerySearch`,
+`galleryResults`, `galleryGrid` and `galleryCard` in `gallerygrid.tmpl`, plus the
+element-scoped `web/gallery/gallery.js` module. FTS5 remains the authoritative
+search over each selected set. Filter, collection management, and the allowlist
+editor are full-page server renders.
 
 **The detail page is the artifact, with its chrome floating over it**
 (Exh-ghuv). The frame fills the window. Everything else is one pill of

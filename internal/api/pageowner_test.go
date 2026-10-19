@@ -84,6 +84,8 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	// reads the library on the visitor's behalf without going through the
 	// API's auth group. These are the routes this ticket is about.
 	{route: "/", ownerScoped: true, ownPath: "/", foreignPath: "/"},
+	{route: "/partials/gallery-grid", ownerScoped: true,
+		ownPath: "/partials/gallery-grid", foreignPath: "/partials/gallery-grid"},
 	{route: "/artifacts/{artifactID}", ownerScoped: true,
 		ownPath: "/artifacts/{id}", foreignPath: "/artifacts/{id}"},
 	{route: "/artifacts/{artifactID}/edit", ownerScoped: true,

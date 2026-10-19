@@ -311,7 +311,7 @@ in `internal/api/gallery.go` (epi-q0u2). Each page's CSS and JS are static asset
 authored in the `web/gallery/` workspace, copied into the embedded assets at build
 time (§13), and served under `/assets/gallery/`; per-request values reach the page
 scripts through a small inline bootstrap `<script>` that html/template JSON-encodes.
-The gallery is CRUD-shaped — grid, search (eager client-filtered by swapping the
+The gallery is CRUD-shaped — a paged grid, search (eager htmx requests swapping the
 server-rendered grid), tag/collection filters, a detail view, and an add-artifact
 page at `/new` (av-qo0j) — and full-page server
 renders cover it, keeping everything inside the one Go binary with no frontend
@@ -420,7 +420,10 @@ swap `/partials/capability-cluster` when the runtime network prompt fires
 reloads transparently under the widened CSP, and the controls follow without
 a page reload. That fragment carries both halves and each region takes its
 own with `hx-select`, so one definition of each serves two places on the page
-(Exh-ghuv).
+(Exh-ghuv). The gallery (av-kyhl) also uses htmx to append 24-card pages and
+replace search results through shared gallery partials. Its native module owns
+typing and query revisions; the server supplies each gallery's selection and
+routes (`architecture.md` §3.5).
 
 **Home-screen app shell (av-fdcx).** Every app-origin page head includes the shared
 `pwaHead` partial: the `manifest.json` link plus the `apple-*` tags iOS reads instead

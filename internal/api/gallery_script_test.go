@@ -11,9 +11,9 @@ import (
 // ./...`, so the client half of a feature is verified by the same command that
 // verifies the server half (av-kmwj).
 //
-// The gallery's page scripts are plain files served verbatim, with no bundler
-// and no module system, so the only way to exercise one is to load it into a
-// small DOM (web/gallery/testdom.mjs) and drive it. The Go tests in this
+// The gallery's page scripts are served verbatim, including native modules.
+// Tests load them into a small DOM (web/gallery/testdom.mjs) and drive them.
+// The Go tests in this
 // package can assert that an id is in the rendered markup and that a substring
 // is in the shipped asset; they cannot assert that clicking Allow writes a
 // decision and reloads the frame. That gap is what let a whole feature reach a

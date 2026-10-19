@@ -359,7 +359,8 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 		query += " AND " + w
 	}
 
-	query += " ORDER BY a.created_at DESC LIMIT ? OFFSET ?"
+	// Paging needs a total order even when several artifacts share a timestamp.
+	query += " ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, opts.Offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)

@@ -424,6 +424,7 @@ func (ro *Router) setupRoutes() {
 		// render uses, and carry no authority the page they belong to
 		// doesn't already have — so they sit with the pages, outside the
 		// API's auth group and under the same owner resolution.
+		r.Get("/partials/gallery-grid", ro.galleryGridPartial)
 		r.Get("/partials/agent-preview", ro.agentPreviewPartial)
 		// The chat page's history pane (av-y7td): the conversations kept with
 		// the artifact, and one of them read back.

@@ -1,6 +1,6 @@
 ---
 id: av-kyhl
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-08-01T18:49:54Z
@@ -29,3 +29,15 @@ Wanted on its own merits (the 100 cap is a real bug), and a prerequisite for bou
 
 A library of 250 artifacts is fully reachable by scrolling. Search resets paging rather than appending. The card markup has one definition shared by the page render and the fragment route.
 
+
+## Notes
+
+**2026-10-19T04:36:31Z**
+
+Implemented 24-card htmx paging with one-record lookahead, one shared card/grid template, creation-time/ID ordering, coordinated search, and explicit retries. Native iframe lazy loading is preserved; appending replaces only the sentinel and keeps existing frames alive.
+
+Gallery definitions own page and fragment paths, artifact filters, DOM IDs, and empty states. The shared server helper and native ES module support future galleries with different selections without global paging state. Collection-scoped reuse and two independent gallery components are covered by tests.
+
+Validation: make assets; go test ./... (passed); native module shortcut and request-race tests. Real htmx 4 browser checks reached all 250 artifacts exactly once, preserved a loaded widget frame with zero reloads, rejected delayed page/search/body responses after query changes, recovered from network failures, and fit 1280px, 375px and 320px layouts. Screenshots are in docs/screenshots/av-kyhl/.
+
+Offset pagination reads the current selection; concurrent additions/deletions can shift page boundaries until refresh. Offscreen frame unloading remains av-1a9m.

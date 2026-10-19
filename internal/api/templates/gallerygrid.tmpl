@@ -1,0 +1,39 @@
+{{/* Shared gallery components. Data: galleryGridData. A gallery supplies its
+     own ID and endpoint; these partials know nothing about its selection rule. */}}
+{{define "gallerySearch"}}<form class="search-row" role="search" id="{{.ID}}-search" data-gallery-search
+      hx-get="{{.FragmentPath}}" hx-trigger="submit, exhibit:gallery-search"
+      hx-target="#{{.ID}}-results" hx-swap="innerHTML" hx-sync="#{{.ID}}:replace">
+  <i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
+  <input type="text" name="q" data-gallery-query placeholder="Search artifacts…" value="{{.Query}}" autocomplete="off" aria-label="Search artifacts" aria-keyshortcuts="/">
+  <kbd class="search-kbd" aria-hidden="true">/</kbd>
+  <button class="search-clear" type="button" data-gallery-clear aria-label="Clear search" hidden><i class="ph ph-x" aria-hidden="true"></i></button>
+</form>{{end}}
+
+{{define "galleryResults"}}<p class="gallery-error" data-gallery-search-error hidden>Couldn’t load artifacts. <button class="btn btn-sec" type="submit" form="{{.ID}}-search">Try again</button></p>
+<div class="grid" id="{{.ID}}-results" data-gallery-results>{{template "galleryGrid" .}}</div>{{end}}
+
+{{/* Both the first page and every appended page execute this exact card loop.
+     Replacing only the sentinel leaves existing widget frames running. */}}
+{{define "galleryGrid"}}{{range .Cards}}{{template "galleryCard" .}}{{end}}
+{{if .RetryURL}}{{template "galleryMore" .}}{{else}}
+  {{if and (not .Cards) (eq .Offset 0)}}{{if .Query}}<p class="empty">No artifacts match your search.</p>{{else}}<p class="empty">{{.Empty.Message}}{{if .Empty.ActionURL}} <a href="{{.Empty.ActionURL}}">{{.Empty.ActionLabel}}</a>.{{end}}</p>{{end}}{{end}}
+  {{if .NextURL}}{{template "galleryMore" .}}{{end}}
+{{end}}{{end}}
+
+{{define "galleryMore"}}<div class="gallery-more">
+  <p class="gallery-error" data-gallery-load-error{{if not .RetryURL}} hidden{{end}}>Couldn’t load artifacts. Try again.</p>
+  <button class="btn btn-sec" type="button" data-gallery-page
+          hx-get="{{if .RetryURL}}{{.RetryURL}}{{else}}{{.NextURL}}{{end}}"
+          hx-trigger="{{if .RetryURL}}click{{else}}revealed, click{{end}}"
+          hx-target="closest .gallery-more" hx-swap="outerHTML"
+          hx-sync="#{{.ID}}:abort" hx-disabled-elt="this">{{if .RetryURL}}Try again{{else}}Load more{{end}}</button>
+  <span class="gallery-loading" role="status">Loading artifacts…</span>
+</div>{{end}}
+
+{{/* The tile, title, tag dots, posture/sharing glyphs and Edit have one
+     definition for every gallery. Delegated card clicks leave links and
+     popover controls to their own handlers. */}}
+{{define "galleryCard"}}<div class="card" data-href="/artifacts/{{.ArtifactID}}">
+  {{template "cardWidget" .Widget}}
+  <div class="card-meta"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>{{template "tagDots" .}}{{template "capabilityCluster" .Capability}}<a class="card-edit" href="/artifacts/{{.ArtifactID}}/edit" aria-label="Edit {{.Title}}" title="Edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i></a></div>
+</div>{{end}}

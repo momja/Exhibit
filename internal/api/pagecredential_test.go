@@ -75,6 +75,7 @@ var appOriginGETRoutePaths = []pageRoute{
 
 	// htmx fragments: page markup by another name, so they are held to the
 	// same rule as the pages they are swapped into.
+	{route: "/partials/gallery-grid", path: "/partials/gallery-grid"},
 	{route: "/partials/agent-preview", path: "/partials/agent-preview?artifact={id}"},
 	{route: "/partials/agent-history", path: "/partials/agent-history?artifact={id}"},
 	{route: "/partials/agent-transcript", path: "/partials/agent-transcript?artifact={id}&session=s"},

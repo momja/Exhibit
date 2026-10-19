@@ -51,7 +51,11 @@ main{padding:10px 12px}
 /* min() inside the minmax: a bare 226px is a floor even when the container is
  * narrower, pushing the grid past the viewport in a small window. */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(226px,100%),1fr));gap:6px}
-.grid.grid-loading{opacity:.5;transition:opacity .1s ease}
+.gallery-more{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 0}
+.gallery-loading{display:none;color:var(--color-muted);font-size:14px}
+.gallery-more:has(.htmx-request) .gallery-loading{display:block}
+.gallery-error{color:var(--color-muted);font-size:14px;padding:8px 0}
+.gallery-error[hidden]{display:none}
 
 /* The card is flat: a 1px border and a 2px radius instead of components.css's
  * rounded, shadowed, padded surface. Everything inside it bleeds to that
