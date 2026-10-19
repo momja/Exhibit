@@ -1289,6 +1289,11 @@ exists to undo. Its shell renders server-side and its contents are fetched on
 first open (state is cold data the rest of the page never needs); edits apply
 through the same authenticated state routes (§3.1) on Save, so Cancel simply
 rebuilds the working copy from what the server last confirmed.
+**Export JSON** (Exh-k8p6) reads the current saved state through the same
+authenticated GET route and downloads `<artifact-id>-localStorage.json`. The file
+is a flat JSON object of string values, preserving localStorage keys and values
+verbatim, including values which themselves contain JSON. It excludes unsaved
+inspector edits and frame-local sessionStorage; empty state exports as `{}`.
 
 The edit page also lists the artifact's **versions** (§3.3b) in a panel of its
 own: server-rendered, newest first, each with what produced it and when, and View
