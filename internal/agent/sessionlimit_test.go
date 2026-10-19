@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/store"
@@ -96,4 +98,144 @@ func TestCreateRefusesWhenEverySessionIsBusy(t *testing.T) {
 	_, err := m.Create(context.Background(), CreateOpts{OwnerID: 7, Provider: "anthropic", APIKey: "k"})
 	assert.ErrorIs(t, err, ErrSessionLimit)
 	assert.Contains(t, err.Error(), "all of yours are busy", "the message says what to do about it")
+}
+
+func TestConcurrentReservationsCountStartupCapacity(t *testing.T) {
+	m := newLimitedManager(t)
+	start := make(chan struct{})
+	releases := make(chan func(), 100)
+	var workers sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			release, err := m.reserveProcess(context.Background(), 7)
+			if err == nil {
+				releases <- release
+			} else {
+				assert.ErrorIs(t, err, ErrSessionLimit)
+			}
+		}()
+	}
+	close(start)
+	workers.Wait()
+	close(releases)
+	assert.Equal(t, MaxOwnerSessions, len(releases))
+	m.mu.Lock()
+	assert.Equal(t, MaxOwnerSessions, m.processCount)
+	m.mu.Unlock()
+	for release := range releases {
+		release()
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	assert.Zero(t, m.processCount)
+	assert.Empty(t, m.processOwners)
+}
+
+func TestBusyOwnerRefusalsNeverSpawn(t *testing.T) {
+	m := newLimitedManager(t)
+	for i := 0; i < MaxOwnerSessions; i++ {
+		s := createSession(t, m, 7)
+		s.mu.Lock()
+		s.streaming = true
+		s.mu.Unlock()
+	}
+	marker := filepath.Join(t.TempDir(), "spawned")
+	script := filepath.Join(t.TempDir(), "refused-pi")
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\ntouch '"+marker+"'\n"), 0700))
+	m.cfg.PiBin = script
+	var workers sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			_, err := m.Create(context.Background(), CreateOpts{OwnerID: 7, Provider: "anthropic"})
+			assert.ErrorIs(t, err, ErrSessionLimit)
+		}()
+	}
+	workers.Wait()
+	_, err := os.Stat(marker)
+	assert.True(t, os.IsNotExist(err), "refused requests must not execute the process")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	assert.Equal(t, MaxOwnerSessions, m.processCount)
+}
+
+func TestInstanceLimitIncludesPendingStartsAndReturnsExitedSlots(t *testing.T) {
+	m := newLimitedManager(t)
+	var releases []func()
+	for i := 0; i < MaxInstanceSessions-1; i++ {
+		release, err := m.reserveProcess(context.Background(), int64(i+100))
+		require.NoError(t, err)
+		releases = append(releases, release)
+	}
+	defer func() {
+		for _, release := range releases {
+			release()
+		}
+	}()
+	s := createSession(t, m, 7)
+	s.mu.Lock()
+	s.streaming = true
+	s.mu.Unlock()
+	_, err := m.Create(context.Background(), CreateOpts{OwnerID: 8, Provider: "anthropic"})
+	require.ErrorIs(t, err, ErrInstanceSessionLimit)
+	m.Close(7, s.ID)
+	select {
+	case <-s.processExited:
+	case <-time.After(3 * time.Second):
+		t.Fatal("process did not exit")
+	}
+	replacement := createSession(t, m, 8)
+	require.NotNil(t, replacement)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	assert.Equal(t, MaxInstanceSessions, m.processCount)
+}
+
+func TestFailedStartupReturnsReservation(t *testing.T) {
+	m := newLimitedManager(t)
+	m.cfg.PiBin = filepath.Join(t.TempDir(), "does-not-exist")
+	for i := 0; i < MaxOwnerSessions+1; i++ {
+		_, err := m.Create(context.Background(), CreateOpts{OwnerID: 7, Provider: "anthropic"})
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrSessionLimit)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	assert.Zero(t, m.processCount)
+	assert.Empty(t, m.processOwners)
+}
+
+func TestConcurrentInstanceReservationsNeverExceedCeiling(t *testing.T) {
+	m := newLimitedManager(t)
+	start := make(chan struct{})
+	releases := make(chan func(), 100)
+	var workers sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		workers.Add(1)
+		go func(owner int64) {
+			defer workers.Done()
+			<-start
+			release, err := m.reserveProcess(context.Background(), owner)
+			if err == nil {
+				releases <- release
+			} else {
+				assert.ErrorIs(t, err, ErrInstanceSessionLimit)
+			}
+		}(int64(i + 1))
+	}
+	close(start)
+	workers.Wait()
+	close(releases)
+	assert.Equal(t, MaxInstanceSessions, len(releases))
+	for release := range releases {
+		release()
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	assert.Zero(t, m.processCount)
+	assert.Empty(t, m.processOwners)
 }

@@ -196,7 +196,7 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 // One mapping for both creators — the chat surface and the widget button —
 // so they cannot disagree about what a limit looks like.
 func writeAgentCreateError(w http.ResponseWriter, r *http.Request, op string, err error) {
-	if errors.Is(err, agent.ErrSessionLimit) {
+	if errors.Is(err, agent.ErrSessionLimit) || errors.Is(err, agent.ErrInstanceSessionLimit) {
 		writeError(w, http.StatusTooManyRequests, err.Error())
 		return
 	}

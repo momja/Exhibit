@@ -465,10 +465,23 @@ behaving as it does in the pinned version.
   drains queued events before closing the stream. Excess subscriptions close
   immediately. These limits bound event retention, not the subprocess's own
   memory or the total number of subprocesses.
-- An owner holds at most **10 open sessions** (widget-generate sessions
-  counted): at the limit the oldest idle one is evicted, and only when all
-  ten are mid-run is a new one refused (429). The chat page closes its
-  session on `pagehide`, so reloads do not stack sessions against the limit.
+- Agent prompt validation runs before any subprocess write: messages are at
+  most 256 KiB, with at most eight PNG, JPEG, GIF, or WebP attachments. Each
+  image is valid base64, matches its declared MIME type (PNG if omitted), and
+  decodes to at most 5 MiB; combined decoded images are limited to 16 MiB.
+  Invalid prompts return 400 with an explanation. The service-wide request
+  body limit still applies independently.
+- An owner holds at most **10 agent processes**, and the instance at most
+  **32**, including processes starting or stopping. Capacity is reserved
+  atomically before startup and returned after the process is reaped; failed
+  startup also returns its reservation. At capacity the caller's oldest idle
+  process is evicted and reaped before its slot is reused. Busy processes and
+  other owners' processes are not evicted. If no slot can be reclaimed, the
+  request returns 429 with a readable message. Widget generation counts too.
+  The chat page closes its session on `pagehide`.
+- Reading a conversation for persistence consumes at most 64 MiB plus one
+  overflow byte. Files beyond that ceiling are refused even if their final
+  entry is unfinished; within the ceiling, only complete lines are kept.
 - When a save-tool call succeeds, the session emits a synthetic
   `exhibit_artifact_saved` event; a `set_state`/`delete_state` call emits the
   analogous `exhibit_state_changed` event, and `set_widget`/`edit_widget` the
