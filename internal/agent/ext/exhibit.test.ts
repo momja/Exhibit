@@ -290,13 +290,22 @@ describe("get_artifact tool", () => {
 		assert.ok(!header.includes("\n\nSYSTEM"), "the title cannot open a paragraph");
 	});
 
-	it("tells the model to read before changing and to read again after", async (t) => {
+	it("permits preloaded source and reuse after successful saves", async (t) => {
 		needExhibit(t);
 		const pi = makePi();
 		await exhibitMod.default(pi);
 		const d = pi.tools.get("get_artifact").description;
-		assert.match(d, /NOT in your context until you call this/);
-		assert.match(d, /read it again/);
+		assert.match(d, /including preloaded source/);
+		assert.match(d, /successful creates, writes and edits/);
+		assert.match(d, /resume notice/);
+		for (const name of ["get_artifact", "get_widget"]) {
+			const description = pi.tools.get(name).description;
+			assert.match(description, /do not reread merely because your own save succeeded/);
+			for (const reason of [/missing/, /compact/, /conflict/, /failed source match/, /external edit or restore/, /uncertain save outcome/]) {
+				assert.match(description, reason, name);
+			}
+			assert.doesNotMatch(description, /NOT in your context until you call this/);
+		}
 	});
 });
 

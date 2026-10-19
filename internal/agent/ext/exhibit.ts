@@ -330,11 +330,13 @@ export default function (pi: ExtensionAPI) {
 			"Make targeted in-place edits to this session's artifact source, without rewriting " +
 			"the whole document. Prefer this over write_artifact for small changes (a fix, a " +
 			"restyle, one section). Each edit's oldText must match its target exactly and uniquely " +
-			"in the current source — copy it from get_artifact, with enough surrounding context to " +
-			"be unique; minor quote/dash/whitespace drift is tolerated. Put several disjoint changes " +
+			"in the current source — copy it from known source (tool results plus successful saves), " +
+			"with enough surrounding context to be unique; minor quote/dash/whitespace drift is " +
+			"tolerated. Put several disjoint changes " +
 			"in one call's edits[]; edits that overlap or touch must be merged into one instead. " +
-			"If an edit matches nothing, re-read with get_artifact and retry against the current " +
-			"source — never fall back to rewriting the document by hand from memory.",
+			"Read with get_artifact if needed source is missing, after a conflict or external change, " +
+			"or if an edit matches nothing; retry against the current source — never fall back " +
+			"to rewriting the document by hand from memory.",
 		parameters: Type.Object({
 			edits: Type.Array(
 				Type.Object({
@@ -402,10 +404,12 @@ export default function (pi: ExtensionAPI) {
 		label: "Read artifact",
 		description:
 			"Read this session's artifact: its current HTML source and metadata (title, " +
-			"network allowlist). The source is NOT in your context until you call this, so read " +
-			"it before you change it — and read it again after anything may have changed it: " +
-			"your own save, or an edit made elsewhere (by the user, or earlier in this " +
-			"conversation's history).",
+			"network allowlist). Reuse source already available in tool results (including preloaded " +
+			"source), plus your successful creates, writes and edits; do not reread merely because " +
+			"your own save succeeded. Read when needed source or metadata is missing (including " +
+			"after compaction), after a conflict or failed source match, on evidence of an external " +
+			"edit or restore, or to resolve an uncertain save outcome. A resumed conversation " +
+			"must refresh source as its resume notice directs.",
 		parameters: Type.Object({}),
 		async execute() {
 			const target = requireBoundArtifact();
@@ -573,11 +577,13 @@ export default function (pi: ExtensionAPI) {
 			"Make targeted in-place edits to this session's artifact gallery widget, without rewriting " +
 			"the whole tile. Prefer this over set_widget for small changes. Each edit's oldText must " +
 			"match its target exactly and uniquely in the current widget source — copy it from " +
-			"get_widget, with enough surrounding context to be unique; minor quote/dash/whitespace " +
-			"drift is tolerated. Put several disjoint changes in one call's edits[]; edits that " +
+			"known source (tool results plus successful saves), with enough surrounding context to " +
+			"be unique; minor quote/dash/whitespace drift is tolerated. Put several disjoint changes " +
+			"in one call's edits[]; edits that " +
 			"overlap or touch must be merged into one instead. If the artifact has no widget yet, " +
-			"create it with set_widget first; if an edit matches nothing, re-read with get_widget " +
-			"and retry against the current source.",
+			"create it with set_widget first. Read with get_widget if needed source is missing, " +
+			"after a conflict or external change, or if an edit matches nothing; retry against " +
+			"the current source.",
 		parameters: Type.Object({
 			edits: Type.Array(
 				Type.Object({
@@ -622,7 +628,10 @@ export default function (pi: ExtensionAPI) {
 		label: "Read widget",
 		description:
 			"Read this session's artifact gallery widget source. Reports that there is no widget " +
-			"yet when the artifact has none.",
+			"yet when the artifact has none. Reuse known source plus successful saves; do not " +
+			"reread merely because your own save succeeded. Read when needed source is missing " +
+			"or compacted away, after a conflict or failed source match, on evidence of an " +
+			"external edit or restore, or to resolve an uncertain save outcome.",
 		parameters: Type.Object({}),
 		async execute() {
 			const target = requireBoundArtifact();

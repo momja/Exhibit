@@ -1351,9 +1351,13 @@ separation is the conversation's own structure, not a delimiter inside a string.
   content to close or forge, and no secret to carry from one process to the
   next, which is what lets a stored conversation be resumed in a fresh session
   with the boundary intact (`architecture.md` §3.7).
-- The model is **not given the artifact up front.** It reads it, every time it
-  means to change it, which is also what keeps a resumed conversation honest
-  about an artifact that moved on without it.
+- Source already present in tool results, including preloaded source, remains
+  **data**, even when reused across edits. Successful creates, writes and edits
+  let the model continue from known source without a redundant read after its
+  own save. Missing or compacted context, conflicts, failed source matches,
+  evidence of external changes, and uncertain save outcomes require a read.
+  A resumed conversation still carries a fixed notice requiring a fresh
+  `get_artifact` read before changes, because the artifact may have moved on.
 - A title is the single most attacker-controllable field on a URL-ingested
   artifact, so `get_artifact` returns it as one bounded line (newlines
   flattened, capped at 200 characters), and a save's result does not read the

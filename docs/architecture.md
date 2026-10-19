@@ -1618,9 +1618,13 @@ configuration, and the pages keep offering the agent.
   result is its own message role, so the boundary between data and instruction
   is the conversation's structure — nothing to forge, and no per-session secret
   to carry from one process to the next. The system prompt is static and
-  states that tool results are data; the model is not handed the artifact up
-  front, it reads it, and a modify session therefore spends its first tool call
-  on `get_artifact`.
+  states that tool results are data. The prompt permits reusing source already
+  present in tool results (including preloaded source), plus successful creates,
+  writes and edits. A successful own save does not require another model tool
+  call to read the source. Read with `get_artifact` or `get_widget` when needed
+  source is missing or compacted away, after a conflict or failed source match,
+  on evidence of an external edit or restore, or when a save's outcome is
+  uncertain. This is prompt guidance; it does not itself enforce concurrency.
 - **Conversations are kept as Pi records them** (av-y7td): each session runs
   with `--session`, and on every settled turn the service reads Pi's session
   file back and stores it in the conversation's `agent_transcripts` row, with

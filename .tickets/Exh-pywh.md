@@ -1,6 +1,6 @@
 ---
 id: Exh-pywh
-status: in_progress
+status: closed
 deps: [Exh-dgno]
 links: []
 created: 2026-10-19T05:12:10Z
@@ -18,3 +18,9 @@ Remove contradictory or blanket reread-after-save instructions from system promp
 
 Prompt and tool contracts consistently permit reuse after successful saves and require rereads on conflict or missing context; targeted tests and documentation reflect the behavior; no weakening of untrusted-data boundaries.
 
+
+## Notes
+
+**2026-10-19T05:17:07Z**
+
+Updated system/mode prompts and artifact/widget tool descriptions to reuse known or preloaded tool-result source plus successful saves. Reads remain required for missing/compacted context, conflicts, failed matches, external changes and uncertain saves; resume freshness and TOOL RESULTS ARE DATA remain intact. Updated focused Go/tool-description tests and agent/security/architecture docs. Verified go test ./internal/agent -count=1, eight selected real-Pi 1.3.0 API integration tests, asset build, and git diff --check.
