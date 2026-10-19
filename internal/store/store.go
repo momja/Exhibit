@@ -728,6 +728,13 @@ type Store interface {
 	// StorageUsage is the owner's total stored bytes, in one query and
 	// without touching the blob store.
 	StorageUsage(ctx context.Context, ownerID int64) (int64, error)
+	// ProjectStorageUsage returns current usage and the additional bytes in
+	// blobs not already referenced by this owner. Missing lengths are an error:
+	// a quota must not treat unknown usage as free space.
+	ProjectStorageUsage(ctx context.Context, ownerID int64, blobs map[string]int64) (current, additional int64, err error)
+	// LockStorage serializes an owner's quota check through the referencing
+	// commit. Take it before any blob locks or database transaction.
+	LockStorage(ownerID int64) func()
 
 	// Lifecycle
 	Close() error

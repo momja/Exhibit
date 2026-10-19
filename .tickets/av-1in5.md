@@ -1,6 +1,6 @@
 ---
 id: av-1in5
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-08-18T05:55:46Z
@@ -19,3 +19,9 @@ What is actually missing is everything that makes a *tenant* mean something: blo
 
 Deliberately **not** here: agent token metering and spend caps. They are their own epic ([[av-hyo6]]) because they measure a different thing — what an owner consumes over time, rather than what they hold — and because the agent's spend problem is not solved by billing at all.
 
+
+## Notes
+
+**2026-10-19T00:08:41Z**
+
+av-10bw completes the final remaining prerequisite: owner storage quotas now consume the existing entitlement resolver and storage accounting. All children are closed; self-hosted instances remain unlimited with enforcement unset.

@@ -142,6 +142,15 @@ async function api(method: string, path: string, body?: unknown): Promise<any> {
 	}
 	const text = await resp.text();
 	if (resp.status === 413) {
+		let refusal: any;
+		try { refusal = JSON.parse(text); } catch { /* A proxy may return HTML. */ }
+		if (refusal?.code === "storage_quota_exceeded") {
+			throw new Error(
+				`exhibit API ${method} ${path} refused: ${refusal.error}. Nothing was saved. ` +
+					"Storage includes previous versions, so rewriting a smaller document still adds bytes. " +
+					"Ask the owner to free storage or raise the allowance before saving again.",
+			);
+		}
 		throw tooLargeError(method, path, size, limitFrom413(text));
 	}
 	if (!resp.ok) {

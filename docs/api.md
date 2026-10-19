@@ -92,6 +92,28 @@ document has a little less room than the figure. A body sent without a
 A URL ingest is not bound by it: its request carries only the URL, and the page
 the server fetches has its own 10 MiB cap, below.
 
+**Storage quota.** When `ENTITLEMENTS_ENABLED` is on, artifact creates, body
+rewrites, refetches and widget saves must fit the owner's resolved storage
+allowance. Agent writes use the same gate. A refusal happens before storing
+bytes and leaves the artifact, its metadata and its history unchanged:
+
+```json
+{"error":"storage quota exceeded: limit 100 bytes, current usage 90 bytes, refused write 20 bytes (20 additional bytes)",
+ "code":"storage_quota_exceeded", "limit_bytes":100, "usage_bytes":90,
+ "write_bytes":20, "additional_bytes":20}
+```
+
+The status is `413`. `write_bytes` counts the assembled content, including
+snapshot assets; `additional_bytes` excludes assets the owner already stores.
+The check uses current usage plus additional bytes. Historical versions retain
+old bodies and widgets, so even a smaller rewrite adds its full byte length.
+Snapshots are checked after vendoring; their request size cannot predict their
+stored size. Saves that change no bytes and metadata-only edits need no space.
+Reads, rendering, export and deletion remain available when over quota, and
+lowering an entitlement never deletes artifacts. An unresolved entitlement or
+unknown storage usage produces `500` and refuses the write. With enforcement
+off, quota checks are bypassed.
+
 **Ingest from a URL** — send `url` instead of `body` and the server fetches the
 page (bounded to 10 MiB). The title falls back to the page's `<title>`. Because
 the fetched page's relative references (`js/app.js`, `/assets/x.png`,

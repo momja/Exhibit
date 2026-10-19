@@ -27,7 +27,8 @@ type SQLiteStore struct {
 	// Held across a blob write and the transaction that references it, and
 	// across the deletion queue's recheck-and-unlink, so the two cannot
 	// interleave into a referenced blob with no bytes (bloblock.go).
-	blobLocks blobLocks
+	blobLocks    blobLocks
+	storageLocks blobLocks
 }
 
 func OpenSQLite(path string) (*SQLiteStore, error) {

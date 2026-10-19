@@ -248,11 +248,8 @@ func (e Entitlements) resolve(ent store.Entitlement) (Allowance, error) {
 // itself, so there is exactly one place the fallback rules live and exactly
 // one place they can be got wrong.
 //
-// It has no caller in this repo yet, and that is the ticket's boundary rather
-// than an oversight: av-2p8z stores what an owner is allowed and resolves it,
-// and av-10bw's storage quota — blocked on this — is the first gate to ask.
-// What that gate inherits is the whole of the contract below, including the
-// fail-closed direction, so it does not re-decide any of it.
+// The storage quota gate uses this answer before writing bytes. It inherits
+// the whole contract below, including the fail-closed direction.
 //
 // Three things about the shape are load-bearing.
 //
