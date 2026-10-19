@@ -49,6 +49,8 @@ function loadWidgetHealth(t) {
 
   return {
     ...page, results, addCard, swap,
+    pendingObservations: () => observers.size,
+    intersectionCallback: (card) => observers.get(card.frame)?.callback,
     reveal(card) {
       observers.get(card.frame)?.callback([{ target: card.frame, isIntersecting: true }]);
     },
@@ -103,4 +105,50 @@ test("search results get health watchers when the swap event targets the search 
 
   assert.ok(results.every((card) => card.failed()),
     "the request source need not contain any of the new widget frames");
+});
+
+test("a widget ready before becoming visible never starts a later failure deadline", async (t) => {
+  const page = loadWidgetHealth(t);
+  const card = page.addCard();
+  await page.swap([card]);
+  const queuedIntersection = page.intersectionCallback(card);
+  await page.postFromFrame({ __avWidget: true, status: "ready" }, card.frame.contentWindow);
+
+  assert.equal(page.pendingObservations(), 0);
+  queuedIntersection([{ target: card.frame, isIntersecting: true }]);
+  page.tick(6000);
+  assert.equal(card.failed(), false);
+});
+
+test("a ready report before frame initialization survives later htmx processing", async (t) => {
+  const page = loadWidgetHealth(t);
+  const card = page.addCard();
+  await page.postFromFrame({ __avWidget: true, status: "ready" }, card.frame.contentWindow);
+  await page.swap([card]);
+  page.reveal(card);
+  page.tick(6000);
+
+  assert.equal(card.failed(), false);
+  assert.equal(page.pendingObservations(), 0);
+});
+
+test("unloading cancels health work and remounting starts one fresh watcher", async (t) => {
+  const page = loadWidgetHealth(t);
+  const card = page.addCard();
+  await page.swap([card]);
+  page.reveal(card);
+  page.tick(3000);
+  await card.frame.dispatchEvent({ type: "exhibit:widget-dispose" });
+  page.tick(6000);
+
+  assert.equal(card.failed(), false);
+  assert.equal(card.frame.dataset.widgetWatched, undefined);
+  assert.equal(card.frame.listenerCount("__avresolved"), 0);
+  assert.equal(card.frame.listenerCount("exhibit:widget-dispose"), 0);
+  assert.equal(page.pendingObservations(), 0);
+  await page.document.dispatchEvent({ type: "exhibit:widget-mounted", target: card.frame });
+  assert.equal(card.frame.listenerCount("__avresolved"), 1);
+  page.reveal(card);
+  page.tick(6000);
+  assert.equal(card.failed(), true);
 });

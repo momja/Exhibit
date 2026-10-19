@@ -1,6 +1,6 @@
 ---
 id: av-1a9m
-status: in_progress
+status: closed
 deps: [av-kyhl]
 links: []
 created: 2026-08-01T18:50:13Z
@@ -33,3 +33,13 @@ Measure first with the numbers above as the baseline.
 
 Widget frame count (and JS heap) stays bounded as the library grows, measured against the 60-card baseline in the description.
 
+
+## Notes
+
+**2026-10-19T06:25:50Z**
+
+Implemented viewport-buffered widget unloading in a gallery-local native module. Widgets beyond a 400px buffer lose their browsing context while their server-created iframe node and monogram remain available. Nearby widgets survive paging; re-entry reloads through an owner-scoped, no-store app redirect that issues a fresh render token. Search releases removed cards and observers. Widget health work is disposed on unloading, and early readiness reports cannot restart later deadlines.
+
+Measured with stock run-tracker widgets at 1280x800: 60/250 artifacts previously retained 60/250 frames after traversal; bounded runs peaked at 45/50 settled frames and retained 35 after returning to the top. At 375x812, 250 cards peaked at 10 and retained 8. At 3840x2160, 216 cards loaded automatically with all 208 visible widgets present and healthy. The preview clamps JS heap figures to 10,000,000 bytes, so exact heap savings could not be measured or claimed.
+
+Validation: make assets; go test -timeout 20m ./...; focused checks after merging current origin/main; native module/health regression tests; real-browser paging, re-entry with fresh credentials, unchanged nearby frame identity, destroyed offscreen browsing contexts, and search cleanup. Measurements and method are in docs/widgets.md, with desktop/mobile screenshots in docs/screenshots/av-1a9m/.

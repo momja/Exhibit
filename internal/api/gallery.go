@@ -731,6 +731,9 @@ func (v capabilityView) HasTrigger() bool {
 type widgetView struct {
 	// URL is the render-origin widget document, empty when there is no widget.
 	URL string
+	// ReloadURL marks gallery widgets whose live documents are unloaded away
+	// from the viewport. Re-entry mints a fresh render credential here.
+	ReloadURL string
 	// Monogram and Hue drive the default tile. Hue is a plain 0–359 number the
 	// stylesheet feeds to hsl(), so the tint stays a presentation decision.
 	Monogram string
@@ -859,6 +862,14 @@ func newWidgetView(a *store.Artifact, urls renderURLs) widgetView {
 	}
 	if a.WidgetBlobID != "" {
 		v.URL = urls.widget(a.ID)
+	}
+	return v
+}
+
+func newGalleryWidgetView(a *store.Artifact, urls renderURLs) widgetView {
+	v := newWidgetView(a, urls)
+	if v.URL != "" {
+		v.ReloadURL = "/artifacts/" + a.ID + "/widget/open"
 	}
 	return v
 }

@@ -1198,8 +1198,14 @@ Search debounces typing, replaces the grid from offset zero, and updates the
 gallery URL. Search and paging share an htmx request queue per gallery, and
 query revisions reject stale responses even during the debounce or body read.
 Failed requests offer an explicit retry; a failed page leaves earlier cards
-intact. Native iframe lazy loading remains in place; offscreen frame unloading
-is the separate av-1a9m follow-up.
+intact. Native iframe lazy loading remains in place. Gallery widget documents
+are also unloaded outside a 400px viewport buffer (av-1a9m): the existing card,
+monogram and iframe node stay available, but a detached iframe has no live
+document. Re-entry attaches that same server-created node with an app-origin
+`/artifacts/:id/widget/open` URL. The owner-scoped route mints a fresh render
+token and redirects to the render origin, so scrolling back after the original
+ten-minute credential expires still works. Initial loads retain their direct
+render URLs and nearby frames keep running through paging.
 
 `gallerygrid.go` holds the shared paging behavior. A `galleryDefinition` supplies
 its DOM ID, full-page and fragment paths, store filters and empty-state copy.
@@ -1207,7 +1213,10 @@ The owner always comes from the request, and subsequent search and page requests
 stay on that gallery's fragment route. Future galleries can select different
 artifact sets through those filters while reusing `gallerySearch`,
 `galleryResults`, `galleryGrid` and `galleryCard` in `gallerygrid.tmpl`, plus the
-element-scoped `web/gallery/gallery.js` module. FTS5 remains the authoritative
+element-scoped `web/gallery/gallery.js` module. Its `gallery-widgets.js` module
+owns one visibility observer per gallery and releases removed cards after
+search. Widget health timers and observers are disposed on unloading and
+reinitialized on re-entry. FTS5 remains the authoritative
 search over each selected set. Filter, collection management, and the allowlist
 editor are full-page server renders.
 

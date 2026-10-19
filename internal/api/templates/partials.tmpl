@@ -231,7 +231,7 @@
      keeps its contents out of the tab order — the widget states a fact, it is
      not a control. The <title> is the accessible name every iframe needs.
      Data: widgetView (gallery.go). */}}
-{{define "cardWidget"}}<div class="card-widget{{if .URL}} has-frame{{end}}"><div class="card-widget-default" style="--tile-hue:{{.Hue}}"><span class="card-widget-monogram">{{.Monogram}}</span></div>{{if .URL}}<iframe class="card-widget-frame" src="{{.URL}}" sandbox="allow-scripts" loading="lazy" tabindex="-1" scrolling="no" title="{{.Title}} widget"></iframe>{{end}}</div>{{end}}
+{{define "cardWidget"}}<div class="card-widget{{if .URL}} has-frame{{end}}"{{if .ReloadURL}} data-gallery-widget data-widget-reload="{{.ReloadURL}}"{{end}}><div class="card-widget-default" style="--tile-hue:{{.Hue}}"><span class="card-widget-monogram">{{.Monogram}}</span></div>{{if .URL}}<iframe class="card-widget-frame" src="{{.URL}}" sandbox="allow-scripts" loading="lazy" tabindex="-1" scrolling="no" title="{{.Title}} widget"></iframe>{{end}}</div>{{end}}
 
 {{/* capabilityPopover is the "receipt" for what was approved at ingest
      (spec 6.2) — capabilityCluster's aria-describedby target. One row per

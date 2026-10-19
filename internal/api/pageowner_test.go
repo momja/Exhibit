@@ -92,6 +92,8 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 		ownPath: "/artifacts/{id}/edit", foreignPath: "/artifacts/{id}/edit"},
 	{route: "/artifacts/{artifactID}/open", ownerScoped: true,
 		ownPath: "/artifacts/{id}/open", foreignPath: "/artifacts/{id}/open"},
+	{route: "/artifacts/{artifactID}/widget/open", ownerScoped: true,
+		ownPath: "/artifacts/{id}/widget/open", foreignPath: "/artifacts/{id}/widget/open"},
 	{route: "/agent", ownerScoped: true,
 		ownPath: "/agent?artifact={id}", foreignPath: "/agent?artifact={id}"},
 	{route: "/partials/agent-preview", ownerScoped: true,

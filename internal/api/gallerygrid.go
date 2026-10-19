@@ -88,7 +88,7 @@ func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, of
 	for _, a := range artifacts {
 		grid.Cards = append(grid.Cards, galleryCard{
 			ArtifactID: a.ID, Title: a.Title, Tags: tagViews(a.Tags),
-			Capability: newCardCapabilityView(a), Widget: newWidgetView(a, urls),
+			Capability: newCardCapabilityView(a), Widget: newGalleryWidgetView(a, urls),
 		})
 	}
 	return grid, nil
