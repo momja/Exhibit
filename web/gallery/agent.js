@@ -232,8 +232,8 @@ async function deleteKey() {
 
 // --- Session + SSE --------------------------------------------------------
 let lifecycle = 0;
-let switchingConversation = false;
-let sending = false;
+let switchingConversation = null;
+let sending = null;
 let leaving = false;
 const preparation = createSessionPreparation({
   async start() {
@@ -259,8 +259,12 @@ const typingPreparation = createTypingPreparation({
 });
 function invalidatePreparation() {
   lifecycle++;
+  sending = null;
   typingPreparation.reset();
   preparation.discard();
+  const switching = switchingConversation;
+  switchingConversation = null;
+  if (switching) switching.startup.discard();
 }
 function resetSession() {
   invalidatePreparation();
@@ -532,7 +536,8 @@ async function send() {
   const text = inputEl.value.trim();
   if (!text || sending || switchingConversation || leaving) return;
   if (!keyConfigured) { openKeyModal(); return; }
-  sending = true;
+  const sendingAttempt = {};
+  sending = sendingAttempt;
   typingPreparation.reset();
   const acceptedSnippets = pendingSnippets.slice();
   const current = lifecycle;
@@ -567,11 +572,13 @@ async function send() {
     });
     if (!r.ok && current === lifecycle) {
       const d = await r.json().catch(() => ({}));
-      addMsg('err', d.error || 'The agent rejected the message.');
+      if (current === lifecycle) addMsg('err', d.error || 'The agent rejected the message.');
     }
   } catch (error) {
     if (current === lifecycle) addMsg('err', error.message || 'Could not send the message.');
-  } finally { sending = false; }
+  } finally {
+    if (sending === sendingAttempt) sending = null;
+  }
 }
 
 function describeSnippet(d) {
@@ -671,38 +678,63 @@ document.getElementById('history').addEventListener('click', (e) => {
   if (btn) resumeConversation(btn.dataset.resume, Number(btn.dataset.rollback) || 0);
 });
 
+// A retry can attach to the same session while an older response is delayed.
+// Defer its cleanup to the new attempt rather than closing its pending session.
+function disposeHistorySession(session) {
+  // 200 only attaches to a sidecar that may belong to another tab. Only a
+  // 201 sidecar was created by this request and belongs to its cleanup.
+  if (!session.createdByRequest || session.id === sessionId) return;
+  if (switchingConversation?.conversationId === session.id) {
+    switchingConversation.lateSessions.set(session.id, session);
+    return;
+  }
+  apiFetch('/api/agent/sessions/' + encodeURIComponent(session.id),
+    {method: 'DELETE', keepalive: leaving}).catch(() => {});
+}
+
 async function resumeConversation(conversationId, rollbackTo) {
   const statusEl = document.getElementById('resume-status');
   const say = (text) => { if (statusEl) statusEl.textContent = text; };
-  if (!artifact || switchingConversation) return;
+  if (!artifact || switchingConversation || leaving) return;
   if (streaming || sending) {
     say('The agent is still working. Stop it, or wait for it to finish, before switching conversations.');
     return;
   }
   invalidatePreparation();
   const current = lifecycle;
-  switchingConversation = true;
+  const artifactId = artifact.id;
+  const past = document.getElementById('history-messages');
+  const pastMarkup = past ? past.innerHTML : '';
+  const attempt = { conversationId, lateSessions: new Map(), startup: createSessionPreparation({
+    async start() {
+      const res = await apiFetch('/api/agent/sessions', {
+        method: 'POST',
+        body: JSON.stringify({artifact_id: artifactId, resume_session_id: conversationId})
+      });
+      const started = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const error = new Error(started.error || 'Could not continue this conversation.');
+        error.status = res.status;
+        throw error;
+      }
+      return {...started, createdByRequest: res.status === 201};
+    },
+    close: disposeHistorySession
+  }) };
+  switchingConversation = attempt;
+  const isCurrent = () => switchingConversation === attempt && current === lifecycle
+    && artifact?.id === artifactId && !leaving;
   try {
     say('Starting…');
 
-    // Start the conversation before touching the artifact, so a refusal — no key,
-    // no agent — costs nothing: the page's own chat is still there and nothing
-    // has been rolled back.
-    const res = await apiFetch('/api/agent/sessions', {
-      method: 'POST',
-      body: JSON.stringify({artifact_id: artifact.id, resume_session_id: conversationId})
-    });
-    const started = await res.json().catch(() => ({}));
-    if (current !== lifecycle) {
-      if (res.ok && started.id !== sessionId) apiFetch('/api/agent/sessions/' + encodeURIComponent(started.id),
-        {method: 'DELETE', keepalive: leaving}).catch(() => {});
+    // Reuse the same bounded startup lifecycle as a new conversation. The
+    // request and transcript belong to this click, even while History swaps.
+    const started = await attempt.startup.claim();
+    if (!started || !isCurrent()) {
+      attempt.startup.discard();
       return;
     }
-    if (!res.ok) {
-      say(started.error || 'Could not continue this conversation.');
-      if (res.status === 412) openKeyModal();
-      return;
-    }
+    attempt.startup.release();
     // A conversation that is already running (this page's own, or a second tab's)
     // is attached to rather than restarted; otherwise the page's live session
     // gives way to the one being continued.
@@ -716,11 +748,12 @@ async function resumeConversation(conversationId, rollbackTo) {
 
     if (rollbackTo) {
       const back = await apiFetch(
-        '/api/artifacts/' + encodeURIComponent(artifact.id) + '/versions/' + rollbackTo + '/restore',
+        '/api/artifacts/' + encodeURIComponent(artifactId) + '/versions/' + rollbackTo + '/restore',
         {method: 'POST'});
-      if (current !== lifecycle) return;
+      if (!isCurrent()) return;
       if (!back.ok) {
         const why = await back.json().catch(() => ({}));
+        if (!isCurrent()) return;
         // A missing historical blob is also a 409. Only the explicit
         // already-current response means there was nothing to put back.
         if (back.status !== 409 || why.code !== 'already_current') {
@@ -733,8 +766,7 @@ async function resumeConversation(conversationId, rollbackTo) {
 
     // What was said, as the fragment drew it, becomes the chat: the conversation
     // being continued, with the next message after it.
-    const past = document.getElementById('history-messages');
-    messagesEl.innerHTML = past ? past.innerHTML : '';
+    messagesEl.innerHTML = pastMarkup;
     addMsg('sys', (rollbackTo ? 'Rolled back to v' + rollbackTo + '. ' : '') +
       'Continuing this conversation. The agent will read the artifact again before it changes anything.');
     closeHistory();
@@ -746,8 +778,15 @@ async function resumeConversation(conversationId, rollbackTo) {
     if (rollbackTo || viewingVersion()) refreshPreview();
     if (rollbackTo) nudgePreview();
   } catch (error) {
-    if (current === lifecycle) say(error.message || 'Could not continue this conversation.');
-  } finally { switchingConversation = false; }
+    if (isCurrent()) {
+      say(error.message || 'Could not continue this conversation.');
+      if (error.status === 412) openKeyModal();
+    }
+  } finally {
+    if (switchingConversation === attempt) switchingConversation = null;
+    for (const session of attempt.lateSessions.values()) disposeHistorySession(session);
+    attempt.lateSessions.clear();
+  }
 }
 
 // --- Looking at an earlier version (av-vw7r) -----------------------------------
