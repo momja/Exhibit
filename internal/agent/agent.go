@@ -303,11 +303,13 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		"--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files",
 		"--no-builtin-tools",
 		"-e", m.extPath,
-		"--provider", opts.Provider,
 		"--system-prompt", sysPrompt,
 	}
+	// Since Pi 1.0, --provider requires --model. Without a model, omit both:
+	// Pi 0.99.1 ignored --provider in that case and selected its authenticated
+	// default. The isolated environment below still supplies only this key.
 	if opts.Model != "" {
-		args = append(args, "--model", opts.Model)
+		args = append(args, "--provider", opts.Provider, "--model", opts.Model)
 	}
 	if m.cfg.Guardrail != nil {
 		args = append(args, "-e", m.guardPath)

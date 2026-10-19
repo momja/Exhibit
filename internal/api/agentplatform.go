@@ -53,8 +53,8 @@ type PlatformKey struct {
 // malformed LOGIN_PASSWORD_HASH. The alternative is an instance that boots
 // looking configured and fails at whichever session happens to be first.
 //
-// AGENT_MODEL is optional: empty leaves the model to the provider's own
-// default, exactly as an empty model does for a stored BYO key.
+// AGENT_MODEL is optional: empty lets Pi select its authenticated default,
+// exactly as an empty model does for a stored BYO key.
 func PlatformKeyFromEnv() (*PlatformKey, error) {
 	key := strings.TrimSpace(os.Getenv("AGENT_API_KEY"))
 	if key == "" {
