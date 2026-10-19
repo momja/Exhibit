@@ -92,8 +92,9 @@ contains only the bound artifact id. Send claims an existing or pending startup
 and captures its own text and selections before awaiting it. Editing the draft
 while startup finishes cannot change that accepted request. Preparation never
 sends draft text to the server or calls a provider. Browser preparation expires
-90 seconds after it becomes ready; every server session also has a fixed
-90-second deadline until its first accepted prompt. A prompt being screened at
+90 seconds from startup, including a pending POST; every server session also
+has a fixed 90-second deadline until its first accepted prompt. History startup
+uses the same bounded lifecycle. A prompt being screened at
 the deadline finishes admission: acceptance claims normal idle lifetime;
 refusal expires the unclaimed session. Typing and guard refusals do not renew
 that server deadline. Navigation, key changes, and history switches discard
