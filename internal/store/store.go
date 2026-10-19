@@ -50,15 +50,17 @@ const (
 )
 
 type Artifact struct {
-	VersionSeq   int       `json:"version_seq"`
-	ID           string    `json:"id"`
-	OwnerID      int64     `json:"owner_id"`
-	Title        string    `json:"title"`
-	SourceBlobID string    `json:"source_blob_id"`
-	SourceURL    string    `json:"source_url"`
-	Tier         Tier      `json:"tier"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	VersionSeq     int       `json:"version_seq"`
+	ID             string    `json:"id"`
+	OwnerID        int64     `json:"owner_id"`
+	Title          string    `json:"title"`
+	SourceBlobID   string    `json:"source_blob_id"`
+	SourceRevision string    `json:"source_revision"`
+	WidgetRevision string    `json:"widget_revision"`
+	SourceURL      string    `json:"source_url"`
+	Tier           Tier      `json:"tier"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 	// NetworkAllowlist is the artifact's approved origins, hydrated on read
 	// from the decision='allow' rows of artifact_network_origins (exhibit-x87).
 	// It is a projection, not a column: writes go through the origin-decision
@@ -357,10 +359,11 @@ type ListOptions struct {
 // otherwise GenerationID names the replacement generation.
 type ArtifactSnapshot struct {
 	Provenance
-	SourceBlobID string
-	SourceText   string
-	GenerationID string
-	Assets       []ArtifactAsset
+	ExpectedSourceRevision *string
+	SourceBlobID           string
+	SourceText             string
+	GenerationID           string
+	Assets                 []ArtifactAsset
 }
 
 // Store is the seam between handlers and persistence (architecture §3.3).

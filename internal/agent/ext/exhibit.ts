@@ -153,6 +153,22 @@ async function api(method: string, path: string, body?: unknown): Promise<any> {
 		}
 		throw tooLargeError(method, path, size, limitFrom413(text));
 	}
+	if (resp.status === 409 || resp.status === 428) {
+		let refusal: any;
+		try { refusal = JSON.parse(text); } catch { /* retain generic error handling */ }
+		if (["source_conflict", "widget_conflict", "precondition_required"].includes(refusal?.code)) {
+			const resource = refusal.resource === "widget" ? "widget" : "artifact";
+			throw new Error(`The ${resource} changed or its read revision is missing. Nothing was saved. ` +
+				`Re-read with get_${resource}, reconcile your changes, and retry deliberately.`);
+		}
+	}
+	// Only a widget-less artifact carries an empty-content revision. Other 404s
+	// (unknown artifact, missing blob) must remain errors.
+	if (resp.status === 404 && method === "GET" && path.endsWith("/widget")) {
+		let missing: any;
+		try { missing = JSON.parse(text); } catch { /* not a widget snapshot */ }
+		if (typeof missing?.widget_revision === "string" && missing.body === "") return {...missing, missing: true};
+	}
 	if (!resp.ok) {
 		throw new Error(`exhibit API ${method} ${path} -> ${resp.status}: ${text.slice(0, 300)}`);
 	}
@@ -203,6 +219,22 @@ function requireBoundArtifact(): string {
 }
 
 export default function (pi: ExtensionAPI) {
+	let sourceRevision: string | undefined;
+	let widgetRevision: string | undefined;
+
+	function revision(value: unknown, resource: string): string {
+		if (typeof value !== "string" || value === "") {
+			throw new Error(`No ${resource} revision was returned. Nothing was saved; re-read with get_${resource} and retry.`);
+		}
+		return value;
+	}
+
+	// Keep oversized full writes local even when no read has happened yet.
+	function preflight(method: string, path: string, body: unknown) {
+		const size = Buffer.byteLength(JSON.stringify(body), "utf8");
+		if (MAX_BODY_BYTES > 0 && size > MAX_BODY_BYTES) throw tooLargeError(method, path, size, MAX_BODY_BYTES);
+	}
+
 	if (process.env.EXHIBIT_MOCK_LLM_URL) {
 		pi.registerProvider("exhibit-mock", {
 			name: "Exhibit Mock",
@@ -245,6 +277,8 @@ export default function (pi: ExtensionAPI) {
 			// The API bound the session's credential to this id as it wrote the
 			// row; mirror that here so the later tools have a target.
 			boundArtifactId = r.artifact.id;
+			sourceRevision = r.artifact.source_revision;
+			widgetRevision = r.artifact.widget_revision;
 			const footprint: string[] = r.network_footprint || [];
 			let text = `Created artifact ${r.artifact.id} ("${params.title}").`;
 			if (footprint.length > 0) {
@@ -268,9 +302,17 @@ export default function (pi: ExtensionAPI) {
 	 * source) — one function so both report the same footprint semantics and
 	 * the same artifact_saved event the chat UI re-renders on.
 	 */
-	async function saveBody(target: string, body: string, title?: string) {
+	async function saveBody(target: string, body: string, title?: string, expectedRevision?: string) {
+		const path = "/api/artifacts/" + encodeURIComponent(target);
 		const patch: Record<string, unknown> = { body };
 		if (title) patch.title = title;
+		preflight("PATCH", path, patch);
+		let expected = expectedRevision || sourceRevision;
+		if (!expected) {
+			const current = await api("GET", path + "?body=true");
+			expected = revision(current.source_revision, "artifact");
+		}
+		patch.expected_source_revision = expected;
 		// PATCH /api/artifacts/:id returns {artifact, network_footprint,
 		// footprint_changed} — the identity lives under `artifact`, never at
 		// the top level. Reading it from the top level yielded undefined, which
@@ -278,8 +320,9 @@ export default function (pi: ExtensionAPI) {
 		// The id itself comes from the session's bound artifact, never a tool
 		// parameter (av-hrtv note) — these tools take no artifact id, which is
 		// what stops a model from being talked into naming one (av-e0yj).
-		const r = await api("PATCH", "/api/artifacts/" + encodeURIComponent(target), patch);
+		const r = await api("PATCH", path, patch);
 		const a = r.artifact || {};
+		sourceRevision = revision(a.source_revision, "artifact");
 		// Report only the origins the rewritten body leaves *blocked*: an
 		// already-approved origin is not blocked, so re-flagging it would be a
 		// false alarm the create path never has to filter — a brand-new
@@ -354,13 +397,14 @@ export default function (pi: ExtensionAPI) {
 			// (a failed tool result naming the edit) and the stored body is
 			// left exactly as it was.
 			const a = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "?body=true");
+			const expectedRevision = revision(a.source_revision, "artifact");
 			let next: string;
 			try {
 				next = applyEdits(a.body || "", params.edits ?? []).body;
 			} catch (err) {
 				throw new Error(err instanceof Error ? err.message : String(err));
 			}
-			return saveBody(target, next);
+			return saveBody(target, next, undefined, expectedRevision);
 		},
 	});
 
@@ -409,6 +453,7 @@ export default function (pi: ExtensionAPI) {
 		async execute() {
 			const target = requireBoundArtifact();
 			const a = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "?body=true");
+			sourceRevision = revision(a.source_revision, "artifact");
 			let meta =
 				`id: ${a.id}\ntitle: ${oneLine(a.title)}\n` +
 				`allowlist: [${(a.network_allowlist || []).join(", ")}]`;
@@ -520,10 +565,16 @@ export default function (pi: ExtensionAPI) {
 	 * function so both report the same unapproved-origins warning and the
 	 * same widget_saved event the gallery card re-renders on.
 	 */
-	async function saveWidget(target: string, body: string) {
-		const r = await api("PUT", "/api/artifacts/" + encodeURIComponent(target) + "/widget", {
-			body,
-		});
+	async function saveWidget(target: string, body: string, expectedRevision?: string) {
+		const path = "/api/artifacts/" + encodeURIComponent(target) + "/widget";
+		preflight("PUT", path, {body});
+		let expected = expectedRevision || widgetRevision;
+		if (!expected) {
+			const current = await api("GET", path);
+			expected = revision(current.widget_revision, "widget");
+		}
+		const r = await api("PUT", path, {body, expected_widget_revision: expected});
+		widgetRevision = revision(r.widget_revision, "widget");
 		const unapproved: string[] = r.unapproved_origins || [];
 		let text = `Saved the gallery widget for artifact ${target}.`;
 		if (unapproved.length > 0) {
@@ -597,24 +648,17 @@ export default function (pi: ExtensionAPI) {
 			// Validation runs before any PUT: a bad edit throws (a failed
 			// tool result naming the edit) and the stored tile is left
 			// exactly as it was.
-			let current: string;
-			try {
-				const w = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "/widget");
-				current = w.body || "";
-			} catch (err) {
-				const msg = err instanceof Error ? err.message : String(err);
-				if (msg.includes("-> 404")) {
-					throw new Error("This artifact has no widget yet — create it with set_widget first.");
-				}
-				throw err;
-			}
+			const w = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "/widget");
+			const expectedRevision = revision(w.widget_revision, "widget");
+			if (w.missing) throw new Error("This artifact has no widget yet — create it with set_widget first.");
+			const current = w.body || "";
 			let next: string;
 			try {
 				next = applyEdits(current, params.edits ?? []).body;
 			} catch (err) {
 				throw new Error(err instanceof Error ? err.message : String(err));
 			}
-			return saveWidget(target, next);
+			return saveWidget(target, next, expectedRevision);
 		},
 	});
 
@@ -628,26 +672,14 @@ export default function (pi: ExtensionAPI) {
 		async execute() {
 			const target = requireBoundArtifact();
 			const path = "/api/artifacts/" + encodeURIComponent(target) + "/widget";
-			try {
-				const r = await api("GET", path);
-				return ok(labeled("current gallery widget of the artifact this session is editing:", r.body || ""), {
-					exhibit: "widget_read",
-					artifactId: target,
-				});
-			} catch (err) {
-				// A widget-less artifact 404s. That is an ordinary answer to this
-				// question, not a tool failure, so return it as text — an error
-				// would make the model retry or apologize for nothing.
-				const msg = err instanceof Error ? err.message : String(err);
-				if (msg.includes("-> 404")) {
-					return ok("This artifact has no widget yet.", {
-						exhibit: "widget_read",
-						artifactId: target,
-						missing: true,
-					});
-				}
-				throw err;
-			}
+			const r = await api("GET", path);
+			widgetRevision = revision(r.widget_revision, "widget");
+			if (r.missing) return ok("This artifact has no widget yet.", {
+				exhibit: "widget_read", artifactId: target, missing: true,
+			});
+			return ok(labeled("current gallery widget of the artifact this session is editing:", r.body || ""), {
+				exhibit: "widget_read", artifactId: target,
+			});
 		},
 	});
 

@@ -13,11 +13,8 @@ import (
 // storeRefetchedSnapshot stages every blob before atomically switching the
 // body and asset rows. A failed write or transaction leaves the old snapshot
 // intact; its unused staged blobs go through the reference-checked drain.
-func (ro *Router) storeRefetchedSnapshot(ctx context.Context, ownerID int64, id, body string, bodyChanged bool, collected []snapshot.RuntimeAsset, provenance ...store.Provenance) error {
-	replacement := store.ArtifactSnapshot{Provenance: store.Provenance{Origin: store.VersionRefetch}}
-	if len(provenance) > 0 {
-		replacement.Provenance = provenance[0]
-	}
+func (ro *Router) storeRefetchedSnapshot(ctx context.Context, ownerID int64, id, body string, bodyChanged bool, collected []snapshot.RuntimeAsset, expected string, provenance store.Provenance) (string, error) {
+	replacement := store.ArtifactSnapshot{Provenance: provenance, ExpectedSourceRevision: &expected}
 	var staged []string
 	if bodyChanged {
 		replacement.SourceBlobID = uuid.New().String()
@@ -29,7 +26,7 @@ func (ro *Router) storeRefetchedSnapshot(ctx context.Context, ownerID int64, id,
 	}
 	unlockStorage, err := ro.beginStorageWrite(ctx, ownerID, snapshotStorageBlobs(ownerID, replacement.SourceBlobID, body, collected))
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer unlockStorage()
 	queued, err := func() ([]string, error) {
@@ -69,5 +66,5 @@ func (ro *Router) storeRefetchedSnapshot(ctx context.Context, ownerID int64, id,
 		slog.WarnContext(ctx, "reclaim refetch blobs",
 			slog.String("artifact_id", id), slog.String("err", cleanupErr.Error()))
 	}
-	return err
+	return replacement.SourceBlobID, err
 }

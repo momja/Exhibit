@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -49,6 +50,16 @@ const (
 // add noise to the history.
 var ErrAlreadyCurrent = errors.New("that version is already the current one")
 
+// ContentRevision identifies an immutable content pointer. Empty widget content
+// has a token too. Restoring a pointer restores its identity; other resources'
+// changes never invalidate it. Clients must treat these tokens as opaque.
+func ContentRevision(blobID string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte("exhibit-content-v1:"+blobID)))
+}
+
+var ErrSourceChanged = errors.New("source changed; re-read the source and retry; your changes were not saved")
+var ErrWidgetChanged = errors.New("widget changed; re-read the widget and retry; your changes were not saved")
+
 // Version is one row of an artifact's history.
 type Version struct {
 	ArtifactID string `json:"artifact_id"`
@@ -81,6 +92,12 @@ type Provenance struct {
 // WidgetBlobID that points at "" removes the widget.
 type VersionChange struct {
 	Provenance
+	ExpectedSourceRevision *string
+	ExpectedWidgetRevision *string
+	// CheckOnly checks preconditions without recording a duplicate version.
+	CheckOnly bool
+	// Metadata bundled with a source save commits in the same transaction.
+	Updates      map[string]any
 	BodyBlobID   *string
 	WidgetBlobID *string
 	// SourceText is the body's search shadow (ExtractSearchText). Set it
@@ -207,6 +224,9 @@ func (s *SQLiteStore) CommitVersion(ctx context.Context, ownerID int64, artifact
 	if err != nil {
 		return nil, err
 	}
+	if err := updateArtifactTx(ctx, tx, ownerID, artifactID, c.Updates); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
@@ -284,6 +304,17 @@ func commitVersionTx(ctx context.Context, tx *sql.Tx, ownerID int64, artifactID 
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	if c.ExpectedSourceRevision != nil && *c.ExpectedSourceRevision != ContentRevision(body) {
+		return nil, ErrSourceChanged
+	}
+	if c.ExpectedWidgetRevision != nil && *c.ExpectedWidgetRevision != ContentRevision(widget) {
+		return nil, ErrWidgetChanged
+	}
+	if c.CheckOnly {
+		return scanVersion(artifactID, tx.QueryRowContext(ctx,
+			`SELECT `+versionColumns+` FROM artifact_versions v WHERE v.artifact_id = ? AND v.seq = ?`, artifactID, headSeq))
 	}
 
 	// The state as it stands right before this change, recorded on the version

@@ -265,6 +265,7 @@ async function save() {
   const payload = {
     title: title || 'Untitled',
     body,
+    expected_source_revision: document.getElementById('body').dataset.revision,
     network_allowlist: allowlist,
     downloads_approved: downloadsApproved,
     clipboard_approved: clipboardApproved
@@ -283,9 +284,12 @@ async function save() {
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    status.textContent = '✗ Error: ' + (data.error || resp.statusText);
+    status.textContent = resp.status === 409
+      ? '✗ Source changed elsewhere. Your edits are still here. Copy them before reloading, then compare and retry.'
+      : '✗ Error: ' + (data.error || resp.statusText);
     return;
   }
+  document.getElementById('body').dataset.revision = data.artifact?.source_revision;
   // Blocks the user chose to forget, applied after the PATCH so a failed save
   // leaves every decision exactly as it was. A forget that fails is reported
   // rather than swallowed: the row is already gone from the panel, so silence
@@ -427,13 +431,16 @@ async function deleteArtifact() {
     try {
       const r = await apiFetch('/api/artifacts/' + ID + '/widget', {
         method: 'PUT',
-        body: JSON.stringify({body: body})
+        body: JSON.stringify({body: body, expected_widget_revision: src.dataset.revision})
       });
       if (!r.ok) {
-        status.textContent = '✗ ' + ((await r.text().catch(() => '')).trim() || r.statusText);
+        status.textContent = r.status === 409
+          ? '✗ Widget changed elsewhere. Your edits are still here. Copy them before reloading, then compare and retry.'
+          : '✗ ' + ((await r.text().catch(() => '')).trim() || r.statusText);
         return;
       }
       const data = await r.json();
+      src.dataset.revision = data.widget_revision;
       // A widget shares the artifact's allowlist, so an origin missing from it
       // is already blocked at render — a fact to report, not a pending
       // approval. The allowlist panel above is where it would be granted.
@@ -452,12 +459,16 @@ async function deleteArtifact() {
     status.textContent = 'Removing…';
     try {
       const r = await apiFetch('/api/artifacts/' + ID + '/widget', {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'If-Match': src.dataset.revision }
       });
       if (!r.ok) {
-        status.textContent = '✗ ' + ((await r.text().catch(() => '')).trim() || r.statusText);
+        status.textContent = r.status === 409
+          ? '✗ Widget changed elsewhere. Your edits are still here. Copy them before reloading, then compare and retry.'
+          : '✗ ' + ((await r.text().catch(() => '')).trim() || r.statusText);
         return;
       }
+      src.dataset.revision = r.headers.get('X-Widget-Revision');
       setSource('widget-src', '');
       status.textContent = '✓ Removed';
       setHasWidget(false);
@@ -478,6 +489,7 @@ async function deleteArtifact() {
     const GENERATE_TIMEOUT_MS = 180000;
 
     generateBtn.addEventListener('click', async function() {
+      const generationBuffer = src.value;
       generateBtn.disabled = true;
       saveBtn.disabled = true;
       status.textContent = 'Generating… the agent is reading the artifact and writing its tile.';
@@ -524,7 +536,13 @@ async function deleteArtifact() {
             // and edit what the agent wrote, not just its rendered tile.
             try {
               const got = await apiFetch('/api/artifacts/' + ID + '/widget');
-              if (got.ok) setSource('widget-src', (await got.json()).body || '');
+              if (got.ok) {
+                const snapshot = await got.json();
+                if (src.value === generationBuffer) {
+                  setSource('widget-src', snapshot.body || '');
+                  src.dataset.revision = snapshot.widget_revision;
+                }
+              }
             } catch (err) { /* the tile still rendered; the source can be re-read */ }
             setHasWidget(true);
             refreshPreview();

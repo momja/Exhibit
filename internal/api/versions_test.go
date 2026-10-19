@@ -66,7 +66,7 @@ func TestANewArtifactHasOneVersion(t *testing.T) {
 func TestAManualEditCreatesAVersion(t *testing.T) {
 	r := newTestRouter(t)
 	id := createArtifact(t, r, map[string]any{"title": "T", "body": "<html><body>one</body></html>"})
-	patchArtifact(t, r, id, map[string]any{"body": "<html><body>two</body></html>"})
+	patchArtifact(t, r, id, map[string]any{"body": "<html><body>two</body></html>", "expected_source_revision": contentRevisionForTest(t, r, id)})
 
 	vs := listVersions(t, r, id)
 	require.Len(t, vs, 2)
@@ -95,7 +95,7 @@ func TestRestoreReturnsTheCodeAndTheStateTheVersionLeftBehind(t *testing.T) {
 	id := createArtifact(t, r, map[string]any{"title": "T", "body": "<html><body>one</body></html>"})
 	putState(t, r, id, "score", "10")
 
-	patchArtifact(t, r, id, map[string]any{"body": "<html><body>two</body></html>"})
+	patchArtifact(t, r, id, map[string]any{"body": "<html><body>two</body></html>", "expected_source_revision": contentRevisionForTest(t, r, id)})
 	putState(t, r, id, "score", "99")
 	putState(t, r, id, "added-later", "x")
 
@@ -162,7 +162,7 @@ func TestAnAgentWriteIsLabelledWithItsSessionAndPrompt(t *testing.T) {
 	grant.SetPrompt("  make it\ncount down  ")
 
 	w := doWithToken(t, r, "PATCH", "/api/artifacts/"+id, grant.Token(),
-		map[string]any{"body": "<html><body>two</body></html>"})
+		map[string]any{"body": "<html><body>two</body></html>", "expected_source_revision": contentRevisionForTest(t, r, id)})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	vs := listVersions(t, r, id)
@@ -203,7 +203,7 @@ func TestAnAgentCreatedArtifactIsAttributedToTheAgent(t *testing.T) {
 func TestAnAgentCredentialCannotReachVersionHistory(t *testing.T) {
 	r, reg := newScopedTestRouter(t)
 	id := createArtifact(t, r, map[string]any{"title": "T", "body": "<html><body>one</body></html>"})
-	patchArtifact(t, r, id, map[string]any{"body": "<html><body>two</body></html>"})
+	patchArtifact(t, r, id, map[string]any{"body": "<html><body>two</body></html>", "expected_source_revision": contentRevisionForTest(t, r, id)})
 	grant, err := reg.Issue(1, id, "sess")
 	require.NoError(t, err)
 
@@ -257,7 +257,7 @@ func TestRefetchIsAVersionAndAnUnchangedOneIsNot(t *testing.T) {
 func TestEditPageListsVersionsAndOffersRestoreOnEarlierOnes(t *testing.T) {
 	r := newTestRouter(t)
 	id := createArtifact(t, r, map[string]any{"title": "T", "body": "<html><body>one</body></html>"})
-	patchArtifact(t, r, id, map[string]any{"body": "<html><body>two</body></html>"})
+	patchArtifact(t, r, id, map[string]any{"body": "<html><body>two</body></html>", "expected_source_revision": contentRevisionForTest(t, r, id)})
 
 	req := httptest.NewRequest("GET", "/artifacts/"+id+"/edit", nil)
 	w := httptest.NewRecorder()
@@ -287,7 +287,7 @@ func TestEditPageEscapesVersionMessages(t *testing.T) {
 	require.NoError(t, err)
 	grant.SetPrompt(`<script>alert(1)</script>`)
 	w := doWithToken(t, r, "PATCH", "/api/artifacts/"+id, grant.Token(),
-		map[string]any{"body": "<html><body>two</body></html>"})
+		map[string]any{"body": "<html><body>two</body></html>", "expected_source_revision": contentRevisionForTest(t, r, id)})
 	require.Equal(t, http.StatusOK, w.Code)
 
 	req := httptest.NewRequest("GET", "/artifacts/"+id+"/edit", nil)

@@ -450,3 +450,76 @@ with their code. `PUT` and `DELETE` state routes check it atomically with the
 mutation and return 409 (`code: "version_changed"`) for a superseded frame. This
 prevents delayed writes from overwriting restored state. Explicit API edits and
 the state inspector may omit the header.
+
+## Conditional source and widget saves (av-n0gl)
+
+Read `GET /api/artifacts/:id?body=true` for `body` and opaque
+`source_revision` in the same response. Artifact JSON (including create and
+metadata GET) also includes `source_revision` and `widget_revision`.
+Read `GET /api/artifacts/:id/widget` for `body` and `widget_revision`.
+An artifact with no widget still returns **404**, now with JSON
+`{"error":"artifact has no widget","body":"","widget_revision":"…"}`.
+An unknown artifact is a plain 404 with no revision; do not interpret it as an
+empty widget. A missing/unreadable blob is also not an empty-widget snapshot.
+Reads capture the pointer and token together; immutable version blobs keep
+returned bytes paired with that token even when a save races the read.
+
+Send the token from that read with the complete replacement document:
+
+```json
+{"body":"<html>…</html>","expected_source_revision":"…"}
+```
+
+on `PATCH /api/artifacts/:id`, or
+
+```json
+{"body":"<html>…</html>","expected_widget_revision":"…"}
+```
+
+on `PUT /api/artifacts/:id/widget`. PATCH success returns the saved source token
+as `artifact.source_revision`; PUT success returns `widget_revision` alongside
+`body`. These tokens identify **this request's saved content**, even if another
+write has already advanced the head before the response arrives. Cache the
+submitted bytes with that token, never a later head token. An identical save
+keeps the token and creates no version, but still checks the precondition.
+
+A stale source token returns **409** JSON with `code: "source_conflict"` and
+`resource: "source"`; a stale widget token returns `code: "widget_conflict"`
+and `resource: "widget"`. Both carry `error` instructing the caller to re-read
+and retry. No content, bundled metadata, state or version changes commit on a
+conflict; unused staged blobs are reclaimed. Keep the local buffer, explicitly
+re-read, reconcile against the new bytes, and retry deliberately. There is no
+automatic retry. A present token must be a nonempty string (otherwise 400).
+
+Agent grants **must** supply the applicable token for source body PATCH and
+widget PUT; omission returns **428** JSON `code: "precondition_required"`,
+`resource: "source" | "widget"` and an explanatory `error`. Unconditioned agent tools
+therefore fail safely. Built-in agent tools bind read revisions and send them
+with every full-body write, including rewrites and widget creation. Conflicts
+become re-read-and-retry tool errors without an automatic retry. Legacy owner/browser
+and service-token API clients may omit the token for compatibility; such a
+request uses the handler's current read as its precondition, protecting the
+server read/commit interval only. It cannot protect a client's earlier stale
+read. Built-in browser writers send explicit tokens from their read snapshots.
+Title-only PATCH does not require a source precondition, but an explicitly
+supplied precondition is always checked, even with an empty/ignored body.
+
+`POST /api/artifacts/:id/refetch` accepts optional JSON
+`{"expected_source_revision":"…"}`; a bodyless legacy request captures the
+revision before fetching. Refetch compares that revision atomically on commit
+and also checks it on an unchanged result. Success includes
+`artifact.source_revision`. The detail page sends its displayed revision.
+`DELETE /api/artifacts/:id/widget` accepts the raw widget token in `If-Match`
+and returns 204 with `X-Widget-Revision` for the empty content. Agent grants
+require that header; the widget panel always supplies it. A stale removal is
+409 even if the current widget is already absent.
+
+Tokens are hashes of immutable content pointers, independently for source and
+widget; they are neither aggregate history sequence numbers nor timestamps.
+Widget/state/metadata changes leave an unchanged source's token valid, and
+source edits leave an unchanged widget's token valid. Restores reuse the saved
+pointers, so restoring the exact previous content identity makes its old token
+valid again (ABA is intentionally content-based). A restore that only changes
+state does not invalidate source. An identical rewrite preserves identity;
+rewriting different bytes mints a fresh identity even within the same second.
+Do not derive tokens from bytes, parse them or use them to order versions.

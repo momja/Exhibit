@@ -27,6 +27,7 @@ async function refetchWith(body) {
     STATE_WRITABLE: true,
     SHARED_STATE: false,
     ID: "art-1",
+    sourceRevision: "source-v1",
     SOURCE_URL: "https://source.example.com/tool.html",
     OPEN_URL: "/artifacts/art-1/open",
     downloadsApproved: false,
@@ -46,7 +47,7 @@ async function refetchWith(body) {
   return { api, status, reloads: () => reloads };
 }
 
-const artifact = { id: "art-1" };
+const artifact = { id: "art-1", source_revision: "source-v2" };
 
 test("an unchanged source says so and does not reload", async () => {
   const { api, status, reloads } = await refetchWith({
@@ -55,6 +56,7 @@ test("an unchanged source says so and does not reload", async () => {
   });
 
   assert.equal(api.calls[0].path, "/api/artifacts/art-1/refetch");
+  assert.deepEqual(JSON.parse(api.calls[0].body), {expected_source_revision:"source-v1"});
   assert.equal(status.textContent, "✓ Already up to date.");
   assert.equal(reloads(), 0);
 });
