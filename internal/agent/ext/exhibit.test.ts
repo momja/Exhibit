@@ -289,24 +289,6 @@ describe("get_artifact tool", () => {
 		const header = result.content[0].text.split("\n\n")[1];
 		assert.ok(!header.includes("\n\nSYSTEM"), "the title cannot open a paragraph");
 	});
-
-	it("permits preloaded source and reuse after successful saves", async (t) => {
-		needExhibit(t);
-		const pi = makePi();
-		await exhibitMod.default(pi);
-		const d = pi.tools.get("get_artifact").description;
-		assert.match(d, /including preloaded source/);
-		assert.match(d, /successful creates, writes and edits/);
-		assert.match(d, /resume notice/);
-		for (const name of ["get_artifact", "get_widget"]) {
-			const description = pi.tools.get(name).description;
-			assert.match(description, /do not reread merely because your own save succeeded/);
-			for (const reason of [/missing/, /compact/, /conflict/, /failed source match/, /external edit or restore/, /uncertain save outcome/]) {
-				assert.match(description, reason, name);
-			}
-			assert.doesNotMatch(description, /NOT in your context until you call this/);
-		}
-	});
 });
 
 describe("saving an artifact", () => {

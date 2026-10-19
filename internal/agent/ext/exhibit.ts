@@ -404,12 +404,7 @@ export default function (pi: ExtensionAPI) {
 		label: "Read artifact",
 		description:
 			"Read this session's artifact: its current HTML source and metadata (title, " +
-			"network allowlist). Reuse source already available in tool results (including preloaded " +
-			"source), plus your successful creates, writes and edits; do not reread merely because " +
-			"your own save succeeded. Read when needed source or metadata is missing (including " +
-			"after compaction), after a conflict or failed source match, on evidence of an external " +
-			"edit or restore, or to resolve an uncertain save outcome. A resumed conversation " +
-			"must refresh source as its resume notice directs.",
+			"network allowlist).",
 		parameters: Type.Object({}),
 		async execute() {
 			const target = requireBoundArtifact();
@@ -628,10 +623,7 @@ export default function (pi: ExtensionAPI) {
 		label: "Read widget",
 		description:
 			"Read this session's artifact gallery widget source. Reports that there is no widget " +
-			"yet when the artifact has none. Reuse known source plus successful saves; do not " +
-			"reread merely because your own save succeeded. Read when needed source is missing " +
-			"or compacted away, after a conflict or failed source match, on evidence of an " +
-			"external edit or restore, or to resolve an uncertain save outcome.",
+			"yet when the artifact has none.",
 		parameters: Type.Object({}),
 		async execute() {
 			const target = requireBoundArtifact();
