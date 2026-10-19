@@ -190,7 +190,7 @@ func decide(messages []chatMessage) turnPlan {
 		result, _ := textOf(last.Content)
 		switch name {
 		case "ask_user":
-			return turnPlan{kind: "text", text: "Thanks. " + result}
+			return turnPlan{kind: "text", text: "Thanks — I’ll use that for your plan."}
 		case "get_selection":
 			if currentSource == "" {
 				return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]string{}}
@@ -228,13 +228,13 @@ func decide(messages []chatMessage) turnPlan {
 
 	// An explicit trigger keeps questionnaire demos and integration tests
 	// deterministic without changing the ordinary artifact-building script.
-	if last.Role == "user" && strings.Contains(lastUserText, "mock-ask-questions") {
+	if last.Role == "user" && (strings.Contains(lastUserText, "mock-ask-questions") || strings.Contains(lastUserText, "Help me plan meals for my family.")) {
 		return turnPlan{kind: "tool", toolName: "ask_user", toolArgs: map[string]any{"questions": []map[string]any{
-			{"id": "view", "question": "How would you like to see your plans?", "options": []map[string]string{
-				{"label": "A weekly view", "description": "See your whole week together"},
-				{"label": "A simple list", "description": "Focus on what comes next"},
+			{"id": "view", "question": "How should your plan look?", "options": []map[string]string{
+				{"label": "Weekly calendar"},
+				{"label": "Simple list"},
 			}},
-			{"id": "goal", "question": "What would make this most useful for you?"},
+			{"id": "goal", "question": "Anything you want to include?"},
 		}}}
 	}
 

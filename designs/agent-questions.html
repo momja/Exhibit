@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root { color-scheme:light dark; --ink:#111; --muted:#777; --line:#ddd; --blue:#23559e; --tint:#eef4ff; --button-ink:#fff; }
+  @media(prefers-color-scheme:dark) { :root { --ink:#e8eaed; --muted:#9aa0a9; --line:#3c4149; --blue:#8bb5f4; --tint:#202b3d; --button-ink:#111; } }
+  * { box-sizing:border-box; }
+  body { margin:0; color:var(--foreground,var(--ink)); background:transparent; font:14px/1.5 system-ui,sans-serif; }
+  main { max-width:480px; padding-block:8px; }
+  .brief { max-width:85%; width:fit-content; margin:0 0 30px auto; padding:9px 13px; border-radius:12px 12px 3px 12px; background:var(--accent-surface,var(--tint)); }
+  fieldset { border:0; padding:0; margin:0 0 26px; min-width:0; }
+  legend { font-weight:600; padding:0; margin-bottom:8px; }
+  .choice { display:flex; align-items:center; gap:10px; padding:8px 0; cursor:pointer; min-height:38px; }
+  input { width:16px; height:16px; margin:0; accent-color:var(--blue); }
+  details { margin-top:7px; }
+  summary { color:var(--blue); font-size:13px; cursor:pointer; }
+  textarea { display:block; width:100%; margin-top:6px; padding:8px 0; min-height:39px; resize:vertical; border:0; border-bottom:1px solid var(--border,var(--line)); border-radius:0; font:inherit; background:transparent; color:inherit; }
+  textarea:focus { outline:0; border-color:var(--blue); }
+  .actions { display:flex; align-items:center; gap:20px; }
+  button { border:0; background:var(--blue); color:var(--button-ink); border-radius:7px; font:500 13px system-ui,sans-serif; padding:9px 16px; cursor:pointer; }
+  .skip { background:transparent; color:var(--muted-foreground,var(--muted)); padding:8px 0; font-weight:400; }
+</style>
+</head>
+<body>
+<main>
+  <p class="brief">Help me plan meals for my family.</p>
+  <form>
+    <fieldset>
+      <legend>How should your plan look?</legend>
+      <label class="choice"><input type="radio" name="view" value="week">Weekly calendar</label>
+      <label class="choice"><input type="radio" name="view" value="list">Simple list</label>
+      <details><summary>Something else</summary><textarea aria-label="How should your plan look?" rows="1" placeholder="Your answer…"></textarea></details>
+    </fieldset>
+    <fieldset>
+      <legend>Anything you want to include?</legend>
+      <textarea aria-label="Anything you want to include?" rows="1" placeholder="Your answer…"></textarea>
+    </fieldset>
+    <div class="actions"><button type="submit">Continue</button><button class="skip" type="button">Skip</button></div>
+  </form>
+</main>
+<script>
+  document.querySelector('form').addEventListener('submit', event => event.preventDefault());
+  document.querySelector('details textarea').addEventListener('input', () => document.querySelectorAll('input').forEach(input => input.checked = false));
+  document.querySelectorAll('input').forEach(input => input.addEventListener('change', () => {
+    document.querySelector('details').open = false;
+    document.querySelector('details textarea').value = '';
+  }));
+</script>
+</body>
+</html>

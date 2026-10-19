@@ -13,7 +13,7 @@ export function registerQuestions(pi: ExtensionAPI) {
 		description: "Ask the user one to four related questions and wait for their answers. " +
 			"Use everyday, non-technical language. Be eager to clarify vague details and confirm your interpretation of what the person wants before making consequential choices. " +
 			"Offer useful suggestions as options when that makes answering easier; omit options for an open question. " +
-			"The user can always write their own answer or add details. Put your recommended option first and explain its benefit; no option is selected automatically. " +
+			"The user can always write their own answer or add details. Use short labels, and add descriptions only when needed to distinguish the choices. Put your recommended option first; no option is selected automatically. " +
 			"Batch related questions in one call. A skipped question is not agreement or permission.",
 		parameters: Type.Object({
 			questions: Type.Array(Type.Object({

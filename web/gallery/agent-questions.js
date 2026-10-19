@@ -80,7 +80,7 @@ async function submitAnswers(form, cancelled) {
   const status = form.querySelector('.question-status');
   const answers = cancelled ? [] : collectAnswers(form);
   if (!cancelled && answers.some(answer => answer.selected.length === 0 && !answer.text)) {
-    status.textContent = 'Please answer each question, or choose “Skip for now”.';
+    status.textContent = 'Answer each question or skip.';
     return;
   }
   form.dataset.submitting = 'true';
@@ -124,16 +124,22 @@ messages.addEventListener('submit', event => {
 messages.addEventListener('input', event => {
   const form = event.target.closest('[data-question-form]');
   if (form && form.dataset.submitting !== 'true') form.querySelector('.question-status').textContent = '';
+  const question = event.target.closest('[data-question-id]');
+  if (event.target.tagName === 'TEXTAREA' && event.target.value.trim() && question?.dataset.multiSelect === 'false') {
+    question.querySelectorAll('input[type="radio"]').forEach(input => { input.checked = false; });
+  }
+});
+
+messages.addEventListener('change', event => {
+  if (event.target.type !== 'radio') return;
+  const question = event.target.closest('[data-question-id]');
+  if (question) {
+    question.querySelector('textarea').value = '';
+    question.querySelector('details').open = false;
+  }
 });
 
 messages.addEventListener('click', event => {
-  const ownAnswer = event.target.closest('[data-question-clear]');
-  if (ownAnswer) {
-    const question = ownAnswer.closest('[data-question-id]');
-    question.querySelectorAll('input').forEach(input => { input.checked = false; });
-    question.querySelector('textarea').focus();
-    return;
-  }
   const button = event.target.closest('[data-question-skip]');
   if (!button) return;
   return submitAnswers(button.closest('[data-question-form]'), true);

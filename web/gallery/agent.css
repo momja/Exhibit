@@ -67,29 +67,28 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .tool-chip.done{color:var(--color-success);border-color:var(--color-success-tint-border);background:var(--color-success-tint)}
 .tool-chip.fail{color:var(--color-danger-ink);border-color:var(--color-danger-tint-border);background:var(--color-danger-soft)}
 .tool-chip i{font-size:13px}
-.agent-questions{align-self:stretch;border:1px solid var(--color-accent-tint-border);border-radius:12px;padding:14px;background:var(--color-ground);font-size:14px;line-height:1.45;overflow-wrap:anywhere}
-.question-heading{display:flex;align-items:center;gap:7px;font-weight:600;color:var(--color-ink)}
-.question-heading i{color:var(--brand-blue);font-size:19px}
-.question-intro,.question-help{color:var(--color-muted);font-size:12px;margin-top:5px}
-.agent-questions fieldset{border:0;min-width:0;margin-top:18px}
-.agent-questions legend{font-weight:600;padding:0;white-space:pre-wrap}
-.question-number{color:var(--color-muted);font-weight:400}
-.question-options{display:grid;gap:7px;margin:8px 0 10px}
-.question-option{display:flex;align-items:flex-start;gap:9px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-panel);padding:10px;cursor:pointer}
-.question-option:has(input:checked){border-color:var(--brand-blue);background:var(--color-accent-tint)}
-.question-option input{accent-color:var(--brand-blue);margin-top:3px;flex-shrink:0}
-.question-option-label{display:block;font-size:13px;font-weight:500;white-space:pre-wrap}
+.agent-questions{align-self:stretch;margin-block:10px;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.agent-questions fieldset{border:0;min-width:0;margin:0 0 26px}
+.agent-questions legend{font-weight:600;padding:0;margin-bottom:8px;white-space:pre-wrap}
+.question-options{display:grid}
+.question-option{display:flex;align-items:flex-start;gap:10px;padding:9px 0;min-height:40px;cursor:pointer}
+.question-option input{width:16px;height:16px;accent-color:var(--brand-blue);margin-top:3px;flex-shrink:0}
+.question-option-label{display:block;white-space:pre-wrap}
 .question-option-description{display:block;color:var(--color-muted);font-size:12px;margin-top:2px;white-space:pre-wrap}
-.question-text-label{display:block;font-size:12px;color:var(--color-ink-mid);margin:8px 0 5px}
-.agent-questions textarea{display:block;width:100%;resize:vertical;min-height:62px;max-height:200px;border:1px solid var(--color-border);border-radius:7px;padding:9px 10px;font:inherit;font-size:var(--field-font-size);background:var(--color-panel);color:var(--color-ink)}
+.question-other{margin-top:7px}
+.question-other summary{width:fit-content;color:var(--brand-blue);font-size:13px;cursor:pointer;padding-block:3px}
+.agent-questions textarea{display:block;width:100%;resize:vertical;min-height:39px;max-height:160px;border:0;border-bottom:1px solid var(--color-border);border-radius:0;padding:8px 0;font:inherit;font-size:var(--field-font-size);background:transparent;color:var(--color-ink)}
+.agent-questions textarea:focus{border-color:var(--brand-blue)}
 .agent-questions :is(input,textarea,button):focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
 .question-status{font-size:12px;color:var(--color-danger-ink);margin-top:10px}
 .question-status:empty{display:none}
-.question-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:14px}
-.question-skip,.question-own-answer,#question-retry{border:0;background:transparent;color:var(--color-ink-mid);font:inherit;font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
-.question-summary{margin-top:12px}
+.question-actions{display:flex;align-items:center;flex-wrap:wrap;gap:20px}
+.question-skip,#question-retry{border:0;background:transparent;color:var(--color-muted);font:inherit;font-size:13px;cursor:pointer;padding:8px 0}
+.question-skip:hover,#question-retry:hover{color:var(--brand-blue)}
+.question-summary+.question-summary{margin-top:18px}
 .question-summary-prompt{font-weight:500;white-space:pre-wrap}
 .question-summary-answer{color:var(--color-ink-soft);margin-top:4px;white-space:pre-wrap}
+.question-skipped{color:var(--color-muted);font-size:13px;margin-top:8px}
 #question-load-error{font-size:12px;color:var(--color-danger-ink)}
 .thinking{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;color:var(--color-muted);font-size:12.5px;font-style:italic}
 /* No prefers-reduced-motion override, on purpose (av-90ej): a stopped spinner

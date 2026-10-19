@@ -86,16 +86,37 @@ test('an option question can be answered entirely in the person’s own words', 
   assert.equal(JSON.parse(p.calls[0].body).answers[0].text, 'A monthly calendar');
 });
 
-test('the person can clear an earlier choice and switch to their own answer', async () => {
+test('typing a different answer clears an earlier single choice', async () => {
   const p = await fixture();
   const selected = { checked: true };
-  let focused = false;
-  const question = { querySelectorAll: () => [selected], querySelector: () => ({ focus() { focused = true; } }) };
-  const button = { closest: () => question };
-  await p.byId('messages').click({ closest: selector => selector === '[data-question-clear]' ? button : null });
+  const question = { dataset: { multiSelect: 'false' }, querySelectorAll: () => [selected] };
+  await p.byId('messages').dispatchEvent({ type: 'input', target: {
+    tagName: 'TEXTAREA', value: 'A monthly calendar',
+    closest: selector => selector === '[data-question-form]' ? p.form : question
+  } });
   assert.equal(selected.checked, false);
-  assert.equal(focused, true);
   assert.equal(p.calls.length, 0);
+});
+
+test('selecting a suggestion clears and closes the custom answer', async () => {
+  const p = await fixture();
+  const text = { value: 'A monthly calendar' };
+  const details = { open: true };
+  const question = { querySelector: selector => selector === 'textarea' ? text : details };
+  await p.byId('messages').dispatchEvent({ type: 'change', target: { type: 'radio', closest: () => question } });
+  assert.equal(text.value, '');
+  assert.equal(details.open, false);
+});
+
+test('a written answer can accompany multiple selections', async () => {
+  const p = await fixture();
+  const selected = { checked: true };
+  const question = { dataset: { multiSelect: 'true' }, querySelectorAll: () => [selected] };
+  await p.byId('messages').dispatchEvent({ type: 'input', target: {
+    tagName: 'TEXTAREA', value: 'And a calendar',
+    closest: selector => selector === '[data-question-form]' ? p.form : question
+  } });
+  assert.equal(selected.checked, true);
 });
 
 test('an empty answer does not silently submit a suggested default', async () => {
@@ -103,7 +124,7 @@ test('an empty answer does not silently submit a suggested default', async () =>
   p.entries[0].choices = [];
   await p.submit();
   assert.equal(p.calls.length, 0);
-  assert.match(p.status.textContent, /answer each question/);
+  assert.match(p.status.textContent, /Answer each question/);
   await p.byId('messages').dispatchEvent({ type: 'input', target: { closest: () => p.form } });
   assert.equal(p.status.textContent, '');
 });

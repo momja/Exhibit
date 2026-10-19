@@ -404,6 +404,7 @@ function handleAgentEvent(ev) {
     }
     case 'tool_execution_start': {
       removeThinking();
+      if (ev.toolName === 'ask_user') break;
       const chip = el('div', 'tool-chip');
       const label = toolLabel(ev.toolName, ev.args);
       chip.dataset.label = label;
@@ -615,9 +616,7 @@ function updateComposer() {
   const waiting = pendingQuestions.size > 0;
   inputEl.disabled = waiting;
   document.getElementById('send-btn').disabled = waiting || !inputEl.value.trim();
-  document.getElementById('hint').textContent = waiting
-    ? 'Answer the questions above to continue, or choose “Skip for now”.'
-    : 'Enter to send · Shift+Enter for a new line · Ctrl+Shift+S to snippet an element from the preview';
+  document.getElementById('hint').hidden = waiting;
   inputEl.style.height = 'auto';
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
 }
@@ -1037,12 +1036,8 @@ function briefToMessage(brief) {
   const configured = await refreshKeyStatus();
   const brief = takeBrief();
   if (artifact) {
-    // The pane is already showing this artifact — the page render included the
-    // same fragment a swap would fetch — so boot only has to say so.
-    addMsg('sys', 'Editing "' + artifact.title + '". Describe the change you want — or snippet an element from the preview first.');
+    // The preview is already rendered; only the composer needs its edit hint.
     inputEl.placeholder = 'Describe the change to make…';
-  } else {
-    addMsg('sys', 'Describe a small self-contained tool and the agent will build it and save it to your library.');
   }
   // A brief only opens a *new* build. In modify mode the session already has a
   // subject, and a brief that somehow survived would ask for a second one.

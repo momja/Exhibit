@@ -34,9 +34,9 @@ func TestAgentQuestionsRoundTripAndHistory(t *testing.T) {
 	path := "/api/agent/sessions/" + session + "/questions/" + requestID
 	w := doJSON(t, h.router, http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), "How would you like to see your plans?")
+	assert.Contains(t, w.Body.String(), "How should your plan look?")
 	assert.Contains(t, w.Body.String(), `type="radio"`)
-	assert.Contains(t, w.Body.String(), "What would make this most useful for you?")
+	assert.Contains(t, w.Body.String(), "Anything you want to include?")
 	assert.NotContains(t, w.Body.String(), " checked")
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	w = doJSON(t, h.router, http.MethodPost, "/api/agent/sessions/"+session+"/prompt", map[string]string{"message": "an accidental message while answering"})
@@ -45,7 +45,7 @@ func TestAgentQuestionsRoundTripAndHistory(t *testing.T) {
 
 	w = doJSON(t, h.router, http.MethodPost, path, map[string]any{"answers": []agent.QuestionAnswer{{ID: "view", Selected: []string{"not a suggestion"}}}})
 	require.Equal(t, http.StatusBadRequest, w.Code)
-	answers := []agent.QuestionAnswer{{ID: "view", Selected: []string{"A weekly view"}}, {ID: "goal", Text: "Meals for my family <script>hello</script>"}}
+	answers := []agent.QuestionAnswer{{ID: "view", Selected: []string{"Weekly calendar"}}, {ID: "goal", Text: "Meals for my family <script>hello</script>"}}
 	w = doJSON(t, h.router, http.MethodPost, path, map[string]any{"answers": answers})
 	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
 	seen := awaitEvent(t, events, func(line string) bool { return strings.Contains(line, `"agent_settled"`) }, "the agent to continue after the answers")
@@ -56,7 +56,7 @@ func TestAgentQuestionsRoundTripAndHistory(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, w.Code, "a second tab cannot answer again")
 	w = doJSON(t, h.router, http.MethodGet, path, nil)
 	assert.NotContains(t, w.Body.String(), "data-question-form")
-	assert.Contains(t, w.Body.String(), "A weekly view")
+	assert.Contains(t, w.Body.String(), "Weekly calendar")
 	assert.Contains(t, w.Body.String(), "&lt;script&gt;hello&lt;/script&gt;")
 	assert.NotContains(t, w.Body.String(), "<script>hello</script>")
 
@@ -91,7 +91,7 @@ func TestAgentQuestionsSkipAndStopReleaseTheTool(t *testing.T) {
 			}
 			awaitEvent(t, events, func(line string) bool { return strings.Contains(line, `"agent_settled"`) }, "the unanswered tool to settle")
 			w := doJSON(t, h.router, http.MethodGet, path, nil)
-			assert.Contains(t, w.Body.String(), "Questions skipped")
+			assert.Contains(t, w.Body.String(), "Skipped")
 			assert.NotContains(t, w.Body.String(), "data-question-form")
 		})
 	}
@@ -125,7 +125,6 @@ func TestAgentQuestionTemplateEscapesPromptsAndSupportsMultipleSelections(t *tes
 	fragment, err := renderPage("agentQuestions", agentQuestionsData{QuestionRequest: request, SessionID: "s"})
 	require.NoError(t, err)
 	assert.Contains(t, fragment, `type="checkbox"`)
-	assert.Contains(t, fragment, "Choose any that fit")
 	assert.Contains(t, fragment, "&lt;img")
 	assert.Contains(t, fragment, "&lt;b&gt;detail&lt;/b&gt;")
 	assert.NotContains(t, fragment, "<img")

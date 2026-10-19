@@ -168,11 +168,11 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
        src-less iframe, so there is never an iframe pointed at nothing.
      Data: agentPreviewData (agentui.go). */}}
 {{define "agentPreview"}}<div class="preview-bar">
-      <span class="title" id="pv-title">{{if .HasArtifact}}{{.Title}}{{else}}No artifact yet{{end}}</span>
+      <span class="title" id="pv-title">{{if .HasArtifact}}{{.Title}}{{else}}Preview{{end}}</span>
       {{if .HasArtifact}}<button type="button" id="pv-open" class="preview-open" data-direct-open-artifact="{{.ID}}" data-direct-open-url="{{.OpenURL}}" aria-label="Open in new tab" title="Open in new tab"><span class="lbl">Open </span><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
       <a id="pv-detail" href="{{.DetailURL}}">Details</a>{{end}}
       <span class="spacer"></span>
-      <button class="snip-btn" id="snip-btn"{{if not .HasArtifact}} disabled{{end}} onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
+      <button class="snip-btn" id="snip-btn"{{if not .HasArtifact}} disabled hidden{{end}} onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
     </div>
     {{/* The artifact's gallery tile (av-fafu), rendered by the same cardWidget
          partial the library uses so what the agent sees here is what the
@@ -181,7 +181,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
          empty case of its own. */}}
     {{if .HasArtifact}}<div class="pv-widget">{{template "cardWidget" .Widget}}<span class="pv-widget-label">Gallery widget</span></div>{{end}}
     <div id="frame-wrap">
-      {{if .HasArtifact}}<iframe id="pv-frame" src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>The artifact preview appears here once the agent saves one.</span></div>{{end}}
+      {{if .HasArtifact}}<iframe id="pv-frame" src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>Your tool will appear here.</span></div>{{end}}
     </div>{{end}}
 
 {{/* agentHistory is the history pane's list: every conversation kept with the

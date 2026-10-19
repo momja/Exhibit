@@ -1,27 +1,26 @@
 {{define "agentQuestions"}}<section class="agent-questions" id="agent-question-{{.ID}}" data-pending="{{.Pending}}" data-session-id="{{.SessionID}}" data-request-id="{{.ID}}" aria-label="Questions from the agent">
-  <div class="question-heading"><i class="ph ph-chat-circle-dots" aria-hidden="true"></i> {{if .Pending}}A few details to get it right{{else if .Cancelled}}Questions skipped{{else}}Your answers{{end}}</div>
   {{if .Pending}}
-  <p class="question-intro">Choose what fits, write your own answer, or add a little detail.</p>
   <form data-question-form novalidate>
     {{range $index, $question := .Questions}}
-    <fieldset data-question-id="{{.ID}}">
+    <fieldset data-question-id="{{.ID}}" data-multi-select="{{.MultiSelect}}">
       <legend>{{.Question}}</legend>
-      {{if .Options}}<p class="question-help">{{if .MultiSelect}}Choose any that fit{{else}}Choose one{{end}}</p>
-      <div class="question-options">{{range $optionIndex, $option := .Options}}
+      {{if .Options}}<div class="question-options">{{range .Options}}
         <label class="question-option"><input type="{{if $question.MultiSelect}}checkbox{{else}}radio{{end}}" name="question-{{$index}}" value="{{.Label}}"><span><span class="question-option-label">{{.Label}}</span>{{if .Description}}<span class="question-option-description">{{.Description}}</span>{{end}}</span></label>
-      {{end}}</div><button type="button" class="question-own-answer" data-question-clear>Write my own answer</button>{{end}}
-      <label class="question-text-label" for="answer-{{$.ID}}-{{$index}}">{{if .Options}}Your own answer or extra details{{else}}Your answer{{end}}</label>
-      <textarea id="answer-{{$.ID}}-{{$index}}" name="answer-{{$index}}" rows="2" maxlength="8000" placeholder="{{if .Options}}Something else in mind?{{else}}Tell me a little more…{{end}}"></textarea>
+      {{end}}</div>
+      <details class="question-other"><summary>Something else</summary>{{template "agentQuestionInput" .}}</details>
+      {{else}}{{template "agentQuestionInput" .}}{{end}}
     </fieldset>
     {{end}}
     <p class="question-status" role="status" aria-live="polite"></p>
-    <div class="question-actions"><button class="btn" type="submit">Send answers <i class="ph ph-arrow-right" aria-hidden="true"></i></button><button class="question-skip" type="button" data-question-skip>Skip for now</button></div>
+    <div class="question-actions"><button class="btn" type="submit">Continue</button><button class="question-skip" type="button" data-question-skip>Skip</button></div>
   </form>
   {{else}}
     {{template "agentQuestionSummary" .QuestionRequest}}
   {{end}}
 </section>{{end}}
 
-{{define "agentQuestionSummary"}}{{range $index, $question := .Questions}}<div class="question-summary"><p class="question-summary-prompt">{{.Question}}</p>{{if $.Cancelled}}<p class="question-help">No answer given</p>{{else}}{{with index $.Answers $index}}{{range .Selected}}<p class="question-summary-answer">{{.}}</p>{{end}}{{if .Text}}<p class="question-summary-answer">{{.Text}}</p>{{end}}{{end}}{{end}}</div>{{end}}{{end}}
+{{define "agentQuestionInput"}}<textarea aria-label="{{.Question}}" rows="1" maxlength="8000" placeholder="Your answer…"></textarea>{{end}}
 
-{{define "agentQuestionHistory"}}<section class="agent-questions" aria-label="Questions from the agent"><div class="question-heading"><i class="ph ph-chat-circle-dots" aria-hidden="true"></i> {{if .Cancelled}}Questions skipped{{else}}Your answers{{end}}</div>{{template "agentQuestionSummary" .}}</section>{{end}}
+{{define "agentQuestionSummary"}}{{range $index, $question := .Questions}}<div class="question-summary"><p class="question-summary-prompt">{{.Question}}</p>{{if not $.Cancelled}}{{with index $.Answers $index}}{{range .Selected}}<p class="question-summary-answer">{{.}}</p>{{end}}{{if .Text}}<p class="question-summary-answer">{{.Text}}</p>{{end}}{{end}}{{end}}</div>{{end}}{{if .Cancelled}}<p class="question-skipped">Skipped</p>{{end}}{{end}}
+
+{{define "agentQuestionHistory"}}<section class="agent-questions" aria-label="Questions from the agent">{{template "agentQuestionSummary" .}}</section>{{end}}

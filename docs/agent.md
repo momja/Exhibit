@@ -160,14 +160,17 @@ not change tool parameters, prompt wording, or owner/artifact scope.
 The agent can call `ask_user` with one to four related questions. Each has a
 unique `id`, a plain-language `question`, and optionally up to six
 `options[{label, description?}]`. Setting `multiSelect: true` allows several
-suggestions to be chosen. Every question also has a text field, so the person
-can write a different answer or add details to their choice. Nothing is selected
+suggestions to be chosen. Open questions have a text field. For questions with choices, “Something else”
+reveals a text field for a different answer. Typing replaces a single selection;
+multiple selections can include a written answer. Nothing is selected
 in advance; the whole batch is submitted together.
 
 The system prompt encourages the agent to interpret the person's intended
 outcome, clarify vague details, confirm meaningful assumptions, and offer
-helpful suggestions. Questions ask about what the person needs and prefers in
-everyday language, rather than asking them to make technical decisions.
+helpful suggestions. Questions are short and use everyday language. Option
+descriptions are reserved for differences that help someone choose. The chat
+shows the questions directly, with plain choice rows and no surrounding card
+or introductory copy.
 
 ![Two questions in the agent chat](screenshots/Exh-br5h/01-questions-desktop.png)
 
@@ -190,7 +193,7 @@ travels back to the waiting tool through `extension_ui_response`, rather than
 starting another prompt. While questions are pending, the ordinary composer
 waits and direct prompt requests return `409`.
 
-“Skip for now” posts `{"cancelled":true}` and tells the agent no answer was
+“Skip” posts `{"cancelled":true}` and tells the agent no answer was
 given. Stop aborts the tool through Pi's signal; it does not submit answers.
 Neither is agreement or permission. A reconnect preserves unfinished drafts
 and fetches the current request state instead of reviving answered forms.
