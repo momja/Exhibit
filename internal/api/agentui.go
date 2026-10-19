@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strconv"
 
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -36,9 +37,10 @@ type agentPageData struct {
 	// whether pi exists at all: an instance can have the agent disabled in
 	// either mode, and a platform instance with no pi binary must still show
 	// the banner rather than a key prompt that would fix nothing.
-	BYOK    bool
-	BackURL string
-	Preview agentPreviewData
+	BYOK       bool
+	BackURL    string
+	Preview    agentPreviewData
+	DirectOpen struct{ ID, ViewerPreference, OpenURL string }
 }
 
 // agentPreviewData feeds the "agentPreview" partial - the preview pane's
@@ -55,6 +57,7 @@ type agentPageData struct {
 // default tile is visible too, which is what "this artifact has no widget yet"
 // looks like. It carries the same stamp for the same reason.
 type agentPreviewData struct {
+	ID          string
 	HasArtifact bool
 	Title       string
 	FrameURL    string
@@ -68,8 +71,8 @@ type agentPreviewData struct {
 //
 // FrameURL and the widget tile carry freshly minted render tokens (av-c5aq) —
 // which costs nothing extra here, since both are re-minted on every htmx swap
-// anyway for the cache-busting stamp. OpenURL stays an app-origin link that
-// mints at click time, because the agent pane is a surface someone leaves open
+// anyway for the cache-busting stamp. OpenURL stays an app-origin URL that
+// mints on confirmation, because the agent pane is a surface someone leaves open
 // for a long session.
 func (ro *Router) newAgentPreviewData(r *http.Request, a *store.Artifact) agentPreviewData {
 	if a == nil {
@@ -81,6 +84,7 @@ func (ro *Router) newAgentPreviewData(r *http.Request, a *store.Artifact) agentP
 		widget.URL = cacheBust(widget.URL)
 	}
 	return agentPreviewData{
+		ID:          a.ID,
 		HasArtifact: true,
 		Title:       a.Title,
 		FrameURL:    cacheBust(urls.artifact(a.ID)),
@@ -152,7 +156,7 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 			artifact = a
 		}
 	}
-	page, err := renderPage("agent", agentPageData{
+	data := agentPageData{
 		Favicon:         template.URL(exhibitLogoDataURI),
 		pageCredentials: ro.pageCredentials(r),
 		ArtifactJSON:    template.JS(artifactJSON),
@@ -161,7 +165,14 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 		BYOK:            !ro.platformMode(),
 		BackURL:         backURL,
 		Preview:         ro.newAgentPreviewData(r, artifact),
-	})
+	}
+	data.DirectOpen.ID = data.Preview.ID
+	data.DirectOpen.OpenURL = data.Preview.OpenURL
+	data.DirectOpen.ViewerPreference = strconv.FormatInt(ownerIDFromCtx(r.Context()), 10)
+	if ro.renderURLs(r).anonymous {
+		data.DirectOpen.ViewerPreference = "anonymous"
+	}
+	page, err := renderPage("agent", data)
 	if err != nil {
 		serverError(w, r, "agent page render", err)
 		return

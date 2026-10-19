@@ -31,9 +31,14 @@ func TestAgentPreviewFragmentMatchesThePagesPane(t *testing.T) {
 	// contents in the page are exactly the fragment.
 	assert.Contains(t, normalizePerRender(page), normalizePerRender(fragment))
 	assert.Contains(t, fragment, `<span class="title" id="pv-title">Preview me</span>`)
-	// "Open" is an app-origin link that mints its token when it is clicked, so
+	// "Open" uses an app-origin URL that mints its token when confirmed, so
 	// it carries no credential in the markup at all (av-c5aq).
-	assert.Contains(t, fragment, `href="/artifacts/`+id+`/open"`)
+	assert.Contains(t, fragment, `data-direct-open-artifact="`+id+`" data-direct-open-url="/artifacts/`+id+`/open"`)
+	assert.NotContains(t, fragment, `href="/artifacts/`+id+`/open"`)
+	assert.Contains(t, page, `id="direct-open-modal"`)
+	assert.Contains(t, page, `data-viewer="1"`)
+	assert.Contains(t, page, `<script type="module" src="/assets/gallery/direct-open.js"></script>`)
+	assert.NotContains(t, fragment, `id="direct-open-modal"`, "dialog stays outside swapped preview")
 	assert.Contains(t, fragment, `href="/artifacts/`+id+`"`)
 }
 

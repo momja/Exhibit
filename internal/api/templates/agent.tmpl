@@ -143,6 +143,8 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
      preview pane renders a tile, so it needs it like the gallery does. */}}
 <script src="/assets/gallery/components.js"></script>
 <script type="module" src="/assets/gallery/agent.js"></script>
+{{template "directOpenPrompt" .DirectOpen}}
+<script type="module" src="/assets/gallery/direct-open.js"></script>
 <script type="module" src="/assets/gallery/agent-resize.js"></script>
 <script type="module" src="/assets/gallery/message-actions.js"></script>
 </body>
@@ -165,7 +167,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
      Data: agentPreviewData (agentui.go). */}}
 {{define "agentPreview"}}<div class="preview-bar">
       <span class="title" id="pv-title">{{if .HasArtifact}}{{.Title}}{{else}}No artifact yet{{end}}</span>
-      {{if .HasArtifact}}<a id="pv-open" href="{{.OpenURL}}" target="_blank"><span class="lbl">Open </span>↗</a>
+      {{if .HasArtifact}}<button type="button" id="pv-open" class="preview-open" data-direct-open-artifact="{{.ID}}" data-direct-open-url="{{.OpenURL}}" aria-label="Open in new tab" title="Open in new tab"><span class="lbl">Open </span><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
       <a id="pv-detail" href="{{.DetailURL}}">Details</a>{{end}}
       <span class="spacer"></span>
       <button class="snip-btn" id="snip-btn"{{if not .HasArtifact}} disabled{{end}} onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>

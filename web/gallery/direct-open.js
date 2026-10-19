@@ -5,13 +5,11 @@ const remember = document.getElementById('direct-open-remember');
 const cancel = document.getElementById('direct-open-cancel');
 const confirm = document.getElementById('direct-open-confirm');
 const status = document.getElementById('direct-open-status');
-const { artifact, viewer, openUrl } = modal.dataset;
-const preferenceKey = artifact && viewer
-  ? 'exhibit:direct-open:v1:' + JSON.stringify([viewer, artifact]) : null;
+const { viewer } = modal.dataset;
 let pending = null;
 let background = [];
 
-function remembered() {
+function remembered(preferenceKey) {
   try { return preferenceKey && localStorage.getItem(preferenceKey) === '1'; }
   catch (err) { return false; }
 }
@@ -43,8 +41,8 @@ function finish(opened) {
   // The toolbar menu closes when its button acts. Return to its visible
   // trigger instead of focusing an item in the now-hidden popup.
   const trigger = request.trigger;
-  const target = trigger && !trigger.closest('[hidden]') ? trigger
-    : document.getElementById('pip-more');
+  const target = trigger && trigger.isConnected !== false && !trigger.closest('[hidden]') ? trigger
+    : document.getElementById('pv-open') || document.getElementById('pip-more');
   target?.focus();
   request.resolve?.(opened);
 }
@@ -84,9 +82,9 @@ async function open(request, saveChoice) {
       return;
     }
     if (!approved) throw new Error('approval failed');
-    tab.location = openUrl;
-    if (saveChoice && preferenceKey) {
-      try { localStorage.setItem(preferenceKey, '1'); }
+    tab.location = request.openUrl;
+    if (saveChoice && request.preferenceKey) {
+      try { localStorage.setItem(request.preferenceKey, '1'); }
       catch (err) { /* Ask again next time when persistence is unavailable. */ }
     }
     finish(true);
@@ -101,16 +99,28 @@ async function open(request, saveChoice) {
 
 function requestOpen(options = {}) {
   if (pending) { options.resolve?.(false); return; }
-  pending = { ...options, trigger: options.trigger || document.activeElement, tab: null, busy: false };
+  const trigger = options.trigger || document.activeElement;
+  // Agent controls are replaced by server-rendered preview swaps. Capture
+  // their artifact and URL together for this decision, rather than at boot.
+  const artifact = trigger?.dataset.directOpenArtifact ?? modal.dataset.artifact;
+  const openUrl = trigger?.dataset.directOpenUrl ?? modal.dataset.openUrl;
+  if (!artifact || !openUrl) { options.resolve?.(false); return; }
+  const preferenceKey = viewer
+    ? 'exhibit:direct-open:v1:' + JSON.stringify([viewer, artifact]) : null;
+  pending = { ...options, trigger, openUrl, preferenceKey, tab: null, busy: false };
   remember.checked = false;
-  if (remembered()) open(pending, false);
+  if (remembered(preferenceKey)) open(pending, false);
   else show();
 }
 
 for (const id of ['direct-open-toolbar', 'direct-open-banner']) {
   const trigger = document.getElementById(id);
-  trigger.addEventListener('click', () => requestOpen({ trigger }));
+  trigger?.addEventListener('click', () => requestOpen({ trigger }));
 }
+document.addEventListener('click', (event) => {
+  const trigger = event.target.closest('[data-direct-open-artifact]');
+  if (trigger) requestOpen({ trigger });
+});
 // The existing capability handlers supply their approval and stale-request
 // guard. No API writes belong to this viewer preference, so recipients can
 // remember their own choice as well.
