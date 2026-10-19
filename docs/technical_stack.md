@@ -338,6 +338,15 @@ hand-rolled HTML escaping the old string-concatenated pages needed.)
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.
 
+Artifact viewer tabs and direct render documents share a generated SVG favicon
+from `internal/artifacticon`: an asymmetric Mondrian grid inspired by the logo,
+with up to three tag-colored panels in gallery tag order. The panels have similar
+areas, with one smaller panel always white. Untagged artifacts use Exhibit’s red,
+blue, and yellow; unused tag panels stay white. Render-time icon links replace
+stored favicon links without changing the saved source; widgets retain their
+existing rendering. Other app pages and the automatic `/favicon.ico` routes keep
+the full Exhibit logo.
+
 **Page scripts are ES modules.** A new page script, or one being substantially
 rewritten, loads as `<script type="module" src="/assets/gallery/<name>.js">`
 and imports what it uses by relative path. A classic script finds its

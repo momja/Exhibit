@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/momja/Exhibit/internal/artifacticon"
 	"github.com/momja/Exhibit/internal/color"
 	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/store"
@@ -981,7 +982,7 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		viewerPreference = "anonymous"
 	}
 	return renderPage("detail", detailPageData{
-		Favicon:        template.URL(exhibitLogoDataURI),
+		Favicon:        template.URL(artifacticon.DataURI(a.Tags)),
 		Share:          share,
 		ID:             a.ID,
 		Title:          a.Title,
