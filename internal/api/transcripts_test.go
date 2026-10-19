@@ -171,7 +171,14 @@ func TestTranscriptFragmentShowsTheConversationReadOnly(t *testing.T) {
 	// The same bubbles and chips the live chat draws.
 	assert.Contains(t, frag, `<div class="msg user">make the button &lt;b&gt;green&lt;/b&gt;</div>`)
 	assert.Contains(t, frag, `<div class="tool-chip done"><i class="ph ph-check-circle"></i> Reading artifact source</div>`)
-	assert.Contains(t, frag, `<div class="msg assistant">Done.</div>`)
+	assert.Contains(t, frag, `<div class="msg assistant" data-message-content>Done.</div>`)
+	assert.Equal(t, 1, strings.Count(frag, `data-message-action="copy"`), "only agent text receives an action row")
+	assert.Contains(t, frag, `aria-label="Message actions"`)
+	assert.Contains(t, frag, `role="status"`)
+	page := getPage(t, r, "/agent?artifact="+id)
+	assert.Contains(t, page, `<template id="agent-message-template"><div class="agent-message" data-agent-message>`)
+	assert.Contains(t, page, `<script type="module" src="/assets/gallery/message-actions.js"></script>`)
+	assert.Equal(t, 1, strings.Count(page, `data-message-action="copy"`), "the live template carries the same action row")
 	// Nothing in it talks to the live session.
 	assert.NotContains(t, frag, "composer")
 	assert.NotContains(t, frag, "<textarea")
@@ -273,6 +280,10 @@ func TestTheCardPutsTheRollbackToThePersonAndKeepsTheEscapeSecondary(t *testing.
 	assert.Contains(t, frag, `hx-get="/partials/agent-history?artifact=`+id+`"`)
 	// Nothing about the decision is hidden away in script: it is all here to read.
 	assert.Contains(t, frag, `role="status"`)
+	page := getPage(t, r, "/agent?artifact="+id)
+	assert.Contains(t, page, `<template id="agent-message-template"><div class="agent-message" data-agent-message>`)
+	assert.Contains(t, page, `<script type="module" src="/assets/gallery/message-actions.js"></script>`)
+	assert.Equal(t, 1, strings.Count(page, `data-message-action="copy"`), "the live template carries the same action row")
 }
 
 // A conversation that cannot be continued says why where the card would be.

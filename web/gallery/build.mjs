@@ -45,7 +45,7 @@ const files = [
   // per page, since settings.js drives the admin table /profile does not
   // have and profile.js (av-4wyq) drives a deletion /admin/users must not.
   "settings.css", "settings.js", "profile.js",
-  "agent.css", "agent.js",
+  "agent.css", "agent.js", "message-actions.js",
   // The login page (av-q30x) is stylesheet-only: it deliberately ships no
   // script, being the one page a not-yet-authenticated visitor has to be able
   // to use.

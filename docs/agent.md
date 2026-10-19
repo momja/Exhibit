@@ -548,6 +548,25 @@ are server-rendered fragments (`/partials/agent-history`,
 and closes the pane and runs the one thing a fragment cannot, which is
 continuing a conversation.
 
+**Message actions (Exh-ruds).** Each agent text bubble has an always-visible
+row of icons below it, starting with **Copy**. Action labels appear on hover or
+keyboard focus without shifting the other buttons. Copy preserves the exact text
+(including line breaks and Markdown), with a short success status or an actionable error. The
+Clipboard API is preferred; HTTP deployments use a temporary selection and
+`execCommand('copy')`, restoring focus and the previous selection afterward.
+
+The `agentMessage` template partial owns the bubble, content slot, and action
+row. History renders it directly; live streaming clones the same server-rendered
+`<template>` shell and appends deltas only to `[data-message-content]`, since
+those deltas are browser-local state. `message-actions.js` is a native ES module
+with one delegated listener on `#pane-chat`, so history swaps and continuing a
+conversation need no rebinding. To add an action, add a `data-message-action`
+button to the partial and a matching entry in the module's `actions` map. Each
+entry supplies `run({ content, message, button })`, returning success text, and
+`failureMessage`; the listener handles pending state and accessible feedback.
+Actions that change persisted content should dispatch their change event and
+refresh the appropriate server-rendered partial through htmx.
+
 **Continuing.** Under the transcript is a card that is the whole decision. If the
 artifact is still at the version the conversation was last working against, it is
 one button, *Continue this conversation*. If it has moved on, the card says which

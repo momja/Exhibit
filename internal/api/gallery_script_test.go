@@ -47,6 +47,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"tags.test.mjs",
 		"agent.net.test.mjs",
 		"agent.history.test.mjs",
+		"message-actions.test.mjs",
 		"components.popover.test.mjs",
 		"components.versionviewer.test.mjs",
 		"pip-placement.test.mjs",
