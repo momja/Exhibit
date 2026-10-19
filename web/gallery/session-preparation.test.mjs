@@ -8,18 +8,34 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 function timers() {
   const callbacks = new Map();
   let nextId = 0;
+  let time = 0;
+  async function advance(milliseconds) {
+    const target = time + milliseconds;
+    for (;;) {
+      const next = [...callbacks].sort((a, b) => a[1].at - b[1].at)[0];
+      if (!next || next[1].at > target) break;
+      time = next[1].at;
+      callbacks.delete(next[0]);
+      next[1].fn();
+      await flush();
+    }
+    time = target;
+    await flush();
+  }
   return {
-    schedule(fn) { callbacks.set(++nextId, fn); return nextId; },
+    now: () => time,
+    schedule(fn, delay = 0) { callbacks.set(++nextId, {fn, at: time + delay}); return nextId; },
     cancel(id) { callbacks.delete(id); },
+    advance,
+    // Simulate a suspended page whose deadline timer hasn't been dispatched.
+    elapse(milliseconds) { time += milliseconds; },
     async tick() {
-      const pending = [...callbacks.values()];
-      callbacks.clear();
-      for (const callback of pending) callback();
-      await Promise.resolve();
-      await Promise.resolve();
+      const until = Math.max(time, ...[...callbacks.values()].map(timer => timer.at));
+      await advance(until - time);
     },
   };
 }
@@ -116,4 +132,125 @@ test('discarding before the startup microtask runs makes no session request', as
  const preparation=createSessionPreparation({start:async()=>{starts++;return{id:'unused'};},close(){}});
  const pending=preparation.prepare();preparation.discard();
  assert.equal(await pending,null);assert.equal(starts,0);
+});
+
+
+test('a stalled POST claimed by Send times out, permits retry, and disposes its late success', async () => {
+  const stalled = deferred();
+  const closed = [];
+  let starts = 0;
+  const clock = timers();
+  const preparation = createSessionPreparation({ start: () => ++starts === 1 ? stalled.promise : {id: 'new'},
+    close: session => closed.push(session.id), expireAfter: 90, ...clock });
+  const eager = preparation.prepare();
+  await flush();
+  await clock.advance(60);
+  const claimed = preparation.claim();
+  assert.equal(claimed, eager, 'Send reuses the same bounded startup');
+  const rejected = assert.rejects(claimed, /startup timed out/);
+  await clock.advance(30);
+  await rejected;
+  assert.equal(starts, 1);
+  assert.equal((await preparation.claim()).id, 'new');
+  stalled.resolve({id: 'late'});
+  await flush();
+  assert.deepEqual(closed, ['late']);
+  assert.equal((await preparation.claim()).id, 'new', 'late completion cannot replace the new session');
+  preparation.release();
+});
+
+test('a delayed ready response gets only the remainder of the preparation deadline', async () => {
+  const startup = deferred();
+  const closed = [];
+  const clock = timers();
+  const preparation = createSessionPreparation({start: () => startup.promise,
+    close: session => closed.push(session.id), expireAfter: 90, ...clock});
+  const pending = preparation.prepare();
+  await clock.advance(70);
+  startup.resolve({id: 'slow'});
+  await pending;
+  await clock.advance(19);
+  assert.deepEqual(closed, []);
+  await clock.advance(1);
+  assert.deepEqual(closed, ['slow'], 'ready time does not renew the original deadline');
+});
+
+test('a ready claim cancels unused expiry and follows normal caller lifetime', async () => {
+  const closed = [];
+  const clock = timers();
+  const preparation = createSessionPreparation({start: () => ({id: 'ready'}),
+    close: session => closed.push(session.id), expireAfter: 90, ...clock});
+  await preparation.prepare();
+  await clock.advance(89);
+  assert.equal((await preparation.claim()).id, 'ready');
+  await clock.advance(1000);
+  assert.equal((await preparation.claim()).id, 'ready');
+  assert.deepEqual(closed, []);
+  preparation.release();
+});
+
+test('navigation settles a pending claim without waiting for the POST', async () => {
+  const startup = deferred();
+  const closed = [];
+  const clock = timers();
+  const preparation = createSessionPreparation({start: () => startup.promise,
+    close: session => closed.push(session.id), ...clock});
+  const pending = preparation.claim();
+  await flush();
+  preparation.discard();
+  assert.equal(await pending, null);
+  startup.resolve({id: 'late'});
+  await flush();
+  assert.deepEqual(closed, ['late']);
+});
+
+test('a response after the deadline cannot cancel an overdue timer when Send is waiting', async () => {
+  const startup = deferred();
+  const closed = [];
+  const clock = timers();
+  const preparation = createSessionPreparation({start: () => startup.promise,
+    close: session => closed.push(session.id), expireAfter: 90, ...clock});
+  const pending = preparation.claim();
+  const rejected = assert.rejects(pending, /startup timed out/);
+  await flush();
+  clock.elapse(91);
+  startup.resolve({id: 'already-expired'});
+  await rejected;
+  assert.deepEqual(closed, ['already-expired']);
+});
+
+test('claiming an overdue ready session starts afresh even before its timer callback runs', async () => {
+  let starts = 0;
+  const closed = [];
+  const clock = timers();
+  const preparation = createSessionPreparation({start: () => ({id: ++starts}),
+    close: session => closed.push(session.id), expireAfter: 90, ...clock});
+  await preparation.prepare();
+  clock.elapse(91);
+  assert.equal((await preparation.claim()).id, 2);
+  assert.deepEqual(closed, [1]);
+  preparation.release();
+});
+
+test('a timed-out request rejecting late cannot disturb a newer pending claim', async () => {
+  const old = deferred();
+  const next = deferred();
+  const clock = timers();
+  let starts = 0;
+  const preparation = createSessionPreparation({start: () => ++starts === 1 ? old.promise : next.promise,
+    close() {}, expireAfter: 90, ...clock});
+  const rejected = assert.rejects(preparation.claim(), /startup timed out/);
+  await flush();
+  await clock.advance(90);
+  await rejected;
+  const pending = preparation.claim();
+  await flush();
+  old.reject(new Error('late network failure'));
+  await flush();
+  assert.equal(preparation.claim(), pending);
+  next.resolve({id: 'next'});
+  assert.equal((await pending).id, 'next');
+  await clock.advance(1000);
+  assert.equal((await preparation.claim()).id, 'next');
+  preparation.release();
 });

@@ -72,9 +72,11 @@ test('navigation disposes a late session and an interrupted Send never posts its
   await page.type('hello'); await page.tick(300);
   const sending = page.window.send();
   await page.dispatchOnWindow('pagehide');
-  resolve(json({id: 'late'}));
   await sending;
   assert.equal(prompts(page).length, 0);
+  assert.equal(page.byId('input').value, 'hello');
+  resolve(json({id: 'late'}));
+  await flush();
   assert.equal(deletes(page)[0].path, '/api/agent/sessions/late');
   assert.equal(deletes(page)[0].keepalive, true);
 });
@@ -133,4 +135,44 @@ test('old stream callbacks cannot close or reconnect a replacement session', asy
  assert.equal(starts(page).length,2);
  assert.equal(prompts(page).at(-1).path,'/api/agent/sessions/s2/prompt');
  assert.equal(page.streams.length,2);
+});
+
+test('Send escapes a stalled preparation, retains its draft, retries, and disposes the late session', async () => {
+  let finishStalled;
+  let attempts = 0;
+  const page = await boot(() => ++attempts === 1
+    ? new Promise(resolve => { finishStalled = resolve; }) : json({id: 'retry'}));
+  await page.type('accepted draft');
+  await page.tick(300);
+  const sending = page.window.send();
+  await flush();
+  assert.equal(starts(page).length, 1, 'Send reuses the pending POST');
+  await page.tick(90000);
+  await sending;
+  assert.equal(prompts(page).length, 0);
+  assert.equal(page.byId('input').value, 'accepted draft');
+  assert.ok(page.byId('messages').children.some(message => message.textContent.includes('startup timed out')));
+
+  await page.window.send();
+  assert.equal(starts(page).length, 2, 'the sending lock was released for retry');
+  assert.equal(JSON.parse(prompts(page)[0].body).message, 'accepted draft');
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/retry/prompt');
+  finishStalled(json({id: 'late'}));
+  await flush();
+  assert.equal(deletes(page).filter(call => call.path === '/api/agent/sessions/late').length, 1);
+  await page.type('next draft');
+  await page.window.send();
+  assert.equal(starts(page).length, 2, 'the late response did not replace the claimed session');
+  assert.equal(prompts(page).at(-1).path, '/api/agent/sessions/retry/prompt');
+});
+
+test('a failed Send startup preserves the accepted draft for retry', async () => {
+  let attempts = 0;
+  const page = await boot(() => ++attempts === 1 ? Promise.reject(new Error('offline')) : json({id: 'retry'}));
+  await page.type('keep this draft');
+  await page.window.send();
+  assert.equal(page.byId('input').value, 'keep this draft');
+  assert.equal(prompts(page).length, 0);
+  await page.window.send();
+  assert.equal(JSON.parse(prompts(page)[0].body).message, 'keep this draft');
 });

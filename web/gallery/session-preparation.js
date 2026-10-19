@@ -1,71 +1,82 @@
-// Own an unused session until Send claims it. Invalidating also disposes late
-// responses while the page lives; the server deadline covers destroyed pages.
+// Own an unused session until Send claims it. The fixed startup deadline also
+// bounds Send while the POST is pending; late responses are still disposed.
 export function createSessionPreparation({ start, close, expireAfter = 90_000,
-  schedule = setTimeout, cancel = clearTimeout }) {
-  let generation = 0;
-  let pending = null;
-  let prepared = null;
-  let expiry = null;
-  let claimed = false;
+  schedule = setTimeout, cancel = clearTimeout, now = Date.now }) {
+  let current = null;
 
-  function clearExpiry() {
-    if (expiry !== null) cancel(expiry);
-    expiry = null;
+  function clearExpiry(attempt) {
+    if (attempt.expiry !== null) cancel(attempt.expiry);
+    attempt.expiry = null;
+  }
+
+  function expire(attempt) {
+    if (current !== attempt) return;
+    current = null;
+    clearExpiry(attempt);
+    if (attempt.session) close(attempt.session);
+    else attempt.reject(new Error('Agent session startup timed out. Send again to retry.'));
   }
 
   function discard() {
-    generation++;
-    clearExpiry();
-    const previous = prepared;
-    prepared = null;
-    pending = null;
-    claimed = false;
-    if (previous) close(previous);
+    const previous = current;
+    if (!previous) return;
+    current = null;
+    clearExpiry(previous);
+    // Unblock a waiting Send immediately, even if the POST never completes.
+    previous.resolve(null);
+    if (previous.session) close(previous.session);
   }
 
   function prepare() {
-    if (prepared) return Promise.resolve(prepared);
-    if (pending) return pending;
-    const startedAt = generation;
-    const request = Promise.resolve().then(() => startedAt === generation ? start() : null).then((session) => {
-      if (!session) return null;
-      if (startedAt !== generation) {
-        close(session);
-        return null;
+    if (current && !(current.claimed && current.session) && now() >= current.deadline) expire(current);
+    if (current) return current.promise;
+    const attempt = { session: null, claimed: false, expiry: null,
+      deadline: now() + expireAfter, resolve: null, reject: null, promise: null };
+    attempt.promise = new Promise((resolve, reject) => {
+      attempt.resolve = resolve;
+      attempt.reject = reject;
+    });
+    current = attempt;
+    attempt.expiry = schedule(() => expire(attempt), expireAfter);
+    Promise.resolve().then(() => current === attempt ? start() : null).then((session) => {
+      // A delayed response must not beat an overdue timer callback and claim
+      // a session whose server preparation deadline has already elapsed.
+      if (current === attempt && now() >= attempt.deadline) expire(attempt);
+      if (current !== attempt) {
+        if (session) close(session);
+        return;
       }
-      prepared = session;
-      if (!claimed) expiry = schedule(discard, expireAfter);
-      return session;
+      if (!session) {
+        discard();
+        return;
+      }
+      attempt.session = session;
+      if (attempt.claimed) clearExpiry(attempt);
+      attempt.resolve(session);
+    }, (error) => {
+      if (current === attempt) {
+        current = null;
+        clearExpiry(attempt);
+      }
+      attempt.reject(error);
     });
-    pending = request;
-    // Clear only this request: a discarded startup may finish after a new one.
-    request.then(() => {
-      if (pending === request) pending = null;
-    }, () => {
-      if (pending === request) pending = null;
-    });
-    return request;
+    return attempt.promise;
   }
 
-  async function claim() {
-    claimed = true;
-    clearExpiry();
-    try {
-      return await prepare();
-    } catch (error) {
-      claimed = false;
-      throw error;
-    }
+  function claim() {
+    const promise = prepare();
+    current.claimed = true;
+    // A pending claim still needs its startup deadline. Only a ready session
+    // can move into normal caller-owned lifetime.
+    if (current.session) clearExpiry(current);
+    return promise;
   }
 
   // The caller now owns the claimed session and closes it on normal reset.
   function release() {
-    if (!claimed || !prepared) return;
-    clearExpiry();
-    prepared = null;
-    pending = null;
-    claimed = false;
-    generation++;
+    if (!current?.claimed || !current.session) return;
+    clearExpiry(current);
+    current = null;
   }
 
   return { prepare, claim, discard, release };
