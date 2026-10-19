@@ -442,7 +442,7 @@ GET  /s/:shareID/og.png  Link-preview image of a share: its widget, or the logo 
 GET  /og.png           The generic link-preview card (Exhibit's logo)
 ```
 
-A share document carries OpenGraph tags (`og:title`, `og:description`, `og:image`, `og:type`, `og:url`, `og:site_name`, `og:image:*`, `twitter:card`) naming the artifact and pointing `og:image` at `/s/:shareID/og.png`, a 1056x528 PNG of the share's widget. That route is `no-store`, and it serves the logo card when the instance runs no snapshot browser (`OG_SNAPSHOT_CDP_URL`) or the snapshot fails. Any id that is not a live anonymous link (a grant's id, a revoked link, or one never issued) gets the same `404` page, which carries only Exhibit's generic tags. See `security.md` §1.10.
+A share document carries OpenGraph tags (`og:title`, `og:description`, `og:image`, `og:type`, `og:url`, `og:site_name`, `og:image:*`, `twitter:card`) naming the artifact and pointing `og:image` at `/s/:shareID/og.png`, a 1056x528 PNG of the share's widget. That route is `no-store`, and it serves the logo card when the instance runs no headless browser (`CHROMIUM_CDP_URL`) or the snapshot fails. Any id that is not a live anonymous link (a grant's id, a revoked link, or one never issued) gets the same `404` page, which carries only Exhibit's generic tags. See `security.md` §1.10.
 
 The render surface sets `Content-Security-Policy` from the artifact's approved origins (its `decision='allow'` rows in `artifact_network_origins`), injects the storage shim with the artifact's state inlined, and serves the document `Cache-Control: no-store`. The iframe has `sandbox="allow-scripts"` without `allow-same-origin`, giving it an opaque origin.
 

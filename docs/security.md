@@ -769,28 +769,26 @@ The tags appear only on the share document. The token-gated renders are never
 crawled and carry none.
 
 The picture is the one place Exhibit runs artifact code on infrastructure the
-operator controls rather than in a visitor's browser. It is an opt-in
-sidecar (`OG_SNAPSHOT_CDP_URL`), not something the service image contains, and
-it is held to three rules:
+operator controls rather than in a visitor's browser. It is drawn in the
+operator's optional headless Chromium (`CHROMIUM_CDP_URL`, reached through
+`internal/chromium`), not in anything the service image contains, and it is
+held to three rules:
 
-- **It reaches the render origin and nothing else.** `internal/ogsnap` pauses
-  every request and continues only those under `RENDER_ORIGIN/`. It fails the
-  rest at the protocol layer, so an unforeseen scheme is refused by default.
-  The interception is enabled on the *browser* session, not the snapshot's tab,
-  because a page is not the only thing a widget can start: a popup, a worker
-  and a service worker are targets of their own, and each one escaped a
-  tab-level guard. WebSockets never reach request interception at all, so every
-  render-origin response that could become a document or a worker is re-issued
-  with one more `Content-Security-Policy`, `connect-src 'self' data: blob:`. A
-  browser enforces every policy a response carries, so this one can only narrow
-  the artifact's own, and documents with no response of their own
-  (`about:blank` and `srcdoc` frames, `blob:` and `data:` workers) inherit it
-  from their creator. The policy has to be served with the body: Chromium does
-  not enforce a policy added by `Fetch.continueResponse`, only by
-  `Fetch.fulfillRequest`. Because the interception is browser-wide, the sidecar
-  must be Exhibit's alone. WebRTC is the one way out that neither layer
-  governs. It can send packets to an internal address, but what it reads back
-  is whether a STUN or TURN server answered, not what a service said. The artifact's allowlist is deliberately **not** honoured here. It is
+- **It reaches the render origin and nothing else.** Each snapshot runs in a
+  browser context of its own, created with a proxy that does not exist
+  (`127.0.0.1:0`) and a bypass list naming only `RENDER_ORIGIN`, port
+  included. So the browser's network stack refuses everything else the
+  context does, whatever it is: a fetch, a subresource, a navigation, a
+  WebSocket, or a request from a popup, a worker or a service worker the
+  widget starts, since those all live in the same context. The list starts
+  with `<-loopback>`, because Chromium otherwise sends loopback addresses
+  around any proxy, and that exemption would hand the widget the browser's own
+  DevTools port. The restriction belongs to that one context, so other
+  features using the same browser are unaffected by it. WebRTC is the one way
+  out it does not govern, since WebRTC does not use the proxy. It can send
+  packets to an internal address, but what it reads back is whether a STUN or
+  TURN server answered, not what a service said. The artifact's allowlist is
+  deliberately **not** honoured here. It is
   a decision about what the artifact may reach from a *visitor's* browser. This
   browser sits in the operator's network and publishes its pixels to anyone
   holding the link, so honouring the allowlist would let an owner aim it at an
@@ -810,10 +808,13 @@ it is held to three rules:
   a chat app already fetched is its own copy and out of reach.
 
 Pinned by `internal/render/opengraph_test.go` (the tags, escaping, the four
-share states, the cache and its revocation) and `internal/ogsnap/ogsnap_test.go`
-(which runs a real Chromium when one is installed and fails if anything a
-widget starts — a request, a WebSocket, a popup, a worker, a service worker —
-reaches another origin).
+share states, the cache and its revocation), `internal/ogsnap/ogsnap_test.go`
+(a snapshot is taken under the restriction) and
+`internal/chromium/chromium_test.go`. The last runs a real Chromium when one is
+installed and fails if anything a confined page starts — a request, a
+navigation, a WebSocket, a popup, a worker, a service worker — reaches another
+origin, if another port on the allowed host is reachable, or if a tab with no
+restriction is confined by another tab's.
 
 ## 2. CSP: the allowlist is the wall
 

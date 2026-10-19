@@ -36,7 +36,7 @@ import (
 // middle of.
 
 // Snapshotter renders a page on the render origin into a PNG of a widget
-// tile's shape. *ogsnap.Chromium is the production implementation; it is an
+// tile's shape. *ogsnap.Snapshotter is the production implementation; it is an
 // interface so the render surface does not need a browser to be tested.
 type Snapshotter interface {
 	Snapshot(ctx context.Context, pageURL string) ([]byte, error)

@@ -528,8 +528,9 @@ executable document with the correct security envelope:
   it, carries OpenGraph tags at the top of its `<head>`: the artifact's title,
   fixed description copy, and `og:image` at `/s/:shareID/og.png`. That route serves a
   1056x528 PNG of the share's *widget* (`/s/:shareID/widget`, never the full
-  artifact), drawn by an optional headless Chromium sidecar
-  (`OG_SNAPSHOT_CDP_URL`, `internal/ogsnap`) and cached per share id. With no
+  artifact), drawn by the operator's optional headless Chromium
+  (`CHROMIUM_CDP_URL`, `internal/chromium`, with the preview specifics in
+  `internal/ogsnap`) and cached per share id. With no
   sidecar, or when a snapshot fails, it serves the generic card at `/og.png`,
   which the asset build rasterizes from the logo. The share row is resolved
   before the cache is read, and every id that is not a live link gets one
@@ -1555,9 +1556,10 @@ already expect.
 
 - **Litestream** sidecar → streams the SQLite WAL to a bucket; supervises restore on
   empty volume.
-- **Snapshot browser** → headless Chromium the service drives over CDP to draw
-  share link previews (av-rclm, `OG_SNAPSHOT_CDP_URL`), kept out of the main
-  image. Unset, previews use the logo card.
+- **Headless browser** → a Chromium the service drives over CDP
+  (`CHROMIUM_CDP_URL`, `internal/chromium`), kept out of the main image and
+  shared by server features, each in browser contexts of its own. Share link
+  previews are the first (av-rclm). Unset, previews use the logo card.
 - **Future Chrome extension** → another API client for chat-UI ingest.
 
 ### 3.7 Agent sidecar (Pi harness, Exh-yvhp)

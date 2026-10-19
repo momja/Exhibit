@@ -18,6 +18,7 @@ import (
 	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/chromium"
 	"github.com/momja/Exhibit/internal/logging"
 	"github.com/momja/Exhibit/internal/render"
 	"github.com/momja/Exhibit/internal/rendertoken"
@@ -103,10 +104,11 @@ type Config struct {
 	// shares-only decision is argued: see render.Config.EmbedOrigins. Read
 	// from the environment by EmbedOriginsFromEnv (embedorigins.go).
 	EmbedOrigins []string
-	// PreviewSnapshotter draws a live share's widget for its link preview
-	// (av-rclm). nil — no OG_SNAPSHOT_CDP_URL — means every preview shows the
-	// generic card. Read by PreviewSnapshotterFromEnv (previewsnapshot.go).
-	PreviewSnapshotter render.Snapshotter
+	// Chromium is the operator's headless browser, shared by every server
+	// feature that needs one; link previews of shares (av-rclm) are the first.
+	// nil — no CHROMIUM_CDP_URL — means there is none, and each feature falls
+	// back on its own terms. Read by ChromiumFromEnv (chromium.go).
+	Chromium *chromium.Browser
 	// MaxRequestBodyBytes bounds every request body the app surface accepts
 	// (av-ombn); a larger one is answered 413. Zero means
 	// DefaultMaxRequestBodyBytes, never "unbounded". Read from the
@@ -668,7 +670,7 @@ func (ro *Router) RenderHandler() http.Handler {
 		// Link previews (av-rclm): the logo card every preview falls back to,
 		// and the browser that draws a live share's widget, if any.
 		PreviewImagePNG: previewImagePNG(),
-		Snapshotter:     ro.cfg.PreviewSnapshotter,
+		Snapshotter:     ro.previewSnapshotter(),
 	})
 
 	r := chi.NewRouter()

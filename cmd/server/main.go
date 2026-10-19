@@ -77,12 +77,13 @@ func main() {
 		fatal("configure embed origins", err)
 	}
 
-	// The browser that draws link previews of shares (av-rclm). Unset — the
-	// default — is no browser and the generic card for every preview; a value
-	// that is not a DevTools URL is fatal rather than quietly ignored.
-	previewSnapshotter, err := api.PreviewSnapshotterFromEnv(renderOrigin)
+	// The headless browser server features share; link previews of shares
+	// (av-rclm) are the first. Unset — the default — is no browser, and every
+	// preview shows the generic card; a value that is not a DevTools URL is
+	// fatal rather than quietly ignored.
+	browser, err := api.ChromiumFromEnv()
 	if err != nil {
-		fatal("configure link-preview snapshots", err)
+		fatal("configure the headless browser", err)
 	}
 
 	// The largest request body any route accepts (av-ombn). Unset is the
@@ -285,7 +286,7 @@ func main() {
 		Public:              publicMode,
 		Entitlements:        entitlements,
 		EmbedOrigins:        embedOrigins,
-		PreviewSnapshotter:  previewSnapshotter,
+		Chromium:            browser,
 		MaxRequestBodyBytes: maxBodyBytes,
 	})
 

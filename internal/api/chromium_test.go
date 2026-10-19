@@ -5,43 +5,57 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/chromium"
 	"github.com/momja/Exhibit/internal/ogsnap"
 )
 
-// Unset is every instance that runs no snapshot browser: no snapshotter, and
-// no error, so previews quietly use the generic card.
-func TestPreviewSnapshotterFromEnvUnset(t *testing.T) {
+// Unset is every instance that runs no browser: none, and no error, so link
+// previews quietly use the generic card.
+func TestChromiumFromEnvUnset(t *testing.T) {
 	for _, raw := range []string{"", "   "} {
-		t.Setenv(envPreviewSnapshotCDPURL, raw)
-		snap, err := PreviewSnapshotterFromEnv("https://render.test")
-		if err != nil || snap != nil {
-			t.Fatalf("%q: got %v, %v; want no snapshotter and no error", raw, snap, err)
+		t.Setenv(envChromiumCDPURL, raw)
+		b, err := ChromiumFromEnv()
+		if err != nil || b != nil {
+			t.Fatalf("%q: got %v, %v; want no browser and no error", raw, b, err)
 		}
 	}
 }
 
-func TestPreviewSnapshotterFromEnvAcceptsDevToolsURLs(t *testing.T) {
+func TestChromiumFromEnvAcceptsDevToolsURLs(t *testing.T) {
 	for _, raw := range []string{"ws://chrome:9222", "wss://chrome.internal/", "http://127.0.0.1:9222", "https://chrome.example"} {
-		t.Setenv(envPreviewSnapshotCDPURL, raw)
-		snap, err := PreviewSnapshotterFromEnv("https://render.test")
-		if err != nil {
-			t.Fatalf("%q: %v", raw, err)
-		}
-		if _, ok := snap.(*ogsnap.Chromium); !ok {
-			t.Fatalf("%q: got %T, want *ogsnap.Chromium", raw, snap)
+		t.Setenv(envChromiumCDPURL, raw)
+		if b, err := ChromiumFromEnv(); err != nil || b == nil {
+			t.Fatalf("%q: got %v, %v", raw, b, err)
 		}
 	}
 }
 
-// The operator asked for previews; a value that cannot be a browser endpoint
-// must stop the start rather than leave them wondering why every preview is
-// the logo.
-func TestPreviewSnapshotterFromEnvRefusesNonsense(t *testing.T) {
+// The operator asked for a browser; a value that cannot be one must stop the
+// start rather than leave every feature quietly falling back.
+func TestChromiumFromEnvRefusesNonsense(t *testing.T) {
 	for _, raw := range []string{"chrome:9222", "ftp://chrome:9222", "ws://", "not a url"} {
-		t.Setenv(envPreviewSnapshotCDPURL, raw)
-		if _, err := PreviewSnapshotterFromEnv("https://render.test"); err == nil {
+		t.Setenv(envChromiumCDPURL, raw)
+		if _, err := ChromiumFromEnv(); err == nil {
 			t.Fatalf("%q must be refused", raw)
 		}
+	}
+}
+
+// With a browser configured, link previews draw in it; without one they use
+// the generic card. A nil *ogsnap.Snapshotter inside a non-nil interface would
+// look like a browser to the render surface and fail every preview.
+func TestPreviewsDrawInTheBrowserWhenThereIsOne(t *testing.T) {
+	r := &Router{cfg: Config{RenderOrigin: "https://render.test"}}
+	if snap := r.previewSnapshotter(); snap != nil {
+		t.Fatalf("no browser: got %T, want nil", snap)
+	}
+	b, err := chromium.New("ws://chrome:9222")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.cfg.Chromium = b
+	if _, ok := r.previewSnapshotter().(*ogsnap.Snapshotter); !ok {
+		t.Fatalf("with a browser: got %T, want *ogsnap.Snapshotter", r.previewSnapshotter())
 	}
 }
 

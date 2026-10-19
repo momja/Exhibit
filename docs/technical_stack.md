@@ -303,18 +303,20 @@ truly rendering).
 This is a nice-to-have; a v1 can ship with a generated placeholder (favicon/title card)
 and add real thumbnails later without schema changes.
 
-**As built, for share link previews (av-rclm).** The first consumer is not the
-gallery but the OpenGraph image of a share link. `internal/ogsnap` drives a
-Chromium the operator runs as a sidecar (`chromedp/headless-shell` in the
-Compose `previews` profile), reached by `OG_SNAPSHOT_CDP_URL` through
-`chromedp`'s remote allocator. The image never carries a browser. It snapshots
-the share's widget at the card tile's 264x132 at scale 4, in a fresh browser
-context. Every request outside `RENDER_ORIGIN`, from any target in the
-browser, is failed at the protocol layer, and every render-origin document or
-worker gets an extra `connect-src` policy for the WebSockets that layer never
-sees (`security.md` §1.10). The endpoint may be plaintext or TLS. Discovery
-keeps the scheme, which `chromedp`'s remote allocator does not. With no sidecar, the placeholder is the logo card
-`web/pwa-icons` rasterizes beside the PWA icons.
+**As built (av-rclm).** The browser is shared: `internal/chromium` connects
+to the Chromium the operator runs as a sidecar (`chromedp/headless-shell` in
+the Compose `chromium` profile), named by `CHROMIUM_CDP_URL`, and gives each
+use a tab in a browser context of its own. It does its own endpoint
+discovery, because `chromedp`'s remote allocator always discovers over plain
+HTTP and needs an explicit port. A plaintext or TLS endpoint both work. The
+image never carries a browser.
+
+The first consumer is not the gallery but the OpenGraph image of a share link.
+`internal/ogsnap` holds what is particular to it: the share's widget is
+snapshotted at the card tile's 264x132 at scale 4, in a context that may reach
+`RENDER_ORIGIN` and nothing else (`chromium.ReachOnly`, `security.md` §1.10).
+With no browser, the placeholder is the logo card `web/pwa-icons` rasterizes
+beside the PWA icons.
 
 ## 9. Gallery UI
 
