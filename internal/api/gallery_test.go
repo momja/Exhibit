@@ -181,11 +181,11 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	page := w.Body.String()
 
-	assert.Contains(t, page, `<input type="text" id="search-input" name="q"`)
+	assert.Contains(t, page, `<input type="text" name="q" data-gallery-query`)
 	assert.Contains(t, page, `placeholder="Search artifacts…"`)
-	// debounce + fetch + grid-swap script lives in the static page script
-	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/index.js"), `runSearch`)
-	assert.NotContains(t, page, `type="submit"`)
+	assert.Contains(t, page, `hx-get="/partials/gallery-grid"`)
+	assert.Contains(t, page, `hx-target="#library-gallery-results"`)
+	assert.Contains(t, page, `<script type="module" src="/assets/gallery/index.js"></script>`)
 	assert.NotContains(t, page, `>Search</button>`)
 }
 
@@ -205,7 +205,7 @@ func TestGallerySearchAdvertisesSlashShortcut(t *testing.T) {
 	assert.Contains(t, page, `aria-keyshortcuts="/"`, "screen readers learn the shortcut from the input")
 	kbd := `<kbd class="search-kbd" aria-hidden="true">/</kbd>`
 	require.Contains(t, page, kbd)
-	input := strings.Index(page, `id="search-input"`)
+	input := strings.Index(page, `data-gallery-query`)
 	require.GreaterOrEqual(t, input, 0)
 	assert.Greater(t, strings.Index(page, kbd), input, "the key cap must be the input's later sibling")
 }

@@ -140,20 +140,13 @@ func cacheBust(url string) string {
 }
 
 func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query().Get("q")
-	// The gallery pages sit outside the API's auth group — their credential
-	// lives in the page bootstrap — but they are still owner-scoped: the page
-	// group runs ownerMiddleware under sessionGate, so this is the session's
-	// owner on an instance with a login and the single-user default without
-	// one (av-syug). It is never a guess; ownerIDFromCtx fails closed.
-	ownerID := ownerIDFromCtx(r.Context())
-	arts, err := ro.cfg.Store.ListArtifacts(r.Context(), store.ListOptions{OwnerID: ownerID, Query: q, Limit: 100})
+	grid, err := ro.loadGalleryGrid(r, libraryGallery, 0)
 	if err != nil {
 		serverError(w, r, "gallery index list artifacts", err)
 		return
 	}
 
-	page, err := renderGalleryPage(arts, q, ro.pageCredentials(r), ro.renderURLs(r), ro.adminRequest(r))
+	page, err := renderGalleryPage(grid, ro.pageCredentials(r), ro.adminRequest(r))
 	if err != nil {
 		serverError(w, r, "gallery index render", err)
 		return
@@ -881,8 +874,7 @@ type galleryPageData struct {
 	Favicon template.URL
 	// LogoSVG is the compiled-in brand mark (logo.go), trusted markup.
 	LogoSVG template.HTML
-	Query   string
-	Cards   []galleryCard
+	Grid    galleryGridData
 	pageCredentials
 	// IsAdmin reveals the header link to /admin/users (av-utap). It decides
 	// what the page *offers* and nothing else: the route carries its own
@@ -892,22 +884,11 @@ type galleryPageData struct {
 	IsAdmin bool
 }
 
-func renderGalleryPage(arts []*store.Artifact, query string, creds pageCredentials, urls renderURLs, isAdmin bool) (string, error) {
-	cards := make([]galleryCard, len(arts))
-	for i, a := range arts {
-		cards[i] = galleryCard{
-			ArtifactID: a.ID,
-			Title:      a.Title,
-			Tags:       tagViews(a.Tags),
-			Capability: newCardCapabilityView(a),
-			Widget:     newWidgetView(a, urls),
-		}
-	}
+func renderGalleryPage(grid galleryGridData, creds pageCredentials, isAdmin bool) (string, error) {
 	return renderPage("gallery", galleryPageData{
 		Favicon:         template.URL(exhibitLogoDataURI),
 		LogoSVG:         template.HTML(exhibitLogoSVG),
-		Query:           query,
-		Cards:           cards,
+		Grid:            grid,
 		pageCredentials: creds,
 		IsAdmin:         isAdmin,
 	})

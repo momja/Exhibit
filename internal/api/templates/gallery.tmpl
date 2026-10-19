@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="/assets/gallery/index.css">
 </head>
 <body>
+<div id="{{.Grid.ID}}" data-gallery>
 <header>
   {{.LogoSVG}}
   {{/* The gallery's heading, hidden visually (index.css) but kept so the page
@@ -23,18 +24,13 @@
        row of its own above the grid: the library opens on the control you
        use to find things in it, and the grid gets the height back.
 
-       `/` focuses it from anywhere on the page (av-6mdw, index.js). The key cap
+       `/` focuses it from anywhere on the page (av-6mdw, gallery.js). The key cap
        after the input is how a sighted user learns that; aria-keyshortcuts is
        how a screen reader does, so the cap itself is aria-hidden. It must stay
        the input's later sibling: index.css hides it with `input:focus ~` and
        `input:not(:placeholder-shown) ~`, so it disappears once the box is in
        use with no script involved. */}}
-  <div class="search-row" role="search">
-    <i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
-    <input type="text" id="search-input" name="q" placeholder="Search artifacts…" value="{{.Query}}" autocomplete="off" aria-label="Search artifacts" aria-keyshortcuts="/">
-    <kbd class="search-kbd" aria-hidden="true">/</kbd>
-    <button class="search-clear" type="button" id="search-clear" aria-label="Clear search" hidden><i class="ph ph-x" aria-hidden="true"></i></button>
-  </div>
+  {{template "gallerySearch" .Grid}}
   <span class="spacer"></span>
   {{/* Administration is a secondary control, and it appears only for an
        admin (av-utap). The hiding is a courtesy to everyone else, not a
@@ -74,19 +70,16 @@
      "Sandboxed" label; a sandboxed, private artifact carries no marks at all.
 
      The whole card opens the artifact's detail/viewer page — the card body
-     and the title link are the affordances (index.js).
+     and the title link are the affordances (gallery.js).
 
      The one card action that is NOT the detail page — Edit — is a pencil at
      the row's end, revealed on hover or focus (av-8u7p, av-uvc6). It stays in
      the accessibility tree while hidden, so a screen reader listing links
      still finds it, and its accessible name leads with "Edit" and names the
      artifact; the title attribute is the word a pointer user sees. */}}
-<div class="grid">{{if not .Cards}}<p class="empty">No artifacts yet. <a href="/new">Add your first artifact</a>.</p>{{end}}{{range .Cards}}
-<div class="card" data-href="/artifacts/{{.ArtifactID}}">
-  {{template "cardWidget" .Widget}}
-  <div class="card-meta"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>{{template "tagDots" .}}{{template "capabilityCluster" .Capability}}<a class="card-edit" href="/artifacts/{{.ArtifactID}}/edit" aria-label="Edit {{.Title}}" title="Edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i></a></div>
-</div>{{end}}</div>
+{{template "galleryResults" .Grid}}
 </main>
+</div>
 
 {{/* No CodeMirror island here: the only editor on this page was the ingest
      form's source field, which moved to /new with it. */}}
@@ -104,6 +97,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 </script>
 <script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/components.js"></script>
-<script src="/assets/gallery/index.js"></script>
+<script src="/assets/htmx/htmx.min.js"></script>
+<script type="module" src="/assets/gallery/index.js"></script>
 </body>
 </html>{{end}}

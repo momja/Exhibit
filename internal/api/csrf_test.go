@@ -95,6 +95,7 @@ var appOriginGETRoutes = []getRoute{
 	// convenience GET would be forgeable by any page its owner visits, which
 	// is the worst thing on this instance to make forgeable.
 	{route: "/profile"},
+	{route: "/partials/gallery-grid"},
 	{route: "/partials/agent-preview"},
 	// The history pane (av-y7td): reads of what was said in earlier
 	// conversations. Resuming one is a POST to /api/agent/sessions, which Lax

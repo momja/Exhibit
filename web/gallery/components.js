@@ -153,9 +153,9 @@
   } else {
     watchAll();
   }
-  // Tiles also arrive by htmx swap (the edit page's preview, the agent pane),
-  // so pick those up as they land rather than only at first paint.
-  document.addEventListener('htmx:after:swap', function(e) { watchAll(e.target); });
+  // htmx processes every inserted root. Its swap event targets the request
+  // source or only the first inserted card, missing other frames in a batch.
+  document.addEventListener('htmx:after:process', function(e) { watchAll(e.target); });
 
   window.addEventListener('message', function(e) {
     var d = e.data;
