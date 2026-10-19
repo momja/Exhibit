@@ -103,7 +103,7 @@ func TestGalleryEditPageMountsEditor(t *testing.T) {
 	editJS, err := embeddedAssets.ReadFile("assets/gallery/edit.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(editJS), "ArtifactEditor.mount")
-	assert.Contains(t, page, `<textarea id="body">`)
+	assert.Contains(t, page, `<textarea id="body" data-revision="`)
 }
 
 // The ingest page — /new since av-qo0j, the gallery index before it — loads
