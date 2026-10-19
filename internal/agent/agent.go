@@ -1232,19 +1232,30 @@ const maxSessionFileBytes = 64 << 20
 // line per entry, so a read that races an append can end partway through a
 // line, and half a line is not an entry: only whole lines are returned.
 func readSessionFile(path string) (string, error) {
-	b, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil
 	}
 	if err != nil {
 		return "", err
 	}
+	defer file.Close()
+	return readSessionContents(file, maxSessionFileBytes)
+}
+
+// Read one overflow byte before inspecting complete lines: an oversized
+// unfinished entry must not bypass the limit or allocate its full contents.
+func readSessionContents(reader io.Reader, limit int64) (string, error) {
+	b, err := io.ReadAll(io.LimitReader(reader, limit+1))
+	if err != nil {
+		return "", err
+	}
+	if int64(len(b)) > limit {
+		return "", fmt.Errorf("session file exceeds the %d bytes kept", limit)
+	}
 	end := bytes.LastIndexByte(b, '\n')
 	if end < 0 {
 		return "", nil
-	}
-	if end+1 > maxSessionFileBytes {
-		return "", fmt.Errorf("session file is %d bytes, over the %d kept", end+1, maxSessionFileBytes)
 	}
 	return string(b[:end+1]), nil
 }
