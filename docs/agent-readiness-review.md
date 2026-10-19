@@ -24,19 +24,19 @@ Every PR has passed a separate read-only review-agent review with no remaining f
 
 | PR | Reviewed implementation | Result |
 | --- | --- | --- |
-| #169 | `888aba0` | No findings |
-| #170 | `b371766` | No findings |
-| #171 | `c558b60` | No findings after snapshot/no-op, quota ordering, and failed-write retry fixes |
-| #172 | Original `26f791c`; replayed as `93286de` over corrected OCC | No findings; targeted extension checks passed after replay |
-| #174 | `21a77ff` | No findings after startup/rollback deadlines, cache/compaction, and shared-session cleanup fixes |
+| #169 | `6d893ee` (same patch as reviewed `888aba0`) | No findings |
+| #170 | `38f2011` (same patch as reviewed `b371766`) | No findings |
+| #171 | `ac5debf` (same patches as reviewed `c558b60`) | No findings after snapshot/no-op, quota ordering, and failed-write retry fixes |
+| #172 | `d04bbe6` (same patch as reviewed `26f791c`) | No findings; targeted extension checks passed after replay |
+| #174 | `4aadf77` | No findings after startup/rollback deadlines, cache/compaction, shared-session cleanup, and composer integration fixes; 127 focused tests passed in the final individual review |
 
-A separate combined merge-base review against main is in progress.
+The stack was rebased onto main at `beefacf`. Range-diff verified unchanged implementation patches in the first four layers; eager loading preserves main’s composer button state and has a new individual review. A separate read-only combined merge-base review of `beefacf…4aadf77` completed with **No findings**. Its 25 focused source-context and preparation tests passed; no individual or combined review findings remain unresolved.
 
 Validation completed:
 
 - `sh scripts/build-assets.sh`.
-- `go test -timeout=20m ./...` passed on `8e69df4`, including the real Pi 1.3.0 pipeline, guardrail, scope, usage, legacy/current resume, compaction, OCC, storage, and browser suites.
-- The final change after that run affects browser code/tests only. `go test ./internal/api -run TestGallery -count=1` passed after rebuilding those assets on `21a77ff`; all 79 focused browser lifecycle tests passed.
+- `go test -timeout=20m ./...` passed on the final rebased implementation, `4aadf77`, including the real Pi 1.3.0 pipeline, guardrail, scope, usage, legacy/current resume, compaction, OCC, storage, and browser suites.
+- Gallery checks and focused browser lifecycle tests also passed before the rebase; the final individual eager-loading review passed all 127 focused browser/source-context cases after it.
 - Extension and real-Pi source lifecycle checks passed for split-turn compaction, preservation of widget revisions, and source-role/freshness behavior.
 - Exact OCC-layer extension tests passed all 30 cases, including failed first full-write retries; deterministic API regressions cover no-op restore races and conflict-before-quota ordering.
 - Real browser checks passed deliberate-typing startup, Send reuse, and History → Continue → Send. The mock provider received no requests while composing or resuming; the first accepted request used prepared source and proceeded directly to a write. No console errors occurred.

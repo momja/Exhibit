@@ -1,6 +1,6 @@
 ---
 id: Exh-099b
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-19T05:12:10Z
@@ -17,3 +17,9 @@ Coordinate five PRs: upgrade Pi; eagerly prepare the session and source after de
 
 Five individually reviewed PRs form a coherent stack. Source preloading avoids a model read round trip without placing artifact data in instruction roles; edits reuse known snapshots, conflicts save nothing, and existing session/guardrail/resume behavior remains covered.
 
+
+## Notes
+
+**2026-10-19T06:25:37Z**
+
+Implemented all five children and assembled PR stack #169 → #170 → #171 → #172 → #174. Every PR passed an individual read-only review-agent review after fixes. Combined beefacf…4aadf77 review: No findings; 25 focused tests passed. Final rebased go test -timeout=20m ./... and asset build passed; real-Pi and browser lifecycle checks passed. docs/agent-readiness-review.md provides the stack guide, security/OCC contracts, and validation. Full application Docker image build remains unverified; Node22/Pi1.3.0 runtime smoke passed. PRs remain open and nothing merged or pushed to main.
