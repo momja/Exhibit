@@ -1212,9 +1212,14 @@ stay where a visitor left them across artifacts.
 The page's notices — the capability, blocked-origin and state-changed
 banners, and the status line — float over the artifact on the side of the
 window away from the pill, and stay until dealt with: they are messages to
-read and often act on, which a toast that times out would lose. The rules
-for where things go are `web/gallery/pip-placement.js`, plain geometry with
-no DOM and its own tests; `pip.js` measures the page and applies them.
+read and often act on, which a toast that times out would lose. The stack
+scrolls within a short window so expanded details cannot hide later actions.
+The rules for where things go are `web/gallery/pip-placement.js`, plain
+geometry with no DOM and its own tests; `pip.js` measures the page and applies
+them. Its DOM event tests cover restoring keyboard focus, dismissing popups
+when the artifact receives focus, and grabbing an animated pill.
+
+![Expanded notices scroll within a short window](screenshots/Exh-ghuv/05-scrollable-notices.png)
 
 **The detail page never embeds the artifact's source** (agaf-02xs). The code
 lives one click away on the edit page, in CodeMirror, which is the surface built

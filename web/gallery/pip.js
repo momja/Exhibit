@@ -117,7 +117,10 @@ function restoreFromTab() {
   const size = pillSize();
   // Start just off-screen beside the tab, then spring into the corner.
   setPosition(edge === 'left' ? -size.width : innerWidth, y - size.height / 2, null);
-  requestAnimationFrame(function () { snapTo(corner); });
+  requestAnimationFrame(function () {
+    snapTo(corner);
+    grip.focus({ preventScroll: true });
+  });
   announce('Controls restored');
 }
 
@@ -126,12 +129,14 @@ let drag = null;
 
 function beginDrag(pointerX, pointerY) {
   closePopups();
+  // Freeze an in-flight snap where it is drawn, before measuring the grab.
+  const [x, y] = getComputedStyle(pill).translate.split(' ').map(parseFloat);
+  setPosition(x, y, null);
   drag = {
     offsetX: pointerX - position.x, offsetY: pointerY - position.y,
     startX: pointerX, startY: pointerY, pointerX: pointerX, moved: false,
     samples: [{ t: performance.now(), x: pointerX, y: pointerY }]
   };
-  setPosition(position.x, position.y, null);
   // Lift about the grab point, so the pill stays under the pointer as it scales.
   pill.style.transformOrigin = drag.offsetX + 'px ' + drag.offsetY + 'px';
   pill.classList.add('pip-lifted');
@@ -268,6 +273,14 @@ addEventListener('pointerdown', function (e) {
   });
   if (!inside) closePopups();
 }, true);
+// Events inside the sandboxed frame do not reach this window. Wait until the
+// focus transfer finishes so activeElement identifies the frame, and dismiss
+// the popup without moving focus away from the artifact.
+addEventListener('blur', function () {
+  requestAnimationFrame(function () {
+    if (document.activeElement === document.querySelector('iframe')) closePopups();
+  });
+});
 addEventListener('keydown', function (e) {
   const trigger = openPopupTrigger();
   if (e.key === 'Escape' && trigger) { closePopups(); trigger.focus(); }
