@@ -32,6 +32,12 @@ services:
       - GUARDRAIL_PROVIDER=${GUARDRAIL_PROVIDER:-}
       - GUARDRAIL_MODEL=${GUARDRAIL_MODEL:-}
       - GUARDRAIL_API_KEY=${GUARDRAIL_API_KEY:-}
+      # The headless browser server features share; the first is link-preview
+      # images of shares (av-rclm). Empty = no browser, and every preview is
+      # the Exhibit logo card. With `docker compose --profile chromium up -d
+      # chrome`, set this to ws://chrome:9222. The browser must be able to
+      # reach RENDER_ORIGIN by name (docs/deployment.md §2).
+      - CHROMIUM_CDP_URL=${CHROMIUM_CDP_URL:-}
       # Artifact bodies go to DATA_DIR/blobs unless a bucket is named (av-52ll).
       # To keep them in the MinIO below instead: bring MinIO up FIRST and create
       # the bucket, then uncomment these and start the app. The app verifies the
@@ -64,6 +70,14 @@ services:
     command: replicate -exec "/server"
     depends_on:
       - app
+
+  # Headless Chromium for server features (CHROMIUM_CDP_URL above).
+  # OPTIONAL, and deliberately outside the app image: a browser is several
+  # hundred MB the service does not otherwise need. Publishes no port; the app
+  # reaches it on the compose network.
+  chrome:
+    image: chromedp/headless-shell:stable
+    profiles: ["chromium"]
 
   minio:
     image: minio/minio

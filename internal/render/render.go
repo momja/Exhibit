@@ -4,6 +4,7 @@
 package render
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/momja/Exhibit/internal/tile"
+	"golang.org/x/net/html"
 )
 
 // Config holds the dependencies for the render surface.
@@ -72,16 +74,27 @@ type Config struct {
 	// origin alone whatever this holds — neither opened by an empty value nor
 	// narrowed by a populated one.
 	EmbedOrigins []string
+	// PreviewImagePNG is the generic link-preview card (av-rclm): Exhibit's
+	// logo at the size of a widget snapshot. It is what a share's og:image
+	// shows when there is no snapshot to show, and what /og.png serves. The
+	// api package supplies the PNG its asset build rasterized from the same
+	// logo as the favicon; empty leaves previews without an image.
+	PreviewImagePNG []byte
+	// Snapshotter draws a live share's widget for its link preview
+	// (av-rclm). nil — every instance that runs no snapshot browser — means
+	// every preview uses PreviewImagePNG.
+	Snapshotter Snapshotter
 }
 
 // Renderer handles render-origin requests.
 type Renderer struct {
-	cfg Config
+	cfg      Config
+	previews *previewCache
 }
 
 // New creates a Renderer with the given config.
 func New(cfg Config) *Renderer {
-	return &Renderer{cfg: cfg}
+	return &Renderer{cfg: cfg, previews: newPreviewCache(cfg.Snapshotter)}
 }
 
 // NoReferrer sets `Referrer-Policy: no-referrer` on every response the render
@@ -212,9 +225,19 @@ func (rd *Renderer) authorizeScope(w http.ResponseWriter, r *http.Request, id, s
 // otherwise. The accessor refuses rather than this handler filtering, so the
 // case is unrepresentable on the unscoped read surface (store.go); a grant's
 // id arrives here as nothing, and answers what a nonexistent one answers.
+//
+// Its 404 is the one share-route miss that is a page rather than a line of
+// text: a link preview of a dead link names Exhibit and nothing else
+// (av-rclm), and is the same page whichever kind of dead it is.
 func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
-	a, ok := rd.resolveShare(w, r, chi.URLParam(r, "shareID"))
-	if !ok {
+	shareID := chi.URLParam(r, "shareID")
+	a, err := rd.lookupShare(r.Context(), shareID)
+	switch {
+	case errors.Is(err, errNoShare):
+		rd.serveShareNotFound(w)
+		return
+	case err != nil:
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	// The share row is the authorization (architecture.md §7), so this route
@@ -236,7 +259,13 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	// (av-q3iy), and the ones an operator can narrow with EMBED_ORIGINS — shares only,
 	// because a share is the render document that already carries neither a
 	// principal nor a credential. Config.EmbedOrigins holds the argument.
-	rd.serveArtifactDoc(w, r, a, rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
+	//
+	// It is also the one document carrying link-preview tags (av-rclm): the
+	// only render URL a person pastes into a chat, and the only one a crawler
+	// may open with no credential.
+	rd.serveDoc(w, r, a,
+		document{blobID: a.SourceBlobID, kind: kindArtifact, headMeta: rd.previewTags(a, shareID)},
+		rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
 		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 }
 
@@ -249,26 +278,40 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 // exist. Every miss answers 404, never 403, like the token-gated authorize
 // above.
 func (rd *Renderer) resolveShare(w http.ResponseWriter, r *http.Request, shareID string) (*store.Artifact, bool) {
-	sh, err := rd.cfg.Store.GetAnonymousShareUnscoped(r.Context(), shareID)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return nil, false
-	}
-	if sh == nil {
+	a, err := rd.lookupShare(r.Context(), shareID)
+	switch {
+	case errors.Is(err, errNoShare):
 		http.Error(w, "not found", http.StatusNotFound)
 		return nil, false
-	}
-
-	a, err := rd.cfg.Store.GetArtifactUnscoped(r.Context(), sh.ArtifactID)
-	if err != nil {
+	case err != nil:
 		http.Error(w, "internal error", http.StatusInternalServerError)
-		return nil, false
-	}
-	if a == nil {
-		http.Error(w, "artifact not found", http.StatusNotFound)
 		return nil, false
 	}
 	return a, true
+}
+
+// errNoShare is every way an id can fail to be a live link: never issued,
+// revoked, a grant's, or naming an artifact that is gone. Callers answer all
+// of them alike, so they are one error.
+var errNoShare = errors.New("no such share link")
+
+// lookupShare resolves a share id to the artifact its anonymous link names.
+func (rd *Renderer) lookupShare(ctx context.Context, shareID string) (*store.Artifact, error) {
+	sh, err := rd.cfg.Store.GetAnonymousShareUnscoped(ctx, shareID)
+	if err != nil {
+		return nil, err
+	}
+	if sh == nil {
+		return nil, errNoShare
+	}
+	a, err := rd.cfg.Store.GetArtifactUnscoped(ctx, sh.ArtifactID)
+	if err != nil {
+		return nil, err
+	}
+	if a == nil {
+		return nil, errNoShare
+	}
+	return a, nil
 }
 
 // shareFrameAncestors is the whole of the share routes' framing policy
@@ -459,6 +502,9 @@ type document struct {
 	blobID string
 	kind   docKind
 	state  map[string]string
+	// headMeta is markup for the very top of <head>: a share's link-preview
+	// tags (av-rclm), and empty on every other route.
+	headMeta string
 }
 
 // serveDoc reads blobID, wraps it in the artifact's security envelope (CSP from
@@ -614,6 +660,11 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	}
 
 	out := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, a.VersionSeq)
+	if doc.headMeta != "" {
+		// Ahead of the preamble, and of any og: tags the artifact wrote for
+		// itself: a crawler reads the first, and may read no further.
+		out = prependToHead(out, doc.headMeta)
+	}
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
 		slog.Int64("owner", viewer.OwnerID),
@@ -2427,19 +2478,49 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 	// payload grants none.
 	shim += "\n" + assetManifestScript(assetManifest)
 
-	// Try to inject after <head>
-	idx := strings.Index(strings.ToLower(body), "<head>")
-	if idx >= 0 {
-		insertAt := idx + len("<head>")
-		return body[:insertAt] + "\n" + shim + body[insertAt:]
+	return prependToHead(body, shim)
+}
+
+// prependToHead inserts markup as the first thing inside the document's
+// <head>: just past its start tag, attributes and all, when there is one, else
+// before </head>, else at the very top of the document.
+func prependToHead(body, markup string) string {
+	if at, ok := headContentStart(body); ok {
+		return body[:at] + "\n" + markup + body[at:]
 	}
 
 	// Try to inject before </head>
-	idx = strings.Index(strings.ToLower(body), "</head>")
+	idx := strings.Index(strings.ToLower(body), "</head>")
 	if idx >= 0 {
-		return body[:idx] + shim + "\n" + body[idx:]
+		return body[:idx] + markup + "\n" + body[idx:]
 	}
 
 	// Fallback: prepend
-	return shim + "\n" + body
+	return markup + "\n" + body
+}
+
+// headContentStart returns the offset just past the document's <head> start
+// tag. It reads the document with a real tokenizer, so <head lang="en"> is a
+// head, a quoted ">" in an attribute does not end the tag early, and a <head>
+// inside a comment, or a <header>, is not one. A head start tag after the body
+// has begun is ignored by browsers, and so is ignored here.
+func headContentStart(body string) (int, bool) {
+	z := html.NewTokenizer(strings.NewReader(body))
+	offset := 0
+	for {
+		tt := z.Next()
+		if tt == html.ErrorToken {
+			return 0, false
+		}
+		offset += len(z.Raw())
+		if tt != html.StartTagToken && tt != html.SelfClosingTagToken {
+			continue
+		}
+		switch name, _ := z.TagName(); string(name) {
+		case "head":
+			return offset, true
+		case "body":
+			return 0, false
+		}
+	}
 }

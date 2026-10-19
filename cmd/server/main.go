@@ -77,6 +77,15 @@ func main() {
 		fatal("configure embed origins", err)
 	}
 
+	// The headless browser server features share; link previews of shares
+	// (av-rclm) are the first. Unset — the default — is no browser, and every
+	// preview shows the generic card; a value that is not a DevTools URL is
+	// fatal rather than quietly ignored.
+	browser, err := api.ChromiumFromEnv()
+	if err != nil {
+		fatal("configure the headless browser", err)
+	}
+
 	// The largest request body any route accepts (av-ombn). Unset is the
 	// default, never unbounded; a value that is not a positive number of bytes
 	// is fatal rather than replaced by the default the operator did not write.
@@ -277,6 +286,7 @@ func main() {
 		Public:              publicMode,
 		Entitlements:        entitlements,
 		EmbedOrigins:        embedOrigins,
+		Chromium:            browser,
 		MaxRequestBodyBytes: maxBodyBytes,
 	})
 

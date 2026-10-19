@@ -528,6 +528,20 @@ executable document with the correct security envelope:
   origin; and a share render holds no privileged control a stolen click could
   spend (`security.md` §1.8).
 
+- Gives a share link a **link preview** (av-rclm). The share document, and only
+  it, carries OpenGraph tags at the top of its `<head>`: the artifact's title,
+  fixed description copy, and `og:image` at `/s/:shareID/og.png`. That route serves a
+  1056x528 PNG of the share's *widget* (`/s/:shareID/widget`, never the full
+  artifact), drawn by the operator's optional headless Chromium
+  (`CHROMIUM_CDP_URL`, `internal/chromium`, with the preview specifics in
+  `internal/ogsnap`) and cached per share id. With no
+  sidecar, or when a snapshot fails, it serves the generic card at `/og.png`,
+  which the asset build rasterizes from the logo. The share row is resolved
+  before the cache is read, and every id that is not a live link gets one
+  generic 404 page naming only Exhibit. The sidecar loads nothing outside the
+  render origin, whatever the allowlist says. This is the one place artifact
+  code runs on the operator's side of the network (`security.md` §1.10).
+
 - Serves **one earlier version** of an artifact at `/a/:id/versions/:seq`
   (av-vw7r) — its body as it was, beside the data that version left behind (the
   snapshot a restore would put back, `Store.GetVersionView`) — so a person can
@@ -1546,8 +1560,10 @@ already expect.
 
 - **Litestream** sidecar → streams the SQLite WAL to a bucket; supervises restore on
   empty volume.
-- **Thumbnail worker** → headless Chromium screenshotting artifacts, kept out of the main
-  image.
+- **Headless browser** → a Chromium the service drives over CDP
+  (`CHROMIUM_CDP_URL`, `internal/chromium`), kept out of the main image and
+  shared by server features, each in browser contexts of its own. Share link
+  previews are the first (av-rclm). Unset, previews use the logo card.
 - **Future Chrome extension** → another API client for chat-UI ingest.
 
 ### 3.7 Agent sidecar (Pi harness, Exh-yvhp)
@@ -2360,6 +2376,11 @@ reachable there: a grant is authorized by identity rather than by its id, so
 serving one would turn that id back into a capability URL (§3.3). This reuse is why sharing is nearly free:
 it's the render path with a different front-door check. A one-file self-contained `.html`
 export remains as the service-independent fallback.
+
+A pasted link unfurls (av-rclm): the share document carries OpenGraph tags
+naming the artifact and pointing at `/s/:shareId/og.png`, a picture of its
+widget (§3.2). Every id that is not a live link previews as Exhibit and
+nothing else.
 
 The row's existence is the whole lifetime. A share is live until it is deleted;
 `DELETE /api/shares/:id` is the only way one ends, and `POST /api/shares` refuses an

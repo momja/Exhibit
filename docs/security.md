@@ -755,6 +755,67 @@ frame, only the notice's own shape, one fixed effect), and
 `internal/api/versionviewer_test.go`, whose last cases ask the *real* render handler
 for the URL the app minted.
 
+### 1.10 Link previews: what a share says about itself, and the one browser on our side (av-rclm)
+
+A chat app unfurling a pasted `/s/:shareID` is a stranger with no credential,
+which is exactly who the share route already serves. So the preview follows
+the share route's rule and adds nothing to it. A live anonymous link carries
+OpenGraph tags with the artifact's **title** (escaped) and a picture of its
+**widget**. The description is fixed copy, so no other artifact text is
+copied out. Every other id, whether a grant's, a revoked link's or one never
+issued, gets one 404 page naming Exhibit, byte-identical whichever it is. A
+preview is therefore no oracle over which ids are live or which are grants.
+The tags appear only on the share document. The token-gated renders are never
+crawled and carry none.
+
+The picture is the one place Exhibit runs artifact code on infrastructure the
+operator controls rather than in a visitor's browser. It is drawn in the
+operator's optional headless Chromium (`CHROMIUM_CDP_URL`, reached through
+`internal/chromium`), not in anything the service image contains, and it is
+held to three rules:
+
+- **It reaches the render origin and nothing else.** Each snapshot runs in a
+  browser context of its own, created with a proxy that does not exist
+  (`127.0.0.1:0`) and a bypass list naming only `RENDER_ORIGIN`, port
+  included. So the browser's network stack refuses everything else the
+  context does, whatever it is: a fetch, a subresource, a navigation, a
+  WebSocket, or a request from a popup, a worker or a service worker the
+  widget starts, since those all live in the same context. The list starts
+  with `<-loopback>`, because Chromium otherwise sends loopback addresses
+  around any proxy, and that exemption would hand the widget the browser's own
+  DevTools port. The restriction belongs to that one context, so other
+  features using the same browser are unaffected by it. WebRTC is the one way
+  out it does not govern, since WebRTC does not use the proxy. It can send
+  packets to an internal address, but what it reads back is whether a STUN or
+  TURN server answered, not what a service said. The artifact's allowlist is
+  deliberately **not** honoured here. It is
+  a decision about what the artifact may reach from a *visitor's* browser. This
+  browser sits in the operator's network and publishes its pixels to anyone
+  holding the link, so honouring the allowlist would let an owner aim it at an
+  internal address and read the answer out of a screenshot. A widget that draws
+  network data previews without it. The deployment guidance to give the browser
+  no route to anything else is the outer wall. This rule is the inner one.
+- **It draws the shared widget, not the artifact.** The page is
+  `/s/:shareID/widget`: the narrowed widget preamble, no bridges, no devices,
+  the owner's state exactly as that public URL already serves it. Each
+  snapshot runs in a browser context of its own, disposed with it, so nothing
+  one artifact leaves in the browser is there when the next one loads.
+- **Holding a link cannot drive it.** Snapshots are cached per share id for ten
+  minutes, a failure is cached as long as a success, concurrent requests for
+  one id share a render, and at most two render at once. The share row is
+  resolved before the cache is read, so a revoked link stops yielding its
+  picture on the next request, and every preview response is `no-store`. What
+  a chat app already fetched is its own copy and out of reach.
+
+Pinned by `internal/render/opengraph_test.go` (the tags, escaping, the four
+share states, the cache and its revocation), `internal/ogsnap/ogsnap_test.go`
+(a snapshot is taken under the restriction) and
+`internal/chromium/chromium_test.go`. The last runs a real Chromium when one is
+installed and fails if anything a confined page starts — a request, a
+navigation, a WebSocket, a popup, a worker, a service worker — reaches another
+origin, if another port on the allowed host is reachable, or if a tab with no
+restriction is confined by another tab's.
+
 ## 2. CSP: the allowlist is the wall
 
 Each artifact carries a set of per-origin decisions (`artifact_network_origins`,

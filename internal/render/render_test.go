@@ -976,3 +976,22 @@ func TestOriginPolicyTakesAllowedFromTheArtifactAllowlist(t *testing.T) {
 		t.Fatalf("blocked must hold only the refusals: %v", policy.Blocked)
 	}
 }
+
+// prependToHead puts markup first inside the head however the start tag is
+// written, which is what lets the preamble run before any artifact script and
+// a share's preview tags lead the page's own.
+func TestPrependToHeadOpensTheHead(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"bare", `<html><head><title>t</title></head>`, "<html><head>\nX<title>t</title></head>"},
+		{"attributes", `<head prefix="og: https://ogp.me/ns#"><meta>`, "<head prefix=\"og: https://ogp.me/ns#\">\nX<meta>"},
+		{"upper case", `<HTML><HEAD LANG=en><TITLE>t</TITLE>`, "<HTML><HEAD LANG=en>\nX<TITLE>t</TITLE>"},
+		{"quoted >", `<head data-x="a>b"><meta>`, "<head data-x=\"a>b\">\nX<meta>"},
+		{"commented head", `<!-- <head> --><head lang="en"><meta>`, "<!-- <head> --><head lang=\"en\">\nX<meta>"},
+		{"header is not head", `<title>t</title></head><body><header>h</header>`, "<title>t</title>X\n</head><body><header>h</header>"},
+		{"no head at all", `<body><header>h</header></body>`, "X\n<body><header>h</header></body>"},
+	} {
+		if got := prependToHead(tc.in, "X"); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

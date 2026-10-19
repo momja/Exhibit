@@ -18,6 +18,7 @@ import (
 	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/chromium"
 	"github.com/momja/Exhibit/internal/logging"
 	"github.com/momja/Exhibit/internal/render"
 	"github.com/momja/Exhibit/internal/rendertoken"
@@ -103,6 +104,11 @@ type Config struct {
 	// shares-only decision is argued: see render.Config.EmbedOrigins. Read
 	// from the environment by EmbedOriginsFromEnv (embedorigins.go).
 	EmbedOrigins []string
+	// Chromium is the operator's headless browser, shared by every server
+	// feature that needs one; link previews of shares (av-rclm) are the first.
+	// nil — no CHROMIUM_CDP_URL — means there is none, and each feature falls
+	// back on its own terms. Read by ChromiumFromEnv (chromium.go).
+	Chromium *chromium.Browser
 	// MaxRequestBodyBytes bounds every request body the app surface accepts
 	// (av-ombn); a larger one is answered 413. Zero means
 	// DefaultMaxRequestBodyBytes, never "unbounded". Read from the
@@ -661,6 +667,10 @@ func (ro *Router) RenderHandler() http.Handler {
 		// Empty on every instance that has not asked to restrict framing,
 		// which leaves a share's frame-ancestors open (av-q3iy).
 		EmbedOrigins: ro.cfg.EmbedOrigins,
+		// Link previews (av-rclm): the logo card every preview falls back to,
+		// and the browser that draws a live share's widget, if any.
+		PreviewImagePNG: previewImagePNG(),
+		Snapshotter:     ro.previewSnapshotter(),
 	})
 
 	r := chi.NewRouter()
@@ -700,6 +710,12 @@ func (ro *Router) RenderHandler() http.Handler {
 	// Serve an artifact's widget via its share link (av-ei5h) — share row
 	// authorizes, widget blob renders, share framing applies.
 	r.Get("/s/{shareID}/widget", renderer.ServeShareWidget)
+	// A live share link's preview image (av-rclm): its widget, snapshotted,
+	// or the generic card. Share-authorized like the two routes above.
+	r.Get("/s/{shareID}/og.png", renderer.ServeSharePreviewImage)
+	// The generic preview card, for every link that is not a live share.
+	// Static artwork, like the favicon.
+	r.Get("/og.png", renderer.ServePreviewImage)
 
 	return r
 }

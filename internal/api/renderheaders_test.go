@@ -70,6 +70,13 @@ func TestRenderOriginWithholdsTheReferrer(t *testing.T) {
 		// the same static artwork for every visitor — but still on this
 		// surface, so it withholds the Referer like every row here.
 		{"favicon", "/favicon.ico", "/favicon.ico", http.StatusOK},
+		// The link-preview images (av-rclm): a crawler fetches them with no
+		// credential, and the share id in the path is the authorization, so
+		// both the live link and the miss withhold the Referer like the
+		// share document itself.
+		{"share preview image", "/s/{shareID}/og.png", "/s/" + shareID + "/og.png", http.StatusOK},
+		{"share preview image, unknown id", "/s/{shareID}/og.png", "/s/does-not-exist/og.png", http.StatusNotFound},
+		{"generic preview image", "/og.png", "/og.png", http.StatusOK},
 	}
 
 	covered := map[string]bool{}

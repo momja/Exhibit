@@ -212,6 +212,9 @@ func TestHostDispatcherKeepsTheOriginBoundary(t *testing.T) {
 				"the render surface answered %s %s on the app origin", method, route)
 			return nil
 		}))
-		assert.Equal(t, 5, walked, "expected /a/{id}, /a/{id}/assets/{assetID}, /a/{id}/versions/{seq}, /w/{id} and /favicon.ico; the /s/* pair is dual-claimed and exempt above")
+		// The preview images (av-rclm) are render-only: every og:image the
+		// service emits is absolute to the render origin, and an app-origin
+		// /s/:id already redirects there before a crawler reads any tag.
+		assert.Equal(t, 7, walked, "expected /a/{id}, /a/{id}/assets/{assetID}, /a/{id}/versions/{seq}, /w/{id}, /favicon.ico, /og.png and /s/{shareID}/og.png; the /s/* pair is dual-claimed and exempt above")
 	})
 }
