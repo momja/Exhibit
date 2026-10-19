@@ -264,7 +264,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 {{define "agentMessage"}}<div class="agent-message" data-agent-message>
   <div class="msg assistant" data-message-content>{{.}}</div>
   <div class="message-actions" role="group" aria-label="Message actions">
-    <button type="button" class="message-action" data-message-action="copy" title="Copy text" aria-label="Copy message text"><i class="ph ph-copy" aria-hidden="true"></i><span>Copy</span></button>
+    <button type="button" class="message-action" data-message-action="copy" aria-label="Copy message text"><i class="ph ph-copy" aria-hidden="true"></i><span class="message-action-label" aria-hidden="true">Copy text</span></button>
     <span class="message-action-status" role="status" aria-live="polite" aria-atomic="true"></span>
   </div>
 </div>{{end}}

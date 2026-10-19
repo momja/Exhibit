@@ -549,8 +549,9 @@ and closes the pane and runs the one thing a fragment cannot, which is
 continuing a conversation.
 
 **Message actions (Exh-ruds).** Each agent text bubble has an always-visible
-row below it, starting with **Copy**. It copies the exact text (including line
-breaks and Markdown), with a short success status or an actionable error. The
+row of icons below it, starting with **Copy**. Action labels appear on hover or
+keyboard focus without shifting the other buttons. Copy preserves the exact text
+(including line breaks and Markdown), with a short success status or an actionable error. The
 Clipboard API is preferred; HTTP deployments use a temporary selection and
 `execCommand('copy')`, restoring focus and the previous selection afterward.
 
