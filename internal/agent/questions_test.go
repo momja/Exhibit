@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func TestQuestionAnswersReachTheWaitingToolOnce(t *testing.T) {
 	assert.True(t, request.Pending)
 	assert.Contains(t, string(s.backlog[0]), "exhibit_questions")
 	answers := []QuestionAnswer{{ID: "view", Selected: []string{"Weekly"}}, {ID: "goal", Text: "Plan meals"}}
-	require.NoError(t, s.AnswerQuestions(request.ID, answers, false))
+	require.NoError(t, s.AnswerQuestions(request.ID, QuestionResponse{Answers: answers}))
 	var response struct {
 		Type, ID, Value string
 		Cancelled       bool
@@ -56,9 +57,9 @@ func TestQuestionAnswersReachTheWaitingToolOnce(t *testing.T) {
 	assert.Equal(t, "extension_ui_response", response.Type)
 	assert.Equal(t, request.ID, response.ID)
 	assert.False(t, response.Cancelled)
-	encoded, _ := json.Marshal(answers)
+	encoded, _ := json.Marshal(QuestionResponse{Answers: answers})
 	assert.JSONEq(t, string(encoded), response.Value)
-	assert.ErrorIs(t, s.AnswerQuestions(request.ID, answers, false), ErrQuestionExpired)
+	assert.ErrorIs(t, s.AnswerQuestions(request.ID, QuestionResponse{Answers: answers}), ErrQuestionExpired)
 	assert.Equal(t, 1, bytes.Count(input.Bytes(), []byte("\n")))
 }
 
@@ -71,7 +72,37 @@ func TestInvalidQuestionAnswersLeaveTheFormOpen(t *testing.T) {
 		{{ID: "view", Text: "a"}, {ID: "view", Text: "b"}},
 	} {
 		s, input := newQuestionSession(t)
-		assert.ErrorIs(t, s.AnswerQuestions("request-1", answers, false), ErrInvalidAnswer)
+		assert.ErrorIs(t, s.AnswerQuestions("request-1", QuestionResponse{Answers: answers}), ErrInvalidAnswer)
+		request, _ := s.Questions("request-1")
+		assert.True(t, request.Pending)
+		assert.Empty(t, input.String())
+	}
+}
+
+func TestQuestionMessageCanRedirectTheWholeBatch(t *testing.T) {
+	s, input := newQuestionSession(t)
+	message := "Actually, make a shopping list instead."
+	require.NoError(t, s.AnswerQuestions("request-1", QuestionResponse{Message: message}))
+	request, _ := s.Questions("request-1")
+	assert.False(t, request.Pending)
+	assert.False(t, request.Cancelled)
+	assert.Empty(t, request.Answers)
+	assert.Equal(t, message, request.Message)
+	var response struct{ Value string }
+	require.NoError(t, json.Unmarshal(input.Bytes(), &response))
+	assert.JSONEq(t, `{"message":"Actually, make a shopping list instead."}`, response.Value)
+	assert.ErrorIs(t, s.AnswerQuestions("request-1", QuestionResponse{Message: message}), ErrQuestionExpired)
+}
+
+func TestInvalidQuestionMessagesLeaveTheRequestOpen(t *testing.T) {
+	for _, response := range []QuestionResponse{
+		{Message: "   "},
+		{Message: strings.Repeat("a", 8001)},
+		{Message: "A new direction", Answers: []QuestionAnswer{{ID: "view", Text: "Weekly"}}},
+		{Message: "A new direction", Cancelled: true},
+	} {
+		s, input := newQuestionSession(t)
+		assert.ErrorIs(t, s.AnswerQuestions("request-1", response), ErrInvalidAnswer)
 		request, _ := s.Questions("request-1")
 		assert.True(t, request.Pending)
 		assert.Empty(t, input.String())
@@ -81,11 +112,11 @@ func TestInvalidQuestionAnswersLeaveTheFormOpen(t *testing.T) {
 func TestQuestionWriteFailureCanBeRetried(t *testing.T) {
 	s, input := newQuestionSession(t)
 	input.fail = true
-	assert.Error(t, s.AnswerQuestions("request-1", nil, true))
+	assert.Error(t, s.AnswerQuestions("request-1", QuestionResponse{Cancelled: true}))
 	request, _ := s.Questions("request-1")
 	assert.True(t, request.Pending)
 	input.fail = false
-	require.NoError(t, s.AnswerQuestions("request-1", nil, true))
+	require.NoError(t, s.AnswerQuestions("request-1", QuestionResponse{Cancelled: true}))
 	request, _ = s.Questions("request-1")
 	assert.True(t, request.Cancelled)
 	assert.Empty(t, request.Answers)
@@ -97,7 +128,7 @@ func TestConcurrentQuestionResponsesHaveOneWinner(t *testing.T) {
 	results := make(chan error, 2)
 	for range 2 {
 		wg.Add(1)
-		go func() { defer wg.Done(); results <- s.AnswerQuestions("request-1", nil, true) }()
+		go func() { defer wg.Done(); results <- s.AnswerQuestions("request-1", QuestionResponse{Cancelled: true}) }()
 	}
 	wg.Wait()
 	first, second := <-results, <-results
@@ -111,7 +142,7 @@ func TestToolCompletionCancelsAnUnansweredQuestion(t *testing.T) {
 	request, _ := s.Questions("request-1")
 	assert.False(t, request.Pending)
 	assert.True(t, request.Cancelled)
-	assert.ErrorIs(t, s.AnswerQuestions("request-1", nil, true), ErrQuestionExpired)
+	assert.ErrorIs(t, s.AnswerQuestions("request-1", QuestionResponse{Cancelled: true}), ErrQuestionExpired)
 }
 
 func TestQuestionAllowsMultipleSelectionsAndCustomDetails(t *testing.T) {
@@ -120,7 +151,7 @@ func TestQuestionAllowsMultipleSelectionsAndCustomDetails(t *testing.T) {
 	request.Questions[0].MultiSelect = true
 	s.questions[request.ID] = request
 	answers := []QuestionAnswer{{ID: "view", Selected: []string{"Weekly", "List"}, Text: "Show both together"}, {ID: "goal", Text: "Planning meals"}}
-	require.NoError(t, s.AnswerQuestions(request.ID, answers, false))
+	require.NoError(t, s.AnswerQuestions(request.ID, QuestionResponse{Answers: answers}))
 	request, _ = s.Questions(request.ID)
 	assert.Equal(t, answers, request.Answers)
 }
@@ -139,7 +170,7 @@ func TestQuestionWaitDoesNotSpendTheRunawayTurnAllowance(t *testing.T) {
 	line, _ := json.Marshal(map[string]string{"type": "extension_ui_request", "id": "r", "method": "input", "title": questionDialogTitle, "placeholder": string(payload)})
 	s.handleLine(line)
 	assert.Nil(t, s.turnTimer)
-	require.NoError(t, s.AnswerQuestions("r", []QuestionAnswer{{ID: "q", Text: "A list"}}, false))
+	require.NoError(t, s.AnswerQuestions("r", QuestionResponse{Answers: []QuestionAnswer{{ID: "q", Text: "A list"}}}))
 	assert.NotNil(t, s.turnTimer)
 	s.clearTurnClock()
 }
@@ -151,10 +182,10 @@ func TestQuestionClockWaitsForEveryReplyAndCannotRearmAfterSettle(t *testing.T) 
 	second := s.questions["request-1"]
 	second.ID = "request-2"
 	s.questions[second.ID] = second
-	require.NoError(t, s.AnswerQuestions("request-1", nil, true))
+	require.NoError(t, s.AnswerQuestions("request-1", QuestionResponse{Cancelled: true}))
 	assert.Nil(t, s.turnTimer, "another question is still waiting on the person")
 	s.streaming = false
-	require.NoError(t, s.AnswerQuestions("request-2", nil, true))
+	require.NoError(t, s.AnswerQuestions("request-2", QuestionResponse{Cancelled: true}))
 	assert.Nil(t, s.turnTimer, "a racing final reply must not restart the clock after settle")
 }
 

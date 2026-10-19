@@ -26,11 +26,24 @@ test("ask_user waits for a whole batch and returns the person's choices and word
 			return new Promise(resolve => { respond = resolve; });
 		} }
 	});
-	respond(JSON.stringify(answers));
+	respond(JSON.stringify({ answers }));
 	const response = await result;
 	assert.deepEqual(response.details.answers, answers);
 	assert.equal(response.details.cancelled, false);
 	assert.match(response.content[0].text, /user's own instructions/);
+});
+
+test("a chat reply can redirect the request without invented field answers", async () => {
+	const tool = questionTool();
+	const message = "Actually, make a shopping list instead.";
+	const response = await tool.execute("call-1", { questions }, null, null, {
+		ui: { input: async () => JSON.stringify({ message }) }
+	});
+	assert.deepEqual(response.details.answers, []);
+	assert.equal(response.details.message, message);
+	assert.equal(response.details.cancelled, false);
+	assert.match(response.content[0].text, /redirect the request/);
+	assert.ok(response.content[0].text.includes(message));
 });
 
 test("skipping or aborting never invents an answer", async () => {

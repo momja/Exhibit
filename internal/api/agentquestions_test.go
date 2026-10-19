@@ -35,9 +35,10 @@ func TestAgentQuestionsRoundTripAndHistory(t *testing.T) {
 	w := doJSON(t, h.router, http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "How should your plan look?")
-	assert.Contains(t, w.Body.String(), `type="radio"`)
-	assert.Contains(t, w.Body.String(), "Additional Comments")
-	assert.NotContains(t, w.Body.String(), " checked")
+	assert.Contains(t, w.Body.String(), "data-question-choice")
+	assert.Contains(t, w.Body.String(), "What should the plan help you with?")
+	assert.NotContains(t, w.Body.String(), `aria-pressed="true"`)
+	assert.NotContains(t, w.Body.String(), ">Continue</button>")
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	w = doJSON(t, h.router, http.MethodPost, "/api/agent/sessions/"+session+"/prompt", map[string]string{"message": "an accidental message while answering"})
 	assert.Equal(t, http.StatusConflict, w.Code)
@@ -97,6 +98,35 @@ func TestAgentQuestionsSkipAndStopReleaseTheTool(t *testing.T) {
 	}
 }
 
+func TestAgentQuestionChatReplyReachesTheToolAndHistory(t *testing.T) {
+	h := newPiHarness(t)
+	session, artifact, requestID, events, unsubscribe := askMockQuestions(t, h)
+	defer unsubscribe()
+	path := "/api/agent/sessions/" + session + "/questions/" + requestID
+	message := "Actually, a shopping list <script>hello</script>"
+	w := doJSON(t, h.router, http.MethodPost, path, map[string]string{"message": message})
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	awaitEvent(t, events, func(line string) bool { return strings.Contains(line, `"agent_settled"`) }, "the agent to continue after a chat reply")
+	assert.Contains(t, strings.Join(h.llm.messagesInRole("tool"), "\n"), "Actually, a shopping list")
+	w = doJSON(t, h.router, http.MethodGet, path, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.NotContains(t, w.Body.String(), "data-question-form")
+	assert.Contains(t, w.Body.String(), "Actually, a shopping list &lt;script&gt;hello&lt;/script&gt;")
+	assert.NotContains(t, w.Body.String(), "<script>hello</script>")
+	kept := keptConversation(t, h.router, artifact, session, 1)
+	var projected *agent.QuestionRequest
+	for _, entry := range agent.Messages(kept) {
+		if entry.Role == "questions" {
+			projected = entry.Questions
+		}
+	}
+	require.NotNil(t, projected)
+	assert.Equal(t, message, projected.Message)
+	assert.Empty(t, projected.Answers)
+	history := getPage(t, h.router, "/partials/agent-transcript?artifact="+artifact+"&session="+session)
+	assert.Contains(t, history, "Actually, a shopping list &lt;script&gt;hello&lt;/script&gt;")
+}
+
 func TestAgentQuestionsArePrivateToSessionOwner(t *testing.T) {
 	h := newAgentOwnerHarness(t)
 	session, artifact, requestID, events, unsubscribe := askMockQuestions(t, h.piHarness)
@@ -124,7 +154,8 @@ func TestAgentQuestionTemplateEscapesPromptsAndSupportsMultipleSelections(t *tes
 	request := agent.QuestionRequest{ID: "r", Pending: true, Questions: []agent.Question{{ID: "q", Question: `What about <img src=x onerror=alert(1)>?`, MultiSelect: true, Options: []agent.QuestionOption{{Label: `A "quote"`, Description: `<b>detail</b>`}}}}}
 	fragment, err := renderPage("agentQuestions", agentQuestionsData{QuestionRequest: request, SessionID: "s"})
 	require.NoError(t, err)
-	assert.Contains(t, fragment, `type="checkbox"`)
+	assert.Contains(t, fragment, `data-multi-select="true"`)
+	assert.Contains(t, fragment, ">Done</button>")
 	assert.Contains(t, fragment, "&lt;img")
 	assert.Contains(t, fragment, "&lt;b&gt;detail&lt;/b&gt;")
 	assert.NotContains(t, fragment, "<img")

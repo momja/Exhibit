@@ -34,3 +34,7 @@ Removed visible selection controls from question choices. The whole row is click
 **2026-10-19T21:59:36Z**
 
 Renamed the general notes field to Additional Comments in the demo and canvas, and clarified the tool schema guidance to use that label for extra notes. Refreshed desktop/mobile screenshots. Validation: existing question round-trip, extension and mock suites passed; verified the updated label and accessible field name in the live preview.
+
+**2026-10-19T22:11:52Z**
+
+Removed Continue and the general comments field. Single-choice rows now commit immediately; stacked questions resume after their last committed answer. Something else and open questions send with Enter or the send icon, while multiple-selection questions retain Done. The chat composer stays available and can answer or redirect the whole request through the same owner-scoped tool reply, with saved history and no invented field answers. Added duplicate-send and failure/retry handling, refreshed canvas and desktop/mobile screenshots, and updated agent guidance. Validation: complete agent and mock suites, focused question/API/page/gallery suites, and targeted Go race checks passed. Browser checks covered immediate choice, typed answer, chat redirection, stacked questions and mobile overflow.

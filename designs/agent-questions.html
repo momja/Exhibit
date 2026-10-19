@@ -7,16 +7,15 @@
   :root { color-scheme:light dark; --ink:#111; --muted:#777; --line:#ddd; --blue:#23559e; --tint:#eef4ff; --button-ink:#fff; }
   @media(prefers-color-scheme:dark) { :root { --ink:#e8eaed; --muted:#9aa0a9; --line:#3c4149; --blue:#8bb5f4; --tint:#202b3d; --button-ink:#111; } }
   * { box-sizing:border-box; }
+  [hidden] { display:none!important; }
   body { margin:0; color:var(--foreground,var(--ink)); background:transparent; font:14px/1.5 system-ui,sans-serif; }
   main { max-width:480px; padding-block:8px; }
   .brief { max-width:85%; width:fit-content; margin:0 0 30px auto; padding:9px 13px; border-radius:12px 12px 3px 12px; background:var(--accent-surface,var(--tint)); }
   fieldset { border:0; padding:0; margin:0 0 26px; min-width:0; }
   legend { font-weight:600; padding:0; margin-bottom:8px; }
-  .choice { position:relative; display:flex; align-items:center; padding:9px 12px; margin-bottom:4px; border-radius:6px; cursor:pointer; min-height:40px; }
+  .choice { display:flex; align-items:center; width:100%; padding:9px 12px; margin-bottom:4px; border:0; border-radius:6px; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; min-height:40px; }
   .choice:hover { background:var(--secondary,var(--tint)); }
-  .choice:has(input:checked) { background:var(--accent-surface,var(--tint)); color:var(--accent-surface-foreground,var(--blue)); }
-  .choice:has(input:focus-visible) { outline:2px solid var(--blue); outline-offset:2px; }
-  input { position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+  .choice:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
   details { margin-top:7px; }
   summary { color:var(--blue); font-size:13px; cursor:pointer; }
   textarea { display:block; width:100%; margin-top:6px; padding:8px 0; min-height:39px; resize:vertical; border:0; border-bottom:1px solid var(--border,var(--line)); border-radius:0; font:inherit; background:transparent; color:inherit; }
@@ -24,6 +23,12 @@
   .actions { display:flex; align-items:center; gap:20px; }
   button { border:0; background:var(--blue); color:var(--button-ink); border-radius:7px; font:500 13px system-ui,sans-serif; padding:9px 16px; cursor:pointer; }
   .skip { background:transparent; color:var(--muted-foreground,var(--muted)); padding:8px 0; font-weight:400; }
+  .write { display:flex; align-items:flex-end; gap:8px; }
+  .write textarea { min-width:0; flex:1; }
+  .write button { padding:8px; background:transparent; color:var(--blue); }
+  .composer { display:flex; gap:8px; align-items:center; border-top:1px solid var(--border,var(--line)); margin-top:24px; padding-top:12px; }
+  .composer textarea { min-width:0; flex:1; margin:0; padding:8px 10px; border:1px solid var(--border,var(--line)); border-radius:8px; }
+  #answer { margin-top:8px; }
 </style>
 </head>
 <body>
@@ -32,24 +37,36 @@
   <form>
     <fieldset>
       <legend>How should your plan look?</legend>
-      <label class="choice"><input type="radio" name="view" value="week" checked>Weekly calendar</label>
-      <label class="choice"><input type="radio" name="view" value="list">Simple list</label>
-      <details><summary>Something else</summary><textarea aria-label="How should your plan look?" rows="1" placeholder="Your answer…"></textarea></details>
+      <div id="choices"><button class="choice" type="button">Weekly calendar</button><button class="choice" type="button">Simple list</button></div>
+      <details><summary>Something else</summary><div class="write"><textarea aria-label="How should your plan look?" rows="1" placeholder="Your answer…"></textarea><button type="submit">Send</button></div></details>
+      <p id="answer" hidden></p>
     </fieldset>
-    <fieldset>
-      <legend>Additional Comments</legend>
-      <textarea aria-label="Additional Comments" rows="1" placeholder="Your answer…"></textarea>
-    </fieldset>
-    <div class="actions"><button type="submit">Continue</button><button class="skip" type="button">Skip</button></div>
+    <div class="actions"><button class="skip" type="button">Skip</button></div>
   </form>
+  <div class="composer"><textarea aria-label="Message the agent" rows="1" placeholder="Message the agent…"></textarea><button id="message-send" type="button">Send</button></div>
 </main>
 <script>
-  document.querySelector('form').addEventListener('submit', event => event.preventDefault());
-  document.querySelector('details textarea').addEventListener('input', () => document.querySelectorAll('input').forEach(input => input.checked = false));
-  document.querySelectorAll('input').forEach(input => input.addEventListener('change', () => {
-    document.querySelector('details').open = false;
-    document.querySelector('details textarea').value = '';
-  }));
+  function answer(text) {
+    if (!text.trim()) return;
+    document.querySelector('#choices').hidden = true;
+    document.querySelector('details').hidden = true;
+    document.querySelector('.actions').hidden = true;
+    document.querySelector('#answer').textContent = text;
+    document.querySelector('#answer').hidden = false;
+  }
+  document.querySelectorAll('.choice').forEach(button => button.addEventListener('click', () => answer(button.textContent)));
+  document.querySelector('form').addEventListener('submit', event => {
+    event.preventDefault();
+    answer(document.querySelector('details textarea').value);
+  });
+  document.querySelector('details textarea').addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); answer(event.target.value); }
+  });
+  document.querySelector('.skip').addEventListener('click', () => answer('Skipped'));
+  document.querySelector('#message-send').addEventListener('click', () => answer(document.querySelector('.composer textarea').value));
+  document.querySelector('.composer textarea').addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); answer(event.target.value); }
+  });
 </script>
 </body>
 </html>

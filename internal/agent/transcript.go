@@ -124,7 +124,7 @@ func project(msgs []piMessage) []TranscriptMessage {
 				QuestionRequest
 			}
 			if json.Unmarshal(m.Details, &result) == nil && result.Exhibit == "questions_answered" && validQuestions(result.Questions) {
-				if result.Cancelled || validateAnswers(result.Questions, result.Answers) == nil {
+				if validateQuestionResponse(result.Questions, QuestionResponse{Answers: result.Answers, Message: result.Message, Cancelled: result.Cancelled}) == nil {
 					questionResults[m.ToolCallID] = result.QuestionRequest
 				}
 			}

@@ -229,13 +229,16 @@ func decide(messages []chatMessage) turnPlan {
 	// An explicit trigger keeps questionnaire demos and integration tests
 	// deterministic without changing the ordinary artifact-building script.
 	if last.Role == "user" && (strings.Contains(lastUserText, "mock-ask-questions") || strings.Contains(lastUserText, "Help me plan meals for my family.")) {
-		return turnPlan{kind: "tool", toolName: "ask_user", toolArgs: map[string]any{"questions": []map[string]any{
+		questions := []map[string]any{
 			{"id": "view", "question": "How should your plan look?", "options": []map[string]string{
 				{"label": "Weekly calendar"},
 				{"label": "Simple list"},
 			}},
-			{"id": "goal", "question": "Additional Comments"},
-		}}}
+		}
+		if strings.Contains(lastUserText, "mock-ask-questions") {
+			questions = append(questions, map[string]any{"id": "goal", "question": "What should the plan help you with?"})
+		}
+		return turnPlan{kind: "tool", toolName: "ask_user", toolArgs: map[string]any{"questions": questions}}
 	}
 
 	// A widget-only session writes a tile and nothing else, and needs no read:

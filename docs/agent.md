@@ -160,10 +160,13 @@ not change tool parameters, prompt wording, or owner/artifact scope.
 The agent can call `ask_user` with one to four related questions. Each has a
 unique `id`, a plain-language `question`, and optionally up to six
 `options[{label, description?}]`. Setting `multiSelect: true` allows several
-suggestions to be chosen. Open questions have a text field. For questions with choices, “Something else”
-reveals a text field for a different answer. Typing replaces a single selection;
-multiple selections can include a written answer. Nothing is selected
-in advance; the whole batch is submitted together.
+suggestions to be chosen. Clicking a single choice answers it immediately.
+For questions with choices, “Something else” reveals a text field; open
+questions show the field directly. Enter or the send icon commits a written
+answer (Shift+Enter adds a line). When questions are stacked, the agent resumes
+as soon as the last answer is committed. Questions that allow multiple
+selections have a “Done” action so choosing the first item does not send an
+unfinished set. Nothing is selected in advance.
 
 The system prompt encourages the agent to interpret the person's intended
 outcome, clarify vague details, confirm meaningful assumptions, and offer
@@ -171,9 +174,10 @@ helpful suggestions. Questions are short and use everyday language. Option
 descriptions are reserved for differences that help someone choose. The chat
 shows the questions directly, with full-width rows that highlight when selected
 and no surrounding card
-or introductory copy.
+or introductory copy. There is no Continue button or general comments field;
+the ordinary chat composer remains available to answer or redirect the agent.
 
-![Two questions in the agent chat](screenshots/Exh-br5h/01-questions-desktop.png)
+![A question in the agent chat](screenshots/Exh-br5h/01-questions-desktop.png)
 
 The extension uses an abortable Pi `input` request with the private title
 `exhibit:questions:v1`. Go validates and tracks the request, then emits
@@ -186,13 +190,22 @@ is sent to the same URL with `POST`:
 {"answers":[{"id":"view","selected":["A weekly view"]},{"id":"goal","text":"Plan meals for my family"}]}
 ```
 
+A message from the chat composer replies to the whole request instead:
+
+```json
+{"message":"Actually, make a shopping list instead."}
+```
+
 Both endpoints use the owner-scoped session lookup, and the sidecar's scoped
 artifact credential cannot answer on the person's behalf. Answers must match
 every question exactly once, in order; choices must be among that question's
-suggestions. An already answered or cancelled request returns `409`. The answer
+suggestions. A chat message is limited to 8,000 bytes and cannot be mixed with
+structured answers or cancellation. It goes to the model as the person's own
+words, without inventing answers to unfilled questions. An already answered
+or cancelled request returns `409`. The answer
 travels back to the waiting tool through `extension_ui_response`, rather than
-starting another prompt. While questions are pending, the ordinary composer
-waits and direct prompt requests return `409`.
+starting another prompt. The composer uses the question reply endpoint while
+questions are pending; direct prompt requests still return `409`.
 
 “Skip” posts `{"cancelled":true}` and tells the agent no answer was
 given. Stop aborts the tool through Pi's signal; it does not submit answers.

@@ -26,6 +26,7 @@ let sessionId = null;
 let eventSource = null;
 let streaming = false;
 const pendingQuestions = new Set();
+let sendingQuestionMessage = false;
 let keyConfigured = false;
 let configuredProvider = null;   // provider the stored key currently belongs to, or null
 let pendingSnippets = [];   // [{image:{data,mimeType}, descriptor, thumbUrl}]
@@ -548,9 +549,23 @@ async function stopAgent() {
 
 // --- Sending ---------------------------------------------------------------
 async function send() {
-  if (pendingQuestions.size) return;
+  if (sendingQuestionMessage) return;
   const text = inputEl.value.trim();
   if (!text || sending || switchingConversation || leaving) return;
+  if (pendingQuestions.size) {
+    const detail = { sessionId, requestId: pendingQuestions.values().next().value, message: text };
+    document.dispatchEvent(new CustomEvent('exhibit:question-message', { detail }));
+    if (!detail.response) return;
+    sendingQuestionMessage = true;
+    updateComposer();
+    try {
+      if (await detail.response && inputEl.value.trim() === text) inputEl.value = '';
+    } finally {
+      sendingQuestionMessage = false;
+      updateComposer();
+    }
+    return;
+  }
   if (!keyConfigured) { openKeyModal(); return; }
   const sendingAttempt = {};
   sending = sendingAttempt;
@@ -614,13 +629,19 @@ inputEl.addEventListener('keydown', (e) => {
 });
 function updateComposer() {
   const waiting = pendingQuestions.size > 0;
-  inputEl.disabled = waiting;
-  document.getElementById('send-btn').disabled = waiting || !inputEl.value.trim();
+  inputEl.disabled = false;
+  inputEl.placeholder = waiting ? 'Message the agent…' : artifact ? 'Describe the change to make…' : 'Describe the tool to build…';
+  document.getElementById('send-btn').disabled = sendingQuestionMessage || !inputEl.value.trim();
   document.getElementById('hint').hidden = waiting;
   inputEl.style.height = 'auto';
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
 }
 inputEl.addEventListener('input', () => { updateComposer(); typingPreparation.update(inputEl.value); });
+document.addEventListener('exhibit:question-resolved', event => {
+  if (event.detail.sessionId !== sessionId) return;
+  pendingQuestions.delete(event.detail.requestId);
+  updateComposer();
+});
 
 // --- Mobile panes (av-td4y) ------------------------------------------------
 // Below 640px the chat and the preview each take the whole screen and the

@@ -41,14 +41,11 @@ func (ro *Router) agentAnswerQuestions(w http.ResponseWriter, r *http.Request) {
 	if s == nil {
 		return
 	}
-	var response struct {
-		Answers   []agent.QuestionAnswer `json:"answers"`
-		Cancelled bool                   `json:"cancelled"`
-	}
+	var response agent.QuestionResponse
 	if !decodeJSON(w, r, &response) {
 		return
 	}
-	if err := s.AnswerQuestions(chi.URLParam(r, "requestID"), response.Answers, response.Cancelled); err != nil {
+	if err := s.AnswerQuestions(chi.URLParam(r, "requestID"), response); err != nil {
 		switch {
 		case errors.Is(err, agent.ErrQuestionExpired):
 			writeError(w, http.StatusConflict, err.Error())

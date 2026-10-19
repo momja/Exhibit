@@ -15,7 +15,7 @@ const questionDialogTitle = "exhibit:questions:v1"
 var (
 	ErrQuestionExpired = errors.New("these questions are no longer waiting for an answer")
 	ErrInvalidAnswer   = errors.New("please answer every question by choosing an option or writing a response")
-	ErrQuestionPending = errors.New("please answer the questions above, or skip them before sending another message")
+	ErrQuestionPending = errors.New("please answer the questions above or reply in chat")
 )
 
 type QuestionOption struct {
@@ -36,6 +36,14 @@ type QuestionAnswer struct {
 	Text     string   `json:"text,omitempty"`
 }
 
+// A chat message can answer or redirect the whole request without forcing the
+// person to fill in each field. Structured answers and a message are exclusive.
+type QuestionResponse struct {
+	Answers   []QuestionAnswer `json:"answers,omitempty"`
+	Message   string           `json:"message,omitempty"`
+	Cancelled bool             `json:"cancelled,omitempty"`
+}
+
 // QuestionRequest is also the view model for the server-rendered chat card.
 // Questions never change; a response replaces the pending state once.
 type QuestionRequest struct {
@@ -43,6 +51,7 @@ type QuestionRequest struct {
 	ToolCallID string           `json:"toolCallId"`
 	Questions  []Question       `json:"questions"`
 	Answers    []QuestionAnswer `json:"answers,omitempty"`
+	Message    string           `json:"message,omitempty"`
 	Pending    bool             `json:"pending"`
 	Cancelled  bool             `json:"cancelled"`
 }
@@ -83,6 +92,7 @@ func (s *Session) receiveQuestions(line []byte) bool {
 		return true
 	}
 	request.ID, request.Pending, request.Cancelled, request.Answers = dialog.ID, true, false, nil
+	request.Message = ""
 	s.mu.Lock()
 	if s.questions == nil {
 		s.questions = map[string]QuestionRequest{}
@@ -142,10 +152,23 @@ func validateAnswers(questions []Question, answers []QuestionAnswer) error {
 	return nil
 }
 
+func validateQuestionResponse(questions []Question, response QuestionResponse) error {
+	if response.Message != "" {
+		if len(response.Message) > 8000 || strings.TrimSpace(response.Message) == "" || len(response.Answers) != 0 || response.Cancelled {
+			return ErrInvalidAnswer
+		}
+		return nil
+	}
+	if response.Cancelled {
+		return nil
+	}
+	return validateAnswers(questions, response.Answers)
+}
+
 // AnswerQuestions claims a request while holding the same lock used for
 // cancellation. Two tabs cannot answer it twice, and a failed write leaves it
 // pending so the person can retry. UI replies have no normal RPC response.
-func (s *Session) AnswerQuestions(id string, answers []QuestionAnswer, cancelled bool) error {
+func (s *Session) AnswerQuestions(id string, response QuestionResponse) error {
 	s.writeMu.Lock()
 	s.mu.Lock()
 	request, ok := s.questions[id]
@@ -154,16 +177,17 @@ func (s *Session) AnswerQuestions(id string, answers []QuestionAnswer, cancelled
 		s.writeMu.Unlock()
 		return ErrQuestionExpired
 	}
-	if cancelled {
-		answers = nil
-	} else if err := validateAnswers(request.Questions, answers); err != nil {
+	if err := validateQuestionResponse(request.Questions, response); err != nil {
 		s.mu.Unlock()
 		s.writeMu.Unlock()
 		return err
 	}
-	err := s.writeQuestionResponse(id, answers, cancelled)
+	if response.Cancelled {
+		response.Answers = nil
+	}
+	err := s.writeQuestionResponse(id, response)
 	if err == nil {
-		request.Pending, request.Cancelled, request.Answers = false, cancelled, answers
+		request.Pending, request.Cancelled, request.Answers, request.Message = false, response.Cancelled, response.Answers, response.Message
 		s.questions[id] = request
 		s.lastActive = time.Now()
 	}
@@ -178,9 +202,9 @@ func (s *Session) AnswerQuestions(id string, answers []QuestionAnswer, cancelled
 }
 
 // Caller serializes writes with writeMu.
-func (s *Session) writeQuestionResponse(id string, answers []QuestionAnswer, cancelled bool) error {
-	value, _ := json.Marshal(answers)
-	line, _ := json.Marshal(map[string]any{"type": "extension_ui_response", "id": id, "value": string(value), "cancelled": cancelled})
+func (s *Session) writeQuestionResponse(id string, response QuestionResponse) error {
+	value, _ := json.Marshal(response)
+	line, _ := json.Marshal(map[string]any{"type": "extension_ui_response", "id": id, "value": string(value), "cancelled": response.Cancelled})
 	if _, err := s.stdin.Write(append(line, '\n')); err != nil {
 		return fmt.Errorf("send answer to agent: %w", err)
 	}
@@ -190,7 +214,7 @@ func (s *Session) writeQuestionResponse(id string, answers []QuestionAnswer, can
 func (s *Session) sendQuestionCancellation(id string) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	_ = s.writeQuestionResponse(id, nil, true)
+	_ = s.writeQuestionResponse(id, QuestionResponse{Cancelled: true})
 }
 
 // cancelQuestions also retires requests when a tool is aborted by Pi or the
