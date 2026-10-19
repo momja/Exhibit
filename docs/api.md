@@ -409,14 +409,20 @@ screenshot + selector to your next prompt. See [docs/agent.md](./docs/agent.md).
 ## Shares
 
 ```
-POST   /api/shares                 Create share {"artifact_id":"...","public":true}
-DELETE /api/shares/:id             Delete share
-GET    /s/:shareID                 View shared artifact (no auth)
+POST   /api/shares                 Create anonymous link {"artifact_id":"..."}
+POST   /api/shares                 Grant access {"artifact_id":"...","recipients":["alice"]}
+GET    /api/artifacts/:id/shares    List the owner's anonymous link and grants
+DELETE /api/shares/:id             Revoke a link or grant (owner only)
+GET    /s/:shareID                 View anonymously shared artifact (render origin)
 ```
 
-Share links resolve on the render origin, under the artifact's own CSP. No account needed to view a share.
+An anonymous link is a capability URL: anyone holding it can view the artifact without an account. It resolves on the render origin under the artifact's own CSP. Each artifact has at most one anonymous link; creating another returns `409`. Send `{"artifact_id":"...","replace":true}` to rotate it atomically, invalidating the old URL. A successful link create or replacement returns `201` with `share` and `share_url`.
 
-A share has no lifetime of its own: it is live from the moment it is minted until the row is deleted, and `DELETE /api/shares/:id` is how it ends. There is no expiry (av-8ipt removed a column nothing ever set), and a create request carrying `expires_at` is refused with `400` rather than quietly given a link that never expires.
+For restricted access, supply `recipients` with account login names or email addresses. This creates directed grants: recipients sign in and open the ordinary `/artifacts/:id` page. A grant's ID cannot be used as an anonymous `/s/:shareID` link. The response is `200` with a `results` entry per name (`granted`, `already_shared`, `unknown`, `ambiguous`, or `self`). `replace` is refused on grant requests.
+
+`public` is no longer a share field. Any create request carrying it, including `public: false`, `public: true`, or `public: null`, returns `400` before creating or replacing any link or grant. Omit it and use `recipients` when access should require a named account. Share responses omit `public`; the presence of a recipient distinguishes a directed grant from an anonymous link.
+
+A share has no lifetime of its own: it is live from the moment it is minted until the row is deleted, and `DELETE /api/shares/:id` is how it ends. There is no expiry, and a create request carrying `expires_at` is refused with `400` rather than quietly given a link that never expires.
 
 ## Your own account
 

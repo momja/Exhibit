@@ -1,6 +1,6 @@
 ---
 id: av-20xv
-status: open
+status: closed
 deps: []
 links: [av-0k5q, av-v991, av-7k7b, av-6xjd, av-8ipt, av-lrae]
 created: 2026-08-09T04:24:30Z
@@ -82,3 +82,7 @@ it a schema change rather than a data migration.
 
 The interim fix stands until then: stop accepting a value the server does not
 honour.
+
+**2026-10-19T19:46:54Z**
+
+Verified the final removal decision is implemented by migration 028 and the create handler tombstone: public is absent from persisted shares and responses, and requests mentioning it are refused. Corrected the API docs that still instructed callers to send public:true. Expanded regression coverage across every JSON value type for anonymous-link creation, directed grants, and link rotation, including unchanged sharing state on rejection.
