@@ -548,6 +548,25 @@ are server-rendered fragments (`/partials/agent-history`,
 and closes the pane and runs the one thing a fragment cannot, which is
 continuing a conversation.
 
+**Message actions (Exh-ruds).** Each agent text bubble has an always-visible
+row of icons below it, starting with **Copy**. Action labels appear on hover or
+keyboard focus without shifting the other buttons. Copy preserves the exact text
+(including line breaks and Markdown), with a short success status or an actionable error. The
+Clipboard API is preferred; HTTP deployments use a temporary selection and
+`execCommand('copy')`, restoring focus and the previous selection afterward.
+
+The `agentMessage` template partial owns the bubble, content slot, and action
+row. History renders it directly; live streaming clones the same server-rendered
+`<template>` shell and appends deltas only to `[data-message-content]`, since
+those deltas are browser-local state. `message-actions.js` is a native ES module
+with one delegated listener on `#pane-chat`, so history swaps and continuing a
+conversation need no rebinding. To add an action, add a `data-message-action`
+button to the partial and a matching entry in the module's `actions` map. Each
+entry supplies `run({ content, message, button })`, returning success text, and
+`failureMessage`; the listener handles pending state and accessible feedback.
+Actions that change persisted content should dispatch their change event and
+refresh the appropriate server-rendered partial through htmx.
+
 **Continuing.** Under the transcript is a card that is the whole decision. If the
 artifact is still at the version the conversation was last working against, it is
 one button, *Continue this conversation*. If it has moved on, the card says which
@@ -583,6 +602,15 @@ conversation being continued, and re-renders the preview if it rolled back. A
 conversation that cannot be continued — kept before session files existed, or on
 an instance with no agent — shows a note where the card would be, not a missing
 button.
+
+**Resizable chat (Exh-blsd).** On desktop, drag the chat panel's right edge to
+change its width. The edge uses a resize cursor without a visible grip or extra
+bar. Focus the edge and use Left/Right arrows
+(Shift for larger steps), or Home/End for the width limits. Double-click resets
+it to 460 pixels. The browser remembers the preferred width; smaller windows
+clamp it so both panes keep at least 280 pixels. Mobile retains the Chat/Preview
+tabs and hides the divider. The divider lives outside the preview partial, so
+resizing never reloads the artifact.
 
 **The brief handoff (nw-d1dd).** A create session usually arrives from `/new`,
 whose Build-with-agent panel is now the page's default and is a *form* rather

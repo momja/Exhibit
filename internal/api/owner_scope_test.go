@@ -105,6 +105,7 @@ func TestArtifactRoutes404ForAnotherOwner(t *testing.T) {
 		body []byte
 	}{
 		{"GET artifact", "GET", "/api/artifacts/%s", nil},
+		{"GET assets export", "GET", "/api/artifacts/%s/assets/export", nil},
 		{"PATCH artifact", "PATCH", "/api/artifacts/%s", patch},
 		{"PATCH allowlist (origin-decision write)", "PATCH", "/api/artifacts/%s", allowlist},
 		{"DELETE artifact", "DELETE", "/api/artifacts/%s", nil},

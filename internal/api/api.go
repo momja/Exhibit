@@ -525,6 +525,7 @@ func (ro *Router) setupRoutes() {
 				// live outside the body.
 				r.Get("/export", ro.exportArtifact)
 				r.Get("/assets", ro.listAssets)
+				r.Get("/assets/export", ro.exportAssets)
 				r.Delete("/assets/{assetID}", ro.deleteAsset)
 				// Per-origin network decisions (av-kmwj). Decided one
 				// origin at a time, because that is what the runtime
