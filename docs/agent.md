@@ -591,7 +591,11 @@ that: `agent.history.test.mjs` pins the page's side (open, first message, ended
 session) and `TestAChatOnAnArtifactThatHasHistoryStartsANewConversation` the
 server's, against a real Pi.
 
-**History.** Once the page is about an artifact, the chat has a History button.
+**History.** Once the page is about an artifact, a History pill floats at the
+upper right of the chat. Messages scroll beneath it without a fixed toolbar
+cutting off the conversation. A top inset inside the scrolling content keeps
+the first message clear of the button; it scrolls away with the messages.
+The button uses the shared panel, border, and shadow tokens in both themes.
 It opens a pane that takes the place of the messages and the composer — a
 conversation you are only reading must not sit above a box that would talk to
 the live one — listing the conversations kept with the artifact, each with its
@@ -602,6 +606,11 @@ are server-rendered fragments (`/partials/agent-history`,
 `/partials/agent-transcript`) swapped into `#history` by htmx; `agent.js` opens
 and closes the pane and runs the one thing a fragment cannot, which is
 continuing a conversation.
+
+The floating control is shown on [desktop in light mode](screenshots/Exh-dwif/01-floating-history-light.png),
+[desktop in dark mode](screenshots/Exh-dwif/02-floating-history-dark.png), and
+[mobile](screenshots/Exh-dwif/03-floating-history-mobile.png). These screenshots
+use sample messages in the live page to show the scrolled layout.
 
 **Message actions (Exh-ruds).** Each agent text bubble has an always-visible
 row of icons below it, starting with **Copy**. Action labels appear on hover or
