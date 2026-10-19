@@ -44,7 +44,8 @@ The only way data changes. Full route reference: `api.md`.
 - `PATCH /api/artifacts/:id`: title, body, `network_allowlist` (the whole allow
   set; block rows are left alone), the capability approvals (`downloads_approved`,
   `clipboard_approved`, `links_approved`, `camera_approved`, `microphone_approved`,
-  `geolocation_approved`, named once in `store.ApprovalColumns`),
+  `geolocation_approved`, named once in `store.ApprovalColumns`, which drives a
+  strict-boolean check in both handler and store),
   `share_state_mode` (checked against `store.ValidShareStateMode` in handler *and*
   store, av-6xjd), other scalars. A changed body is a new blob and a new version (§3.3b);
   an identical one writes nothing. The response carries the new footprint and
@@ -62,8 +63,8 @@ The only way data changes. Full route reference: `api.md`.
   script hiding its dependencies) leave any saved asset missing from the new
   collection, or a snapshot-level error occurs while saved assets exist, the
   refetch is a 400 before anything is written. Never writes the allowlist; returns
-  `network_footprint`, `footprint_changed`, `undecided_origins`, `updated`,
-  `snapshot`.
+  `network_footprint`, `footprint_changed`, `undecided_origins` (footprint minus
+  every origin already allowed *or blocked*), `updated`, `snapshot`.
 - `GET …/versions`, `POST …/versions/:seq/restore`: history and restore (§3.3b).
   No route creates a version. Restore is owner-only and not in `agentSubResources`.
 - `DELETE /api/artifacts/:id`: rows first, then bytes (every version's blobs), with
@@ -105,7 +106,6 @@ The only way data changes. Full route reference: `api.md`.
   the authenticated group (av-4ac9). Values come from env on `api.Config`
   (`PUBLIC_MODE_ENABLED`, `PUBLIC_INSTANCE_NAME`, `PUBLIC_INSTANCE_DESCRIPTION`,
   `PUBLIC_OWNER_ID`). 404 when public mode is off.
-- `POST /api/shares` refuses `expires_at` (§7).
 
 **Allowlist entries are origins** (av-i7hd). `POST`/`PATCH` run them through
 `origin.NormalizeOrigin` (scheme + host + non-default port, lowercased, deduped). A
@@ -129,9 +129,6 @@ read and idle timeouts but no write timeout (the agent SSE stream stays open).
 else does. Deny-by-default list. The pass is recorded on the context so pages hide
 edit controls and mint anonymous render tokens (§3.2).
 
-**Owner is a real query predicate** (av-ep8k): handlers pass it into every Store
-method that names an artifact, and SQL filters on it (§3.3).
-
 ### 3.2 Render surface
 
 A read-only surface on `RENDER_ORIGIN` that emits an artifact as an executable
@@ -142,13 +139,17 @@ it safe behind the no-auth share path (§7).
   rows are inlined to mute the prompt); state, from the principal chosen by
   `Artifact.StatePrincipal` (`shared` mode inlines the owner's board, `own` the
   viewer's). The write path resolves through the same function (av-v991).
-- **CSP**: `connect-src`/`script-src`/`worker-src`/`style-src`/`img-src`/`font-src`/
-  `media-src` from the allowlist. Every source is in one of two buckets:
-  *network-reaching* (allowlist-gated) or *local, no-egress* (`'unsafe-inline'`,
-  `'unsafe-eval'`, `data:`, `blob:`; unconditional). That bucket question is the only
-  one a new directive raises. `worker-src` is explicit because its absence fails
-  silently (av-x01o). One *system* source is neither: the artifact's own asset path
-  in `connect-src` (av-20fk). It is never stored as a decision and never shown in
+- **CSP** (`buildCSP`): baseline `default-src 'none'`. Every source is in one of two
+  buckets: *network-reaching* (the allowlist, gated) or *local, no-egress*
+  (unconditional): `script-src 'unsafe-inline' 'unsafe-eval' blob: data:`,
+  `worker-src blob: data:`, `style-src 'unsafe-inline'`, `img-src data:`,
+  `font-src data:`, `media-src blob:`, `connect-src blob: data:`. That bucket
+  question is the only one a new directive raises. `worker-src` is explicit because
+  its absence fails silently (av-x01o). `form-action 'self'` plus the allowlist is
+  explicit because it never inherits `default-src`, and the sandbox keeps
+  `allow-forms`. One *system* source is neither bucket: the artifact's own asset path,
+  added to every directive an asset loads under (script, style, img, font, media,
+  connect; av-20fk, av-oz40). It is never stored as a decision and never shown in
   the allowlist editor. The render origin is dropped from every scan result and
   write path (`withoutRenderOrigin`, av-oz40): an allow row for it would open every
   other artifact's documents.
@@ -162,7 +163,8 @@ it safe behind the no-auth share path (§7).
   network permission reporter. Taxonomy: `security.md` §4.
   - **Shim resync** (av-v991): the host posts the current state map in; the shim
     diffs it into the cache in place and fires one `storage` event per changed key.
-    It checks both halves of the sender's identity. `clear()` deletes keys rather
+    `postMessage` both ways: the document gets no API endpoint, no `connect-src`
+    source and no write credential. It checks both halves of the sender's identity. `clear()` deletes keys rather
     than rebinding; `StorageEvent` is built without `storageArea` (it throws on a
     plain object). It narrows the collision window and does not merge.
   - **Network reporter** (av-kmwj): a `securitypolicyviolation` listener that posts
@@ -184,9 +186,8 @@ it safe behind the no-auth share path (§7).
   credential. `Access-Control-Allow-Origin: *`, real `Content-Type`, and it must
   never redirect (CSP path matching does not survive one).
 - **Framing**: the app embeds `<iframe src="RENDER_ORIGIN/a/:id"
-  sandbox="allow-scripts">` with no `allow-same-origin` and no `allow=`. Denied
-  capabilities are proxied through the host by the bridges with per-artifact
-  first-use approval (§6).
+  sandbox="allow-scripts allow-forms">` (widget tiles: `allow-scripts` only), never
+  `allow-same-origin`. An `allow=` delegation re-grants nothing on an opaque origin.
 - **`frame-ancestors`** (av-6nbo, av-q3iy): `/a/:id` and `/w/:id` allow `APP_ORIGIN`
   only. `/s/:shareID` allows `*`, or `APP_ORIGIN` plus `EMBED_ORIGINS` when that is
   set. The routes pass the policy to `serveDoc`; `buildCSP` holds none of its own.
@@ -195,22 +196,24 @@ it safe behind the no-auth share path (§7).
   `security.md` §1.8.
 - **Version view** `/a/:id/versions/:seq` (av-vw7r): an earlier body with the state
   it left behind (`Store.GetVersionView`). Its token is scoped to that version
-  (`rendertoken.VersionScope`, in the MAC) and minted only for the owner.
+  (`rendertoken.VersionScope`, in the MAC) and minted only for the owner;
+  `ServeVersion` also 404s an anonymous or non-owner claim with a valid signature.
   Nothing persists: the shim's `VERSION_VIEW` flag, the host treating it as a
   different frame, and a CSP `sandbox`. The first refused write posts an empty
   `__avVersionUnsaved` notice so the page can say so (§3.5). The head is not
   served. `security.md` §1.9.
 - **Widget** `/w/:id` (av-fafu): same path and CSP, reads the widget blob, takes the
-  narrowed preamble (`WIDGET = true`, no write-through, no bridges) plus a small base
-  stylesheet. 404 when there is no widget. `widgets.md`.
+  narrowed preamble (`WIDGET = true`: state inlined, no write-through, no bridges)
+  plus a small base stylesheet. The URL is keyed by artifact, not blob, so it is
+  stable across saves. 404 when there is no widget. `widgets.md`.
 - **Render tokens** (av-c5aq): `/a/:id` and `/w/:id` require an HMAC-SHA256 token
   scoped to (artifact, owner), ten-minute TTL, minted by the app into each frame
   `src`. Late clicks go through `/artifacts/:id/open`, which mints and redirects.
   The render origin never holds a session: a top-level render runs artifact script.
   Claims are named (`o=1.e=….<tag>`, av-6axy); `p`, the viewer principal, is
   omitted when equal to `o` (`MintViewer`) and set on a recipient's frame (av-awr4).
-  Duplicate or unknown keys are rejected, and so is a token carrying both `a` and
-  `p`. An `anonymous` claim (av-wmp6) renders with no state
+  `s` scopes a token to a share row. Duplicate or unknown keys are rejected, and so
+  is a token carrying both `a` and `p`. An `anonymous` claim (av-wmp6) renders with no state
   inlined and no write-through; it is in the MAC because it subtracts authority.
   A share still inlines the owner's state. `security.md` §1.3.
 
@@ -280,14 +283,15 @@ and writes state.
   404, and `Stat` would cost a second request per read); `Delete` does no existence
   check. A partially read reader is treated as unknown length, because the offset
   upload path addresses parts from zero and would store the wrong bytes. `FSStore`
-  lives under `DATA_DIR`. Widgets are blobs too (`widget_blob_id`). Blobs are never
-  overwritten.
+  lives under `DATA_DIR`. Widgets are blobs too (`widget_blob_id`).
 - **Storage accounting** (av-fw1b, migration 021): `blob_sizes` plus the
   `blob_references` view. Lengths are recorded by the one funnel every `Blob.Put`
   goes through (`internal/api/blobwrite.go`, AST-tested), not by changing
   `Blob.Put`'s signature, which every backend would then have to honor. Totals are
   derived by join,
-  never counted. Migration 026 added assets to the view. A shared blob is charged in
+  never counted. The view is the extension point: a new blob-referencing table must
+  join it (as assets did in migration 026, versions in 032) *and* `blobqueue.go`,
+  or its bytes are charged to nobody. A shared blob is charged in
   full once to each referencing owner. `RecomputeStorageUsage` (`server storage
   recompute`) re-measures, keeps the old length for unreadable blobs, and writes only
   if the row is unchanged since it started, so an edit landing mid-pass keeps its
@@ -385,8 +389,6 @@ and on every refetch, after fetch and before `Blob.put`.
   typed `FetchError`s in the `snapshot` report.
 - **Fallback `<base href="<source-url>">`** is injected for surviving relatives.
 
-The vendorer never seeds the allowlist.
-
 ### 3.5 Gallery (web UI)
 
 Server-rendered `html/template` pages (`internal/api/templates/`, handlers in
@@ -403,16 +405,12 @@ A page outside the group reads an empty library (fail closed;
 Client JS islands: the CodeMirror editor and the renderer iframe. Search swaps the
 server-rendered grid on debounced input.
 
-**Detail page** (Exh-ghuv): the frame fills the window; controls float in a
-draggable pill that snaps to corners or tucks into an edge tab. The title opens an
-info card (date, posture receipt from `capabilityPopover`, Manage); ⋮ holds the rest.
-Notices float on the far side and persist until handled. Geometry lives in
-`web/gallery/pip-placement.js`, DOM wiring in `pip.js`. Screenshots:
-`docs/screenshots/Exh-ghuv/`.
+**Detail page** (Exh-ghuv): the frame fills the window under a floating,
+draggable control pill. Placement rules are pure geometry in
+`web/gallery/pip-placement.js`; `pip.js` applies them.
 
-**The detail page never embeds the artifact's source** (agaf-02xs). Page weight must
-not depend on artifact size; Safari stalls on a 16 MB page. Show facts about an
-artifact, never its bytes.
+**The detail page never embeds the artifact's source** (agaf-02xs): Safari stalls on
+a 16 MB page. Show facts about an artifact, never its bytes.
 
 **Recipients use the same page** (av-awr4) through `GetArtifactReadableBy`. One flag,
 `ReadOnly` from `pageCredentials.forArtifactOwnedBy`, removes owner chrome and makes
@@ -459,9 +457,8 @@ fact (shared data > public link > named people) and none for private. Since av-u
 it lives in `capabilityCluster` (folded in by `newCardCapabilityView`), and the
 popover gets a Sharing section; the detail receipt omits it.
 
-**Card** (av-uvc6): tile plus one 26px meta row (title, tag dots, posture and
-sharing glyphs, hover Edit pencil). `capabilityView.Compact` drops the
-"Sandboxed" label, so a private sandboxed artifact shows no marks.
+**Card** (av-uvc6): `capabilityView.Compact` drops the "Sandboxed" label, so a
+private sandboxed artifact shows no marks.
 
 **`/new`** (av-qo0j, nw-d1dd): three ingest modes, Build with agent selected by
 default. The agent mode is a form of named fields. The brief crosses to `/agent` in
@@ -490,8 +487,8 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
   the HTTP API. Output is scanned like any ingest, never auto-approved.
 - **Scoped credential** (av-e0yj): `internal/agentscope` mints a token resolving to
   (owner, artifact). `authMiddleware` allows only `POST /api/artifacts` while
-  unbound, then `GET`/`PATCH` and the `state`/`widget` sub-resources of the bound
-  artifact (`agentSubResources`). The create binds it. No tool takes an id. Composes
+  unbound, then `GET`/`PATCH` on the bound artifact plus `agentSubResources`:
+  `state` and `widget` read/write, `assets` read-only. The create binds it. No tool takes an id. Composes
   with owner scoping; neither half suffices alone. The grant is revoked when the
   subprocess exits or is killed; no credential outlives its process.
 - **Live sessions are in-memory and owner-scoped.** They live in a process-local
@@ -570,7 +567,7 @@ type Identity struct{ ExternalID, Email string }
   Id 1 adopts the existing single-user library.
 - **`LOGIN_USERNAME`/`LOGIN_PASSWORD_HASH`** are bootstrap and break-glass, checked
   before the table in `resolveLocalLogin` and live while set (`newLocalCredential` in
-  `cmd/server/main.go`).
+  `cmd/server/main.go`). Setting one without the other is fatal at startup.
 - **Routes**: `/auth/login` (page, or redirect to the provider when there is no
   local login), `POST /auth/local`, `/auth/sso`. Registered per capability;
   `Config.LocalUsers` is read at startup, so the first CLI-created account needs a
@@ -602,20 +599,17 @@ non-admin one.
 Resolved from `ownerIDFromCtx`, never the URL; a session is the authorization. Same
 furniture as admin, no shared authority.
 
-- Header entry points are two icon buttons (Add artifact, profile) with
-  `aria-label` and `title`.
-- Sections are `.card` blocks: Account, Sign out, danger zone.
 - **Sign out** (nw-a1ef) is a `POST` form to `/auth/logout`, rendered only when a
   session exists (a no-login instance registers no such route).
-- **Display name** falls back to the provider subject, then the sign-in route
-  (unlike `newAdminUserView`, which shows email alone). Shared furniture:
-  `settings.css`, the `settingsHeader` partial.
+- **Display name** (`profileName`): email, else provider subject, else the sign-in
+  route. Local to this page; `newAdminUserView` shows email alone.
 - **Delete library** (av-4wyq): the copy says an IdP login still works and lands in
   a new, empty account; it states the live share count; it takes two steps, the
   second the typed phrase `delete my library`, checked server-side. Storage size is
   shown under Account, not in the confirmation (av-fw1b). Blocked states show a
-  reason. A tripwire test in `sqlite_account.go` forces a deletion decision for every
-  new table.
+  reason. `sqlite_account.go` records which tables it deletes;
+  `TestEveryTableIsAccountedForInAccountDeletion` fails on a new table without a
+  decision.
 
 ### 3.8c Per-owner entitlements (av-2p8z)
 
@@ -689,7 +683,9 @@ ingest-time transform, degrades to a report, and never seeds the allowlist.
 - **Reads are inlined at render**: a load-time fetch would lose the race with the
   artifact's synchronous startup reads.
 - **Writes go through the host frame**: the opaque-origin iframe cannot call the API,
-  so the authenticated host does the `PUT`. Last write wins.
+  so the authenticated host does the `PUT`. Last write wins. Only `localStorage`
+  persists; framed `sessionStorage` is a separate in-memory cache that dies with
+  the frame.
 - **Resync is the same bridge reversed** (av-v991): the host refetches state on
   `visibilitychange`, and every few seconds for a `shared` artifact; the shim applies
   the diff and fires `storage` events. If nothing listened, the host offers a reload
@@ -698,8 +694,11 @@ ingest-time transform, degrades to a report, and never seeds the allowlist.
 - **Downloads, clipboard and external links** ride host-frame bridges with
   per-artifact first-use approval (`downloads_approved`, `clipboard_approved`,
   `links_approved`). Each bridge is UX; anything it misses stays sandbox-blocked.
-  Native paste is unaffected. Forms are governed by `form-action`, not the link
-  bridge. Framed-only.
+  The download bridge recovers `blob:` payloads from its `createObjectURL`
+  registry, never by a CSP-governed fetch. The link bridge runs after the
+  download-href check, so `blob:`/`data:` anchors stay downloads. Native paste is
+  unaffected. Forms are governed by `form-action` (§3.2), not the link bridge.
+  Framed-only.
 - **Camera, microphone and location are gates, not bridges** (av-mv3k, av-f446).
   The frame cannot get a device, and a position would spend the app origin's
   permission. The host prompts, records the approval, and opens the top-level render,
