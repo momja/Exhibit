@@ -42,9 +42,11 @@ The only way data changes. Full route reference: `api.md`.
   returns the footprint for approval (§5).
 - `GET /api/artifacts[/:id]`: list and detail.
 - `PATCH /api/artifacts/:id`: title, body, `network_allowlist` (the whole allow
-  set; block rows are left alone), the capability approvals named once in
-  `store.ApprovalColumns`, `share_state_mode` (validated in handler *and* store,
-  av-6xjd), other scalars. A changed body is a new blob and a new version (§3.3b);
+  set; block rows are left alone), the capability approvals (`downloads_approved`,
+  `clipboard_approved`, `links_approved`, `camera_approved`, `microphone_approved`,
+  `geolocation_approved`, named once in `store.ApprovalColumns`),
+  `share_state_mode` (checked against `store.ValidShareStateMode` in handler *and*
+  store, av-6xjd), other scalars. A changed body is a new blob and a new version (§3.3b);
   an identical one writes nothing. The response carries the new footprint and
   `footprint_changed`, which re-runs the approval gate. If the previous body's
   bytes are missing the write still goes through (it is the repair) and
@@ -54,8 +56,12 @@ The only way data changes. Full route reference: `api.md`.
   pipeline and record a new version (av-reo3, av-b17a). A non-2xx, empty or non-HTML
   response is refused with the artifact untouched; nothing else is judged. New blobs
   are staged, then `ReplaceArtifactSnapshot` switches body, search text and asset
-  generation in one transaction. A refetch that loses any previously saved asset
-  is refused before writing. Never writes the allowlist; returns
+  generation in one transaction. Body and assets are compared separately, since a
+  runtime payload never appears in the body. A refetch that collected no assets
+  keeps the existing ones. If fetch failures (including a failed stylesheet or
+  script hiding its dependencies) leave any saved asset missing from the new
+  collection, or a snapshot-level error occurs while saved assets exist, the
+  refetch is a 400 before anything is written. Never writes the allowlist; returns
   `network_footprint`, `footprint_changed`, `undecided_origins`, `updated`,
   `snapshot`.
 - `GET …/versions`, `POST …/versions/:seq/restore`: history and restore (§3.3b).
@@ -63,9 +69,13 @@ The only way data changes. Full route reference: `api.md`.
 - `DELETE /api/artifacts/:id`: rows first, then bytes (every version's blobs), with
   the ids queued in the delete's transaction (§3.3a, av-7jcq). A failed blob delete
   is a 500, and the queue retries it.
-- `GET/PUT/DELETE /api/artifacts/:id/state[/:key]`: state rows (§6), scoped to the
+- `GET/PUT/DELETE /api/artifacts/:id/state`: state rows (§6), scoped to the
   caller's own rows (av-q0ub). `PUT` is called by the host frame for the shim.
-  Deletes are idempotent; `:key` is one percent-encoded segment. The only route
+  `DELETE ?key=…` removes one key; `DELETE` with no `key` parameter erases all of
+  the caller's state and nothing else. The key is a query parameter, never a path
+  segment: a `..` key in a path normalizes to the artifact itself and would delete
+  it (av-hh1o). A present-but-empty `key` is the empty-string key. Deletes are
+  idempotent. The only route
   family a grantee may write (av-v991): handlers resolve one principal, the viewer,
   and the store's `…AsViewer` methods decide whose rows that means.
 - `GET …/export`: the artifact as one self-contained file, assets folded back in as
@@ -91,9 +101,11 @@ The only way data changes. Full route reference: `api.md`.
   no id, requires a session (not the service token) and the typed confirmation
   phrase server-side. Refuses the last enabled admin (`ErrLastAdmin`).
 - Collection and tag CRUD.
-- `GET /api/settings/public`: instance name and description, the one unauthenticated
-  `/api` route (av-4ac9). Values come from env (`PUBLIC_*`). 404 when public mode is
-  off.
+- `GET /api/settings/public`: instance name and description, registered outside
+  the authenticated group (av-4ac9). Values come from env on `api.Config`
+  (`PUBLIC_MODE_ENABLED`, `PUBLIC_INSTANCE_NAME`, `PUBLIC_INSTANCE_DESCRIPTION`,
+  `PUBLIC_OWNER_ID`). 404 when public mode is off.
+- `POST /api/shares` refuses `expires_at` (§7).
 
 **Allowlist entries are origins** (av-i7hd). `POST`/`PATCH` run them through
 `origin.NormalizeOrigin` (scheme + host + non-default port, lowercased, deduped). A
@@ -104,9 +116,11 @@ CSP, where a path entry is path-matched.
 session cookie when a login exists (§3.8), else the static bearer token. Auth and
 ownership are one layer.
 
-**Every body is bounded** (av-ombn). `limitRequestBody` sits on the router root:
-over `MAX_REQUEST_BODY_BYTES` (32 MiB default) is 413 before any handler. Handlers
-read bodies only via `decodeJSON`. Tests walk the parser and the write routes. A
+**Every body is bounded** (av-ombn). `limitRequestBody` sits on the router root. A
+body *declared* over `MAX_REQUEST_BODY_BYTES` (32 MiB default) is 413 before any
+handler; one of unknown length is wrapped in `http.MaxBytesReader` and reaches the
+handler. Handlers read bodies only via `decodeJSON`, which turns the overrun into
+413. Tests walk the parser and the write routes (`bodylimit_test.go`). A
 write peaks near 10× its body. Listeners come from `api.NewServer` with header,
 read and idle timeouts but no write timeout (the agent SSE stream stays open).
 
@@ -174,10 +188,14 @@ it safe behind the no-auth share path (§7).
   capabilities are proxied through the host by the bridges with per-artifact
   first-use approval (§6).
 - **`frame-ancestors`** (av-6nbo, av-q3iy): `/a/:id` and `/w/:id` allow `APP_ORIGIN`
-  only. `/s/:shareID` allows `*` unless `EMBED_ORIGINS` narrows it. The routes pass
-  the policy to `serveDoc`; `buildCSP` holds none of its own. `security.md` §1.8.
+  only. `/s/:shareID` allows `*`, or `APP_ORIGIN` plus `EMBED_ORIGINS` when that is
+  set. The routes pass the policy to `serveDoc`; `buildCSP` holds none of its own.
+  The open default is safe only because **every `postMessage` the preamble sends
+  targets `APP_ORIGIN`**, so a foreign framer receives nothing from the shim.
+  `security.md` §1.8.
 - **Version view** `/a/:id/versions/:seq` (av-vw7r): an earlier body with the state
-  it left behind (`Store.GetVersionView`). Token scoped to that version and owner.
+  it left behind (`Store.GetVersionView`). Its token is scoped to that version
+  (`rendertoken.VersionScope`, in the MAC) and minted only for the owner.
   Nothing persists: the shim's `VERSION_VIEW` flag, the host treating it as a
   different frame, and a CSP `sandbox`. The first refused write posts an empty
   `__avVersionUnsaved` notice so the page can say so (§3.5). The head is not
@@ -190,8 +208,9 @@ it safe behind the no-auth share path (§7).
   `src`. Late clicks go through `/artifacts/:id/open`, which mints and redirects.
   The render origin never holds a session: a top-level render runs artifact script.
   Claims are named (`o=1.e=….<tag>`, av-6axy); `p`, the viewer principal, is
-  omitted when equal to `o` and set on a recipient's frame (av-awr4). Duplicate or
-  unknown keys are rejected. An `anonymous` claim (av-wmp6) renders with no state
+  omitted when equal to `o` (`MintViewer`) and set on a recipient's frame (av-awr4).
+  Duplicate or unknown keys are rejected, and so is a token carrying both `a` and
+  `p`. An `anonymous` claim (av-wmp6) renders with no state
   inlined and no write-through; it is in the MAC because it subtracts authority.
   A share still inlines the owner's state. `security.md` §1.3.
 
@@ -213,8 +232,9 @@ Blob:   put/get/delete by id
 owner's id behaves exactly like a missing one: reads return nothing, writes return
 `ErrNotFound`, handlers answer 404, never 403.
 
-**Two unscoped accessors**, named for it: `GetArtifactUnscoped` and
-`GetAnonymousShareUnscoped`, used only by `internal/render` (test-enforced;
+**Unscoped accessors are named for it**: `GetArtifactUnscoped`,
+`GetAnonymousShareUnscoped`, and for assets `ArtifactAssetsUnscoped` and
+`GetArtifactAssetUnscoped`. Callers stay inside `internal/render` (test-enforced;
 `grep Unscoped` is the audit). The share accessor resolves only the anonymous link,
 in the query, so a grant id is never a public URL (av-lrae).
 
@@ -255,16 +275,23 @@ and writes state.
   (av-52ll), both held to one contract suite in `internal/blob`. Load-bearing
   properties: the backend buffers at most one 5 MiB part (callers above still read
   bodies whole); a missing blob fails at `Get` with an error satisfying
-  `errors.Is(err, fs.ErrNotExist)`, forced by a one-byte read rather than a `Stat`;
-  `Delete` does no existence check. A partially read reader is treated as unknown
-  length. Widgets are blobs too (`widget_blob_id`). Blobs are never overwritten.
+  `errors.Is(err, fs.ErrNotExist)`, forced by a one-byte read pushed back onto the
+  stream (the SDK handle is lazy, a render that has started a 200 cannot become a
+  404, and `Stat` would cost a second request per read); `Delete` does no existence
+  check. A partially read reader is treated as unknown length, because the offset
+  upload path addresses parts from zero and would store the wrong bytes. `FSStore`
+  lives under `DATA_DIR`. Widgets are blobs too (`widget_blob_id`). Blobs are never
+  overwritten.
 - **Storage accounting** (av-fw1b, migration 021): `blob_sizes` plus the
   `blob_references` view. Lengths are recorded by the one funnel every `Blob.Put`
-  goes through (`internal/api/blobwrite.go`, AST-tested). Totals are derived by join,
+  goes through (`internal/api/blobwrite.go`, AST-tested), not by changing
+  `Blob.Put`'s signature, which every backend would then have to honor. Totals are
+  derived by join,
   never counted. Migration 026 added assets to the view. A shared blob is charged in
   full once to each referencing owner. `RecomputeStorageUsage` (`server storage
   recompute`) re-measures, keeps the old length for unreadable blobs, and writes only
-  if the row is unchanged since it started. `BackfillBlobSizes` runs at startup.
+  if the row is unchanged since it started, so an edit landing mid-pass keeps its
+  fresher length. `BackfillBlobSizes` runs at startup.
   Nothing here refuses; limits are §3.8d.
 - **Condemned blob ids**: `pending_blob_deletions` (§3.3a).
 
@@ -275,7 +302,7 @@ restore) is a version, and each version keeps the state its code left behind.
 
 - **The head is a version.** `artifact_versions(artifact_id, seq, origin, message,
   session_id, body_blob_id, widget_blob_id, state_json, created_at)`. The head
-  pointers on `artifacts` are written only by `store.CommitVersion` /
+  pointers `artifacts.source_blob_id` / `widget_blob_id` are written only by `store.CommitVersion` /
   `RestoreVersion` in the same transaction. Version 1 comes from an `AFTER INSERT`
   trigger.
 - **Blobs are never overwritten.** Shared blobs live while any version names them;
@@ -294,7 +321,9 @@ restore) is a version, and each version keeps the state its code left behind.
 - **Provenance**: `origin` is `initial|edit|agent|refetch|restore`. An agent write
   takes message and session from its server-held grant (`agentscope.Grant`).
 - **Assets**: `artifact_version_assets` keeps each version's asset metadata.
-  Restore and preview use it; refcounts and accounting include it.
+  A refetch that changed only a runtime payload still records a version. Restore
+  and preview use the snapshot; refcounts and accounting include it; asset URLs
+  stay readable while any version retains them.
 - **Fresh version blobs** are queued for reference-checked cleanup before their
   bytes are written, so a failed save leaves durable cleanup intent.
 - **Stale frames**: the shim stamps writes with its rendered version; the host sends
@@ -343,10 +372,11 @@ and on every refetch, after fetch and before `Blob.put`.
 - **HTML inlining**: images, `srcset`, icons → `data:`; scripts and stylesheets
   inlined. Above `snapshot.InlineDataURIMaxBytes` an asset becomes an out-of-line
   blob and the reference is rewritten to its asset URL (av-oz40).
-- **CSS inlining** recurses through `url()` and `@import`, with cycle and depth
-  guards.
+- **CSS inlining** recurses through `url()` and `@import`, each sheet resolved
+  against its own URL, with cycle and depth guards (exhibit-lwb.4).
 - **Runtime assets** (av-ghvs): binary payloads fetched from JS (`.wasm`, `.data`,
-  `.bin`, `.mem`) found by `scanner.FetchRefs`, under `MaxInlineAssetBytes`.
+  `.bin`, `.mem`) found by `scanner.FetchRefs` (the fetch half of
+  `scanner.LiteralRefs`, shared with the footprint), under `MaxInlineAssetBytes`.
   Vendoring is required because relocating the page makes those fetches
   cross-origin and the source sends no CORS headers. The pass collects into
   `artifact_assets` and leaves the body's literals alone (av-20fk); the render
@@ -407,26 +437,31 @@ never heard except by `components.js` revealing the hidden "not saved" banner on
 `/partials/*` render the same named partial as the full page; a mutation dispatches
 a body event and the region refetches. Consumers: the agent preview pane, the
 widget panel (`/partials/card-widget`), the posture cluster
-(`/partials/capability-cluster`, av-mf1x, two regions via `hx-select`), and the
-share panel.
+(`/partials/capability-cluster` on `exhibit:capabilities-changed`, av-mf1x, one
+`artifactPosture` fragment feeding two regions via `hx-select`), and the share
+panel.
 
 **Card widgets** (av-fafu): a sandboxed `/w/:id` frame, or a server-rendered
 monogram tile when there is none. The frame is `pointer-events: none` and
 `tabindex="-1"`. One `cardWidget` partial serves card, edit page, agent pane and
 fragment route.
 
-**Sharing** (av-6xjd, av-tlpv): an owner-only `sharePanel` modal with three
-sections: people (one field, several names, each reported back), saved-data mode,
-and the public link (toggle plus replace). Changes apply immediately. The script is
-a native ES module. The body is an htmx target refreshed by `exhibit:shares-changed`.
+**Sharing** (av-6xjd, av-tlpv): an owner-only `sharePanel` modal, rendered only
+when `detailPageData.Share` is non-nil, with three sections: people (one field,
+several names, each reported back), saved-data mode, and the public link (toggle
+plus replace). Named recipients write state per the mode; **public-link visitors
+see the owner's state in either mode and never write it back**. Changes apply
+immediately. The script is a native ES module. The body is an htmx target
+refreshed from `/partials/share-panel` on `exhibit:shares-changed`.
 On a 5xx refresh the existing controls stay, disabled, so nothing is replayed and
 unsent names survive. On the card, `shareBadgeView` shows one glyph for the strongest
 fact (shared data > public link > named people) and none for private. Since av-uvc6
-it lives in `capabilityCluster`, and the popover gets a Sharing section; the
-detail receipt omits it.
+it lives in `capabilityCluster` (folded in by `newCardCapabilityView`), and the
+popover gets a Sharing section; the detail receipt omits it.
 
 **Card** (av-uvc6): tile plus one 26px meta row (title, tag dots, posture and
-sharing glyphs, hover Edit pencil). A private sandboxed artifact shows no marks.
+sharing glyphs, hover Edit pencil). `capabilityView.Compact` drops the
+"Sandboxed" label, so a private sandboxed artifact shows no marks.
 
 **`/new`** (av-qo0j, nw-d1dd): three ingest modes, Build with agent selected by
 default. The agent mode is a form of named fields. The brief crosses to `/agent` in
@@ -449,15 +484,20 @@ The agent is the main way artifacts are built and changed. Each chat session run
 and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
 
 - **Single write path**: built-in tools disabled; one extension
-  (`internal/agent/ext/exhibit.ts`) whose artifact, state and widget tools call the
-  HTTP API. Output is scanned like any ingest, never auto-approved.
+  (`internal/agent/ext/exhibit.ts`) whose tools (`create_artifact`,
+  `write_artifact`, `edit_artifact`, `get_artifact`, `get_state`, `set_state`,
+  `delete_state`, `set_widget`, `edit_widget`, `get_widget`, `get_selection`) call
+  the HTTP API. Output is scanned like any ingest, never auto-approved.
 - **Scoped credential** (av-e0yj): `internal/agentscope` mints a token resolving to
   (owner, artifact). `authMiddleware` allows only `POST /api/artifacts` while
   unbound, then `GET`/`PATCH` and the `state`/`widget` sub-resources of the bound
   artifact (`agentSubResources`). The create binds it. No tool takes an id. Composes
-  with owner scoping; neither half suffices alone.
-- **Sessions are owner-scoped**: `Manager.Get(ownerID, id)`; another owner's session
-  is 404. The SSE route resolves its owner in `authorizeEventStream`.
+  with owner scoping; neither half suffices alone. The grant is revoked when the
+  subprocess exits or is killed; no credential outlives its process.
+- **Live sessions are in-memory and owner-scoped.** They live in a process-local
+  registry, not SQLite, and do not survive a restart (transcripts do, below).
+  `Manager.Get(ownerID, id)`; another owner's session is 404. The SSE route
+  resolves its owner in `authorizeEventStream`.
 - **Oversized writes** (av-ombn): the sidecar gets `EXHIBIT_MAX_BODY_BYTES` and
   refuses early; a 413 yields a readable tool error.
 - **Untrusted text arrives only as tool results** (av-5s7g). The system prompt is
@@ -466,6 +506,8 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
   `agent_transcripts` with the artifact version. Only `agent.Messages` leaves the
   server. Pi is pinned because its file format is now a contract.
 - **Resume** (av-b4yh): only with `resume_session_id`, sent from History's Continue.
+  The resumed session uses the current system prompt, and its first prompt carries
+  a fixed sentence saying the artifact may have changed and must be read again.
   Rolling back the artifact is the page's choice via the restore route. Sessions run
   from `/`; the scratch dir is deleted after.
 - **BYO key**: AES-256-GCM at rest (`internal/secrets`, `agent_keys`), passed via a
@@ -473,12 +515,15 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
 - **Platform key** (av-siqf): `AGENT_API_KEY` makes `agentSessionOpts` ignore stored
   keys. The key route 404s, the page shows no key/provider/model controls, and
   `internal/agent/redact.go` strips `api`/`provider`/`model` from broadcast and
-  stored messages, keeping `usage` (av-2yws). A spend cap is required to start
-  (av-99f4).
+  stored messages, keeping `usage` (av-2yws). Platform mode refuses to start with
+  no `AGENT_SPEND_CAP_*` set (av-99f4, `agent.md`).
 - **Streaming**: SSE at `/api/agent/sessions/:id/events`; mid-run prompts steer.
 - **SSE ticket** (av-rgp1): `EventSource` cannot send headers, so the stream takes a
-  random, single-use, seconds-lived, session-bound ticket. The token never appears in
-  a URL. Redeeming sets the owner.
+  random, single-use, seconds-lived, session-bound ticket, minted only by a
+  header-authenticated request (session create, widget generate, or
+  `POST …/sessions/:id/ticket` for each reconnect). The token never appears in a
+  URL. The TTL bounds when a connection may open, not how long it stays open.
+  Redeeming sets the owner.
 - **Live preview**: `exhibit_artifact_saved` triggers an htmx swap of
   `/partials/agent-preview`; `exhibit_widget_saved` is separate.
 - **Widget generation** (av-fafu): `POST …/widget/generate` starts a one-shot
@@ -511,7 +556,8 @@ type Identity struct{ ExternalID, Email string }
   CSRF control as long as no GET mutates (`security.md` §1.4,
   `internal/api/csrf_test.go`).
 - **Schema**: `users(id, external_id, email, created_at, password_hash, is_admin)`,
-  `sessions(id, user_id, expires_at)`. `users.id` is `owner_id`. Nullable
+  `sessions(id, user_id, expires_at)`. `users.id` is `owner_id`, and no table
+  outside `users` holds a provider-specific identifier. Nullable
   `password_hash` keeps both kinds of account in one table.
 - **No login configured**: no `/auth/*` routes, pass-through gate, static token,
   owner 1. Proxy auth needs nothing here.
@@ -519,7 +565,7 @@ type Identity struct{ ExternalID, Email string }
   redirect-based. One session layer, two login paths.
 - **bcrypt hashes only**; admins provision accounts (§3.8a, `user add`/`user
   passwd`). No self-registration, no reset mail, no SMTP. Local accounts use
-  `external_id = local:<normalized name>` for uniqueness.
+  `external_id = local:<normalized name>` (`auth.LocalExternalID`) for uniqueness.
 - **First user is admin**, decided inside the single `INSERT` (`store.insertUser`).
   Id 1 adopts the existing single-user library.
 - **`LOGIN_USERNAME`/`LOGIN_PASSWORD_HASH`** are bootstrap and break-glass, checked
@@ -559,8 +605,11 @@ furniture as admin, no shared authority.
 - Header entry points are two icon buttons (Add artifact, profile) with
   `aria-label` and `title`.
 - Sections are `.card` blocks: Account, Sign out, danger zone.
-- **Sign out** (nw-a1ef) is a `POST` form, rendered only when a session exists.
-- **Display name** falls back to the provider subject, then the sign-in route.
+- **Sign out** (nw-a1ef) is a `POST` form to `/auth/logout`, rendered only when a
+  session exists (a no-login instance registers no such route).
+- **Display name** falls back to the provider subject, then the sign-in route
+  (unlike `newAdminUserView`, which shows email alone). Shared furniture:
+  `settings.css`, the `settingsHeader` partial.
 - **Delete library** (av-4wyq): the copy says an IdP login still works and lands in
   a new, empty account; it states the live share count; it takes two steps, the
   second the typed phrase `delete my library`, checked server-side. Storage size is
@@ -580,10 +629,14 @@ client.
 - **One resolver**, `Router.resolveAllowance`, returns an `Allowance`; gates read
   nothing else.
 - **Fail closed on ambiguity, not absence.** Limits off: unlimited, nothing read. On:
-  an unresolvable entitlement is an error and the caller refuses; a missing row
-  takes the instance default. `Limit`'s zero value refuses everything.
+  an unresolvable entitlement is an error and the caller refuses; no `users` row, or
+  a row with no limit of its own, takes the instance default. `Limit`'s zero value
+  refuses everything.
 - **`ENTITLEMENTS_ENABLED` without a default is fatal at startup.**
-- **Overrides are listable** (`Store.ListEntitlementOverrides`) to spot drift.
+- **Overrides are listable** (`Store.ListEntitlementOverrides`) to spot drift. The
+  predicate is "carries an entitlement of its own", not "differs from the default":
+  an override equal to today's default is still what the external system last
+  wrote, and must stay visible.
 - Account deletion removes them with the row.
 
 ### 3.8d Storage quotas (av-10bw)
@@ -600,7 +653,9 @@ library, never across owners. A refused write is a 413 naming limit, usage, writ
 and additional bytes, with nothing changed.
 
 With enforcement off there is no lock and no read. With it on, an unresolved
-entitlement or missing length refuses. Staged unused bytes enter the deletion queue.
+entitlement or missing recorded length refuses, and a failure to record a fresh
+blob's size prevents its reference from committing. Staged unused bytes enter the
+deletion queue. Accounting reads stay tolerant; only the quota projection is strict.
 
 An owner may stay over quota; lowering a limit reclaims nothing. Reads, renders,
 exports, metadata edits, unchanged saves, restores and deletions skip the gate.
@@ -662,7 +717,11 @@ because the link row is the authorization. Only a row with no recipient answers
 there; a grant's id buys nothing (§3.3). The `.html` export is the service-free
 fallback.
 
-A share lives until deleted. There is no expiry (av-8ipt).
+An anonymous link shows the owner's state and never writes it, whatever
+`share_state_mode` says; the mode selects rows only for named recipients.
+
+A share lives until deleted. There is no expiry, and `POST /api/shares` refuses an
+`expires_at` rather than accept a deadline it will not honor (av-8ipt).
 
 ## 8. Evolution seams
 

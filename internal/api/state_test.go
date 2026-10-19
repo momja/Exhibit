@@ -146,7 +146,7 @@ func TestDeleteStateUnknownArtifact(t *testing.T) {
 }
 
 // Both DELETEs sit inside the authenticated API group, like every other
-// mutating route — there is no second write path (architecture.md §4.1).
+// mutating route — there is no second write path (architecture.md §3.1).
 func TestDeleteStateRequiresAuth(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Stateful")
