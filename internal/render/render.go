@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/momja/Exhibit/internal/artifacticon"
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/store"
@@ -29,10 +30,9 @@ type Config struct {
 	AppOrigin    string
 	RenderOrigin string
 	// FaviconSVG is the Exhibit brand mark served at /favicon.ico (nw-6184).
-	// Render documents are visitor-authored files that own their own <head>,
-	// so the surface never injects an icon link into them; instead this
-	// fallback gives every document without an icon of its own the same mark
-	// the app origin wears. The api package supplies its compiled-in logo
+	// Artifact documents get their own E-and-tags icon link. This static
+	// fallback covers automatic browser probes and other render pages. The
+	// api package supplies its compiled-in logo
 	// (internal/api/logo.svg) — one artwork, both origins — and an empty
 	// value answers 404, so a Renderer built without it fails closed.
 	FaviconSVG string
@@ -124,13 +124,8 @@ func NoReferrer(next http.Handler) http.Handler {
 	})
 }
 
-// ServeFavicon serves the Exhibit brand mark at /favicon.ico (nw-6184). It
-// is the fallback every render document without an icon of its own resolves
-// to: a browser shows the linked icon when the artifact names one and probes
-// this path otherwise, so the surface's pages wear the same mark as the app
-// origin without the surface ever rewriting a visitor-authored <head>. The
-// bytes are SVG despite the .ico path, like the app origin's twin route, and
-// an unconfigured Renderer answers 404 rather than an empty document.
+// ServeFavicon answers automatic browser probes with the static brand mark.
+// Artifact documents explicitly link their E-and-tags icon instead.
 func (rd *Renderer) ServeFavicon(w http.ResponseWriter, r *http.Request) {
 	if rd.cfg.FaviconSVG == "" {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -659,7 +654,11 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		origins = originPolicy{Allowed: a.NetworkAllowlist}
 	}
 
-	out := injectPreamble(string(bodyBytes), a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, a.VersionSeq)
+	body := string(bodyBytes)
+	if !widget {
+		body = injectFavicon(body, artifacticon.DataURI(a.Tags))
+	}
+	out := injectPreamble(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, a.VersionSeq)
 	if doc.headMeta != "" {
 		// Ahead of the preamble, and of any og: tags the artifact wrote for
 		// itself: a crawler reads the first, and may read no further.

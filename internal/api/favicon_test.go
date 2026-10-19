@@ -1,21 +1,32 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/artifacticon"
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// nw-6184. The artifact pages (detail, edit) and the agent page never carried
-// a favicon link while every other app-origin page did, and the render origin
-// served no icon file at all — so those tabs wore the browser's default while
-// the gallery wore the brand mark. The fix is one artwork everywhere: the
-// pages inline it as a data-URI link, and both origins serve the same bytes
-// as a file for the requests no link covers.
+func TestArtifactViewerFaviconUsesTags(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Tagged tab")
+	tags := []*store.Tag{{ID: "green", OwnerID: 1, Name: "Green", Color: "#10b981"}}
+	require.NoError(t, r.cfg.Store.CreateTag(context.Background(), tags[0]))
+	require.NoError(t, r.cfg.Store.AddArtifactTag(context.Background(), 1, id, "green"))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("GET", "/artifacts/"+id, nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Contains(t, w.Body.String(), strings.ReplaceAll(artifacticon.DataURI(tags), "+", "&#43;"))
+}
+
+// Static pages and automatic favicon probes retain the full brand mark.
+// Artifact viewers use the E and current tag colors (Exh-qvmf).
 
 // escapedFaviconURI is exhibitLogoDataURI as html/template emits it inside an
 // href: the data: scheme survives because the value is typed template.URL,
@@ -23,9 +34,8 @@ import (
 // same encoding for the hero image).
 var escapedFaviconURI = strings.ReplaceAll(string(exhibitLogoDataURI), "+", "&#43;")
 
-// TestAppOriginPagesCarryTheSameFavicon walks every app-origin page and
-// requires the byte-identical icon link on each — not just "a link", but the
-// same artwork, so a page can never quietly drift to a second mark again.
+// TestAppOriginPagesCarryTheSameFavicon checks the static brand icon on app
+// pages and the artifact-specific icon on the viewer.
 func TestAppOriginPagesCarryTheSameFavicon(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Favicon check")
@@ -33,12 +43,16 @@ func TestAppOriginPagesCarryTheSameFavicon(t *testing.T) {
 	want := `<link rel="icon" type="image/svg+xml" href="` + escapedFaviconURI + `">`
 	for name, path := range pwaHeadPages(id) {
 		t.Run(name, func(t *testing.T) {
+			pageWant := want
+			if name == "detail" {
+				pageWant = `<link rel="icon" type="image/svg+xml" href="` + strings.ReplaceAll(artifacticon.DataURI(nil), "+", "&#43;") + `">`
+			}
 			req := httptest.NewRequest("GET", path, nil)
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 
-			require.Contains(t, w.Body.String(), want,
-				"%s must wear the same brand mark as every other app page", path)
+			require.Contains(t, w.Body.String(), pageWant,
+				"%s must carry its expected tab icon", path)
 		})
 	}
 }
@@ -60,9 +74,7 @@ func TestFaviconRouteServesTheBrandMark(t *testing.T) {
 }
 
 // TestRenderFaviconServesTheBrandMark is the render origin's half of the same
-// promise: a document without an icon of its own falls back to the origin's
-// /favicon.ico, so render pages wear the brand mark without the surface ever
-// rewriting a visitor-authored <head>.
+// promise for automatic browser probes; artifact documents link their own icon.
 func TestRenderFaviconServesTheBrandMark(t *testing.T) {
 	r := newTestRouter(t)
 
