@@ -1,0 +1,30 @@
+flowchart TB
+    operator["Operator browser"]
+
+    subgraph host["Deployer's host"]
+        proxy["Reverse proxy (their choice)<br/>operator-supplied, not shipped"]
+        subgraph goproc["one Go process — two route groups"]
+            app["App surface<br/>(gallery, API)"]
+            render["Render surface<br/>(serves artifact docs + CSP)"]
+        end
+        store["Store interface<br/>SQLite + blobs (FS or S3)"]
+        opt["optional, composed around:<br/>Litestream &rarr; bucket, thumb worker"]
+    end
+
+    operator -->|TLS| proxy
+    proxy -->|"plain HTTP &middot; APP_ORIGIN"| app
+    proxy -->|"plain HTTP &middot; RENDER_ORIGIN"| render
+    app --> store
+    render --> store
+    store -.-> opt
+
+    subgraph visitor["Visitor's browser (may be a different person / device)"]
+        subgraph page["Page from RENDER_ORIGIN"]
+            subgraph frame["sandboxed &lt;iframe&gt; — opaque origin"]
+                artifact["storage shim (localStorage &rarr; API) + artifact code<br/>network limited by per-artifact CSP"]
+            end
+        end
+    end
+
+    render -->|serves document| page
+    artifact -->|"state read / write-through, over API"| app

@@ -1,0 +1,67 @@
+flowchart TD
+    v(["visitor: GET render URL"]) --> r1["Render surface:<br/>Store.get(artifact) + allowlist + state"]
+    r1 --> r2["build CSP from allowlist; compose<br/>&lt;head&gt;(render preamble, state INLINED) + body"]
+    r2 --> r3["Cache-Control: no-store;<br/>serve into sandboxed iframe<br/>(allow-scripts, NO allow-same-origin)"]
+    r3 --> load{{"iframe load — opaque 'null' origin;<br/>cannot call the API directly; artifact runs"}}
+
+    load --> getItem["getItem"]
+    getItem --> getRes["served synchronously from the<br/>inlined cache — no fetch, no race"]
+    load --> setItem["setItem"]
+    setItem --> setRes["update cache sync;<br/>postMessage(k,v) to host frame"]
+    setRes --> setPut["host (app origin, authed):<br/>PUT /state — write-through, LWW"]
+
+    load --> fetch["artifact fetch to origin X"]
+    fetch --> fetchQ{"origin on allowlist?"}
+    fetchQ -->|yes| fPermit["browser permits"]
+    fetchQ -->|no| fBlock["browser blocks (CSP); the preamble posts<br/>the blocked origin to the host frame"]
+    fBlock --> fPrompt{"already refused, or<br/>not an allowlist directive?"}
+    fPrompt -->|yes| fQuiet["stays silent &mdash; no prompt"]
+    fPrompt -->|no| fAsk{"host prompts in app chrome<br/>(origin + directive)"}
+    fAsk -->|Allow| fAllow["POST /origins allow &rarr; frame reloads<br/>via /open &rarr; new CSP, request retries"]
+    fAsk -->|Block once| fOnce["dismiss; the next load asks again"]
+    fAsk -->|Don't ask again| fNever["POST /origins block &rarr; suppresses the<br/>prompt, never widens the CSP"]
+
+    load --> dl["artifact download<br/>blob:/data: anchor, clicked or click()ed"]
+    dl --> dlInt["download bridge intercepts;<br/>postMessage filename + bytes to host"]
+    dlInt --> dlQ{"already approved?"}
+    dlQ -->|yes| dlGo["host triggers the download<br/>from the app origin"]
+    dlQ -->|first attempt| dlPrompt{"host prompts<br/>(artifact + filename)"}
+    dlPrompt -->|approve| dlOK["PATCH downloads_approved<br/>(server-side, revocable) &rarr; download"]
+    dlPrompt -->|deny| dlNo["bytes dropped;<br/>artifact keeps running"]
+    dl --> dlMiss["any vector the bridge misses &rarr;<br/>stays blocked (sandbox omits allow-downloads)"]
+
+    load --> cb["navigator.clipboard<br/>readText() / writeText()"]
+    cb --> cbInt["clipboard bridge replaces the API;<br/>postMessage op,id,text? to host"]
+    cbInt --> cbQ{"already approved?"}
+    cbQ -->|yes| cbGo["host runs the op on the app origin;<br/>posts result back"]
+    cbQ -->|first attempt| cbPrompt{"host prompts<br/>(artifact + direction)"}
+    cbPrompt -->|approve| cbOK["PATCH clipboard_approved &rarr;<br/>op &rarr; result"]
+    cbPrompt -->|deny| cbNo["Promise rejects (NotAllowedError)"]
+    cb --> cbNative["native Ctrl/Cmd+V paste &rarr;<br/>browser event, unaffected"]
+
+    load --> gm["navigator.mediaDevices<br/>getUserMedia(constraints)"]
+    gm --> gmInt["media GATE replaces the API;<br/>no device is reachable in this frame"]
+    gmInt --> gmQ{"those devices<br/>already approved?"}
+    gmQ -->|yes| gmBanner["reject + &quot;open it directly&quot; banner"]
+    gmQ -->|first attempt| gmPrompt{"host prompts<br/>(artifact + devices)"}
+    gmPrompt -->|approve| gmOK["PATCH camera_approved /<br/>microphone_approved &rarr; open top-level &rarr; reject here"]
+    gmPrompt -->|deny| gmNo["Promise rejects (NotAllowedError)"]
+    gmTop(["top-level render / share"]) --> gmNative["native getUserMedia, enforced by the<br/>artifact's Permissions-Policy header"]
+
+    load --> geo["navigator.geolocation<br/>getCurrentPosition / watchPosition"]
+    geo --> geoInt["location GATE replaces the API;<br/>the frame has no allow= delegation"]
+    geoInt --> geoQ{"location<br/>already approved?"}
+    geoQ -->|yes| geoBanner["error callback + &quot;open it directly&quot; banner"]
+    geoQ -->|first attempt| geoPrompt{"host prompts<br/>(artifact wants your location)"}
+    geoPrompt -->|approve| geoOK["PATCH geolocation_approved &rarr;<br/>open top-level &rarr; error callback here"]
+    geoPrompt -->|deny| geoNo["error callback (PERMISSION_DENIED)"]
+    geoTop(["top-level render / share"]) --> geoNative["native geolocation, enforced by the<br/>artifact's Permissions-Policy header"]
+
+    load --> lk["external http(s) anchor<br/>clicked (target=_blank or plain)"]
+    lk --> lkInt["link bridge intercepts;<br/>postMessage URL to host"]
+    lkInt --> lkQ{"already approved?"}
+    lkQ -->|yes| lkGo["host opens the URL in a new tab<br/>from the app origin"]
+    lkQ -->|first attempt| lkPrompt{"host prompts<br/>(destination host)"}
+    lkPrompt -->|approve| lkOK["PATCH links_approved &rarr;<br/>open in new tab"]
+    lkPrompt -->|deny| lkNo["URL dropped;<br/>artifact keeps running"]
+    lk --> lkMiss["popup vectors the bridge misses &rarr;<br/>stay sandbox-blocked (no allow-popups)"]
