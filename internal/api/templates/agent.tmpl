@@ -56,6 +56,7 @@
               hx-get="/partials/agent-history" hx-vals='js:{artifact: previewArtifactId()}'
               hx-target="#history" hx-swap="innerHTML" onclick="openHistory()"><i class="ph ph-clock-counter-clockwise"></i> History</button>
     </div>
+    <template id="agent-message-template">{{template "agentMessage" ""}}</template>
     <div id="messages"></div>
     <div id="history"></div>
     <div class="composer">
@@ -139,6 +140,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
      preview pane renders a tile, so it needs it like the gallery does. */}}
 <script src="/assets/gallery/components.js"></script>
 <script src="/assets/gallery/agent.js"></script>
+<script type="module" src="/assets/gallery/message-actions.js"></script>
 </body>
 </html>{{end}}
 
@@ -204,7 +206,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
   <p class="history-meta">{{template "conversationMeta" .}}</p>
 </div>
 <div class="history-messages" id="history-messages">
-  {{range .Messages}}{{if eq .Role "tool"}}<div class="tool-chip {{if .Failed}}fail{{else}}done{{end}}"><i class="ph {{if .Failed}}ph-x-circle{{else}}ph-check-circle{{end}}"></i> {{.Text}}</div>{{else}}<div class="msg {{.Role}}">{{.Text}}{{if .Images}}<span class="history-images">{{.Images}} image{{if ne .Images 1}}s{{end}} attached</span>{{end}}</div>{{end}}{{else}}<p class="history-empty">Nothing was said in this conversation.</p>{{end}}
+  {{range .Messages}}{{if eq .Role "tool"}}<div class="tool-chip {{if .Failed}}fail{{else}}done{{end}}"><i class="ph {{if .Failed}}ph-x-circle{{else}}ph-check-circle{{end}}"></i> {{.Text}}</div>{{else if eq .Role "assistant"}}{{template "agentMessage" .Text}}{{else}}<div class="msg {{.Role}}">{{.Text}}{{if .Images}}<span class="history-images">{{.Images}} image{{if ne .Images 1}}s{{end}} attached</span>{{end}}</div>{{end}}{{else}}<p class="history-empty">Nothing was said in this conversation.</p>{{end}}
 </div>
 {{template "agentResume" .}}{{end}}
 
@@ -254,3 +256,15 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
      version it was last working against (and whether that is still the one
      the artifact is at), and when it last ran. */}}
 {{define "conversationMeta"}}{{if .VersionSeq}}Based on v{{.VersionSeq}}{{if .Current}} · current{{end}} · {{end}}<time datetime="{{.WhenISO}}">{{.When}}</time>{{end}}
+
+{{/* One definition for history and the live-stream template. Live text exists
+     only in the browser until the conversation is saved; agent.js clones this
+     shell and writes deltas into the bubble, leaving actions untouched. Add
+     buttons here and handlers in message-actions.js for future message tools. */}}
+{{define "agentMessage"}}<div class="agent-message" data-agent-message>
+  <div class="msg assistant" data-message-content>{{.}}</div>
+  <div class="message-actions" role="group" aria-label="Message actions">
+    <button type="button" class="message-action" data-message-action="copy" title="Copy text" aria-label="Copy message text"><i class="ph ph-copy" aria-hidden="true"></i><span>Copy</span></button>
+    <span class="message-action-status" role="status" aria-live="polite" aria-atomic="true"></span>
+  </div>
+</div>{{end}}

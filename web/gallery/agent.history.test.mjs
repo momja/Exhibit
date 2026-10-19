@@ -323,3 +323,32 @@ test("a missing historical blob is a failed rollback even with HTTP 409", async 
   assert.match(page.byId("resume-status").textContent, /Could not roll back.*not continued/);
   assert.equal(page.byId("pane-chat").classList.contains("history-open"), true);
 });
+
+// Streaming writes only the server template's content slot, preserving the
+// action row through deltas and creating a separate row for the next block.
+test('streamed response blocks keep their own message action shells', () => {
+  const { byId, context } = loadAgent();
+  const shells = [];
+  byId('agent-message-template').content = { firstElementChild: {
+    cloneNode() {
+      const content = { textContent: '' };
+      const shell = { content, querySelector: () => content, actions: ['copy'] };
+      shells.push(shell);
+      return shell;
+    }
+  } };
+  const update = (type, delta) => context.handleAgentEvent({
+    type: 'message_update', assistantMessageEvent: { type, delta }
+  });
+  update('text_delta', 'First');
+  update('text_delta', '\nsecond');
+  assert.equal(shells.length, 1);
+  assert.equal(shells[0].content.textContent, 'First\nsecond');
+  assert.deepEqual(shells[0].actions, ['copy']);
+  assert.ok(byId('messages').children.includes(shells[0]));
+  update('text_end');
+  update('text_delta', 'Another block');
+  assert.equal(shells.length, 2);
+  assert.equal(shells[1].content.textContent, 'Another block');
+  assert.equal(shells[0].content.textContent, 'First\nsecond');
+});

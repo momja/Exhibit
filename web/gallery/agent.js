@@ -64,8 +64,14 @@ function spinnerIcon() {
   return svg;
 }
 function addMsg(cls, text) {
-  const m = el('div', 'msg ' + cls, text);
-  messagesEl.appendChild(m);
+  // The server owns the message shell and action markup. Streaming text is
+  // browser-local state, so fill only its content slot as deltas arrive.
+  const message = cls === 'assistant'
+    ? document.getElementById('agent-message-template').content.firstElementChild.cloneNode(true)
+    : el('div', 'msg ' + cls);
+  const m = cls === 'assistant' ? message.querySelector('[data-message-content]') : message;
+  m.textContent = text;
+  messagesEl.appendChild(message);
   messagesEl.scrollTop = messagesEl.scrollHeight;
   return m;
 }
