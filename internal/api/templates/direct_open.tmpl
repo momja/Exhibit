@@ -1,0 +1,15 @@
+{{define "directOpenPrompt"}}
+<div id="direct-open-modal" class="modal-overlay" data-artifact="{{.ID}}" data-viewer="{{.ViewerPreference}}" data-open-url="{{.OpenURL}}" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="direct-open-title" aria-describedby="direct-open-body">
+    <h2 id="direct-open-title">Open outside the preview sandbox?</h2>
+    <p id="direct-open-body">This tool will run as a regular web page. It can download files, navigate to external sites, and use browser features restricted in the preview, subject to your browser’s normal controls.</p>
+    <label class="direct-open-remember"><input type="checkbox" id="direct-open-remember"> Do not ask again for this artifact</label>
+    <p id="direct-open-status" role="status" hidden></p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sec" id="direct-open-cancel">Cancel</button>
+      <button type="button" class="btn" id="direct-open-confirm">Open directly</button>
+    </div>
+  </div>
+</div>
+{{end}}

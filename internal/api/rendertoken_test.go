@@ -168,7 +168,7 @@ func TestMintedTokenIsScopedToOneArtifact(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, renderGet(t, r, "/a/"+other+"?"+rendertoken.Param+"="+tok).Code)
 }
 
-// "Open in new tab" is a link, not a frame: it may be clicked long after the
+// "Open in new tab" is an action: it may be clicked long after the
 // page was rendered, so it carries no token in the markup and mints one on the
 // redirect instead. The redirect itself must not be cacheable — it hands out a
 // credential with a deadline.
@@ -176,9 +176,9 @@ func TestOpenArtifactMintsOnRedirect(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Run Log")
 
-	// The page links at the app origin, with no credential in the href.
+	// The confirmation uses an app-origin URL, with no credential in the markup.
 	page := getPage(t, r, "/artifacts/"+id)
-	assert.Contains(t, page, `href="/artifacts/`+id+`/open"`)
+	assert.Contains(t, page, `data-open-url="/artifacts/`+id+`/open"`)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/artifacts/"+id+"/open", nil))
