@@ -258,4 +258,8 @@ func TestAgentPageServes(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.True(t, strings.Contains(w.Body.String(), "Agent API key"))
+	assert.Contains(t, w.Body.String(), `id="agent-layout"`)
+	assert.Contains(t, w.Body.String(), `id="agent-pane-resizer" role="separator" tabindex="0"`)
+	assert.Contains(t, w.Body.String(), `aria-controls="pane-chat"`)
+	assert.Contains(t, w.Body.String(), `<script type="module" src="/assets/gallery/agent-resize.js"></script>`)
 }
