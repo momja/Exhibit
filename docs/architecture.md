@@ -72,8 +72,8 @@ The only way data changes. Full route reference: `api.md`.
   is a 500, and the queue retries it.
 - `GET/PUT/DELETE /api/artifacts/:id/state`: state rows (§6), scoped to the
   caller's own rows (av-q0ub). `PUT` is called by the host frame for the shim.
-  `DELETE ?key=…` removes one key; `DELETE` with no `key` parameter erases all of
-  the caller's state and nothing else. The key is a query parameter, never a path
+  `DELETE ?key=…` removes one key; `DELETE` with no `key` parameter erases every
+  row the caller's principal resolves to, and nothing else. The key is a query parameter, never a path
   segment: a `..` key in a path normalizes to the artifact itself and would delete
   it (av-hh1o). A present-but-empty `key` is the empty-string key. Deletes are
   idempotent. The only route
@@ -85,6 +85,10 @@ The only way data changes. Full route reference: `api.md`.
   asset read fails the export. Lives in `internal/export` for the static build too.
 - `GET …/assets`, `DELETE …/assets/:assetID`: out-of-line payloads, metadata only
   (av-20fk). No create or update: only the vendorer produces assets.
+- `GET …/assets/export`: owner-only ZIP of the current assets (Exh-6fz9):
+  `manifest.json` plus `assets/<asset-id>/<sanitized filename>` with original
+  bytes. Built in a temp file first, so an unreadable blob fails the export
+  rather than producing a partial download.
 - `GET/POST/DELETE …/origins`: per-origin decisions, the runtime prompt's write path
   (av-kmwj). Separate from `PATCH` because it can record and undo a block and
   decides one origin at a time. Origin is a query parameter on `DELETE` (av-hh1o).
@@ -187,7 +191,9 @@ it safe behind the no-auth share path (§7).
   never redirect (CSP path matching does not survive one).
 - **Framing**: the app embeds `<iframe src="RENDER_ORIGIN/a/:id"
   sandbox="allow-scripts allow-forms">` (widget tiles: `allow-scripts` only), never
-  `allow-same-origin`. An `allow=` delegation re-grants nothing on an opaque origin.
+  `allow-same-origin`. No `allow=` delegation: for camera and clipboard it does
+  nothing on an opaque origin, and Chromium's `geolocation` would spend the app
+  origin's own permission (§6).
 - **`frame-ancestors`** (av-6nbo, av-q3iy): `/a/:id` and `/w/:id` allow `APP_ORIGIN`
   only. `/s/:shareID` allows `*`, or `APP_ORIGIN` plus `EMBED_ORIGINS` when that is
   set. The routes pass the policy to `serveDoc`; `buildCSP` holds none of its own.
@@ -212,7 +218,7 @@ it safe behind the no-auth share path (§7).
   The render origin never holds a session: a top-level render runs artifact script.
   Claims are named (`o=1.e=….<tag>`, av-6axy); `p`, the viewer principal, is
   omitted when equal to `o` (`MintViewer`) and set on a recipient's frame (av-awr4).
-  `s` scopes a token to a share row. Duplicate or unknown keys are rejected, and so
+  `s` carries a share row id (reserved for av-7k7b; nothing reads it yet). Duplicate or unknown keys are rejected, and so
   is a token carrying both `a` and `p`. An `anonymous` claim (av-wmp6) renders with no state
   inlined and no write-through; it is in the MAC because it subtracts authority.
   A share still inlines the owner's state. `security.md` §1.3.
@@ -287,11 +293,12 @@ and writes state.
 - **Storage accounting** (av-fw1b, migration 021): `blob_sizes` plus the
   `blob_references` view. Lengths are recorded by the one funnel every `Blob.Put`
   goes through (`internal/api/blobwrite.go`, AST-tested), not by changing
-  `Blob.Put`'s signature, which every backend would then have to honor. Totals are
+  `Blob.Put`'s signature. Totals are
   derived by join,
   never counted. The view is the extension point: a new blob-referencing table must
-  join it (as assets did in migration 026, versions in 032) *and* `blobqueue.go`,
-  or its bytes are charged to nobody. A shared blob is charged in
+  join it (as assets did in migration 026, versions in 032) or its bytes are
+  charged to nobody, *and* `blobReferenceCount` in `blobqueue.go` or it is deleted
+  while still referenced. A shared blob is charged in
   full once to each referencing owner. `RecomputeStorageUsage` (`server storage
   recompute`) re-measures, keeps the old length for unreadable blobs, and writes only
   if the row is unchanged since it started, so an edit landing mid-pass keeps its
@@ -346,7 +353,8 @@ transaction records which blob ids it condemned, so a crash cannot leak bytes.
   (`internal/store/blobqueue.go`, where new blob-referencing tables must be added).
 - After commit: delete files, then queue rows, then recorded lengths.
 - **The drain rechecks before unlinking**: content-addressed asset ids can be
-  referenced again. The recheck is embedded in the queue row's `DELETE`.
+  referenced again. It runs `blobReferenceCount` under the blob lock; a referenced
+  id leaves the queue with its bytes untouched.
 - **Recheck and unlink are one critical section per blob id**
   (`internal/store/bloblock.go`); ingest holds the same lock from first byte to
   commit.
@@ -402,8 +410,26 @@ Page routes sit in a group under `ownerMiddleware` (av-syug), fed by `sessionGat
 A page outside the group reads an empty library (fail closed;
 `pageowner_test.go` enforces membership).
 
-Client JS islands: the CodeMirror editor and the renderer iframe. Search swaps the
-server-rendered grid on debounced input.
+Client JS islands: the CodeMirror editor and the renderer iframe.
+
+**Gallery paging** (av-kyhl): 24 cards per page, ordered by creation time and id,
+with a one-record lookahead. "Load more" fetches `/partials/gallery-grid` and htmx
+replaces only that sentinel, so existing cards and live widget frames survive.
+Offsets mean another tab's adds or deletes can shift page boundaries until a
+refresh. Search debounces and replaces the grid from offset zero; search and paging
+share one `hx-sync` scope per gallery, and query revisions drop stale responses.
+Shared pieces:
+`gallerygrid.go` (a `galleryDefinition` supplies DOM id, paths, store filters,
+empty-state copy; the owner always comes from the request), the `gallerygrid.tmpl`
+partials, and the `web/gallery/gallery.js` module.
+
+**Live widget bounds** (av-1a9m): `gallery-widgets.js` unloads widget documents
+beyond a 400px viewport buffer, keeping the server-created iframe node. Gallery
+cards only: `data-gallery-widget` must not appear on `/partials/card-widget`, so
+the edit and agent previews keep the shared partial's plain lifecycle. Re-entry
+reattaches it via the owner-scoped `/artifacts/:id/widget/open`, which mints a fresh
+render token and redirects, so a card scrolled back to after ten minutes still
+loads. Initial loads keep their direct render URL.
 
 **Detail page** (Exh-ghuv): the frame fills the window under a floating,
 draggable control pill. Placement rules are pure geometry in
@@ -414,7 +440,8 @@ a 16 MB page. Show facts about an artifact, never its bytes.
 
 **Recipients use the same page** (av-awr4) through `GetArtifactReadableBy`. One flag,
 `ReadOnly` from `pageCredentials.forArtifactOwnedBy`, removes owner chrome and makes
-`api.js` refuse writes. A recipient's session raises none of the three prompts that
+`api.js` refuse ordinary writes. State writes are gated separately by the
+bootstrap's `STATE_WRITABLE`, the one exception carved out of `ReadOnly`. A recipient's session raises none of the three prompts that
 write per-artifact authority (network, first-use approvals, device/location gates);
 the request settles as a denial, and a blocked origin is explained in chrome with no
 button. `/artifacts/:id/open` uses the same accessor. Recipients write state per
@@ -422,11 +449,14 @@ button. `/artifacts/:id/open` uses the same accessor. Recipients write state per
 
 **Edit page**: the state inspector (av-hg5f) renders each value through a control
 inferred from its shape, with no raw JSON editing, fetched on first open, saved via
-the state routes. The versions panel lists history with View and Restore; restore
+the state routes. Its Export JSON (Exh-k8p6) downloads the saved state as a flat
+object of string values via the same GET, excluding unsaved edits and
+`sessionStorage`. The versions panel lists history with View and Restore; restore
 asks first and reloads.
 
 **Version viewer** (av-vw7r): `GET /partials/version-viewer` renders the
-`versionViewer` partial on the edit page and in the agent preview pane. Host bridges
+`versionViewer` partial on the edit page and in the agent preview pane, minting the
+frame's token at swap time so a page open past ten minutes still works. Host bridges
 listen only to `#pv-frame`, which the viewer frame is not, so a version frame is
 never heard except by `components.js` revealing the hidden "not saved" banner on
 `__avVersionUnsaved`. `Restorable` picks the verb (Restore vs Roll back).
@@ -462,8 +492,7 @@ private sandboxed artifact shows no marks.
 
 **`/new`** (av-qo0j, nw-d1dd): three ingest modes, Build with agent selected by
 default. The agent mode is a form of named fields. The brief crosses to `/agent` in
-`sessionStorage`, never a URL; `agent.js` reads and removes it once, and maps fields
-to labels in one list.
+`sessionStorage`, never a URL; `agent.js` reads and removes it once.
 
 **`notfound.tmpl`** answers every app-origin HTML 404, escaping the echoed path.
 `/api/*` keeps plain errors.
@@ -471,8 +500,8 @@ to labels in one list.
 ### 3.6 Optional satellites (composed around, not shipped in)
 
 - **Litestream** sidecar: streams the WAL to a bucket and restores an empty volume.
+  SQLite only: filesystem blobs need their own backup.
 - **Thumbnail worker**: headless Chromium, out of the main image.
-- **Chrome extension** (future): another API client.
 
 ### 3.7 Agent sidecar (Pi harness, Exh-yvhp)
 
@@ -487,8 +516,10 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
   the HTTP API. Output is scanned like any ingest, never auto-approved.
 - **Scoped credential** (av-e0yj): `internal/agentscope` mints a token resolving to
   (owner, artifact). `authMiddleware` allows only `POST /api/artifacts` while
-  unbound, then `GET`/`PATCH` on the bound artifact plus `agentSubResources`:
-  `state` and `widget` read/write, `assets` read-only. The create binds it. No tool takes an id. Composes
+  unbound, then `GET`/`PATCH` on the bound artifact plus `agentSubResources`
+  (`internal/api/middleware.go`): `state` and `widget` read/write, `assets`
+  read-only. Deny-by-default: a new agent tool needing a new sub-route must add it
+  there, or it 403s at runtime. Trust argument: `security.md` §5.3. The create binds it. No tool takes an id. Composes
   with owner scoping; neither half suffices alone. The grant is revoked when the
   subprocess exits or is killed; no credential outlives its process.
 - **Live sessions are in-memory and owner-scoped.** They live in a process-local
@@ -522,11 +553,11 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
   URL. The TTL bounds when a connection may open, not how long it stays open.
   Redeeming sets the owner.
 - **Live preview**: `exhibit_artifact_saved` triggers an htmx swap of
-  `/partials/agent-preview`; `exhibit_widget_saved` is separate.
+  `/partials/agent-preview`; `exhibit_widget_saved` is separate. Each render
+  stamps the frame URL (`cacheBust`), because a browser never re-requests a
+  stable `src`.
 - **Widget generation** (av-fafu): `POST …/widget/generate` starts a one-shot
   `WidgetOnly` session and returns its id without waiting.
-- **Trust**: steered by text the service did not author, so its reach is narrower
-  than any client's: one artifact's source, state and widget. `security.md` §5.3.
 - **Guardrail** (av-gust): with `GUARDRAIL_*`, `ext/guard.ts` screens each user
   message on Pi's `input` hook; a failed screen blocks. `security.md` §5.4.
 
@@ -602,7 +633,7 @@ furniture as admin, no shared authority.
 - **Sign out** (nw-a1ef) is a `POST` form to `/auth/logout`, rendered only when a
   session exists (a no-login instance registers no such route).
 - **Display name** (`profileName`): email, else provider subject, else the sign-in
-  route. Local to this page; `newAdminUserView` shows email alone.
+  route.
 - **Delete library** (av-4wyq): the copy says an IdP login still works and lands in
   a new, empty account; it states the live share count; it takes two steps, the
   second the typed phrase `delete my library`, checked server-side. Storage size is
@@ -672,8 +703,7 @@ sandbox, CSP). The server's best defense is never running artifact code.
 
 ![Ingest data flow](diagrams/ingest-flow.svg)
 
-Scan and surface before anything is renderable: the artifact is stored network-inert,
-and the approved allowlist arrives by `PATCH`. Snapshot vendoring (§3.4a) is the only
+Snapshot vendoring (§3.4a) is the only
 ingest-time transform, degrades to a report, and never seeds the allowlist.
 
 ## 6. Render + state data flow
@@ -687,13 +717,15 @@ ingest-time transform, degrades to a report, and never seeds the allowlist.
   persists; framed `sessionStorage` is a separate in-memory cache that dies with
   the frame.
 - **Resync is the same bridge reversed** (av-v991): the host refetches state on
-  `visibilitychange`, and every few seconds for a `shared` artifact; the shim applies
-  the diff and fires `storage` events. If nothing listened, the host offers a reload
+  `visibilitychange`, and every few seconds for a `shared` artifact (shim side:
+  §3.2). If no `storage` listener ran, the host offers a reload
   in app chrome, never automatically. Anonymous frames never resync. Merge is not
   solved at this layer, and the UI must not imply collaborative editing.
 - **Downloads, clipboard and external links** ride host-frame bridges with
   per-artifact first-use approval (`downloads_approved`, `clipboard_approved`,
-  `links_approved`). Each bridge is UX; anything it misses stays sandbox-blocked.
+  `links_approved`). Each bridge is UX: the sandbox independently blocks direct
+  downloads, the clipboard API and popups. It does not block a plain anchor the
+  link bridge misses, which navigates the iframe itself.
   The download bridge recovers `blob:` payloads from its `createObjectURL`
   registry, never by a CSP-governed fetch. The link bridge runs after the
   download-href check, so `blob:`/`data:` anchors stay downloads. Native paste is
@@ -704,9 +736,6 @@ ingest-time transform, degrades to a report, and never seeds the allowlist.
   permission. The host prompts, records the approval, and opens the top-level render,
   where the `Permissions-Policy` header enforces it. The framed call rejects.
   Measurements: `security.md` §4.
-- **Cross-device state** needs nothing more: state is server-side, keyed by viewer,
-  never by device. The render token's principal (av-c5aq, av-6axy) picks the rows;
-  a share uses the owner's.
 
 ## 7. Sharing
 
