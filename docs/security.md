@@ -774,10 +774,23 @@ sidecar (`OG_SNAPSHOT_CDP_URL`), not something the service image contains, and
 it is held to three rules:
 
 - **It reaches the render origin and nothing else.** `internal/ogsnap` pauses
-  every request the page makes and continues only those under `RENDER_ORIGIN/`.
-  It fails the rest at the protocol layer, so an unforeseen scheme is refused by
-  default. WebSockets, which that interception does not see, are blocked by
-  pattern. The artifact's allowlist is deliberately **not** honoured here. It is
+  every request and continues only those under `RENDER_ORIGIN/`. It fails the
+  rest at the protocol layer, so an unforeseen scheme is refused by default.
+  The interception is enabled on the *browser* session, not the snapshot's tab,
+  because a page is not the only thing a widget can start: a popup, a worker
+  and a service worker are targets of their own, and each one escaped a
+  tab-level guard. WebSockets never reach request interception at all, so every
+  render-origin response that could become a document or a worker is re-issued
+  with one more `Content-Security-Policy`, `connect-src 'self' data: blob:`. A
+  browser enforces every policy a response carries, so this one can only narrow
+  the artifact's own, and documents with no response of their own
+  (`about:blank` and `srcdoc` frames, `blob:` and `data:` workers) inherit it
+  from their creator. The policy has to be served with the body: Chromium does
+  not enforce a policy added by `Fetch.continueResponse`, only by
+  `Fetch.fulfillRequest`. Because the interception is browser-wide, the sidecar
+  must be Exhibit's alone. WebRTC is the one way out that neither layer
+  governs. It can send packets to an internal address, but what it reads back
+  is whether a STUN or TURN server answered, not what a service said. The artifact's allowlist is deliberately **not** honoured here. It is
   a decision about what the artifact may reach from a *visitor's* browser. This
   browser sits in the operator's network and publishes its pixels to anyone
   holding the link, so honouring the allowlist would let an owner aim it at an
@@ -798,8 +811,9 @@ it is held to three rules:
 
 Pinned by `internal/render/opengraph_test.go` (the tags, escaping, the four
 share states, the cache and its revocation) and `internal/ogsnap/ogsnap_test.go`
-(which runs a real Chromium when one is installed and fails if a widget's
-requests to another origin arrive there).
+(which runs a real Chromium when one is installed and fails if anything a
+widget starts — a request, a WebSocket, a popup, a worker, a service worker —
+reaches another origin).
 
 ## 2. CSP: the allowlist is the wall
 

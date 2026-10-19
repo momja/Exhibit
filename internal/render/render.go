@@ -19,6 +19,7 @@ import (
 	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/momja/Exhibit/internal/tile"
+	"golang.org/x/net/html"
 )
 
 // Config holds the dependencies for the render surface.
@@ -2481,22 +2482,45 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 }
 
 // prependToHead inserts markup as the first thing inside the document's
-// <head>: after a bare <head> tag when there is one, else before </head>, else
-// at the very top of the document.
+// <head>: just past its start tag, attributes and all, when there is one, else
+// before </head>, else at the very top of the document.
 func prependToHead(body, markup string) string {
-	// Try to inject after <head>
-	idx := strings.Index(strings.ToLower(body), "<head>")
-	if idx >= 0 {
-		insertAt := idx + len("<head>")
-		return body[:insertAt] + "\n" + markup + body[insertAt:]
+	if at, ok := headContentStart(body); ok {
+		return body[:at] + "\n" + markup + body[at:]
 	}
 
 	// Try to inject before </head>
-	idx = strings.Index(strings.ToLower(body), "</head>")
+	idx := strings.Index(strings.ToLower(body), "</head>")
 	if idx >= 0 {
 		return body[:idx] + markup + "\n" + body[idx:]
 	}
 
 	// Fallback: prepend
 	return markup + "\n" + body
+}
+
+// headContentStart returns the offset just past the document's <head> start
+// tag. It reads the document with a real tokenizer, so <head lang="en"> is a
+// head, a quoted ">" in an attribute does not end the tag early, and a <head>
+// inside a comment, or a <header>, is not one. A head start tag after the body
+// has begun is ignored by browsers, and so is ignored here.
+func headContentStart(body string) (int, bool) {
+	z := html.NewTokenizer(strings.NewReader(body))
+	offset := 0
+	for {
+		tt := z.Next()
+		if tt == html.ErrorToken {
+			return 0, false
+		}
+		offset += len(z.Raw())
+		if tt != html.StartTagToken && tt != html.SelfClosingTagToken {
+			continue
+		}
+		switch name, _ := z.TagName(); string(name) {
+		case "head":
+			return offset, true
+		case "body":
+			return 0, false
+		}
+	}
 }

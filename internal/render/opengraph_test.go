@@ -112,6 +112,26 @@ func TestALiveLinkCarriesThePreviewTags(t *testing.T) {
 	}
 }
 
+// A head start tag with attributes is still the head. The tags go straight
+// after it, ahead of the shared page's own OpenGraph tags and the preamble;
+// after them, a crawler keeps the page's title and image, or stops reading
+// before it reaches ours.
+func TestPreviewTagsLeadAnAttributedHead(t *testing.T) {
+	rd, _ := newPreviewRenderer(t, "Run Log", nil)
+	if err := rd.cfg.Blob.Put(context.Background(), "abc-blob", strings.NewReader(
+		`<html><head prefix="og: https://ogp.me/ns#"><meta property="og:title" content="Source page"></head><body></body></html>`)); err != nil {
+		t.Fatal(err)
+	}
+	body := serveShareRaw(t, rd, "the-link").Body.String()
+	head := strings.Index(body, `<head prefix="og: https://ogp.me/ns#">`)
+	ours := strings.Index(body, `content="Run Log"`)
+	theirs := strings.Index(body, `content="Source page"`)
+	preamble := strings.Index(body, "<script")
+	if head < 0 || ours < head || ours > theirs || ours > preamble {
+		t.Fatalf("the preview tags must open the attributed head: head@%d ours@%d theirs@%d preamble@%d", head, ours, theirs, preamble)
+	}
+}
+
 // The tags belong to the share route alone. The token-gated document is never
 // crawled, and carrying them there would put a share URL into a page that has
 // no share.

@@ -309,8 +309,11 @@ Chromium the operator runs as a sidecar (`chromedp/headless-shell` in the
 Compose `previews` profile), reached by `OG_SNAPSHOT_CDP_URL` through
 `chromedp`'s remote allocator. The image never carries a browser. It snapshots
 the share's widget at the card tile's 264x132 at scale 4, in a fresh browser
-context, with every request outside `RENDER_ORIGIN` failed at the protocol
-layer (`security.md` §1.10). With no sidecar, the placeholder is the logo card
+context. Every request outside `RENDER_ORIGIN`, from any target in the
+browser, is failed at the protocol layer, and every render-origin document or
+worker gets an extra `connect-src` policy for the WebSockets that layer never
+sees (`security.md` §1.10). The endpoint may be plaintext or TLS. Discovery
+keeps the scheme, which `chromedp`'s remote allocator does not. With no sidecar, the placeholder is the logo card
 `web/pwa-icons` rasterizes beside the PWA icons.
 
 ## 9. Gallery UI
