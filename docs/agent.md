@@ -448,13 +448,23 @@ behaving as it does in the pinned version.
   authorization check as every other session route. Because a ticket is spent
   on connect, the chat page drives its own reconnect (mint, then reconnect,
   with backoff) instead of relying on EventSource's automatic retry; the
-  session's event backlog replays on subscribe, so nothing is lost. An agent
+  session's bounded event backlog replays on subscribe. Events older than
+  the replay budget are no longer available. An agent
   session's own scoped credential is
   accepted for neither: it is not a page credential.
 
 - `internal/agent` tracks streaming state (prompts sent mid-stream become Pi
   steering messages), keeps an event backlog for late subscribers, and reaps
   idle sessions. On every settled turn it keeps the conversation (below).
+  Stdout records are limited to 8 MiB including their terminator; oversized
+  records are discarded through the next newline with a warning, then reading
+  resumes. Replay retains at most 4096 events and 16 MiB. Each session accepts
+  at most four SSE subscribers; each has a queue with the same count and byte
+  limits and at most one 8 MiB event in delivery. Slow subscribers lose their
+  oldest queued events. Unsubscribing releases the queue, and session shutdown
+  drains queued events before closing the stream. Excess subscriptions close
+  immediately. These limits bound event retention, not the subprocess's own
+  memory or the total number of subprocesses.
 - An owner holds at most **10 open sessions** (widget-generate sessions
   counted): at the limit the oldest idle one is evicted, and only when all
   ten are mid-run is a new one refused (429). The chat page closes its

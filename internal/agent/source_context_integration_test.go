@@ -79,15 +79,19 @@ func TestRealPiPreparedSourceLifecycle(t *testing.T) {
 		require.Eventually(t, func() bool { mu.Lock(); defer mu.Unlock(); return reads >= minimum }, 10*time.Second, 10*time.Millisecond)
 	}
 	send := func(s *Session, text string) {
+		// Replay is delivered asynchronously; consume the idle session's retained
+		// events explicitly before waiting for this prompt's settle.
+		s.mu.Lock()
+		replayCount := len(s.backlog)
+		s.mu.Unlock()
 		events, unsubscribe := s.Subscribe()
 		defer unsubscribe()
-		// Subscribe includes backlog; wait for this prompt's settle only.
-	drain:
-		for {
+		replayDeadline := time.After(5 * time.Second)
+		for i := 0; i < replayCount; i++ {
 			select {
 			case <-events:
-			default:
-				break drain
+			case <-replayDeadline:
+				t.Fatal("replay did not drain")
 			}
 		}
 		require.NoError(t, s.Prompt(context.Background(), text, nil, nil))

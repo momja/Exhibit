@@ -396,7 +396,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		mgr:               m,
 		cmd:               cmd,
 		stdin:             stdin,
-		subs:              map[chan []byte]struct{}{},
+		subs:              map[*eventSubscriber]struct{}{},
 		pending:           map[string]chan rpcResponse{},
 		done:              make(chan struct{}),
 		lastActive:        time.Now(),
@@ -692,8 +692,9 @@ type Session struct {
 	// resumeNotice is the sentence the first prompt of a resumed conversation
 	// carries (prompt.go); it is held until a prompt has actually landed.
 	resumeNotice       string
-	subs               map[chan []byte]struct{}
+	subs               map[*eventSubscriber]struct{}
 	backlog            [][]byte
+	backlogBytes       int
 	pending            map[string]chan rpcResponse
 	streaming          bool
 	closed             bool
@@ -743,28 +744,30 @@ type rpcResponse struct {
 // create-mode session has yet to save anything.
 func (s *Session) ArtifactID() string { return s.grant.Scope().ArtifactID }
 
-// maxBacklog bounds replayed events for late SSE subscribers.
-const maxBacklog = 4096
-
 // Done is closed when the subprocess exits.
 func (s *Session) Done() <-chan struct{} { return s.done }
 
-// Subscribe returns a channel receiving every event line (replaying the
-// backlog first) and an unsubscribe func.
+// Subscribe replays retained events, then streams live events. Excess clients
+// receive a closed channel. Unsubscribe releases its queue and worker.
 func (s *Session) Subscribe() (<-chan []byte, func()) {
-	ch := make(chan []byte, 1024)
 	s.mu.Lock()
-	for _, ev := range s.backlog {
-		select {
-		case ch <- ev:
-		default:
-		}
+	defer s.mu.Unlock()
+	sub := newEventSubscriber()
+	if len(s.subs) >= maxSubscribers {
+		close(sub.events)
+		return sub.events, func() {}
 	}
-	s.subs[ch] = struct{}{}
-	s.mu.Unlock()
-	return ch, func() {
+	for _, ev := range s.backlog {
+		sub.enqueue(ev)
+	}
+	s.subs[sub] = struct{}{}
+	go sub.run(s.done)
+	return sub.events, func() {
 		s.mu.Lock()
-		delete(s.subs, ch)
+		sub.stop()
+		// Release retained bytes before making capacity available to a new tab.
+		<-sub.finished
+		delete(s.subs, sub)
 		s.mu.Unlock()
 	}
 }
@@ -970,12 +973,13 @@ func (s *Session) call(ctx context.Context, cmd map[string]any) (rpcResponse, er
 // state, detects artifact saves, and broadcasts every event to subscribers.
 func (s *Session) readLoop(stdout io.Reader) {
 	defer close(s.readDone)
-	reader := bufio.NewReaderSize(stdout, 1<<20)
+	reader := bufio.NewReaderSize(stdout, 64<<10)
 	for {
-		line, err := reader.ReadBytes('\n')
-		line = bytes.TrimRight(line, "\r\n")
-		if len(line) > 0 {
-			s.handleLine(line)
+		line, oversized, err := readEventLine(reader)
+		if oversized {
+			slog.Warn("discarded oversized pi event", slog.String("session_id", s.ID), slog.Int("limit_bytes", maxEventLineBytes))
+		} else if len(line) > 0 {
+			s.handleLine(bytes.TrimRight(line, "\r\n"))
 		}
 		if err != nil {
 			return
@@ -1248,15 +1252,21 @@ func readSessionFile(path string) (string, error) {
 func (s *Session) broadcast(line []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.backlog = append(s.backlog, line)
-	if len(s.backlog) > maxBacklog {
-		s.backlog = s.backlog[len(s.backlog)-maxBacklog:]
+	if len(line) > maxEventLineBytes {
+		return
 	}
-	for ch := range s.subs {
-		select {
-		case ch <- line:
-		default: // slow subscriber: drop rather than block the read loop
-		}
+	// Own the retained bytes: a trimmed record may otherwise keep a much
+	// larger reader allocation alive than the byte budget accounts for.
+	line = bytes.Clone(line)
+	s.backlog = append(s.backlog, line)
+	s.backlogBytes += len(line)
+	for len(s.backlog) > maxBacklog || s.backlogBytes > maxEventQueueBytes {
+		s.backlogBytes -= len(s.backlog[0])
+		s.backlog[0] = nil
+		s.backlog = s.backlog[1:]
+	}
+	for sub := range s.subs {
+		sub.enqueue(line)
 	}
 }
 
@@ -1292,9 +1302,9 @@ func (s *Session) finish() {
 	s.mu.Unlock()
 	// The credential dies with the process that held it.
 	s.mgr.cfg.Credentials.Revoke(s.grant)
-	close(s.done)
 	ev, _ := json.Marshal(map[string]string{"type": "exhibit_session_closed"})
 	s.broadcast(ev)
+	close(s.done)
 	go s.removeScratch()
 }
 

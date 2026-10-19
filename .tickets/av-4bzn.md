@@ -1,6 +1,6 @@
 ---
 id: av-4bzn
-status: in_progress
+status: closed
 deps: []
 links: [av-wrbu, Exh-w3h0, Exh-p4zz, Exh-nueb]
 created: 2026-08-03T05:02:38Z
@@ -30,3 +30,17 @@ Pi stdout is read with ReadBytes, which allocates without a line limit. The repl
 ## Scope split
 
 The service-wide body limit, explicit HTTP timeouts, ten-session owner cap, 429 mapping, and transcript persistence ceiling are already implemented. Remaining independent defects are tracked in Exh-w3h0 (prompt/image validation), Exh-p4zz (atomic process admission and instance ceiling), and Exh-nueb (bounded transcript reads). Those are outside this fix.
+
+## Notes
+
+**2026-10-19T19:54:04Z**
+
+Implemented bounded JSONL reading (8 MiB per line), replay and subscriber queues (4096 events / 16 MiB each), four subscribers per session, explicit queue cleanup, and ordered draining at SSE shutdown. Published bytes are copied so trimmed reader buffers cannot evade accounting. Oversized lines are discarded through newline with a warning; slow subscribers drop oldest queued events. Added boundary, recovery, eviction, ownership, subscription-limit, shutdown, and cleanup regression coverage. Independent prompt, admission, and transcript fixes remain in the three split tickets.
+
+**2026-10-19T19:57:27Z**
+
+Validation: make assets; full go test ./internal/agent; full go test -race ./internal/agent; targeted API session ownership and 429 tests all pass. Updated integration helpers to consume asynchronous replay explicitly.
+
+**2026-10-19T19:58:03Z**
+
+The full internal/api suite also passed (403.739s). The earlier combined invocation reported failure only because its agent package ran before the asynchronous-replay test helper correction; the corrected full agent suite and full agent race suite subsequently passed.
