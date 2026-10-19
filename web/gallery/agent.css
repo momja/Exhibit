@@ -70,9 +70,12 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .agent-questions{align-self:stretch;margin-block:10px;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
 .agent-questions fieldset{border:0;min-width:0;margin:0 0 26px}
 .agent-questions legend{font-weight:600;padding:0;margin-bottom:8px;white-space:pre-wrap}
-.question-options{display:grid}
-.question-option{display:flex;align-items:flex-start;gap:10px;padding:9px 0;min-height:40px;cursor:pointer}
-.question-option input{width:16px;height:16px;accent-color:var(--brand-blue);margin-top:3px;flex-shrink:0}
+.question-options{display:grid;gap:4px}
+.question-option{position:relative;display:flex;align-items:flex-start;width:100%;padding:9px 12px;min-height:40px;border-radius:6px;cursor:pointer}
+.question-option:hover{background:var(--color-subtle)}
+.question-option:has(input:checked){background:var(--color-accent-tint);color:var(--color-accent-tint-ink)}
+.question-option:has(input:focus-visible){outline:2px solid var(--brand-blue);outline-offset:2px}
+.question-option input{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .question-option-label{display:block;white-space:pre-wrap}
 .question-option-description{display:block;color:var(--color-muted);font-size:12px;margin-top:2px;white-space:pre-wrap}
 .question-other{margin-top:7px}

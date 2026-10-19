@@ -169,7 +169,8 @@ The system prompt encourages the agent to interpret the person's intended
 outcome, clarify vague details, confirm meaningful assumptions, and offer
 helpful suggestions. Questions are short and use everyday language. Option
 descriptions are reserved for differences that help someone choose. The chat
-shows the questions directly, with plain choice rows and no surrounding card
+shows the questions directly, with full-width rows that highlight when selected
+and no surrounding card
 or introductory copy.
 
 ![Two questions in the agent chat](screenshots/Exh-br5h/01-questions-desktop.png)

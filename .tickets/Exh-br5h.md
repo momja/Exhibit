@@ -26,3 +26,7 @@ Implemented ask_user with up to four grouped questions, optional single or multi
 **2026-10-19T21:47:27Z**
 
 Reworked the question UX after user feedback: removed the nested outer card and option boxes, generic heading, repeated instructions, tool-status chip and welcome banners. Questions now use plain radio/checkbox rows; Something else discloses a custom answer. Typing replaces a single selection, selecting a suggestion clears the custom answer, and all questions still submit together with Continue or Skip. Simplified empty-preview copy and agent guidance. Updated the design canvas, desktop/mobile screenshots and interaction tests. Validation: focused agent/API/mock tests including gallery scripts and real Pi question round trips passed; browser checks covered switching answers, reconnect draft retention, submission, phone dark mode and overflow.
+
+**2026-10-19T21:55:29Z**
+
+Removed visible selection controls from question choices. The whole row is clickable and receives the selected highlight; keyboard selection and focus indicators remain available. Updated the canvas design and desktop/mobile screenshots. Validation: gallery script suite and question-template tests passed, and browser checks confirmed full-row selection, arrow-key changes, selected styling in both appearances and no mobile overflow.
