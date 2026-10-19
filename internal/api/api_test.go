@@ -300,6 +300,7 @@ func TestShareCreate(t *testing.T) {
 	// A share has no lifetime of its own (av-8ipt): it is live until deleted,
 	// so the resource says nothing about expiry.
 	assert.NotContains(t, share, "expires_at")
+	assert.NotContains(t, share, "public")
 }
 
 // av-8ipt: share expiry is gone, and a request that still asks for one is told
@@ -341,29 +342,44 @@ func TestShareCreateRejectsExpiresAt(t *testing.T) {
 	}
 }
 
-// av-20xv, closed: `public` was accepted, stored and never read, so
-// `public: false` was the one value a caller would set believing they had
-// restricted something. av-lrae dropped the column — it means exactly "no
-// recipient" now — and the request shape must stop offering the choice rather
-// than keep taking a value nothing honours. Both spellings are refused, since
-// the defect is accepting the key at all.
+// av-20xv: the removed flag must be refused before any sharing mutation,
+// including granting access and rotating a link somebody already holds.
 func TestShareCreateRejectsPublic(t *testing.T) {
-	r := newTestRouter(t)
-	id := seedShareableArtifact(t, r, "Public Flag Test")
+	for _, operation := range []string{"create link", "grant", "replace link"} {
+		t.Run(operation, func(t *testing.T) {
+			r := newTestRouter(t)
+			id := seedShareableArtifact(t, r, "Public Flag Test")
+			seedLocalAccount(t, r, "alice")
+			body := map[string]any{"artifact_id": id}
+			switch operation {
+			case "grant":
+				body["recipients"] = []string{"alice"}
+			case "replace link":
+				mintLink(t, r, id, false)
+				body["replace"] = true
+			}
+			before := listShares(t, r, id)
 
-	for name, value := range map[string]any{
-		"true":  true,
-		"false": false,
-	} {
-		t.Run(name, func(t *testing.T) {
-			sb, _ := json.Marshal(map[string]any{"artifact_id": id, "public": value})
-			req := httptest.NewRequest("POST", "/api/shares", bytes.NewReader(sb))
-			req.Header.Set("Authorization", authHeader())
-			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
-			assert.Equal(t, http.StatusBadRequest, w.Code)
-			assert.Contains(t, w.Body.String(), "public is no longer supported")
+			for name, value := range map[string]any{
+				"true": true, "false": false, "null": nil,
+				"string": "false", "number": 0,
+				"object": map[string]any{}, "array": []any{},
+			} {
+				t.Run(name, func(t *testing.T) {
+					body["public"] = value
+					sb, err := json.Marshal(body)
+					require.NoError(t, err)
+					req := httptest.NewRequest("POST", "/api/shares", bytes.NewReader(sb))
+					req.Header.Set("Authorization", authHeader())
+					req.Header.Set("Content-Type", "application/json")
+					w := httptest.NewRecorder()
+					r.ServeHTTP(w, req)
+					assert.Equal(t, http.StatusBadRequest, w.Code)
+					assert.Contains(t, w.Body.String(), "public is no longer supported")
+					assert.Equal(t, before, listShares(t, r, id),
+						"refusing the flag must not create a link, grant access, or rotate a live link")
+				})
+			}
 		})
 	}
 }
