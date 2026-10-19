@@ -414,11 +414,13 @@ Shipped consumers: the agent surface's preview pane, re-rendered after every
 agent save (`architecture.md` §3.7, `docs/agent.md`); the artifact edit
 page's widget panel, which swaps `/partials/card-widget` after a save so the
 tile refreshes without a reload that would drop the CodeMirror buffer beside it
-(`docs/widgets.md`); and the detail page's capability badge + popover, which
+(`docs/widgets.md`); and the detail page's posture mark and receipt, which
 swap `/partials/capability-cluster` when the runtime network prompt fires
 `exhibit:capabilities-changed` after an origin approval (av-mf1x) — the frame
-reloads transparently under the widened CSP, and the toolbar follows without
-a page reload.
+reloads transparently under the widened CSP, and the controls follow without
+a page reload. That fragment carries both halves and each region takes its
+own with `hx-select`, so one definition of each serves two places on the page
+(Exh-ghuv).
 
 **Home-screen app shell (av-fdcx).** Every app-origin page head includes the shared
 `pwaHead` partial: the `manifest.json` link plus the `apple-*` tags iOS reads instead

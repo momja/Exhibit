@@ -1185,6 +1185,42 @@ same server-rendered gallery with the query and swaps only the grid, so the
 FTS5 search query stays authoritative without a full page reload. Filter,
 collection management, and the allowlist editor are full-page server renders.
 
+**The detail page is the artifact, with its chrome floating over it**
+(Exh-ghuv). The frame fills the window. Everything else is one pill of
+controls (back, a grip, the title, share, ⋮) that behaves like
+picture-in-picture on macOS and iOS: drag it by the grip and it springs to the
+nearest corner, or let go within 20px of a side edge and it is put away,
+leaving a tab that brings it back. The two-row header and toolbar it replaced
+took the top of every artifact for chrome, and on a phone needed a bottom
+sheet (av-g7n7) to fit at all; the pill is one layout for every viewport.
+
+![The floating controls over an artifact](screenshots/Exh-ghuv/01-controls.png)
+
+The title is the button that opens an info card: the created date, the
+sandbox posture receipt (the same `capabilityPopover` partial the gallery card
+uses), and the owner's Manage link. A posture mark in front of the title is
+the cluster's summary — a shield when fully contained, the grant glyphs when
+not, neutral like the cluster, never a verdict. The ⋮ menu holds the rest:
+Open in new tab, then the owner's Edit, Modify with agent, Download file and
+Update from source, then Hide controls. Both popups open toward the middle of
+the window; the card is flush with the pill and as wide as it, the menu hangs
+off its button. Placement is remembered on the app origin, so the controls
+stay where a visitor left them across artifacts.
+
+![The info card](screenshots/Exh-ghuv/02-info-card.png)
+
+The page's notices — the capability, blocked-origin and state-changed
+banners, and the status line — float over the artifact on the side of the
+window away from the pill, and stay until dealt with: they are messages to
+read and often act on, which a toast that times out would lose. The stack
+scrolls within a short window so expanded details cannot hide later actions.
+The rules for where things go are `web/gallery/pip-placement.js`, plain
+geometry with no DOM and its own tests; `pip.js` measures the page and applies
+them. Its DOM event tests cover restoring keyboard focus, dismissing popups
+when the artifact receives focus, and grabbing an animated pill.
+
+![Expanded notices scroll within a short window](screenshots/Exh-ghuv/05-scrollable-notices.png)
+
 **The detail page never embeds the artifact's source** (agaf-02xs). The code
 lives one click away on the edit page, in CodeMirror, which is the surface built
 for reading it; the detail page is the *running* artifact. That is a size
@@ -1321,9 +1357,10 @@ swaps it after a save, refreshing the tile without a reload that would drop
 the CodeMirror buffer beside it. `/partials/capability-cluster` is the same
 shape on the detail page (av-mf1x): after a runtime origin approval the
 prompt reloads the frame transparently under the widened CSP and fires
-`exhibit:capabilities-changed`, and the toolbar badge + popover re-render
-from the same partial — so the chrome beside the frame stops describing the
-allowlist as it was at page load.
+`exhibit:capabilities-changed`, and the posture mark in the title and the
+receipt in the info card re-render from one fragment (`artifactPosture`),
+each selecting its half with `hx-select` — so the chrome over the frame stops
+describing the allowlist as it was at page load.
 
 **Card widgets (av-fafu).** Each card leads with a tile: either the artifact's
 widget in a sandboxed frame from `RENDER_ORIGIN/w/:id`, or — when it has none —
@@ -1401,8 +1438,9 @@ the posture glyphs, rather than a labelled badge of its own. One trigger, one
 popover: the popover gains a Sharing section carrying the level and the full
 sentence naming every fact that is true, which the badge's `title` used to
 hold. The fold is the card's alone (`newCardCapabilityView`). The detail
-toolbar renders the same cluster to recipients too, and who else holds a grant
-is not part of what a grant carries, so its popover has no Sharing section.
+page renders the same posture receipt to recipients too, and who else holds a
+grant is not part of what a grant carries, so its receipt has no Sharing
+section.
 
 **The card itself (av-uvc6)** is the tile plus one 26px meta row: the title,
 the artifact's tags as color dots (each name is the dot's `title` and

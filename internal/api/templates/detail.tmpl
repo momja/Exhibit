@@ -12,33 +12,80 @@
 <link rel="stylesheet" href="/assets/gallery/components.css">
 <link rel="stylesheet" href="/assets/gallery/detail.css">
 {{/* htmx swaps the share panel's body after a grant, a revoke or a link
-     change (av-6m3e); self-hosted from the app origin like every other asset,
-     never a CDN. Loaded only where there is a panel to swap: a recipient's
-     page has no share controls at all, so it should not carry the library
-     that refreshes them. */}}
+     change (av-6m3e), and the posture mark and receipt after an origin
+     approval (av-mf1x); self-hosted from the app origin like every other
+     asset, never a CDN. Loaded only for the owner: a recipient's page has no
+     share controls and cannot approve an origin, so nothing on it changes
+     and it should not carry the library that refreshes them. */}}
 {{if .Share}}<script src="/assets/htmx/htmx.min.js"></script>{{end}}
 </head>
 <body>
-<header>
-  {{/* The label collapses to the bare arrow on phones (av-g7n7) — the
-       header there is one non-wrapping row and the title needs the width. */}}
-  <a href="/">←<span class="back-label"> Gallery</span></a>
-  <h1>{{.Title}}</h1>
-  <span class="muted text-sm">{{.Created}}</span>
-  {{/* Kebab: display:none above 640px, where the toolbar below is already a
-       visible row. Below it, the toolbar is a bottom sheet and this opens it. */}}
-  <button type="button" id="sheet-toggle" aria-label="Artifact actions" aria-haspopup="true" aria-expanded="false" aria-controls="actions-sheet"><i class="ph ph-dots-three-vertical"></i></button>
-</header>
-<div class="toolbar" id="actions-sheet">
-  {{/* Sheet-only chrome (grab handle + title/date): display:none on desktop,
-       where the toolbar is an inline row that needs no header of its own. */}}
-  <div class="sheet-head"><span class="sheet-grip"></span><span class="sheet-title">{{.Title}}</span><span class="muted text-sm">{{.Created}}</span></div>
-  <a href="{{.OpenURL}}" target="_blank">Open in new tab ↗</a>
-  {{/* Everything from here to the capability cluster belongs to the artifact's
-       OWNER (av-awr4). A recipient reached this page through a grant, which is
-       read access to the artifact and nothing else, so each of these would
-       answer 404 from a server that has always been owner-scoped: /edit and
-       /agent read the body, the export reads it too, and refetch rewrites it.
+{{/* The artifact is the page (Exh-ghuv). It fills the window, and the page's
+     own chrome is one floating pill of controls over it, which the visitor
+     can drag to any corner or put away against a side edge. The two-row
+     header and toolbar this replaced took the top of every artifact for
+     chrome. Placement, dragging and the two popups are pip.js. */}}
+<div class="panels">
+  {{/* No allow="clipboard-*" delegation: the frame's opaque origin matches no
+       Permissions-Policy allowlist, so the delegation was a no-op (av-hll6).
+       Clipboard read/write is instead proxied through the host via the shim's
+       capability bridge, gated by per-artifact first-use approval. Native
+       keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. */}}
+  <iframe src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy" title="{{.Title}}"></iframe>
+</div>
+<div class="pip" id="pip" role="toolbar" aria-label="Artifact controls">
+  <a class="pip-btn" href="/" aria-label="Back to gallery" title="Gallery"><i class="ph ph-arrow-left" aria-hidden="true"></i></a>
+  <span class="pip-sep"></span>
+  <button type="button" class="pip-grip" id="pip-grip" title="Drag to move" aria-label="Move controls. Drag them, or use the arrow keys. Past the left or right edge puts them away."></button>
+  {{/* The title is the button that opens the info card, and the posture mark
+       in front of it is the cluster's summary (Exh-ghuv). The mark is an htmx
+       target (av-mf1x): after a runtime origin approval the prompt fires
+       exhibit:capabilities-changed on <body>, and the mark and the receipt in
+       the card each take their half of the same fragment. For a recipient
+       htmx is not loaded and these attributes are inert, since they cannot
+       approve anything and so there is nothing to refresh. */}}
+  <button type="button" class="pip-title" id="pip-title" title="About this artifact" aria-labelledby="pip-title-text pip-posture" aria-expanded="false" aria-controls="pip-info">
+    <span id="pip-posture"
+          hx-get="/partials/capability-cluster?artifact={{.ID}}"
+          hx-trigger="exhibit:capabilities-changed from:body"
+          hx-select=".pip-posture"
+          hx-swap="innerHTML">{{template "postureGlyph" .Capability}}</span>
+    <span class="pip-title-text" id="pip-title-text">{{.Title}}</span>
+    <i class="ph ph-caret-down pip-caret" aria-hidden="true"></i>
+  </button>
+  <span class="pip-sep"></span>
+  {{/* Opens the share modal (av-esa1). .Share gates it on the same value that
+       decides whether the modal is rendered at all, so the control and its
+       target cannot disagree about who is an owner. */}}
+  {{if .Share}}<button type="button" class="pip-btn" id="share-open" aria-label="Share" title="Share"><i class="ph ph-share-network" aria-hidden="true"></i></button>{{end}}
+  <button type="button" class="pip-btn" id="pip-more" aria-label="More actions" title="More" aria-expanded="false" aria-controls="pip-menu"><i class="ph ph-dots-three-vertical" aria-hidden="true"></i></button>
+</div>
+{{/* The info card: facts about the artifact, opened from the title. The
+     receipt stays for everyone, and the link to change it does not. What this
+     artifact may reach is a fact about the tool running in the visitor's own
+     browser, the one piece of the owner's configuration a recipient has a
+     direct stake in, and what the CSP-block explanation points back at. The
+     receipt's Manage link follows ShowManage, which is the same ReadOnly
+     narrowing as everything else on this page.
+
+     Outside the pill rather than inside it: the pill is transformed and
+     blurred, and either makes it the containing block of a fixed-position
+     child, which would pin the card to the pill instead of the window. */}}
+<div class="pip-popup pip-info" id="pip-info" role="region" aria-label="About this artifact" tabindex="-1" hidden>
+  <div class="pip-info-meta">Created {{.Created}}</div>
+  <div id="capability-cluster"
+       hx-get="/partials/capability-cluster?artifact={{.ID}}"
+       hx-trigger="exhibit:capabilities-changed from:body"
+       hx-select=".capability-popover, .frag-error"
+       hx-swap="innerHTML">{{template "capabilityPopover" .Capability}}</div>
+</div>
+<div class="pip-popup pip-menu" id="pip-menu" hidden>
+  <a href="{{.OpenURL}}" target="_blank"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</a>
+  {{/* Everything from here to the divider belongs to the artifact's OWNER
+       (av-awr4). A recipient reached this page through a grant, which is read
+       access to the artifact and nothing else, so each of these would answer
+       404 from a server that has always been owner-scoped: /edit and /agent
+       read the body, the export reads it too, and refetch rewrites it.
        Rendering them and letting them fail is the specific dishonesty this
        gate exists to remove — a control that does nothing teaches the visitor
        the tool is flaky rather than that it is not theirs.
@@ -48,50 +95,29 @@
        writes on, so what the page offers and what the page may send cannot
        drift apart. */}}
   {{if not .ReadOnly}}
-  <span class="toolbar-sep">|</span>
-  <a href="/artifacts/{{.ID}}/edit"><i class="ph ph-pencil-simple"></i> Edit</a>
-  <span class="toolbar-sep">|</span>
-  <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot"></i> Modify with agent</a>
-  <span class="toolbar-sep">|</span>
+  <a href="/artifacts/{{.ID}}/edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i> Edit</a>
+  <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot" aria-hidden="true"></i> Modify with agent</a>
   {{/* The portable copy (av-vnkt): one file with every stored payload folded
        back in, depending on no origin and no running instance. A plain link,
        because the response is an attachment — no JS, and it works from the
        page a visitor is already on. */}}
-  <a href="/api/artifacts/{{.ID}}/export" download><i class="ph ph-download-simple"></i> Download file</a>
+  <a href="/api/artifacts/{{.ID}}/export" download><i class="ph ph-download-simple" aria-hidden="true"></i> Download file</a>
+  {{if .SourceURL}}<button type="button" onclick="refetchSource()"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Update from source</button>{{end}}
   {{end}}
-  <span class="toolbar-sep">|</span>
-  {{/* The cluster stays for everyone, and the link to change it does not. What
-       this artifact may reach is a fact about the tool running in the visitor's
-       own browser — the one piece of the owner's configuration a recipient has
-       a direct stake in, and what the CSP-block explanation points back at. */}}
-  {{/* The cluster is an htmx target (av-mf1x): after a runtime origin
-       approval the prompt fires exhibit:capabilities-changed on <body> and
-       htmx re-fetches the fragment, so the toolbar stops describing the
-       allowlist as it was at page load. innerHTML, because the fragment
-       renders the capabilityCluster partial itself. For a recipient htmx is
-       not loaded and these attributes are inert — they cannot approve
-       anything, so there is nothing to refresh. */}}
-  <div id="capability-cluster"
-       hx-get="/partials/capability-cluster?artifact={{.ID}}"
-       hx-trigger="exhibit:capabilities-changed from:body"
-       hx-swap="innerHTML">{{template "capabilityCluster" .Capability}}</div>
-  {{if not .ReadOnly}}
-  <a href="/artifacts/{{.ID}}/edit#security-panel">Manage in allowlist settings →</a>
-  {{/* Opens the share modal (av-esa1). A button rather than a link because the
-       panel is on this page; .Share gates it on the same value that decides
-       whether the modal is rendered at all, so the control and its target
-       cannot disagree about who is an owner. */}}
-  {{if .Share}}
-  <span class="toolbar-sep">|</span>
-  <button type="button" id="share-open"><i class="ph ph-share-network"></i> Share</button>{{end}}
-  {{if .SourceURL}}
-  <span class="toolbar-sep">|</span>
-  <button onclick="refetchSource()">Update from source ↻</button>{{end}}
-  {{end}}
-  <span id="al-status" class="muted"></span>
+  <hr>
+  <button type="button" id="pip-hide"><i class="ph ph-caret-right" aria-hidden="true"></i> Hide controls</button>
 </div>
-{{/* Scrim behind the mobile actions sheet; display:none above 640px. */}}
-<div id="sheet-scrim" class="sheet-scrim"></div>
+{{/* What is left of the controls when they are put away: a tab on the side
+     edge, always visible, that brings them back on a click or a drag. */}}
+<button type="button" class="pip-tab" id="pip-tab" aria-label="Show artifact controls" hidden><i class="ph ph-caret-right" aria-hidden="true"></i><span class="pip-tab-label">{{.Title}}</span></button>
+{{/* Moving or hiding the controls is announced to screen readers and shown
+     nowhere: the visitor who dragged them can already see where they went. */}}
+<div class="sr-only" id="pip-announce" role="status" aria-live="polite"></div>
+{{/* The page's notices: the three banners below and the status line. They are
+     messages to read and often act on, so they stay until dealt with rather
+     than timing out, and they float over the artifact on the side of the
+     window away from the pill (pip.js sets data-pip-corner on <body>). */}}
+<div class="pip-notices">
 {{/* Unsupported-capability warning (av-yvtb): hidden until the render shim
      reports that the artifact tried something the opaque-origin sandbox can't
      run. Phase 1 detects a Worker({type:'module'}) (browsers refuse it in the
@@ -173,13 +199,10 @@
   </div>
   <button type="button" class="banner-action" id="state-changed-reload"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Reload the tool</button>
 </div>
-<div class="panels">
-  {{/* No allow="clipboard-*" delegation: the frame's opaque origin matches no
-       Permissions-Policy allowlist, so the delegation was a no-op (av-hll6).
-       Clipboard read/write is instead proxied through the host via the shim's
-       capability bridge, gated by per-artifact first-use approval. Native
-       keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. */}}
-  <iframe src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy"></iframe>
+{{/* Status from the page's own requests: an approval that failed to save, a
+     refetch in progress or its result. Empty most of the time, and an empty
+     line takes no room. */}}
+<div id="al-status" class="pip-status" role="status"></div>
 </div>
 
 {{/* The four capability dialogs below, and the network prompt at the end of
@@ -203,7 +226,7 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dl-title">
     <h2 id="dl-title">Allow downloads?</h2>
     <p><strong>{{.Title}}</strong> wants to download <code id="dl-filename"></code>.</p>
-    <p>Allowing lets this artifact save files to your device from now on. You can revoke this at any time from the toolbar.</p>
+    <p>Allowing lets this artifact save files to your device from now on. You can revoke this at any time from its security settings.</p>
     <div class="modal-actions">
       <span class="spacer"></span>
       <button type="button" class="btn btn-sec" id="dl-block">Block</button>
@@ -216,7 +239,7 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="clip-title">
     <h2 id="clip-title">Allow clipboard access?</h2>
     <p><strong>{{.Title}}</strong> wants to <span id="clip-direction">use</span> your clipboard.</p>
-    <p>Allowing lets this artifact read and write your clipboard from now on. You can revoke this at any time from the toolbar.</p>
+    <p>Allowing lets this artifact read and write your clipboard from now on. You can revoke this at any time from its security settings.</p>
     <div class="modal-actions">
       <span class="spacer"></span>
       <button type="button" class="btn btn-sec" id="clip-block">Block</button>
@@ -228,7 +251,7 @@
 <div id="link-modal" class="modal-overlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="link-title">
     <h2 id="link-title">Allow opening links?</h2>
-    <p>You are opening a link to <code id="link-host">example.com</code>. Exhibit cannot verify the safety of external sites. Make sure you trust this destination before allowing links. You can revoke this at any time from the toolbar.</p>
+    <p>You are opening a link to <code id="link-host">example.com</code>. Exhibit cannot verify the safety of external sites. Make sure you trust this destination before allowing links. You can revoke this at any time from its security settings.</p>
     <div class="modal-actions">
       <span class="spacer"></span>
       <button type="button" class="btn btn-sec" id="link-block">Block</button>
@@ -341,5 +364,6 @@ let geolocationApproved = {{if .Capability.GeolocationApproved}}true{{else}}fals
      everything by id inside #share-panel and tolerates the panel's absence, so
      the guard is a courtesy rather than the control. */}}
 {{if .Share}}<script type="module" src="/assets/gallery/share.js"></script>{{end}}
+<script type="module" src="/assets/gallery/pip.js"></script>
 </body>
 </html>{{end}}
