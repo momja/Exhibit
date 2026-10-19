@@ -103,6 +103,10 @@ type Config struct {
 	// shares-only decision is argued: see render.Config.EmbedOrigins. Read
 	// from the environment by EmbedOriginsFromEnv (embedorigins.go).
 	EmbedOrigins []string
+	// PreviewSnapshotter draws a live share's widget for its link preview
+	// (av-rclm). nil — no OG_SNAPSHOT_CDP_URL — means every preview shows the
+	// generic card. Read by PreviewSnapshotterFromEnv (previewsnapshot.go).
+	PreviewSnapshotter render.Snapshotter
 	// MaxRequestBodyBytes bounds every request body the app surface accepts
 	// (av-ombn); a larger one is answered 413. Zero means
 	// DefaultMaxRequestBodyBytes, never "unbounded". Read from the
@@ -661,6 +665,10 @@ func (ro *Router) RenderHandler() http.Handler {
 		// Empty on every instance that has not asked to restrict framing,
 		// which leaves a share's frame-ancestors open (av-q3iy).
 		EmbedOrigins: ro.cfg.EmbedOrigins,
+		// Link previews (av-rclm): the logo card every preview falls back to,
+		// and the browser that draws a live share's widget, if any.
+		PreviewImagePNG: previewImagePNG(),
+		Snapshotter:     ro.cfg.PreviewSnapshotter,
 	})
 
 	r := chi.NewRouter()
@@ -700,6 +708,12 @@ func (ro *Router) RenderHandler() http.Handler {
 	// Serve an artifact's widget via its share link (av-ei5h) — share row
 	// authorizes, widget blob renders, share framing applies.
 	r.Get("/s/{shareID}/widget", renderer.ServeShareWidget)
+	// A live share link's preview image (av-rclm): its widget, snapshotted,
+	// or the generic card. Share-authorized like the two routes above.
+	r.Get("/s/{shareID}/og.png", renderer.ServeSharePreviewImage)
+	// The generic preview card, for every link that is not a live share.
+	// Static artwork, like the favicon.
+	r.Get("/og.png", renderer.ServePreviewImage)
 
 	return r
 }

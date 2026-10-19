@@ -77,6 +77,14 @@ func main() {
 		fatal("configure embed origins", err)
 	}
 
+	// The browser that draws link previews of shares (av-rclm). Unset — the
+	// default — is no browser and the generic card for every preview; a value
+	// that is not a DevTools URL is fatal rather than quietly ignored.
+	previewSnapshotter, err := api.PreviewSnapshotterFromEnv(renderOrigin)
+	if err != nil {
+		fatal("configure link-preview snapshots", err)
+	}
+
 	// The largest request body any route accepts (av-ombn). Unset is the
 	// default, never unbounded; a value that is not a positive number of bytes
 	// is fatal rather than replaced by the default the operator did not write.
@@ -277,6 +285,7 @@ func main() {
 		Public:              publicMode,
 		Entitlements:        entitlements,
 		EmbedOrigins:        embedOrigins,
+		PreviewSnapshotter:  previewSnapshotter,
 		MaxRequestBodyBytes: maxBodyBytes,
 	})
 

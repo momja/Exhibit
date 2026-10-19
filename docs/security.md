@@ -755,6 +755,52 @@ frame, only the notice's own shape, one fixed effect), and
 `internal/api/versionviewer_test.go`, whose last cases ask the *real* render handler
 for the URL the app minted.
 
+### 1.10 Link previews: what a share says about itself, and the one browser on our side (av-rclm)
+
+A chat app unfurling a pasted `/s/:shareID` is a stranger with no credential,
+which is exactly who the share route already serves. So the preview follows
+the share route's rule and adds nothing to it. A live anonymous link carries
+OpenGraph tags with the artifact's **title** (escaped) and a picture of its
+**widget**. The description is fixed copy, so no other artifact text is
+copied out. Every other id, whether a grant's, a revoked link's or one never
+issued, gets one 404 page naming Exhibit, byte-identical whichever it is. A
+preview is therefore no oracle over which ids are live or which are grants.
+The tags appear only on the share document. The token-gated renders are never
+crawled and carry none.
+
+The picture is the one place Exhibit runs artifact code on infrastructure the
+operator controls rather than in a visitor's browser. It is an opt-in
+sidecar (`OG_SNAPSHOT_CDP_URL`), not something the service image contains, and
+it is held to three rules:
+
+- **It reaches the render origin and nothing else.** `internal/ogsnap` pauses
+  every request the page makes and continues only those under `RENDER_ORIGIN/`.
+  It fails the rest at the protocol layer, so an unforeseen scheme is refused by
+  default. WebSockets, which that interception does not see, are blocked by
+  pattern. The artifact's allowlist is deliberately **not** honoured here. It is
+  a decision about what the artifact may reach from a *visitor's* browser. This
+  browser sits in the operator's network and publishes its pixels to anyone
+  holding the link, so honouring the allowlist would let an owner aim it at an
+  internal address and read the answer out of a screenshot. A widget that draws
+  network data previews without it. The deployment guidance to give the browser
+  no route to anything else is the outer wall. This rule is the inner one.
+- **It draws the shared widget, not the artifact.** The page is
+  `/s/:shareID/widget`: the narrowed widget preamble, no bridges, no devices,
+  the owner's state exactly as that public URL already serves it. Each
+  snapshot runs in a browser context of its own, disposed with it, so nothing
+  one artifact leaves in the browser is there when the next one loads.
+- **Holding a link cannot drive it.** Snapshots are cached per share id for ten
+  minutes, a failure is cached as long as a success, concurrent requests for
+  one id share a render, and at most two render at once. The share row is
+  resolved before the cache is read, so a revoked link stops yielding its
+  picture on the next request, and every preview response is `no-store`. What
+  a chat app already fetched is its own copy and out of reach.
+
+Pinned by `internal/render/opengraph_test.go` (the tags, escaping, the four
+share states, the cache and its revocation) and `internal/ogsnap/ogsnap_test.go`
+(which runs a real Chromium when one is installed and fails if a widget's
+requests to another origin arrive there).
+
 ## 2. CSP: the allowlist is the wall
 
 Each artifact carries a set of per-origin decisions (`artifact_network_origins`,

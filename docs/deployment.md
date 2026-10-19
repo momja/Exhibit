@@ -79,6 +79,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `PUBLIC_INSTANCE_DESCRIPTION` | *(unset)* | One line about it |
 | `PUBLIC_OWNER_ID` | `1` | Whose library the instance publishes — every artifact query filters on an owner, so a public instance has to name one. `1` is the owner a single-user library is already filed under |
 | `EMBED_ORIGINS` | *(unset)* | Restricts who may put a **share** in an iframe to `APP_ORIGIN` plus these. Origins separated by commas or spaces; an entry that is not an origin is a startup failure rather than a silent drop. Unset = any site may frame a share, which is what a public link is for; `/a/:id` and `/w/:id` are framed by your gallery alone either way |
+| `OG_SNAPSHOT_CDP_URL` | *(unset)* | DevTools endpoint of a headless Chromium (`ws://chrome:9222`) that draws each share link's preview image from its widget. Unset = every link preview shows the Exhibit logo card. A value that is not a `ws(s)://` or `http(s)://` URL is a startup failure (below) |
 | `BLOB_S3_BUCKET` | *(unset)* | Store artifact bodies in this S3-compatible bucket instead of on disk. Unset = filesystem under `DATA_DIR`, exactly as before (§7) |
 | `BLOB_S3_ENDPOINT` | AWS S3 | The bucket's API host, with an optional scheme: `http://localhost:9000`, `https://minio.example.com`, or a bare host. **Without a scheme, TLS is assumed** |
 | `BLOB_S3_REGION` | *(unset)* | Region, when your provider needs one. MinIO does not |
@@ -146,6 +147,33 @@ a share render holds no privileged control a stolen click could spend. This
 header is the second lock on that door, not the first, which is why refusing
 every framer by default would have cost every operator a lookup and bought
 close to nothing.
+
+**Link previews of shares (`OG_SNAPSHOT_CDP_URL`).** Paste a share link into
+Slack, Discord, iMessage or anything else that unfurls links, and the preview
+shows the artifact's title and a picture. With nothing configured the picture is
+the Exhibit logo card. To show the artifact's own gallery tile instead, run a
+headless Chromium beside the service and point this at its DevTools port:
+
+```
+docker compose --profile previews up -d chrome
+OG_SNAPSHOT_CDP_URL=ws://chrome:9222
+```
+
+The browser loads the share's widget at `RENDER_ORIGIN/s/<id>/widget`, so it
+must be able to reach `RENDER_ORIGIN` by that name. It is allowed to load
+nothing else: every request the widget makes to another origin is refused
+inside the browser, whatever the artifact's allowlist says, so a widget that
+fetches its numbers from elsewhere previews without them. This browser is
+inside your network and its screenshots are public, which is why. Still, give
+it no route to anything it does not need; that is a better wall than any check
+in the service. Snapshots are drawn at most two at a time, and each one is
+reused for ten minutes, so a link pasted into a busy channel costs one render.
+
+What a preview carries is the artifact's **title** and its tile. Nothing else
+from inside the artifact leaves. A link that is not live, whether revoked, a
+grant's id, or never issued, previews as Exhibit's name and logo and is
+indistinguishable from any other dead link. A chat app that already unfurled a
+link keeps its copy after you revoke it; that is outside any server's reach.
 
 ## 3. Logging in (optional)
 

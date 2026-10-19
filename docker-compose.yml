@@ -32,6 +32,11 @@ services:
       - GUARDRAIL_PROVIDER=${GUARDRAIL_PROVIDER:-}
       - GUARDRAIL_MODEL=${GUARDRAIL_MODEL:-}
       - GUARDRAIL_API_KEY=${GUARDRAIL_API_KEY:-}
+      # Link-preview images of shares (av-rclm). Empty = the Exhibit logo card.
+      # With `docker compose --profile previews up -d chrome`, set this to
+      # ws://chrome:9222 to draw each share's widget instead. The browser
+      # must be able to reach RENDER_ORIGIN by name (docs/deployment.md §2).
+      - OG_SNAPSHOT_CDP_URL=${OG_SNAPSHOT_CDP_URL:-}
       # Artifact bodies go to DATA_DIR/blobs unless a bucket is named (av-52ll).
       # To keep them in the MinIO below instead: bring MinIO up FIRST and create
       # the bucket, then uncomment these and start the app. The app verifies the
@@ -64,6 +69,14 @@ services:
     command: replicate -exec "/server"
     depends_on:
       - app
+
+  # Headless Chromium for link-preview snapshots (OG_SNAPSHOT_CDP_URL above).
+  # OPTIONAL, and deliberately outside the app image: a browser is several
+  # hundred MB the service does not otherwise need. Publishes no port; the app
+  # reaches it on the compose network.
+  chrome:
+    image: chromedp/headless-shell:stable
+    profiles: ["previews"]
 
   minio:
     image: minio/minio

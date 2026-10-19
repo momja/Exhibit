@@ -26,7 +26,7 @@ safety" (§12).
 | Tier-2 transpile | Babel standalone (in-iframe) → `esbuild` later | SWC |
 | Storage shim | Vanilla JS, bundled with `esbuild` | — |
 | Ingest scan | `x/net/html` parser (+ JS heuristic) | — |
-| Thumbnails | Headless Chromium worker (`chromedp`) — optional | client `html2canvas` |
+| Thumbnails / link previews | Headless Chromium sidecar driven by `chromedp` over CDP — optional (§8) | client `html2canvas` |
 | Gallery UI | Server-rendered stdlib `html/template` + static CSS/JS assets (§9) | templ (codegen — rejected) |
 | Partial re-render | **htmx** — self-hosted / embedded on app origin, no CDN (§9) | hand-rolled fetch-and-swap helper |
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
@@ -302,6 +302,16 @@ truly rendering).
 
 This is a nice-to-have; a v1 can ship with a generated placeholder (favicon/title card)
 and add real thumbnails later without schema changes.
+
+**As built, for share link previews (av-rclm).** The first consumer is not the
+gallery but the OpenGraph image of a share link. `internal/ogsnap` drives a
+Chromium the operator runs as a sidecar (`chromedp/headless-shell` in the
+Compose `previews` profile), reached by `OG_SNAPSHOT_CDP_URL` through
+`chromedp`'s remote allocator. The image never carries a browser. It snapshots
+the share's widget at the card tile's 264x132 at scale 4, in a fresh browser
+context, with every request outside `RENDER_ORIGIN` failed at the protocol
+layer (`security.md` §1.10). With no sidecar, the placeholder is the logo card
+`web/pwa-icons` rasterizes beside the PWA icons.
 
 ## 9. Gallery UI
 

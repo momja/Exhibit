@@ -61,9 +61,31 @@ async function renderMaskableIcon(size, fileName, safeFraction = 0.8) {
     .toFile(path.join(outDir, fileName));
 }
 
+// The link-preview image every share falls back to (av-rclm): when the
+// instance runs no snapshot browser, when a snapshot fails, and for every
+// link that does not resolve to a live share. The same size as a widget
+// snapshot (ImageWidth x ImageHeight in internal/ogsnap), so a preview card
+// keeps its shape whichever image it gets; the ground is tokens.css's
+// --color-ground, which the logo's white card reads against.
+async function renderPreviewCard(width, height, fileName) {
+  const logoHeight = Math.round(height * 0.6);
+  const logo = await sharp(svg)
+    .resize({ height: logoHeight })
+    .png()
+    .toBuffer();
+
+  await sharp({
+    create: { width, height, channels: 4, background: "#f0f0f0" },
+  })
+    .composite([{ input: logo, gravity: "center" }])
+    .png()
+    .toFile(path.join(outDir, fileName));
+}
+
 await renderIcon(180, "apple-touch-icon-180.png");
 await renderIcon(192, "icon-192.png");
 await renderIcon(512, "icon-512.png");
 await renderMaskableIcon(512, "icon-512-maskable.png");
+await renderPreviewCard(1056, 528, "og-default.png");
 
 console.log("Rendered PWA icons ->", path.relative(process.cwd(), outDir));

@@ -1,6 +1,6 @@
 ---
 id: av-rclm
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-08-09T22:39:13Z
@@ -34,3 +34,9 @@ The original text predates av-lrae and av-8ipt. `shares.public` and `shares.expi
 - No snapshot is served for a share id that no longer resolves to a live link, even from cache.
 - `Cache-Control: no-store` is set on every share-route metadata response: the document, the 404 page, and the image.
 - Tests cover the live link, grant id, revoked, and never-issued states, plus the snapshot network restriction.
+
+## Notes
+
+**2026-10-19T06:53:34Z**
+
+Implemented on feature/av-rclm/opengraph-share-previews. Tags on /s/:id, preview image at /s/:id/og.png (widget snapshot via optional OG_SNAPSHOT_CDP_URL Chromium sidecar, confined to RENDER_ORIGIN; else the logo card at /og.png), one generic 404 page for every dead link. Follow-up not done: generic OG tags on app-origin pages.
