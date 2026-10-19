@@ -176,8 +176,11 @@
         <button type="button" class="btn btn-sm btn-sec" id="state-cancel"><i class="ph ph-x"></i> Cancel</button>
         <span id="state-status" class="text-sm muted"></span>
         <span class="spacer"></span>
+        <button type="button" class="btn btn-sm btn-sec" id="state-export"><i class="ph ph-download-simple" aria-hidden="true"></i> Export JSON</button>
         <button type="button" class="btn btn-sm btn-danger" id="state-erase"><i class="ph ph-warning"></i> Erase all data</button>
       </div>
+      <p class="text-sm muted">Export JSON downloads saved data. Save any edits before exporting.</p>
+      <span id="state-export-status" class="text-sm muted" role="status"></span>
     </div>
   </details>
 
@@ -201,6 +204,11 @@
       </p>
       <div id="assets-rows"></div>
       <span id="assets-status" class="text-sm muted"></span>
+      <div class="btn-row">
+        <button type="button" class="btn btn-sm btn-sec" id="assets-export"><i class="ph ph-download-simple" aria-hidden="true"></i> Export assets ZIP</button>
+        <span id="assets-export-status" class="text-sm muted" role="status"></span>
+      </div>
+      <p class="text-sm muted">Downloads all saved assets and a manifest with their source URLs and content types.</p>
     </div>
   </details>
 
@@ -329,7 +337,9 @@ let geolocationApproved = {{if .GeolocationApproved}}true{{else}}false{{end}};
 <script src="/assets/gallery/edit.js"></script>
 <script src="/assets/gallery/state-api.js"></script>
 <script src="/assets/gallery/state.js"></script>
+<script type="module" src="/assets/gallery/state-export.js"></script>
 <script src="/assets/gallery/assets.js"></script>
+<script type="module" src="/assets/gallery/assets-export.js"></script>
 <script type="module" src="/assets/gallery/versions.js"></script>
 <script src="/assets/gallery/tags.js"></script>
 </body>

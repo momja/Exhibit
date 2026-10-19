@@ -182,6 +182,12 @@ func TestEditPageRendersStatePanel(t *testing.T) {
 	assert.Contains(t, page, `<div id="state-rows"></div>`)
 	assert.Contains(t, page, `id="state-save"`)
 	assert.Contains(t, page, `id="state-cancel"`)
+	assert.Contains(t, page, `id="state-export"`)
+	assert.Contains(t, page, `id="state-export-status"`)
+	assert.Contains(t, page, `<script type="module" src="/assets/gallery/state-export.js"></script>`)
+	assert.Contains(t, page, `id="assets-export"`)
+	assert.Contains(t, page, `id="assets-export-status"`)
+	assert.Contains(t, page, `<script type="module" src="/assets/gallery/assets-export.js"></script>`)
 	// Erase-all is warning-styled, not a peer of the other two (AC 8).
 	assert.Contains(t, page, `class="btn btn-sm btn-danger" id="state-erase"`)
 	// Add-key asks for key + type up front (AC 6).

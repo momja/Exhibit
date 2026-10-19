@@ -170,6 +170,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/api/artifacts/{artifactID}/", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/state", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/assets", why: "API group, covered by owner_scope_test.go"},
+	{route: "/api/artifacts/{artifactID}/assets/export", why: "Owner-scoped asset archive, covered by assets_export_test.go and sharegrant_page_test.go"},
 	{route: "/api/artifacts/{artifactID}/export", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/origins", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/widget", why: "API group, covered by owner_scope_test.go"},

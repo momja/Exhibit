@@ -2,7 +2,7 @@
 id: av-1rvm
 status: open
 deps: []
-links: [av-y98v, av-p4hm, av-7jcq, av-vnkt]
+links: [av-y98v, av-p4hm, av-7jcq, av-vnkt, Exh-k8p6]
 created: 2026-08-03T03:51:10Z
 type: feature
 priority: 2
@@ -49,3 +49,7 @@ To be defined once the shape is settled. Blocking question before any implementa
 **2026-10-03T06:00:00Z**
 
 The undo half is answered by [[av-bavj]]: state is snapshotted as one JSON object on the version being replaced, in the same transaction as every change, and restored with the version (restore is itself undoable). Still open here: user-facing export/import of state (portability), and a snapshot before the destructive state operations (clear, erase-all, agent `delete_state`), which are not version changes.
+
+**2026-10-19T04:39:35Z**
+
+Exh-k8p6 adds JSON export of persisted localStorage from the edit page. The format is a flat object of string values matching GET state. Import and snapshots before destructive operations remain separate work.
