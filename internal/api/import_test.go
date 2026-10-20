@@ -4,10 +4,12 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -132,7 +134,6 @@ func TestImportAssetsInvalidArchiveLeavesExistingData(t *testing.T) {
 		"missing payload":     func(m *assetsManifest, f map[string][]byte) { delete(f, m.Assets[1].Path) },
 		"wrong size":          func(m *assetsManifest, f map[string][]byte) { m.Assets[1].SizeBytes++ },
 		"wrong artifact":      func(m *assetsManifest, f map[string][]byte) { m.ArtifactID = "another" },
-		"duplicate URL":       func(m *assetsManifest, f map[string][]byte) { m.Assets[1].SourceURL = m.Assets[0].SourceURL },
 		"duplicate ID":        func(m *assetsManifest, f map[string][]byte) { m.Assets[1].ID = m.Assets[0].ID },
 		"traversal":           func(m *assetsManifest, f map[string][]byte) { f["../outside"] = []byte("bad") },
 		"extra payload":       func(m *assetsManifest, f map[string][]byte) { f["extra"] = []byte("bad") },
@@ -207,7 +208,8 @@ func TestImportAssetsQuotaAndBlobFailurePreserveData(t *testing.T) {
 				oldPath := a.Path
 				a.ID = "new-" + a.ID
 				a.Path = "assets/" + a.ID + "/payload"
-				files[a.Path] = []byte("other")
+				files[a.Path] = []byte(fmt.Sprintf("replacement payload %d", i))
+				a.SizeBytes = int64(len(files[a.Path]))
 				delete(files, oldPath)
 			}
 			before := quotaBlobContents(t, dir)
@@ -229,6 +231,83 @@ func TestImportAssetsQuotaAndBlobFailurePreserveData(t *testing.T) {
 			assert.Equal(t, before, quotaBlobContents(t, dir), "no staged payloads survive a failed import")
 		})
 	}
+}
+
+func TestImportAssetsSwapsTheEntireSetAtTheStorageLimit(t *testing.T) {
+	r, dir := newTestRouterWithBlobDir(t)
+	id := createTestArtifact(t, r, "Complete replacement")
+	original, _ := seedExportAssets(t, r, id)
+	used := storageUsed(t, r)
+	r.cfg.Entitlements = enforcing(used)
+	manifest, files := readAssetsZIP(t, getAssetsExport(r, id))
+	delete(files, "manifest.json")
+	// Keep B, omit A, add C. The exact final set is B,C, with no old A.
+	delete(files, manifest.Assets[0].Path)
+	manifest.Assets = manifest.Assets[1:]
+	newBody := []byte("new")
+	newPath := "assets/new-asset/payload"
+	manifest.Assets = append(manifest.Assets, exportedAsset{
+		assetView: assetView{ID: "new-asset", SourceURL: "https://example.test/new", ContentType: "application/octet-stream", SizeBytes: int64(len(newBody))},
+		Path:      newPath,
+	})
+	files[newPath] = newBody
+	w := postImport(r, id, "assets", makeImportZIP(t, manifest, files), false)
+	require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Equal(t, used, storageUsed(t, r))
+	w = postImport(r, id, "assets", makeImportZIP(t, manifest, files), true)
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	got, err := r.cfg.Store.ListArtifactAssets(t.Context(), 1, id)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.ElementsMatch(t, []string{original[1].ID, "new-asset"}, []string{got[0].ID, got[1].ID})
+	assert.Equal(t, used-2, storageUsed(t, r))
+	contents := quotaBlobContents(t, dir)
+	assert.NotContains(t, contents, original[0].BlobID, "omitted, unreferenced payloads must be reclaimed")
+	assert.Contains(t, contents, original[1].BlobID)
+	assert.Equal(t, string(newBody), contents[store.AssetBlobID(1, newBody)])
+	// A manifest with no assets clears everything, even after the quota falls
+	// below current usage; it is also a complete replacement.
+	r.cfg.Entitlements = enforcing(used - 10)
+	empty := makeImportZIP(t, assetsManifest{ArtifactID: id, Assets: []exportedAsset{}}, nil)
+	w = postImport(r, id, "assets", empty, true)
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	got, err = r.cfg.Store.ListArtifactAssets(t.Context(), 1, id)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+	assert.Equal(t, used-10, storageUsed(t, r))
+	assert.Len(t, quotaBlobContents(t, dir), 1, "only the artifact body remains")
+}
+
+func TestImportAssetsRoundTripsSnapshotWithRepeatedSourceURLs(t *testing.T) {
+	withUnguardedFetcher(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/image.bin" {
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(bigPNG())
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<img src="/image.bin"><script>fetch('/image.bin')</script>`))
+	}))
+	t.Cleanup(upstream.Close)
+	r := newTestRouter(t)
+	w, created := postArtifact(t, r, map[string]any{"url": upstream.URL + "/page", "snapshot": true})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	id := created.Artifact.ID
+	original, err := r.cfg.Store.ListArtifactAssets(t.Context(), 1, id)
+	require.NoError(t, err)
+	require.Len(t, original, 2, "markup and runtime collectors can store separate assets for one source URL")
+	require.Equal(t, original[0].SourceURL, original[1].SourceURL)
+	require.NotEqual(t, original[0].ID, original[1].ID)
+	exported := getAssetsExport(r, id)
+	require.Equal(t, http.StatusOK, exported.Code, exported.Body.String())
+	r.cfg.Entitlements = enforcing(storageUsed(t, r))
+	w = postImport(r, id, "assets", exported.Body.Bytes(), true)
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	restored, err := r.cfg.Store.ListArtifactAssets(t.Context(), 1, id)
+	require.NoError(t, err)
+	require.Len(t, restored, 2)
+	assert.ElementsMatch(t, []string{original[0].ID, original[1].ID}, []string{restored[0].ID, restored[1].ID})
 }
 
 func TestImportZIPRejectsCRCFailureAndExpandedOverrun(t *testing.T) {

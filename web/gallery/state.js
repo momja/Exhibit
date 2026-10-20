@@ -46,6 +46,7 @@
 
   let entries = [];   // working copy; see parseEntry
   let loaded = false; // state is fetched on first open, not with the page
+  let loadSequence = 0; // only the latest read may replace the working copy
 
   // --- type inference ---------------------------------------------------
   // describe() maps a parsed value onto the form model, or returns null for
@@ -497,19 +498,23 @@
   }
 
   async function loadState() {
+    const sequence = ++loadSequence;
     setStatus('Loading…');
     let resp;
     try {
       resp = await api('GET', stateURL());
     } catch (err) {
+      if (sequence !== loadSequence) return;
       setStatus('✗ Could not load state: ' + err.message);
       return;
     }
+    if (sequence !== loadSequence) return;
     if (!resp.ok) {
       setStatus('✗ Could not load state: ' + resp.statusText);
       return;
     }
     const data = await resp.json().catch(() => ({}));
+    if (sequence !== loadSequence) return;
     entries = Object.keys(data).sort().map(key => parseEntry(key, data[key]));
     loaded = true;
     render();

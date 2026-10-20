@@ -153,12 +153,14 @@ func readAssetsImport(body []byte, artifactID string) ([]snapshot.RuntimeAsset, 
 	if len(manifest.Assets) > limits.MaxAssets || len(files) != len(manifest.Assets)+1 {
 		return nil, errors.New("archive entries do not match its manifest")
 	}
-	seenIDs, seenURLs, seenPaths := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	// Markup and runtime collection can produce distinct IDs for one source
+	// URL, so validate identity and archive paths without deduplicating URLs.
+	seenIDs, seenPaths := map[string]bool{}, map[string]bool{}
 	assets := make([]snapshot.RuntimeAsset, 0, len(manifest.Assets))
 	remaining := limits.MaxTotalBytes
 	for _, asset := range manifest.Assets {
 		source, err := url.Parse(asset.SourceURL)
-		if !importAssetID.MatchString(asset.ID) || seenIDs[asset.ID] || seenURLs[asset.SourceURL] || seenPaths[asset.Path] ||
+		if !importAssetID.MatchString(asset.ID) || seenIDs[asset.ID] || seenPaths[asset.Path] ||
 			err != nil || source.Host == "" || (source.Scheme != "https" && source.Scheme != "http") ||
 			asset.ContentType == "" || strings.ContainsAny(asset.ContentType, "\r\n") ||
 			!strings.HasPrefix(asset.Path, "assets/"+asset.ID+"/") || files[asset.Path] == nil || asset.SizeBytes < 0 {
@@ -172,7 +174,7 @@ func readAssetsImport(body []byte, artifactID string) ([]snapshot.RuntimeAsset, 
 			return nil, fmt.Errorf("asset size does not match manifest: %s", asset.Path)
 		}
 		remaining -= int64(len(payload))
-		seenIDs[asset.ID], seenURLs[asset.SourceURL], seenPaths[asset.Path] = true, true, true
+		seenIDs[asset.ID], seenPaths[asset.Path] = true, true
 		assets = append(assets, snapshot.RuntimeAsset{AssetID: asset.ID, SourceURL: asset.SourceURL, ContentType: asset.ContentType, Body: payload})
 	}
 	return assets, nil
@@ -204,7 +206,7 @@ func readImportEntry(file *zip.File, limit int64) ([]byte, error) {
 
 func (ro *Router) storeImportedAssets(ctx context.Context, ownerID int64, id string, assets []snapshot.RuntimeAsset, confirmed bool) error {
 	blobs := snapshotStorageBlobs(ownerID, "", "", assets)
-	unlockStorage, err := ro.beginStorageWrite(ctx, ownerID, blobs)
+	unlockStorage, err := ro.beginAssetReplacementStorageWrite(ctx, ownerID, id, blobs)
 	if err != nil {
 		return err
 	}

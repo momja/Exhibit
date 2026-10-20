@@ -27,7 +27,10 @@ func TestImportAssetsChecksConfirmationAndRollsBackFailedInserts(t *testing.T) {
 	original := []ArtifactAsset{{ID: "old", SourceURL: "https://example.test/old", BlobID: "old-blob", ContentType: "image/png", SizeBytes: 5}}
 	_, err := fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "original", original)
 	require.NoError(t, err)
-	replacement := []ArtifactAsset{{ID: "new", SourceURL: "https://example.test/new", BlobID: "new-blob", ContentType: "image/png", SizeBytes: 6}}
+	replacement := []ArtifactAsset{
+		{ID: "first", SourceURL: "https://example.test/first", BlobID: "first-blob", ContentType: "image/png", SizeBytes: 5},
+		{ID: "new", SourceURL: "https://example.test/new", BlobID: "new-blob", ContentType: "image/png", SizeBytes: 6},
+	}
 	_, err = fx.store.ImportArtifactAssets(ctx, 1, "a1", "import", replacement, false)
 	require.ErrorIs(t, err, ErrImportConfirmation)
 	_, err = fx.store.db.ExecContext(ctx, `CREATE TRIGGER reject_asset_import BEFORE INSERT ON artifact_assets WHEN NEW.id='new' BEGIN SELECT RAISE(ABORT, 'injected failure'); END`)

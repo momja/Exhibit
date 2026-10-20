@@ -55,6 +55,18 @@ func (ro *Router) beginStorageWrite(ctx context.Context, ownerID int64, blobs ma
 // preflight runs after acquiring the storage lock, so a writer that advanced
 // the content while we waited is rejected before any quota refusal.
 func (ro *Router) beginStorageWriteChecked(ctx context.Context, ownerID int64, blobs map[string]int64, preflight func() error) (func(), error) {
+	return ro.beginStorageWriteProjected(ctx, ownerID, blobs, preflight, func() (int64, int64, error) {
+		return ro.cfg.Store.ProjectStorageUsage(ctx, ownerID, blobs)
+	})
+}
+
+func (ro *Router) beginAssetReplacementStorageWrite(ctx context.Context, ownerID int64, artifactID string, blobs map[string]int64) (func(), error) {
+	return ro.beginStorageWriteProjected(ctx, ownerID, blobs, nil, func() (int64, int64, error) {
+		return ro.cfg.Store.ProjectAssetReplacementUsage(ctx, ownerID, artifactID, blobs)
+	})
+}
+
+func (ro *Router) beginStorageWriteProjected(ctx context.Context, ownerID int64, blobs map[string]int64, preflight func() error, project func() (int64, int64, error)) (func(), error) {
 	noop := func() {}
 	if !ro.cfg.Entitlements.Enforced {
 		return noop, nil
@@ -71,7 +83,7 @@ func (ro *Router) beginStorageWriteChecked(ctx context.Context, ownerID int64, b
 		unlock()
 		return noop, err
 	}
-	current, additional, err := ro.cfg.Store.ProjectStorageUsage(ctx, ownerID, blobs)
+	current, additional, err := project()
 	if err != nil {
 		unlock()
 		return noop, err
