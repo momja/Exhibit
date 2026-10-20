@@ -1,6 +1,6 @@
 ---
 id: Exh-vfks
-status: in_progress
+status: closed
 deps: []
 links: [Exh-6fz9, Exh-k8p6]
 created: 2026-10-20T03:01:26Z
@@ -17,3 +17,29 @@ Add import controls symmetrical to the Stored state JSON and Stored assets ZIP e
 
 Both panels accept their exported format. Existing corresponding data triggers explicit erasure confirmation; empty data imports without confirmation. Cancel and invalid files preserve existing data. Replacement is atomic, owner-scoped, and refreshes the panel. Cover empty imports, binary assets, malformed files, access control, and responsive layout.
 
+
+## Notes
+
+**2026-10-20T03:21:26Z**
+
+Implemented Import JSON and Import assets ZIP with validation before replacement, transaction-level confirmation guards, owner-only access, quota-aware asset staging and cleanup, and partial panel refresh. Import/export regression tests, server build, and desktop/mobile browser checks pass; full repository test run is in progress. Screenshots are in docs/screenshots/Exh-vfks/.
+
+**2026-10-20T03:24:29Z**
+
+Final verification complete: make assets, the final server build, import/export regression checks, and go test ./... all pass. Browser checks verified empty imports without prompts, populated-data warnings, cancellation, accepted replacements, and asset delete/import swaps at desktop and 390px mobile widths. PR: https://github.com/momja/Exhibit/pull/184.
+
+**2026-10-20T05:11:17Z**
+
+User clarification: asset imports are always complete replacements of the current asset set. Correct quota accounting to evaluate the final swapped set, accept valid whole exported archives with repeated source URLs, and verify omitted assets are retired atomically. No merge or partial-import mode.
+
+**2026-10-20T05:19:59Z**
+
+Corrected complete asset replacement accounting: quota now measures the final swapped set and retains charges for body, shared, and historical references. Valid duplicate-source exports round-trip. Regression tests prove omitted assets disappear, unused payloads are reclaimed, empty manifests clear the set, and failed inserts restore the entire original set. Also fixed the reviewed state refresh race with sequencing of GET responses. Validation: go test ./... passed, 14 import/state JS tests passed, final server build passed, and live browser verified cancellation, A,B to B,C swaps, swapping back, and delayed pre-import responses. Live environment runs the updated binary on port 18110.
+
+**2026-10-20T05:48:36Z**
+
+Address follow-up review: serialize state imports with inspector writes, make archive limits compatible with complete snapshot exports, register state import regression tests, and obtain a separate OWASP Top 10 security analysis of the upload paths.
+
+**2026-10-20T06:22:26Z**
+
+Fixed both follow-up review findings and registered the state import suite in the Go runner. Inspector Save/Erase and import share a busy gate through refresh; committed replacement discards old drafts even when refresh fails. Complete snapshot exports now support up to 200 rows/96 MiB expanded with 48 MiB unique payloads. A separate OWASP Top 10:2025 agent reproduced and verified fixes for deleted asset URL rebinding and bulk-state database denial of service; report is docs/stored-data-import-security-review.md. Migration034 retains immutable URL identities without payload references; streaming state validation caps 10,000 keys before DB access, with prepared inserts and a five-second transaction deadline. Rebased cleanly onto current main and preserved compact documentation. Final make assets, server build, go test ./..., 17 targeted JavaScript tests, migration/account deletion checks, and live desktop/mobile checks passed. Updated PR184 and live server on18110; no main merge or push.

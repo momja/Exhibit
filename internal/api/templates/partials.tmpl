@@ -447,3 +447,22 @@
     </div>
   </div>
 </div>{{end}}
+
+{{define "assetPanelRows"}}
+<div data-artifact-id="{{.ArtifactID}}">
+  {{if not .Loaded}}
+    <p class="text-sm muted">Loading assets…</p>
+  {{else if .Assets}}
+    <p class="text-sm muted">{{len .Assets}} {{if eq (len .Assets) 1}}asset{{else}}assets{{end}} · {{.TotalBytes}} bytes</p>
+    {{range .Assets}}
+      <div class="asset-row">
+        <code class="asset-url">{{.SourceURL}}</code>
+        <span class="text-sm muted asset-meta">{{.SizeBytes}} B · {{.ContentType}}</span>
+        <button type="button" class="btn btn-sm btn-danger" data-delete-asset="{{.ID}}" data-source-url="{{.SourceURL}}" title="Delete this asset" aria-label="Delete {{.SourceURL}}"><i class="ph ph-trash" aria-hidden="true"></i></button>
+      </div>
+    {{end}}
+  {{else}}
+    <p class="text-sm muted">This artifact stores no assets of its own.</p>
+  {{end}}
+</div>
+{{end}}

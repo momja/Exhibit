@@ -104,6 +104,61 @@ func (s *SQLiteStore) ProjectStorageUsage(ctx context.Context, ownerID int64, bl
 	return current, additional, nil
 }
 
+func (s *SQLiteStore) ProjectAssetReplacementUsage(ctx context.Context, ownerID int64, artifactID string, blobs map[string]int64) (current, additional int64, err error) {
+	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
+		return 0, 0, err
+	}
+	// Remove only this artifact's current asset references. A blob shared with
+	// its body, another artifact, or a saved version must still count once.
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT refs.blob_id, sizes.bytes, refs.n > COALESCE(removed.n, 0)
+		FROM (SELECT blob_id, COUNT(*) AS n FROM blob_references
+		      WHERE owner_id=? GROUP BY blob_id) refs
+		LEFT JOIN (SELECT blob_id, COUNT(*) AS n FROM artifact_assets
+		           WHERE artifact_id=? GROUP BY blob_id) removed ON removed.blob_id=refs.blob_id
+		LEFT JOIN blob_sizes sizes ON sizes.blob_id=refs.blob_id`, ownerID, artifactID)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+	retained := make(map[string]bool)
+	var projected int64
+	for rows.Next() {
+		var id string
+		var size sql.NullInt64
+		var keep bool
+		if err := rows.Scan(&id, &size, &keep); err != nil {
+			return 0, 0, err
+		}
+		if !size.Valid {
+			return 0, 0, fmt.Errorf("storage usage unresolved: referenced blob has no recorded size; recompute storage usage")
+		}
+		if size.Int64 < 0 || size.Int64 > math.MaxInt64-current {
+			return 0, 0, fmt.Errorf("invalid storage usage size")
+		}
+		current += size.Int64
+		if keep {
+			retained[id] = true
+			projected += size.Int64
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, 0, err
+	}
+	for id, size := range blobs {
+		if id == "" || size < 0 {
+			return 0, 0, fmt.Errorf("invalid projected blob size")
+		}
+		if !retained[id] {
+			if size > math.MaxInt64-projected {
+				return 0, 0, fmt.Errorf("invalid projected blob size")
+			}
+			projected += size
+		}
+	}
+	return current, projected - current, nil
+}
+
 // RecordBlobSize persists a blob's byte length. Called by the write funnel
 // that wraps every Blob.Put, and idempotent by upsert: rewriting a body in
 // place (an edit, a refetch, a widget save all reuse their blob id) replaces

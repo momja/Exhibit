@@ -41,6 +41,7 @@ main{padding:24px;max-width:900px;margin:0 auto}
 .security-col label.row{margin-bottom:10px}
 
 /* --- state inspector (av-hg5f): typed form editing of artifact state ---- */
+.state-body{border:0;min-width:0}
 /* Every value is edited through the control its inferred type implies, so the
  * nesting here is the value's own shape: rows hold controls, container
  * controls hold rows. Indentation (a left rule per nesting level) is what

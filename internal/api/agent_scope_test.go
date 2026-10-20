@@ -306,6 +306,8 @@ func TestAgentScopeAllowsRejectsPathTricks(t *testing.T) {
 		{"GET", "/api/artifacts/abd"},
 		{"GET", "/api/artifacts/abd/state"},
 		{"POST", "/api/artifacts/abc/state"},
+		{"POST", "/api/artifacts/abc/state/import"},
+		{"POST", "/api/artifacts/abc/assets/import"},
 		{"DELETE", "/api/artifacts/abc/assets/xyz"},
 		{"GET", "/api/artifacts/abc/transcripts"},
 		{"POST", "/api/artifacts/abc/widget/generate"},

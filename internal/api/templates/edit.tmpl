@@ -153,7 +153,7 @@
        is cold data no other part of this page needs. */}}
   <details class="details-panel" id="state-panel">
     <summary id="state-summary">{{template "panelCaret"}} <span id="state-summary-text">Stored state</span></summary>
-    <div class="panel-body state-body">
+    <fieldset class="panel-body state-body" id="state-controls" aria-label="Stored state controls">
       <p class="text-sm muted">
         Data this artifact saved through <code>localStorage</code>, held on the server so it
         follows you between devices. Each value is edited through the control its type implies —
@@ -177,16 +177,19 @@
         <span id="state-status" class="text-sm muted"></span>
         <span class="spacer"></span>
         <button type="button" class="btn btn-sm btn-sec" id="state-export"><i class="ph ph-download-simple" aria-hidden="true"></i> Export JSON</button>
+        <button type="button" class="btn btn-sm btn-sec" id="state-import"><i class="ph ph-upload-simple" aria-hidden="true"></i> Import JSON</button>
+        <input type="file" id="state-import-file" accept=".json,application/json" aria-label="Import stored state JSON" hidden>
         <button type="button" class="btn btn-sm btn-danger" id="state-erase"><i class="ph ph-warning"></i> Erase all data</button>
       </div>
       <p class="text-sm muted">Export JSON downloads saved data. Save any edits before exporting.</p>
       <span id="state-export-status" class="text-sm muted" role="status"></span>
-    </div>
+      <p class="text-sm muted">Import JSON replaces saved state and any unsaved state edits with an exported JSON file.</p>
+      <span id="state-import-status" class="text-sm muted" role="status"></span>
+    </fieldset>
   </details>
 
-  {{/* Out-of-line assets (av-20fk). Same shape as the state panel above and
-       for the same reason: the shell renders server-side, the contents are
-       fetched on first open. It is the only place these bytes are visible at
+  {{/* Out-of-line assets (av-20fk). The list is a server-rendered partial,
+       refreshed by htmx after import and delete events. It is the only place these bytes are visible at
        all — they are deliberately not in the source below — so it is also the
        only place they can be reclaimed. */}}
   <details class="details-panel" id="assets-panel">
@@ -202,13 +205,17 @@
         Deleting one is permanent, and it will break the artifact if its code still loads that
         file. Match the address against the source before removing it.
       </p>
-      <div id="assets-rows"></div>
+      <div id="assets-rows" hx-get="/partials/asset-panel?artifact={{.ID}}" hx-trigger="load, exhibit:assets-changed from:body" hx-swap="innerHTML">{{template "assetPanelRows" .AssetPanel}}</div>
       <span id="assets-status" class="text-sm muted"></span>
       <div class="btn-row">
         <button type="button" class="btn btn-sm btn-sec" id="assets-export"><i class="ph ph-download-simple" aria-hidden="true"></i> Export assets ZIP</button>
+        <button type="button" class="btn btn-sm btn-sec" id="assets-import"><i class="ph ph-upload-simple" aria-hidden="true"></i> Import assets ZIP</button>
+        <input type="file" id="assets-import-file" accept=".zip,application/zip" aria-label="Import stored assets ZIP" hidden>
         <span id="assets-export-status" class="text-sm muted" role="status"></span>
       </div>
       <p class="text-sm muted">Downloads all saved assets and a manifest with their source URLs and content types.</p>
+      <p class="text-sm muted">Import assets ZIP replaces saved assets with an exported ZIP for this artifact.</p>
+      <span id="assets-import-status" class="text-sm muted" role="status"></span>
     </div>
   </details>
 
@@ -335,9 +342,10 @@ let geolocationApproved = {{if .GeolocationApproved}}true{{else}}false{{end}};
 <script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/edit.js"></script>
 <script src="/assets/gallery/state-api.js"></script>
-<script src="/assets/gallery/state.js"></script>
+<script type="module" src="/assets/gallery/state.js"></script>
 <script type="module" src="/assets/gallery/state-export.js"></script>
-<script src="/assets/gallery/assets.js"></script>
+<script type="module" src="/assets/gallery/assets.js"></script>
+<script type="module" src="/assets/gallery/storage-import.js"></script>
 <script type="module" src="/assets/gallery/assets-export.js"></script>
 <script type="module" src="/assets/gallery/versions.js"></script>
 <script src="/assets/gallery/tags.js"></script>

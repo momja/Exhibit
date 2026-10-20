@@ -3,9 +3,8 @@
 // Every request the app surface answers carries a body of at most
 // MAX_REQUEST_BODY_BYTES. One number for every route rather than one per
 // route. The routes that matter are the document writes (POST and PATCH of
-// an artifact, PUT of a widget), and every other route takes a JSON object of
-// a few fields, for which a separate smaller ceiling would buy nothing the
-// document routes do not already concede.
+// an artifact, PUT of a widget, and stored-data imports). JSON and ZIP imports
+// use the same ceiling, including uploads of undeclared length.
 //
 // # Why 32 MiB
 //
@@ -34,14 +33,15 @@
 // An undeclared length (chunked) is wrapped in http.MaxBytesReader, which
 // stops reading one byte past the limit; the handler's decode then fails,
 // and decodeJSON answers 413 rather than the 400 a malformed body gets.
-// decodeJSON is the only place in this package allowed to read r.Body, and
-// bodylimit_test.go walks the package's AST to keep it that way.
+// This file owns all direct reads of r.Body, through decodeJSON and
+// readImportFile; bodylimit_test.go walks the package's AST to keep it that way.
 package api
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -127,6 +127,23 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	}
 	writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 	return false
+}
+
+// readImportFile shares the global body limit and its 413 semantics with JSON
+// writes. Imports need complete files: JSON rejects trailing bytes, and ZIP
+// needs random access to its directory before anything is published.
+func readImportFile(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeBodyTooLarge(w, tooLarge.Limit)
+		} else {
+			writeError(w, http.StatusBadRequest, "could not read import file")
+		}
+		return nil, false
+	}
+	return body, true
 }
 
 // bodyReadStatus is decodeJSON's choice of status for a body read that does

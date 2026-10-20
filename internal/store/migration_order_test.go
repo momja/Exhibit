@@ -106,6 +106,9 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 	ctx := context.Background()
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id > 23",
+		"DROP TRIGGER remember_historical_asset_identity",
+		"DROP TRIGGER remember_current_asset_identity",
+		"DROP TABLE asset_identities",
 		// 033's conversation record (av-y7td): three columns on a table that
 		// predates all of this, so they are taken back off rather than dropped
 		// with it.
@@ -219,6 +222,9 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	// shares.recipient_id blocks that column's DROP.
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id >= 28",
+		"DROP TRIGGER remember_historical_asset_identity",
+		"DROP TRIGGER remember_current_asset_identity",
+		"DROP TABLE asset_identities",
 		// 033 first (av-y7td): the columns it added to agent_transcripts.
 		"ALTER TABLE agent_transcripts DROP COLUMN version_seq",
 		"ALTER TABLE agent_transcripts DROP COLUMN session_file",

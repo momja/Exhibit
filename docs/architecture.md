@@ -92,11 +92,17 @@ The only way data changes. Full route reference: `api.md`.
   internal and is materialized wherever the artifact leaves the service. One failed
   asset read fails the export. Lives in `internal/export` for the static build too.
 - `GET …/assets`, `DELETE …/assets/:assetID`: out-of-line payloads, metadata only
-  (av-20fk). No create or update: only the vendorer produces assets.
+  (av-20fk). Produced by the vendorer or a complete owner-only ZIP import;
+  individual payload writes are not exposed.
 - `GET …/assets/export`: owner-only ZIP of the current assets (Exh-6fz9):
   `manifest.json` plus `assets/<asset-id>/<sanitized filename>` with original
   bytes. Built in a temp file first, so an unreadable blob fails the export
   rather than producing a partial download.
+- `POST …/state/import`, `POST …/assets/import`: owner-only complete replacement
+  from exported JSON/ZIP. Nonempty targets require `?replace=true` after erasure
+  confirmation; validation and failures preserve existing data. See `api.md`
+  and [the import security review](stored-data-import-security-review.md) for
+  upload limits, validation, replacement accounting, and OWASP coverage.
 - `GET/POST/DELETE …/origins`: per-origin decisions, the runtime prompt's write path
   (av-kmwj). Separate from `PATCH` because it can record and undo a block and
   decides one origin at a time. Origin is a query parameter on `DELETE` (av-hh1o).
@@ -308,6 +314,9 @@ and writes state.
   owner and never across owners (av-20fk). Deletability depends only on recorded
   facts (artifact gone, generation superseded, owner asked), never on a literal in
   the body.
+- **Asset identities**: migration 034 retains immutable ID/artifact/content/MIME
+  bindings after artifact or account deletion. They are security records, not
+  payload references, and do not prevent blob reclamation or incur storage charges.
 - **Bodies**: `blob.FSStore` or `blob.S3Store`, selected by `BLOB_S3_BUCKET`
   (av-52ll), both held to one contract suite in `internal/blob`. Load-bearing
   properties: the backend buffers at most one 5 MiB part (callers above still read
@@ -497,7 +506,11 @@ button. `/artifacts/:id/open` uses the same accessor. Recipients write state per
 inferred from its shape, with no raw JSON editing, fetched on first open, saved via
 the state routes. Its Export JSON (Exh-k8p6) downloads the saved state as a flat
 object of string values via the same GET, excluding unsaved edits and
-`sessionStorage`. The versions panel lists history with View and Restore; restore
+`sessionStorage`. Import JSON replaces saved state and discards the old working
+copy, even if the refresh fails. Save, erase, and import share a busy gate through
+that refresh. Import assets ZIP swaps the complete current set and refreshes the
+server-rendered asset partial through htmx; source/widget edits survive both imports.
+The versions panel lists history with View and Restore; restore
 asks first and reloads.
 
 **Version viewer** (av-vw7r): `GET /partials/version-viewer` renders the

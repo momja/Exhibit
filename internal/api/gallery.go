@@ -1006,6 +1006,7 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 }
 
 type editPageData struct {
+	AssetPanel assetPanelView
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
 	Favicon        template.URL

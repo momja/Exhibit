@@ -193,7 +193,7 @@ func TestEditPageRendersStatePanel(t *testing.T) {
 	// Add-key asks for key + type up front (AC 6).
 	assert.Contains(t, page, `id="state-add-key"`)
 	assert.Contains(t, page, `id="state-add-type"`)
-	assert.Contains(t, page, `<script src="/assets/gallery/state.js"></script>`)
+	assert.Contains(t, page, `<script type="module" src="/assets/gallery/state.js"></script>`)
 
 	// The erase confirmation names the artifact, so the page bootstrap has to
 	// carry the persisted title (not the editable title field).

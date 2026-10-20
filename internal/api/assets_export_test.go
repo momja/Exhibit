@@ -35,8 +35,10 @@ func seedExportAssets(t *testing.T, r *Router, id string) ([]store.ArtifactAsset
 		{ID: "asset-one", BlobID: "export-one", SourceURL: "https://example.test/a/app.wasm?token=one", ContentType: "application/wasm", SizeBytes: 5},
 		{ID: "asset-two", BlobID: "export-two", SourceURL: "https://example.test/b/app.wasm?token=two", ContentType: "application/octet-stream", SizeBytes: 5},
 	}
-	for i, a := range assets {
-		require.NoError(t, r.cfg.Blob.Put(t.Context(), a.BlobID, bytes.NewReader(bodies[i])))
+	for i := range assets {
+		assets[i].BlobID = store.AssetBlobID(defaultOwnerID, bodies[i])
+		a := assets[i]
+		require.NoError(t, r.putBlob(t.Context(), a.BlobID, bytes.NewReader(bodies[i])))
 	}
 	_, err := r.cfg.Store.ReplaceArtifactAssets(t.Context(), defaultOwnerID, id, "export-generation", assets)
 	require.NoError(t, err)
@@ -87,7 +89,7 @@ func TestExportAssetsPreservesBytesAndMetadata(t *testing.T) {
 	remaining, err := os.ReadDir(temp)
 	require.NoError(t, err)
 	assert.Empty(t, remaining, "the completed archive is removed from temporary storage")
-	assert.NotContains(t, string(files["manifest.json"]), "export-one", "internal blob ids stay internal")
+	assert.NotContains(t, string(files["manifest.json"]), assets[0].BlobID, "internal blob ids stay internal")
 }
 
 func TestExportAssetsWithNoAssets(t *testing.T) {

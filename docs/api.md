@@ -176,6 +176,38 @@ As with any ingest, residual origins surface in `network_footprint` for
 **explicit** approval — the snapshot never seeds the `network_allowlist`, so a
 snapshotted artifact stays network-inert until you approve its residual origins.
 
+## Stored-data imports
+
+```
+POST /api/artifacts/:id/state/import   Replace the owner's saved state from raw JSON
+POST /api/artifacts/:id/assets/import Replace all current assets from an exported ZIP
+```
+
+Both routes are owner-only; recipients, anonymous visitors and scoped agent
+credentials cannot import. State values must be strings, keys must be unique, and
+an import may contain at most 10,000 keys. State replacement uses prepared inserts
+under a five-second deadline. Asset ZIPs must belong to this artifact and include
+`manifest.json` and exactly its listed payloads, retaining their asset IDs.
+
+A nonempty target returns `409` with `confirmation_required: true` without
+changing it. After the person confirms erasure, retry the same body with
+`?replace=true`. Empty targets do not require confirmation. Success is `204`.
+Replacement is atomic: omitted current entries disappear; an empty state object
+or asset manifest clears the corresponding set. Invalid data and failed writes
+preserve the original set. Other viewers' private state is untouched.
+
+The global HTTP upload ceiling applies. ZIP limits are 200 assets, 96 MiB expanded
+payloads, 48 MiB distinct payload bytes and a 1 MiB manifest. These limits cover
+both markup and runtime rows for each fetched URL. Paths, metadata, CRCs and
+payload sizes are validated before staging; archives are not extracted to disk.
+An asset ID cannot change its bytes or MIME, even after deletion. Identical old
+exports remain restorable. Blob quota checks measure the final replaced set,
+retaining charges for payloads referenced elsewhere or by history. Invalid input
+returns `400`; request, key-count, or storage limits return `413`.
+
+See [the OWASP import review](stored-data-import-security-review.md) for security
+coverage, durable identity records, and existing architecture/legacy limits.
+
 ## Versions
 
 Every change to an artifact's body or widget — a `PATCH` that changes `body`, a

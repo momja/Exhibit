@@ -472,6 +472,9 @@ type Store interface {
 	// served document is about to fetch — and the asset lookup still takes
 	// the artifact id, so one artifact cannot address another's.
 	ReplaceArtifactAssets(ctx context.Context, ownerID int64, artifactID, generationID string, assets []ArtifactAsset) ([]string, error)
+	// Imports replace data atomically and refuse a nonempty target unless replace is true.
+	ImportArtifactAssets(ctx context.Context, ownerID int64, artifactID, generationID string, assets []ArtifactAsset, replace bool) ([]string, error)
+	ImportState(ctx context.Context, ownerID int64, artifactID string, state map[string]string, replace bool) error
 	ListArtifactAssets(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactAsset, error)
 	// GetArtifactAsset resolves current or historical asset IDs for the owner.
 	GetArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) (*ArtifactAsset, error)
@@ -738,6 +741,10 @@ type Store interface {
 	// blobs not already referenced by this owner. Missing lengths are an error:
 	// a quota must not treat unknown usage as free space.
 	ProjectStorageUsage(ctx context.Context, ownerID int64, blobs map[string]int64) (current, additional int64, err error)
+	// ProjectAssetReplacementUsage projects a complete swap of this artifact's
+	// current assets. References in other artifacts and saved versions remain
+	// charged. The returned additional bytes may be negative.
+	ProjectAssetReplacementUsage(ctx context.Context, ownerID int64, artifactID string, blobs map[string]int64) (current, additional int64, err error)
 	// LockStorage serializes an owner's quota check through the referencing
 	// commit. Take it before any blob locks or database transaction.
 	LockStorage(ownerID int64) func()

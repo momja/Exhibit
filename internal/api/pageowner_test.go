@@ -106,6 +106,8 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 		ownPath: "/partials/agent-transcript?artifact={id}&session=s", foreignPath: "/partials/agent-transcript?artifact={id}&session=s"},
 	{route: "/partials/card-widget", ownerScoped: true,
 		ownPath: "/partials/card-widget?artifact={id}", foreignPath: "/partials/card-widget?artifact={id}"},
+	{route: "/partials/asset-panel", ownerScoped: true,
+		ownPath: "/partials/asset-panel?artifact={id}", foreignPath: "/partials/asset-panel?artifact={id}"},
 	{route: "/partials/tag-panel", ownerScoped: true,
 		ownPath: "/partials/tag-panel?artifact={id}", foreignPath: "/partials/tag-panel?artifact={id}"},
 	// The capability badge + popover (av-mf1x). Owner-scoped like the detail

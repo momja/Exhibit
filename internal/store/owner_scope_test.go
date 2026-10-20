@@ -72,6 +72,8 @@ func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 		(artifact_id, seq, id, generation_id, source_url, blob_id, content_type, size_bytes, created_at)
 		VALUES (?, 1, ?, 'seed', 'https://seed.test/a.wasm', 'asset-blob', 'application/wasm', 1, datetime('now'))`, id, "asset-"+id)
 	require.NoError(t, err)
+	require.NoError(t, s.RecordBlobSize(ctx, "blob-"+id, 1))
+	require.NoError(t, s.RecordBlobSize(ctx, "asset-blob", 1))
 	require.NoError(t, s.SetState(ctx, OwnerID(owner), id, ViewerID(owner), "seed", "value"))
 	require.NoError(t, s.SaveTranscript(ctx, owner, Transcript{ArtifactID: id, SessionID: "session-" + id, Title: "seed", SessionFile: "{}\n"}))
 	require.NoError(t, s.CreateShare(ctx, owner, &Share{ID: "share-" + id, ArtifactID: id}))
@@ -182,6 +184,17 @@ func ownerCases() []ownerCase {
 		{"GetState", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			st, err := s.GetState(ctx, OwnerID(o), id, ViewerID(o))
 			return len(st) == 0, err
+		}},
+		{"ImportState", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			return false, s.ImportState(ctx, o, id, map[string]string{"new": "value"}, true)
+		}},
+		{"ImportArtifactAssets", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, err := s.ImportArtifactAssets(ctx, o, id, "generation", nil, true)
+			return false, err
+		}},
+		{"ProjectAssetReplacementUsage", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, _, err := s.ProjectAssetReplacementUsage(ctx, o, id, nil)
+			return false, err
 		}},
 		{"SetState", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			return false, s.SetState(ctx, OwnerID(o), id, ViewerID(o), "planted", "by the wrong owner")
