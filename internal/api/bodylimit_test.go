@@ -103,6 +103,7 @@ var writeRoutes = []struct {
 	{"DELETE", "/api/tags/{tagID}/artifacts/{artifactID}", false},
 	{"POST", "/api/admin/users/", true},
 	{"PATCH", "/api/admin/users/{userID}", true},
+	{"POST", "/api/admin/users/{userID}/artifacts/import", true},
 	{"DELETE", "/api/account", false},
 	{"POST", "/api/shares/", true},
 	{"DELETE", "/api/shares/{shareID}", false},
@@ -118,7 +119,10 @@ func bodyLimitRouter(t *testing.T) *Router {
 	ro := newTestRouter(t)
 	cfg := ro.cfg
 	cfg.MaxRequestBodyBytes = testBodyLimit
+	cfg.ArtifactImportAdminToken = "private-import-token"
 	cfg.LocalCredential = newTestCredential(t, "admin", "pw")
+	_, err := cfg.Store.UpsertUser(t.Context(), "body-limit-import-owner", "import@example.test")
+	require.NoError(t, err)
 	return NewRouter(cfg)
 }
 
@@ -193,6 +197,9 @@ func serveBody(ro *Router, method, path, contentType string, body io.Reader, con
 	req := httptest.NewRequest(method, path, body)
 	req.ContentLength = contentLength
 	req.Header.Set("Authorization", "Bearer secret")
+	if artifactBundleImportPath.MatchString(req.URL.Path) {
+		req.Header.Set("Authorization", "Bearer "+ro.cfg.ArtifactImportAdminToken)
+	}
 	req.Header.Set("Content-Type", contentType)
 	rec := httptest.NewRecorder()
 	ro.ServeHTTP(rec, req)
