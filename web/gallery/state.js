@@ -619,6 +619,12 @@ import { withStateOperation } from './state-operations.js';
   // An import replaces the inspector's client-side working copy, preserving
   // the source and widget editor buffers elsewhere on this page.
   document.body.addEventListener('exhibit:state-imported', event => {
+    // Replacement has committed. Discard the old draft even if the refresh
+    // fails, so a later Save cannot restore keys from before the import.
+    entries = [];
+    loaded = false;
+    rowsEl.replaceChildren();
+    updateSummary();
     const refresh = loadState();
     event.detail?.waitUntil(refresh);
     return refresh;

@@ -92,6 +92,24 @@ test('state import blocks saves and erasure until its inspector refresh complete
   assert.deepEqual(page.byId('state-rows').children.map(row => row.dataset.key), ['imported']);
 });
 
+test('a failed post-import refresh cannot leave old drafts available for saving', async () => {
+  let reads = 0;
+  const calls = [];
+  const page = await inspector(async (url, options = {}) => {
+    calls.push(options.method);
+    if (options.method === 'POST') return new Response(null, { status: 204 });
+    if (options.method === 'GET' && ++reads === 1) return Response.json({});
+    throw new Error('refresh offline');
+  });
+  await page.add('old-draft');
+  await page.upload();
+  assert.match(page.byId('state-status').textContent, /refresh offline/);
+  assert.equal(page.byId('state-controls').disabled, false);
+  assert.deepEqual(page.byId('state-rows').children, []);
+  await page.byId('state-save').click();
+  assert.deepEqual(calls, ['GET', 'POST', 'GET']);
+});
+
 for (const olderRead of ['response', 'JSON body', 'network error', 'HTTP error']) {
   test('import refresh ignores an obsolete ' + olderRead, async () => {
     const old = deferred();
