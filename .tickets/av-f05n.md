@@ -1,25 +1,40 @@
 ---
 id: av-f05n
 status: open
-deps: [av-e1sr]
+deps: [av-e1sr, av-g8oa]
 links: []
 created: 2026-07-07T05:44:49Z
 type: feature
-priority: 2
+priority: 1
 assignee: Max Omdal
 parent: av-f3cp
 ---
-# e2e: UI flow tests — ingest approval, share path, gallery search/tags
+# e2e: modal save flow across Stimulus and htmx replacement
 
-ingest.spec.ts: through the UI (paste HTML with external references), assert the footprint approval dialog lists the scanner's origins, approve a subset, assert the artifact lands in the gallery with exactly that allowlist. share.spec.ts: share backend exists today (exhibit-7k3 closed) but there is no share button — mint via POST /api/shares, open /s/:id in a context with no credentials, assert render; assert expired/deleted share does not render; switch minting to the UI when a share button ships. gallery.spec.ts: seed artifacts with distinct titles/tags, submit the search form, assert the filtered grid; exercise tag pill add/edit/detach modals. See docs/proposals/e2e_testing.md §5 items 4-6.
+Third step in [av-f3cp](av-f3cp.md): use the upcoming shared modal to cover one complete UI lifecycle after the [harness](av-e1sr.md) and [CI gate](av-g8oa.md) exist. Broader ingest/sharing/search/tag journeys moved to [Exh-jtv1](Exh-jtv1.md).
+
+## Consumer and prerequisite to settle
+
+The proposed first consumer is gallery Duplicate: it already starts from a Stimulus action menu, opens a native dialog, saves through the API, dispatches `exhibit:artifacts-changed`, refreshes server-rendered gallery cards through htmx, and focuses the new card. Its dialog is currently feature-owned, not a shared Stimulus modal. Confirm this consumer and identify/link the upcoming modal implementation ticket before starting the shared-modal portion. If another consumer is chosen, retain the same observable lifecycle criteria.
+
+This story tests that component when it ships; it does not implement the shared modal or invent a new product flow. The existing `TestActionMenuBrowser` and `TestGalleryActionMenuDuplicationBrowser` remain focused component coverage. Avoid duplicating all their menu/controller internals in Playwright.
+
+## Design
+
+- Drive the real authenticated application with API-seeded fixture artifacts. All actions under test (menu activation, modal input, save, refresh) go through the UI and ordinary server routes. No mocked successful mutation or synthetic replacement markup.
+- Use accessible roles/labels and keyboard input. Use the selected feature's documented native-dialog contract for initial focus, focus containment, dismissal guards, and return focus; conventions are in [UI components](../docs/ui-components.md).
+- Observe the successful mutation and actual htmx fragment request/DOM replacement. After refresh, interact with a newly inserted/replaced action menu and reopen its modal to prove Stimulus connected the new nodes and that the feature handler still runs exactly once.
+- Assert successful-save focus on the intended replacement element. For Duplicate, cancellation restores the visible menu trigger; successful creation focuses the new card title after refresh, then its action menu/dialog is usable. Do not require focusing a removed trigger.
 
 ## Acceptance Criteria
 
-GIVEN pasted HTML with external origins WHEN uploaded THEN the approval dialog shows the scanned origins and only approved ones land on the allowlist. GIVEN a minted share WHEN /s/:id is opened with no credentials THEN it renders; expired/deleted shares do not. GIVEN seeded artifacts WHEN searching THEN only matches render; tag add/edit/detach round-trips through the modals.
+1. GIVEN an authenticated gallery with a fixture artifact, WHEN its action menu is activated by keyboard and the chosen action is selected, THEN the modal opens with the correct artifact and initial field focus. Tab/Shift+Tab remain in the modal while open.
+2. Escape, explicit Cancel, and backdrop dismissal obey the same feature guard, issue no mutation when cancellation is allowed, and return focus to the connected visible trigger. Test the documented pending-save dismissal behavior as well.
+3. WHEN valid input is submitted, THEN exactly one mutation succeeds, the server-rendered htmx region refreshes without full-page navigation, the saved result appears, and focus lands on the feature's intended surviving/new element. Use request/DOM conditions rather than fixed sleeps.
+4. WHEN the refreshed component is operated again by keyboard, THEN its menu and modal work with the new artifact data and one user action causes one feature action. Exercise at least two refresh cycles to catch accumulating handlers or stale targets.
+5. A failed save leaves actionable error feedback and a usable modal; retry follows the feature's existing idempotency contract and cancellation behavior. A controlled API error may be injected for this error-path case; the successful path uses the real API.
+6. The flow runs in the required hosted Chromium suite with failure traces. Existing Go/Node/component tests remain in place; no blanket local Playwright requirement is added.
 
+## Historical scope superseded — 2026-10-20
 
-## Notes
-
-**2026-07-15T06:33:03Z**
-
-When building the UI-flow suite, explicitly cover the epi-q0u2 split-script seam end-to-end: the gallery page scripts (index/detail/edit) moved into static assets that read/reassign globals declared by each page's inline bootstrap (TOKEN, ID, SOURCE_URL, allowlist, downloadsApproved, clipboardApproved, DEFAULT_TAG_COLOR). A Go contract test (TestGalleryBootstrapSharesGlobalsWithAssets) pins that both sides name the same globals and stay classic (non-module) scripts, but it can't confirm the flows actually run. e2e should exercise: upload -> approve origins (PATCH + re-render), tag add/edit/delete, eager search grid-swap, download approval, clipboard bridge, allowlist add, and refetch — the flows whose wiring the inline->external split put at risk and which substring/Go tests structurally can't see.
+The July note requested broad flows to protect classic inline-bootstrap/external-script globals. The gallery now includes native modules and Stimulus. Cover the current behavior and import/component contracts, not a rule that scripts must stay classic. Follow-up journeys are tracked in [Exh-jtv1](Exh-jtv1.md); share UI already exists and share expiry no longer exists.
