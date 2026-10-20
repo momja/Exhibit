@@ -29,6 +29,9 @@ type TranscriptMessage struct {
 	Images int `json:"images,omitempty"`
 	// Failed marks a tool that returned an error.
 	Failed bool `json:"failed,omitempty"`
+	// Questions contains only the explicitly projected prompts and answers,
+	// never a tool's arbitrary details or source content.
+	Questions *QuestionRequest `json:"questions,omitempty"`
 }
 
 // titleRunes is the longest a conversation's title gets.
@@ -50,6 +53,7 @@ type piMessage struct {
 	Content    json.RawMessage `json:"content"`
 	ToolCallID string          `json:"toolCallId"`
 	IsError    bool            `json:"isError"`
+	Details    json.RawMessage `json:"details"`
 }
 
 // piBlock is one content block of a message.
@@ -116,8 +120,28 @@ func project(msgs []piMessage) []TranscriptMessage {
 	}
 
 	out := []TranscriptMessage{}
+	// Match each result to the preceding call. Providers can reuse a tool ID
+	// in a later turn; its reply must not replace an earlier question's answer.
+	questionRows := map[string]int{}
 	for _, m := range msgs {
 		switch m.Role {
+		case "toolResult":
+			row, ok := questionRows[m.ToolCallID]
+			if !ok || m.IsError {
+				continue
+			}
+			delete(questionRows, m.ToolCallID)
+			var result struct {
+				Exhibit string `json:"exhibit"`
+				QuestionRequest
+			}
+			if json.Unmarshal(m.Details, &result) == nil && result.Exhibit == "questions_answered" && validQuestions(result.Questions) {
+				if validateQuestionResponse(result.Questions, QuestionResponse{Answers: result.Answers, Message: result.Message, Cancelled: result.Cancelled}) == nil {
+					result.Pending = false
+					result.ID, result.ToolCallID = "", ""
+					out[row].Questions = &result.QuestionRequest
+				}
+			}
 		case "prepared_source":
 			out = append(out, TranscriptMessage{Role: "tool", Text: "Prepared artifact source"})
 		case "user":
@@ -135,6 +159,20 @@ func project(msgs []piMessage) []TranscriptMessage {
 						out = append(out, TranscriptMessage{Role: "assistant", Text: b.Text})
 					}
 				case "toolCall":
+					delete(questionRows, b.ID)
+					if b.Name == "ask_user" {
+						args, _ := json.Marshal(b.Arguments)
+						var prompts struct {
+							Questions []Question `json:"questions"`
+						}
+						_ = json.Unmarshal(args, &prompts)
+						request := QuestionRequest{Questions: prompts.Questions, Cancelled: true}
+						if validQuestions(request.Questions) {
+							questionRows[b.ID] = len(out)
+							out = append(out, TranscriptMessage{Role: "questions", Questions: &request})
+							continue
+						}
+					}
 					out = append(out, TranscriptMessage{Role: "tool", Text: toolLabel(b.Name, b.Arguments), Failed: failed[b.ID]})
 				}
 			}
@@ -204,6 +242,8 @@ func toolLabel(name string, args map[string]any) string {
 		return "Erasing all state"
 	case "get_selection":
 		return "Reading selected elements"
+	case "ask_user":
+		return "Asking you"
 	}
 	return name
 }

@@ -25,6 +25,8 @@ const MODEL_SUGGESTIONS = {
 let sessionId = null;
 let eventSource = null;
 let streaming = false;
+const pendingQuestions = new Set();
+let sendingQuestionMessage = false;
 let keyConfigured = false;
 let configuredProvider = null;   // provider the stored key currently belongs to, or null
 let pendingSnippets = [];   // [{image:{data,mimeType}, descriptor, thumbUrl}]
@@ -264,11 +266,20 @@ function invalidatePreparation() {
   preparation.discard();
   if (switchingConversation) cancelHistoryContinuation(switchingConversation);
 }
+function setSession(id) {
+  if (id === sessionId) return;
+  const previousSessionId = sessionId;
+  sessionId = id;
+  pendingQuestions.clear();
+  document.dispatchEvent(new CustomEvent('exhibit:agent-session-changed', {detail: {sessionId: id, previousSessionId}}));
+  updateComposer();
+}
+
 function resetSession() {
   invalidatePreparation();
   closeEvents();
   if (sessionId) { apiFetch('/api/agent/sessions/' + sessionId, {method:'DELETE', keepalive: leaving}).catch(()=>{}); }
-  sessionId = null;
+  setSession(null);
   setStreaming(false);
 }
 window.addEventListener('pagehide', () => { leaving = true; resetSession(); });
@@ -281,7 +292,7 @@ async function ensureSession() {
     const d = await preparation.claim();
     if (!d || current !== lifecycle) return false;
     preparation.release();
-    sessionId = d.id;
+    setSession(d.id);
     connectEvents(d.sse_ticket);
     return true;
   } catch (error) {
@@ -368,7 +379,13 @@ let thinkingEl = null;
 let toolChips = {};          // toolCallId -> chip element
 
 function handleAgentEvent(ev) {
+  document.dispatchEvent(new CustomEvent('exhibit:agent-event', {detail: {event: ev, sessionId}}));
   switch (ev.type) {
+    case 'exhibit_questions':
+      if (ev.pending) pendingQuestions.add(ev.requestId);
+      else pendingQuestions.delete(ev.requestId);
+      updateComposer();
+      break;
     case 'agent_start':
       setStreaming(true);
       break;
@@ -397,6 +414,7 @@ function handleAgentEvent(ev) {
     }
     case 'tool_execution_start': {
       removeThinking();
+      if (ev.toolName === 'ask_user') break;
       const chip = el('div', 'tool-chip');
       const label = toolLabel(ev.toolName, ev.args);
       chip.dataset.label = label;
@@ -494,7 +512,7 @@ function handleAgentEvent(ev) {
       setStreaming(false);
       if (ended) addMsg('sys', 'Agent session ended. Your next message starts a new one.');
       closeEvents();
-      sessionId = null;
+      setSession(null);
       break;
     }
     case 'auto_retry_start':
@@ -514,6 +532,7 @@ function toolLabel(name, args) {
     case 'set_widget': return 'Saving widget';
     case 'get_widget': return 'Reading widget';
     case 'get_selection': return 'Reading selected elements';
+    case 'ask_user': return 'Asking you';
     case 'get_state': return 'Reading artifact state';
     case 'set_state': return 'Setting state key "' + (args.key || '') + '"';
     case 'delete_state': return args.key ? 'Deleting state key "' + args.key + '"' : 'Erasing all state';
@@ -527,6 +546,8 @@ function removeThinking() {
 
 function setStreaming(on) {
   streaming = on;
+  if (!on) pendingQuestions.clear();
+  updateComposer();
   document.getElementById('stop-btn').style.display = on ? '' : 'none';
 }
 
@@ -537,8 +558,30 @@ async function stopAgent() {
 
 // --- Sending ---------------------------------------------------------------
 async function send() {
+  if (sendingQuestionMessage) return;
   const text = inputEl.value.trim();
   if (!text || sending || switchingConversation || leaving) return;
+  if (pendingQuestions.size) {
+    const attached = [...pendingSnippets];
+    const images = attached.filter(s => s.image).map(s => ({data: s.image.data, mime_type: s.image.mimeType}));
+    const snippets = attached.map(s => describeSnippet(s.descriptor));
+    const detail = { sessionId, requestId: pendingQuestions.values().next().value, message: text, images, snippets };
+    document.dispatchEvent(new CustomEvent('exhibit:question-message', { detail }));
+    if (!detail.response) return;
+    sendingQuestionMessage = true;
+    updateComposer();
+    try {
+      if (await detail.response) {
+        if (inputEl.value.trim() === text) inputEl.value = '';
+        pendingSnippets = pendingSnippets.filter(snippet => !attached.includes(snippet));
+        renderSnippetChips();
+      }
+    } finally {
+      sendingQuestionMessage = false;
+      updateComposer();
+    }
+    return;
+  }
   if (!keyConfigured) { openKeyModal(); return; }
   const sendingAttempt = {};
   sending = sendingAttempt;
@@ -601,11 +644,20 @@ inputEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 function updateComposer() {
-  document.getElementById('send-btn').disabled = !inputEl.value.trim();
+  const waiting = pendingQuestions.size > 0;
+  inputEl.disabled = false;
+  inputEl.placeholder = waiting ? 'Message the agent…' : artifact ? 'Describe the change to make…' : 'Describe the tool to build…';
+  document.getElementById('send-btn').disabled = sendingQuestionMessage || !inputEl.value.trim();
+  document.getElementById('hint').hidden = waiting;
   inputEl.style.height = 'auto';
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
 }
 inputEl.addEventListener('input', () => { updateComposer(); typingPreparation.update(inputEl.value); });
+document.addEventListener('exhibit:question-resolved', event => {
+  if (event.detail.sessionId !== sessionId) return;
+  pendingQuestions.delete(event.detail.requestId);
+  updateComposer();
+});
 
 // --- Mobile panes (av-td4y) ------------------------------------------------
 // Below 640px the chat and the preview each take the whole screen and the
@@ -689,7 +741,7 @@ function detachHistoryCandidate(attempt) {
   attempt.candidateId = null;
   if (!candidateId || sessionId !== candidateId) return;
   closeEvents();
-  sessionId = null;
+  setSession(null);
   setStreaming(false);
 }
 
@@ -759,7 +811,7 @@ async function resumeConversation(conversationId, rollbackTo) {
       const previous = sessionId;
       closeEvents();
       if (previous) apiFetch('/api/agent/sessions/' + previous, {method: 'DELETE'}).catch(() => {});
-      sessionId = started.id;
+      setSession(started.id);
       connectEvents(started.sse_ticket);
     }
 
@@ -1021,12 +1073,8 @@ function briefToMessage(brief) {
   const configured = await refreshKeyStatus();
   const brief = takeBrief();
   if (artifact) {
-    // The pane is already showing this artifact — the page render included the
-    // same fragment a swap would fetch — so boot only has to say so.
-    addMsg('sys', 'Editing "' + artifact.title + '". Describe the change you want — or snippet an element from the preview first.');
+    // The preview is already rendered; only the composer needs its edit hint.
     inputEl.placeholder = 'Describe the change to make…';
-  } else {
-    addMsg('sys', 'Describe a small self-contained tool and the agent will build it and save it to your library.');
   }
   // A brief only opens a *new* build. In modify mode the session already has a
   // subject, and a brief that somehow survived would ask for a second one.

@@ -16,6 +16,9 @@ export const Type = {
 	String(opts) {
 		return desc("string", opts);
 	},
+	Boolean(opts) {
+		return desc("boolean", opts);
+	},
 	Optional(schema) {
 		return { ...schema, optional: true };
 	},

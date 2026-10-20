@@ -384,6 +384,10 @@ func (s *Session) armTurnClock() {
 		return
 	}
 	s.mu.Lock()
+	if s.closed || s.stopping || !s.streaming || s.hasPendingQuestions() {
+		s.mu.Unlock()
+		return
+	}
 	if s.turnTimer != nil {
 		s.turnTimer.Stop()
 	}

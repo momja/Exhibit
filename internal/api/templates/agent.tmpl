@@ -60,10 +60,11 @@
     <div id="messages"></div>
     <div id="history"></div>
     <div class="composer">
+      <div id="question-load-error" role="status" hidden>Could not load the questions. <button type="button" id="question-retry">Try again</button></div>
       <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> Preview updated — tap Preview to view</button>
       <div id="snippet-chips"></div>
       <div class="compose-row">
-        <textarea id="input" rows="1" placeholder="Describe the tool to build…"></textarea>
+        <textarea id="input" rows="1" aria-label="Message the agent" placeholder="Describe the tool to build…"></textarea>
         <button type="button" class="btn" id="send-btn" onclick="send()" aria-label="Send message" title="Send message" disabled><i class="ph ph-paper-plane-right" aria-hidden="true"></i></button>
         <button type="button" class="btn btn-stop" id="stop-btn" onclick="stopAgent()" aria-label="Stop agent" title="Stop agent" style="display:none"><i class="ph ph-stop" aria-hidden="true"></i></button>
       </div>
@@ -146,6 +147,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 {{template "directOpenPrompt" .DirectOpen}}
 <script type="module" src="/assets/gallery/direct-open.js"></script>
 <script type="module" src="/assets/gallery/agent-resize.js"></script>
+<script type="module" src="/assets/gallery/agent-questions.js"></script>
 <script type="module" src="/assets/gallery/message-actions.js"></script>
 </body>
 </html>{{end}}
@@ -166,11 +168,11 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
        src-less iframe, so there is never an iframe pointed at nothing.
      Data: agentPreviewData (agentui.go). */}}
 {{define "agentPreview"}}<div class="preview-bar">
-      <span class="title" id="pv-title">{{if .HasArtifact}}{{.Title}}{{else}}No artifact yet{{end}}</span>
+      <span class="title" id="pv-title">{{if .HasArtifact}}{{.Title}}{{else}}Preview{{end}}</span>
       {{if .HasArtifact}}<button type="button" id="pv-open" class="preview-open" data-direct-open-artifact="{{.ID}}" data-direct-open-url="{{.OpenURL}}" aria-label="Open in new tab" title="Open in new tab"><span class="lbl">Open </span><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
       <a id="pv-detail" href="{{.DetailURL}}">Details</a>{{end}}
       <span class="spacer"></span>
-      <button class="snip-btn" id="snip-btn"{{if not .HasArtifact}} disabled{{end}} onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
+      <button class="snip-btn" id="snip-btn"{{if not .HasArtifact}} disabled hidden{{end}} onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
     </div>
     {{/* The artifact's gallery tile (av-fafu), rendered by the same cardWidget
          partial the library uses so what the agent sees here is what the
@@ -179,7 +181,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
          empty case of its own. */}}
     {{if .HasArtifact}}<div class="pv-widget">{{template "cardWidget" .Widget}}<span class="pv-widget-label">Gallery widget</span></div>{{end}}
     <div id="frame-wrap">
-      {{if .HasArtifact}}<iframe id="pv-frame" src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>The artifact preview appears here once the agent saves one.</span></div>{{end}}
+      {{if .HasArtifact}}<iframe id="pv-frame" src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>Your tool will appear here.</span></div>{{end}}
     </div>{{end}}
 
 {{/* agentHistory is the history pane's list: every conversation kept with the
@@ -212,7 +214,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
   <p class="history-meta">{{template "conversationMeta" .}}</p>
 </div>
 <div class="history-messages" id="history-messages">
-  {{range .Messages}}{{if eq .Role "tool"}}<div class="tool-chip {{if .Failed}}fail{{else}}done{{end}}"><i class="ph {{if .Failed}}ph-x-circle{{else}}ph-check-circle{{end}}"></i> {{.Text}}</div>{{else if eq .Role "assistant"}}{{template "agentMessage" .Text}}{{else}}<div class="msg {{.Role}}">{{.Text}}{{if .Images}}<span class="history-images">{{.Images}} image{{if ne .Images 1}}s{{end}} attached</span>{{end}}</div>{{end}}{{else}}<p class="history-empty">Nothing was said in this conversation.</p>{{end}}
+  {{range .Messages}}{{if eq .Role "questions"}}{{template "agentQuestionHistory" .Questions}}{{else if eq .Role "tool"}}<div class="tool-chip {{if .Failed}}fail{{else}}done{{end}}"><i class="ph {{if .Failed}}ph-x-circle{{else}}ph-check-circle{{end}}"></i> {{.Text}}</div>{{else if eq .Role "assistant"}}{{template "agentMessage" .Text}}{{else}}<div class="msg {{.Role}}">{{.Text}}{{if .Images}}<span class="history-images">{{.Images}} image{{if ne .Images 1}}s{{end}} attached</span>{{end}}</div>{{end}}{{else}}<p class="history-empty">Nothing was said in this conversation.</p>{{end}}
 </div>
 {{template "agentResume" .}}{{end}}
 

@@ -204,6 +204,19 @@ const WIDGET_PUT_OK = {
 };
 
 describe("edit_artifact tool", () => {
+	it("offers questions in chat sessions but omits them from background widget jobs", async () => {
+		const interactive = makePi();
+		exhibitMod.default(interactive);
+		assert.ok(interactive.tools.has("ask_user"));
+		process.env.EXHIBIT_WIDGET_ONLY = "1";
+		try {
+			const background = makePi();
+			exhibitMod.default(background);
+			assert.ok(!background.tools.has("ask_user"));
+		} finally {
+			delete process.env.EXHIBIT_WIDGET_ONLY;
+		}
+	});
 	it("registers with the same scoping as write_artifact (no artifact id parameter)", async (t) => {
 		needExhibit(t);
 		const pi = makePi();

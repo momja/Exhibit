@@ -1,0 +1,27 @@
+{{define "agentQuestions"}}<section class="agent-questions" id="agent-question-{{.ID}}" data-pending="{{.Pending}}" data-session-id="{{.SessionID}}" data-request-id="{{.ID}}" aria-label="Questions from the agent">
+  {{if .Pending}}
+  <form data-question-form novalidate>
+    {{range .Questions}}
+    <fieldset data-question-id="{{.ID}}" data-multi-select="{{.MultiSelect}}">
+      <legend>{{.Question}}</legend>
+      {{if .Options}}<div class="question-options">{{range .Options}}
+        <button type="button" class="question-option" data-question-choice value="{{.Label}}" aria-pressed="false"><span><span class="question-option-label">{{.Label}}</span>{{if .Description}}<span class="question-option-description">{{.Description}}</span>{{end}}</span></button>
+      {{end}}</div>
+      {{if .MultiSelect}}<button type="button" class="question-done" data-question-answer>Done</button>{{end}}
+      <details class="question-other"><summary>Something else</summary>{{template "agentQuestionInput" .}}</details>
+      {{else}}{{template "agentQuestionInput" .}}{{end}}
+    </fieldset>
+    {{end}}
+    <p class="question-status" role="status" aria-live="polite"></p>
+    <div class="question-actions"><button class="question-skip" type="button" data-question-skip>Skip</button><button class="question-skip" type="button" data-question-resend hidden>Try again</button></div>
+  </form>
+  {{else}}
+    {{template "agentQuestionSummary" .QuestionRequest}}
+  {{end}}
+</section>{{end}}
+
+{{define "agentQuestionInput"}}<div class="question-write"><textarea aria-label="{{.Question}}" rows="1" maxlength="8000" placeholder="Your answer…"></textarea><button type="button" class="question-send" data-question-answer aria-label="Send answer" title="Send answer"><i class="ph ph-paper-plane-right" aria-hidden="true"></i></button></div>{{end}}
+
+{{define "agentQuestionSummary"}}{{range $index, $question := .Questions}}<div class="question-summary"><p class="question-summary-prompt">{{.Question}}</p>{{if and (not $.Cancelled) (not $.Message)}}{{with index $.Answers $index}}{{range .Selected}}<p class="question-summary-answer">{{.}}</p>{{end}}{{if .Text}}<p class="question-summary-answer">{{.Text}}</p>{{end}}{{end}}{{end}}</div>{{end}}{{if .Message}}<div class="msg user question-message">{{.Message}}</div>{{end}}{{if .Blocked}}<p class="question-skipped">Reply not sent.</p>{{else if .Cancelled}}<p class="question-skipped">Skipped</p>{{end}}{{end}}
+
+{{define "agentQuestionHistory"}}<section class="agent-questions" aria-label="Questions from the agent">{{template "agentQuestionSummary" .}}</section>{{end}}

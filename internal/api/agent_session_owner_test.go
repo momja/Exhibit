@@ -167,6 +167,8 @@ func TestAgentSessionRoutesRefuseAnotherOwner(t *testing.T) {
 		body                 any
 	}{
 		{"prompt", http.MethodPost, "/prompt", map[string]any{"message": "make the button green"}},
+		{"questions", http.MethodGet, "/questions/request-1", nil},
+		{"answers", http.MethodPost, "/questions/request-1", map[string]any{"cancelled": true}},
 		{"abort", http.MethodPost, "/abort", nil},
 		{"close", http.MethodDelete, "", nil},
 	} {

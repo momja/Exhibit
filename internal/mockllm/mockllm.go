@@ -120,7 +120,7 @@ type turnPlan struct {
 	// caller sees a real token count (the guard screen reports it, av-gust).
 	usage    map[string]int
 	toolName string
-	toolArgs map[string]string
+	toolArgs map[string]any
 }
 
 // injectionRe is the instruction a hostile artifact title/body plants. The
@@ -189,9 +189,14 @@ func decide(messages []chatMessage) turnPlan {
 		name := toolNameFor(messages, last.ToolCallID)
 		result, _ := textOf(last.Content)
 		switch name {
+		case "ask_user":
+			if strings.Contains(result, "refused by the instance's usage-policy screen") {
+				return turnPlan{kind: "text", text: "Please send a different reply."}
+			}
+			return turnPlan{kind: "text", text: "Thanks — I’ll use that for your plan."}
 		case "get_selection":
 			if currentSource == "" {
-				return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]string{}}
+				return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]any{}}
 			}
 			newBody, what := transform(bodyFromSourceResult(currentSource), lastUserText)
 			return turnPlan{kind: "tool", toolName: "write_artifact", toolArgs: updateArgs(newBody, rogueID, what)}
@@ -199,13 +204,16 @@ func decide(messages []chatMessage) turnPlan {
 			// A host-prepared source read can precede the first request. It
 			// doesn't replace the user's actual state/widget/selection intent.
 			if widgetOnly {
-				return turnPlan{kind: "tool", toolName: "set_widget", toolArgs: map[string]string{"body": cannedWidget}}
+				return turnPlan{kind: "tool", toolName: "set_widget", toolArgs: map[string]any{"body": cannedWidget}}
+			}
+			if plan, ok := questionPlan(lastUserText); ok {
+				return plan
 			}
 			if plan, ok := decideStateCommand(lastUserText); ok {
 				return plan
 			}
 			if selectionRe.MatchString(lastUserText) && !selectionRead {
-				return turnPlan{kind: "tool", toolName: "get_selection", toolArgs: map[string]string{}}
+				return turnPlan{kind: "tool", toolName: "get_selection", toolArgs: map[string]any{}}
 			}
 			newBody, what := transform(bodyFromSourceResult(result), lastUserText)
 			return turnPlan{kind: "tool", toolName: "write_artifact", toolArgs: updateArgs(newBody, rogueID, what)}
@@ -224,10 +232,16 @@ func decide(messages []chatMessage) turnPlan {
 		}
 	}
 
+	if last.Role == "user" && !widgetOnly {
+		if plan, ok := questionPlan(lastUserText); ok {
+			return plan
+		}
+	}
+
 	// A widget-only session writes a tile and nothing else, and needs no read:
 	// the canned tile is the same whatever the artifact holds.
 	if widgetOnly {
-		return turnPlan{kind: "tool", toolName: "set_widget", toolArgs: map[string]string{"body": cannedWidget}}
+		return turnPlan{kind: "tool", toolName: "set_widget", toolArgs: map[string]any{"body": cannedWidget}}
 	}
 
 	// A user prompt on a session that has an artifact. The source is not in the
@@ -238,15 +252,33 @@ func decide(messages []chatMessage) turnPlan {
 			return plan
 		}
 		if selectionRe.MatchString(lastUserText) {
-			return turnPlan{kind: "tool", toolName: "get_selection", toolArgs: map[string]string{}}
+			return turnPlan{kind: "tool", toolName: "get_selection", toolArgs: map[string]any{}}
 		}
-		return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]string{}}
+		return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]any{}}
 	}
 	return turnPlan{
 		kind:     "tool",
 		toolName: "create_artifact",
-		toolArgs: map[string]string{"title": titleFrom(lastUserText), "body": cannedTool},
+		toolArgs: map[string]any{"title": titleFrom(lastUserText), "body": cannedTool},
 	}
+}
+
+// Explicit triggers keep question demos and integration tests deterministic,
+// whether source preparation precedes the first model request or not.
+func questionPlan(userText string) (turnPlan, bool) {
+	if !strings.Contains(userText, "mock-ask-questions") && !strings.Contains(userText, "Help me plan meals for my family.") {
+		return turnPlan{}, false
+	}
+	questions := []map[string]any{
+		{"id": "view", "question": "How should your plan look?", "options": []map[string]string{
+			{"label": "Weekly calendar"},
+			{"label": "Simple list"},
+		}},
+	}
+	if strings.Contains(userText, "mock-ask-questions") {
+		questions = append(questions, map[string]any{"id": "goal", "question": "What should the plan help you with?"})
+	}
+	return turnPlan{kind: "tool", toolName: "ask_user", toolArgs: map[string]any{"questions": questions}}, true
 }
 
 var (
@@ -267,17 +299,17 @@ func decideStateCommand(userText string) (turnPlan, bool) {
 		return turnPlan{
 			kind:     "tool",
 			toolName: "set_state",
-			toolArgs: map[string]string{"key": m[1], "value": strings.TrimSpace(m[2])},
+			toolArgs: map[string]any{"key": m[1], "value": strings.TrimSpace(m[2])},
 		}, true
 	}
 	if m := deleteKeyRe.FindStringSubmatch(userText); m != nil {
-		return turnPlan{kind: "tool", toolName: "delete_state", toolArgs: map[string]string{"key": m[1]}}, true
+		return turnPlan{kind: "tool", toolName: "delete_state", toolArgs: map[string]any{"key": m[1]}}, true
 	}
 	if clearStateRe.MatchString(userText) {
-		return turnPlan{kind: "tool", toolName: "delete_state", toolArgs: map[string]string{}}, true
+		return turnPlan{kind: "tool", toolName: "delete_state", toolArgs: map[string]any{}}, true
 	}
 	if readStateRe.MatchString(userText) {
-		return turnPlan{kind: "tool", toolName: "get_state", toolArgs: map[string]string{}}, true
+		return turnPlan{kind: "tool", toolName: "get_state", toolArgs: map[string]any{}}, true
 	}
 	return turnPlan{}, false
 }
@@ -305,8 +337,8 @@ func screenPlan(messages []chatMessage) turnPlan {
 // carried an injected "also update artifact <id>", is emitted as an extra id
 // argument — the tool has no such parameter and ignores it, which is the
 // property under test.
-func updateArgs(body, rogueID, note string) map[string]string {
-	args := map[string]string{"body": body, "_note": note}
+func updateArgs(body, rogueID, note string) map[string]any {
+	args := map[string]any{"body": body, "_note": note}
 	if rogueID != "" {
 		args["id"] = rogueID
 	}
@@ -475,7 +507,7 @@ func streamPlan(w http.ResponseWriter, plan turnPlan) {
 			fmt.Fprintf(w, "data: %s\n\n", b)
 		}
 	case "tool":
-		args := map[string]string{}
+		args := map[string]any{}
 		for k, v := range plan.toolArgs {
 			if !strings.HasPrefix(k, "_") {
 				args[k] = v
