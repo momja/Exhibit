@@ -4,7 +4,11 @@
 set -eu
 
 repository=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-release_dir=${1:?usage: scripts/package-agent.sh OUTPUT_DIRECTORY [amd64|arm64]}
+release_dir=${1:?usage: scripts/package-agent.sh OUTPUT_DIRECTORY [amd64|arm64] [RELEASE_VERSION]}
+release_version=${3:-$(git -C "$repository" rev-parse --short=12 HEAD)}
+case "$release_version" in ''|*[!a-zA-Z0-9._-]*) echo "invalid release version" >&2; exit 1 ;; esac
+case "$release_version" in [a-zA-Z0-9]*) ;; *) echo "release version must start with a letter or digit" >&2; exit 1 ;; esac
+test "${#release_version}" -le 96
 case "$(uname -m)" in x86_64) host_arch=x64; default_arch=amd64 ;; aarch64|arm64) host_arch=arm64; default_arch=arm64 ;; *) echo "unsupported build host" >&2; exit 1 ;; esac
 architecture=${2:-$default_arch}
 case "$architecture" in amd64) node_arch=x64 ;; arm64) node_arch=arm64 ;; *) echo "unsupported architecture" >&2; exit 1 ;; esac
@@ -34,9 +38,18 @@ if [ "$host_arch" != "$node_arch" ]; then
   build_node="$download_dir/host-node"
 fi
 PATH="$build_node/bin:$PATH" "$build_node/bin/node" "$release_dir/node/lib/node_modules/npm/bin/npm-cli.js" ci --prefix "$release_dir" --cpu="$node_arch" --os=linux --ignore-scripts --engine-strict --omit=dev --no-audit --no-fund
-(cd "$repository" && CGO_ENABLED=0 GOOS=linux GOARCH="$architecture" go build -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o "$release_dir/exhibit-agent" ./cmd/exhibit-agent)
+(cd "$repository" && CGO_ENABLED=0 GOOS=linux GOARCH="$architecture" go build -trimpath -buildvcs=false -ldflags="-s -w -buildid= -X main.releaseVersion=$release_version" -o "$release_dir/exhibit-agent" ./cmd/exhibit-agent)
 cp "$repository/cmd/exhibit-agent/runtime/launch" "$release_dir/launch"
 chmod 755 "$release_dir/launch"
-printf 'protocol=1\npi=%s\nnode=%s\narchitecture=%s\n' "$pi_version" "$node_version" "$architecture" > "$release_dir/versions"
+mkdir "$release_dir/bin"
+ln -s ../exhibit-agent "$release_dir/bin/exhibit-agent"
+ln -s ../node/bin/node "$release_dir/bin/node"
+ln -s ../node_modules/.bin/pi "$release_dir/bin/pi"
+printf '%s\n' "$release_version" > "$release_dir/EXHIBIT_RELEASE"
+printf 'release=%s\nprotocol=1\npi=%s\nnode=%s\narchitecture=%s\n' "$release_version" "$pi_version" "$node_version" "$architecture" > "$release_dir/versions"
 (cd "$release_dir" && sha256sum exhibit-agent launch package-lock.json > checksums.sha256)
-if [ "$host_arch" = "$node_arch" ]; then "$release_dir/launch" --version; fi
+if [ "$host_arch" = "$node_arch" ]; then
+  test "$(env -i PATH="$release_dir/bin:/usr/bin:/bin" "$release_dir/bin/exhibit-agent" --version)" = "$release_version"
+  test "$(env -i PATH="$release_dir/bin:/usr/bin:/bin" "$release_dir/bin/node" --version)" = "v$node_version"
+  test "$(env -i PATH="$release_dir/bin:/usr/bin:/bin" "$release_dir/bin/pi" --version)" = "$pi_version"
+fi

@@ -10,13 +10,27 @@ operator credential, or browser cookies.
 Build a relocatable Linux release (amd64 or arm64):
 
 ```sh
-sh scripts/package-agent.sh /tmp/exhibit-agent-release amd64
+sh scripts/package-agent.sh /tmp/exhibit-agent-release amd64 RELEASE_VERSION
 ```
 
 The builder verifies Node's published SHA256, runs `npm ci --ignore-scripts
 --engine-strict`, and emits the static Go binary, exact Node installation,
-locked Pi installation, launcher, version manifest, and checksums. Copy that
-directory to a host or Sprite. Register `launch` as the Sprite Service command;
+locked Pi installation, launcher, version manifest, and checksums. The tree has
+`bin/exhibit-agent`, `bin/pi`, and `bin/node`, matching the Sprite bootstrap.
+`bin/exhibit-agent --version` prints exactly RELEASE_VERSION; `--runtime-info`
+prints the protocol and runtime pins. The default release version is the local
+Git revision. Archive the tree with
+`scripts/agent-workers-sprites/package-release.sh RELEASE_VERSION RUNTIME_DIR OUTPUT.tar.gz`.
+Verify the extracted layout, checksums, exact version outputs, and native daemon
+startup with the bundled Pi (cross archives verify layout and checksums):
+
+```sh
+EXHIBIT_AGENT_RELEASE_ARCHIVE=/absolute/path/OUTPUT.tar.gz \
+EXHIBIT_AGENT_RELEASE_VERSION=RELEASE_VERSION \
+go test -count=1 -run '^TestPackagedReleaseMatchesSpriteBootstrap$' ./cmd/exhibit-agent
+```
+
+Copy that directory to a host or Sprite. Register `launch` as the Sprite Service command;
 Docker is not required. Roll back the complete directory together, keeping
 protocol version compatibility with core. Core image/config changes and Sprite
 provisioning are owned by the parent integration.
@@ -57,8 +71,10 @@ Every request includes `Authorization: Bearer …` and `Exhibit-Agent-Version: 1
 `GET /v1/ready` reports protocol/runtime pins, capabilities, and assignment.
 Operations under `/v1/executions/{executionID}` are `POST /start`, `POST /commands`
 (prompt, steer, abort, question reply, stats, state, compaction), `GET /events?after=N`,
-`GET /snapshot`, and `POST /close`. `/ready` under that execution checks warm/cold
-state. The local service also has `POST /release`. DTOs and limits are defined in
+`GET /snapshot`, `POST /lease`, `POST /idle`, `POST /close`, and `POST /release`.
+`/ready` under that execution checks warm/cold state. `close` stops execution and
+retains the final snapshot; `release` reclaims only after core's acknowledgment.
+DTOs and limits are defined in
 `internal/agentexec/protocol.go`; typed error codes distinguish auth/version,
 capacity, expired events, rejected commands, and uncertain outcomes.
 
@@ -69,6 +85,13 @@ uses bounded cursor batches and fails explicitly if retention was exceeded.
 Idle closes the event request and all keep-alives, with no health polling or
 background reconnection. `Endpoint.Active`, `Idle(ctx, Snapshot)`, and `Release`
 let a provisioner manage bounded compute holds and checkpoint acknowledgment.
+`Snapshot.Settled` distinguishes settled turns from a waiting-human pause. Core
+event acknowledgment precedes idle acknowledgment; a checkpoint failure stops
+the transport and never releases its idle hold. Inside a Sprite the daemon
+auto-detects `/.sprite/api.sock`, or accepts `--sprite-holds required|off`. It
+acquires a task hold before accepting input, renews only while active within the
+current core lease, and releases after durable idle acknowledgment/abort/shutdown.
+There is no daemon-lifetime task heartbeat.
 An explicit new prompt after confirmed idle revalidates `Provisioner.Acquire`.
 After a cold restart it requires `Endpoint.LoadSnapshot` to read the acknowledged
 central session file and current artifact binding before starting the new prompt.
@@ -77,9 +100,15 @@ It never resumes automatically after an uncertain active run.
 Pi has a private HOME and TMPDIR, runs from `/`, receives a minimal environment,
 and loads only the shipped extensions. Context discovery and built-in tools are
 disabled. Scratch has a 96 MiB/1024-entry watchdog, a 64 MiB session-file ceiling,
-and is removed after process exit/final snapshot. Daemon startup takes an exclusive
+and is removed after process exit, durable final acknowledgment, and authority
+release. Failed checkpoint/release retains the snapshot for explicit recovery.
+Daemon startup takes an exclusive
 scratch-root lock and removes abandoned execution directories. A worker must have
-an execution expiry within 24 hours; each outstanding command has a deadline of
+an execution expiry within 24 hours; `LeaseProcess.SetLease` extends it from a
+core-approved deadline. Expiry bounds active work, while idle/waiting-human
+pauses accept renewal before the next explicit input. Idle `SetLease` stages
+the deadline without HTTP, and no worker polling/heartbeat renews an idle lease.
+Each outstanding command has a deadline of
 at most two minutes. The default worker runaway-turn backstop is 15 minutes and
 may be tightened by core. The worker pauses that timer while waiting on a person.
 
@@ -88,5 +117,22 @@ runs before resume snapshot/usage reads, and may return a replacement fenced
 `*agentscope.Grant`. All session scope/provenance uses that grant. Assigned runs
 persist only through `Checkpoint(ctx, ExecutionCheckpoint)` with file, title,
 kind (`tool`, `settled`, `interrupted`) and monotonic sequence. Final drain gates
-`Release` on successful checkpoint acknowledgment. `Manager.Shutdown(ctx)` stops
+`Release` on successful checkpoint acknowledgment. `BeginClose` runs before
+final snapshot; `StartupFailed` handles pre-start failures separately. `Resume`
+and `UsageBaseline` may supply the fenced central snapshot/revision/status and
+accounting baseline. `Session.InterruptionNotice()` and an interruption event
+let core render prior interruption without replaying uncertain work.
+`Manager.RetainedSnapshot` and `RetryDrain` recover a failed final flush without
+starting a model. Retries resume after acknowledged stop, checkpoint, authority
+release, and cleanup phases; a failed checkpoint retains the same sequence and
+payload for retry. `Manager.EraseOwner(ctx, ownerID)` is destructive and must be
+called only after successful account deletion; it revokes/stops live and retained
+executions and reclaims without persisting deleted history. Cleanup failures
+retain only a `Reclaimer`, without private Session payloads, for later calls to
+`EraseOwner`. Runner processes implement `ErasureCleanup() Reclaimer` to transfer
+this minimal retry capability and scrub their execution payload references.
+`agent.Config.MaxSessions` bounds fleet starts/processes plus retained failed
+drains (zero defaults to 32); per-owner admission remains ten. This fleet limit
+is independent of the local development daemon's 32-assignment bound.
+`Manager.Shutdown(ctx)` stops
 admission, drains processes/output, checkpoints, releases, and cleans scratch.

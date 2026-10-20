@@ -37,7 +37,7 @@ func run() error {
 	localAssignments := flag.Bool("local-assignments", false, "authenticated static local service, accepting up to 32 isolated assignments; production Sprites use fixed identities")
 	holdMode := flag.String("sprite-holds", "auto", "in-Sprite Tasks API holds: auto, required, or off")
 	holdTTL := flag.Duration("hold-ttl", time.Minute, "active task hold expiry (whole seconds, 3s to 5m)")
-	version := flag.Bool("version", false, "print worker protocol/runtime pins")
+	version := flag.Bool("version", false, "print the immutable release version")
 	runtimeInfo := flag.Bool("runtime-info", false, "print protocol and pinned runtime versions")
 	flag.Parse()
 	if *version {
