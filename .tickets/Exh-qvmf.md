@@ -1,6 +1,10 @@
 ---
 id: Exh-qvmf
+<<<<<<< HEAD
 status: closed
+=======
+status: in_progress
+>>>>>>> 500dc0a (Start Exh-qvmf artifact tag favicon)
 deps: []
 links: []
 created: 2026-10-19T19:41:26Z
@@ -8,6 +12,7 @@ type: feature
 priority: 2
 assignee: Max Omdal
 ---
+<<<<<<< HEAD
 # Artifact favicon with balanced Mondrian tag colors
 
 Show a Mondrian mosaic inspired by the Exhibit logo on sandbox viewer pages and direct render documents. Use up to three tag colors in gallery order in similarly sized panels, with a smaller white panel and offset black dividers. Untagged artifacts use the Exhibit brand palette; unused tag panels stay white.
@@ -30,3 +35,9 @@ Final verification: make assets, go build ./..., full internal/render suite, upd
 **2026-10-19T21:53:20Z**
 
 Replaced the E-and-dots favicon with the user-approved Mondrian design. Balanced tag panels now occupy 49, 48, and 42 square units (about 35%, 35%, 30% of colored area). Fixed grid and tag order retain visual memory. Untagged artifacts use the brand palette; unused panels stay white. Saved the generated SVG preview screenshot. All artifacticon tests, focused render/API favicon tests, go build ./..., and git diff --check passed.
+=======
+# Artifact favicon with logo E and tag dots
+
+Show the E extracted from the Exhibit logo with up to three vertically stacked tag-color dots on sandbox viewer pages and direct render documents. With no tags, show only the E.
+
+>>>>>>> 500dc0a (Start Exh-qvmf artifact tag favicon)
