@@ -315,7 +315,8 @@ Final assembled-stack verification (2026-10-20):
 - `make assets` and `go test ./... -count=1 -timeout=15m` passed, including the
   complete API and SQLite suites.
 - Vet passed for the server, worker, agent, authority, transport, API, Sprites,
-  and Store packages. All 29 browser history tests passed.
+  and Store packages. All 46 browser history/import tests passed after rebasing
+  onto the shipped asset-import changes; the full Go suite also passed again.
 - The native arm64 release archive passed
   `TestPackagedReleaseMatchesSpriteBootstrap` with bundled Node/Pi. The amd64
   archive passed layout/checksum/ELF checks; amd64 execution was not tested.
