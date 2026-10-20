@@ -8,7 +8,8 @@ flowchart TB
             render["Render surface<br/>(serves artifact docs + CSP)"]
         end
         store["Store interface<br/>SQLite + blobs (FS or S3)"]
-        opt["optional, composed around:<br/>Litestream &rarr; bucket, thumb worker"]
+        opt["optional Litestream &rarr; bucket<br/>(SQLite WAL only)"]
+        browser["optional headless Chromium (CDP)<br/>share-widget snapshots in isolated contexts"]
     end
 
     operator -->|TLS| proxy
@@ -17,6 +18,8 @@ flowchart TB
     app --> store
     render --> store
     store -.-> opt
+    render -.->|"CDP link previews"| browser
+    browser -->|"widget requests: RENDER_ORIGIN only"| render
 
     subgraph visitor["Visitor's browser (may be a different person / device)"]
         subgraph page["Page from RENDER_ORIGIN"]

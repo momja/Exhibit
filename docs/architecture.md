@@ -9,8 +9,9 @@ beside it (`tk show <id>`). `security.md` carries the full security policy.
 ## 1. Architectural principles
 
 1. **It's just a file.** A tier-1/2 artifact is a self-contained document that runs
-   in the *visitor's* browser. The service stores and serves it and never executes
-   artifact code. The user can take their software and data with them.
+   in the *visitor's* browser. The service stores and serves it; optional share
+   previews run only its widget in a browser satellite (§3.2). The user can take
+   their software and data with them.
 2. **One write path.** Every mutation, state write-through included, enters through
    the HTTP API. Auth, validation, replication and multi-user attach there.
 3. **Two origins, hard boundary.** The app and the artifacts it renders live on
@@ -53,6 +54,13 @@ The only way data changes. Full route reference: `api.md`.
   bytes are missing the write still goes through (it is the repair) and
   `footprint_changed` is true; any other read failure aborts the whole PATCH
   (av-wu9d). Tags and collections use their own `POST/DELETE` membership routes.
+- `POST /api/artifacts/:id/duplicate`: owner-only copy of current source, widget,
+  assets and metadata, with optional owner state and share settings; copied shares
+  get fresh identities. Staging and quota checks precede one atomic store
+  transaction. A request UUID makes uncertain retries return the same copy, even
+  after the original changes or disappears. The gallery refreshes its cards through
+  htmx without navigating. Precise copy and retry rules:
+  [artifact-duplication.md](artifact-duplication.md).
 - `POST /api/artifacts/:id/refetch`: re-fetch `source_url` through the full ingest
   pipeline and record a new version (av-reo3, av-b17a). A non-2xx, empty or non-HTML
   response is refused with the artifact untouched; nothing else is judged. New blobs
@@ -110,6 +118,15 @@ The only way data changes. Full route reference: `api.md`.
   the authenticated group (av-4ac9). Values come from env on `api.Config`
   (`PUBLIC_MODE_ENABLED`, `PUBLIC_INSTANCE_NAME`, `PUBLIC_INSTANCE_DESCRIPTION`,
   `PUBLIC_OWNER_ID`). 404 when public mode is off.
+
+**Conditional source and widget saves** (av-n0gl): independent opaque revisions
+pair each read's bytes with its token. The version transaction checks the token
+even on unchanged saves and commits bundled source metadata atomically; refetch
+checks its pre-fetch source revision. Agent source/widget writes and targeted
+`edits` require the applicable token. Legacy owner replacements may omit it,
+protecting only the handler's read/commit interval. A conflict is 409 with nothing
+committed: re-read, reconcile and retry deliberately, never automatically. Protocol: `api.md`,
+Conditional source and widget saves.
 
 **Allowlist entries are origins** (av-i7hd). `POST`/`PATCH` run them through
 `origin.NormalizeOrigin` (scheme + host + non-default port, lowercased, deduped). A
@@ -200,6 +217,17 @@ it safe behind the no-auth share path (§7).
   The open default is safe only because **every `postMessage` the preamble sends
   targets `APP_ORIGIN`**, so a foreign framer receives nothing from the shim.
   `security.md` §1.8.
+- **Share link previews** (av-rclm): only share documents carry OpenGraph tags:
+  title, fixed description, and `/s/:shareID/og.png`, a 1056x528 PNG of
+  `/s/:shareID/widget`, never the full artifact. Optional Chromium
+  (`CHROMIUM_CDP_URL`, `internal/chromium`; snapshot logic in `internal/ogsnap`)
+  draws it in an isolated browser context whose browser requests are confined to
+  the render origin regardless of the allowlist. Snapshots are cached per share
+  id; the share row is resolved before any cache read. Every id that is not a live
+  link gets one generic Exhibit 404. Without Chromium, or on snapshot failure,
+  serve the logo card built at `/og.png`. This is the one place artifact code
+  runs on the operator's infrastructure; confinement and its limits: `security.md`
+  §1.10.
 - **Version view** `/a/:id/versions/:seq` (av-vw7r): an earlier body with the state
   it left behind (`Store.GetVersionView`). Its token is scoped to that version
   (`rendertoken.VersionScope`, in the MAC) and minted only for the owner;
@@ -423,6 +451,14 @@ Shared pieces:
 empty-state copy; the owner always comes from the request), the `gallerygrid.tmpl`
 partials, and the `web/gallery/gallery.js` module.
 
+**Card actions** (Exh-johq): a trailing menu replaces the standalone Edit link,
+sharing `.action-menu` styles with the detail pill. `gallery-actions.js` delegates
+from the stable gallery root, so search and paging swaps need no rebinding.
+Outside clicks, focus leaving and Escape close it; Escape restores trigger focus.
+Keyboard and touch expose the trigger without hover. Duplicate dispatches
+`exhibit:artifacts-changed` to clear search and reset paging through the existing
+htmx form (`artifact-duplication.md`).
+
 **Live widget bounds** (av-1a9m): `gallery-widgets.js` unloads widget documents
 beyond a 400px viewport buffer, keeping the server-created iframe node. Gallery
 cards only: `data-gallery-widget` must not appear on `/partials/card-widget`, so
@@ -501,7 +537,10 @@ default. The agent mode is a form of named fields. The brief crosses to `/agent`
 
 - **Litestream** sidecar: streams the WAL to a bucket and restores an empty volume.
   SQLite only: filesystem blobs need their own backup.
-- **Thumbnail worker**: headless Chromium, out of the main image.
+- **Headless browser**: optional Chromium over CDP (`CHROMIUM_CDP_URL`,
+  `internal/chromium`), out of the main image and shared by server features,
+  each in its own browser contexts. Share link previews are the first (av-rclm);
+  unset, they use the logo card.
 
 ### 3.7 Agent sidecar (Pi harness, Exh-yvhp)
 
@@ -513,7 +552,9 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
   (`internal/agent/ext/exhibit.ts`) whose tools (`create_artifact`,
   `write_artifact`, `edit_artifact`, `get_artifact`, `get_state`, `set_state`,
   `delete_state`, `set_widget`, `edit_widget`, `get_widget`, `get_selection`) call
-  the HTTP API. Output is scanned like any ingest, never auto-approved.
+  the HTTP API or read selected elements. `ask_user` uses Pi's interactive RPC
+  channel for chat questions (`agent.md`). Output is scanned like any ingest,
+  never auto-approved.
 - **Scoped credential** (av-e0yj): `internal/agentscope` mints a token resolving to
   (owner, artifact). `authMiddleware` allows only `POST /api/artifacts` while
   unbound, then `GET`/`PATCH` on the bound artifact plus `agentSubResources`
@@ -529,13 +570,29 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
 - **Oversized writes** (av-ombn): the sidecar gets `EXHIBIT_MAX_BODY_BYTES` and
   refuses early; a 413 yields a readable tool error.
 - **Untrusted text arrives only as tool results** (av-5s7g). The system prompt is
-  static; a modify session starts with `get_artifact`.
+  static. Sessions reuse known source, including preloaded results and successful
+  own creates, writes and edits; a successful save needs no extra read. Read with
+  `get_artifact` or `get_widget` when needed source is missing or compacted away,
+  after a conflict or failed source match, on evidence of an external edit or
+  restore, or when a save's outcome is uncertain. Prompt guidance does not enforce
+  concurrency; revision preconditions do (§3.1).
+- **Preparation** (Exh-1f4m): deliberate typing may start a session and an authorized
+  source prefetch without sending draft text or making a provider request. After
+  Send passes screening, the extension validates the revision, refreshes if changed,
+  and projects a synthetic assistant `get_artifact` call plus its actual tool result.
+  Failed preparation falls back to the ordinary tool. Pi persists prepared reads as
+  custom data; the extension projects pairs on resume and after compaction without
+  promoting source into user messages. Never-accepted sessions have a fixed
+  90-second deadline, independent of normal idle lifetime. Successful own saves
+  advance the retained source base; later prompts validate it without fetching or
+  injecting another full copy. Lifecycle and replay: `agent.md`, `security.md` §5.2.
 - **Transcripts** (av-y7td): Pi's session file is stored per settled turn in
   `agent_transcripts` with the artifact version. Only `agent.Messages` leaves the
   server. Pi is pinned because its file format is now a contract.
 - **Resume** (av-b4yh): only with `resume_session_id`, sent from History's Continue.
   The resumed session uses the current system prompt, and its first prompt carries
-  a fixed sentence saying the artifact may have changed and must be read again.
+  a fixed notice saying the artifact may have changed: use freshly prepared source,
+  or read with `get_artifact` if preparation was unavailable.
   Rolling back the artifact is the page's choice via the restore route. Sessions run
   from `/`; the scratch dir is deleted after.
 - **BYO key**: AES-256-GCM at rest (`internal/secrets`, `agent_keys`), passed via a
@@ -690,14 +747,16 @@ exports, metadata edits, unchanged saves, restores and deletions skip the gate.
 In decreasing trust:
 
 1. **Operator ↔ App API.** Authenticated; about identity and the single write path.
-2. **App ↔ stored body.** Untrusted data at rest, never executed server-side.
+2. **App ↔ stored body.** Untrusted data at rest; execution stays in browsers.
 3. **Render origin ↔ visitor browser.** Code executes here, on a separate origin in an
    opaque-origin sandbox. The browser enforces.
 4. **Artifact code ↔ everything else.** Sandbox without `allow-same-origin` plus the
    per-artifact CSP.
 
 Hard boundaries are pushed to the browser's own mechanisms (origin isolation, iframe
-sandbox, CSP). The server's best defense is never running artifact code.
+sandbox, CSP). Optional share-widget snapshots are the exception to visitor-side
+execution: their Chromium contexts run on the operator's infrastructure, with
+separate request confinement (§3.2; `security.md` §1.10).
 
 ## 5. Ingest data flow
 
@@ -744,6 +803,9 @@ the artifact through the same read-only render surface and CSP, with no app auth
 because the link row is the authorization. Only a row with no recipient answers
 there; a grant's id buys nothing (§3.3). The `.html` export is the service-free
 fallback.
+
+A pasted link unfurls through OpenGraph tags and a picture of its widget (§3.2,
+av-rclm). Every id that is not a live link previews as Exhibit and nothing else.
 
 An anonymous link shows the owner's state and never writes it, whatever
 `share_state_mode` says; the mode selects rows only for named recipients.
