@@ -451,13 +451,23 @@ Shared pieces:
 empty-state copy; the owner always comes from the request), the `gallerygrid.tmpl`
 partials, and the `web/gallery/gallery.js` module.
 
+**Reusable UI behavior** (Exh-16ds): Go partials own markup, shared CSS owns style,
+and Stimulus controllers own browser state and lifecycle. Register controllers in
+`web/gallery/controllers.js`; full pages load `componentScripts` once from the app
+origin. htmx fragments carry controller markup, which connects and disconnects
+automatically. Features own API calls and change events. Conventions and browser
+tests: [ui-components.md](ui-components.md).
+
 **Card actions** (Exh-johq): a trailing menu replaces the standalone Edit link,
-sharing `.action-menu` styles with the detail pill. `gallery-actions.js` delegates
-from the stable gallery root, so search and paging swaps need no rebinding.
+sharing `.action-menu` styles with the detail pill. The `actionMenu` Go partial
+gets its items from `galleryCardActions`; `action-menu-controller.js` handles each
+instance, including cards inserted or replaced by htmx.
 Outside clicks, focus leaving and Escape close it; Escape restores trigger focus.
-Keyboard and touch expose the trigger without hover. Duplicate dispatches
-`exhibit:artifacts-changed` to clear search and reset paging through the existing
-htmx form (`artifact-duplication.md`).
+Keyboard and touch expose the trigger without hover. Links navigate normally;
+event items dispatch their named feature event with data and the visible trigger.
+Duplication listens for `exhibit:duplicate`, then dispatches
+`exhibit:artifacts-changed` after saving to clear search and reset paging through
+the existing htmx form (`artifact-duplication.md`).
 
 **Live widget bounds** (av-1a9m): `gallery-widgets.js` unloads widget documents
 beyond a 400px viewport buffer, keeping the server-created iframe node. Gallery
