@@ -150,6 +150,14 @@ var accountTables = map[string]accountTable{
 	// rows name the owner id they were attributed to and keep naming it.
 	"agent_usage": {reachNone,
 		"the spend ledger; the money was spent and the rows are accounting, not the person's data", ""},
+	"agent_conversations": {reachNone,
+		"conversation identity/generation and checkpoint digest only; attribution and fencing survive account deletion like the usage ledger, with no transcript content", ""},
+	"agent_executions": {reachNone,
+		"historical execution attribution for late usage and deduplication; deleted artifacts lose write authority and reconciliation releases capacity", ""},
+	"agent_supervisor_credentials": {reachNone,
+		"expiring secret hashes and funding attribution only; permit bounded late accounting after deletion, never artifact access", ""},
+	"agent_usage_receipts": {reachNone,
+		"stable event identities and payload digests prevent accounting retries from double counting after deletion", ""},
 }
 
 // schemaTables is every table the live database reports, which is the only

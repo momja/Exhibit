@@ -19,10 +19,12 @@
 package agentscope
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -47,9 +49,14 @@ type Grant struct {
 	// conversation produced it without anything the model emits being able to
 	// say otherwise.
 	sessionID string
+	execution Execution
+	validate  Validator
+	guard     Guard
+	bind      Binder
 
-	mu    sync.Mutex
-	scope Scope
+	mu       sync.Mutex
+	createMu sync.Mutex
+	scope    Scope
 	// prompt is the user's latest message, set by the session as each arrives.
 	// It labels the versions the agent writes while answering it.
 	prompt string
@@ -83,27 +90,88 @@ func (g *Grant) Scope() Scope {
 }
 
 // BindArtifact binds an unbound (create-mode) grant to the artifact that was
-// just created under it. The first binding wins and later ones are ignored, so
-// the scope only ever narrows: a session cannot walk itself from artifact to
-// artifact by creating more of them.
+// just created under it. The first binding wins; fenced grants report a
+// conflicting binding as an error. The scope only ever narrows.
 //
 // Callers must pass an id they established themselves — the API's create
 // handler passes the id it just wrote. An id read back out of model-supplied
 // tool arguments would make the binding forgeable, which is the whole thing
 // this prevents.
-func (g *Grant) BindArtifact(artifactID string) {
+func (g *Grant) BindArtifact(artifactID string) error {
+	return g.BindArtifactContext(context.Background(), artifactID)
+}
+
+// BindArtifactContext persists a fenced create-mode binding before publishing
+// it to readers. The caller supplies the artifact it created, never tool input.
+func (g *Grant) BindArtifactContext(ctx context.Context, artifactID string) error {
 	if artifactID == "" {
-		return
+		return nil
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.scope.ArtifactID == "" {
+		if g.bind != nil {
+			if err := g.bind(ctx, g.scope, g.sessionID, g.execution, artifactID); err != nil {
+				return err
+			}
+		}
 		g.scope.ArtifactID = artifactID
+	} else if g.bind != nil && g.scope.ArtifactID != artifactID {
+		return fmt.Errorf("execution already bound to another artifact")
 	}
+	return nil
 }
 
-// Registry holds the live grants. Grants are in-memory and per-process,
-// exactly like the sessions they belong to: a restart drops both together.
+// Execution is issued by the core, not decoded from a tool's request body.
+type Execution struct {
+	ID         string
+	WorkerID   string
+	Generation int64
+}
+
+type Validator func(context.Context, Scope, string, Execution) error
+type Guard func(context.Context, Scope, string, Execution) (func(), error)
+type Binder func(context.Context, Scope, string, Execution, string) error
+
+func (g *Grant) Execution() Execution { return g.execution }
+
+// Guard keeps the execution authoritative through an entire API operation.
+// Middleware MUST defer its returned release until the handler finishes: a
+// Resolve check alone does not fence an in-flight write against takeover.
+func (g *Grant) Guard(ctx context.Context) (func(), error) {
+	if g.guard == nil {
+		return func() {}, nil
+	}
+	// Serialize unbound create requests. Middleware must check the path against
+	// Scope AFTER Guard, since a preceding create may have just bound it.
+	creating := g.Scope().ArtifactID == ""
+	if creating {
+		g.createMu.Lock()
+	}
+	release, err := g.guard(ctx, g.Scope(), g.sessionID, g.execution)
+	if err != nil {
+		if creating {
+			g.createMu.Unlock()
+		}
+		return nil, err
+	}
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			release()
+			if creating {
+				g.createMu.Unlock()
+			}
+		})
+	}, nil
+}
+
+// IsCredential recognizes retired/unknown tool credentials too, allowing auth
+// middleware to reject them before anonymous/auth-disabled fallback.
+func IsCredential(token string) bool { return strings.HasPrefix(token, "exagent_") }
+
+// Registry holds in-memory, per-process grants. Restart drops these bearer
+// credentials; durable execution assignments remain in the core repository.
 type Registry struct {
 	mu     sync.Mutex
 	grants map[string]*Grant
@@ -117,11 +185,24 @@ func NewRegistry() *Registry {
 // Issue mints a credential scoped to one owner and, when artifactID is
 // non-empty, one artifact, for the chat session named by sessionID.
 func (r *Registry) Issue(ownerID int64, artifactID, sessionID string) (*Grant, error) {
+	return r.issue(ownerID, artifactID, sessionID, Execution{}, nil, nil, nil)
+}
+
+// IssueFenced requires both a point-in-time validator and an operation guard.
+func (r *Registry) IssueFenced(ownerID int64, artifactID, sessionID string, execution Execution, validate Validator, guard Guard, bind Binder) (*Grant, error) {
+	if execution.ID == "" || execution.WorkerID == "" || execution.Generation <= 0 || validate == nil || guard == nil || bind == nil {
+		return nil, fmt.Errorf("incomplete execution authority")
+	}
+	return r.issue(ownerID, artifactID, sessionID, execution, validate, guard, bind)
+}
+
+func (r *Registry) issue(ownerID int64, artifactID, sessionID string, execution Execution, validate Validator, guard Guard, bind Binder) (*Grant, error) {
 	tok, err := newToken()
 	if err != nil {
 		return nil, err
 	}
 	g := &Grant{token: tok, sessionID: sessionID, scope: Scope{OwnerID: ownerID, ArtifactID: artifactID}}
+	g.execution, g.validate, g.guard, g.bind = execution, validate, guard, bind
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.grants[tok] = g
@@ -131,21 +212,31 @@ func (r *Registry) Issue(ownerID int64, artifactID, sessionID string) (*Grant, e
 // Resolve returns the grant a bearer token names, or nil. Unknown tokens are
 // indistinguishable from no token at all to the caller.
 func (r *Registry) Resolve(token string) *Grant {
+	return r.ResolveContext(context.Background(), token)
+}
+
+func (r *Registry) ResolveContext(ctx context.Context, token string) *Grant {
 	if token == "" {
 		return nil
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	var found *Grant
 	// Constant-time compare against each live token: the map lookup alone
 	// would answer "is this a valid credential?" in token-dependent time.
 	// The registry holds one grant per live chat session, so this is a very
 	// short walk.
 	for tok, g := range r.grants {
 		if len(tok) == len(token) && subtle.ConstantTimeCompare([]byte(tok), []byte(token)) == 1 {
-			return g
+			found = g
+			break
 		}
 	}
-	return nil
+	r.mu.Unlock()
+	// Never hold the registry mutex during database access or callbacks.
+	if found != nil && found.validate != nil && found.validate(ctx, found.Scope(), found.sessionID, found.execution) != nil {
+		return nil
+	}
+	return found
 }
 
 // Revoke retires a credential. Called when the session it belongs to ends, so
