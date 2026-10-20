@@ -43,6 +43,10 @@ func (c *workerCoordinator) cleanupStatic(ctx context.Context, record workerReco
 		if err != nil {
 			return errors.New("static worker cleanup unavailable")
 		}
+		if response.Header.Get(agentexec.VersionHeader) != agentexec.ProtocolVersion {
+			response.Body.Close()
+			return errors.New("static worker cleanup protocol not confirmed")
+		}
 		status := response.StatusCode
 		var remoteError agentexec.WireError
 		if status >= 400 {
