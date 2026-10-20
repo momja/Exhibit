@@ -37,7 +37,11 @@ export default class extends Controller {
 
   close(event) {
     event?.preventDefault();
-    if (!this.busy) this.dialogTarget.close();
+    if (this.busy) return;
+    this.dialogTarget.close();
+    // Native close events are queued. Restore now so an older event cannot
+    // steal focus from a menu the user has already reopened.
+    this.restoreFocus();
   }
 
   restoreFocus() {

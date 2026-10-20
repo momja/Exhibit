@@ -192,7 +192,12 @@ const click = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.cli
 
 	// Removing the stable host aborts its pending read and closes the native
 	// dialog. Reconnecting the same host has no stale pending guard/listeners.
-	openGallery(id)
+	// A queued close event from the preceding cancellation can arrive after
+	// the action menu reopens; it must not steal the menu's keyboard focus.
+	run(chromedp.Click(chromedp.CSS(`#card-actions-`+id+`-trigger`)),
+		chromedp.Evaluate[chromedp.Void](`document.querySelector('`+dialog+`').dispatchEvent(new Event('close'))`),
+		chromedp.KeyEvent(kb.End), chromedp.KeyEvent(kb.Enter),
+		chromedp.Poll[chromedp.Void](`document.querySelector('`+dialog+`').open`))
 	mode.Store(2)
 	run(chromedp.Click(chromedp.CSS(submit)))
 	request("/api/artifacts/" + id + "/export?format=zip")

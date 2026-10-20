@@ -1,7 +1,7 @@
 {{/* One dialog per stable artifact-download controller host. All choices are
      server markup; only the artifact title and browser interaction vary. */}}
 {{define "artifactDownloadDialog"}}<dialog class="artifact-download-dialog" data-artifact-download-target="dialog" aria-labelledby="artifact-download-title" aria-describedby="artifact-download-description"
-  data-action="cancel->artifact-download#close close->artifact-download#restoreFocus click->artifact-download#backdrop">
+  data-action="cancel->artifact-download#close click->artifact-download#backdrop">
   <form data-action="submit->artifact-download#download">
     <h2 id="artifact-download-title">Download artifact</h2>
     <p class="artifact-download-name" data-artifact-download-target="artifactTitle"></p>
