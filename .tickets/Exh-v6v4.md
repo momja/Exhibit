@@ -9,10 +9,44 @@ priority: 2
 assignee: Max Omdal
 parent: Exh-i0ll
 ---
-# Persist agent transcripts through the HTTP API (single-write-path fix)
+# Persist and restore agent conversation snapshots through the HTTP API
 
-Session.persistTranscript in internal/agent currently calls store.SaveTranscript directly — the one write bypassing the HTTP API. Add PUT /api/artifacts/:id/transcripts and route the agent manager through it. Prerequisite for extracting the agent to its own repository (Exh-k75k): once transcripts go over HTTP, the agent has zero store access. docs/agent.md §Extraction step 1
+Updated 2026-10-20 for Exh-i0ll. Replace `Session.persistTranscript`'s direct
+`Store.SaveTranscript` call and provide a trusted resume-file read so a worker
+can be replaced without its filesystem. This is one extraction prerequisite;
+usage and spend Store dependencies are handled by Exh-hz3g.
 
-## Notes (av-y7td)
+## Design
 
-The row this writes now holds Pi's own session file (migration 032), which a later session can be started from. Authorize the PUT as the service rather than with the session's scoped credential: a session that can write its own history can plant instructions into a conversation the user later resumes. Today the write is the manager's and no model output reaches it.
+- Add a bounded, authenticated supervisor-only snapshot write API (the original
+  proposal was `PUT /api/artifacts/:id/transcripts`) and raw Pi session-file
+  read for the assigned conversation. Ordinary History endpoints continue to
+  return only their current safe projection, never raw files.
+- Authorize using the assigned owner/artifact/conversation and execution
+  attempt. The tool grant cannot reach either operation. Do not give workers
+  a library-wide static token or trust an owner ID supplied in a request body.
+- Retain complete Pi JSONL records, title, stable conversation ID, artifact
+  version provenance, and the existing 64 MiB persistence bound. Enforce the
+  byte limit before allocating the whole input; coordinate with Exh-nueb.
+- Save after completed tool calls as well as settlement and final shutdown,
+  sharing the persistence/drain work in av-rcwx. Distinguish a recoverable
+  partial record from a settled continuation point; interrupted work is not
+  automatically replayed.
+- Use execution fencing and monotonic checkpoint revisions so retries are
+  idempotent and late snapshots cannot replace newer history. Coordinate the
+  assignment contract with Exh-xw7h. Keep version association coherent with
+  the writes represented by the snapshot, rather than trusting worker text.
+- Worker replacement reads the current stored snapshot only after acquiring
+  the conversation assignment. Missing/foreign conversations remain a 404;
+  legacy message-dump conversations remain readable but non-resumable.
+
+## Acceptance Criteria
+
+1. Snapshot persistence and raw resume reads work over HTTP from a separate
+   worker with no Store access; browser and Pi tool credentials cannot call them.
+2. Duplicate, reordered, stale-attempt, oversized, and cross-owner requests
+   cannot corrupt history or publish raw session data to the browser.
+3. A different worker restores the same conversation and title from durable
+   history; ordinary History projections and legacy conversations still work.
+4. Completed tool-call checkpoints and orderly final flush are covered, with
+   interruption represented explicitly and no automatic unfinished-turn replay.
