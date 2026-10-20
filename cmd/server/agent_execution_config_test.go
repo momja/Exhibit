@@ -34,6 +34,22 @@ func TestAgentExecutionModeIsExplicit(t *testing.T) {
 	}
 }
 
+func TestSelfHostingDoesNotInferRemoteExecution(t *testing.T) {
+	clearAgentExecutionEnv(t)
+	// Shared deployment environments can contain unused hosting credentials.
+	// They must not change a self-hosted instance's execution mode or require
+	// configuring infrastructure unless the operator explicitly selects it.
+	t.Setenv("AGENT_WORKER_URL", "not-a-worker-url")
+	t.Setenv("AGENT_WORKER_TOKEN", "unused")
+	t.Setenv("SPRITE_TOKEN", "unused")
+	t.Setenv("AGENT_SPRITE_PREFIX", "unused/invalid")
+	t.Setenv("AGENT_WORKER_RELEASE_URL", "unused")
+	config, err := agentExecutionConfigFromEnv()
+	if err != nil || config.Mode != "local" || config.WorkerURL != "" || config.SpriteToken != "" {
+		t.Fatalf("self-hosting must stay local without infrastructure configuration: config=%+v err=%v", config, err)
+	}
+}
+
 func TestAgentExecutionRejectsIncompleteOrMalformedDeployment(t *testing.T) {
 	for _, test := range []struct {
 		name string

@@ -643,8 +643,16 @@ screen what the agent writes back, or what it saves into an artifact.
 
 ### 4.3 Execution modes and standalone workers
 
-`AGENT_EXECUTION_MODE=local` is the default and uses the bundled Pi. A missing
-local `PI_BIN` disables execution with a warning; the rest of Exhibit still runs.
+**Self-hosting is the default.** Plain `docker build .` and `docker compose up`
+use the local image, which includes Node and Pi. Existing installations do not
+need a worker service, Fly account, release archive, or any `AGENT_WORKER_*` /
+`SPRITE_*` settings. Users continue adding their provider keys in Exhibit;
+platform-supplied keys remain a separate, optional configuration.
+
+`AGENT_EXECUTION_MODE=local` is the default for both the normal image and source
+startup. Only an explicit `remote` or `sprites` setting selects an external
+backend; setting a worker URL or Sprite credential alone does not switch modes.
+A missing local `PI_BIN` disables execution with a warning; the rest of Exhibit still runs.
 `off` deliberately disables execution. `remote` and `sprites` start the complete
 chat/History UI without Pi or Node on core. Invalid or incomplete explicit
 configuration fails startup; remote failure never spawns Pi locally.
@@ -663,8 +671,11 @@ configuration fails startup; remote failure never spawns Pi locally.
 | `AGENT_WORKER_STARTUP_TIMEOUT` | Startup budget (default `2m`) |
 | `AGENT_WORKER_IDLE_RETENTION` | Idle lifetime before reclaim (default `30m`; positive in Sprites mode) |
 
-Build core with `docker build --target core …`; the default image retains local
-Pi for existing self-hosters. Build/install the standalone runtime as described
+For a hosted deployment, opt into the Node/Pi-free image with
+`docker build --target core …`. That optional image defaults to `remote` and
+requires its worker settings; explicitly set `AGENT_EXECUTION_MODE=sprites` plus
+the Sprite settings to use on-demand Sprites. The normal image and Compose setup
+keep local execution. Build/install the standalone runtime as described
 in [`cmd/exhibit-agent/README.md`](../cmd/exhibit-agent/README.md). A static remote
 service must use `--local-assignments` and has a separate maximum of 32 assignments;
 Sprites use fixed identities and their own
