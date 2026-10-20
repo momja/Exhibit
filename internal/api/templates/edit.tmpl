@@ -250,7 +250,6 @@
              its reason in the title when the agent can't run. */}}
         <div class="btn-row">
           <button type="button" class="btn btn-sm" id="widget-generate"{{if not .CanGenerateWidget}} disabled title="{{.GenerateHint}}"{{end}}><i class="ph ph-sparkle"></i> <span id="widget-generate-label">{{if .WidgetSrc}}Regenerate{{else}}Generate widget{{end}}</span></button>
-          <button type="button" class="btn btn-sm btn-sec" id="widget-save"><i class="ph ph-check"></i> Save widget</button>
           <button type="button" class="btn btn-sm btn-sec" id="widget-remove"><i class="ph ph-trash"></i> Remove</button>
           <span id="widget-status" class="text-sm muted"></span>
         </div>
@@ -292,7 +291,7 @@
   </details>
 
   <div class="btn-row">
-    <button class="btn" onclick="save()"><i class="ph ph-check"></i> Save</button>
+    <button class="btn" id="save-button" onclick="save()"><i class="ph ph-check"></i> Save</button>
     <a href="/artifacts/{{.ID}}"><button class="btn btn-sec" type="button"><i class="ph ph-x"></i> Cancel</button></a>
     <span id="status"></span>
     <span class="spacer"></span>

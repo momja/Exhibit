@@ -255,6 +255,9 @@ function renderSecurityPanel() {
 }
 renderSecurityPanel();
 
+// Keep the approval gate across retries when a later widget save fails.
+let pendingSourceFootprint = [];
+
 async function save() {
   const title = document.getElementById('title').value.trim();
   const body  = document.getElementById('body').value;
@@ -290,19 +293,24 @@ async function save() {
     return;
   }
   document.getElementById('body').dataset.revision = data.artifact?.source_revision;
+  if (data.footprint_changed) pendingSourceFootprint = data.network_footprint || [];
   // Blocks the user chose to forget, applied after the PATCH so a failed save
   // leaves every decision exactly as it was. A forget that fails is reported
   // rather than swallowed: the row is already gone from the panel, so silence
   // would show an origin as undecided that the next render still suppresses.
   if (forgotten.length > 0 && !(await forgetBlockedOrigins(status))) return;
+  if (widgetPanel && !(await widgetPanel.save())) {
+    status.textContent = 'Artifact saved, but the widget was not saved. ' +
+      document.getElementById('widget-status').textContent;
+    return;
+  }
   status.textContent = '✓ Saved';
   // If the edited body changed the network footprint, the server re-ran the
   // scan and returned it. Re-run the explicit-approval flow so the user can
   // review/enable new origins — the same gate ingest uses. The allowlist is
   // never seeded from the scan; only the origins the user selects are written.
-  const footprint = data.network_footprint || [];
-  if (data.footprint_changed && footprint.length > 0) {
-    showApproval(footprint);
+  if (pendingSourceFootprint.length > 0) {
+    showApproval(pendingSourceFootprint);
     return;
   }
   setTimeout(() => { window.location.href = '/artifacts/' + ID; }, 500);
@@ -398,18 +406,19 @@ async function deleteArtifact() {
 }
 
 // --- gallery widget panel (av-fafu) ----------------------------------------
-// The widget is a separate document with its own endpoint, so it saves on its
-// own buttons rather than riding the artifact's Save. On success the panel
+// The widget is a separate document with its own endpoint. The page's Save
+// waits for this panel's save before reporting success. On success the panel
 // fires exhibit:widget-saved and htmx re-fetches the cardWidget fragment into
 // the preview slot — no page reload (which would drop the editor buffer) and
 // no markup rebuilt here that the template already owns.
-(function() {
+const widgetPanel = (function() {
   const src = document.getElementById('widget-src');
   const status = document.getElementById('widget-status');
-  const saveBtn = document.getElementById('widget-save');
+  const saveBtn = document.getElementById('save-button');
   const removeBtn = document.getElementById('widget-remove');
   const generateBtn = document.getElementById('widget-generate');
   if (!src) return;
+  let hasWidget = !!src.value.trim();
 
   function refreshPreview() {
     document.body.dispatchEvent(new CustomEvent('exhibit:widget-saved'));
@@ -418,15 +427,20 @@ async function deleteArtifact() {
   // The summary line is the only thing outside this panel that reports whether
   // the artifact has a widget, so keep it honest as the panel changes it.
   function setHasWidget(has) {
+    hasWidget = has;
     const summary = document.getElementById('widget-summary-text');
     if (summary) summary.textContent = has ? 'custom tile' : 'default tile';
     const label = document.getElementById('widget-generate-label');
     if (label) label.textContent = has ? 'Regenerate' : 'Generate widget';
   }
 
-  saveBtn.addEventListener('click', async function() {
+  async function saveWidget() {
     const body = src.value.trim();
-    if (!body) { status.textContent = 'Nothing to save — the source is empty.'; return; }
+    if (!body) {
+      if (!hasWidget) return true;
+      status.textContent = '✗ Widget source cannot be empty. Use Remove to restore the default tile.';
+      return false;
+    }
     status.textContent = 'Saving…';
     try {
       const r = await apiFetch('/api/artifacts/' + ID + '/widget', {
@@ -437,7 +451,7 @@ async function deleteArtifact() {
         status.textContent = r.status === 409
           ? '✗ Widget changed elsewhere. Your edits are still here. Copy them before reloading, then compare and retry.'
           : '✗ ' + ((await r.text().catch(() => '')).trim() || r.statusText);
-        return;
+        return false;
       }
       const data = await r.json();
       src.dataset.revision = data.widget_revision;
@@ -449,10 +463,12 @@ async function deleteArtifact() {
         : '✓ Saved';
       setHasWidget(true);
       refreshPreview();
+      return true;
     } catch (e) {
       status.textContent = '✗ ' + e.message;
+      return false;
     }
-  });
+  }
 
   removeBtn.addEventListener('click', async function() {
     if (!confirm('Remove this artifact’s widget? Its card falls back to the default tile.')) return;
@@ -575,4 +591,5 @@ async function deleteArtifact() {
       }
     });
   }
+  return { save: saveWidget };
 })();

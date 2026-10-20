@@ -1,6 +1,6 @@
 ---
 id: Exh-rwgv
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-20T06:06:27Z
@@ -16,3 +16,9 @@ The artifact edit page has a separate Save widget button, while the bottom Save 
 
 Bottom Save persists artifact and nonempty widget edits; empty default widgets remain absent; widget failures preserve edits and prevent navigation; the separate Save widget button is removed.
 
+
+## Notes
+
+**2026-10-20T06:15:58Z**
+
+Implemented unified artifact/widget Save, removed the widget save button, preserved revisions, default-tile behavior, partial-failure messages, and network approval across retries. Updated widget docs and captured the real editor screenshot. Validation: make assets; 17 focused edit/origin script tests; focused Go edit-page and complete gallery-script suite; browser verified persisted title/source/widget and a competing widget save preserving the draft. Full go test ./... was terminated with exit 143 before completion.
