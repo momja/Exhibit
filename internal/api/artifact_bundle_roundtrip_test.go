@@ -22,7 +22,7 @@ func TestArtifactBundleRoundTripAcrossInstances(t *testing.T) {
 	source := newTestRouter(t)
 	destination := newTestRouter(t)
 	destination.cfg.RenderOrigin = "https://destination-render.example"
-	destination.cfg.ArtifactImportAdminToken = "private-import-credential"
+	destination.cfg.AuthToken = "destination-operator-token"
 	ctx := t.Context()
 	_, err := destination.cfg.Store.UpsertUser(ctx, "other-account", "other@example.test")
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestArtifactBundleRoundTripAcrossInstances(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, deleteArtifactReq(t, source, id).Code)
 
 	request = httptest.NewRequest(http.MethodPost, "/api/admin/users/"+strconv.FormatInt(account.ID, 10)+"/artifacts/import", bytes.NewReader(exported.Body.Bytes()))
-	request.Header.Set("Authorization", "Bearer "+destination.cfg.ArtifactImportAdminToken)
+	request.Header.Set("Authorization", "Bearer "+destination.cfg.AuthToken)
 	request.Header.Set("Content-Type", "application/zip")
 	response := httptest.NewRecorder()
 	destination.ServeHTTP(response, request)

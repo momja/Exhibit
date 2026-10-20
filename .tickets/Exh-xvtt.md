@@ -25,3 +25,7 @@ Implemented the versioned page-based bundle contract, complete ZIP exporter, sha
 **2026-10-20T09:05:50Z**
 
 Final validation: go test ./... passed (API 260.645s, store 116.521s); server build passed. The shared download browser suite passed five consecutive runs after the deterministic queued-close-event focus regression was fixed. Final parser and UI read-only reviews report no findings; all earlier full-diff/security findings are addressed. Published stack: https://github.com/momja/Exhibit/pull/184 -> https://github.com/momja/Exhibit/pull/193 -> https://github.com/momja/Exhibit/pull/194 -> https://github.com/momja/Exhibit/pull/195. All layers are registered with the parent thread.
+
+**2026-10-20T20:33:10Z**
+
+Per user preference, private import now reuses the existing AUTH_TOKEN bearer credential and the shared matchesServiceToken check. Removed the separate import token configuration and startup environment setting. Sessions alone, scoped agent credentials and query credentials remain refused before lookup/body inspection. The server and Compose retain their existing dev-token fallback when AUTH_TOKEN is unset or empty; this does not disable import. Updated operator instructions and cross-instance/authorization/body-limit tests.

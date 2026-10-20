@@ -33,9 +33,6 @@ type Config struct {
 	AppOrigin    string
 	RenderOrigin string
 	AuthToken    string
-	// ArtifactImportAdminToken enables the private, account-targeted bundle
-	// restore endpoint. Neither service credentials nor sessions authorize it.
-	ArtifactImportAdminToken string
 	// Agent chat support (Exh-yvhp). Agent is nil when the pi harness is
 	// unavailable; Secrets seals the BYO provider keys at rest.
 	// AgentCredentials resolves the per-session scoped tokens agent sidecars
@@ -486,7 +483,8 @@ func (ro *Router) setupRoutes() {
 	// naming itself. See publicmode.go for that choice.
 	ro.Get("/api/settings/public", ro.publicSettings)
 
-	// Deliberately outside ordinary API authentication and admin sessions.
+	// The early import guard requires the service bearer token; sessions alone
+	// cannot reach this private endpoint through ordinary API authentication.
 	ro.Post("/api/admin/users/{userID}/artifacts/import", ro.importArtifactBundle)
 
 	// The agent SSE event stream. EventSource can't set headers, so the

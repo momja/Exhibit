@@ -119,7 +119,6 @@ func bodyLimitRouter(t *testing.T) *Router {
 	ro := newTestRouter(t)
 	cfg := ro.cfg
 	cfg.MaxRequestBodyBytes = testBodyLimit
-	cfg.ArtifactImportAdminToken = "private-import-token"
 	cfg.LocalCredential = newTestCredential(t, "admin", "pw")
 	_, err := cfg.Store.UpsertUser(t.Context(), "body-limit-import-owner", "import@example.test")
 	require.NoError(t, err)
@@ -196,10 +195,7 @@ func TestEveryWriteRouteRefusesAnOversizedBody(t *testing.T) {
 func serveBody(ro *Router, method, path, contentType string, body io.Reader, contentLength int64) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, body)
 	req.ContentLength = contentLength
-	req.Header.Set("Authorization", "Bearer secret")
-	if artifactBundleImportPath.MatchString(req.URL.Path) {
-		req.Header.Set("Authorization", "Bearer "+ro.cfg.ArtifactImportAdminToken)
-	}
+	req.Header.Set("Authorization", "Bearer "+ro.cfg.AuthToken)
 	req.Header.Set("Content-Type", contentType)
 	rec := httptest.NewRecorder()
 	ro.ServeHTTP(rec, req)

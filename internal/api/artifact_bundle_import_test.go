@@ -21,8 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const bundleImportTestToken = "dedicated-private-import-token"
-
 func artifactBundleFixture() (artifactBundleManifest, map[string][]byte) {
 	m := artifactBundleManifest{Format: artifactBundleFormat, Version: artifactBundleVersion, ArtifactID: "old-artifact",
 		RenderOrigin: "https://old-render.example", EntryPage: "main", StatePath: "state.json",
@@ -76,15 +74,14 @@ func makeArtifactBundleZIP(t *testing.T, manifest any, files map[string][]byte) 
 
 func postArtifactBundle(ro *Router, ownerID int64, body []byte) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(http.MethodPost, "/api/admin/users/"+strconv.FormatInt(ownerID, 10)+"/artifacts/import", bytes.NewReader(body))
-	r.Header.Set("Authorization", "Bearer "+bundleImportTestToken)
+	r.Header.Set("Authorization", "Bearer "+ro.cfg.AuthToken)
 	w := httptest.NewRecorder()
 	ro.ServeHTTP(w, r)
 	return w
 }
 
-func enableBundleImport(t *testing.T, ro *Router) *store.User {
+func createBundleImportTarget(t *testing.T, ro *Router) *store.User {
 	t.Helper()
-	ro.cfg.ArtifactImportAdminToken = bundleImportTestToken
 	u, err := ro.cfg.Store.UpsertUser(t.Context(), "import-owner", "owner@example.test")
 	require.NoError(t, err)
 	return u
@@ -92,7 +89,7 @@ func enableBundleImport(t *testing.T, ro *Router) *store.User {
 
 func TestArtifactBundleImportRestoresSourceWithFreshIdentitiesAndExactOwnerState(t *testing.T) {
 	ro := newTestRouter(t)
-	u := enableBundleImport(t, ro)
+	u := createBundleImportTarget(t, ro)
 	ro.cfg.RenderOrigin = "https://new-render.example"
 	other, err := ro.cfg.Store.UpsertUser(t.Context(), "other-owner", "other@example.test")
 	require.NoError(t, err)
@@ -179,13 +176,13 @@ func (s *bundleImportLookupTrap) GetUser(context.Context, int64) (*store.User, e
 }
 
 func TestArtifactBundleImportCredentialRefusalsAre404BeforeLookupOrBody(t *testing.T) {
-	for _, configured := range []string{"", bundleImportTestToken} {
+	for _, configured := range []string{"", "operator-token"} {
 		ro := newTestRouter(t)
-		ro.cfg.ArtifactImportAdminToken = configured
+		ro.cfg.AuthToken = configured
 		trap := &bundleImportLookupTrap{Store: ro.cfg.Store}
 		ro.cfg.Store = trap
 		for _, target := range []string{"1", "9999", "invalid"} {
-			for _, authorization := range []string{"", "Bearer secret", "Bearer wrong", "Bearer dedicated-private-import-tokem", "Basic " + bundleImportTestToken} {
+			for _, authorization := range []string{"", "Bearer secret", "Bearer wrong", "Bearer operator-tokem", "Basic " + configured} {
 				for _, contentLength := range []int64{-1, DefaultMaxRequestBodyBytes + 1} {
 					body := &countingBody{remaining: DefaultMaxRequestBodyBytes + 10}
 					r := httptest.NewRequest(http.MethodPost, "/api/admin/users/"+target+"/artifacts/import", body)
@@ -205,7 +202,6 @@ func TestArtifactBundleImportCredentialRefusalsAre404BeforeLookupOrBody(t *testi
 
 func TestArtifactBundleImportSessionsAloneRefuseAndTokenWorksWithoutSession(t *testing.T) {
 	in := newAdminInstance(t)
-	in.ro.cfg.ArtifactImportAdminToken = bundleImportTestToken
 	path := userPath(in.member.ID) + "/artifacts/import"
 	for _, cookie := range []*http.Cookie{in.adminCookie, in.memberCookie} {
 		r := httptest.NewRequest(http.MethodPost, path, strings.NewReader("invalid"))
@@ -222,6 +218,29 @@ func TestArtifactBundleImportSessionsAloneRefuseAndTokenWorksWithoutSession(t *t
 		w = postArtifactBundle(in.ro, id, []byte("invalid"))
 		assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 	}
+}
+
+func TestArtifactBundleImportRefusesScopedAndQueryCredentials(t *testing.T) {
+	ro, registry := newScopedTestRouter(t)
+	grant, err := registry.Issue(defaultOwnerID, "scoped-artifact", "agent-session")
+	require.NoError(t, err)
+	trap := &bundleImportLookupTrap{Store: ro.cfg.Store}
+	ro.cfg.Store = trap
+	for _, credential := range []struct{ header, query string }{
+		{"Bearer " + grant.Token(), ""},
+		{"", "?token=" + ro.cfg.AuthToken},
+		{"", "?access_token=" + ro.cfg.AuthToken},
+	} {
+		body := &countingBody{remaining: DefaultMaxRequestBodyBytes + 10}
+		r := httptest.NewRequest(http.MethodPost, "/api/admin/users/1/artifacts/import"+credential.query, body)
+		r.Header.Set("Authorization", credential.header)
+		r.ContentLength = DefaultMaxRequestBodyBytes + 1
+		w := httptest.NewRecorder()
+		ro.ServeHTTP(w, r)
+		require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+		assert.Zero(t, body.read)
+	}
+	assert.Zero(t, trap.lookups)
 }
 
 func TestArtifactBundleImportRejectsMalformedBundlesBeforeStaging(t *testing.T) {
@@ -274,7 +293,7 @@ func TestArtifactBundleImportRejectsMalformedBundlesBeforeStaging(t *testing.T) 
 		},
 	}
 	ro, dir := newTestRouterWithBlobDir(t)
-	u := enableBundleImport(t, ro)
+	u := createBundleImportTarget(t, ro)
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
 			m, files := artifactBundleFixture()
@@ -410,7 +429,7 @@ func TestArtifactBundleImportQuotaAndStagingFailuresPublishNothing(t *testing.T)
 	for _, failure := range []string{"quota", "publication", "partial staging"} {
 		t.Run(failure, func(t *testing.T) {
 			ro, dir := newTestRouterWithBlobDir(t)
-			u := enableBundleImport(t, ro)
+			u := createBundleImportTarget(t, ro)
 			realStore := ro.cfg.Store
 			switch failure {
 			case "quota":
@@ -446,7 +465,7 @@ func (b bundleImportDeleteFailure) Delete(context.Context, string) error {
 
 func TestArtifactBundleImportFailedCleanupRemainsDurablyReclaimable(t *testing.T) {
 	ro, dir := newTestRouterWithBlobDir(t)
-	u := enableBundleImport(t, ro)
+	u := createBundleImportTarget(t, ro)
 	realStore, realBlob := ro.cfg.Store, ro.cfg.Blob
 	ro.cfg.Store = bundleImportFailingStore{Store: realStore}
 	ro.cfg.Blob = bundleImportDeleteFailure{Store: realBlob}
@@ -467,7 +486,7 @@ func TestArtifactBundleImportFailedCleanupRemainsDurablyReclaimable(t *testing.T
 
 func TestArtifactBundleImportReusesOwnerPayloadsForQuotaAndFailedCleanup(t *testing.T) {
 	ro, dir := newTestRouterWithBlobDir(t)
-	u := enableBundleImport(t, ro)
+	u := createBundleImportTarget(t, ro)
 	m, files := artifactBundleFixture()
 	body := makeArtifactBundleZIP(t, m, files)
 	w := postArtifactBundle(ro, u.ID, body)
@@ -510,7 +529,7 @@ func TestArtifactBundleImportReusesOwnerPayloadsForQuotaAndFailedCleanup(t *test
 
 func TestArtifactBundleImportedAssetsRestoreThroughStoredAssets(t *testing.T) {
 	ro := newTestRouter(t)
-	u := enableBundleImport(t, ro)
+	u := createBundleImportTarget(t, ro)
 	require.Equal(t, defaultOwnerID, u.ID)
 	m, files := artifactBundleFixture()
 	w := postArtifactBundle(ro, u.ID, makeArtifactBundleZIP(t, m, files))
@@ -525,7 +544,7 @@ func TestArtifactBundleImportedAssetsRestoreThroughStoredAssets(t *testing.T) {
 
 func TestArtifactBundleImportWithoutWidgetAssetsOrState(t *testing.T) {
 	ro := newTestRouter(t)
-	u := enableBundleImport(t, ro)
+	u := createBundleImportTarget(t, ro)
 	m, files := artifactBundleFixture()
 	delete(files, m.Widget.Path)
 	delete(files, m.Widget.SourcePath)
@@ -610,7 +629,7 @@ func TestArtifactBundleImportDistinguishesCommentsFromLiveURLs(t *testing.T) {
 
 func TestArtifactBundleImportRejectsExcessiveNestedHTMLBeforeStaging(t *testing.T) {
 	ro := newTestRouter(t)
-	user := enableBundleImport(t, ro)
+	user := createBundleImportTarget(t, ro)
 	manifest, files := artifactBundleFixture()
 	files[manifest.Pages[0].SourcePath] = []byte(artifactBundleNestedHTML(64, "<p>nested</p>"))
 	w := postArtifactBundle(ro, user.ID, makeArtifactBundleZIP(t, manifest, files))

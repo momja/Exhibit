@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,14 +32,9 @@ var artifactBundleImportPath = regexp.MustCompile(`^/api/admin/users/[^/]+/artif
 // not distinguish a disabled/unauthorized endpoint from a nonexistent one.
 func (ro *Router) artifactBundleImportGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if artifactBundleImportPath.MatchString(r.URL.Path) {
-			candidate := sha256.Sum256([]byte(bearerToken(r)))
-			expected := sha256.Sum256([]byte(ro.cfg.ArtifactImportAdminToken))
-			matches := subtle.ConstantTimeCompare(candidate[:], expected[:])
-			if ro.cfg.ArtifactImportAdminToken == "" || matches != 1 {
-				http.NotFound(w, r)
-				return
-			}
+		if artifactBundleImportPath.MatchString(r.URL.Path) && !ro.matchesServiceToken(bearerToken(r)) {
+			http.NotFound(w, r)
+			return
 		}
 		next.ServeHTTP(w, r)
 	})

@@ -27,11 +27,10 @@ are outside this snapshot. Metadata records source title/URL/tier and approvals;
 an imported artifact starts private with fresh network and capability approvals.
 
 The private import is `POST /api/admin/users/:userID/artifacts/import`, with the
-raw ZIP as its request body. It is disabled unless
-`ARTIFACT_IMPORT_ADMIN_TOKEN` is configured and requires that exact token in an
-Authorization Bearer header. An ordinary service token or admin session does not
-authorize import. Refusals return 404 before target lookup or body parsing. No
-gallery/admin controls or public API documentation advertise this endpoint.
+raw ZIP as its request body. It requires the existing instance `AUTH_TOKEN` in
+an Authorization Bearer header. Admin and ordinary sessions alone do not
+authorize import. Refusals return 404 before target lookup or body parsing.
+No gallery/admin controls or public API documentation advertise this endpoint.
 Operator details belong in this document and deployment configuration only.
 
 Import creates a new artifact, returns 201 with its ordinary artifact JSON, and
@@ -50,11 +49,13 @@ headers or import before staging.
 
 ## Operator restore
 
-Set `ARTIFACT_IMPORT_ADMIN_TOKEN` to a dedicated secret on the destination
-server, then restart it. Keep this separate from `AUTH_TOKEN`; service tokens,
-admin sessions, and ordinary sessions cannot authorize bundle imports. Leaving
-the variable empty disables the endpoint. The configured secret is accepted
-only through `Authorization: Bearer …`, never through a query parameter.
+Use the destination server's existing `AUTH_TOKEN`, the operator credential that
+already has administrative API authority. No import-specific secret or enable
+switch is needed. Only `Authorization: Bearer …` authorizes import; browser
+sessions, scoped agent credentials, and query parameters do not. The server
+and Compose use `dev-token` when `AUTH_TOKEN` is unset or empty, so emptying
+the environment variable does not disable import. Use the destination
+server’s effective token.
 
 Provision the destination account first and use its integer user ID. It must
 exist and remain enabled through publication. Send the exported ZIP directly,
@@ -62,7 +63,7 @@ without multipart encoding:
 
 ```sh
 curl --fail-with-body \
-  -H "Authorization: Bearer $ARTIFACT_IMPORT_ADMIN_TOKEN" \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
   -H 'Content-Type: application/zip' \
   --data-binary @artifact.zip \
   https://exhibit.example.com/api/admin/users/42/artifacts/import
@@ -89,7 +90,7 @@ metadata/state, unsafe or duplicate paths, unlisted files, or a bad CRC fails
 before any blob is staged. Destination storage quotas apply to the rewritten
 source/widget and distinct asset payloads after rewriting.
 
-A missing or wrong dedicated token returns the same `404` before account
+A missing or wrong service token returns the same `404` before account
 lookup or request-body inspection, including for declared oversized uploads.
 With the correct token, a nonexistent/disabled account returns `404`, invalid
 archives return `400`, and an upload/quota/state-key limit returns `413`.
