@@ -65,13 +65,6 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .pip-popup[hidden]{display:none}
 @keyframes pip-pop{from{opacity:0;scale:.96}}
 .pip-menu{min-width:236px;font-size:13px}
-/* Items nest inside the menu: outer radius - 6px pad - 1px border. */
-.pip-menu a,.pip-menu button{display:flex;width:100%;align-items:center;gap:10px;padding:7px 10px;border:0;border-radius:calc(var(--radius-lg) - 7px);background:none;
-  color:var(--color-ink);font:inherit;text-align:left;text-decoration:none;cursor:pointer}
-.pip-menu .ph{font-size:16px;width:18px;color:var(--color-muted)}
-.pip-menu a:hover,.pip-menu a:focus-visible,.pip-menu button:hover,.pip-menu button:focus-visible{background:var(--color-accent-tint);color:var(--brand-blue);outline:none}
-.pip-menu a:hover .ph,.pip-menu a:focus-visible .ph,.pip-menu button:hover .ph,.pip-menu button:focus-visible .ph{color:var(--brand-blue)}
-.pip-menu hr{border:0;border-top:1px solid var(--color-hairline);margin:5px 4px}
 .pip-info-meta{padding:6px 10px 0;color:var(--color-muted);font-size:11.5px}
 /* The receipt is the shared capabilityPopover partial, which is a hidden
    hover popover elsewhere; here it is the card's body, always shown. */

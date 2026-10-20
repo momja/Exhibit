@@ -1,0 +1,16 @@
+{{/* One native modal per gallery. Native dialog provides focus containment,
+     Escape, and an inert background while a duplication is in progress. */}}
+{{define "duplicateDialog"}}<dialog class="duplicate-dialog" data-duplicate-dialog aria-labelledby="{{.ID}}-duplicate-title">
+  <form>
+    <h2 id="{{.ID}}-duplicate-title">Duplicate artifact</h2>
+    <label class="duplicate-title-label" for="{{.ID}}-duplicate-name">Title</label>
+    <input id="{{.ID}}-duplicate-name" name="title" type="text" required autocomplete="off">
+    <label class="duplicate-option"><input name="copy_share_settings" type="checkbox"><span>Copy share settings<small>Give the same people access and create a new public link if enabled.</small></span></label>
+    <label class="duplicate-option"><input name="copy_data" type="checkbox"><span>Copy data<small>Include your saved artifact data.</small></span></label>
+    <p class="duplicate-status" data-duplicate-status role="status" aria-live="polite"></p>
+    <div class="duplicate-actions">
+      <button class="btn btn-sec" type="button" data-duplicate-cancel>Cancel</button>
+      <button class="btn" type="submit">Duplicate artifact</button>
+    </div>
+  </form>
+</dialog>{{end}}

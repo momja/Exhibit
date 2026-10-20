@@ -452,7 +452,10 @@ widget documents beyond a 400px viewport buffer and remounts their existing
 server-created iframe nodes on return (av-1a9m). Reloads go through an
 owner-scoped app-origin redirect to obtain a fresh render token; initial loads
 keep their direct render URL. The edit and agent previews keep their own
-lifecycles.
+lifecycles. Gallery duplication dispatches the scoped,
+bubbling `exhibit:artifacts-changed` event; the gallery controller clears its
+search and resets paging before firing that form's existing htmx search trigger.
+The modal and card markup remain server templates (`artifact-duplication.md`).
 
 **Home-screen app shell (av-fdcx).** Every app-origin page head includes the shared
 `pwaHead` partial: the `manifest.json` link plus the `apple-*` tags iOS reads instead

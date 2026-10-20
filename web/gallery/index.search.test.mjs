@@ -150,3 +150,19 @@ test("request revisions belong to one gallery, even with the same query", async 
   assert.equal(event.defaultPrevented, false);
   await second.form.dispatchEvent({ type: 'submit' });
 });
+
+test('an artifact change clears a filtered gallery and invalidates in-flight old search results', async () => {
+  const { root, form, input } = await loadIndex();
+  input.value = 'old title';
+  await input.dispatchEvent({ type: 'input' });
+  const ctx = { sourceElement: form, request: { action: '/partials/gallery-grid?q=old%20title', signal: { aborted: false } } };
+  await root.dispatchEvent(htmxEvent('htmx:before:request', ctx));
+  let requested = 0;
+  form.addEventListener('exhibit:gallery-search', () => requested++);
+  await root.dispatchEvent({ type: 'exhibit:artifacts-changed' });
+  assert.equal(input.value, '');
+  assert.equal(requested, 1);
+  const stale = htmxEvent('htmx:before:swap', ctx);
+  await root.dispatchEvent(stale);
+  assert.equal(stale.defaultPrevented, true);
+});

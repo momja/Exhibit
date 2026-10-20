@@ -65,20 +65,12 @@
   <a class="btn btn-sec icon-btn" href="/profile" aria-label="Your account" title="Your account"><i class="ph ph-user-circle" aria-hidden="true"></i></a>
 </header>
 <main>
-{{/* One card is the tile plus a single meta row (av-uvc6): title, tag dots,
-     the posture and sharing glyphs, and Edit. No created date and no
-     "Sandboxed" label; a sandboxed, private artifact carries no marks at all.
-
-     The whole card opens the artifact's detail/viewer page — the card body
-     and the title link are the affordances (gallery.js).
-
-     The one card action that is NOT the detail page — Edit — is a pencil at
-     the row's end, revealed on hover or focus (av-8u7p, av-uvc6). It stays in
-     the accessibility tree while hidden, so a screen reader listing links
-     still finds it, and its accessible name leads with "Edit" and names the
-     artifact; the title attribute is the word a pointer user sees. */}}
+{{/* Cards share their tile, title, status marks, and action menu with every
+     gallery fragment. Card clicks open the viewer; menu actions have their
+     own controls and are handled through delegation after htmx swaps. */}}
 {{template "galleryResults" .Grid}}
 </main>
+{{if not .ReadOnly}}{{template "duplicateDialog" .Grid}}{{end}}
 </div>
 
 {{/* No CodeMirror island here: the only editor on this page was the ingest

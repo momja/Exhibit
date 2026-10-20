@@ -168,6 +168,15 @@ input,select,textarea{font-size:var(--field-font-size)}
 .capability-wrap{position:relative;display:inline-flex}
 .capability-popover{position:absolute;top:100%;right:0;margin-top:var(--space-3);z-index:30;width:260px;max-width:80vw;background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);padding:var(--space-5);font-size:12px;color:var(--color-ink-soft);text-align:left;visibility:hidden;opacity:0;pointer-events:none;transition:opacity .12s ease}
 .capability-wrap.is-open .capability-popover{visibility:visible;opacity:1;pointer-events:auto}
+/* Shared by the artifact pill and gallery card action menus. */
+.action-menu{padding:6px;background:var(--color-panel);border:1px solid var(--color-hairline-strong);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);font-size:13px;cursor:default}
+.action-menu[hidden]{display:none}
+.action-menu a,.action-menu button{display:flex;width:100%;align-items:center;gap:10px;padding:7px 10px;border:0;border-radius:calc(var(--radius-lg) - 7px);background:none;color:var(--color-ink);font:inherit;text-align:left;text-decoration:none;cursor:pointer}
+.action-menu .ph{font-size:16px;width:18px;color:var(--color-muted)}
+.action-menu a:hover,.action-menu a:focus-visible,.action-menu button:hover,.action-menu button:focus-visible{background:var(--color-accent-tint);color:var(--brand-blue);outline:none}
+.action-menu a:hover .ph,.action-menu a:focus-visible .ph,.action-menu button:hover .ph,.action-menu button:focus-visible .ph{color:var(--brand-blue)}
+.action-menu hr{border:0;border-top:1px solid var(--color-hairline);margin:5px 4px}
+
 .capability-popover-header{font-weight:600;color:var(--color-ink);margin-bottom:var(--space-4)}
 .capability-popover-row{display:flex;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)}
 .capability-popover-row:last-child{margin-bottom:0}

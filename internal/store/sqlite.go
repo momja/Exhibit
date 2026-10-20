@@ -362,7 +362,9 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 	}
 
 	// Paging needs a total order even when several artifacts share a timestamp.
-	query += " ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?"
+	// SQLite's default timestamps and RFC3339 (including subsecond clone
+	// timestamps) sort differently as text. Compare their actual instants.
+	query += " ORDER BY julianday(a.created_at) DESC, a.id DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, opts.Offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)

@@ -388,6 +388,7 @@ type ArtifactSnapshot struct {
 type Store interface {
 	// Artifacts. PutArtifact takes the owner from a.OwnerID.
 	PutArtifact(ctx context.Context, a *Artifact) error
+	DuplicateArtifact(ctx context.Context, ownerID int64, sourceID string, duplicate ArtifactDuplicate) (bool, error)
 	// GetArtifact returns (nil, nil) when the artifact does not exist *or*
 	// belongs to another owner — the two cases are deliberately identical
 	// (see the type comment). Handlers turn nil into 404.
@@ -472,6 +473,8 @@ type Store interface {
 	// the artifact id, so one artifact cannot address another's.
 	ReplaceArtifactAssets(ctx context.Context, ownerID int64, artifactID, generationID string, assets []ArtifactAsset) ([]string, error)
 	ListArtifactAssets(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactAsset, error)
+	// GetArtifactAsset resolves current or historical asset IDs for the owner.
+	GetArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) (*ArtifactAsset, error)
 	ArtifactAssetsUnscoped(ctx context.Context, artifactID string) ([]ArtifactAsset, error)
 	GetArtifactAssetUnscoped(ctx context.Context, artifactID, assetID string) (*ArtifactAsset, error)
 	DeleteArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) ([]string, error)
