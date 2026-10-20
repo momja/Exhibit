@@ -6,6 +6,8 @@ used the current [OWASP Top 10:2025 categories](https://top10.owasp.org/2025/),
 source inspection, and focused local attack reproductions. It did not attack the
 live demo or external applications. No outstanding new security finding remained
 after the follow-up checks.
+Subsequent rebases retained the reviewed import-handler and store logic while
+reconciling the compact architecture documentation and existing gallery changes.
 
 ## Findings and fixes
 
