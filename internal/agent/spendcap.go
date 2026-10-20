@@ -301,6 +301,16 @@ func (s *Session) checkInstanceCap() {
 	}()
 }
 
+// EnforceInstanceCap applies the instance ceiling after a trusted usage-ledger
+// write, including late receipts with no live reporting session. It probes only
+// the instance layer; owner and session budgets remain between-runs gates.
+// Callers provide the probe's context, and abort RPCs use the usual stop path.
+func (m *Manager) EnforceInstanceCap(ctx context.Context) {
+	if refusal := m.probeInstanceCap(ctx); refusal != nil {
+		m.stopRunsForInstanceCap(refusal, nil)
+	}
+}
+
 // stopRunsForInstanceCap applies one probe's refusal across this manager,
 // regardless of owner. Snapshot first: stopping takes session locks and sends
 // abort RPCs, neither of which may hold the manager's registry lock. Do not
@@ -310,7 +320,9 @@ func (m *Manager) stopRunsForInstanceCap(refusal *CapRefusal, reporting *Session
 	// Include the reporting session once even if it has left the registry
 	// while draining final usage. stopRunForCap checks whether it is active.
 	sessions := make([]*Session, 0, len(m.sessions)+1)
-	sessions = append(sessions, reporting)
+	if reporting != nil {
+		sessions = append(sessions, reporting)
+	}
 	for _, s := range m.sessions {
 		if s != reporting {
 			sessions = append(sessions, s)

@@ -74,6 +74,62 @@ func (w *instanceFanoutAbortRecorder) Write(p []byte) (int, error) {
 	return w.WriteCloser.Write(p)
 }
 
+func TestEnforceInstanceCapAfterLateReceiptStopsPlatformRunsAcrossOwners(t *testing.T) {
+	first, db := newMeteringSession(t, true)
+	m := first.mgr
+	m.cfg.Caps = SpendCaps{
+		OwnerMicrosPerMonth: microsPtr(0), SessionMicros: microsPtr(0),
+		InstanceMicrosPerMonth: microsPtr(1_000_000),
+	}
+	spend := &instanceFanoutSpendStore{Store: db}
+	m.st = spend
+	first.ID, first.OwnerID, first.streaming = "first-platform-owner", 11, true
+	m.sessions = map[string]*Session{first.ID: first}
+	second := newInstanceFanoutSession(t, m, "second-platform-owner", 22, true)
+	byok := newInstanceFanoutSession(t, m, "byok", 33, false)
+	idle := newInstanceFanoutSession(t, m, "idle", 44, true)
+	idle.streaming = false
+	transports := make(map[*Session]*instanceFanoutAbortRecorder)
+	for _, s := range []*Session{first, second, byok, idle} {
+		transport := &instanceFanoutAbortRecorder{WriteCloser: s.stdin}
+		s.stdin = transport
+		transports[s] = transport
+	}
+	seedSpend(t, db, first.OwnerID, first.ID, store.PaidByPlatform, store.UsageSourceModel, 600_000)
+	seedSpend(t, db, second.OwnerID, second.ID, store.PaidByPlatform, store.UsageSourceTool, 300_000)
+	seedSpend(t, db, byok.OwnerID, byok.ID, store.PaidByUser, store.UsageSourceModel, 50_000_000)
+
+	// A trusted supervisor writes a late receipt directly to the central
+	// ledger. Its retired execution has no Session in this manager.
+	lateReceipt := store.AgentUsage{OwnerID: 99, SessionID: "retired-execution",
+		PaidBy: store.PaidByPlatform, Source: store.UsageSourceModel, CostMicros: 100_000}
+	require.NoError(t, m.st.RecordAgentUsage(context.Background(), lateReceipt))
+	require.NotContains(t, m.sessions, lateReceipt.SessionID)
+	m.EnforceInstanceCap(context.Background())
+
+	refusal := &CapRefusal{Which: "instance", LimitMicros: 1_000_000, UsedMicros: 1_000_000,
+		ResetAt: nextMonth(time.Now())}
+	for _, s := range []*Session{first, second} {
+		requireInstanceFanoutNotice(t, s, "instance", refusal.Message())
+		require.Eventually(t, func() bool { return transports[s].aborts.Load() == 1 }, 5*time.Second, time.Millisecond)
+	}
+	for _, s := range []*Session{byok, idle} {
+		assert.Empty(t, instanceFanoutNotices(s))
+		assert.Zero(t, transports[s].aborts.Load(), "%s must not receive an abort", s.ID)
+	}
+	assert.NoError(t, byok.capBeforePrompt())
+	assert.Equal(t, int32(1), spend.probes.Load(), "late-receipt enforcement probes the instance exactly once")
+}
+
+func TestEnforceInstanceCapWithoutInstanceLimitDoesNotProbe(t *testing.T) {
+	spend := &instanceFanoutSpendStore{}
+	m := &Manager{st: spend, cfg: Config{Caps: SpendCaps{
+		OwnerMicrosPerMonth: microsPtr(0), SessionMicros: microsPtr(0),
+	}}}
+	m.EnforceInstanceCap(context.Background())
+	assert.Zero(t, spend.probes.Load(), "owner and session limits do not enable instance enforcement")
+}
+
 func TestInstanceCapBYOKGuardrailReceiptStopsPlatformPeers(t *testing.T) {
 	byok, db := newMeteringSession(t, false)
 	m := byok.mgr
