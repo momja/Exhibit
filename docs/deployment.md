@@ -637,17 +637,62 @@ lets messages through when it breaks is not one. The log records why.
 
 What it screens: each message's own words, not the artifact source attached
 to it, and not images. It screens against a built-in policy drafted from
-Anthropic's and OpenAI's prohibited uses (`internal/agent/ext/guard.ts`).
+Anthropic's and OpenAI's prohibited uses (`internal/agentassets/ext/guard.ts`).
 Off-topic use is allowed; only prohibited content is blocked. It does not
 screen what the agent writes back, or what it saves into an artifact.
 
-### 4.3 If `pi` is missing
+### 4.3 Execution modes and standalone workers
 
-The server still starts without `pi` on `PATH`, logs
-`pi binary not found; agent support disabled`, and answers every agent call
-with `503`. The pages still offer the agent, so users meet a disabled banner
-and refused requests. Treat that log line as a broken install and fix the
-image or `PI_BIN`. Running without the agent is not a supported configuration.
+`AGENT_EXECUTION_MODE=local` is the default and uses the bundled Pi. A missing
+local `PI_BIN` disables execution with a warning; the rest of Exhibit still runs.
+`off` deliberately disables execution. `remote` and `sprites` start the complete
+chat/History UI without Pi or Node on core. Invalid or incomplete explicit
+configuration fails startup; remote failure never spawns Pi locally.
+
+| Setting | Meaning |
+| --- | --- |
+| `AGENT_WORKER_URL` | Required in `remote`: authenticated standalone service URL, normally HTTPS |
+| `AGENT_WORKER_TOKEN` | Required in `remote`: separate random worker credential, at least 32 characters; never an Exhibit operator/tool token |
+| `AGENT_WORKER_ALLOW_INSECURE` | Explicit private-network HTTP opt-in; loopback development does not need it |
+| `SPRITE_TOKEN` | Required in `sprites`: management credential held only by core |
+| `AGENT_SPRITE_PREFIX` | Required exclusive deployment namespace, 3–27 lowercase letters/digits/hyphens |
+| `AGENT_WORKER_RELEASE_URL` | Required in `sprites`: immutable HTTPS runtime tar.gz archive |
+| `AGENT_WORKER_RELEASE_VERSION` | Required exact runtime release identity |
+| `AGENT_WORKER_RELEASE_SHA256` | Required lowercase SHA256 of the complete archive |
+| `AGENT_MAX_WORKERS` | Central fleet admission ceiling (default 32); retained Sprites also count toward infrastructure capacity |
+| `AGENT_WORKER_STARTUP_TIMEOUT` | Startup budget (default `2m`) |
+| `AGENT_WORKER_IDLE_RETENTION` | Idle lifetime before reclaim (default `30m`; positive in Sprites mode) |
+
+Build core with `docker build --target core …`; the default image retains local
+Pi for existing self-hosters. Build/install the standalone runtime as described
+in [`cmd/exhibit-agent/README.md`](../cmd/exhibit-agent/README.md). A static remote
+service must use `--local-assignments`; Sprites use fixed identities and their own
+transport/token. Provider keys and supervisor configuration travel in authenticated
+request bodies, never browser bootstrap, URLs or command arguments.
+
+Keep `DATA_DIR/agent-workers` with the core volume and the same `EXHIBIT_SECRET`.
+It contains a domain-separated, encrypted request journal, with private directory
+and file permissions and fsync/rename replacement. Requests are durable before
+provisioning. Core startup fences old assignments; unconfirmed infrastructure
+cleanup remains journaled for retry. Account deletion also fences/removes workers.
+Do not copy this directory into a worker. A deployment remains one SQLite-writing
+core; adding workers scales execution, not database availability.
+
+Drain before runtime upgrades or mode changes: SIGTERM stops admission, drains
+worker output and saves final checkpoints while the API remains available, then
+shuts down listeners. Roll back core and the complete pinned worker release with
+compatible protocol version 1. Never replace binaries underneath an active
+assignment. After worker loss, use History's explicit Continue; an uncertain prompt
+is not replayed. Completed artifact saves and acknowledged snapshots remain saved.
+If cleanup fails, retain the journal and restore management connectivity; use the
+exclusive prefix to inspect leftovers without probing/waking worker HTTP endpoints.
+
+An open idle browser must not hold Sprite compute: event streams/keep-alives and
+in-Sprite Tasks API holds release after durable settlement. Sweeps use management
+metadata only. See [agent-workers-sprites.md](agent-workers-sprites.md) for cleanup
+and rollout checks. No live Sprite credentials were configured during development;
+real simultaneous Sprites, cold/warm latency, idle compute charges, retained-disk
+costs, actual org limits and rollback under platform failure remain unverified.
 
 ## 5. Reverse proxy / TLS
 

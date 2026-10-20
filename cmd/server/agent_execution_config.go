@@ -43,7 +43,6 @@ func agentExecutionConfigFromEnv() (agentExecutionConfig, error) {
 	}
 	switch cfg.Mode {
 	case "off", "local":
-		return cfg, nil
 	case "remote":
 		cfg.WorkerURL = strings.TrimSpace(os.Getenv("AGENT_WORKER_URL"))
 		cfg.WorkerToken = strings.TrimSpace(os.Getenv("AGENT_WORKER_TOKEN"))

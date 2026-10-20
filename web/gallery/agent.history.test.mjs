@@ -30,7 +30,7 @@ async function loadAgent({ artifact = null } = {}) {
     alert: () => {}, confirm: () => true
   }, { "net-modal": { hidden: true }, "key-modal": { hidden: true } });
   const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
-    ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion']);
+    ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion', 'setSession']);
   Object.assign(page.context, page.window, bindings);
   return page;
 }
@@ -90,7 +90,7 @@ async function boot(responses) {
     alert: () => {}, confirm: () => true
   }, { "net-modal": { hidden: true }, "key-modal": { hidden: true } });
   const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
-    ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion']);
+    ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion', 'setSession']);
   Object.assign(page.context, page.window, bindings);
   await new Promise((resolve) => setTimeout(resolve, 0));
   return { ...page, api };
@@ -468,4 +468,18 @@ test('streamed response blocks keep their own message action shells', async () =
   assert.equal(shells.length, 2);
   assert.equal(shells[1].content.textContent, 'Another block');
   assert.equal(shells[0].content.textContent, 'First\nsecond');
+});
+
+test("an interruption is shown once across replay, and a new continuation gets its own notice", async () => {
+  const page = await loadAgent({artifact: {id: "art-1", title: "Counter"}});
+  const event = {type: "exhibit_execution_interrupted", message: "The previous run was interrupted; unfinished work was not replayed."};
+  page.context.setSession("conversation");
+  const before = page.byId("messages").children.length;
+  page.context.handleAgentEvent(event);
+  page.context.handleAgentEvent(event);
+  assert.equal(page.byId("messages").children.length, before + 1);
+  page.context.setSession(null);
+  page.context.setSession("conversation");
+  page.context.handleAgentEvent(event);
+  assert.equal(page.byId("messages").children.length, before + 2);
 });

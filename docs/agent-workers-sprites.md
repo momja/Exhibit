@@ -3,8 +3,8 @@
 Implementation scope: [Exh-fuxp](../.tickets/Exh-fuxp.md), under
 [Exh-i0ll](../.tickets/Exh-i0ll.md). `internal/sprites` is an infrastructure
 backend, independent of `internal/agent`, HTTP handlers, and Store. The core
-Manager still owns coordination. This package does not change production mode
-selection or start resources on its own.
+Manager still owns coordination. `cmd/server/agent_workers.go` connects it to production mode selection, durable
+admission, encrypted request journaling, lease renewal and scheduled cleanup.
 
 ## Platform contracts checked 2026-10-20
 
@@ -43,7 +43,7 @@ none is claimed to have been exercised against a live org in this implementation
 Construct `sprites.New(sprites.Config{...})`. Required values are `Token`, an
 exclusive deployment `Prefix`, and `Release{Version, URL, SHA256}`. The URL is a
 complete pinned runtime **archive**, even if the outer configuration calls it
-`AGENT_WORKER_BINARY_URL`. Require an immutable release version and a separate
+`AGENT_WORKER_RELEASE_URL`. Require an immutable release version and a separate
 SHA256 setting; a bare Go binary does not satisfy the archive contract.
 
 Suggested configuration mapping, owned by the core integration:
@@ -52,9 +52,9 @@ Suggested configuration mapping, owned by the core integration:
 | --- | --- |
 | `SPRITE_TOKEN` | `Config.Token`, coordinator only |
 | `AGENT_SPRITE_PREFIX` | `Config.Prefix` |
-| `AGENT_WORKER_BINARY_URL` | `Config.Release.URL` (tar.gz runtime bundle) |
+| `AGENT_WORKER_RELEASE_URL` | `Config.Release.URL` (tar.gz runtime bundle) |
 | `AGENT_WORKER_RELEASE_VERSION` | `Config.Release.Version` |
-| `AGENT_WORKER_BINARY_SHA256` | `Config.Release.SHA256` |
+| `AGENT_WORKER_RELEASE_SHA256` | `Config.Release.SHA256` |
 | `AGENT_MAX_WORKERS` | `Config.MaxWorkers` and central active admission |
 | `AGENT_WORKER_STARTUP_TIMEOUT` | `Config.StartupTimeout` |
 | `AGENT_WORKER_IDLE_RETENTION` | `Config.IdleRetention` |
@@ -294,6 +294,13 @@ in the implementation environment. No paid Sprite was launched. A real release
 archive, live service bootstrap, two concurrent conversations, forced loss,
 actual org quota/rate behavior, warm/cold timings, idle compute suspension,
 retained-storage usage/billing, and a production rollback remain unvalidated.
-The parent must wire runtime holds, central assignment persistence/fencing and
-snapshots, transport adaptation, retention scheduling, mode/config selection,
-and end-to-end validation before claiming the epic's rollout acceptance criteria.
+Core integration now wires holds, shared durable authority, encrypted request
+journaling, snapshots, per-Sprite transports, retention scheduling and mode
+selection. Local validation additionally drives real pinned Pi through standalone
+HTTP services with a fake Sprite fleet: simultaneous distinct-owner turns, central
+admission, source/state changes, cold service replacement, resume and priced-usage
+retry continuity, guardrail and aggregate instance-budget refusal, idle renewal
+without worker HTTP, and account cleanup. Handler tests cover login/body-limit
+separation, atomic concurrent create, stale denial and exact source/widget version
+association. Blocking guards and management cleanup cannot stall other workers.
+These checks do not establish the live platform or billing evidence above.

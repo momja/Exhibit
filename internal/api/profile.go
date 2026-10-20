@@ -278,6 +278,13 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if ro.cfg.DeleteAgentOwner != nil {
+		if err := ro.cfg.DeleteAgentOwner(ctx, ownerID); err != nil {
+			serverError(w, r, "delete account workers", err)
+			return
+		}
+	}
+
 	// The rows are gone, which took the sessions with them (ON DELETE CASCADE
 	// on sessions.user_id) — so the browser is already signed out server-side.
 	// Clearing the cookie stops it presenting a credential no row backs.

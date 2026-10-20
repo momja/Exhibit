@@ -224,7 +224,7 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)
 	if err != nil {
-		writeAgentCreateError(w, r, "create widget agent session", err)
+		ro.writeAgentCreateError(w, r, "create widget agent session", err)
 		return
 	}
 	if err := s.Prompt(r.Context(), generateWidgetPrompt, nil, nil); err != nil {
@@ -298,10 +298,14 @@ func (ro *Router) deleteWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	none := ""
-	if _, err := ro.cfg.Store.CommitVersion(r.Context(), ownerID, id, store.VersionChange{
+	version, err := ro.cfg.Store.CommitVersion(r.Context(), ownerID, id, store.VersionChange{
 		Provenance: versionProvenance(r, store.VersionEdit), WidgetBlobID: &none,
 		ExpectedWidgetRevision: expected, CheckOnly: a.WidgetBlobID == "",
-	}); err != nil {
+	})
+	if err == nil && a.WidgetBlobID != "" {
+		err = ro.recordAgentVersion(r.Context(), version)
+	}
+	if err != nil {
 		writeArtifactError(w, r, "remove widget", err)
 		return
 	}
