@@ -44,6 +44,9 @@ type Config struct {
 	// Runner selects execution transport. Nil retains the in-process local mode.
 	// A remote Runner requires neither WorkRoot nor PiBin on the coordinator.
 	Runner agentexec.Runner
+	// MaxSessions bounds concurrent starts/processes and retained failed drains
+	// across all owners. Zero defaults to 32; the per-owner limit remains ten.
+	MaxSessions int
 	// ReserveExecution runs after local admission and before provisioning/spawn.
 	// It lets the durable coordinator reserve/fence this attempt and replace the
 	// tool token with a narrowly scoped execution grant. A failed startup also
@@ -93,7 +96,7 @@ func KnownProvider(p string) bool { _, ok := providerEnv[p]; return ok }
 // budget. Widget-generate sessions count like any other.
 const MaxOwnerSessions = 10
 
-// MaxInstanceSessions bounds subprocesses across every owner, including startup.
+// MaxInstanceSessions is the default instance ceiling, including startup.
 const MaxInstanceSessions = 32
 
 var ErrInstanceSessionLimit = errors.New("this instance has reached its agent process limit — close a conversation or try again shortly")
@@ -156,6 +159,12 @@ const InterruptedResumeNotice = "The previous run was interrupted. Its last succ
 func New(cfg Config, st store.Store) (*Manager, error) {
 	if cfg.Credentials == nil {
 		return nil, fmt.Errorf("agent manager needs a credential registry")
+	}
+	if cfg.MaxSessions < 0 {
+		return nil, fmt.Errorf("agent maximum sessions must be positive (or zero for the default)")
+	}
+	if cfg.MaxSessions == 0 {
+		cfg.MaxSessions = MaxInstanceSessions
 	}
 	if cfg.IdleTimeout == 0 {
 		cfg.IdleTimeout = 30 * time.Minute
@@ -519,7 +528,7 @@ func (m *Manager) reserveProcess(ctx context.Context, ownerID int64) (func(), er
 				recoveryCount++
 			}
 		}
-		if m.processOwners[ownerID]+recoveryCount < MaxOwnerSessions && m.processCount+len(m.recoveries) < MaxInstanceSessions {
+		if m.processOwners[ownerID]+recoveryCount < MaxOwnerSessions && m.processCount+len(m.recoveries) < m.cfg.MaxSessions {
 			m.processOwners[ownerID]++
 			m.processCount++
 			m.mu.Unlock()
@@ -534,7 +543,7 @@ func (m *Manager) reserveProcess(ctx context.Context, ownerID int64) (func(), er
 			}, nil
 		}
 		refusal := ErrSessionLimit
-		if m.processOwners[ownerID] < MaxOwnerSessions {
+		if m.processOwners[ownerID]+recoveryCount < MaxOwnerSessions {
 			refusal = ErrInstanceSessionLimit
 		}
 		_, oldest := m.ownerSessionsLocked(ownerID, "")
