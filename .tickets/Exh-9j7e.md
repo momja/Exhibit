@@ -22,3 +22,11 @@ Duplicates preserve artifact source and supporting content; title and optional s
 **2026-10-20T02:41:34Z**
 
 Implemented gallery Duplicate modal, owner-scoped atomic API/store clone, optional sharing and owner data, independent remapped assets, quota accounting and idempotent retries. Documented behavior in docs/artifact-duplication.md. Focused API/store checks and registered client suites passed; parent will complete integration/full-suite/browser verification.
+
+**2026-10-20T02:51:11Z**
+
+Integrated on feature/Exh-johq/gallery-actions-integration. Browser verified unchecked options produce empty private copies; checked options preserve owner data/share mode with fresh public IDs; filtered galleries reset and show the new artifact through htmx; performance.timeOrigin and a JS sentinel prove no document reload. Simulated a successful commit followed by lost acknowledgement and confirmed retry creates exactly one copy. Escape, focus restoration, light/dark styling and phone-width layout checked; screenshots updated. Added duplicate route to request-body-size boundary inventory; targeted boundary and generated-icon checks pass after rebuilding all assets.
+
+**2026-10-20T02:53:44Z**
+
+Final validation passed: make assets; go build ./cmd/server; go test ./... (API 312.264s, store 218.002s); browser interaction checks and screenshots. Both feature and main worktrees are clean; main remains on main.

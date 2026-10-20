@@ -23,6 +23,10 @@ as the initial page. Clearing the search ensures a renamed copy remains visible.
 The page does not navigate or reload. A failed refresh can be retried without
 repeating the mutation.
 
+![Duplicate artifact modal](screenshots/Exh-9j7e/01-duplicate-modal.png)
+
+[Phone layout](screenshots/Exh-9j7e/02-duplicate-mobile.png)
+
 ## API and persistence
 
 `POST /api/artifacts/:id/duplicate` is owner-only and unavailable to scoped
