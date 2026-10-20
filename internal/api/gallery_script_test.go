@@ -62,6 +62,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"pip-placement.test.mjs",
 		"pip.test.mjs",
 		"index.search.test.mjs",
+		"duplicate.test.mjs",
 		// Not a page script: render.shim.test.mjs runs the render preamble,
 		// which is a Go string literal it lifts out of render.go. It belongs
 		// here anyway, for the reason this suite exists — a Go test can assert

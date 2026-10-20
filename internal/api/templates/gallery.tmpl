@@ -70,6 +70,7 @@
      own controls and are handled through delegation after htmx swaps. */}}
 {{template "galleryResults" .Grid}}
 </main>
+{{if not .ReadOnly}}{{template "duplicateDialog" .Grid}}{{end}}
 </div>
 
 {{/* No CodeMirror island here: the only editor on this page was the ingest

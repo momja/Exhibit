@@ -2,10 +2,12 @@
 // in their templates; this module owns only typing, shortcuts and request races.
 import { initializeGalleryWidgets } from './gallery-widgets.js';
 import { initializeCardActions } from './gallery-actions.js';
+import { initializeDuplication } from './duplicate.js';
 
 export function initializeGallery(root) {
   initializeGalleryWidgets(root);
   initializeCardActions(root);
+  initializeDuplication(root);
   const form = root.querySelector('[data-gallery-search]');
   const input = root.querySelector('[data-gallery-query]');
   const clear = root.querySelector('[data-gallery-clear]');
@@ -40,6 +42,15 @@ export function initializeGallery(root) {
     search();
   });
   syncClear();
+  root.addEventListener('exhibit:artifacts-changed', () => {
+    // A renamed copy may not match the active search. Return to the library's
+    // first page so the newly-created artifact is visible after the swap.
+    input.value = '';
+    query = '';
+    revision++;
+    syncClear();
+    search();
+  });
 
   // hx-sync coordinates searches and pages within this gallery. Revisions
   // also cover the debounce interval and a response already reading its body:
@@ -83,6 +94,7 @@ export function initializeGalleries() {
   document.addEventListener('keydown', (event) => {
     if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
     const target = event.target;
+    if (target.closest('dialog[open]')) return;
     if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
     const gallery = target.closest('[data-gallery]') || galleries[0];
     if (!gallery) return;

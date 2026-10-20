@@ -1,6 +1,6 @@
 ---
 id: Exh-9j7e
-status: in_progress
+status: closed
 deps: [Exh-johq]
 links: []
 created: 2026-10-20T02:25:12Z
@@ -16,3 +16,9 @@ Add a Duplicate action and modal with editable title, copy share settings, and c
 
 Duplicates preserve artifact source and supporting content; title and optional share/data copying work; owner boundaries enforced; gallery refreshes using htmx; modal handles failures.
 
+
+## Notes
+
+**2026-10-20T02:41:34Z**
+
+Implemented gallery Duplicate modal, owner-scoped atomic API/store clone, optional sharing and owner data, independent remapped assets, quota accounting and idempotent retries. Documented behavior in docs/artifact-duplication.md. Focused API/store checks and registered client suites passed; parent will complete integration/full-suite/browser verification.

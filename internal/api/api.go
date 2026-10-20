@@ -501,6 +501,7 @@ func (ro *Router) setupRoutes() {
 				r.Get("/", ro.getArtifact)
 				r.Patch("/", ro.updateArtifact)
 				r.Post("/refetch", ro.refetchArtifact)
+				r.Post("/duplicate", ro.duplicateArtifact)
 				r.Delete("/", ro.deleteArtifact)
 				// Version history (store/versions.go). Written as a side effect
 				// of every change to the body or widget, so the only mutation

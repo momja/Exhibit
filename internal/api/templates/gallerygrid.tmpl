@@ -40,6 +40,7 @@
       <button type="button" class="card-actions-trigger" data-card-actions-trigger aria-label="Actions for {{.Title}}" title="Actions" aria-expanded="false" aria-controls="card-actions-{{.ArtifactID}}"><i class="ph ph-dots-three-vertical" aria-hidden="true"></i></button>
       <div class="action-menu card-actions-menu" id="card-actions-{{.ArtifactID}}" hidden>
         <a href="/artifacts/{{.ArtifactID}}/edit" aria-label="Edit {{.Title}}"><i class="ph ph-pencil-simple" aria-hidden="true"></i> Edit</a>
+        <button type="button" data-duplicate-artifact="{{.ArtifactID}}" data-artifact-title="{{.Title}}" aria-label="Duplicate {{.Title}}"><i class="ph ph-copy" aria-hidden="true"></i> Duplicate</button>
       </div>
     </div>
   </div>

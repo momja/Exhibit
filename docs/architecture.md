@@ -120,6 +120,13 @@ The only way data changes. Route groups:
   recorded as a new version (§3.3b); a body identical to it is not written at all.
   Tag and collection membership use the dedicated `POST/DELETE
   /api/artifacts/:id/tags/:tagID` and `.../collections/:colID` routes.
+- `POST /api/artifacts/:id/duplicate` — owner-only cloning of current source,
+  widget, stored assets and metadata, with optional owner state and fresh share
+  identities. Blob staging and quota checks precede one atomic store transaction;
+  a request UUID makes uncertain retries resolve the same copy. The gallery stays
+  in place and refreshes its server-rendered cards through htmx. See
+  [`artifact-duplication.md`](artifact-duplication.md) for the precise copy and
+  retry rules.
 - `POST /api/artifacts/:id/refetch` — for URL-ingested artifacts, re-fetches
   `source_url` and records the fresh snapshot as a new version (av-reo3, av-b17a). A response the protocol says is not the page (a non-2xx
   status, an empty body, a content type other than HTML) is refused with the
