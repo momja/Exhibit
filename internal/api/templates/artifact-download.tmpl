@@ -1,0 +1,28 @@
+{{/* One dialog per stable artifact-download controller host. All choices are
+     server markup; only the artifact title and browser interaction vary. */}}
+{{define "artifactDownloadDialog"}}<dialog class="artifact-download-dialog" data-artifact-download-target="dialog" aria-labelledby="artifact-download-title" aria-describedby="artifact-download-description"
+  data-action="cancel->artifact-download#close click->artifact-download#backdrop">
+  <form data-action="submit->artifact-download#download">
+    <h2 id="artifact-download-title">Download artifact</h2>
+    <p class="artifact-download-name" data-artifact-download-target="artifactTitle"></p>
+    <p id="artifact-download-description">Choose what to save to your device.</p>
+    <fieldset data-artifact-download-target="choices">
+      <legend class="sr-only">Download format</legend>
+      <label class="artifact-download-option">
+        <input type="radio" name="format" value="zip" checked autofocus data-artifact-download-target="format" aria-labelledby="artifact-download-zip-label" aria-describedby="artifact-download-zip-description">
+        <span><span class="artifact-download-option-title" id="artifact-download-zip-label">Everything (.zip) <small class="artifact-download-recommended">Recommended</small></span>
+          <span class="artifact-download-option-description" id="artifact-download-zip-description">Artifact, widget, saved data, and assets in one portable bundle.</span></span>
+      </label>
+      <label class="artifact-download-option">
+        <input type="radio" name="format" value="html" data-artifact-download-target="format" aria-labelledby="artifact-download-html-label" aria-describedby="artifact-download-html-description">
+        <span><span class="artifact-download-option-title" id="artifact-download-html-label">Artifact HTML only (.html)</span>
+          <span class="artifact-download-option-description" id="artifact-download-html-description">A self-contained HTML file with assets embedded. Saved data and widget are not included.</span></span>
+      </label>
+    </fieldset>
+    <p class="artifact-download-status" data-artifact-download-target="status" role="status" aria-live="polite" aria-atomic="true"></p>
+    <div class="artifact-download-actions">
+      <button class="btn btn-sec" type="button" data-artifact-download-target="cancel" data-action="artifact-download#close">Cancel</button>
+      <button class="btn" type="submit" data-artifact-download-target="submit">Download</button>
+    </div>
+  </form>
+</dialog>{{end}}

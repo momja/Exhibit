@@ -169,7 +169,7 @@ func TestGalleryActionMenuDuplicationBrowser(t *testing.T) {
 		chromedp.Navigate(srv.URL),
 		chromedp.Focus(chromedp.CSS(trigger)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('`+trigger+`').getAttribute('aria-expanded') === 'false'`),
-		chromedp.KeyEvent(kb.ArrowDown), chromedp.KeyEvent(kb.End), chromedp.KeyEvent(kb.Enter),
+		chromedp.KeyEvent(kb.ArrowDown), chromedp.KeyEvent(kb.ArrowDown), chromedp.KeyEvent(kb.Enter),
 		chromedp.Poll[chromedp.Void](`document.querySelector('[data-duplicate-dialog]').open`),
 	))
 	correct, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.querySelector('`+menu+`').hidden && document.querySelector('[data-duplicate-dialog] [name="title"]').value === 'Original (copy)'`))
