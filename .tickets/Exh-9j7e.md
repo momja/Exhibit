@@ -30,3 +30,7 @@ Integrated on feature/Exh-johq/gallery-actions-integration. Browser verified unc
 **2026-10-20T02:53:44Z**
 
 Final validation passed: make assets; go build ./cmd/server; go test ./... (API 312.264s, store 218.002s); browser interaction checks and screenshots. Both feature and main worktrees are clean; main remains on main.
+
+**2026-10-20T04:44:54Z**
+
+Fixed both review findings: duplicating a refetched artifact now follows owner-scoped stored URLs into historical assets, recursively includes textual dependencies, rewrites fresh identities, and preserves the current runtime manifest without copying unused history. Dialog padding clicks preserve edits while actual backdrop clicks dismiss. Regression coverage passed for historical dependency cycles, quota boundaries, source deletion, owner/artifact boundaries, all gallery script suites, and render asset/version tests. Built the server and verified real browser padding/backdrop clicks and focus restoration.

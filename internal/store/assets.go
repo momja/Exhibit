@@ -195,6 +195,23 @@ func (s *SQLiteStore) ArtifactAssetsUnscoped(ctx context.Context, artifactID str
 	return scanAssets(rows)
 }
 
+// GetArtifactAsset resolves a stored URL for the owner, including assets from
+// earlier versions that the current source or widget can still reference.
+func (s *SQLiteStore) GetArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) (*ArtifactAsset, error) {
+	row := s.db.QueryRowContext(ctx,
+		`WITH owned AS (SELECT id FROM artifacts WHERE id = ?1 AND owner_id = ?3)
+		 SELECT id, artifact_id, generation_id, source_url, blob_id,
+		        content_type, size_bytes, created_at
+		   FROM artifact_assets
+		  WHERE artifact_id IN (SELECT id FROM owned) AND id = ?2
+		  UNION ALL
+		 SELECT id, artifact_id, generation_id, source_url, blob_id,
+		        content_type, size_bytes, created_at
+		   FROM artifact_version_assets
+		  WHERE artifact_id IN (SELECT id FROM owned) AND id = ?2 LIMIT 1`, artifactID, assetID, ownerID)
+	return scanAsset(row)
+}
+
 // GetArtifactAssetUnscoped resolves one asset for the render surface's asset
 // route, which serves it to whoever holds the id.
 //
@@ -213,7 +230,10 @@ func (s *SQLiteStore) GetArtifactAssetUnscoped(ctx context.Context, artifactID, 
                 content_type, size_bytes, created_at
            FROM artifact_version_assets
           WHERE artifact_id = ?1 AND id = ?2 LIMIT 1`, artifactID, assetID)
+	return scanAsset(row)
+}
 
+func scanAsset(row *sql.Row) (*ArtifactAsset, error) {
 	var a ArtifactAsset
 	var createdAt any
 	if err := row.Scan(&a.ID, &a.ArtifactID, &a.GenerationID, &a.SourceURL,

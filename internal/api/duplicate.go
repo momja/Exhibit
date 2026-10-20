@@ -77,57 +77,10 @@ func (ro *Router) duplicateArtifact(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "duplicate generation identity", err)
 		return
 	}
-	// Markup assets carry absolute stored URLs; runtime fetches instead use a
-	// manifest. Give both fresh asset identities and remap embedded URLs in
-	// source, widgets and text assets so the copy survives deleting its source.
-	var replacements []string
-	for _, asset := range assets {
-		assetID, err := store.NewAssetID()
-		if err != nil {
-			serverError(w, r, "duplicate asset identity", err)
-			return
-		}
-		replacements = append(replacements, "/a/"+sourceID+"/assets/"+asset.ID, "/a/"+id+"/assets/"+assetID)
-		asset.ID = assetID
-		d.Assets = append(d.Assets, asset)
-	}
-	rewrite := strings.NewReplacer(replacements...)
-	body, err := ro.readBlobString(r.Context(), a.SourceBlobID)
+	blobs, err := ro.duplicateContent(r.Context(), ownerID, a, &d)
 	if err != nil {
-		serverError(w, r, "read duplicate source", err)
+		serverError(w, r, "prepare duplicate content", err)
 		return
-	}
-	body = rewrite.Replace(body)
-	d.SourceText = store.ExtractSearchText(body)
-	blobs := map[string]string{d.BodyBlobID: body}
-	if a.WidgetBlobID != "" {
-		widget, err := ro.readBlobString(r.Context(), a.WidgetBlobID)
-		if err != nil {
-			serverError(w, r, "read duplicate widget", err)
-			return
-		}
-		d.WidgetBlobID = uuid.NewString()
-		blobs[d.WidgetBlobID] = rewrite.Replace(widget)
-	}
-	for i, asset := range assets {
-		content, err := ro.readBlobString(r.Context(), asset.BlobID)
-		if err != nil {
-			serverError(w, r, "read duplicate asset", err)
-			return
-		}
-		if strings.HasPrefix(asset.ContentType, "text/") || strings.Contains(asset.ContentType, "javascript") || strings.Contains(asset.ContentType, "json") || strings.Contains(asset.ContentType, "svg") {
-			content = rewrite.Replace(content)
-		}
-		d.Assets[i].BlobID = store.AssetBlobID(ownerID, []byte(content))
-		d.Assets[i].SourceURL = rewrite.Replace(asset.SourceURL)
-		d.Assets[i].SizeBytes = int64(len(content))
-		// Existing asset bytes are immutable and already checked by the read.
-		// Do not overwrite a shared content address: a failed Put could damage
-		// the source artifact too. Blob locks protect these references until
-		// the source/version checks and clone transaction complete.
-		if d.Assets[i].BlobID != asset.BlobID {
-			blobs[d.Assets[i].BlobID] = content
-		}
 	}
 	created, err := ro.storeDuplicate(r.Context(), ownerID, sourceID, d, blobs)
 	if err != nil {

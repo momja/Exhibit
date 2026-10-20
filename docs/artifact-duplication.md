@@ -11,8 +11,9 @@ original title followed by ` (copy)` and two unchecked options:
   state and is therefore included.
 
 The copy always keeps the current source, optional gallery widget, current
-stored assets, source URL, tier, capability approvals, allowed and blocked
-origin decisions, tags and collection membership. It starts with its own
+stored assets and any older assets referenced by that content, source URL,
+tier, capability approvals, allowed and blocked origin decisions, tags and
+collection membership. It starts with its own
 initial version. Previous versions, historical state snapshots, agent
 conversations, usage records and credentials do not travel with it.
 
@@ -46,6 +47,12 @@ generation IDs are fresh. Embedded asset URLs in source, widget and textual
 asset content are rewritten for the copy. Unchanged binary payloads retain the
 existing owner-scoped content addresses; reference-aware deletion keeps them
 alive while either artifact needs them.
+
+Reference discovery follows textual asset dependencies, including cycles, into
+earlier generations when needed by the current content. Unused historical
+assets stay behind. Historical dependencies use their new stored URL as the
+manifest key, preserving the current generation's mapping for runtime fetches
+of upstream URLs.
 
 Staging passes through the existing storage quota, accounting and blob locks.
 A single store transaction then checks ownership and that the source version

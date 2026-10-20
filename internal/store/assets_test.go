@@ -274,3 +274,35 @@ func TestAnAssetIsNotReachableThroughAnotherArtifact(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, crossed, "the artifact id in the path must gate the lookup")
 }
+
+func TestGetArtifactAssetIncludesHistoryAndChecksOwnerAndArtifact(t *testing.T) {
+	fx := newQueueFixture(t)
+	ctx := t.Context()
+	seedAssetArtifact(t, fx, "a1")
+	seedAssetArtifact(t, fx, "a2")
+	_, err := fx.store.ReplaceArtifactAssets(ctx, 1, "a1", "old-generation",
+		[]ArtifactAsset{asset("old-id", "https://cdn.test/app.wasm", "old-blob")})
+	require.NoError(t, err)
+	_, err = fx.store.ReplaceArtifactSnapshot(ctx, 1, "a1", ArtifactSnapshot{
+		GenerationID: "current-generation",
+		Assets:       []ArtifactAsset{asset("current-id", "https://cdn.test/app.wasm", "current-blob")},
+	})
+	require.NoError(t, err)
+	for _, id := range []string{"old-id", "current-id"} {
+		found, err := fx.store.GetArtifactAsset(ctx, 1, "a1", id)
+		require.NoError(t, err)
+		require.NotNil(t, found)
+		assert.Equal(t, id, found.ID)
+		for _, lookup := range []struct {
+			owner    int64
+			artifact string
+		}{{2, "a1"}, {1, "a2"}, {1, "missing"}} {
+			found, err := fx.store.GetArtifactAsset(ctx, lookup.owner, lookup.artifact, id)
+			require.NoError(t, err)
+			assert.Nil(t, found, "current and historical assets have the same ownership boundary")
+		}
+	}
+	found, err := fx.store.GetArtifactAsset(ctx, 1, "a1", "missing")
+	require.NoError(t, err)
+	assert.Nil(t, found)
+}

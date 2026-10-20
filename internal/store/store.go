@@ -473,6 +473,8 @@ type Store interface {
 	// the artifact id, so one artifact cannot address another's.
 	ReplaceArtifactAssets(ctx context.Context, ownerID int64, artifactID, generationID string, assets []ArtifactAsset) ([]string, error)
 	ListArtifactAssets(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactAsset, error)
+	// GetArtifactAsset resolves current or historical asset IDs for the owner.
+	GetArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) (*ArtifactAsset, error)
 	ArtifactAssetsUnscoped(ctx context.Context, artifactID string) ([]ArtifactAsset, error)
 	GetArtifactAssetUnscoped(ctx context.Context, artifactID, assetID string) (*ArtifactAsset, error)
 	DeleteArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) ([]string, error)
