@@ -266,6 +266,8 @@ func TestAGrantReachesTheViewerPageAndNoOtherAppRoute(t *testing.T) {
 			`{"origin":"https://api.example.com","decision":"allow","source":"runtime"}`},
 		{http.MethodGet, "/api/artifacts/" + in.granted + "/export", ""},
 		{http.MethodGet, "/api/artifacts/" + in.granted + "/assets/export", ""},
+		{http.MethodPost, "/api/artifacts/" + in.granted + "/state/import?replace=true", `{"new":"value"}`},
+		{http.MethodPost, "/api/artifacts/" + in.granted + "/assets/import?replace=true", "invalid zip"},
 	} {
 		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
 		req.Header.Set("Content-Type", "application/json")

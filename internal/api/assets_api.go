@@ -3,10 +3,8 @@ package api
 // The out-of-line asset endpoints (av-20fk): what an artifact carries beside
 // its body, and the one control that removes a piece of it.
 //
-// Deliberately read-and-delete. Assets are produced by the snapshot vendorer at
-// ingest and by nothing else, so there is no create or update here — a client
-// that could POST bytes into an artifact's asset set would be a second way to
-// put arbitrary content behind that artifact's render URL.
+// Assets originate at snapshot ingest or an owner-confirmed archive import.
+// The metadata and delete routes here never expose the stored payload bytes.
 
 import (
 	"errors"

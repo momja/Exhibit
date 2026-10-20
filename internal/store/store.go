@@ -472,6 +472,9 @@ type Store interface {
 	// served document is about to fetch — and the asset lookup still takes
 	// the artifact id, so one artifact cannot address another's.
 	ReplaceArtifactAssets(ctx context.Context, ownerID int64, artifactID, generationID string, assets []ArtifactAsset) ([]string, error)
+	// Imports replace data atomically and refuse a nonempty target unless replace is true.
+	ImportArtifactAssets(ctx context.Context, ownerID int64, artifactID, generationID string, assets []ArtifactAsset, replace bool) ([]string, error)
+	ImportState(ctx context.Context, ownerID int64, artifactID string, state map[string]string, replace bool) error
 	ListArtifactAssets(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactAsset, error)
 	// GetArtifactAsset resolves current or historical asset IDs for the owner.
 	GetArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) (*ArtifactAsset, error)

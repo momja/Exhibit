@@ -101,6 +101,10 @@ func NewGenerationID() (string, error) { return NewAssetID() }
 // intent to delete the old bytes becomes durable at the same instant the last
 // row naming them disappears.
 func (s *SQLiteStore) ReplaceArtifactAssets(ctx context.Context, ownerID int64, artifactID, generationID string, assets []ArtifactAsset) ([]string, error) {
+	return s.replaceOwnedArtifactAssets(ctx, ownerID, artifactID, generationID, assets, nil)
+}
+
+func (s *SQLiteStore) replaceOwnedArtifactAssets(ctx context.Context, ownerID int64, artifactID, generationID string, assets []ArtifactAsset, confirmed *bool) ([]string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -118,6 +122,25 @@ func (s *SQLiteStore) ReplaceArtifactAssets(ctx context.Context, ownerID int64, 
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	if confirmed != nil {
+		if err := checkImport(ctx, tx, ownerID, artifactID, *confirmed, "SELECT COUNT(*) FROM artifact_assets WHERE artifact_id=?", artifactID); err != nil {
+			return nil, err
+		}
+		for _, asset := range assets {
+			var conflicts int
+			err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (
+				SELECT artifact_id, blob_id, content_type FROM artifact_assets WHERE id=?
+				UNION ALL SELECT artifact_id, blob_id, content_type FROM artifact_version_assets WHERE id=?
+			) WHERE artifact_id<>? OR blob_id<>? OR content_type<>?`, asset.ID, asset.ID, artifactID, asset.BlobID, asset.ContentType).Scan(&conflicts)
+			if err != nil {
+				return nil, err
+			}
+			if conflicts > 0 {
+				return nil, ErrImportAssetConflict
+			}
+		}
 	}
 
 	superseded, err := replaceArtifactAssets(ctx, tx, artifactID, generationID, assets)

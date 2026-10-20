@@ -608,6 +608,10 @@
   document.getElementById('state-cancel').addEventListener('click', cancelEdits);
   document.getElementById('state-erase').addEventListener('click', eraseAll);
 
+  // An import replaces the inspector's client-side working copy, preserving
+  // the source and widget editor buffers elsewhere on this page.
+  document.body.addEventListener('exhibit:state-imported', () => loadState());
+
   // State is cold data no other part of the edit page needs, so it is fetched
   // on first open rather than inlined with the page.
   panel.addEventListener('toggle', () => {

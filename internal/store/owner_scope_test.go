@@ -183,6 +183,13 @@ func ownerCases() []ownerCase {
 			st, err := s.GetState(ctx, OwnerID(o), id, ViewerID(o))
 			return len(st) == 0, err
 		}},
+		{"ImportState", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			return false, s.ImportState(ctx, o, id, map[string]string{"new":"value"}, true)
+		}},
+		{"ImportArtifactAssets", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, err := s.ImportArtifactAssets(ctx, o, id, "generation", nil, true)
+			return false, err
+		}},
 		{"SetState", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			return false, s.SetState(ctx, OwnerID(o), id, ViewerID(o), "planted", "by the wrong owner")
 		}},

@@ -71,6 +71,8 @@ var writeRoutes = []struct {
 	{"POST", "/api/artifacts/{artifactID}/refetch", false},
 	{"POST", "/api/artifacts/{artifactID}/duplicate", true},
 	{"POST", "/api/artifacts/{artifactID}/versions/{seq}/restore", false},
+	{"POST", "/api/artifacts/{artifactID}/state/import", true},
+	{"POST", "/api/artifacts/{artifactID}/assets/import", true},
 	{"PUT", "/api/artifacts/{artifactID}/state", true},
 	{"DELETE", "/api/artifacts/{artifactID}/state", false},
 	{"DELETE", "/api/artifacts/{artifactID}/assets/{assetID}", false},

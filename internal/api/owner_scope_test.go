@@ -105,6 +105,8 @@ func TestArtifactRoutes404ForAnotherOwner(t *testing.T) {
 		body []byte
 	}{
 		{"GET artifact", "GET", "/api/artifacts/%s", nil},
+		{"POST state import", "POST", "/api/artifacts/%s/state/import?replace=true", []byte(`{"new":"value"}`)},
+		{"POST assets import", "POST", "/api/artifacts/%s/assets/import?replace=true", []byte(`invalid zip`)},
 		{"GET assets export", "GET", "/api/artifacts/%s/assets/export", nil},
 		{"PATCH artifact", "PATCH", "/api/artifacts/%s", patch},
 		{"PATCH allowlist (origin-decision write)", "PATCH", "/api/artifacts/%s", allowlist},
@@ -289,6 +291,7 @@ func TestGalleryPages404ForAnotherOwner(t *testing.T) {
 		"/artifacts/" + foreignID + "/edit",
 		"/partials/card-widget?artifact=" + foreignID,
 		"/partials/tag-panel?artifact=" + foreignID,
+		"/partials/asset-panel?artifact=" + foreignID,
 		"/partials/capability-cluster?artifact=" + foreignID,
 	} {
 		req := httptest.NewRequest("GET", path, nil)
