@@ -69,7 +69,7 @@ func TestEveryMigrationIsAboveTheVersionsAlreadyShipped(t *testing.T) {
 	// computed from the current tree — and because a new file numbered into a
 	// gap in this list is exactly what must fail.
 	shipped := map[int64]bool{}
-	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22} {
+	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34} {
 		shipped[v] = true
 	}
 	for _, v := range goMigrationVersions {

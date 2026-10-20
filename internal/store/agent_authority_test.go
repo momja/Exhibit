@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -15,31 +16,37 @@ import (
 )
 
 func TestAgentAuthorityUpgradeKeepsLegacyConversationsAndUsage(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "upgrade.db")
-	s, err := OpenSQLite(path)
-	require.NoError(t, err)
-	ctx := context.Background()
-	require.NoError(t, goose.DownToContext(ctx, s.db, "migrations", 33))
-	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "artifact", OwnerID: 1, Title: "t", SourceBlobID: "b", Tier: Tier1}))
-	require.NoError(t, s.SaveTranscript(ctx, 1, Transcript{ArtifactID: "artifact", SessionID: "conversation", SessionFile: "{\"type\":\"session\"}\n", Title: "retained title"}))
-	_, err = s.db.Exec(`INSERT INTO agent_transcripts(artifact_id,session_id,messages) VALUES('artifact','legacy','[]')`)
-	require.NoError(t, err)
-	require.NoError(t, s.RecordAgentUsage(ctx, AgentUsage{OwnerID: 1, SessionID: "conversation", Provider: "p", PaidBy: PaidByPlatform, Source: UsageSourceModel, InputTokens: 9, CostMicros: 50}))
-	require.NoError(t, s.Close())
-	s, err = OpenSQLite(path)
-	require.NoError(t, err)
-	defer s.Close()
-	c := agentcontrol.New(s, agentscope.NewRegistry(), agentcontrol.Config{})
-	a, err := c.Reserve(ctx, agentcontrol.Reservation{OwnerID: 1, ArtifactID: "artifact", ConversationID: "conversation", ExecutionID: "new", WorkerID: "w", Resume: true})
-	require.NoError(t, err)
-	p, err := c.ReadSnapshot(ctx, a.Identity)
-	require.NoError(t, err)
-	assert.Equal(t, "retained title", p.Title)
-	_, err = c.Reserve(ctx, agentcontrol.Reservation{OwnerID: 1, ArtifactID: "artifact", ConversationID: "legacy", ExecutionID: "legacy-new", WorkerID: "w", Resume: true})
-	require.ErrorIs(t, err, agentcontrol.ErrNotResumable)
-	spend, err := s.SessionAgentSpend(ctx, 1, "conversation")
-	require.NoError(t, err)
-	assert.Equal(t, int64(50), spend.CostMicros)
+	// Main has shipped both version 33 conversations and version 34 asset
+	// identities. Worker authority must migrate after either deployed schema.
+	for _, version := range []int64{33, 34} {
+		t.Run(fmt.Sprintf("from_%d", version), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "upgrade.db")
+			s, err := OpenSQLite(path)
+			require.NoError(t, err)
+			ctx := context.Background()
+			require.NoError(t, goose.DownToContext(ctx, s.db, "migrations", version))
+			require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "artifact", OwnerID: 1, Title: "t", SourceBlobID: "b", Tier: Tier1}))
+			require.NoError(t, s.SaveTranscript(ctx, 1, Transcript{ArtifactID: "artifact", SessionID: "conversation", SessionFile: "{\"type\":\"session\"}\n", Title: "retained title"}))
+			_, err = s.db.Exec(`INSERT INTO agent_transcripts(artifact_id,session_id,messages) VALUES('artifact','legacy','[]')`)
+			require.NoError(t, err)
+			require.NoError(t, s.RecordAgentUsage(ctx, AgentUsage{OwnerID: 1, SessionID: "conversation", Provider: "p", PaidBy: PaidByPlatform, Source: UsageSourceModel, InputTokens: 9, CostMicros: 50}))
+			require.NoError(t, s.Close())
+			s, err = OpenSQLite(path)
+			require.NoError(t, err)
+			defer s.Close()
+			c := agentcontrol.New(s, agentscope.NewRegistry(), agentcontrol.Config{})
+			a, err := c.Reserve(ctx, agentcontrol.Reservation{OwnerID: 1, ArtifactID: "artifact", ConversationID: "conversation", ExecutionID: "new", WorkerID: "w", Resume: true})
+			require.NoError(t, err)
+			p, err := c.ReadSnapshot(ctx, a.Identity)
+			require.NoError(t, err)
+			assert.Equal(t, "retained title", p.Title)
+			_, err = c.Reserve(ctx, agentcontrol.Reservation{OwnerID: 1, ArtifactID: "artifact", ConversationID: "legacy", ExecutionID: "legacy-new", WorkerID: "w", Resume: true})
+			require.ErrorIs(t, err, agentcontrol.ErrNotResumable)
+			spend, err := s.SessionAgentSpend(ctx, 1, "conversation")
+			require.NoError(t, err)
+			assert.Equal(t, int64(50), spend.CostMicros)
+		})
+	}
 }
 
 func TestAgentSupervisorPersistsOnlyHashAndLateUsageReceiptsAreAtomic(t *testing.T) {
