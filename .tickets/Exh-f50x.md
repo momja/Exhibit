@@ -1,6 +1,6 @@
 ---
 id: Exh-f50x
-status: open
+status: closed
 deps: [Exh-numw]
 links: []
 created: 2026-07-11T05:02:43Z

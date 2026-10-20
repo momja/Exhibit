@@ -1,6 +1,6 @@
 ---
 id: Exh-numw
-status: open
+status: closed
 deps: [Exh-imom]
 links: []
 created: 2026-07-11T05:02:35Z
