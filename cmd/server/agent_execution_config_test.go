@@ -8,7 +8,7 @@ import (
 
 func clearAgentExecutionEnv(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{"AGENT_EXECUTION_MODE", "AGENT_WORKER_URL", "AGENT_WORKER_TOKEN", "SPRITE_TOKEN", "AGENT_SPRITE_PREFIX", "AGENT_WORKER_BINARY_URL", "AGENT_WORKER_STARTUP_TIMEOUT", "AGENT_WORKER_IDLE_RETENTION", "AGENT_MAX_WORKERS"} {
+	for _, name := range []string{"AGENT_EXECUTION_MODE", "AGENT_WORKER_URL", "AGENT_WORKER_TOKEN", "AGENT_WORKER_ALLOW_INSECURE", "SPRITE_TOKEN", "AGENT_SPRITE_PREFIX", "AGENT_WORKER_RELEASE_URL", "AGENT_WORKER_RELEASE_VERSION", "AGENT_WORKER_RELEASE_SHA256", "AGENT_WORKER_STARTUP_TIMEOUT", "AGENT_WORKER_IDLE_RETENTION", "AGENT_MAX_WORKERS"} {
 		t.Setenv(name, "")
 	}
 }
@@ -24,7 +24,7 @@ func TestAgentExecutionModeIsExplicit(t *testing.T) {
 		t.Fatal("remote mode must not silently fall back when unconfigured")
 	}
 	t.Setenv("AGENT_WORKER_URL", "http://127.0.0.1:8090")
-	t.Setenv("AGENT_WORKER_TOKEN", "worker-test-credential")
+	t.Setenv("AGENT_WORKER_TOKEN", strings.Repeat("x", 32))
 	t.Setenv("AGENT_WORKER_STARTUP_TIMEOUT", "45s")
 	t.Setenv("AGENT_WORKER_IDLE_RETENTION", "0s")
 	t.Setenv("AGENT_MAX_WORKERS", "7")
@@ -42,6 +42,8 @@ func TestAgentExecutionRejectsIncompleteOrMalformedDeployment(t *testing.T) {
 	}{
 		{"unknown backend", map[string]string{"AGENT_EXECUTION_MODE": "automatic"}, "AGENT_EXECUTION_MODE"},
 		{"missing worker auth", map[string]string{"AGENT_WORKER_TOKEN": ""}, "AGENT_WORKER_TOKEN"},
+		{"short worker auth", map[string]string{"AGENT_WORKER_TOKEN": "too-short"}, "AGENT_WORKER_TOKEN"},
+		{"plaintext remote", map[string]string{"AGENT_WORKER_URL": "http://worker.example"}, "AGENT_WORKER_ALLOW_INSECURE"},
 		{"credentials in URL", map[string]string{"AGENT_WORKER_URL": "https://user:password@worker.example"}, "AGENT_WORKER_URL"},
 		{"query token", map[string]string{"AGENT_WORKER_URL": "https://worker.example?token=secret"}, "AGENT_WORKER_URL"},
 		{"non HTTP", map[string]string{"AGENT_WORKER_URL": "file:///tmp/worker"}, "AGENT_WORKER_URL"},
@@ -51,13 +53,13 @@ func TestAgentExecutionRejectsIncompleteOrMalformedDeployment(t *testing.T) {
 		{"missing Sprite auth", map[string]string{"AGENT_EXECUTION_MODE": "sprites"}, "SPRITE_TOKEN"},
 		{"missing Sprite namespace", map[string]string{"AGENT_EXECUTION_MODE": "sprites", "SPRITE_TOKEN": "test"}, "AGENT_SPRITE_PREFIX"},
 		{"invalid Sprite namespace", map[string]string{"AGENT_EXECUTION_MODE": "sprites", "SPRITE_TOKEN": "test", "AGENT_SPRITE_PREFIX": "Project/Owner"}, "AGENT_SPRITE_PREFIX"},
-		{"missing runtime artifact", map[string]string{"AGENT_EXECUTION_MODE": "sprites", "SPRITE_TOKEN": "test", "AGENT_SPRITE_PREFIX": "test"}, "AGENT_WORKER_BINARY_URL"},
+		{"missing runtime artifact", map[string]string{"AGENT_EXECUTION_MODE": "sprites", "SPRITE_TOKEN": "test", "AGENT_SPRITE_PREFIX": "test"}, "AGENT_WORKER_RELEASE_URL"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			clearAgentExecutionEnv(t)
 			t.Setenv("AGENT_EXECUTION_MODE", "remote")
 			t.Setenv("AGENT_WORKER_URL", "https://worker.example")
-			t.Setenv("AGENT_WORKER_TOKEN", "worker-test-credential")
+			t.Setenv("AGENT_WORKER_TOKEN", strings.Repeat("x", 32))
 			for name, value := range test.env {
 				t.Setenv(name, value)
 			}
