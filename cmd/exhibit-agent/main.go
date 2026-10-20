@@ -15,7 +15,10 @@ import (
 	"time"
 
 	"github.com/momja/Exhibit/internal/agentexec"
+	"github.com/momja/Exhibit/internal/sprites"
 )
+
+var releaseVersion = "dev"
 
 func main() {
 	if err := run(); err != nil {
@@ -32,9 +35,16 @@ func run() error {
 	session := flag.String("session-id", "", "assigned conversation identity")
 	tokenFile := flag.String("token-file", "", "0600 file containing this assignment's worker bearer credential")
 	localAssignments := flag.Bool("local-assignments", false, "authenticated static local service, accepting up to 32 isolated assignments; production Sprites use fixed identities")
+	holdMode := flag.String("sprite-holds", "auto", "in-Sprite Tasks API holds: auto, required, or off")
+	holdTTL := flag.Duration("hold-ttl", time.Minute, "active task hold expiry (whole seconds, 3s to 5m)")
 	version := flag.Bool("version", false, "print worker protocol/runtime pins")
+	runtimeInfo := flag.Bool("runtime-info", false, "print protocol and pinned runtime versions")
 	flag.Parse()
 	if *version {
+		fmt.Println(releaseVersion)
+		return nil
+	}
+	if *runtimeInfo {
 		fmt.Printf("exhibit-agent protocol=%s pi=%s node=%s\n", agentexec.ProtocolVersion, agentexec.PiVersion, agentexec.NodeVersion)
 		return nil
 	}
@@ -60,7 +70,23 @@ func run() error {
 		return err
 	}
 	defer lock.Close()
-	service, err := agentexec.NewService(agentexec.ServiceConfig{ExecutionID: *execution, SessionID: *session, Token: strings.TrimSpace(string(token)), Runner: agentexec.Local{PiBin: *pi, WorkRoot: *root}, LocalAssignments: *localAssignments})
+	var holds agentexec.Holds
+	switch *holdMode {
+	case "required":
+		info, err := os.Stat(sprites.TasksSocket)
+		if err != nil || info.Mode()&os.ModeSocket == 0 {
+			return errors.New("required in-Sprite Tasks API socket is unavailable")
+		}
+		holds = sprites.NewHolds()
+	case "auto":
+		if info, err := os.Stat(sprites.TasksSocket); err == nil && info.Mode()&os.ModeSocket != 0 {
+			holds = sprites.NewHolds()
+		}
+	case "off":
+	default:
+		return errors.New("--sprite-holds must be auto, required, or off")
+	}
+	service, err := agentexec.NewService(agentexec.ServiceConfig{ExecutionID: *execution, SessionID: *session, Token: strings.TrimSpace(string(token)), Runner: agentexec.Local{PiBin: *pi, WorkRoot: *root}, LocalAssignments: *localAssignments, Holds: holds, HoldTTL: *holdTTL})
 	if err != nil {
 		return err
 	}

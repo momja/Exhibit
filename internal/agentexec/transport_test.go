@@ -184,7 +184,12 @@ func TestRemoteProcessRoundTripIdleAndRestore(t *testing.T) {
 	require.NoError(t, p.WriteSelection(context.Background(), []string{"untrusted element"}))
 	sendRPC(t, p, "prompt-1", "prompt", "first")
 	waitType(t, lines, "agent_settled")
-	require.Eventually(t, func() bool { return idle.Load() >= 2 }, 3*time.Second, time.Millisecond)
+	require.Eventually(t, func() bool {
+		r := p.(*RemoteProcess)
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return idle.Load() >= 2 && !r.pumping
+	}, 3*time.Second, time.Millisecond)
 	remote := p.(*RemoteProcess)
 	remote.mu.Lock()
 	assert.False(t, remote.pumping, "no live HTTP event stream after settle")
@@ -210,7 +215,11 @@ func TestRemoteProcessRoundTripIdleAndRestore(t *testing.T) {
 	assert.Contains(t, final, "second")
 	entries, err := os.ReadDir(root)
 	require.NoError(t, err)
-	assert.Empty(t, entries, "close removes all scratch")
+	assert.NotEmpty(t, entries, "close retains unacknowledged scratch")
+	require.NoError(t, p.Cleanup())
+	entries, err = os.ReadDir(root)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "acknowledged cleanup removes scratch")
 	assert.GreaterOrEqual(t, active.Load(), int32(3))
 	// A different daemon gets only the central checkpoint, with fresh identity.
 	_, replacement, _ := testService(t)

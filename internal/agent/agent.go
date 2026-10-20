@@ -30,6 +30,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -115,18 +116,40 @@ type Manager struct {
 	shutdown      bool
 	drainErr      error
 	stopReaper    chan struct{}
+	recoveries    map[string]*Session
+	erasedOwners  map[int64]bool
+	erasureErrors map[int64]error
 }
 
 // ExecutionReservation belongs to the core coordinator. Checkpoint must be
 // idempotent and fenced by the identity passed to ReserveExecution. Release is
 // invoked only after the final checkpoint succeeds and process output drains.
 type ExecutionReservation struct {
-	Grant       *agentscope.Grant
-	Checkpoint  func(context.Context, ExecutionCheckpoint) error
-	Release     func(context.Context) error
-	ExpiresAt   time.Time
-	TurnTimeout time.Duration
+	Grant         *agentscope.Grant
+	Checkpoint    func(context.Context, ExecutionCheckpoint) error
+	Release       func(context.Context) error
+	ExpiresAt     time.Time
+	TurnTimeout   time.Duration
+	BeginClose    func(context.Context) error
+	StartupFailed func(context.Context) error
+	Started       func(agentexec.Process)
+	BeforePrompt  func(context.Context) (time.Time, error)
+	Resume        *ResumeSnapshot
+	UsageBaseline *store.UsageTotals
 }
+
+// ResumeSnapshot is loaded by the durable reservation, after it fences the
+// conversation. It replaces a direct transcript read for assigned continuations.
+type ResumeSnapshot struct {
+	SessionFile    string
+	Title          string
+	Kind           string
+	Revision       int64
+	PreviousStatus string
+	Interrupted    bool
+}
+
+const InterruptedResumeNotice = "The previous run was interrupted. Its last successful saves remain saved. This conversation resumes from its last acknowledged snapshot; unfinished work has not been replayed."
 
 // New constructs the durable coordinator. Remote mode does no local filesystem
 // preparation and performs no Pi/Node lookup.
@@ -137,7 +160,7 @@ func New(cfg Config, st store.Store) (*Manager, error) {
 	if cfg.IdleTimeout == 0 {
 		cfg.IdleTimeout = 30 * time.Minute
 	}
-	m := &Manager{cfg: cfg, st: st, sessions: map[string]*Session{}, stopReaper: make(chan struct{})}
+	m := &Manager{cfg: cfg, st: st, sessions: map[string]*Session{}, recoveries: map[string]*Session{}, erasedOwners: map[int64]bool{}, erasureErrors: map[int64]error{}, stopReaper: make(chan struct{})}
 	go m.reap()
 	return m, nil
 }
@@ -232,10 +255,10 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	defer func() {
 		if !spawned {
 			m.cfg.Credentials.Revoke(grant)
-			if reservation != nil && reservation.Release != nil {
+			if reservation != nil && reservation.StartupFailed != nil {
 				releaseCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
-				if err := reservation.Release(releaseCtx); err != nil {
+				if err := reservation.StartupFailed(releaseCtx); err != nil {
 					slog.Warn("release failed execution reservation", slog.String("execution_id", identity.ExecutionID))
 				}
 			}
@@ -259,10 +282,17 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	var resume *store.Transcript
 	var recorded store.UsageTotals
 	title := ""
+	var resumeMetadata *ResumeSnapshot
 	if opts.ResumeSessionID != "" {
 		// Both durable and process-local identity are now reserved. Never load a
 		// continuation snapshot or its accounting baseline before fencing admission.
-		resume, err = m.st.GetTranscript(ctx, opts.OwnerID, opts.ArtifactID, id)
+		if reservation != nil && reservation.Resume != nil {
+			metadata := *reservation.Resume
+			resumeMetadata = &metadata
+			resume = &store.Transcript{SessionID: id, ArtifactID: opts.ArtifactID, Title: metadata.Title, SessionFile: metadata.SessionFile, Resumable: metadata.SessionFile != ""}
+		} else {
+			resume, err = m.st.GetTranscript(ctx, opts.OwnerID, opts.ArtifactID, id)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("read the conversation to resume: %w", err)
 		}
@@ -270,7 +300,11 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 			return nil, fmt.Errorf("conversation is no longer available to resume")
 		}
 		title = resume.Title
-		recorded, err = m.st.SessionAgentSpend(ctx, opts.OwnerID, id)
+		if reservation != nil && reservation.UsageBaseline != nil {
+			recorded = *reservation.UsageBaseline
+		} else {
+			recorded, err = m.st.SessionAgentSpend(ctx, opts.OwnerID, id)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("read the conversation's recorded usage: %w", err)
 		}
@@ -284,6 +318,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	if resume != nil {
 		config.SessionSnapshot = resume.SessionFile
 		resumeNotice = resumedNotice
+		if resumeMetadata != nil && (resumeMetadata.Interrupted || resumeMetadata.Kind == "interrupted" || resumeMetadata.PreviousStatus == "interrupted") {
+			resumeNotice += "\n\n" + InterruptedResumeNotice
+		}
 	}
 	if guard := m.cfg.Guardrail; guard != nil {
 		config.Guardrail = &agentexec.Guardrail{Provider: guard.Provider, Model: guard.Model, APIKey: guard.APIKey}
@@ -326,6 +363,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		executionIdentity: identity,
 		reservation:       reservation,
 		retired:           make(chan struct{}),
+		resumeMetadata:    resumeMetadata,
 		cmd:               cmd,
 		stdin:             process,
 		subs:              map[*eventSubscriber]struct{}{},
@@ -358,10 +396,21 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}
 	m.sessions[id] = s
 	shuttingDown := m.shutdown
+	ownerErased := m.erasedOwners[opts.OwnerID]
+	if ownerErased {
+		s.erased.Store(true)
+	}
 	m.mu.Unlock()
-	if shuttingDown {
+	if shuttingDown || ownerErased {
 		s.kill()
 		return nil, fmt.Errorf("agent manager shutting down")
+	}
+	if reservation != nil && reservation.Started != nil {
+		reservation.Started(process)
+	}
+	if s.InterruptionNotice() != "" {
+		event, _ := json.Marshal(map[string]string{"type": "exhibit_execution_interrupted", "message": InterruptedResumeNotice})
+		s.broadcast(event)
 	}
 	slog.InfoContext(ctx, "agent session started",
 		slog.String("session_id", id),
@@ -379,7 +428,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 func (m *Manager) reserveConversation(id string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.shutdown || m.sessions[id] != nil || m.starting[id] {
+	if m.shutdown || m.sessions[id] != nil || m.recoveries[id] != nil || m.starting[id] {
 		return false
 	}
 	if m.starting == nil {
@@ -457,14 +506,20 @@ func (m *Manager) reserveProcess(ctx context.Context, ownerID int64) (func(), er
 			return nil, err
 		}
 		m.mu.Lock()
-		if m.shutdown {
+		if m.shutdown || m.erasedOwners[ownerID] {
 			m.mu.Unlock()
 			return nil, fmt.Errorf("agent manager shutting down")
 		}
 		if m.processOwners == nil {
 			m.processOwners = make(map[int64]int)
 		}
-		if m.processOwners[ownerID] < MaxOwnerSessions && m.processCount < MaxInstanceSessions {
+		recoveryCount := 0
+		for _, recovery := range m.recoveries {
+			if recovery.OwnerID == ownerID {
+				recoveryCount++
+			}
+		}
+		if m.processOwners[ownerID]+recoveryCount < MaxOwnerSessions && m.processCount+len(m.recoveries) < MaxInstanceSessions {
 			m.processOwners[ownerID]++
 			m.processCount++
 			m.mu.Unlock()
@@ -686,6 +741,14 @@ type Session struct {
 	eventHandled      func()
 	executionIdentity agentexec.Identity
 	reservation       *ExecutionReservation
+	resumeMetadata    *ResumeSnapshot
+	beginCloseMu      sync.Mutex
+	beginCloseDone    bool
+	beginCloseErr     error
+	drainMu           sync.Mutex
+	retainedErr       error
+	erased            atomic.Bool
+	drainComplete     bool
 	retired           chan struct{}
 	mgr               *Manager
 	cmd               *exec.Cmd
@@ -711,6 +774,7 @@ type Session struct {
 	questions          map[string]QuestionRequest
 	streaming          bool
 	interrupted        bool
+	eventFailure       error
 	closed             bool
 	stopping           bool // unavailable to callers, but still draining its final writes
 	lastActive         time.Time
@@ -760,6 +824,21 @@ func (s *Session) ArtifactID() string { return s.grant.Scope().ArtifactID }
 
 // Done is closed when the subprocess exits.
 func (s *Session) Done() <-chan struct{} { return s.done }
+
+// InterruptionNotice lets core render the prior execution's status without
+// exposing worker files or inventing an automatic retry.
+func (s *Session) InterruptionNotice() string {
+	if r := s.resumeMetadata; r != nil && (r.Interrupted || r.Kind == "interrupted" || r.PreviousStatus == "interrupted") {
+		return InterruptedResumeNotice
+	}
+	return ""
+}
+func (s *Session) SetLease(ctx context.Context, deadline time.Time) error {
+	if lease, ok := s.process.(agentexec.LeaseProcess); ok {
+		return lease.SetLease(ctx, deadline)
+	}
+	return errors.New("execution runner does not support lease renewal")
+}
 
 // Subscribe replays retained events, then streams live events. Excess clients
 // receive a closed channel. Unsubscribe releases its queue and worker.
@@ -824,6 +903,9 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	// prompts cannot both pass it. It runs before the send because a session
 	// over budget must not pay for the guardrail screen either.
 	if err := s.capBeforePrompt(); err != nil {
+		return err
+	}
+	if err := s.prepareExecution(ctx); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -993,6 +1075,19 @@ func (s *Session) readLoop(stdout io.Reader) {
 		} else if len(line) > 0 {
 			s.handleLine(bytes.TrimRight(line, "\r\n"))
 		}
+		s.mu.Lock()
+		failure := s.eventFailure
+		s.mu.Unlock()
+		if failure != nil {
+			message := "Execution stopped because its durable checkpoint could not be acknowledged. Unfinished work was not replayed."
+			event, _ := json.Marshal(map[string]string{"type": "extension_error", "error": message})
+			s.broadcast(event)
+			if transport, ok := s.process.(interface{ FailEvents(error) }); ok {
+				transport.FailEvents(errors.New(message))
+			}
+			s.kill()
+			return
+		}
 		if (oversized || len(line) > 0) && s.eventHandled != nil {
 			s.eventHandled()
 		}
@@ -1081,7 +1176,7 @@ func (s *Session) handleLine(line []byte) {
 				s.noteMessageUsage(msg.Role, msg.Provider, msg.Model, u)
 			}
 			if msg.Role == "toolResult" && s.reservation != nil {
-				_ = s.persistCheckpoint(s.ArtifactID(), "tool")
+				s.checkpointEvent("tool")
 			}
 		}
 	case "compaction_end":
@@ -1112,7 +1207,7 @@ func (s *Session) handleLine(line []byte) {
 		s.flushInFlightUsage()
 		go s.reconcileUsage()
 		if s.reservation != nil {
-			_ = s.persistCheckpoint(s.ArtifactID(), "settled")
+			s.checkpointEvent("settled")
 		} else if artifactID := s.ArtifactID(); artifactID != "" {
 			s.persisting.Add(1)
 			go func() {
@@ -1145,6 +1240,15 @@ func (s *Session) handleLine(line []byte) {
 	}
 
 	s.broadcast(s.redact(bytes.Clone(line)))
+}
+
+func (s *Session) checkpointEvent(kind string) {
+	if err := s.persistCheckpoint(s.ArtifactID(), kind); err != nil {
+		s.mu.Lock()
+		s.eventFailure = err
+		s.interrupted = true
+		s.mu.Unlock()
+	}
 }
 
 // redact applies the platform-mode filter to one event line on its way out of
@@ -1227,10 +1331,11 @@ func (s *Session) noteWidgetSaved(details map[string]any) {
 // ExecutionCheckpoint describes complete Pi records and why they were captured.
 // Assigned runs use the callback as their only transcript persistence path.
 type ExecutionCheckpoint struct {
-	SessionFile string
-	Title       string
-	Kind        string // "tool", "settled", or "interrupted"
-	Sequence    uint64 // Monotonic within this execution attempt, including final flush.
+	SessionFile  string
+	Title        string
+	Kind         string // "tool", "settled", or "interrupted"
+	Sequence     uint64 // Monotonic within this execution attempt, including final flush.
+	BaseRevision int64
 }
 
 func (s *Session) persistTranscript(artifactID string) {
@@ -1240,9 +1345,15 @@ func (s *Session) persistTranscript(artifactID string) {
 func (s *Session) persistCheckpoint(artifactID, kind string) error {
 	s.persistMu.Lock()
 	defer s.persistMu.Unlock()
+	if s.erased.Load() {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	file, err := s.snapshot(ctx)
+	if s.erased.Load() {
+		return nil
+	}
 	if err == nil {
 		s.checkpointSequence++
 		s.mu.Lock()
@@ -1252,7 +1363,11 @@ func (s *Session) persistCheckpoint(artifactID, kind string) error {
 			if s.reservation.Checkpoint == nil {
 				err = fmt.Errorf("assigned execution has no durable checkpoint callback")
 			} else {
-				err = s.reservation.Checkpoint(ctx, ExecutionCheckpoint{SessionFile: file, Title: title, Kind: kind, Sequence: s.checkpointSequence})
+				checkpoint := ExecutionCheckpoint{SessionFile: file, Title: title, Kind: kind, Sequence: s.checkpointSequence}
+				if s.resumeMetadata != nil {
+					checkpoint.BaseRevision = s.resumeMetadata.Revision
+				}
+				err = s.reservation.Checkpoint(ctx, checkpoint)
 			}
 		} else if file != "" && artifactID != "" {
 			err = s.mgr.st.SaveTranscript(ctx, s.OwnerID, store.Transcript{ArtifactID: artifactID, SessionID: s.ID, Title: title, SessionFile: file})
@@ -1325,7 +1440,7 @@ func (s *Session) finish() {
 		return
 	}
 	s.closed = true
-	s.interrupted = s.streaming || s.promptInFlight
+	s.interrupted = s.interrupted || s.streaming || s.promptInFlight
 	s.streaming = false
 	s.mu.Unlock()
 	s.cancelQuestions("")
@@ -1345,41 +1460,107 @@ func (s *Session) finish() {
 func (s *Session) removeScratch() {
 	<-s.readDone
 	s.persisting.Wait()
-	// Final checkpoint is the only release gate. All earlier checkpoints and
-	// stdout handling have finished before durable authority can be relinquished.
+	_ = s.finalizeExecution()
+	if s.retired != nil {
+		close(s.retired)
+	}
+}
+
+// finalizeExecution deliberately retains both the process snapshot and the
+// assignment on any failed close/checkpoint/release. RetryDrain is explicit;
+// it never replays a prompt and never allows an earlier resume past this file.
+func (s *Session) finalizeExecution() error {
+	s.drainMu.Lock()
+	defer s.drainMu.Unlock()
+	if s.drainComplete {
+		return nil
+	}
+	var beginErr error
+	if !s.erased.Load() {
+		beginErr = s.beginClose()
+	}
 	kind := "settled"
 	s.mu.Lock()
 	if s.interrupted {
 		kind = "interrupted"
 	}
 	s.mu.Unlock()
-	checkpointErr := s.persistCheckpoint(s.ArtifactID(), kind)
-	drainErr := checkpointErr
-	if reservation := s.reservation; reservation != nil && checkpointErr == nil && reservation.Release != nil {
+	var checkpointErr error
+	if !s.erased.Load() {
+		checkpointErr = s.persistCheckpoint(s.ArtifactID(), kind)
+	}
+	drainErr := errors.Join(checkpointErr, beginErr)
+	if reservation := s.reservation; reservation != nil && drainErr == nil && !s.erased.Load() && reservation.Release != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		if err := reservation.Release(ctx); err != nil {
-			drainErr = errors.Join(drainErr, err)
-			slog.Warn("release execution reservation failed", slog.String("execution_id", s.executionIdentity.ExecutionID))
-		}
+		drainErr = reservation.Release(ctx)
 		cancel()
 	}
-	if s.process != nil {
-		if err := s.process.Cleanup(); err != nil {
-			drainErr = errors.Join(drainErr, err)
-			slog.Warn("remove execution scratch failed", slog.String("session_id", s.ID))
-		}
+	if (drainErr == nil || s.erased.Load()) && s.process != nil {
+		drainErr = s.process.Cleanup()
 	}
 	s.mgr.mu.Lock()
-	if drainErr != nil {
-		s.mgr.drainErr = errors.Join(s.mgr.drainErr, fmt.Errorf("final execution drain failed: %w", drainErr))
+	if s.mgr.recoveries == nil {
+		s.mgr.recoveries = map[string]*Session{}
+	}
+	if s.erased.Load() {
+		if s.mgr.erasureErrors == nil {
+			s.mgr.erasureErrors = map[int64]error{}
+		}
+		s.mgr.erasureErrors[s.OwnerID] = errors.Join(s.mgr.erasureErrors[s.OwnerID], drainErr)
+		s.retainedErr = nil
+		s.drainComplete = true
+		delete(s.mgr.recoveries, s.ID)
+		s.mu.Lock()
+		s.backlog = nil
+		s.backlogBytes = 0
+		s.questions = nil
+		s.mu.Unlock()
+	} else if drainErr != nil {
+		s.retainedErr = drainErr
+		s.mgr.recoveries[s.ID] = s
+		slog.Warn("execution retained for recovery", slog.String("execution_id", s.executionIdentity.ExecutionID))
+	} else {
+		s.retainedErr = nil
+		s.drainComplete = true
+		delete(s.mgr.recoveries, s.ID)
+	}
+	s.mgr.drainErr = nil
+	for _, recovery := range s.mgr.recoveries {
+		s.mgr.drainErr = errors.Join(s.mgr.drainErr, recovery.retainedErr)
 	}
 	if s.mgr.sessions[s.ID] == s {
 		delete(s.mgr.sessions, s.ID)
 	}
 	s.mgr.mu.Unlock()
-	if s.retired != nil {
-		close(s.retired)
+	return drainErr
+}
+
+// RetainedSnapshot is a trusted coordinator recovery read, owner-scoped like
+// Get. It is never a browser/tool transcript API and does not release anything.
+func (m *Manager) RetainedSnapshot(ctx context.Context, ownerID int64, id string) (string, error) {
+	m.mu.Lock()
+	s := m.recoveries[id]
+	m.mu.Unlock()
+	if s == nil || s.OwnerID != ownerID {
+		return "", fmt.Errorf("retained execution not found")
 	}
+	s.drainMu.Lock()
+	defer s.drainMu.Unlock()
+	return s.snapshot(ctx)
+}
+
+// RetryDrain retries only final persistence/release, never model execution.
+func (m *Manager) RetryDrain(ctx context.Context, ownerID int64, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	s := m.recoveries[id]
+	m.mu.Unlock()
+	if s == nil || s.OwnerID != ownerID {
+		return fmt.Errorf("retained execution not found")
+	}
+	return s.finalizeExecution()
 }
 
 func (s *Session) kill() {
@@ -1390,6 +1571,9 @@ func (s *Session) kill() {
 	}
 	s.mu.Unlock()
 	s.markStopping()
+	if !s.erased.Load() {
+		_ = s.beginClose()
+	}
 	s.mgr.cfg.Credentials.Revoke(s.grant)
 	_ = s.stdin.Close()
 	if s.process != nil {
@@ -1399,6 +1583,79 @@ func (s *Session) kill() {
 	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
 	}
+}
+
+// EraseOwner is destructive and MUST be called only after successful durable
+// account deletion. It blocks owner admission, revokes/stops live and retained
+// executions, and reclaims their snapshots WITHOUT checkpointing deleted data.
+// Ordinary close and RetryDrain retain their fail-closed durability behavior.
+func (m *Manager) EraseOwner(ctx context.Context, ownerID int64) error {
+	m.mu.Lock()
+	if m.erasedOwners == nil {
+		m.erasedOwners = map[int64]bool{}
+	}
+	m.erasedOwners[ownerID] = true
+	all := map[*Session]bool{}
+	for _, s := range m.sessions {
+		if s.OwnerID == ownerID {
+			s.erased.Store(true)
+			all[s] = false
+		}
+	}
+	for _, s := range m.recoveries {
+		if s.OwnerID == ownerID {
+			s.erased.Store(true)
+			all[s] = true
+		}
+	}
+	m.mu.Unlock()
+	for s := range all {
+		m.cfg.Credentials.Revoke(s.grant)
+		go func(s *Session) { s.kill(); <-s.done; s.persisting.Wait(); _ = s.finalizeExecution() }(s)
+	}
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		m.mu.Lock()
+		remaining := m.processOwners[ownerID]
+		for _, s := range m.sessions {
+			if s.OwnerID == ownerID {
+				remaining++
+			}
+		}
+		for _, s := range m.recoveries {
+			if s.OwnerID == ownerID {
+				remaining++
+			}
+		}
+		err := m.erasureErrors[ownerID]
+		m.mu.Unlock()
+		if remaining == 0 {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s *Session) beginClose() error {
+	s.beginCloseMu.Lock()
+	defer s.beginCloseMu.Unlock()
+	if s.beginCloseDone {
+		return nil
+	}
+	if s.reservation != nil && s.reservation.BeginClose != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.beginCloseErr = s.reservation.BeginClose(ctx)
+	}
+	if s.beginCloseErr == nil {
+		s.beginCloseDone = true
+	}
+	return s.beginCloseErr
 }
 
 func (s *Session) markStopping() {
@@ -1421,4 +1678,17 @@ func paidByFor(platformPaid bool) string {
 		return store.PaidByPlatform
 	}
 	return store.PaidByUser
+}
+
+func (s *Session) prepareExecution(ctx context.Context) error {
+	if s.reservation != nil && s.reservation.BeforePrompt != nil {
+		deadline, err := s.reservation.BeforePrompt(ctx)
+		if err != nil {
+			return err
+		}
+		if !deadline.IsZero() {
+			return s.SetLease(ctx, deadline)
+		}
+	}
+	return nil
 }

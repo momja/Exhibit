@@ -31,6 +31,16 @@ type ServiceConfig struct {
 	// development/self-hosted endpoints. Authentication remains mandatory.
 	LocalAssignments bool
 	MaxAssignments   int
+	Holds            Holds
+	HoldTTL          time.Duration
+}
+
+// Holds is implemented by the in-Sprite Tasks API. It needs no management
+// credential, starts no goroutines itself, and is optional for local workers.
+type Holds interface {
+	Acquire(context.Context, string, time.Duration) error
+	Renew(context.Context, string, time.Duration) error
+	Release(context.Context, string) error
 }
 
 type Service struct {
@@ -46,6 +56,7 @@ type Service struct {
 	running         bool
 	waiting         bool
 	commands        map[string][32]byte
+	promptCommands  map[string]bool
 	pending         map[string]time.Time
 	events          []Event
 	eventBytes      int
@@ -61,6 +72,8 @@ type Service struct {
 	requests        chan struct{}
 	children        map[string]*Service
 	retired         map[string]bool
+	holdActive      bool
+	holdRenewAt     time.Time
 }
 
 func NewService(cfg ServiceConfig) (*Service, error) {
@@ -79,7 +92,13 @@ func NewService(cfg ServiceConfig) (*Service, error) {
 	if cfg.MaxAssignments > 32 {
 		return nil, errors.New("at most 32 local worker assignments are supported")
 	}
-	return &Service{cfg: cfg, changed: make(chan struct{}), commands: make(map[string][32]byte), pending: make(map[string]time.Time), subscribers: make(chan struct{}, 4), requests: make(chan struct{}, 8), children: make(map[string]*Service), retired: make(map[string]bool)}, nil
+	if cfg.HoldTTL == 0 {
+		cfg.HoldTTL = time.Minute
+	}
+	if cfg.HoldTTL < 3*time.Second || cfg.HoldTTL > 5*time.Minute || cfg.HoldTTL%time.Second != 0 {
+		return nil, errors.New("worker hold TTL must be whole seconds from 3 seconds to 5 minutes")
+	}
+	return &Service{cfg: cfg, changed: make(chan struct{}), commands: make(map[string][32]byte), promptCommands: make(map[string]bool), pending: make(map[string]time.Time), subscribers: make(chan struct{}, 4), requests: make(chan struct{}, 8), children: make(map[string]*Service), retired: make(map[string]bool)}, nil
 }
 
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +132,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		writeJSON(w, Readiness{Version: ProtocolVersion, PiVersion: PiVersion, ExecutionID: s.cfg.ExecutionID, SessionID: s.cfg.SessionID,
 			Started: started, Closed: closed,
-			Capabilities: []string{"commands", "idle-disconnect", "snapshot", "selection", "deduplication"}})
+			Capabilities: []string{"commands", "idle-disconnect", "snapshot", "selection", "deduplication", "leases", "idle-ack", "final-ack"}})
 		return
 	}
 	path := strings.TrimPrefix(r.URL.EscapedPath(), base)
@@ -128,6 +147,37 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.command(w, r)
 	case r.Method == http.MethodGet && path == "/events":
 		s.eventBatch(w, r)
+	case r.Method == http.MethodPost && path == "/lease":
+		s.setLease(w, r)
+	case r.Method == http.MethodPost && path == "/release":
+		if err := s.Reclaim(r.Context()); err != nil {
+			writeError(w, 409, "reclaim_failed", "closed worker snapshot must be acknowledged before reclamation")
+			return
+		}
+		writeJSON(w, map[string]bool{"released": true})
+	case r.Method == http.MethodPost && path == "/idle":
+		var ack struct {
+			Cursor uint64 `json:"cursor"`
+		}
+		if !decodeJSON(w, r, &ack, 1024) {
+			return
+		}
+		s.opMu.Lock()
+		s.mu.Lock()
+		idle := (!s.running || s.waiting) && len(s.pending) == 0 && ack.Cursor == s.cursor
+		s.mu.Unlock()
+		if !idle {
+			s.opMu.Unlock()
+			writeError(w, 409, "idle_changed", "worker received more events or commands before idle acknowledgment")
+			return
+		}
+		err := s.releaseHold(r.Context())
+		s.opMu.Unlock()
+		if err != nil {
+			writeError(w, 503, "hold_release_failed", "worker idle hold release failed")
+			return
+		}
+		writeJSON(w, map[string]bool{"idle": true})
 	case r.Method == http.MethodGet && path == "/snapshot":
 		file, err := s.snapshot(r.Context())
 		if err != nil {
@@ -135,7 +185,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.mu.Lock()
-		snapshot := Snapshot{SessionFile: file, Cursor: s.cursor, Closed: s.closed}
+		snapshot := Snapshot{SessionFile: file, Cursor: s.cursor, Closed: s.closed, Settled: !s.running && !s.waiting && len(s.pending) == 0}
 		s.mu.Unlock()
 		writeJSON(w, snapshot)
 	case r.Method == http.MethodPost && path == "/close":
@@ -154,12 +204,64 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.mu.Lock()
-		result := Snapshot{SessionFile: s.finalSnapshot, Cursor: s.cursor, Closed: true}
+		result := Snapshot{SessionFile: s.finalSnapshot, Cursor: s.cursor, Closed: true, Settled: !s.running && !s.waiting}
 		s.mu.Unlock()
 		writeJSON(w, result)
 	default:
 		writeError(w, 404, "not_found", "unknown worker operation")
 	}
+}
+
+func (s *Service) setLease(w http.ResponseWriter, r *http.Request) {
+	var update LeaseUpdate
+	if !decodeJSON(w, r, &update, 2048) {
+		return
+	}
+	if update.ID == "" || len(update.ID) > 200 || !update.ExpiresAt.After(time.Now()) || update.ExpiresAt.After(time.Now().Add(24*time.Hour)) {
+		writeError(w, 400, "invalid_lease", "assigned lease must have stable identity and expire within 24 hours")
+		return
+	}
+	data, _ := json.Marshal(update)
+	hash := sha256.Sum256(data)
+	s.opMu.Lock()
+	defer s.opMu.Unlock()
+	s.mu.Lock()
+	if existing, ok := s.commands[update.ID]; ok {
+		s.mu.Unlock()
+		if existing != hash {
+			writeError(w, 409, "command_conflict", "lease identity already used")
+			return
+		}
+		writeJSON(w, map[string]bool{"renewed": true})
+		return
+	}
+	if s.closed || !s.ready || (s.running && !s.waiting && !time.Now().Before(s.expires)) {
+		s.mu.Unlock()
+		writeError(w, 409, "execution_unavailable", "worker execution lease is no longer active")
+		return
+	}
+	if len(s.commands) >= MaxCommands {
+		s.mu.Unlock()
+		writeError(w, 429, "command_limit", "execution command capacity reached")
+		return
+	}
+	p, previous := s.process, s.expires
+	s.mu.Unlock()
+	if update.ExpiresAt.Before(previous) {
+		writeError(w, 409, "stale_lease", "worker lease cannot be moved backwards")
+		return
+	}
+	if lease, ok := p.(LeaseProcess); ok {
+		if err := lease.SetLease(r.Context(), update.ExpiresAt); err != nil {
+			writeError(w, 503, "lease_failed", "unable to update Pi lease deadline")
+			return
+		}
+	}
+	s.mu.Lock()
+	s.expires = update.ExpiresAt
+	s.commands[update.ID] = hash
+	s.mu.Unlock()
+	writeJSON(w, map[string]bool{"renewed": true})
 }
 
 func (s *Service) start(w http.ResponseWriter, r *http.Request) {
@@ -316,8 +418,24 @@ func (s *Service) command(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := s.process
+	needsHold := rpc.Type == "prompt" || rpc.Type == "steer" || rpc.Type == "extension_ui_response"
+	if needsHold && !time.Now().Before(s.expires) {
+		s.mu.Unlock()
+		writeError(w, 409, "lease_expired", "renew the assigned lease before accepting more work")
+		return
+	}
+	s.mu.Unlock()
+	if needsHold {
+		if err := s.acquireHold(r.Context()); err != nil {
+			writeError(w, 503, "hold_unavailable", "unable to acquire active worker hold; command was not accepted")
+			return
+		}
+		setProcessActive(p, true)
+	}
+	s.mu.Lock()
 	s.commands[command.ID] = hash
 	if rpc.Type == "prompt" || rpc.Type == "steer" {
+		s.promptCommands[command.ID] = true
 		s.running = true
 		s.turnStarted = now
 	}
@@ -375,22 +493,26 @@ func (s *Service) readOutput(reader io.Reader) {
 				if event.ID == "worker-ready-"+s.cfg.ExecutionID && !event.Success {
 					s.readinessFailed = true
 				}
-				if !event.Success || event.Data.Disposition == "handled" {
+				if s.promptCommands[event.ID] && (!event.Success || event.Data.Disposition == "handled") {
 					s.running = false
 					s.waiting = false
 					s.turnStarted = time.Time{}
+					setProcessActive(s.process, false)
 				}
 			case "agent_start":
 				s.running = true
 				s.waiting = false
 				s.turnStarted = time.Now()
+				setProcessActive(s.process, true)
 			case "agent_settled":
 				s.running = false
 				s.waiting = false
 				s.turnStarted = time.Time{}
+				setProcessActive(s.process, false)
 			case "extension_ui_request":
 				if event.Method == "input" && event.Title == "exhibit:questions:v1" {
 					s.waiting = true
+					setProcessActive(s.process, false)
 				}
 			}
 			s.signalLocked()
@@ -485,9 +607,8 @@ func (s *Service) snapshot(ctx context.Context) (string, error) {
 	return p.Snapshot(ctx)
 }
 
-// Shutdown kills and drains Pi, then captures complete records and removes
-// scratch. The final snapshot remains readable in supervisor memory for core
-// acknowledgment. A daemon is never reassigned to another owner/session.
+// Shutdown stops Pi and captures complete records. Reclaim is separate: core
+// must durably acknowledge the final snapshot and release authority first.
 func (s *Service) Shutdown(ctx context.Context) error {
 	if s.cfg.LocalAssignments {
 		s.mu.Lock()
@@ -512,7 +633,7 @@ func (s *Service) Shutdown(ctx context.Context) error {
 		err := s.finalErr
 		s.signalLocked()
 		s.mu.Unlock()
-		return err
+		return errors.Join(err, s.releaseHold(ctx))
 	}
 	s.mu.Unlock()
 	_ = p.Close()
@@ -523,15 +644,45 @@ func (s *Service) Shutdown(ctx context.Context) error {
 	}
 	_ = p.Wait()
 	file, err := p.Snapshot(ctx)
-	cleanupErr := p.Cleanup()
+	cleanupErr := s.releaseHold(ctx)
 	if err == nil {
 		err = cleanupErr
 	}
 	s.mu.Lock()
-	s.finalSnapshot, s.finalErr, s.process, s.closed = file, err, nil, true
+	s.finalSnapshot, s.finalErr, s.closed = file, err, true
 	s.signalLocked()
 	s.mu.Unlock()
 	return err
+}
+
+// Reclaim is an authenticated supervisor acknowledgment, never a tool command.
+func (s *Service) Reclaim(ctx context.Context) error {
+	s.opMu.Lock()
+	defer s.opMu.Unlock()
+	s.mu.Lock()
+	p, closed, finalErr := s.process, s.closed, s.finalErr
+	s.mu.Unlock()
+	if !closed {
+		return errors.New("execution is still active")
+	}
+	if finalErr != nil {
+		return finalErr
+	}
+	if p != nil {
+		if err := p.Cleanup(); err != nil {
+			return err
+		}
+	}
+	s.mu.Lock()
+	s.process = nil
+	s.mu.Unlock()
+	return nil
+}
+
+func setProcessActive(p Process, active bool) {
+	if state, ok := p.(interface{ SetActive(bool) }); ok {
+		state.SetActive(active)
+	}
 }
 
 func (s *Service) watchdog(p Process) {
@@ -543,19 +694,107 @@ func (s *Service) watchdog(p Process) {
 			return
 		case now := <-ticker.C:
 			s.mu.Lock()
-			expired := !now.Before(s.expires) || (s.running && !s.waiting && !s.turnStarted.IsZero() && now.Sub(s.turnStarted) > s.turnTimeout)
+			expired := (s.running && !s.waiting && !now.Before(s.expires)) || (s.running && !s.waiting && !s.turnStarted.IsZero() && now.Sub(s.turnStarted) > s.turnTimeout)
 			for _, deadline := range s.pending {
 				if !now.Before(deadline) {
 					expired = true
 				}
 			}
 			s.mu.Unlock()
+			if !expired {
+				s.opMu.Lock()
+				s.mu.Lock()
+				renew := s.holdActive && s.running && !s.waiting && !now.Before(s.holdRenewAt)
+				s.mu.Unlock()
+				if renew {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					ttl, err := s.activeHoldTTL()
+					if err == nil {
+						err = s.cfg.Holds.Renew(ctx, s.holdName(), ttl)
+					}
+					cancel()
+					if err != nil {
+						expired = true
+					} else {
+						s.mu.Lock()
+						s.holdRenewAt = now.Add(s.cfg.HoldTTL / 3)
+						s.mu.Unlock()
+					}
+				}
+				s.opMu.Unlock()
+			}
 			if expired {
 				_ = p.Close()
 				return
 			}
 		}
 	}
+}
+
+func (s *Service) holdName() string {
+	sum := sha256.Sum256([]byte(s.cfg.ExecutionID))
+	return fmt.Sprintf("exhibit-%x", sum[:16])
+}
+
+// Caller serializes hold transitions with opMu; readOutput never performs I/O.
+func (s *Service) acquireHold(ctx context.Context) error {
+	if s.cfg.Holds == nil {
+		return nil
+	}
+	s.mu.Lock()
+	active := s.holdActive
+	s.mu.Unlock()
+	if active {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	ttl, err := s.activeHoldTTL()
+	if err != nil {
+		return err
+	}
+	if err := s.cfg.Holds.Acquire(ctx, s.holdName(), ttl); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.holdActive = true
+	s.holdRenewAt = time.Now().Add(s.cfg.HoldTTL / 3)
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *Service) activeHoldTTL() (time.Duration, error) {
+	s.mu.Lock()
+	remaining := time.Until(s.expires)
+	s.mu.Unlock()
+	ttl := s.cfg.HoldTTL
+	if remaining < ttl {
+		ttl = remaining.Truncate(time.Second)
+	}
+	if ttl < time.Second {
+		return 0, errors.New("assigned lease has less than one second remaining")
+	}
+	return ttl, nil
+}
+func (s *Service) releaseHold(ctx context.Context) error {
+	if s.cfg.Holds == nil {
+		return nil
+	}
+	s.mu.Lock()
+	active := s.holdActive
+	s.mu.Unlock()
+	if !active {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := s.cfg.Holds.Release(ctx, s.holdName()); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.holdActive = false
+	s.mu.Unlock()
+	return nil
 }
 
 func (s *Service) signalLocked() { close(s.changed); s.changed = make(chan struct{}) }

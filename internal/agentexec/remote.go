@@ -88,6 +88,7 @@ type RemoteProcess struct {
 	config         StartConfig
 	provisioner    Provisioner
 	acknowledged   chan struct{}
+	leasePending   bool
 }
 
 // UncertainError means a command may have run. Reserve a new fenced attempt
@@ -150,7 +151,7 @@ func (r Remote) Start(ctx context.Context, cfg StartConfig) (Process, error) {
 		err = errors.New("worker readiness/version/assignment mismatch")
 		return nil, err
 	}
-	for _, capability := range []string{"commands", "idle-disconnect", "snapshot", "selection", "deduplication"} {
+	for _, capability := range []string{"commands", "idle-disconnect", "snapshot", "selection", "deduplication", "leases", "idle-ack", "final-ack"} {
 		found := false
 		for _, value := range ready.Capabilities {
 			if value == capability {
@@ -192,8 +193,12 @@ func (p *RemoteProcess) SynchronizeEvents() func() {
 		}
 	}
 }
-func (p *RemoteProcess) Stderr() io.Reader { return strings.NewReader("") }
-func (p *RemoteProcess) Wait() error       { <-p.done; p.mu.Lock(); defer p.mu.Unlock(); return p.err }
+
+// FailEvents stops delivery without acknowledging the failed checkpoint, so no
+// idle callback or daemon hold-release acknowledgment can follow it.
+func (p *RemoteProcess) FailEvents(err error) { p.terminate(err) }
+func (p *RemoteProcess) Stderr() io.Reader    { return strings.NewReader("") }
+func (p *RemoteProcess) Wait() error          { <-p.done; p.mu.Lock(); defer p.mu.Unlock(); return p.err }
 func (p *RemoteProcess) WriteSelection(ctx context.Context, selection []string) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -263,7 +268,7 @@ func (p *RemoteProcess) wake() {
 // worker. Background stats, event delivery failures, and unfinished prompts
 // never enter this recovery path.
 func (p *RemoteProcess) ensureAttached(ctx context.Context, kind string) error {
-	if kind != "prompt" && kind != "steer" {
+	if kind != "prompt" && kind != "steer" && kind != "extension_ui_response" {
 		return nil
 	}
 	p.mu.Lock()
@@ -297,7 +302,7 @@ func (p *RemoteProcess) ensureAttached(ctx context.Context, kind string) error {
 	if err := p.request(ctx, http.MethodGet, "/ready", nil, &ready, 1<<20); err != nil {
 		return err
 	}
-	if ready.Version != ProtocolVersion || ready.PiVersion != PiVersion || ready.ExecutionID != cfg.ExecutionID || (ready.SessionID != "" && ready.SessionID != cfg.SessionID) || ready.Closed {
+	if ready.Version != ProtocolVersion || ready.PiVersion != PiVersion || ready.ExecutionID != cfg.ExecutionID || (ready.SessionID != "" && ready.SessionID != cfg.SessionID) || ready.Closed || (ready.Unassigned && !endpoint.AllowUnassigned) {
 		return errors.New("worker assignment changed or expired; reserve a new attempt")
 	}
 	if !ready.Started {
@@ -319,9 +324,19 @@ func (p *RemoteProcess) ensureAttached(ctx context.Context, kind string) error {
 		p.cursor = 0
 		p.config = cfg
 		p.mu.Unlock()
+	} else {
+		p.mu.Lock()
+		pending := p.leasePending
+		p.mu.Unlock()
+		if pending {
+			if err := p.request(ctx, http.MethodPost, "/lease", LeaseUpdate{ID: uuid.NewString(), ExpiresAt: cfg.ExpiresAt}, new(any), 1<<20); err != nil {
+				return err
+			}
+		}
 	}
 	p.mu.Lock()
 	p.quiescent = false
+	p.leasePending = false
 	p.mu.Unlock()
 	return nil
 }
@@ -426,6 +441,20 @@ func (p *RemoteProcess) pump() {
 					return
 				}
 			}
+			if current == generation {
+				ctx, cancel := context.WithTimeout(p.lifetime, 10*time.Second)
+				err = p.request(ctx, http.MethodPost, "/idle", map[string]uint64{"cursor": cursor}, new(any), 1<<20)
+				cancel()
+				if err != nil {
+					p.commandMu.Unlock()
+					var changed *HTTPError
+					if errors.As(err, &changed) && changed.Code == "idle_changed" {
+						continue
+					}
+					p.terminate(err)
+					return
+				}
+			}
 			p.mu.Lock()
 			if p.generation == generation {
 				p.quiescent = true
@@ -460,6 +489,35 @@ func (p *RemoteProcess) Snapshot(ctx context.Context) (string, error) {
 	return snapshot.SessionFile, nil
 }
 func (p *RemoteProcess) Close() error { return p.Kill() }
+
+func (p *RemoteProcess) SetLease(ctx context.Context, deadline time.Time) error {
+	p.commandMu.Lock()
+	defer p.commandMu.Unlock()
+	if !deadline.After(time.Now()) || deadline.After(time.Now().Add(24*time.Hour)) {
+		return errors.New("worker lease must expire within 24 hours")
+	}
+	p.mu.Lock()
+	stopped, quiescent := p.stopping, p.quiescent
+	p.mu.Unlock()
+	if stopped {
+		return errors.New("worker execution stopped")
+	}
+	if quiescent {
+		p.mu.Lock()
+		p.config.ExpiresAt = deadline
+		p.leasePending = true
+		p.mu.Unlock()
+		return nil
+	}
+	if err := p.request(ctx, http.MethodPost, "/lease", LeaseUpdate{ID: uuid.NewString(), ExpiresAt: deadline}, new(any), 1<<20); err != nil {
+		return err
+	}
+	p.mu.Lock()
+	p.config.ExpiresAt = deadline
+	p.mu.Unlock()
+	return nil
+}
+
 func (p *RemoteProcess) Kill() error {
 	p.commandMu.Lock()
 	defer p.commandMu.Unlock()
@@ -475,6 +533,9 @@ func (p *RemoteProcess) Kill() error {
 	defer cancel()
 	var snapshot Snapshot
 	if err := p.request(ctx, http.MethodPost, "/close", map[string]string{"id": uuid.NewString()}, &snapshot, 2*MaxSessionBytes+(1<<20)); err != nil {
+		p.mu.Lock()
+		p.closeRequested = false
+		p.mu.Unlock()
 		p.terminate(err)
 		return err
 	}
@@ -488,7 +549,7 @@ func (p *RemoteProcess) Cleanup() error {
 	var err error
 	p.cleanup.Do(func() {
 		err = p.Close()
-		if p.endpoint.AllowUnassigned && err == nil {
+		if err == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			err = p.request(ctx, http.MethodPost, "/release", map[string]string{"id": uuid.NewString()}, new(any), 1<<20)
 			cancel()

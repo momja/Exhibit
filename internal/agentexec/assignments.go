@@ -13,7 +13,7 @@ import (
 // assignments retain snapshots until an authenticated release after core saves.
 func (s *Service) serveAssignments(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/v1/ready" && r.Method == http.MethodGet {
-		writeJSON(w, Readiness{Version: ProtocolVersion, PiVersion: PiVersion, Unassigned: true, Capabilities: []string{"commands", "idle-disconnect", "snapshot", "selection", "deduplication"}})
+		writeJSON(w, Readiness{Version: ProtocolVersion, PiVersion: PiVersion, Unassigned: true, Capabilities: []string{"commands", "idle-disconnect", "snapshot", "selection", "deduplication", "leases", "idle-ack", "final-ack"}})
 		return
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/v1/executions/")
@@ -77,10 +77,14 @@ func (s *Service) serveAssignments(w http.ResponseWriter, r *http.Request) {
 	}
 	if operation == "release" && r.Method == http.MethodPost {
 		child.mu.Lock()
-		done := child.closed && child.process == nil
+		done := child.closed
 		child.mu.Unlock()
 		if !done {
 			writeError(w, 409, "execution_active", "close and acknowledge the final snapshot before release")
+			return
+		}
+		if err := child.Reclaim(r.Context()); err != nil {
+			writeError(w, 503, "reclaim_failed", "worker scratch reclamation failed")
 			return
 		}
 		s.mu.Lock()

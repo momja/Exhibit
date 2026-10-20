@@ -35,6 +35,9 @@ type LocalProcess struct {
 	exited         chan struct{}
 	err            error
 	cleanup        sync.Once
+	leaseMu        sync.Mutex
+	expiresAt      time.Time
+	leaseActive    bool
 }
 
 func (r Local) Start(ctx context.Context, cfg StartConfig) (Process, error) {
@@ -143,10 +146,10 @@ func (r Local) Start(ctx context.Context, cfg StartConfig) (Process, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start pi: %w", err)
 	}
-	p := &LocalProcess{Command: cmd, WorkDir: workDir, SessionPath: sessionPath, stdin: stdin, stdout: stdout, stderr: stderr, exited: make(chan struct{})}
+	p := &LocalProcess{Command: cmd, WorkDir: workDir, SessionPath: sessionPath, stdin: stdin, stdout: stdout, stderr: stderr, exited: make(chan struct{}), expiresAt: cfg.ExpiresAt}
 	started = true
 	go func() { p.err = cmd.Wait(); close(p.exited) }()
-	go p.enforceBounds(cfg.ExpiresAt)
+	go p.enforceBounds()
 	return p, nil
 }
 
@@ -206,7 +209,26 @@ func (p *LocalProcess) Cleanup() error {
 // Scratch is transient and bounded even when Pi or an extension misbehaves.
 // The worker package never removes active scratch to enforce a quota: it stops
 // the process first so core can retrieve the last complete snapshot.
-func (p *LocalProcess) enforceBounds(expiry time.Time) {
+func (p *LocalProcess) SetLease(ctx context.Context, deadline time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !deadline.After(time.Now()) || deadline.After(time.Now().Add(24*time.Hour)) {
+		return errors.New("worker lease must expire within 24 hours")
+	}
+	p.leaseMu.Lock()
+	p.expiresAt = deadline
+	p.leaseMu.Unlock()
+	return nil
+}
+
+func (p *LocalProcess) SetActive(active bool) {
+	p.leaseMu.Lock()
+	p.leaseActive = active
+	p.leaseMu.Unlock()
+}
+
+func (p *LocalProcess) enforceBounds() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -214,7 +236,10 @@ func (p *LocalProcess) enforceBounds(expiry time.Time) {
 		case <-p.exited:
 			return
 		case now := <-ticker.C:
-			if (!expiry.IsZero() && !now.Before(expiry)) || scratchTooLarge(p.WorkDir) {
+			p.leaseMu.Lock()
+			expiry, active := p.expiresAt, p.leaseActive
+			p.leaseMu.Unlock()
+			if (active && !expiry.IsZero() && !now.Before(expiry)) || scratchTooLarge(p.WorkDir) {
 				_ = p.Close()
 				return
 			}
@@ -226,6 +251,9 @@ func scratchTooLarge(root string) bool {
 	var size int64
 	count := 0
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -234,6 +262,9 @@ func scratchTooLarge(root string) bool {
 			return errors.New("scratch file limit")
 		}
 		info, err := entry.Info()
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}

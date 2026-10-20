@@ -85,6 +85,17 @@ type Process interface {
 // Direct Process consumers may omit this and process events asynchronously.
 type EventSynchronizer interface{ SynchronizeEvents() (handled func()) }
 
+// LeaseProcess accepts explicit core-approved deadlines. Call only during
+// active execution or immediately before a new prompt, never from idle polling.
+type LeaseProcess interface {
+	SetLease(context.Context, time.Time) error
+}
+
+type LeaseUpdate struct {
+	ID        string    `json:"id"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 type Command struct {
 	ID       string          `json:"id"`
 	Deadline time.Time       `json:"deadline"`
@@ -111,6 +122,7 @@ type Snapshot struct {
 	SessionFile string `json:"session_file"`
 	Cursor      uint64 `json:"cursor"`
 	Closed      bool   `json:"closed"`
+	Settled     bool   `json:"settled"`
 }
 
 type Readiness struct {
