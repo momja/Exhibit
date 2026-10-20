@@ -1238,6 +1238,15 @@ reinitialized on re-entry. FTS5 remains the authoritative
 search over each selected set. Filter, collection management, and the allowlist
 editor are full-page server renders.
 
+Gallery cards expose a trailing action menu in place of the standalone Edit
+link. Its panel and items share `.action-menu` styles with the detail pill.
+`gallery-actions.js` delegates menu behavior from the stable gallery root, so
+search and paging swaps need no rebinding. Menus close on outside clicks,
+focus leaving, or Escape; Escape returns focus to the trigger. Keyboard focus
+and touch expose the trigger without requiring hover.
+
+![Gallery card action menu](screenshots/Exh-johq/01-gallery-actions.png)
+
 **The detail page is the artifact, with its chrome floating over it**
 (Exh-ghuv). The frame fills the window. Everything else is one pill of
 controls (back, a grip, the title, share, ⋮) that behaves like

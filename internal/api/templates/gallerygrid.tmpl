@@ -30,10 +30,17 @@
   <span class="gallery-loading" role="status">Loading artifacts…</span>
 </div>{{end}}
 
-{{/* The tile, title, tag dots, posture/sharing glyphs and Edit have one
+{{/* The tile, title, tag dots, posture/sharing glyphs and actions have one
      definition for every gallery. Delegated card clicks leave links and
      popover controls to their own handlers. */}}
 {{define "galleryCard"}}<div class="card" data-href="/artifacts/{{.ArtifactID}}">
   {{template "cardWidget" .Widget}}
-  <div class="card-meta"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>{{template "tagDots" .}}{{template "capabilityCluster" .Capability}}<a class="card-edit" href="/artifacts/{{.ArtifactID}}/edit" aria-label="Edit {{.Title}}" title="Edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i></a></div>
+  <div class="card-meta"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>{{template "tagDots" .}}{{template "capabilityCluster" .Capability}}
+    <div class="card-actions" data-card-actions>
+      <button type="button" class="card-actions-trigger" data-card-actions-trigger aria-label="Actions for {{.Title}}" title="Actions" aria-expanded="false" aria-controls="card-actions-{{.ArtifactID}}"><i class="ph ph-dots-three-vertical" aria-hidden="true"></i></button>
+      <div class="action-menu card-actions-menu" id="card-actions-{{.ArtifactID}}" hidden>
+        <a href="/artifacts/{{.ArtifactID}}/edit" aria-label="Edit {{.Title}}"><i class="ph ph-pencil-simple" aria-hidden="true"></i> Edit</a>
+      </div>
+    </div>
+  </div>
 </div>{{end}}

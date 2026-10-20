@@ -251,12 +251,11 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 
 	// The redundant 'Details' link is gone (it duplicated the title click).
 	assert.NotContains(t, page, `>Details</a>`)
-	assert.NotContains(t, page, `class="card-actions"`)
-
-	// av-8u7p, av-uvc6: the one card action that is not the detail page, a
-	// pencil at the end of the meta row. Its accessible name leads with
-	// "Edit" and names the artifact; the title is the word a pointer sees.
-	assert.Contains(t, page, `<a class="card-edit" href="/artifacts/`+id+`/edit" aria-label="Edit Openless" title="Edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i></a>`)
+	assert.Contains(t, page, `class="card-actions" data-card-actions`)
+	assert.Contains(t, page, `aria-label="Actions for Openless" title="Actions" aria-expanded="false" aria-controls="card-actions-`+id+`"`)
+	assert.Contains(t, page, `class="action-menu card-actions-menu" id="card-actions-`+id+`" hidden`)
+	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit" aria-label="Edit Openless"><i class="ph ph-pencil-simple" aria-hidden="true"></i> Edit</a>`)
+	assert.NotContains(t, page, `class="card-edit"`)
 
 	// av-uvc6: one meta row under the tile, and no created date on it.
 	assert.Contains(t, page, `<div class="card-meta"><a class="card-title" href="/artifacts/`+id+`">Openless</a>`)
@@ -268,32 +267,17 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.NotContains(t, page, `target="_blank"`)
 }
 
-// av-8u7p, av-uvc6: the card's Edit pencil is hover-revealed, but
-// 'hover-revealed' must not mean 'unreachable'. Keyboard focus reveals it,
-// coarse pointers show it unconditionally, and at rest it stays in the
-// accessibility tree rather than being display:none'd out of it.
-func TestGalleryCardEditStaysReachableWithoutHover(t *testing.T) {
+// The action trigger remains reachable without hover and uses the same menu
+// visual vocabulary as the artifact pill.
+func TestGalleryCardActionsStayReachableWithoutHover(t *testing.T) {
 	r := newTestRouter(t)
 	css := galleryAsset(t, r, "/assets/gallery/index.css")
-
-	// Keyboard: focus anywhere within the card reveals the pencil, so it is
-	// not a hover-only control for anyone tabbing through the grid.
-	assert.Contains(t, css, `.card:hover .card-edit,.card:focus-within .card-edit{width:22px;margin:0 -4px 0 -2px;opacity:1}`)
-
-	// Touch: hover does not exist, so the pencil is always visible there.
-	// Both queries are load-bearing: a hover-less input does not reliably
-	// report hover:none (Chrome's touch emulation reports neither
-	// hover:none nor hover:hover), and the coarse pointer identifies those.
-	assert.Contains(t, css, `@media (hover:none),(pointer:coarse){.card-edit{width:22px;margin:0 -4px 0 -2px;opacity:1}}`)
-
-	// At rest it is collapsed, not removed: never display:none or
-	// visibility:hidden, either of which would drop the link from a screen
-	// reader's list of links.
-	assert.Contains(t, css, `.card-edit{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:1px;`)
-	rest := css[strings.Index(css, `.card-edit{`):]
-	rest = rest[:strings.Index(rest, "}")]
-	assert.NotContains(t, rest, "display:none")
-	assert.NotContains(t, rest, "visibility:hidden")
+	assert.Contains(t, css, `.card:hover .card-actions,.card:focus-within .card-actions,.card-actions.is-open{width:22px;`)
+	assert.Contains(t, css, `@media (hover:none),(pointer:coarse){.card-actions{width:22px;`)
+	assert.Contains(t, css, `.card-actions-trigger{opacity:1}`)
+	shared := galleryAsset(t, r, "/assets/gallery/components.css")
+	assert.Contains(t, shared, `.action-menu a,.action-menu button{`)
+	assert.Contains(t, shared, `.action-menu[hidden]{display:none}`)
 }
 
 // av-isb3, av-uvc6: the gallery card's posture glyphs are neutral and

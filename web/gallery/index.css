@@ -95,24 +95,17 @@ main{padding:10px 12px}
 .card .capability-cluster .capability-count{font-size:10.5px;margin-left:-2px}
 .card .capability-popover{left:-1px;right:-1px;width:auto;max-width:none;margin-top:4px;cursor:default}
 
-/* Edit, revealed on hover or focus (av-8u7p, av-uvc6). At rest it is a 1px
- * sliver whose negative margin cancels the row's gap, so the glyphs before it
- * sit flush right with no reserved hole. It is never display:none or
- * visibility:hidden: those would drop it from the accessibility tree and a
- * screen reader listing links would not find it. Tabbing to it focuses the
- * card, which is what reveals it. */
-.card-edit{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:1px;height:20px;margin-left:-6px;overflow:hidden;border-radius:var(--radius-pill);color:var(--brand-blue);font-size:13px;text-decoration:none;opacity:0}
-.card:hover .card-edit,.card:focus-within .card-edit{width:22px;margin:0 -4px 0 -2px;opacity:1}
-.card-edit:hover,.card-edit:focus-visible{background:var(--color-hover-fill)}
-.card-edit i{line-height:1}
-/* Touch has no hover, so a hover-gated control is simply unreachable there —
- * and using a library across devices is a core flow (spec 8.3). Both queries
- * are needed, not one: a hover-less input does not always report
- * hover:none (some report neither none nor hover), and on those the coarse
- * pointer is what identifies it. Either match shows the pencil; the cost of
- * a false positive is a pencil that is always visible, against a false
- * negative's unreachable control. */
-@media (hover:none),(pointer:coarse){.card-edit{width:22px;margin:0 -4px 0 -2px;opacity:1}}
+/* The action trigger stays reachable by keyboard and touch. The wrapper
+ * collapses at rest without clipping its menu or removing the button. */
+.card-actions{position:relative;flex:0 0 auto;display:inline-flex;width:1px;height:20px;margin-left:-6px}
+.card-actions-trigger{display:inline-flex;align-items:center;justify-content:center;width:100%;min-width:0;height:20px;padding:0;overflow:hidden;border:0;border-radius:var(--radius-pill);background:none;color:var(--brand-blue);font-size:15px;cursor:pointer;opacity:0}
+.card:hover .card-actions,.card:focus-within .card-actions,.card-actions.is-open{width:22px;margin:0 -4px 0 -2px}
+.card:hover .card-actions-trigger,.card:focus-within .card-actions-trigger,.card-actions.is-open .card-actions-trigger{opacity:1}
+.card-actions-trigger:hover,.card-actions-trigger:focus-visible,.card-actions-trigger[aria-expanded=true]{background:var(--color-hover-fill)}
+.card-actions-trigger i{line-height:1}
+.card-actions-menu{position:absolute;right:0;bottom:calc(100% + 6px);width:180px;max-width:calc(100vw - 32px);z-index:40}
+.card:has(.card-actions.is-open){z-index:31}
+@media (hover:none),(pointer:coarse){.card-actions{width:22px;margin:0 -4px 0 -2px}.card-actions-trigger{opacity:1}}
 
 .empty{color:var(--color-muted);font-size:14px;padding:20px 0}
 .empty a{color:var(--brand-blue)}
