@@ -87,10 +87,15 @@ The only way data changes. Full route reference: `api.md`.
   idempotent. The only route
   family a grantee may write (av-v991): handlers resolve one principal, the viewer,
   and the store's `…AsViewer` methods decide whose rows that means.
-- `GET …/export`: the artifact as one self-contained file, assets folded back in as
-  `data:` URIs (av-vnkt). The file is the canonical artifact; the URL form is
-  internal and is materialized wherever the artifact leaves the service. One failed
-  asset read fails the export. Lives in `internal/export` for the static build too.
+- `GET …/export`: owner-only complete ZIP snapshot, also selected by
+  `?format=zip`. Its versioned manifest names editable source, portable HTML,
+  optional widget source/HTML, owner state and original asset bytes. Current
+  assets and reachable historical dependencies are retained without version
+  history. Built in a bounded temporary file before download headers, so missing
+  content cannot yield a partial successful archive. `?format=html` retains the
+  self-contained document (av-vnkt), excluding widget and state. Both formats
+  materialize assets through `internal/export`, also used by the static build.
+  Bundle contract: [artifact-bundles.md](artifact-bundles.md).
 - `GET …/assets`, `DELETE …/assets/:assetID`: out-of-line payloads, metadata only
   (av-20fk). Produced by the vendorer or a complete owner-only ZIP import;
   individual payload writes are not exposed.

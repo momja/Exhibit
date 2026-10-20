@@ -26,6 +26,7 @@ package export
 import (
 	"encoding/base64"
 	"encoding/json"
+	"mime"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -63,7 +64,7 @@ func Materialize(body string, assets []store.ArtifactAsset, assetURL func(store.
 			// that will not resolve once the instance is gone.
 			return "", err
 		}
-		uri := "data:" + a.ContentType + ";base64," + base64.StdEncoding.EncodeToString(raw)
+		uri := DataURIPrefix(a.ContentType) + base64.StdEncoding.EncodeToString(raw)
 
 		if url := assetURL(a); url != "" && strings.Contains(body, url) {
 			body = strings.ReplaceAll(body, url, uri)
@@ -75,6 +76,41 @@ func Materialize(body string, assets []store.ArtifactAsset, assetURL func(store.
 		return body, nil
 	}
 	return injectManifest(body, manifest)
+}
+
+// DataURIPrefix encodes MIME metadata so a data URI can be inserted into HTML,
+// CSS, JSON or JavaScript without terminating a surrounding string. Normalize
+// optional MIME whitespace and quoted token values (especially charset) first.
+func DataURIPrefix(contentType string) string {
+	if mediaType, parameters, err := mime.ParseMediaType(contentType); err == nil {
+		contentType = mime.FormatMediaType(mediaType, parameters)
+	}
+	var prefix strings.Builder
+	prefix.WriteString("data:")
+	quoted, escaped := false, false
+	const hex = "0123456789ABCDEF"
+	for i := 0; i < len(contentType); i++ {
+		character := contentType[i]
+		if !quoted && (character == ' ' || character == '\t') {
+			continue
+		}
+		if character == '"' && !escaped {
+			quoted = !quoted
+		}
+		safe := character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' || strings.ContainsRune("-._~+", rune(character)) ||
+			(!quoted && strings.ContainsRune("/;=", rune(character)))
+		if safe {
+			prefix.WriteByte(character)
+		} else {
+			prefix.WriteByte('%')
+			prefix.WriteByte(hex[character>>4])
+			prefix.WriteByte(hex[character&15])
+		}
+		escaped = character == '\\' && quoted && !escaped
+	}
+	prefix.WriteString(";base64,")
+	return prefix.String()
 }
 
 // injectManifest puts the runtime-payload manifest at the top of <head>, ahead
@@ -129,7 +165,7 @@ func injectManifest(body string, manifest map[string]string) (string, error) {
     } else {
       body = new TextEncoder().encode(decodeURIComponent(payload));
     }
-    var mime = meta.replace(/;base64$/i, '') || 'text/plain';
+    var mime = decodeURIComponent(meta.replace(/;base64$/i, '')) || 'text/plain';
     return new Response(body, { status: 200, headers: { 'Content-Type': mime } });
   }
 

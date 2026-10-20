@@ -42,3 +42,8 @@ pattern from Stored data import. All source/widget/state/assets rows publish in
 one transaction. New artifact and asset identities are generated and references
 to the source render origin are rebound in source, widget, textual assets and
 runtime source URLs. Never rebind an old immutable public asset identity.
+
+Reference parsing allows at most 32 context levels and cumulative input of eight
+times each source/payload's length plus 8 KiB. Nested `srcdoc` documents share
+their enclosing document's budget. Exhaustion rejects export before download
+headers or import before staging.
