@@ -50,3 +50,7 @@ Confirmed the option labels were left-aligned, then centered the label content h
 **2026-10-19T23:19:30Z**
 
 Corrected the interpretation of the alignment feedback: restored left-aligned labels while retaining vertical centering within each bubble. Updated the canvas and screenshots. Validation: asset build passed; live measurements at desktop and phone widths showed equal 11.5px space above and below each label line box.
+
+**2026-10-20T02:56:02Z**
+
+Fixed all four review findings: question replies (including Something else, selected suggestions and chat steering) now share the direct-prompt usage-policy screen and exclude refused text from model results and saved answers; chat replies preserve screenshot/snippet attachments as separate artifact data and retain them on failure; closing or replacing a session aborts question loads and prevents late failures, forms and error responses from updating retired UI; text limits now count Unicode characters. Added regression coverage for screen refusal/provider failure, attachment delivery and retry, delayed session responses, transcript integrity and Unicode boundaries. Validation: go test ./... passed, targeted Go race checks passed, final gallery interaction regressions passed. Live browser checks verified refusal, delayed-swap cancellation, and delivery/consumption of a captured screenshot and selection.

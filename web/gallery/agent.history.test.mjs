@@ -139,6 +139,61 @@ test('a rejected chat reply preserves the draft for retry', async () => {
   assert.equal(page.byId('send-btn').disabled, false);
 });
 
+test('question replies keep attachments on failure and consume them only after acceptance', async () => {
+  const page = await boot([STARTED, json(202, {})]);
+  await page.context.ensureSession();
+  page.context.handleAgentEvent({ type: 'exhibit_questions', requestId: 'q1', pending: true });
+  const frame = page.byId('pv-frame');
+  frame.contentWindow = {};
+  await page.postFromFrame({ __exSnippet: 'captured', descriptor: { selector: '#counter', tag: 'BUTTON', outerHTML: '<button>Count</button>' }, image: { data: 'base64', mimeType: 'image/png' } }, frame.contentWindow);
+  const replies = [];
+  page.context.document.addEventListener('exhibit:question-message', event => {
+    replies.push(event.detail);
+    event.detail.response = Promise.resolve(replies.length > 1);
+  });
+  page.byId('input').value = 'Make this button larger';
+  await page.context.send();
+  assert.equal(page.byId('input').value, 'Make this button larger');
+  await page.context.send();
+  assert.equal(page.byId('input').value, '');
+  for (const reply of replies) {
+    assert.equal(reply.images[0].data, 'base64');
+    assert.equal(reply.images[0].mime_type, 'image/png');
+    assert.ok(reply.snippets[0].includes('<button>Count</button>'));
+  }
+  page.context.handleAgentEvent({ type: 'exhibit_questions', requestId: 'q1', pending: false });
+  page.byId('input').value = 'And make the heading bold';
+  await page.context.send();
+  const next = JSON.parse(posts(page.api, '/prompt')[0].body);
+  assert.deepEqual(next.images, []);
+  assert.deepEqual(next.snippets, []);
+});
+
+test('an attachment added while a reply is sending remains available for the next message', async () => {
+  const page = await boot([STARTED, json(202, {})]);
+  await page.context.ensureSession();
+  page.context.handleAgentEvent({ type: 'exhibit_questions', requestId: 'q1', pending: true });
+  const frame = page.byId('pv-frame');
+  frame.contentWindow = {};
+  const capture = selector => page.postFromFrame({ __exSnippet: 'captured', descriptor: { selector, tag: 'BUTTON' } }, frame.contentWindow);
+  await capture('#first');
+  let finish;
+  page.context.document.addEventListener('exhibit:question-message', event => {
+    event.detail.response = new Promise(resolve => { finish = resolve; });
+  });
+  page.byId('input').value = 'Make the first button larger';
+  const sending = page.context.send();
+  await capture('#second');
+  finish(true);
+  await sending;
+  page.context.handleAgentEvent({ type: 'exhibit_questions', requestId: 'q1', pending: false });
+  page.byId('input').value = 'Now make the second one green';
+  await page.context.send();
+  const next = JSON.parse(posts(page.api, '/prompt')[0].body);
+  assert.equal(next.snippets.length, 1);
+  assert.ok(next.snippets[0].includes('#second'));
+});
+
 test('Enter cannot resend a chat reply while its successful response is still being displayed', async () => {
   const page = await boot([STARTED]);
   await page.context.ensureSession();

@@ -266,11 +266,20 @@ function invalidatePreparation() {
   preparation.discard();
   if (switchingConversation) cancelHistoryContinuation(switchingConversation);
 }
+function setSession(id) {
+  if (id === sessionId) return;
+  const previousSessionId = sessionId;
+  sessionId = id;
+  pendingQuestions.clear();
+  document.dispatchEvent(new CustomEvent('exhibit:agent-session-changed', {detail: {sessionId: id, previousSessionId}}));
+  updateComposer();
+}
+
 function resetSession() {
   invalidatePreparation();
   closeEvents();
   if (sessionId) { apiFetch('/api/agent/sessions/' + sessionId, {method:'DELETE', keepalive: leaving}).catch(()=>{}); }
-  sessionId = null;
+  setSession(null);
   setStreaming(false);
 }
 window.addEventListener('pagehide', () => { leaving = true; resetSession(); });
@@ -283,7 +292,7 @@ async function ensureSession() {
     const d = await preparation.claim();
     if (!d || current !== lifecycle) return false;
     preparation.release();
-    sessionId = d.id;
+    setSession(d.id);
     connectEvents(d.sse_ticket);
     return true;
   } catch (error) {
@@ -503,7 +512,7 @@ function handleAgentEvent(ev) {
       setStreaming(false);
       if (ended) addMsg('sys', 'Agent session ended. Your next message starts a new one.');
       closeEvents();
-      sessionId = null;
+      setSession(null);
       break;
     }
     case 'auto_retry_start':
@@ -553,13 +562,20 @@ async function send() {
   const text = inputEl.value.trim();
   if (!text || sending || switchingConversation || leaving) return;
   if (pendingQuestions.size) {
-    const detail = { sessionId, requestId: pendingQuestions.values().next().value, message: text };
+    const attached = [...pendingSnippets];
+    const images = attached.filter(s => s.image).map(s => ({data: s.image.data, mime_type: s.image.mimeType}));
+    const snippets = attached.map(s => describeSnippet(s.descriptor));
+    const detail = { sessionId, requestId: pendingQuestions.values().next().value, message: text, images, snippets };
     document.dispatchEvent(new CustomEvent('exhibit:question-message', { detail }));
     if (!detail.response) return;
     sendingQuestionMessage = true;
     updateComposer();
     try {
-      if (await detail.response && inputEl.value.trim() === text) inputEl.value = '';
+      if (await detail.response) {
+        if (inputEl.value.trim() === text) inputEl.value = '';
+        pendingSnippets = pendingSnippets.filter(snippet => !attached.includes(snippet));
+        renderSnippetChips();
+      }
     } finally {
       sendingQuestionMessage = false;
       updateComposer();
@@ -725,7 +741,7 @@ function detachHistoryCandidate(attempt) {
   attempt.candidateId = null;
   if (!candidateId || sessionId !== candidateId) return;
   closeEvents();
-  sessionId = null;
+  setSession(null);
   setStreaming(false);
 }
 
@@ -795,7 +811,7 @@ async function resumeConversation(conversationId, rollbackTo) {
       const previous = sessionId;
       closeEvents();
       if (previous) apiFetch('/api/agent/sessions/' + previous, {method: 'DELETE'}).catch(() => {});
-      sessionId = started.id;
+      setSession(started.id);
       connectEvents(started.sse_ticket);
     }
 

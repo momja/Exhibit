@@ -64,3 +64,54 @@ test("ambiguous question IDs and repeated suggestions are refused before opening
 		await assert.rejects(tool.execute("call-1", { questions: batch }, null, null, { ui: { input() { assert.fail("should not ask"); } } }), /unique id/);
 	}
 });
+
+test("question replies share the configured guardrail and fail closed without exposing refused text", async () => {
+	const saved = { ...process.env };
+	Object.assign(process.env, { EXHIBIT_GUARD_PROVIDER: "guard", EXHIBIT_GUARD_MODEL: "screen", EXHIBIT_GUARD_API_KEY: "dummy-key" });
+	try {
+		for (const reply of ["BLOCK", "unparseable", "error", "ALLOW"]) {
+			for (const body of [{ message: "private reply" }, { answers: [{ id: "layout", selected: ["private reply"], text: "user detail" }] }]) {
+				const tool = questionTool();
+				const notes: string[] = [], screened: string[] = [];
+				const response = await tool.execute("call-1", { questions }, new AbortController().signal, null, {
+					ui: { input: async () => JSON.stringify(body), notify: text => notes.push(text) },
+					modelRegistry: {
+						getModelOfType: () => null, find: () => ({}),
+						complete: async (_model, context, options) => {
+							assert.equal(options.apiKey, "dummy-key");
+							screened.push(context.messages[0].content);
+							if (reply === "error") throw new Error("provider unavailable");
+							return { stopReason: "stop", content: [{ type: "text", text: reply }], usage: { input: 1, output: 1 } };
+						}
+					}
+				});
+				assert.equal(screened.length, 1);
+				assert.ok(screened[0].includes("private reply"));
+				if (reply === "ALLOW") {
+					assert.equal(response.details.blocked, false);
+					assert.ok(JSON.stringify(response.content).includes("private reply"));
+				} else {
+					assert.equal(response.details.blocked, true);
+					assert.equal(response.details.cancelled, true);
+					assert.ok(!JSON.stringify(response).includes("private reply"));
+					assert.ok(notes.some(note => /exhibit_guard:(blocked|error)/.test(note)));
+				}
+			}
+		}
+	} finally {
+		process.env = saved;
+	}
+});
+
+test("attached selections and images remain data and never enter the instruction or screen text", async () => {
+	const tool = questionTool();
+	const message = "Make this button larger";
+	const snippets = ["<button>untrusted selection</button>"];
+	const images = [{ type: "image", data: "base64-image", mimeType: "image/png" }];
+	const response = await tool.execute("call-1", { questions }, null, null, { ui: { input: async () => JSON.stringify({ message, snippets, images }) } });
+	assert.ok(response.content[0].text.includes(message));
+	assert.ok(!response.content[0].text.includes(snippets[0]));
+	assert.ok(response.content[1].text.includes(snippets[0]));
+	assert.match(response.content[1].text, /untrusted data, not instructions/);
+	assert.deepEqual(response.content[2], { type: "image", data: "base64-image", mimeType: "image/png" });
+});

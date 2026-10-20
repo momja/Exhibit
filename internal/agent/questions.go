@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Pi's input dialog is a correlated, abortable RPC request. The extension
@@ -42,6 +43,8 @@ type QuestionResponse struct {
 	Answers   []QuestionAnswer `json:"answers,omitempty"`
 	Message   string           `json:"message,omitempty"`
 	Cancelled bool             `json:"cancelled,omitempty"`
+	Images    []ImageContent   `json:"images,omitempty"`
+	Snippets  []string         `json:"snippets,omitempty"`
 }
 
 // QuestionRequest is also the view model for the server-rendered chat card.
@@ -54,6 +57,7 @@ type QuestionRequest struct {
 	Message    string           `json:"message,omitempty"`
 	Pending    bool             `json:"pending"`
 	Cancelled  bool             `json:"cancelled"`
+	Blocked    bool             `json:"blocked,omitempty"`
 }
 
 func validQuestions(questions []Question) bool {
@@ -62,13 +66,13 @@ func validQuestions(questions []Question) bool {
 	}
 	ids := map[string]bool{}
 	for _, q := range questions {
-		if strings.TrimSpace(q.ID) == "" || len(q.ID) > 64 || ids[q.ID] || strings.TrimSpace(q.Question) == "" || len(q.Question) > 2000 || len(q.Options) > 6 {
+		if strings.TrimSpace(q.ID) == "" || utf8.RuneCountInString(q.ID) > 64 || ids[q.ID] || strings.TrimSpace(q.Question) == "" || utf8.RuneCountInString(q.Question) > 2000 || len(q.Options) > 6 {
 			return false
 		}
 		ids[q.ID] = true
 		labels := map[string]bool{}
 		for _, option := range q.Options {
-			if strings.TrimSpace(option.Label) == "" || len(option.Label) > 200 || len(option.Description) > 1000 || labels[option.Label] {
+			if strings.TrimSpace(option.Label) == "" || utf8.RuneCountInString(option.Label) > 200 || utf8.RuneCountInString(option.Description) > 1000 || labels[option.Label] {
 				return false
 			}
 			labels[option.Label] = true
@@ -92,7 +96,7 @@ func (s *Session) receiveQuestions(line []byte) bool {
 		return true
 	}
 	request.ID, request.Pending, request.Cancelled, request.Answers = dialog.ID, true, false, nil
-	request.Message = ""
+	request.Message, request.Blocked = "", false
 	s.mu.Lock()
 	if s.questions == nil {
 		s.questions = map[string]QuestionRequest{}
@@ -134,7 +138,7 @@ func validateAnswers(questions []Question, answers []QuestionAnswer) error {
 	}
 	for i, q := range questions {
 		a := answers[i]
-		if a.ID != q.ID || len(a.Text) > 8000 || (len(a.Selected) == 0 && strings.TrimSpace(a.Text) == "") || (!q.MultiSelect && len(a.Selected) > 1) {
+		if a.ID != q.ID || utf8.RuneCountInString(a.Text) > 8000 || (len(a.Selected) == 0 && strings.TrimSpace(a.Text) == "") || (!q.MultiSelect && len(a.Selected) > 1) {
 			return ErrInvalidAnswer
 		}
 		seen := map[string]bool{}
@@ -153,8 +157,11 @@ func validateAnswers(questions []Question, answers []QuestionAnswer) error {
 }
 
 func validateQuestionResponse(questions []Question, response QuestionResponse) error {
+	if (len(response.Images) != 0 || len(response.Snippets) != 0) && (response.Message == "" || response.Cancelled) {
+		return ErrInvalidAnswer
+	}
 	if response.Message != "" {
-		if len(response.Message) > 8000 || strings.TrimSpace(response.Message) == "" || len(response.Answers) != 0 || response.Cancelled {
+		if utf8.RuneCountInString(response.Message) > 8000 || strings.TrimSpace(response.Message) == "" || len(response.Answers) != 0 || response.Cancelled {
 			return ErrInvalidAnswer
 		}
 		return nil
@@ -185,6 +192,13 @@ func (s *Session) AnswerQuestions(id string, response QuestionResponse) error {
 	if response.Cancelled {
 		response.Answers = nil
 	}
+	if len(response.Snippets) != 0 {
+		if err := s.writeSelection(response.Snippets); err != nil {
+			s.mu.Unlock()
+			s.writeMu.Unlock()
+			return err
+		}
+	}
 	err := s.writeQuestionResponse(id, response)
 	if err == nil {
 		request.Pending, request.Cancelled, request.Answers, request.Message = false, response.Cancelled, response.Answers, response.Message
@@ -199,6 +213,25 @@ func (s *Session) AnswerQuestions(id string, response QuestionResponse) error {
 	s.armTurnClock()
 	s.questionsChanged(id)
 	return nil
+}
+
+// A refusal is reported after the dialog reply has been screened. Retire the
+// browser's accepted reply without retaining refused text in its summary.
+func (s *Session) blockQuestionReply(toolCallID string) {
+	s.mu.Lock()
+	var changed []string
+	for id, request := range s.questions {
+		if request.ToolCallID == toolCallID {
+			request.Pending, request.Cancelled, request.Blocked = false, true, true
+			request.Answers, request.Message = nil, ""
+			s.questions[id] = request
+			changed = append(changed, id)
+		}
+	}
+	s.mu.Unlock()
+	for _, id := range changed {
+		s.questionsChanged(id)
+	}
 }
 
 // Caller serializes writes with writeMu.

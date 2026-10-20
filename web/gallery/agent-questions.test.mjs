@@ -6,7 +6,7 @@ import { loadPageScript } from './testdom.mjs';
 const script = fileURLToPath(new URL('../../internal/api/assets/gallery/agent-questions.js', import.meta.url));
 const json = (status, body = {}) => ({ ok: status < 400, status, json: async () => body });
 
-async function fixture({ responses = [json(204)], count = 1, multiSelect = false } = {}) {
+async function fixture({ responses = [json(204)], count = 1, multiSelect = false, getResponse = () => json(200), beforeSwap = async () => {} } = {}) {
   const calls = [], swaps = [], cards = new Map(), fields = [];
   const status = { textContent: '' }, retry = { hidden: true };
   const card = { dataset: { sessionId: 'session-1', requestId: 'request-1', pending: 'true' },
@@ -33,17 +33,20 @@ async function fixture({ responses = [json(204)], count = 1, multiSelect = false
   fields.push(retry);
   const apiFetch = async (path, options = {}) => {
     calls.push({ path, ...options });
-    if (options.method === 'GET') return json(200);
+    if (options.method === 'GET') return getResponse();
     const next = responses.shift();
     if (next instanceof Error) throw next;
     return typeof next === 'function' ? next() : next || json(204);
   };
-  const page = loadPageScript([], { apiFetch,
+  const page = loadPageScript([], { apiFetch, AbortController,
     CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
     htmx: { async ajax(verb, path, options) {
       swaps.push({ verb, path, ...options });
       await options.fetch(path, { method: verb });
-      cards.set('agent-question-request-1', card);
+      await beforeSwap();
+      let cancelled = false;
+      await page.context.document.dispatchEvent({ type: 'htmx:before:swap', detail: { ctx: options }, preventDefault() { cancelled = true; } });
+      if (!cancelled) cards.set('agent-question-request-1', card);
     } }
   });
   cards.set('agent-question-request-1', card);
@@ -51,6 +54,7 @@ async function fixture({ responses = [json(204)], count = 1, multiSelect = false
   page.context.document.getElementById = id => id.startsWith('agent-question-') ? cards.get(id) || null : byId(id);
   page.byId('messages').querySelectorAll = () => [form];
   await page.loadModule(script);
+  await page.context.document.dispatchEvent({ type: 'exhibit:agent-session-changed', detail: { sessionId: 'session-1' } });
   const event = (type, extra = {}) => page.context.document.dispatchEvent({
     type: 'exhibit:agent-event', detail: { sessionId: 'session-1', event: { type, requestId: 'request-1', ...extra } }
   });
@@ -63,8 +67,8 @@ async function fixture({ responses = [json(204)], count = 1, multiSelect = false
     questions[index].text.value = value;
     await page.byId('messages').dispatchEvent({ type: 'input', target: questions[index].text });
   };
-  const reply = async message => {
-    const detail = { sessionId: 'session-1', requestId: 'request-1', message };
+  const reply = async (message, attachments = {}) => {
+    const detail = { sessionId: 'session-1', requestId: 'request-1', message, ...attachments };
     await page.context.document.dispatchEvent({ type: 'exhibit:question-message', detail });
     return detail.response;
   };
@@ -152,6 +156,65 @@ test('chat can redirect a whole batch without inventing answers', async () => {
   const p = await fixture({ count: 2 });
   assert.equal(await p.reply('Make a shopping list instead.'), true);
   assert.deepEqual(JSON.parse(p.calls[0].body), { message: 'Make a shopping list instead.' });
+});
+
+test('chat forwards captured images and selections with the reply', async () => {
+  const p = await fixture();
+  const attachments = { images: [{ data: 'base64', mime_type: 'image/png' }], snippets: ['<button>Selected</button>'] };
+  assert.equal(await p.reply('Make this larger', attachments), true);
+  assert.deepEqual(JSON.parse(p.calls[0].body), { message: 'Make this larger', ...attachments });
+});
+
+test('closing or replacing a session aborts loads and ignores late failures', async () => {
+  for (const close of [true, false]) {
+    let reject;
+    const p = await fixture({ getResponse: () => new Promise((_, no) => { reject = no; }) });
+    p.cards.clear();
+    const loading = p.event('exhibit_questions', { pending: true });
+    await Promise.resolve();
+    if (close) await p.event('exhibit_session_closed');
+    else await p.context.document.dispatchEvent({ type: 'exhibit:agent-session-changed', detail: { sessionId: 'session-2' } });
+    assert.equal(p.calls[0].signal.aborted, true);
+    reject(new Error('connection closed'));
+    await loading;
+    assert.equal(p.byId('question-load-error').hidden, true);
+    const requests = p.calls.length;
+    await p.byId('question-retry').click();
+    assert.equal(p.calls.length, requests, 'no retry may target the retired session');
+  }
+});
+
+test('a retired session cannot swap in a late successful response', async () => {
+  let resume, reached;
+  const paused = new Promise(resolve => { reached = resolve; });
+  const p = await fixture({ beforeSwap: async () => {
+    reached();
+    await new Promise(resolve => { resume = resolve; });
+  } });
+  p.cards.clear();
+  const loading = p.event('exhibit_questions', { pending: true });
+  await paused;
+  await p.event('exhibit_session_closed');
+  resume();
+  await loading;
+  assert.equal(p.cards.size, 0);
+  assert.equal(p.byId('question-load-error').hidden, true);
+});
+
+test('a delayed answer error cannot update a retired question form', async () => {
+  let finish, reached;
+  const reading = new Promise(resolve => { reached = resolve; });
+  const p = await fixture({ responses: [{ ok: false, status: 409, json: async () => {
+    reached();
+    return new Promise(resolve => { finish = resolve; });
+  } }] });
+  const sending = p.reply('Make a shopping list instead');
+  await reading;
+  await p.event('exhibit_session_closed');
+  finish({ error: 'Already answered' });
+  assert.equal(await sending, false);
+  assert.equal(p.status.textContent, 'This conversation has ended.');
+  assert.equal(p.calls.length, 1);
 });
 
 test('a failed immediate answer keeps the draft and offers an explicit retry', async () => {

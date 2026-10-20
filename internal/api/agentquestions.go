@@ -41,11 +41,15 @@ func (ro *Router) agentAnswerQuestions(w http.ResponseWriter, r *http.Request) {
 	if s == nil {
 		return
 	}
-	var response agent.QuestionResponse
-	if !decodeJSON(w, r, &response) {
+	var req struct {
+		agent.QuestionResponse
+		Images []agentPromptImage `json:"images"`
+	}
+	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if err := s.AnswerQuestions(chi.URLParam(r, "requestID"), response); err != nil {
+	req.QuestionResponse.Images = promptImages(req.Images)
+	if err := s.AnswerQuestions(chi.URLParam(r, "requestID"), req.QuestionResponse); err != nil {
 		switch {
 		case errors.Is(err, agent.ErrQuestionExpired):
 			writeError(w, http.StatusConflict, err.Error())

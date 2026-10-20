@@ -190,6 +190,9 @@ func decide(messages []chatMessage) turnPlan {
 		result, _ := textOf(last.Content)
 		switch name {
 		case "ask_user":
+			if strings.Contains(result, "refused by the instance's usage-policy screen") {
+				return turnPlan{kind: "text", text: "Please send a different reply."}
+			}
 			return turnPlan{kind: "text", text: "Thanks — I’ll use that for your plan."}
 		case "get_selection":
 			if currentSource == "" {

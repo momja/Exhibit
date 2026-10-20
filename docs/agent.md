@@ -199,13 +199,25 @@ A message from the chat composer replies to the whole request instead:
 Both endpoints use the owner-scoped session lookup, and the sidecar's scoped
 artifact credential cannot answer on the person's behalf. Answers must match
 every question exactly once, in order; choices must be among that question's
-suggestions. A chat message is limited to 8,000 bytes and cannot be mixed with
+suggestions. Question and option limits count Unicode characters. A chat
+message is limited to 8,000 characters and cannot be mixed with
 structured answers or cancellation. It goes to the model as the person's own
 words, without inventing answers to unfilled questions. An already answered
 or cancelled request returns `409`. The answer
 travels back to the waiting tool through `extension_ui_response`, rather than
 starting another prompt. The composer uses the question reply endpoint while
 questions are pending; direct prompt requests still return `409`.
+
+Written replies and selected suggestions pass through the same configured
+usage-policy screen as direct prompts, including its timeout and fail-closed
+behavior. Refused text is excluded from the agent's tool result and saved
+question answers. Attached screenshots and selected elements travel separately
+as artifact data; they are not treated as instructions or screened as the
+person's words. Attachments remain in the composer if sending fails.
+
+Question loads are tied to the active session. Closing or replacing it aborts
+outstanding fetches, ignores late failures, and prevents delayed swaps from
+restoring obsolete forms or error banners.
 
 “Skip” posts `{"cancelled":true}` and tells the agent no answer was
 given. Stop aborts the tool through Pi's signal; it does not submit answers.

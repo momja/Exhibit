@@ -157,8 +157,8 @@ func New(cfg Config, st store.Store) (*Manager, error) {
 	if err := os.WriteFile(filepath.Join(cfg.WorkRoot, "source-context.ts"), sourceContext, 0o644); err != nil {
 		return nil, fmt.Errorf("materialize source context: %w", err)
 	}
-	// guard.ts is materialized whether or not a guardrail is configured; it is
-	// loaded into a session only when one is (av-gust).
+	// The question tool imports the shared screen from guard.ts. Pi registers
+	// its direct-input hook only when a guardrail is configured (av-gust).
 	guardSrc, err := extFS.ReadFile("ext/guard.ts")
 	if err != nil {
 		return nil, err
@@ -1148,6 +1148,10 @@ func (s *Session) handleLine(line []byte) {
 		}
 		if !probe.IsError && json.Unmarshal(probe.Result, &res) == nil {
 			switch res.Details["exhibit"] {
+			case "questions_answered":
+				if res.Details["blocked"] == true {
+					s.blockQuestionReply(probe.ToolCallID)
+				}
 			case "artifact_saved":
 				s.noteArtifactSaved(res.Details)
 			case "state_changed":

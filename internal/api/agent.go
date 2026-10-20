@@ -325,12 +325,29 @@ func (ro *Router) agentSessionTicket(w http.ResponseWriter, r *http.Request) {
 // the session hands to the model as a tool result (get_selection) rather than as
 // prompt text. Page JS therefore composes no envelope at all (av-e0yj).
 type agentPromptRequest struct {
-	Message string `json:"message"`
-	Images  []struct {
-		Data     string `json:"data"`
-		MimeType string `json:"mime_type"`
-	} `json:"images"`
-	Snippets []string `json:"snippets"`
+	Message  string             `json:"message"`
+	Images   []agentPromptImage `json:"images"`
+	Snippets []string           `json:"snippets"`
+}
+
+type agentPromptImage struct {
+	Data     string `json:"data"`
+	MimeType string `json:"mime_type"`
+}
+
+func promptImages(images []agentPromptImage) []agent.ImageContent {
+	var out []agent.ImageContent
+	for _, image := range images {
+		if image.Data == "" {
+			continue
+		}
+		mimeType := image.MimeType
+		if mimeType == "" {
+			mimeType = "image/png"
+		}
+		out = append(out, agent.ImageContent{Type: "image", Data: image.Data, MimeType: mimeType})
+	}
+	return out
 }
 
 func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {

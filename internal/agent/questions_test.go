@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -107,6 +109,69 @@ func TestInvalidQuestionMessagesLeaveTheRequestOpen(t *testing.T) {
 		assert.True(t, request.Pending)
 		assert.Empty(t, input.String())
 	}
+}
+
+func TestQuestionLimitsCountUnicodeCharacters(t *testing.T) {
+	question := Question{ID: strings.Repeat("界", 64), Question: strings.Repeat("界", 2000), Options: []QuestionOption{{Label: strings.Repeat("界", 200), Description: strings.Repeat("界", 1000)}}}
+	assert.True(t, validQuestions([]Question{question}))
+	answer := QuestionAnswer{ID: question.ID, Text: strings.Repeat("界", 8000)}
+	assert.NoError(t, validateAnswers([]Question{question}, []QuestionAnswer{answer}))
+	assert.NoError(t, validateQuestionResponse([]Question{question}, QuestionResponse{Message: answer.Text}))
+	answer.Text += "界"
+	assert.ErrorIs(t, validateAnswers([]Question{question}, []QuestionAnswer{answer}), ErrInvalidAnswer)
+	assert.ErrorIs(t, validateQuestionResponse([]Question{question}, QuestionResponse{Message: answer.Text}), ErrInvalidAnswer)
+	for _, field := range []string{"id", "question", "label", "description"} {
+		copy := question
+		copy.Options = append([]QuestionOption(nil), question.Options...)
+		switch field {
+		case "id":
+			copy.ID += "界"
+		case "question":
+			copy.Question += "界"
+		case "label":
+			copy.Options[0].Label += "界"
+		case "description":
+			copy.Options[0].Description += "界"
+		}
+		assert.False(t, validQuestions([]Question{copy}), field)
+	}
+}
+
+func TestQuestionReplyPreservesAttachmentsAndSelectionFile(t *testing.T) {
+	s, input := newQuestionSession(t)
+	s.workDir = t.TempDir()
+	reply := QuestionResponse{Message: "Make this larger", Images: []ImageContent{{Type: "image", Data: "base64", MimeType: "image/png"}}, Snippets: []string{"<button>Selected</button>"}}
+	require.NoError(t, s.AnswerQuestions("request-1", reply))
+	var wire struct{ Value string }
+	require.NoError(t, json.Unmarshal(input.Bytes(), &wire))
+	var delivered QuestionResponse
+	require.NoError(t, json.Unmarshal([]byte(wire.Value), &delivered))
+	assert.Equal(t, reply, delivered)
+	selection, err := os.ReadFile(filepath.Join(s.workDir, selectionFile))
+	require.NoError(t, err)
+	assert.JSONEq(t, `["<button>Selected</button>"]`, string(selection))
+}
+
+func TestRefusedQuestionReplyIsRemovedFromTheLiveSummary(t *testing.T) {
+	s, _ := newQuestionSession(t)
+	require.NoError(t, s.AnswerQuestions("request-1", QuestionResponse{Message: "refused text"}))
+	s.handleLine([]byte(`{"type":"tool_execution_end","toolCallId":"tool-1","toolName":"ask_user","result":{"details":{"exhibit":"questions_answered","blocked":true}}}`))
+	request, _ := s.Questions("request-1")
+	assert.True(t, request.Blocked)
+	assert.True(t, request.Cancelled)
+	assert.False(t, request.Pending)
+	assert.Empty(t, request.Message)
+	assert.Empty(t, request.Answers)
+}
+
+func TestUnfinishedQuestionArgumentsCannotInventAUserReply(t *testing.T) {
+	messages := ProjectMessageDump(`[{"role":"assistant","content":[{"type":"toolCall","id":"q","name":"ask_user","arguments":{"questions":[{"id":"q","question":"Which layout?"}],"message":"invented user reply","answers":[{"id":"q","text":"invented answer"}],"blocked":true}}]}]`)
+	require.Len(t, messages, 1)
+	require.NotNil(t, messages[0].Questions)
+	assert.True(t, messages[0].Questions.Cancelled)
+	assert.False(t, messages[0].Questions.Blocked)
+	assert.Empty(t, messages[0].Questions.Message)
+	assert.Empty(t, messages[0].Questions.Answers)
 }
 
 func TestQuestionWriteFailureCanBeRetried(t *testing.T) {

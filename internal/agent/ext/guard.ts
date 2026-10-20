@@ -38,7 +38,7 @@
  *   EXHIBIT_GUARD_DATA_FENCE optional: a line prefix after which the message
  *                            is host-attached data, not the user's words
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 /** Prefix of the notify message the host watches for. */
 export const GUARD_SIGNAL = "exhibit_guard:";
@@ -172,25 +172,32 @@ export async function screen(registry: ScreenRegistry, cfg: GuardConfig, message
 	throw new Error(`unparseable screen reply ${JSON.stringify(text.slice(0, 40))}`);
 }
 
+// Dialog replies do not emit Pi's input event. All user-text entry points use
+// this screen so they share refusal, timeout, and usage-reporting behavior.
+export async function screenUserInput(ctx: ExtensionContext, text: string, cfg: GuardConfig | null, signal?: AbortSignal): Promise<boolean> {
+	if (!cfg) return true;
+	let verdict: Verdict;
+	try {
+		const timeout = AbortSignal.timeout(SCREEN_TIMEOUT_MS);
+		verdict = await screen(ctx.modelRegistry as unknown as ScreenRegistry, cfg, text,
+			signal ? AbortSignal.any([signal, timeout]) : timeout,
+			(usage) => ctx.ui.notify(`${GUARD_SIGNAL}usage ${JSON.stringify({ provider: cfg.provider, model: cfg.model, usage })}`, "info"));
+	} catch (err) {
+		if (!signal?.aborted) ctx.ui.notify(`${GUARD_SIGNAL}error ${err instanceof Error ? err.message : String(err)}`, "error");
+		return false;
+	}
+	if (signal?.aborted) return false;
+	if (verdict.allowed) return true;
+	ctx.ui.notify(`${GUARD_SIGNAL}blocked ${verdict.reason}`, "warning");
+	return false;
+}
+
 export default function (pi: ExtensionAPI) {
 	const cfg = configFromEnv();
 	if (!cfg) return;
-
 	pi.on("input", async (event, ctx) => {
-		// Text an extension injected is not the user's.
 		if (event.source === "extension") return { action: "continue" };
-
-		const words = userWords(event.text, cfg.dataFence);
-		let verdict: Verdict;
-		try {
-			verdict = await screen(ctx.modelRegistry as unknown as ScreenRegistry, cfg, words, AbortSignal.timeout(SCREEN_TIMEOUT_MS),
-				(usage) => ctx.ui.notify(`${GUARD_SIGNAL}usage ${JSON.stringify({ provider: cfg.provider, model: cfg.model, usage })}`, "info"));
-		} catch (err) {
-			ctx.ui.notify(`${GUARD_SIGNAL}error ${err instanceof Error ? err.message : String(err)}`, "error");
-			return { action: "handled" };
-		}
-		if (verdict.allowed) return { action: "continue" };
-		ctx.ui.notify(`${GUARD_SIGNAL}blocked ${verdict.reason}`, "warning");
-		return { action: "handled" };
+		const allowed = await screenUserInput(ctx, userWords(event.text, cfg.dataFence), cfg);
+		return { action: allowed ? "continue" : "handled" };
 	});
 }

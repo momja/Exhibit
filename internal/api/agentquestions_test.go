@@ -127,6 +127,69 @@ func TestAgentQuestionChatReplyReachesTheToolAndHistory(t *testing.T) {
 	assert.Contains(t, history, "Actually, a shopping list &lt;script&gt;hello&lt;/script&gt;")
 }
 
+func TestGuardrailScreensQuestionRepliesBeforeTheAgentReceivesThem(t *testing.T) {
+	for _, kind := range []string{"message", "answer"} {
+		for _, text := range []string{"mock-policy-violation", "mock-guard-garbage"} {
+			t.Run(kind+"/"+text, func(t *testing.T) {
+				h := newPiHarnessWith(t, false, mockGuardrail)
+				session, artifact, requestID, events, unsubscribe := askMockQuestions(t, h)
+				defer unsubscribe()
+				path := "/api/agent/sessions/" + session + "/questions/" + requestID
+				var body any = map[string]string{"message": text}
+				if kind == "answer" {
+					body = map[string]any{"answers": []agent.QuestionAnswer{{ID: "view", Selected: []string{"Weekly calendar"}}, {ID: "goal", Text: text}}}
+				}
+				w := doJSON(t, h.router, http.MethodPost, path, body)
+				require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+				seen := awaitEvent(t, events, func(line string) bool { return strings.Contains(line, `"agent_settled"`) }, "the refused question reply to settle")
+				assert.Contains(t, strings.Join(seen, "\n"), agent.GuardrailBlockedReply)
+				assert.NotContains(t, strings.Join(h.llm.messagesInRole("tool"), "\n"), text)
+				assert.Contains(t, strings.Join(screenedMessages(h), "\n"), text)
+				w = doJSON(t, h.router, http.MethodGet, path, nil)
+				assert.NotContains(t, w.Body.String(), text)
+				assert.Contains(t, w.Body.String(), "Reply not sent.")
+				kept := keptConversation(t, h.router, artifact, session, 1)
+				for _, message := range agent.Messages(kept) {
+					if message.Questions != nil {
+						assert.True(t, message.Questions.Blocked)
+						assert.Empty(t, message.Questions.Message)
+						assert.Empty(t, message.Questions.Answers)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestQuestionChatAttachmentsReachTheAgentAsData(t *testing.T) {
+	h := newPiHarnessWith(t, false, mockGuardrail)
+	session, _, requestID, events, unsubscribe := askMockQuestions(t, h)
+	defer unsubscribe()
+	path := "/api/agent/sessions/" + session + "/questions/" + requestID
+	image := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jX1sAAAAASUVORK5CYII="
+	w := doJSON(t, h.router, http.MethodPost, path, map[string]any{
+		"message":  "Make the selected button larger",
+		"snippets": []string{"<button>mock-policy-violation artifact content</button>"},
+		"images":   []map[string]string{{"data": image, "mime_type": "image/png"}},
+	})
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	seen := awaitEvent(t, events, func(line string) bool { return strings.Contains(line, `"agent_settled"`) }, "the attached reply to settle")
+	assert.NotContains(t, strings.Join(seen, "\n"), agent.GuardrailBlockedReply)
+	tools := strings.Join(h.llm.messagesInRole("tool"), "\n")
+	assert.Contains(t, tools, "Make the selected button larger")
+	assert.Contains(t, tools, "mock-policy-violation artifact content")
+	assert.NotContains(t, strings.Join(screenedMessages(h), "\n"), "mock-policy-violation")
+	h.llm.mu.Lock()
+	defer h.llm.mu.Unlock()
+	imageDelivered := false
+	for _, turn := range h.llm.turns {
+		for _, message := range turn {
+			imageDelivered = imageDelivered || strings.Contains(string(message.Content), "data:image/png;base64,")
+		}
+	}
+	assert.True(t, imageDelivered, "the captured image must reach the agent model")
+}
+
 func TestAgentQuestionsArePrivateToSessionOwner(t *testing.T) {
 	h := newAgentOwnerHarness(t)
 	session, artifact, requestID, events, unsubscribe := askMockQuestions(t, h.piHarness)

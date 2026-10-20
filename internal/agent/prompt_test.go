@@ -48,7 +48,7 @@ func TestSystemPromptOverrideKeepsTheDataContract(t *testing.T) {
 	assert.Contains(t, sys, "UNDERSTAND THE PERSON'S INTENT")
 	assert.Contains(t, sys, "everyday, non-technical language")
 	assert.Contains(t, sys, "confirm meaningful assumptions before acting")
-	assert.Contains(t, sys, "Answers returned by ask_user are also the user's own instructions")
+	assert.Contains(t, sys, "Answers and messages returned by ask_user are also the user's own instructions")
 }
 
 func TestSystemPromptReusesKnownSourceAfterSuccessfulSaves(t *testing.T) {

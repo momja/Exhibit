@@ -155,8 +155,11 @@ func project(msgs []piMessage) []TranscriptMessage {
 						request, ok := questionResults[b.ID]
 						if !ok {
 							args, _ := json.Marshal(b.Arguments)
-							_ = json.Unmarshal(args, &request)
-							request.Cancelled = true
+							var prompts struct {
+								Questions []Question `json:"questions"`
+							}
+							_ = json.Unmarshal(args, &prompts)
+							request = QuestionRequest{Questions: prompts.Questions, Cancelled: true}
 						}
 						if validQuestions(request.Questions) {
 							request.Pending = false
