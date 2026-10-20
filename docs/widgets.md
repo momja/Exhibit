@@ -56,7 +56,7 @@ still wants a face. There is no separate mechanism for it.
 | `GET RENDER_ORIGIN/w/:artifactID` | Serves the widget document (`internal/render`). 404 when the artifact has none. |
 | `GET RENDER_ORIGIN/s/:shareID/widget` | Serves the widget through the artifact's anonymous link (av-ei5h): share row authorizes, owner's state inlined, share framing applies. An artifact with no widget serves its default tile instead (av-cp7j): a static monogram document, no script, CSP of inline style only. The share panel's embed snippet therefore appears whenever the link exists. |
 | Gallery card | Frames the widget, or renders the default tile (`cardWidget` partial). |
-| Artifact edit page | "Gallery widget" panel: source editor, live preview, Generate / Save / Remove. |
+| Artifact edit page | "Gallery widget" panel: source editor, live preview, Generate / Remove. The page's Save button saves both artifact and widget edits. |
 | Agent chat | `set_widget` / `get_widget` tools; the preview pane shows the tile. |
 | `GET/PUT/DELETE /api/artifacts/:id/widget` | The single write path, like every other mutation. |
 | `POST /api/artifacts/:id/widget/generate` | Starts the one-shot agent session behind the Generate button. |
@@ -69,6 +69,14 @@ documents, and there is no reason one should be a bare textarea. Each editor
 mounts when its panel first opens rather than at page load, because CodeMirror
 measures the DOM when constructed and a closed `<details>` is `display:none` —
 mounting into one yields zero-width gutters and a misplaced cursor.
+
+The **Save** button at the bottom saves the artifact first, then its nonempty
+widget source. It reports success and leaves the editor only after both saves
+succeed. A widget conflict or failure keeps the edits visible and reports that
+the artifact saved but the widget did not. An empty default widget stays absent;
+use **Remove** to delete an existing widget.
+
+![Widget editor with one page Save button](screenshots/Exh-rwgv/01-widget-unified-save.png)
 
 **Generate / Regenerate** is how you get a widget without writing one, and
 without leaving for the chat surface. The button carries **no prompt**: it
