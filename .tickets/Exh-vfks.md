@@ -1,6 +1,6 @@
 ---
 id: Exh-vfks
-status: in_progress
+status: closed
 deps: []
 links: [Exh-6fz9, Exh-k8p6]
 created: 2026-10-20T03:01:26Z
@@ -39,3 +39,7 @@ Corrected complete asset replacement accounting: quota now measures the final sw
 **2026-10-20T05:48:36Z**
 
 Address follow-up review: serialize state imports with inspector writes, make archive limits compatible with complete snapshot exports, register state import regression tests, and obtain a separate OWASP Top 10 security analysis of the upload paths.
+
+**2026-10-20T06:22:26Z**
+
+Fixed both follow-up review findings and registered the state import suite in the Go runner. Inspector Save/Erase and import share a busy gate through refresh; committed replacement discards old drafts even when refresh fails. Complete snapshot exports now support up to 200 rows/96 MiB expanded with 48 MiB unique payloads. A separate OWASP Top 10:2025 agent reproduced and verified fixes for deleted asset URL rebinding and bulk-state database denial of service; report is docs/stored-data-import-security-review.md. Migration034 retains immutable URL identities without payload references; streaming state validation caps 10,000 keys before DB access, with prepared inserts and a five-second transaction deadline. Rebased cleanly onto current main and preserved compact documentation. Final make assets, server build, go test ./..., 17 targeted JavaScript tests, migration/account deletion checks, and live desktop/mobile checks passed. Updated PR184 and live server on18110; no main merge or push.
