@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="/assets/gallery/index.css">
 </head>
 <body>
-<div id="{{.Grid.ID}}" data-gallery>
+<div id="{{.Grid.ID}}" data-gallery{{if not .ReadOnly}} data-controller="artifact-download" data-action="exhibit:download->artifact-download#open"{{end}}>
 <header>
   {{.LogoSVG}}
   {{/* The gallery's heading, hidden visually (index.css) but kept so the page
@@ -70,7 +70,7 @@
      own controls and are handled through delegation after htmx swaps. */}}
 {{template "galleryResults" .Grid}}
 </main>
-{{if not .ReadOnly}}{{template "duplicateDialog" .Grid}}{{end}}
+{{if not .ReadOnly}}{{template "duplicateDialog" .Grid}}{{template "artifactDownloadDialog"}}{{end}}
 </div>
 
 {{/* No CodeMirror island here: the only editor on this page was the ingest

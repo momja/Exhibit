@@ -59,7 +59,7 @@ func TestDetailPageMenuFollowsReadOnly(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Menu Tool", Tier: store.Tier1, CreatedAt: time.Now(), SourceURL: "https://example.com/tool"}
 	owner, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds, nil)
 	require.NoError(t, err)
-	for _, item := range []string{`href="/artifacts/abc123/edit"`, `href="/agent?artifact=abc123"`, `href="/api/artifacts/abc123/export"`, `onclick="refetchSource()"`} {
+	for _, item := range []string{`href="/artifacts/abc123/edit"`, `href="/agent?artifact=abc123"`, `data-artifact-download-artifact-id-param="abc123"`, `onclick="refetchSource()"`} {
 		assert.Contains(t, owner, item)
 	}
 

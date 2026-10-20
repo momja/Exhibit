@@ -134,7 +134,7 @@ func TestTheRecipientsPageOffersNothingItCannotDo(t *testing.T) {
 	ownerOnly := map[string]string{
 		"the edit page":             "/artifacts/" + in.granted + "/edit",
 		"the agent":                 "/agent?artifact=" + in.granted,
-		"the self-contained export": "/api/artifacts/" + in.granted + "/export",
+		"the artifact download":     `data-action="artifact-download#open"`,
 		"the allowlist settings":    "/artifacts/" + in.granted + "/edit#security-panel",
 		"the popover's manage link": "capability-popover-manage",
 		"the refetch button":        "refetchSource()",

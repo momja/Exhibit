@@ -81,7 +81,7 @@ with `exhibit:artifacts-changed`.
 
 [Phone layout](screenshots/Exh-16ds/02-gallery-action-menu-mobile.png)
 
-## Adding a controller, including the next modal
+## Adding a controller
 
 1. Add a native module under `web/gallery/` importing `Controller` from
    `../stimulus/stimulus.js`. Register it in `controllers.js` and add its file
@@ -96,11 +96,43 @@ with `exhibit:artifacts-changed`.
 5. Features perform authenticated API calls and emit the existing change events
    that htmx regions listen for. Controllers do not rebuild server markup.
 
-The next modal component should wrap native `<dialog>` behavior, define initial
-and return focus, and route Escape, backdrop, and explicit dismissal through
-the same feature guard. Form contents and asynchronous saving belong to the
-story implementing them. Existing dialogs retain their implementations until
-migrated.
+## Artifact download dialog
+
+The `artifactDownloadDialog` Go partial, `.artifact-download-*` shared styles,
+and `artifact-download` Stimulus controller form one reusable native `<dialog>`.
+The host stays outside the gallery results region so htmx card replacements
+and appends keep one dialog. The owner detail page uses the same component.
+Read-only pages omit its host and markup; server-rendered read-only gallery
+fragments omit the download action too.
+
+Gallery menus dispatch `exhibit:download` with `artifactID`, `title` and their
+visible `trigger`. A stable host handles it with
+`data-action="exhibit:download->artifact-download#open"`. A direct button can use
+`data-action="artifact-download#open"`, the `artifact-id` and `trigger-id` action
+parameters, and `data-artifact-download-title` (plain text, preserving titles
+that look like JSON). The detail menu supplies `pip-more` as its return trigger
+because the selected menu item is hidden when the menu closes.
+
+Both format choices are server markup. Everything (.zip) is selected and focused
+on every opening; Artifact HTML only (.html) retains the self-contained document
+download. The controller calls `apiFetch` through `api-module.js` with explicit
+`?format=zip` or `?format=html`, then uses `downloadBlob` and the server filename.
+It never rebuilds the dialog or card markup. Stored state JSON and assets ZIP
+remain independent exports.
+
+Native dialog supplies focus containment and an inert background. Escape,
+backdrop and Cancel share the pending guard: while the response and its blob are
+being read, formats and buttons are disabled, dismissal is refused, and repeated
+submissions send no second request. Errors are announced in the dialog with a
+Try again button and preserve the selected format. Success or cancellation
+restores focus to the visible trigger; reopening resets errors and ZIP selection.
+Disconnect aborts a pending read and closes the dialog.
+
+![Download choices in the gallery](screenshots/Exh-zlsl/01-gallery-download-desktop.png)
+
+[Gallery on a phone](screenshots/Exh-zlsl/02-gallery-download-mobile.png) ·
+[Artifact viewer](screenshots/Exh-zlsl/03-detail-download-desktop.png) ·
+[Artifact viewer on a phone](screenshots/Exh-zlsl/04-detail-download-mobile.png)
 
 ## Testing
 
@@ -109,12 +141,15 @@ integration uses a real browser through the existing `chromiumtest` helper:
 
 ```sh
 make assets
-go test ./internal/api -run 'Test(ActionMenuBrowser|GalleryActionMenuDuplicationBrowser)$' -count=1
+go test ./internal/api -run 'Test(ActionMenuBrowser|GalleryActionMenuDuplicationBrowser|ArtifactDownloadBrowser|ArtifactDownloadControls)$' -count=1
 ```
 
 The helper finds a locally installed Playwright Chromium headless shell, or
 uses `CHROMIUM_TEST_BINARY`. It skips browser tests when neither is available.
 Cases cover two different menus, escaped payloads, keyboard/focus, actual htmx
 replacements and appends, disconnect/reconnect, and the existing duplication
-dialog. Add browser integration cases for new controllers; keep the miniature
+dialog. Download coverage includes both formats, credentials, keyboard/focus,
+all dismissals, pending guards, HTTP/body-read failures and retry, htmx append
+and replacement, disconnect/reconnect, detail controls, and a phone viewport.
+Add browser integration cases for new controllers; keep the miniature
 Node DOM focused on feature logic.

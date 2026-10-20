@@ -34,8 +34,8 @@ func menuEvent(label, icon, event string, detail map[string]string) actionMenuIt
 	return actionMenuItem{Label: label, Icon: icon, Event: event, Payload: string(payload)}
 }
 
-func galleryCardActions(id, title string) actionMenuView {
-	return actionMenuView{
+func galleryCardActions(id, title string, readOnly bool) actionMenuView {
+	menu := actionMenuView{
 		ID: "card-actions-" + id, Label: "Actions for " + title,
 		Class: "card-actions", TriggerClass: "card-actions-trigger", PanelClass: "card-actions-menu",
 		Items: []actionMenuItem{
@@ -43,4 +43,8 @@ func galleryCardActions(id, title string) actionMenuView {
 			menuEvent("Duplicate", "ph-copy", "exhibit:duplicate", map[string]string{"artifactID": id, "title": title}),
 		},
 	}
+	if !readOnly {
+		menu.Items = append(menu.Items, menuEvent("Download artifact", "ph-download-simple", "exhibit:download", map[string]string{"artifactID": id, "title": title}))
+	}
+	return menu
 }

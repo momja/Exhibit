@@ -85,11 +85,12 @@ func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, of
 		grid.NextURL = galleryURL(gallery.FragmentPath, grid.Query, offset+galleryPageSize)
 	}
 	urls := ro.renderURLs(r)
+	readOnly := ro.pageCredentials(r).ReadOnly
 	for _, a := range artifacts {
 		grid.Cards = append(grid.Cards, galleryCard{
 			ArtifactID: a.ID, Title: a.Title, Tags: tagViews(a.Tags),
 			Capability: newCardCapabilityView(a), Widget: newGalleryWidgetView(a, urls),
-			Actions: galleryCardActions(a.ID, a.Title),
+			Actions: galleryCardActions(a.ID, a.Title, readOnly),
 		})
 	}
 	return grid, nil

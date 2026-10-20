@@ -19,7 +19,7 @@
      and it should not carry the library that refreshes them. */}}
 {{if .Share}}<script src="/assets/htmx/htmx.min.js"></script>{{end}}
 </head>
-<body>
+<body{{if not .ReadOnly}} data-controller="artifact-download"{{end}}>
 {{/* The artifact is the page (Exh-ghuv). It fills the window, and the page's
      own chrome is one floating pill of controls over it, which the visitor
      can drag to any corner or put away against a side edge. The two-row
@@ -97,11 +97,7 @@
   {{if not .ReadOnly}}
   <a href="/artifacts/{{.ID}}/edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i> Edit</a>
   <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot" aria-hidden="true"></i> Modify with agent</a>
-  {{/* The portable copy (av-vnkt): one file with every stored payload folded
-       back in, depending on no origin and no running instance. A plain link,
-       because the response is an attachment — no JS, and it works from the
-       page a visitor is already on. */}}
-  <a href="/api/artifacts/{{.ID}}/export" download><i class="ph ph-download-simple" aria-hidden="true"></i> Download file</a>
+  <button type="button" data-action="artifact-download#open" data-artifact-download-artifact-id-param="{{.ID}}" data-artifact-download-title="{{.Title}}" data-artifact-download-trigger-id-param="pip-more" aria-haspopup="dialog"><i class="ph ph-download-simple" aria-hidden="true"></i> Download artifact</button>
   {{if .SourceURL}}<button type="button" onclick="refetchSource()"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Update from source</button>{{end}}
   {{end}}
   <hr>
@@ -307,6 +303,7 @@
 
 {{template "networkPrompt"}}
 {{template "directOpenPrompt" .}}
+{{if not .ReadOnly}}{{template "artifactDownloadDialog"}}{{end}}
 <script>
 const TOKEN = {{.Token}};
 {{/* READ_ONLY and TOKEN are one decision, made server-side per request
@@ -362,6 +359,7 @@ let geolocationApproved = {{if .Capability.GeolocationApproved}}true{{else}}fals
      (av-6xvs). Before detail.js, which installs it at load. */}}
 <script src="/assets/gallery/network-prompt.js"></script>
 <script src="/assets/gallery/detail.js"></script>
+{{if not .ReadOnly}}{{template "componentScripts"}}{{end}}
 <script type="module" src="/assets/gallery/direct-open.js"></script>
 {{/* The share panel's script, loaded only where the panel exists. It resolves
      everything by id inside #share-panel and tolerates the panel's absence, so
