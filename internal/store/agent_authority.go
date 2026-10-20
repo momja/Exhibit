@@ -43,7 +43,7 @@ const agentAssignmentSelect = `SELECT c.owner_id,c.id,e.execution_id,e.worker_id
  FROM agent_executions e JOIN agent_conversations c ON c.id=e.conversation_id `
 const liveAgentStatuses = `('reserved','active','closing')`
 
-func scanAgentAssignment(row *sql.Row) (agentcontrol.Assignment, error) {
+func scanAgentAssignment(row interface{ Scan(...any) error }) (agentcontrol.Assignment, error) {
 	var a agentcontrol.Assignment
 	var expiry int64
 	err := row.Scan(&a.OwnerID, &a.ConversationID, &a.ExecutionID, &a.WorkerID, &a.Generation, &a.ArtifactID, &a.Status, &expiry, &a.Revision, &a.PreviousStatus)
@@ -70,9 +70,9 @@ func (s *SQLiteStore) ReserveAgentExecution(ctx context.Context, r agentcontrol.
 		return out, agentcontrol.ErrInvalid
 	}
 	err = s.agentTransaction(ctx, func(tx *sql.Conn) error {
-		// Also reclaim assignments whose artifact/account was removed. Their usage
-		// attribution remains; they cannot hold fleet capacity forever.
-		_, err := tx.ExecContext(ctx, `UPDATE agent_executions SET status='interrupted' WHERE status IN `+liveAgentStatuses+` AND (lease_until<=? OR conversation_id IN (SELECT id FROM agent_conversations c WHERE artifact_id!='' AND NOT EXISTS(SELECT 1 FROM artifacts a WHERE a.id=c.artifact_id AND a.owner_id=c.owner_id)))`, now.UnixMilli())
+		// Only this conversation is exclusively fenced by the caller. Leave other
+		// expired/orphaned attempts for their own fenced reconciliation.
+		_, err := tx.ExecContext(ctx, `UPDATE agent_executions SET status='interrupted' WHERE conversation_id=? AND status IN `+liveAgentStatuses+` AND (lease_until<=? OR conversation_id IN (SELECT id FROM agent_conversations c WHERE artifact_id!='' AND NOT EXISTS(SELECT 1 FROM artifacts a WHERE a.id=c.artifact_id AND a.owner_id=c.owner_id)))`, r.ConversationID, now.UnixMilli())
 		if err != nil {
 			return err
 		}
@@ -141,7 +141,7 @@ func (s *SQLiteStore) ReserveAgentExecution(ctx context.Context, r agentcontrol.
 			return agentcontrol.ErrAssigned
 		}
 		var ownerCount, fleetCount int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(c.owner_id=?),0) FROM agent_executions e JOIN agent_conversations c ON c.id=e.conversation_id WHERE e.status IN `+liveAgentStatuses, r.OwnerID).Scan(&fleetCount, &ownerCount); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(c.owner_id=?),0) FROM agent_executions e JOIN agent_conversations c ON c.id=e.conversation_id WHERE e.status IN `+liveAgentStatuses+` AND e.lease_until>? AND (c.artifact_id='' OR EXISTS(SELECT 1 FROM artifacts a WHERE a.id=c.artifact_id AND a.owner_id=c.owner_id))`, r.OwnerID, now.UnixMilli()).Scan(&fleetCount, &ownerCount); err != nil {
 			return err
 		}
 		if ownerCount >= agentcontrol.MaxOwnerExecutions {
@@ -252,40 +252,55 @@ func (s *SQLiteStore) RecordAgentArtifactVersion(ctx context.Context, id agentco
 		return err
 	})
 }
-func (s *SQLiteStore) ReconcileAgentExecutions(ctx context.Context, all bool, now time.Time) (out []agentcontrol.Assignment, err error) {
-	out = []agentcontrol.Assignment{}
+
+// Discovery takes no operation fences and changes no authority. Each candidate
+// must be rechecked and reconciled under its own conversation's exclusive fence.
+func (s *SQLiteStore) ListAgentExecutionsToReconcile(ctx context.Context, all bool, now time.Time) ([]agentcontrol.Assignment, error) {
+	condition, args := agentReconciliationFilter(all, now)
+	rows, err := s.db.QueryContext(ctx, agentAssignmentSelect+` WHERE `+condition+` ORDER BY c.id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []agentcontrol.Assignment{}
+	for rows.Next() {
+		a, err := scanAgentAssignment(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+func agentReconciliationFilter(all bool, now time.Time) (string, []any) {
+	condition := `e.status IN ` + liveAgentStatuses
+	if all {
+		return condition, nil
+	}
+	return condition + ` AND (e.lease_until<=? OR (c.artifact_id!='' AND NOT EXISTS(SELECT 1 FROM artifacts a WHERE a.id=c.artifact_id AND a.owner_id=c.owner_id)))`, []any{now.UnixMilli()}
+}
+
+// ReconcileAgentExecution cannot interrupt a newer attempt, a terminal attempt,
+// or a lease renewed after candidate discovery. A nil result means it no longer
+// qualifies. The caller holds only this conversation's exclusive fence.
+func (s *SQLiteStore) ReconcileAgentExecution(ctx context.Context, id agentcontrol.Identity, all bool, now time.Time) (out *agentcontrol.Assignment, err error) {
 	err = s.agentTransaction(ctx, func(tx *sql.Conn) error {
-		condition := `e.status IN ` + liveAgentStatuses
-		args := []any{}
-		if !all {
-			condition += ` AND (e.lease_until<=? OR (c.artifact_id!='' AND NOT EXISTS(SELECT 1 FROM artifacts a WHERE a.id=c.artifact_id AND a.owner_id=c.owner_id)))`
-			args = append(args, now.UnixMilli())
+		condition, args := agentReconciliationFilter(all, now)
+		condition += ` AND c.owner_id=? AND c.id=? AND e.execution_id=? AND e.worker_id=? AND e.generation=?`
+		args = append(args, id.OwnerID, id.ConversationID, id.ExecutionID, id.WorkerID, id.Generation)
+		a, err := scanAgentAssignment(tx.QueryRowContext(ctx, agentAssignmentSelect+` WHERE `+condition, args...))
+		if errors.Is(err, agentcontrol.ErrStale) {
+			return nil
 		}
-		rows, err := tx.QueryContext(ctx, agentAssignmentSelect+` WHERE `+condition, args...)
 		if err != nil {
 			return err
 		}
-		for rows.Next() {
-			var a agentcontrol.Assignment
-			var expiry int64
-			if err := rows.Scan(&a.OwnerID, &a.ConversationID, &a.ExecutionID, &a.WorkerID, &a.Generation, &a.ArtifactID, &a.Status, &expiry, &a.Revision, &a.PreviousStatus); err != nil {
-				rows.Close()
-				return err
-			}
-			a.LeaseUntil = time.UnixMilli(expiry).UTC()
-			a.Status = agentcontrol.Interrupted
-			out = append(out, a)
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE agent_executions SET status='interrupted' WHERE execution_id=?`, id.ExecutionID); err != nil {
 			return err
 		}
-		for _, a := range out {
-			if _, err := tx.ExecContext(ctx, `UPDATE agent_executions SET status='interrupted' WHERE execution_id=?`, a.ExecutionID); err != nil {
-				return err
-			}
-		}
+		a.Status = agentcontrol.Interrupted
+		out = &a
 		return nil
 	})
 	return out, err

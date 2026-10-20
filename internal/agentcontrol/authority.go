@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/momja/Exhibit/internal/agentscope"
@@ -118,7 +117,8 @@ type Repository interface {
 	TransitionAgentExecution(context.Context, Identity, string, time.Time, time.Time) error
 	BindAgentExecution(context.Context, Identity, string, time.Time) error
 	RecordAgentArtifactVersion(context.Context, Identity, int, time.Time) error
-	ReconcileAgentExecutions(context.Context, bool, time.Time) ([]Assignment, error)
+	ListAgentExecutionsToReconcile(context.Context, bool, time.Time) ([]Assignment, error)
+	ReconcileAgentExecution(context.Context, Identity, bool, time.Time) (*Assignment, error)
 	SaveAgentSupervisor(context.Context, Identity, []byte, string, time.Time, time.Time) error
 	ResolveAgentSupervisor(context.Context, []byte, time.Time) (Supervisor, error)
 	ReadAgentSnapshot(context.Context, Identity, time.Time) (Snapshot, error)
@@ -137,13 +137,10 @@ type Control struct {
 	repo     Repository
 	registry *agentscope.Registry
 	cfg      Config
-	// A handler holds RLock through its last write. Reassignment/release must
-	// wait, including when the lease expires while that handler is running.
-	fence sync.RWMutex
-	// Separate from the takeover fence, so a create can bind while holding
-	// shared authority. Shared across grants to prevent reissued create tokens
-	// from authorizing two simultaneous first saves.
-	createFence sync.Mutex
+	// Only the conversation whose authority changes waits for its handlers.
+	// Entries exist while holders or waiters reference them, not for the whole
+	// lifetime of every conversation this core has ever seen.
+	fences conversationFences
 }
 
 func New(repo Repository, registry *agentscope.Registry, cfg Config) *Control {
@@ -166,8 +163,11 @@ func New(repo Repository, registry *agentscope.Registry, cfg Config) *Control {
 // ExecutionID is a stable request identity supplied by the core; retrying it
 // returns the same still-live reservation, never resurrects a terminal attempt.
 func (c *Control) Reserve(ctx context.Context, r Reservation) (Assignment, error) {
-	c.fence.Lock()
-	defer c.fence.Unlock()
+	release, err := c.fences.acquire(ctx, r.ConversationID, true, false)
+	if err != nil {
+		return Assignment{}, err
+	}
+	defer release()
 	now := c.cfg.Now()
 	r.FleetLimit = c.cfg.FleetLimit
 	r.LeaseUntil = now.Add(c.cfg.LeaseTTL)
@@ -175,8 +175,11 @@ func (c *Control) Reserve(ctx context.Context, r Reservation) (Assignment, error
 }
 
 func (c *Control) transition(ctx context.Context, id Identity, status string) error {
-	c.fence.Lock()
-	defer c.fence.Unlock()
+	release, err := c.fences.acquire(ctx, id.ConversationID, true, false)
+	if err != nil {
+		return err
+	}
+	defer release()
 	now := c.cfg.Now()
 	return c.repo.TransitionAgentExecution(ctx, id, status, now.Add(c.cfg.LeaseTTL), now)
 }
@@ -200,6 +203,8 @@ func (c *Control) Release(ctx context.Context, id Identity, terminal string) err
 // ReconcileExpired permits replacement after worker loss without heartbeats
 // keeping idle workers awake. InterruptAll is the startup fence when this core
 // cannot reattach its previous workers; both return cleanup targets to Manager.
+// They reconcile discovered attempts independently. On cancellation or error,
+// callers must still clean up the assignments returned before that error.
 func (c *Control) ReconcileExpired(ctx context.Context) ([]Assignment, error) {
 	return c.reconcile(ctx, false)
 }
@@ -207,19 +212,40 @@ func (c *Control) InterruptAll(ctx context.Context) ([]Assignment, error) {
 	return c.reconcile(ctx, true)
 }
 func (c *Control) reconcile(ctx context.Context, all bool) ([]Assignment, error) {
-	c.fence.Lock()
-	defer c.fence.Unlock()
-	return c.repo.ReconcileAgentExecutions(ctx, all, c.cfg.Now())
+	candidates, err := c.repo.ListAgentExecutionsToReconcile(ctx, all, c.cfg.Now())
+	if err != nil {
+		return nil, err
+	}
+	reconciled := []Assignment{}
+	for _, candidate := range candidates {
+		release, err := c.fences.acquire(ctx, candidate.ConversationID, true, false)
+		if err != nil {
+			return reconciled, err
+		}
+		// A lease may have been renewed, or its attempt replaced, while we
+		// waited. Recheck both under the conversation fence and transaction.
+		assignment, err := c.repo.ReconcileAgentExecution(ctx, candidate.Identity, all, c.cfg.Now())
+		release()
+		if err != nil {
+			return reconciled, err
+		}
+		if assignment != nil {
+			reconciled = append(reconciled, *assignment)
+		}
+	}
+	return reconciled, nil
 }
 
 func (c *Control) Guard(ctx context.Context, id Identity) (func(), error) {
-	c.fence.RLock()
-	if _, err := c.repo.GetAgentExecution(ctx, id, c.cfg.Now()); err != nil {
-		c.fence.RUnlock()
+	release, err := c.fences.acquire(ctx, id.ConversationID, false, false)
+	if err != nil {
 		return nil, err
 	}
-	var once sync.Once
-	return func() { once.Do(c.fence.RUnlock) }, nil
+	if _, err := c.repo.GetAgentExecution(ctx, id, c.cfg.Now()); err != nil {
+		release()
+		return nil, err
+	}
+	return release, nil
 }
 func (c *Control) WithExecution(ctx context.Context, id Identity, fn func(context.Context) error) error {
 	release, err := c.Guard(ctx, id)
@@ -244,27 +270,15 @@ func (c *Control) validateTool(ctx context.Context, scope agentscope.Scope, conv
 	return nil
 }
 func (c *Control) guardTool(ctx context.Context, scope agentscope.Scope, conversation string, e agentscope.Execution) (func(), error) {
-	creating := scope.ArtifactID == ""
-	if creating {
-		c.createFence.Lock()
-	}
-	c.fence.RLock()
-	if err := c.validateTool(ctx, scope, conversation, e); err != nil {
-		c.fence.RUnlock()
-		if creating {
-			c.createFence.Unlock()
-		}
+	release, err := c.fences.acquire(ctx, conversation, false, scope.ArtifactID == "")
+	if err != nil {
 		return nil, err
 	}
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			c.fence.RUnlock()
-			if creating {
-				c.createFence.Unlock()
-			}
-		})
-	}, nil
+	if err := c.validateTool(ctx, scope, conversation, e); err != nil {
+		release()
+		return nil, err
+	}
+	return release, nil
 }
 
 // Bind checks and narrows the durable binding in one transaction. It must not

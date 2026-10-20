@@ -568,3 +568,239 @@ func TestFailedReservationCanBeReplacedWithoutPretendingToResume(t *testing.T) {
 	_, err = f.c.Reserve(ctx, r)
 	require.ErrorIs(t, err, agentcontrol.ErrAssigned)
 }
+
+// A tool request may spend most of its time reading an upload or staging a
+// save. That held operation fence must not stall another worker's lifecycle.
+func TestConversationGuardDoesNotBlockOtherLifecycle(t *testing.T) {
+	f := setup(t, 2)
+	a := f.reserve(t, "slow-save")
+	release, err := f.c.Guard(ctx, a.Identity)
+	require.NoError(t, err)
+	defer release()
+	operationCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		b, err := f.c.Reserve(operationCtx, request(1, "healthy-worker"))
+		if err != nil {
+			done <- err
+			return
+		}
+		f.clock.Add(50 * 1000)
+		if err := f.c.Renew(operationCtx, b.Identity); err != nil {
+			done <- err
+			return
+		}
+		// B's original lease would now have expired. Its independent renewal keeps
+		// it authoritative while A still holds its operation fence.
+		f.clock.Add(20 * 1000)
+		unlock, err := f.c.Guard(operationCtx, b.Identity)
+		if err != nil {
+			done <- err
+			return
+		}
+		unlock()
+		done <- f.c.Release(operationCtx, b.Identity, agentcontrol.Closed)
+	}()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("unrelated lifecycle waited for A's operation")
+	}
+}
+
+func TestReserveReclaimsExpiredCapacityWithoutRevokingAnotherConversation(t *testing.T) {
+	f := setup(t, 1)
+	a := f.reserve(t, "expired-save")
+	release, err := f.c.Guard(ctx, a.Identity)
+	require.NoError(t, err)
+	defer release()
+	f.clock.Add(61 * 1000)
+	operationCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { _, err := f.c.Reserve(operationCtx, request(1, "replacement-capacity")); done <- err }()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("unrelated admission waited for A's operation")
+	}
+	candidates, err := f.s.ListAgentExecutionsToReconcile(ctx, false, time.UnixMilli(f.clock.Load()))
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+	assert.Equal(t, a.ExecutionID, candidates[0].ExecutionID)
+	assert.Equal(t, agentcontrol.Reserved, candidates[0].Status, "admission must not mutate authority outside its conversation fence")
+}
+
+func TestUnboundCreatesInDifferentConversationsDoNotBlock(t *testing.T) {
+	f := setup(t, 32)
+	grants := make([]*agentscope.Grant, 0, 2)
+	for _, conversation := range []string{"create-a", "create-b"} {
+		r := request(1, conversation)
+		r.ArtifactID = ""
+		a, err := f.c.Reserve(ctx, r)
+		require.NoError(t, err)
+		g, err := f.c.IssueTool(ctx, a.Identity)
+		require.NoError(t, err)
+		grants = append(grants, g)
+	}
+	release, err := grants[0].Guard(ctx)
+	require.NoError(t, err)
+	defer release()
+	operationCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		unlock, err := grants[1].Guard(operationCtx)
+		if err != nil {
+			done <- err
+			return
+		}
+		defer unlock()
+		done <- grants[1].BindArtifactContext(operationCtx, "other")
+	}()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("B's first save waited for A's create")
+	}
+	assert.Empty(t, grants[0].Scope().ArtifactID)
+	assert.Equal(t, "other", grants[1].Scope().ArtifactID)
+}
+
+func TestSameConversationWaitersHonorCancellation(t *testing.T) {
+	for _, operation := range []string{"reserve", "release", "reconcile"} {
+		t.Run(operation, func(t *testing.T) {
+			f := setup(t, 32)
+			a := f.reserve(t, "busy")
+			release, err := f.c.Guard(ctx, a.Identity)
+			require.NoError(t, err)
+			defer release()
+			operationCtx, cancel := context.WithTimeout(ctx, 30*time.Millisecond)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() {
+				var err error
+				switch operation {
+				case "reserve":
+					_, err = f.c.Reserve(operationCtx, request(1, a.ConversationID))
+				case "release":
+					err = f.c.Release(operationCtx, a.Identity, agentcontrol.Closed)
+				case "reconcile":
+					_, err = f.c.InterruptAll(operationCtx)
+				}
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+			case <-time.After(time.Second):
+				t.Fatal("canceled waiter still blocked behind the guard")
+			}
+			// Canceling a queued takeover must leave the original attempt valid.
+			unlock, err := f.c.Guard(ctx, a.Identity)
+			require.NoError(t, err)
+			unlock()
+		})
+	}
+}
+
+func TestCreateGuardWaitersHonorCancellationAcrossSameAndReissuedGrant(t *testing.T) {
+	f := setup(t, 32)
+	r := request(1, "create-cancel")
+	r.ArtifactID = ""
+	a, err := f.c.Reserve(ctx, r)
+	require.NoError(t, err)
+	first, err := f.c.IssueTool(ctx, a.Identity)
+	require.NoError(t, err)
+	second, err := f.c.IssueTool(ctx, a.Identity)
+	require.NoError(t, err)
+	release, err := first.Guard(ctx)
+	require.NoError(t, err)
+	defer release()
+	for _, g := range []*agentscope.Grant{first, second} {
+		operationCtx, cancel := context.WithTimeout(ctx, 30*time.Millisecond)
+		done := make(chan error, 1)
+		go func() {
+			unlock, err := g.Guard(operationCtx)
+			if err == nil {
+				unlock()
+			}
+			done <- err
+		}()
+		select {
+		case err := <-done:
+			require.ErrorIs(t, err, context.DeadlineExceeded)
+		case <-time.After(time.Second):
+			t.Fatal("canceled create waiter still blocked")
+		}
+		cancel()
+	}
+	require.NoError(t, first.BindArtifactContext(ctx, "artifact"))
+}
+
+func TestReconciliationWaitDoesNotBlockOtherConversationRenewal(t *testing.T) {
+	f := setup(t, 32)
+	a := f.reserve(t, "a-busy")
+	b := f.reserve(t, "b-healthy")
+	release, err := f.c.Guard(ctx, a.Identity)
+	require.NoError(t, err)
+	defer release()
+	operationCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	reconciled := make(chan error, 1)
+	go func() { _, err := f.c.InterruptAll(operationCtx); reconciled <- err }()
+	renewCtx, cancelRenew := context.WithTimeout(ctx, time.Second)
+	defer cancelRenew()
+	renewed := make(chan error, 1)
+	go func() { renewed <- f.c.Renew(renewCtx, b.Identity) }()
+	select {
+	case err := <-renewed:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("reconciliation of A blocked B's renewal")
+	}
+	cancel()
+	select {
+	case err := <-reconciled:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("reconciliation did not cancel")
+	}
+}
+
+func TestReconciliationReturnsCompletedCleanupWhenCanceled(t *testing.T) {
+	f := setup(t, 32)
+	first := f.reserve(t, "a-reap")
+	second := f.reserve(t, "z-busy")
+	release, err := f.c.Guard(ctx, second.Identity)
+	require.NoError(t, err)
+	defer release()
+	operationCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	type result struct {
+		assignments []agentcontrol.Assignment
+		err         error
+	}
+	done := make(chan result, 1)
+	go func() { assignments, err := f.c.InterruptAll(operationCtx); done <- result{assignments, err} }()
+	require.Eventually(t, func() bool {
+		candidates, err := f.s.ListAgentExecutionsToReconcile(ctx, true, time.UnixMilli(f.clock.Load()))
+		return err == nil && len(candidates) == 1 && candidates[0].ExecutionID == second.ExecutionID
+	}, 2*time.Second, time.Millisecond, "the first conversation should reconcile before waiting for the second")
+	cancel()
+	select {
+	case got := <-done:
+		require.ErrorIs(t, got.err, context.Canceled)
+		require.Len(t, got.assignments, 1)
+		assert.Equal(t, first.ExecutionID, got.assignments[0].ExecutionID)
+	case <-time.After(time.Second):
+		t.Fatal("reconciliation did not cancel")
+	}
+	unlock, err := f.c.Guard(ctx, second.Identity)
+	require.NoError(t, err)
+	unlock()
+}

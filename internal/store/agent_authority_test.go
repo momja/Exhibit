@@ -136,3 +136,38 @@ func TestAgentCreateAndBindingCommitTogetherAndIgnoreUntrustedOwner(t *testing.T
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
+
+func TestAgentReconciliationRechecksLeaseAndAttemptAfterDiscovery(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	r := agentcontrol.Reservation{OwnerID: 1, ConversationID: "conversation", ExecutionID: "first-attempt", WorkerID: "first-worker", FleetLimit: 32, LeaseUntil: now.Add(time.Minute)}
+	first, err := s.ReserveAgentExecution(ctx, r, now)
+	require.NoError(t, err)
+	candidates, err := s.ListAgentExecutionsToReconcile(ctx, false, now.Add(2*time.Minute))
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+	// This renewal was authorized before expiry but committed after discovery.
+	// Reconciliation must use the updated lease rather than its candidate copy.
+	require.NoError(t, s.TransitionAgentExecution(ctx, first.Identity, "", now.Add(4*time.Minute), now.Add(30*time.Second)))
+	reconciled, err := s.ReconcileAgentExecution(ctx, candidates[0].Identity, false, now.Add(2*time.Minute))
+	require.NoError(t, err)
+	assert.Nil(t, reconciled)
+	_, err = s.GetAgentExecution(ctx, first.Identity, now.Add(2*time.Minute))
+	require.NoError(t, err)
+	reconciled, err = s.ReconcileAgentExecution(ctx, first.Identity, true, now.Add(2*time.Minute))
+	require.NoError(t, err)
+	require.NotNil(t, reconciled)
+	assert.Equal(t, agentcontrol.Interrupted, reconciled.Status)
+	r.ExecutionID = "second-attempt"
+	r.WorkerID = "second-worker"
+	r.LeaseUntil = now.Add(3 * time.Minute)
+	second, err := s.ReserveAgentExecution(ctx, r, now.Add(2*time.Minute))
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), second.Generation)
+	reconciled, err = s.ReconcileAgentExecution(ctx, candidates[0].Identity, true, now.Add(2*time.Minute))
+	require.NoError(t, err)
+	assert.Nil(t, reconciled, "stale candidates cannot interrupt a replacement")
+	_, err = s.GetAgentExecution(ctx, second.Identity, now.Add(2*time.Minute))
+	require.NoError(t, err)
+}

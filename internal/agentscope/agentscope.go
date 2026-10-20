@@ -54,9 +54,8 @@ type Grant struct {
 	guard     Guard
 	bind      Binder
 
-	mu       sync.Mutex
-	createMu sync.Mutex
-	scope    Scope
+	mu    sync.Mutex
+	scope Scope
 	// prompt is the user's latest message, set by the session as each arrives.
 	// It labels the versions the agent writes while answering it.
 	prompt string
@@ -130,6 +129,9 @@ type Execution struct {
 }
 
 type Validator func(context.Context, Scope, string, Execution) error
+
+// Guard callbacks must serialize unbound creates by conversation, including
+// across reissued grants, and allow context cancellation while waiting.
 type Guard func(context.Context, Scope, string, Execution) (func(), error)
 type Binder func(context.Context, Scope, string, Execution, string) error
 
@@ -142,27 +144,15 @@ func (g *Grant) Guard(ctx context.Context) (func(), error) {
 	if g.guard == nil {
 		return func() {}, nil
 	}
-	// Serialize unbound create requests. Middleware must check the path against
-	// Scope AFTER Guard, since a preceding create may have just bound it.
-	creating := g.Scope().ArtifactID == ""
-	if creating {
-		g.createMu.Lock()
-	}
+	// The authority callback owns conversation-wide, cancellable create
+	// serialization. Middleware must still check Scope after acquiring Guard.
 	release, err := g.guard(ctx, g.Scope(), g.sessionID, g.execution)
 	if err != nil {
-		if creating {
-			g.createMu.Unlock()
-		}
 		return nil, err
 	}
 	var once sync.Once
 	return func() {
-		once.Do(func() {
-			release()
-			if creating {
-				g.createMu.Unlock()
-			}
-		})
+		once.Do(release)
 	}, nil
 }
 
