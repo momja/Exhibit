@@ -24,7 +24,7 @@ func TestExtensionSuite(t *testing.T) {
 	if err != nil {
 		t.Skip("node not installed; agent extension tests need it (so does `make assets`)")
 	}
-	dir, err := filepath.Abs("ext")
+	dir, err := filepath.Abs("../agentassets/ext")
 	if err != nil {
 		t.Fatal(err)
 	}

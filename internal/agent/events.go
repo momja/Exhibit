@@ -2,39 +2,24 @@ package agent
 
 import (
 	"bufio"
-	"errors"
 	"sync"
+
+	"github.com/momja/Exhibit/internal/agentexec"
 )
 
 const (
 	// Large tool results are allowed, but a malformed JSONL record cannot
 	// allocate arbitrarily. The limit includes the line terminator.
-	maxEventLineBytes  = 8 << 20
-	maxEventQueueBytes = 16 << 20
-	maxBacklog         = 4096
+	maxEventLineBytes  = agentexec.MaxEventBytes
+	maxEventQueueBytes = agentexec.MaxQueueBytes
+	maxBacklog         = agentexec.MaxEvents
 	maxSubscribers     = 4
 )
 
 // readEventLine discards an oversized record through its terminator. ReadSlice
 // keeps even an endless unterminated record bounded; partial JSON is never used.
 func readEventLine(reader *bufio.Reader) ([]byte, bool, error) {
-	var line []byte
-	oversized := false
-	for {
-		fragment, err := reader.ReadSlice('\n')
-		if !oversized {
-			if len(line)+len(fragment) > maxEventLineBytes {
-				line = nil
-				oversized = true
-			} else {
-				line = append(line, fragment...)
-			}
-		}
-		if errors.Is(err, bufio.ErrBufferFull) {
-			continue
-		}
-		return line, oversized, err
-	}
+	return agentexec.ReadEventLine(reader)
 }
 
 // Each subscriber owns a bounded queue and at most one event being delivered.
