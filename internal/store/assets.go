@@ -133,7 +133,8 @@ func (s *SQLiteStore) replaceOwnedArtifactAssets(ctx context.Context, ownerID in
 			err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (
 				SELECT artifact_id, blob_id, content_type FROM artifact_assets WHERE id=?
 				UNION ALL SELECT artifact_id, blob_id, content_type FROM artifact_version_assets WHERE id=?
-			) WHERE artifact_id<>? OR blob_id<>? OR content_type<>?`, asset.ID, asset.ID, artifactID, asset.BlobID, asset.ContentType).Scan(&conflicts)
+				UNION ALL SELECT artifact_id, blob_id, content_type FROM asset_identities WHERE id=?
+			) WHERE artifact_id<>? OR blob_id<>? OR content_type<>?`, asset.ID, asset.ID, asset.ID, artifactID, asset.BlobID, asset.ContentType).Scan(&conflicts)
 			if err != nil {
 				return nil, err
 			}

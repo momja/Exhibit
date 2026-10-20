@@ -127,6 +127,12 @@ var accountTables = map[string]accountTable{
 
 	"goose_db_version": {reachNone, "the migration ledger — a property of the database, not of a person", ""},
 
+	// A deleted public URL must never be rebound, even if an account/artifact
+	// ID is reused later. This security ledger retains only opaque identities,
+	// content addresses and MIME, not payloads, state, titles or source URLs.
+	"asset_identities": {reachNone,
+		"immutable public URL bindings survive deletion as security records; they retain no payload references", ""},
+
 	// DeleteAccount writes here, and the reach is still `none`: a blob id
 	// reaches this table only in the transaction that deleted the last row
 	// naming it, which was also the last record of whose it was. What survives

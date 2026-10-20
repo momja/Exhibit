@@ -30,25 +30,62 @@ func (ro *Router) importState(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var values map[string]any
-	if err := json.Unmarshal(body, &values); err != nil || values == nil {
-		writeError(w, http.StatusBadRequest, "Choose a JSON object exported from Stored state.")
+	state, err := readStateImport(body)
+	if err != nil {
+		if errors.Is(err, store.ErrImportStateTooLarge) {
+			writeImportError(w, r, err)
+		} else {
+			writeError(w, http.StatusBadRequest, err.Error())
+		}
 		return
 	}
-	state := make(map[string]string, len(values))
-	for key, value := range values {
-		text, ok := value.(string)
-		if !ok {
-			writeError(w, http.StatusBadRequest, "Every state value must be a string, as in an exported localStorage JSON file.")
-			return
-		}
-		state[key] = text
-	}
-	err := ro.cfg.Store.ImportState(r.Context(), ownerIDFromCtx(r.Context()), id, state, r.URL.Query().Get("replace") == "true")
+	err = ro.cfg.Store.ImportState(r.Context(), ownerIDFromCtx(r.Context()), id, state, r.URL.Query().Get("replace") == "true")
 	if writeImportError(w, r, err) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Decode one flat object incrementally. Reject nested values and too many
+// entries before allocating them or taking the database's write connection.
+func readStateImport(body []byte) (map[string]string, error) {
+	invalid := errors.New("Choose a JSON object of string values exported from Stored state.")
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	start, err := decoder.Token()
+	if err != nil || start != json.Delim('{') {
+		return nil, invalid
+	}
+	state := make(map[string]string)
+	for decoder.More() {
+		if len(state) >= store.MaxImportedStateKeys {
+			return nil, store.ErrImportStateTooLarge
+		}
+		keyToken, err := decoder.Token()
+		if err != nil {
+			return nil, invalid
+		}
+		key, ok := keyToken.(string)
+		if !ok {
+			return nil, invalid
+		}
+		if _, duplicate := state[key]; duplicate {
+			return nil, errors.New("state import contains a duplicate key")
+		}
+		valueToken, err := decoder.Token()
+		value, ok := valueToken.(string)
+		if err != nil || !ok {
+			return nil, invalid
+		}
+		state[key] = value
+	}
+	end, err := decoder.Token()
+	if err != nil || end != json.Delim('}') {
+		return nil, invalid
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return nil, invalid
+	}
+	return state, nil
 }
 
 func (ro *Router) importTargetExists(w http.ResponseWriter, r *http.Request, id string) bool {
@@ -75,6 +112,8 @@ func writeImportError(w http.ResponseWriter, r *http.Request, err error) bool {
 		}{err.Error(), true})
 	} else if errors.Is(err, store.ErrImportAssetConflict) {
 		writeError(w, http.StatusBadRequest, err.Error())
+	} else if errors.Is(err, store.ErrImportStateTooLarge) {
+		writeError(w, http.StatusRequestEntityTooLarge, err.Error())
 	} else {
 		writeArtifactError(w, r, "import stored data", err)
 	}

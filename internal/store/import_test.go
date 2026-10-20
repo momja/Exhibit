@@ -1,6 +1,8 @@
 package store
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,6 +20,18 @@ func TestImportStateRollsBackFailedReplacement(t *testing.T) {
 	got, err := s.GetState(ctx, 1, "import", 1)
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"old": "keep"}, got)
+}
+
+func TestImportStateRejectsOversizedMapsBeforeTakingTheDatabase(t *testing.T) {
+	s := newTestStore(t)
+	state := make(map[string]string, MaxImportedStateKeys+1)
+	for i := 0; i <= MaxImportedStateKeys; i++ {
+		state[fmt.Sprint(i)] = ""
+	}
+	// Closing the DB demonstrates that cardinality is refused before a
+	// transaction/connection is acquired, even for direct store callers.
+	require.NoError(t, s.Close())
+	require.ErrorIs(t, s.ImportState(context.Background(), 1, "artifact", state, true), ErrImportStateTooLarge)
 }
 
 func TestImportAssetsChecksConfirmationAndRollsBackFailedInserts(t *testing.T) {

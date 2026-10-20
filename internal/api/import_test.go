@@ -327,3 +327,136 @@ func TestImportZIPRejectsCRCFailureAndExpandedOverrun(t *testing.T) {
 	_, err = readImportEntry(&zip.File{FileHeader: zip.FileHeader{Name: "oversized", UncompressedSize64: 49 << 20}}, 48<<20)
 	require.ErrorContains(t, err, "size limit")
 }
+
+func TestImportCompleteSnapshotExportsAtCollectorLimits(t *testing.T) {
+	withUnguardedFetcher(t)
+	for _, tc := range []struct {
+		name        string
+		count, size int
+	}{
+		{"expanded payloads", 7, 4 << 20},
+		{"asset entries", 51, 9 << 10},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var page string
+			for i := 0; i < tc.count; i++ {
+				page += fmt.Sprintf(`<img src="/image-%d.bin"><script>fetch('/image-%d.bin')</script>`, i, i)
+			}
+			payload := bytes.Repeat([]byte("x"), tc.size)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/page" {
+					w.Header().Set("Content-Type", "text/html")
+					_, _ = w.Write([]byte(page))
+					return
+				}
+				w.Header().Set("Content-Type", "image/png")
+				_, _ = w.Write(payload)
+			}))
+			t.Cleanup(upstream.Close)
+			r := newTestRouter(t)
+			w, created := postArtifact(t, r, map[string]any{"url": upstream.URL + "/page", "snapshot": true})
+			require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+			id := created.Artifact.ID
+			original, err := r.cfg.Store.ListArtifactAssets(t.Context(), 1, id)
+			require.NoError(t, err)
+			require.Len(t, original, 2*tc.count)
+			exported := getAssetsExport(r, id)
+			require.Equal(t, http.StatusOK, exported.Code)
+			w = postImport(r, id, "assets", exported.Body.Bytes(), true)
+			require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+			restored, err := r.cfg.Store.ListArtifactAssets(t.Context(), 1, id)
+			require.NoError(t, err)
+			require.Len(t, restored, len(original))
+			byID := make(map[string]store.ArtifactAsset, len(original))
+			for _, asset := range original {
+				byID[asset.ID] = asset
+			}
+			for _, asset := range restored {
+				want := byID[asset.ID]
+				want.GenerationID, want.CreatedAt = asset.GenerationID, asset.CreatedAt
+				assert.Equal(t, want, asset)
+			}
+		})
+	}
+}
+
+func TestImportAssetsCannotRebindDeletedPublicURLs(t *testing.T) {
+	r, dir := newTestRouterWithBlobDir(t)
+	id := createTestArtifact(t, r, "Immutable asset imports")
+	original, bodies := seedExportAssets(t, r, id)
+	exported := getAssetsExport(r, id).Body.Bytes()
+	manifest, files := readAssetsZIP(t, getAssetsExport(r, id))
+	delete(files, "manifest.json")
+	for _, asset := range original {
+		req := httptest.NewRequest(http.MethodDelete, "/api/artifacts/"+id+"/assets/"+asset.ID, nil)
+		req.Header.Set("Authorization", authHeader())
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	}
+	assert.Len(t, quotaBlobContents(t, dir), 1, "identity records do not retain payloads")
+	oldPath := manifest.Assets[0].Path
+	files[oldPath] = []byte("other")
+	w := postImport(r, id, "assets", makeImportZIP(t, manifest, files), false)
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Len(t, quotaBlobContents(t, dir), 1)
+	assert.Equal(t, http.StatusNotFound, renderGet(t, r, "/a/"+id+"/assets/"+original[0].ID).Code)
+	// Identical exports can be swapped back in, including after all references
+	// and bytes have been removed; only rebinding the old URL is refused.
+	w = postImport(r, id, "assets", exported, false)
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	served := renderGet(t, r, "/a/"+id+"/assets/"+original[0].ID)
+	require.Equal(t, http.StatusOK, served.Code)
+	assert.Equal(t, bodies[0], served.Body.Bytes())
+}
+
+func TestImportStateBoundsEntriesBeforeReplacement(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "State limits")
+	require.NoError(t, r.cfg.Store.SetStateAsViewer(t.Context(), 1, id, "old", "keep"))
+	state := make(map[string]string, store.MaxImportedStateKeys+1)
+	for i := 0; i <= store.MaxImportedStateKeys; i++ {
+		state[fmt.Sprint(i)] = ""
+	}
+	body, err := json.Marshal(state)
+	require.NoError(t, err)
+	w := postImport(r, id, "state", body, true)
+	require.Equal(t, http.StatusRequestEntityTooLarge, w.Code, w.Body.String())
+	got, err := r.cfg.Store.GetStateAsViewer(t.Context(), 1, id)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"old": "keep"}, got)
+	delete(state, fmt.Sprint(store.MaxImportedStateKeys))
+	body, err = json.Marshal(state)
+	require.NoError(t, err)
+	w = postImport(r, id, "state", body, true)
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	got, err = r.cfg.Store.GetStateAsViewer(t.Context(), 1, id)
+	require.NoError(t, err)
+	assert.Equal(t, state, got)
+	_, err = readStateImport([]byte(`{"a":"one","a":"two"}`))
+	require.ErrorContains(t, err, "duplicate")
+}
+
+func TestImportAssetsRetainsUniquePayloadAndEntryLimits(t *testing.T) {
+	manifest := assetsManifest{ArtifactID: "artifact", Assets: []exportedAsset{}}
+	files := map[string][]byte{}
+	for i := 0; i < 4; i++ {
+		id := fmt.Sprintf("asset-%d", i)
+		path := "assets/" + id + "/payload"
+		body := bytes.Repeat([]byte{byte(i)}, 16<<20)
+		manifest.Assets = append(manifest.Assets, exportedAsset{assetView: assetView{ID: id, SourceURL: "https://example.test/" + id, ContentType: "application/octet-stream", SizeBytes: int64(len(body))}, Path: path})
+		files[path] = body
+	}
+	_, err := readAssetsImport(makeImportZIP(t, manifest, files), "artifact")
+	require.ErrorContains(t, err, "unique asset payloads")
+	manifest.Assets = nil
+	files = map[string][]byte{}
+	for i := 0; i < 201; i++ {
+		id := fmt.Sprintf("asset-%d", i)
+		path := "assets/" + id + "/payload"
+		manifest.Assets = append(manifest.Assets, exportedAsset{assetView: assetView{ID: id, SourceURL: "https://example.test/" + id, ContentType: "application/octet-stream"}, Path: path})
+		files[path] = nil
+	}
+	_, err = readAssetsImport(makeImportZIP(t, manifest, files), "artifact")
+	require.ErrorContains(t, err, "too many entries")
+}

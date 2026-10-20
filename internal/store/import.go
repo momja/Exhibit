@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"time"
 )
 
 // ErrImportConfirmation means replacement would erase existing data. It is
@@ -11,9 +13,18 @@ import (
 var ErrImportConfirmation = errors.New("import requires confirmation to erase existing data")
 var ErrImportAssetConflict = errors.New("an imported asset id already identifies different stored content")
 
+const MaxImportedStateKeys = 10000
+
+var ErrImportStateTooLarge = fmt.Errorf("state import exceeds the maximum of %d keys", MaxImportedStateKeys)
+
 // ImportState replaces only the owner's localStorage map, leaving recipients'
 // private state and every other part of the artifact alone.
 func (s *SQLiteStore) ImportState(ctx context.Context, ownerID int64, artifactID string, state map[string]string, replace bool) error {
+	if len(state) > MaxImportedStateKeys {
+		return ErrImportStateTooLarge
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -25,8 +36,13 @@ func (s *SQLiteStore) ImportState(ctx context.Context, ownerID int64, artifactID
 	if _, err := tx.ExecContext(ctx, "DELETE FROM artifact_state WHERE artifact_id=? AND user_id=?", artifactID, ownerID); err != nil {
 		return err
 	}
+	insert, err := tx.PrepareContext(ctx, "INSERT INTO artifact_state (artifact_id, user_id, key, value) VALUES (?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insert.Close()
 	for key, value := range state {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO artifact_state (artifact_id, user_id, key, value) VALUES (?, ?, ?, ?)", artifactID, ownerID, key, value); err != nil {
+		if _, err := insert.ExecContext(ctx, artifactID, ownerID, key, value); err != nil {
 			return err
 		}
 	}
