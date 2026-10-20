@@ -335,21 +335,6 @@ type agentPromptImage struct {
 	MimeType string `json:"mime_type"`
 }
 
-func promptImages(images []agentPromptImage) []agent.ImageContent {
-	var out []agent.ImageContent
-	for _, image := range images {
-		if image.Data == "" {
-			continue
-		}
-		mimeType := image.MimeType
-		if mimeType == "" {
-			mimeType = "image/png"
-		}
-		out = append(out, agent.ImageContent{Type: "image", Data: image.Data, MimeType: mimeType})
-	}
-	return out
-}
-
 func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
 	s := ro.agentSession(w, r)
 	if s == nil {

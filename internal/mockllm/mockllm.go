@@ -196,7 +196,7 @@ func decide(messages []chatMessage) turnPlan {
 			return turnPlan{kind: "text", text: "Thanks — I’ll use that for your plan."}
 		case "get_selection":
 			if currentSource == "" {
-				return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]string{}}
+				return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]any{}}
 			}
 			newBody, what := transform(bodyFromSourceResult(currentSource), lastUserText)
 			return turnPlan{kind: "tool", toolName: "write_artifact", toolArgs: updateArgs(newBody, rogueID, what)}
@@ -204,13 +204,16 @@ func decide(messages []chatMessage) turnPlan {
 			// A host-prepared source read can precede the first request. It
 			// doesn't replace the user's actual state/widget/selection intent.
 			if widgetOnly {
-				return turnPlan{kind: "tool", toolName: "set_widget", toolArgs: map[string]string{"body": cannedWidget}}
+				return turnPlan{kind: "tool", toolName: "set_widget", toolArgs: map[string]any{"body": cannedWidget}}
+			}
+			if plan, ok := questionPlan(lastUserText); ok {
+				return plan
 			}
 			if plan, ok := decideStateCommand(lastUserText); ok {
 				return plan
 			}
 			if selectionRe.MatchString(lastUserText) && !selectionRead {
-				return turnPlan{kind: "tool", toolName: "get_selection", toolArgs: map[string]string{}}
+				return turnPlan{kind: "tool", toolName: "get_selection", toolArgs: map[string]any{}}
 			}
 			newBody, what := transform(bodyFromSourceResult(result), lastUserText)
 			return turnPlan{kind: "tool", toolName: "write_artifact", toolArgs: updateArgs(newBody, rogueID, what)}
@@ -229,19 +232,10 @@ func decide(messages []chatMessage) turnPlan {
 		}
 	}
 
-	// An explicit trigger keeps questionnaire demos and integration tests
-	// deterministic without changing the ordinary artifact-building script.
-	if last.Role == "user" && (strings.Contains(lastUserText, "mock-ask-questions") || strings.Contains(lastUserText, "Help me plan meals for my family.")) {
-		questions := []map[string]any{
-			{"id": "view", "question": "How should your plan look?", "options": []map[string]string{
-				{"label": "Weekly calendar"},
-				{"label": "Simple list"},
-			}},
+	if last.Role == "user" && !widgetOnly {
+		if plan, ok := questionPlan(lastUserText); ok {
+			return plan
 		}
-		if strings.Contains(lastUserText, "mock-ask-questions") {
-			questions = append(questions, map[string]any{"id": "goal", "question": "What should the plan help you with?"})
-		}
-		return turnPlan{kind: "tool", toolName: "ask_user", toolArgs: map[string]any{"questions": questions}}
 	}
 
 	// A widget-only session writes a tile and nothing else, and needs no read:
@@ -267,6 +261,24 @@ func decide(messages []chatMessage) turnPlan {
 		toolName: "create_artifact",
 		toolArgs: map[string]any{"title": titleFrom(lastUserText), "body": cannedTool},
 	}
+}
+
+// Explicit triggers keep question demos and integration tests deterministic,
+// whether source preparation precedes the first model request or not.
+func questionPlan(userText string) (turnPlan, bool) {
+	if !strings.Contains(userText, "mock-ask-questions") && !strings.Contains(userText, "Help me plan meals for my family.") {
+		return turnPlan{}, false
+	}
+	questions := []map[string]any{
+		{"id": "view", "question": "How should your plan look?", "options": []map[string]string{
+			{"label": "Weekly calendar"},
+			{"label": "Simple list"},
+		}},
+	}
+	if strings.Contains(userText, "mock-ask-questions") {
+		questions = append(questions, map[string]any{"id": "goal", "question": "What should the plan help you with?"})
+	}
+	return turnPlan{kind: "tool", toolName: "ask_user", toolArgs: map[string]any{"questions": questions}}, true
 }
 
 var (

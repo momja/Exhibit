@@ -1150,7 +1150,8 @@ func (s *Session) handleLine(line []byte) {
 			switch res.Details["exhibit"] {
 			case "questions_answered":
 				if res.Details["blocked"] == true {
-					s.blockQuestionReply(probe.ToolCallID)
+					requestID, _ := res.Details["requestId"].(string)
+					s.blockQuestionReply(requestID, probe.ToolCallID)
 				}
 			case "artifact_saved":
 				s.noteArtifactSaved(res.Details)

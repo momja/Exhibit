@@ -62,7 +62,7 @@ export function registerQuestions(pi: ExtensionAPI) {
 			}
 			return {
 				content,
-				details: { exhibit: "questions_answered", questions: params.questions, answers, message, cancelled, blocked },
+				details: { exhibit: "questions_answered", requestId: response.requestId, questions: params.questions, answers, message, cancelled, blocked },
 			};
 		},
 	});

@@ -113,27 +113,35 @@ func project(msgs []piMessage) []TranscriptMessage {
 	// A tool's outcome is a message of its own, after the call that asked for
 	// it, so which calls failed is known up front.
 	failed := map[string]bool{}
-	questionResults := map[string]QuestionRequest{}
 	for _, m := range msgs {
 		if m.Role == "toolResult" && m.IsError {
 			failed[m.ToolCallID] = true
 		}
-		if m.Role == "toolResult" && !m.IsError {
+	}
+
+	out := []TranscriptMessage{}
+	// Match each result to the preceding call. Providers can reuse a tool ID
+	// in a later turn; its reply must not replace an earlier question's answer.
+	questionRows := map[string]int{}
+	for _, m := range msgs {
+		switch m.Role {
+		case "toolResult":
+			row, ok := questionRows[m.ToolCallID]
+			if !ok || m.IsError {
+				continue
+			}
+			delete(questionRows, m.ToolCallID)
 			var result struct {
 				Exhibit string `json:"exhibit"`
 				QuestionRequest
 			}
 			if json.Unmarshal(m.Details, &result) == nil && result.Exhibit == "questions_answered" && validQuestions(result.Questions) {
 				if validateQuestionResponse(result.Questions, QuestionResponse{Answers: result.Answers, Message: result.Message, Cancelled: result.Cancelled}) == nil {
-					questionResults[m.ToolCallID] = result.QuestionRequest
+					result.Pending = false
+					result.ID, result.ToolCallID = "", ""
+					out[row].Questions = &result.QuestionRequest
 				}
 			}
-		}
-	}
-
-	out := []TranscriptMessage{}
-	for _, m := range msgs {
-		switch m.Role {
 		case "prepared_source":
 			out = append(out, TranscriptMessage{Role: "tool", Text: "Prepared artifact source"})
 		case "user":
@@ -151,19 +159,16 @@ func project(msgs []piMessage) []TranscriptMessage {
 						out = append(out, TranscriptMessage{Role: "assistant", Text: b.Text})
 					}
 				case "toolCall":
+					delete(questionRows, b.ID)
 					if b.Name == "ask_user" {
-						request, ok := questionResults[b.ID]
-						if !ok {
-							args, _ := json.Marshal(b.Arguments)
-							var prompts struct {
-								Questions []Question `json:"questions"`
-							}
-							_ = json.Unmarshal(args, &prompts)
-							request = QuestionRequest{Questions: prompts.Questions, Cancelled: true}
+						args, _ := json.Marshal(b.Arguments)
+						var prompts struct {
+							Questions []Question `json:"questions"`
 						}
+						_ = json.Unmarshal(args, &prompts)
+						request := QuestionRequest{Questions: prompts.Questions, Cancelled: true}
 						if validQuestions(request.Questions) {
-							request.Pending = false
-							request.ID, request.ToolCallID = "", ""
+							questionRows[b.ID] = len(out)
 							out = append(out, TranscriptMessage{Role: "questions", Questions: &request})
 							continue
 						}

@@ -32,7 +32,7 @@ func (w *questionStdin) Write(p []byte) (int, error) {
 func newQuestionSession(t *testing.T) (*Session, *questionStdin) {
 	t.Helper()
 	input := &questionStdin{}
-	s := &Session{stdin: input, mgr: &Manager{}, subs: map[chan []byte]struct{}{}, streaming: true}
+	s := &Session{stdin: input, mgr: &Manager{}, subs: map[*eventSubscriber]struct{}{}, streaming: true}
 	questions := []Question{
 		{ID: "view", Question: "How would you like to see your plans?", Options: []QuestionOption{{Label: "Weekly"}, {Label: "List"}}},
 		{ID: "goal", Question: "What should this help you do?"},
@@ -59,7 +59,7 @@ func TestQuestionAnswersReachTheWaitingToolOnce(t *testing.T) {
 	assert.Equal(t, "extension_ui_response", response.Type)
 	assert.Equal(t, request.ID, response.ID)
 	assert.False(t, response.Cancelled)
-	encoded, _ := json.Marshal(QuestionResponse{Answers: answers})
+	encoded, _ := json.Marshal(map[string]any{"requestId": request.ID, "answers": answers})
 	assert.JSONEq(t, string(encoded), response.Value)
 	assert.ErrorIs(t, s.AnswerQuestions(request.ID, QuestionResponse{Answers: answers}), ErrQuestionExpired)
 	assert.Equal(t, 1, bytes.Count(input.Bytes(), []byte("\n")))
@@ -92,7 +92,7 @@ func TestQuestionMessageCanRedirectTheWholeBatch(t *testing.T) {
 	assert.Equal(t, message, request.Message)
 	var response struct{ Value string }
 	require.NoError(t, json.Unmarshal(input.Bytes(), &response))
-	assert.JSONEq(t, `{"message":"Actually, make a shopping list instead."}`, response.Value)
+	assert.JSONEq(t, `{"message":"Actually, make a shopping list instead.","requestId":"request-1"}`, response.Value)
 	assert.ErrorIs(t, s.AnswerQuestions("request-1", QuestionResponse{Message: message}), ErrQuestionExpired)
 }
 
@@ -155,7 +155,7 @@ func TestQuestionReplyPreservesAttachmentsAndSelectionFile(t *testing.T) {
 func TestRefusedQuestionReplyIsRemovedFromTheLiveSummary(t *testing.T) {
 	s, _ := newQuestionSession(t)
 	require.NoError(t, s.AnswerQuestions("request-1", QuestionResponse{Message: "refused text"}))
-	s.handleLine([]byte(`{"type":"tool_execution_end","toolCallId":"tool-1","toolName":"ask_user","result":{"details":{"exhibit":"questions_answered","blocked":true}}}`))
+	s.handleLine([]byte(`{"type":"tool_execution_end","toolCallId":"tool-1","toolName":"ask_user","result":{"details":{"exhibit":"questions_answered","requestId":"request-1","blocked":true}}}`))
 	request, _ := s.Questions("request-1")
 	assert.True(t, request.Blocked)
 	assert.True(t, request.Cancelled)

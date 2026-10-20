@@ -161,12 +161,61 @@ func TestGuardrailScreensQuestionRepliesBeforeTheAgentReceivesThem(t *testing.T)
 	}
 }
 
+func TestRefusedReplyDoesNotReplaceAnEarlierQuestionAnswer(t *testing.T) {
+	h := newPiHarnessWith(t, false, mockGuardrail)
+	session, artifact, firstID, events, unsubscribe := askMockQuestions(t, h)
+	defer unsubscribe()
+	path := "/api/agent/sessions/" + session + "/questions/"
+	w := doJSON(t, h.router, http.MethodPost, path+firstID, map[string]string{"message": "A weekly calendar for family meals"})
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	awaitEvent(t, events, func(line string) bool { return strings.Contains(line, `"agent_settled"`) }, "the first question reply to settle")
+	w = doJSON(t, h.router, http.MethodPost, "/api/agent/sessions/"+session+"/prompt", map[string]string{"message": "mock-ask-questions"})
+	require.Equal(t, http.StatusAccepted, w.Code, w.Body.String())
+	seen := awaitEvent(t, events, func(line string) bool {
+		return strings.Contains(line, `"exhibit_questions"`) && strings.Contains(line, `"pending":true`)
+	}, "the second question request")
+	var next struct {
+		RequestID string `json:"requestId"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(seen[len(seen)-1]), &next))
+	require.NotEqual(t, firstID, next.RequestID)
+	// The deterministic provider reuses call_mock_1 in both turns. Matching a
+	// refusal or saved result by tool ID alone would overwrite the first reply.
+	w = doJSON(t, h.router, http.MethodPost, path+next.RequestID, map[string]string{"message": "mock-policy-violation"})
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	awaitEvent(t, events, func(line string) bool { return strings.Contains(line, `"agent_settled"`) }, "the second reply to be refused")
+	w = doJSON(t, h.router, http.MethodGet, path+firstID, nil)
+	assert.Contains(t, w.Body.String(), "A weekly calendar for family meals")
+	assert.NotContains(t, w.Body.String(), "Reply not sent.")
+	w = doJSON(t, h.router, http.MethodGet, path+next.RequestID, nil)
+	assert.Contains(t, w.Body.String(), "Reply not sent.")
+	var answers []*agent.QuestionRequest
+	for _, message := range agent.Messages(keptConversation(t, h.router, artifact, session, 2)) {
+		if message.Questions != nil {
+			answers = append(answers, message.Questions)
+		}
+	}
+	require.Len(t, answers, 2)
+	assert.Equal(t, "A weekly calendar for family meals", answers[0].Message)
+	assert.False(t, answers[0].Blocked)
+	assert.True(t, answers[1].Blocked)
+	assert.Empty(t, answers[1].Message)
+}
+
 func TestQuestionChatAttachmentsReachTheAgentAsData(t *testing.T) {
 	h := newPiHarnessWith(t, false, mockGuardrail)
 	session, _, requestID, events, unsubscribe := askMockQuestions(t, h)
 	defer unsubscribe()
 	path := "/api/agent/sessions/" + session + "/questions/" + requestID
 	image := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jX1sAAAAASUVORK5CYII="
+	for _, invalid := range [][]agentPromptImage{
+		{{Data: "not base64!", MimeType: "image/png"}},
+		{{Data: image, MimeType: "image/svg+xml"}},
+		make([]agentPromptImage, maxAgentImages+1),
+	} {
+		w := doJSON(t, h.router, http.MethodPost, path, map[string]any{"message": "Make this larger", "images": invalid})
+		require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	}
 	w := doJSON(t, h.router, http.MethodPost, path, map[string]any{
 		"message":  "Make the selected button larger",
 		"snippets": []string{"<button>mock-policy-violation artifact content</button>"},

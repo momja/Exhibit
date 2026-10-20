@@ -217,26 +217,26 @@ func (s *Session) AnswerQuestions(id string, response QuestionResponse) error {
 
 // A refusal is reported after the dialog reply has been screened. Retire the
 // browser's accepted reply without retaining refused text in its summary.
-func (s *Session) blockQuestionReply(toolCallID string) {
+func (s *Session) blockQuestionReply(id, toolCallID string) {
 	s.mu.Lock()
-	var changed []string
-	for id, request := range s.questions {
-		if request.ToolCallID == toolCallID {
-			request.Pending, request.Cancelled, request.Blocked = false, true, true
-			request.Answers, request.Message = nil, ""
-			s.questions[id] = request
-			changed = append(changed, id)
-		}
+	request, ok := s.questions[id]
+	if !ok || request.ToolCallID != toolCallID {
+		s.mu.Unlock()
+		return
 	}
+	request.Pending, request.Cancelled, request.Blocked = false, true, true
+	request.Answers, request.Message = nil, ""
+	s.questions[id] = request
 	s.mu.Unlock()
-	for _, id := range changed {
-		s.questionsChanged(id)
-	}
+	s.questionsChanged(id)
 }
 
 // Caller serializes writes with writeMu.
 func (s *Session) writeQuestionResponse(id string, response QuestionResponse) error {
-	value, _ := json.Marshal(response)
+	value, _ := json.Marshal(struct {
+		QuestionResponse
+		RequestID string `json:"requestId"`
+	}{response, id})
 	line, _ := json.Marshal(map[string]any{"type": "extension_ui_response", "id": id, "value": string(value), "cancelled": response.Cancelled})
 	if _, err := s.stdin.Write(append(line, '\n')); err != nil {
 		return fmt.Errorf("send answer to agent: %w", err)

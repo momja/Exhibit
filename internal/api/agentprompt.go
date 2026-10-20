@@ -25,12 +25,18 @@ func (req agentPromptRequest) validate() ([]agent.ImageContent, error) {
 	if strings.TrimSpace(req.Message) == "" {
 		return nil, fmt.Errorf("message is required")
 	}
-	if len(req.Images) > maxAgentImages {
+	return promptImages(req.Images)
+}
+
+// Prompt and question replies share attachment validation before either path
+// writes a selection file or delivers user input to the waiting sidecar.
+func promptImages(input []agentPromptImage) ([]agent.ImageContent, error) {
+	if len(input) > maxAgentImages {
 		return nil, fmt.Errorf("at most %d images may be attached", maxAgentImages)
 	}
-	images := make([]agent.ImageContent, 0, len(req.Images))
+	images := make([]agent.ImageContent, 0, len(input))
 	total := 0
-	for i, im := range req.Images {
+	for i, im := range input {
 		mime := im.MimeType
 		if mime == "" {
 			mime = "image/png"

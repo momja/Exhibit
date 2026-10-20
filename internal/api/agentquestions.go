@@ -48,7 +48,12 @@ func (ro *Router) agentAnswerQuestions(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	req.QuestionResponse.Images = promptImages(req.Images)
+	images, err := promptImages(req.Images)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	req.QuestionResponse.Images = images
 	if err := s.AnswerQuestions(chi.URLParam(r, "requestID"), req.QuestionResponse); err != nil {
 		switch {
 		case errors.Is(err, agent.ErrQuestionExpired):

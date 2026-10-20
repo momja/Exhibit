@@ -214,6 +214,9 @@ behavior. Refused text is excluded from the agent's tool result and saved
 question answers. Attached screenshots and selected elements travel separately
 as artifact data; they are not treated as instructions or screened as the
 person's words. Attachments remain in the composer if sending fails.
+Images use the same count, MIME-type and decoded-size checks as direct prompts.
+A later refusal affects only its own question; earlier answers remain intact
+in both the live chat and saved history.
 
 Question loads are tied to the active session. Closing or replacing it aborts
 outstanding fetches, ignores late failures, and prevents delayed swaps from
