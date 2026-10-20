@@ -153,7 +153,7 @@ var accountTables = map[string]accountTable{
 	"agent_conversations": {reachNone,
 		"conversation identity/generation and checkpoint digest only; attribution and fencing survive account deletion like the usage ledger, with no transcript content", ""},
 	"agent_executions": {reachNone,
-		"historical execution attribution for late usage and deduplication; deleted artifacts lose write authority and reconciliation releases capacity", ""},
+		"historical execution attribution for late usage and deduplication; DeleteAccount atomically interrupts live attempts before erasing owner rows", ""},
 	"agent_supervisor_credentials": {reachNone,
 		"expiring secret hashes and funding attribution only; permit bounded late accounting after deletion, never artifact access", ""},
 	"agent_usage_receipts": {reachNone,
