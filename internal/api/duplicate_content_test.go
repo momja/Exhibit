@@ -116,7 +116,7 @@ func TestDuplicateArtifactPreservesReferencedHistoricalAssetsAfterRefetch(t *tes
 
 	require.Equal(t, http.StatusNoContent, deleteArtifactReq(t, ro, id).Code)
 	for oldID, newID := range ids {
-		asset, err := ro.cfg.Store.GetArtifactAssetUnscoped(ctx, a.ID, newID)
+		asset, err := ro.cfg.Store.GetArtifactAsset(ctx, 1, a.ID, newID)
 		require.NoError(t, err)
 		require.NotNil(t, asset, "the copied render URL still resolves after deleting its source")
 		stored, err := ro.readBlobString(ctx, asset.BlobID)
