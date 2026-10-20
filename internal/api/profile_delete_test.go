@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -509,4 +510,30 @@ func TestDeleteAccountSignsTheBrowserOut(t *testing.T) {
 	// And the cookie really is spent: the same request again is unauthenticated.
 	again := in.do(t, http.MethodGet, "/api/artifacts", nil)
 	assert.Equal(t, http.StatusUnauthorized, again.Code)
+}
+
+func TestWorkerCleanupFailureStillClearsCookieAndLocalAccountBlobs(t *testing.T) {
+	in := newDeleteInstance(t)
+	id := in.seedLibrary(t)
+	artifact, err := in.st.GetArtifact(context.Background(), in.member.ID, id)
+	require.NoError(t, err)
+	in.ro.cfg.DeleteAgentOwner = func(ctx context.Context, owner int64) error {
+		require.Equal(t, in.member.ID, owner)
+		_, err := in.st.GetUser(ctx, owner)
+		require.ErrorIs(t, err, store.ErrNotFound, "worker erasure follows durable deletion")
+		return errors.New("management unavailable")
+	}
+	response := in.deleteAccount(t)
+	require.Equal(t, 500, response.Code)
+	for _, blob := range []string{artifact.SourceBlobID, artifact.WidgetBlobID} {
+		_, err := os.Stat(filepath.Join(in.blobDir, blob))
+		require.True(t, os.IsNotExist(err))
+	}
+	var cleared bool
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == sessionCookieName && cookie.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	require.True(t, cleared, "failed remote cleanup must not skip clearing the login cookie")
 }

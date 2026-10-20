@@ -290,8 +290,8 @@ Observed validation in this checkout:
 - `go test -race ./internal/sprites` and `go vet ./internal/sprites` pass.
 
 No `SPRITE_TOKEN`, `SPRITES_TOKEN`, `FLY_API_TOKEN`, or `FLY_ACCESS_TOKEN` is present
-in the implementation environment. No paid Sprite was launched. A real release
-archive, live service bootstrap, two concurrent conversations, forced loss,
+in the implementation environment. No paid Sprite was launched. Live installation of the verified runtime
+archive, service bootstrap, two concurrent Sprites, forced platform loss,
 actual org quota/rate behavior, warm/cold timings, idle compute suspension,
 retained-storage usage/billing, and a production rollback remain unvalidated.
 Core integration now wires holds, shared durable authority, encrypted request

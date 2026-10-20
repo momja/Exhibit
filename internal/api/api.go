@@ -372,7 +372,11 @@ func (ro *Router) setupRoutes() {
 	ro.Use(compressor())
 	// Supervisor snapshots have their own authentication and 64 MiB bound.
 	// Dispatch before the browser login gate and general request body limiter.
-	worker := NewAgentWorkerHandler(ro.cfg.AgentControl)
+	var usageObserver func(context.Context)
+	if ro.cfg.Agent != nil {
+		usageObserver = ro.cfg.Agent.EnforceInstanceCap
+	}
+	worker := NewAgentWorkerHandler(ro.cfg.AgentControl, usageObserver)
 	ro.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == AgentWorkerAuthorityPath || strings.HasPrefix(r.URL.Path, AgentWorkerAuthorityPath+"/") {

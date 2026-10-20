@@ -20,12 +20,15 @@ import (
 // A request is durable before the first management call; uncertain retries and
 // restart cleanup therefore use the original identity and endpoint credential.
 type workerRecord struct {
-	OwnerID    int64
-	Prefix     string
-	EraseOwner bool
-	Assignment agentcontrol.Assignment
-	Request    sprites.Request
-	IdleSince  time.Time
+	OwnerID     int64
+	Mode        string
+	StaticURL   string
+	StaticToken string
+	Prefix      string
+	EraseOwner  bool
+	Assignment  agentcontrol.Assignment
+	Request     sprites.Request
+	IdleSince   time.Time
 }
 
 type workerJournal struct {

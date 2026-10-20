@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -173,7 +175,7 @@ func workerTestFixture(t *testing.T, limit int, configure ...func(*agent.Config)
 	t.Cleanup(core.Close)
 	runner, err := c.runner("/missing-core-pi", "/missing-core-scratch")
 	require.NoError(t, err)
-	managerConfig := agent.Config{Runner: runner, ReserveExecution: c.reserve, Credentials: registry, APIBaseURL: core.URL, MockLLMURL: provider.URL}
+	managerConfig := agent.Config{Runner: runner, ReserveExecution: c.reserve, MaxSessions: config.MaxWorkers, Credentials: registry, APIBaseURL: core.URL, MockLLMURL: provider.URL}
 	for _, apply := range configure {
 		apply(&managerConfig)
 	}
@@ -254,6 +256,8 @@ func TestWorkerCoordinatorRealHTTPConcurrentOwnersResumeAndCentralAdmission(t *t
 	require.Equal(t, 2, fleet.provisioned)
 	fleet.mu.Unlock()
 	_, err := manager.Create(context.Background(), agent.CreateOpts{OwnerID: 3, Provider: "exhibit-mock", APIKey: "third"})
+	require.True(t, errors.Is(err, agent.ErrInstanceSessionLimit) || errors.Is(err, agentcontrol.ErrFleetLimit), err)
+	_, err = c.reserve(context.Background(), agentexec.Identity{OwnerID: 3, SessionID: "overflow", ExecutionID: "overflow-attempt"}, nil)
 	require.ErrorIs(t, err, agentcontrol.ErrFleetLimit)
 	for i, session := range sessions {
 		group.Add(1)
@@ -313,6 +317,14 @@ func TestWorkerCoordinatorRealHTTPConcurrentOwnersResumeAndCentralAdmission(t *t
 	}
 	require.NoError(t, fleet.coldRestart(ctx, firstRecord.Request))
 	send(sessions[0], "make it green after cold wake", "exhibit_artifact_saved")
+	require.Eventually(t, func() bool {
+		record := c.journal.snapshot()[firstRecord.Assignment.ExecutionID]
+		return !record.IdleSince.IsZero()
+	}, 3*time.Second, 10*time.Millisecond)
+	// Destroy the complete Sprite after confirmed settlement. A new explicit
+	// prompt provisions the immutable request and restores central history.
+	require.NoError(t, fleet.Destroy(ctx, firstRecord.Request.Identity))
+	send(sessions[0], "make it orange after complete replacement", "exhibit_artifact_saved")
 	// The mock model's price table is intentionally zero. A trusted priced
 	// receipt proves nonzero lifetime spend survives replacement, and retries
 	// cannot double count it; real model tokens still prove new work occurred.
@@ -482,4 +494,190 @@ func TestBlockedManagementCleanupDoesNotBlockWorkerActivation(t *testing.T) {
 	require.NoError(t, <-finished)
 	c.backend = fleet
 	require.NoError(t, c.release(ctx, id, agentcontrol.Failed))
+}
+
+func TestCoreRestartFencesOldGrantAndCleansJournaledSprite(t *testing.T) {
+	c, _, fleet, st := workerTestFixture(t, 2)
+	ctx := context.Background()
+	reservation, err := c.reserve(ctx, agentexec.Identity{OwnerID: 7, SessionID: "restart-conversation", ExecutionID: "restart-attempt"}, nil)
+	require.NoError(t, err)
+	_, err = c.acquire(ctx, agentexec.Identity{OwnerID: 7, SessionID: "restart-conversation", ExecutionID: "restart-attempt"})
+	require.NoError(t, err)
+	require.NotNil(t, c.registry.Resolve(reservation.Grant.Token()))
+	// Simulate the replacement core before any runtime reattachment. It shares
+	// only durable storage/key material; live worker/grant maps start empty.
+	box, err := secrets.Load("test-core-secrets", "")
+	require.NoError(t, err)
+	config := c.config
+	config.Mode = "remote"
+	replacement, err := newWorkerCoordinator(ctx, config, filepath.Dir(filepath.Dir(c.journal.path)), box, st, agentscope.NewRegistry(), false)
+	require.NoError(t, err)
+	require.Nil(t, c.registry.Resolve(reservation.Grant.Token()), "prior worker must lose effective write authority on core restart")
+	record := replacement.journal.snapshot()["restart-attempt"]
+	require.Equal(t, int64(7), record.Assignment.OwnerID)
+	require.Equal(t, agentcontrol.Interrupted, record.Assignment.Status)
+	require.NotEmpty(t, record.Request.EndpointToken)
+	replacement.backend = fleet
+	require.NoError(t, replacement.reconcile(ctx))
+	require.Empty(t, replacement.journal.snapshot(), "remove provisioning credentials only after confirmed resource cleanup")
+	_, err = fleet.Query(ctx, record.Request.Identity)
+	require.ErrorIs(t, err, sprites.ErrNotFound)
+	// Retire the simulated old core's ephemeral maps so its test cleanup does
+	// not overwrite the replacement's durable journal.
+	c.retire("restart-attempt")
+	require.NoError(t, c.journal.update("restart-attempt", nil))
+}
+
+type unavailableCleanupFleet struct {
+	sprites.Backend
+	unavailable bool
+}
+
+func (f *unavailableCleanupFleet) Reconcile(ctx context.Context, a []sprites.Assignment, b sprites.BeforeDestroy) (sprites.ReconcileResult, error) {
+	if f.unavailable {
+		return sprites.ReconcileResult{}, errors.New("management unavailable")
+	}
+	return f.Backend.Reconcile(ctx, a, b)
+}
+func (f *unavailableCleanupFleet) Destroy(ctx context.Context, id sprites.Identity) error {
+	if f.unavailable {
+		return errors.New("management unavailable")
+	}
+	return f.Backend.Destroy(ctx, id)
+}
+
+func TestFailedRestartCleanupPreservesFreshSessionForExistingOwner(t *testing.T) {
+	old, _, fleet, st := workerTestFixture(t, 4)
+	ctx := context.Background()
+	_, err := st.UpsertUser(ctx, "existing-owner", "owner@example.test")
+	require.NoError(t, err)
+	_, err = old.reserve(ctx, agentexec.Identity{OwnerID: 1, SessionID: "old", ExecutionID: "old-attempt"}, nil)
+	require.NoError(t, err)
+	_, err = old.acquire(ctx, agentexec.Identity{OwnerID: 1, SessionID: "old", ExecutionID: "old-attempt"})
+	require.NoError(t, err)
+	box, err := secrets.Load("test-core-secrets", "")
+	require.NoError(t, err)
+	registry := agentscope.NewRegistry()
+	config := old.config
+	config.Mode = "remote"
+	replacement, err := newWorkerCoordinator(ctx, config, filepath.Dir(filepath.Dir(old.journal.path)), box, st, registry, false)
+	require.NoError(t, err)
+	unavailable := &unavailableCleanupFleet{Backend: fleet, unavailable: true}
+	replacement.backend = unavailable
+	replacement.config.Mode = "sprites"
+	fleet.journal = replacement.journal
+	require.Error(t, replacement.reconcile(ctx))
+	require.False(t, replacement.journal.snapshot()["old-attempt"].EraseOwner, "restart cleanup is not account erasure")
+	runner, err := replacement.runner("/missing-core-pi", "/missing-core-scratch")
+	require.NoError(t, err)
+	manager, err := agent.New(agent.Config{Runner: runner, ReserveExecution: replacement.reserve, Credentials: registry, MockLLMURL: "http://unused.test", APIBaseURL: "http://unused.test"}, st)
+	require.NoError(t, err)
+	replacement.manager = manager
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = manager.Shutdown(ctx)
+		unavailable.unavailable = false
+		_ = replacement.reconcile(ctx)
+		old.retire("old-attempt")
+		_ = old.journal.update("old-attempt", nil)
+	})
+	fresh, err := manager.Create(ctx, agent.CreateOpts{OwnerID: 1, Provider: "exhibit-mock", APIKey: "assigned-fresh-key"})
+	require.NoError(t, err)
+	unavailable.unavailable = false
+	require.NoError(t, replacement.reconcile(ctx))
+	require.NotNil(t, manager.Get(1, fresh.ID), "old-attempt cleanup must preserve this owner's fresh execution")
+	_, err = st.GetUser(ctx, 1)
+	require.NoError(t, err)
+}
+
+func TestCoreRestartReclaimsStaticDaemonAssignmentCapacity(t *testing.T) {
+	pi, err := exec.LookPath("pi")
+	if err != nil {
+		t.Skip("pinned Pi unavailable")
+	}
+	ctx := context.Background()
+	daemon, err := agentexec.NewService(agentexec.ServiceConfig{Token: strings.Repeat("static-worker-token-", 3), LocalAssignments: true, MaxAssignments: 1, Runner: agentexec.Local{PiBin: pi, WorkRoot: t.TempDir()}})
+	require.NoError(t, err)
+	server := httptest.NewServer(daemon)
+	t.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		_ = daemon.Shutdown(cleanup)
+		server.Close()
+	})
+	directory := t.TempDir()
+	st, err := store.OpenSQLite(directory + "/app.db")
+	require.NoError(t, err)
+	defer st.Close()
+	box, err := secrets.Load("static-core-secret", "")
+	require.NoError(t, err)
+	config := agentExecutionConfig{Mode: "remote", WorkerURL: server.URL, WorkerToken: strings.Repeat("static-worker-token-", 3), MaxWorkers: 2, StartupTimeout: 10 * time.Second, IdleRetention: time.Minute}
+	old, err := newWorkerCoordinator(ctx, config, directory, box, st, agentscope.NewRegistry(), false)
+	require.NoError(t, err)
+	start := func(c *workerCoordinator, id string) agentexec.Process {
+		identity := agentexec.Identity{OwnerID: 1, SessionID: id, ExecutionID: id}
+		reservation, err := c.reserve(ctx, identity, nil)
+		require.NoError(t, err)
+		runner, err := c.runner("/missing-core-pi", "/missing-core-scratch")
+		require.NoError(t, err)
+		process, err := runner.Start(ctx, agentexec.StartConfig{Identity: identity, Provider: "anthropic", APIKey: "assigned-test-key", APIBaseURL: "http://unused.test", ToolToken: reservation.Grant.Token(), SystemPrompt: "no built-in tools", ExpiresAt: reservation.ExpiresAt})
+		require.NoError(t, err)
+		go func() { _, _ = io.Copy(io.Discard, process.Stdout()) }()
+		return process
+	}
+	first := start(old, "old-static-attempt")
+	replacement, err := newWorkerCoordinator(ctx, config, directory, box, st, agentscope.NewRegistry(), false)
+	require.NoError(t, err)
+	require.Empty(t, replacement.journal.snapshot(), "confirmed static close/release removes restart cleanup intent")
+	// The daemon has capacity ONE. Starting another assignment proves that the
+	// fenced previous core's worker memory/scratch/capacity was reclaimed.
+	second := start(replacement, "new-static-attempt")
+	require.NoError(t, second.Close())
+	require.NoError(t, replacement.release(ctx, replacement.journal.snapshot()["new-static-attempt"].Assignment.Identity, agentcontrol.Closed))
+	require.NoError(t, second.Cleanup())
+	_ = first.ErasureCleanup().Cleanup()
+	require.NoError(t, replacement.reconcile(ctx))
+}
+
+func TestLateUsageHTTPStopsOtherActivePlatformWorker(t *testing.T) {
+	limit := int64(1_000_000)
+	c, manager, _, st := workerTestFixture(t, 3, func(cfg *agent.Config) { cfg.Caps = agent.SpendCaps{InstanceMicrosPerMonth: &limit} })
+	c.paidBy = "platform"
+	ctx := context.Background()
+	session, err := manager.Create(ctx, agent.CreateOpts{OwnerID: 1, Provider: "exhibit-mock", APIKey: "assigned-key", PlatformPaid: true})
+	require.NoError(t, err)
+	events, unsubscribe := session.Subscribe()
+	defer unsubscribe()
+	require.NoError(t, session.Prompt(ctx, "mock-ask-questions", nil, nil))
+	require.Eventually(t, func() bool {
+		select {
+		case event := <-events:
+			return strings.Contains(string(event), `"type":"exhibit_questions"`)
+		default:
+			return false
+		}
+	}, 10*time.Second, 10*time.Millisecond)
+	old, err := c.control.Reserve(ctx, agentcontrol.Reservation{OwnerID: 9, ConversationID: "terminated-conversation", ExecutionID: "terminated-attempt", WorkerID: "old-worker"})
+	require.NoError(t, err)
+	token, err := c.control.IssueSupervisor(ctx, old.Identity, "platform")
+	require.NoError(t, err)
+	require.NoError(t, c.control.Release(ctx, old.Identity, agentcontrol.Interrupted))
+	// Router attaches the observer to the shared manager. An unrelated closed
+	// attempt's receipt must stop this current worker without waiting for more
+	// model events from it.
+	router := api.NewRouter(api.Config{Store: st, Agent: manager, AgentControl: c.control})
+	request := httptest.NewRequest("POST", api.AgentWorkerAuthorityPath+"/usage", strings.NewReader(`{"event_id":"late-paid-receipt","source":"model","cost_micros":1000000}`))
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	require.Equal(t, 200, response.Code, response.Body.String())
+	require.Eventually(t, func() bool {
+		select {
+		case event := <-events:
+			return strings.Contains(string(event), `"type":"exhibit_spend_cap"`) && strings.Contains(string(event), `"cap":"instance"`)
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
 }

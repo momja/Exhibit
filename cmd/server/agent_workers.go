@@ -137,16 +137,13 @@ func newWorkerCoordinator(ctx context.Context, config agentExecutionConfig, data
 	// in the encrypted journal for management-only retries after startup.
 	for id, record := range journal.snapshot() {
 		record.Assignment.Status = agentcontrol.Interrupted
-		record.EraseOwner = true
 		record.IdleSince = time.Now().Add(-config.IdleRetention)
 		if err := journal.update(id, &record); err != nil {
 			return nil, err
 		}
 	}
-	if c.backend != nil {
-		if err := c.reconcile(ctx); err != nil {
-			slog.Warn("worker restart cleanup pending")
-		}
+	if err := c.reconcile(ctx); err != nil {
+		slog.Warn("worker restart cleanup pending")
 	}
 	return c, nil
 }
@@ -234,7 +231,10 @@ func (c *workerCoordinator) reserve(ctx context.Context, id agentexec.Identity, 
 			return nil, err
 		}
 	}
-	record := workerRecord{OwnerID: id.OwnerID, Prefix: c.config.SpritePrefix, Assignment: assignment, Request: request}
+	record := workerRecord{OwnerID: id.OwnerID, Mode: c.config.Mode, Prefix: c.config.SpritePrefix, Assignment: assignment, Request: request}
+	if c.config.Mode == "remote" {
+		record.StaticURL, record.StaticToken = c.config.WorkerURL, c.config.WorkerToken
+	}
 	if err := c.journal.update(id.ExecutionID, &record); err != nil {
 		return nil, err
 	}
@@ -308,6 +308,9 @@ func (c *workerCoordinator) acquire(ctx context.Context, id agentexec.Identity) 
 			remote, err = c.backend.Provision(ctx, record.Request)
 		} else {
 			remote, err = c.backend.Wake(ctx, record.Request)
+			if errors.Is(err, sprites.ErrNotFound) {
+				remote, err = c.backend.Provision(ctx, record.Request)
+			}
 		}
 		if err != nil {
 			return endpoint, err
@@ -517,6 +520,20 @@ func (c *workerCoordinator) reconcile(ctx context.Context) error {
 		if live && !record.IdleSince.IsZero() && c.config.IdleRetention > 0 && time.Since(record.IdleSince) >= c.config.IdleRetention && c.manager != nil {
 			go c.manager.Close(record.OwnerID, record.Assignment.ConversationID)
 		}
+		if !live && (record.Mode == "remote" || record.StaticURL != "") {
+			unlock, lockErr := c.lockExecution(ctx, execution)
+			if lockErr != nil {
+				failures = append(failures, lockErr)
+				continue
+			}
+			if cleanupErr := c.cleanupStatic(ctx, record); cleanupErr != nil {
+				failures = append(failures, cleanupErr)
+			} else if err := c.journal.update(execution, nil); err != nil {
+				failures = append(failures, err)
+			}
+			unlock()
+			continue
+		}
 		if c.backend == nil {
 			if !live && record.Request.EndpointToken == "" && !record.EraseOwner {
 				if err := c.journal.update(execution, nil); err != nil {
@@ -610,7 +627,13 @@ func (c *workerCoordinator) deleteOwner(ctx context.Context, owner int64) error 
 			unlock()
 			continue
 		}
-		if c.backend == nil {
+		if record.Mode == "remote" || record.StaticURL != "" {
+			if err := c.cleanupStatic(ctx, record); err != nil {
+				failures = append(failures, err)
+				unlock()
+				continue
+			}
+		} else if c.backend == nil {
 			if eraseErr != nil {
 				unlock()
 				continue

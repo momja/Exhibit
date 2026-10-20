@@ -273,6 +273,10 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 		// a second process on the same conversation would be two writers of one
 		// record. The next tab to ask gets the one that exists.
 		if live := ro.cfg.Agent.Get(opts.OwnerID, req.ResumeSessionID); live != nil {
+			if live.ArtifactID() != req.ArtifactID {
+				writeError(w, http.StatusNotFound, "conversation not found")
+				return
+			}
 			ticket, err := ro.sseTickets.Issue(live.ID, opts.OwnerID)
 			if err != nil {
 				serverError(w, r, "issue sse ticket", err)

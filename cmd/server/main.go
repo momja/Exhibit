@@ -224,7 +224,7 @@ func main() {
 		} else if runnerErr != nil {
 			fatal("configure agent runner", runnerErr)
 		} else {
-			agentMgr, err = agent.New(agent.Config{Runner: runner, ReserveExecution: workers.reserve,
+			agentMgr, err = agent.New(agent.Config{Runner: runner, ReserveExecution: workers.reserve, MaxSessions: executionConfig.MaxWorkers,
 				APIBaseURL: appOrigin, Credentials: agentCreds, MockLLMURL: mockLLMURL,
 				HideModelIdentity: platformAgentKey != nil, Guardrail: guardrail, Caps: spendCaps,
 				IdleTimeout: executionConfig.IdleRetention, MaxRequestBodyBytes: maxBodyBytes}, st)

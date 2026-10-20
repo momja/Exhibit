@@ -199,3 +199,20 @@ func TestWorkerCheckpointUsesCommittedSourceAndWidgetVersions(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5, snapshot.VersionSeq)
 }
+
+func TestLiveContinuationMustMatchRequestedArtifact(t *testing.T) {
+	harness := newPiHarness(t)
+	ro := harness.router
+	first := createArtifact(t, ro, map[string]any{"title": "first", "body": "<p>first</p>"})
+	second := createArtifact(t, ro, map[string]any{"title": "second", "body": "<p>second</p>"})
+	session := conversation(t, harness, first, "make it blue")
+	ro.cfg.AgentControl = agentcontrol.New(ro.cfg.Store.(agentcontrol.Repository), ro.cfg.AgentCredentials, agentcontrol.Config{})
+	wrong := doJSON(t, ro, "POST", "/api/agent/sessions", map[string]string{"artifact_id": second, "resume_session_id": session})
+	require.Equal(t, 404, wrong.Code, wrong.Body.String())
+	correct := doJSON(t, ro, "POST", "/api/agent/sessions", map[string]string{"artifact_id": first, "resume_session_id": session})
+	require.Equal(t, 200, correct.Code, correct.Body.String())
+	var response map[string]any
+	require.NoError(t, json.Unmarshal(correct.Body.Bytes(), &response))
+	require.Equal(t, session, response["id"])
+	closeAndWait(t, ro, session)
+}

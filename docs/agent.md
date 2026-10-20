@@ -549,7 +549,7 @@ behaving as it does in the pinned version.
   Invalid prompts return 400 with an explanation. The service-wide request
   body limit still applies independently.
 - An owner holds at most **10 agent processes**, and the instance at most
-  **32**, including processes starting or stopping. Capacity is reserved
+  **AGENT_MAX_WORKERS** (default 32), including startup and retained failed drains. Capacity is reserved
   atomically before startup and returned after the process is reaped; failed
   startup also returns its reservation. At capacity the caller's oldest idle
   process is evicted and reaped before its slot is reused. Busy processes and

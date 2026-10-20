@@ -666,15 +666,20 @@ configuration fails startup; remote failure never spawns Pi locally.
 Build core with `docker build --target core …`; the default image retains local
 Pi for existing self-hosters. Build/install the standalone runtime as described
 in [`cmd/exhibit-agent/README.md`](../cmd/exhibit-agent/README.md). A static remote
-service must use `--local-assignments`; Sprites use fixed identities and their own
+service must use `--local-assignments` and has a separate maximum of 32 assignments;
+Sprites use fixed identities and their own
 transport/token. Provider keys and supervisor configuration travel in authenticated
 request bodies, never browser bootstrap, URLs or command arguments.
 
 Keep `DATA_DIR/agent-workers` with the core volume and the same `EXHIBIT_SECRET`.
 It contains a domain-separated, encrypted request journal, with private directory
 and file permissions and fsync/rename replacement. Requests are durable before
-provisioning. Core startup fences old assignments; unconfirmed infrastructure
-cleanup remains journaled for retry. Account deletion also fences/removes workers.
+provisioning. Core startup fences old assignments and reclaims their individual workers;
+unconfirmed cleanup remains journaled for retry. Static endpoint identity and
+credentials are encrypted with each assignment so prior daemon capacity can be
+reclaimed after restart/config rotation. Ordinary restart cleanup preserves the
+account and any newly admitted conversation. Account deletion separately erases
+worker data and completes local cookie/blob cleanup even if remote cleanup fails.
 Do not copy this directory into a worker. A deployment remains one SQLite-writing
 core; adding workers scales execution, not database availability.
 
