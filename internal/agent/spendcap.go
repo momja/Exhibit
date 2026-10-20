@@ -294,9 +294,33 @@ func (s *Session) checkInstanceCap() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if refusal := s.mgr.probeInstanceCap(ctx); refusal != nil {
-			s.stopRunForCap(refusal)
+			s.mgr.stopRunsForInstanceCap(refusal, s)
 		}
 	}()
+}
+
+// stopRunsForInstanceCap applies one probe's refusal across this manager,
+// regardless of owner. Snapshot first: stopping takes session locks and sends
+// abort RPCs, neither of which may hold the manager's registry lock. Do not
+// probe again while fanning out, including for an unresolved check.
+func (m *Manager) stopRunsForInstanceCap(refusal *CapRefusal, reporting *Session) {
+	m.mu.Lock()
+	// Include the reporting session once even if it has left the registry
+	// while draining final usage. stopRunForCap checks whether it is active.
+	sessions := make([]*Session, 0, len(m.sessions)+1)
+	sessions = append(sessions, reporting)
+	for _, s := range m.sessions {
+		if s != reporting {
+			sessions = append(sessions, s)
+		}
+	}
+	m.mu.Unlock()
+
+	for _, s := range sessions {
+		if s.paidBy == store.PaidByPlatform {
+			s.stopRunForCap(refusal)
+		}
+	}
 }
 
 // probeInstanceCap answers only the instance layer — the backstop's own
@@ -332,15 +356,15 @@ func (m *Manager) probeInstanceCap(ctx context.Context) *CapRefusal {
 // way silently continuing is not.
 func (s *Session) stopRunForCap(refusal *CapRefusal) {
 	s.mu.Lock()
-	running := s.streaming
+	running := s.streaming && !s.closed && !s.stopping
 	s.mu.Unlock()
 
-	slog.Warn("agent run stopped at spend cap",
-		slog.String("session_id", s.ID), slog.String("owner_id", strconv.FormatInt(s.OwnerID, 10)),
-		slog.String("cap", refusal.Which), slog.String("message", refusal.Message()))
 	if !running {
 		return
 	}
+	slog.Warn("agent run stopped at spend cap",
+		slog.String("session_id", s.ID), slog.String("owner_id", strconv.FormatInt(s.OwnerID, 10)),
+		slog.String("cap", refusal.Which), slog.String("message", refusal.Message()))
 
 	ev, _ := json.Marshal(map[string]any{
 		"type":    "exhibit_spend_cap",
