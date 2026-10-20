@@ -1,6 +1,6 @@
 ---
 id: av-tuku
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-19T04:31:15Z

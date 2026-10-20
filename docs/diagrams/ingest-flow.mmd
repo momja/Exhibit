@@ -1,0 +1,19 @@
+flowchart TD
+    post["client &rarr; POST /api/artifacts<br/>(body | url [+ snapshot] + metadata)"] --> kind{ingest type}
+
+    kind -->|url ingest| fetch["API: fetch page (bounded 10 MiB),<br/>extract &lt;title&gt;"]
+    fetch --> snapQ{snapshot on?}
+    snapQ -->|yes| snap["snapshot.InlineHTMLAssets — bounded fetch + inline<br/>assets as data:/inline &lt;script&gt;/&lt;style&gt; &rarr;<br/>self-contained body + report<br/>(vendored, residual, per-asset failures — never fatal)"]
+    snapQ -->|no| scan1
+    snap --> scan1["inject &lt;base href&gt; for surviving relatives, unless the page<br/>has its own; ScanDoc the body as stored &rarr; footprint"]
+
+    kind -->|paste| scan2["API: ScanDoc: tokenize, resolve relatives through<br/>the document's own base &rarr; footprint list"]
+
+    scan1 --> resp1["API &rarr; respond: &quot;these N origins will be<br/>contacted — approve?&quot; (+ snapshot report)"]
+    scan2 --> resp1
+
+    resp1 --> confirm["client &rarr; confirm (+ edited allowlist) &rarr; API"]
+    confirm --> persist["API: Blob.put(body) — untrusted bytes at rest;<br/>Store.put(artifact, tier, source_url, ...) with no allow rows;<br/>FTS5 index (title)"]
+    persist --> resp2["API &rarr; respond: artifact id + render URL +<br/>footprint (network-inert until approved)"]
+    resp2 --> patch["client &rarr; PATCH /api/artifacts/:id<br/>(approved allowlist) &rarr; API"]
+    patch --> update["API: replace the artifact's decision='allow' rows &rarr;<br/>now renderable with network egress"]
