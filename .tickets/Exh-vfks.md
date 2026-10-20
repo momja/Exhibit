@@ -1,6 +1,6 @@
 ---
 id: Exh-vfks
-status: in_progress
+status: closed
 deps: []
 links: [Exh-6fz9, Exh-k8p6]
 created: 2026-10-20T03:01:26Z
@@ -17,3 +17,9 @@ Add import controls symmetrical to the Stored state JSON and Stored assets ZIP e
 
 Both panels accept their exported format. Existing corresponding data triggers explicit erasure confirmation; empty data imports without confirmation. Cancel and invalid files preserve existing data. Replacement is atomic, owner-scoped, and refreshes the panel. Cover empty imports, binary assets, malformed files, access control, and responsive layout.
 
+
+## Notes
+
+**2026-10-20T03:21:26Z**
+
+Implemented Import JSON and Import assets ZIP with validation before replacement, transaction-level confirmation guards, owner-only access, quota-aware asset staging and cleanup, and partial panel refresh. Import/export regression tests, server build, and desktop/mobile browser checks pass; full repository test run is in progress. Screenshots are in docs/screenshots/Exh-vfks/.
