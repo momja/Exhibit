@@ -34,7 +34,8 @@ type LocalProcess struct {
 	stdout, stderr *os.File
 	exited         chan struct{}
 	err            error
-	cleanup        sync.Once
+	cleanupMu      sync.Mutex
+	cleaned        bool
 	leaseMu        sync.Mutex
 	expiresAt      time.Time
 	leaseActive    bool
@@ -195,16 +196,38 @@ func (p *LocalProcess) WriteSelection(ctx context.Context, selection []string) e
 	return WriteSelection(p.WorkDir, selection)
 }
 func (p *LocalProcess) Cleanup() error {
-	var err error
-	p.cleanup.Do(func() {
-		_ = p.Close()
-		_ = p.Wait()
-		_ = p.stdout.Close()
-		_ = p.stderr.Close()
-		err = os.RemoveAll(p.WorkDir)
-	})
-	return err
+	p.cleanupMu.Lock()
+	defer p.cleanupMu.Unlock()
+	if p.cleaned {
+		return nil
+	}
+	if err := p.Close(); err != nil {
+		return err
+	}
+	_ = p.Wait()
+	_ = p.stdout.Close()
+	_ = p.stderr.Close()
+	if err := os.RemoveAll(p.WorkDir); err != nil {
+		return err
+	}
+	p.cleaned = true
+	return nil
 }
+
+func (p *LocalProcess) ErasureCleanup() Reclaimer {
+	p.cleanupMu.Lock()
+	defer p.cleanupMu.Unlock()
+	// The caller has already stopped/reaped the local process. Keep only its
+	// scratch path if filesystem reclamation needs a later retry.
+	p.Command.Env = nil
+	_ = p.stdout.Close()
+	_ = p.stderr.Close()
+	return scratchReclaimer(p.WorkDir)
+}
+
+type scratchReclaimer string
+
+func (r scratchReclaimer) Cleanup() error { return os.RemoveAll(string(r)) }
 
 // Scratch is transient and bounded even when Pi or an extension misbehaves.
 // The worker package never removes active scratch to enforce a quota: it stops

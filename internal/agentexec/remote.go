@@ -71,7 +71,8 @@ type RemoteProcess struct {
 	lifetime       context.Context
 	cancel         context.CancelFunc
 	once           sync.Once
-	cleanup        sync.Once
+	cleanupMu      sync.Mutex
+	reclaimer      *remoteReclaimer
 	commandMu      sync.Mutex
 	mu             sync.Mutex
 	err            error
@@ -80,6 +81,7 @@ type RemoteProcess struct {
 	generation     uint64
 	stopping       bool
 	closeRequested bool
+	closeID        string
 	selection      []string
 	hasSelection   bool
 	final          *Snapshot
@@ -528,11 +530,15 @@ func (p *RemoteProcess) Kill() error {
 	}
 	p.closeRequested = true
 	p.stopping = true
+	if p.closeID == "" {
+		p.closeID = uuid.NewString()
+	}
+	closeID := p.closeID
 	p.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var snapshot Snapshot
-	if err := p.request(ctx, http.MethodPost, "/close", map[string]string{"id": uuid.NewString()}, &snapshot, 2*MaxSessionBytes+(1<<20)); err != nil {
+	if err := p.request(ctx, http.MethodPost, "/close", map[string]string{"id": closeID}, &snapshot, 2*MaxSessionBytes+(1<<20)); err != nil {
 		p.mu.Lock()
 		p.closeRequested = false
 		p.mu.Unlock()
@@ -541,31 +547,106 @@ func (p *RemoteProcess) Kill() error {
 	}
 	p.mu.Lock()
 	p.final = &snapshot
+	terminated := p.lifetime.Err() != nil
 	p.mu.Unlock()
-	p.wake() // Drain final usage/events before Wait reports execution ended.
+	if !terminated {
+		p.wake() // Drain final usage/events before Wait reports execution ended.
+	}
 	return nil
 }
 func (p *RemoteProcess) Cleanup() error {
-	var err error
-	p.cleanup.Do(func() {
-		err = p.Close()
-		if err == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			err = p.request(ctx, http.MethodPost, "/release", map[string]string{"id": uuid.NewString()}, new(any), 1<<20)
-			cancel()
+	p.cleanupMu.Lock()
+	defer p.cleanupMu.Unlock()
+	if p.reclaimer == nil {
+		if err := p.Close(); err != nil {
+			return err
 		}
-		p.terminate(err)
-		_ = p.out.Close()
-		if p.endpoint.Release != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if releaseErr := p.endpoint.Release(ctx); err == nil {
-				err = releaseErr
-			}
-		}
-		p.closeConnections()
-	})
+		p.mu.Lock()
+		p.reclaimer = newRemoteReclaimer(p.endpoint, p.client, p.base, true, p.closeID)
+		p.mu.Unlock()
+	}
+	err := p.reclaimer.Cleanup()
+	p.terminate(err)
+	_ = p.out.Close()
 	return err
+}
+
+func (p *RemoteProcess) ErasureCleanup() Reclaimer {
+	p.cleanupMu.Lock()
+	defer p.cleanupMu.Unlock()
+	p.terminate(nil)
+	_ = p.out.Close()
+	p.commandMu.Lock()
+	defer p.commandMu.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.reclaimer == nil {
+		p.reclaimer = newRemoteReclaimer(p.endpoint, p.client, p.base, p.closeRequested, p.closeID)
+	}
+	// No transcript, provider key, tool grant, selection, or restore callback
+	// belongs in the retained owner-erasure target.
+	p.final = nil
+	p.config = StartConfig{}
+	p.selection = nil
+	p.provisioner = nil
+	p.endpoint = Endpoint{}
+	return p.reclaimer
+}
+
+// remoteReclaimer contains no execution payload. Each acknowledged phase is
+// recorded independently so transient errors never consume the cleanup target.
+type remoteReclaimer struct {
+	mu                         sync.Mutex
+	endpoint                   Endpoint
+	client                     *http.Client
+	base, closeID, releaseID   string
+	stopped, released, cleaned bool
+}
+
+func newRemoteReclaimer(endpoint Endpoint, client *http.Client, base string, stopped bool, closeID string) *remoteReclaimer {
+	endpoint.Active, endpoint.Idle, endpoint.LoadSnapshot = nil, nil, nil
+	if closeID == "" {
+		closeID = uuid.NewString()
+	}
+	return &remoteReclaimer{endpoint: endpoint, client: client, base: base, stopped: stopped, closeID: closeID, releaseID: uuid.NewString()}
+}
+func (r *remoteReclaimer) Cleanup() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.cleaned {
+		return nil
+	}
+	defer r.client.CloseIdleConnections()
+	if !r.stopped {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// Decode and discard; deleted history is never retained by this capability.
+		err := requestWorker(ctx, r.client, r.endpoint, r.base, http.MethodPost, "/close", map[string]string{"id": r.closeID}, new(any), 2*MaxSessionBytes+(1<<20))
+		cancel()
+		if err != nil {
+			return err
+		}
+		r.stopped = true
+	}
+	if !r.released {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := requestWorker(ctx, r.client, r.endpoint, r.base, http.MethodPost, "/release", map[string]string{"id": r.releaseID}, new(any), 1<<20)
+		cancel()
+		if err != nil {
+			return err
+		}
+		r.released = true
+	}
+	if r.endpoint.Release != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := r.endpoint.Release(ctx)
+		cancel()
+		if err != nil {
+			return err
+		}
+	}
+	r.cleaned = true
+	r.endpoint = Endpoint{}
+	return nil
 }
 func (p *RemoteProcess) terminate(err error) {
 	p.once.Do(func() {
@@ -581,6 +662,12 @@ func (p *RemoteProcess) terminate(err error) {
 }
 
 func (p *RemoteProcess) request(ctx context.Context, method, path string, input, output any, limit int64) error {
+	p.mu.Lock()
+	base, endpoint, client := p.base, p.endpoint, p.client
+	p.mu.Unlock()
+	return requestWorker(ctx, client, endpoint, base, method, path, input, output, limit)
+}
+func requestWorker(ctx context.Context, client *http.Client, endpoint Endpoint, base, method, path string, input, output any, limit int64) error {
 	var body io.Reader
 	if input != nil {
 		data, err := json.Marshal(input)
@@ -589,9 +676,6 @@ func (p *RemoteProcess) request(ctx context.Context, method, path string, input,
 		}
 		body = bytes.NewReader(data)
 	}
-	p.mu.Lock()
-	base, endpoint, client := p.base, p.endpoint, p.client
-	p.mu.Unlock()
 	req, err := http.NewRequestWithContext(ctx, method, base+path, body)
 	if err != nil {
 		return errors.New("invalid worker request")

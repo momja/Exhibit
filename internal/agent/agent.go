@@ -108,17 +108,17 @@ type Manager struct {
 	cfg Config
 	st  store.Store
 
-	mu            sync.Mutex
-	sessions      map[string]*Session
-	processOwners map[int64]int
-	processCount  int
-	starting      map[string]bool // conversation identities reserved before loading history
-	shutdown      bool
-	drainErr      error
-	stopReaper    chan struct{}
-	recoveries    map[string]*Session
-	erasedOwners  map[int64]bool
-	erasureErrors map[int64]error
+	mu             sync.Mutex
+	sessions       map[string]*Session
+	processOwners  map[int64]int
+	processCount   int
+	starting       map[string]bool // conversation identities reserved before loading history
+	shutdown       bool
+	drainErr       error
+	stopReaper     chan struct{}
+	recoveries     map[string]*Session
+	erasedOwners   map[int64]bool
+	erasureTargets map[int64]map[string]agentexec.Reclaimer
 }
 
 // ExecutionReservation belongs to the core coordinator. Checkpoint must be
@@ -160,7 +160,7 @@ func New(cfg Config, st store.Store) (*Manager, error) {
 	if cfg.IdleTimeout == 0 {
 		cfg.IdleTimeout = 30 * time.Minute
 	}
-	m := &Manager{cfg: cfg, st: st, sessions: map[string]*Session{}, recoveries: map[string]*Session{}, erasedOwners: map[int64]bool{}, erasureErrors: map[int64]error{}, stopReaper: make(chan struct{})}
+	m := &Manager{cfg: cfg, st: st, sessions: map[string]*Session{}, recoveries: map[string]*Session{}, erasedOwners: map[int64]bool{}, erasureTargets: map[int64]map[string]agentexec.Reclaimer{}, stopReaper: make(chan struct{})}
 	go m.reap()
 	return m, nil
 }
@@ -737,22 +737,26 @@ type Session struct {
 	// (av-siqf, redact.go).
 	hideModelIdentity bool
 
-	process           agentexec.Process
-	eventHandled      func()
-	executionIdentity agentexec.Identity
-	reservation       *ExecutionReservation
-	resumeMetadata    *ResumeSnapshot
-	beginCloseMu      sync.Mutex
-	beginCloseDone    bool
-	beginCloseErr     error
-	drainMu           sync.Mutex
-	retainedErr       error
-	erased            atomic.Bool
-	drainComplete     bool
-	retired           chan struct{}
-	mgr               *Manager
-	cmd               *exec.Cmd
-	stdin             io.WriteCloser
+	process               agentexec.Process
+	eventHandled          func()
+	executionIdentity     agentexec.Identity
+	reservation           *ExecutionReservation
+	resumeMetadata        *ResumeSnapshot
+	beginCloseMu          sync.Mutex
+	beginCloseDone        bool
+	beginCloseErr         error
+	drainMu               sync.Mutex
+	retainedErr           error
+	erased                atomic.Bool
+	drainComplete         bool
+	terminalStopped       bool
+	terminalCheckpoint    *ExecutionCheckpoint
+	terminalCheckpointAck bool
+	authorityReleased     bool
+	retired               chan struct{}
+	mgr                   *Manager
+	cmd                   *exec.Cmd
+	stdin                 io.WriteCloser
 
 	writeMu sync.Mutex // serializes stdin writes
 	// promptMu keeps one prompt in flight at a time, from send to response.
@@ -1350,33 +1354,47 @@ func (s *Session) persistCheckpoint(artifactID, kind string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	file, err := s.snapshot(ctx)
-	if s.erased.Load() {
-		return nil
-	}
+	checkpoint, err := s.captureCheckpoint(ctx, kind)
 	if err == nil {
-		s.checkpointSequence++
-		s.mu.Lock()
-		title := s.title
-		s.mu.Unlock()
-		if s.reservation != nil {
-			if s.reservation.Checkpoint == nil {
-				err = fmt.Errorf("assigned execution has no durable checkpoint callback")
-			} else {
-				checkpoint := ExecutionCheckpoint{SessionFile: file, Title: title, Kind: kind, Sequence: s.checkpointSequence}
-				if s.resumeMetadata != nil {
-					checkpoint.BaseRevision = s.resumeMetadata.Revision
-				}
-				err = s.reservation.Checkpoint(ctx, checkpoint)
-			}
-		} else if file != "" && artifactID != "" {
-			err = s.mgr.st.SaveTranscript(ctx, s.OwnerID, store.Transcript{ArtifactID: artifactID, SessionID: s.ID, Title: title, SessionFile: file})
-		}
+		err = s.writeCheckpoint(ctx, artifactID, checkpoint)
 	}
 	if err != nil {
 		slog.Warn("execution checkpoint failed", slog.String("session_id", s.ID), slog.String("kind", kind))
 	}
 	return err
+}
+
+// Caller serializes captures with persistMu. A terminal drain retains this DTO
+// across lost acknowledgments rather than assigning a new sequence on retry.
+func (s *Session) captureCheckpoint(ctx context.Context, kind string) (*ExecutionCheckpoint, error) {
+	file, err := s.snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.checkpointSequence++
+	s.mu.Lock()
+	title := s.title
+	s.mu.Unlock()
+	checkpoint := &ExecutionCheckpoint{SessionFile: file, Title: title, Kind: kind, Sequence: s.checkpointSequence}
+	if s.resumeMetadata != nil {
+		checkpoint.BaseRevision = s.resumeMetadata.Revision
+	}
+	return checkpoint, nil
+}
+func (s *Session) writeCheckpoint(ctx context.Context, artifactID string, checkpoint *ExecutionCheckpoint) error {
+	if s.erased.Load() {
+		return nil
+	}
+	if s.reservation != nil {
+		if s.reservation.Checkpoint == nil {
+			return fmt.Errorf("assigned execution has no durable checkpoint callback")
+		}
+		return s.reservation.Checkpoint(ctx, *checkpoint)
+	}
+	if checkpoint.SessionFile != "" && artifactID != "" {
+		return s.mgr.st.SaveTranscript(ctx, s.OwnerID, store.Transcript{ArtifactID: artifactID, SessionID: s.ID, Title: checkpoint.Title, SessionFile: checkpoint.SessionFile})
+	}
+	return nil
 }
 
 // maxSessionFileBytes bounds what is kept of one conversation. A session file
@@ -1475,64 +1493,115 @@ func (s *Session) finalizeExecution() error {
 	if s.drainComplete {
 		return nil
 	}
-	var beginErr error
-	if !s.erased.Load() {
-		beginErr = s.beginClose()
+	if s.erased.Load() {
+		return s.finalizeErasure()
 	}
-	kind := "settled"
-	s.mu.Lock()
-	if s.interrupted {
-		kind = "interrupted"
+	drainErr := s.beginClose()
+	if drainErr == nil && !s.terminalStopped {
+		if s.process != nil {
+			drainErr = s.process.Close()
+		}
+		if drainErr == nil {
+			s.terminalStopped = true
+		}
 	}
-	s.mu.Unlock()
-	var checkpointErr error
-	if !s.erased.Load() {
-		checkpointErr = s.persistCheckpoint(s.ArtifactID(), kind)
-	}
-	drainErr := errors.Join(checkpointErr, beginErr)
-	if reservation := s.reservation; reservation != nil && drainErr == nil && !s.erased.Load() && reservation.Release != nil {
+	if drainErr == nil && !s.terminalCheckpointAck && !s.erased.Load() {
+		s.persistMu.Lock()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		drainErr = reservation.Release(ctx)
+		if s.terminalCheckpoint == nil {
+			kind := "settled"
+			s.mu.Lock()
+			if s.interrupted {
+				kind = "interrupted"
+			}
+			s.mu.Unlock()
+			s.terminalCheckpoint, drainErr = s.captureCheckpoint(ctx, kind)
+		}
+		if drainErr == nil {
+			drainErr = s.writeCheckpoint(ctx, s.ArtifactID(), s.terminalCheckpoint)
+		}
+		if drainErr == nil {
+			s.terminalCheckpointAck = true
+		}
 		cancel()
+		s.persistMu.Unlock()
 	}
-	if (drainErr == nil || s.erased.Load()) && s.process != nil {
+	if s.erased.Load() {
+		return s.finalizeErasure()
+	}
+	if drainErr == nil && !s.authorityReleased {
+		if reservation := s.reservation; reservation != nil && reservation.Release != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			drainErr = reservation.Release(ctx)
+			cancel()
+		}
+		if drainErr == nil {
+			s.authorityReleased = true
+		}
+	}
+	if drainErr == nil && s.process != nil {
 		drainErr = s.process.Cleanup()
 	}
 	s.mgr.mu.Lock()
 	if s.mgr.recoveries == nil {
 		s.mgr.recoveries = map[string]*Session{}
 	}
-	if s.erased.Load() {
-		if s.mgr.erasureErrors == nil {
-			s.mgr.erasureErrors = map[int64]error{}
-		}
-		s.mgr.erasureErrors[s.OwnerID] = errors.Join(s.mgr.erasureErrors[s.OwnerID], drainErr)
-		s.retainedErr = nil
-		s.drainComplete = true
-		delete(s.mgr.recoveries, s.ID)
-		s.mu.Lock()
-		s.backlog = nil
-		s.backlogBytes = 0
-		s.questions = nil
-		s.mu.Unlock()
-	} else if drainErr != nil {
+	if drainErr != nil {
 		s.retainedErr = drainErr
 		s.mgr.recoveries[s.ID] = s
 		slog.Warn("execution retained for recovery", slog.String("execution_id", s.executionIdentity.ExecutionID))
 	} else {
 		s.retainedErr = nil
+		s.terminalCheckpoint = nil
 		s.drainComplete = true
 		delete(s.mgr.recoveries, s.ID)
 	}
-	s.mgr.drainErr = nil
-	for _, recovery := range s.mgr.recoveries {
-		s.mgr.drainErr = errors.Join(s.mgr.drainErr, recovery.retainedErr)
-	}
+	s.mgr.refreshDrainErrorLocked()
 	if s.mgr.sessions[s.ID] == s {
 		delete(s.mgr.sessions, s.ID)
 	}
 	s.mgr.mu.Unlock()
 	return drainErr
+}
+
+// After account deletion, retain only a cleanup capability, never the Session
+// (which owns chat events, snapshots, prompts, grants and policy callbacks).
+// Caller holds drainMu and has waited for process/event delivery to stop.
+func (s *Session) finalizeErasure() error {
+	var target agentexec.Reclaimer
+	if s.process != nil {
+		target = s.process.ErasureCleanup()
+	}
+	s.terminalCheckpoint = nil
+	s.mu.Lock()
+	s.backlog, s.questions = nil, nil
+	s.backlogBytes = 0
+	s.mu.Unlock()
+	s.mgr.mu.Lock()
+	defer s.mgr.mu.Unlock()
+	if target != nil {
+		if s.mgr.erasureTargets == nil {
+			s.mgr.erasureTargets = map[int64]map[string]agentexec.Reclaimer{}
+		}
+		if s.mgr.erasureTargets[s.OwnerID] == nil {
+			s.mgr.erasureTargets[s.OwnerID] = map[string]agentexec.Reclaimer{}
+		}
+		s.mgr.erasureTargets[s.OwnerID][s.ID] = target
+	}
+	s.retainedErr = nil
+	s.drainComplete = true
+	delete(s.mgr.recoveries, s.ID)
+	if s.mgr.sessions[s.ID] == s {
+		delete(s.mgr.sessions, s.ID)
+	}
+	s.mgr.refreshDrainErrorLocked()
+	return nil
+}
+func (m *Manager) refreshDrainErrorLocked() {
+	m.drainErr = nil
+	for _, recovery := range m.recoveries {
+		m.drainErr = errors.Join(m.drainErr, recovery.retainedErr)
+	}
 }
 
 // RetainedSnapshot is a trusted coordinator recovery read, owner-scoped like
@@ -1549,7 +1618,8 @@ func (m *Manager) RetainedSnapshot(ctx context.Context, ownerID int64, id string
 	return s.snapshot(ctx)
 }
 
-// RetryDrain retries only final persistence/release, never model execution.
+// RetryDrain retries terminal stop/read, persistence, release and reclamation
+// from the last acknowledged phase. It never replays model execution.
 func (m *Manager) RetryDrain(ctx context.Context, ownerID int64, id string) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -1589,6 +1659,8 @@ func (s *Session) kill() {
 // account deletion. It blocks owner admission, revokes/stops live and retained
 // executions, and reclaims their snapshots WITHOUT checkpointing deleted data.
 // Ordinary close and RetryDrain retain their fail-closed durability behavior.
+// On cleanup failure only a payload-free reclaim capability is retained;
+// subsequent calls retry it. No final checkpoint or authority Release is used.
 func (m *Manager) EraseOwner(ctx context.Context, ownerID int64) error {
 	m.mu.Lock()
 	if m.erasedOwners == nil {
@@ -1628,10 +1700,31 @@ func (m *Manager) EraseOwner(ctx context.Context, ownerID int64) error {
 				remaining++
 			}
 		}
-		err := m.erasureErrors[ownerID]
+		targets := map[string]agentexec.Reclaimer{}
+		if remaining == 0 {
+			for id, target := range m.erasureTargets[ownerID] {
+				targets[id] = target
+			}
+		}
 		m.mu.Unlock()
 		if remaining == 0 {
-			return err
+			var failures []error
+			for id, target := range targets {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				if err := target.Cleanup(); err != nil {
+					failures = append(failures, err)
+					continue
+				}
+				m.mu.Lock()
+				delete(m.erasureTargets[ownerID], id)
+				if len(m.erasureTargets[ownerID]) == 0 {
+					delete(m.erasureTargets, ownerID)
+				}
+				m.mu.Unlock()
+			}
+			return errors.Join(failures...)
 		}
 		select {
 		case <-ctx.Done():

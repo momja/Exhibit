@@ -30,6 +30,11 @@ func (s *Service) serveAssignments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if retired {
+		if operation == "release" && r.Method == http.MethodPost {
+			// An authenticated retry may follow a lost successful response.
+			writeJSON(w, map[string]bool{"released": true})
+			return
+		}
 		writeError(w, 409, "execution_retired", "execution was released; reserve a new attempt")
 		return
 	}

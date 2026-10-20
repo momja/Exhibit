@@ -675,6 +675,9 @@ func (s *Service) Reclaim(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	s.process = nil
+	s.finalSnapshot = ""
+	s.events = nil
+	s.eventBytes = 0
 	s.mu.Unlock()
 	return nil
 }

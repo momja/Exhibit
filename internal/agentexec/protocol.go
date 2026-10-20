@@ -70,6 +70,7 @@ type Runner interface {
 // stops execution but leaves Snapshot readable until Cleanup, after persistence.
 type Process interface {
 	io.WriteCloser
+	ErasureProcess
 	Stdout() io.Reader
 	Stderr() io.Reader
 	Wait() error
@@ -78,6 +79,15 @@ type Process interface {
 	WriteSelection(context.Context, []string) error
 	Cleanup() error
 }
+
+// Reclaimer retains only the capability needed to remove an execution. Cleanup
+// is idempotent and retryable after failure.
+type Reclaimer interface{ Cleanup() error }
+
+// ErasureProcess discards private in-memory execution payloads after delivery
+// has stopped, transferring only transport/scratch cleanup state to core. The
+// returned capability must remain available until reclamation succeeds.
+type ErasureProcess interface{ ErasureCleanup() Reclaimer }
 
 // EventSynchronizer lets a coordinator acknowledge an event AFTER its policy,
 // accounting, and durable checkpoint work. A remote idle hook must not release
