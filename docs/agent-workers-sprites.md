@@ -326,6 +326,13 @@ Final assembled-stack verification (2026-10-20):
   processes were stopped after verification.
 - Targeted race tests covered concurrent workers, restart cleanup, erasure,
   central admission/fencing, and late-receipt instance hard-stop propagation.
+- Self-hosting upgrade verification used the server from main with schema 034,
+  then the default local image with worker migration 035 on the same data volume.
+  Login, encrypted BYOK credentials, artifacts and History survived; the same
+  conversation resumed and committed another source version using bundled Pi.
+  No execution-mode override, worker service, Sprite credentials, platform key,
+  or spend-cap configuration was supplied. Default Compose still starts only
+  the app. Upgrade regressions also cover schema 033.
 
 Review-agent review covered every implementation layer and each follow-up fix;
 all findings were fixed and re-reviewed. These are local validation results,
