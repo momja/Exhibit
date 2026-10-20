@@ -851,6 +851,7 @@ type galleryCard struct {
 	Tags       []tagView
 	Capability capabilityView
 	Widget     widgetView
+	Actions    actionMenuView
 }
 
 // newWidgetView builds a card's tile view model, minting the tile frame's

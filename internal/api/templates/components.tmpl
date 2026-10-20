@@ -1,0 +1,18 @@
+{{/* Include once on an app page using shared controllers. The native module
+     imports only app-origin assets, starts one application, and registers
+     controllers explicitly. htmx fragments contain markup only. */}}
+{{define "componentScripts"}}<script type="module" src="/assets/gallery/controllers.js"></script>{{end}}
+
+{{/* Data: actionMenuView. A link navigates normally; an event item dispatches
+     its named, bubbling feature event with its payload and the visible trigger
+     in event.detail. Feature code owns API calls and refresh events. */}}
+{{define "actionMenu"}}<div class="action-menu-container{{if .Class}} {{.Class}}{{end}}" data-controller="action-menu"
+  data-action="click@window->action-menu#dismiss focusout->action-menu#focusOut keydown->action-menu#navigate action-menu:opened@window->action-menu#closeOther">
+  <button type="button" class="btn btn-sec icon-btn{{if .TriggerClass}} {{.TriggerClass}}{{end}}" id="{{.ID}}-trigger"
+    data-action-menu-target="trigger" data-action="action-menu#toggle"
+    aria-label="{{.Label}}" title="Actions" aria-haspopup="menu" aria-expanded="false" aria-controls="{{.ID}}"><i class="ph ph-dots-three-vertical" aria-hidden="true"></i></button>
+  <div class="action-menu action-menu-panel{{if .PanelClass}} {{.PanelClass}}{{end}}" id="{{.ID}}" role="menu" aria-labelledby="{{.ID}}-trigger" data-action-menu-target="menu" hidden>
+    {{range .Items}}{{if .Href}}<a href="{{.Href}}" role="menuitem" tabindex="-1" data-action-menu-target="item" data-action="action-menu#select">{{if .Icon}}<i class="ph {{.Icon}}" aria-hidden="true"></i> {{end}}{{.Label}}</a>
+    {{else}}<button type="button" role="menuitem" tabindex="-1" data-action-menu-target="item" data-action="action-menu#select" data-action-menu-event-param="{{.Event}}" data-action-menu-payload-param="{{.Payload}}">{{if .Icon}}<i class="ph {{.Icon}}" aria-hidden="true"></i> {{end}}{{.Label}}</button>{{end}}{{end}}
+  </div>
+</div>{{end}}

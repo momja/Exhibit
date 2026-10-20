@@ -10,6 +10,11 @@ original title followed by ` (copy)` and two unchecked options:
   viewers' private state. In shared-data mode, the shared board is the owner's
   state and is therefore included.
 
+The shared action-menu controller emits `exhibit:duplicate` with the artifact
+ID, title, and visible menu trigger. The feature's existing form owns saving
+and returns focus to that trigger when dismissed. See
+[UI components](ui-components.md) for the reusable menu definition.
+
 The copy always keeps the current source, optional gallery widget, current
 stored assets and any older assets referenced by that content, source URL,
 tier, capability approvals, allowed and blocked origin decisions, tags and

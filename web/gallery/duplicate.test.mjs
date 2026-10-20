@@ -42,13 +42,6 @@ async function fixture(respond = async () => Response.json({ id: 'created-copy' 
   form.querySelector = selector => ({
     '[type="submit"]': submit, '[data-duplicate-cancel]': cancel, '[data-duplicate-status]': status
   })[selector] || null;
-  const actions = { querySelector: () => trigger };
-  const action = { dataset: { duplicateArtifact: 'original-id', artifactTitle: 'Original <title>' },
-    closest: selector => selector === '[data-card-actions]' ? actions : null };
-  const target = { closest: selector => {
-    if (selector === '[data-duplicate-artifact]' || selector.startsWith('a, button')) return action;
-    return null;
-  } };
   root.querySelector = selector => ({
     '[data-duplicate-dialog]': dialog,
     '[data-gallery-search]': search, '[data-gallery-query]': query,
@@ -61,12 +54,14 @@ async function fixture(respond = async () => Response.json({ id: 'created-copy' 
   let refreshes = 0;
   search.addEventListener('exhibit:gallery-search', () => refreshes++);
   await page.loadModule(script);
-  const open = () => root.click(target);
+  const open = () => root.dispatchEvent({ type: 'exhibit:duplicate', detail: {
+    artifactID: 'original-id', title: 'Original <title>', trigger
+  } });
   const save = () => form.dispatchEvent({ type: 'submit', preventDefault() {} });
   return { ...page, root, dialog, form, title, data, share, submit, cancel, status, trigger, query, newLink, calls, open, save, refreshes: () => refreshes };
 }
 
-test('opens from a delegated card action with editable title and unchecked options; cancel restores menu focus', async () => {
+test('opens from a menu action event with editable title and unchecked options; cancel restores menu focus', async () => {
   const p = await fixture();
   await p.open();
   assert.equal(p.dialog.open, true);
