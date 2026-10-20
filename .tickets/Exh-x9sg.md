@@ -19,3 +19,7 @@ Create an unadvertised account-targeted API requiring a dedicated configured adm
 **2026-10-20T06:41:58Z**
 
 Implemented dedicated-token-only account import outside ordinary API auth, strict ZIP/CRC/metadata/state validation, fresh artifact/asset/generation/blob identities with cross-origin reference rebinding, atomic enabled-account Store.ImportArtifactBundle publication, quota preflight and durable staging cleanup. Added hand-built archive, auth, fidelity, compressed expansion, quota, rollback and cleanup recovery tests; exporter schema and limits coordinated without schema edits.
+
+**2026-10-20T09:03:56Z**
+
+Integrated the dedicated-token-only importer with versioned ZIP exports and explicit existing-account targets. Source/widget/generation/asset identities are fresh; asset blobs use destination-account content addresses so Stored Assets export/restore and quota deduplication remain compatible. Auth refusals, malformed archives, rollback/cleanup, quotas, exact owner state and cross-instance historical-asset restoration pass the focused suite.
