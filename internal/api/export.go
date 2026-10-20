@@ -1,12 +1,7 @@
 package api
 
-// The self-contained export endpoint (av-vnkt).
-//
-// PRD §7 promises a one-file `.html` an artifact's owner can email, archive, or
-// open years later with no service in the loop. That promise became load-bearing
-// when av-20fk and av-oz40 moved artifact payloads out of the body: inside the
-// service a URL is the better representation, but a file that needs this
-// instance alive is not a file. This is where the two are reconciled.
+// Owner-only portable downloads: a complete ZIP by default, or an explicit
+// legacy HTML document with out-of-line assets folded back in (av-vnkt).
 
 import (
 	"context"
@@ -16,12 +11,16 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/momja/Exhibit/internal/export"
-	"github.com/momja/Exhibit/internal/store"
 )
 
-// exportArtifact serves one artifact as a single self-contained document.
+// exportArtifact validates the format before loading any content. Both formats
+// use the owner-scoped lookup, never the viewer/shared-state read path.
 func (ro *Router) exportArtifact(w http.ResponseWriter, r *http.Request) {
+	format := r.URL.Query().Get("format")
+	if format != "" && format != "zip" && format != "html" {
+		writeError(w, http.StatusBadRequest, "unsupported export format: choose zip or html")
+		return
+	}
 	id := chi.URLParam(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
 
@@ -35,28 +34,17 @@ func (ro *Router) exportArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := ro.readBlobString(r.Context(), a.SourceBlobID)
+	content, err := ro.loadArtifactBundleContent(r.Context(), ownerID, a, format != "html")
 	if err != nil {
-		serverError(w, r, "export: read body", err)
+		serverError(w, r, "export: read content", err)
 		return
 	}
-	assets, err := ro.cfg.Store.ListArtifactAssets(r.Context(), ownerID, id)
-	if err != nil {
-		serverError(w, r, "export: list assets", err)
+	if format != "html" {
+		ro.exportArtifactZIP(w, r, a, content)
 		return
 	}
-
-	doc, err := export.Materialize(body, assets,
-		func(as store.ArtifactAsset) string {
-			return ro.cfg.RenderOrigin + "/a/" + id + "/assets/" + as.ID
-		},
-		func(blobID string) ([]byte, error) {
-			s, err := ro.readBlobString(r.Context(), blobID)
-			return []byte(s), err
-		})
+	doc, err := content.portableHTML(content.source)
 	if err != nil {
-		// Better a failed export than one that claims to be self-contained
-		// while pointing at a URL that dies with the instance.
 		serverError(w, r, "export: materialize", err)
 		return
 	}

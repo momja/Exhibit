@@ -176,6 +176,36 @@ As with any ingest, residual origins surface in `network_footprint` for
 **explicit** approval — the snapshot never seeds the `network_allowlist`, so a
 snapshotted artifact stays network-inert until you approve its residual origins.
 
+## Artifact export
+
+```text
+GET /api/artifacts/:id/export              Complete artifact ZIP
+GET /api/artifacts/:id/export?format=zip   Complete artifact ZIP
+GET /api/artifacts/:id/export?format=html  Self-contained HTML document
+```
+
+Downloads require the artifact's owner. Unsupported formats return `400`;
+missing and foreign artifacts return `404`. Responses use attachment filenames
+and `Cache-Control: no-store`.
+
+The ZIP contains a readable, versioned `manifest.json`, the current editable
+source and a separate portable HTML page, optional widget source and portable
+HTML, `state.json` with only the owner's string values, and original asset files.
+Current assets and historical assets reached through source, widget or textual
+payload references are retained. The bundle excludes version history, account
+credentials, shares, chats and tag/collection memberships. See the
+[bundle format](artifact-bundles.md) for its schema. HTML-only downloads exclude
+owner state and widget content.
+
+The completed ZIP and each source, portable HTML or state entry fit the configured
+`MAX_REQUEST_BODY_BYTES` ceiling (32 MiB by default). The manifest is at most
+1 MiB, state has at most 10,000 keys, and at most 200 asset rows contain at most
+96 MiB expanded bytes and 48 MiB distinct payload bytes. These match restoration
+limits. Materialization also bounds repeated and nested asset expansion and
+nested HTML reference parsing. Missing
+content, cyclic textual asset dependencies or an exceeded limit fail the request
+before download headers; the temporary ZIP is always removed.
+
 ## Stored-data imports
 
 ```

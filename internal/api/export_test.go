@@ -16,7 +16,7 @@ import (
 
 func exportGet(t *testing.T, r *Router, id string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest("GET", "/api/artifacts/"+id+"/export", nil)
+	req := httptest.NewRequest("GET", "/api/artifacts/"+id+"/export?format=html", nil)
 	req.Header.Set("Authorization", authHeader())
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

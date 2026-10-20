@@ -1,6 +1,9 @@
 package export
 
 import (
+	"encoding/json"
+	"mime"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -9,6 +12,26 @@ import (
 
 	"github.com/momja/Exhibit/internal/store"
 )
+
+func TestDataURIPrefixPreservesMIMEMetadataWithoutBreakingStrings(t *testing.T) {
+	for _, contentType := range []string{
+		`image/png; name="a b"`, `Application/JSON; charset="utf-8"`, `text/plain; name="a b'&<>"`,
+	} {
+		prefix := DataURIPrefix(contentType)
+		assert.NotContains(t, prefix, `"`)
+		assert.NotContains(t, prefix, `'`)
+		var embedded map[string]string
+		require.NoError(t, json.Unmarshal([]byte(`{"uri":"`+prefix+`AA=="}`), &embedded))
+		metadata, err := url.PathUnescape(strings.TrimSuffix(strings.TrimPrefix(prefix, "data:"), ";base64,"))
+		require.NoError(t, err)
+		wantType, wantParameters, err := mime.ParseMediaType(contentType)
+		require.NoError(t, err)
+		gotType, gotParameters, err := mime.ParseMediaType(metadata)
+		require.NoError(t, err)
+		assert.Equal(t, wantType, gotType)
+		assert.Equal(t, wantParameters, gotParameters)
+	}
+}
 
 // Where the manifest lands decides whether it runs at all: a fetch wrapper
 // only shadows callers that come after it, and one spliced into a comment or a
