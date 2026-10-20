@@ -23,6 +23,9 @@
  * which is exactly what a page reload would show.
  */
 
+import { apiFetch } from './api-module.js';
+import { withStateOperation } from './state-operations.js';
+
 (function () {
   const panel = document.getElementById('state-panel');
   if (!panel) return;
@@ -609,13 +612,17 @@
   addKeyInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); addKey(); }
   });
-  document.getElementById('state-save').addEventListener('click', saveState);
+  document.getElementById('state-save').addEventListener('click', () => withStateOperation(saveState));
   document.getElementById('state-cancel').addEventListener('click', cancelEdits);
-  document.getElementById('state-erase').addEventListener('click', eraseAll);
+  document.getElementById('state-erase').addEventListener('click', () => withStateOperation(eraseAll));
 
   // An import replaces the inspector's client-side working copy, preserving
   // the source and widget editor buffers elsewhere on this page.
-  document.body.addEventListener('exhibit:state-imported', () => loadState());
+  document.body.addEventListener('exhibit:state-imported', event => {
+    const refresh = loadState();
+    event.detail?.waitUntil(refresh);
+    return refresh;
+  });
 
   // State is cold data no other part of the edit page needs, so it is fetched
   // on first open rather than inlined with the page.

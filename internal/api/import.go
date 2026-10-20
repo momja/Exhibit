@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -125,8 +126,11 @@ func readAssetsImport(body []byte, artifactID string) ([]snapshot.RuntimeAsset, 
 		return nil, fmt.Errorf("Choose a ZIP exported from Stored assets: %w", err)
 	}
 	limits := snapshot.DefaultLimits()
-	if len(archive.File) > limits.MaxAssets+1 {
-		return nil, fmt.Errorf("asset archive has too many entries (maximum %d assets)", limits.MaxAssets)
+	// Each fetched URL can produce a markup row and a runtime row. Bound the
+	// whole exported archive, including both collectors, without splitting it.
+	maxAssets := 2 * limits.MaxAssets
+	if len(archive.File) > maxAssets+1 {
+		return nil, fmt.Errorf("asset archive has too many entries (maximum %d assets)", maxAssets)
 	}
 	files := make(map[string]*zip.File, len(archive.File))
 	for _, file := range archive.File {
@@ -150,14 +154,16 @@ func readAssetsImport(body []byte, artifactID string) ([]snapshot.RuntimeAsset, 
 	if manifest.ArtifactID != artifactID {
 		return nil, errors.New("This asset ZIP belongs to a different artifact. Choose an export of this artifact.")
 	}
-	if len(manifest.Assets) > limits.MaxAssets || len(files) != len(manifest.Assets)+1 {
+	if len(manifest.Assets) > maxAssets || len(files) != len(manifest.Assets)+1 {
 		return nil, errors.New("archive entries do not match its manifest")
 	}
 	// Markup and runtime collection can produce distinct IDs for one source
 	// URL, so validate identity and archive paths without deduplicating URLs.
 	seenIDs, seenPaths := map[string]bool{}, map[string]bool{}
 	assets := make([]snapshot.RuntimeAsset, 0, len(manifest.Assets))
-	remaining := limits.MaxTotalBytes
+	remaining := 2 * limits.MaxTotalBytes
+	uniqueRemaining := limits.MaxTotalBytes
+	payloads := make(map[[32]byte][]byte)
 	for _, asset := range manifest.Assets {
 		source, err := url.Parse(asset.SourceURL)
 		if !importAssetID.MatchString(asset.ID) || seenIDs[asset.ID] || seenPaths[asset.Path] ||
@@ -174,6 +180,16 @@ func readAssetsImport(body []byte, artifactID string) ([]snapshot.RuntimeAsset, 
 			return nil, fmt.Errorf("asset size does not match manifest: %s", asset.Path)
 		}
 		remaining -= int64(len(payload))
+		digest := sha256.Sum256(payload)
+		if existing, ok := payloads[digest]; ok {
+			payload = existing
+		} else {
+			uniqueRemaining -= int64(len(payload))
+			if uniqueRemaining < 0 {
+				return nil, errors.New("unique asset payloads exceed the snapshot size limit")
+			}
+			payloads[digest] = payload
+		}
 		seenIDs[asset.ID], seenPaths[asset.Path] = true, true
 		assets = append(assets, snapshot.RuntimeAsset{AssetID: asset.ID, SourceURL: asset.SourceURL, ContentType: asset.ContentType, Body: payload})
 	}

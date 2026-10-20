@@ -153,7 +153,7 @@
        is cold data no other part of this page needs. */}}
   <details class="details-panel" id="state-panel">
     <summary id="state-summary">{{template "panelCaret"}} <span id="state-summary-text">Stored state</span></summary>
-    <div class="panel-body state-body">
+    <fieldset class="panel-body state-body" id="state-controls" aria-label="Stored state controls">
       <p class="text-sm muted">
         Data this artifact saved through <code>localStorage</code>, held on the server so it
         follows you between devices. Each value is edited through the control its type implies —
@@ -185,7 +185,7 @@
       <span id="state-export-status" class="text-sm muted" role="status"></span>
       <p class="text-sm muted">Import JSON replaces saved state and any unsaved state edits with an exported JSON file.</p>
       <span id="state-import-status" class="text-sm muted" role="status"></span>
-    </div>
+    </fieldset>
   </details>
 
   {{/* Out-of-line assets (av-20fk). The list is a server-rendered partial,
@@ -343,7 +343,7 @@ let geolocationApproved = {{if .GeolocationApproved}}true{{else}}false{{end}};
 <script src="/assets/gallery/api.js"></script>
 <script src="/assets/gallery/edit.js"></script>
 <script src="/assets/gallery/state-api.js"></script>
-<script src="/assets/gallery/state.js"></script>
+<script type="module" src="/assets/gallery/state.js"></script>
 <script type="module" src="/assets/gallery/state-export.js"></script>
 <script type="module" src="/assets/gallery/assets.js"></script>
 <script type="module" src="/assets/gallery/storage-import.js"></script>

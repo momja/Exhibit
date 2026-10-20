@@ -10,7 +10,7 @@ const success = () => new Response(null, { status: 204 });
 async function setup(kind, responses, answer = true) {
   const calls = [], prompts = [], events = [];
   const page = loadPageScript([], {
-    ID: 'artifact-1', Event,
+    ID: 'artifact-1', Event, CustomEvent,
     apiFetch: async (url, options) => {
       calls.push({ url, options });
       const response = responses.shift();

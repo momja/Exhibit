@@ -1,6 +1,6 @@
 ---
 id: Exh-vfks
-status: closed
+status: in_progress
 deps: []
 links: [Exh-6fz9, Exh-k8p6]
 created: 2026-10-20T03:01:26Z
@@ -35,3 +35,7 @@ User clarification: asset imports are always complete replacements of the curren
 **2026-10-20T05:19:59Z**
 
 Corrected complete asset replacement accounting: quota now measures the final swapped set and retains charges for body, shared, and historical references. Valid duplicate-source exports round-trip. Regression tests prove omitted assets disappear, unused payloads are reclaimed, empty manifests clear the set, and failed inserts restore the entire original set. Also fixed the reviewed state refresh race with sequencing of GET responses. Validation: go test ./... passed, 14 import/state JS tests passed, final server build passed, and live browser verified cancellation, A,B to B,C swaps, swapping back, and delayed pre-import responses. Live environment runs the updated binary on port 18110.
+
+**2026-10-20T05:48:36Z**
+
+Address follow-up review: serialize state imports with inspector writes, make archive limits compatible with complete snapshot exports, register state import regression tests, and obtain a separate OWASP Top 10 security analysis of the upload paths.
