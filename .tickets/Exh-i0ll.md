@@ -156,3 +156,9 @@ with the implementation; this ticket is the planning authority until then.
    idle compute release, retained-storage cost, and bounded capacity failure.
    Operators have documented rollout, rollback, cleanup, and failure diagnosis.
 
+
+## Notes
+
+**2026-10-20T07:30:55Z**
+
+Implementation delivered as a four-layer PR stack: durable authority, Sprites backend, standalone runtime, and production core integration. Chat/login/BYOK/History/budgets remain in Exhibit. Review-agent findings were fixed and re-reviewed. Code children are complete; epic remains in_progress with Exh-fuxp for credentialed live Sprite rollout, telemetry and cost/suspension evidence. No deployment or paid resources were created in this environment.

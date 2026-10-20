@@ -68,7 +68,11 @@ does not read environment variables. Root mode selection (`local`, `remote`,
 `Identity{OwnerID, SessionID, ExecutionID}` is an immutable **assignment**.
 OwnerID is a string here; adapt an integer owner ID with `strconv.FormatInt`.
 ExecutionID is the central fencing/assignment generation, not the prompt ID.
-Use a fresh ExecutionID after loss/replacement; never reuse a deleted generation.
+Use a fresh ExecutionID after central lease loss or reassignment; never reuse a
+retired generation. If only an idle Sprite disappears while its central lease
+remains valid, the coordinator may provision the same immutable assignment on
+the next explicit input and restore its acknowledged snapshot. It does not
+replay an uncertain active turn.
 The deterministic resource name is `<prefix>-<128-bit identity hash>`. Raw owner
 and conversation IDs do not appear in the name, and a different owner produces a
 different Sprite. Prefixes must be exclusive to one coordinator deployment.
@@ -129,7 +133,8 @@ failure is returned; an unknown create outcome that cannot be queried remains a
 possible orphan for reconciliation. Never silently treat it as a completed run.
 
 `ErrCapacity` is actionable admission refusal; release capacity or retry later.
-`ErrNotFound` requires deliberate restore into a fresh central assignment.
+`ErrNotFound` requires deliberate snapshot restoration: keep an existing valid
+idle assignment, or acquire a fresh central assignment after lease loss.
 `ErrConflict` requires investigation/new assignment, not automatic token rotation
 or prompt replay. Upstream bodies, service output, and hook errors are excluded
 from returned errors because they may contain secrets. Do not log Requests,
@@ -304,3 +309,24 @@ without worker HTTP, and account cleanup. Handler tests cover login/body-limit
 separation, atomic concurrent create, stale denial and exact source/widget version
 association. Blocking guards and management cleanup cannot stall other workers.
 These checks do not establish the live platform or billing evidence above.
+
+Final assembled-stack verification (2026-10-20):
+
+- `make assets` and `go test ./... -count=1 -timeout=15m` passed, including the
+  complete API and SQLite suites.
+- Vet passed for the server, worker, agent, authority, transport, API, Sprites,
+  and Store packages. All 29 browser history tests passed.
+- The native arm64 release archive passed
+  `TestPackagedReleaseMatchesSpriteBootstrap` with bundled Node/Pi. The amd64
+  archive passed layout/checksum/ELF checks; amd64 execution was not tested.
+- `docker build --target core` passed. A local container using that image had
+  no Node/Pi executables, rendered chat after login, and drove a separate
+  packaged worker over HTTP to stream saves, persist History, resume the same
+  conversation, and commit another source version. The container and fixture
+  processes were stopped after verification.
+- Targeted race tests covered concurrent workers, restart cleanup, erasure,
+  central admission/fencing, and late-receipt instance hard-stop propagation.
+
+Review-agent review covered every implementation layer and each follow-up fix;
+all findings were fixed and re-reviewed. These are local validation results,
+not a live Sprite rollout.

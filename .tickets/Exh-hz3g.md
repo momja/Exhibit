@@ -1,6 +1,6 @@
 ---
 id: Exh-hz3g
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-07-12T18:03:33Z
@@ -58,3 +58,9 @@ boundary for standalone execution. The worker must have no Store dependency.
 4. The current UI and renderer bridges require no new origin, public worker
    endpoint, browser-held worker token, or CORS allowance.
 
+
+## Notes
+
+**2026-10-20T07:30:54Z**
+
+Implemented versioned worker/supervisor authority, separate scoped credentials, durable per-conversation fencing, atomic create binding, idempotent usage/late receipts, central budget admission and instance hard-stop fanout. Reviewed with review-agent; all findings fixed and re-reviewed. HTTP auth, stale/cross-owner, provenance, usage deduplication and account-erasure race regressions pass.
