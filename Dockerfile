@@ -45,16 +45,26 @@ COPY --from=assets /app/internal/api/assets/ ./internal/api/assets/
 # Build the server binary
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
 
-# --- Runtime stage ---
-# Node-based (not distroless): the agent surface (docs/agent.md) spawns `pi`
-# — Mario Zechner's pi-mono agent harness — as a subprocess of the server
-# itself, so it must live in this image. Pi is npm-only (no standalone
-# binary) and its bin script is a `#!/usr/bin/env node` shebang, which needs
-# a real userland (node + env) that distroless/static doesn't provide. The
-# server itself stays a static Go binary; only the agent surface pulls in
-# this larger base. The agent is part of the product, so every image ships
-# `pi`; there is no agent-free build.
-FROM node:22-bookworm-slim
+# --- Core with remote agent execution ---
+# Build with --target core when a standalone worker runs Pi. Node remains an
+# asset-build dependency above; this runtime contains only the Go server and
+# its TLS trust roots. Worker configuration is supplied at deployment time.
+FROM debian:bookworm-slim AS core
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends ca-certificates \
+	&& rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /bin/server /server
+
+VOLUME ["/data"]
+ENV DATA_DIR=/data ADDR=:8080 RENDER_ADDR=:8081 AGENT_EXECUTION_MODE=remote
+EXPOSE 8080 8081
+ENTRYPOINT ["/server"]
+
+# --- Local-execution runtime (the default for existing self-hosted installs) ---
+# Pi's npm entry point needs Node and env; the Go server remains static.
+FROM node:22-bookworm-slim AS local
 
 # Pi is pinned (av-2yws): metering reads Pi's usage-event shape, and the
 # usage-policy guardrail (av-gust) depends on how its extension hooks behave
