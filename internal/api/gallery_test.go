@@ -251,10 +251,11 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 
 	// The redundant 'Details' link is gone (it duplicated the title click).
 	assert.NotContains(t, page, `>Details</a>`)
-	assert.Contains(t, page, `class="card-actions" data-card-actions`)
-	assert.Contains(t, page, `aria-label="Actions for Openless" title="Actions" aria-expanded="false" aria-controls="card-actions-`+id+`"`)
-	assert.Contains(t, page, `class="action-menu card-actions-menu" id="card-actions-`+id+`" hidden`)
-	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit" aria-label="Edit Openless"><i class="ph ph-pencil-simple" aria-hidden="true"></i> Edit</a>`)
+	assert.Contains(t, page, `class="action-menu-container card-actions" data-controller="action-menu"`)
+	assert.Contains(t, page, `aria-label="Actions for Openless" title="Actions" aria-haspopup="menu" aria-expanded="false" aria-controls="card-actions-`+id+`"`)
+	assert.Contains(t, page, `id="card-actions-`+id+`" role="menu" aria-labelledby="card-actions-`+id+`-trigger"`)
+	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit" role="menuitem"`)
+	assert.Contains(t, page, `<script type="module" src="/assets/gallery/controllers.js"></script>`)
 	assert.NotContains(t, page, `class="card-edit"`)
 
 	// av-uvc6: one meta row under the tile, and no created date on it.

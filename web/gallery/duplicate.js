@@ -39,12 +39,11 @@ export function initializeDuplication(root) {
     // person closes the modal too, without issuing another mutation.
     if (pending) root.dispatchEvent(new CustomEvent('exhibit:artifacts-changed', { bubbles: true }));
   }
-  root.addEventListener('click', event => {
-    const action = event.target.closest('[data-duplicate-artifact]');
-    if (!action || busy || dialog.open) return;
-    artifactID = action.dataset.duplicateArtifact;
-    trigger = action.closest('[data-card-actions]').querySelector('[data-card-actions-trigger]');
-    title.value = action.dataset.artifactTitle + ' (copy)';
+  root.addEventListener('exhibit:duplicate', event => {
+    if (busy || dialog.open) return;
+    artifactID = event.detail.artifactID;
+    trigger = event.detail.trigger;
+    title.value = event.detail.title + ' (copy)';
     share.checked = false;
     data.checked = false;
     pending = undefined;

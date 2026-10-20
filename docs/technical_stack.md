@@ -29,6 +29,7 @@ safety" (§12).
 | Thumbnails / link previews | Headless Chromium sidecar driven by `chromedp` over CDP — optional (§8) | client `html2canvas` |
 | Gallery UI | Server-rendered stdlib `html/template` + static CSS/JS assets (§9) | templ (codegen — rejected) |
 | Partial re-render | **htmx** — self-hosted / embedded on app origin, no CDN (§9) | hand-rolled fetch-and-swap helper |
+| Reusable UI behavior | **Stimulus** — self-hosted ES module, Go partials own markup (§9) | explicit component initialization in vanilla JS |
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
 | Agent harness | **Pi** (`pi --mode rpc` sidecar per session; TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
@@ -329,8 +330,8 @@ scripts through a small inline bootstrap `<script>` that html/template JSON-enco
 The gallery is CRUD-shaped — a paged grid, search (eager htmx requests swapping the
 server-rendered grid), tag/collection filters, a detail view, and an add-artifact
 page at `/new` (av-qo0j) — and full-page server
-renders cover it, keeping everything inside the one Go binary with no frontend
-framework and no template codegen. (templ — the codegen engine an early scaffold
+renders cover it, keeping everything inside the one Go binary with no client-side
+rendering framework and no template codegen. (templ — the codegen engine an early scaffold
 used — was considered for the extraction and rejected: the stdlib engine adds zero
 dependencies and no generate step, and its contextual auto-escaping replaces the
 hand-rolled HTML escaping the old string-concatenated pages needed.)
@@ -382,6 +383,29 @@ which a module script requires. The rules for getting there:
   Run the Node suite with `node --experimental-vm-modules --test`; the Go test
   runner supplies the same flag.
 
+**Reusable interactions use Stimulus.** A component combines a named Go partial,
+shared CSS over the design tokens, and a controller registered explicitly in
+`web/gallery/controllers.js`. Full pages include `componentScripts` once;
+htmx fragments carry only `data-controller`, targets, values, and actions.
+Stimulus connects inserted components and disconnects removed ones. Browser
+state belongs to the controller, and its root stays stable when a partial
+update must preserve that state. Feature code still owns authenticated API
+calls and the change events that request server-rendered refreshes.
+
+`web/stimulus/` pins and vendors the upstream ES module and MIT license onto
+the app origin. Native imports need no gallery bundler or production Node
+runtime. The first consumer is the shared `actionMenu` partial and controller:
+gallery cards supply links and named feature events, and duplication listens
+for `exhibit:duplicate`. [UI component conventions](ui-components.md) cover
+defining different menus and adding the next modal controller.
+
+Controller integration uses the existing Chromium test helper, rather than
+emulating DOM observation in `testdom.mjs`. `TestActionMenuBrowser` exercises
+multiple instances, keyboard/focus, actual htmx swaps, and disconnect/reconnect;
+`TestGalleryActionMenuDuplicationBrowser` covers the feature event and modal
+focus boundary. Set `CHROMIUM_TEST_BINARY` if the helper cannot find a locally
+installed browser. The existing Node suites continue covering feature logic.
+
 **Page scripts are tested by running them (av-kmwj).** `web/gallery/testdom.mjs`
 is a small DOM — element lookup, listeners, `hidden`, `textContent`, and a
 `postMessage` boundary between the host and the artifact frame — that a
@@ -417,9 +441,10 @@ it won over a hand-rolled fetch-and-swap helper. The rules it must follow:
   Phosphor icons below, and loaded from `/assets/htmx/htmx.min.js`.
 - Page JS keeps no cached references into a swappable region: after a swap the
   old nodes are gone. Resolve elements on use.
-- Bind behavior inside a swappable region by delegation. One listener on an
-  ancestor the swap leaves in place matches its targets by `data-*` attribute,
-  so swapped-in markup works with no re-binding step after `htmx:after:swap`.
+- Bind shared component behavior with Stimulus actions and scoped targets.
+  Inserted component roots connect automatically. Existing page behavior can
+  use delegation from a stable ancestor, matching `data-*` attributes, so
+  swapped-in markup works with no rebinding after `htmx:after:swap`.
 - State that lives only in the browser stays in page JS. Whether a panel is
   open, a form's unsaved working copy such as the state inspector's, and
   anything that changes per keystroke are examples. The server cannot render

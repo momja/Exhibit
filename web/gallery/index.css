@@ -103,7 +103,7 @@ main{padding:10px 12px}
 .card:hover .card-actions-trigger,.card:focus-within .card-actions-trigger,.card-actions.is-open .card-actions-trigger{opacity:1}
 .card-actions-trigger:hover,.card-actions-trigger:focus-visible,.card-actions-trigger[aria-expanded=true]{background:var(--color-hover-fill)}
 .card-actions-trigger i{line-height:1}
-.card-actions-menu{position:absolute;right:0;bottom:calc(100% + 6px);width:180px;max-width:calc(100vw - 32px);z-index:40}
+.card-actions-menu{position:absolute;right:0;top:auto;bottom:calc(100% + 6px);width:180px;max-width:calc(100vw - 32px);z-index:40}
 .card:has(.card-actions.is-open){z-index:31}
 @media (hover:none),(pointer:coarse){.card-actions{width:22px;margin:0 -4px 0 -2px}.card-actions-trigger{opacity:1}}
 

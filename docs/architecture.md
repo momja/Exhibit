@@ -1247,12 +1247,17 @@ editor are full-page server renders.
 
 Gallery cards expose a trailing action menu in place of the standalone Edit
 link. Its panel and items share `.action-menu` styles with the detail pill.
-`gallery-actions.js` delegates menu behavior from the stable gallery root, so
-search and paging swaps need no rebinding. Menus close on outside clicks,
+The shared `actionMenu` Go partial receives its action list from
+`galleryCardActions`. A single Stimulus controller handles every instance,
+including cards inserted or replaced by htmx. Menus close on outside clicks,
 focus leaving, or Escape; Escape returns focus to the trigger. Keyboard focus
-and touch expose the trigger without requiring hover.
+and touch expose the trigger without requiring hover. Links navigate normally;
+event items dispatch their named feature event with data and the visible
+trigger. Duplication listens for `exhibit:duplicate`. The self-hosted controller
+entry point and conventions for further components are described in
+[`ui-components.md`](ui-components.md).
 
-![Gallery card action menu](screenshots/Exh-johq/01-gallery-actions.png)
+![Gallery card action menu](screenshots/Exh-16ds/01-gallery-action-menu.png)
 
 **The detail page is the artifact, with its chrome floating over it**
 (Exh-ghuv). The frame fills the window. Everything else is one pill of

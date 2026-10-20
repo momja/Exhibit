@@ -1,0 +1,7 @@
+{
+  "name": "exhibit-stimulus",
+  "private": true,
+  "description": "Vendors the Stimulus ES module and license into the app-origin embedded assets.",
+  "scripts": { "build": "node build.mjs" },
+  "devDependencies": { "@hotwired/stimulus": "3.2.2" }
+}
