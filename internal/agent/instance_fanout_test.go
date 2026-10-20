@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -56,6 +57,64 @@ func requireInstanceFanoutNotice(t *testing.T, s *Session, which, message string
 	assert.Equal(t, map[string]string{
 		"type": "exhibit_spend_cap", "cap": which, "message": message,
 	}, notice, "fanout preserves the existing refusal message without exposing model identity")
+}
+
+type instanceFanoutAbortRecorder struct {
+	io.WriteCloser
+	aborts atomic.Int32
+}
+
+func (w *instanceFanoutAbortRecorder) Write(p []byte) (int, error) {
+	var command struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(p, &command) == nil && command.Type == "abort" {
+		w.aborts.Add(1)
+	}
+	return w.WriteCloser.Write(p)
+}
+
+func TestInstanceCapBYOKGuardrailReceiptStopsPlatformPeers(t *testing.T) {
+	byok, db := newMeteringSession(t, false)
+	m := byok.mgr
+	m.cfg.Caps = SpendCaps{InstanceMicrosPerMonth: microsPtr(1_000_000)}
+	spend := &instanceFanoutSpendStore{Store: db}
+	m.st = spend
+	byok.streaming = true
+	m.sessions = map[string]*Session{byok.ID: byok}
+	first := newInstanceFanoutSession(t, m, "first-platform-owner", 11, true)
+	second := newInstanceFanoutSession(t, m, "second-platform-owner", 22, true)
+	transports := make(map[*Session]*instanceFanoutAbortRecorder)
+	for _, s := range []*Session{byok, first, second} {
+		transport := &instanceFanoutAbortRecorder{WriteCloser: s.stdin}
+		s.stdin = transport
+		transports[s] = transport
+	}
+
+	seedSpend(t, db, first.OwnerID, first.ID, store.PaidByPlatform, store.UsageSourceModel, 600_000)
+	seedSpend(t, db, second.OwnerID, second.ID, store.PaidByPlatform, store.UsageSourceTool, 300_000)
+	seedSpend(t, db, byok.OwnerID, byok.ID, store.PaidByUser, store.UsageSourceModel, 50_000_000)
+	require.Nil(t, m.probeInstanceCap(context.Background()), "aggregate platform spend is below the cap")
+
+	// Only the BYOK session reports new usage. Screening is platform spend
+	// regardless of who funds the session's own model requests.
+	screen := Usage{Input: 100, Output: 1}
+	screen.Cost.Total = 0.1
+	byok.RecordGuardrailUsage("guard-provider", "guard-model", screen)
+	refusal := &CapRefusal{Which: "instance", LimitMicros: 1_000_000, UsedMicros: 1_000_000,
+		ResetAt: nextMonth(time.Now())}
+	for _, s := range []*Session{first, second} {
+		requireInstanceFanoutNotice(t, s, "instance", refusal.Message())
+		require.Eventually(t, func() bool { return transports[s].aborts.Load() == 1 }, 5*time.Second, time.Millisecond,
+			"each active platform peer must receive the existing abort RPC")
+	}
+	assert.Empty(t, instanceFanoutNotices(byok), "the BYOK reporter must not be stopped")
+	assert.Zero(t, transports[byok].aborts.Load())
+	byok.mu.Lock()
+	assert.True(t, byok.streaming)
+	byok.mu.Unlock()
+	assert.NoError(t, byok.capBeforePrompt(), "BYOK prompts stay exempt from platform limits")
+	assert.Equal(t, int32(2), spend.probes.Load(), "one baseline probe and one receipt-triggered probe")
 }
 
 func TestInstanceCapRefusalStopsPlatformRunsAcrossOwners(t *testing.T) {

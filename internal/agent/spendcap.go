@@ -285,9 +285,11 @@ func (m *Manager) ProbeCaps(ctx context.Context, ownerID int64) *CapRefusal {
 // removed every other one — a run in progress always finishes). It goes off
 // in a goroutine because the read loop must not block on SQL, and because
 // stopping the run needs an RPC round trip the loop itself would deadlock
-// on.
+// on. Probe regardless of the reporting session's funding: guardrail receipts
+// in BYOK sessions also spend platform money. Fanout still stops only
+// platform-paid runs.
 func (s *Session) checkInstanceCap() {
-	if s.paidBy != store.PaidByPlatform || s.mgr.cfg.Caps.InstanceMicrosPerMonth == nil {
+	if s.mgr.cfg.Caps.InstanceMicrosPerMonth == nil {
 		return
 	}
 	go func() {
