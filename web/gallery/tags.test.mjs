@@ -10,21 +10,25 @@ const TAGS_JS = path.join(here, "../../internal/api/assets/gallery/tags.js");
 
 const ID = "art-1";
 
-function loadTags({ responses = [], initial = {}, confirmed = true } = {}) {
+async function loadTags({ responses = [], initial = {}, confirmed = true } = {}) {
   const api = recordingApi(responses);
   const events = [];
   let reloads = 0;
-  const page = loadPageScript([TAGS_JS], {
+  const page = loadPageScript([], {
     ID, TOKEN: "", READ_ONLY: false,
     apiFetch: api.apiFetch,
     confirm: () => confirmed,
     CustomEvent
   }, {
+    "tags-panel": { dataset: { artifactId: ID } },
+    "tag-create-error": { hidden: true },
     "tag-edit-modal": { hidden: true },
     "tag-add-error": { hidden: true },
     "tag-edit-error": { hidden: true },
     ...initial
   });
+  page.window.apiFetch = api.apiFetch;
+  await page.loadModule(TAGS_JS);
   page.window.location.reload = () => { reloads++; };
   page.document.body.addEventListener("exhibit:tags-changed", (e) => events.push(e.type));
 
@@ -41,7 +45,7 @@ function loadTags({ responses = [], initial = {}, confirmed = true } = {}) {
 }
 
 test("remove detaches the tag from this artifact and re-renders the panel", async () => {
-  const t = loadTags();
+  const t = await loadTags();
   await t.clickAction("detach-tag", { tagId: "tag-1" });
   assert.deepEqual(t.api.calls.map((c) => [c.method, c.path]), [["DELETE", "/api/tags/tag-1/artifacts/art-1"]]);
   assert.deepEqual(t.events, ["exhibit:tags-changed"]);
@@ -49,22 +53,24 @@ test("remove detaches the tag from this artifact and re-renders the panel", asyn
 });
 
 test("adding an existing tag attaches it, and nothing is created", async () => {
-  const t = loadTags({ initial: { "tag-add-select": { value: "tag-2" } } });
+  const t = await loadTags({ initial: {
+    "tag-add-select": { value: "tag-2" }, "tag-add-name": { value: "Unsubmitted new tag" }
+  } });
   await t.clickById("tag-add-confirm");
   assert.deepEqual(t.api.calls.map((c) => [c.method, c.path]), [["POST", "/api/tags/tag-2/artifacts/art-1"]]);
   assert.deepEqual(t.events, ["exhibit:tags-changed"]);
 });
 
 test("create new makes the tag with its name and color, then attaches it", async () => {
-  const t = loadTags({
+  const t = await loadTags({
     initial: {
-      "tag-add-select": { value: "__new__" },
+      "tag-add-select": { value: "" },
       "tag-add-name": { value: "  charts " },
       "tag-add-color-hex": { value: "#ff0000" }
     },
     responses: [{ ok: true, status: 201, json: async () => ({ id: "new-tag" }) }]
   });
-  await t.clickById("tag-add-confirm");
+  await t.clickById("tag-create-confirm");
   assert.deepEqual(t.api.calls.map((c) => [c.method, c.path]), [
     ["POST", "/api/tags"],
     ["POST", "/api/tags/new-tag/artifacts/art-1"]
@@ -74,7 +80,7 @@ test("create new makes the tag with its name and color, then attaches it", async
 });
 
 test("add with nothing chosen sends nothing and says why", async () => {
-  const t = loadTags({ initial: { "tag-add-select": { value: "" } } });
+  const t = await loadTags({ initial: { "tag-add-select": { value: "" } } });
   await t.clickById("tag-add-confirm");
   assert.equal(t.api.calls.length, 0);
   assert.equal(t.byId("tag-add-error").hidden, false);
@@ -82,17 +88,18 @@ test("add with nothing chosen sends nothing and says why", async () => {
 });
 
 test("a refused create is reported and never attaches", async () => {
-  const t = loadTags({
-    initial: { "tag-add-select": { value: "__new__" }, "tag-add-name": { value: "dup" }, "tag-add-color-hex": { value: "" } },
+  const t = await loadTags({
+    initial: { "tag-add-select": { value: "" }, "tag-add-name": { value: "dup" }, "tag-add-color-hex": { value: "" } },
     responses: [{ ok: false, status: 409, json: async () => ({ error: "tag exists" }) }]
   });
-  await t.clickById("tag-add-confirm");
+  await t.clickById("tag-create-confirm");
   assert.equal(t.api.calls.length, 1);
-  assert.equal(t.byId("tag-add-error").textContent, "tag exists");
+  assert.equal(t.byId("tag-create-error").textContent, "tag exists");
+  assert.equal(t.byId("tag-create-confirm").disabled, false);
 });
 
 test("the edit dialog renames the tag library-wide and re-renders the panel", async () => {
-  const t = loadTags();
+  const t = await loadTags();
   await t.clickAction("edit-tag", { tagId: "tag-1", tagName: "charts", tagColor: "#ffffff" });
   const modal = t.byId("tag-edit-modal");
   assert.equal(modal.hidden, false);
@@ -107,10 +114,45 @@ test("the edit dialog renames the tag library-wide and re-renders the panel", as
 });
 
 test("deleting a tag asks first, and a declined confirm sends nothing", async () => {
-  const t = loadTags({ confirmed: false });
+  const t = await loadTags({ confirmed: false });
   await t.clickAction("edit-tag", { tagId: "tag-1", tagName: "charts", tagColor: "#ffffff" });
   const modal = t.byId("tag-edit-modal");
   await modal.dispatchEvent({ type: "click", target: { closest: (sel) => (sel === "#tag-edit-delete" ? {} : null) } });
   assert.equal(t.api.calls.length, 0);
   assert.equal(modal.hidden, false);
+});
+
+test("creating validates its own name even when an existing tag is selected", async () => {
+  const t = await loadTags({ initial: {
+    "tag-add-select": { value: "tag-2" }, "tag-add-name": { value: "  " }
+  } });
+  await t.clickById("tag-create-confirm");
+  assert.equal(t.api.calls.length, 0);
+  assert.equal(t.byId("tag-create-error").textContent, "Name is required.");
+  assert.equal(t.byId("tag-add-error").hidden, true);
+});
+
+test("Enter in the new tag name creates without consulting the dropdown", async () => {
+  const t = await loadTags({
+    initial: { "tag-add-select": { value: "tag-2" }, "tag-add-name": { value: "new" } },
+    responses: [{ ok: true, json: async () => ({ id: "new-tag" }) }]
+  });
+  let prevented = false;
+  await t.byId("tags-panel").dispatchEvent({ type: "keydown", key: "Enter",
+    target: { id: "tag-add-name" }, preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.deepEqual(t.api.calls.map(c => c.path), ["/api/tags", "/api/tags/new-tag/artifacts/art-1"]);
+});
+
+test("attachment errors after creation survive the panel refresh", async () => {
+  const t = await loadTags({
+    initial: { "tag-add-name": { value: "new" } },
+    responses: [
+      { ok: true, json: async () => ({ id: "new-tag" }) },
+      { ok: false, json: async () => ({ error: "Could not attach" }) }
+    ]
+  });
+  await t.clickById("tag-create-confirm");
+  assert.equal(t.byId("tag-add-error").textContent, "Could not attach");
+  assert.deepEqual(t.events, ["exhibit:tags-changed"]);
 });

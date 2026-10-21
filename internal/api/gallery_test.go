@@ -106,7 +106,7 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
-	assert.Contains(t, page, `<details class="details-panel" id="tags-panel">`)
+	assert.Contains(t, page, `<details class="details-panel" id="tags-panel" data-artifact-id="`+id+`">`)
 	assert.Contains(t, page, `hx-get="/partials/tag-panel?artifact=`+id+`"`)
 	assert.Contains(t, page, `hx-trigger="exhibit:tags-changed from:body"`)
 	assert.Contains(t, page, `data-action="edit-tag" data-tag-id="`+charts.ID+`" data-tag-name="charts" data-tag-color="#ffffff"`)
@@ -114,13 +114,17 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 	// The dropdown offers what is not yet attached.
 	assert.Contains(t, page, `<option value="`+other.ID+`">other</option>`)
 	assert.NotContains(t, page, `<option value="`+charts.ID+`">`)
-	assert.Contains(t, page, `<option value="__new__">+ Create new tag</option>`)
+	assert.NotContains(t, page, `value="__new__"`)
+	assert.Contains(t, page, `id="tag-create-confirm"`)
+	assert.Contains(t, page, `Create and add tag`)
+	assert.Contains(t, page, `id="tag-create-error"`)
+	assert.NotContains(t, page, `class="tag-create" hidden`)
 	assert.Contains(t, page, `id="tag-add-color-hex" class="field" value="#6b7280"`)
 	// The library-wide edit dialog, and the script that drives both.
 	assert.Contains(t, page, `<div id="tag-edit-modal" class="modal-overlay" hidden>`)
 	assert.Contains(t, page, `data-color="#6B7280"`) // store.DefaultTagColor preset
 	assert.Contains(t, page, `id="tag-edit-delete"`)
-	assert.Contains(t, page, `<script src="/assets/gallery/tags.js"></script>`)
+	assert.Contains(t, page, `<script type="module" src="/assets/gallery/tags.js"></script>`)
 	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/tags.js"), "exhibit:tags-changed")
 }
 

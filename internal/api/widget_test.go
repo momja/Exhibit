@@ -235,7 +235,7 @@ func TestEditPageSectionsAreSymmetricPanels(t *testing.T) {
 	page := w.Body.String()
 
 	for _, panel := range []string{
-		`<details class="details-panel" id="tags-panel">`,
+		`<details class="details-panel" id="tags-panel" data-artifact-id="` + id + `">`,
 		`<details class="details-panel" id="security-panel">`,
 		`<details class="details-panel" id="state-panel">`,
 		`<details class="details-panel" id="assets-panel">`,
