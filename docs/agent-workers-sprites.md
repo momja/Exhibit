@@ -3,8 +3,8 @@
 Implementation scope: [Exh-fuxp](../.tickets/Exh-fuxp.md), under
 [Exh-i0ll](../.tickets/Exh-i0ll.md). `internal/sprites` is an infrastructure
 backend, independent of `internal/agent`, HTTP handlers, and Store. The core
-Manager still owns coordination. This package does not change production mode
-selection or start resources on its own.
+Manager still owns coordination. `cmd/server/agent_workers.go` connects it to production mode selection, durable
+admission, encrypted request journaling, lease renewal and scheduled cleanup.
 
 ## Platform contracts checked 2026-10-20
 
@@ -43,7 +43,7 @@ none is claimed to have been exercised against a live org in this implementation
 Construct `sprites.New(sprites.Config{...})`. Required values are `Token`, an
 exclusive deployment `Prefix`, and `Release{Version, URL, SHA256}`. The URL is a
 complete pinned runtime **archive**, even if the outer configuration calls it
-`AGENT_WORKER_BINARY_URL`. Require an immutable release version and a separate
+`AGENT_WORKER_RELEASE_URL`. Require an immutable release version and a separate
 SHA256 setting; a bare Go binary does not satisfy the archive contract.
 
 Suggested configuration mapping, owned by the core integration:
@@ -52,9 +52,9 @@ Suggested configuration mapping, owned by the core integration:
 | --- | --- |
 | `SPRITE_TOKEN` | `Config.Token`, coordinator only |
 | `AGENT_SPRITE_PREFIX` | `Config.Prefix` |
-| `AGENT_WORKER_BINARY_URL` | `Config.Release.URL` (tar.gz runtime bundle) |
+| `AGENT_WORKER_RELEASE_URL` | `Config.Release.URL` (tar.gz runtime bundle) |
 | `AGENT_WORKER_RELEASE_VERSION` | `Config.Release.Version` |
-| `AGENT_WORKER_BINARY_SHA256` | `Config.Release.SHA256` |
+| `AGENT_WORKER_RELEASE_SHA256` | `Config.Release.SHA256` |
 | `AGENT_MAX_WORKERS` | `Config.MaxWorkers` and central active admission |
 | `AGENT_WORKER_STARTUP_TIMEOUT` | `Config.StartupTimeout` |
 | `AGENT_WORKER_IDLE_RETENTION` | `Config.IdleRetention` |
@@ -68,7 +68,11 @@ does not read environment variables. Root mode selection (`local`, `remote`,
 `Identity{OwnerID, SessionID, ExecutionID}` is an immutable **assignment**.
 OwnerID is a string here; adapt an integer owner ID with `strconv.FormatInt`.
 ExecutionID is the central fencing/assignment generation, not the prompt ID.
-Use a fresh ExecutionID after loss/replacement; never reuse a deleted generation.
+Use a fresh ExecutionID after central lease loss or reassignment; never reuse a
+retired generation. If only an idle Sprite disappears while its central lease
+remains valid, the coordinator may provision the same immutable assignment on
+the next explicit input and restore its acknowledged snapshot. It does not
+replay an uncertain active turn.
 The deterministic resource name is `<prefix>-<128-bit identity hash>`. Raw owner
 and conversation IDs do not appear in the name, and a different owner produces a
 different Sprite. Prefixes must be exclusive to one coordinator deployment.
@@ -129,7 +133,8 @@ failure is returned; an unknown create outcome that cannot be queried remains a
 possible orphan for reconciliation. Never silently treat it as a completed run.
 
 `ErrCapacity` is actionable admission refusal; release capacity or retry later.
-`ErrNotFound` requires deliberate restore into a fresh central assignment.
+`ErrNotFound` requires deliberate snapshot restoration: keep an existing valid
+idle assignment, or acquire a fresh central assignment after lease loss.
 `ErrConflict` requires investigation/new assignment, not automatic token rotation
 or prompt replay. Upstream bodies, service output, and hook errors are excluded
 from returned errors because they may contain secrets. Do not log Requests,
@@ -290,10 +295,46 @@ Observed validation in this checkout:
 - `go test -race ./internal/sprites` and `go vet ./internal/sprites` pass.
 
 No `SPRITE_TOKEN`, `SPRITES_TOKEN`, `FLY_API_TOKEN`, or `FLY_ACCESS_TOKEN` is present
-in the implementation environment. No paid Sprite was launched. A real release
-archive, live service bootstrap, two concurrent conversations, forced loss,
+in the implementation environment. No paid Sprite was launched. Live installation of the verified runtime
+archive, service bootstrap, two concurrent Sprites, forced platform loss,
 actual org quota/rate behavior, warm/cold timings, idle compute suspension,
 retained-storage usage/billing, and a production rollback remain unvalidated.
-The parent must wire runtime holds, central assignment persistence/fencing and
-snapshots, transport adaptation, retention scheduling, mode/config selection,
-and end-to-end validation before claiming the epic's rollout acceptance criteria.
+Core integration now wires holds, shared durable authority, encrypted request
+journaling, snapshots, per-Sprite transports, retention scheduling and mode
+selection. Local validation additionally drives real pinned Pi through standalone
+HTTP services with a fake Sprite fleet: simultaneous distinct-owner turns, central
+admission, source/state changes, cold service replacement, resume and priced-usage
+retry continuity, guardrail and aggregate instance-budget refusal, idle renewal
+without worker HTTP, and account cleanup. Handler tests cover login/body-limit
+separation, atomic concurrent create, stale denial and exact source/widget version
+association. Blocking guards and management cleanup cannot stall other workers.
+These checks do not establish the live platform or billing evidence above.
+
+Final assembled-stack verification (2026-10-20):
+
+- `make assets` and `go test ./... -count=1 -timeout=15m` passed, including the
+  complete API and SQLite suites.
+- Vet passed for the server, worker, agent, authority, transport, API, Sprites,
+  and Store packages. All 46 browser history/import tests passed after rebasing
+  onto the shipped asset-import changes; the full Go suite also passed again.
+- The native arm64 release archive passed
+  `TestPackagedReleaseMatchesSpriteBootstrap` with bundled Node/Pi. The amd64
+  archive passed layout/checksum/ELF checks; amd64 execution was not tested.
+- `docker build --target core` passed. A local container using that image had
+  no Node/Pi executables, rendered chat after login, and drove a separate
+  packaged worker over HTTP to stream saves, persist History, resume the same
+  conversation, and commit another source version. The container and fixture
+  processes were stopped after verification.
+- Targeted race tests covered concurrent workers, restart cleanup, erasure,
+  central admission/fencing, and late-receipt instance hard-stop propagation.
+- Self-hosting upgrade verification used the server from main with schema 034,
+  then the default local image with worker migration 035 on the same data volume.
+  Login, encrypted BYOK credentials, artifacts and History survived; the same
+  conversation resumed and committed another source version using bundled Pi.
+  No execution-mode override, worker service, Sprite credentials, platform key,
+  or spend-cap configuration was supplied. Default Compose still starts only
+  the app. Upgrade regressions also cover schema 033.
+
+Review-agent review covered every implementation layer and each follow-up fix;
+all findings were fixed and re-reviewed. These are local validation results,
+not a live Sprite rollout.

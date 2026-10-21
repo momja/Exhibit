@@ -254,3 +254,24 @@ func TestWorkerAuthorityPolicyStorageOutageFailsClosed(t *testing.T) {
 		assert.NotContains(t, w.Body.String(), f.token)
 	}
 }
+
+func TestInsertedLateUsageNotifiesCentralPolicyOnce(t *testing.T) {
+	f := newWorkerAuthorityFixture(t)
+	require.NoError(t, f.c.Release(context.Background(), f.assignment.Identity, agentcontrol.Interrupted))
+	var notifications atomic.Int32
+	f.handler = NewAgentWorkerHandler(f.c, func(ctx context.Context) {
+		total, err := f.ro.cfg.Store.InstanceAgentSpend(ctx, time.Time{})
+		require.NoError(t, err)
+		require.Equal(t, int64(125), total.CostMicros, "notify after the receipt commits")
+		notifications.Add(1)
+	})
+	report := `{"event_id":"late-message","source":"model","cost_micros":125}`
+	for range 2 {
+		response := f.send("POST", AgentWorkerAuthorityPath+"/usage", f.token, strings.NewReader(report), "")
+		require.Equal(t, 200, response.Code, response.Body.String())
+	}
+	require.Equal(t, int32(1), notifications.Load(), "idempotent retry must not repeat enforcement")
+	invalid := f.send("POST", AgentWorkerAuthorityPath+"/usage", f.token, strings.NewReader(`{"event_id":"invalid","source":"model","cost_micros":-1}`), "")
+	require.Equal(t, 400, invalid.Code)
+	require.Equal(t, int32(1), notifications.Load())
+}

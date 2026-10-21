@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/subtle"
 	"log/slog"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/momja/Exhibit/internal/agentcontrol"
 	"github.com/momja/Exhibit/internal/agentscope"
 )
 
@@ -77,7 +79,13 @@ func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if g := ro.resolveAgentGrant(token); g != nil {
+		if g := ro.resolveAgentGrant(r.Context(), token); g != nil {
+			release, err := g.Guard(r.Context())
+			if err != nil {
+				writeError(w, http.StatusUnauthorized, "agent execution is no longer authoritative")
+				return
+			}
+			defer release()
 			scope := g.Scope()
 			if !agentScopeAllows(scope, r.Method, r.URL.EscapedPath()) {
 				slog.WarnContext(r.Context(), "agent credential refused outside its scope",
@@ -94,6 +102,11 @@ func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 			// Principal, rather than deferred to ownerMiddleware.
 			ctx := withPrincipal(r.Context(), Principal{OwnerID: scope.OwnerID, Kind: PrincipalAgentGrant, Grant: g})
 			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		if agentscope.IsCredential(token) || agentcontrol.IsSupervisorCredential(token) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -216,11 +229,11 @@ func bearerToken(r *http.Request) string {
 	return auth[7:]
 }
 
-func (ro *Router) resolveAgentGrant(token string) *agentscope.Grant {
+func (ro *Router) resolveAgentGrant(ctx context.Context, token string) *agentscope.Grant {
 	if ro.cfg.AgentCredentials == nil {
 		return nil
 	}
-	return ro.cfg.AgentCredentials.Resolve(token)
+	return ro.cfg.AgentCredentials.ResolveContext(ctx, token)
 }
 
 // agentSubResources are the sub-paths of an artifact an agent session may

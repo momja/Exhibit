@@ -41,17 +41,17 @@ func TestASessionLimitRefusesWith429AndItsMessage(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/agent/sessions", nil)
 
 	w := httptest.NewRecorder()
-	writeAgentCreateError(w, req, "create agent session", agent.ErrSessionLimit)
+	(&Router{}).writeAgentCreateError(w, req, "create agent session", agent.ErrSessionLimit)
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 	assert.Contains(t, w.Body.String(), "all of yours are busy")
 
 	w = httptest.NewRecorder()
-	writeAgentCreateError(w, req, "create agent session", agent.ErrInstanceSessionLimit)
+	(&Router{}).writeAgentCreateError(w, req, "create agent session", agent.ErrInstanceSessionLimit)
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 	assert.Contains(t, w.Body.String(), "instance has reached")
 
 	w = httptest.NewRecorder()
-	writeAgentCreateError(w, req, "create agent session", errors.New("spawn failed"))
+	(&Router{}).writeAgentCreateError(w, req, "create agent session", errors.New("spawn failed"))
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 

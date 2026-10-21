@@ -2,16 +2,27 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/store"
 )
 
 func (ro *Router) storeInitialArtifact(ctx context.Context, a *store.Artifact, body string) error {
-	commit := func() error { return ro.cfg.Store.PutArtifact(ctx, a) }
+	commit := func() error {
+		if grant := agentGrantFromCtx(ctx); grant != nil && grant.Execution().ID != "" {
+			writer, ok := ro.cfg.Store.(store.AgentArtifactWriter)
+			if !ok {
+				return fmt.Errorf("atomic agent artifact storage unavailable")
+			}
+			return writer.PutAgentArtifact(ctx, agentExecutionIdentity(grant), a, time.Now())
+		}
+		return ro.cfg.Store.PutArtifact(ctx, a)
+	}
 	if ro.cfg.Entitlements.Enforced {
 		return ro.storeBlobContent(ctx, a.SourceBlobID, body, commit)
 	}

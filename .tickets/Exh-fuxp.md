@@ -67,3 +67,9 @@ References checked 2026-10-20:
    memory bounds, idle compute release, retained-disk cost, actual org limits,
    and working rollback. Cost verification uses observed usage rather than a
    promise that sleeping persistent storage is free.
+
+## Notes
+
+**2026-10-20T07:30:55Z**
+
+Backend and production integration implemented and review-agent reviewed: authenticated REST/WebSocket provisioning, Service bootstrap, bounded Tasks holds, pinned releases, retention/orphan cleanup and encrypted request recovery. Fake platform plus real local Pi/HTTP/Unix-socket tests pass. Remains in_progress: no Sprite credentials are available and no paid resources were launched; real two-Sprite concurrency, warm/cold timing, idle suspension, retained-storage billing, actual org quotas, rollout telemetry and live rollback evidence are still required.

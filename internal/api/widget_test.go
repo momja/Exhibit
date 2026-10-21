@@ -309,7 +309,7 @@ func TestWidgetGenerateUnavailableWithoutAgent(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-	assert.Contains(t, w.Body.String(), "pi binary")
+	assert.Contains(t, w.Body.String(), "agent execution is not enabled")
 }
 
 // Generation starts an agent session, so it is a mutation and sits behind the

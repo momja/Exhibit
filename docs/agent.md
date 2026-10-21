@@ -7,21 +7,19 @@ agent saves flowing through the normal ingest path.
 
 ## How it fits the architecture
 
-Pi (`pi-mono`, Mario Zechner's agent harness) runs as a **sidecar subprocess**,
-one per chat session, spawned by the Go service as
-`pi --mode rpc --session <scratch>/session.jsonl --no-builtin-tools -e exhibit.ts`. The image
-ships `pi`; unlike the satellites in architecture §3.6 it is not optional. The
-service talks strict JSONL over stdin/stdout (Pi's RPC mode) and fans events
-out to the browser over SSE.
+Exhibit owns the chat UI, login, keys, usage ledger, budgets, history and
+`internal/agent.Manager`. Its `agentexec.Runner` selects local execution (the
+default), an authenticated standalone worker, or one Fly Sprite per assignment.
+Only Pi supervision and scratch move to `cmd/exhibit-agent`; workers have no Store
+access, database/blob mount, server encryption key, or operator credential.
+Remote core needs neither Node nor Pi and never falls back to a local subprocess.
 
-```
-browser chat UI ──POST prompt──► Go service ──JSONL stdin──► pi (sidecar)
-      ▲                              │                          │
-      └────────── SSE events ◄───────┘◄───JSONL stdout──────────┘
-                                                                │ tool calls
-                        exhibit API (single write path) ◄───────┘
-                        POST /api/artifacts · PATCH /api/artifacts/:id
-```
+The browser sends prompts and receives SSE on Exhibit's existing origin. The core
+sends assigned configuration and idempotent commands over authenticated worker
+HTTP, consumes bounded event batches, and persists complete Pi snapshots through
+central authority. Pi runs `--mode rpc --session <scratch>/session.jsonl
+--no-builtin-tools` with the shared embedded extensions from `internal/agentassets`.
+Provider credentials reach only that execution's minimal environment.
 
 The single write path is preserved: the agent's only tools are
 `create_artifact` / `write_artifact` / `edit_artifact` / `get_artifact` for the document,
@@ -29,7 +27,7 @@ The single write path is preserved: the agent's only tools are
 (av-lvi1), and `set_widget` / `edit_widget` / `get_widget` for the artifact's gallery tile
 (av-fafu), plus `get_selection` for the elements the user picked in the preview and
 `ask_user` for questions in the chat —
-all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
+all registered by a Pi extension (`internal/agentassets/ext/exhibit.ts`,
 materialized to the data dir at startup). Artifact tools call back into the
 Exhibit HTTP API; `ask_user` uses Pi's interactive RPC channel. Agent output is scanned like any other ingest; scanned origins are
 **never** auto-approved — the chat UI tells the user when a saved artifact has
@@ -60,7 +58,7 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
   uncertain save invalidates the snapshot and requires an explicit read before
   retrying. `edit_widget` follows the same contract for its independent widget
   snapshot. Full rewrites still use `write_artifact` or `set_widget`, with the
-  revision of the source already read. Engine: `internal/agent/ext/edit.ts`
+  revision of the source already read. Engine: `internal/agentassets/ext/edit.ts`
   (pure, node-tested); wiring: `ext/exhibit.ts`.
 - **The API refuses anything outside the scope.** The sidecar authenticates
   with a per-session credential (`internal/agentscope`) that resolves to
@@ -338,8 +336,8 @@ that control self-hosts, where BYOK gives it to them in full. Concretely:
   `BYOK = false` so the page never calls the key route.
 - Pi's own identifiers are stripped from the event stream, and a stored
   conversation is served only as a projection that carries none (below).
-- Availability is a separate, unchanged signal: a missing `pi` binary still
-  disables the surface in either mode.
+- Execution availability is separate from funding mode: local mode needs Pi;
+  remote/Sprites modes use an authenticated worker and need no local Pi.
 
 ### What Pi emits, and what is filtered
 
@@ -348,7 +346,7 @@ service's publishing seams passes Pi's protocol through verbatim — the SSE
 broadcast. (A stored conversation holds the same fields, but is served only as
 a projection that names fields explicitly; see Conversations below.) Captured
 from a real
-`pi --mode rpc` turn (Pi 0.87.1, the version the Dockerfile pins):
+`pi --mode rpc` turn (Pi 1.3.0, the version the runtime pins):
 
 ```json
 {"type":"turn_end","message":{"role":"assistant","content":[…],
@@ -459,7 +457,7 @@ topic filter: off-topic use is allowed. Nor is it a spend control: what each
 screen costs is recorded in the ledger tagged `guardrail` (below), and the
 limits over it are the spend cap's (av-99f4, above).
 
-- **A second Pi extension.** `internal/agent/ext/guard.ts` is embedded and
+- **A second Pi extension.** `internal/agentassets/ext/guard.ts` is embedded and
   materialized beside `exhibit.ts`, and loaded with its own `-e` only when a
   guardrail is configured. It imports nothing from `exhibit.ts`, and its whole
   contract is `EXHIBIT_GUARD_*` in the sidecar's environment, so it could leave
@@ -551,7 +549,7 @@ behaving as it does in the pinned version.
   Invalid prompts return 400 with an explanation. The service-wide request
   body limit still applies independently.
 - An owner holds at most **10 agent processes**, and the instance at most
-  **32**, including processes starting or stopping. Capacity is reserved
+  **AGENT_MAX_WORKERS** (default 32), including startup and retained failed drains. Capacity is reserved
   atomically before startup and returned after the process is reaped; failed
   startup also returns its reservation. At capacity the caller's oldest idle
   process is evicted and reaped before its slot is reused. Busy processes and
@@ -570,21 +568,18 @@ behaving as it does in the pinned version.
 
 ## Conversations (av-y7td)
 
-A conversation is kept as Pi itself records it. Each session is spawned with
-`--session <workDir>/session.jsonl`, so Pi appends its own session file — every
-entry, in order, compacted or not — and on every `agent_settled` the service
-reads that file back and stores it in the conversation's `agent_transcripts`
-row (`internal/agent` `persistTranscript`). Pi's session file is the one format
-`pi --session` starts from, so keeping it is what makes a conversation
-resumable; it is stored as it is rather than translated into anything of ours.
+A conversation is kept as complete Pi JSONL records, including raw provider/model
+fields needed for reliable continuation. Core saves checkpoints after completed
+tool calls, settled turns, and orderly shutdown. Each checkpoint carries a
+monotonic revision, title and `tool|settled|interrupted` kind. Repeated revisions
+must match exactly; superseded attempts cannot overwrite newer history. The
+64 MiB bound is checked before reading the whole file.
 
-The row also records which version of the artifact the conversation was last
-working against — the artifact's head version when the file was stored, read in
-the same statement (`store.SaveTranscript`) — and a title, the first prompt
-shortened. Storing is an upsert per (artifact, session), so a conversation is
-one record that grows; a conversation that outgrows 64 MiB (each read of the
-artifact is a full copy in the file) stops being kept rather than growing the
-database without limit, and the live session carries on.
+The version association comes from the exact source/widget version committed by
+this attempt while its grant guard was held, including atomic create binding.
+A later browser edit cannot relabel that checkpoint with a newer head. Raw
+records stay private; platform redaction happens at browser event/projection
+boundaries, preserving the resume file intact.
 
 What leaves the server is a **projection**, never the file. A session file holds
 the system prompt, every tool result in full, the model's reasoning and the
@@ -860,7 +855,8 @@ capture leaves the sandbox only as data posted to that host.
 
 | Env | Meaning |
 |-----|---------|
-| `PI_BIN` | pi executable (default `pi`). If missing, the server boots and every agent route answers `503`: a broken install, not a configuration |
+| `AGENT_EXECUTION_MODE` | `local` (default), `off`, `remote`, or `sprites`; see deployment §4 for worker settings |
+| `PI_BIN` | Local-mode Pi executable (default `pi`). Missing Pi disables local execution with a warning; remote modes do not look it up |
 | `EXHIBIT_SECRET` | optional server secret for key encryption (else `data/secret.key` is generated) |
 | `MOCK_LLM_URL` | dev/test only: enables the `exhibit-mock` provider pointing at `cmd/mockllm` |
 | `AGENT_API_KEY` | the instance's own provider key — set it to enable platform mode; unset is BYOK |
@@ -886,7 +882,7 @@ model that obeys an "also update artifact &lt;id&gt;" planted in untrusted data 
 so the whole pipeline is testable without real provider credentials.
 `cmd/mockllm` serves it as a standalone process for driving the surface by
 hand; Go tests mount `mockllm.Handler()` on an httptest server and spawn a
-real pi sidecar against it (`internal/api/agent_pipeline_test.go` and
+real Pi runtime against it (`internal/api/agent_pipeline_test.go` and
 `agent_platform_pipeline_test.go`, both skipped when `pi` is not installed).
 `exhibit-mock` is a valid `AGENT_PROVIDER`, so platform mode is exercised end
 to end with no real credential. The exhibit extension registers the provider only
@@ -941,46 +937,37 @@ conversation persistence and resume, platform event redaction, and token
 metering across turns and resume. They skip if `pi` is absent, so a passing
 run without Pi does not verify an upgrade.
 
-## Extraction plan (epic `Exh-i0ll`)
+## Standalone execution boundary
 
-The agent is a PoC guest in this repository, not a permanent resident. The
-target shape is a **separate repository (`exhibit-agent`) holding a separate
-Go service** that integrates with Exhibit exclusively through the HTTP API —
-the same "optional satellite" standing as the thumbnail worker, just with a
-UI. Steps, in order:
+[Exh-i0ll](../.tickets/Exh-i0ll.md) extracts execution while keeping the UI and
+durable coordinator in Exhibit. `internal/agentexec` and `cmd/exhibit-agent` are
+independently buildable without core frontend assets or storage packages. Exact
+runtime pins, protocol and packaging: [`cmd/exhibit-agent/README.md`](../cmd/exhibit-agent/README.md).
+No separate repository, external UI origin or new browser-held worker token is
+required.
 
-1. **Transcripts through the API** (`Exh-v6v4`): `Session.persistTranscript`
-   currently calls `store.SaveTranscript` directly — the one write bypassing
-   the HTTP API. Becomes `PUT /api/artifacts/:id/transcripts`; after this the
-   agent has zero store access and is extractable. Authorize that write as
-   the *service*, never with the session's scoped credential: a stored
-   conversation is replayed into Pi when it is resumed (av-b4yh), so a session
-   able to write its own history could plant instructions in a conversation the
-   user later continues. Today the write is the manager's, server code that no
-   model output reaches, and Pi alone writes the file.
-2. **Exhibit-side seams** (`Exh-hz3g`): an `AGENT_URL` config that, when set,
-   points the gallery "Agent" link and the detail-page "Modify with agent"
-   action at the external agent UI; plus an additional configured embedder
-   origin accepted by the render-surface bridges (snippet picker activation
-   and postMessage target, `__avState` write bridge are today pinned to
-   `APP_ORIGIN` — the agent service's chat page must be allowed to embed
-   render iframes with both working).
-3. **Extraction** (`Exh-k75k`): move `internal/agent` (sessions, pi sidecar,
-   `ext/exhibit.ts`), `internal/secrets` + the `agent_keys` storage, the
-   `/agent` chat UI, the agent API routes, and `internal/mockllm` +
-   `cmd/mockllm` into the new repo. Config: `EXHIBIT_URL` + `EXHIBIT_TOKEN`,
-   `PI_BIN`, its own port and secret. The browser talks only to the agent
-   service, which **proxies** every Exhibit read/write through the API — no
-   CORS opened on Exhibit, no token in page JS. Then delete the agent code
-   from Exhibit core.
+One `agentcontrol.Control` is shared by the core coordinator and API middleware.
+It reserves centrally before provisioning/resume reads, issues separate tool and
+supervisor credentials, and fences every mutation through the whole handler.
+Unresolved worker credentials cannot fall through to auth-disabled access.
+The own-auth supervisor API at `/internal/agent-worker/v1/{snapshot,usage}` is
+app-origin only; browser, service and Pi tool tokens cannot read raw snapshots.
+Core's Manager continues to use its local authority/ledger directly: it does not
+make HTTP calls to itself for accounting.
 
-What stays in Exhibit, because it is genuinely core: the
-`internal/agentscope` registry and the scope check in `authMiddleware`
-(authorization is Exhibit's to keep, so an extracted agent service would
-obtain a session credential from Exhibit rather than mint one), the
-`agent_transcripts` table and its endpoints (artifact provenance belongs to
-the artifact), and the snippet picker (`internal/render/snippet.go` — a
-render-surface capability any embedding host can drive, not agent code).
+The coordinator persists Sprite requests and encrypted endpoint credentials before
+provisioning, fences prior attempts on core restart, and schedules management-only
+cleanup. Distinct owners never share a worker disk. Worker event connections and
+active Tasks API holds close after settlement is durably acknowledged; an idle
+browser SSE stays connected to core. Central lease renewal does not wake Sprites.
+The worker independently expires after coordinator loss. A new explicit prompt
+may restore an acknowledged settled snapshot after cold restart; uncertain active
+commands surface interruption and are never replayed automatically.
+
+Configuration, rollout/rollback and cleanup: [deployment.md §4](deployment.md#4-ai-agent)
+and [agent-workers-sprites.md](agent-workers-sprites.md). Fake infrastructure and
+real pinned-Pi HTTP tests do not prove live billing, warm/cold readiness, org limits,
+or concurrent Sprite capacity. Those rollout measurements remain outstanding.
 
 ## Known PoC limits
 

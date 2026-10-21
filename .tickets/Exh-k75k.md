@@ -1,6 +1,6 @@
 ---
 id: Exh-k75k
-status: in_progress
+status: closed
 deps: [Exh-v6v4, Exh-hz3g]
 links: [av-e0yj, Exh-099b, av-4bzn, Exh-p4zz, Exh-nueb]
 created: 2026-07-12T03:30:17Z
@@ -58,3 +58,9 @@ Exhibit; horizontal scaling does not require moving them to another origin.
 5. Runtime release/install instructions and Exhibit configuration/architecture
    documentation describe the implemented boundary and independent rollback.
 
+
+## Notes
+
+**2026-10-20T07:30:54Z**
+
+Implemented independently runnable storage-free Go/Pi worker, local and remote runners, bounded protocol/events/commands, leases/holds, checkpoint acknowledgements and retryable drain/erasure. Native arm64 release with Node22.22.0/Pi1.3.0 was packaged and executed; amd64 archive layout/ELF/checksums verified without amd64 execution. Core target builds without Node/Pi. Reviewed with review-agent and fixes re-reviewed; live Sprite rollout remains Exh-fuxp.
