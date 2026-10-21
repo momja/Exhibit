@@ -1,6 +1,6 @@
 ---
 id: Exh-xw7h
-status: in_progress
+status: closed
 deps: [Exh-hz3g]
 links: []
 created: 2026-10-20T05:25:12Z
@@ -52,3 +52,9 @@ one set of limits. Part of Exh-i0ll; builds on Exh-hz3g's internal API.
    usage is still attributed once. Replacement retains identity and spend.
 4. Abort/close/hard-stop reach the correct worker, browser reconnect recovers
    state, and idle coordination permits worker compute to stop.
+
+## Notes
+
+**2026-10-20T07:30:55Z**
+
+Implemented production mode routing, shared durable admission/leases, encrypted provisioning/cleanup journal, independent execution gates, idle renewal without worker HTTP, cold/full replacement restore, restart cleanup and owner erasure retries. Reviewed with review-agent and fixes re-reviewed. Real pinned-Pi/fake-Sprite concurrent-owner, admission, restart, spend continuity, guardrail/cap fanout and race regressions pass. Live platform and billing evidence remains Exh-fuxp.

@@ -565,81 +565,46 @@ default. The agent mode is a form of named fields. The brief crosses to `/agent`
   each in its own browser contexts. Share link previews are the first (av-rclm);
   unset, they use the logo card.
 
-### 3.7 Agent sidecar (Pi harness, Exh-yvhp)
+### 3.7 Agent execution (Pi harness)
 
-The agent is the main way artifacts are built and changed. Each chat session runs one
-`pi --mode rpc` subprocess managed by `internal/agent`. Without `pi` the server boots
-and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
+`internal/agent.Manager` stays in Exhibit: browser chat/SSE, login, encrypted BYOK,
+platform policy/redaction, the usage ledger and spend caps, History and admission.
+`agentexec.Runner` moves Pi and per-execution scratch to `cmd/exhibit-agent` when
+`AGENT_EXECUTION_MODE=remote|sprites`; that worker has no Store, core volume,
+server secret or operator credential. `local` is the default; `off` disables
+execution. Remote failure never falls back to local Pi. Details: `agent.md`.
 
-- **Single write path**: built-in tools disabled; one extension
-  (`internal/agent/ext/exhibit.ts`) whose tools (`create_artifact`,
-  `write_artifact`, `edit_artifact`, `get_artifact`, `get_state`, `set_state`,
-  `delete_state`, `set_widget`, `edit_widget`, `get_widget`, `get_selection`) call
-  the HTTP API or read selected elements. `ask_user` uses Pi's interactive RPC
-  channel for chat questions (`agent.md`). Output is scanned like any ingest,
-  never auto-approved.
-- **Scoped credential** (av-e0yj): `internal/agentscope` mints a token resolving to
-  (owner, artifact). `authMiddleware` allows only `POST /api/artifacts` while
-  unbound, then `GET`/`PATCH` on the bound artifact plus `agentSubResources`
-  (`internal/api/middleware.go`): `state` and `widget` read/write, `assets`
-  read-only. Deny-by-default: a new agent tool needing a new sub-route must add it
-  there, or it 403s at runtime. Trust argument: `security.md` §5.3. The create binds it. No tool takes an id. Composes
-  with owner scoping; neither half suffices alone. The grant is revoked when the
-  subprocess exits or is killed; no credential outlives its process.
-- **Live sessions are in-memory and owner-scoped.** They live in a process-local
-  registry, not SQLite, and do not survive a restart (transcripts do, below).
-  `Manager.Get(ownerID, id)`; another owner's session is 404. The SSE route
-  resolves its owner in `authorizeEventStream`.
-- **Oversized writes** (av-ombn): the sidecar gets `EXHIBIT_MAX_BODY_BYTES` and
-  refuses early; a 413 yields a readable tool error.
-- **Untrusted text arrives only as tool results** (av-5s7g). The system prompt is
-  static. Sessions reuse known source, including preloaded results and successful
-  own creates, writes and edits; a successful save needs no extra read. Read with
-  `get_artifact` or `get_widget` when needed source is missing or compacted away,
-  after a conflict or failed source match, on evidence of an external edit or
-  restore, or when a save's outcome is uncertain. Prompt guidance does not enforce
-  concurrency; revision preconditions do (§3.1).
-- **Preparation** (Exh-1f4m): deliberate typing may start a session and an authorized
-  source prefetch without sending draft text or making a provider request. After
-  Send passes screening, the extension validates the revision, refreshes if changed,
-  and projects a synthetic assistant `get_artifact` call plus its actual tool result.
-  Failed preparation falls back to the ordinary tool. Pi persists prepared reads as
-  custom data; the extension projects pairs on resume and after compaction without
-  promoting source into user messages. Never-accepted sessions have a fixed
-  90-second deadline, independent of normal idle lifetime. Successful own saves
-  advance the retained source base; later prompts validate it without fetching or
-  injecting another full copy. Lifecycle and replay: `agent.md`, `security.md` §5.2.
-- **Transcripts** (av-y7td): Pi's session file is stored per settled turn in
-  `agent_transcripts` with the artifact version. Only `agent.Messages` leaves the
-  server. Pi is pinned because its file format is now a contract.
-- **Resume** (av-b4yh): only with `resume_session_id`, sent from History's Continue.
-  The resumed session uses the current system prompt, and its first prompt carries
-  a fixed notice saying the artifact may have changed: use freshly prepared source,
-  or read with `get_artifact` if preparation was unavailable.
-  Rolling back the artifact is the page's choice via the restore route. Sessions run
-  from `/`; the scratch dir is deleted after.
-- **BYO key**: AES-256-GCM at rest (`internal/secrets`, `agent_keys`), passed via a
-  minimal environment, shown masked.
-- **Platform key** (av-siqf): `AGENT_API_KEY` makes `agentSessionOpts` ignore stored
-  keys. The key route 404s, the page shows no key/provider/model controls, and
-  `internal/agent/redact.go` strips `api`/`provider`/`model` from broadcast and
-  stored messages, keeping `usage` (av-2yws). Platform mode refuses to start with
-  no `AGENT_SPEND_CAP_*` set (av-99f4, `agent.md`).
-- **Streaming**: SSE at `/api/agent/sessions/:id/events`; mid-run prompts steer.
-- **SSE ticket** (av-rgp1): `EventSource` cannot send headers, so the stream takes a
-  random, single-use, seconds-lived, session-bound ticket, minted only by a
-  header-authenticated request (session create, widget generate, or
-  `POST …/sessions/:id/ticket` for each reconnect). The token never appears in a
-  URL. The TTL bounds when a connection may open, not how long it stays open.
-  Redeeming sets the owner.
-- **Live preview**: `exhibit_artifact_saved` triggers an htmx swap of
-  `/partials/agent-preview`; `exhibit_widget_saved` is separate. Each render
-  stamps the frame URL (`cacheBust`), because a browser never re-requests a
-  stable `src`.
-- **Widget generation** (av-fafu): `POST …/widget/generate` starts a one-shot
-  `WidgetOnly` session and returns its id without waiting.
-- **Guardrail** (av-gust): with `GUARDRAIL_*`, `ext/guard.ts` screens each user
-  message on Pi's `input` hook; a failed screen blocks. `security.md` §5.4.
+- **Durable authority**: one shared `agentcontrol.Control` reserves owner/fleet
+  capacity before provisioning or reading resume data. SQLite stores conversation,
+  attempt, worker and fencing generation. Core renews leases without contacting
+  idle workers. Startup fences prior assignments; replacement preserves acknowledged
+  snapshots and spend, and never replays an uncertain prompt automatically.
+- **Single write path**: Pi has no built-in tools; the embedded extension
+  (`internal/agentassets/ext/exhibit.ts`) uses the normal artifact/state/widget
+  APIs. An owner/artifact/attempt grant is held through each handler, including
+  its final write. Unbound creates atomically create and bind once. Source/widget
+  preconditions and exact committed version provenance survive the split.
+  Tools cannot reach supervisor, History, keys, shares or approval operations.
+- **Durability**: completed tool calls, settled turns and final close checkpoint
+  complete Pi JSONL through fenced, monotonic central authority. The supervisor API
+  `/internal/agent-worker/v1` has its own authentication and 64 MiB snapshot limit,
+  outside browser login/general API auth and the 32 MiB limiter, on the app origin
+  only. Raw files stay private; browser History exposes only `agent.Messages`.
+- **Sprites lifecycle**: a purpose-encrypted journal under `DATA_DIR` saves the
+  immutable assignment and endpoint token before provisioning. Each assignment
+  gets its own authenticated Sprite and transport. Settled event acknowledgements
+  precede idle stream/hold release; browser SSE remains on core. Management-only
+  retention/orphan sweeps and account deletion remove workers; no idle health
+  polling or cross-owner disk reuse. Deployment evidence: `agent-workers-sprites.md`.
+- **Context and UI**: untrusted source stays in tool results. Preparation retains
+  the 90-second never-accepted lifetime and passes central admission. Current
+  snippets/images, questions, steering, widgets/state, History/rollback/Continue,
+  SSE tickets and htmx preview swaps keep their existing origin and owner checks.
+- **Policy**: BYOK is encrypted centrally; Pi receives only its selected provider
+  key in a minimal environment. Platform mode hides provider/model identity from
+  browser projections and events while retaining raw Pi records for resume.
+  Guardrail screening, usage attribution, lifetime conversation spend and instance
+  hard stops remain centrally enforced; capacity failures return 429/503.
 
 ### 3.8 Login: two paths, one session layer (av-30rj, av-q30x, av-rzvf)
 
@@ -852,7 +817,7 @@ A share lives until deleted. There is no expiry, and `POST /api/shares` refuses 
 
 - **Not a runtime or PaaS.** No tier-3 backends or per-artifact servers.
 - **Not a multi-service deployment.** One Go process, embedded SQLite, optional
-  satellites, and short-lived per-session Pi sidecars (§3.7).
+  satellites, and on-demand per-conversation execution workers (§3.7).
 - **Not a predictor.** Policy sits at the runtime boundary.
 - **Not the owner of TLS or backup targets.** The release is the image and a config
   contract.

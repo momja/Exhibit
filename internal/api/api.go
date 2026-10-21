@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/agentcontrol"
 	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
@@ -40,6 +42,10 @@ type Config struct {
 	// from. Nil means no agent credential is accepted at all.
 	Agent            *agent.Manager
 	AgentCredentials *agentscope.Registry
+	// AgentControl is shared with the coordinator and fences every tool operation.
+	AgentControl *agentcontrol.Control
+	// DeleteAgentOwner revokes executions and removes worker data after account deletion.
+	DeleteAgentOwner func(context.Context, int64) error
 	Secrets          *secrets.Box
 	MockEnabled      bool
 	// PlatformAgentKey is the credential this instance runs agent sessions
@@ -364,6 +370,22 @@ func (ro *Router) setupRoutes() {
 	ro.Use(logging.RequestMiddleware)
 	ro.Use(middleware.Recoverer)
 	ro.Use(compressor())
+	// Supervisor snapshots have their own authentication and 64 MiB bound.
+	// Dispatch before the browser login gate and general request body limiter.
+	var usageObserver func(context.Context)
+	if ro.cfg.Agent != nil {
+		usageObserver = ro.cfg.Agent.EnforceInstanceCap
+	}
+	worker := NewAgentWorkerHandler(ro.cfg.AgentControl, usageObserver)
+	ro.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == AgentWorkerAuthorityPath || strings.HasPrefix(r.URL.Path, AgentWorkerAuthorityPath+"/") {
+				worker.ServeHTTP(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	// Every request body is bounded (av-ombn), and this is the one place that
 	// says so: registered on the root, ahead of every group, a route added
 	// anywhere below inherits it without having to remember it.

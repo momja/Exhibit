@@ -23,29 +23,36 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/momja/Exhibit/internal/agentexec"
 	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/store"
 )
 
-//go:embed ext/exhibit.ts ext/edit.ts ext/guard.ts ext/source-context.ts ext/questions.ts
-var extFS embed.FS
-
 // Config for the Manager.
 type Config struct {
+	// Runner selects execution transport. Nil retains the in-process local mode.
+	// A remote Runner requires neither WorkRoot nor PiBin on the coordinator.
+	Runner agentexec.Runner
+	// MaxSessions bounds concurrent starts/processes and retained failed drains
+	// across all owners. Zero defaults to 32; the per-owner limit remains ten.
+	MaxSessions int
+	// ReserveExecution runs after local admission and before provisioning/spawn.
+	// It lets the durable coordinator reserve/fence this attempt and replace the
+	// tool token with a narrowly scoped execution grant. A failed startup also
+	// releases its reservation. Successful attempts release after final checkpoint.
+	ReserveExecution func(context.Context, agentexec.Identity, *agentscope.Grant) (*ExecutionReservation, error)
+
 	PiBin      string // pi executable, e.g. "pi"
 	WorkRoot   string // scratch root; per-session cwd + the materialized extension
 	APIBaseURL string // exhibit app origin the extension calls back into
@@ -78,14 +85,7 @@ type Config struct {
 }
 
 // providerEnv maps a provider name to the env var pi reads its key from.
-var providerEnv = map[string]string{
-	"anthropic":    "ANTHROPIC_API_KEY",
-	"openai":       "OPENAI_API_KEY",
-	"google":       "GEMINI_API_KEY",
-	"openrouter":   "OPENROUTER_API_KEY",
-	"opencode-go":  "OPENCODE_API_KEY",
-	"exhibit-mock": "EXHIBIT_MOCK_API_KEY",
-}
+var providerEnv = agentexec.ProviderEnvironment
 
 // KnownProvider reports whether the manager can route a key to provider.
 func KnownProvider(p string) bool { _, ok := providerEnv[p]; return ok }
@@ -96,7 +96,7 @@ func KnownProvider(p string) bool { _, ok := providerEnv[p]; return ok }
 // budget. Widget-generate sessions count like any other.
 const MaxOwnerSessions = 10
 
-// MaxInstanceSessions bounds subprocesses across every owner, including startup.
+// MaxInstanceSessions is the default instance ceiling, including startup.
 const MaxInstanceSessions = 32
 
 var ErrInstanceSessionLimit = errors.New("this instance has reached its agent process limit — close a conversation or try again shortly")
@@ -108,66 +108,68 @@ var ErrSessionLimit = fmt.Errorf("this instance keeps at most %d agent conversat
 
 // Manager owns all live sessions.
 type Manager struct {
-	cfg       Config
-	st        store.Store
-	extPath   string
-	guardPath string
+	cfg Config
+	st  store.Store
 
-	mu            sync.Mutex
-	sessions      map[string]*Session
-	processOwners map[int64]int
-	processCount  int
-	starting      map[string]bool // conversation identities reserved before loading history
+	mu             sync.Mutex
+	sessions       map[string]*Session
+	processOwners  map[int64]int
+	processCount   int
+	starting       map[string]bool // conversation identities reserved before loading history
+	shutdown       bool
+	drainErr       error
+	stopReaper     chan struct{}
+	recoveries     map[string]*Session
+	erasedOwners   map[int64]bool
+	erasureTargets map[int64]map[string]agentexec.Reclaimer
 }
 
-// New materializes the extension and its relative imports
-// under cfg.WorkRoot and starts the idle reaper.
+// ExecutionReservation belongs to the core coordinator. Checkpoint must be
+// idempotent and fenced by the identity passed to ReserveExecution. Release is
+// invoked only after the final checkpoint succeeds and process output drains.
+type ExecutionReservation struct {
+	Grant         *agentscope.Grant
+	Checkpoint    func(context.Context, ExecutionCheckpoint) error
+	Release       func(context.Context) error
+	ExpiresAt     time.Time
+	TurnTimeout   time.Duration
+	BeginClose    func(context.Context) error
+	StartupFailed func(context.Context) error
+	Started       func(agentexec.Process)
+	BeforePrompt  func(context.Context) (time.Time, error)
+	Resume        *ResumeSnapshot
+	UsageBaseline *store.UsageTotals
+}
+
+// ResumeSnapshot is loaded by the durable reservation, after it fences the
+// conversation. It replaces a direct transcript read for assigned continuations.
+type ResumeSnapshot struct {
+	SessionFile    string
+	Title          string
+	Kind           string
+	Revision       int64
+	PreviousStatus string
+	Interrupted    bool
+}
+
+const InterruptedResumeNotice = "The previous run was interrupted. Its last successful saves remain saved. This conversation resumes from its last acknowledged snapshot; unfinished work has not been replayed."
+
+// New constructs the durable coordinator. Remote mode does no local filesystem
+// preparation and performs no Pi/Node lookup.
 func New(cfg Config, st store.Store) (*Manager, error) {
 	if cfg.Credentials == nil {
 		return nil, fmt.Errorf("agent manager needs a credential registry")
 	}
+	if cfg.MaxSessions < 0 {
+		return nil, fmt.Errorf("agent maximum sessions must be positive (or zero for the default)")
+	}
+	if cfg.MaxSessions == 0 {
+		cfg.MaxSessions = MaxInstanceSessions
+	}
 	if cfg.IdleTimeout == 0 {
 		cfg.IdleTimeout = 30 * time.Minute
 	}
-	if err := os.MkdirAll(cfg.WorkRoot, 0o755); err != nil {
-		return nil, fmt.Errorf("create agent work root: %w", err)
-	}
-	src, err := extFS.ReadFile("ext/exhibit.ts")
-	if err != nil {
-		return nil, err
-	}
-	extPath := filepath.Join(cfg.WorkRoot, "exhibit.ts")
-	if err := os.WriteFile(extPath, src, 0o644); err != nil {
-		return nil, fmt.Errorf("materialize exhibit extension: %w", err)
-	}
-	// Relative imports must sit beside the extension for Pi's loader.
-	for _, name := range []string{"edit.ts", "questions.ts"} {
-		source, err := extFS.ReadFile("ext/" + name)
-		if err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(filepath.Join(cfg.WorkRoot, name), source, 0o644); err != nil {
-			return nil, fmt.Errorf("materialize exhibit %s: %w", name, err)
-		}
-	}
-	sourceContext, err := extFS.ReadFile("ext/source-context.ts")
-	if err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(filepath.Join(cfg.WorkRoot, "source-context.ts"), sourceContext, 0o644); err != nil {
-		return nil, fmt.Errorf("materialize source context: %w", err)
-	}
-	// The question tool imports the shared screen from guard.ts. Pi registers
-	// its direct-input hook only when a guardrail is configured (av-gust).
-	guardSrc, err := extFS.ReadFile("ext/guard.ts")
-	if err != nil {
-		return nil, err
-	}
-	guardPath := filepath.Join(cfg.WorkRoot, "guard.ts")
-	if err := os.WriteFile(guardPath, guardSrc, 0o644); err != nil {
-		return nil, fmt.Errorf("materialize guard extension: %w", err)
-	}
-	m := &Manager{cfg: cfg, st: st, extPath: extPath, guardPath: guardPath, sessions: map[string]*Session{}}
+	m := &Manager{cfg: cfg, st: st, sessions: map[string]*Session{}, recoveries: map[string]*Session{}, erasedOwners: map[int64]bool{}, erasureTargets: map[int64]map[string]agentexec.Reclaimer{}, stopReaper: make(chan struct{})}
 	go m.reap()
 	return m, nil
 }
@@ -224,30 +226,22 @@ var ErrSessionLive = errors.New("that conversation is already running")
 
 // Create decrypted-key session: spawns the pi subprocess and starts its reader.
 func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error) {
-	envKey, ok := providerEnv[opts.Provider]
+	_, ok := providerEnv[opts.Provider]
 	if !ok {
 		return nil, fmt.Errorf("unsupported provider %q", opts.Provider)
 	}
 	if opts.Provider == "exhibit-mock" && m.cfg.MockLLMURL == "" {
 		return nil, fmt.Errorf("mock provider is not enabled on this server")
 	}
-	var resume *store.Transcript
+	id := opts.ResumeSessionID
+	if id == "" {
+		id = uuid.NewString()
+	}
 	if opts.ResumeSessionID != "" {
-		// Claim the identity before reading either history or its usage seed.
-		// A snapshot read by the caller can already be stale by the time the
-		// preceding process finishes saving and releases this conversation.
-		if !m.reserveConversation(opts.ResumeSessionID) {
+		if !m.reserveConversation(id) {
 			return nil, ErrSessionLive
 		}
-		defer m.releaseConversationStart(opts.ResumeSessionID)
-		var err error
-		resume, err = m.st.GetTranscript(ctx, opts.OwnerID, opts.ArtifactID, opts.ResumeSessionID)
-		if err != nil {
-			return nil, fmt.Errorf("read the conversation to resume: %w", err)
-		}
-		if resume == nil || !resume.Resumable {
-			return nil, fmt.Errorf("conversation is no longer available to resume")
-		}
+		defer m.releaseConversationStart(id)
 	}
 	releaseProcess, err := m.reserveProcess(ctx, opts.OwnerID)
 	if err != nil {
@@ -259,141 +253,105 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 			releaseProcess()
 		}
 	}()
-
-	id := uuid.New().String()
-	title := ""
-	var recorded store.UsageTotals
-	if resume != nil {
-		id, title = resume.SessionID, resume.Title
-		// Pi's own totals count the whole conversation, the turns before this
-		// process included, and every settle reconciles the ledger against
-		// them (usage.go). The ledger already holds those turns, so this
-		// process's count of what is recorded starts from them — from zero the
-		// first settle would record them a second time.
-		var err error
-		if recorded, err = m.st.SessionAgentSpend(ctx, opts.OwnerID, id); err != nil {
-			return nil, fmt.Errorf("read the conversation's recorded usage: %w", err)
-		}
-	}
-	// The scratch directory belongs to this process, not to the conversation.
-	// Every resumed process starts with a fresh working copy of its saved file.
-	workDir := filepath.Join(m.cfg.WorkRoot, uuid.New().String())
-	if err := os.MkdirAll(workDir, 0o755); err != nil {
-		return nil, fmt.Errorf("create session dir: %w", err)
-	}
-
-	// The credential is what actually confines this session: it resolves to
-	// (owner, artifact) and the API refuses everything else. The subprocess
-	// never sees the operator's service token (av-e0yj).
+	// The core issues the artifact grant. A central execution reservation can
+	// fence/replace it before the runner acquires any infrastructure or process.
 	grant, err := m.cfg.Credentials.Issue(opts.OwnerID, opts.ArtifactID, id)
 	if err != nil {
 		return nil, err
 	}
+	identity := agentexec.Identity{ExecutionID: uuid.NewString(), SessionID: id, OwnerID: opts.OwnerID, ArtifactID: opts.ArtifactID, Resume: opts.ResumeSessionID != ""}
+	var reservation *ExecutionReservation
 	defer func() {
 		if !spawned {
-			m.cfg.Credentials.Revoke(grant) // no live subprocess ⇒ no live token
-			_ = os.RemoveAll(workDir)       // and nothing to keep the directory for
+			m.cfg.Credentials.Revoke(grant)
+			if reservation != nil && reservation.StartupFailed != nil {
+				releaseCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				if err := reservation.StartupFailed(releaseCtx); err != nil {
+					slog.Warn("release failed execution reservation", slog.String("execution_id", identity.ExecutionID))
+				}
+			}
 		}
 	}()
-	sysPrompt := buildSystemPrompt(m.cfg.SystemPrompt, opts)
-	sessionFile := filepath.Join(workDir, sessionFileName)
+	if m.cfg.ReserveExecution != nil {
+		reservation, err = m.cfg.ReserveExecution(ctx, identity, grant)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if reservation != nil && reservation.Grant != nil && reservation.Grant != grant {
+		replacement := reservation.Grant
+		if replacement.SessionID() != id || replacement.Scope() != (agentscope.Scope{OwnerID: opts.OwnerID, ArtifactID: opts.ArtifactID}) {
+			m.cfg.Credentials.Revoke(replacement)
+			return nil, fmt.Errorf("execution reservation returned an incompatible scoped grant")
+		}
+		m.cfg.Credentials.Revoke(grant)
+		grant = replacement
+	}
+	var resume *store.Transcript
+	var recorded store.UsageTotals
+	title := ""
+	var resumeMetadata *ResumeSnapshot
+	if opts.ResumeSessionID != "" {
+		// Both durable and process-local identity are now reserved. Never load a
+		// continuation snapshot or its accounting baseline before fencing admission.
+		if reservation != nil && reservation.Resume != nil {
+			metadata := *reservation.Resume
+			resumeMetadata = &metadata
+			resume = &store.Transcript{SessionID: id, ArtifactID: opts.ArtifactID, Title: metadata.Title, SessionFile: metadata.SessionFile, Resumable: metadata.SessionFile != ""}
+		} else {
+			resume, err = m.st.GetTranscript(ctx, opts.OwnerID, opts.ArtifactID, id)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read the conversation to resume: %w", err)
+		}
+		if resume == nil || !resume.Resumable {
+			return nil, fmt.Errorf("conversation is no longer available to resume")
+		}
+		title = resume.Title
+		if reservation != nil && reservation.UsageBaseline != nil {
+			recorded = *reservation.UsageBaseline
+		} else {
+			recorded, err = m.st.SessionAgentSpend(ctx, opts.OwnerID, id)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read the conversation's recorded usage: %w", err)
+		}
+	}
+	token := grant.Token()
+	config := agentexec.StartConfig{Identity: identity, Provider: opts.Provider, Model: opts.Model, APIKey: opts.APIKey,
+		APIBaseURL: m.cfg.APIBaseURL, ToolToken: token, TargetArtifactID: opts.ArtifactID,
+		SystemPrompt: buildSystemPrompt(m.cfg.SystemPrompt, opts), MockLLMURL: m.cfg.MockLLMURL,
+		WidgetOnly: opts.WidgetOnly, MaxRequestBodyBytes: m.cfg.MaxRequestBodyBytes}
 	resumeNotice := ""
 	if resume != nil {
-		// What the database holds is the conversation as of its last settled
-		// turn, which is the right place to resume from: a turn that was still
-		// running when the last session ended never finished, and is not
-		// something to continue.
-		if err := os.WriteFile(sessionFile, []byte(resume.SessionFile), 0o600); err != nil {
-			return nil, fmt.Errorf("restore session file: %w", err)
-		}
+		config.SessionSnapshot = resume.SessionFile
 		resumeNotice = resumedNotice
+		if resumeMetadata != nil && (resumeMetadata.Interrupted || resumeMetadata.Kind == "interrupted" || resumeMetadata.PreviousStatus == "interrupted") {
+			resumeNotice += "\n\n" + InterruptedResumeNotice
+		}
 	}
-
-	args := []string{
-		"--mode", "rpc",
-		// Pi records the conversation in its own session file, which is what
-		// the service keeps (persistTranscript) and what a resumed session
-		// starts from.
-		"--session", sessionFile,
-		"--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files",
-		"--no-builtin-tools",
-		"-e", m.extPath,
-		"--system-prompt", sysPrompt,
+	if guard := m.cfg.Guardrail; guard != nil {
+		config.Guardrail = &agentexec.Guardrail{Provider: guard.Provider, Model: guard.Model, APIKey: guard.APIKey}
 	}
-	// Since Pi 1.0, --provider requires --model. Without a model, omit both:
-	// Pi 0.99.1 ignored --provider in that case and selected its authenticated
-	// default. The isolated environment below still supplies only this key.
-	if opts.Model != "" {
-		args = append(args, "--provider", opts.Provider, "--model", opts.Model)
+	if reservation != nil {
+		config.ExpiresAt = reservation.ExpiresAt
+		config.TurnTimeout = reservation.TurnTimeout
 	}
-	if m.cfg.Guardrail != nil {
-		args = append(args, "-e", m.guardPath)
+	runner := m.cfg.Runner
+	if runner == nil {
+		runner = agentexec.Local{PiBin: m.cfg.PiBin, WorkRoot: m.cfg.WorkRoot}
 	}
-
-	cmd := exec.Command(m.cfg.PiBin, args...) //nolint:gosec // args are server-constructed
-	// Every session runs from the same directory, and it is the root. A session
-	// file records the directory it ran in, and Pi refuses to resume one whose
-	// directory no longer exists — which a per-session directory never survives:
-	// it is removed when the session ends (removeScratch), and a conversation is
-	// resumed long after. The session has no use for a working directory of its
-	// own anyway: it has no built-in tools and loads no context files.
-	cmd.Dir = sessionCwd
-	// Minimal environment: enough for node + jiti, the exhibit callback
-	// contract, and exactly one provider key. Deliberately NOT os.Environ():
-	// the server's own env must not leak other credentials into a session.
-	// HOME is pinned to the session workdir so pi cannot read the operator's
-	// ~/.pi/agent/auth.json — stored logins there would otherwise take
-	// precedence over the BYO key and silently bill the operator's account.
-	cmd.Env = []string{
-		"PATH=" + os.Getenv("PATH"),
-		"HOME=" + workDir,
-		"LANG=" + os.Getenv("LANG"),
-		"TMPDIR=" + os.TempDir(),
-		"EXHIBIT_API_URL=" + m.cfg.APIBaseURL,
-		// Scoped to this session's artifact, not the service token.
-		"EXHIBIT_TOKEN=" + grant.Token(),
-		// The tools' target, so none of them needs an id parameter.
-		"EXHIBIT_ARTIFACT_ID=" + opts.ArtifactID,
-		"EXHIBIT_SESSION_ID=" + id,
-		// Where get_selection finds the elements the user picked (Prompt writes
-		// it): one definition of the path, so the two sides cannot disagree.
-		"EXHIBIT_SELECTION_FILE=" + filepath.Join(workDir, selectionFile),
-		envKey + "=" + opts.APIKey,
-	}
-	if m.cfg.MockLLMURL != "" {
-		cmd.Env = append(cmd.Env, "EXHIBIT_MOCK_LLM_URL="+m.cfg.MockLLMURL)
-	}
-	if opts.WidgetOnly {
-		cmd.Env = append(cmd.Env, "EXHIBIT_WIDGET_ONLY=1")
-	}
-	if m.cfg.MaxRequestBodyBytes > 0 {
-		cmd.Env = append(cmd.Env, "EXHIBIT_MAX_BODY_BYTES="+strconv.FormatInt(m.cfg.MaxRequestBodyBytes, 10))
-	}
-	if m.cfg.Guardrail != nil {
-		cmd.Env = append(cmd.Env, m.cfg.Guardrail.env()...)
-	}
-
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	stdin, err := cmd.StdinPipe()
+	process, err := runner.Start(ctx, config)
 	if err != nil {
 		return nil, err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start pi: %w", err)
 	}
 	spawned = true
-
+	var workDir, sessionFile string
+	var cmd *exec.Cmd // compatibility metadata for local in-process test helpers
+	if local, ok := process.(*agentexec.LocalProcess); ok {
+		workDir, sessionFile, cmd = local.WorkDir, local.SessionPath, local.Command
+	}
 	s := &Session{
 		ID:                id,
 		OwnerID:           opts.OwnerID,
@@ -410,8 +368,13 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		grant:             grant,
 		hideModelIdentity: m.cfg.HideModelIdentity,
 		mgr:               m,
+		process:           process,
+		executionIdentity: identity,
+		reservation:       reservation,
+		retired:           make(chan struct{}),
+		resumeMetadata:    resumeMetadata,
 		cmd:               cmd,
-		stdin:             stdin,
+		stdin:             process,
 		subs:              map[*eventSubscriber]struct{}{},
 		pending:           map[string]chan rpcResponse{},
 		done:              make(chan struct{}),
@@ -419,13 +382,17 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		prepared:          true,
 	}
 	s.preparationTimer = time.AfterFunc(PreparedSessionLifetime, s.expirePreparation)
+	if synchronizer, ok := process.(agentexec.EventSynchronizer); ok {
+		s.eventHandled = synchronizer.SynchronizeEvents()
+	}
 	// Publish the session before its process-exit cleanup can retire it. That
 	// cleanup takes the same mutex, including when Pi exits during startup.
 	m.mu.Lock()
-	go s.readLoop(stdout)
-	go s.drainStderr(stderr)
+	go s.readLoop(process.Stdout())
+	go s.drainStderr(process.Stderr())
 	go func() {
-		_ = cmd.Wait()
+		_ = process.Wait()
+		<-s.readDone
 		releaseProcess()
 		close(s.processExited)
 		s.finish()
@@ -437,7 +404,23 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 		return nil, ErrSessionLive
 	}
 	m.sessions[id] = s
+	shuttingDown := m.shutdown
+	ownerErased := m.erasedOwners[opts.OwnerID]
+	if ownerErased {
+		s.erased.Store(true)
+	}
 	m.mu.Unlock()
+	if shuttingDown || ownerErased {
+		s.kill()
+		return nil, fmt.Errorf("agent manager shutting down")
+	}
+	if reservation != nil && reservation.Started != nil {
+		reservation.Started(process)
+	}
+	if s.InterruptionNotice() != "" {
+		event, _ := json.Marshal(map[string]string{"type": "exhibit_execution_interrupted", "message": InterruptedResumeNotice})
+		s.broadcast(event)
+	}
 	slog.InfoContext(ctx, "agent session started",
 		slog.String("session_id", id),
 		slog.String("provider", opts.Provider),
@@ -454,7 +437,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 func (m *Manager) reserveConversation(id string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.sessions[id] != nil || m.starting[id] {
+	if m.shutdown || m.sessions[id] != nil || m.recoveries[id] != nil || m.starting[id] {
 		return false
 	}
 	if m.starting == nil {
@@ -532,10 +515,20 @@ func (m *Manager) reserveProcess(ctx context.Context, ownerID int64) (func(), er
 			return nil, err
 		}
 		m.mu.Lock()
+		if m.shutdown || m.erasedOwners[ownerID] {
+			m.mu.Unlock()
+			return nil, fmt.Errorf("agent manager shutting down")
+		}
 		if m.processOwners == nil {
 			m.processOwners = make(map[int64]int)
 		}
-		if m.processOwners[ownerID] < MaxOwnerSessions && m.processCount < MaxInstanceSessions {
+		recoveryCount := 0
+		for _, recovery := range m.recoveries {
+			if recovery.OwnerID == ownerID {
+				recoveryCount++
+			}
+		}
+		if m.processOwners[ownerID]+recoveryCount < MaxOwnerSessions && m.processCount+len(m.recoveries) < m.cfg.MaxSessions {
 			m.processOwners[ownerID]++
 			m.processCount++
 			m.mu.Unlock()
@@ -550,7 +543,7 @@ func (m *Manager) reserveProcess(ctx context.Context, ownerID int64) (func(), er
 			}, nil
 		}
 		refusal := ErrSessionLimit
-		if m.processOwners[ownerID] < MaxOwnerSessions {
+		if m.processOwners[ownerID]+recoveryCount < MaxOwnerSessions {
 			refusal = ErrInstanceSessionLimit
 		}
 		_, oldest := m.ownerSessionsLocked(ownerID, "")
@@ -605,8 +598,51 @@ func (m *Manager) ownerSessionsLocked(ownerID int64, skipID string) (count int, 
 
 // reap closes sessions idle longer than the configured timeout.
 func (m *Manager) reap() {
-	for range time.Tick(time.Minute) {
-		m.reapIdle(time.Now().Add(-m.cfg.IdleTimeout))
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			m.reapIdle(time.Now().Add(-m.cfg.IdleTimeout))
+		case <-m.stopReaper:
+			return
+		}
+	}
+}
+
+// Shutdown refuses new work, stops all executions, and waits for final snapshots,
+// persistence, reservation release, and scratch cleanup. The caller bounds drain.
+func (m *Manager) Shutdown(ctx context.Context) error {
+	m.mu.Lock()
+	if !m.shutdown {
+		m.shutdown = true
+		close(m.stopReaper)
+	}
+	all := make([]*Session, 0, len(m.sessions))
+	for _, s := range m.sessions {
+		all = append(all, s)
+	}
+	m.mu.Unlock()
+	for _, s := range all {
+		go s.kill()
+	}
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		m.mu.Lock()
+		empty := len(m.sessions) == 0 && m.processCount == 0 && len(m.starting) == 0
+		m.mu.Unlock()
+		if empty {
+			m.mu.Lock()
+			err := m.drainErr
+			m.mu.Unlock()
+			return err
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
@@ -692,8 +728,9 @@ type Session struct {
 	// persistMu serializes persistTranscript, so two settles close together
 	// cannot store the older read after the newer one; persisting counts the
 	// ones in flight, so the scratch directory outlives them.
-	persistMu  sync.Mutex
-	persisting sync.WaitGroup
+	persistMu          sync.Mutex
+	checkpointSequence uint64 // guarded by persistMu
+	persisting         sync.WaitGroup
 	// readDone closes when everything the subprocess printed has been handled.
 	readDone chan struct{}
 	// processExited closes after Wait returns and its admission slot is released.
@@ -709,9 +746,26 @@ type Session struct {
 	// (av-siqf, redact.go).
 	hideModelIdentity bool
 
-	mgr   *Manager
-	cmd   *exec.Cmd
-	stdin io.WriteCloser
+	process               agentexec.Process
+	eventHandled          func()
+	executionIdentity     agentexec.Identity
+	reservation           *ExecutionReservation
+	resumeMetadata        *ResumeSnapshot
+	beginCloseMu          sync.Mutex
+	beginCloseDone        bool
+	beginCloseErr         error
+	drainMu               sync.Mutex
+	retainedErr           error
+	erased                atomic.Bool
+	drainComplete         bool
+	terminalStopped       bool
+	terminalCheckpoint    *ExecutionCheckpoint
+	terminalCheckpointAck bool
+	authorityReleased     bool
+	retired               chan struct{}
+	mgr                   *Manager
+	cmd                   *exec.Cmd
+	stdin                 io.WriteCloser
 
 	writeMu sync.Mutex // serializes stdin writes
 	// promptMu keeps one prompt in flight at a time, from send to response.
@@ -732,6 +786,8 @@ type Session struct {
 	pending            map[string]chan rpcResponse
 	questions          map[string]QuestionRequest
 	streaming          bool
+	interrupted        bool
+	eventFailure       error
 	closed             bool
 	stopping           bool // unavailable to callers, but still draining its final writes
 	lastActive         time.Time
@@ -782,6 +838,21 @@ func (s *Session) ArtifactID() string { return s.grant.Scope().ArtifactID }
 // Done is closed when the subprocess exits.
 func (s *Session) Done() <-chan struct{} { return s.done }
 
+// InterruptionNotice lets core render the prior execution's status without
+// exposing worker files or inventing an automatic retry.
+func (s *Session) InterruptionNotice() string {
+	if r := s.resumeMetadata; r != nil && (r.Interrupted || r.Kind == "interrupted" || r.PreviousStatus == "interrupted") {
+		return InterruptedResumeNotice
+	}
+	return ""
+}
+func (s *Session) SetLease(ctx context.Context, deadline time.Time) error {
+	if lease, ok := s.process.(agentexec.LeaseProcess); ok {
+		return lease.SetLease(ctx, deadline)
+	}
+	return errors.New("execution runner does not support lease renewal")
+}
+
 // Subscribe replays retained events, then streams live events. Excess clients
 // receive a closed channel. Unsubscribe releases its queue and worker.
 func (s *Session) Subscribe() (<-chan []byte, func()) {
@@ -810,13 +881,7 @@ func (s *Session) Subscribe() (<-chan []byte, func()) {
 // selectionFile is the file, in the session's work directory, that carries the
 // elements the user selected to the subprocess. The extension's get_selection
 // tool is told its path through EXHIBIT_SELECTION_FILE.
-const selectionFile = "selection.json"
-
-// sessionFileName is Pi's session file in the work directory.
-const sessionFileName = "session.jsonl"
-
-// sessionCwd is the working directory of every session's subprocess.
-const sessionCwd = "/"
+const selectionFile = agentexec.SelectionFile
 
 // Prompt sends a user prompt, optionally with images and the elements the user
 // selected in the artifact preview. If the agent is mid-stream the message is
@@ -851,6 +916,9 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	// prompts cannot both pass it. It runs before the send because a session
 	// over budget must not pay for the guardrail screen either.
 	if err := s.capBeforePrompt(); err != nil {
+		return err
+	}
+	if err := s.prepareExecution(ctx); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -936,22 +1004,19 @@ func (s *Session) claimPreparationLocked() {
 // that selected none. Written to a temporary name and renamed, so the
 // subprocess never reads half a file.
 func (s *Session) writeSelection(selection []string) error {
-	path := filepath.Join(s.workDir, selectionFile)
-	if len(selection) == 0 {
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("clear selection: %w", err)
-		}
-		return nil
+	if s.process == nil {
+		return agentexec.WriteSelection(s.workDir, selection)
 	}
-	b, err := json.Marshal(selection)
-	if err != nil {
-		return err
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return s.process.WriteSelection(ctx, selection)
+}
+
+func (s *Session) snapshot(ctx context.Context) (string, error) {
+	if s.process != nil {
+		return s.process.Snapshot(ctx)
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return fmt.Errorf("write selection: %w", err)
-	}
-	return os.Rename(tmp, path)
+	return readSessionFile(s.sessionFile)
 }
 
 // Abort asks pi to stop the current run.
@@ -1023,6 +1088,22 @@ func (s *Session) readLoop(stdout io.Reader) {
 		} else if len(line) > 0 {
 			s.handleLine(bytes.TrimRight(line, "\r\n"))
 		}
+		s.mu.Lock()
+		failure := s.eventFailure
+		s.mu.Unlock()
+		if failure != nil {
+			message := "Execution stopped because its durable checkpoint could not be acknowledged. Unfinished work was not replayed."
+			event, _ := json.Marshal(map[string]string{"type": "extension_error", "error": message})
+			s.broadcast(event)
+			if transport, ok := s.process.(interface{ FailEvents(error) }); ok {
+				transport.FailEvents(errors.New(message))
+			}
+			s.kill()
+			return
+		}
+		if (oversized || len(line) > 0) && s.eventHandled != nil {
+			s.eventHandled()
+		}
 		if err != nil {
 			return
 		}
@@ -1084,6 +1165,9 @@ func (s *Session) handleLine(line []byte) {
 	case "agent_start":
 		s.mu.Lock()
 		s.claimPreparationLocked()
+		if s.title == "" {
+			s.title = ConversationTitle(s.grant.Prompt())
+		}
 		s.streaming = true
 		s.lastActive = time.Now()
 		s.mu.Unlock()
@@ -1103,6 +1187,9 @@ func (s *Session) handleLine(line []byte) {
 		if json.Unmarshal(probe.Message, &msg) == nil {
 			if u, ok := decodeUsage(msg.Usage); ok {
 				s.noteMessageUsage(msg.Role, msg.Provider, msg.Model, u)
+			}
+			if msg.Role == "toolResult" && s.reservation != nil {
+				s.checkpointEvent("tool")
 			}
 		}
 	case "compaction_end":
@@ -1132,7 +1219,9 @@ func (s *Session) handleLine(line []byte) {
 		// can only ever see this turn's response and never a later one's.
 		s.flushInFlightUsage()
 		go s.reconcileUsage()
-		if artifactID := s.ArtifactID(); artifactID != "" {
+		if s.reservation != nil {
+			s.checkpointEvent("settled")
+		} else if artifactID := s.ArtifactID(); artifactID != "" {
 			s.persisting.Add(1)
 			go func() {
 				defer s.persisting.Done()
@@ -1164,6 +1253,15 @@ func (s *Session) handleLine(line []byte) {
 	}
 
 	s.broadcast(s.redact(bytes.Clone(line)))
+}
+
+func (s *Session) checkpointEvent(kind string) {
+	if err := s.persistCheckpoint(s.ArtifactID(), kind); err != nil {
+		s.mu.Lock()
+		s.eventFailure = err
+		s.interrupted = true
+		s.mu.Unlock()
+	}
 }
 
 // redact applies the platform-mode filter to one event line on its way out of
@@ -1243,37 +1341,69 @@ func (s *Session) noteWidgetSaved(details map[string]any) {
 	s.broadcast(ev)
 }
 
-// persistTranscript stores the conversation with the artifact, tied to the
-// version the artifact is at (av-y7td). Runs after each settled turn, so what is
-// kept tracks the conversation as it grows, and is exactly what Pi would start
-// from if the conversation were resumed: its own session file, read back.
+// ExecutionCheckpoint describes complete Pi records and why they were captured.
+// Assigned runs use the callback as their only transcript persistence path.
+type ExecutionCheckpoint struct {
+	SessionFile  string
+	Title        string
+	Kind         string // "tool", "settled", or "interrupted"
+	Sequence     uint64 // Monotonic within this execution attempt, including final flush.
+	BaseRevision int64
+}
+
 func (s *Session) persistTranscript(artifactID string) {
+	_ = s.persistCheckpoint(artifactID, "settled")
+}
+
+func (s *Session) persistCheckpoint(artifactID, kind string) error {
 	s.persistMu.Lock()
 	defer s.persistMu.Unlock()
+	if s.erased.Load() {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
-	file, err := readSessionFile(s.sessionFile)
+	checkpoint, err := s.captureCheckpoint(ctx, kind)
+	if err == nil {
+		err = s.writeCheckpoint(ctx, artifactID, checkpoint)
+	}
 	if err != nil {
-		slog.Warn("transcript read failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
-		return
+		slog.Warn("execution checkpoint failed", slog.String("session_id", s.ID), slog.String("kind", kind))
 	}
-	if file == "" {
-		return // Pi has written nothing yet
+	return err
+}
+
+// Caller serializes captures with persistMu. A terminal drain retains this DTO
+// across lost acknowledgments rather than assigning a new sequence on retry.
+func (s *Session) captureCheckpoint(ctx context.Context, kind string) (*ExecutionCheckpoint, error) {
+	file, err := s.snapshot(ctx)
+	if err != nil {
+		return nil, err
 	}
+	s.checkpointSequence++
 	s.mu.Lock()
 	title := s.title
 	s.mu.Unlock()
-	// The session's owner, not the artifact's: a transcript can only attach to
-	// an artifact this session's owner actually holds, so an artifact id the
-	// model invented (or lifted from another library) fails with ErrNotFound
-	// instead of writing across the tenant boundary.
-	err = s.mgr.st.SaveTranscript(ctx, s.OwnerID, store.Transcript{
-		ArtifactID: artifactID, SessionID: s.ID, Title: title, SessionFile: file,
-	})
-	if err != nil {
-		slog.Warn("transcript save failed", slog.String("session_id", s.ID), slog.String("err", err.Error()))
+	checkpoint := &ExecutionCheckpoint{SessionFile: file, Title: title, Kind: kind, Sequence: s.checkpointSequence}
+	if s.resumeMetadata != nil {
+		checkpoint.BaseRevision = s.resumeMetadata.Revision
 	}
+	return checkpoint, nil
+}
+func (s *Session) writeCheckpoint(ctx context.Context, artifactID string, checkpoint *ExecutionCheckpoint) error {
+	if s.erased.Load() {
+		return nil
+	}
+	if s.reservation != nil {
+		if s.reservation.Checkpoint == nil {
+			return fmt.Errorf("assigned execution has no durable checkpoint callback")
+		}
+		return s.reservation.Checkpoint(ctx, *checkpoint)
+	}
+	if checkpoint.SessionFile != "" && artifactID != "" {
+		return s.mgr.st.SaveTranscript(ctx, s.OwnerID, store.Transcript{ArtifactID: artifactID, SessionID: s.ID, Title: checkpoint.Title, SessionFile: checkpoint.SessionFile})
+	}
+	return nil
 }
 
 // maxSessionFileBytes bounds what is kept of one conversation. A session file
@@ -1281,38 +1411,11 @@ func (s *Session) persistTranscript(artifactID string) {
 // so it grows with the artifact as well as with the talk, and a conversation
 // that outgrows this stops being kept rather than growing the database without
 // limit. The live session is unaffected.
-const maxSessionFileBytes = 64 << 20
+const maxSessionFileBytes = agentexec.MaxSessionBytes
 
-// readSessionFile returns Pi's session file as written so far. Pi appends one
-// line per entry, so a read that races an append can end partway through a
-// line, and half a line is not an entry: only whole lines are returned.
-func readSessionFile(path string) (string, error) {
-	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	return readSessionContents(file, maxSessionFileBytes)
-}
-
-// Read one overflow byte before inspecting complete lines: an oversized
-// unfinished entry must not bypass the limit or allocate its full contents.
+func readSessionFile(path string) (string, error) { return agentexec.ReadSessionFile(path) }
 func readSessionContents(reader io.Reader, limit int64) (string, error) {
-	b, err := io.ReadAll(io.LimitReader(reader, limit+1))
-	if err != nil {
-		return "", err
-	}
-	if int64(len(b)) > limit {
-		return "", fmt.Errorf("session file exceeds the %d bytes kept", limit)
-	}
-	end := bytes.LastIndexByte(b, '\n')
-	if end < 0 {
-		return "", nil
-	}
-	return string(b[:end+1]), nil
+	return agentexec.ReadSessionContents(reader, limit)
 }
 
 func (s *Session) broadcast(line []byte) {
@@ -1364,6 +1467,7 @@ func (s *Session) finish() {
 		return
 	}
 	s.closed = true
+	s.interrupted = s.interrupted || s.streaming || s.promptInFlight
 	s.streaming = false
 	s.mu.Unlock()
 	s.cancelQuestions("")
@@ -1383,16 +1487,159 @@ func (s *Session) finish() {
 func (s *Session) removeScratch() {
 	<-s.readDone
 	s.persisting.Wait()
-	// A dead process must not be offered as a resumable live session. Wait
-	// until its final transcript is stored before freeing its identity.
+	_ = s.finalizeExecution()
+	if s.retired != nil {
+		close(s.retired)
+	}
+}
+
+// finalizeExecution deliberately retains both the process snapshot and the
+// assignment on any failed close/checkpoint/release. RetryDrain is explicit;
+// it never replays a prompt and never allows an earlier resume past this file.
+func (s *Session) finalizeExecution() error {
+	s.drainMu.Lock()
+	defer s.drainMu.Unlock()
+	if s.drainComplete {
+		return nil
+	}
+	if s.erased.Load() {
+		return s.finalizeErasure()
+	}
+	drainErr := s.beginClose()
+	if drainErr == nil && !s.terminalStopped {
+		if s.process != nil {
+			drainErr = s.process.Close()
+		}
+		if drainErr == nil {
+			s.terminalStopped = true
+		}
+	}
+	if drainErr == nil && !s.terminalCheckpointAck && !s.erased.Load() {
+		s.persistMu.Lock()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if s.terminalCheckpoint == nil {
+			kind := "settled"
+			s.mu.Lock()
+			if s.interrupted {
+				kind = "interrupted"
+			}
+			s.mu.Unlock()
+			s.terminalCheckpoint, drainErr = s.captureCheckpoint(ctx, kind)
+		}
+		if drainErr == nil {
+			drainErr = s.writeCheckpoint(ctx, s.ArtifactID(), s.terminalCheckpoint)
+		}
+		if drainErr == nil {
+			s.terminalCheckpointAck = true
+		}
+		cancel()
+		s.persistMu.Unlock()
+	}
+	if s.erased.Load() {
+		return s.finalizeErasure()
+	}
+	if drainErr == nil && !s.authorityReleased {
+		if reservation := s.reservation; reservation != nil && reservation.Release != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			drainErr = reservation.Release(ctx)
+			cancel()
+		}
+		if drainErr == nil {
+			s.authorityReleased = true
+		}
+	}
+	if drainErr == nil && s.process != nil {
+		drainErr = s.process.Cleanup()
+	}
 	s.mgr.mu.Lock()
+	if s.mgr.recoveries == nil {
+		s.mgr.recoveries = map[string]*Session{}
+	}
+	if drainErr != nil {
+		s.retainedErr = drainErr
+		s.mgr.recoveries[s.ID] = s
+		slog.Warn("execution retained for recovery", slog.String("execution_id", s.executionIdentity.ExecutionID))
+	} else {
+		s.retainedErr = nil
+		s.terminalCheckpoint = nil
+		s.drainComplete = true
+		delete(s.mgr.recoveries, s.ID)
+	}
+	s.mgr.refreshDrainErrorLocked()
 	if s.mgr.sessions[s.ID] == s {
 		delete(s.mgr.sessions, s.ID)
 	}
 	s.mgr.mu.Unlock()
-	if err := os.RemoveAll(s.workDir); err != nil {
-		slog.Warn("remove session scratch directory", slog.String("session_id", s.ID), slog.String("err", err.Error()))
+	return drainErr
+}
+
+// After account deletion, retain only a cleanup capability, never the Session
+// (which owns chat events, snapshots, prompts, grants and policy callbacks).
+// Caller holds drainMu and has waited for process/event delivery to stop.
+func (s *Session) finalizeErasure() error {
+	var target agentexec.Reclaimer
+	if s.process != nil {
+		target = s.process.ErasureCleanup()
 	}
+	s.terminalCheckpoint = nil
+	s.mu.Lock()
+	s.backlog, s.questions = nil, nil
+	s.backlogBytes = 0
+	s.mu.Unlock()
+	s.mgr.mu.Lock()
+	defer s.mgr.mu.Unlock()
+	if target != nil {
+		if s.mgr.erasureTargets == nil {
+			s.mgr.erasureTargets = map[int64]map[string]agentexec.Reclaimer{}
+		}
+		if s.mgr.erasureTargets[s.OwnerID] == nil {
+			s.mgr.erasureTargets[s.OwnerID] = map[string]agentexec.Reclaimer{}
+		}
+		s.mgr.erasureTargets[s.OwnerID][s.ID] = target
+	}
+	s.retainedErr = nil
+	s.drainComplete = true
+	delete(s.mgr.recoveries, s.ID)
+	if s.mgr.sessions[s.ID] == s {
+		delete(s.mgr.sessions, s.ID)
+	}
+	s.mgr.refreshDrainErrorLocked()
+	return nil
+}
+func (m *Manager) refreshDrainErrorLocked() {
+	m.drainErr = nil
+	for _, recovery := range m.recoveries {
+		m.drainErr = errors.Join(m.drainErr, recovery.retainedErr)
+	}
+}
+
+// RetainedSnapshot is a trusted coordinator recovery read, owner-scoped like
+// Get. It is never a browser/tool transcript API and does not release anything.
+func (m *Manager) RetainedSnapshot(ctx context.Context, ownerID int64, id string) (string, error) {
+	m.mu.Lock()
+	s := m.recoveries[id]
+	m.mu.Unlock()
+	if s == nil || s.OwnerID != ownerID {
+		return "", fmt.Errorf("retained execution not found")
+	}
+	s.drainMu.Lock()
+	defer s.drainMu.Unlock()
+	return s.snapshot(ctx)
+}
+
+// RetryDrain retries terminal stop/read, persistence, release and reclamation
+// from the last acknowledged phase. It never replays model execution.
+func (m *Manager) RetryDrain(ctx context.Context, ownerID int64, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	s := m.recoveries[id]
+	m.mu.Unlock()
+	if s == nil || s.OwnerID != ownerID {
+		return fmt.Errorf("retained execution not found")
+	}
+	return s.finalizeExecution()
 }
 
 func (s *Session) kill() {
@@ -1403,11 +1650,114 @@ func (s *Session) kill() {
 	}
 	s.mu.Unlock()
 	s.markStopping()
+	if !s.erased.Load() {
+		_ = s.beginClose()
+	}
 	s.mgr.cfg.Credentials.Revoke(s.grant)
 	_ = s.stdin.Close()
-	if s.cmd.Process != nil {
+	if s.process != nil {
+		_ = s.process.Kill()
+		return
+	}
+	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
 	}
+}
+
+// EraseOwner is destructive and MUST be called only after successful durable
+// account deletion. It blocks owner admission, revokes/stops live and retained
+// executions, and reclaims their snapshots WITHOUT checkpointing deleted data.
+// Ordinary close and RetryDrain retain their fail-closed durability behavior.
+// On cleanup failure only a payload-free reclaim capability is retained;
+// subsequent calls retry it. No final checkpoint or authority Release is used.
+func (m *Manager) EraseOwner(ctx context.Context, ownerID int64) error {
+	m.mu.Lock()
+	if m.erasedOwners == nil {
+		m.erasedOwners = map[int64]bool{}
+	}
+	m.erasedOwners[ownerID] = true
+	all := map[*Session]bool{}
+	for _, s := range m.sessions {
+		if s.OwnerID == ownerID {
+			s.erased.Store(true)
+			all[s] = false
+		}
+	}
+	for _, s := range m.recoveries {
+		if s.OwnerID == ownerID {
+			s.erased.Store(true)
+			all[s] = true
+		}
+	}
+	m.mu.Unlock()
+	for s := range all {
+		m.cfg.Credentials.Revoke(s.grant)
+		go func(s *Session) { s.kill(); <-s.done; s.persisting.Wait(); _ = s.finalizeExecution() }(s)
+	}
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		m.mu.Lock()
+		remaining := m.processOwners[ownerID]
+		for _, s := range m.sessions {
+			if s.OwnerID == ownerID {
+				remaining++
+			}
+		}
+		for _, s := range m.recoveries {
+			if s.OwnerID == ownerID {
+				remaining++
+			}
+		}
+		targets := map[string]agentexec.Reclaimer{}
+		if remaining == 0 {
+			for id, target := range m.erasureTargets[ownerID] {
+				targets[id] = target
+			}
+		}
+		m.mu.Unlock()
+		if remaining == 0 {
+			var failures []error
+			for id, target := range targets {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				if err := target.Cleanup(); err != nil {
+					failures = append(failures, err)
+					continue
+				}
+				m.mu.Lock()
+				delete(m.erasureTargets[ownerID], id)
+				if len(m.erasureTargets[ownerID]) == 0 {
+					delete(m.erasureTargets, ownerID)
+				}
+				m.mu.Unlock()
+			}
+			return errors.Join(failures...)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s *Session) beginClose() error {
+	s.beginCloseMu.Lock()
+	defer s.beginCloseMu.Unlock()
+	if s.beginCloseDone {
+		return nil
+	}
+	if s.reservation != nil && s.reservation.BeginClose != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.beginCloseErr = s.reservation.BeginClose(ctx)
+	}
+	if s.beginCloseErr == nil {
+		s.beginCloseDone = true
+	}
+	return s.beginCloseErr
 }
 
 func (s *Session) markStopping() {
@@ -1430,4 +1780,17 @@ func paidByFor(platformPaid bool) string {
 		return store.PaidByPlatform
 	}
 	return store.PaidByUser
+}
+
+func (s *Session) prepareExecution(ctx context.Context) error {
+	if s.reservation != nil && s.reservation.BeforePrompt != nil {
+		deadline, err := s.reservation.BeforePrompt(ctx)
+		if err != nil {
+			return err
+		}
+		if !deadline.IsZero() {
+			return s.SetLease(ctx, deadline)
+		}
+	}
+	return nil
 }

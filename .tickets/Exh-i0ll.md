@@ -156,3 +156,13 @@ with the implementation; this ticket is the planning authority until then.
    idle compute release, retained-storage cost, and bounded capacity failure.
    Operators have documented rollout, rollback, cleanup, and failure diagnosis.
 
+
+## Notes
+
+**2026-10-20T07:30:55Z**
+
+Implementation delivered as a four-layer PR stack: durable authority, Sprites backend, standalone runtime, and production core integration. Chat/login/BYOK/History/budgets remain in Exhibit. Review-agent findings were fixed and re-reviewed. Code children are complete; epic remains in_progress with Exh-fuxp for credentialed live Sprite rollout, telemetry and cost/suspension evidence. No deployment or paid resources were created in this environment.
+
+**2026-10-20T20:47:31Z**
+
+Self-hosting remains the default: source and normal Docker/Compose use local Pi with BYOK; hosted remote/Sprites modes require explicit configuration. Rebased the stack onto current main and moved worker authority to migration 035 after main shipped asset identities at 034. Upgrade regressions cover schemas 033/034. Real container upgrade from main preserved login, encrypted key, artifact, History and same-conversation resume using bundled Pi with no worker/cloud/platform settings. Review-agent follow-up review found no remaining findings.

@@ -10,6 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/agentcontrol"
+	"github.com/momja/Exhibit/internal/agentexec"
+	"github.com/momja/Exhibit/internal/sprites"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -150,11 +153,10 @@ type createAgentSessionRequest struct {
 // session creators — the chat surface and the widget generator (av-fafu) — go
 // through it, so a key is resolved in exactly one place.
 //
-// Availability stays a separate signal from the credential: a missing pi
-// binary is a 503 in either mode, decided before either key is looked at.
+// Execution availability is independent of funding mode, checked before keys.
 func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agent.CreateOpts, bool) {
 	if ro.cfg.Agent == nil {
-		writeError(w, http.StatusServiceUnavailable, "agent support is not enabled (pi binary not found)")
+		writeError(w, http.StatusServiceUnavailable, "agent execution is not enabled")
 		return agent.CreateOpts{}, false
 	}
 	ownerID := ownerIDFromCtx(r.Context())
@@ -192,12 +194,33 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 
 // writeAgentCreateError answers a refused Create. The session limit
 // (av-99f4) is a refusal with a message, not a fault: it answers 429 so the
-// chat treats it as a limit. Everything else is the 500 it has always been.
+// chat treats it as a limit. Durable execution startup failures answer 503.
 // One mapping for both creators — the chat surface and the widget button —
 // so they cannot disagree about what a limit looks like.
-func writeAgentCreateError(w http.ResponseWriter, r *http.Request, op string, err error) {
-	if errors.Is(err, agent.ErrSessionLimit) || errors.Is(err, agent.ErrInstanceSessionLimit) {
+func (ro *Router) writeAgentCreateError(w http.ResponseWriter, r *http.Request, op string, err error) {
+	if errors.Is(err, agent.ErrSessionLimit) || errors.Is(err, agent.ErrInstanceSessionLimit) || errors.Is(err, agentcontrol.ErrOwnerLimit) || errors.Is(err, agentcontrol.ErrFleetLimit) || errors.Is(err, sprites.ErrCapacity) {
 		writeError(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
+	if errors.Is(err, agentcontrol.ErrAssigned) || errors.Is(err, agentcontrol.ErrNotResumable) {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	if errors.Is(err, agentcontrol.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "conversation not found")
+		return
+	}
+	var workerError *agentexec.HTTPError
+	if errors.As(err, &workerError) {
+		status := http.StatusServiceUnavailable
+		if workerError.Status == 429 {
+			status = http.StatusTooManyRequests
+		}
+		writeError(w, status, "agent worker unavailable; try again shortly")
+		return
+	}
+	if ro.cfg.AgentControl != nil {
+		writeError(w, http.StatusServiceUnavailable, "agent execution could not start; try again shortly")
 		return
 	}
 	serverError(w, r, op, err)
@@ -230,24 +253,30 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "resume_session_id needs artifact_id")
 			return
 		}
-		t, err := ro.cfg.Store.GetTranscript(r.Context(), opts.OwnerID, req.ArtifactID, req.ResumeSessionID)
-		if err != nil {
-			serverError(w, r, "get conversation to resume", err)
-			return
-		}
-		if t == nil {
-			writeError(w, http.StatusNotFound, "conversation not found")
-			return
-		}
-		if !t.Resumable {
-			writeError(w, http.StatusConflict,
-				"that conversation was kept before conversations could be continued, so it can only be read")
-			return
+		if ro.cfg.AgentControl == nil {
+			t, err := ro.cfg.Store.GetTranscript(r.Context(), opts.OwnerID, req.ArtifactID, req.ResumeSessionID)
+			if err != nil {
+				serverError(w, r, "get conversation to resume", err)
+				return
+			}
+			if t == nil {
+				writeError(w, http.StatusNotFound, "conversation not found")
+				return
+			}
+			if !t.Resumable {
+				writeError(w, http.StatusConflict,
+					"that conversation was kept before conversations could be continued, so it can only be read")
+				return
+			}
 		}
 		// A conversation that is still running is continued by attaching to it:
 		// a second process on the same conversation would be two writers of one
 		// record. The next tab to ask gets the one that exists.
-		if live := ro.cfg.Agent.Get(opts.OwnerID, t.SessionID); live != nil {
+		if live := ro.cfg.Agent.Get(opts.OwnerID, req.ResumeSessionID); live != nil {
+			if live.ArtifactID() != req.ArtifactID {
+				writeError(w, http.StatusNotFound, "conversation not found")
+				return
+			}
 			ticket, err := ro.sseTickets.Issue(live.ID, opts.OwnerID)
 			if err != nil {
 				serverError(w, r, "issue sse ticket", err)
@@ -256,7 +285,7 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, ro.sessionResponse(live, opts, ticket))
 			return
 		}
-		opts.ResumeSessionID = t.SessionID
+		opts.ResumeSessionID = req.ResumeSessionID
 	}
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)
@@ -265,7 +294,7 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeAgentCreateError(w, r, "create agent session", err)
+		ro.writeAgentCreateError(w, r, "create agent session", err)
 		return
 	}
 	// The ticket rides along with the id: creating a session and connecting

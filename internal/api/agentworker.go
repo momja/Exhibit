@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -29,7 +30,8 @@ const (
 // JSONL plus revision/kind/title headers; its JSON acknowledgement omits the
 // file. POST usage accepts agentcontrol.Usage and no owner/funding fields.
 // An unknown protocol version/path is 404; unsupported methods are 405.
-func NewAgentWorkerHandler(authority *agentcontrol.Control) http.Handler {
+// Usage observers run only after a new receipt commits, never on a duplicate.
+func NewAgentWorkerHandler(authority *agentcontrol.Control, usageObservers ...func(context.Context)) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+AgentWorkerAuthorityPath+"/snapshot", func(w http.ResponseWriter, r *http.Request) {
 		s, ok := agentWorkerSupervisor(w, r, authority)
@@ -94,6 +96,13 @@ func NewAgentWorkerHandler(authority *agentcontrol.Control) http.Handler {
 		if err != nil {
 			agentWorkerError(w, err)
 			return
+		}
+		if inserted {
+			for _, observe := range usageObservers {
+				if observe != nil {
+					observe(r.Context())
+				}
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(struct {

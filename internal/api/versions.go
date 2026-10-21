@@ -14,6 +14,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/momja/Exhibit/internal/agentcontrol"
+	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -161,7 +163,28 @@ func (ro *Router) storeVersionContent(ctx context.Context, ownerID int64, id, co
 		version, err = ro.cfg.Store.CommitVersion(ctx, ownerID, id, change)
 		return err
 	})
+	if err == nil {
+		err = ro.recordAgentVersion(ctx, version)
+	}
 	return version, err
+}
+
+func (ro *Router) recordAgentVersion(ctx context.Context, version *store.Version) error {
+	if version == nil {
+		return nil
+	}
+	if grant := agentGrantFromCtx(ctx); grant != nil && grant.Execution().ID != "" {
+		if ro.cfg.AgentControl == nil {
+			return fmt.Errorf("agent authority unavailable")
+		}
+		return ro.cfg.AgentControl.RecordArtifactVersion(ctx, agentExecutionIdentity(grant), version.Seq)
+	}
+	return nil
+}
+
+func agentExecutionIdentity(grant *agentscope.Grant) agentcontrol.Identity {
+	execution := grant.Execution()
+	return agentcontrol.Identity{OwnerID: grant.Scope().OwnerID, ConversationID: grant.SessionID(), ExecutionID: execution.ID, WorkerID: execution.WorkerID, Generation: execution.Generation}
 }
 
 // Reject stale content before quota accounting. This read-only preflight

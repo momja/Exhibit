@@ -24,6 +24,7 @@ const MODEL_SUGGESTIONS = {
 
 let sessionId = null;
 let eventSource = null;
+let interruptionShown = false;
 let streaming = false;
 const pendingQuestions = new Set();
 let sendingQuestionMessage = false;
@@ -267,6 +268,7 @@ function invalidatePreparation() {
   if (switchingConversation) cancelHistoryContinuation(switchingConversation);
 }
 function setSession(id) {
+  interruptionShown = false;
   if (id === sessionId) return;
   const previousSessionId = sessionId;
   sessionId = id;
@@ -499,6 +501,12 @@ function handleAgentEvent(ev) {
       break;
     case 'exhibit_source_prepared':
       addMsg('sys', 'Prepared artifact source.');
+      break;
+    case 'exhibit_execution_interrupted':
+      if (!interruptionShown) {
+        interruptionShown = true;
+        addMsg('sys', ev.message || 'The previous run was interrupted. Unfinished work has not been replayed.');
+      }
       break;
     case 'extension_error':
       addMsg('err', 'Extension error: ' + (ev.error || 'unknown'));

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -176,6 +177,12 @@ func validateQuestionResponse(questions []Question, response QuestionResponse) e
 // cancellation. Two tabs cannot answer it twice, and a failed write leaves it
 // pending so the person can retry. UI replies have no normal RPC response.
 func (s *Session) AnswerQuestions(id string, response QuestionResponse) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := s.prepareExecution(ctx); err != nil {
+		return err
+	}
+
 	s.writeMu.Lock()
 	s.mu.Lock()
 	request, ok := s.questions[id]
