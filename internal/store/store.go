@@ -475,6 +475,9 @@ type Store interface {
 	// Imports replace data atomically and refuse a nonempty target unless replace is true.
 	ImportArtifactAssets(ctx context.Context, ownerID int64, artifactID, generationID string, assets []ArtifactAsset, replace bool) ([]string, error)
 	ImportState(ctx context.Context, ownerID int64, artifactID string, state map[string]string, replace bool) error
+	// ImportArtifactBundle publishes a fresh private artifact and all its children
+	// in one transaction, after the caller has staged its immutable blobs.
+	ImportArtifactBundle(ctx context.Context, ownerID int64, bundle ArtifactBundleImport) error
 	ListArtifactAssets(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactAsset, error)
 	// GetArtifactAsset resolves current or historical asset IDs for the owner.
 	GetArtifactAsset(ctx context.Context, ownerID int64, artifactID, assetID string) (*ArtifactAsset, error)

@@ -103,6 +103,7 @@ var writeRoutes = []struct {
 	{"DELETE", "/api/tags/{tagID}/artifacts/{artifactID}", false},
 	{"POST", "/api/admin/users/", true},
 	{"PATCH", "/api/admin/users/{userID}", true},
+	{"POST", "/api/admin/users/{userID}/artifacts/import", true},
 	{"DELETE", "/api/account", false},
 	{"POST", "/api/shares/", true},
 	{"DELETE", "/api/shares/{shareID}", false},
@@ -119,6 +120,8 @@ func bodyLimitRouter(t *testing.T) *Router {
 	cfg := ro.cfg
 	cfg.MaxRequestBodyBytes = testBodyLimit
 	cfg.LocalCredential = newTestCredential(t, "admin", "pw")
+	_, err := cfg.Store.UpsertUser(t.Context(), "body-limit-import-owner", "import@example.test")
+	require.NoError(t, err)
 	return NewRouter(cfg)
 }
 
@@ -192,7 +195,7 @@ func TestEveryWriteRouteRefusesAnOversizedBody(t *testing.T) {
 func serveBody(ro *Router, method, path, contentType string, body io.Reader, contentLength int64) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, body)
 	req.ContentLength = contentLength
-	req.Header.Set("Authorization", "Bearer secret")
+	req.Header.Set("Authorization", "Bearer "+ro.cfg.AuthToken)
 	req.Header.Set("Content-Type", contentType)
 	rec := httptest.NewRecorder()
 	ro.ServeHTTP(rec, req)

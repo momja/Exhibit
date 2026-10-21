@@ -364,6 +364,8 @@ func (ro *Router) setupRoutes() {
 	ro.Use(logging.RequestMiddleware)
 	ro.Use(middleware.Recoverer)
 	ro.Use(compressor())
+	// Hide private bundle imports before even the declared-length refusal.
+	ro.Use(ro.artifactBundleImportGuard)
 	// Every request body is bounded (av-ombn), and this is the one place that
 	// says so: registered on the root, ahead of every group, a route added
 	// anywhere below inherits it without having to remember it.
@@ -480,6 +482,10 @@ func (ro *Router) setupRoutes() {
 	// precisely who needs it; a private instance answers 404 rather than
 	// naming itself. See publicmode.go for that choice.
 	ro.Get("/api/settings/public", ro.publicSettings)
+
+	// The early import guard requires the service bearer token; sessions alone
+	// cannot reach this private endpoint through ordinary API authentication.
+	ro.Post("/api/admin/users/{userID}/artifacts/import", ro.importArtifactBundle)
 
 	// The agent SSE event stream. EventSource can't set headers, so the
 	// handler authenticates itself rather than going through the API's auth

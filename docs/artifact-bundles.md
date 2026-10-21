@@ -27,11 +27,10 @@ are outside this snapshot. Metadata records source title/URL/tier and approvals;
 an imported artifact starts private with fresh network and capability approvals.
 
 The private import is `POST /api/admin/users/:userID/artifacts/import`, with the
-raw ZIP as its request body. It is disabled unless
-`ARTIFACT_IMPORT_ADMIN_TOKEN` is configured and requires that exact token in an
-Authorization Bearer header. An ordinary service token or admin session does not
-authorize import. Refusals return 404 before target lookup or body parsing. No
-gallery/admin controls or public API documentation advertise this endpoint.
+raw ZIP as its request body. It requires the existing instance `AUTH_TOKEN` in
+an Authorization Bearer header. Admin and ordinary sessions alone do not
+authorize import. Refusals return 404 before target lookup or body parsing.
+No gallery/admin controls or public API documentation advertise this endpoint.
 Operator details belong in this document and deployment configuration only.
 
 Import creates a new artifact, returns 201 with its ordinary artifact JSON, and
@@ -47,3 +46,55 @@ Reference parsing allows at most 32 context levels and cumulative input of eight
 times each source/payload's length plus 8 KiB. Nested `srcdoc` documents share
 their enclosing document's budget. Exhaustion rejects export before download
 headers or import before staging.
+
+## Operator restore
+
+Use the destination server's existing `AUTH_TOKEN`, the operator credential that
+already has administrative API authority. No import-specific secret or enable
+switch is needed. Only `Authorization: Bearer …` authorizes import; browser
+sessions, scoped agent credentials, and query parameters do not. The server
+and Compose use `dev-token` when `AUTH_TOKEN` is unset or empty, so emptying
+the environment variable does not disable import. Use the destination
+server’s effective token.
+
+Provision the destination account first and use its integer user ID. It must
+exist and remain enabled through publication. Send the exported ZIP directly,
+without multipart encoding:
+
+```sh
+curl --fail-with-body \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H 'Content-Type: application/zip' \
+  --data-binary @artifact.zip \
+  https://exhibit.example.com/api/admin/users/42/artifacts/import
+```
+
+Success returns `201` and the ordinary artifact JSON, including its fresh ID.
+Every request creates a new private artifact; repeating a successful request
+creates another copy. The original title, source URL, tier, editable source,
+widget, asset bytes, and exact owner-state strings travel. Source artifact,
+asset, and generation identities are fresh, as are source and widget blob IDs. Asset blobs use the destination account’s content addresses
+so identical payloads share their storage and quota charge. Network decisions and
+capability approvals reset, sharing defaults to `own`, and no shares or account
+organization are copied. Portable HTML entries are validated but the separate
+editable source entries are restored.
+
+The ZIP upload uses `MAX_REQUEST_BODY_BYTES` (32 MiB by default), including
+chunked requests. Each expanded page, editable source, widget, and state file
+uses that same ceiling. The manifest is at most 1 MiB. At most 200 asset rows
+are accepted, with at most 96 MiB of expanded asset entries and 48 MiB of unique
+asset payloads, including historical dependencies. Owner state is at most
+10,000 string keys. These limits also apply when exporting a complete bundle.
+An unsupported format/version, multiple pages, missing references, malformed
+metadata/state, unsafe or duplicate paths, unlisted files, or a bad CRC fails
+before any blob is staged. Destination storage quotas apply to the rewritten
+source/widget and distinct asset payloads after rewriting.
+
+A missing or wrong service token returns the same `404` before account
+lookup or request-body inspection, including for declared oversized uploads.
+With the correct token, a nonexistent/disabled account returns `404`, invalid
+archives return `400`, and an upload/quota/state-key limit returns `413`.
+Expanded entry and asset-budget violations return `400`. Publication uses one
+database transaction: failed publication exposes no artifact, source/widget
+version, assets, or state. Staged blobs are durably queued before writes and
+reclaimed after a failure; startup cleanup retries any interrupted reclamation.
