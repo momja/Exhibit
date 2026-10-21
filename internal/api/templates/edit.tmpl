@@ -36,7 +36,7 @@
        and the others are things you go looking for. */}}
   {{/* Tags (tags.js). Changes save immediately via the tag API, not the
        Save button; htmx re-renders the body on exhibit:tags-changed. */}}
-  <details class="details-panel" id="tags-panel">
+  <details class="details-panel" id="tags-panel" data-artifact-id="{{.ID}}">
     <summary>{{template "panelCaret"}} Tags</summary>
     <div class="panel-body">
       <div id="tags-body"
@@ -348,6 +348,6 @@ let geolocationApproved = {{if .GeolocationApproved}}true{{else}}false{{end}};
 <script type="module" src="/assets/gallery/storage-import.js"></script>
 <script type="module" src="/assets/gallery/assets-export.js"></script>
 <script type="module" src="/assets/gallery/versions.js"></script>
-<script src="/assets/gallery/tags.js"></script>
+<script type="module" src="/assets/gallery/tags.js"></script>
 </body>
 </html>{{end}}

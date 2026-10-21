@@ -166,8 +166,10 @@ input.state-input{max-width:340px}
 .tag-pill-btn i{font-size:12px;line-height:1}
 .tag-panel>p{margin-bottom:12px}
 .tag-add-row{display:flex;gap:8px;align-items:center}
-.tag-add-row .select{flex:1;max-width:320px}
-.tag-create{display:flex;flex-direction:column;gap:4px;margin-top:10px;max-width:320px}
+.tag-add-row .select{flex:1;min-width:0;max-width:320px}
+.tag-create{display:flex;flex-direction:column;gap:4px;margin-top:20px;max-width:320px}
+.tag-create h3{margin:0 0 8px}
+.tag-create .btn{align-self:flex-start;margin-top:8px}
 .tag-error{color:var(--color-danger-hover);margin-top:8px}
 
 /* Edit-tag modal. */

@@ -1,12 +1,15 @@
-/* Edit page Tags panel (edit.tmpl). Globals: ID, TOKEN/READ_ONLY (api.js).
+/* Edit page Tags panel (edit.tmpl). Independent existing-tag and new-tag actions.
  * Every change goes through the tag API, then fires exhibit:tags-changed so
  * htmx re-renders #tags-body. Listeners are delegated from #tags-panel, which
  * survives the swap.
  */
+import { apiFetch } from './api-module.js';
+
 (function() {
   const panel = document.getElementById('tags-panel');
   if (!panel) return;
 
+  const artifactID = panel.dataset.artifactId;
   const byId = (id) => document.getElementById(id);
 
   function changed() {
@@ -47,39 +50,49 @@
 
   async function detach(tagID) {
     setError('tag-add-error', '');
-    const r = await apiFetch('/api/tags/' + encodeURIComponent(tagID) + '/artifacts/' + encodeURIComponent(ID), {
+    const r = await apiFetch('/api/tags/' + encodeURIComponent(tagID) + '/artifacts/' + encodeURIComponent(artifactID), {
       method: 'DELETE'
     }).catch(function() { return null; });
     if (!r || !r.ok) setError('tag-add-error', await errorOf(r, 'Could not remove the tag.'));
     changed();
   }
 
-  // Attach an existing tag, creating it first for "create new".
-  async function add() {
-    setError('tag-add-error', '');
-    const select = byId('tag-add-select');
-    const choice = select ? select.value : '';
-    if (!choice) { setError('tag-add-error', 'Choose a tag or create a new one.'); return; }
+  async function attach(tagID, errorID) {
+    const attached = await apiFetch('/api/tags/' + encodeURIComponent(tagID) + '/artifacts/' + encodeURIComponent(artifactID), {
+      method: 'POST'
+    }).catch(function() { return null; });
+    if (!attached || !attached.ok) setError(errorID, await errorOf(attached, 'Could not add the tag.'));
+    // Re-render even on failure: a just-created tag belongs in the dropdown.
+    changed();
+  }
 
-    let tagID = choice;
-    if (choice === '__new__') {
-      const name = byId('tag-add-name').value.trim();
-      if (!name) { setError('tag-add-error', 'Name is required.'); return; }
+  async function addExisting() {
+    setError('tag-add-error', '');
+    const tagID = byId('tag-add-select').value;
+    if (!tagID) { setError('tag-add-error', 'Choose an existing tag to add.'); return; }
+    await attach(tagID, 'tag-add-error');
+  }
+
+  async function createAndAdd() {
+    const button = byId('tag-create-confirm');
+    if (button.disabled) return;
+    setError('tag-create-error', '');
+    const name = byId('tag-add-name').value.trim();
+    if (!name) { setError('tag-create-error', 'Name is required.'); byId('tag-add-name').focus(); return; }
+    button.disabled = true;
+    try {
       const created = await apiFetch('/api/tags', {
         method: 'POST',
         body: JSON.stringify({ name: name, color: byId('tag-add-color-hex').value.trim() })
       }).catch(function() { return null; });
-      if (!created || !created.ok) { setError('tag-add-error', await errorOf(created, 'Could not create the tag.')); return; }
-      const data = await created.json().catch(function() { return {}; });
-      tagID = data.id;
+      if (!created || !created.ok) { setError('tag-create-error', await errorOf(created, 'Could not create the tag.')); return; }
+      const data = await created.json();
+      // Attachment errors must survive the htmx refresh of the creation fields.
+      setError('tag-add-error', '');
+      await attach(data.id, 'tag-add-error');
+    } finally {
+      button.disabled = false;
     }
-
-    const attached = await apiFetch('/api/tags/' + encodeURIComponent(tagID) + '/artifacts/' + encodeURIComponent(ID), {
-      method: 'POST'
-    }).catch(function() { return null; });
-    if (!attached || !attached.ok) setError('tag-add-error', await errorOf(attached, 'Could not add the tag.'));
-    // Re-render even on failure: a just-created tag belongs in the dropdown.
-    changed();
   }
 
   panel.addEventListener('click', function(e) {
@@ -91,19 +104,9 @@
     }
     const swatch = target.closest ? target.closest('.color-swatch') : null;
     if (swatch) return setColor('tag-add', byId('tag-add-create-fields'), swatch.dataset.color);
-    if (target.closest && target.closest('#tag-add-confirm')) return add();
+    if (target.closest && target.closest('#tag-add-confirm')) return addExisting();
+    if (target.closest && target.closest('#tag-create-confirm')) return createAndAdd();
     return undefined;
-  });
-
-  panel.addEventListener('change', function(e) {
-    if (e.target.id !== 'tag-add-select') return;
-    const fields = byId('tag-add-create-fields');
-    const creating = e.target.value === '__new__';
-    if (fields) fields.hidden = !creating;
-    if (creating) {
-      setColor('tag-add', fields, byId('tag-add-color-hex').value);
-      byId('tag-add-name').focus();
-    }
   });
 
   panel.addEventListener('input', function(e) {
@@ -111,9 +114,9 @@
   });
 
   panel.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && e.target && e.target.id === 'tag-add-name') {
+    if (e.key === 'Enter' && e.target && (e.target.id === 'tag-add-name' || e.target.id === 'tag-add-color-hex')) {
       e.preventDefault();
-      add();
+      return createAndAdd();
     }
   });
 
