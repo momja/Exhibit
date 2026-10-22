@@ -2,7 +2,7 @@
 id: Exh-co2m
 status: in_progress
 deps: []
-links: []
+links: [Exh-h5va, Exh-g2vv]
 created: 2026-10-22T00:49:02Z
 type: feature
 priority: 2
@@ -20,3 +20,9 @@ Throwaway-quality POC on a branch; not for merge as-is. Findings and measurement
 
 1. A demo artifact with a backend fetches arXiv through the handler from the framed preview. 2. A non-allowlisted origin, loopback/private addresses, and runaway CPU/memory are refused or bounded, with tests. 3. A downloaded bundle runs on a user's machine and serves the same app. 4. Report with measurements and open questions.
 
+
+## Notes
+
+**2026-10-22T06:51:01Z**
+
+Follow-up direction recorded in Exh-g2vv (experimental): park the server-side backend, build a credential-free relay plus connectors instead. Findings in docs/backend-poc.md on feature/Exh-co2m/backend-poc.
