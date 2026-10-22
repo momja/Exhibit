@@ -143,4 +143,5 @@ func TestDetailPageRendersLinkConfirmationModal(t *testing.T) {
 	assert.Regexp(t, `id="link-block"[^>]*autofocus[^>]*data-modal-dismiss`, page)
 	assert.Contains(t, string(detailJS), `setCapabilityApproved('links_approved', approved, 'link',`)
 	assert.Contains(t, string(detailJS), `await checkedLinkDestination(link.url)`)
+	assert.Contains(t, string(detailJS), `window.open(destination, '_blank', 'noopener,noreferrer')`)
 }
