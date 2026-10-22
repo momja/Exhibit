@@ -1,0 +1,10 @@
+{{define "relayConsent"}}<dialog class="relay-consent" data-relay-host-target="consent" data-action="cancel->relay-host#decline" aria-labelledby="relay-consent-title-{{.ID}}">
+  <span class="experimental-label">Experimental relay</span>
+  <h2 id="relay-consent-title-{{.ID}}">Allow server requests?</h2>
+  <p><strong>{{.Title}}</strong> wants Exhibit to contact <code data-relay-host-target="destination"></code>.</p>
+  <p data-relay-host-target="readCopy">Allow this artifact to read from its approved API origins through Exhibit's server.</p>
+  <p data-relay-host-target="writeCopy" hidden>Allow this artifact to send data and make changes at its approved API origins through Exhibit's server. This includes POST, PUT, PATCH and DELETE requests.</p>
+  <p class="muted">Requests leave from this server's address. Origin approval and connection grants still apply. You can revoke this permission in Connections &amp; relay.</p>
+  <p role="alert" data-relay-host-target="error"></p>
+  <div class="relay-dialog-actions"><button type="button" class="btn btn-sec" data-action="relay-host#decline" autofocus>Decline</button><button type="button" class="btn" data-relay-host-target="allow" data-action="relay-host#approve">Allow reads</button></div>
+</dialog>{{end}}

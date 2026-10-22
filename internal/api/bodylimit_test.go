@@ -15,6 +15,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/momja/Exhibit/internal/connectors"
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -76,6 +78,22 @@ var writeRoutes = []struct {
 	{"PUT", "/api/artifacts/{artifactID}/state", true},
 	{"DELETE", "/api/artifacts/{artifactID}/state", false},
 	{"DELETE", "/api/artifacts/{artifactID}/grants", false},
+	{"POST", "/api/artifacts/{artifactID}/agent-connections", true},
+	{"POST", "/api/artifacts/{artifactID}/connections", true},
+	{"DELETE", "/api/artifacts/{artifactID}/connections/{connectionID}", false},
+	{"DELETE", "/api/artifacts/{artifactID}/connection-data", false},
+	{"POST", "/api/artifacts/{artifactID}/connections/{connectionID}/standin", false},
+	{"DELETE", "/api/artifacts/{artifactID}/connection-requests/{requestID}", false},
+	{"POST", "/api/artifacts/{artifactID}/relay", true},
+	{"POST", "/api/artifacts/{artifactID}/navigation-check", true},
+	{"PUT", "/api/artifacts/{artifactID}/relay-grant", true},
+	{"POST", "/api/artifacts/{artifactID}/relay-schedules", true},
+	{"DELETE", "/api/artifacts/{artifactID}/relay-schedules/{scheduleID}", false},
+	{"POST", "/api/connections", true},
+	{"DELETE", "/api/connections/{connectionID}", false},
+	{"POST", "/api/connections/oauth/github/begin", true},
+	{"POST", "/api/connections/vendor/begin", true},
+	{"POST", "/api/connections/vendor/complete", true},
 	{"DELETE", "/api/artifacts/{artifactID}/assets/{assetID}", false},
 	{"POST", "/api/artifacts/{artifactID}/origins", true},
 	{"DELETE", "/api/artifacts/{artifactID}/origins", false},
@@ -120,6 +138,9 @@ func bodyLimitRouter(t *testing.T) *Router {
 	cfg := ro.cfg
 	cfg.MaxRequestBodyBytes = testBodyLimit
 	cfg.LocalCredential = newTestCredential(t, "admin", "pw")
+	cfg.Relay.Enabled = true
+	cfg.Relay.SchedulesEnabled = true
+	cfg.Connections = connectors.New(connectors.Config{Store: cfg.Store.(*store.SQLiteStore), Box: cfg.Secrets})
 	return NewRouter(cfg)
 }
 
@@ -195,6 +216,16 @@ func serveBody(ro *Router, method, path, contentType string, body io.Reader, con
 	req.ContentLength = contentLength
 	req.Header.Set("Authorization", "Bearer secret")
 	req.Header.Set("Content-Type", contentType)
+	// Runtime requests carry the app page's current policy, so this fixture
+	// reaches the decoder instead of correctly failing the stale-page fence.
+	if strings.HasPrefix(path, "/api/artifacts/") && (strings.HasSuffix(path, "/relay") || strings.HasSuffix(path, "/standin") || strings.HasSuffix(path, "/navigation-check")) {
+		id := strings.Split(strings.TrimPrefix(path, "/api/artifacts/"), "/")[0]
+		if a, err := ro.cfg.Store.GetArtifactReadableBy(req.Context(), store.ViewerID(defaultOwnerID), id); err == nil && a != nil {
+			if policy, err := ro.relayPolicy(req.Context(), defaultOwnerID, a); err == nil {
+				req.Header.Set("X-Exhibit-Relay-Policy", policy)
+			}
+		}
+	}
 	rec := httptest.NewRecorder()
 	ro.ServeHTTP(rec, req)
 	return rec
@@ -214,6 +245,9 @@ func seedBodyLimitFixtures(t *testing.T, ro *Router) *strings.Replacer {
 		"{sessionID}", "missing",
 		"{seq}", "1",
 		"{shareID}", "missing",
+		"{connectionID}", "missing",
+		"{requestID}", "missing",
+		"{scheduleID}", "missing",
 	)
 }
 

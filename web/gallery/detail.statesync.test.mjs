@@ -51,7 +51,7 @@ const HIDDEN = {
 // changing between two polls.
 const stateResponse = (state) => ({ ok: true, status: 200, json: async () => state });
 
-function loadDetail({ readOnly = false, stateWritable = true, shared = false, responses = [] } = {}) {
+function loadDetail({ readOnly = false, stateWritable = true, shared = false, responses = [], connectionProtected = false } = {}) {
   const api = recordingApi(responses);
   const page = loadPageScript(DETAIL_JS, {
     TOKEN: "",
@@ -61,6 +61,7 @@ function loadDetail({ readOnly = false, stateWritable = true, shared = false, re
     ID,
     SOURCE_URL: "",
     OPEN_URL,
+    CONNECTION_PROTECTED: connectionProtected,
     downloadsApproved: false,
     clipboardApproved: false,
     linksApproved: false,
@@ -199,6 +200,16 @@ test("the reload is the visitor's to press, and goes through /open", async () =>
     "the frame's own src carries a token minted when this page loaded, and this " +
     "banner is pressed on pages that have been open a while");
   assert.equal(byId("state-changed-banner").hidden, true);
+});
+
+test('retained data protection reloads the host even with relay disabled', async () => {
+  const page = loadDetail({ connectionProtected: true });
+  let reloads = 0;
+  page.window.location.reload = () => { reloads++; };
+  await page.postFromFrame(synced(1, false));
+  await page.byId('state-changed-reload').click();
+  assert.equal(reloads, 1);
+  assert.equal(page.frame.src, '', 'a fresh iframe redirect must not preserve an old private window.name');
 });
 
 test("a sync report from anywhere but our own frame is ignored", async () => {

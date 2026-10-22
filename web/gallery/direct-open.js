@@ -1,5 +1,6 @@
 // App-origin gate for top-level artifact opens. Markup and copy live in the
-// template. /open also reloads frames, so the redirect itself stays ungated.
+// template. Mark new tabs so /open can check current data policies separately
+// from ordinary frame reloads, including when this page has become stale.
 const modal = document.getElementById('direct-open-modal');
 const remember = document.getElementById('direct-open-remember');
 const cancel = document.getElementById('direct-open-cancel');
@@ -12,6 +13,17 @@ let background = [];
 function remembered(preferenceKey) {
   try { return preferenceKey && localStorage.getItem(preferenceKey) === '1'; }
   catch (err) { return false; }
+}
+
+function directOpenURL(openUrl) {
+  const fragmentStart = openUrl.indexOf('#');
+  const target = fragmentStart === -1 ? openUrl : openUrl.slice(0, fragmentStart);
+  const fragment = fragmentStart === -1 ? '' : openUrl.slice(fragmentStart);
+  const queryStart = target.indexOf('?');
+  const path = queryStart === -1 ? target : target.slice(0, queryStart);
+  const query = new URLSearchParams(queryStart === -1 ? '' : target.slice(queryStart + 1));
+  query.set('direct', '1');
+  return path + '?' + query + fragment;
 }
 
 function show(message = '') {
@@ -82,7 +94,7 @@ async function open(request, saveChoice) {
       return;
     }
     if (!approved) throw new Error('approval failed');
-    tab.location = request.openUrl;
+    tab.location = directOpenURL(request.openUrl);
     if (saveChoice && request.preferenceKey) {
       try { localStorage.setItem(request.preferenceKey, '1'); }
       catch (err) { /* Ask again next time when persistence is unavailable. */ }
@@ -100,6 +112,10 @@ async function open(request, saveChoice) {
 function requestOpen(options = {}) {
   if (pending) { options.resolve?.(false); return; }
   const trigger = options.trigger || document.activeElement;
+  if ((typeof CONNECTION_PROTECTED === 'boolean' && CONNECTION_PROTECTED) || trigger?.disabled) {
+    options.resolve?.(false);
+    return;
+  }
   // Agent controls are replaced by server-rendered preview swaps. Capture
   // their artifact and URL together for this decision, rather than at boot.
   const artifact = trigger?.dataset.directOpenArtifact ?? modal.dataset.artifact;

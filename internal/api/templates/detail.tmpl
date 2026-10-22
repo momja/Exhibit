@@ -18,9 +18,9 @@
      asset, never a CDN. Loaded only for the owner: a recipient's page has no
      share controls and cannot approve an origin, so nothing on it changes
      and it should not carry the library that refreshes them. */}}
-{{if .Share}}<script src="{{asset "htmx/htmx.min.js"}}"></script>{{end}}
+{{if or .Share .RelayEnabled}}<script src="{{asset "htmx/htmx.min.js"}}"></script>{{end}}
 </head>
-<body>
+<body{{if .RelayEnabled}} data-controller="relay-host" data-relay-host-artifact-id-value="{{.ID}}" data-relay-host-frame-selector-value=".panels > iframe" data-relay-host-policy-value="{{.RelayPolicy}}"{{end}}>
 {{template "appHeader" .Header}}
 <div class="panels">
   {{/* No allow="clipboard-*" delegation: the frame's opaque origin matches no
@@ -28,7 +28,7 @@
        Clipboard read/write is instead proxied through the host via the shim's
        capability bridge, gated by per-artifact first-use approval. Native
        keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. */}}
-  <iframe src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy" title="{{.Title}}"></iframe>
+  <iframe {{if .RelayEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy" title="{{.Title}}"></iframe>
 </div>
 {{/* The page's notices: the three banners below and the status line. They are
      messages to read and often act on, so they stay until dealt with rather
@@ -59,7 +59,7 @@
       <p id="capability-warning-detail"></p>
     </details>
   </div>
-  <button type="button" class="banner-action" id="direct-open-banner"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</button>
+  <button type="button" class="banner-action" id="direct-open-banner"{{if .ConnectionProtected}} disabled title="Connected data must stay inside Exhibit, where its data destinations are enforced."{{end}}><i class="ph ph-arrow-square-out" aria-hidden="true"></i> {{if .ConnectionProtected}}Connected preview only{{else}}Open in new tab{{end}}</button>
 </div>
 {{/* The recipient's answer to a CSP-blocked origin (av-awr4): explain, do not
      ask. Only the artifact's owner may widen its allowlist, so the runtime
@@ -224,6 +224,7 @@
 
 {{template "networkPrompt"}}
 {{template "directOpenPrompt" .}}
+{{if .RelayEnabled}}{{template "relayConsent" .}}{{end}}
 <script>
 const TOKEN = {{.Token}};
 {{/* READ_ONLY and TOKEN are one decision, made server-side per request
@@ -250,6 +251,10 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const STATE_WRITABLE = {{if .StateWritable}}true{{else}}false{{end}};
 const SHARED_STATE = {{if .SharedState}}true{{else}}false{{end}};
 const ID = {{.ID}};
+const RELAY_ENABLED = {{if .RelayEnabled}}true{{else}}false{{end}};
+const CONNECTION_PROTECTED = {{if .ConnectionProtected}}true{{else}}false{{end}};
+const NAVIGATION_POLICY = {{.RelayPolicy}};
+const PUBLIC_NAVIGATION = {{if .PublicNavigation}}true{{else}}false{{end}};
 const SOURCE_URL = {{.SourceURL}};
 let sourceRevision = {{.SourceRevision}};
 {{/* The app-origin route that mints a render token and redirects to it, used

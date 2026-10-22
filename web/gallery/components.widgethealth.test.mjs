@@ -77,6 +77,21 @@ test("every appended widget falls back after silence without disturbing a ready 
   assert.equal(existing.failed(), false, "paging must not restart a ready widget's deadline");
 });
 
+test('protected widget health belongs to the opaque inner frame, not its trusted wrapper', async (t) => {
+  const page = loadWidgetHealth(t);
+  const card = page.addCard();
+  const inner = {};
+  card.frame.dataset.widgetWrapper = '';
+  card.frame.contentDocument = { querySelector: () => ({ contentWindow: inner }) };
+  await page.swap([card]);
+  page.reveal(card);
+  await page.postFromFrame({ __avWidget: true, status: 'ready' }, card.frame.contentWindow);
+  page.tick(6000);
+  assert.equal(card.failed(), true, 'wrapper messages cannot vouch for the guest');
+  await page.postFromFrame({ __avWidget: true, status: 'ready' }, inner);
+  assert.equal(card.failed(), false);
+});
+
 test("reprocessing a gallery preserves deadlines and waits for offscreen widgets", async (t) => {
   const page = loadWidgetHealth(t);
   const visible = page.addCard();

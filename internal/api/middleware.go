@@ -238,6 +238,9 @@ var agentSubResources = map[string][]string{
 	"state":  {http.MethodGet, http.MethodPut, http.MethodDelete},
 	"widget": {http.MethodGet, http.MethodPut, http.MethodDelete},
 	"assets": {http.MethodGet},
+	// Metadata and a pending UI request only. Actual credential acquisition,
+	// recipes, grants and dismissal remain outside an agent's authority.
+	"agent-connections": {http.MethodGet, http.MethodPost},
 }
 
 // agentScopeAllows is the entire reach of an agent session credential, written

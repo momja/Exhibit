@@ -69,3 +69,13 @@ ph-warning-circle
 ph-warning-octagon
 ph-x
 ph-x-circle
+ph-arrow-up-right
+ph-bank
+ph-clock-clockwise
+ph-flask
+ph-github-logo
+ph-lock-key
+ph-package
+ph-plugs
+ph-plugs-connected
+ph-plus-circle

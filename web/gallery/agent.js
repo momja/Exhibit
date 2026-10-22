@@ -469,7 +469,13 @@ function handleAgentEvent(ev) {
       if (ev.footprint && ev.footprint.length) {
         note += ' It references external origins (' + ev.footprint.join(', ') + '); they stay blocked until you approve them on the artifact page.';
       }
+      if (ev.warnings && ev.warnings.length) note += ' Review the network warnings below before allowing access.';
       addMsg('sys', note);
+      break;
+    }
+    case 'exhibit_connection_requested': {
+      if (!artifact || artifact.id !== ev.artifactId) break;
+      document.body.dispatchEvent(new CustomEvent('exhibit:connection-requested'));
       break;
     }
     case 'exhibit_state_changed': {

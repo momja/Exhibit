@@ -15,6 +15,8 @@ import (
 	"github.com/momja/Exhibit/internal/api"
 	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/connectors"
+	"github.com/momja/Exhibit/internal/egress"
 	"github.com/momja/Exhibit/internal/humanize"
 	"github.com/momja/Exhibit/internal/logging"
 	"github.com/momja/Exhibit/internal/secrets"
@@ -64,6 +66,17 @@ func main() {
 	entitlements, err := api.EntitlementsFromEnv()
 	if err != nil {
 		fatal("configure per-owner entitlements", err)
+	}
+	relayConfig, err := api.RelayFromEnv()
+	if err != nil {
+		fatal("configure experimental relay", err)
+	}
+	connectionConfig, err := connectors.ConfigFromEnv()
+	if err != nil {
+		fatal("configure experimental connectors", err)
+	}
+	if connectionConfig != nil && !relayConfig.Enabled {
+		fatal("configure experimental connectors", errors.New("CONNECTORS_ENABLED requires RELAY_ENABLED"))
 	}
 
 	// Who may frame a share (av-q3iy). Unset — the default — leaves a share
@@ -282,7 +295,16 @@ func main() {
 		}
 	}
 
+	var connectionService *connectors.Service
+	if connectionConfig != nil {
+		connectionConfig.Store = st
+		connectionConfig.Box = box
+		connectionConfig.GateFactory = func(origins []string) (*egress.Gate, error) { return relayConfig.Gate(origins, appOrigin) }
+		connectionService = connectors.New(*connectionConfig)
+	}
 	routerConfig := api.Config{
+		Relay:               relayConfig,
+		Connections:         connectionService,
 		Store:               st,
 		Blob:                bl,
 		AppOrigin:           appOrigin,
@@ -315,6 +337,10 @@ func main() {
 	if hostedLogin != nil {
 		go router.RetryHostedAccountDeletions(context.Background())
 	}
+	maintenanceCtx, stopMaintenance := context.WithCancel(context.Background())
+	defer stopMaintenance()
+	router.StartRelaySchedules(maintenanceCtx)
+	router.StartConnectorMaintenance(maintenanceCtx)
 
 	// One listener or two (av-xath). Two is the default and the shape an
 	// operator-supplied proxy expects: a hostname mapped to each port. A

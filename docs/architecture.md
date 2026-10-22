@@ -1016,3 +1016,15 @@ A share lives until deleted. There is no expiry, and `POST /api/shares` refuses 
 - **Not a predictor.** Policy sits at the runtime boundary.
 - **Not the owner of TLS or backup targets.** The release is the image and a config
   contract.
+
+## Experimental relay and connector boundary
+
+The optional relay and connector engines perform reviewed, bounded HTTPS
+requests while artifact execution stays in the browser. Ordinary API fetches,
+credential injection and declarative fetch-to-state schedules share
+`internal/egress`; no artifact server script or QuickJS runtime is introduced.
+Document-bound host authority and current-policy checks keep a newly granted
+connection from empowering an older frame. ZIP exports include a local relay
+and acquire local credentials again. See [relay-connectors.md](relay-connectors.md)
+for the configuration, ownership rules, portable runners and recorded decision
+superseding the synchronous backend POC.

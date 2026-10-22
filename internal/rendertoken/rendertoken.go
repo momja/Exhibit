@@ -213,6 +213,13 @@ func VersionScope(artifactID string, seq int) string {
 	return artifactID + "/v/" + strconv.Itoa(seq)
 }
 
+// PolicyScope binds a credential to its opaque data-policy path. A cached
+// document cannot carry private bytes into a later, wider policy by replaying
+// its credential or selecting another viewer's unbound document URL.
+func PolicyScope(documentScope, policy string) string {
+	return documentScope + "/p/" + policy
+}
+
 // Mint returns a token authorizing ownerID to render artifactID for TTL, as
 // that owner: their state is the state the document inlines.
 func (s *Signer) Mint(artifactID string, ownerID int64) string {

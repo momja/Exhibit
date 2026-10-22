@@ -234,7 +234,7 @@
      keeps its contents out of the tab order — the widget states a fact, it is
      not a control. The <title> is the accessible name every iframe needs.
      Data: widgetView (gallery.go). */}}
-{{define "cardWidget"}}<div class="card-widget{{if .URL}} has-frame{{end}}"{{if .ReloadURL}} data-gallery-widget data-widget-reload="{{.ReloadURL}}"{{end}}><div class="card-widget-default" style="--tile-hue:{{.Hue}}"><span class="card-widget-monogram">{{.Monogram}}</span></div>{{if .URL}}<iframe class="card-widget-frame" src="{{.URL}}" sandbox="allow-scripts" loading="lazy" tabindex="-1" scrolling="no" title="{{.Title}} widget"></iframe>{{end}}</div>{{end}}
+{{define "cardWidget"}}<div class="card-widget{{if .URL}} has-frame{{end}}"{{if .ReloadURL}} data-gallery-widget data-widget-reload="{{.ReloadURL}}"{{end}}><div class="card-widget-default" style="--tile-hue:{{.Hue}}"><span class="card-widget-monogram">{{.Monogram}}</span></div>{{if .URL}}<iframe class="card-widget-frame" {{if .Wrapped}}srcdoc="{{.FrameDocument}}" data-widget-wrapper sandbox="allow-scripts allow-same-origin"{{else}}src="{{.URL}}" sandbox="allow-scripts"{{end}} loading="lazy" tabindex="-1" scrolling="no" title="{{.Title}} widget"></iframe>{{end}}</div>{{end}}
 
 {{/* capabilityPopover is the "receipt" for what was approved at ingest
      (spec 6.2) — capabilityCluster's aria-describedby target. One row per
@@ -427,6 +427,10 @@
     <h2 id="net-title">Allow network access?</h2>
     <p>This artifact tried to contact <code id="net-origin"></code> and was blocked.</p>
     <p class="text-sm muted" id="net-directive"></p>
+    <div id="net-warning-list" hx-get="/partials/network-warnings"
+         hx-trigger="exhibit:network-origin-warning from:body"
+         hx-vals='js:{artifact: document.getElementById("net-warning-list").dataset.artifact}'
+         hx-swap="innerHTML" hx-sync="this:replace"></div>
     <p>Allowing adds this origin to the artifact's allowlist and reloads the artifact so the request can retry. You can revoke it later in allowlist settings.</p>
     <div class="modal-actions">
       <button type="button" class="btn btn-sec" id="net-never">Don't ask again</button>

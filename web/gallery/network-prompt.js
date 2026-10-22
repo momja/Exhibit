@@ -79,6 +79,12 @@
         document.getElementById('net-origin').textContent = pending.origin;
         document.getElementById('net-directive').textContent =
           pending.directive ? 'Blocked by ' + pending.directive : '';
+        const warnings = document.getElementById('net-warning-list');
+        if (warnings) {
+          warnings.dataset.artifact = artifactId();
+          warnings.replaceChildren();
+          document.body.dispatchEvent(new CustomEvent('exhibit:network-origin-warning'));
+        }
         modal.hidden = false;
         // Land on the safe answer, the way the link prompt does.
         document.getElementById('net-once').focus();

@@ -139,12 +139,33 @@ test('retrying a failed widget save retains the source network approval gate', a
   footprint_changed:true,network_footprint:['https://new.example.com']
  })};
  const p=await load([sourceWithNewOrigin,conflict,sourceSaved,widgetSaved]);
+ let reviews=0;
+ p.document.body.addEventListener('exhibit:network-approval-changed',()=>reviews++);
  await p.context.save();
  assert.equal(p.timers.length,0);
  await p.context.save();
  assert.equal(p.byId('scan-result').style.display,'block');
- assert.match(p.byId('scan-result').innerHTML,/https:\/\/new\.example\.com/);
+ assert.equal(reviews,1,'approval markup is refreshed by htmx from the saved source');
  assert.equal(p.timers.length,0);
+});
+
+test('new network warnings require review even when the origin footprint is unchanged', async()=>{
+ const p=await load([{ok:true,status:200,json:async()=>({
+  artifact:{source_revision:'source-v2'},footprint_changed:false,
+  network_warnings:[{code:'no_cors',message:'Opaque response'}]
+ })}],'');
+ let warnings=0,reviews=0;
+ p.document.body.addEventListener('exhibit:network-warnings-changed',()=>warnings++);
+ p.document.body.addEventListener('exhibit:network-approval-changed',()=>reviews++);
+ assert.equal(await p.context.save(),false);
+ assert.equal(p.context.artifactDirty(),true,'warning review keeps Save and leave from navigating');
+ assert.equal(warnings,1);
+ assert.equal(reviews,1);
+ assert.equal(p.byId('scan-result').style.display,'block');
+ assert.equal(p.timers.length,0,'the warning must not disappear into an automatic navigation');
+ p.window.finishEdit();
+ assert.equal(p.context.artifactDirty(),false);
+ assert.equal(p.byId('source-network-warnings').hidden,false);
 });
 
 test('clearing an existing widget requires explicit removal', async()=>{

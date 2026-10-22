@@ -594,3 +594,72 @@ valid again (ABA is intentionally content-based). A restore that only changes
 state does not invalidate source. An identical rewrite preserves identity;
 rewriting different bytes mints a fresh identity even within the same second.
 Do not derive tokens from bytes, parse them or use them to order versions.
+
+## Experimental relay and connections
+
+Acquisition and relay routes require their operator feature flags plus a browser session or
+service-token principal. Scoped agent tokens cannot configure connections,
+submit credentials, edit grants, schedule work or directly spend relay authority.
+Relay requests additionally need app-owned authority for the current render
+policy; the artifact bridge supplies it without exposing it to artifact code.
+
+```text
+GET    /api/connections                         Safe connection metadata and providers
+POST   /api/connections                         Acquire a native connection in app chrome
+DELETE /api/connections/:connectionID           Revoke a connection
+POST   /api/connections/oauth/github/begin      Begin bound GitHub consent
+GET    /api/connections/oauth/github/callback   Complete one-shot bound consent
+POST   /api/connections/vendor/begin            Begin a reviewed managed connection
+POST   /api/connections/vendor/complete         Poll and finish a browser-bound managed flow
+GET    /api/artifacts/:id/connections           Current viewer's connection grants
+POST   /api/artifacts/:id/connections           Grant a saved connection and destinations
+DELETE /api/artifacts/:id/connections/:id       Remove a connection grant
+DELETE /api/artifacts/:id/connection-data       Clear saved data and obsolete own restrictions
+POST   /api/artifacts/:id/connections/:id/standin  Obtain an inert short-lived handle
+GET    /api/artifacts/:id/relay-grant            Read the viewer's relay consent
+PUT    /api/artifacts/:id/relay-grant            Set {reads, writes} consent
+POST   /api/artifacts/:id/relay                  Perform a checked request for this frame
+POST   /api/artifacts/:id/navigation-check       Validate a host-opened link against current policy
+GET    /api/artifacts/:id/relay-schedules        List declarative refreshes
+POST   /api/artifacts/:id/relay-schedules        Create a refresh
+DELETE /api/artifacts/:id/relay-schedules/:id    Remove a refresh
+GET    /api/artifacts/:id/relay-bundle           Download an owner-scoped runnable ZIP
+GET    /api/artifacts/:id/agent-connections     Agent-safe connection metadata
+POST   /api/artifacts/:id/agent-connections     Ask the person to connect a provider
+```
+
+A relay request is `{url, method, headers, body_base64}`; headers map strings to
+strings. A completed exchange returns
+`{status, status_text, headers, body_base64, url}`. The host returns those bytes
+to the opaque frame as a `Response`, never as app-origin markup. Limits are one
+MiB request bodies and four MiB decoded response bodies. Origin approval, relay
+consent, connector grants and operator policy are checked independently.
+The host supplies `X-Exhibit-Relay-Policy` for relay, connection metadata,
+stand-ins, link validation and state synchronization. A changed source or
+destination policy returns 409 and requires reopening the artifact. Requests
+from ordinary state API clients continue to work without that optional header.
+
+Native connection creation accepts a named reviewed `recipe`: `api-key`,
+`bearer`, `basic` or `simplefin`. Generic recipes use an exact HTTPS `origin`;
+API keys additionally choose a permitted `header`. Acquisition fields are
+accepted only in the trusted app interface and never appear in list responses.
+A grant includes `connection_id`, `permitted_egress` origins and explicit
+`share_with_recipients` consent. A schedule accepts
+`{url, state_key, interval_hours}` and stores a successful text response in the
+viewer's artifact state without executing artifact code. See
+[relay-connectors.md](relay-connectors.md) for exact boundaries and operator
+configuration, and [the runnable examples](../examples/connectors/README.md).
+
+Removing access or revoking a credential retains the data-destination policy
+protecting cached state. The separate human-only `DELETE connection-data`
+action clears the viewer's effective state, owner version-state snapshots when
+applicable, and obsolete policies owned by that viewer in one transaction.
+Active grants and a shared owner's policies remain. Recipients cannot clear a
+shared board; the owner must do that. Cleanup remains available with acquisition
+disabled. Previously open pages may retain copies of data they already read.
+
+Managed OAuth begins with `{provider}` and returns `{session_id,url,expires_at}`.
+Open the provider URL, then submit `{session_id,name}` to `vendor/complete`.
+It returns 202 while pending or 201 with connected metadata. The server verifies
+the browser binding, provider, owner and exact flow tags before accepting a
+vendor connection; frontend messages cannot establish that authority.

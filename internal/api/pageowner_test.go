@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/connectors"
 	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/secrets"
 	"github.com/momja/Exhibit/internal/store"
@@ -91,6 +92,11 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/", ownerScoped: true, ownPath: "/", foreignPath: "/"},
 	{route: "/partials/gallery-grid", ownerScoped: true,
 		ownPath: "/partials/gallery-grid", foreignPath: "/partials/gallery-grid"},
+	{route: "/connections", ownerScoped: true, ownPath: "/connections?artifact={id}", foreignPath: "/connections?artifact={id}"},
+	{route: "/partials/connections", ownerScoped: true, ownPath: "/partials/connections?artifact={id}", foreignPath: "/partials/connections?artifact={id}"},
+	{route: "/partials/network-warnings", ownerScoped: true, ownPath: "/partials/network-warnings?artifact={id}", foreignPath: "/partials/network-warnings?artifact={id}"},
+	{route: "/partials/network-approval", ownerScoped: true, ownPath: "/partials/network-approval?artifact={id}&mode=new", foreignPath: "/partials/network-approval?artifact={id}&mode=new"},
+	{route: "/partials/agent-connection-requests", ownerScoped: true, ownPath: "/partials/agent-connection-requests?artifact={id}", foreignPath: "/partials/agent-connection-requests?artifact={id}"},
 	{route: "/artifacts/{artifactID}", ownerScoped: true,
 		ownPath: "/artifacts/{id}", foreignPath: "/artifacts/{id}"},
 	{route: "/artifacts/{artifactID}/edit", ownerScoped: true,
@@ -187,6 +193,13 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/api/artifacts/", why: "API group: authMiddleware + ownerMiddleware, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/state", why: "API group, covered by owner_scope_test.go"},
+	{route: "/api/artifacts/{artifactID}/connections", scopedByHandler: true, coveredBy: "connections_test.go", why: "API group resolves the viewer and connectionArtifact checks artifact read authority; TestConnectionSurfacesFollowTheSessionViewer verifies own and foreign requests"},
+	{route: "/api/artifacts/{artifactID}/agent-connections", scopedByHandler: true, coveredBy: "connections_test.go", why: "agent metadata is restricted to the request owner; TestConnectionSurfacesFollowTheSessionViewer verifies own and foreign requests"},
+	{route: "/api/artifacts/{artifactID}/relay-grant", scopedByHandler: true, coveredBy: "connections_test.go", why: "relayArtifact resolves session viewer and verifies artifact access; TestConnectionSurfacesFollowTheSessionViewer verifies own and foreign requests"},
+	{route: "/api/artifacts/{artifactID}/relay-schedules", scopedByHandler: true, coveredBy: "connections_test.go", why: "same viewer boundary as relay grants, covered by TestConnectionSurfacesFollowTheSessionViewer"},
+	{route: "/api/artifacts/{artifactID}/relay-bundle", scopedByHandler: true, coveredBy: "connections_test.go", why: "exports require artifact ownership and include no credentials; covered by TestConnectionSurfacesFollowTheSessionViewer"},
+	{route: "/api/connections", scopedByHandler: true, coveredBy: "connections_test.go", why: "connection owner is the resolved session viewer and cannot be chosen in a query; covered by TestConnectionSurfacesFollowTheSessionViewer"},
+	{route: "/api/connections/oauth/github/callback", scopedByHandler: true, coveredBy: "connections_test.go", why: "callback resolves the live session and verifies one-shot state bound to browser flow; covered by TestConnectionOAuthCallbackRejectsForgedNavigation"},
 	{route: "/api/artifacts/{artifactID}/assets", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/assets/export", why: "Owner-scoped asset archive, covered by assets_export_test.go and sharegrant_page_test.go"},
 	{route: "/api/artifacts/{artifactID}/export", why: "API group, covered by owner_scope_test.go"},
@@ -244,6 +257,9 @@ type twoOwnerInstance struct {
 func newTwoOwnerInstance(t *testing.T) twoOwnerInstance {
 	t.Helper()
 	ro, st := newIdentityTestRouter(t, &stubProvider{})
+	ro.cfg.Relay.Enabled = true
+	ro.cfg.Relay.SchedulesEnabled = true
+	ro.cfg.Connections = connectors.New(connectors.Config{Store: st.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ctx := context.Background()
 
 	one, err := st.UpsertUser(ctx, "sub-one", "one@example.test")
@@ -272,22 +288,25 @@ func seedOwnedArtifact(t *testing.T, ro *Router, owner int64, id, title, bodyMar
 	blobID, widgetBlobID := id+"-blob", id+"-widget-blob"
 
 	require.NoError(t, ro.cfg.Blob.Put(ctx, blobID,
-		strings.NewReader("<html><body><h1>"+bodyMarker+"</h1></body></html>")))
+		strings.NewReader("<html><body><h1>"+bodyMarker+"</h1><script>fetch('https://"+id+".example/data')</script></body></html>")))
 	require.NoError(t, ro.cfg.Blob.Put(ctx, widgetBlobID,
 		strings.NewReader("<html><body>"+bodyMarker+" tile</body></html>")))
 	require.NoError(t, ro.cfg.Store.PutArtifact(ctx, &store.Artifact{
 		ID: id, OwnerID: owner, Title: title,
 		SourceBlobID: blobID, WidgetBlobID: widgetBlobID,
 		Tier: store.Tier1, SourceText: bodyMarker,
+		SourceURL: "https://" + id + ".example/snapshot",
 	}))
+	_, err := ro.cfg.Store.(store.ConnectionRequestStore).RequestArtifactConnection(ctx, owner, id, "simplefin", "Read account balances")
+	require.NoError(t, err)
 	require.NoError(t, ro.cfg.Store.SetState(ctx, store.OwnerID(owner), id, store.ViewerID(owner), "note", stateMarker))
 	// An edit on top of it, which makes what is above an earlier version — one
 	// the version viewer (av-vw7r) can look at, with the state it left, and one
 	// there is something to refuse a stranger.
 	headBlobID := id + "-head-blob"
 	require.NoError(t, ro.cfg.Blob.Put(ctx, headBlobID,
-		strings.NewReader("<html><body><h1>"+bodyMarker+" (edited)</h1></body></html>")))
-	_, err := ro.cfg.Store.CommitVersion(ctx, owner, id, store.VersionChange{BodyBlobID: &headBlobID})
+		strings.NewReader("<html><body><h1>"+bodyMarker+" (edited)</h1><script>fetch('https://"+id+".example/data')</script></body></html>")))
+	_, err = ro.cfg.Store.CommitVersion(ctx, owner, id, store.VersionChange{BodyBlobID: &headBlobID})
 	require.NoError(t, err)
 	// A conversation kept with it, so the history fragments (av-y7td) have
 	// something of the artifact's to render and something to refuse a stranger.
@@ -531,10 +550,12 @@ func TestNoRenderURLOnASecondOwnersPageServesAnotherOwnersArtifactOrState(t *tes
 // instance must be untouched by any of this.
 func TestSingleUserPagesStillRenderOwnerOnesLibrary(t *testing.T) {
 	r := newTestRouter(t)
-	id := createTestArtifact(t, r, "Single User Shelf")
-	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>tile</b>").Code)
-	require.NoError(t, r.cfg.Store.SaveTranscript(context.Background(), defaultOwnerID, store.Transcript{
-		ArtifactID: id, SessionID: "s", Title: "a conversation", SessionFile: "{}\n"}))
+	r.cfg.Relay.Enabled = true
+	r.cfg.Relay.SchedulesEnabled = true
+	r.cfg.Connections = connectors.New(connectors.Config{Store: r.cfg.Store.(*store.SQLiteStore), Box: r.cfg.Secrets})
+	// Conditional network and connection fragments need a warning and a pending
+	// request to render. Use the same nonempty fixture as the session walk.
+	id := seedOwnedArtifact(t, r, defaultOwnerID, "single-user-artifact", "Single User Shelf", "Single user body", "Single user state")
 
 	for _, row := range appOriginGETOwnerScope {
 		if !row.ownerScoped {

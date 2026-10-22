@@ -105,7 +105,7 @@ test("Allow persists location alone, opens the top-level render, and answers the
     "approving location writes that flag and no device flag");
   assert.equal(tabs.length, 1, "the tab is claimed in the click's own task");
   assert.equal(tabs[0].opener, null, "the artifact's top-level render gets no handle on the library tab");
-  assert.equal(tabs[0].location, OPEN_URL);
+  assert.equal(tabs[0].location, OPEN_URL + '?direct=1');
   assert.equal(byId("geo-modal").hidden, true);
   assert.deepEqual(answers(frame).map((a) => [a.id, a.banner]), [[1, false]],
     "no banner: the user is already looking at the place the approval works");
@@ -252,7 +252,7 @@ test("the camera gate's Allow still persists, opens the render, and answers", as
   await allowing;
 
   assert.deepEqual(patches(api), [{ camera_approved: true }]);
-  assert.equal(tabs[0].location, OPEN_URL);
+  assert.equal(tabs[0].location, OPEN_URL + '?direct=1');
   assert.equal(tabs[0].opener, null);
   const [reply] = frame.contentWindow.posted.filter((m) => m.__avMediaResult);
   assert.equal(reply.id, "m1");

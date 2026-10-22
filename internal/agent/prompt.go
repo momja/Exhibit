@@ -86,6 +86,23 @@ func modePrompt(opts CreateOpts) string {
 	return ""
 }
 
+// Platform capabilities are explicit session facts. The default instance has
+// no relay; its prompt must never promise requests the server cannot service.
+func networkGuidance(opts CreateOpts) string {
+	if opts.WidgetOnly {
+		return "\n\nWidgets cannot use Exhibit's relay or connections. Read data the artifact has already refreshed into localStorage; never fetch connected data from a widget."
+	}
+	if !opts.NetworkRelayEnabled {
+		return "\n\nNETWORK ACCESS. This instance's API relay is disabled. External requests need the user's approval for each origin and obey the browser's normal CORS rules. Keep code and styles inline; prefer zero external references when the person's goal does not need an API. Never route requests through a public CORS proxy or use mode: 'no-cors' to work around CORS: it returns an opaque response the artifact cannot read."
+	}
+	guidance := "\n\nNETWORK ACCESS. fetch() can call HTTPS APIs directly, including APIs without CORS headers: Exhibit relays the request after the user approves the origin and grants relay access. The relay works in the logged-in artifact frame, not in public-link views or top-level exports. Each origin needs the user's approval, and writes need a separate stronger grant; create/write/edit tool results list the origins that will be requested. Fetch the API directly. Never use a public CORS proxy or mode: 'no-cors', and do not build a backend for this. Handle refused approval and request failures in the artifact's interface."
+	if opts.ConnectionsEnabled {
+		guidance += "\n\nCONNECTIONS. list_connections() lists safe connection names, providers, origins, capabilities and any reviewed API endpoint; request_connection(provider, reason) asks the person to connect an account in Exhibit's own interface. These tools need a saved artifact: for a new connected app, first save its interface with a clear disconnected state, then list or request connections and finish the integration. Request only what the artifact needs. Credentials are acquired only in Exhibit, never in artifact code or chat: never ask for a key, password, setup token or access URL, and never store one in source, state, a widget or a tool call. Fetch the connection's API origin without credentials; the relay injects them after the person attaches the connection and approves its data destinations. Agents never write connector recipes or grants. A pending connection request is not permission: show a clear disconnected state until the person completes setup."
+		guidance += " At runtime, await window.exhibit.connections.list() to read safe metadata for the connections this viewer has actually granted to this artifact. Discover the viewer's provider, origins and reviewed endpoint there instead of baking the owner's connection id into the app; an empty list means disconnected. Native attach-by-origin is preferred: fetch that API without credentials. Only when this operator enables stand-ins, await window.exhibit.connections.get(connectionId) returns {value, access_url, expires_at}; these are short-lived placeholder handles, never real credentials. Use a stand-in only in the recipe's designated credential position and origin; never persist it in source or state, send it elsewhere, or treat it as a real access URL. Handle disabled stand-in support and expired handles as normal interface states."
+	}
+	return guidance
+}
+
 // buildSystemPrompt composes the session's system prompt: the role half
 // (overridable by config), the paragraph naming this session's mode, and the
 // always-present contract on how to read tool results.
@@ -98,7 +115,7 @@ func buildSystemPrompt(override string, opts CreateOpts) string {
 	if !opts.WidgetOnly {
 		guidance = "\n\n" + questionGuidance
 	}
-	return role + modePrompt(opts) + guidance + "\n\n" + dataContract
+	return role + networkGuidance(opts) + modePrompt(opts) + guidance + "\n\n" + dataContract
 }
 
 // selectionNotice is the fixed sentence appended to a prompt that carries a

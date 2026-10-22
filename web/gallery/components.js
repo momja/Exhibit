@@ -180,7 +180,14 @@
     // never e.origin — same rule as every other frame message on these pages.
     var frames = document.querySelectorAll('.card-widget-frame');
     for (var i = 0; i < frames.length; i++) {
-      if (frames[i].contentWindow !== e.source) continue;
+      var source = frames[i].contentWindow;
+      if (frames[i].dataset.widgetWrapper !== undefined) {
+        // Only our script-free app-origin wrapper is readable. Its guest
+        // document remains opaque and is identified solely by WindowProxy.
+        try { source = frames[i].contentDocument?.querySelector('iframe')?.contentWindow; }
+        catch (_) { source = null; }
+      }
+      if (!source || source !== e.source) continue;
       // Frames can answer before DOMContentLoaded or htmx processing.
       // Initialize first so the answer also stops any future deadline.
       watch(frames[i]);

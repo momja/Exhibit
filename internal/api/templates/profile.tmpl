@@ -66,6 +66,20 @@
 </section>
 {{end}}
 
+{{if .Connections.Enabled}}
+<div class="card">
+  <h3 class="settings-h3">Connections <span class="muted text-sm">Experimental</span></h3>
+  <p class="settings-copy">Your account's limits for external accounts and scheduled fetches. Credentials are configured in Exhibit and kept outside artifact code.</p>
+  <dl class="settings-facts">
+    <dt>Native secrets</dt><dd>{{.Connections.Native}}</dd>
+    <dt>Native OAuth</dt><dd>{{.Connections.OAuth}}</dd>
+    <dt>Managed OAuth</dt><dd>{{.Connections.Vendor}}</dd>
+    <dt>Scheduled fetches</dt><dd>{{.Connections.Schedules}}</dd>
+  </dl>
+  <div class="settings-foot"><a class="btn btn-sec" href="/connections"><i class="ph ph-key" aria-hidden="true"></i> Manage connections</a></div>
+</div>
+{{end}}
+
 {{/* Sign out (nw-a1ef). The session was revocable from the first day it
      existed, since /auth/logout deletes the row, and nothing in the UI ever
      pointed at it. Clearing a cookie by hand was the only way out.
@@ -116,6 +130,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 {{define "accountDeletion"}}<div class="card card-danger" data-controller="account-deletion" data-account-deletion-hosted-value="{{if .Clerk}}true{{else}}false{{end}}">
   <h3 class="settings-h3 settings-h3-danger"><i class="ph ph-warning-octagon" aria-hidden="true"></i> Delete account</h3>
   <p class="settings-danger-copy">Permanently delete your Exhibit account, library, saved data, and shared artifacts. This cannot be undone.</p>
+  {{if .Connections.Enabled}}<p class="settings-danger-copy">External OAuth connections are revoked before deletion. If a provider is unavailable, your account stays here so you can retry; some connections may already have been disconnected.</p>{{end}}
   {{if .Account.SignedIn}}
   {{/* Counted rather than gestured at, and shares first among equals: an
        artifact is your own, but a share is access somebody else may be

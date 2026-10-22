@@ -2,6 +2,8 @@
 // page scripts import this entry point. Register new shared controllers here.
 import { Application } from '../stimulus/stimulus.js';
 import ActionMenuController from './action-menu-controller.js';
+import RelayHostController from './relay-host-controller.js';
+import ConnectionsController from './connections-controller.js';
 import UnsavedChangesController from './unsaved-changes-controller.js';
 
 import ClerkController from './clerk-controller.js';
@@ -19,3 +21,5 @@ application.register('filter-sheet', FilterSheetController);
 
 import FloatingHeaderController from './floating-header-controller.js';
 application.register('floating-header', FloatingHeaderController);
+application.register('relay-host', RelayHostController);
+application.register('connections', ConnectionsController);
