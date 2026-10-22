@@ -553,6 +553,11 @@ func updateArtifactTx(ctx context.Context, tx *sql.Tx, ownerID int64, id string,
 			if !ok || !ValidShareStateMode(mode) {
 				return fmt.Errorf("share_state_mode must be %q or %q", ShareStateOwn, ShareStateShared)
 			}
+			if mode == ShareStateShared {
+				if err := validateConnectionSharing(ctx, tx, ownerID, id); err != nil {
+					return err
+				}
+			}
 		}
 		setClauses = append(setClauses, k+"=?")
 		args = append(args, v)
@@ -1446,13 +1451,24 @@ func (s *SQLiteStore) CreateAnonymousLink(ctx context.Context, ownerID int64, ar
 	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
 		return nil, err
 	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err := validateConnectionSharing(ctx, tx, ownerID, artifactID); err != nil {
+		return nil, err
+	}
 	id := uuid.New().String()
-	_, err := s.db.ExecContext(ctx,
+	_, err = tx.ExecContext(ctx,
 		"INSERT INTO share_links (id, artifact_id) VALUES (?, ?)", id, artifactID)
 	if isUniqueViolation(err) {
 		return nil, ErrDuplicateShare
 	}
 	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return &Share{ID: id, ArtifactID: artifactID}, nil
@@ -1615,6 +1631,9 @@ func (s *SQLiteStore) ReplaceAnonymousLink(ctx context.Context, ownerID int64, a
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }() // no-op once committed
+	if err := validateConnectionSharing(ctx, tx, ownerID, artifactID); err != nil {
+		return nil, err
+	}
 
 	if _, err := tx.ExecContext(ctx,
 		"DELETE FROM share_links WHERE artifact_id=?", artifactID); err != nil {

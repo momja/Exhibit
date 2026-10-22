@@ -163,6 +163,12 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 		ro.grantShares(w, r, ownerID, req.ArtifactID, req.Recipients)
 		return
 	}
+	if ro.cfg.Connections != nil {
+		if err := ro.cfg.Connections.ValidateArtifactSharing(r.Context(), ownerID, req.ArtifactID); err != nil {
+			connectionError(w, err)
+			return
+		}
+	}
 
 	var sh *store.Share
 	if req.Replace {
@@ -171,6 +177,10 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 		sh, err = ro.cfg.Store.CreateAnonymousLink(r.Context(), ownerID, req.ArtifactID)
 	}
 	if err != nil {
+		if errors.Is(err, store.ErrConnectionSharing) {
+			connectionError(w, err)
+			return
+		}
 		if errors.Is(err, store.ErrDuplicateShare) {
 			writeError(w, http.StatusConflict, "this artifact already has a public link")
 			return

@@ -111,6 +111,18 @@ test("offscreen widgets lose their document and reload with a fresh credential o
   assert.deepEqual(events, ["dispose", "mount"], "repeated intersection does not reload a live frame");
 });
 
+test('a protected widget drops its old srcdoc before loading the fresh trusted wrapper', async () => {
+  const page = await loadWidgets();
+  const { well, frame } = page.first;
+  frame.dataset.widgetWrapper = '';
+  frame.srcdoc = 'old trusted wrapper';
+  frame.removeAttribute = name => { if (name === 'srcdoc') delete frame.srcdoc; };
+  page.intersect(page.first, false);
+  page.intersect(page.first, true);
+  assert.equal(frame.srcdoc, undefined);
+  assert.equal(frame.src, well.dataset.widgetReload);
+});
+
 test("paging observes new widgets and search releases removed ones", async () => {
   const page = await loadWidgets();
   const added = page.addWidget();

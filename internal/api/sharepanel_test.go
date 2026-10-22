@@ -209,8 +209,8 @@ func TestOnlyTheOwnerGetsTheSharePanel(t *testing.T) {
 	assert.NotContains(t, recipient, `id="share-panel"`)
 	assert.NotContains(t, recipient, `id="share-open"`)
 	assert.NotContains(t, recipient, "gallery/share.js")
-	assert.NotContains(t, recipient, "htmx/htmx.min.js",
-		"a page with no panel to swap should not carry the library that swaps it")
+	assert.Contains(t, recipient, "htmx/htmx.min.js",
+		"recipients still use the server-rendered network review and capability fragments")
 }
 
 // A recipient's name is text somebody else chose — a login name, or an address

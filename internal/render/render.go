@@ -5,12 +5,15 @@ package render
 
 import (
 	"context"
+	"crypto/hmac"
 	"encoding/json"
 	"errors"
 	"fmt"
+	stdhtml "html"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -29,6 +32,14 @@ type Config struct {
 	Blob         blob.Store
 	AppOrigin    string
 	RenderOrigin string
+	RelayEnabled bool
+	// Connector grants narrow every CSP network destination, including image,
+	// script and form channels. Failure must stop the render, never widen it.
+	NetworkOrigins func(context.Context, int64, string, []string) ([]string, error)
+	// Private connected state is served only in a trusted app-owned frame.
+	// A top-level page has no parent policy constraining self-navigation.
+	ConnectionProtected func(context.Context, int64, string, bool) (bool, error)
+	DocumentPolicy      func(context.Context, int64, string) (string, bool, error)
 	// FaviconSVG is the Exhibit brand mark served at /favicon.ico (nw-6184).
 	// Artifact documents get their own tag-color mosaic icon link. This static
 	// fallback covers automatic browser probes and other render pages. The
@@ -171,6 +182,10 @@ func (rd *Renderer) authorize(w http.ResponseWriter, r *http.Request, id string)
 // rendertoken.VersionScope, which is what keeps a token for one from opening
 // the other.
 func (rd *Renderer) authorizeScope(w http.ResponseWriter, r *http.Request, id, scope string) (*store.Artifact, rendertoken.Claims, bool) {
+	policyPath := chi.URLParam(r, "policy")
+	if policyPath != "" {
+		scope = rendertoken.PolicyScope(scope, policyPath)
+	}
 	if rd.cfg.Tokens == nil {
 		// No signer configured: nothing can present a valid token, so nothing
 		// may render. Failing closed is the point — an open render surface is
@@ -201,6 +216,17 @@ func (rd *Renderer) authorizeScope(w http.ResponseWriter, r *http.Request, id, s
 	if a == nil || a.OwnerID != viewer.OwnerID {
 		http.Error(w, "not found", http.StatusNotFound)
 		return nil, rendertoken.Claims{}, false
+	}
+	if rd.cfg.DocumentPolicy != nil && !viewer.Anonymous {
+		current, protected, err := rd.cfg.DocumentPolicy(r.Context(), viewer.ViewerID, id)
+		if err != nil {
+			http.Error(w, "connection policy is unavailable", http.StatusServiceUnavailable)
+			return nil, rendertoken.Claims{}, false
+		}
+		if (protected || policyPath != "") && !hmac.Equal([]byte(current), []byte(policyPath)) {
+			http.Error(w, "Artifact access changed. Reopen it through Exhibit.", http.StatusForbidden)
+			return nil, rendertoken.Claims{}, false
+		}
 	}
 	return a, viewer, true
 }
@@ -259,7 +285,7 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	// only render URL a person pastes into a chat, and the only one a crawler
 	// may open with no credential.
 	rd.serveDoc(w, r, a,
-		document{blobID: a.SourceBlobID, kind: kindArtifact, headMeta: rd.previewTags(a, shareID)},
+		document{blobID: a.SourceBlobID, kind: kindArtifact, headMeta: rd.previewTags(a, shareID), publicShare: true},
 		rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
 		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 }
@@ -359,7 +385,7 @@ func (rd *Renderer) ServeShareWidget(w http.ResponseWriter, r *http.Request) {
 	// the shared artifact. Same disclosure as that document — the owner's live
 	// numbers to anyone holding the link — in a more scrapable shape, which is
 	// inherent to publishing a tile.
-	rd.serveDoc(w, r, a, document{blobID: a.WidgetBlobID, kind: kindWidget},
+	rd.serveDoc(w, r, a, document{blobID: a.WidgetBlobID, kind: kindWidget, publicShare: true},
 		rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
 		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 }
@@ -491,10 +517,11 @@ const (
 // left behind — and is unused by the other kinds, which read the viewer's live
 // rows.
 type document struct {
-	assets []store.ArtifactAsset
-	blobID string
-	kind   docKind
-	state  map[string]string
+	assets      []store.ArtifactAsset
+	blobID      string
+	kind        docKind
+	state       map[string]string
+	publicShare bool
 	// headMeta is markup for the very top of <head>: a share's link-preview
 	// tags (av-rclm), and empty on every other route.
 	headMeta string
@@ -524,6 +551,26 @@ type document struct {
 // serveDoc and buildCSP hold no policy about framing at all.
 func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, doc document, viewer rendertoken.Claims, frameAncestors []string) {
 	widget, versionView := doc.kind == kindWidget, doc.kind == kindVersion
+	protected := false
+	if rd.cfg.ConnectionProtected != nil && !viewer.Anonymous {
+		var err error
+		protected, err = rd.cfg.ConnectionProtected(r.Context(), viewer.ViewerID, a.ID, doc.publicShare)
+		if err != nil {
+			http.Error(w, "connection sharing policy is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+	}
+	if protected && !privateFrameRequest(r, rd.cfg.AppOrigin) {
+		// Browser scripts cannot forge this Fetch Metadata header. Reject
+		// before reading source or state, including on direct widget/version
+		// opens. CSP has no supported top-level navigation restriction.
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = fmt.Fprintf(w, `<!doctype html><html><head><meta charset="utf-8"><title>Open through Exhibit</title></head><body><h1>Open this connected app through Exhibit</h1><p>Its saved data must stay in the preview, where approved data destinations are enforced.</p><p><a href="%s/artifacts/%s">Return to the app</a></p></body></html>`, stdhtml.EscapeString(strings.TrimSuffix(rd.cfg.AppOrigin, "/")), stdhtml.EscapeString(url.PathEscape(a.ID)))
+		return
+	}
 	rc, err := rd.cfg.Blob.Get(r.Context(), doc.blobID)
 	if err != nil {
 		http.Error(w, "artifact body not found", http.StatusNotFound)
@@ -560,8 +607,16 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		assetBase = rd.assetBaseURL(a.ID)
 	}
 
-	csp := buildCSP(a.NetworkAllowlist, rd.cfg.AppOrigin, assetBase, frameAncestors...)
-	if versionView {
+	allowed := a.NetworkAllowlist
+	if rd.cfg.NetworkOrigins != nil && !viewer.Anonymous {
+		allowed, err = rd.cfg.NetworkOrigins(r.Context(), viewer.ViewerID, a.ID, allowed)
+		if err != nil {
+			http.Error(w, "connection policy is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+	}
+	csp := buildCSP(allowed, rd.cfg.AppOrigin, assetBase, frameAncestors...)
+	if versionView || protected {
 		// The page that embeds a version frame gives it sandbox="allow-scripts
 		// allow-forms" and nothing reaches the frame's storage from there — but
 		// "nothing persists" is this document's whole promise, so it is also made
@@ -651,12 +706,16 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
 		origins = originPolicy{Allowed: a.NetworkAllowlist}
 	}
+	origins.Allowed = allowed
 
 	body := string(bodyBytes)
 	if !widget {
 		body = injectFavicon(body, artifacticon.DataURI(a.Tags))
 	}
 	out := injectPreamble(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, a.VersionSeq)
+	if rd.cfg.RelayEnabled && !widget && !versionView && !viewer.Anonymous && doc.headMeta == "" {
+		out = injectRelay(out, rd.cfg.AppOrigin, a.ID, allowed)
+	}
 	if doc.headMeta != "" {
 		// Ahead of the preamble, and of any og: tags the artifact wrote for
 		// itself: a crawler reads the first, and may read no further.
@@ -677,6 +736,24 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		slog.String("permissions_policy", permissions),
 	)
 	fmt.Fprint(w, out)
+}
+
+// Fetch Metadata is available only in potentially trustworthy contexts. Plain
+// HTTP development origins (including remote Tailscale hostnames) omit it.
+// There, a navigation's browser-controlled Referer must name the trusted app.
+// An artifact has an opaque origin and the render surface sends no-referrer,
+// so it cannot manufacture an app-origin referrer for a top-level navigation.
+// HTTPS deployments always require the stronger destination header.
+func privateFrameRequest(r *http.Request, appOrigin string) bool {
+	if destination := r.Header.Get("Sec-Fetch-Dest"); destination != "" {
+		return destination == "iframe"
+	}
+	app, err := url.Parse(appOrigin)
+	if err != nil || app.Scheme != "http" || app.Host == "" || app.User != nil {
+		return false
+	}
+	referrer, err := url.Parse(r.Header.Get("Referer"))
+	return err == nil && referrer.Scheme == app.Scheme && referrer.User == nil && strings.EqualFold(referrer.Host, app.Host)
 }
 
 // versionSandbox is the CSP sandbox directive a version document carries. The
@@ -2368,7 +2445,7 @@ const widgetHealthScript = `<script>
   function post(type, detail) {
     if (sent) return;
     sent = true;
-    window.parent.postMessage({ __avWidget: true, status: type, detail: detail || null }, API_ORIGIN);
+    window.top.postMessage({ __avWidget: true, status: type, detail: detail || null }, API_ORIGIN);
   }
   window.addEventListener('error', function(e) {
     post('error', e && e.message ? String(e.message) : 'script error');

@@ -39,8 +39,10 @@ func TestRenderOriginWithholdsTheReferrer(t *testing.T) {
 		{"artifact, no token", "/a/{artifactID}", "/a/" + id, http.StatusNotFound},
 		{"artifact, bad token", "/a/{artifactID}", "/a/" + id + "?" + rendertoken.Param + "=bogus", http.StatusNotFound},
 		{"artifact, unknown id", "/a/{artifactID}", "/a/does-not-exist", http.StatusNotFound},
+		{"bound artifact, bad token", "/a/{artifactID}/p/{policy}", "/a/" + id + "/p/obsolete?t=bogus", http.StatusNotFound},
 		{"widget", "/w/{artifactID}", "/w/" + id + "?" + rendertoken.Param + "=" + tok, http.StatusOK},
 		{"widget, no token", "/w/{artifactID}", "/w/" + id, http.StatusNotFound},
+		{"bound widget, bad token", "/w/{artifactID}/p/{policy}", "/w/" + id + "/p/obsolete?t=bogus", http.StatusNotFound},
 		{"share", "/s/{shareID}", "/s/" + shareID, http.StatusOK},
 		{"share, unknown id", "/s/{shareID}", "/s/does-not-exist", http.StatusNotFound},
 		// The shared widget (av-ei5h) carries no token — the share row is
@@ -59,6 +61,7 @@ func TestRenderOriginWithholdsTheReferrer(t *testing.T) {
 			"/a/" + id + "/versions/1?" + rendertoken.Param + "=" + tok, http.StatusNotFound},
 		{"version, never made", "/a/{artifactID}/versions/{seq}",
 			"/a/" + id + "/versions/99?" + rendertoken.Param + "=" + neverMadeTok, http.StatusNotFound},
+		{"bound version, bad token", "/a/{artifactID}/p/{policy}/versions/{seq}", "/a/" + id + "/p/obsolete/versions/1?t=bogus", http.StatusNotFound},
 		// The asset route (av-20fk) takes no render token — its unguessable
 		// asset id is the credential — but it is still on this surface and
 		// still must not put the URL that reached it into a third party's

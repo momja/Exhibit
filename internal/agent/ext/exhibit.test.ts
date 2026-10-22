@@ -156,6 +156,87 @@ function makePi() {
 	};
 }
 
+describe("network warnings and native connection tools", () => {
+	it("returns scan warnings from create, write and edit in the same tool result", async () => {
+		const warnings = [
+			{ code: "public_cors_proxy", origin: "https://corsproxy.io", message: "This proxy sends requests through a third party." },
+			{ code: "no_cors", message: "no-cors creates an opaque, unreadable response." },
+		];
+		for (const name of ["create_artifact", "write_artifact", "edit_artifact"]) {
+			const pi = makePi();
+			exhibitMod.default(pi);
+			const saved = { ...PATCH_OK, network_warnings: warnings };
+			const fixture = makeFetch({ body: "<h1>old</h1>", patchResult: saved });
+			const result = await withFetch(async (url, opts) => {
+				if (opts.method === "POST") return { ok: true, text: async () => JSON.stringify({ ...saved, render_url: "http://render.test/a/artifact-1" }) };
+				return fixture.fetch(url, opts);
+			}, async () => {
+				if (name !== "create_artifact") await pi.tools.get("get_artifact").execute("read", {});
+				const params = name === "edit_artifact" ? { edits: [{ oldText: "old", newText: "new" }] } : { title: "App", body: "<h1>new</h1>" };
+				return pi.tools.get(name).execute("save", params);
+			});
+			assert.deepEqual(result.details.warnings, warnings, name);
+			assert.match(result.content[0].text, /third party/);
+			assert.match(result.content[0].text, /opaque, unreadable/);
+		}
+	});
+
+	it("offers connector tools only when enabled and never in widget sessions", () => {
+		delete process.env.EXHIBIT_CONNECTIONS_ENABLED;
+		const disabled = makePi();
+		exhibitMod.default(disabled);
+		assert.ok(!disabled.tools.has("list_connections"));
+		process.env.EXHIBIT_CONNECTIONS_ENABLED = "1";
+		try {
+			const interactive = makePi();
+			exhibitMod.default(interactive);
+			assert.ok(interactive.tools.has("list_connections"));
+			assert.ok(interactive.tools.has("request_connection"));
+			process.env.EXHIBIT_WIDGET_ONLY = "1";
+			const widget = makePi();
+			exhibitMod.default(widget);
+			assert.ok(!widget.tools.has("list_connections"));
+			assert.ok(!widget.tools.has("request_connection"));
+		} finally {
+			delete process.env.EXHIBIT_CONNECTIONS_ENABLED;
+			delete process.env.EXHIBIT_WIDGET_ONLY;
+		}
+	});
+
+	it("selects safe connection metadata and only queues a scoped UI request", async () => {
+		process.env.EXHIBIT_CONNECTIONS_ENABLED = "1";
+		try {
+			const pi = makePi();
+			exhibitMod.default(pi);
+			const calls = [];
+			await withFetch(async (url, opts) => {
+				calls.push({ url, opts });
+				assert.equal(url, "http://exhibit.test/api/artifacts/artifact-1/agent-connections");
+				const data = opts.method === "GET" ? {
+					connections: [{ name: "Budget", provider: "simplefin", origins: ["https://bridge.example"], capabilities: ["read accounts"], endpoint: "/accounts", status: "active", encrypted_secret: "NEVER-SHOW", secret: "NEVER-SHOW" }],
+					providers: [{ id: "simplefin", name: "SimpleFIN", capabilities: ["read accounts"], enabled: true, secret: "NEVER-SHOW" }],
+					pending_requests: [{ secret: "NEVER-SHOW" }],
+				} : { request: { id: "request-1" }, manage_url: "/connections?artifact=artifact-1", secret: "NEVER-SHOW" };
+				return { ok: true, text: async () => JSON.stringify(data) };
+			}, async () => {
+				const listed = await pi.tools.get("list_connections").execute("list", {});
+				assert.match(listed.content[0].text, /read accounts/);
+				assert.match(listed.content[0].text, /\/accounts/);
+				assert.ok(!JSON.stringify(listed).includes("NEVER-SHOW"));
+				const requested = await pi.tools.get("request_connection").execute("request", { provider: "simplefin", reason: "Read account balances" });
+				assert.match(requested.content[0].text, /grants no access/);
+				assert.equal(requested.details.requestId, "request-1");
+				assert.ok(!JSON.stringify(requested).includes("NEVER-SHOW"));
+			});
+			assert.equal(calls.length, 2);
+			assert.deepEqual(JSON.parse(calls[1].opts.body), { provider: "simplefin", reason: "Read account balances" });
+			assert.deepEqual(Object.keys(pi.tools.get("request_connection").parameters.properties).sort(), ["provider", "reason"]);
+		} finally {
+			delete process.env.EXHIBIT_CONNECTIONS_ENABLED;
+		}
+	});
+});
+
 function needExhibit(t) {
 	if (!exhibitMod) return t.skip("exhibit.ts failed to load");
 }

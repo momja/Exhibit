@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/momja/Exhibit/internal/auth"
+	"github.com/momja/Exhibit/internal/connectors"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,6 +27,27 @@ type profileInstance struct {
 	st     store.Store
 	user   *store.User
 	cookie *http.Cookie
+}
+
+func TestProfileShowsResolvedConnectionAndScheduleLimits(t *testing.T) {
+	in := newProfileInstance(t, "connection-limits", "limits@example.test")
+	in.ro.cfg.Relay.Enabled = true
+	in.ro.cfg.Entitlements = Entitlements{Enforced: true, DefaultStorageBytes: 1 << 30, DefaultConnections: connectors.Limits{Native: 25, OAuth: 10, Vendor: 3}, DefaultSchedules: 10}
+	page := in.page(t)
+	for _, text := range []string{"Native secrets", "25 connections", "Native OAuth", "10 connections", "Managed OAuth", "3 connections", "Scheduled fetches", "10 schedules", `href="/connections"`} {
+		assert.Contains(t, page, text)
+	}
+	native, oauth, vendor, schedules := int64(4), int64(2), int64(1), int64(0)
+	require.NoError(t, in.st.SetEntitlement(context.Background(), in.user.ID, store.EntitlementPatch{SetConnectionNativeLimit: true, ConnectionNativeLimit: &native, SetConnectionOAuthLimit: true, ConnectionOAuthLimit: &oauth, SetConnectionVendorLimit: true, ConnectionVendorLimit: &vendor, SetRelayScheduleLimit: true, RelayScheduleLimit: &schedules}))
+	page = in.page(t)
+	for _, text := range []string{"4 connections", "2 connections", "1 connection", "0 schedules"} {
+		assert.Contains(t, page, text)
+	}
+	assert.NotContains(t, page, "25 connections")
+	in.ro.cfg.Entitlements.Enforced = false
+	page = in.page(t)
+	assert.Contains(t, page, "Unlimited")
+	assert.NotContains(t, page, "4 connections")
 }
 
 // newProfileInstance seeds a user through the store directly — this page reads

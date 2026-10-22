@@ -80,6 +80,12 @@ export const networkPrompt = {
       if (!pending) { if (modal.open) close(); return; }
       document.getElementById('net-origin').textContent = pending.origin;
       document.getElementById('net-directive').textContent = pending.directive ? 'Blocked by ' + pending.directive : '';
+      const warnings = document.getElementById('net-warning-list');
+      if (warnings) {
+        warnings.dataset.artifact = pending.artifactID;
+        warnings.replaceChildren();
+        document.body.dispatchEvent(new CustomEvent('exhibit:network-origin-warning'));
+      }
       document.getElementById('net-never').disabled = false;
       document.getElementById('net-allow').disabled = false;
       prompt.show(frame());

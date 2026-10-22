@@ -65,12 +65,12 @@ func TestNoMigrationVersionIsUsedTwice(t *testing.T) {
 // first instance to restart.
 func TestEveryMigrationIsAboveTheVersionsAlreadyShipped(t *testing.T) {
 	// The versions in a deployed ledger before this branch: every .sql file
-	// main shipped (through 038), plus the Go migrations at 8, 12 and 23.
+	// main shipped (through 042), plus the Go migrations at 8, 12 and 23.
 	// Written out rather than derived, because "what is already deployed" is
 	// history and cannot be computed from the current tree — and because a new
 	// file numbered into a gap in this list is exactly what must fail.
 	shipped := map[int64]bool{}
-	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38} {
+	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42} {
 		shipped[v] = true
 	}
 	for _, v := range goMigrationVersions {

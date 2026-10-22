@@ -99,3 +99,13 @@ func TestSaveWithoutArtifactIDBroadcastsNothingSynthetic(t *testing.T) {
 	assert.Len(t, events, 1, "only the raw pi line is forwarded")
 	assert.Empty(t, s.ArtifactID())
 }
+
+func TestConnectionRequestEventUsesTheBoundArtifact(t *testing.T) {
+	s := newDetachedSession(t, "art-1")
+	events := feed(t, s, `{"type":"tool_execution_end","toolName":"request_connection","isError":false,"result":{"details":{"exhibit":"connection_requested","artifactId":"other-artifact","provider":"simplefin","requestId":"request-1"}}}`)
+	event := find(events, "exhibit_connection_requested")
+	require.NotNil(t, event)
+	assert.Equal(t, "art-1", event["artifactId"])
+	assert.Equal(t, "simplefin", event["provider"])
+	assert.Equal(t, "request-1", event["requestId"])
+}

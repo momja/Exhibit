@@ -256,6 +256,9 @@ func decide(messages []chatMessage) turnPlan {
 		}
 		return turnPlan{kind: "tool", toolName: "get_artifact", toolArgs: map[string]any{}}
 	}
+	if strings.Contains(strings.ToLower(lastUserText), "arxiv") {
+		return turnPlan{kind: "tool", toolName: "create_artifact", toolArgs: map[string]any{"title": "Paper trail", "body": arxivTool}}
+	}
 	return turnPlan{
 		kind:     "tool",
 		toolName: "create_artifact",

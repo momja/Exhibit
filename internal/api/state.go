@@ -25,8 +25,12 @@ func stateViewer(r *http.Request) store.ViewerID {
 
 func (ro *Router) getState(w http.ResponseWriter, r *http.Request) {
 	artifactID := urlParamID(r, "artifactID")
+	w.Header().Set("Cache-Control", "no-store")
 
 	if !ro.artifactExists(w, r, artifactID, "get state") {
+		return
+	}
+	if !ro.stateFramePolicy(w, r, artifactID) {
 		return
 	}
 
@@ -35,9 +39,43 @@ func (ro *Router) getState(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "get state", err)
 		return
 	}
+	if !ro.stateFramePolicy(w, r, artifactID) {
+		return
+	}
 	slog.DebugContext(r.Context(), "state read",
 		slog.String("artifact_id", artifactID), slog.Int("keys", len(state)))
 	writeJSON(w, http.StatusOK, state)
+}
+
+// App-owned frame resyncs carry their policy token. A source or grant change
+// must stop new state flowing into a document whose CSP is now out of date.
+// Ordinary API/editor state reads are not a frame bridge and need no token.
+func (ro *Router) stateFramePolicy(w http.ResponseWriter, r *http.Request, artifactID string) bool {
+	if len(r.Header.Values("X-Exhibit-Relay-Policy")) == 0 {
+		return true
+	}
+	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), stateViewer(r), artifactID)
+	if err != nil {
+		serverError(w, r, "state frame policy", err)
+		return false
+	}
+	if a == nil {
+		writeError(w, http.StatusNotFound, "artifact not found")
+		return false
+	}
+	return ro.requireRelayPolicy(w, r, a)
+}
+
+func (ro *Router) lockStateFramePolicy(w http.ResponseWriter, r *http.Request, artifactID string) (func(), bool) {
+	if len(r.Header.Values("X-Exhibit-Relay-Policy")) == 0 {
+		return func() {}, true
+	}
+	ro.connectionDataMu.Lock()
+	if !ro.stateFramePolicy(w, r, artifactID) {
+		ro.connectionDataMu.Unlock()
+		return nil, false
+	}
+	return ro.connectionDataMu.Unlock, true
 }
 
 // Key is a pointer so an omitted key (nil — a malformed request) stays
@@ -70,6 +108,11 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 	if !ro.artifactExists(w, r, artifactID, "set state") {
 		return
 	}
+	unlock, allowed := ro.lockStateFramePolicy(w, r, artifactID)
+	if !allowed {
+		return
+	}
+	defer unlock()
 
 	if err := ro.cfg.Store.SetStateAsViewer(r.Context(), stateViewer(r), artifactID, key, req.Value, version...); err != nil {
 		writeArtifactError(w, r, "set state", err)
@@ -111,6 +154,11 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	if !ro.artifactExists(w, r, artifactID, "delete state") {
 		return
 	}
+	unlock, allowed := ro.lockStateFramePolicy(w, r, artifactID)
+	if !allowed {
+		return
+	}
+	defer unlock()
 
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {

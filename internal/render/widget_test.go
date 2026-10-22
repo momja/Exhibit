@@ -209,7 +209,7 @@ func TestWidgetPreambleReportsHealthToHost(t *testing.T) {
 		t.Fatalf("widget preamble must report rejected promises: %s", doc)
 	}
 	// Pinned to the app origin like every other message the preamble sends.
-	if !strings.Contains(doc, "window.parent.postMessage({ __avWidget: true, status: type, detail: detail || null }, API_ORIGIN)") {
+	if !strings.Contains(doc, "window.top.postMessage({ __avWidget: true, status: type, detail: detail || null }, API_ORIGIN)") {
 		t.Fatalf("health report must be pinned to the app origin: %s", doc)
 	}
 	// Top-level renders have no host to report to.

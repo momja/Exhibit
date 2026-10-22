@@ -27,6 +27,7 @@ const files = [
   "tokens.css", "components.css", "components.js", "api.js", "api-module.js",
   "controllers.js", "floating-header-controller.js", "clerk.js", "clerk-controller.js", "clerk-client.js", "clerk-appearance.js", "clerk-menu.js", "account-deletion-controller.js", "action-menu-controller.js", "modal-controller.js", "modal.js", "filter-sheet-controller.js", "unsaved-changes-controller.js", "editor-session.js",
   "event-scope.js", "gallery-controller.js", "gallery-space-controller.js",
+  "relay-host-controller.js", "connections-controller.js", "connections.css",
   "index.css", "index.js", "gallery.js", "gallery-return.js", "gallery-widgets.js", "duplicate.js",
   "new.css", "new.js",
   "detail.css", "detail.js", "direct-open.js", "pip.js", "pip-placement.js",

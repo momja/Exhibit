@@ -172,6 +172,18 @@ function ok(text: string, details: Record<string, unknown>) {
 	return { content: [{ type: "text" as const, text }], details };
 }
 
+type NetworkWarning = { code: string; origin?: string; message: string };
+
+function networkWarnings(response: any): NetworkWarning[] {
+	return (Array.isArray(response.network_warnings) ? response.network_warnings : [])
+		.filter((warning: any) => typeof warning?.code === "string" && typeof warning?.message === "string")
+		.map((warning: any) => ({ code: warning.code, ...(typeof warning.origin === "string" ? { origin: warning.origin } : {}), message: warning.message }));
+}
+
+function warningText(warnings: NetworkWarning[]): string {
+	return warnings.length ? "\nNetwork warnings:\n" + warnings.map(warning => `- ${warning.message}${warning.origin ? ` (${warning.origin})` : ""}`).join("\n") : "";
+}
+
 // Renders state as delimited raw-value blocks rather than a JSON object.
 // JSON.stringify()-ing the values would backslash-escape every quote inside
 // a JSON-shaped value, and a model asked to reproduce that escaped text back
@@ -236,6 +248,46 @@ export default function (pi: ExtensionAPI) {
 	}
 	// The one-shot widget action has no chat surface to answer a dialog.
 	if (process.env.EXHIBIT_WIDGET_ONLY !== "1") registerQuestions(pi);
+	if (process.env.EXHIBIT_CONNECTIONS_ENABLED === "1" && process.env.EXHIBIT_WIDGET_ONLY !== "1") {
+		pi.registerTool({
+			name: "list_connections",
+			label: "List connections",
+			description: "List safe connection names, providers, API origins and capabilities available to this session's artifact, plus providers the person may connect. Never returns credentials. A listed connection still needs the person's artifact grant before use.",
+			parameters: Type.Object({}),
+			async execute() {
+				const target = requireBoundArtifact();
+				const response = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "/agent-connections");
+				// Select the metadata contract explicitly: no future API field can
+				// accidentally turn this tool into a credential-reading path.
+				const connections = (response.connections || []).map((connection: any) => ({
+					name: oneLine(connection.name), provider: connection.provider,
+					origins: connection.origins || [], capabilities: connection.capabilities || [], status: connection.status,
+					...(typeof connection.endpoint === "string" ? { endpoint: connection.endpoint } : {}),
+				}));
+				const providers = (response.providers || []).map((provider: any) => ({
+					id: provider.id, name: oneLine(provider.name), capabilities: provider.capabilities || [], enabled: provider.enabled === true,
+				}));
+				return ok(labeled("connection metadata for this session's artifact:", JSON.stringify({ connections, providers })), { exhibit: "connections_listed", artifactId: target });
+			},
+		});
+		pi.registerTool({
+			name: "request_connection",
+			label: "Request connection",
+			description: "Ask the person to configure a provider in Exhibit's own connection interface. Pass a provider id from list_connections and a short reason describing what the artifact needs. Never include a key, password, setup token or access URL. This queues a UI request and grants no access; agents cannot write recipes or connection grants.",
+			parameters: Type.Object({
+				provider: Type.String({ description: "Provider id from list_connections" }),
+				reason: Type.String({ description: "Brief explanation of why this artifact needs the connection; no credentials" }),
+			}),
+			async execute(_id, params) {
+				const target = requireBoundArtifact();
+				const response = await api("POST", "/api/artifacts/" + encodeURIComponent(target) + "/agent-connections", { provider: params.provider, reason: params.reason });
+				return ok("Connection requested in Exhibit. The person must configure and attach it in the connection interface; this request grants no access. Keep a clear disconnected state until setup is complete.", {
+					exhibit: "connection_requested", artifactId: target, provider: params.provider,
+					requestId: response.request?.id, manageUrl: response.manage_url,
+				});
+			},
+		});
+	}
 	if (process.env.EXHIBIT_MOCK_LLM_URL) {
 		pi.registerProvider("exhibit-mock", {
 			name: "Exhibit Mock",
@@ -281,10 +333,12 @@ export default function (pi: ExtensionAPI) {
 			sourceSnapshot = { body: params.body, revision: revision(r.artifact.source_revision) };
 			widgetSnapshot = { body: null, revision: revision(r.artifact.widget_revision), missing: true };
 			const footprint: string[] = r.network_footprint || [];
+			const warnings = networkWarnings(r);
 			let text = `Created artifact ${r.artifact.id} ("${params.title}").`;
 			if (footprint.length > 0) {
 				text += ` Network footprint (blocked until the user approves): ${footprint.join(", ")}.`;
 			}
+			text += warningText(warnings);
 			return ok(text, {
 				exhibit: "artifact_saved",
 				action: "created",
@@ -292,6 +346,7 @@ export default function (pi: ExtensionAPI) {
 				title: params.title,
 				renderUrl: r.render_url,
 				footprint,
+				warnings,
 			});
 		},
 	});
@@ -333,6 +388,7 @@ export default function (pi: ExtensionAPI) {
 		// artifact starts with nothing approved (av-hrtv).
 		const approved: string[] = a.network_allowlist || [];
 		const footprint: string[] = (r.network_footprint || []).filter((o: string) => !approved.includes(o));
+		const warnings = networkWarnings(r);
 		// No title: a save's result is not the place to read the stored title back
 		// — it is untrusted on a URL-ingested artifact, and the model has no use
 		// for it here (it knows what it just wrote).
@@ -340,12 +396,14 @@ export default function (pi: ExtensionAPI) {
 		if (footprint.length > 0) {
 			text += ` Network footprint (blocked until the user approves): ${footprint.join(", ")}.`;
 		}
+		text += warningText(warnings);
 		return ok(text, {
 			exhibit: "artifact_saved",
 			action: "updated",
 			artifactId: a.id || target,
 			title: a.title,
 			footprint,
+			warnings,
 			// Whether the new body's origins differ from the previous body's —
 			// a different question from `footprint` above, which is about
 			// approval rather than change.
