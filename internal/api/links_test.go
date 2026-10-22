@@ -144,5 +144,5 @@ func TestDetailPageRendersLinkConfirmationModal(t *testing.T) {
 	assert.Contains(t, string(detailJS), `document.getElementById('link-modal').hidden = false`)
 	assert.Contains(t, string(detailJS), `setCapabilityApproved('links_approved', approved, 'link')`)
 	assert.Contains(t, string(detailJS), `await checkedLinkDestination(link.url)`)
-	assert.Contains(t, string(detailJS), `window.open(destination, '_blank', 'noopener')`)
+	assert.Contains(t, string(detailJS), `window.open(destination, '_blank', 'noopener,noreferrer')`)
 }
