@@ -1,6 +1,6 @@
 ---
 id: Exh-ys5q
-status: in_progress
+status: closed
 deps: [Exh-mg8f]
 links: []
 created: 2026-10-22T06:50:51Z
@@ -23,3 +23,9 @@ EXPERIMENTAL; part of Exh-g2vv; lands with phase 1.
 - An agent asked for an arXiv app writes a direct fetch with no proxy and no no-cors (spot-check with mockllm fixtures plus one live run).
 - A body containing corsproxy.io or no-cors produces the warning in the footprint and the tool result.
 
+
+## Notes
+
+**2026-10-22T16:01:53Z**
+
+Implemented conditional agent platform facts, direct-fetch mockllm/Pi fixture, public-proxy/no-cors/copied-backend warnings in API/tool results and server-rendered approval UI, connection requests, and HTML portability note. The authored arXiv example works live. A live model-generation spot check requires a provider key and is tracked in Exh-3kvx.

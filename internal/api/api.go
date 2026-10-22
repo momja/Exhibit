@@ -19,6 +19,7 @@ import (
 	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/chromium"
+	"github.com/momja/Exhibit/internal/connectors"
 	"github.com/momja/Exhibit/internal/logging"
 	"github.com/momja/Exhibit/internal/render"
 	"github.com/momja/Exhibit/internal/rendertoken"
@@ -115,6 +116,11 @@ type Config struct {
 	// environment by MaxRequestBodyBytesFromEnv (bodylimit.go), which also
 	// carries the measurements behind the default.
 	MaxRequestBodyBytes int64
+	Relay               RelayConfig
+	Connections         *connectors.Service
+	// Stored data-destination policy outlives the feature switch. Disabling
+	// acquisition must not let previously connected data leave its grant.
+	ConnectionPolicy *connectors.Service
 }
 
 // Router wraps chi.Mux and holds the config.
@@ -133,7 +139,11 @@ type Router struct {
 	logins *loginLimiter
 	// sseTickets authenticates the agent event stream, the one route a
 	// browser cannot send a header on (av-rgp1). See ssetickets.go.
-	sseTickets *sseTicketStore
+	sseTickets   *sseTicketStore
+	relayRuntime *relayRuntime
+	// A reset and a frame state write must not interleave between policy
+	// validation and mutation. Deployment is one binary and one SQLite file.
+	connectionDataMu sync.Mutex
 }
 
 // compressibleTypes is the explicit set of response content types worth
@@ -329,12 +339,20 @@ func (cw *gzipResponseWriter) Close() error {
 
 // NewRouter constructs the chi router with all routes registered.
 func NewRouter(cfg Config) *Router {
+	if cfg.ConnectionPolicy == nil {
+		if cfg.Connections != nil {
+			cfg.ConnectionPolicy = cfg.Connections
+		} else if st, ok := cfg.Store.(*store.SQLiteStore); ok {
+			cfg.ConnectionPolicy = connectors.New(connectors.Config{Store: st, Box: cfg.Secrets})
+		}
+	}
 	r := &Router{
-		Mux:        chi.NewRouter(),
-		cfg:        cfg,
-		tokens:     renderSigner(cfg.Secrets),
-		logins:     newLoginLimiter(nil),
-		sseTickets: newSSETicketStore(sseTicketTTL),
+		Mux:          chi.NewRouter(),
+		cfg:          cfg,
+		tokens:       renderSigner(cfg.Secrets),
+		logins:       newLoginLimiter(nil),
+		sseTickets:   newSSETicketStore(sseTicketTTL),
+		relayRuntime: newRelayRuntime(),
 	}
 	r.setupRoutes()
 	return r
@@ -425,6 +443,8 @@ func (ro *Router) setupRoutes() {
 		// session is the whole authorization. Registering the two beside each
 		// other is where that difference is visible.
 		r.Get("/profile", ro.profilePage)
+		r.Get("/connections", ro.connectionsPage)
+		r.Get("/partials/connections", ro.connectionsPartial)
 
 		// Server-rendered fragments, swapped into a live page by htmx
 		// (av-6m3e). They render the same template partials the full page
@@ -433,6 +453,9 @@ func (ro *Router) setupRoutes() {
 		// API's auth group and under the same owner resolution.
 		r.Get("/partials/gallery-grid", ro.galleryGridPartial)
 		r.Get("/partials/agent-preview", ro.agentPreviewPartial)
+		r.Get("/partials/network-warnings", ro.networkWarningsPartial)
+		r.Get("/partials/network-approval", ro.networkApprovalPartial)
+		r.Get("/partials/agent-connection-requests", ro.agentConnectionRequestsPartial)
 		// The chat page's history pane (av-y7td): the conversations kept with
 		// the artifact, and one of them read back.
 		r.Get("/partials/agent-history", ro.agentHistoryPartial)
@@ -480,6 +503,7 @@ func (ro *Router) setupRoutes() {
 	// precisely who needs it; a private instance answers 404 rather than
 	// naming itself. See publicmode.go for that choice.
 	ro.Get("/api/settings/public", ro.publicSettings)
+	ro.Get("/api/connections/oauth/github/callback", ro.connectionOAuthCallback)
 
 	// The agent SSE event stream. EventSource can't set headers, so the
 	// handler authenticates itself rather than going through the API's auth
@@ -533,6 +557,22 @@ func (ro *Router) setupRoutes() {
 				// the "it's just a file" promise is kept now that payloads
 				// live outside the body.
 				r.Get("/export", ro.exportArtifact)
+				r.Get("/relay-bundle", ro.exportRelayBundle)
+				r.Post("/relay", ro.performRelay)
+				r.Post("/navigation-check", ro.checkArtifactNavigation)
+				r.Get("/relay-grant", ro.getRelayGrant)
+				r.Put("/relay-grant", ro.setRelayGrant)
+				r.Get("/relay-schedules", ro.listRelaySchedules)
+				r.Post("/relay-schedules", ro.createRelaySchedule)
+				r.Delete("/relay-schedules/{scheduleID}", ro.deleteRelaySchedule)
+				r.Get("/connections", ro.listArtifactConnections)
+				r.Post("/connections", ro.grantArtifactConnection)
+				r.Delete("/connections/{connectionID}", ro.deleteArtifactConnection)
+				r.Delete("/connection-data", ro.clearConnectionData)
+				r.Post("/connections/{connectionID}/standin", ro.connectionStandin)
+				r.Get("/agent-connections", ro.agentConnections)
+				r.Post("/agent-connections", ro.agentRequestConnection)
+				r.Delete("/connection-requests/{requestID}", ro.dismissConnectionRequest)
 				r.Get("/assets", ro.listAssets)
 				r.Get("/assets/export", ro.exportAssets)
 				r.Post("/assets/import", ro.importAssets)
@@ -599,6 +639,12 @@ func (ro *Router) setupRoutes() {
 			r.Post("/sessions/{sessionID}/abort", ro.agentAbort)
 			r.Delete("/sessions/{sessionID}", ro.closeAgentSession)
 		})
+		r.Get("/api/connections", ro.listConnections)
+		r.Post("/api/connections", ro.createConnection)
+		r.Delete("/api/connections/{connectionID}", ro.deleteConnection)
+		r.Post("/api/connections/oauth/github/begin", ro.beginConnectionOAuth)
+		r.Post("/api/connections/vendor/begin", ro.beginConnectionVendor)
+		r.Post("/api/connections/vendor/complete", ro.completeConnectionVendor)
 
 		r.Route("/api/collections", func(r chi.Router) {
 			r.Get("/", ro.listCollections)
@@ -658,10 +704,14 @@ func (ro *Router) setupRoutes() {
 // It is read-only and serves artifacts in sandboxed iframes.
 func (ro *Router) RenderHandler() http.Handler {
 	renderer := render.New(render.Config{
-		Store:        ro.cfg.Store,
-		Blob:         ro.cfg.Blob,
-		AppOrigin:    ro.cfg.AppOrigin,
-		RenderOrigin: ro.cfg.RenderOrigin,
+		Store:               ro.cfg.Store,
+		Blob:                ro.cfg.Blob,
+		AppOrigin:           ro.cfg.AppOrigin,
+		RenderOrigin:        ro.cfg.RenderOrigin,
+		RelayEnabled:        ro.cfg.Relay.Enabled,
+		NetworkOrigins:      ro.connectionOrigins,
+		ConnectionProtected: ro.connectionDocumentProtected,
+		DocumentPolicy:      ro.renderDocumentPolicy,
 		// The same Signer the app surface mints with: one process, one key,
 		// stateless verification — no shared table, no round trip.
 		Tokens: ro.tokens,
@@ -697,6 +747,7 @@ func (ro *Router) RenderHandler() http.Handler {
 	r.Get("/favicon.ico", renderer.ServeFavicon)
 	// Serve a rendered artifact by id
 	r.Get("/a/{artifactID}", renderer.ServeArtifact)
+	r.Get("/a/{artifactID}/p/{policy}", renderer.ServeArtifact)
 	// One of the artifact's out-of-line assets (av-20fk). Registered before
 	// the document route reads as more specific, and chi routes it that way
 	// regardless. Deliberately un-tokened and cacheable — see ServeAsset for
@@ -707,9 +758,11 @@ func (ro *Router) RenderHandler() http.Handler {
 	// beside the data it left behind, under a token scoped to that version and
 	// with nothing it does persisting. See ServeVersion.
 	r.Get("/a/{artifactID}/versions/{seq}", renderer.ServeVersion)
+	r.Get("/a/{artifactID}/p/{policy}/versions/{seq}", renderer.ServeVersion)
 	// Serve an artifact's gallery-card widget (av-fafu) — same origin, same
 	// per-artifact CSP, narrower preamble.
 	r.Get("/w/{artifactID}", renderer.ServeWidget)
+	r.Get("/w/{artifactID}/p/{policy}", renderer.ServeWidget)
 	// Serve share via render origin
 	r.Get("/s/{shareID}", renderer.ServeShare)
 	// Serve an artifact's widget via its share link (av-ei5h) — share row

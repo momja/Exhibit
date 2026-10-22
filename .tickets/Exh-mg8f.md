@@ -1,6 +1,6 @@
 ---
 id: Exh-mg8f
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-22T06:50:51Z
@@ -30,3 +30,9 @@ EXPERIMENTAL; part of Exh-g2vv. The CORS-free fetch path every later phase build
 - An existing artifact with allow rows but no relay grant gets no relay behavior.
 - The arXiv demo works in the page with no server script.
 
+
+## Notes
+
+**2026-10-22T16:01:53Z**
+
+Implemented the authenticated document-bound fetch relay, separate read/write consent, dial-pinned SSRF gate, per-hop header and redirect checks, decoded size/time bounds, cache/backoff and metadata-only activity. Live arXiv search and HTTPbin bearer example verified through the browser; Chromium confinement and hostile-header tests pass.

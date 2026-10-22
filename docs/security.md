@@ -9,7 +9,8 @@ The one-paragraph threat model: an artifact is **untrusted code that executes in
 the visitor's browser**. The server never executes it — artifact bytes are inert
 data at rest, stored and served. What must be protected is therefore (a) the app's
 session and API from artifact code, (b) the visitor from silent network egress,
-and (c) the server itself during ingest-time fetching. Each gets its own mechanism
+and (c) the server itself during ingest-time fetching and optional API relay
+requests. Each gets its own mechanism
 below, and every hard boundary is browser- or kernel-enforced machinery, never our
 own code convention.
 
@@ -1553,3 +1554,22 @@ gets the same explicit decision an ingest would (av-hrtv). If a real control is
 ever wanted here it is per-directive allowlists — approve an origin for
 `script-src` only, so a fetch to it is browser-blocked regardless of any scan —
 which is enforcement rather than marking, and a separate, larger change.
+
+## Experimental relay and credential custody
+
+Relay access is a separate viewer/artifact grant, never implied by an origin
+approval. The frame holds no provider credential or app-owned render-policy
+authority. A document-bound bridge returns response bytes only to its opaque
+frame. Current network policy constrains all browser egress paths for connected
+data; grant changes invalidate earlier render authority. Widgets, public links
+and direct render visits cannot use the relay.
+
+The shared HTTPS gate checks each redirect, rejects non-public DNS answers and
+dials a checked literal, applies a guest header allowlist, caps decoded bytes
+and time, and never inherits an environment proxy. First-party injection runs
+afresh after each destination check. Credentials and connector caches are
+encrypted at rest, and only metadata is logged. Financial connections default
+to no other data destination. Local exports enforce the same boundary with
+opaque frames, exact Host/Origin/session checks and locally acquired secrets.
+The full security and validation contract is in
+[relay-connectors.md](relay-connectors.md).

@@ -69,7 +69,7 @@ func TestEveryMigrationIsAboveTheVersionsAlreadyShipped(t *testing.T) {
 	// computed from the current tree — and because a new file numbered into a
 	// gap in this list is exactly what must fail.
 	shipped := map[int64]bool{}
-	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34} {
+	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35} {
 		shipped[v] = true
 	}
 	for _, v := range goMigrationVersions {
@@ -104,6 +104,7 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	rewindConnectionSchema(t, s)
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id > 23",
 		"DROP TRIGGER remember_historical_asset_identity",
@@ -216,6 +217,7 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{
 		ID: "shared-twice", OwnerID: alice, Title: "shared twice", SourceBlobID: "b1", Tier: Tier1}))
+	rewindConnectionSchema(t, s)
 
 	// Rewind 028 and plant the rows a pre-028 instance could hold. 029's
 	// triggers and columns (av-6xjd) come off first, since a trigger naming
@@ -296,4 +298,31 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 		"SELECT share_grant_count, share_link FROM artifacts WHERE id = 'shared-twice'").Scan(&grants, &link))
 	assert.Equal(t, 0, grants)
 	assert.Equal(t, 1, link, "the surviving row is an anonymous link and the card must say so")
+}
+
+// These two upgrade fixtures manually rewind schema and the ledger rather
+// than goose.DownTo. Remove the new experimental tables and user columns too,
+// so they model an actual earlier instance instead of replaying CREATE over
+// objects that did not exist in that release.
+func rewindConnectionSchema(t *testing.T, s *SQLiteStore) {
+	t.Helper()
+	for _, stmt := range []string{
+		"DROP TABLE IF EXISTS artifact_connection_data_policies",
+		"DROP TABLE IF EXISTS artifact_connection_requests",
+		"DROP TRIGGER IF EXISTS relay_account_delete",
+		"DROP TABLE IF EXISTS relay_schedules",
+		"DROP TABLE IF EXISTS relay_activity",
+		"DROP TABLE IF EXISTS artifact_relay_grants",
+		"DROP TABLE IF EXISTS connection_cache",
+		"DROP TABLE IF EXISTS connection_usage",
+		"DROP TABLE IF EXISTS artifact_connection_grants",
+		"DROP TABLE IF EXISTS connections",
+		"ALTER TABLE users DROP COLUMN relay_schedule_limit",
+		"ALTER TABLE users DROP COLUMN connection_vendor_limit",
+		"ALTER TABLE users DROP COLUMN connection_oauth_limit",
+		"ALTER TABLE users DROP COLUMN connection_native_limit",
+	} {
+		_, err := s.db.ExecContext(context.Background(), stmt)
+		require.NoError(t, err, stmt)
+	}
 }

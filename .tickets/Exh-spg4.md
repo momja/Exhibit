@@ -1,6 +1,6 @@
 ---
 id: Exh-spg4
-status: in_progress
+status: closed
 deps: [Exh-mg8f]
 links: []
 created: 2026-10-22T06:50:51Z
@@ -34,3 +34,9 @@ EXPERIMENTAL; part of Exh-g2vv; builds on phase 1.
 - A share recipient never uses the owner's connection unless it was explicitly shared.
 - Exceeding the connection quota is refused before reaching the provider.
 
+
+## Notes
+
+**2026-10-22T16:01:53Z**
+
+Implemented encrypted API key/Bearer/Basic/SimpleFIN acquisition and management UI, viewer grants, destination policy, response scrubbing, SimpleFIN quota/cache, account cleanup and agent-safe metadata. Retained data policy survives disconnect and credential deletion; explicit atomic cleanup clears saved data/history before releasing obsolete restrictions. HTTPbin native flow verified live. Real bank-account acceptance is tracked in Exh-3kvx because no account credentials are available.

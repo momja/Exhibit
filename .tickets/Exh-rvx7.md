@@ -1,6 +1,6 @@
 ---
 id: Exh-rvx7
-status: in_progress
+status: closed
 deps: [Exh-spg4]
 links: []
 created: 2026-10-22T06:50:52Z
@@ -24,3 +24,9 @@ The relay's main gap versus a backend is work while no page is open: digests, pr
 - A widget shows data refreshed on schedule with no page open.
 - Schedules count against quotas and entitlements.
 
+
+## Notes
+
+**2026-10-22T16:01:53Z**
+
+Implemented declarative GET-to-state schedules with randomized first run, atomic claiming, current access/policy/entitlement/quota checks and previous-snapshot preservation. Reset discards stale in-flight scheduled responses. A live HTTPbin schedule saved a scrubbed authenticated snapshot with no artifact page open; the connected gallery widget reads it.

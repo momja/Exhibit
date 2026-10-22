@@ -34,6 +34,7 @@ function loadEdit({ blocked = [BLOCKED], allowlist = [], responses = [] } = {}) 
     downloadsApproved: false, clipboardApproved: false, linksApproved: false,
     cameraApproved: false, microphoneApproved: false, geolocationApproved: false,
     apiFetch: api.apiFetch,
+    CustomEvent,
     alert: () => {}, confirm: () => true
   }, {
     // save() refuses an empty body before it reaches anything else, so the

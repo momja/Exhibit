@@ -1,6 +1,6 @@
 ---
 id: Exh-qhfd
-status: in_progress
+status: closed
 deps: [Exh-spg4]
 links: []
 created: 2026-10-22T06:50:51Z
@@ -28,3 +28,9 @@ EXPERIMENTAL; part of Exh-g2vv.
 - Idle pruning removes connections at the vendor.
 - Cost per user is measured on staging.
 
+
+## Notes
+
+**2026-10-22T16:01:53Z**
+
+Implemented managed Nango Connect UI with browser-bound server polling, provider/owner/flow verification, separate entitlement cap, revocation and idle vendor deletion. Deliberate security deviation: retrieve managed credentials and use the single Exhibit egress gate instead of the vendor proxy, so every redirect is checked and reflected credentials can be scrubbed. TLS protocol fixtures pass. Live provider consent and actual staging cost measurement require an operator account and are tracked in Exh-3kvx.

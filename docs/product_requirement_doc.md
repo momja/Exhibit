@@ -692,3 +692,19 @@ again before it changes anything.
 The static core and the eventual multi-user service share ~90% of the code; the only
 real additions later are the auth middleware, a storage backend swap, and shares —
 each made cheap by decisions taken in step 1.
+
+## Experimental external APIs and connections
+
+Opt-in relay access lets an artifact call approved HTTPS APIs with ordinary
+browser `fetch`, including providers without CORS support. Reviewed connectors
+keep account credentials outside artifacts, agents, state and exports; a person
+configures and grants each connection in Exhibit. Relay reads and writes have
+separate consent, and grants say where connected data may go. Connections belong
+to the current viewer unless sharing is explicitly approved.
+
+Artifacts continue executing only in browsers. Declarative scheduled fetches
+can update saved data for widgets without executing an artifact backend. A
+portable ZIP contains the app, saved state and a local relay, with credentials
+re-entered locally. A plain HTML export identifies origins that need a relay.
+All phases are experimental and off by default; the implemented behavior and
+examples are specified in [relay-connectors.md](relay-connectors.md).

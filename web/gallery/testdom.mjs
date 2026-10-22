@@ -147,6 +147,7 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
     document,
     location: window.location,
     URL,
+    URLSearchParams,
     Response,
     Blob,
     // The download bridge gates on `d.bytes instanceof ArrayBuffer`, and a vm

@@ -1,6 +1,6 @@
 ---
 id: Exh-trew
-status: in_progress
+status: closed
 deps: [Exh-mg8f]
 links: []
 created: 2026-10-22T06:50:52Z
@@ -21,3 +21,9 @@ Exported apps that rely on the relay must keep working off Exhibit. The POC's bu
 - An exported relay-using artifact runs under serve.mjs and exhibit-run with the same allowlist behavior.
 - Connections prompt for local secrets.
 
+
+## Notes
+
+**2026-10-22T16:01:53Z**
+
+Implemented runnable ZIP exports, zero-dependency Node local relay and Go exhibit-run, local reconnect UI, no exported connection IDs/secrets, opaque sandbox, pinned DNS and per-hop policy, CSRF/Host validation and financial-policy persistence across disconnect/replacement/restart. Actual Node-process and Go-handler parity tests pass; integrated API ZIP inspected for secrets.

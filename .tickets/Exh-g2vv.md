@@ -1,6 +1,6 @@
 ---
 id: Exh-g2vv
-status: in_progress
+status: closed
 deps: []
 links: [Exh-co2m, Exh-h5va]
 created: 2026-10-22T06:50:04Z
@@ -52,3 +52,9 @@ Goal: let artifacts use external APIs (including ones with no CORS support) and,
 - architecture.md, security.md, api.md and the PRD are updated as phases land. "Execution stays in browsers" remains true.
 - A decision is recorded with Exh-h5va about the parked backend: reconcile, supersede, or keep for scheduled, webhook and shared-authority needs.
 
+
+## Notes
+
+**2026-10-22T16:01:53Z**
+
+Implemented all seven phases and the configuration interface on feature/Exh-g2vv/relay-connectors. Execution remains in browsers; docs record the relay/schedule reconciliation with Exh-h5va and Exh-co2m. Features are independently gated and experimental by default. Full go test ./..., assets build and go vet pass; focused Chromium, race and real browser checks cover boundary behavior. Live HTTPbin, arXiv and a closed-page scheduled widget are demonstrated. External credential/staging-only acceptance checks are explicitly tracked in Exh-3kvx.

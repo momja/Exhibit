@@ -36,7 +36,9 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 	// Named explicitly rather than by a --test directory walk, so a file added
 	// with a typo'd name is a missing test rather than a silent no-op.
 	suites := []string{
+		"direct-open.test.mjs",
 		"detail.net.test.mjs",
+		"detail.navigation.test.mjs",
 		"detail.refetch.test.mjs",
 		"detail.recipient.test.mjs",
 		"detail.statesync.test.mjs",

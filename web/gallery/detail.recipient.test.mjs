@@ -83,6 +83,7 @@ function loadDetail({ readOnly, approvals = {} } = {}) {
     ...approvals,
     apiFetch: api.apiFetch,
     apiStateFetch: api.apiStateFetch,
+    apiNavigationCheck: async (_id, url) => ({ ok: true, json: async () => ({ url }) }),
     // The runtime prompt fires exhibit:capabilities-changed on Allow
     // (av-mf1x); the harness provides the constructor the browser does.
     CustomEvent,

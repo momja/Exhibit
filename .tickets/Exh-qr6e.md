@@ -1,6 +1,6 @@
 ---
 id: Exh-qr6e
-status: in_progress
+status: closed
 deps: [Exh-spg4]
 links: []
 created: 2026-10-22T06:50:51Z
@@ -27,3 +27,9 @@ For recipes whose ordinary client code expects to hold a credential value (the S
 - The echo-reflection test proves no real secret is returned.
 - The exfiltration test blocks and alerts.
 
+
+## Notes
+
+**2026-10-22T16:01:53Z**
+
+Implemented expiring viewer/connection/origin-bound stand-ins, reviewed header/Basic substitution, misuse refusal and activity alert, inert exports, and reflection scrubbing with preallocation size bounds. Stand-in, echo, exfiltration and resource-bound race tests pass.

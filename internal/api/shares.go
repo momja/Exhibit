@@ -164,6 +164,12 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 		ro.grantShares(w, r, ownerID, req.ArtifactID, req.Recipients)
 		return
 	}
+	if ro.cfg.Connections != nil {
+		if err := ro.cfg.Connections.ValidateArtifactSharing(r.Context(), ownerID, req.ArtifactID); err != nil {
+			connectionError(w, err)
+			return
+		}
+	}
 
 	sh := &store.Share{
 		ID:         uuid.New().String(),
@@ -176,6 +182,10 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 	if req.Replace {
 		replaced, err := ro.cfg.Store.ReplaceAnonymousLink(r.Context(), ownerID, req.ArtifactID, sh.ID)
 		if err != nil {
+			if errors.Is(err, store.ErrConnectionSharing) {
+				connectionError(w, err)
+				return
+			}
 			if errors.Is(err, store.ErrDuplicateShare) {
 				writeError(w, http.StatusConflict, "this artifact already has a public link")
 				return
@@ -187,6 +197,10 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 		slog.DebugContext(r.Context(), "share link replaced",
 			slog.String("share_id", sh.ID), slog.String("artifact_id", req.ArtifactID))
 	} else if err := ro.cfg.Store.CreateShare(r.Context(), ownerID, sh); err != nil {
+		if errors.Is(err, store.ErrConnectionSharing) {
+			connectionError(w, err)
+			return
+		}
 		// The artifact already has its one link (av-lrae). That is a schema
 		// invariant doing its job, so it is the caller's answer — 409 — rather
 		// than a 500 reporting our own constraint as a fault.

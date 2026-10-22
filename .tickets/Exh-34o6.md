@@ -1,6 +1,6 @@
 ---
 id: Exh-34o6
-status: in_progress
+status: closed
 deps: [Exh-spg4]
 links: []
 created: 2026-10-22T06:50:51Z
@@ -22,3 +22,9 @@ EXPERIMENTAL; part of Exh-g2vv.
 - Connect, refresh and revoke work for the first provider end to end.
 - Limits are enforced at connect time and visible on /profile.
 
+
+## Notes
+
+**2026-10-22T16:01:53Z**
+
+Implemented browser/session-bound GitHub OAuth with PKCE, refresh/rotation and revocation, plus native/OAuth/vendor/schedule entitlement overrides and profile visibility. End-to-end TLS fixture tests pass. Operator registration and live provider consent remain external validation in Exh-3kvx.

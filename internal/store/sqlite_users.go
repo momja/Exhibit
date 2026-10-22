@@ -152,7 +152,8 @@ func (s *SQLiteStore) GetUserByEmail(ctx context.Context, email string) (*User, 
 // uses it or by none.
 const userColumns = `id, external_id, email, created_at, is_admin,
                      password_hash IS NOT NULL, disabled_at IS NOT NULL,
-                     plan, storage_limit_bytes, entitlement_ref`
+                     plan, storage_limit_bytes, entitlement_ref,
+                     connection_native_limit,connection_oauth_limit,connection_vendor_limit,relay_schedule_limit`
 
 func (s *SQLiteStore) getUserBy(ctx context.Context, where string, arg any) (*User, error) {
 	var sc userScan

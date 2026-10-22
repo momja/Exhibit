@@ -10,12 +10,13 @@ const storage = () => {
   return { values, getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
 };
 
-async function load({ artifact = 'art-1', viewer = '1', store = storage(), blocked = false, readOnly = false } = {}) {
+async function load({ artifact = 'art-1', viewer = '1', store = storage(), blocked = false, readOnly = false, connectionProtected = false } = {}) {
   const tabs = [];
   const api = recordingApi();
   const openURL = `/artifacts/${artifact}/open`;
   const page = loadPageScript(['network-prompt.js', 'state-api.js', 'detail.js'].map(asset), {
     ID: artifact, OPEN_URL: openURL, SOURCE_URL: '', TOKEN: '', READ_ONLY: readOnly,
+    CONNECTION_PROTECTED: connectionProtected,
     STATE_WRITABLE: !readOnly, SHARED_STATE: false,
     downloadsApproved: false, clipboardApproved: false, linksApproved: false,
     cameraApproved: false, microphoneApproved: false, geolocationApproved: false,
@@ -37,7 +38,7 @@ async function load({ artifact = 'art-1', viewer = '1', store = storage(), block
   const checkbox = page.byId('direct-open-remember');
   const confirm = page.byId('direct-open-confirm');
   const cancel = page.byId('direct-open-cancel');
-  return { ...page, api, tabs, trigger, prompt, checkbox, confirm, cancel, store, openURL };
+  return { ...page, api, tabs, trigger, prompt, checkbox, confirm, cancel, store, openURL, directURL: openURL + '?direct=1' };
 }
 
 test('both toolbar and capability banner ask before opening exactly one isolated tab', async () => {
@@ -53,7 +54,7 @@ test('both toolbar and capability banner ask before opening exactly one isolated
     assert.equal(page.tabs.length, before + 1);
     assert.deepEqual(page.tabs.at(-1).args, ['', '_blank']);
     assert.equal(page.tabs.at(-1).opener, null);
-    assert.equal(page.tabs.at(-1).location, page.openURL);
+    assert.equal(page.tabs.at(-1).location, page.directURL);
     assert.equal(page.prompt.hidden, true);
   }
   assert.equal(page.store.values.size, 0, 'unchecked confirmation re-prompts');
@@ -146,7 +147,7 @@ test('only checked confirmation persists, including for read-only recipients, ac
   for (const page of [first, await load({ store, readOnly: true })]) {
     await page.trigger.click();
     assert.equal(page.prompt.hidden, true);
-    assert.equal(page.tabs.at(-1).location, page.openURL);
+    assert.equal(page.tabs.at(-1).location, page.directURL);
   }
   for (const options of [{ artifact: 'art-2' }, { viewer: '2' }, { viewer: 'anonymous' }]) {
     const other = await load({ store, ...options });
@@ -165,7 +166,7 @@ for (const failure of ['getItem', 'setItem']) {
     page.checkbox.checked = true;
     await page.confirm.click();
     assert.equal(page.tabs.length, 1);
-    assert.equal(page.tabs[0].location, page.openURL);
+    assert.equal(page.tabs[0].location, page.directURL);
     const reload = await load({ store });
     await reload.trigger.click();
     assert.equal(reload.prompt.hidden, false);
@@ -207,7 +208,7 @@ for (const [kind, request] of [
     await page.confirm.click();
     await retrying;
     assert.equal(page.tabs.length, 1);
-    assert.equal(page.tabs[0].location, page.openURL);
+    assert.equal(page.tabs[0].location, page.directURL);
     assert.equal(page.byId(`${kind}-modal`).hidden, true);
   });
 }
@@ -222,9 +223,10 @@ test('frame reloads bypass the gate and never create a tab', async () => {
 
 // A delegated click models a newly rendered agent control, without reloading
 // the module. The dialog remains in the page while the controls are swapped.
-async function clickAgentOpen(page, artifact) {
+async function clickAgentOpen(page, artifact, { disabled = false } = {}) {
   const trigger = page.byId('agent-open-' + (page.agentButtonCount = (page.agentButtonCount || 0) + 1));
   trigger.dataset = { directOpenArtifact: artifact, directOpenUrl: `/artifacts/${artifact}/open` };
+  trigger.disabled = disabled;
   const icon = { closest: (selector) => selector === '[data-direct-open-artifact]' ? trigger : null };
   await page.document.dispatchEvent({ type: 'click', target: icon });
   return trigger;
@@ -241,7 +243,7 @@ test('agent opens after creation and swaps use current artifact and share detail
   await clickAgentOpen(page, 'created');
   page.checkbox.checked = true;
   await page.confirm.click();
-  assert.equal(page.tabs.at(-1).location, '/artifacts/created/open');
+  assert.equal(page.tabs.at(-1).location, '/artifacts/created/open?direct=1');
   assert.equal(page.tabs.at(-1).opener, null);
   await clickAgentOpen(page, 'created');
   assert.equal(page.prompt.hidden, true, 'replacement button uses remembered choice');
@@ -255,7 +257,7 @@ test('agent opens after creation and swaps use current artifact and share detail
   // the clicked control and never remember its choice against the next one.
   page.prompt.dataset.artifact = 'next';
   await page.confirm.click();
-  assert.equal(page.tabs.at(-1).location, '/artifacts/different/open');
+  assert.equal(page.tabs.at(-1).location, '/artifacts/different/open?direct=1');
   await clickAgentOpen(page, 'next');
   assert.equal(page.prompt.hidden, false);
 });
@@ -269,9 +271,66 @@ test('agent uses a choice remembered from detail and restores focus after a prev
   const agent = await load({ artifact: '', store });
   await clickAgentOpen(agent, 'art-1');
   assert.equal(agent.prompt.hidden, true);
-  assert.equal(agent.tabs.at(-1).location, detail.openURL);
+  assert.equal(agent.tabs.at(-1).location, detail.directURL);
   const old = await clickAgentOpen(agent, 'other');
   old.isConnected = false;
   await agent.cancel.click();
   assert.equal(agent.document.activeElement, agent.byId('pv-open'));
 });
+
+test('direct opens preserve existing query parameters and replace the intent marker', async () => {
+  const page = await load();
+  page.prompt.dataset.openUrl = page.openURL + '?view=history&direct=0#saved';
+  await page.trigger.click();
+  await page.confirm.click();
+  assert.equal(page.tabs[0].location, page.openURL + '?view=history&direct=1#saved');
+});
+
+test('protected detail controls and capability events cannot spend a remembered direct-open choice', async () => {
+  const store = storage();
+  const earlier = await load({ store });
+  await earlier.trigger.click();
+  earlier.checkbox.checked = true;
+  await earlier.confirm.click();
+  const page = await load({ store, connectionProtected: true });
+  await page.trigger.click();
+  let result;
+  let approvals = 0;
+  await page.document.dispatchEvent(new CustomEvent('exhibit:open-directly', {
+    detail: { approve: () => { approvals++; return true; }, resolve: opened => { result = opened; } }
+  }));
+  assert.equal(result, false);
+  assert.equal(approvals, 0);
+  assert.equal(page.prompt.hidden, true);
+  assert.equal(page.tabs.length, 0);
+  assert.deepEqual(page.api.calls, []);
+});
+
+test('a newly protected agent control cannot spend the earlier detail preference', async () => {
+  const store = storage();
+  const detail = await load({ store });
+  await detail.trigger.click();
+  detail.checkbox.checked = true;
+  await detail.confirm.click();
+  const agent = await load({ artifact: '', store });
+  await clickAgentOpen(agent, 'art-1', { disabled: true });
+  assert.equal(agent.prompt.hidden, true);
+  assert.equal(agent.tabs.length, 0);
+});
+
+for (const [kind, request, resultFlag] of [
+  ['media', { __avMedia: true, id: 'm1', video: true }, '__avMediaResult'],
+  ['geo', { __avGeolocation: true, id: 1 }, '__avGeolocationResult']
+]) {
+  test(`protected ${kind} requests are answered without a direct-open or capability prompt`, async () => {
+    const page = await load({ connectionProtected: true });
+    await page.postFromFrame({ ...request, artifactId: 'art-1' });
+    assert.equal(page.byId(`${kind}-modal`).hidden, true);
+    assert.equal(page.prompt.hidden, true);
+    assert.equal(page.tabs.length, 0);
+    assert.deepEqual(page.api.calls, []);
+    const answer = page.frame.contentWindow.posted.find(message => message[resultFlag]);
+    assert.equal(answer.banner, false);
+    assert.match(answer.error, /Connected data must stay inside Exhibit/);
+  });
+}

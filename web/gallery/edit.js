@@ -257,6 +257,7 @@ renderSecurityPanel();
 
 // Keep the approval gate across retries when a later widget save fails.
 let pendingSourceFootprint = [];
+let pendingSourceWarnings = [];
 
 async function save() {
   const title = document.getElementById('title').value.trim();
@@ -265,6 +266,7 @@ async function save() {
   if (!body.trim()) { status.textContent = 'Body cannot be empty.'; return; }
   status.textContent = 'Saving…';
   document.getElementById('scan-result').style.display = 'none';
+  document.getElementById('source-network-warnings').hidden = false;
   const payload = {
     title: title || 'Untitled',
     body,
@@ -294,6 +296,8 @@ async function save() {
   }
   document.getElementById('body').dataset.revision = data.artifact?.source_revision;
   if (data.footprint_changed) pendingSourceFootprint = data.network_footprint || [];
+  pendingSourceWarnings = data.network_warnings || [];
+  document.body.dispatchEvent(new CustomEvent('exhibit:network-warnings-changed'));
   // Blocks the user chose to forget, applied after the PATCH so a failed save
   // leaves every decision exactly as it was. A forget that fails is reported
   // rather than swallowed: the row is already gone from the panel, so silence
@@ -309,8 +313,8 @@ async function save() {
   // scan and returned it. Re-run the explicit-approval flow so the user can
   // review/enable new origins — the same gate ingest uses. The allowlist is
   // never seeded from the scan; only the origins the user selects are written.
-  if (pendingSourceFootprint.length > 0) {
-    showApproval(pendingSourceFootprint);
+  if (pendingSourceFootprint.length > 0 || pendingSourceWarnings.length > 0) {
+    showApproval();
     return;
   }
   setTimeout(() => { window.location.href = '/artifacts/' + ID; }, 500);
@@ -339,26 +343,11 @@ async function forgetBlockedOrigins(status) {
   return true;
 }
 
-function showApproval(footprint) {
+function showApproval() {
   const scanDiv = document.getElementById('scan-result');
-  // An origin the user previously blocked ("don't ask again") is listed but
-  // starts unchecked and labelled — re-approving it must be a deliberate act,
-  // not the default the other origins get.
-  const rows = footprint.map(o => {
-    const isBlocked = blocked.includes(o);
-    return '<label style="display:block;margin:4px 0">' +
-      '<input type="checkbox" class="al-origin" value="' + esc(o) + '"' + (isBlocked ? '' : ' checked') + '> ' +
-      '<code>' + esc(o) + '</code>' + (isBlocked ? ' <span class="text-sm muted">blocked</span>' : '') +
-      '</label>';
-  }).join('');
+  document.getElementById('source-network-warnings').hidden = true;
   scanDiv.style.display = 'block';
-  scanDiv.innerHTML = '<strong>Edited artifact wants to contact these origins.</strong>' +
-    '<div class="muted" style="margin:4px 0 8px">The most secure option will <em>always</em> be to disable all external origins. Origin approval is never automatic.</div>' +
-    rows +
-    '<div class="btn-row" style="margin-top:10px">' +
-    '<button class="btn btn-sm" onclick="approveOrigins()">Approve selected &amp; enable</button>' +
-    '<button class="btn btn-sm" style="background:var(--color-muted)" onclick="finishEdit()">Keep all blocked</button>' +
-    '</div>';
+  document.body.dispatchEvent(new CustomEvent('exhibit:network-approval-changed'));
 }
 
 async function approveOrigins() {
