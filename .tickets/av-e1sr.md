@@ -1,6 +1,6 @@
 ---
 id: av-e1sr
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-07-07T05:44:12Z
@@ -36,3 +36,7 @@ First implementation step in [av-f3cp](av-f3cp.md), authorized on 2026-10-23. Es
 ## References
 
 [Security and storage boundary](../docs/security.md), [current startup/auth](../cmd/server/main.go), [API](../docs/api.md). The missing July proposal is superseded by this design.
+
+## Implementation — 2026-10-23
+
+Implemented the isolated built-server launcher, API fixtures/real local login, and flagship state round-trip through reload and a fresh owner context. The state journey passes locally. Verified occupied-port rejection, missing-build/browser and empty-suite failures, deployment-env isolation, and SIGTERM process/data cleanup. Explicit Make targets and setup/debugging guide added; ordinary make test unchanged.

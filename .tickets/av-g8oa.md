@@ -1,6 +1,6 @@
 ---
 id: av-g8oa
-status: in_progress
+status: closed
 deps: [av-e1sr]
 links: []
 created: 2026-07-07T05:44:36Z
@@ -35,3 +35,6 @@ Second step in [av-f3cp](av-f3cp.md), immediately after the [harness](av-e1sr.md
 
 Coverage mapping and maintenance guidance moved to [Exh-gtz1](Exh-gtz1.md). Browser caching is a measured optimization, not an acceptance criterion. A blocking changed-path guard needs a separate usefulness decision after real coverage exists.
 
+## Implementation — 2026-10-23
+
+Implemented the first hosted Ubuntu workflow with Node 24, Go from go.mod, locked Chromium, existing Go/Node/component checks, six Playwright journeys, and 14-day failure evidence. Selects the installed headless shell through Playwright public APIs and rejects skipped required component results. actionlint passed. Hosted failure/green-run validation and required-check activation are PR rollout steps; user approved merge enforcement on 2026-10-23.

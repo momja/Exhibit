@@ -1,4 +1,4 @@
-.PHONY: build test run clean assets lint
+.PHONY: build test run clean assets lint e2e e2e-ui
 
 build: assets
 	go build -o bin/server ./cmd/server
@@ -13,6 +13,14 @@ assets:
 
 test:
 	go test ./...
+
+# Explicit browser regression commands. Install e2e dependencies/Chromium and
+# run make build first; ordinary make test does not require Playwright.
+e2e:
+	cd e2e && npm test
+
+e2e-ui:
+	cd e2e && npm run test:ui
 
 # Static analysis. golangci-lint is not vendored — install it yourself first:
 #   go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.0

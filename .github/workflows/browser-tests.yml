@@ -1,0 +1,62 @@
+name: Browser regression
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-regression:
+    name: Browser regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: Install test dependencies
+        run: npm ci --prefix e2e
+      - name: Install Chromium and Linux dependencies
+        working-directory: e2e
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Select the installed browser for Go component tests
+        working-directory: e2e
+        run: |
+          browser_binary="$(node chromium-binary.mjs)"
+          test -x "$browser_binary"
+          echo "CHROMIUM_TEST_BINARY=$browser_binary" >> "$GITHUB_ENV"
+      - name: Build the application and embedded assets
+        run: make build
+      - name: Run Go, gallery Node, and Chromium component checks
+        run: |
+          mkdir -p e2e/artifacts
+          go test -count=1 -json ./... > e2e/artifacts/go-tests.jsonl
+          node e2e/check-browser-tests.mjs
+      - name: Run Playwright application journeys
+        run: make e2e
+      - name: Retain failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: browser-regression-failure
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+            e2e/artifacts/
+          retention-days: 14
+          if-no-files-found: warn
