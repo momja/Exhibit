@@ -75,10 +75,10 @@ func (s *Service) Standin(ctx context.Context, viewerID int64, artifactID, id st
 	s.standins[token] = standinBinding{viewerID: viewerID, connectionID: id, origins: append([]string{}, r.Origins...), expires: expires}
 	s.mu.Unlock()
 	result := &Standin{ConnectionID: id, Value: token, ExpiresAt: expires}
-	if rec.Provider == "simplefin" || rec.Provider == "basic" {
+	if rec.Provider == "basic" {
 		u, _ := url.Parse(r.Origins[0])
 		u.User = url.UserPassword("exhibit", token)
-		u.Path = strings.TrimSuffix(r.Endpoint, "/accounts")
+		u.Path = "" // The stand-in always names the public virtual root.
 		result.AccessURL = u.String()
 	}
 	return result, nil
@@ -170,13 +170,7 @@ func (s *Service) responseScrubber(rec *store.ConnectionRecord, viewerID int64, 
 		}
 	}
 	patterns := map[string]string{}
-	if rec.Provider == "simplefin" && c.Endpoint != "" {
-		patterns[c.Endpoint] = "/accounts"
-	}
-	for _, value := range values {
-		if value == "" || value == ":" || value == r.Scheme {
-			continue
-		}
+	addPattern := func(value, replacement string) {
 		patterns[value] = replacement
 		encoded := url.QueryEscape(value)
 		if encoded != value {
@@ -186,6 +180,22 @@ func (s *Service) responseScrubber(rec *store.ConnectionRecord, viewerID int64, 
 		if len(escaped) > 2 {
 			patterns[string(escaped[1:len(escaped)-1])] = replacement
 		}
+	}
+	if c.BasePath != "" && c.BasePath != "/" {
+		// Providers may reflect an escaped URL, a decoded path, or a
+		// JSON-escaped path. Every representation must preserve the alias.
+		addPattern(strings.TrimRight(c.BasePath, "/")+"/", "/")
+		addPattern(c.BasePath, "/")
+		if decoded, err := url.PathUnescape(c.BasePath); err == nil && decoded != c.BasePath {
+			addPattern(strings.TrimRight(decoded, "/")+"/", "/")
+			addPattern(decoded, "/")
+		}
+	}
+	for _, value := range values {
+		if value == "" || value == ":" || value == r.Scheme {
+			continue
+		}
+		addPattern(value, replacement)
 	}
 	ordered := make([]string, 0, len(patterns))
 	for value := range patterns {

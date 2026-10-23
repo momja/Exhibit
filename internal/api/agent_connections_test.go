@@ -37,13 +37,13 @@ func TestAgentConnectionToolsExposeMetadataAndQueueOnly(t *testing.T) {
 	assert.NotContains(t, w.Body.String(), connection.ID)
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 
-	w = doWithToken(t, ro, http.MethodPost, path, grant.Token(), map[string]any{"provider": "simplefin", "reason": "Show account balances"})
+	w = doWithToken(t, ro, http.MethodPost, path, grant.Token(), map[string]any{"provider": "basic", "reason": "Show account balances"})
 	require.Equal(t, http.StatusAccepted, w.Code, w.Body.String())
 	var response struct {
 		Request store.ArtifactConnectionRequest `json:"request"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.Equal(t, "simplefin", response.Request.Provider)
+	assert.Equal(t, "basic", response.Request.Provider)
 	requests, err := s.ListArtifactConnectionRequests(context.Background(), 1, id)
 	require.NoError(t, err)
 	require.Len(t, requests, 1)
@@ -52,7 +52,7 @@ func TestAgentConnectionToolsExposeMetadataAndQueueOnly(t *testing.T) {
 	assert.Empty(t, grants, "requesting setup never grants access")
 
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
-		w = doWithToken(t, ro, method, "/api/artifacts/"+other+"/agent-connections", grant.Token(), map[string]any{"provider": "simplefin", "reason": "Wrong artifact"})
+		w = doWithToken(t, ro, method, "/api/artifacts/"+other+"/agent-connections", grant.Token(), map[string]any{"provider": "basic", "reason": "Wrong artifact"})
 		assert.Equal(t, http.StatusForbidden, w.Code)
 	}
 	w = doWithToken(t, ro, http.MethodDelete, "/api/artifacts/"+id+"/connection-requests/"+response.Request.ID, grant.Token(), nil)
@@ -72,7 +72,7 @@ func TestAgentConnectionRequestsRequireAnEnabledProviderAndRelay(t *testing.T) {
 	for _, body := range []map[string]any{
 		{"provider": "attacker-recipe", "reason": "Not shipped policy"},
 		{"provider": "github", "reason": "Disabled phase"},
-		{"provider": "simplefin", "reason": ""},
+		{"provider": "basic", "reason": ""},
 	} {
 		w = doJSON(t, ro, http.MethodPost, path, body)
 		assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())

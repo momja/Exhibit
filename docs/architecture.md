@@ -1028,3 +1028,12 @@ connection from empowering an older frame. ZIP exports include a local relay
 and acquire local credentials again. See [relay-connectors.md](relay-connectors.md)
 for the configuration, ownership rules, portable runners and recorded decision
 superseding the synchronous backend POC.
+
+Native connectors are generic API key, Bearer and Basic credential policies.
+A pasted Basic credential URL is split in trusted app code into an origin,
+encrypted credentials and an encrypted private base path. The relay maps
+artifact paths under that base without disclosing it. Every connection defaults
+to no other data destinations. User-selected daily request limits and encrypted
+GET response reuse are enforced per connection across artifacts and devices.
+No provider-specific API-key or Basic connector, or setup-token claim code, is shipped.
+Native OAuth remains limited to the reviewed provider set.
