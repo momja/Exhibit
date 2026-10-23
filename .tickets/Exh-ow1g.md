@@ -28,6 +28,9 @@ EXPERIMENTAL; part of Exh-g2vv. Decision (2026-10-23): Exhibit ships no provider
 - **Every connection defaults to "data may go nowhere else"**, widened only by explicit approval. This replaces the built-in's financial-sensitivity default.
 - **No one-time-token claim step.** Users redeem any setup token themselves and paste the resulting URL. Never let an artifact perform a claim: a one-time token is itself a credential.
 
+## Ticket to update with this work
+- Exh-3kvx (staging validation): replace the real-account check for this provider with "connect a real Basic-auth API through a generic connection (pasting a URL with embedded credentials) and inspect frame/state/export/transcript secrecy", and drop it from the fixtures list. (Edited on this branch rather than on main, where both copies are identical; editing main would conflict.)
+
 ## Migration
 Existing connections created from the built-in recipe (experimental, so only staging or dev data) are converted to generic Basic connections with the same origin and credentials and default limits, or deleted with a reconnect prompt; pick one and note it.
 
