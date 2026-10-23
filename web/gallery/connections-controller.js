@@ -18,7 +18,7 @@ export default class extends Controller {
     }
     this.basicURLChanged();
     // Text is interaction state, not a replacement for server-rendered UI.
-    this.createButtonTarget.textContent = provider === 'github' ? 'Continue to GitHub' : provider === 'nango' ? 'Continue to provider' : 'Save connection';
+    this.createButtonTarget.textContent = provider === 'github' ? 'Continue to GitHub' : provider === 'vendor' ? 'Continue to provider' : 'Save connection';
   }
 
   basicURLChanged() {
@@ -59,7 +59,7 @@ export default class extends Controller {
       for (const field of ['daily_limit', 'cache_minutes']) {
         if (field in data) data[field] = Number(data[field] || 0);
       }
-      const vendorWindow = data.recipe === 'nango' ? window.open('about:blank', '_blank') : null;
+      const vendorWindow = data.recipe === 'vendor' ? window.open('about:blank', '_blank') : null;
       if (vendorWindow) vendorWindow.opener = null;
       try {
         if (data.recipe === 'github') {
@@ -67,7 +67,7 @@ export default class extends Controller {
           window.location.assign(result.url);
           return;
         }
-        if (data.recipe === 'nango') {
+        if (data.recipe === 'vendor') {
           if (!vendorWindow) throw new Error('Allow popups to connect this provider, then try again.');
           await this.connectVendor(data, vendorWindow);
         } else {
@@ -78,6 +78,22 @@ export default class extends Controller {
         this.changed('Connection saved. Choose an artifact to grant access.');
       } catch (error) { vendorWindow?.close(); this.createErrorTarget.textContent = error.message; }
     });
+  }
+
+  reconnect(event) {
+    const { connectionKind, provider, connectionName } = event.currentTarget.dataset;
+    this.providerTarget.value = connectionKind === 'vendor' ? 'vendor' : provider;
+    this.createFormTarget.elements.name.value = connectionName;
+    if (connectionKind === 'vendor') {
+      this.createFormTarget.elements.vendor_provider.value = provider;
+      if (!this.createFormTarget.elements.vendor_provider.value) {
+        this.feedbackTarget.textContent = 'This provider is no longer offered. Choose an available provider or revoke the saved connection.';
+        this.feedbackTarget.classList.add('is-error');
+      }
+    }
+    this.providerChanged();
+    this.createFormTarget.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    this.createFormTarget.elements.name.focus({ preventScroll: true });
   }
 
   revoke(event) {

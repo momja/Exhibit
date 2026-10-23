@@ -28,7 +28,32 @@ func connectionError(w http.ResponseWriter, err error) {
 	if errors.Is(err, store.ErrNotFound) {
 		message = "connection or artifact not found"
 	}
+	if code := managedErrorCode(err); code != "" {
+		writeJSON(w, status, map[string]string{"error": vendorErrorMessage(code), "code": code})
+		return
+	}
 	writeError(w, status, message)
+}
+
+func managedErrorCode(err error) string {
+	var vendorError *connectors.VendorError
+	if errors.As(err, &vendorError) {
+		return connectors.ErrorCode(err)
+	}
+	return ""
+}
+
+func vendorErrorMessage(code string) string {
+	switch code {
+	case "needs_reconnect":
+		return "This account needs to be connected again in Connections."
+	case "rate_limited":
+		return "The managed provider is rate limited. Try again later."
+	case "refused":
+		return "The managed provider refused this request. Review the connection permissions."
+	default:
+		return "The managed provider is unavailable. Try again later."
+	}
 }
 
 func (ro *Router) listConnections(w http.ResponseWriter, r *http.Request) {

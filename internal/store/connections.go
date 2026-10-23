@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -53,6 +54,8 @@ type ConnectionRecord struct {
 	Name            string     `json:"name"`
 	Provider        string     `json:"provider"`
 	Kind            string     `json:"kind"`
+	Engine          string     `json:"-"`
+	ExternalRef     string     `json:"-"`
 	RecipeJSON      string     `json:"-"`
 	EncryptedSecret string     `json:"-"`
 	Status          string     `json:"status"`
@@ -219,12 +222,12 @@ func (s *SQLiteStore) ConnectionArtifacts(ctx context.Context, ownerID int64, id
 	return out, rows.Err()
 }
 
-const connectionColumns = `id,owner_id,name,provider,kind,recipe_json,encrypted_secret,status,created_at,last_used_at`
+const connectionColumns = `id,owner_id,name,provider,kind,engine,external_ref,recipe_json,encrypted_secret,status,created_at,last_used_at`
 
 func scanConnection(row interface{ Scan(...any) error }) (*ConnectionRecord, error) {
 	var c ConnectionRecord
 	var created, last any
-	err := row.Scan(&c.ID, &c.OwnerID, &c.Name, &c.Provider, &c.Kind, &c.RecipeJSON, &c.EncryptedSecret, &c.Status, &created, &last)
+	err := row.Scan(&c.ID, &c.OwnerID, &c.Name, &c.Provider, &c.Kind, &c.Engine, &c.ExternalRef, &c.RecipeJSON, &c.EncryptedSecret, &c.Status, &created, &last)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -242,6 +245,10 @@ func scanConnection(row interface{ Scan(...any) error }) (*ConnectionRecord, err
 // CreateConnection enforces the kind's resolved entitlement in the insertion
 // transaction. A zero limit refuses all; only -1 means unlimited.
 func (s *SQLiteStore) CreateConnection(ctx context.Context, c *ConnectionRecord, limit int) error {
+	if c.Kind == "vendor" && c.Engine == "" {
+		// Compatibility for callers creating the pre-engine vendor shape.
+		c.Engine = "nango"
+	}
 	if limit < -1 {
 		return ErrConnectionLimit
 	}
@@ -251,13 +258,13 @@ func (s *SQLiteStore) CreateConnection(ctx context.Context, c *ConnectionRecord,
 	}
 	defer tx.Rollback()
 	var count int
-	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM connections WHERE owner_id=? AND kind=? AND status='active'`, c.OwnerID, c.Kind).Scan(&count); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM connections WHERE owner_id=? AND kind=? AND (status='active' OR (kind='vendor' AND status='reconnect'))`, c.OwnerID, c.Kind).Scan(&count); err != nil {
 		return err
 	}
 	if limit >= 0 && count >= limit {
 		return ErrConnectionLimit
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO connections(id,owner_id,name,provider,kind,recipe_json,encrypted_secret,status) VALUES(?,?,?,?,?,?,?,'active')`, c.ID, c.OwnerID, c.Name, c.Provider, c.Kind, c.RecipeJSON, c.EncryptedSecret)
+	_, err = tx.ExecContext(ctx, `INSERT INTO connections(id,owner_id,name,provider,kind,engine,external_ref,recipe_json,encrypted_secret,status) VALUES(?,?,?,?,?,?,?,?,?,'active')`, c.ID, c.OwnerID, c.Name, c.Provider, c.Kind, c.Engine, c.ExternalRef, c.RecipeJSON, c.EncryptedSecret)
 	if err != nil {
 		return err
 	}
@@ -287,15 +294,30 @@ func (s *SQLiteStore) GetConnection(ctx context.Context, ownerID int64, id strin
 
 // GetGrantedConnection reads only a grant already held by this viewer or an
 // owner's explicit opt-in grant. Callers must separately authorize artifact
-// viewing; a grant never confers access to the artifact itself.
+// viewing; a grant never confers access to the artifact itself. Reconnect rows
+// stay visible so an expired credential cannot become an unauthenticated relay.
 func (s *SQLiteStore) GetGrantedConnection(ctx context.Context, viewerID int64, artifactID, id string) (*ConnectionRecord, error) {
-	return scanConnection(s.db.QueryRowContext(ctx, `SELECT `+prefixedConnectionColumns()+` FROM connections c WHERE c.id=? AND c.status='active' AND EXISTS (
+	return scanConnection(s.db.QueryRowContext(ctx, `SELECT `+prefixedConnectionColumns()+` FROM connections c WHERE c.id=? AND c.status IN ('active','reconnect') AND EXISTS (
  SELECT 1 FROM artifact_connection_grants g JOIN artifacts a ON a.id=g.artifact_id
  WHERE g.connection_id=c.id AND g.artifact_id=? AND (g.viewer_id=? OR (g.share_with_recipients=1 AND g.viewer_id=a.owner_id)))`, id, artifactID, viewerID))
 }
 
 func prefixedConnectionColumns() string {
-	return `c.id,c.owner_id,c.name,c.provider,c.kind,c.recipe_json,c.encrypted_secret,c.status,c.created_at,c.last_used_at`
+	return `c.id,c.owner_id,c.name,c.provider,c.kind,c.engine,c.external_ref,c.recipe_json,c.encrypted_secret,c.status,c.created_at,c.last_used_at`
+}
+
+// UpdateVendorConnectionRef lazily pins a legacy connection's external account
+// ID after its encrypted credential is read. It never changes the engine or
+// replaces a previously pinned account, even if operator routing has changed.
+func (s *SQLiteStore) UpdateVendorConnectionRef(ctx context.Context, id, engine, externalRef string) error {
+	if !validVendorEngine(engine) || externalRef == "" || len(externalRef) > 1024 || strings.ContainsAny(externalRef, "\r\n\x00") {
+		return errors.New("invalid managed connection reference")
+	}
+	return s.exactlyOneRow(ctx, `UPDATE connections SET external_ref=? WHERE id=? AND kind='vendor' AND engine=? AND (external_ref='' OR external_ref=?)`, externalRef, id, engine, externalRef)
+}
+
+func (s *SQLiteStore) MarkVendorConnectionReconnect(ctx context.Context, ownerID int64, id string) error {
+	return s.exactlyOneRow(ctx, `UPDATE connections SET status='reconnect' WHERE id=? AND owner_id=? AND kind='vendor' AND status IN ('active','reconnect')`, id, ownerID)
 }
 
 func (s *SQLiteStore) UpdateConnectionSecret(ctx context.Context, ownerID int64, id, encrypted string) error {
@@ -365,7 +387,7 @@ func (s *SQLiteStore) PutConnectionGrant(ctx context.Context, g ConnectionGrantR
 func (s *SQLiteStore) ListConnectionGrants(ctx context.Context, viewerID int64, artifactID string) ([]ConnectionGrantRecord, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT g.artifact_id,g.connection_id,g.viewer_id,g.permitted_egress_json,g.share_with_recipients,g.created_at
  FROM artifact_connection_grants g JOIN artifacts a ON a.id=g.artifact_id JOIN connections c ON c.id=g.connection_id
- WHERE g.artifact_id=? AND c.status='active' AND (g.viewer_id=? OR (g.share_with_recipients=1 AND g.viewer_id=a.owner_id)) ORDER BY g.viewer_id=? DESC,g.connection_id`, artifactID, viewerID, viewerID)
+ WHERE g.artifact_id=? AND c.status IN ('active','reconnect') AND (g.viewer_id=? OR (g.share_with_recipients=1 AND g.viewer_id=a.owner_id)) ORDER BY g.viewer_id=? DESC,g.connection_id`, artifactID, viewerID, viewerID)
 	if err != nil {
 		return nil, err
 	}

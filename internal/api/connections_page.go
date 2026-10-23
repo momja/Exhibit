@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/momja/Exhibit/internal/bundle"
 	"github.com/momja/Exhibit/internal/connectors"
@@ -44,6 +45,9 @@ type connectionPageView struct {
 	Requests         []store.ArtifactConnectionRequest
 	Warnings         []scanner.Warning
 	Preview          *connectionGrantPreview
+	Operator         bool
+	VendorUsage      []store.VendorUsage
+	UsagePeriod      string
 	pageCredentials
 }
 
@@ -65,6 +69,17 @@ func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error
 	v.Allowance, err = ro.resolveAllowance(r.Context(), viewer)
 	if err != nil {
 		return v, err
+	}
+	if ro.adminRequest(r) {
+		v.Operator = true
+		if s, ok := ro.cfg.Store.(vendorUsageStore); ok {
+			now := time.Now().UTC()
+			v.UsagePeriod = now.Format("January 2006") + " · UTC"
+			v.VendorUsage, err = s.VendorUsage(r.Context(), now)
+			if err != nil {
+				return v, err
+			}
+		}
 	}
 	if v.Enabled && ro.cfg.Connections != nil {
 		v.Providers = ro.cfg.Connections.Providers()
@@ -250,7 +265,7 @@ func (ro *Router) exportRelayBundle(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, g := range grants {
 			kind := g.Connection.Provider
-			if kind == "github" || kind == "nango" {
+			if g.Connection.Kind == "oauth" || g.Connection.Kind == "vendor" {
 				kind = "bearer"
 			}
 			for _, o := range g.Connection.Origins {

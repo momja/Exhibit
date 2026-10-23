@@ -302,47 +302,13 @@ func (g *Gate) Do(ctx context.Context, req *http.Request) (*Response, error) {
 // Each hop starts with sanitized guest headers: previous credentials never
 // carry over, even between allowlisted origins. Never pass an artifact callback.
 func (g *Gate) DoAuthorized(ctx context.Context, req *http.Request, authorize func(*http.Request) error) (*Response, error) {
-	if req == nil {
-		return nil, &DeniedError{Reason: "missing request"}
-	}
-	if err := g.check(req.URL); err != nil {
-		return nil, err
-	}
-	method := req.Method
-	if method == "" {
-		method = http.MethodGet
-	}
-	switch method {
-	case "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS":
-	default:
-		return nil, &DeniedError{Reason: "request method is not supported"}
-	}
 	ctx, cancel := context.WithTimeout(ctx, g.limits.Timeout)
 	defer cancel()
-	var body []byte
-	var err error
-	if req.Body != nil {
-		defer req.Body.Close()
-		stopClose := context.AfterFunc(ctx, func() { _ = req.Body.Close() })
-		defer stopClose()
-		body, err = io.ReadAll(io.LimitReader(req.Body, g.limits.MaxRequestBytes+1))
-		if err != nil {
-			return nil, err
-		}
-		if int64(len(body)) > g.limits.MaxRequestBytes {
-			return nil, &DeniedError{Reason: "request exceeds relay byte limit"}
-		}
+	prepared, err := g.prepareRequest(ctx, req)
+	if err != nil {
+		return nil, err
 	}
-	baseHeaders := selectedHeaders(req.Header, requestHeaders)
-	headerBytes := 0
-	for name, values := range baseHeaders {
-		for _, value := range values {
-			headerBytes += len(name) + len(value) + 4
-		}
-	}
-	if headerBytes > 64<<10 {
-		return nil, &DeniedError{Reason: "request headers exceed relay byte limit"}
-	}
+	method, body, baseHeaders := prepared.method, prepared.body, prepared.headers
 	target := *req.URL
 	for hop := 0; ; hop++ {
 		if err := g.check(&target); err != nil {
