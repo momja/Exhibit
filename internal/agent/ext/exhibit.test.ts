@@ -213,23 +213,23 @@ describe("network warnings and native connection tools", () => {
 				calls.push({ url, opts });
 				assert.equal(url, "http://exhibit.test/api/artifacts/artifact-1/agent-connections");
 				const data = opts.method === "GET" ? {
-					connections: [{ name: "Budget", provider: "simplefin", origins: ["https://bridge.example"], capabilities: ["read accounts"], endpoint: "/accounts", status: "active", encrypted_secret: "NEVER-SHOW", secret: "NEVER-SHOW" }],
-					providers: [{ id: "simplefin", name: "SimpleFIN", capabilities: ["read accounts"], enabled: true, secret: "NEVER-SHOW" }],
+					connections: [{ name: "Private API", provider: "basic", origins: ["https://api.example"], capabilities: ["read"], endpoint: "/", status: "active", encrypted_secret: "NEVER-SHOW", secret: "NEVER-SHOW" }],
+					providers: [{ id: "basic", name: "HTTP Basic", capabilities: ["read"], enabled: true, secret: "NEVER-SHOW" }],
 					pending_requests: [{ secret: "NEVER-SHOW" }],
 				} : { request: { id: "request-1" }, manage_url: "/connections?artifact=artifact-1", secret: "NEVER-SHOW" };
 				return { ok: true, text: async () => JSON.stringify(data) };
 			}, async () => {
 				const listed = await pi.tools.get("list_connections").execute("list", {});
-				assert.match(listed.content[0].text, /read accounts/);
-				assert.match(listed.content[0].text, /\/accounts/);
+				assert.match(listed.content[0].text, /HTTP Basic/);
+				assert.match(listed.content[0].text, /https:\/\/api\.example/);
 				assert.ok(!JSON.stringify(listed).includes("NEVER-SHOW"));
-				const requested = await pi.tools.get("request_connection").execute("request", { provider: "simplefin", reason: "Read account balances" });
+				const requested = await pi.tools.get("request_connection").execute("request", { provider: "basic", reason: "Read account balances" });
 				assert.match(requested.content[0].text, /grants no access/);
 				assert.equal(requested.details.requestId, "request-1");
 				assert.ok(!JSON.stringify(requested).includes("NEVER-SHOW"));
 			});
 			assert.equal(calls.length, 2);
-			assert.deepEqual(JSON.parse(calls[1].opts.body), { provider: "simplefin", reason: "Read account balances" });
+			assert.deepEqual(JSON.parse(calls[1].opts.body), { provider: "basic", reason: "Read account balances" });
 			assert.deepEqual(Object.keys(pi.tools.get("request_connection").parameters.properties).sort(), ["provider", "reason"]);
 		} finally {
 			delete process.env.EXHIBIT_CONNECTIONS_ENABLED;

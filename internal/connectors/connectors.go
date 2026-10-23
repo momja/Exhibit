@@ -113,6 +113,7 @@ type Connection struct {
 	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
 	DailyLimit    int        `json:"daily_limit"`
 	RequestsToday int        `json:"requests_today"`
+	CacheMinutes  int        `json:"cache_minutes"`
 	Endpoint      string     `json:"endpoint,omitempty"`
 	Header        string     `json:"header,omitempty"`
 }
@@ -131,8 +132,7 @@ func (s *Service) Providers() []Provider {
 	return []Provider{
 		{"api-key", "API key", "native", "A key injected into a reviewed header at the origin you choose.", []string{"read"}, "personal", true},
 		{"bearer", "Bearer token", "native", "A token sent in the Authorization header to one origin.", []string{"read"}, "personal", true},
-		{"basic", "HTTP Basic", "native", "A username and password sent to one origin over HTTPS.", []string{"read"}, "personal", true},
-		{"simplefin", "SimpleFIN", "native", "Read accounts and transactions. Cached for one hour, at most 24 provider requests per UTC day. Financial data stays at this origin unless you explicitly approve another.", []string{"read accounts", "read transactions"}, "financial", true},
+		{"basic", "HTTP Basic", "native", "A username and password, or a pasted HTTPS URL containing both. Data stays at this origin unless you explicitly approve another.", []string{"read"}, "personal", true},
 		{"github", "GitHub", "oauth", "Connect GitHub using the operator's registered OAuth application.", []string{"read profile", "read repositories"}, "personal", s.cfg.OAuthEnabled && s.cfg.GitHub.ClientID != "" && s.cfg.GitHub.ClientSecret != ""},
 		{"nango", "Managed OAuth", "vendor", "Connect a provider approved by this instance's operator.", []string{"read"}, "personal", s.cfg.VendorEnabled && s.cfg.Vendor.configured()},
 	}
@@ -150,7 +150,9 @@ type CreateRequest struct {
 	Secret             string `json:"secret,omitempty"`
 	Username           string `json:"username,omitempty"`
 	Password           string `json:"password,omitempty"`
-	SetupToken         string `json:"setup_token,omitempty"`
+	AccessURL          string `json:"access_url,omitempty"`
+	DailyLimit         int    `json:"daily_limit,omitempty"`
+	CacheMinutes       int    `json:"cache_minutes,omitempty"`
 	AllowWrites        bool   `json:"allow_writes,omitempty"`
 	VendorProvider     string `json:"vendor_provider,omitempty"`
 	VendorConnectionID string `json:"vendor_connection_id,omitempty"`
@@ -174,7 +176,8 @@ type credential struct {
 	Password           string          `json:"password,omitempty"`
 	OAuthToken         json.RawMessage `json:"oauth_token,omitempty"`
 	VendorConnectionID string          `json:"vendor_connection_id,omitempty"`
-	Endpoint           string          `json:"endpoint,omitempty"`
+	Endpoint           string          `json:"endpoint,omitempty"` // Earlier native credentials stored a private endpoint alias.
+	BasePath           string          `json:"base_path,omitempty"`
 }
 
 func (s *Service) Create(ctx context.Context, ownerID int64, in CreateRequest, limits Limits) (*Connection, error) {
@@ -193,15 +196,32 @@ func (s *Service) Create(ctx context.Context, ownerID int64, in CreateRequest, l
 		provider = in.Provider
 	}
 	kind := "native"
-	r := recipe{Sensitivity: "personal", AllowWrites: in.AllowWrites}
+	if in.DailyLimit < 0 || in.CacheMinutes < 0 || in.CacheMinutes > 525600 {
+		return nil, fmt.Errorf("%w: daily requests must be nonnegative and response reuse must be between 0 and 525600 minutes", ErrInvalid)
+	}
+	if in.AccessURL != "" && provider != "basic" {
+		return nil, fmt.Errorf("%w: a credential URL is supported only for Basic authentication", ErrInvalid)
+	}
+	r := recipe{Sensitivity: "personal", AllowWrites: in.AllowWrites, DailyLimit: in.DailyLimit, CacheSeconds: in.CacheMinutes * 60}
 	c := credential{}
 	switch provider {
 	case "api-key", "bearer", "basic":
-		o, err := normalizeHTTPSOrigin(in.Origin)
-		if err != nil {
-			return nil, err
+		if provider == "basic" && in.AccessURL != "" {
+			if in.Origin != "" || in.Username != "" || in.Password != "" {
+				return nil, fmt.Errorf("%w: paste a credential URL or enter separate Basic fields", ErrInvalid)
+			}
+			o, parsed, err := parseBasicAccessURL(in.AccessURL)
+			if err != nil {
+				return nil, err
+			}
+			r.Origins, r.Endpoint, c = []string{o}, "/", parsed
+		} else {
+			o, err := normalizeHTTPSOrigin(in.Origin)
+			if err != nil {
+				return nil, err
+			}
+			r.Origins = []string{o}
 		}
-		r.Origins = []string{o}
 		switch provider {
 		case "api-key":
 			r.Header = http.CanonicalHeaderKey(strings.TrimSpace(in.Header))
@@ -219,23 +239,16 @@ func (s *Service) Create(ctx context.Context, ownerID int64, in CreateRequest, l
 		case "basic":
 			r.Header = "Authorization"
 			r.Scheme = "Basic "
-			c.Username = in.Username
-			c.Password = in.Password
+			if in.AccessURL == "" {
+				c.Username = in.Username
+				c.Password = in.Password
+			}
 			if c.Username == "" || strings.Contains(c.Username, ":") {
 				return nil, fmt.Errorf("%w: Basic authentication needs a username without a colon", ErrInvalid)
 			}
 		}
 		if (provider != "basic" && c.Value == "") || (provider == "basic" && c.Password == "") {
 			return nil, fmt.Errorf("%w: credential is required", ErrInvalid)
-		}
-	case "simplefin":
-		if strings.TrimSpace(in.SetupToken) == "" {
-			return nil, fmt.Errorf("%w: SimpleFIN setup token is required", ErrInvalid)
-		}
-		var err error
-		r, c, err = s.claimSimpleFIN(ctx, in.SetupToken)
-		if err != nil {
-			return nil, err
 		}
 	case "nango":
 		if !s.cfg.VendorEnabled || !s.cfg.Vendor.configured() {
@@ -317,14 +330,15 @@ func (s *Service) metadata(ctx context.Context, rec *store.ConnectionRecord) (*C
 	if r.AllowWrites {
 		caps = append(caps, "write")
 	}
-	if rec.Provider == "simplefin" {
-		caps = []string{"read accounts", "read transactions"}
-	}
 	used, err := s.cfg.Store.ConnectionRequestsToday(ctx, rec.ID, s.cfg.Now())
 	if err != nil {
 		return nil, err
 	}
-	return &Connection{ID: rec.ID, Name: rec.Name, Provider: rec.Provider, Kind: rec.Kind, Origins: r.Origins, Capabilities: caps, Sensitivity: r.Sensitivity, Status: rec.Status, CreatedAt: rec.CreatedAt, LastUsedAt: rec.LastUsedAt, DailyLimit: r.DailyLimit, RequestsToday: used, Endpoint: r.Endpoint, Header: r.Header}, nil
+	endpoint := ""
+	if r.Endpoint != "" {
+		endpoint = "/" // The private base path is never metadata.
+	}
+	return &Connection{ID: rec.ID, Name: rec.Name, Provider: rec.Provider, Kind: rec.Kind, Origins: r.Origins, Capabilities: caps, Sensitivity: r.Sensitivity, Status: rec.Status, CreatedAt: rec.CreatedAt, LastUsedAt: rec.LastUsedAt, DailyLimit: r.DailyLimit, RequestsToday: used, CacheMinutes: r.CacheSeconds / 60, Endpoint: endpoint, Header: r.Header}, nil
 }
 
 func (s *Service) readCredential(rec *store.ConnectionRecord) (recipe, credential, error) {
@@ -339,6 +353,14 @@ func (s *Service) readCredential(rec *store.ConnectionRecord) (recipe, credentia
 	}
 	if err = json.Unmarshal([]byte(raw), &c); err != nil {
 		return r, c, errors.New("invalid stored connection credential")
+	}
+	if c.BasePath == "" && c.Endpoint != "" && r.Endpoint != "" {
+		// Shape-based migration retains the encrypted private endpoint. Its
+		// public alias identifies the suffix to remove when recovering a base.
+		c.BasePath = (&url.URL{Path: strings.TrimSuffix(c.Endpoint, r.Endpoint)}).EscapedPath()
+		if c.BasePath == "" {
+			c.BasePath = "/"
+		}
 	}
 	return r, c, nil
 }
@@ -376,49 +398,88 @@ func safeCredentialHeader(h string) bool {
 	return !slices.Contains([]string{"cookie", "set-cookie", "host", "origin", "referer", "content-length", "transfer-encoding", "connection", "accept-encoding", "user-agent", "forwarded", "upgrade", "trailer", "te"}, lower)
 }
 
-func (s *Service) claimSimpleFIN(ctx context.Context, setup string) (recipe, credential, error) {
-	fail := func() (recipe, credential, error) {
-		return recipe{}, credential{}, fmt.Errorf("%w: SimpleFIN setup token could not be claimed; obtain a new token from your bridge", ErrInvalid)
+// parseBasicAccessURL splits a user-pasted URL without making a network
+// request. The username, password and base path all stay in the encrypted
+// credential; only the normalized origin and a virtual root are published.
+func parseBasicAccessURL(raw string) (string, credential, error) {
+	fail := func() (string, credential, error) {
+		return "", credential{}, fmt.Errorf("%w: paste an HTTPS URL with a username and password, without a query or fragment", ErrInvalid)
 	}
-	if len(setup) > 16384 {
+	if len(raw) > 16384 || strings.TrimSpace(raw) != raw || strings.ContainsAny(raw, "\r\n") {
 		return fail()
 	}
-	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(setup))
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User == nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" {
+		return fail()
+	}
+	username := u.User.Username()
+	password, ok := u.User.Password()
+	if !ok || username == "" || password == "" || strings.Contains(username, ":") || strings.ContainsAny(username+password, "\r\n") {
+		return fail()
+	}
+	o, err := normalizeHTTPSOrigin(u.Scheme + "://" + u.Host)
 	if err != nil {
 		return fail()
 	}
-	u, err := url.Parse(string(raw))
-	if err != nil || u.Scheme != "https" || u.User != nil || u.Fragment != "" || u.Host == "" {
+	base := strings.TrimRight(u.EscapedPath(), "/")
+	if base == "" {
+		base = "/"
+	}
+	if !safeRelativePath(base) {
 		return fail()
 	}
-	o := requestOrigin(u)
-	gate, err := s.cfg.GateFactory([]string{o})
+	return o, credential{Username: username, Password: password, BasePath: base}, nil
+}
+
+// safeRelativePath refuses path traversal, including nested percent encoding,
+// before a frame-controlled suffix can be appended to a private base path.
+func safeRelativePath(escaped string) bool {
+	for i := 0; i < 8; i++ {
+		if strings.ContainsAny(escaped, "\\\r\n") || strings.HasPrefix(escaped, "//") {
+			return false
+		}
+		for _, segment := range strings.Split(escaped, "/") {
+			if segment == "." || segment == ".." {
+				return false
+			}
+		}
+		decoded, err := url.PathUnescape(escaped)
+		if err != nil {
+			return false
+		}
+		if decoded == escaped {
+			return true
+		}
+		escaped = decoded
+	}
+	return false
+}
+
+func withPrivateBase(ctx context.Context, req *http.Request, base string) (*http.Request, error) {
+	if base == "" || base == "/" {
+		return req, nil
+	}
+	if !safeRelativePath(base) || !safeRelativePath(req.URL.EscapedPath()) {
+		return nil, fmt.Errorf("%w: request path must stay within the connection's base URL", ErrEgress)
+	}
+	copy := req.Clone(ctx)
+	u := *req.URL
+	copy.URL = &u
+	u.RawPath = strings.TrimRight(base, "/") + "/" + strings.TrimLeft(req.URL.EscapedPath(), "/")
+	path, err := url.PathUnescape(u.RawPath)
 	if err != nil {
-		return fail()
+		return nil, ErrEgress
 	}
-	defer gate.Close()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), nil)
-	if err != nil {
-		return fail()
+	u.Path = path
+	return copy, nil
+}
+
+func withinPrivateBase(u *url.URL, base string) bool {
+	if base == "" || base == "/" {
+		return true
 	}
-	resp, err := gate.Do(ctx, req)
-	if err != nil || resp.Status < 200 || resp.Status >= 300 || len(resp.Body) > 16384 {
-		return fail()
-	}
-	access, err := url.Parse(strings.TrimSpace(string(resp.Body)))
-	if err != nil || access.Scheme != "https" || access.User == nil || access.Host == "" || access.RawQuery != "" || access.Fragment != "" {
-		return fail()
-	}
-	password, ok := access.User.Password()
-	if !ok || access.User.Username() == "" || password == "" {
-		return fail()
-	}
-	accountOrigin := requestOrigin(access)
-	if accountOrigin == "" {
-		return fail()
-	}
-	endpoint := strings.TrimSuffix(access.Path, "/") + "/accounts"
-	return recipe{Origins: []string{accountOrigin}, Header: "Authorization", Scheme: "Basic ", Sensitivity: "financial", DailyLimit: 24, CacheSeconds: 3600, Endpoint: "/accounts"}, credential{Username: access.User.Username(), Password: password, Endpoint: endpoint}, nil
+	path := u.EscapedPath()
+	return safeRelativePath(path) && (path == base || strings.HasPrefix(path, strings.TrimRight(base, "/")+"/"))
 }
 
 type GrantRequest struct {
@@ -636,25 +697,17 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 	if req.Method != http.MethodGet && req.Method != http.MethodHead && !r.AllowWrites {
 		return nil, fmt.Errorf("%w: connection grants read access only", ErrEgress)
 	}
-	if r.Endpoint != "" && req.URL.EscapedPath() != r.Endpoint {
-		return nil, fmt.Errorf("%w: this recipe only permits its accounts endpoint", ErrEgress)
+	// A generic virtual root hides every pasted URL's private base path.
+	// Redirects are checked against the same base before reinjecting a secret.
+	req, err = withPrivateBase(ctx, req, c.BasePath)
+	if err != nil {
+		return nil, err
 	}
-	if rec.Provider == "simplefin" {
-		if err = validateSimpleFINWindow(req.URL); err != nil {
-			return nil, err
-		}
-	}
-	// A stable public alias keeps the claimed access URL's private path out of
-	// artifact memory, transcripts and exports. Rewrite before the gate validates.
-	if rec.Provider == "simplefin" {
-		req = req.Clone(ctx)
-		copied := *req.URL
-		req.URL = &copied
-		req.URL.Path = c.Endpoint
-		req.URL.RawPath = ""
+	if !gate.Allows(req.URL) {
+		return nil, ErrEgress
 	}
 	hash := requestCacheKey(req)
-	cacheable := r.CacheSeconds > 0 && req.Method == http.MethodGet
+	cacheable := r.CacheSeconds > 0 && req.Method == http.MethodGet && (req.Body == nil || req.Body == http.NoBody)
 	if cacheable {
 		sealed, e := s.cfg.Store.GetConnectionCache(ctx, rec.ID, hash, s.cfg.Now())
 		if e == nil {
@@ -662,18 +715,24 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 			if e != nil {
 				return nil, errors.New("connection cache could not be decrypted")
 			}
-			cached, e := decodeCachedResponse(plain)
+			cached, snapshot, usable, e := decodeConnectionCache(plain)
 			if e != nil {
 				return nil, e
 			}
-			_ = s.cfg.Store.TouchConnection(ctx, rec.ID)
-			return cached, nil
+			if usable {
+				// The cache is connection-wide; stand-ins are viewer-local and
+				// expire. Scrub the encrypted original for this delivery only.
+				if e = s.scrubResponse(rec, viewerID, r, snapshot, cached); e != nil {
+					return nil, e
+				}
+				if e = s.cfg.Store.TouchConnection(ctx, rec.ID); e != nil {
+					return nil, e
+				}
+				return cached, nil
+			}
 		} else if !errors.Is(e, store.ErrNotFound) {
 			return nil, e
 		}
-	}
-	if err = s.cfg.Store.ReserveConnectionRequest(ctx, rec.ID, r.DailyLimit, s.cfg.Now()); err != nil {
-		return nil, err
 	}
 	var response *egress.Response
 	{
@@ -688,17 +747,35 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 			if requestOrigin(hop.URL) != target {
 				return ErrEgress
 			}
-			if rec.Provider == "simplefin" && hop.URL.Path != c.Endpoint {
+			if !withinPrivateBase(hop.URL, c.BasePath) {
 				return ErrEgress
+			}
+			// Count each actual provider hop, including redirects. Cache hits
+			// never spend quota, and the durable reservation precedes I/O.
+			if err := s.cfg.Store.ReserveConnectionRequest(ctx, rec.ID, r.DailyLimit, s.cfg.Now()); err != nil {
+				return err
 			}
 			return engine.Authorize(ctx, hop, rec, r, &c)
 		})
 	}
 	if err != nil {
-		if errors.Is(err, ErrEgress) || errors.Is(err, ErrStandin) || errors.Is(err, ErrDisabled) {
+		if errors.Is(err, ErrEgress) || errors.Is(err, ErrStandin) || errors.Is(err, ErrDisabled) || errors.Is(err, store.ErrConnectionQuota) {
 			return nil, err
 		}
 		return nil, errors.New("connection provider request failed")
+	}
+	var cacheEntry []byte
+	if cacheable && response.Status >= 200 && response.Status < 300 && response.Status != http.StatusPartialContent && !varyWildcard(response.Header) {
+		if err = responseSizeAllowed(response); err != nil {
+			return nil, err
+		}
+		// Seal the original bytes and only the secrets needed to scrub them.
+		// A refreshed access token may no longer be the stored credential by
+		// the next cache hit. Never persist a viewer's inert handle as data.
+		cacheEntry, err = encodeConnectionCache(response, c)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err = s.scrubResponse(rec, viewerID, r, c, response); err != nil {
 		return nil, err
@@ -706,15 +783,8 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 	if err = s.cfg.Store.TouchConnection(ctx, rec.ID); err != nil {
 		return nil, err
 	}
-	if cacheable && response.Status >= 200 && response.Status < 300 {
-		raw, e := json.Marshal(response)
-		if e != nil {
-			return nil, e
-		}
-		if len(raw) > maxConnectionCacheJSONBytes {
-			return nil, ErrResponseSize
-		}
-		sealed, e := s.cfg.Box.Encrypt(string(raw))
+	if cacheEntry != nil {
+		sealed, e := s.cfg.Box.Encrypt(string(cacheEntry))
 		if e != nil {
 			return nil, e
 		}
@@ -726,16 +796,99 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 }
 
 func requestCacheKey(req *http.Request) string {
-	sum := sha256.Sum256([]byte(req.Method + "\n" + req.URL.String() + "\n" + req.Header.Get("Accept")))
+	// Include every frame-controlled representation header the common gate
+	// forwards. Stand-ins and discarded headers never split a shared cache,
+	// while ranges, language and conditional requests cannot reuse each other.
+	headers := make(http.Header)
+	for key, values := range req.Header {
+		key = http.CanonicalHeaderKey(key)
+		switch key {
+		case "Accept", "Accept-Language", "Content-Type", "If-Match", "If-None-Match", "If-Modified-Since", "If-Unmodified-Since", "Range", "If-Range", "Cache-Control":
+			headers[key] = append(headers[key], values...)
+		}
+	}
+	raw, _ := json.Marshal(headers) // Header contains only JSON-safe string slices.
+	sum := sha256.Sum256([]byte(req.Method + "\n" + req.URL.String() + "\n" + string(raw)))
 	return hex.EncodeToString(sum[:])
 }
-func validateSimpleFINWindow(u *url.URL) error {
-	q := u.Query()
-	var start, end int64
-	_, e1 := fmt.Sscan(q.Get("start-date"), &start)
-	_, e2 := fmt.Sscan(q.Get("end-date"), &end)
-	if e1 == nil && e2 == nil && (end < start || end-start > int64(90*24*time.Hour/time.Second)) {
-		return fmt.Errorf("%w: SimpleFIN windows may cover at most 90 days", ErrInvalid)
+
+func varyWildcard(header http.Header) bool {
+	for _, value := range header.Values("Vary") {
+		for _, field := range strings.Split(value, ",") {
+			if strings.TrimSpace(field) == "*" {
+				return true
+			}
+		}
 	}
-	return nil
+	return false
+}
+
+// cachedCredential deliberately excludes OAuth payloads and vendor metadata.
+// It travels only inside the encrypted, bounded cache envelope.
+type cachedCredential struct {
+	Value    string `json:"value,omitempty"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
+	BasePath string `json:"base_path,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
+}
+
+func encodeConnectionCache(response *egress.Response, c credential) ([]byte, error) {
+	snapshot := cachedCredential{Value: c.Value, Username: c.Username, Password: c.Password, BasePath: c.BasePath, Endpoint: c.Endpoint}
+	if len(c.OAuthToken) > 0 {
+		// Preserve just the refresh secret for redaction, rather than arbitrary
+		// token JSON. The current access token is already in c.Value.
+		var token struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		if json.Unmarshal(c.OAuthToken, &token) != nil {
+			return nil, errors.New("invalid connection cache credential")
+		}
+		snapshot.Password = token.RefreshToken
+	}
+	secret, err := json.Marshal(snapshot)
+	if err != nil || len(secret) > maxConnectionResponseMetadataBytes {
+		return nil, ErrResponseSize
+	}
+	entry := struct {
+		*egress.Response
+		Version    int             `json:"version"`
+		Credential json.RawMessage `json:"credential"`
+	}{response, 1, secret}
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > maxConnectionCacheJSONBytes {
+		return nil, ErrResponseSize
+	}
+	return raw, nil
+}
+
+func decodeConnectionCache(plain string) (*egress.Response, credential, bool, error) {
+	// The shared decoder verifies the encoded body length before allocating
+	// it, including for entries from an earlier version.
+	response, err := decodeCachedResponse(plain)
+	if err != nil {
+		return nil, credential{}, false, err
+	}
+	var entry struct {
+		Version    int             `json:"version"`
+		Credential json.RawMessage `json:"credential"`
+	}
+	if json.Unmarshal([]byte(plain), &entry) != nil {
+		return nil, credential{}, false, errors.New("connection cache contains an invalid response")
+	}
+	if entry.Version != 1 || len(entry.Credential) == 0 {
+		return nil, credential{}, false, nil // Old scrubbed responses are a miss.
+	}
+	if len(entry.Credential) > maxConnectionResponseMetadataBytes {
+		return nil, credential{}, false, ErrResponseSize
+	}
+	var snapshot cachedCredential
+	if json.Unmarshal(entry.Credential, &snapshot) != nil {
+		return nil, credential{}, false, errors.New("connection cache contains an invalid credential")
+	}
+	c := credential{Value: snapshot.Value, Username: snapshot.Username, Password: snapshot.Password, BasePath: snapshot.BasePath, Endpoint: snapshot.Endpoint}
+	return response, c, true, nil
 }

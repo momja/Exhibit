@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default=os.environ.get("EXHIBIT_URL", "http://t3code:18080"))
-    parser.add_argument("--only", choices=["arxiv", "simplefin", "connection-check"])
+    parser.add_argument("--only", choices=["arxiv", "connection-check"])
     args = parser.parse_args()
     token = os.environ.get("EXHIBIT_TOKEN")
     if not token:
@@ -27,7 +27,6 @@ def main():
             return json.load(response)
 
     examples = [("arxiv", "Fieldnotes · arXiv research reader", "arxiv.html", None),
-                ("simplefin", "Commonplace · personal finances", "simplefin-budget.html", "simplefin-widget.html"),
                 ("connection-check", "Connection check", "connection-check.html", "connection-widget.html")]
     for name, title, filename, widget in examples:
         if args.only and name != args.only:

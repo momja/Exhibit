@@ -3,6 +3,7 @@ package bundle
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,15 +35,19 @@ type ServerOptions struct {
 	Gate *egress.Gate
 }
 type localConnection struct {
-	Origin   string `json:"origin"`
-	Kind     string `json:"kind"`
-	Header   string `json:"header,omitempty"`
-	Secret   string `json:"secret,omitempty"`
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
-	Endpoint string `json:"-"`
-	Day      string `json:"-"`
-	Calls    int    `json:"-"`
+	Origin       string   `json:"origin"`
+	Kind         string   `json:"kind"`
+	Header       string   `json:"header,omitempty"`
+	Secret       string   `json:"secret,omitempty"`
+	Username     string   `json:"username,omitempty"`
+	Password     string   `json:"password,omitempty"`
+	AccessURL    string   `json:"access_url,omitempty"`
+	DailyLimit   int      `json:"daily_limit,omitempty"`
+	CacheMinutes int      `json:"cache_minutes,omitempty"`
+	DataOrigins  []string `json:"data_origins,omitempty"`
+	BasePath     string   `json:"-"`
+	Day          string   `json:"-"`
+	Calls        int      `json:"-"`
 }
 type relayRequest struct {
 	URL        string            `json:"url"`
@@ -63,18 +69,19 @@ type cachedResponse struct {
 }
 
 type Server struct {
-	app              *Bundle
-	options          ServerOptions
-	csrf             string
-	framePolicy      string
-	financialOrigins map[string]bool
-	gate             *egress.Gate
-	hosts            map[string]bool
-	mu               sync.Mutex
-	state            map[string]string
-	connections      map[string]localConnection
-	cache            map[string]cachedResponse
-	active           chan struct{}
+	app             *Bundle
+	options         ServerOptions
+	csrf            string
+	framePolicy     string
+	dataPolicies    map[string][]string
+	gate            *egress.Gate
+	hosts           map[string]bool
+	mu              sync.Mutex
+	state           map[string]string
+	connections     map[string]localConnection
+	connectionLocks map[string]*sync.Mutex
+	cache           map[string]cachedResponse
+	active          chan struct{}
 }
 
 func NewServer(app *Bundle, options ServerOptions) (*Server, error) {
@@ -88,11 +95,9 @@ func NewServer(app *Bundle, options ServerOptions) (*Server, error) {
 	if _, err := rand.Read(token); err != nil {
 		return nil, err
 	}
-	s := &Server{app: app, options: options, csrf: base64.RawURLEncoding.EncodeToString(token), framePolicy: rand.Text(), financialOrigins: map[string]bool{}, hosts: map[string]bool{}, state: map[string]string{}, connections: map[string]localConnection{}, cache: map[string]cachedResponse{}, active: make(chan struct{}, 8)}
+	s := &Server{app: app, options: options, csrf: base64.RawURLEncoding.EncodeToString(token), framePolicy: rand.Text(), dataPolicies: map[string][]string{}, hosts: map[string]bool{}, state: map[string]string{}, connections: map[string]localConnection{}, connectionLocks: map[string]*sync.Mutex{}, cache: map[string]cachedResponse{}, active: make(chan struct{}, 8)}
 	for _, requirement := range app.Manifest.Connections {
-		if requirement.Kind == "simplefin" {
-			s.financialOrigins[requirement.Origin] = true
-		}
+		s.dataPolicies[requirement.Origin] = slices.Clone(requirement.DataOrigins)
 	}
 	for _, host := range options.AllowedHosts {
 		if strings.ContainsAny(host, "/\\?#@ \t\r\n") || host == "" {
@@ -118,23 +123,25 @@ func NewServer(app *Bundle, options ServerOptions) (*Server, error) {
 	if options.StatePath != "" {
 		if raw, err := os.ReadFile(options.StatePath + ".policy.json"); err == nil {
 			var policy struct {
-				FinancialOrigins []string `json:"financial_origins"`
+				DataPolicies map[string][]string `json:"data_policies"`
+				// Preserve the restrictive policy written by older runners.
+				LegacyOrigins []string `json:"financial_origins"`
 			}
-			if len(raw) > 64<<10 || json.Unmarshal(raw, &policy) != nil || len(policy.FinancialOrigins) == 0 {
-				return nil, errors.New("invalid saved local financial policy")
+			if len(raw) > 64<<10 || json.Unmarshal(raw, &policy) != nil || (len(policy.DataPolicies) == 0 && len(policy.LegacyOrigins) == 0) {
+				return nil, errors.New("invalid saved local connection data policy")
 			}
-			for _, entry := range policy.FinancialOrigins {
-				normalized, err := origin.NormalizeOrigin(entry)
-				permitted := false
-				for _, allowed := range app.Manifest.NetworkAllowlist {
-					if normalized == allowed {
-						permitted = true
-					}
+			for _, entry := range policy.LegacyOrigins {
+				if policy.DataPolicies == nil {
+					policy.DataPolicies = map[string][]string{}
 				}
-				if err != nil || !permitted || !strings.HasPrefix(normalized, "https://") {
-					return nil, errors.New("saved local financial policy does not match this bundle")
+				policy.DataPolicies[entry] = []string{entry}
+			}
+			for source, destinations := range policy.DataPolicies {
+				c, err := s.prepareConnection(localConnection{Origin: source, Kind: "bearer", Secret: "policy-validation", DataOrigins: destinations})
+				if err != nil {
+					return nil, errors.New("saved local connection data policy does not match this bundle")
 				}
-				s.financialOrigins[normalized] = true
+				s.dataPolicies[source] = c.DataOrigins
 			}
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return nil, err
@@ -156,7 +163,12 @@ func NewServer(app *Bundle, options ServerOptions) (*Server, error) {
 			return nil, errors.New("EXHIBIT_CONNECTIONS must be a JSON array")
 		}
 		for _, c := range connections {
-			if err := s.validateConnection(c); err != nil {
+			c, err := s.prepareConnection(c)
+			if err != nil {
+				s.Close()
+				return nil, err
+			}
+			if err := s.recordDataPolicyLocked(c.Origin, c.DataOrigins); err != nil {
 				s.Close()
 				return nil, err
 			}
@@ -189,16 +201,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// The header also forces a direct, top-level visit into an opaque
 		// sandbox, where it cannot read the connect page or the host token.
 		s.mu.Lock()
-		origins := strings.Join(s.app.Manifest.NetworkAllowlist, " ")
-		if len(s.financialOrigins) > 0 {
-			restricted := []string{}
-			if len(s.financialOrigins) == 1 {
-				for o := range s.financialOrigins {
-					restricted = append(restricted, o)
-				}
-			}
-			origins = strings.Join(restricted, " ")
-		}
+		origins := strings.Join(s.allowedDataOriginsLocked(), " ")
 		policy := s.framePolicy
 		state, _ := json.Marshal(s.state)
 		s.mu.Unlock()
@@ -213,11 +216,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		for _, requirement := range s.requirements() {
 			if connection, ok := s.connections[requirement.Origin]; ok {
-				endpoint := ""
-				if connection.Kind == "simplefin" {
-					endpoint = "/accounts"
-				}
-				list = append(list, map[string]any{"name": requirement.Name, "provider": connection.Kind, "kind": "native", "origins": []string{connection.Origin}, "endpoint": endpoint})
+				list = append(list, map[string]any{"name": requirement.Name, "provider": connection.Kind, "kind": "native", "origins": []string{connection.Origin}})
 			}
 		}
 		s.mu.Unlock()
@@ -311,6 +310,9 @@ func (s *Server) saveState(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 
+var errLocalQuota = errors.New("this connection's daily request limit has been reached")
+var errLocalPolicy = errors.New("connections changed; reload the app")
+
 func (s *Server) relay(w http.ResponseWriter, r *http.Request) {
 	select {
 	case s.active <- struct{}{}:
@@ -322,15 +324,6 @@ func (s *Server) relay(w http.ResponseWriter, r *http.Request) {
 	var input relayRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20)).Decode(&input); err != nil {
 		s.error(w, "Invalid relay request", 400)
-		return
-	}
-	s.mu.Lock()
-	currentPolicy := s.framePolicy
-	s.mu.Unlock()
-	if subtle.ConstantTimeCompare([]byte(input.Policy), []byte(currentPolicy)) != 1 {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(409)
-		_ = json.NewEncoder(w).Encode(map[string]any{"error": "Connections changed; reloading the app with its current network policy", "reload": true})
 		return
 	}
 	body, err := base64.StdEncoding.DecodeString(input.BodyBase64)
@@ -351,49 +344,33 @@ func (s *Server) relay(w http.ResponseWriter, r *http.Request) {
 		s.error(w, "Invalid relay origin", 400)
 		return
 	}
+	if !slices.Contains(s.app.Manifest.NetworkAllowlist, o) {
+		s.error(w, "Destination is not in this bundle's allowlist", 403)
+		return
+	}
+	// Serialize cache lookup, quota reservation and provider contact for each
+	// connection, including concurrent requests from multiple frame documents.
+	s.mu.Lock()
+	if s.connectionLocks[o] == nil {
+		s.connectionLocks[o] = &sync.Mutex{}
+	}
+	connectionLock := s.connectionLocks[o]
+	s.mu.Unlock()
+	connectionLock.Lock()
+	defer connectionLock.Unlock()
 	s.mu.Lock()
 	if subtle.ConstantTimeCompare([]byte(input.Policy), []byte(s.framePolicy)) != 1 {
 		s.mu.Unlock()
-		s.error(w, "Connections changed; reload the app", 409)
+		s.policyError(w)
+		return
+	}
+	allowed := s.allowedDataOriginsLocked()
+	if !slices.Contains(allowed, o) {
+		s.mu.Unlock()
+		s.error(w, "Connected data may not be sent to this destination", 403)
 		return
 	}
 	connection, connected := s.connections[o]
-	financialOrigins := make([]string, 0, len(s.financialOrigins))
-	for financialOrigin := range s.financialOrigins {
-		financialOrigins = append(financialOrigins, financialOrigin)
-		if financialOrigin != o {
-			s.mu.Unlock()
-			s.error(w, "This financial app may send data only to its connected origin", 403)
-			return
-		}
-	}
-	cacheKey := req.Method + " " + req.URL.String()
-	if connected && connection.Kind == "simplefin" {
-		if req.URL.Path != "/accounts" || (req.Method != "GET" && req.Method != "HEAD") {
-			s.mu.Unlock()
-			s.error(w, "SimpleFIN permits only GET /accounts", 403)
-			return
-		}
-		if cached, ok := s.cache[cacheKey]; ok && time.Now().Before(cached.expires) {
-			s.mu.Unlock()
-			s.writeRelay(w, cached.response)
-			return
-		}
-		day := time.Now().UTC().Format("2006-01-02")
-		if connection.Day != day {
-			connection.Day = day
-			connection.Calls = 0
-		}
-		if connection.Calls >= 24 {
-			s.mu.Unlock()
-			s.error(w, "SimpleFIN's daily request limit has been reached", 429)
-			return
-		}
-		connection.Calls++
-		s.connections[o] = connection
-		req.URL.Path = connection.Endpoint
-		req.URL.RawPath = ""
-	}
 	for _, requirement := range s.app.Manifest.Connections {
 		if requirement.Origin == o && !connected {
 			s.mu.Unlock()
@@ -401,30 +378,60 @@ func (s *Server) relay(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	headerBytes, _ := json.Marshal(input.Headers)
+	cacheKey := fmt.Sprintf("%s %s %x", req.Method, req.URL.String(), sha256.Sum256(headerBytes))
+	cacheable := connected && connection.CacheMinutes > 0 && (req.Method == "GET" || req.Method == "HEAD") && len(body) == 0 && !strings.Contains(strings.ToLower(req.Header.Get("Cache-Control")), "no-")
+	for _, header := range []string{"Range", "If-Range", "If-Match", "If-None-Match", "If-Modified-Since", "If-Unmodified-Since"} {
+		cacheable = cacheable && req.Header.Get(header) == ""
+	}
+	if cacheable {
+		if cached, ok := s.cache[cacheKey]; ok && time.Now().Before(cached.expires) {
+			s.mu.Unlock()
+			s.writeRelay(w, cached.response)
+			return
+		}
+	}
 	s.mu.Unlock()
+	if connected && connection.BasePath != "" {
+		if !safeAccessPath(req.URL.Path) {
+			s.error(w, "Invalid path for this connection", 400)
+			return
+		}
+		req.URL.Path = connection.BasePath + "/" + strings.TrimLeft(req.URL.Path, "/")
+		req.URL.RawPath = ""
+	}
 	response, err := s.gate.DoAuthorized(r.Context(), req, func(hop *http.Request) error {
 		hopOrigin, err := origin.NormalizeOrigin(hop.URL.Scheme + "://" + hop.URL.Host)
-		if err != nil {
-			return errors.New("invalid connector destination")
+		if err != nil || !slices.Contains(allowed, hopOrigin) {
+			return errors.New("connected data destinations remain restricted after disconnect")
 		}
-		for _, financialOrigin := range financialOrigins {
-			if financialOrigin != hopOrigin {
-				return errors.New("financial data destinations remain restricted after disconnect")
-			}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if subtle.ConstantTimeCompare([]byte(input.Policy), []byte(s.framePolicy)) != 1 {
+			return errLocalPolicy
 		}
-		if !connected {
+		if !connected || hopOrigin != o {
 			return nil
 		}
-		if connection.Kind == "simplefin" && (hopOrigin != o || hop.URL.Path != connection.Endpoint) {
-			return errors.New("financial connector redirects are restricted")
+		if connection.BasePath != "" && (!safeAccessPath(hop.URL.Path) || (hop.URL.Path != connection.BasePath && !strings.HasPrefix(hop.URL.Path, connection.BasePath+"/"))) {
+			return errors.New("redirect leaves the connection's private base path")
 		}
-		if hopOrigin != o {
-			return nil
+		// Authorization runs only after this hop passes the common gate. A
+		// cached response costs no call; every provider redirect costs a call.
+		current := s.connections[o]
+		day := time.Now().UTC().Format("2006-01-02")
+		if current.Day != day {
+			current.Day, current.Calls = day, 0
 		}
+		if current.DailyLimit > 0 && current.Calls >= current.DailyLimit {
+			return errLocalQuota
+		}
+		current.Calls++
+		s.connections[o] = current
 		switch connection.Kind {
 		case "bearer":
 			hop.Header.Set("Authorization", "Bearer "+connection.Secret)
-		case "basic", "simplefin":
+		case "basic":
 			hop.SetBasicAuth(connection.Username, connection.Password)
 		case "api-key":
 			hop.Header.Set(connection.Header, connection.Secret)
@@ -432,28 +439,43 @@ func (s *Server) relay(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		s.error(w, "The local relay refused or could not complete this request", 502)
+		switch {
+		case errors.Is(err, errLocalQuota):
+			s.error(w, errLocalQuota.Error(), 429)
+		case errors.Is(err, errLocalPolicy):
+			s.policyError(w)
+		default:
+			s.error(w, "The local relay refused or could not complete this request", 502)
+		}
 		return
 	}
 	s.mu.Lock()
-	policyUnchanged := subtle.ConstantTimeCompare([]byte(input.Policy), []byte(s.framePolicy)) == 1
-	s.mu.Unlock()
-	if !policyUnchanged {
-		s.error(w, "Connections changed; reload the app", 409)
+	defer s.mu.Unlock()
+	if subtle.ConstantTimeCompare([]byte(input.Policy), []byte(s.framePolicy)) != 1 {
+		s.policyError(w)
 		return
 	}
-	if connected && connection.Kind == "simplefin" {
-		response.URL = input.URL
-	}
 	if connected {
+		if connection.BasePath != "" {
+			response.URL = input.URL
+		}
 		scrubLocalResponse(connection, response)
 	}
-	if connected && connection.Kind == "simplefin" && response.Status >= 200 && response.Status < 300 {
-		s.mu.Lock()
-		s.cache[cacheKey] = cachedResponse{response, time.Now().Add(time.Hour)}
-		s.mu.Unlock()
+	if cacheable && response.Status >= 200 && response.Status < 300 && response.Status != 206 && !strings.Contains(response.Header.Get("Vary"), "*") && !strings.Contains(strings.ToLower(response.Header.Get("Cache-Control")), "no-store") {
+		for key, cached := range s.cache {
+			if time.Now().After(cached.expires) || len(s.cache) >= 128 {
+				delete(s.cache, key)
+			}
+		}
+		s.cache[cacheKey] = cachedResponse{response, time.Now().Add(time.Duration(connection.CacheMinutes) * time.Minute)}
 	}
 	s.writeRelay(w, response)
+}
+
+func (s *Server) policyError(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_ = json.NewEncoder(w).Encode(map[string]any{"error": "Connections changed; reloading the app with its current network policy", "reload": true})
 }
 
 func scrubLocalResponse(connection localConnection, response *egress.Response) {
@@ -478,8 +500,15 @@ func scrubLocalResponse(connection localConnection, response *egress.Response) {
 				}
 			}
 		}
-		if connection.Kind == "simplefin" && connection.Endpoint != "" {
-			data = bytes.ReplaceAll(data, []byte(connection.Endpoint), []byte("/accounts"))
+		if connection.BasePath != "" {
+			escapedPath := (&url.URL{Path: connection.BasePath}).EscapedPath()
+			for _, path := range []string{connection.BasePath, escapedPath, url.QueryEscape(connection.BasePath), url.PathEscape(connection.BasePath)} {
+				encoded, _ := json.Marshal(path)
+				jsonPath := string(encoded[1 : len(encoded)-1])
+				for _, variation := range []string{path, jsonPath, strings.ReplaceAll(path, "/", `\/`), strings.ReplaceAll(jsonPath, "/", `\/`)} {
+					data = bytes.ReplaceAll(data, []byte(variation), nil)
+				}
+			}
 		}
 		return data
 	}
@@ -520,44 +549,89 @@ func credentialHeader(header string) bool {
 	}
 	return true
 }
-func (s *Server) validateConnection(c localConnection) error {
-	o, err := origin.NormalizeOrigin(c.Origin)
-	if err != nil || o != c.Origin || !strings.HasPrefix(o, "https://") {
-		return errors.New("local connection requires a normalized https origin")
-	}
-	allowed := false
-	for _, entry := range s.app.Manifest.NetworkAllowlist {
-		if entry == o {
-			allowed = true
+func safeAccessPath(path string) bool {
+	for range 4 {
+		if strings.Contains(path, "\\") {
+			return false
 		}
+		for _, part := range strings.Split(path, "/") {
+			if part == "." || part == ".." {
+				return false
+			}
+		}
+		decoded, err := url.PathUnescape(path)
+		if err != nil {
+			return false
+		}
+		if decoded == path {
+			return true
+		}
+		path = decoded
 	}
-	if !allowed {
-		return errors.New("connection origin is not in this bundle's allowlist")
+	return false
+}
+
+func (s *Server) prepareConnection(c localConnection) (localConnection, error) {
+	if c.AccessURL != "" {
+		access, err := url.Parse(strings.TrimSpace(c.AccessURL))
+		if err != nil || len(c.AccessURL) > 8192 || c.Kind != "basic" || access.Scheme != "https" || access.User == nil || access.RawQuery != "" || access.Fragment != "" || !safeAccessPath(access.Path) {
+			return c, errors.New("enter an HTTPS Basic access URL with embedded username and password, without query or fragment")
+		}
+		accessOrigin, err := origin.NormalizeOrigin(access.Scheme + "://" + access.Host)
+		if err != nil || (c.Origin != "" && accessOrigin != c.Origin) {
+			return c, errors.New("the Basic access URL must use this connection's allowed origin")
+		}
+		c.Origin, c.Username = accessOrigin, access.User.Username()
+		c.Password, _ = access.User.Password()
+		c.BasePath = strings.TrimRight(access.Path, "/")
+		c.AccessURL = ""
+	}
+	o, err := origin.NormalizeOrigin(c.Origin)
+	if err != nil || o != c.Origin || !strings.HasPrefix(o, "https://") || !slices.Contains(s.app.Manifest.NetworkAllowlist, o) {
+		return c, errors.New("local connection requires an allowed normalized HTTPS origin")
+	}
+	if c.DailyLimit < 0 || c.CacheMinutes < 0 || c.CacheMinutes > 525600 {
+		return c, errors.New("enter nonnegative request and response reuse limits (reuse at most 525600 minutes)")
+	}
+	c.DataOrigins, err = origin.NormalizeOrigins(append(slices.Clone(c.DataOrigins), o))
+	if err != nil {
+		return c, errors.New("invalid connection data destinations")
+	}
+	for _, destination := range c.DataOrigins {
+		if !slices.Contains(s.app.Manifest.NetworkAllowlist, destination) {
+			return c, errors.New("connection data destination must be in the bundle allowlist")
+		}
 	}
 	switch c.Kind {
 	case "bearer":
 		if c.Secret == "" {
-			return errors.New("enter a bearer token")
+			return c, errors.New("enter a bearer token")
 		}
 	case "api-key":
 		if c.Secret == "" || !credentialHeader(c.Header) {
-			return errors.New("enter an API key and a permitted header")
+			return c, errors.New("enter an API key and a permitted header")
 		}
 	case "basic":
 		if c.Username == "" || c.Password == "" || strings.Contains(c.Username, ":") {
-			return errors.New("enter a Basic username and password")
-		}
-	case "simplefin":
-		if c.Username == "" || c.Password == "" || c.Endpoint == "" {
-			return errors.New("connect SimpleFIN using a setup token")
+			return c, errors.New("enter a Basic access URL, or a username and password")
 		}
 	default:
-		return errors.New("unsupported local connection kind")
+		return c, errors.New("unsupported local connection kind; reconnect using a generic connection")
 	}
 	if strings.ContainsAny(c.Secret+c.Username+c.Password, "\r\n") {
-		return errors.New("credentials cannot contain line breaks")
+		return c, errors.New("credentials cannot contain line breaks")
 	}
-	return nil
+	return c, nil
+}
+
+// Every retained connection policy restricts all outbound channels. Disconnect
+// removes authority to authenticate, without releasing data already in state.
+func (s *Server) allowedDataOriginsLocked() []string {
+	allowed := slices.Clone(s.app.Manifest.NetworkAllowlist)
+	for _, destinations := range s.dataPolicies {
+		allowed = slices.DeleteFunc(allowed, func(entry string) bool { return !slices.Contains(destinations, entry) })
+	}
+	return allowed
 }
 
 func (s *Server) requirements() []ConnectionRequirement {
@@ -579,16 +653,33 @@ func (s *Server) connectPage(w http.ResponseWriter, message string) {
 	// A native form's Origin may become null under no-referrer. Keep its
 	// same-origin evidence for CSRF validation without disclosing it off-site.
 	w.Header().Set("Referrer-Policy", "same-origin")
+	type destination struct {
+		Origin   string
+		Approved bool
+	}
 	type row struct {
 		ConnectionRequirement
-		Connected bool
-		Index     int
+		Connected    bool
+		Index        int
+		Destinations []destination
 	}
 	rows := []row{}
 	s.mu.Lock()
 	for i, requirement := range s.requirements() {
-		_, connected := s.connections[requirement.Origin]
-		rows = append(rows, row{requirement, connected, i})
+		connection, connected := s.connections[requirement.Origin]
+		if connected {
+			requirement.Kind, requirement.DailyLimit, requirement.CacheMinutes = connection.Kind, connection.DailyLimit, connection.CacheMinutes
+			if connection.Header != "" {
+				requirement.Header = connection.Header
+			}
+		}
+		entry := row{ConnectionRequirement: requirement, Connected: connected, Index: i}
+		for _, allowed := range s.app.Manifest.NetworkAllowlist {
+			if allowed != requirement.Origin {
+				entry.Destinations = append(entry.Destinations, destination{allowed, slices.Contains(s.dataPolicies[requirement.Origin], allowed)})
+			}
+		}
+		rows = append(rows, entry)
 	}
 	s.mu.Unlock()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -615,27 +706,31 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 		s.connectPage(w, "Connection removed from this runner.")
 		return
 	}
-	c := localConnection{Origin: requirement.Origin, Kind: r.PostForm.Get("kind"), Header: r.PostForm.Get("header"), Secret: r.PostForm.Get("secret"), Username: r.PostForm.Get("username"), Password: r.PostForm.Get("password")}
-	if c.Kind == "simplefin" {
-		var err error
-		c, err = s.claimSimpleFIN(r, r.PostForm.Get("setup"), requirement.Origin)
-		if err != nil {
-			s.connectPage(w, err.Error())
-			return
+	readLimit := func(name string) (int, error) {
+		value := strings.TrimSpace(r.PostForm.Get(name))
+		if value == "" {
+			return 0, nil
 		}
+		return strconv.Atoi(value)
 	}
-	if err := s.validateConnection(c); err != nil {
+	dailyLimit, dailyErr := readLimit("daily_limit")
+	cacheMinutes, cacheErr := readLimit("cache_minutes")
+	if dailyErr != nil || cacheErr != nil {
+		s.connectPage(w, "Enter whole numbers for request and response reuse limits.")
+		return
+	}
+	c, err := s.prepareConnection(localConnection{Origin: requirement.Origin, Kind: r.PostForm.Get("kind"), Header: r.PostForm.Get("header"), Secret: r.PostForm.Get("secret"), Username: r.PostForm.Get("username"), Password: r.PostForm.Get("password"), AccessURL: r.PostForm.Get("access_url"), DailyLimit: dailyLimit, CacheMinutes: cacheMinutes, DataOrigins: r.PostForm["data_origins"]})
+	if err != nil {
 		s.connectPage(w, err.Error())
 		return
 	}
 	s.mu.Lock()
-	if c.Kind == "simplefin" {
-		if err := s.recordFinancialOriginLocked(c.Origin); err != nil {
-			s.mu.Unlock()
-			s.connectPage(w, "Could not save this app's local financial policy. The connection was not stored.")
-			return
-		}
+	if err := s.recordDataPolicyLocked(c.Origin, c.DataOrigins); err != nil {
+		s.mu.Unlock()
+		s.connectPage(w, "Could not save this app's local data policy. The connection was not stored.")
+		return
 	}
+
 	s.connections[c.Origin] = c
 	s.cache = map[string]cachedResponse{}
 	s.framePolicy = rand.Text()
@@ -643,18 +738,15 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 	s.connectPage(w, "Connected locally. Credentials remain in the runner's memory until it stops.")
 }
 
-// The policy outlives credentials and process restarts: disconnecting must not
-// release financial data already saved in state.json to a broader manifest.
-func (s *Server) recordFinancialOriginLocked(connectedOrigin string) error {
-	origins := []string{connectedOrigin}
-	for entry := range s.financialOrigins {
-		if entry != connectedOrigin {
-			origins = append(origins, entry)
-		}
+// Explicit trusted approval changes a policy. A disconnect never changes it.
+func (s *Server) recordDataPolicyLocked(source string, destinations []string) error {
+	policies := make(map[string][]string, len(s.dataPolicies)+1)
+	for entry, allowed := range s.dataPolicies {
+		policies[entry] = slices.Clone(allowed)
 	}
-	slices.Sort(origins)
+	policies[source] = slices.Clone(destinations)
 	if s.options.StatePath != "" {
-		raw, _ := json.Marshal(map[string]any{"financial_origins": origins})
+		raw, _ := json.Marshal(map[string]any{"data_policies": policies})
 		filename := s.options.StatePath + ".policy.json"
 		if err := os.WriteFile(filename+".tmp", raw, 0600); err != nil {
 			return err
@@ -663,46 +755,9 @@ func (s *Server) recordFinancialOriginLocked(connectedOrigin string) error {
 			return err
 		}
 	}
-	s.financialOrigins[connectedOrigin] = true
+	s.dataPolicies = policies
 	return nil
-}
-func (s *Server) claimSimpleFIN(r *http.Request, setup, expectedOrigin string) (localConnection, error) {
-	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(setup))
-	if err != nil {
-		decoded, err = base64.RawStdEncoding.DecodeString(strings.TrimSpace(setup))
-	}
-	if err != nil {
-		return localConnection{}, errors.New("enter a valid SimpleFIN setup token")
-	}
-	claim, err := url.Parse(string(decoded))
-	if err != nil || claim.Scheme != "https" || claim.User != nil || claim.Fragment != "" {
-		return localConnection{}, errors.New("SimpleFIN setup token requires an https claim URL")
-	}
-	o, err := origin.NormalizeOrigin(claim.Scheme + "://" + claim.Host)
-	if err != nil {
-		return localConnection{}, errors.New("invalid SimpleFIN claim origin")
-	}
-	g, err := egress.New([]string{o}, egress.Limits{MaxResponseBytes: 64 << 10})
-	if err != nil {
-		return localConnection{}, err
-	}
-	defer g.Close()
-	req, _ := http.NewRequestWithContext(r.Context(), "POST", claim.String(), nil)
-	response, err := g.Do(r.Context(), req)
-	if err != nil || response.Status < 200 || response.Status >= 300 {
-		return localConnection{}, errors.New("SimpleFIN setup could not be claimed; it may already have been used")
-	}
-	access, err := url.Parse(strings.TrimSpace(string(response.Body)))
-	if err != nil || access.Scheme != "https" || access.User == nil || access.RawQuery != "" || access.Fragment != "" {
-		return localConnection{}, errors.New("SimpleFIN returned an invalid access URL")
-	}
-	accessOrigin, err := origin.NormalizeOrigin(access.Scheme + "://" + access.Host)
-	if err != nil || accessOrigin != expectedOrigin {
-		return localConnection{}, errors.New("SimpleFIN access origin differs from this bundle's allowed origin; update exhibit.json before connecting")
-	}
-	password, _ := access.User.Password()
-	return localConnection{Origin: accessOrigin, Kind: "simplefin", Username: access.User.Username(), Password: password, Endpoint: strings.TrimRight(access.Path, "/") + "/accounts"}, nil
 }
 
 var hostTemplate = template.Must(template.New("host").Parse(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}}</title><style>html,body{height:100%;margin:0;font:15px system-ui;background:#f6f7f8;color:#172126}body{display:flex;flex-direction:column}header{display:flex;align-items:center;gap:20px;padding:12px 20px;border-bottom:1px solid #ddd}header strong{flex:1}a{color:#146350}iframe{border:0;width:100%;flex:1;background:white}.label{font-size:12px;color:#5c676c}</style></head><body><header><strong>{{.Title}}</strong><span class="label">Exhibit · local relay</span><a href="/__exhibit/connect" target="_blank" rel="noopener">Connections</a></header><iframe id="exhibit-app" title="{{.Title}}" sandbox="allow-scripts" src="/__exhibit/render"></iframe><script type="module">{{.Script}}</script></body></html>`))
-var connectTemplate = template.Must(template.New("connect").Parse(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local connections · {{.Title}}</title><style>body{margin:40px auto;padding:0 20px;max-width:720px;font:16px/1.5 system-ui;color:#172126;background:#f6f7f8}a{color:#146350}form{padding:24px;background:white;border:1px solid #dce0e1;border-radius:12px;margin:20px 0}h2{font-size:19px;margin:0}label{display:block;margin:14px 0}input,select,button{font:inherit;padding:9px;border:1px solid #bcc6c5;border-radius:6px;max-width:100%;box-sizing:border-box}input{display:block;width:100%}button{cursor:pointer;background:#146350;color:white;margin-right:8px}.muted{font-size:14px;color:#52615f}.message{padding:12px;background:#e2eee8}code{overflow-wrap:anywhere}small{display:block}</style></head><body><a href="/">← Back to app</a><h1>Local connections</h1><p>Connect {{.Title}} on this machine. Credentials stay outside the app frame and are held only until this runner stops.</p><p class="muted">This app can read data from a connection and send data to: {{.Origins}}. SimpleFIN connections restrict relay requests to their financial origin and allow at most 24 provider requests per day.</p>{{if .Message}}<p class="message" role="status">{{.Message}}</p>{{end}}{{range .Rows}}<form method="post" action="/__exhibit/connect" autocomplete="off" data-connection-form><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="index" value="{{.Index}}"><h2>{{.Name}}</h2><code>{{.Origin}}</code><p class="muted">{{if .Connected}}Connected locally{{else}}No local credentials{{end}}</p><label>Connection kind<select name="kind"><option value="bearer" {{if eq .Kind "bearer"}}selected{{end}}>Bearer token</option><option value="api-key" {{if eq .Kind "api-key"}}selected{{end}}>API key header</option><option value="basic" {{if eq .Kind "basic"}}selected{{end}}>Basic authentication</option><option value="simplefin" {{if eq .Kind "simplefin"}}selected{{end}}>SimpleFIN setup token</option></select></label><div data-kinds="bearer api-key"><label>API key or bearer token<input type="password" name="secret" autocomplete="new-password"></label></div><div data-kinds="api-key"><label>API key header<input name="header" value="{{if .Header}}{{.Header}}{{else}}X-API-Key{{end}}"></label></div><div data-kinds="basic"><label>Basic username<input name="username" autocomplete="off"></label><label>Basic password<input type="password" name="password" autocomplete="new-password"></label></div><div data-kinds="simplefin"><label>SimpleFIN setup token<input type="password" name="setup" autocomplete="new-password"></label></div><small class="muted">Credentials are used only for this origin. Reconnecting replaces the current local connection.</small><p><button name="action" value="connect">Connect locally</button>{{if .Connected}}<button name="action" value="disconnect">Disconnect</button>{{end}}</p></form>{{else}}<p>This app has no allowed external origins.</p>{{end}}<script type="module">{{.Script}}</script></body></html>`))
+var connectTemplate = template.Must(template.New("connect").Parse(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local connections · {{.Title}}</title><style>body{margin:40px auto;padding:0 20px;max-width:720px;font:16px/1.5 system-ui;color:#172126;background:#f6f7f8}a{color:#146350}form{padding:24px;background:white;border:1px solid #dce0e1;border-radius:12px;margin:20px 0}h2{font-size:19px;margin:0}label{display:block;margin:14px 0}input,select,button{font:inherit;padding:9px;border:1px solid #bcc6c5;border-radius:6px;max-width:100%;box-sizing:border-box}input{display:block;width:100%}input[type=checkbox]{display:inline;width:auto}button{cursor:pointer;background:#146350;color:white;margin-right:8px}.muted{font-size:14px;color:#52615f}.message{padding:12px;background:#e2eee8}code{overflow-wrap:anywhere}small{display:block}fieldset{border:1px solid #dce0e1;border-radius:6px;margin-top:20px}</style></head><body><a href="/">← Back to app</a><h1>Local connections</h1><p>Connect {{.Title}} on this machine. Credentials stay outside the app frame and are held only until this runner stops. Reconnect after restarting.</p><p class="muted">Every connection keeps data at its own origin by default. Explicitly approve any other destination below. Saved data policies survive disconnecting and restarting. The app's allowed origins are: {{.Origins}}.</p>{{if .Message}}<p class="message" role="status">{{.Message}}</p>{{end}}{{range .Rows}}<form method="post" action="/__exhibit/connect" autocomplete="off" data-connection-form><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="index" value="{{.Index}}"><h2>{{.Name}}</h2><code>{{.Origin}}</code><p class="muted">{{if .Connected}}Connected locally{{else}}No local credentials{{end}}</p><label>Connection kind<select name="kind"><option value="bearer" {{if eq .Kind "bearer"}}selected{{end}}>Bearer token</option><option value="api-key" {{if eq .Kind "api-key"}}selected{{end}}>API key header</option><option value="basic" {{if eq .Kind "basic"}}selected{{end}}>Basic authentication</option></select></label><div data-kinds="bearer api-key"><label>API key or bearer token<input type="password" name="secret" autocomplete="new-password"></label></div><div data-kinds="api-key"><label>API key header<input name="header" value="{{if .Header}}{{.Header}}{{else}}X-API-Key{{end}}"></label></div><div data-kinds="basic"><label>Basic access URL (HTTPS with embedded username and password)<input type="password" name="access_url" autocomplete="new-password" placeholder="https://user:password@api.example/private-base"></label><p class="muted">Or enter the credentials separately when the API has no private base path.</p><label>Basic username<input name="username" autocomplete="off"></label><label>Basic password<input type="password" name="password" autocomplete="new-password"></label></div><label>Maximum provider requests per UTC day (optional)<input type="number" name="daily_limit" min="0" step="1" value="{{if .DailyLimit}}{{.DailyLimit}}{{end}}"></label><label>Reuse successful GET/HEAD responses for minutes (optional)<input type="number" name="cache_minutes" min="0" max="525600" step="1" value="{{if .CacheMinutes}}{{.CacheMinutes}}{{end}}"></label><fieldset><legend>Data may go to</legend><p>{{.Origin}} (this connection's source)</p>{{range .Destinations}}<label><input type="checkbox" name="data_origins" value="{{.Origin}}" {{if .Approved}}checked{{end}}> Explicitly allow {{.Origin}}</label>{{end}}</fieldset><small class="muted">Credentials are used only for this origin. Reconnecting replaces the current local connection. Limits and reuse apply during this runner session.</small><p><button name="action" value="connect">Connect locally</button>{{if .Connected}}<button name="action" value="disconnect">Disconnect</button>{{end}}</p></form>{{else}}<p>This app has no allowed external origins.</p>{{end}}<script type="module">{{.Script}}</script></body></html>`))

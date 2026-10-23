@@ -35,7 +35,7 @@ func TestConnectionEntitlementsAreAtomicAndOwnerScoped(t *testing.T) {
 func TestConnectionQuotaReservationSurvivesConcurrentRequests(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	require.NoError(t, s.CreateConnection(ctx, &ConnectionRecord{ID: "quota", OwnerID: alice, Name: "Bank", Provider: "simplefin", Kind: "native", RecipeJSON: "{}", EncryptedSecret: "sealed"}, -1))
+	require.NoError(t, s.CreateConnection(ctx, &ConnectionRecord{ID: "quota", OwnerID: alice, Name: "Bank", Provider: "basic", Kind: "native", RecipeJSON: "{}", EncryptedSecret: "sealed"}, -1))
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	var mu sync.Mutex
 	successes := 0
@@ -91,7 +91,7 @@ func TestConnectionSharingInvariantAlsoGuardsStoreMutations(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "private-connected", OwnerID: alice, Title: "Private", SourceBlobID: "body", Tier: Tier1}))
-	require.NoError(t, s.CreateConnection(ctx, &ConnectionRecord{ID: "private-connection", OwnerID: alice, Name: "Bank", Provider: "simplefin", Kind: "native", RecipeJSON: "{}", EncryptedSecret: "sealed"}, -1))
+	require.NoError(t, s.CreateConnection(ctx, &ConnectionRecord{ID: "private-connection", OwnerID: alice, Name: "Bank", Provider: "basic", Kind: "native", RecipeJSON: "{}", EncryptedSecret: "sealed"}, -1))
 	grant := ConnectionGrantRecord{ArtifactID: "private-connected", ConnectionID: "private-connection", ViewerID: alice}
 	require.NoError(t, s.PutConnectionGrant(ctx, grant))
 	assert.ErrorIs(t, s.UpdateArtifact(ctx, alice, "private-connected", map[string]any{"share_state_mode": ShareStateShared}), ErrConnectionSharing)

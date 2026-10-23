@@ -255,7 +255,16 @@ func (ro *Router) exportRelayBundle(w http.ResponseWriter, r *http.Request) {
 			}
 			for _, o := range g.Connection.Origins {
 				if allowedOrigins[o] {
-					requirements = append(requirements, bundle.ConnectionRequirement{Name: g.Connection.Name, Kind: kind, Origin: o, Header: g.Connection.Header})
+					destinations := []string{}
+					for _, destination := range append(append([]string{}, g.Connection.Origins...), g.PermittedEgress...) {
+						if allowedOrigins[destination] {
+							destinations = append(destinations, destination)
+						}
+					}
+					requirements = append(requirements, bundle.ConnectionRequirement{
+						Name: g.Connection.Name, Kind: kind, Origin: o, Header: g.Connection.Header,
+						DailyLimit: g.Connection.DailyLimit, CacheMinutes: g.Connection.CacheMinutes, DataOrigins: destinations,
+					})
 				}
 			}
 		}

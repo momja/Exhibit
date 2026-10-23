@@ -16,8 +16,16 @@ export default class extends Controller {
       section.hidden = !active;
       for (const input of section.querySelectorAll('input,select,textarea,button')) input.disabled = !active;
     }
+    this.basicURLChanged();
     // Text is interaction state, not a replacement for server-rendered UI.
     this.createButtonTarget.textContent = provider === 'github' ? 'Continue to GitHub' : provider === 'nango' ? 'Continue to provider' : 'Save connection';
+  }
+
+  basicURLChanged() {
+    if (this.providerTarget.value !== 'basic') return;
+    const fields = this.createFormTarget.elements;
+    const usingURL = fields.access_url.value !== '';
+    for (const name of ['origin', 'username', 'password']) fields[name].disabled = usingURL;
   }
 
   async request(path, options = {}) {
@@ -48,6 +56,9 @@ export default class extends Controller {
       this.createErrorTarget.textContent = '';
       const data = Object.fromEntries(new FormData(this.createFormTarget));
       data.allow_writes = data.allow_writes === 'on';
+      for (const field of ['daily_limit', 'cache_minutes']) {
+        if (field in data) data[field] = Number(data[field] || 0);
+      }
       const vendorWindow = data.recipe === 'nango' ? window.open('about:blank', '_blank') : null;
       if (vendorWindow) vendorWindow.opener = null;
       try {
