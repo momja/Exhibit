@@ -271,6 +271,19 @@ func (s *Service) Revoke(ctx context.Context, ownerID int64, id string) error {
 
 // These helpers keep callers' error mapping independent of provider messages.
 func ErrorStatus(err error) int {
+	var vendorErr *VendorError
+	if errors.As(err, &vendorErr) {
+		switch vendorErr.Code {
+		case VendorNeedsReconnect:
+			return http.StatusConflict
+		case VendorRateLimited:
+			return http.StatusTooManyRequests
+		case VendorRefused:
+			return http.StatusForbidden
+		default:
+			return http.StatusBadGateway
+		}
+	}
 	switch {
 	case errors.Is(err, ErrDisabled):
 		return 404
@@ -287,4 +300,19 @@ func ErrorStatus(err error) int {
 	default:
 		return 502
 	}
+}
+
+// ErrorCode is stable across vendor engines and never exposes provider text.
+func ErrorCode(err error) string {
+	var vendorErr *VendorError
+	if errors.As(err, &vendorErr) {
+		return vendorErr.Code
+	}
+	switch {
+	case errors.Is(err, store.ErrConnectionQuota), errors.Is(err, store.ErrConnectionLimit):
+		return VendorRateLimited
+	case errors.Is(err, ErrEgress), errors.Is(err, ErrStandin):
+		return VendorRefused
+	}
+	return ""
 }

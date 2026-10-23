@@ -1,6 +1,6 @@
 ---
 id: Exh-vdns
-status: in_progress
+status: closed
 deps: [Exh-qhfd]
 links: []
 created: 2026-10-23T05:19:53Z
@@ -51,3 +51,13 @@ So hosted Exhibit wants Composio (or both) for the long tail; self-hosters want 
 - Vendor errors surface as the normalized set; needs_reconnect drives the reconnect prompt.
 - Per-engine cost counters are visible to the operator.
 
+
+## Notes
+
+**2026-10-23T06:18:13Z**
+
+Implemented a shared VendorEngine interface with Nango inject and Composio forward adapters selected per reviewed provider. Connections and pending flows pin the original engine, external reference and policy; migration 041 pins legacy Nango records without credential transfer. The common relay retains grants, destination custody, allowlists, quota/cache, limits and logs. Normalized errors persist reconnect state and drive trusted UI prompts. Monthly anonymous per-engine/provider management, inject and forward attempts plus stored connections are visible to operators. Updated configuration, API, architecture/security docs and desktop/mobile screenshots.
+
+Verified current official Composio Connect Link, account, proxy, token-custody, revocation and retention contracts before implementation. Credential export is unsupported, requiring disclosed forward mode; provider dial/redirect validation and unknown-token scrubbing remain vendor limitations. Binary-download URLs are refused, and encoded uploads must fit the control-plane cap. Fixture coverage includes mixed engines, config switches and pending flows, common policy enforcement, lifecycle, errors, response caps and cost counters. Live consent, billing and actual project retention settings remain in Exh-3kvx; this environment has no vendor credentials.
+
+Validation: make assets; full go test -json -timeout 15m ./... (all packages pass); go vet ./...; race suites for egress, connectors and bundle; final Composio MIME/string fixtures also pass with race detection. Browser checks covered generic Basic creation, encrypted metadata, limits and htmx updates, removal, desktop/mobile/dark views and refreshed gallery examples. The removed-provider tracked-file search is empty. A full store race probe exceeded its default ten-minute timeout in the large account deletion fixture; targeted affected store races and the full normal store suite pass.

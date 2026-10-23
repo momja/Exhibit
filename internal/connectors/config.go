@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -72,59 +74,136 @@ func ConfigFromEnv() (*Config, error) {
 		}
 	}
 	if cfg.VendorEnabled {
-		cfg.Vendor.SecretKey = os.Getenv("CONNECTORS_NANGO_SECRET_KEY")
-		cfg.Vendor.UserNamespace = strings.TrimSpace(os.Getenv("CONNECTORS_NANGO_NAMESPACE"))
-		cfg.Vendor.IdleDays = 30
-		if cfg.Vendor.SecretKey == "" || cfg.Vendor.UserNamespace == "" {
-			return nil, errors.New("CONNECTORS_VENDOR_ENABLED requires CONNECTORS_NANGO_SECRET_KEY and CONNECTORS_NANGO_NAMESPACE")
-		}
-		if invalidConfigSecret(cfg.Vendor.SecretKey) || !regexp.MustCompile(`^[A-Za-z0-9_-]{1,80}$`).MatchString(cfg.Vendor.UserNamespace) {
-			return nil, errors.New("Nango operator key or namespace has invalid characters")
-		}
-		cfg.Vendor.BaseURL = "https://api.nango.dev"
-		if raw := strings.TrimSpace(os.Getenv("CONNECTORS_NANGO_BASE_URL")); raw != "" {
-			if !validConfigURL(raw) {
-				return nil, errors.New("CONNECTORS_NANGO_BASE_URL must be an HTTPS URL without credentials or a fragment")
-			}
-			u, _ := url.Parse(raw)
-			if u.RawQuery != "" || u.Path != "" && u.Path != "/" {
-				return nil, errors.New("CONNECTORS_NANGO_BASE_URL must be an origin")
-			}
-			cfg.Vendor.BaseURL = strings.TrimSuffix(raw, "/")
-		}
-		if raw := strings.TrimSpace(os.Getenv("CONNECTORS_NANGO_IDLE_DAYS")); raw != "" {
-			n, err := strconv.Atoi(raw)
-			if err != nil || n < 1 || n > 3650 {
-				return nil, errors.New("CONNECTORS_NANGO_IDLE_DAYS must be between 1 and 3650")
-			}
-			cfg.Vendor.IdleDays = n
-		}
-		raw := os.Getenv("CONNECTORS_NANGO_PROVIDERS")
-		if len(raw) > 65536 || json.Unmarshal([]byte(raw), &cfg.Vendor.Providers) != nil || len(cfg.Vendor.Providers) == 0 {
-			return nil, errors.New("CONNECTORS_NANGO_PROVIDERS must be a JSON object of reviewed provider names and HTTPS origins")
-		}
-		for id, p := range cfg.Vendor.Providers {
-			if !regexp.MustCompile(`^[a-z][a-z0-9_-]{0,79}$`).MatchString(id) || len(p.Origins) == 0 || len(p.Origins) > 8 {
-				return nil, errors.New("CONNECTORS_NANGO_PROVIDERS contains an invalid provider or origin list")
-			}
-			if p.Name == "" {
-				p.Name = id
-			}
-			if len(p.Name) > 100 {
-				return nil, errors.New("CONNECTORS_NANGO_PROVIDERS contains an invalid display name")
-			}
-			for i, o := range p.Origins {
-				normalized, err := normalizeHTTPSOrigin(o)
-				if err != nil {
-					return nil, errors.New("CONNECTORS_NANGO_PROVIDERS contains an invalid HTTPS origin")
-				}
-				p.Origins[i] = normalized
-			}
-			cfg.Vendor.Providers[id] = p
+		cfg.Vendor, err = vendorConfigFromEnv()
+		if err != nil {
+			return nil, err
 		}
 	}
 	return cfg, nil
 }
+func vendorConfigFromEnv() (VendorConfig, error) {
+	cfg := VendorConfig{
+		BaseURL: "https://api.nango.dev", SecretKey: os.Getenv("CONNECTORS_NANGO_SECRET_KEY"),
+		ComposioBaseURL: "https://backend.composio.dev", ComposioAPIKey: os.Getenv("CONNECTORS_COMPOSIO_API_KEY"),
+		UserNamespace: strings.TrimSpace(os.Getenv("CONNECTORS_VENDOR_NAMESPACE")), IdleDays: 30,
+	}
+	if cfg.UserNamespace == "" {
+		cfg.UserNamespace = strings.TrimSpace(os.Getenv("CONNECTORS_NANGO_NAMESPACE"))
+	}
+	if !regexp.MustCompile(`^[A-Za-z0-9_-]{1,80}$`).MatchString(cfg.UserNamespace) {
+		return cfg, errors.New("CONNECTORS_VENDOR_NAMESPACE (or CONNECTORS_NANGO_NAMESPACE) must be a nonempty instance namespace")
+	}
+	if invalidConfigSecret(cfg.SecretKey) || invalidConfigSecret(cfg.ComposioAPIKey) {
+		return cfg, errors.New("vendor operator keys contain invalid characters")
+	}
+	for _, endpoint := range []struct {
+		name  string
+		value *string
+	}{{"CONNECTORS_NANGO_BASE_URL", &cfg.BaseURL}, {"CONNECTORS_COMPOSIO_BASE_URL", &cfg.ComposioBaseURL}} {
+		if raw := strings.TrimSpace(os.Getenv(endpoint.name)); raw != "" {
+			normalized, err := normalizeHTTPSOrigin(raw)
+			if err != nil {
+				return cfg, fmt.Errorf("%s must be an HTTPS origin without credentials, query, or fragment", endpoint.name)
+			}
+			*endpoint.value = normalized
+		}
+	}
+	idleName := "CONNECTORS_VENDOR_IDLE_DAYS"
+	rawIdle := strings.TrimSpace(os.Getenv(idleName))
+	if rawIdle == "" {
+		idleName, rawIdle = "CONNECTORS_NANGO_IDLE_DAYS", strings.TrimSpace(os.Getenv("CONNECTORS_NANGO_IDLE_DAYS"))
+	}
+	if rawIdle != "" {
+		n, err := strconv.Atoi(rawIdle)
+		if err != nil || n < 1 || n > 3650 {
+			return cfg, fmt.Errorf("%s must be between 1 and 3650", idleName)
+		}
+		cfg.IdleDays = n
+	}
+	providerName := "CONNECTORS_VENDOR_PROVIDERS"
+	rawProviders := os.Getenv(providerName)
+	legacy := strings.TrimSpace(rawProviders) == ""
+	if legacy {
+		providerName, rawProviders = "CONNECTORS_NANGO_PROVIDERS", os.Getenv("CONNECTORS_NANGO_PROVIDERS")
+	}
+	decoder := json.NewDecoder(strings.NewReader(rawProviders))
+	decoder.DisallowUnknownFields()
+	if len(rawProviders) > 65536 || decoder.Decode(&cfg.Providers) != nil || len(cfg.Providers) == 0 {
+		return cfg, fmt.Errorf("%s must be a JSON object of reviewed provider configurations", providerName)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return cfg, fmt.Errorf("%s must contain one JSON object", providerName)
+	}
+	providerID := regexp.MustCompile(`^[a-z][a-z0-9_-]{0,79}$`)
+	remoteID := regexp.MustCompile(`^[A-Za-z0-9_-]{1,256}$`)
+	for id, provider := range cfg.Providers {
+		if !providerID.MatchString(id) || len(provider.Origins) == 0 || len(provider.Origins) > 8 {
+			return cfg, fmt.Errorf("%s contains an invalid provider or origin list", providerName)
+		}
+		if legacy && provider.Engine == "" {
+			provider.Engine = "nango"
+		}
+		if legacy && provider.Engine != "nango" {
+			return cfg, errors.New("CONNECTORS_NANGO_PROVIDERS only configures Nango; use CONNECTORS_VENDOR_PROVIDERS for other engines")
+		}
+		switch provider.Engine {
+		case "nango":
+			if strings.TrimSpace(cfg.SecretKey) == "" {
+				return cfg, errors.New("Nango providers require CONNECTORS_NANGO_SECRET_KEY")
+			}
+			if provider.DeliveryMode == "" {
+				provider.DeliveryMode = "inject"
+			}
+			if provider.DeliveryMode != "inject" {
+				return cfg, errors.New("Nango providers require inject delivery mode")
+			}
+		case "composio":
+			if strings.TrimSpace(cfg.ComposioAPIKey) == "" {
+				return cfg, errors.New("Composio providers require CONNECTORS_COMPOSIO_API_KEY")
+			}
+			if !remoteID.MatchString(provider.AuthConfigID) {
+				return cfg, fmt.Errorf("%s Composio providers require a valid auth_config_id", providerName)
+			}
+			if provider.Toolkit == "" {
+				provider.Toolkit = id
+			}
+			if !providerID.MatchString(provider.Toolkit) {
+				return cfg, fmt.Errorf("%s contains an invalid Composio toolkit", providerName)
+			}
+			if provider.DeliveryMode == "" {
+				provider.DeliveryMode = "forward"
+			}
+			if provider.DeliveryMode != "forward" {
+				return cfg, errors.New("Composio providers require forward delivery mode because connected-account credentials are unavailable")
+			}
+		default:
+			return cfg, fmt.Errorf("%s providers require an explicitly configured nango or composio engine", providerName)
+		}
+		if provider.Name == "" {
+			provider.Name = id
+		}
+		if len(provider.Name) > 100 || strings.ContainsAny(provider.Name, "\r\n\x00") {
+			return cfg, fmt.Errorf("%s contains an invalid display name", providerName)
+		}
+		if provider.DailyLimit < 0 || provider.CacheMinutes < 0 || provider.CacheMinutes > 525600 {
+			return cfg, fmt.Errorf("%s contains invalid request or response reuse limits", providerName)
+		}
+		var origins []string
+		for _, entry := range provider.Origins {
+			normalized, err := normalizeHTTPSOrigin(entry)
+			if err != nil {
+				return cfg, fmt.Errorf("%s contains an invalid HTTPS origin", providerName)
+			}
+			if !slices.Contains(origins, normalized) {
+				origins = append(origins, normalized)
+			}
+		}
+		provider.Origins = origins
+		cfg.Providers[id] = provider
+	}
+	return cfg, nil
+}
+
 func configSwitch(name string) (bool, error) {
 	raw := strings.TrimSpace(os.Getenv(name))
 	if raw == "" {
@@ -141,5 +220,5 @@ func validConfigURL(raw string) bool {
 	return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil && u.Fragment == ""
 }
 func invalidConfigSecret(raw string) bool {
-	return len(raw) > 16384 || strings.ContainsAny(raw, "\r\n\x00")
+	return len(raw) > 16384 || strings.ContainsFunc(raw, func(r rune) bool { return r < 0x20 || r == 0x7f })
 }

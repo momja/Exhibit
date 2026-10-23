@@ -314,6 +314,7 @@ func rewindConnectionSchema(t *testing.T, s *SQLiteStore) {
 		"DROP TABLE IF EXISTS relay_activity",
 		"DROP TABLE IF EXISTS artifact_relay_grants",
 		"DROP TABLE IF EXISTS connection_cache",
+		"DROP TABLE IF EXISTS vendor_usage",
 		"DROP TABLE IF EXISTS connection_usage",
 		"DROP TABLE IF EXISTS artifact_connection_grants",
 		"DROP TABLE IF EXISTS connections",

@@ -52,25 +52,117 @@ tokens and refreshes remain server-side. `CONNECTORS_GITHUB_SCOPES` selects the
 operator's reviewed scopes. Endpoint overrides exist for fixture and enterprise
 configuration and remain HTTPS-only.
 
-For managed OAuth, set `CONNECTORS_NANGO_SECRET_KEY`, an instance-specific
-`CONNECTORS_NANGO_NAMESPACE`, and a reviewed `CONNECTORS_NANGO_PROVIDERS` JSON
-object, for example:
+For managed OAuth, set `CONNECTORS_VENDOR_NAMESPACE` to a stable, instance-specific
+name and configure `CONNECTORS_VENDOR_PROVIDERS` as a reviewed JSON object:
 
 ```json
-{"slack":{"name":"Slack","origins":["https://slack.com"]}}
+{
+  "slack": {
+    "name": "Slack",
+    "engine": "nango",
+    "origins": ["https://slack.com"],
+    "daily_limit": 100,
+    "cache_minutes": 5
+  },
+  "linear": {
+    "name": "Linear",
+    "engine": "composio",
+    "auth_config_id": "ac_operator_config",
+    "toolkit": "linear",
+    "origins": ["https://api.linear.app"],
+    "allow_writes": false
+  }
+}
 ```
 
-`CONNECTORS_NANGO_BASE_URL` defaults to `https://api.nango.dev`.
-`CONNECTORS_NANGO_IDLE_DAYS` defaults to 30. The provider list is operator policy,
-never agent-authored recipe code. Completed managed connections are checked
-against the current user before storing their identifier. Idle managed
-connections are pruned. Exhibit's entitlement system limits native, OAuth and
-managed connections separately; the UI reports availability and remaining
-allowances. No external vendor account or live consent is assumed by tests.
+Use the provider configuration key registered in Nango; Composio additionally
+requires its auth config ID and toolkit slug. `CONNECTORS_NANGO_SECRET_KEY` and
+`CONNECTORS_COMPOSIO_API_KEY` configure their respective control-plane clients.
+Their base origins default to `https://api.nango.dev` and
+`https://backend.composio.dev`; `CONNECTORS_NANGO_BASE_URL` and
+`CONNECTORS_COMPOSIO_BASE_URL` override them with HTTPS origins. Optional
+self-hosted Nango uses the same public-address boundary, with no private-network
+exception. `CONNECTORS_VENDOR_IDLE_DAYS` defaults to 30.
 
-Nango manages credential acquisition and refresh. Exhibit retrieves credentials
-and sends requests through its own gate; it deliberately does not use a vendor
-proxy, because redirect and dial-time checks must apply to every provider hop.
+The legacy `CONNECTORS_NANGO_PROVIDERS`, `CONNECTORS_NANGO_NAMESPACE` and
+`CONNECTORS_NANGO_IDLE_DAYS` remain accepted when their canonical counterpart is
+absent. A legacy provider map selects Nango; a canonical map must explicitly
+select an engine. Invalid engines, origins, credential positions or delivery
+modes fail startup without printing configuration values. Native GitHub OAuth,
+Nango providers and Composio providers can operate together.
+
+The vendor interface covers start, completion, status, injection or forwarding,
+and revocation. Exhibit retains grants, entitlement checks, the allowlist,
+destination policy, quota reservations, encrypted caching, stand-ins and logs.
+Vendor errors become `needs_reconnect`, `rate_limited`, `refused` or
+`upstream_error`, with safe messages shared by the relay and trusted UI.
+
+### Delivery modes and migration
+
+Nango uses **inject** mode: Exhibit retrieves managed credentials and authorizes
+each checked hop through its own egress gate. Provider response bodies do not
+pass through Nango. Composio uses **forward** mode: Exhibit checks the initial
+exact origin, operator policy, public DNS answers, method, headers and body
+before handing a sanitized request to Composio. The same deadline and decoded
+response limits apply. Composio performs the provider dial and redirects, so
+Exhibit cannot pin that dial, check its redirect hops or scrub reflected
+credentials it never receives. The grant preview and saved connection identify
+the engine, delivery mode and this limitation. There is no silent fallback from
+inject to forward mode.
+
+Connections persist their engine, external reference and reviewed provider
+settings. Changing a provider's configured engine affects new connections and
+new flows only. Existing connections keep their original engine and policy;
+the UI recommends reconnection. Unusable credentials report `needs_reconnect`
+and show a reconnect action. Reconnection starts a new consent flow under the
+current configuration; revoke the old connection when ready. The original
+engine handles revocation and idle pruning even after the provider is switched.
+If an entitlement cap prevents keeping both, revoke the old connection first.
+Keep an old engine's operator key configured until its connections are removed.
+Migration 041 pins earlier managed connections to Nango and resolves their
+legacy encrypted reference without transferring credentials between vendors.
+
+Operators can inspect **Vendor usage** on the Connections page or
+`GET /api/admin/connector-usage`. It reports the current UTC month's management,
+injected-provider and forwarded-provider attempts per engine/provider, plus
+currently stored connections. Counts persist across restarts and failed
+attempts, exclude cache hits, and survive deletion as anonymous aggregates.
+They are cost inputs, not an invoice or a dollar estimate. The existing
+entitlement system limits native, OAuth and managed connections separately.
+
+### Composio verification (2026-10-23)
+
+The implementation uses current v3.1 hosted Connect Links and connected-account
+polling, not the retired managed-OAuth initiation flow. Browser binding and the
+returned account's owner, auth config and toolkit are checked before saving.
+[Connect Link reference](https://docs.composio.dev/reference/api-reference/connected-accounts/postConnectedAccountsLink),
+[connected-account reference](https://docs.composio.dev/reference/api-reference/connected-accounts/getConnectedAccountsByNanoid).
+
+Current credential APIs redact both managed and custom-app secrets and do not
+provide a supported token-export path; this requires forward mode.
+[Token custody](https://docs.composio.dev/docs/security/token-custody).
+Proxy Execute supports HTTP endpoints beyond predefined tools, but restricts
+absolute targets to the connected account's scheme and registrable domain;
+Exhibit applies a stricter exact-origin policy. The adapter uses documented
+methods and header/query parameters, preserves upstream status and safe headers,
+and reconstructs the parsed data response. Binary download URLs are refused;
+no vendor-supplied download host is fetched. Encoded upload envelopes must also
+fit the control-plane request cap, which can make their effective raw-body cap
+smaller than the relay's one MiB.
+[Proxy contract](https://docs.composio.dev/reference/api-reference/tools/postToolsExecuteProxy),
+[proxy behavior](https://docs.composio.dev/docs/extending-sessions/proxy-execute).
+
+Composio processes proxied request and response data. Its published standard
+retention stores payload logs for up to one year. Zero Data Retention is a
+separate project/plan control for covered calls, with metadata still retained;
+managed OAuth apps require Enterprise for that coverage. Exhibit neither
+configures nor verifies this vendor setting. Review it before granting access.
+[Privacy policy](https://composio.dev/privacy),
+[ZDR scope and exclusions](https://docs.composio.dev/docs/security/zero-data-retention).
+Programmatic provider revocation is best effort; local/vendor deletion can stop
+further use without proving that an upstream token was revoked. Unsupported
+providers may require cleanup in the provider's own settings.
+[Revocation reference](https://docs.composio.dev/reference/api-reference/connected-accounts/postConnectedAccountsByNanoidRevoke).
 
 ## Using a connection
 
@@ -159,8 +251,10 @@ HTTP development origins, where browsers omit that header, the browser's
 referrer must instead name the exact trusted app origin. The trusted widget
 wrapper sends only that origin; render documents still send no referrer.
 
-`internal/egress` enforces all of the following for native and managed
-connections, ordinary relay requests, acquisition flows and refreshes:
+`internal/egress` enforces all of the following for native and inject-mode
+connections, ordinary relay requests, acquisition flows and refreshes. Forward
+mode shares the initial request and response boundary described above, with
+the disclosed exception for the vendor’s provider dial and redirects:
 
 - HTTPS only; exact normalized origins on the initial URL and every redirect.
 - Public IPs only. Legacy numeric IP spellings, loopback, private, link-local,
@@ -267,6 +361,13 @@ Validation commands: `make assets`, `go test ./...`, and `go vet ./...`.
 Security checks include the real Chromium bridge/widget tests and race tests
 for the egress gate, connector engine and standalone runners. Review images are
 in [screenshots/Exh-g2vv](screenshots/Exh-g2vv).
-Live generic Basic account access, registered GitHub OAuth, Nango staging costs and one live model
-generation require external credentials; those checks are tracked in
+Shared native/Nango/Composio fixtures cover grants, custody, allowlists,
+quota/cache and feature flags. Managed fixtures also cover bound consent,
+engine changes with existing connections and pending flows, normalized errors,
+reconnect state, revocation, response caps and persistent cost counters. The
+full normal Go suite passes. A broader store race run reached the default
+ten-minute timeout in the large account-deletion fixture; focused affected
+store races pass.
+Live generic Basic account access, registered GitHub OAuth, Nango and Composio
+staging flows/costs and one live model generation require external credentials; those checks are tracked in
 [Exh-3kvx](../.tickets/Exh-3kvx.md).

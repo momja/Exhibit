@@ -654,3 +654,18 @@ Open the provider URL, then submit `{session_id,name}` to `vendor/complete`.
 It returns 202 while pending or 201 with connected metadata. The server verifies
 the browser binding, provider, owner and exact flow tags before accepting a
 vendor connection; frontend messages cannot establish that authority.
+
+Managed connections are selected with the generic `vendor` entry in the trusted
+connect UI. Operator-reviewed provider settings select Nango (`inject`) or
+Composio (`forward`). Safe connection metadata includes `engine`,
+`delivery_mode` and `reconnect_recommended`; external vendor references remain
+server-only. The begin/complete API keeps its browser-bound session contract.
+Managed errors include `code` with `needs_reconnect`, `rate_limited`, `refused`
+or `upstream_error`. A changed provider engine affects new connections; existing
+ones continue on their pinned engine until explicitly reconnected/revoked.
+
+`GET /api/admin/connector-usage` is operator-only and returns `period_start`,
+`period_end` and `usage`: the current UTC month's aggregate `management_calls`,
+`inject_calls` and `forward_calls`, plus `stored_connections`, grouped by
+`engine` and `provider`. Failed attempts count; cache hits do not. The response
+is `no-store` and remains available when acquisition engines are disabled.

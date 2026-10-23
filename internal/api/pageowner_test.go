@@ -153,6 +153,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	// and is pinned by admin_test.go.
 	{route: "/admin/users", why: "reads the instance's account directory, not a library — guarded by adminOnly (av-utap) rather than scoped by owner"},
 	{route: "/api/admin/users/", why: "same directory as JSON; API group plus adminOnly, covered by admin_test.go"},
+	{route: "/api/admin/connector-usage", why: "instance-wide anonymous counters; API group plus adminOnly, covered by vendor_usage_test.go"},
 
 	// The other account surface (av-qo05). It reads exactly one users row and
 	// no library at all, so it is neither owner-scoped in this walk's sense
