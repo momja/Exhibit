@@ -266,6 +266,9 @@ func (ro *Router) performRelay(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, connectors.ErrStandin) {
 				status, code, message = 403, "credential_misuse", "A credential stand-in was used outside its approved origin or position. The request was blocked."
 			}
+			if vendorCode := managedErrorCode(err); vendorCode != "" {
+				status, code, message, denied = connectors.ErrorStatus(err), vendorCode, vendorErrorMessage(vendorCode), ""
+			}
 		}
 		writeJSON(w, status, map[string]any{"error": message, "code": code, "origin": denied})
 		return
@@ -340,6 +343,9 @@ func (ro *Router) executeRelay(ctx context.Context, viewer int64, a *store.Artif
 		if errors.Is(err, connectors.ErrStandin) {
 			code = "credential_misuse_blocked"
 		}
+		if vendorCode := managedErrorCode(err); vendorCode != "" {
+			code, status = vendorCode, connectors.ErrorStatus(err)
+		}
 		_ = s.RecordRelayActivity(ctx, viewer, a.ID, store.RelayActivity{Origin: o, Method: req.Method, Status: status, Bytes: size, DurationMS: duration, Cached: cached, ErrorCode: code})
 		slog.InfoContext(ctx, "artifact relay", slog.Int64("viewer_id", viewer), slog.String("artifact_id", a.ID), slog.String("origin", o), slog.String("method", req.Method), slog.Int("status", status), slog.Int("bytes", size), slog.Int64("duration_ms", duration))
 	}()
@@ -374,6 +380,10 @@ func (ro *Router) executeRelay(ctx context.Context, viewer int64, a *store.Artif
 		if target := relayOrigin(response.URL); target != "" && target != o {
 			ro.relayRuntime.backoff(target, response.Header.Get("Retry-After"))
 		}
+	}
+	var vendorError *connectors.VendorError
+	if errors.As(err, &vendorError) && vendorError.Code == connectors.VendorRateLimited {
+		ro.relayRuntime.backoff(o, vendorError.RetryAfter)
 	}
 	if err == nil && canCache && response != nil {
 		ro.relayRuntime.cacheResponse(cacheKey, response)

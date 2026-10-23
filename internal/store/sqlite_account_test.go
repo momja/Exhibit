@@ -79,6 +79,7 @@ var accountTables = map[string]accountTable{
 		"SELECT COUNT(*) FROM artifact_connection_grants WHERE viewer_id = ?1 OR artifact_id = '" + deletedArtifact + "'"},
 	"artifact_connection_data_policies": {reachExplicit, "retained data restrictions survive credential deletion but are erased with their viewer account or artifact",
 		"SELECT COUNT(*) FROM artifact_connection_data_policies WHERE viewer_id = ?1 OR artifact_id = '" + deletedArtifact + "'"},
+	"vendor_usage": {reachNone, "anonymous per-engine/provider/day cost totals hold no user or connection identity and retain spent usage after account deletion", ""},
 	"connection_usage": {reachCascade, "connection deletion erases its durable provider quota accounting",
 		"SELECT COUNT(*) FROM connection_usage WHERE connection_id = 'member-connection'"},
 	"connection_cache": {reachCascade, "connection deletion erases cached encrypted provider data",

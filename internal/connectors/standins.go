@@ -56,6 +56,9 @@ func (s *Service) Standin(ctx context.Context, viewerID int64, artifactID, id st
 	if err != nil {
 		return nil, err
 	}
+	if rec.Kind == "vendor" && rec.Status == "reconnect" {
+		return nil, vendorFailure(rec.Engine, VendorNeedsReconnect)
+	}
 	r, _, err := s.readCredential(rec)
 	if err != nil {
 		return nil, err
@@ -196,6 +199,11 @@ func (s *Service) responseScrubber(rec *store.ConnectionRecord, viewerID int64, 
 			continue
 		}
 		addPattern(value, replacement)
+	}
+	for _, secret := range c.ExtraSecrets {
+		if secret != "" {
+			addPattern(secret, "[credential redacted]")
+		}
 	}
 	ordered := make([]string, 0, len(patterns))
 	for value := range patterns {

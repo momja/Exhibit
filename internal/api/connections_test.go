@@ -202,6 +202,44 @@ func TestBasicCredentialURLStaysOutOfMetadataAndExport(t *testing.T) {
 	assert.Equal(t, []string{origin}, manifest.Connections[0].DataOrigins)
 }
 
+func TestManagedProviderIDExportsAsLocalBearerRequirement(t *testing.T) {
+	ro := newTestRouter(t)
+	ro.cfg.Relay.Enabled = true
+	s := ro.cfg.Store.(*store.SQLiteStore)
+	ro.cfg.Connections = connectors.New(connectors.Config{Store: s, Box: ro.cfg.Secrets})
+	ctx := context.Background()
+	id := createOwnArtifact(t, ro)
+	const origin = "https://api.example.test"
+	require.NoError(t, s.SetOriginDecision(ctx, 1, id, origin, store.DecisionAllow, "test"))
+	sealed, err := ro.cfg.Secrets.Encrypt(`{"vendor_connection_id":"ca_private_fixture"}`)
+	require.NoError(t, err)
+	require.NoError(t, s.CreateConnection(ctx, &store.ConnectionRecord{
+		ID: "managed-export", OwnerID: 1, Name: "Managed API", Provider: "notes-cloud", Kind: "vendor", Engine: "composio", ExternalRef: "ca_private_fixture",
+		RecipeJSON: `{"origins":["https://api.example.test"],"vendor_provider":"notes-cloud","vendor_spec":{"engine":"composio","delivery_mode":"forward","origins":["https://api.example.test"]}}`, EncryptedSecret: sealed,
+	}, -1))
+	_, err = ro.cfg.Connections.Grant(ctx, 1, id, connectors.GrantRequest{ConnectionID: "managed-export"})
+	require.NoError(t, err)
+	w := doJSON(t, ro, http.MethodGet, "/api/artifacts/"+id+"/relay-bundle", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
+	require.NoError(t, err)
+	var manifest bundle.Manifest
+	for _, file := range zr.File {
+		reader, err := file.Open()
+		require.NoError(t, err)
+		body, err := io.ReadAll(reader)
+		require.NoError(t, reader.Close())
+		require.NoError(t, err)
+		assert.NotContains(t, string(body), "ca_private_fixture")
+		assert.NotContains(t, string(body), "managed-export")
+		if strings.HasSuffix(file.Name, "/exhibit.json") {
+			require.NoError(t, json.Unmarshal(body, &manifest))
+		}
+	}
+	require.Len(t, manifest.Connections, 1)
+	assert.Equal(t, "bearer", manifest.Connections[0].Kind)
+}
+
 func getWithConnectionPolicy(t *testing.T, ro *Router, viewer int64, id, path string, cookie *http.Cookie) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)

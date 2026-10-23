@@ -1577,3 +1577,15 @@ Local exports enforce the same boundary with
 opaque frames, exact Host/Origin/session checks and locally acquired secrets.
 The full security and validation contract is in
 [relay-connectors.md](relay-connectors.md).
+
+Vendor forward mode is explicitly distinct from injection. Composio's current
+API redacts managed credentials, so Exhibit passes a sanitized, approved request
+to its proxy. The common egress gate checks initial exact origin, operator
+policy, all public DNS answers, allowed headers, body size and deadline, then
+bounds and filters the returned response. It cannot pin the vendor's provider
+dial, inspect its redirects or scrub secrets it never held. Grant previews
+identify this mode and the vendor's payload-retention boundary; vendor bodies
+never enter trusted app DOM or Exhibit activity logs. Native/Nango injection
+continues checking and authorizing each directly dialed hop. Vendor errors are
+normalized without retaining upstream body text. Per-engine anonymous aggregate
+counters carry no request, credential, connection or account identity.

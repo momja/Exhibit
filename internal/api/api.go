@@ -674,6 +674,7 @@ func (ro *Router) setupRoutes() {
 		r.Post("/api/connections/oauth/github/begin", ro.beginConnectionOAuth)
 		r.Post("/api/connections/vendor/begin", ro.beginConnectionVendor)
 		r.Post("/api/connections/vendor/complete", ro.completeConnectionVendor)
+		r.With(ro.adminOnly).Get("/api/admin/connector-usage", ro.connectorUsage)
 
 		r.Route("/api/collections", func(r chi.Router) {
 			r.Get("/", ro.listCollections)

@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -20,35 +19,148 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-type VendorProvider struct {
-	Name        string   `json:"name"`
-	Origins     []string `json:"origins"`
-	AllowWrites bool     `json:"allow_writes"`
-}
-type VendorConfig struct {
-	BaseURL       string
-	SecretKey     string
-	Providers     map[string]VendorProvider
-	IdleDays      int
-	UserNamespace string
+const (
+	VendorInject         = "inject"
+	VendorForward        = "forward"
+	VendorNeedsReconnect = "needs_reconnect"
+	VendorRateLimited    = "rate_limited"
+	VendorRefused        = "refused"
+	VendorUpstreamError  = "upstream_error"
+)
+
+// VendorError never incorporates vendor response bodies or request URLs. The
+// same codes reach the relay, trusted UI and operator activity for each engine.
+type VendorError struct {
+	Engine     string
+	Code       string
+	RetryAfter string
+	HTTPStatus int
 }
 
-func (v VendorConfig) configured() bool { return v.SecretKey != "" && len(v.Providers) > 0 }
-func (v VendorConfig) base() string {
-	if v.BaseURL == "" {
-		return "https://api.nango.dev"
+func (e *VendorError) Error() string {
+	switch e.Code {
+	case VendorNeedsReconnect:
+		return "managed connection needs to be reconnected"
+	case VendorRateLimited:
+		return "managed connector request limit reached; retry later"
+	case VendorRefused:
+		return "managed connector refused this request"
+	default:
+		return "managed connector is temporarily unavailable"
 	}
-	return strings.TrimSuffix(v.BaseURL, "/")
+}
+func (e *VendorError) Unwrap() error {
+	if e.Code == VendorRefused {
+		return errors.Join(ErrEgress, ErrInvalid)
+	}
+	return nil
+}
+func vendorFailure(engine, code string) *VendorError { return &VendorError{Engine: engine, Code: code} }
+
+// VendorProvider is operator-reviewed configuration. A copy is pinned to each
+// flow and saved connection: changing a provider affects new connections only.
+type VendorProvider struct {
+	Name         string   `json:"name"`
+	Origins      []string `json:"origins"`
+	AllowWrites  bool     `json:"allow_writes"`
+	Engine       string   `json:"engine,omitempty"`
+	AuthConfigID string   `json:"auth_config_id,omitempty"`
+	Toolkit      string   `json:"toolkit,omitempty"`
+	DeliveryMode string   `json:"delivery_mode,omitempty"`
+	DailyLimit   int      `json:"daily_limit,omitempty"`
+	CacheMinutes int      `json:"cache_minutes,omitempty"`
+}
+
+func (p VendorProvider) defaults(provider string) VendorProvider {
+	if p.Engine == "" {
+		p.Engine = "nango"
+	}
+	if p.DeliveryMode == "" {
+		p.DeliveryMode = VendorInject
+		if p.Engine == "composio" {
+			p.DeliveryMode = VendorForward
+		}
+	}
+	if p.Name == "" {
+		p.Name = provider
+	}
+	if p.Toolkit == "" {
+		p.Toolkit = provider
+	}
+	p.Origins = append([]string{}, p.Origins...)
+	return p
+}
+
+type VendorConfig struct {
+	BaseURL         string // Nango: retained for existing operator configuration.
+	SecretKey       string
+	ComposioBaseURL string
+	ComposioAPIKey  string
+	Providers       map[string]VendorProvider
+	IdleDays        int
+	UserNamespace   string
+}
+
+func (v VendorConfig) configured() bool {
+	for id, raw := range v.Providers {
+		p := raw.defaults(id)
+		if v.engineConfigured(p.Engine) {
+			return true
+		}
+	}
+	return false
+}
+func (v VendorConfig) engineConfigured(engine string) bool {
+	switch engine {
+	case "nango":
+		return v.SecretKey != ""
+	case "composio":
+		return v.ComposioAPIKey != ""
+	}
+	return false
+}
+func (v VendorConfig) base() string { return v.engineBase("nango") }
+func (v VendorConfig) engineBase(engine string) string {
+	switch engine {
+	case "nango":
+		if v.BaseURL != "" {
+			return strings.TrimSuffix(v.BaseURL, "/")
+		}
+		return "https://api.nango.dev"
+	case "composio":
+		if v.ComposioBaseURL != "" {
+			return strings.TrimSuffix(v.ComposioBaseURL, "/")
+		}
+		return "https://backend.composio.dev"
+	}
+	return ""
 }
 func (v VendorConfig) ownerTag(ownerID int64) string {
 	return v.UserNamespace + ":exhibit:" + strconv.FormatInt(ownerID, 10)
 }
 
 type VendorSession struct {
-	ID        string `json:"session_id"`
-	URL       string `json:"url"`
-	ExpiresAt string `json:"expires_at"`
-	Provider  string `json:"provider"`
+	ID           string `json:"session_id"`
+	URL          string `json:"url"`
+	ExpiresAt    string `json:"expires_at"`
+	Provider     string `json:"provider"`
+	Engine       string `json:"engine"`
+	DeliveryMode string `json:"delivery_mode"`
+	ExternalRef  string `json:"-"`
+}
+
+type VendorFlowRequest struct {
+	ID          string
+	OwnerTag    string
+	Provider    string
+	Spec        VendorProvider
+	ExternalRef string
+}
+type VendorConnectionSpec struct {
+	OwnerTag    string
+	Provider    string
+	ExternalRef string
+	Spec        VendorProvider
 }
 
 type vendorFlow struct {
@@ -57,12 +169,15 @@ type vendorFlow struct {
 	binding  [32]byte
 	expires  time.Time
 	resultID string
+	request  VendorFlowRequest
 }
 
 type VendorProviderInfo struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Origins []string `json:"origins"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Origins      []string `json:"origins"`
+	Engine       string   `json:"engine"`
+	DeliveryMode string   `json:"delivery_mode"`
 }
 
 func (s *Service) VendorProviders() []VendorProviderInfo {
@@ -70,96 +185,97 @@ func (s *Service) VendorProviders() []VendorProviderInfo {
 	if !s.cfg.VendorEnabled {
 		return out
 	}
-	for id, p := range s.cfg.Vendor.Providers {
-		out = append(out, VendorProviderInfo{ID: id, Name: p.Name, Origins: p.Origins})
+	for id, raw := range s.cfg.Vendor.Providers {
+		p := raw.defaults(id)
+		if !s.cfg.Vendor.engineConfigured(p.Engine) {
+			continue
+		}
+		out = append(out, VendorProviderInfo{ID: id, Name: p.Name, Origins: p.Origins, Engine: p.Engine, DeliveryMode: p.DeliveryMode})
 	}
 	slices.SortFunc(out, func(a, b VendorProviderInfo) int { return strings.Compare(a.ID, b.ID) })
 	return out
 }
 
+func (s *Service) vendorEngine(id string) (VendorEngine, error) {
+	if !s.cfg.VendorEnabled || !s.cfg.Vendor.engineConfigured(id) {
+		return nil, ErrDisabled
+	}
+	switch id {
+	case "nango":
+		return nangoEngine{s: s}, nil
+	case "composio":
+		return composioEngine{s: s}, nil
+	}
+	return nil, ErrInvalid
+}
 func (s *Service) BeginVendor(ctx context.Context, ownerID int64, provider string, limits Limits) (*VendorSession, error) {
 	return s.BeginVendorBound(ctx, ownerID, provider, limits, "direct-service")
 }
-
 func (s *Service) BeginVendorBound(ctx context.Context, ownerID int64, provider string, limits Limits, binding string) (*VendorSession, error) {
-	if !s.cfg.VendorEnabled || !s.cfg.Vendor.configured() {
+	if !s.cfg.VendorEnabled {
 		return nil, ErrDisabled
 	}
-	if _, ok := s.cfg.Vendor.Providers[provider]; !ok {
+	raw, ok := s.cfg.Vendor.Providers[provider]
+	if !ok || ownerID <= 0 || binding == "" {
+		return nil, ErrInvalid
+	}
+	spec := raw.defaults(provider)
+	engine, err := s.vendorEngine(spec.Engine)
+	if err != nil {
+		return nil, err
+	}
+	if spec.DeliveryMode != engine.DeliveryMode() {
 		return nil, ErrInvalid
 	}
 	list, err := s.List(ctx, ownerID)
 	if err != nil {
 		return nil, err
 	}
-	n := 0
+	count := 0
 	for _, c := range list {
-		if c.Kind == "vendor" && c.Status == "active" {
-			n++
+		if c.Kind == "vendor" && (c.Status == "active" || c.Status == VendorNeedsReconnect || c.Status == "reconnect") {
+			count++
 		}
 	}
-	if limits.Vendor >= 0 && n >= limits.Vendor {
+	if limits.Vendor >= 0 && count >= limits.Vendor {
 		return nil, store.ErrConnectionLimit
 	}
-	if ownerID <= 0 || binding == "" {
-		return nil, ErrInvalid
-	}
-	flowID := randomToken()
+	id := randomToken()
+	request := VendorFlowRequest{ID: id, OwnerTag: s.cfg.Vendor.ownerTag(ownerID), Provider: provider, Spec: spec}
+	flow := vendorFlow{ownerID: ownerID, provider: provider, binding: sha256.Sum256([]byte(binding)), expires: s.cfg.Now().Add(30 * time.Minute), request: request}
 	s.mu.Lock()
-	for id, f := range s.vendorFlows {
+	for oldID, f := range s.vendorFlows {
 		if !f.expires.After(s.cfg.Now()) {
-			delete(s.vendorFlows, id)
-			s.locks.Delete("vendor-flow:" + id)
+			delete(s.vendorFlows, oldID)
+			s.locks.Delete("vendor-flow:" + oldID)
 		}
 	}
-	full := len(s.vendorFlows) >= 512
-	if !full {
-		s.vendorFlows[flowID] = vendorFlow{ownerID: ownerID, provider: provider, binding: sha256.Sum256([]byte(binding)), expires: s.cfg.Now().Add(30 * time.Minute)}
-	}
-	s.mu.Unlock()
-	if full {
+	if len(s.vendorFlows) >= 512 {
+		s.mu.Unlock()
 		return nil, errors.New("too many pending managed connections; try again later")
 	}
-	keepFlow := false
-	defer func() {
-		if !keepFlow {
-			s.mu.Lock()
-			delete(s.vendorFlows, flowID)
-			s.mu.Unlock()
-		}
-	}()
-	tag := s.cfg.Vendor.ownerTag(ownerID)
-	raw, _ := json.Marshal(map[string]any{"end_user": map[string]string{"id": tag}, "tags": map[string]string{"end_user_id": tag, "exhibit_owner": tag, "exhibit_flow": flowID}, "allowed_integrations": []string{provider}})
-	response, err := s.vendorRequest(ctx, http.MethodPost, "/connect/sessions", raw)
+	s.vendorFlows[id] = flow
+	s.mu.Unlock()
+	result, err := engine.Start(ctx, request)
 	if err != nil {
+		s.mu.Lock()
+		delete(s.vendorFlows, id)
+		s.mu.Unlock()
 		return nil, err
 	}
-	var result struct {
-		Data struct {
-			Token   string `json:"token"`
-			Link    string `json:"connect_link"`
-			Expires string `json:"expires_at"`
-		} `json:"data"`
-	}
-	if json.Unmarshal(response.Body, &result) != nil || result.Data.Token == "" {
-		return nil, errors.New("managed OAuth did not return a connection session")
-	}
-	link := result.Data.Link
-	if link == "" {
-		link = "https://connect.nango.dev/?session_token=" + url.QueryEscape(result.Data.Token)
-	}
-	u, err := url.Parse(link)
-	if err != nil || u.Scheme != "https" || u.User != nil || u.Host != "connect.nango.dev" {
-		return nil, errors.New("managed OAuth returned an invalid connect destination")
-	}
-	keepFlow = true
-	return &VendorSession{ID: flowID, URL: link, ExpiresAt: result.Data.Expires, Provider: provider}, nil
+	flow.request.ExternalRef = result.ExternalRef
+	s.mu.Lock()
+	s.vendorFlows[id] = flow
+	s.mu.Unlock()
+	result.ID = id
+	result.Provider = provider
+	result.Engine = engine.ID()
+	result.DeliveryMode = engine.DeliveryMode()
+	return result, nil
 }
 
-// CompleteVendor uses Nango's supported tag-filtered connections listing. A
-// fresh per-flow tag is copied by Nango to the newly authorized connection;
-// arbitrary postMessages and caller-supplied vendor connection ids are not
-// completion proof. Repeated polling is idempotent after the connection saves.
+// CompleteVendor polls only the server-created engine flow. The caller cannot
+// supply a remote connection identity, switch its engine, or alter its policy.
 func (s *Service) CompleteVendor(ctx context.Context, ownerID int64, binding, id, name string, limits Limits) (*Connection, bool, error) {
 	if !s.cfg.VendorEnabled {
 		return nil, false, ErrDisabled
@@ -189,91 +305,132 @@ func (s *Service) CompleteVendor(ctx context.Context, ownerID int64, binding, id
 		c, err := s.metadata(ctx, record)
 		return c, true, err
 	}
-	tag := s.cfg.Vendor.ownerTag(ownerID)
-	query := url.Values{"tags[exhibit_flow]": []string{id}, "tags[end_user_id]": []string{tag}}
-	response, err := s.vendorRequest(ctx, http.MethodGet, "/connections?"+query.Encode(), nil)
+	engine, err := s.vendorEngine(flow.request.Spec.Engine)
 	if err != nil {
 		return nil, false, err
 	}
-	var listing struct {
-		Connections []vendorConnection `json:"connections"`
+	ref, complete, err := engine.Complete(ctx, flow.request)
+	if err != nil || !complete {
+		return nil, false, err
 	}
-	if json.Unmarshal(response.Body, &listing) != nil {
-		return nil, false, errors.New("managed OAuth completion could not be read")
+	if strings.TrimSpace(name) == "" {
+		name = flow.request.Spec.Name
 	}
-	for _, remote := range listing.Connections {
-		if remote.Provider != flow.provider || remote.Tags["exhibit_flow"] != id || remote.Tags["end_user_id"] != tag || remote.Tags["exhibit_owner"] != tag || len(remote.Errors) > 0 {
-			continue
-		}
-		verified, err := s.getVendorConnection(ctx, flow.provider, remote.ID)
-		if err != nil {
-			return nil, false, err
-		}
-		if verified.Tags["exhibit_flow"] != id || verified.EndUser.ID != tag || verified.Tags["exhibit_owner"] != tag {
-			return nil, false, ErrEgress
-		}
-		if strings.TrimSpace(name) == "" {
-			name = s.cfg.Vendor.Providers[flow.provider].Name
-		}
-		c, err := s.Create(ctx, ownerID, CreateRequest{Name: name, Recipe: "nango", VendorProvider: flow.provider, VendorConnectionID: remote.ID}, limits)
-		if err != nil {
-			return nil, false, err
-		}
-		flow.resultID = c.ID
-		s.mu.Lock()
-		s.vendorFlows[id] = flow
-		s.mu.Unlock()
-		return c, true, nil
+	c, err := s.saveVendor(ctx, ownerID, name, flow.request.Provider, flow.request.OwnerTag, ref, flow.request.Spec, limits)
+	if err != nil {
+		return nil, false, err
 	}
-	return nil, false, nil
+	flow.resultID = c.ID
+	s.mu.Lock()
+	s.vendorFlows[id] = flow
+	s.mu.Unlock()
+	return c, true, nil
 }
 
-type vendorConnection struct {
-	ID       string            `json:"connection_id"`
-	Provider string            `json:"provider_config_key"`
-	Tags     map[string]string `json:"tags"`
-	Errors   []json.RawMessage `json:"errors"`
-	EndUser  struct {
-		ID string `json:"id"`
-	} `json:"end_user"`
-	Credentials struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		Type         string `json:"type"`
-	} `json:"credentials"`
-}
-
-func (s *Service) getVendorConnection(ctx context.Context, provider, id string) (*vendorConnection, error) {
-	path := "/connections/" + url.PathEscape(id) + "?provider_config_key=" + url.QueryEscape(provider)
-	response, err := s.vendorRequest(ctx, http.MethodGet, path, nil)
+func (s *Service) saveVendor(ctx context.Context, ownerID int64, name, provider, ownerTag, ref string, spec VendorProvider, limits Limits) (*Connection, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 100 || !validVendorReference(ref) {
+		return nil, ErrInvalid
+	}
+	if spec.DailyLimit < 0 || spec.CacheMinutes < 0 || spec.CacheMinutes > 525600 {
+		return nil, ErrInvalid
+	}
+	spec = spec.defaults(provider)
+	engine, err := s.vendorEngine(spec.Engine)
 	if err != nil {
 		return nil, err
 	}
-	var result vendorConnection
-	if json.Unmarshal(response.Body, &result) != nil || result.ID != id || result.Provider != provider {
-		return nil, errors.New("managed OAuth connection could not be verified")
+	if spec.DeliveryMode != engine.DeliveryMode() || len(spec.Origins) == 0 || len(spec.Origins) > 8 {
+		return nil, ErrInvalid
 	}
-	return &result, nil
-}
-func (s *Service) verifyVendorConnection(ctx context.Context, provider, id string, ownerID int64) error {
-	c, err := s.getVendorConnection(ctx, provider, id)
-	if err != nil {
-		return err
+	for i, entry := range spec.Origins {
+		normalized, err := normalizeHTTPSOrigin(entry)
+		if err != nil {
+			return nil, err
+		}
+		spec.Origins[i] = normalized
 	}
-	tag := s.cfg.Vendor.ownerTag(ownerID)
-	if c.Tags["exhibit_owner"] != tag || c.EndUser.ID != tag {
-		return fmt.Errorf("%w: managed connection belongs to another account", ErrInvalid)
-	}
-	return nil
+	r := recipe{Origins: append([]string{}, spec.Origins...), Header: "Authorization", Scheme: "Bearer ", AllowWrites: spec.AllowWrites, Sensitivity: "personal", DailyLimit: spec.DailyLimit, CacheSeconds: spec.CacheMinutes * 60, VendorProvider: provider, VendorEngine: spec.Engine, VendorSpec: &spec, VendorOwnerTag: ownerTag}
+	return s.save(ctx, ownerID, name, provider, "vendor", r, credential{VendorConnectionID: ref}, limits)
 }
 
-func (s *Service) vendorRequest(ctx context.Context, method, path string, body []byte) (*egress.Response, error) {
-	if !s.cfg.VendorEnabled || !s.cfg.Vendor.configured() {
+func (s *Service) vendorConnectionSpec(ctx context.Context, rec *store.ConnectionRecord, r recipe, c credential) (VendorConnectionSpec, error) {
+	provider := r.VendorProvider
+	if provider == "" {
+		provider = rec.Provider
+	}
+	spec := VendorProvider{Name: rec.Name, Origins: append([]string{}, r.Origins...), AllowWrites: r.AllowWrites, Engine: rec.Engine}
+	if r.VendorSpec != nil {
+		spec = *r.VendorSpec
+		spec.Origins = append([]string{}, r.VendorSpec.Origins...)
+	}
+	if rec.Engine != "" {
+		spec.Engine = rec.Engine
+	} else if r.VendorEngine != "" {
+		spec.Engine = r.VendorEngine
+	}
+	spec = spec.defaults(provider)
+	ref := rec.ExternalRef
+	if ref == "" {
+		ref = c.VendorConnectionID
+		if ref != "" {
+			if err := s.cfg.Store.UpdateVendorConnectionRef(ctx, rec.ID, spec.Engine, ref); err != nil {
+				return VendorConnectionSpec{}, err
+			}
+		}
+	}
+	tag := r.VendorOwnerTag
+	if tag == "" {
+		tag = s.cfg.Vendor.ownerTag(rec.OwnerID)
+	}
+	if ref == "" {
+		return VendorConnectionSpec{}, vendorFailure(spec.Engine, VendorNeedsReconnect)
+	}
+	return VendorConnectionSpec{OwnerTag: tag, Provider: provider, ExternalRef: ref, Spec: spec}, nil
+}
+
+// VendorStatus is an explicit health check; listing metadata does not spend a
+// vendor API call. Changing configured engines recommends reconnecting while
+// the pinned engine remains usable until the user does so.
+func (s *Service) VendorStatus(ctx context.Context, ownerID int64, id string) (string, error) {
+	rec, err := s.cfg.Store.GetConnection(ctx, ownerID, id)
+	if err != nil {
+		return "", err
+	}
+	if rec.Kind != "vendor" {
+		return "", ErrInvalid
+	}
+	r, c, err := s.readCredential(rec)
+	if err != nil {
+		return "", err
+	}
+	spec, err := s.vendorConnectionSpec(ctx, rec, r, c)
+	if err != nil {
+		return "", err
+	}
+	engine, err := s.vendorEngine(spec.Spec.Engine)
+	if err != nil {
+		return "", err
+	}
+	status, statusErr := engine.Status(ctx, spec)
+	var failure *VendorError
+	needsReconnect := status == VendorNeedsReconnect || status == "revoked" || errors.As(statusErr, &failure) && failure.Code == VendorNeedsReconnect
+	if needsReconnect {
+		if err := s.cfg.Store.MarkVendorConnectionReconnect(ctx, rec.OwnerID, rec.ID); err != nil {
+			return "", err
+		}
+	}
+	return status, statusErr
+}
+
+func (s *Service) vendorAPIRequest(ctx context.Context, engineID, provider, method, path string, body []byte, operation string) (*egress.Response, error) {
+	if !s.cfg.VendorEnabled || !s.cfg.Vendor.engineConfigured(engineID) {
 		return nil, ErrDisabled
 	}
-	base, err := url.Parse(s.cfg.Vendor.base())
-	if err != nil || base.User != nil || base.RawQuery != "" || base.Fragment != "" {
-		return nil, errors.New("invalid managed OAuth configuration")
+	baseString := s.cfg.Vendor.engineBase(engineID)
+	base, err := url.Parse(baseString)
+	if err != nil || base.Scheme != "https" || base.Host == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") {
+		return nil, vendorFailure(engineID, VendorRefused)
 	}
 	expected := requestOrigin(base)
 	gate, err := s.cfg.GateFactory([]string{expected})
@@ -281,68 +438,79 @@ func (s *Service) vendorRequest(ctx context.Context, method, path string, body [
 		return nil, err
 	}
 	defer gate.Close()
-	req, err := http.NewRequestWithContext(ctx, method, s.cfg.Vendor.base()+path, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, baseString+path, bytes.NewReader(body))
 	if err != nil {
-		return nil, errors.New("managed OAuth request could not be created")
+		return nil, vendorFailure(engineID, VendorRefused)
 	}
 	response, err := gate.DoAuthorized(ctx, req, func(hop *http.Request) error {
 		if requestOrigin(hop.URL) != expected {
 			return ErrEgress
 		}
-		hop.Header.Set("Authorization", "Bearer "+s.cfg.Vendor.SecretKey)
+		if err := s.cfg.Store.RecordVendorCall(ctx, engineID, provider, operation, s.cfg.Now()); err != nil {
+			return err
+		}
+		if engineID == "nango" {
+			hop.Header.Set("Authorization", "Bearer "+s.cfg.Vendor.SecretKey)
+		} else {
+			hop.Header.Set("x-api-key", s.cfg.Vendor.ComposioAPIKey)
+		}
 		hop.Header.Set("Content-Type", "application/json")
 		hop.Header.Set("Accept", "application/json")
 		return nil
 	})
 	if err != nil {
-		return nil, errors.New("managed OAuth provider is unavailable")
+		var known *VendorError
+		if errors.As(err, &known) {
+			return nil, err
+		}
+		return nil, vendorFailure(engineID, VendorUpstreamError)
 	}
 	if response.Status < 200 || response.Status >= 300 {
-		if method == http.MethodDelete && response.Status == 404 {
+		if method == http.MethodDelete && response.Status == http.StatusNotFound {
 			return response, nil
 		}
-		return nil, errors.New("managed OAuth request was refused by the provider")
+		return nil, vendorHTTPError(engineID, response.Status, response.Header)
 	}
 	return response, nil
 }
-
-// vendorEngine retrieves fresh OAuth credentials server-side, then injects them
-// through Exhibit's original gate. This deliberately avoids a vendor proxy
-// following redirects or reflecting secrets outside Exhibit's visibility.
-type vendorEngine struct{ s *Service }
-
-func (e vendorEngine) Authorize(ctx context.Context, req *http.Request, rec *store.ConnectionRecord, r recipe, c *credential) error {
-	if !e.s.cfg.VendorEnabled {
-		return ErrDisabled
+func vendorHTTPError(engine string, status int, header http.Header) *VendorError {
+	code := VendorUpstreamError
+	switch {
+	case status == 401:
+		code = VendorNeedsReconnect
+	case status == 429:
+		code = VendorRateLimited
+	case status == 403 || status == 400 || status == 404 || status == 409 || status == 422:
+		code = VendorRefused
 	}
-	remote, err := e.s.getVendorConnection(ctx, r.VendorProvider, c.VendorConnectionID)
-	if err != nil {
-		return err
-	}
-	tag := e.s.cfg.Vendor.ownerTag(rec.OwnerID)
-	if remote.Tags["exhibit_owner"] != tag || remote.EndUser.ID != tag {
-		return ErrEgress
-	}
-	if remote.Credentials.AccessToken == "" {
-		return errors.New("managed provider did not return an OAuth 2 access token")
-	}
-	c.Value = remote.Credentials.AccessToken
-	c.Password = remote.Credentials.RefreshToken
-	r.Header = "Authorization"
-	r.Scheme = "Bearer "
-	return (NativeEngine{}).Authorize(ctx, req, rec, r, c)
+	return &VendorError{Engine: engine, Code: code, RetryAfter: header.Get("Retry-After"), HTTPStatus: status}
 }
+
 func (s *Service) deleteVendor(ctx context.Context, rec *store.ConnectionRecord) error {
 	r, c, err := s.readCredential(rec)
 	if err != nil {
 		return err
 	}
-	_, err = s.vendorRequest(ctx, http.MethodDelete, "/connections/"+url.PathEscape(c.VendorConnectionID)+"?provider_config_key="+url.QueryEscape(r.VendorProvider), nil)
-	return err
+	spec, err := s.vendorConnectionSpec(ctx, rec, r, c)
+	if err != nil {
+		return err
+	}
+	engine, err := s.vendorEngine(spec.Spec.Engine)
+	if err != nil {
+		return err
+	}
+	revokeErr := engine.Revoke(ctx, spec)
+	var failure *VendorError
+	if errors.As(revokeErr, &failure) && failure.Code == VendorNeedsReconnect {
+		if err := s.cfg.Store.MarkVendorConnectionReconnect(ctx, rec.OwnerID, rec.ID); err != nil {
+			return err
+		}
+	}
+	return revokeErr
 }
 
-// PruneIdle is safe to run repeatedly. Failed vendor deletions retain their
-// local record, keeping cost leakage visible and the next attempt retryable.
+// PruneIdle retains local records on failed remote deletion so cost leakage
+// remains visible and retryable. Revocation always uses the saved engine.
 func (s *Service) PruneIdle(ctx context.Context) (int, error) {
 	if !s.cfg.VendorEnabled {
 		return 0, nil
@@ -365,4 +533,26 @@ func (s *Service) PruneIdle(ctx context.Context) (int, error) {
 		count++
 	}
 	return count, joined
+}
+
+func validVendorReference(ref string) bool {
+	if ref == "" || len(ref) > 256 || ref == "." || ref == ".." {
+		return false
+	}
+	for _, c := range ref {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune("_-.:@", c)) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Service) vendorOperatorSecrets() []string {
+	out := []string{}
+	for _, secret := range []string{s.cfg.Vendor.SecretKey, s.cfg.Vendor.ComposioAPIKey} {
+		if secret != "" && !slices.Contains(out, secret) {
+			out = append(out, secret)
+		}
+	}
+	return out
 }

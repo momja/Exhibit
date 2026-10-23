@@ -1037,3 +1037,14 @@ to no other data destinations. User-selected daily request limits and encrypted
 GET response reuse are enforced per connection across artifacts and devices.
 No provider-specific API-key or Basic connector, or setup-token claim code, is shipped.
 Native OAuth remains limited to the reviewed provider set.
+
+Managed authentication uses a swappable vendor engine beside the native
+request-authorizing Engine interface. Nango injects retrieved credentials into
+Exhibit's own checked HTTP hops. Composio currently exposes redacted credentials
+and therefore uses the explicit forward-mode boundary: common initial URL,
+public-address preflight, headers, quota/cache and response caps, while the
+vendor owns provider dialing and redirects. No additional artifact-facing relay
+or server code runtime is introduced. Connections pin engine, external reference
+and reviewed policy; configuration changes affect new connections, and existing
+ones retain their original engine until reconnection. Aggregate monthly
+engine/provider attempts and current stored-connection counts are operator-only.

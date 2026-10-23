@@ -101,21 +101,24 @@ func (s *Service) ClearData(ctx context.Context, viewerID int64, artifactID stri
 }
 
 type Connection struct {
-	ID            string     `json:"id"`
-	Name          string     `json:"name"`
-	Provider      string     `json:"provider"`
-	Kind          string     `json:"kind"`
-	Origins       []string   `json:"origins"`
-	Capabilities  []string   `json:"capabilities"`
-	Sensitivity   string     `json:"sensitivity"`
-	Status        string     `json:"status"`
-	CreatedAt     time.Time  `json:"created_at"`
-	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
-	DailyLimit    int        `json:"daily_limit"`
-	RequestsToday int        `json:"requests_today"`
-	CacheMinutes  int        `json:"cache_minutes"`
-	Endpoint      string     `json:"endpoint,omitempty"`
-	Header        string     `json:"header,omitempty"`
+	ID                   string     `json:"id"`
+	Name                 string     `json:"name"`
+	Provider             string     `json:"provider"`
+	Kind                 string     `json:"kind"`
+	Origins              []string   `json:"origins"`
+	Capabilities         []string   `json:"capabilities"`
+	Sensitivity          string     `json:"sensitivity"`
+	Status               string     `json:"status"`
+	CreatedAt            time.Time  `json:"created_at"`
+	LastUsedAt           *time.Time `json:"last_used_at,omitempty"`
+	DailyLimit           int        `json:"daily_limit"`
+	RequestsToday        int        `json:"requests_today"`
+	CacheMinutes         int        `json:"cache_minutes"`
+	Endpoint             string     `json:"endpoint,omitempty"`
+	Header               string     `json:"header,omitempty"`
+	Engine               string     `json:"engine"`
+	DeliveryMode         string     `json:"delivery_mode"`
+	ReconnectRecommended bool       `json:"reconnect_recommended"`
 }
 
 type Provider struct {
@@ -134,7 +137,7 @@ func (s *Service) Providers() []Provider {
 		{"bearer", "Bearer token", "native", "A token sent in the Authorization header to one origin.", []string{"read"}, "personal", true},
 		{"basic", "HTTP Basic", "native", "A username and password, or a pasted HTTPS URL containing both. Data stays at this origin unless you explicitly approve another.", []string{"read"}, "personal", true},
 		{"github", "GitHub", "oauth", "Connect GitHub using the operator's registered OAuth application.", []string{"read profile", "read repositories"}, "personal", s.cfg.OAuthEnabled && s.cfg.GitHub.ClientID != "" && s.cfg.GitHub.ClientSecret != ""},
-		{"nango", "Managed OAuth", "vendor", "Connect a provider approved by this instance's operator.", []string{"read"}, "personal", s.cfg.VendorEnabled && s.cfg.Vendor.configured()},
+		{"vendor", "Managed OAuth", "vendor", "Connect a provider approved by this instance's operator.", []string{"read"}, "personal", s.cfg.VendorEnabled && s.cfg.Vendor.configured()},
 	}
 }
 
@@ -159,15 +162,18 @@ type CreateRequest struct {
 }
 
 type recipe struct {
-	Origins        []string `json:"origins"`
-	Header         string   `json:"header"`
-	Scheme         string   `json:"scheme"`
-	AllowWrites    bool     `json:"allow_writes"`
-	Sensitivity    string   `json:"sensitivity"`
-	DailyLimit     int      `json:"daily_limit"`
-	CacheSeconds   int      `json:"cache_seconds"`
-	Endpoint       string   `json:"endpoint,omitempty"`
-	VendorProvider string   `json:"vendor_provider,omitempty"`
+	Origins        []string        `json:"origins"`
+	Header         string          `json:"header"`
+	Scheme         string          `json:"scheme"`
+	AllowWrites    bool            `json:"allow_writes"`
+	Sensitivity    string          `json:"sensitivity"`
+	DailyLimit     int             `json:"daily_limit"`
+	CacheSeconds   int             `json:"cache_seconds"`
+	Endpoint       string          `json:"endpoint,omitempty"`
+	VendorProvider string          `json:"vendor_provider,omitempty"`
+	VendorEngine   string          `json:"vendor_engine,omitempty"`
+	VendorSpec     *VendorProvider `json:"vendor_spec,omitempty"`
+	VendorOwnerTag string          `json:"vendor_owner_tag,omitempty"`
 }
 
 type credential struct {
@@ -178,6 +184,7 @@ type credential struct {
 	VendorConnectionID string          `json:"vendor_connection_id,omitempty"`
 	Endpoint           string          `json:"endpoint,omitempty"` // Earlier native credentials stored a private endpoint alias.
 	BasePath           string          `json:"base_path,omitempty"`
+	ExtraSecrets       []string        `json:"extra_secrets,omitempty"`
 }
 
 func (s *Service) Create(ctx context.Context, ownerID int64, in CreateRequest, limits Limits) (*Connection, error) {
@@ -250,26 +257,37 @@ func (s *Service) Create(ctx context.Context, ownerID int64, in CreateRequest, l
 		if (provider != "basic" && c.Value == "") || (provider == "basic" && c.Password == "") {
 			return nil, fmt.Errorf("%w: credential is required", ErrInvalid)
 		}
-	case "nango":
-		if !s.cfg.VendorEnabled || !s.cfg.Vendor.configured() {
+	case "vendor", "nango", "composio":
+		if !s.cfg.VendorEnabled {
 			return nil, ErrDisabled
 		}
-		kind = "vendor"
-		spec, ok := s.cfg.Vendor.Providers[in.VendorProvider]
+		raw, ok := s.cfg.Vendor.Providers[in.VendorProvider]
 		if !ok {
 			return nil, fmt.Errorf("%w: provider is not approved by the operator", ErrInvalid)
 		}
-		if in.VendorConnectionID == "" || len(in.VendorConnectionID) > 200 || strings.ContainsAny(in.VendorConnectionID, "\r\n") {
-			return nil, fmt.Errorf("%w: a completed managed OAuth connection is required", ErrInvalid)
-		}
-		r.Origins = append([]string{}, spec.Origins...)
-		r.Header = "Authorization"
-		r.VendorProvider = in.VendorProvider
-		r.AllowWrites = spec.AllowWrites
-		c.VendorConnectionID = in.VendorConnectionID
-		if err := s.verifyVendorConnection(ctx, in.VendorProvider, in.VendorConnectionID, ownerID); err != nil {
+		spec := raw.defaults(in.VendorProvider)
+		engine, err := s.vendorEngine(spec.Engine)
+		if err != nil {
 			return nil, err
 		}
+		if in.VendorConnectionID == "" || len(in.VendorConnectionID) > 256 || strings.ContainsAny(in.VendorConnectionID, "\r\n") {
+			return nil, ErrInvalid
+		}
+		connection := VendorConnectionSpec{OwnerTag: s.cfg.Vendor.ownerTag(ownerID), Provider: in.VendorProvider, ExternalRef: in.VendorConnectionID, Spec: spec}
+		status, err := engine.Status(ctx, connection)
+		if err != nil {
+			return nil, err
+		}
+		if status != "ok" {
+			return nil, vendorFailure(spec.Engine, VendorNeedsReconnect)
+		}
+		if in.DailyLimit > 0 {
+			spec.DailyLimit = in.DailyLimit
+		}
+		if in.CacheMinutes > 0 {
+			spec.CacheMinutes = in.CacheMinutes
+		}
+		return s.saveVendor(ctx, ownerID, in.Name, in.VendorProvider, connection.OwnerTag, in.VendorConnectionID, spec, limits)
 	default:
 		return nil, fmt.Errorf("%w: choose a supported provider", ErrInvalid)
 	}
@@ -293,6 +311,10 @@ func (s *Service) save(ctx context.Context, ownerID int64, name, provider, kind 
 		return nil, err
 	}
 	rec := &store.ConnectionRecord{ID: uuid.NewString(), OwnerID: ownerID, Name: name, Provider: provider, Kind: kind, RecipeJSON: string(policy), EncryptedSecret: sealed}
+	if kind == "vendor" {
+		rec.Engine = r.VendorEngine
+		rec.ExternalRef = c.VendorConnectionID
+	}
 	if err = s.cfg.Store.CreateConnection(ctx, rec, limits.For(kind)); err != nil {
 		if errors.Is(err, store.ErrConnectionLimit) {
 			return nil, fmt.Errorf("%w: this account allows %d %s connections", err, limits.For(kind), kind)
@@ -338,7 +360,33 @@ func (s *Service) metadata(ctx context.Context, rec *store.ConnectionRecord) (*C
 	if r.Endpoint != "" {
 		endpoint = "/" // The private base path is never metadata.
 	}
-	return &Connection{ID: rec.ID, Name: rec.Name, Provider: rec.Provider, Kind: rec.Kind, Origins: r.Origins, Capabilities: caps, Sensitivity: r.Sensitivity, Status: rec.Status, CreatedAt: rec.CreatedAt, LastUsedAt: rec.LastUsedAt, DailyLimit: r.DailyLimit, RequestsToday: used, CacheMinutes: r.CacheSeconds / 60, Endpoint: endpoint, Header: r.Header}, nil
+	connection := &Connection{ID: rec.ID, Name: rec.Name, Provider: rec.Provider, Kind: rec.Kind, Origins: r.Origins, Capabilities: caps, Sensitivity: r.Sensitivity, Status: rec.Status, CreatedAt: rec.CreatedAt, LastUsedAt: rec.LastUsedAt, DailyLimit: r.DailyLimit, RequestsToday: used, CacheMinutes: r.CacheSeconds / 60, Endpoint: endpoint, Header: r.Header, Engine: "native", DeliveryMode: VendorInject}
+	if rec.Status == "reconnect" {
+		connection.Status = VendorNeedsReconnect
+		connection.ReconnectRecommended = true
+	}
+	if rec.Kind == "vendor" {
+		connection.Engine = rec.Engine
+		if connection.Engine == "" {
+			connection.Engine = r.VendorEngine
+		}
+		if connection.Engine == "" {
+			connection.Engine = "nango"
+		}
+		if connection.Engine == "composio" {
+			connection.DeliveryMode = VendorForward
+		}
+		if r.VendorSpec != nil && r.VendorSpec.DeliveryMode != "" {
+			connection.DeliveryMode = r.VendorSpec.DeliveryMode
+		}
+		provider := r.VendorProvider
+		if provider == "" {
+			provider = rec.Provider
+		}
+		configured, ok := s.cfg.Vendor.Providers[provider]
+		connection.ReconnectRecommended = connection.ReconnectRecommended || !ok || configured.defaults(provider).Engine != connection.Engine
+	}
+	return connection, nil
 }
 
 func (s *Service) readCredential(rec *store.ConnectionRecord) (recipe, credential, error) {
@@ -558,6 +606,9 @@ func (s *Service) grantMetadata(ctx context.Context, g store.ConnectionGrantReco
 		dest = strings.Join(g.PermittedEgress, ", ")
 	}
 	consent := "Can " + strings.Join(meta.Capabilities, ", ") + " using " + meta.Name + "; can send data to: " + dest + "."
+	if meta.DeliveryMode == VendorForward {
+		consent += " Requests and responses pass through " + meta.Engine + " in forward mode."
+	}
 	return &Grant{Connection: *meta, ArtifactID: g.ArtifactID, ViewerID: g.ViewerID, PermittedEgress: g.PermittedEgress, ShareWithRecipients: g.ShareWithRecipients, Consent: consent}, nil
 }
 func (s *Service) Grants(ctx context.Context, viewerID int64, artifactID string) ([]Grant, error) {
@@ -602,6 +653,22 @@ func (s *Service) AllowedEgress(ctx context.Context, viewerID int64, artifactID 
 type Engine interface {
 	Authorize(context.Context, *http.Request, *store.ConnectionRecord, recipe, *credential) error
 }
+
+// VendorEngine owns only managed authentication and delivery. Exhibit checks
+// all grants, destinations, request limits and cache custody before calling it.
+// Inject engines add credentials after each checked hop; forward engines send
+// only a sanitized request whose target the common gate preflighted.
+type VendorEngine interface {
+	ID() string
+	DeliveryMode() string
+	Start(context.Context, VendorFlowRequest) (*VendorSession, error)
+	Complete(context.Context, VendorFlowRequest) (string, bool, error)
+	Status(context.Context, VendorConnectionSpec) (string, error)
+	Authorize(context.Context, *http.Request, VendorConnectionSpec, *credential) error
+	Forward(context.Context, *http.Request, VendorConnectionSpec) (*egress.Response, error)
+	Revoke(context.Context, VendorConnectionSpec) error
+}
+
 type NativeEngine struct{}
 
 func (NativeEngine) Authorize(_ context.Context, req *http.Request, _ *store.ConnectionRecord, r recipe, c *credential) error {
@@ -687,12 +754,33 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 	if err != nil {
 		return nil, err
 	}
+	if rec.Kind == "vendor" && rec.Status == "reconnect" {
+		return nil, vendorFailure(rec.Engine, VendorNeedsReconnect)
+	}
 	r, c, err := s.readCredential(rec)
 	if err != nil {
 		return nil, err
 	}
 	if rec.Kind == "oauth" && !s.cfg.OAuthEnabled || rec.Kind == "vendor" && !s.cfg.VendorEnabled {
 		return nil, ErrDisabled
+	}
+	var managed VendorEngine
+	var managedSpec VendorConnectionSpec
+	if rec.Kind == "vendor" {
+		managedSpec, err = s.vendorConnectionSpec(ctx, rec, r, c)
+		if err != nil {
+			return nil, err
+		}
+		managed, err = s.vendorEngine(managedSpec.Spec.Engine)
+		if err != nil {
+			return nil, err
+		}
+		if managedSpec.Spec.DeliveryMode != managed.DeliveryMode() {
+			return nil, vendorFailure(managed.ID(), VendorRefused)
+		}
+		// Operator API keys are also credentials. A vendor may reflect them in
+		// a proxy payload; unlike opaque provider tokens, these are known here.
+		c.ExtraSecrets = append(c.ExtraSecrets, s.vendorOperatorSecrets()...)
 	}
 	if req.Method != http.MethodGet && req.Method != http.MethodHead && !r.AllowWrites {
 		return nil, fmt.Errorf("%w: connection grants read access only", ErrEgress)
@@ -720,6 +808,7 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 				return nil, e
 			}
 			if usable {
+				snapshot.ExtraSecrets = append(snapshot.ExtraSecrets, c.ExtraSecrets...)
 				// The cache is connection-wide; stand-ins are viewer-local and
 				// expire. Scrub the encrypted original for this delivery only.
 				if e = s.scrubResponse(rec, viewerID, r, snapshot, cached); e != nil {
@@ -735,32 +824,65 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 		}
 	}
 	var response *egress.Response
-	{
+	if managed != nil && managed.DeliveryMode() == VendorForward {
+		response, err = gate.DoForwarded(ctx, req, func(forwardCtx context.Context, checked *http.Request) (*egress.Response, error) {
+			if requestOrigin(checked.URL) != target || !slices.Contains(managedSpec.Spec.Origins, target) {
+				return nil, ErrEgress
+			}
+			if err := s.cfg.Store.ReserveConnectionRequest(forwardCtx, rec.ID, r.DailyLimit, s.cfg.Now()); err != nil {
+				return nil, err
+			}
+			return managed.Forward(forwardCtx, checked, managedSpec)
+		})
+	} else {
 		var engine Engine = NativeEngine{}
 		if rec.Kind == "oauth" {
 			engine = oauthEngine{s: s}
 		}
-		if rec.Kind == "vendor" {
-			engine = vendorEngine{s: s}
+		if managed != nil {
+			engine = vendorInjectionEngine{engine: managed, spec: managedSpec}
 		}
 		response, err = gate.DoAuthorized(ctx, req, func(hop *http.Request) error {
-			if requestOrigin(hop.URL) != target {
+			if requestOrigin(hop.URL) != target || !withinPrivateBase(hop.URL, c.BasePath) {
 				return ErrEgress
 			}
-			if !withinPrivateBase(hop.URL, c.BasePath) {
-				return ErrEgress
-			}
-			// Count each actual provider hop, including redirects. Cache hits
-			// never spend quota, and the durable reservation precedes I/O.
 			if err := s.cfg.Store.ReserveConnectionRequest(ctx, rec.ID, r.DailyLimit, s.cfg.Now()); err != nil {
 				return err
 			}
-			return engine.Authorize(ctx, hop, rec, r, &c)
+			if err := engine.Authorize(ctx, hop, rec, r, &c); err != nil {
+				return err
+			}
+			if managed != nil {
+				return s.cfg.Store.RecordVendorCall(ctx, managed.ID(), managedSpec.Provider, "inject", s.cfg.Now())
+			}
+			return nil
 		})
 	}
+	if err == nil && managed != nil && response.Status >= 400 {
+		err = vendorHTTPError(managed.ID(), response.Status, response.Header)
+	}
 	if err != nil {
+		var vendorErr *VendorError
+		if errors.As(err, &vendorErr) {
+			if vendorErr.Code == VendorNeedsReconnect {
+				if saveErr := s.cfg.Store.MarkVendorConnectionReconnect(ctx, rec.OwnerID, rec.ID); saveErr != nil {
+					return nil, saveErr
+				}
+			}
+			return nil, err
+		}
+		var denied *egress.DeniedError
+		if errors.As(err, &denied) {
+			if managed != nil {
+				return nil, vendorFailure(managed.ID(), VendorRefused)
+			}
+			return nil, ErrEgress
+		}
 		if errors.Is(err, ErrEgress) || errors.Is(err, ErrStandin) || errors.Is(err, ErrDisabled) || errors.Is(err, store.ErrConnectionQuota) {
 			return nil, err
+		}
+		if managed != nil {
+			return nil, vendorFailure(managed.ID(), VendorUpstreamError)
 		}
 		return nil, errors.New("connection provider request failed")
 	}
@@ -826,15 +948,19 @@ func varyWildcard(header http.Header) bool {
 // cachedCredential deliberately excludes OAuth payloads and vendor metadata.
 // It travels only inside the encrypted, bounded cache envelope.
 type cachedCredential struct {
-	Value    string `json:"value,omitempty"`
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
-	BasePath string `json:"base_path,omitempty"`
-	Endpoint string `json:"endpoint,omitempty"`
+	Value        string   `json:"value,omitempty"`
+	Username     string   `json:"username,omitempty"`
+	Password     string   `json:"password,omitempty"`
+	BasePath     string   `json:"base_path,omitempty"`
+	Endpoint     string   `json:"endpoint,omitempty"`
+	ExtraSecrets []string `json:"extra_secrets,omitempty"`
 }
 
 func encodeConnectionCache(response *egress.Response, c credential) ([]byte, error) {
-	snapshot := cachedCredential{Value: c.Value, Username: c.Username, Password: c.Password, BasePath: c.BasePath, Endpoint: c.Endpoint}
+	snapshot := cachedCredential{Value: c.Value, Username: c.Username, Password: c.Password, BasePath: c.BasePath, Endpoint: c.Endpoint, ExtraSecrets: append([]string{}, c.ExtraSecrets...)}
+	if len(snapshot.ExtraSecrets) > 8 {
+		return nil, ErrResponseSize
+	}
 	if len(c.OAuthToken) > 0 {
 		// Preserve just the refresh secret for redaction, rather than arbitrary
 		// token JSON. The current access token is already in c.Value.
@@ -889,6 +1015,18 @@ func decodeConnectionCache(plain string) (*egress.Response, credential, bool, er
 	if json.Unmarshal(entry.Credential, &snapshot) != nil {
 		return nil, credential{}, false, errors.New("connection cache contains an invalid credential")
 	}
-	c := credential{Value: snapshot.Value, Username: snapshot.Username, Password: snapshot.Password, BasePath: snapshot.BasePath, Endpoint: snapshot.Endpoint}
+	if len(snapshot.ExtraSecrets) > 8 {
+		return nil, credential{}, false, ErrResponseSize
+	}
+	c := credential{Value: snapshot.Value, Username: snapshot.Username, Password: snapshot.Password, BasePath: snapshot.BasePath, Endpoint: snapshot.Endpoint, ExtraSecrets: snapshot.ExtraSecrets}
 	return response, c, true, nil
+}
+
+type vendorInjectionEngine struct {
+	engine VendorEngine
+	spec   VendorConnectionSpec
+}
+
+func (e vendorInjectionEngine) Authorize(ctx context.Context, req *http.Request, _ *store.ConnectionRecord, _ recipe, c *credential) error {
+	return e.engine.Authorize(ctx, req, e.spec, c)
 }

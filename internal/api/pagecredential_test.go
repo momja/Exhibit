@@ -139,6 +139,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/collections/", path: "/api/collections"},
 	{route: "/api/tags/", path: "/api/tags"},
 	{route: "/api/admin/users/", path: "/api/admin/users"},
+	{route: "/api/admin/connector-usage", path: "/api/admin/connector-usage"},
 
 	// The login flow, registered only when a login is configured. Requested
 	// last, because logging out is one of them.

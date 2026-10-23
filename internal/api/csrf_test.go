@@ -187,6 +187,7 @@ var appOriginGETRoutes = []getRoute{
 	// accounts changes nothing; creating, disabling and resetting are the
 	// POST and PATCH on the same group.
 	{route: "/api/admin/users/"},
+	{route: "/api/admin/connector-usage"},
 
 	// The login flow: the only GET routes that change state, registered only
 	// when a login is configured. Each is safe for its own reason, not by the
