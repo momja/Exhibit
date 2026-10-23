@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -186,6 +187,7 @@ type relayResponse struct {
 type relayRefusal struct {
 	status                int
 	code, message, origin string
+	retryAfter            time.Duration
 }
 
 func (e *relayRefusal) Error() string { return e.message }
@@ -252,6 +254,9 @@ func (ro *Router) performRelay(w http.ResponseWriter, r *http.Request) {
 		status, code, message, denied := http.StatusBadGateway, "relay_failed", "The API request failed. Try again later.", ""
 		if errors.As(err, &refusal) {
 			status, code, message, denied = refusal.status, refusal.code, refusal.message, refusal.origin
+			if refusal.retryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(refusal.retryAfter.Seconds()))))
+			}
 		} else {
 			var gate *egress.DeniedError
 			if errors.As(err, &gate) {
@@ -287,14 +292,14 @@ func (ro *Router) performRelay(w http.ResponseWriter, r *http.Request) {
 func (ro *Router) executeRelay(ctx context.Context, viewer int64, a *store.Artifact, req *http.Request) (response *egress.Response, err error) {
 	s, ok := ro.relayStore()
 	if !ok || !ro.cfg.Relay.Enabled {
-		return nil, &relayRefusal{503, "relay_disabled", "Experimental relay is disabled.", ""}
+		return nil, &relayRefusal{status: 503, code: "relay_disabled", message: "Experimental relay is disabled."}
 	}
 	g, err := s.GetRelayGrant(ctx, viewer, a.ID)
 	if err != nil {
 		return nil, err
 	}
 	if !g.Reads || relayWrite(req.Method) && !g.Writes {
-		return nil, &relayRefusal{403, "relay_consent_required", "This artifact needs your permission to use the relay.", ""}
+		return nil, &relayRefusal{status: 403, code: "relay_consent_required", message: "This artifact needs your permission to use the relay."}
 	}
 	if ro.cfg.Connections == nil && ro.cfg.ConnectionPolicy != nil {
 		policies, policyErr := ro.cfg.ConnectionPolicy.DataPolicies(ctx, viewer, a.ID)
@@ -302,15 +307,15 @@ func (ro *Router) executeRelay(ctx context.Context, viewer int64, a *store.Artif
 			return nil, policyErr
 		}
 		if len(policies) > 0 {
-			return nil, &relayRefusal{403, "connections_disabled", "Connections are disabled for this instance. Ask the operator to re-enable them before using this connected artifact.", ""}
+			return nil, &relayRefusal{status: 403, code: "connections_disabled", message: "Connections are disabled for this instance. Ask the operator to re-enable them before using this connected artifact."}
 		}
 	}
 	o, err := origin.NormalizeOrigin(req.URL.Scheme + "://" + req.URL.Host)
 	if err != nil {
-		return nil, &relayRefusal{400, "invalid_url", "Use an HTTPS API URL.", ""}
+		return nil, &relayRefusal{status: 400, code: "invalid_url", message: "Use an HTTPS API URL."}
 	}
-	if !ro.relayRuntime.allow(viewer, a.ID, o) {
-		return nil, &relayRefusal{429, "relay_rate_limited", "Relay request limit reached. Wait a minute before trying again.", ""}
+	if delay := ro.relayRuntime.reserveRequest(viewer, a.ID, o); delay > 0 {
+		return nil, relayThrottle(delay)
 	}
 	allowed, err := ro.connectionOrigins(ctx, viewer, a.ID, a.NetworkAllowlist)
 	if err != nil {
@@ -322,8 +327,8 @@ func (ro *Router) executeRelay(ctx context.Context, viewer int64, a *store.Artif
 			firstHop = false
 			return nil
 		}
-		if !ro.relayRuntime.allow(viewer, a.ID, relayOrigin(target.String())) {
-			return &relayRefusal{429, "relay_rate_limited", "The API is backing off or the relay request limit has been reached.", ""}
+		if delay := ro.relayRuntime.reserveRequest(viewer, a.ID, relayOrigin(target.String())); delay > 0 {
+			return relayThrottle(delay)
 		}
 		return nil
 	})
@@ -488,12 +493,19 @@ func (ro *Router) requireRelayPolicy(w http.ResponseWriter, r *http.Request, a *
 	}
 	return true
 }
-func (rt *relayRuntime) allow(viewer int64, artifact, target string) bool {
+func relayThrottle(delay time.Duration) *relayRefusal {
+	seconds := int(math.Ceil(delay.Seconds()))
+	return &relayRefusal{status: 429, code: "relay_rate_limited", message: fmt.Sprintf("Relay request limit reached. Try again in %d seconds.", seconds), retryAfter: delay}
+}
+
+// reserveRequest spends all three budgets together, or returns the wait until
+// they can all admit a request. Refused attempts spend no additional tokens.
+func (rt *relayRuntime) reserveRequest(viewer int64, artifact, target string) time.Duration {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 	now := time.Now()
 	if until := rt.blocked[target]; until.After(now) {
-		return false
+		return until.Sub(now)
 	}
 	keys := []string{fmt.Sprintf("owner:%d", viewer), fmt.Sprintf("artifact:%d:%s", viewer, artifact), "target:" + target}
 	rates := []float64{120, 60, 300}
@@ -505,9 +517,10 @@ func (rt *relayRuntime) allow(viewer int64, artifact, target string) bool {
 			}
 		}
 		if len(rt.buckets) > 4096 {
-			return false
+			return time.Minute
 		}
 	}
+	var delay time.Duration
 	for i, key := range keys {
 		b, ok := rt.buckets[key]
 		if !ok {
@@ -517,15 +530,18 @@ func (rt *relayRuntime) allow(viewer int64, artifact, target string) bool {
 		b.updated = now
 		rt.buckets[key] = b
 		if b.tokens < 1 {
-			return false
+			delay = max(delay, time.Duration(math.Ceil((1-b.tokens)*float64(time.Minute)/rates[i])))
 		}
+	}
+	if delay > 0 {
+		return delay
 	}
 	for _, key := range keys {
 		b := rt.buckets[key]
 		b.tokens--
 		rt.buckets[key] = b
 	}
-	return true
+	return 0
 }
 func (rt *relayRuntime) backoff(target, value string) {
 	un := time.Now().Add(time.Minute)

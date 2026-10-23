@@ -687,3 +687,10 @@ ones continue on their pinned engine until explicitly reconnected/revoked.
 `inject_calls` and `forward_calls`, plus `stored_connections`, grouped by
 `engine` and `provider`. Failed attempts count; cache hits do not. The response
 is `no-store` and remains available when acquisition engines are disabled.
+
+Local relay throttling returns HTTP `429` with `code: relay_rate_limited` and a
+numeric `Retry-After` header. The trusted browser host retries GET/HEAD requests
+within a one-minute retry budget, rechecking current policy on every attempt.
+Writes, provider HTTP responses, daily connection quotas and permission errors
+are returned without automatic retries. Frame abort or navigation cancels a
+pending retry.
