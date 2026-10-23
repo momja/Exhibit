@@ -272,7 +272,15 @@ the disclosed exception for the vendor’s provider dial and redirects:
   policy are not delivered. The User-Agent identifies `Exhibit-Relay/1` and the
   instance URL.
 
-Relay token buckets apply per owner, artifact and target origin. Provider 429
+Relay token buckets allow bursts of 120 requests per owner, 60 per artifact and
+300 per target origin, refilling at those rates per minute. A local throttle
+returns `429`, `code: relay_rate_limited` and a `Retry-After` delay. The trusted
+browser bridge waits and retries GET/HEAD requests for up to one minute, within
+the frame's existing request deadline. Each attempt checks current consent and
+policy. Abort and navigation cancel queued retries; writes, daily quota failures,
+permission failures and provider responses are never automatically replayed.
+Large read-only imports therefore slow down while retaining the relay limits.
+Provider 429
 responses impose instance-wide origin back-off using `Retry-After`, including
 redirect destinations. Credential-free GET responses are cached only with
 explicit public `Cache-Control` freshness, scoped to viewer, artifact and policy;
