@@ -14,7 +14,7 @@ tags: [experimental, connectors, security]
 
 EXPERIMENTAL; part of Exh-g2vv.
 
-For recipes whose ordinary client code expects to hold a credential value (the SimpleFIN access URL, SDKs that require a key). This is the Meta Muse pattern: the runtime sees only stand-ins, and an egress process substitutes the real secret per request.
+For recipes whose ordinary client code expects to hold a credential value (an access URL with embedded credentials, SDKs that require a key). This is the Meta Muse pattern: the runtime sees only stand-ins, and an egress process substitutes the real secret per request.
 
 - **Binding:** each stand-in is bound to (viewer, connection, allowed origins). Substitution happens only in recipe-designated positions (the Authorization header including Basic-decoded user:pass, or named query parameters), never anywhere in a URL or body. Otherwise there's a reflection attack: a stand-in placed in a field the API echoes back would come back as the real secret.
 - **Scrubbing:** if the real secret appears in a response, replace it with the stand-in. Refresh-token rotation happens inside the recipe.
@@ -23,7 +23,7 @@ For recipes whose ordinary client code expects to hold a credential value (the S
 
 ## Acceptance Criteria
 
-- Ordinary SimpleFIN client code works unmodified with a stand-in access URL.
+- Ordinary client code that parses an access URL with embedded credentials works unmodified with a stand-in URL.
 - The echo-reflection test proves no real secret is returned.
 - The exfiltration test blocks and alerts.
 
