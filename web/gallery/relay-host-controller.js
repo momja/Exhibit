@@ -1,5 +1,6 @@
 import { Controller } from '../stimulus/stimulus.js';
 import { viewerFetch } from './api-module.js';
+import { requestRelay } from './relay-request.js';
 
 // The host pins artifact identity and frame identity. Frame messages supply
 // request data only; they cannot select another artifact or grant themselves
@@ -109,15 +110,13 @@ export default class extends Controller {
         method: 'POST', body: JSON.stringify(input), signal: controller.signal,
         headers: { 'X-Exhibit-Relay-Policy': this.policyValue }
       });
-      let response = await send();
-      let result = await response.json();
+      let { response, result } = await requestRelay(send, input.method, controller.signal);
       if (result.code === 'relay_consent_required') {
         const consent = this.consentQueue.then(() => this.active && generation === this.generation && !controller.signal.aborted ? this.askConsent(input, controller.signal) : false);
         this.consentQueue = consent.catch(() => false);
         if (!await consent) throw new Error('Relay access was declined.');
         if (controller.signal.aborted) return;
-        response = await send();
-        result = await response.json();
+        ({ response, result } = await requestRelay(send, input.method, controller.signal));
       }
       if (!response.ok) throw new Error(result.error || 'The relay request was refused.');
       if (controller.signal.aborted || generation !== this.generation || !this.active) return;
