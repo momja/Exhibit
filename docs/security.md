@@ -1568,8 +1568,12 @@ The shared HTTPS gate checks each redirect, rejects non-public DNS answers and
 dials a checked literal, applies a guest header allowlist, caps decoded bytes
 and time, and never inherits an environment proxy. First-party injection runs
 afresh after each destination check. Credentials and connector caches are
-encrypted at rest, and only metadata is logged. Financial connections default
-to no other data destination. Local exports enforce the same boundary with
+encrypted at rest, and only metadata is logged. Every connection defaults
+to no other data destination, widened only by explicit approval. Basic access
+URLs are parsed only in trusted app code; credentials and private base paths
+remain encrypted and absent from artifact metadata. Per-connection daily
+request limits and encrypted response reuse apply across artifacts and devices.
+Local exports enforce the same boundary with
 opaque frames, exact Host/Origin/session checks and locally acquired secrets.
 The full security and validation contract is in
 [relay-connectors.md](relay-connectors.md).

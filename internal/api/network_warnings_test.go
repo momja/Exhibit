@@ -70,7 +70,7 @@ func TestAgentConnectionRequestNoticeEscapesReasonAndLinksToConfiguration(t *tes
 	ro.cfg.Relay.Enabled = true
 	ro.cfg.Connections = connectors.New(connectors.Config{Store: s, Box: ro.cfg.Secrets})
 	id := createArtifact(t, ro, map[string]any{"title": "Budget", "body": "<h1>Budget</h1>"})
-	_, err := s.RequestArtifactConnection(context.Background(), 1, id, "simplefin", `<img src=x onerror=alert(1)> Read account balances`)
+	_, err := s.RequestArtifactConnection(context.Background(), 1, id, "basic", `<img src=x onerror=alert(1)> Read account balances`)
 	require.NoError(t, err)
 	w := doJSON(t, ro, http.MethodGet, "/partials/agent-connection-requests?artifact="+id, nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())

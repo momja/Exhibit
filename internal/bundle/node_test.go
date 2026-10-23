@@ -79,10 +79,6 @@ func TestNodeRunnerLocalConnectionAndNetworkBoundary(t *testing.T) {
 	var otherCalls atomic.Int32
 	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		if r.URL.Path == "/claim" {
-			_, _ = io.WriteString(w, "https://simple-user:simple-password@api.example/private/local")
-			return
-		}
 		if r.Host == "second.example" {
 			otherCalls.Add(1)
 			if r.Header.Get("Authorization") != "" {
@@ -93,8 +89,8 @@ func TestNodeRunnerLocalConnectionAndNetworkBoundary(t *testing.T) {
 		}
 		if r.URL.Path == "/private/local/accounts" {
 			user, password, _ := r.BasicAuth()
-			if user != "simple-user" || password != "simple-password" {
-				t.Error("missing local SimpleFIN credentials")
+			if user != "basic-user" || password != "basic-password" {
+				t.Error("missing local Basic credentials")
 			}
 			_, _ = io.WriteString(w, `{"accounts":[]}`)
 			return
@@ -216,6 +212,15 @@ https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathnam
 	if result.Headers["set-cookie"] != "" {
 		t.Error("Node leaked Set-Cookie")
 	}
+	status, _ = request("https://api.example/redirect")
+	if status == 200 || otherCalls.Load() != 0 {
+		t.Fatal("Node default connection policy allowed another destination")
+	}
+	form.Set("data_origins", "https://second.example")
+	form.Add("data_origins", "https://inward.example")
+	response = localRequest(t, client, base, authority, "POST", "/__exhibit/connect", form.Encode(), "", "application/x-www-form-urlencoded")
+	response.Body.Close()
+	refreshPolicy()
 	status, result = request("https://api.example/redirect")
 	if status != 200 || result.URL != "https://second.example/final" {
 		t.Fatalf("Node allowed redirect failed: %d %#v", status, result)
@@ -227,30 +232,34 @@ https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathnam
 		}
 	}
 	before := calls.Load()
-	form = url.Values{"csrf": {token}, "index": {"0"}, "kind": {"simplefin"}, "setup": {base64.StdEncoding.EncodeToString([]byte("https://api.example/claim"))}, "action": {"connect"}}
+	form = url.Values{"csrf": {token}, "index": {"0"}, "kind": {"basic"}, "access_url": {"https://basic-user:basic-password@api.example/private/local"}, "daily_limit": {"1"}, "cache_minutes": {"60"}, "action": {"connect"}}
 	response = localRequest(t, client, base, authority, "POST", "/__exhibit/connect", form.Encode(), "", "application/x-www-form-urlencoded")
 	text := bodyText(t, response)
-	if !strings.Contains(text, "Connected locally") || strings.Contains(text, "simple-password") || strings.Contains(text, "/private/local") {
-		t.Fatalf("Node SimpleFIN claim failed or leaked secret: %s", text)
+	if !strings.Contains(text, "Connected locally") || strings.Contains(text, "basic-password") || strings.Contains(text, "/private/local") {
+		t.Fatalf("Node Basic connect failed or leaked secret: %s", text)
 	}
 	refreshPolicy()
 	response = localRequest(t, client, base, authority, "GET", "/__exhibit/render", "", "", "")
 	if strings.Contains(response.Header.Get("Content-Security-Policy"), "second.example") {
-		t.Error("Node financial frame retained another data destination")
+		t.Error("Node connected frame retained another data destination")
 	}
 	response.Body.Close()
 	for i := 0; i < 2; i++ {
 		status, result = request("https://api.example/accounts")
 		if status != 200 || result.URL != "https://api.example/accounts" {
-			t.Fatalf("Node SimpleFIN endpoint leaked or failed: %d %#v", status, result)
+			t.Fatalf("Node Basic endpoint leaked or failed: %d %#v", status, result)
 		}
 	}
-	if calls.Load() != before+2 {
-		t.Errorf("Node SimpleFIN cache missed: %d calls", calls.Load()-before)
+	if calls.Load() != before+1 {
+		t.Errorf("Node Basic cache missed: %d calls", calls.Load()-before)
+	}
+	status, _ = request("https://api.example/accounts?fresh=1")
+	if status != 429 || calls.Load() != before+1 {
+		t.Fatalf("Node Basic daily quota did not stop provider contact: status %d, %d calls", status, calls.Load()-before)
 	}
 	status, _ = request("https://second.example/data")
 	if status == 200 {
-		t.Error("Node allowed financial data egress to a different origin")
+		t.Error("Node allowed connected data egress to a different origin")
 	}
 	previousOtherCalls := otherCalls.Load()
 	for _, action := range []string{"disconnect", "connect"} {
@@ -260,16 +269,16 @@ https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathnam
 		refreshPolicy()
 		status, _ = request("https://second.example/data")
 		if status == 200 {
-			t.Errorf("Node %s widened financial egress", action)
+			t.Errorf("Node %s widened connected egress", action)
 		}
 		if action == "connect" {
 			status, _ = request("https://api.example/redirect")
 			if status == 200 {
-				t.Error("Node replacement credential permitted financial redirect egress")
+				t.Error("Node replacement credential permitted connected redirect egress")
 			}
 		}
 		if otherCalls.Load() != previousOtherCalls {
-			t.Fatalf("Node %s contacted a forbidden financial destination", action)
+			t.Fatalf("Node %s contacted a forbidden connected destination", action)
 		}
 	}
 	restarted := runNode(t, app, hook, nodeDirectory)
@@ -281,7 +290,11 @@ https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathnam
 	payload, _ := json.Marshal(relayRequest{URL: "https://second.example/data", Method: "GET", Policy: restartedPolicy, Headers: map[string]string{}})
 	response = localRequest(t, client, restarted, restartedAuthority, "POST", "/__exhibit/relay", string(payload), restartedCSRF, "application/json")
 	if response.StatusCode == 200 || otherCalls.Load() != previousOtherCalls {
-		t.Fatal("Node restart lost financial data-destination policy")
+		t.Fatal("Node restart lost connected data-destination policy")
 	}
 	response.Body.Close()
+}
+
+func TestNodeLocalConnectionResponseReuseAndQuotaSafety(t *testing.T) {
+	exerciseLocalConnectionSafety(t, "node")
 }

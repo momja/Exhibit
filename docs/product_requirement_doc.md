@@ -708,3 +708,8 @@ portable ZIP contains the app, saved state and a local relay, with credentials
 re-entered locally. A plain HTML export identifies origins that need a relay.
 All phases are experimental and off by default; the implemented behavior and
 examples are specified in [relay-connectors.md](relay-connectors.md).
+
+Generic API key, Bearer and Basic connections include user-set daily request
+limits and response reuse. Basic accepts a pasted HTTPS credential URL in the
+trusted connect UI. Every connection defaults to no other data destinations;
+additional destinations require explicit approval.

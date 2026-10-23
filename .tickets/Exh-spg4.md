@@ -19,7 +19,7 @@ EXPERIMENTAL; part of Exh-g2vv; builds on phase 1.
 - **Credential engine interface:** the relay asks the engine to authorize a request for a connection; native first, vendor in phase 4.
 - **Attach-by-origin:** the artifact calls the API without credentials, and the relay injects them only for the recipe's origins and only into the recipe's designated header. No stand-ins yet (phase 5).
 - **Acquisition only in Exhibit's UI:** a connect page (paste a key, a username and password, or a URL with embedded credentials, which is split into origin and Basic credentials), and a manage page (revoke, last used, which artifacts use each connection).
-- **Grant prompt:** generated mechanically from the recipe: 'can read your X; can send data to: ...'. Financial recipes default to 'nowhere else'.
+- **Grant prompt:** generated mechanically from the recipe: 'can read your X; can send data to: ...'. Every connection defaults to 'nowhere else'.
 - **Ownership:** connections belong to the viewer by default; sharing yours with share recipients is an explicit opt-in.
 - **Quotas:** optional per-connection limits the user sets (at most N requests per day; reuse responses for M minutes), enforced by the relay for every artifact using the connection. Some APIs disable tokens that exceed a daily budget, and repeated page opens would otherwise exhaust it. Every connection defaults to "data may go nowhere else".
 - **Agent tools:** list_connections (names, providers, origins, capabilities; never secrets) and request_connection(provider, reason), which prompts in Exhibit's UI. Agents never write recipes.
@@ -39,4 +39,4 @@ EXPERIMENTAL; part of Exh-g2vv; builds on phase 1.
 
 **2026-10-22T16:01:53Z**
 
-Implemented encrypted API key/Bearer/Basic/SimpleFIN acquisition and management UI, viewer grants, destination policy, response scrubbing, SimpleFIN quota/cache, account cleanup and agent-safe metadata. Retained data policy survives disconnect and credential deletion; explicit atomic cleanup clears saved data/history before releasing obsolete restrictions. HTTPbin native flow verified live. Real bank-account acceptance is tracked in Exh-3kvx because no account credentials are available.
+Implemented encrypted generic API key/Bearer/Basic acquisition and management UI, viewer grants, destination policy, response scrubbing, per-connection quota/cache, account cleanup and agent-safe metadata. Retained data policy survives disconnect and credential deletion; explicit atomic cleanup clears saved data/history before releasing obsolete restrictions. HTTPbin native flow verified live. Real Basic-auth API acceptance is tracked in Exh-3kvx because no external account credentials are available.

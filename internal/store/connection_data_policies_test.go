@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -153,10 +154,9 @@ func TestConnectionDataPolicyMigrationBackfillsExistingGrants(t *testing.T) {
 	// A former recipient may still hold a saved copy even if their share is
 	// currently revoked. Regranting access must retain that copy's policy.
 	require.NoError(t, s.SetState(ctx, OwnerID(alice), "old-connected", ViewerID(bob), "balance", "existing financial data"))
-	_, err = s.db.ExecContext(ctx, `DROP TABLE artifact_connection_data_policies`)
-	require.NoError(t, err)
-	_, err = s.db.ExecContext(ctx, `DELETE FROM goose_db_version WHERE version_id=39`)
-	require.NoError(t, err)
+	// Rewind newer migrations as well, so this remains a version-38 fixture
+	// when additional connector migrations are introduced.
+	require.NoError(t, goose.DownToContext(ctx, s.db, "migrations", 38))
 	require.NoError(t, s.Close())
 	upgraded, err := OpenSQLite(path)
 	require.NoError(t, err)

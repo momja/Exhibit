@@ -13,8 +13,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/momja/Exhibit/internal/egress"
 )
@@ -199,7 +202,7 @@ func TestGoRunnerHostOriginCSRFAndOpaqueRender(t *testing.T) {
 
 func TestLocalResponseRedactsReflectedCredentials(t *testing.T) {
 	response := &egress.Response{Body: []byte(`{"echo":"private-user:private-password","key":"a secret","path":"/sensitive/path/accounts"}`), URL: "https://api.example/sensitive/path/accounts", Header: http.Header{"Etag": {"a+secret"}}}
-	scrubLocalResponse(localConnection{Kind: "simplefin", Username: "private-user", Password: "private-password", Secret: "a secret", Endpoint: "/sensitive/path/accounts"}, response)
+	scrubLocalResponse(localConnection{Kind: "basic", Username: "private-user", Password: "private-password", Secret: "a secret", BasePath: "/sensitive/path"}, response)
 	for _, secret := range []string{"private-user", "private-password", "a secret", "sensitive/path"} {
 		if bytes.Contains(response.Body, []byte(secret)) || strings.Contains(response.URL, secret) {
 			t.Errorf("reflected credential leaked: %s", secret)
@@ -210,23 +213,22 @@ func TestLocalResponseRedactsReflectedCredentials(t *testing.T) {
 	}
 }
 
-func TestGoFinancialDestinationsStayRestrictedAfterDisconnectAndReplacement(t *testing.T) {
+func TestGoConnectionDestinationsStayRestrictedAfterDisconnectAndReplacement(t *testing.T) {
 	otherCalls := 0
 	other := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { otherCalls++ }))
 	defer other.Close()
 	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, other.URL+"/receive", 302) }))
 	defer provider.Close()
 	g, _ := egress.NewForTests([]string{provider.URL, other.URL}, egress.Limits{})
-	app := New("Financial app", "<p>Cached accounts</p>", map[string]string{"accounts": "private financial snapshot"}, []string{provider.URL, other.URL}, nil)
+	app := New("Connected app", "<p>Cached accounts</p>", map[string]string{"accounts": "private API snapshot"}, []string{provider.URL, other.URL}, nil)
 	s, err := NewServer(app, ServerOptions{AllowedHosts: []string{"runner.example"}, Gate: g})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	// State after the trusted claim flow: even an initially generic bundle
-	// must retain the financial policy once SimpleFIN has been connected.
-	s.connections[provider.URL] = localConnection{Origin: provider.URL, Kind: "simplefin", Username: "local-user", Password: "private-password", Endpoint: "/private/accounts"}
-	s.financialOrigins[provider.URL] = true
+	// Retained data policy remains after removing or replacing credentials.
+	s.connections[provider.URL] = localConnection{Origin: provider.URL, Kind: "basic", Username: "local-user", Password: "private-password", BasePath: "/private"}
+	s.dataPolicies[provider.URL] = []string{provider.URL}
 	fixture := httptest.NewServer(s)
 	defer fixture.Close()
 	response := localRequest(t, fixture.Client(), fixture.URL, "runner.example", "GET", "/__exhibit/connect", "", "", "")
@@ -237,7 +239,7 @@ func TestGoFinancialDestinationsStayRestrictedAfterDisconnectAndReplacement(t *t
 		response := localRequest(t, fixture.Client(), fixture.URL, "runner.example", "POST", "/__exhibit/relay", string(input), token, "application/json")
 		defer response.Body.Close()
 		if response.StatusCode == 200 {
-			t.Fatalf("financial data could reach %s", target)
+			t.Fatalf("connected data could reach %s", target)
 		}
 	}
 	for _, action := range []string{"disconnect", "connect"} {
@@ -247,25 +249,25 @@ func TestGoFinancialDestinationsStayRestrictedAfterDisconnectAndReplacement(t *t
 		relay(other.URL + "/receive")
 		relay(provider.URL + "/redirect")
 		if otherCalls != 0 {
-			t.Fatalf("%s widened financial egress: %d target hits", action, otherCalls)
+			t.Fatalf("%s widened connection egress: %d target hits", action, otherCalls)
 		}
 		response = localRequest(t, fixture.Client(), fixture.URL, "runner.example", "GET", "/__exhibit/render", "", "", "")
 		if strings.Contains(response.Header.Get("Content-Security-Policy"), other.URL) {
-			t.Error("financial CSP widened after connection removal")
+			t.Error("connection CSP widened after connection removal")
 		}
 		response.Body.Close()
 	}
 }
 
-func TestLocalFinancialPolicySurvivesRunnerRestart(t *testing.T) {
-	app := New("Local finances", "<p>Saved data</p>", nil, []string{"https://finance.example", "https://other.example"}, nil)
+func TestLocalConnectionPolicySurvivesRunnerRestart(t *testing.T) {
+	app := New("Local data", "<p>Saved data</p>", nil, []string{"https://api.example", "https://other.example"}, nil)
 	options := ServerOptions{AllowedHosts: []string{"runner.example"}, StatePath: filepath.Join(t.TempDir(), "state.json")}
 	first, err := NewServer(app, options)
 	if err != nil {
 		t.Fatal(err)
 	}
 	first.mu.Lock()
-	err = first.recordFinancialOriginLocked("https://finance.example")
+	err = first.recordDataPolicyLocked("https://api.example", []string{"https://api.example"})
 	first.mu.Unlock()
 	first.Close()
 	if err != nil {
@@ -283,7 +285,7 @@ func TestLocalFinancialPolicySurvivesRunnerRestart(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	restarted.ServeHTTP(recorder, request)
 	if recorder.Code != 403 {
-		t.Fatalf("runner restart lost financial destination policy: %d %s", recorder.Code, recorder.Body.String())
+		t.Fatalf("runner restart lost connection destination policy: %d %s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -360,7 +362,7 @@ func TestGoLocalConnectionStaysOutsideFrameAndUsesSharedGate(t *testing.T) {
 	}
 }
 
-func TestGoSimpleFINAliasCacheQuotaAndNoPrivateEndpointLeak(t *testing.T) {
+func TestGoBasicAccessURLCacheQuotaAndNoPrivateEndpointLeak(t *testing.T) {
 	calls := 0
 	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
@@ -369,23 +371,30 @@ func TestGoSimpleFINAliasCacheQuotaAndNoPrivateEndpointLeak(t *testing.T) {
 		}
 		user, password, _ := r.BasicAuth()
 		if user != "username" || password != "secret" {
-			t.Error("missing SimpleFIN credentials")
+			t.Error("missing Basic credentials")
 		}
 		_, _ = io.WriteString(w, `{"accounts":[]}`)
 	}))
 	defer provider.Close()
 	g, _ := egress.NewForTests([]string{provider.URL}, egress.Limits{})
-	app := New("Finance", "<p>Budget</p>", nil, []string{provider.URL}, nil)
+	app := New("Connected API", "<p>Accounts</p>", nil, []string{provider.URL}, nil)
 	s, err := NewServer(app, ServerOptions{AllowedHosts: []string{"runner.example"}, Gate: g})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	s.connections[provider.URL] = localConnection{Origin: provider.URL, Kind: "simplefin", Username: "username", Password: "secret", Endpoint: "/private/access/accounts"}
 	fixture := httptest.NewServer(s)
 	defer fixture.Close()
 	response := localRequest(t, fixture.Client(), fixture.URL, "runner.example", "GET", "/__exhibit/connect", "", "", "")
 	token := csrfFromPage(t, bodyText(t, response))
+	access, _ := url.Parse(provider.URL + "/private/access")
+	access.User = url.UserPassword("username", "secret")
+	form := url.Values{"csrf": {token}, "index": {"0"}, "kind": {"basic"}, "access_url": {access.String()}, "daily_limit": {"1"}, "cache_minutes": {"10"}, "action": {"connect"}}
+	response = localRequest(t, fixture.Client(), fixture.URL, "runner.example", "POST", "/__exhibit/connect", form.Encode(), "", "application/x-www-form-urlencoded")
+	connected := bodyText(t, response)
+	if !strings.Contains(connected, "Connected locally") || strings.Contains(connected, "private/access") || strings.Contains(connected, "username") && strings.Contains(connected, access.String()) {
+		t.Fatalf("connect failed or returned private access URL: %s", connected)
+	}
 	for i := 0; i < 2; i++ {
 		input, _ := json.Marshal(relayRequest{URL: provider.URL + "/accounts", Method: "GET", Policy: s.framePolicy})
 		response = localRequest(t, fixture.Client(), fixture.URL, "runner.example", "POST", "/__exhibit/relay", string(input), token, "application/json")
@@ -395,11 +404,8 @@ func TestGoSimpleFINAliasCacheQuotaAndNoPrivateEndpointLeak(t *testing.T) {
 		}
 	}
 	if calls != 1 {
-		t.Fatalf("SimpleFIN cache missed: %d calls", calls)
+		t.Fatalf("Basic response cache missed: %d calls", calls)
 	}
-	connection := s.connections[provider.URL]
-	connection.Calls = 24
-	s.connections[provider.URL] = connection
 	input, _ := json.Marshal(relayRequest{URL: provider.URL + "/accounts?fresh=1", Method: "GET", Policy: s.framePolicy})
 	response = localRequest(t, fixture.Client(), fixture.URL, "runner.example", "POST", "/__exhibit/relay", string(input), token, "application/json")
 	if response.StatusCode != 429 || calls != 1 {
@@ -425,4 +431,142 @@ func ExampleNew() {
 	app := New("Weather", "<h1>Weather</h1>", nil, []string{"https://api.example"}, []ConnectionRequirement{{Name: "Weather API", Kind: "api-key", Origin: "https://api.example", Header: "X-API-Key"}})
 	fmt.Println(app.Manifest.Format)
 	// Output: exhibit-relay
+}
+
+// Both shipped runners use this fixture to exercise response reuse and quota
+// through their public local HTTP interface, rather than internal counters.
+func exerciseLocalConnectionSafety(t *testing.T, runner string) {
+	t.Helper()
+	var calls atomic.Int32
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		user, password, _ := r.BasicAuth()
+		if user != "api-user" || password != "api-password" {
+			t.Errorf("wrong Basic credentials: %q %q", user, password)
+		}
+		if !strings.HasPrefix(r.URL.Path, "/private<token>/") {
+			t.Errorf("request left its private base path: %q", r.URL.Path)
+		}
+		if strings.HasSuffix(r.URL.Path, "/redirect") {
+			http.Redirect(w, r, "/private%3Ctoken%3E/resource", http.StatusFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Etag", r.URL.EscapedPath())
+		if strings.HasSuffix(r.URL.Path, "/vary-star") {
+			w.Header().Set("Vary", "*")
+		}
+		if strings.HasSuffix(r.URL.Path, "/no-store") {
+			w.Header().Set("Cache-Control", "no-store")
+		}
+		if r.Header.Get("If-None-Match") != "" {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		if r.Header.Get("Range") != "" || strings.HasSuffix(r.URL.Path, "/partial") {
+			w.WriteHeader(http.StatusPartialContent)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"path": r.URL.Path, "escaped": r.URL.EscapedPath(), "slash_escaped": strings.ReplaceAll(r.URL.Path, "/", `\/`), "authorization": r.Header.Get("Authorization"), "language": r.Header.Get("Accept-Language")})
+	}))
+	defer provider.Close()
+	origin := provider.URL
+	var base, authority string
+	client := &http.Client{Timeout: 10 * time.Second}
+	if runner == "node" {
+		origin = "https://api.example"
+		app := New("Basic API", "<html><head></head><body>Accounts</body></html>", nil, []string{origin}, []ConnectionRequirement{{Name: "API", Kind: "basic", Origin: origin}})
+		hook := fmt.Sprintf(`import dns from "node:dns/promises";import https from "node:https";
+	dns.lookup=async()=>[{address:"8.8.8.8",family:4}];
+	const original=https.request;https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathname=url.pathname;fixture.search=url.search;return original(fixture,{...options,lookup:undefined,rejectUnauthorized:false},callback)};`, provider.URL)
+		base = runNode(t, app, hook)
+		authority = strings.TrimPrefix(base, "http://")
+	} else {
+		gate, _ := egress.NewForTests([]string{origin}, egress.Limits{})
+		app := New("Basic API", "<html><head></head><body>Accounts</body></html>", nil, []string{origin}, []ConnectionRequirement{{Name: "API", Kind: "basic", Origin: origin}})
+		server, err := NewServer(app, ServerOptions{AllowedHosts: []string{"runner.example"}, Gate: gate})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer server.Close()
+		fixture := httptest.NewServer(server)
+		defer fixture.Close()
+		base, authority = fixture.URL, "runner.example"
+	}
+	response := localRequest(t, client, base, authority, "GET", "/__exhibit/connect", "", "", "")
+	token := csrfFromPage(t, bodyText(t, response))
+	var policy string
+	policyPattern := regexp.MustCompile(`(?:const policy = |var policy = )"([A-Za-z0-9_-]+)"`)
+	connect := func(limit int) {
+		t.Helper()
+		access, _ := url.Parse(origin + "/private%3Ctoken%3E")
+		access.User = url.UserPassword("api-user", "api-password")
+		form := url.Values{"csrf": {token}, "index": {"0"}, "kind": {"basic"}, "access_url": {access.String()}, "cache_minutes": {"1"}, "daily_limit": {strconv.Itoa(limit)}, "action": {"connect"}}
+		response := localRequest(t, client, base, authority, "POST", "/__exhibit/connect", form.Encode(), "", "application/x-www-form-urlencoded")
+		text := bodyText(t, response)
+		if !strings.Contains(text, "Connected locally") || strings.Contains(text, "private%3Ctoken%3E") || strings.Contains(text, "api-password") {
+			t.Fatalf("connection failed or returned access data: %s", text)
+		}
+		response = localRequest(t, client, base, authority, "GET", "/__exhibit/render", "", "", "")
+		match := policyPattern.FindStringSubmatch(bodyText(t, response))
+		if len(match) != 2 {
+			t.Fatal("render omitted policy token")
+		}
+		policy = match[1]
+	}
+	request := func(path string, headers map[string]string) (int, relayResponse) {
+		t.Helper()
+		input, _ := json.Marshal(relayRequest{URL: origin + path, Method: "GET", Policy: policy, Headers: headers})
+		response := localRequest(t, client, base, authority, "POST", "/__exhibit/relay", string(input), token, "application/json")
+		defer response.Body.Close()
+		var result relayResponse
+		_ = json.NewDecoder(response.Body).Decode(&result)
+		body, _ := base64.StdEncoding.DecodeString(result.BodyBase64)
+		if len(body) > 0 && !json.Valid(body) {
+			t.Errorf("response redaction corrupted provider JSON: %s", body)
+		}
+		serialized, _ := json.Marshal(result)
+		for _, private := range []string{"private", "token", "api-user", "api-password", base64.StdEncoding.EncodeToString([]byte("api-user:api-password"))} {
+			if bytes.Contains(body, []byte(private)) || bytes.Contains(serialized, []byte(private)) {
+				t.Errorf("private access data reflected into relay response: %s / %s", body, serialized)
+			}
+		}
+		return response.StatusCode, result
+	}
+	connect(0)
+	for _, test := range []struct {
+		path    string
+		headers map[string]string
+		status  int
+		calls   int32
+	}{
+		{"/resource", nil, 200, 1},
+		{"/resource", map[string]string{"Range": "bytes=0-9"}, 206, 2},
+		{"/resource", map[string]string{"If-None-Match": "tag"}, 304, 2},
+		{"/resource", map[string]string{"Accept-Language": "fr"}, 200, 1},
+		{"/resource", map[string]string{"Accept-Language": "en"}, 200, 1},
+		{"/vary-star", nil, 200, 2},
+		{"/no-store", nil, 200, 2},
+		{"/partial", nil, 206, 2},
+	} {
+		before := calls.Load()
+		for range 2 {
+			status, result := request(test.path, test.headers)
+			if status != 200 || result.Status != test.status {
+				t.Fatalf("request %s failed: %d %#v", test.path, status, result)
+			}
+		}
+		if calls.Load()-before != test.calls {
+			t.Errorf("%s %v: wanted %d provider contacts, got %d", test.path, test.headers, test.calls, calls.Load()-before)
+		}
+	}
+	connect(1)
+	before := calls.Load()
+	status, _ := request("/redirect", nil)
+	if status != 429 || calls.Load()-before != 1 {
+		t.Fatalf("redirect exceeded connection quota: status %d, %d provider calls", status, calls.Load()-before)
+	}
+}
+
+func TestGoLocalConnectionResponseReuseAndQuotaSafety(t *testing.T) {
+	exerciseLocalConnectionSafety(t, "go")
 }

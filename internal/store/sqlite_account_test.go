@@ -289,7 +289,7 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: deletedArtifact, ConnectionID: "member-connection", ViewerID: member.ID, ShareWithRecipients: true}))
 	require.NoError(t, s.ReserveConnectionRequest(ctx, "member-connection", 24, time.Now()))
 	require.NoError(t, s.PutConnectionCache(ctx, "member-connection", "hash", "sealed", time.Now().Add(time.Hour)))
-	_, err = s.RequestArtifactConnection(ctx, member.ID, deletedArtifact, "simplefin", "Read my accounts")
+	_, err = s.RequestArtifactConnection(ctx, member.ID, deletedArtifact, "basic", "Read my accounts")
 	require.NoError(t, err)
 	require.NoError(t, s.SaveTranscript(ctx, member.ID, Transcript{ArtifactID: deletedArtifact, SessionID: "sess-1", SessionFile: "{}\n"}))
 	// The recorded lengths of the two blobs the artifact above names, so the

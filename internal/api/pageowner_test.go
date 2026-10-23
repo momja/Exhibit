@@ -287,7 +287,7 @@ func seedOwnedArtifact(t *testing.T, ro *Router, owner int64, id, title, bodyMar
 		Tier: store.Tier1, SourceText: bodyMarker,
 		SourceURL: "https://" + id + ".example/snapshot",
 	}))
-	_, err := ro.cfg.Store.(store.ConnectionRequestStore).RequestArtifactConnection(ctx, owner, id, "simplefin", "Read account balances")
+	_, err := ro.cfg.Store.(store.ConnectionRequestStore).RequestArtifactConnection(ctx, owner, id, "basic", "Read account balances")
 	require.NoError(t, err)
 	require.NoError(t, ro.cfg.Store.SetState(ctx, store.OwnerID(owner), id, store.ViewerID(owner), "note", stateMarker))
 	// An edit on top of it, which makes what is above an earlier version — one

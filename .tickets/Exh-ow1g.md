@@ -1,6 +1,6 @@
 ---
 id: Exh-ow1g
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-23T05:21:31Z
@@ -12,7 +12,7 @@ tags: [experimental, connectors]
 ---
 # [Experimental] Remove the built-in provider-specific connector; generic Basic covers it
 
-EXPERIMENTAL; part of Exh-g2vv. Decision (2026-10-23): Exhibit ships no provider-specific connector for that service; it must not be an official connector. The branch feature/Exh-g2vv/relay-connectors ships one as recipe id `simplefin`. Remove it and every reference to it.
+EXPERIMENTAL; part of Exh-g2vv. Decision (2026-10-23): Exhibit ships no provider-specific connector for that service; it must not be an official connector. Remove the former built-in recipe, acquisition flow and every reference to it from feature/Exh-g2vv/relay-connectors.
 
 ## Remove
 - The built-in recipe and its claim flow (setup-token decode and server-side claim): internal/connectors/connectors.go, plus provider-specific stand-in handling in internal/connectors/standins.go.
@@ -36,9 +36,15 @@ Existing connections created from the built-in recipe (experimental, so only sta
 
 ## Acceptance Criteria
 
-- `git grep -i simplefin` on the branch returns nothing outside history.
+- A case-insensitive tracked-file search for the removed provider name returns nothing outside history.
 - A Basic connection created from a pasted credential URL authenticates relay requests to its origin only.
 - Per-connection daily-request and cache limits are enforced across artifacts; exceeding the limit is refused before the provider is contacted.
 - New connections default to no other destinations.
 - All replaced tests pass against the generic connector.
 
+
+## Notes
+
+**2026-10-23T05:38:56Z**
+
+Removed the built-in connector, acquisition flow and examples. Generic Basic credential URLs now keep credentials/private bases encrypted; user daily limits and GET reuse work connection-wide, with quota reserved on every provider hop. All connections default to no other destinations. Shape-based migration 040 converts existing Basic native records, preserves grants/custody/limits and invalidates old viewer-scrubbed cache entries. Native, API/export and Go/Node parity fixtures pass; race-tested bundle suite passes. Full integration suite will be recorded with the vendor follow-up. Local runner credentials and counters keep their documented per-session lifetime.

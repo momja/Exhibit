@@ -106,7 +106,7 @@ addEventListener('message',event=>{
 		if r.Header.Get("X-Exhibit-Relay-Policy") != "app-policy" {
 			badPolicy.Store(true)
 		}
-		writeJSON(w, 200, map[string]any{"grants": []map[string]any{{"connection": map[string]any{"id": "connection-1", "name": "Budget", "provider": "simplefin", "origins": []string{"https://api.example.test"}, "endpoint": "/accounts"}}}})
+		writeJSON(w, 200, map[string]any{"grants": []map[string]any{{"connection": map[string]any{"id": "connection-1", "name": "Private API", "provider": "basic", "origins": []string{"https://api.example.test"}, "endpoint": "/"}}}})
 	})
 	mux.HandleFunc("/api/artifacts/app-1/connections/connection-1/standin", func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -151,7 +151,7 @@ addEventListener('message',event=>{
 		require.True(t, ok, expression)
 	}
 	run(chromedp.Navigate(appServer.URL), chromedp.Poll[chromedp.Void](`window.relayResults.length === 1 || window.relayError`))
-	check(`!window.relayError && relayResults[0].body.includes('appOriginCompromised') && relayResults[0].connections[0].name === 'Budget' && relayResults[0].standin.value === 'placeholder-handle'`)
+	check(`!window.relayError && relayResults[0].body.includes('appOriginCompromised') && relayResults[0].connections[0].name === 'Private API' && relayResults[0].standin.value === 'placeholder-handle'`)
 	check(`!window.appOriginCompromised && !document.getElementById('upstream-unsafe')`)
 	assert.EqualValues(t, 3, calls.Load())
 	assert.False(t, badPolicy.Load(), "only the app-side policy is sent with a relay call")

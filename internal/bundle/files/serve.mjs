@@ -27,7 +27,9 @@ const allowed = new Set((manifest.network_allowlist || []).map(normalizeOrigin))
 const requirements = [...(manifest.connections || [])];
 for (const requirement of requirements) {
   requirement.origin = normalizeOrigin(requirement.origin);
-  if (!allowed.has(requirement.origin) || !["bearer", "basic", "api-key", "simplefin"].includes(requirement.kind)) throw new Error("Invalid local connection requirement.");
+  if (!allowed.has(requirement.origin) || !["bearer", "basic", "api-key"].includes(requirement.kind)) throw new Error("Unsupported local connection requirement; export again and reconnect using a generic connection.");
+  validateLimits(requirement);
+  requirement.data_origins = normalizedDataOrigins(requirement.origin, requirement.data_origins);
 }
 for (const origin of allowed) if (origin.startsWith("https:") && !requirements.some(requirement => requirement.origin === origin)) requirements.push({name:origin, origin, kind:"bearer", header:"X-API-Key"});
 const page = fs.readFileSync(path.join(directory, "index.html"), "utf8");
@@ -39,16 +41,22 @@ const policyPath = statePath + ".policy.json";
 let state = Object.assign(Object.create(null), JSON.parse(fs.readFileSync(statePath, "utf8")));
 const csrf = crypto.randomBytes(32).toString("base64url");
 let framePolicy = crypto.randomBytes(32).toString("base64url");
-const financialOrigins = new Set(requirements.filter(requirement => requirement.kind === "simplefin").map(requirement => requirement.origin));
+const dataPolicies = new Map((manifest.connections || []).map(requirement => [requirement.origin, requirement.data_origins]));
 if (fs.existsSync(policyPath)) {
   const raw = fs.readFileSync(policyPath,"utf8");
-  if (Buffer.byteLength(raw)>65536) throw new Error("Saved local financial policy exceeds its limit.");
+  if (Buffer.byteLength(raw)>65536) throw new Error("Saved local connection data policy exceeds its limit.");
   const policy = JSON.parse(raw);
-  if (!Array.isArray(policy.financial_origins) || !policy.financial_origins.length) throw new Error("Invalid saved local financial policy.");
-  for (const origin of policy.financial_origins) { const normalized = normalizeOrigin(origin); if (!allowed.has(normalized) || !normalized.startsWith("https:")) throw new Error("Saved local financial policy does not match this bundle."); financialOrigins.add(normalized); }
+  const saved = {...(policy.data_policies || {})};
+  for (const origin of policy.financial_origins || []) saved[origin] = [origin]; // Retain older restrictive policies.
+  if (!Object.keys(saved).length) throw new Error("Invalid saved local connection data policy.");
+  for (const [source, destinations] of Object.entries(saved)) {
+    if (source !== normalizeOrigin(source) || !source.startsWith("https:") || !allowed.has(source)) throw new Error("Saved local data policy does not match this bundle.");
+    dataPolicies.set(source, normalizedDataOrigins(source, destinations));
+  }
 }
 const connections = new Map();
 const cache = new Map();
+const connectionLocks = new Map();
 const allowedHosts = new Set();
 const requestHeaders = new Set(["accept", "accept-language", "content-type", "if-match", "if-none-match", "if-modified-since", "if-unmodified-since", "range", "if-range", "cache-control"]);
 const responseHeaders = new Set(["content-type", "content-language", "cache-control", "etag", "last-modified", "expires", "date", "retry-after", "accept-ranges", "content-range", "vary"]);
@@ -102,7 +110,7 @@ function selectedHeaders(headers, allowedNames) {
   for (const [name, value] of Object.entries(headers || {})) if (allowedNames.has(name.toLowerCase()) && !hop.has(name.toLowerCase())) result[name.toLowerCase()] = Array.isArray(value) ? value.join(", ") : String(value);
   return result;
 }
-async function exchange(url, method, headers, body, signal) {
+async function exchange(url, method, headers, body, signal, authorize) {
   const host = url.hostname.replace(/^\[|\]$/g, "");
   const addresses = net.isIP(host) ? [{address:host, family:net.isIP(host)}] : await new Promise((resolve, reject) => {
     const aborted = () => reject(new Error("The relay timed out."));
@@ -113,6 +121,7 @@ async function exchange(url, method, headers, body, signal) {
   if (!addresses.length || addresses.some(({address}) => !publicAddress(address))) throw new Error("Destination DNS includes a non-public address.");
   addresses.sort((left, right) => left.family - right.family);
   const chosen = addresses[0];
+  authorize(url, headers); // After all DNS answers pass, immediately before contact.
   return new Promise((resolve, reject) => {
     const request = https.request(url, {method, headers, signal, agent:outboundAgent, family:chosen.family, autoSelectFamily:false, maxHeaderSize:65536,
       // DNS answers were checked once; the socket is pinned to that literal.
@@ -141,8 +150,9 @@ async function gate(input, origins = allowed, authorize = () => {}) {
   if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(method)) throw new Error("Unsupported relay method.");
   if (typeof input.body_base64 !== "string" || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(input.body_base64)) throw new Error("Invalid relay body.");
   let body = Buffer.from(input.body_base64, "base64");
-  if (body.length > 1048576 || !input.headers || typeof input.headers !== "object" || Object.keys(input.headers).length > 64) throw new Error("Relay request exceeds its limit.");
-  const baseHeaders = selectedHeaders(input.headers, requestHeaders);
+  const inputHeaders = input.headers ?? {};
+  if (body.length > 1048576 || typeof inputHeaders !== "object" || Array.isArray(inputHeaders) || Object.keys(inputHeaders).length > 64) throw new Error("Relay request exceeds its limit.");
+  const baseHeaders = selectedHeaders(inputHeaders, requestHeaders);
   if (Object.entries(baseHeaders).reduce((length, [name, value]) => length + Buffer.byteLength(name) + Buffer.byteLength(value) + 4, 0) > 65536) throw new Error("Relay headers exceed their byte limit.");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
@@ -151,8 +161,7 @@ async function gate(input, origins = allowed, authorize = () => {}) {
     for (let hop = 0; ; hop++) {
       url = checkURL(url.href, origins);
       const headers = {...baseHeaders, "user-agent":"Exhibit-Relay/1", "accept-encoding":"gzip, deflate"};
-      authorize(url, headers);
-      const response = await exchange(url, method, headers, body, controller.signal);
+      const response = await exchange(url, method, headers, body, controller.signal, authorize);
       if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
         response.destroy();
         if (hop >= 5) throw new Error("Too many redirects.");
@@ -175,11 +184,60 @@ function credentialHeader(header) {
   const name = String(header || "").toLowerCase();
   return /^[a-z0-9-]{1,128}$/.test(name) && !/^(proxy-|sec-|x-forwarded-)/.test(name) && !["cookie", "set-cookie", "host", "origin", "referer", "connection", "content-length", "transfer-encoding", "te", "trailer", "upgrade", "accept-encoding", "user-agent"].includes(name);
 }
-function validateConnection(connection) {
-  if (connection.origin !== normalizeOrigin(connection.origin) || !connection.origin.startsWith("https:") || !allowed.has(connection.origin)) throw new Error("Connection requires an allowed HTTPS origin.");
-  if (connection.kind === "bearer" && !connection.secret || connection.kind === "api-key" && (!connection.secret || !credentialHeader(connection.header)) || connection.kind === "basic" && (!connection.username || !connection.password || connection.username.includes(":")) || connection.kind === "simplefin" && (!connection.username || !connection.password || !connection.endpoint) || !["bearer", "api-key", "basic", "simplefin"].includes(connection.kind)) throw new Error("Enter the required credentials for the selected kind.");
-  if (/[\r\n]/.test((connection.secret || "") + (connection.username || "") + (connection.password || ""))) throw new Error("Credentials cannot contain line breaks.");
+function safeAccessPath(value) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (value.includes("\\") || value.split("/").some(part => [".", ".."].includes(part))) return false;
+    let decoded;
+    try { decoded = decodeURIComponent(value); } catch { return false; }
+    if (decoded === value) return true;
+    value = decoded;
+  }
+  return false;
 }
+function validateLimits(connection) {
+  for (const name of ["daily_limit", "cache_minutes"]) if (connection[name] !== undefined && (!Number.isSafeInteger(connection[name]) || connection[name] < 0)) throw new Error("Enter whole nonnegative request and response reuse limits.");
+  if ((connection.cache_minutes || 0) > 525600) throw new Error("Response reuse cannot exceed 525600 minutes.");
+}
+function normalizedDataOrigins(source, destinations) {
+  if (destinations !== undefined && !Array.isArray(destinations)) throw new Error("Invalid connection data destinations.");
+  const result = [...new Set([source,...(destinations || [])].map(normalizeOrigin))].sort();
+  if (result.some(origin => !allowed.has(origin))) throw new Error("Connection data destination must be in the bundle allowlist.");
+  return result;
+}
+function prepareConnection(input) {
+  const connection = {...input};
+  if (connection.access_url) {
+    try {
+      const value = String(connection.access_url).trim();
+      const rawPath = /^https:\/\/[^/?#]+([^?#]*)/.exec(value)?.[1] || "";
+      const access = new URL(value);
+      if (value.length > 8192 || connection.kind !== "basic" || access.protocol !== "https:" || !access.username || !access.password || access.search || access.hash || !safeAccessPath(rawPath)) throw new Error();
+      const origin = normalizeOrigin(access.origin);
+      if (connection.origin && connection.origin !== origin) throw new Error();
+      connection.origin = origin;
+      connection.username = decodeURIComponent(access.username);
+      connection.password = decodeURIComponent(access.password);
+      connection.base_path = decodeURIComponent(access.pathname).replace(/\/+$/, "");
+      delete connection.access_url;
+    } catch { throw new Error("Enter an HTTPS Basic access URL with embedded credentials at this connection's allowed origin, without query or fragment."); }
+  }
+  if (connection.origin !== normalizeOrigin(connection.origin) || !connection.origin.startsWith("https:") || !allowed.has(connection.origin)) throw new Error("Connection requires an allowed HTTPS origin.");
+  if (connection.kind === "bearer" && !connection.secret || connection.kind === "api-key" && (!connection.secret || !credentialHeader(connection.header)) || connection.kind === "basic" && (!connection.username || !connection.password || connection.username.includes(":")) || !["bearer", "api-key", "basic"].includes(connection.kind)) throw new Error("Enter the required credentials for a generic connection; reconnect older unsupported connections.");
+  if (/[\r\n]/.test((connection.secret || "") + (connection.username || "") + (connection.password || ""))) throw new Error("Credentials cannot contain line breaks.");
+  validateLimits(connection);
+  connection.data_origins = normalizedDataOrigins(connection.origin, connection.data_origins);
+  return connection;
+}
+function effectiveDataOrigins() {
+  return new Set([...allowed].filter(origin => [...dataPolicies.values()].every(destinations => destinations.includes(origin))));
+}
+function recordDataPolicy(source, destinations) {
+  const policies = new Map(dataPolicies); policies.set(source, destinations);
+  fs.writeFileSync(policyPath+".tmp", JSON.stringify({data_policies:Object.fromEntries(policies)}), {mode:0o600});
+  fs.renameSync(policyPath+".tmp", policyPath);
+  dataPolicies.set(source, destinations);
+}
+
 function scrubResponse(connection, response) {
   const values = [connection.secret,connection.username,connection.password];
   if (connection.username || connection.password) values.push(connection.username + ":" + connection.password, Buffer.from(connection.username + ":" + connection.password).toString("base64"));
@@ -187,22 +245,34 @@ function scrubResponse(connection, response) {
   const scrub = buffer => {
     let data = buffer.toString("latin1");
     for (const value of values) if (value) for (const variation of [value, encodeURIComponent(value), new URLSearchParams({value}).toString().slice(6), JSON.stringify(value).slice(1,-1)]) data = data.split(Buffer.from(variation).toString("latin1")).join(Buffer.byteLength(variation) < 21 ? "*" : "[credential redacted]");
-    if (connection.kind === "simplefin" && connection.endpoint) data = data.split(connection.endpoint).join("/accounts");
+    if (connection.base_path) {
+      const escapedPath = connection.base_path.split("/").map(encodeURIComponent).join("/");
+      for (const value of [connection.base_path,escapedPath,encodeURIComponent(connection.base_path),new URLSearchParams({value:connection.base_path}).toString().slice(6)]) {
+        const jsonValue = JSON.stringify(value).slice(1,-1).replace(/[<>&]/g, char => "\\u" + char.charCodeAt(0).toString(16).padStart(4,"0"));
+        for (const variation of [value,jsonValue,value.replaceAll("/","\\/"),jsonValue.replaceAll("/","\\/")]) data = data.split(Buffer.from(variation).toString("latin1")).join("");
+      }
+    }
     return Buffer.from(data,"latin1");
   };
   response.body_base64 = scrub(Buffer.from(response.body_base64,"base64")).toString("base64");
   response.url = scrub(Buffer.from(response.url)).toString();
   for (const [name,value] of Object.entries(response.headers)) response.headers[name] = scrub(Buffer.from(value)).toString();
 }
-for (const connection of JSON.parse(process.env.EXHIBIT_CONNECTIONS || "[]")) { validateConnection(connection); connections.set(connection.origin, connection); }
+for (const input of JSON.parse(process.env.EXHIBIT_CONNECTIONS || "[]")) { const connection = prepareConnection(input); recordDataPolicy(connection.origin, connection.data_origins); connections.set(connection.origin, connection); }
 
 const escape = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[char]));
 const json = value => JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
 const style = "body{font:16px/1.5 system-ui;color:#172126;background:#f6f7f8;margin:40px auto;padding:0 20px;max-width:720px}a{color:#146350}form{padding:24px;background:white;border:1px solid #dce0e1;border-radius:12px;margin:20px 0}label{display:block;margin:14px 0}input,select,button{font:inherit;padding:9px;border:1px solid #bcc6c5;border-radius:6px;max-width:100%;box-sizing:border-box}input{display:block;width:100%}button{cursor:pointer;background:#146350;color:white;margin-right:8px}code{overflow-wrap:anywhere}.muted,small{font-size:14px;color:#52615f}h2{font-size:19px;margin:0}.message{padding:12px;background:#e2eee8}";
 function connectPage(message = "") {
-  const forms = requirements.map((requirement, index) => `<form method="post" action="/__exhibit/connect" autocomplete="off" data-connection-form><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="index" value="${index}"><h2>${escape(requirement.name)}</h2><code>${escape(requirement.origin)}</code><p class="muted">${connections.has(requirement.origin) ? "Connected locally" : "No local credentials"}</p><label>Connection kind<select name="kind">${[["bearer","Bearer token"],["api-key","API key header"],["basic","Basic authentication"],["simplefin","SimpleFIN setup token"]].map(([kind, name]) => `<option value="${kind}" ${requirement.kind === kind ? "selected" : ""}>${name}</option>`).join("")}</select></label><div data-kinds="bearer api-key"><label>API key or bearer token<input type="password" name="secret" autocomplete="new-password"></label></div><div data-kinds="api-key"><label>API key header<input name="header" value="${escape(requirement.header || "X-API-Key")}"></label></div><div data-kinds="basic"><label>Basic username<input name="username" autocomplete="off"></label><label>Basic password<input type="password" name="password" autocomplete="new-password"></label></div><div data-kinds="simplefin"><label>SimpleFIN setup token<input type="password" name="setup" autocomplete="new-password"></label></div><small>Credentials are used only for this origin. Reconnecting replaces the current local connection.</small><p><button name="action" value="connect">Connect locally</button>${connections.has(requirement.origin) ? '<button name="action" value="disconnect">Disconnect</button>' : ""}</p></form>`).join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local connections · ${escape(manifest.title)}</title><style>${style}</style></head><body><a href="/">← Back to app</a><h1>Local connections</h1><p>Connect ${escape(manifest.title)} on this machine. Credentials stay outside the app frame and remain only until this runner stops.</p><p class="muted">This app can read connected data and send it to: ${escape([...allowed].join(", "))}. SimpleFIN restricts relay requests to its financial origin, with at most 24 provider requests per day.</p>${message ? `<p class="message" role="status">${escape(message)}</p>` : ""}${forms || "<p>This app has no allowed external origins.</p>"}<script type="module">${connectScript}</script></body></html>`;
+  const forms = requirements.map((requirement, index) => {
+    const connection = connections.get(requirement.origin);
+    const kind = connection?.kind || requirement.kind;
+    const destinations = [...allowed].filter(origin => origin !== requirement.origin).map(origin => `<label><input type="checkbox" name="data_origins" value="${escape(origin)}" ${(dataPolicies.get(requirement.origin) || []).includes(origin) ? "checked" : ""}> Explicitly allow ${escape(origin)}</label>`).join("");
+    return `<form method="post" action="/__exhibit/connect" autocomplete="off" data-connection-form><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="index" value="${index}"><h2>${escape(requirement.name)}</h2><code>${escape(requirement.origin)}</code><p class="muted">${connection ? "Connected locally" : "No local credentials"}</p><label>Connection kind<select name="kind">${[["bearer","Bearer token"],["api-key","API key header"],["basic","Basic authentication"]].map(([value, name]) => `<option value="${value}" ${kind === value ? "selected" : ""}>${name}</option>`).join("")}</select></label><div data-kinds="bearer api-key"><label>API key or bearer token<input type="password" name="secret" autocomplete="new-password"></label></div><div data-kinds="api-key"><label>API key header<input name="header" value="${escape(requirement.header || "X-API-Key")}"></label></div><div data-kinds="basic"><label>Basic access URL (HTTPS with embedded username and password)<input type="password" name="access_url" autocomplete="new-password" placeholder="https://user:password@api.example/private-base"></label><p class="muted">Or enter the credentials separately when the API has no private base path.</p><label>Basic username<input name="username" autocomplete="off"></label><label>Basic password<input type="password" name="password" autocomplete="new-password"></label></div><label>Maximum provider requests per UTC day (optional)<input type="number" name="daily_limit" min="0" step="1" value="${escape((connection?.daily_limit ?? requirement.daily_limit) || "")}"></label><label>Reuse successful GET/HEAD responses for minutes (optional)<input type="number" name="cache_minutes" min="0" max="525600" step="1" value="${escape((connection?.cache_minutes ?? requirement.cache_minutes) || "")}"></label><fieldset><legend>Data may go to</legend><p>${escape(requirement.origin)} (this connection's source)</p>${destinations}</fieldset><small>Credentials are used only for this origin. Reconnecting replaces the current local connection. Limits and reuse apply during this runner session.</small><p><button name="action" value="connect">Connect locally</button>${connection ? '<button name="action" value="disconnect">Disconnect</button>' : ""}</p></form>`;
+  }).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local connections · ${escape(manifest.title)}</title><style>${style}input[type=checkbox]{display:inline;width:auto}fieldset{border:1px solid #dce0e1;border-radius:6px;margin-top:20px}</style></head><body><a href="/">← Back to app</a><h1>Local connections</h1><p>Connect ${escape(manifest.title)} on this machine. Credentials stay outside the app frame and remain only until this runner stops. Reconnect after restarting.</p><p class="muted">Every connection keeps data at its own origin by default. Explicitly approve any other destination below. Saved data policies survive disconnecting and restarting. The app's allowed origins are: ${escape([...allowed].join(", "))}.</p>${message ? `<p class="message" role="status">${escape(message)}</p>` : ""}${forms || "<p>This app has no allowed external origins.</p>"}<script type="module">${connectScript}</script></body></html>`;
 }
+
 function send(response, status, body, type = "application/json") { response.writeHead(status, {"Content-Type":type}); response.end(body); }
 function error(response, status, message) { send(response, status, JSON.stringify({error:message})); }
 async function readBody(request) {
@@ -228,51 +298,57 @@ function persist(operation) {
   fs.renameSync(statePath + ".tmp", statePath);
   state = next;
 }
-async function claimSimpleFIN(setup, expectedOrigin) {
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(setup)) throw new Error("Enter a valid SimpleFIN setup token.");
-  const claim = new URL(Buffer.from(setup, "base64").toString("utf8"));
-  if (claim.protocol !== "https:" || claim.username || claim.password || claim.hash) throw new Error("SimpleFIN requires an HTTPS claim URL.");
-  const response = await gate({url:claim.href, method:"POST", headers:{}, body_base64:""}, new Set([normalizeOrigin(claim.origin)]));
-  if (response.status < 200 || response.status >= 300) throw new Error("SimpleFIN setup could not be claimed; it may already have been used.");
-  const access = new URL(Buffer.from(response.body_base64, "base64").toString("utf8").trim());
-  if (access.protocol !== "https:" || !access.username || !access.password || access.search || access.hash || normalizeOrigin(access.origin) !== expectedOrigin) throw new Error("SimpleFIN returned an invalid or different access origin; update exhibit.json if its origin changed.");
-  return {origin:expectedOrigin, kind:"simplefin", username:decodeURIComponent(access.username), password:decodeURIComponent(access.password), endpoint:access.pathname.replace(/\/$/, "") + "/accounts", calls:0};
-}
 async function relay(input) {
   const checkPolicy = () => { if (input.policy !== framePolicy) { const failure = new Error("Connections changed; reloading the app with its current network policy."); failure.reload = true; throw failure; } };
   checkPolicy();
-  const publicURL = input.url;
-  const original = checkURL(input.url, allowed);
-  const origin = normalizeOrigin(original.origin);
-  const connection = connections.get(origin);
-  if ([...financialOrigins].some(financialOrigin => financialOrigin !== origin)) throw new Error("This financial app may send data only to its financial origin, including after disconnect.");
-  if ((manifest.connections || []).some(requirement => requirement.origin === origin) && !connection) throw new Error("Connect this app locally using Connections in the page header.");
-  const key = (input.method || "GET") + " " + input.url;
-  if (connection?.kind === "simplefin") {
-    if (original.pathname !== "/accounts" || !["GET", "HEAD"].includes(input.method || "GET")) throw new Error("SimpleFIN permits only GET /accounts.");
-    const saved = cache.get(key); if (saved && saved.expires > Date.now()) return saved.response;
-    const day = new Date().toISOString().slice(0, 10);
-    if (connection.day !== day) { connection.day = day; connection.calls = 0; }
-    if (connection.calls >= 24) throw new Error("SimpleFIN's daily request limit has been reached.");
-    connection.calls++;
-    original.pathname = connection.endpoint;
-    input = {...input, url:original.href};
-  }
-  const response = await gate(input, allowed, (url, headers) => {
-    const hopOrigin = normalizeOrigin(url.origin);
-    if ([...financialOrigins].some(financialOrigin => financialOrigin !== hopOrigin)) throw new Error("Financial data destinations remain restricted after disconnect.");
-    if (!connection) return;
-    if (connection.kind === "simplefin" && (hopOrigin !== origin || url.pathname !== connection.endpoint)) throw new Error("Financial connector redirects are restricted.");
-    if (hopOrigin !== origin) return;
-    if (connection.kind === "bearer") headers.authorization = "Bearer " + connection.secret;
-    else if (["basic", "simplefin"].includes(connection.kind)) headers.authorization = "Basic " + Buffer.from(connection.username + ":" + connection.password).toString("base64");
-    else if (connection.kind === "api-key") headers[connection.header.toLowerCase()] = connection.secret;
-  });
-  checkPolicy();
-  if (connection?.kind === "simplefin") response.url = publicURL;
-  if (connection) scrubResponse(connection,response);
-  if (connection?.kind === "simplefin" && response.status >= 200 && response.status < 300) cache.set(key, {response, expires:Date.now() + 3600000});
-  return response;
+  const origin = normalizeOrigin(checkURL(input.url, allowed).origin);
+  const previous = connectionLocks.get(origin) || Promise.resolve();
+  let release;
+  const lock = new Promise(resolve => { release = resolve; });
+  connectionLocks.set(origin, lock);
+  await previous;
+  try {
+    checkPolicy();
+    const permitted = effectiveDataOrigins();
+    const original = checkURL(input.url, permitted);
+    const connection = connections.get(origin);
+    if ((manifest.connections || []).some(requirement => requirement.origin === origin) && !connection) { const failure = new Error("Connect this app locally using Connections in the page header."); failure.status = 409; throw failure; }
+    const method = input.method || "GET";
+    const selected = selectedHeaders(input.headers || {}, requestHeaders);
+    const key = method + " " + input.url + " " + JSON.stringify(Object.entries(selected).sort());
+    const cacheable = connection?.cache_minutes > 0 && ["GET", "HEAD"].includes(method) && !input.body_base64 && !["range","if-range","if-match","if-none-match","if-modified-since","if-unmodified-since"].some(name => selected[name]) && !/no-/i.test(selected["cache-control"] || "");
+    if (cacheable) { const saved = cache.get(key); if (saved && saved.expires > Date.now()) return saved.response; }
+    const publicURL = input.url;
+    if (connection?.base_path) {
+      const rawPath = /^https:\/\/[^/?#]+([^?#]*)/.exec(input.url)?.[1] || "";
+      if (!safeAccessPath(rawPath)) throw new Error("Invalid path for this connection.");
+      original.pathname = connection.base_path + "/" + original.pathname.replace(/^\/+/, "");
+      input = {...input, url:original.href};
+    }
+    const response = await gate(input, permitted, (url, headers) => {
+      checkPolicy();
+      const hopOrigin = normalizeOrigin(url.origin);
+      if (!permitted.has(hopOrigin)) throw new Error("Connected data destinations remain restricted after disconnect.");
+      if (!connection || hopOrigin !== origin) return;
+      const hopPath = decodeURIComponent(url.pathname);
+      if (connection.base_path && (!safeAccessPath(hopPath) || hopPath !== connection.base_path && !hopPath.startsWith(connection.base_path + "/"))) throw new Error("Redirect leaves the connection's private base path.");
+      const day = new Date().toISOString().slice(0, 10);
+      if (connection.day !== day) { connection.day = day; connection.calls = 0; }
+      if (connection.daily_limit && connection.calls >= connection.daily_limit) { const failure = new Error("This connection's daily request limit has been reached."); failure.status = 429; throw failure; }
+      connection.calls++;
+      if (connection.kind === "bearer") headers.authorization = "Bearer " + connection.secret;
+      else if (connection.kind === "basic") headers.authorization = "Basic " + Buffer.from(connection.username + ":" + connection.password).toString("base64");
+      else if (connection.kind === "api-key") headers[connection.header.toLowerCase()] = connection.secret;
+    });
+    checkPolicy();
+    if (connection?.base_path) response.url = publicURL;
+    if (connection) scrubResponse(connection,response);
+    if (cacheable && response.status >= 200 && response.status < 300 && response.status !== 206 && !response.headers.vary?.includes("*") && !/no-store/i.test(response.headers["cache-control"] || "")) {
+      for (const [key,saved] of cache) if (saved.expires <= Date.now() || cache.size >= 128) cache.delete(key);
+      cache.set(key, {response, expires:Date.now() + connection.cache_minutes * 60000});
+    }
+    return response;
+  } finally { release(); if (connectionLocks.get(origin) === lock) connectionLocks.delete(origin); }
 }
 
 const server = http.createServer(async (request, response) => {
@@ -292,7 +368,7 @@ const server = http.createServer(async (request, response) => {
       response.setHeader("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'");
       send(response, 200, `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(manifest.title)}</title><style>html,body{height:100%;margin:0;font:15px system-ui;background:#f6f7f8;color:#172126}body{display:flex;flex-direction:column}header{display:flex;align-items:center;gap:20px;padding:12px 20px;border-bottom:1px solid #ddd}header strong{flex:1}a{color:#146350}iframe{border:0;width:100%;flex:1;background:white}.label{font-size:12px;color:#5c676c}</style></head><body><header><strong>${escape(manifest.title)}</strong><span class="label">Exhibit · local relay</span><a href="/__exhibit/connect" target="_blank" rel="noopener">Connections</a></header><iframe id="exhibit-app" title="${escape(manifest.title)}" sandbox="allow-scripts" src="/__exhibit/render"></iframe><script type="module">${hostScript.replaceAll("__EXHIBIT_CSRF__", json(csrf))}</script></body></html>`, "text/html; charset=utf-8");
     } else if (request.method === "GET" && url.pathname === "/__exhibit/render") {
-      const origins = [...(financialOrigins.size > 1 ? [] : financialOrigins.size ? financialOrigins : allowed)].join(" ");
+      const origins = [...effectiveDataOrigins()].join(" ");
       response.setHeader("Content-Security-Policy", `sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob: data: ${origins}; style-src 'unsafe-inline' ${origins}; img-src data: blob: ${origins}; font-src data: ${origins}; media-src data: blob: ${origins}; connect-src 'none'; worker-src blob: data:; frame-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'`);
       const script = "<script>" + shim.replaceAll("__EXHIBIT_STATE_JSON__", json(JSON.stringify(state))).replaceAll("__EXHIBIT_POLICY__", json(framePolicy)) + "</script>";
       const head = /<head(?:\s[^>]*)?>/i.exec(page);
@@ -302,7 +378,7 @@ const server = http.createServer(async (request, response) => {
       response.setHeader("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
       send(response, 200, connectPage(), "text/html; charset=utf-8");
     } else if (request.method === "GET" && url.pathname === "/__exhibit/connections") {
-      const list = requirements.filter(requirement => connections.has(requirement.origin)).map(requirement => { const connection = connections.get(requirement.origin); return {name:requirement.name,provider:connection.kind,kind:"native",origins:[connection.origin],endpoint:connection.kind === "simplefin" ? "/accounts" : ""}; });
+      const list = requirements.filter(requirement => connections.has(requirement.origin)).map(requirement => { const connection = connections.get(requirement.origin); return {name:requirement.name,provider:connection.kind,kind:"native",origins:[connection.origin]}; });
       send(response, 200, JSON.stringify(list));
     } else if (request.method === "POST" && url.pathname === "/__exhibit/connect" && form) {
       const index = Number(form.get("index"));
@@ -312,15 +388,9 @@ const server = http.createServer(async (request, response) => {
       try {
         if (form.get("action") === "disconnect") connections.delete(requirement.origin);
         else {
-          let connection = {origin:requirement.origin, kind:form.get("kind"), header:form.get("header"), secret:form.get("secret"), username:form.get("username"), password:form.get("password")};
-          if (connection.kind === "simplefin") connection = await claimSimpleFIN(form.get("setup").trim(), requirement.origin);
-          validateConnection(connection);
-          if (connection.kind === "simplefin") {
-            const financial_origins = [...new Set([...financialOrigins,connection.origin])].sort();
-            fs.writeFileSync(policyPath+".tmp",JSON.stringify({financial_origins}),{mode:0o600});
-            fs.renameSync(policyPath+".tmp",policyPath);
-            financialOrigins.add(connection.origin);
-          }
+          const limit = name => { const value = (form.get(name) || "").trim(); return value ? Number(value) : 0; };
+          const connection = prepareConnection({origin:requirement.origin, kind:form.get("kind"), header:form.get("header"), secret:form.get("secret"), username:form.get("username"), password:form.get("password"), access_url:form.get("access_url"), daily_limit:limit("daily_limit"), cache_minutes:limit("cache_minutes"), data_origins:form.getAll("data_origins")});
+          recordDataPolicy(connection.origin, connection.data_origins);
           connections.set(requirement.origin, connection);
           message = "Connected locally. Credentials remain in the runner's memory until it stops.";
         }
@@ -338,7 +408,7 @@ const server = http.createServer(async (request, response) => {
       try { send(response, 200, JSON.stringify(await relay(JSON.parse(body)))); }
       finally { active--; }
     } else error(response, 404, "Not found.");
-  } catch (failure) { if (!response.headersSent) { if (failure.reload) send(response, 409, JSON.stringify({error:failure.message,reload:true})); else error(response, 502, "The local runner refused or could not complete this request."); } else response.destroy(); }
+  } catch (failure) { if (!response.headersSent) { if (failure.reload) send(response, 409, JSON.stringify({error:failure.message,reload:true})); else error(response, failure.status || 502, failure.status ? failure.message : "The local runner refused or could not complete this request."); } else response.destroy(); }
 });
 server.requestTimeout = 20000;
 server.headersTimeout = 10000;

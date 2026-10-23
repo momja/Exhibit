@@ -622,9 +622,18 @@ destination policy returns 409 and requires reopening the artifact. Requests
 from ordinary state API clients continue to work without that optional header.
 
 Native connection creation accepts a named reviewed `recipe`: `api-key`,
-`bearer`, `basic` or `simplefin`. Generic recipes use an exact HTTPS `origin`;
+`bearer` or `basic`. Generic recipes use an exact HTTPS `origin`;
 API keys additionally choose a permitted `header`. Acquisition fields are
 accepted only in the trusted app interface and never appear in list responses.
+Basic additionally accepts `access_url`, a pasted HTTPS URL with embedded
+credentials, instead of `origin`/`username`/`password`. It separates the origin,
+credentials and base path before encryption; public metadata exposes only a
+virtual root endpoint. An artifact fetching `/accounts` at that origin reaches
+`/accounts` beneath the private base path. There is no setup-token claim flow.
+Optional `daily_limit` and `cache_minutes` cap daily provider requests and reuse
+responses across all artifacts and devices; zero means unlimited requests or
+no response reuse, respectively. Every connection starts with no additional data
+destinations, widened only by explicit approval.
 A grant includes `connection_id`, `permitted_egress` origins and explicit
 `share_with_recipients` consent. A schedule accepts
 `{url, state_key, interval_hours}` and stores a successful text response in the

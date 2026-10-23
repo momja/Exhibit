@@ -147,6 +147,61 @@ func TestConnectionAPIOnlyAcquiresSecretsInTrustedAppAndReturnsMetadata(t *testi
 	assert.Empty(t, list)
 }
 
+func TestBasicCredentialURLStaysOutOfMetadataAndExport(t *testing.T) {
+	ro := newTestRouter(t)
+	ro.cfg.Relay.Enabled = true
+	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	id := createOwnArtifact(t, ro)
+	ctx := context.Background()
+	const origin = "https://api.example.test"
+	require.NoError(t, ro.cfg.Store.SetOriginDecision(ctx, 1, id, origin, store.DecisionAllow, "test"))
+	w := doJSON(t, ro, http.MethodPost, "/api/connections", map[string]any{
+		"name": "Private Basic API", "recipe": "basic",
+		"access_url":  "https://private-user-193:private-password-193@api.example.test/private-base-193/",
+		"daily_limit": 2, "cache_minutes": 60,
+	})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var connection connectors.Connection
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &connection))
+	assert.Equal(t, []string{origin}, connection.Origins)
+	assert.Equal(t, 2, connection.DailyLimit)
+	assert.Equal(t, 60, connection.CacheMinutes)
+	for _, secret := range []string{"private-user-193", "private-password-193", "private-base-193"} {
+		assert.NotContains(t, w.Body.String(), secret)
+	}
+	w = doJSON(t, ro, http.MethodGet, "/api/connections", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	for _, secret := range []string{"private-user-193", "private-password-193", "private-base-193"} {
+		assert.NotContains(t, w.Body.String(), secret)
+	}
+	w = doJSON(t, ro, http.MethodPost, "/api/artifacts/"+id+"/connections", map[string]any{"connection_id": connection.ID})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "nowhere else")
+	w = doJSON(t, ro, http.MethodGet, "/api/artifacts/"+id+"/relay-bundle", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
+	require.NoError(t, err)
+	var manifest bundle.Manifest
+	for _, file := range zr.File {
+		reader, err := file.Open()
+		require.NoError(t, err)
+		body, err := io.ReadAll(reader)
+		require.NoError(t, reader.Close())
+		require.NoError(t, err)
+		for _, secret := range []string{"private-user-193", "private-password-193", "private-base-193", connection.ID} {
+			assert.NotContains(t, string(body), secret, file.Name)
+		}
+		if strings.HasSuffix(file.Name, "/exhibit.json") {
+			require.NoError(t, json.Unmarshal(body, &manifest))
+		}
+	}
+	require.Len(t, manifest.Connections, 1)
+	assert.Equal(t, "basic", manifest.Connections[0].Kind)
+	assert.Equal(t, 2, manifest.Connections[0].DailyLimit)
+	assert.Equal(t, 60, manifest.Connections[0].CacheMinutes)
+	assert.Equal(t, []string{origin}, manifest.Connections[0].DataOrigins)
+}
+
 func getWithConnectionPolicy(t *testing.T, ro *Router, viewer int64, id, path string, cookie *http.Cookie) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)

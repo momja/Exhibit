@@ -8,16 +8,10 @@ the license is included here. The apps support narrow screens and dark mode.
 - `arxiv.html` — Fieldnotes, a research reader with live arXiv search, date and
   relevance sorting, paging, expandable abstracts and a saved reading list.
   The code calls `https://export.arxiv.org/api/query` directly with `fetch`.
-- `simplefin-budget.html` — Commonplace, an account overview with balances,
-  currencies kept separate, monthly inflow/outflow, a saved outflow target,
-  transaction filters and provider error messages. It discovers the viewer's
-  granted SimpleFIN connection and requests its public `/accounts` alias.
 - `connection-check.html` — a small bearer connection demonstration against
   HTTPbin, showing authentication and the redacted response.
 - `connection-widget.html` — reads the last connection check or its scheduled
   `connection-check-auto` snapshot without making a request.
-- `simplefin-widget.html` — a gallery widget that reads the saved `accounts`
-  snapshot. It never makes a request or obtains a connection.
 
 ## Load into Exhibit
 
@@ -71,44 +65,21 @@ Its widget reads saved data. To keep it fresh while the artifact is closed,
 schedule `https://httpbin.org/bearer` into `connection-check-auto` on the
 artifact's connection page.
 
-## Commonplace: SimpleFIN
+## Generic Basic connections
 
-Open **Connections & relay** for Commonplace. Add a SimpleFIN connection by
-pasting a fresh setup token into Exhibit's connection form, then grant that
-connection to this artifact. Leave additional data destinations empty, approve
-its API origin, and enable relay reads. Return to Commonplace and refresh.
-An ordinary SimpleFIN Bridge connection uses `https://bridge.simplefin.org`;
-the app discovers another origin from granted public metadata when needed.
-Its optional origin setting accepts only a public origin, never an access URL.
+To connect an API that supplies a URL containing a username and password, choose
+**HTTP Basic** in Exhibit's connection form and paste the full HTTPS URL there.
+Exhibit separates its origin, credentials and base path. The artifact only needs
+the public origin and endpoint shown in the connection metadata; it never sees
+the pasted URL or the Basic header. Redeem any provider setup token yourself
+before using the form. Exhibit performs no token claim or redemption.
 
-The request is an ordinary, credential-free `fetch(origin + '/accounts?...')`.
-Exhibit maps that public alias to the connection's encrypted private endpoint
-and injects Basic authentication. The app requests a 30-day transaction window
-and understands both v2 `errlist` and legacy `errors`; the
-[official SimpleFIN protocol](https://www.simplefin.org/protocol.html) describes
-the source fields. Balances and transactions remain separated by currency, and
-inflow/outflow includes transfers rather than guessing which records are
-spending. Raw snapshots are saved under `localStorage['accounts']`.
-
-**Explore with sample accounts** gives a usable, clearly labeled view without
-an account. Sample snapshots carry `__exhibit_example: true`; the widget labels
-them too. The sample never claims that a bank is connected. Live provider
-accounts require the user's connection and were not available for development;
-protocol behavior is covered by TLS-backed fixture tests.
-
-For a scheduled widget refresh, use Commonplace's **Keep data fresh** form:
-
-```text
-API URL:    https://bridge.simplefin.org/accounts?version=2
-State key:  accounts
-Every:      24 hours
-```
-
-Use the connection's actual public origin if different. The scheduler only
-fetches and saves the response; it executes no artifact JavaScript. The same
-grants, encrypted cache, daily request quota and destination policy apply.
-The first run is spread across the interval. Provider failures preserve the
-last saved snapshot. The widget reads that snapshot when Exhibit renders it.
+Choose optional daily request and response reuse limits for the connection.
+They apply across every artifact and device using it, with reusable responses
+served without spending another provider request. Leave additional destinations
+empty to keep data at the API's origin; every connection starts with that rule.
+Approve the API origin, grant the connection to your artifact and allow relay
+reads before fetching. Credential setup belongs in Exhibit's interface.
 
 ## Take either app off Exhibit
 
@@ -123,13 +94,13 @@ go build -o exhibit-run ./cmd/exhibit-run
 
 Open the address printed by the runner. Enter local credentials using the
 runner's **Connections** link; original Exhibit credentials never enter the
-bundle. The local SimpleFIN form claims a new setup token and keeps its access
-credentials in runner memory. The public `/accounts` alias stays the same even
-when the locally claimed path changes. Fieldnotes needs only its allowed origin;
-Commonplace can use sample data before reconnecting.
+bundle. The local runner accepts generic API key, Bearer and Basic credentials;
+use its trusted connection form to reconnect. Fieldnotes only needs its allowed
+origin, and the Connection check example can be reconnected with a disposable
+Bearer token.
 
 Only the app, its assets, saved state and nonsecret connection requirements are
-exported. Saved financial data is part of the artifact's state, so decide
+exported. Saved provider data is part of the artifact's state, so decide
 whether to keep or erase it before sharing the downloaded ZIP. A plain HTML
 export lists the origins needing a relay; opening HTML alone does not create
 an Exhibit connection or a local relay.
