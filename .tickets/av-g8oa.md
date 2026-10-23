@@ -38,3 +38,7 @@ Coverage mapping and maintenance guidance moved to [Exh-gtz1](Exh-gtz1.md). Brow
 ## Implementation — 2026-10-23
 
 Implemented the first hosted Ubuntu workflow with Node 24, Go from go.mod, locked Chromium, existing Go/Node/component checks, six Playwright journeys, and 14-day failure evidence. Selects the installed headless shell through Playwright public APIs and rejects skipped required component results. actionlint passed. Hosted failure/green-run validation and required-check activation are PR rollout steps; user approved merge enforcement on 2026-10-23.
+
+## Hosted failure proof — 2026-10-23
+
+[Run 39906606070](https://github.com/momja/Exhibit/actions/runs/39906606070) passed all Go/Node/required Chromium checks and all six real Playwright journeys. Only the temporary intentional assertion failed. Downloaded and inspected its artifact: trace ZIP, failure screenshot, HTML report, server log, and Go JSON results are present. The probe is removed from the final suite. The approved required-check rule will be activated after the restored run is green; rollout evidence is recorded on [PR #198](https://github.com/momja/Exhibit/pull/198).
