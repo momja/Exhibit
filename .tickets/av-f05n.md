@@ -1,6 +1,6 @@
 ---
 id: av-f05n
-status: in_progress
+status: closed
 deps: [av-e1sr, av-g8oa, Exh-b5hv]
 links: []
 created: 2026-07-07T05:44:49Z
@@ -38,3 +38,7 @@ This story tests that component when it ships; it does not implement the shared 
 ## Historical scope superseded — 2026-10-20
 
 The July note requested broad flows to protect classic inline-bootstrap/external-script globals. The gallery now includes native modules and Stimulus. Cover the current behavior and import/component contracts, not a rule that scripts must stay classic. Follow-up journeys are tracked in [Exh-jtv1](Exh-jtv1.md); share UI already exists and share expiry no longer exists.
+
+## Implementation — 2026-10-23
+
+Implemented five full-app Duplicate journeys: keyboard/focus and three dismissal paths; two save/real-htmx replacement cycles; pending-save guard; retry after a real commit with a simulated lost response; and editable retry after a definite refusal. All six Playwright journeys including state pass locally. Shared controller prerequisite implemented; success cases use the real API and server fragments.

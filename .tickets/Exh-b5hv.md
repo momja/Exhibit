@@ -1,6 +1,6 @@
 ---
 id: Exh-b5hv
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-23T05:16:31Z
@@ -17,3 +17,7 @@ Extract shared native-dialog lifecycle into a Stimulus controller: initial and r
 ## Acceptance Criteria
 
 Duplicate uses the registered modal controller; keyboard/focus, dismissal guards while saving, errors/retries, and htmx replacement remain functional. Existing Go/Node checks and the new Playwright journey pass; documentation and screenshots reflect the shared behavior.
+
+## Implementation — 2026-10-23
+
+Implemented registered modal controller with a common cancellable dismissal event, initial/return focus, Tab boundary wrapping, and disconnect cleanup. Migrated Duplicate while preserving feature-owned API calls/retry identity/refresh behavior. Existing Chromium/Node checks pass; removal/reconnection coverage added. Updated component guide and desktop/mobile screenshots.

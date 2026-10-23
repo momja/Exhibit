@@ -111,8 +111,6 @@ main{padding:10px 12px}
 .empty a{color:var(--brand-blue)}
 
 /* Native modal stays in the top layer above card widgets and menu popovers. */
-.duplicate-dialog{margin:auto;width:420px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;padding:22px;border:1px solid var(--color-hairline-strong);border-radius:var(--radius-lg);background:var(--color-panel);color:var(--color-ink);box-shadow:var(--shadow-modal)}
-.duplicate-dialog::backdrop{background:var(--overlay)}
 .duplicate-dialog h2{font-size:17px;font-weight:600;margin-bottom:20px}
 .duplicate-title-label{display:block;font-size:13px;color:var(--color-ink-mid);margin-bottom:6px}
 .duplicate-dialog input[type=text]{width:100%;padding:9px 10px;border:1px solid var(--color-border);border-radius:var(--radius-md);font:inherit;font-size:var(--field-font-size);background:var(--color-ground);color:var(--color-ink)}
