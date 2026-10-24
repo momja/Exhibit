@@ -15,7 +15,7 @@ func TestRelayScheduleClaimsAndAccountDeletion(t *testing.T) {
 	// Personal rows on another person's artifact must also be deleted. The
 	// artifact cascade cannot reach these; the user-delete trigger must.
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "another-library", OwnerID: fx.admin.ID, Title: "Shared tool", Tier: Tier1}))
-	require.NoError(t, s.SetRelayGrant(ctx, fx.member.ID, "another-library", RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(ctx, fx.member.ID, "another-library", RelayGrant{Allowed: true}))
 	require.NoError(t, s.RecordRelayActivity(ctx, fx.member.ID, "another-library", RelayActivity{Origin: "https://api.example.test", Method: "GET", Status: 200}))
 	now := time.Now()
 	job := RelaySchedule{ID: "recipient-job", ViewerID: fx.member.ID, ArtifactID: "another-library", URL: "https://api.example.test", StateKey: "data", IntervalSeconds: 3600, NextRunAt: now.Unix(), Enabled: true}

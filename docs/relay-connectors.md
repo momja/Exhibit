@@ -69,8 +69,7 @@ name and configure `CONNECTORS_VENDOR_PROVIDERS` as a reviewed JSON object:
     "engine": "composio",
     "auth_config_id": "ac_operator_config",
     "toolkit": "linear",
-    "origins": ["https://api.linear.app"],
-    "allow_writes": false
+    "origins": ["https://api.linear.app"]
   }
 }
 ```
@@ -193,30 +192,29 @@ encrypted credentials, private endpoint mapping, quota/cache settings, grants
 and saved-data provenance. Existing artifacts continue using their public
 paths; no reconnect is required.
 
-Grant the saved connection to the artifact, review its capabilities and credential
-destinations, approve its API origin, then enable relay reads. API changes require
-the separate write grant and a connector recipe that permits writes.
+Grant the saved connection to the artifact, review its credential destinations,
+approve its API origin, then allow relay requests.
 
-The read/write boundary currently follows HTTP methods: read-only connections
-permit GET and HEAD. A POST, including a GraphQL query that only reads data,
-requires both the connection's write capability and the viewer's relay write
-consent. Before an optional POST optimization, artifacts should inspect the
-matching connection's safe runtime capabilities and use a GET alternative when
-write access is absent. A write-capable connection for another origin supplies
-no permission for this request.
+**There is no read-only connection** (Exh-cxzb). Exhibit once split reads from
+writes by HTTP method, and that boundary was wrong in both directions: a GET can
+change data (an unsubscribe link, a one-time token, an export that starts a
+job), and a POST can be a pure read (a GraphQL query, a search body). It also
+did nothing for confidentiality, which is the larger risk once data reaches
+artifact code. No generic rule can make it accurate, so there is none: relay
+consent is one decision per artifact and viewer, and a connection attaches its
+credential to GET, HEAD, POST, PUT, PATCH and DELETE alike.
 
-To edit an existing native API key, Bearer or Basic connection, find its card
-under **Saved connections** and open **Edit permissions**. Change **Allow this
-credential to make API changes**, then **Save permissions**. This permits or
-blocks POST, PUT, PATCH and DELETE for every artifact using that connection;
-the saved credential is unchanged. Reopen affected artifacts after saving.
+What a connection can read or change is exactly what its credential can, as
+decided by the provider. To limit a connection, create the credential with
+narrower permissions there — a fine-grained token with read-only scopes, a
+key restricted to particular resources — and connect that. OAuth and managed
+connections are limited the same way, by the scopes their consent granted.
 
-This setting is separate from the artifact's **Relay permissions**. Writes need
-both the connection's permission and **Allow writes and changes** on that
-artifact, alongside its origin approval. The API provider's own permissions
-still apply: enabling writes in Exhibit cannot add scopes to a read-only key.
-OAuth and managed provider scope changes use a new reviewed consent flow rather
-than this native permission editor. **Cancel** discards an unsaved edit.
+Upgrading removes `allow_writes` from saved connections and keeps relay consent
+that already covered every method. Consent given for reads only was agreed to
+under copy that promised GET and HEAD, so it is cleared and the viewer is asked
+again. An operator provider map that still sets `allow_writes` refuses to load,
+naming the provider, until the field is deleted.
 
 **Connection grants are additive.** The artifact's approved origins remain its
 network boundary. A connection supplies credentials only to its matching API
@@ -312,9 +310,9 @@ Relay token buckets allow bursts of 120 requests per owner, 60 per artifact and
 returns `429`, `code: relay_rate_limited` and a `Retry-After` delay. The trusted
 browser bridge waits and retries GET/HEAD requests for up to one minute, within
 the frame's existing request deadline. Each attempt checks current consent and
-policy. Abort and navigation cancel queued retries; writes, daily quota failures,
+policy. Abort and navigation cancel queued retries; other methods, daily quota failures,
 permission failures and provider responses are never automatically replayed.
-Large read-only imports therefore slow down while retaining the relay limits.
+Large GET imports therefore slow down while retaining the relay limits.
 Provider 429
 responses impose instance-wide origin back-off using `Retry-After`, including
 redirect destinations. Credential-free GET responses are cached only with

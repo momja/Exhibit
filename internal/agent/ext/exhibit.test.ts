@@ -213,8 +213,8 @@ describe("network warnings and native connection tools", () => {
 				calls.push({ url, opts });
 				assert.equal(url, "http://exhibit.test/api/artifacts/artifact-1/agent-connections");
 				const data = opts.method === "GET" ? {
-					connections: [{ name: "Private API", provider: "basic", origins: ["https://api.example"], capabilities: ["read"], endpoint: "/", status: "active", encrypted_secret: "NEVER-SHOW", secret: "NEVER-SHOW" }],
-					providers: [{ id: "basic", name: "HTTP Basic", capabilities: ["read"], enabled: true, secret: "NEVER-SHOW" }],
+					connections: [{ name: "Private API", provider: "basic", origins: ["https://api.example"], endpoint: "/", status: "active", encrypted_secret: "NEVER-SHOW", secret: "NEVER-SHOW" }],
+					providers: [{ id: "basic", name: "HTTP Basic", enabled: true, secret: "NEVER-SHOW" }],
 					pending_requests: [{ secret: "NEVER-SHOW" }],
 				} : { request: { id: "request-1" }, manage_url: "/connections?artifact=artifact-1", secret: "NEVER-SHOW" };
 				return { ok: true, text: async () => JSON.stringify(data) };

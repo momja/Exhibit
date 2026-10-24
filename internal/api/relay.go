@@ -157,10 +157,6 @@ func (ro *Router) setRelayGrant(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &g) {
 		return
 	}
-	if g.Writes && !g.Reads {
-		writeError(w, 400, "enable reads before allowing writes")
-		return
-	}
 	if err := s.SetRelayGrant(r.Context(), ownerIDFromCtx(r.Context()), a.ID, g); err != nil {
 		serverError(w, r, "save relay grant", err)
 		return
@@ -191,8 +187,6 @@ type relayRefusal struct {
 }
 
 func (e *relayRefusal) Error() string { return e.message }
-
-func relayWrite(method string) bool { return method != "GET" && method != "HEAD" }
 
 func (ro *Router) performRelay(w http.ResponseWriter, r *http.Request) {
 	a, _ := ro.relayArtifact(w, r)
@@ -298,7 +292,7 @@ func (ro *Router) executeRelay(ctx context.Context, viewer int64, a *store.Artif
 	if err != nil {
 		return nil, err
 	}
-	if !g.Reads || relayWrite(req.Method) && !g.Writes {
+	if !g.Allowed {
 		return nil, &relayRefusal{status: 403, code: "relay_consent_required", message: "This artifact needs your permission to use the relay."}
 	}
 	o, err := origin.NormalizeOrigin(req.URL.Scheme + "://" + req.URL.Host)
@@ -439,9 +433,8 @@ func (ro *Router) relayPolicy(ctx context.Context, viewer int64, a *store.Artifa
 	allowed = append([]string{}, allowed...)
 	slices.Sort(allowed)
 	type binding struct {
-		Connection   string
-		Sharing      bool
-		Capabilities []string
+		Connection string
+		Sharing    bool
 	}
 	bindings := []binding{}
 	policy := ro.cfg.Connections
@@ -454,9 +447,7 @@ func (ro *Router) relayPolicy(ctx context.Context, viewer int64, a *store.Artifa
 			return "", err
 		}
 		for _, g := range grants {
-			capabilities := append([]string{}, g.Connection.Capabilities...)
-			slices.Sort(capabilities)
-			bindings = append(bindings, binding{g.Connection.ID, g.ShareWithRecipients, capabilities})
+			bindings = append(bindings, binding{g.Connection.ID, g.ShareWithRecipients})
 		}
 		retained, err := policy.DataPolicies(ctx, viewer, a.ID)
 		if err != nil {
@@ -470,7 +461,7 @@ func (ro *Router) relayPolicy(ctx context.Context, viewer int64, a *store.Artifa
 			dataConnections[p.ConnectionID] = true
 		}
 		for id := range dataConnections {
-			bindings = append(bindings, binding{"data:" + id, false, nil})
+			bindings = append(bindings, binding{"data:" + id, false})
 		}
 	}
 	slices.SortFunc(bindings, func(a, b binding) int { return strings.Compare(a.Connection, b.Connection) })

@@ -1558,7 +1558,10 @@ which is enforcement rather than marking, and a separate, larger change.
 ## Experimental relay and credential custody
 
 Relay access is a separate viewer/artifact grant, never implied by an origin
-approval. The frame holds no provider credential or app-owned render-policy
+approval. It is one grant covering every method: Exhibit does not claim a
+read-only boundary it cannot enforce, since a GET can change data and a POST can
+only read. The provider's scope for each credential is the limit on what a
+connection may do (Exh-cxzb). The frame holds no provider credential or app-owned render-policy
 authority. A document-bound bridge returns response bytes only to its opaque
 frame. Widgets, public links and direct render visits cannot use the relay.
 

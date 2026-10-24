@@ -688,8 +688,10 @@ each made cheap by decisions taken in step 1.
 Opt-in relay access lets an artifact call approved HTTPS APIs with ordinary
 browser `fetch`, including providers without CORS support. Reviewed connectors
 keep account credentials outside artifacts, agents, state and exports; a person
-configures and grants each connection in Exhibit. Relay reads and writes have
-separate consent. Grants identify the API origins that may receive credentials;
+configures and grants each connection in Exhibit. Relay access is one consent
+per artifact; Exhibit does not classify requests as reads or writes, because an
+HTTP method cannot say what a request does — the provider's permissions for the
+credential decide that. Grants identify the API origins that may receive credentials;
 connections belong to the current viewer unless sharing is explicitly approved.
 Connector grants are additive: the artifact's origin approvals remain its network
 boundary, so multiple connectors and approved standalone APIs/CDNs work together.

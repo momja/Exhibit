@@ -285,7 +285,7 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	}))
 	_, grantErr := s.CreateGrant(ctx, admin.ID, "grant-source", member.ID)
 	require.NoError(t, grantErr)
-	require.NoError(t, s.SetRelayGrant(ctx, member.ID, deletedArtifact, RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(ctx, member.ID, deletedArtifact, RelayGrant{Allowed: true}))
 	require.NoError(t, s.RecordRelayActivity(ctx, member.ID, deletedArtifact, RelayActivity{Origin: "https://api.example.test", Method: "GET", Status: 200, Bytes: 10}))
 	require.NoError(t, s.PutRelaySchedule(ctx, RelaySchedule{ID: "member-refresh", ViewerID: member.ID, ArtifactID: deletedArtifact, URL: "https://api.example.test/accounts", StateKey: "accounts", IntervalSeconds: 86400, NextRunAt: time.Now().Unix(), Enabled: true}, 10))
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))

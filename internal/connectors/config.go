@@ -126,6 +126,16 @@ func vendorConfigFromEnv() (VendorConfig, error) {
 	if legacy {
 		providerName, rawProviders = "CONNECTORS_NANGO_PROVIDERS", os.Getenv("CONNECTORS_NANGO_PROVIDERS")
 	}
+	// allow_writes was removed (Exh-cxzb). Name it, rather than failing as an
+	// unknown field, so an operator upgrading knows exactly what to delete.
+	var loose map[string]map[string]json.RawMessage
+	if json.Unmarshal([]byte(rawProviders), &loose) == nil {
+		for id, fields := range loose {
+			if _, ok := fields["allow_writes"]; ok {
+				return cfg, fmt.Errorf("%s provider %q sets allow_writes, which is no longer supported: delete it. The provider's OAuth scopes decide what a connection can do", providerName, id)
+			}
+		}
+	}
 	decoder := json.NewDecoder(strings.NewReader(rawProviders))
 	decoder.DisallowUnknownFields()
 	if len(rawProviders) > 65536 || decoder.Decode(&cfg.Providers) != nil || len(cfg.Providers) == 0 {

@@ -19,7 +19,7 @@ func TestRelayThrottleReturnsRetryAfterBeforeProviderContact(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	s, _ := ro.relayStore()
-	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Allowed: true}))
 	ro.relayRuntime.buckets["artifact:1:"+id] = relayBucket{updated: time.Now()}
 	w := relayCall(t, ro, id, relayRequest{URL: upstream.URL, Method: "GET"}, "")
 	require.Equal(t, http.StatusTooManyRequests, w.Code, w.Body.String())
@@ -54,7 +54,7 @@ func TestRelayThrottleKeepsUpstreamBackoffGuidance(t *testing.T) {
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
 	s, _ := ro.relayStore()
-	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Allowed: true}))
 	first := relayCall(t, ro, id, relayRequest{URL: upstream.URL}, "")
 	require.Equal(t, http.StatusOK, first.Code, "a provider 429 remains the artifact's response")
 	assert.Contains(t, first.Body.String(), `"status":429`)

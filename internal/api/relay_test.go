@@ -67,7 +67,7 @@ func TestRelayRequiresSeparateReadAndWriteConsentAndSanitizesHeaders(t *testing.
 	assert.Contains(t, w.Body.String(), "relay_consent_required")
 	assert.Zero(t, calls.Load())
 	s, _ := ro.relayStore()
-	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Allowed: true}))
 	w = relayCall(t, ro, id, input, "")
 	require.Equal(t, 200, w.Code, w.Body.String())
 	var result relayResponse
@@ -78,12 +78,10 @@ func TestRelayRequiresSeparateReadAndWriteConsentAndSanitizesHeaders(t *testing.
 	body, err := base64.StdEncoding.DecodeString(result.BodyBase64)
 	require.NoError(t, err)
 	assert.Contains(t, string(body), "appOriginCompromised")
+	// One consent covers every method: a POST may only read, and a GET may
+	// change things, so the relay does not pretend to tell them apart.
 	input.Method = "POST"
 	input.BodyBase64 = base64.StdEncoding.EncodeToString([]byte("data"))
-	w = relayCall(t, ro, id, input, "")
-	require.Equal(t, 403, w.Code)
-	assert.EqualValues(t, 1, calls.Load())
-	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Reads: true, Writes: true}))
 	w = relayCall(t, ro, id, input, "")
 	require.Equal(t, 200, w.Code, w.Body.String())
 	assert.EqualValues(t, 2, calls.Load())
@@ -103,7 +101,7 @@ func TestRelayStalePolicyAndUpstreamBackoff(t *testing.T) {
 		w.WriteHeader(429)
 	}))
 	s, _ := ro.relayStore()
-	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Allowed: true}))
 	a, err := ro.cfg.Store.GetArtifact(context.Background(), 1, id)
 	require.NoError(t, err)
 	old, err := ro.relayPolicy(context.Background(), 1, a)
@@ -133,7 +131,7 @@ func TestRelayCacheRespectsRequestIdentityAndCurrentPolicy(t *testing.T) {
 		fmt.Fprint(w, r.Header.Get("Accept-Language"))
 	}))
 	s, _ := ro.relayStore()
-	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Allowed: true}))
 	input := relayRequest{URL: upstream.URL + "/public", Headers: map[string]string{"Accept-Language": "en"}}
 	for range 2 {
 		require.Equal(t, 200, relayCall(t, ro, id, input, "").Code)
@@ -168,7 +166,7 @@ func TestRelayBackoffIsEnforcedBeforeFollowingARedirect(t *testing.T) {
 		http.Redirect(w, r, target.URL+"/limited", http.StatusFound)
 	}))
 	s, _ := ro.relayStore()
-	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(context.Background(), 1, id, store.RelayGrant{Allowed: true}))
 	require.NoError(t, ro.cfg.Store.SetOriginDecision(context.Background(), 1, id, target.URL, store.DecisionAllow, "test"))
 	require.Equal(t, 200, relayCall(t, ro, id, relayRequest{URL: target.URL}, "").Code)
 	w := relayCall(t, ro, id, relayRequest{URL: redirect.URL}, "")
@@ -181,7 +179,7 @@ func TestRelayScheduledRefreshUsesCurrentConsentAndKeepsPreviousDataOnFailure(t 
 	ro, id, upstream := relayFixture(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); fmt.Fprint(w, `{"balance":42}`) }))
 	s, _ := ro.relayStore()
 	ctx := context.Background()
-	require.NoError(t, s.SetRelayGrant(ctx, 1, id, store.RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(ctx, 1, id, store.RelayGrant{Allowed: true}))
 	now := time.Now()
 	job := store.RelaySchedule{ID: "refresh", ArtifactID: id, ViewerID: 1, URL: upstream.URL, StateKey: "accounts", IntervalSeconds: 3600, NextRunAt: now.Unix(), Enabled: true}
 	require.NoError(t, s.PutRelaySchedule(ctx, job, 10))

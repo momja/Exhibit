@@ -765,3 +765,26 @@ func TestLegacyAmbiguousBindingsRefuseBeforeNetwork(t *testing.T) {
 	assert.ErrorIs(t, err, store.ErrConnectionOverlap)
 	assert.Zero(t, received.Load())
 }
+
+// Exh-cxzb: a connection has no read/write setting. Every method a provider
+// accepts carries the credential; the provider's scope is the only limit.
+func TestNativeConnectionCarriesItsCredentialForEveryMethod(t *testing.T) {
+	s, _ := testService(t)
+	ctx := context.Background()
+	seen := map[string]string{}
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen[r.Method] = r.Header.Get("Authorization")
+	}))
+	defer provider.Close()
+	c, err := s.Create(ctx, 1, CreateRequest{Name: "API", Recipe: "bearer", Origin: provider.URL, Secret: "every-method-secret"}, UnlimitedLimits())
+	require.NoError(t, err)
+	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID})
+	require.NoError(t, err)
+	gate := testGate(t, provider.URL)
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		req, _ := http.NewRequest(method, provider.URL+"/graphql", strings.NewReader(`{"query":"{ viewer { login } }"}`))
+		_, err = s.Do(ctx, 1, "app", req, gate)
+		require.NoError(t, err, method)
+		assert.Equal(t, "Bearer every-method-secret", seen[method], method)
+	}
+}

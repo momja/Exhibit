@@ -10,9 +10,11 @@ import (
 
 // Relay grants are viewer capabilities. An origin decision alone never enables
 // server requests, and sharing an artifact never shares a viewer's consent.
+// There is one decision, not a read/write pair: an HTTP method says nothing
+// reliable about what a request does, so splitting on it would promise a
+// boundary the relay cannot enforce (Exh-cxzb).
 type RelayGrant struct {
-	Reads  bool `json:"reads"`
-	Writes bool `json:"writes"`
+	Allowed bool `json:"allowed"`
 }
 
 type RelayActivity struct {
@@ -59,7 +61,7 @@ type RelayStore interface {
 
 func (s *SQLiteStore) GetRelayGrant(ctx context.Context, viewer int64, artifact string) (RelayGrant, error) {
 	var g RelayGrant
-	err := s.db.QueryRowContext(ctx, `SELECT reads,writes FROM artifact_relay_grants WHERE artifact_id=? AND viewer_id=?`, artifact, viewer).Scan(&g.Reads, &g.Writes)
+	err := s.db.QueryRowContext(ctx, `SELECT allowed FROM artifact_relay_grants WHERE artifact_id=? AND viewer_id=?`, artifact, viewer).Scan(&g.Allowed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return g, nil
 	}
@@ -67,10 +69,7 @@ func (s *SQLiteStore) GetRelayGrant(ctx context.Context, viewer int64, artifact 
 }
 
 func (s *SQLiteStore) SetRelayGrant(ctx context.Context, viewer int64, artifact string, g RelayGrant) error {
-	if g.Writes && !g.Reads {
-		return errors.New("relay writes require read consent")
-	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO artifact_relay_grants(artifact_id,viewer_id,reads,writes) VALUES (?,?,?,?) ON CONFLICT(artifact_id,viewer_id) DO UPDATE SET reads=excluded.reads,writes=excluded.writes,updated_at=CURRENT_TIMESTAMP`, artifact, viewer, g.Reads, g.Writes)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO artifact_relay_grants(artifact_id,viewer_id,allowed) VALUES (?,?,?) ON CONFLICT(artifact_id,viewer_id) DO UPDATE SET allowed=excluded.allowed,updated_at=CURRENT_TIMESTAMP`, artifact, viewer, g.Allowed)
 	return err
 }
 

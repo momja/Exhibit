@@ -266,9 +266,6 @@ func TestComposioStatusAndHostedLinkExpiry(t *testing.T) {
 func TestComposioForwardUsesExactRecipeAndSanitizedDocumentedWireFormat(t *testing.T) {
 	s, _ := testService(t)
 	f := newComposioFixture(t, s, "https://api.example.test")
-	p := s.cfg.Vendor.Providers["notes-cloud"]
-	p.AllowWrites = true
-	s.cfg.Vendor.Providers["notes-cloud"] = p
 	c := completeComposio(t, s)
 	_, err := s.Grant(context.Background(), 1, "app", GrantRequest{ConnectionID: c.ID})
 	require.NoError(t, err)
@@ -316,9 +313,6 @@ func TestComposioForwardUsesExactRecipeAndSanitizedDocumentedWireFormat(t *testi
 func TestComposioForwardBinaryBodyAndTextResult(t *testing.T) {
 	s, _ := testService(t)
 	f := newComposioFixture(t, s, "https://api.example.test")
-	p := s.cfg.Vendor.Providers["notes-cloud"]
-	p.AllowWrites = true
-	s.cfg.Vendor.Providers["notes-cloud"] = p
 	c := completeComposio(t, s)
 	_, err := s.Grant(context.Background(), 1, "app", GrantRequest{ConnectionID: c.ID})
 	require.NoError(t, err)
@@ -606,10 +600,6 @@ func TestNativeNangoAndComposioShareCredentialQuotaAndCachePolicy(t *testing.T) 
 			_, err = doRequest(t, s, 1, gate, provider.URL+"/data?next=page")
 			assert.ErrorIs(t, err, store.ErrConnectionQuota)
 			assert.Equal(t, int32(1), actualCalls(), "a spent quota is refused before native or vendor handoff")
-			write, err := http.NewRequest(http.MethodPost, provider.URL+"/data", strings.NewReader(`{"write":true}`))
-			require.NoError(t, err)
-			_, err = s.Do(ctx, 1, "app", write, gate)
-			assert.ErrorIs(t, err, ErrEgress)
 			s.cfg.VendorEnabled = false
 			_, err = doRequest(t, s, 1, gate, provider.URL+"/data")
 			if kind == "native" {

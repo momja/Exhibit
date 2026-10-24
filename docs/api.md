@@ -606,7 +606,6 @@ policy; the artifact bridge supplies it without exposing it to artifact code.
 ```text
 GET    /api/connections                         Safe connection metadata and providers
 POST   /api/connections                         Acquire a native connection in app chrome
-PATCH  /api/connections/:connectionID           Change native connection write permission
 DELETE /api/connections/:connectionID           Revoke a connection
 POST   /api/connections/oauth/github/begin      Begin bound GitHub consent
 GET    /api/connections/oauth/github/callback   Complete one-shot bound consent
@@ -618,7 +617,7 @@ DELETE /api/artifacts/:id/connections/:id       Remove a connection grant
 DELETE /api/artifacts/:id/connection-data       Clear saved data and obsolete provenance
 POST   /api/artifacts/:id/connections/:id/standin  Obtain an inert short-lived handle
 GET    /api/artifacts/:id/relay-grant            Read the viewer's relay consent
-PUT    /api/artifacts/:id/relay-grant            Set {reads, writes} consent
+PUT    /api/artifacts/:id/relay-grant            Set {allowed} consent
 POST   /api/artifacts/:id/relay                  Perform a checked request for this frame
 POST   /api/artifacts/:id/navigation-check       Validate a host-opened link against current policy
 GET    /api/artifacts/:id/relay-schedules        List declarative refreshes
@@ -652,16 +651,14 @@ virtual root endpoint. An artifact fetching `/accounts` at that origin reaches
 Optional `daily_limit` and `cache_minutes` cap daily provider requests and reuse
 responses across all artifacts and devices; zero means unlimited requests or
 no response reuse, respectively.
-`PATCH /api/connections/:connectionID` accepts `{allow_writes: boolean}` for
-an active native API key, Bearer or Basic connection owned by the current person.
-This human-only action changes whether that credential may make API writes
-across all artifacts using it. It preserves the encrypted credential and its
-identity, origin, header, daily limit and response reuse settings. It does not
-change provider-side scopes or per-artifact relay consent; an artifact still
-needs its separate relay write grant and approved origin. The trusted UI
-refreshes its cards from the server after success, and affected artifacts must
-be reopened under the updated authority. OAuth/managed scope changes require
-reconnection through their reviewed consent flow.
+Connections and relay consent do not distinguish reads from writes (Exh-cxzb).
+An HTTP method says nothing reliable about what a request does: a GET can change
+data and a GraphQL query is a POST. The relay accepts GET, HEAD, POST, PUT, PATCH
+and DELETE under one consent, and a connection attaches its credential to all of
+them. The provider's permissions for the credential are the only limit on what
+a request can read or change; to restrict a connection, create a narrower
+credential at the provider. Connection metadata carries no `capabilities`
+field, and `allow_writes` is not accepted.
 
 A grant accepts `connection_id` and explicit `share_with_recipients` consent.
 Grants are additive: artifact origin approvals remain the network boundary,
@@ -709,6 +706,6 @@ is `no-store` and remains available when acquisition engines are disabled.
 Local relay throttling returns HTTP `429` with `code: relay_rate_limited` and a
 numeric `Retry-After` header. The trusted browser host retries GET/HEAD requests
 within a one-minute retry budget, rechecking current policy on every attempt.
-Writes, provider HTTP responses, daily connection quotas and permission errors
-are returned without automatic retries. Frame abort or navigation cancels a
+Other methods, provider HTTP responses, daily connection quotas and permission
+errors are returned without automatic retries. Frame abort or navigation cancels a
 pending retry.
