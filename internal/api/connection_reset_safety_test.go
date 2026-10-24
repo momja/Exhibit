@@ -108,9 +108,13 @@ func TestConnectionDataResetCannotOvertakeAnAlreadyValidatedFrameWrite(t *testin
 	assert.Empty(t, state)
 }
 
-func TestRetainedDataPolicyStillRestrictsRelayWithAcquisitionDisabled(t *testing.T) {
+func TestRetainedProvenanceDoesNotRestrictApprovedRelayWithAcquisitionDisabled(t *testing.T) {
 	var hits int
-	ro, id, upstream := relayFixture(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits++; fmt.Fprint(w, "received private data") }))
+	ro, id, upstream := relayFixture(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		assert.Empty(t, r.Header.Get("Authorization"))
+		fmt.Fprint(w, "standalone response")
+	}))
 	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = service
 	c, err := service.Create(t.Context(), 1, connectors.CreateRequest{Name: "Private account", Recipe: "bearer", Origin: "https://api.example.test", Secret: "secret"}, connectors.UnlimitedLimits())
@@ -124,10 +128,10 @@ func TestRetainedDataPolicyStillRestrictsRelayWithAcquisitionDisabled(t *testing
 		if enabled {
 			ro.cfg.Connections = service
 		}
-		w := relayCall(t, ro, id, relayRequest{URL: upstream.URL + "/collect?balance=private", Method: http.MethodGet}, "")
-		assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+		w := relayCall(t, ro, id, relayRequest{URL: upstream.URL + "/public", Method: http.MethodGet}, "")
+		assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	}
-	assert.Zero(t, hits, "a raw frame channel request must not bypass retained destination policy")
+	assert.Equal(t, 2, hits, "retained metadata must not block independently approved traffic")
 }
 
 func TestConnectionDataResetDiscardsAnInFlightScheduledResponse(t *testing.T) {

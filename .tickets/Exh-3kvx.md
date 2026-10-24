@@ -23,3 +23,9 @@ Connect a real Basic-auth API through a generic connection by pasting a URL with
 Composio's current official token-custody, Connect Link, proxy, revocation and retention documentation was checked before implementation. It redacts retrievable credentials, so the adapter uses explicit forward mode. TLS fixtures cover native/Nango/Composio policy parity, bound completion, same-instance mixed engines, engine changes, normalized errors, cost counters and response limits. These checks establish the implementation contract, not live provider compatibility.
 
 On staging, verify the operator's actual Composio project/plan retention settings, especially Zero Data Retention coverage for managed versus custom OAuth apps. Inspect the grant disclosure with a real provider, confirm exact-origin refusal before handoff, and test provider-specific redirects under the documented forward-mode limitation. Vendor binary-download URLs are intentionally refused. No real Composio consent or bill has been validated in this environment.
+
+## Notes
+
+**2026-10-24T04:29:39Z**
+
+2026-10-24 additive-permission validation: the existing native GitHub Bearer connection and the artifact's separately approved unpkg.com icon assets work together on the running demo, with GitHub relay status 200 and no connection-data notice. No origin/grant/state reset was performed. Two-connection, standalone API/CDN, schedules, legacy metadata and portable parity are fixture-tested, including races. This is native PAT validation; real Basic account, registered OAuth and Nango/Composio staging/retention/cost checks remain open.

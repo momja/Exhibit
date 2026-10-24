@@ -27,6 +27,14 @@ func TestNangoFlowAndConnectionKeepPinnedEngineWhenProviderConfigurationChanges(
 		fmt.Fprint(w, `{"source":"original provider","reflected":"pinned-nango-access-1837"}`)
 	}))
 	defer provider.Close()
+	var unrelatedCalls atomic.Int32
+	unrelated := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		unrelatedCalls.Add(1)
+		assert.Empty(t, r.Header.Get("Authorization"))
+		assert.Empty(t, r.Header.Get("X-API-Key"))
+		fmt.Fprint(w, "independently approved API")
+	}))
+	defer unrelated.Close()
 	managed := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -69,7 +77,7 @@ func TestNangoFlowAndConnectionKeepPinnedEngineWhenProviderConfigurationChanges(
 	assert.Equal(t, "nango", session.Engine)
 	assert.Equal(t, VendorInject, session.DeliveryMode)
 	// Both the engine and reviewed origins are a snapshot of the started flow.
-	s.cfg.Vendor.Providers["notes"] = VendorProvider{Name: "New Notes", Origins: []string{"https://new-provider.example.test"}, Engine: "composio", AuthConfigID: "ac_new-config"}
+	s.cfg.Vendor.Providers["notes"] = VendorProvider{Name: "New Notes", Origins: []string{unrelated.URL}, Engine: "composio", AuthConfigID: "ac_new-config"}
 	connection, done, err := s.CompleteVendor(ctx, 1, "pinned-browser", session.ID, "Existing account", UnlimitedLimits())
 	require.NoError(t, err)
 	require.True(t, done)
@@ -93,8 +101,11 @@ func TestNangoFlowAndConnectionKeepPinnedEngineWhenProviderConfigurationChanges(
 	assert.Contains(t, string(response.Body), "original provider")
 	assert.NotContains(t, string(response.Body), "pinned-nango-access")
 	assert.Equal(t, int32(1), injected.Load())
-	_, err = doRequest(t, s, 1, testGate(t, "https://new-provider.example.test"), "https://new-provider.example.test/data")
-	assert.ErrorIs(t, err, ErrEgress)
+	response, err = doRequest(t, s, 1, testGate(t, unrelated.URL), unrelated.URL+"/data")
+	require.NoError(t, err)
+	assert.Equal(t, "independently approved API", string(response.Body))
+	assert.Equal(t, int32(1), unrelatedCalls.Load())
+	assert.Equal(t, int32(1), injected.Load(), "the saved credential remains pinned to its original provider")
 	fresh, err := s.BeginVendorBound(ctx, 1, "notes", UnlimitedLimits(), "new-browser")
 	require.NoError(t, err)
 	assert.Equal(t, "composio", fresh.Engine)

@@ -58,3 +58,7 @@ Goal: let artifacts use external APIs (including ones with no CORS support) and,
 **2026-10-22T16:01:53Z**
 
 Implemented all seven phases and the configuration interface on feature/Exh-g2vv/relay-connectors. Execution remains in browsers; docs record the relay/schedule reconciliation with Exh-h5va and Exh-co2m. Features are independently gated and experimental by default. Full go test ./..., assets build and go vet pass; focused Chromium, race and real browser checks cover boundary behavior. Live HTTPbin, arXiv and a closed-page scheduled widget are demonstrated. External credential/staging-only acceptance checks are explicitly tracked in Exh-3kvx.
+
+**2026-10-24T04:12:44Z**
+
+Product correction (2026-10-24, Exh-s47o): connector grants are additive. The artifact's approved origins remain the network boundary; each granted connection supplies credentials only for its own reviewed API origin. Multiple connections and standalone approved APIs/CDNs coexist. This supersedes the earlier interpretation of "data may go nowhere else" as an artifact-wide response-data destination ceiling. Legacy destination metadata no longer narrows or expands network authority. Explicit connected-state sharing and credential custody remain separate controls.

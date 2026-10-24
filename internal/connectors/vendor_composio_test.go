@@ -297,9 +297,16 @@ func TestComposioForwardUsesExactRecipeAndSanitizedDocumentedWireFormat(t *testi
 	assert.Nil(t, forwarded.BinaryBody)
 	assert.ElementsMatch(t, []composioParameter{{Name: "Accept", Value: "application/json", In: "header"}, {Name: "Content-Type", Value: "application/json", In: "header"}}, forwarded.Parameters)
 	before := f.proxies.Load()
-	_, err = doRequest(t, s, 1, testGate(t, "https://api.example.test", "https://else.api.example.test"), "https://else.api.example.test/notes")
-	assert.ErrorIs(t, err, ErrEgress)
-	assert.Equal(t, before, f.proxies.Load(), "even sibling API domains need exact Exhibit approval")
+	standalone := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Empty(t, r.Header.Get("Authorization"))
+		assert.Empty(t, r.Header.Get("X-API-Key"))
+		fmt.Fprint(w, "public API")
+	}))
+	defer standalone.Close()
+	response, err = doRequest(t, s, 1, testGate(t, "https://api.example.test", standalone.URL), standalone.URL+"/notes")
+	require.NoError(t, err)
+	assert.Equal(t, "public API", string(response.Body))
+	assert.Equal(t, before, f.proxies.Load(), "an independently approved API never reuses a vendor forwarder")
 	_, err = doRequest(t, s, 1, testGate(t, "https://unapproved.example.test"), "https://api.example.test/notes")
 	assert.ErrorIs(t, err, ErrEgress)
 	assert.Equal(t, before, f.proxies.Load())
@@ -500,7 +507,7 @@ func TestComposioRevocationSupportsUnsupportedUpstreamRevokeAndAlreadyDeletedAcc
 	})
 }
 
-func TestNativeNangoAndComposioShareGrantDestinationQuotaAndCachePolicy(t *testing.T) {
+func TestNativeNangoAndComposioShareCredentialQuotaAndCachePolicy(t *testing.T) {
 	for _, kind := range []string{"native", "nango", "composio"} {
 		t.Run(kind, func(t *testing.T) {
 			s, _ := testService(t)
@@ -512,6 +519,14 @@ func TestNativeNangoAndComposioShareGrantDestinationQuotaAndCachePolicy(t *testi
 				fmt.Fprint(w, `{"ok":true}`)
 			}))
 			defer provider.Close()
+			var standaloneCalls atomic.Int32
+			standalone := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				standaloneCalls.Add(1)
+				assert.Empty(t, r.Header.Get("Authorization"))
+				assert.Empty(t, r.Header.Get("X-API-Key"))
+				fmt.Fprint(w, `{"public":true}`)
+			}))
+			defer standalone.Close()
 			var c *Connection
 			var err error
 			var actualCalls func() int32
@@ -544,13 +559,15 @@ func TestNativeNangoAndComposioShareGrantDestinationQuotaAndCachePolicy(t *testi
 			grant, err := s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID})
 			require.NoError(t, err)
 			assert.Empty(t, grant.PermittedEgress)
-			assert.Contains(t, grant.Consent, "nowhere else")
-			allowed, err := s.AllowedEgress(ctx, 1, "app", []string{provider.URL, "https://attacker.example.test"})
+			assert.Contains(t, grant.Consent, "Credentials are sent only to: "+provider.URL)
+			assert.Contains(t, grant.Consent, "independently approved origins")
+			allowed, err := s.AllowedEgress(ctx, 1, "app", []string{provider.URL, standalone.URL})
 			require.NoError(t, err)
-			assert.Equal(t, []string{provider.URL}, allowed)
-			gate := testGate(t, provider.URL, "https://attacker.example.test")
-			_, err = doRequest(t, s, 1, gate, "https://attacker.example.test/steal")
-			assert.ErrorIs(t, err, ErrEgress)
+			assert.Equal(t, []string{provider.URL, standalone.URL}, allowed)
+			gate := testGate(t, provider.URL, standalone.URL)
+			_, err = doRequest(t, s, 1, gate, standalone.URL+"/public")
+			require.NoError(t, err)
+			assert.Equal(t, int32(1), standaloneCalls.Load())
 			assert.Zero(t, actualCalls())
 			_, err = doRequest(t, s, 1, testGate(t, "https://unapproved.example.test"), provider.URL+"/data")
 			assert.ErrorIs(t, err, ErrEgress)
@@ -601,13 +618,14 @@ func TestNativeNangoAndComposioShareGrantDestinationQuotaAndCachePolicy(t *testi
 				assert.ErrorIs(t, err, ErrDisabled, "disabled vendor engines cannot release a cached response")
 			}
 			require.NoError(t, s.Ungrant(ctx, 1, "app", c.ID))
-			_, err = doRequest(t, s, 1, gate, "https://attacker.example.test/steal")
-			assert.ErrorIs(t, err, ErrEgress, "removing a grant retains saved-data custody")
+			_, err = doRequest(t, s, 1, gate, standalone.URL+"/public")
+			require.NoError(t, err)
+			assert.Equal(t, int32(2), standaloneCalls.Load(), "disconnection does not revoke independent origin approvals")
 		})
 	}
 }
 
-func TestNangoAndComposioWorkTogetherWithExplicitDataDestinationConsent(t *testing.T) {
+func TestNangoAndComposioWorkTogetherWithIndependentApprovedAPIs(t *testing.T) {
 	s, _ := testService(t)
 	ctx := context.Background()
 	var nativeProviderCalls atomic.Int32
@@ -629,17 +647,29 @@ func TestNangoAndComposioWorkTogetherWithExplicitDataDestinationConsent(t *testi
 	s.cfg.Vendor.Providers["nango-notes"] = VendorProvider{Name: "Nango notes", Engine: "nango", Origins: []string{provider.URL}}
 	nangoConnection, err := s.saveVendor(ctx, 1, "Nango notes", "nango-notes", "tenant:exhibit:1", "nango-reference", s.cfg.Vendor.Providers["nango-notes"], UnlimitedLimits())
 	require.NoError(t, err)
-	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: composioConnection.ID, PermittedEgress: []string{provider.URL}})
+	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: composioConnection.ID})
 	require.NoError(t, err)
-	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: nangoConnection.ID, PermittedEgress: []string{"https://notes.example.test"}})
+	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: nangoConnection.ID})
 	require.NoError(t, err)
-	gate := testGate(t, provider.URL, "https://notes.example.test")
+	var standaloneCalls atomic.Int32
+	standalone := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		standaloneCalls.Add(1)
+		assert.Empty(t, r.Header.Get("Authorization"))
+		assert.Empty(t, r.Header.Get("X-API-Key"))
+		fmt.Fprint(w, `{"standalone":true}`)
+	}))
+	defer standalone.Close()
+	gate := testGate(t, provider.URL, "https://notes.example.test", standalone.URL)
 	response, err := doRequest(t, s, 1, gate, provider.URL+"/notes")
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"engine":"nango"}`, string(response.Body))
 	response, err = doRequest(t, s, 1, gate, "https://notes.example.test/notes")
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"ok":true}`, string(response.Body))
+	response, err = doRequest(t, s, 1, gate, standalone.URL+"/public")
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"standalone":true}`, string(response.Body))
+	assert.Equal(t, int32(1), standaloneCalls.Load())
 	assert.Equal(t, int32(1), nativeProviderCalls.Load())
 	assert.Equal(t, int32(1), composio.proxies.Load())
 	usage, err := s.cfg.Store.VendorUsage(ctx, s.cfg.Now())

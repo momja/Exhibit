@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRelayBundleRetainsDestinationPolicyWhenConnectorsAreDisabled(t *testing.T) {
+func TestRelayBundleRetainsIndependentOriginsWhenConnectorsAreDisabled(t *testing.T) {
 	ro := newTestRouter(t)
 	ro.cfg.Relay.Enabled = true
 	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
@@ -51,7 +51,7 @@ func TestRelayBundleRetainsDestinationPolicyWhenConnectorsAreDisabled(t *testing
 			require.NoError(t, json.Unmarshal(body, &manifest))
 		}
 	}
-	assert.Equal(t, []string{"https://api.example.test"}, manifest.NetworkAllowlist)
+	assert.ElementsMatch(t, []string{"https://api.example.test", "https://elsewhere.example.test"}, manifest.NetworkAllowlist)
 	require.Len(t, manifest.Connections, 1)
 	assert.Equal(t, "Private API", manifest.Connections[0].Name)
 	assert.Equal(t, "bearer", manifest.Connections[0].Kind)
@@ -76,7 +76,7 @@ func TestClearingConnectionDataIsAnExplicitHumanActionAndInvalidatesOldPages(t *
 	require.NoError(t, ro.cfg.Connections.Revoke(ctx, 1, connection.ID))
 	allowed, err := ro.connectionOrigins(ctx, 1, id, base)
 	require.NoError(t, err)
-	assert.Equal(t, base[:1], allowed, "disconnecting retains saved-data protection")
+	assert.Equal(t, base, allowed, "disconnecting leaves independent origin approvals intact")
 	a, err := ro.cfg.Store.GetArtifact(ctx, 1, id)
 	require.NoError(t, err)
 	oldPolicy, err := ro.relayPolicy(ctx, 1, a)
@@ -89,8 +89,7 @@ func TestClearingConnectionDataIsAnExplicitHumanActionAndInvalidatesOldPages(t *
 	state, err := ro.cfg.Store.GetStateAsViewer(ctx, 1, id)
 	require.NoError(t, err)
 	assert.Equal(t, "private cached data", state["cached"])
-	// Disabling acquisition must leave both protection and the explicit
-	// human cleanup action available.
+	// Optional cleanup remains an explicit human action with acquisition off.
 	ro.cfg.Connections = nil
 	w = doJSON(t, ro, http.MethodDelete, path, nil)
 	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
@@ -101,7 +100,7 @@ func TestClearingConnectionDataIsAnExplicitHumanActionAndInvalidatesOldPages(t *
 	require.NoError(t, err)
 	assert.Equal(t, base, allowed)
 	w = relayCall(t, ro, id, relayRequest{URL: base[1]}, oldPolicy)
-	assert.Equal(t, http.StatusConflict, w.Code, "an old host cannot fetch under released restrictions")
+	assert.Equal(t, http.StatusConflict, w.Code, "cleanup invalidates old host authority over the cleared state")
 }
 
 func TestConnectionAPIOnlyAcquiresSecretsInTrustedAppAndReturnsMetadata(t *testing.T) {
@@ -136,7 +135,7 @@ func TestConnectionAPIOnlyAcquiresSecretsInTrustedAppAndReturnsMetadata(t *testi
 	assert.NotContains(t, w.Body.String(), "recipe_json")
 	w = doJSON(t, ro, http.MethodPost, "/api/artifacts/"+id+"/connections", map[string]any{"connection_id": connection.ID, "permitted_egress": []string{}})
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), "nowhere else")
+	assert.NotContains(t, w.Body.String(), "nowhere else")
 	w = getWithConnectionPolicy(t, ro, 1, id, "/api/artifacts/"+id+"/connections", nil)
 	require.Equal(t, 200, w.Code, w.Body.String())
 	assert.NotContains(t, w.Body.String(), "never-return-secret-6921")
@@ -176,7 +175,7 @@ func TestBasicCredentialURLStaysOutOfMetadataAndExport(t *testing.T) {
 	}
 	w = doJSON(t, ro, http.MethodPost, "/api/artifacts/"+id+"/connections", map[string]any{"connection_id": connection.ID})
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), "nowhere else")
+	assert.NotContains(t, w.Body.String(), "nowhere else")
 	w = doJSON(t, ro, http.MethodGet, "/api/artifacts/"+id+"/relay-bundle", nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
@@ -199,7 +198,7 @@ func TestBasicCredentialURLStaysOutOfMetadataAndExport(t *testing.T) {
 	assert.Equal(t, "basic", manifest.Connections[0].Kind)
 	assert.Equal(t, 2, manifest.Connections[0].DailyLimit)
 	assert.Equal(t, 60, manifest.Connections[0].CacheMinutes)
-	assert.Equal(t, []string{origin}, manifest.Connections[0].DataOrigins)
+	assert.Empty(t, manifest.Connections[0].DataOrigins, "new exports do not advertise a data egress ceiling")
 }
 
 func TestManagedProviderIDExportsAsLocalBearerRequirement(t *testing.T) {

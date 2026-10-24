@@ -14,7 +14,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -34,8 +33,8 @@ type Config struct {
 	AppOrigin    string
 	RenderOrigin string
 	RelayEnabled bool
-	// Connector grants narrow every CSP network destination, including image,
-	// script and form channels. Failure must stop the render, never widen it.
+	// Resolve the artifact's independent origin approvals for its CSP. A
+	// connector supplies authentication without narrowing these destinations.
 	NetworkOrigins func(context.Context, int64, string, []string) ([]string, error)
 	// Private connected state is served only in a trusted app-owned frame.
 	// A top-level page has no parent policy constraining self-navigation.
@@ -569,7 +568,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = fmt.Fprintf(w, `<!doctype html><html><head><meta charset="utf-8"><title>Open through Exhibit</title></head><body><h1>Open this connected app through Exhibit</h1><p>Its saved data must stay in the preview, where approved data destinations are enforced.</p><p><a href="%s/artifacts/%s">Return to the app</a></p></body></html>`, stdhtml.EscapeString(strings.TrimSuffix(rd.cfg.AppOrigin, "/")), stdhtml.EscapeString(url.PathEscape(a.ID)))
+		_, _ = fmt.Fprintf(w, `<!doctype html><html><head><meta charset="utf-8"><title>Open through Exhibit</title></head><body><h1>Open this connected app through Exhibit</h1><p>Use its isolated preview to access connected accounts and private saved data.</p><p><a href="%s/artifacts/%s">Return to the app</a></p></body></html>`, stdhtml.EscapeString(strings.TrimSuffix(rd.cfg.AppOrigin, "/")), stdhtml.EscapeString(url.PathEscape(a.ID)))
 		return
 	}
 	rc, err := rd.cfg.Blob.Get(r.Context(), doc.blobID)
@@ -708,11 +707,6 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		origins = originPolicy{Allowed: a.NetworkAllowlist}
 	}
 	origins.Allowed = allowed
-	for _, approved := range a.NetworkAllowlist {
-		if !slices.Contains(allowed, approved) {
-			origins.Restricted = append(origins.Restricted, approved)
-		}
-	}
 
 	body := string(bodyBytes)
 	if !widget {
@@ -770,25 +764,25 @@ func privateFrameRequest(r *http.Request, appOrigin string) bool {
 const versionSandbox = "sandbox allow-scripts allow-forms"
 
 // originPolicy is what the network permission reporter needs to know about an
-// artifact's origin decisions (av-kmwj) and its effective connection policy:
+// artifact's origin decisions (av-kmwj). Two lists rather than one, because the
+// reporter has three cases to tell apart and only two of them are silent:
 //
 //   - Allowed: already in the CSP. A violation naming one of these is a request
 //     that was redirected elsewhere, and the redirect target is hidden from
 //     both frames by the spec. Approving it again would change nothing, so the
 //     reporter explains instead of prompting.
 //   - Blocked: an explicit "don't ask again". Silent, permanently.
-//   - Restricted: approved, but excluded by connection data policy. Explain
-//     the restriction without offering another ineffective approval.
 //   - Anything else is undecided, which is exactly what the prompt is for.
 type originPolicy struct {
-	Allowed    []string
-	Blocked    []string
-	Restricted []string // Approved by the owner, excluded by connection data policy.
+	Allowed []string
+	Blocked []string
 }
 
-// originPolicyFor reads the artifact's saved decisions. serveDoc applies the
-// connection data ceiling, moving excluded approvals into Restricted so the
-// reporter's Allowed list agrees with the CSP.
+// originPolicyFor reads the artifact's decisions into the two lists the
+// preamble inlines. Allowed is taken from the artifact's allowlist rather than
+// re-derived here, so the reporter's idea of "already permitted" is by
+// construction the same set buildCSP emitted — the whole point of the check is
+// that those two agree.
 func (rd *Renderer) originPolicyFor(r *http.Request, a *store.Artifact) (originPolicy, error) {
 	decisions, err := rd.cfg.Store.ListOriginDecisions(r.Context(), a.OwnerID, a.ID)
 	if err != nil {
@@ -1230,7 +1224,6 @@ const shimTemplate = `<script>
   // it only decides what stays quiet.
   var ALLOWED_ORIGINS = %s;
   var BLOCKED_ORIGINS = %s;
-  var RESTRICTED_ORIGINS = %s;
 
   // State is inlined by the render surface at request time, so getItem is
   // correct on the first *synchronous* read. Fetching it asynchronously would
@@ -2325,8 +2318,6 @@ const bridgeScript = `
       // already yes.
       var allowedOrigins = {};
       (ALLOWED_ORIGINS || []).forEach(function(o) { allowedOrigins[o] = true; });
-      var restrictedOrigins = {};
-      (RESTRICTED_ORIGINS || []).forEach(function(o) { restrictedOrigins[o] = true; });
 
       // Reports are buffered until the host announces itself, the same problem
       // and the same handshake as the capability diagnostic above (av-yvtb).
@@ -2374,14 +2365,6 @@ const bridgeScript = `
         try { origin = new URL(uri).origin; } catch (err) { return; }
         if (silencedOrigins[origin]) return;
         silencedOrigins[origin] = true;
-
-        // The owner already approved this origin, but connected or retained
-        // data imposes a stricter ceiling. Let the trusted host explain that
-        // policy, including for recipients who cannot approve network access.
-        if (restrictedOrigins[origin]) {
-          sendReport({ __avNetwork: true, artifactId: ARTIFACT_ID, origin: origin, directive: directive, reason: 'connection_data_policy' });
-          return;
-        }
 
         // The origin is already on the allowlist and the request was blocked
         // anyway, which means it did not end where it started: the fetch was
@@ -2522,9 +2505,6 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 	if origins.Blocked == nil {
 		origins.Blocked = []string{}
 	}
-	if origins.Restricted == nil {
-		origins.Restricted = []string{}
-	}
 	// json.Marshal escapes <, >, & as </>/&, so the literals are
 	// safe to embed inside a <script> element (can't break out with </script>).
 	stateJSON, err := json.Marshal(state)
@@ -2539,10 +2519,6 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 	if err != nil {
 		blockedJSON = []byte("[]")
 	}
-	restrictedJSON, err := json.Marshal(origins.Restricted)
-	if err != nil {
-		restrictedJSON = []byte("[]")
-	}
 	bridges := bridgeScript
 	if widget {
 		bridges = ""
@@ -2551,7 +2527,7 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 	if len(versionSeq) > 0 {
 		version = versionSeq[0]
 	}
-	shim := fmt.Sprintf(shimTemplate, artifactID, version, appOrigin, widget, anonymous, versionView, allowedJSON, blockedJSON, restrictedJSON, stateJSON, bridges)
+	shim := fmt.Sprintf(shimTemplate, artifactID, version, appOrigin, widget, anonymous, versionView, allowedJSON, blockedJSON, stateJSON, bridges)
 	if widget {
 		// No snippet picker: it exists so the user can point at an element in
 		// the *artifact* preview and hand it to the agent. A widget frame is

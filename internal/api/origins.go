@@ -3,7 +3,6 @@ package api
 import (
 	"log/slog"
 	"net/http"
-	"slices"
 
 	"github.com/momja/Exhibit/internal/origin"
 	"github.com/momja/Exhibit/internal/store"
@@ -71,23 +70,6 @@ func (ro *Router) setOriginDecision(w http.ResponseWriter, r *http.Request) {
 	ownerID := ownerIDFromCtx(r.Context())
 	if !ro.artifactExists(w, r, artifactID, "set origin decision") {
 		return
-	}
-	// An artifact's origin approval cannot release connection data to a
-	// destination excluded by its current or retained custody policy.
-	if req.Decision == store.DecisionAllow {
-		allowed, err := ro.connectionOrigins(r.Context(), ownerID, artifactID, []string{normalized})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "check origin connection policy", slog.String("err", err.Error()))
-			writeError(w, http.StatusServiceUnavailable, "Connection policy is unavailable. Try again.")
-			return
-		}
-		if !slices.Contains(allowed, normalized) {
-			writeJSON(w, http.StatusConflict, map[string]string{
-				"code":  "connection_data_policy",
-				"error": "Connection data protection blocks this destination. Review the allowed data destinations in Connections.",
-			})
-			return
-		}
 	}
 	if err := ro.cfg.Store.SetOriginDecision(r.Context(), ownerID, artifactID, normalized, req.Decision, source); err != nil {
 		writeArtifactError(w, r, "set origin decision", err)

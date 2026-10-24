@@ -22,8 +22,7 @@
  *   reload()     - how to refetch the render document so a widened CSP applies.
  *                  A CSP is a response header fixed at load, so a new policy
  *                  needs a new document, and each page reaches one differently.
- *   readOnly()   - optional; true refuses approval prompts. Connection data
- *                  restrictions still get a server-reviewed explanation.
+ *   readOnly()   - optional; true refuses the prompt outright.
  *   explain(o,d) - optional; where a refused report goes instead of the
  *                  dialog. A visitor who cannot record an answer is not asked,
  *                  but the block still has to be accounted for somewhere or
@@ -68,15 +67,6 @@ export const networkPrompt = {
     let pending = null;
     const queue = [];
 
-    function reviewOrigin() {
-      const warnings = document.getElementById('net-warning-list');
-      if (!warnings || !pending) return;
-      warnings.dataset.artifact = pending.artifactID;
-      warnings.dataset.origin = pending.origin;
-      warnings.replaceChildren();
-      document.body.dispatchEvent(new CustomEvent('exhibit:network-origin-warning'));
-    }
-
     // Advances to the next queued report, or closes the dialog when the
     // queue is empty. Every dismissal path goes through here, so "next" and
     // "close" are one behaviour rather than two that can disagree.
@@ -90,7 +80,12 @@ export const networkPrompt = {
       if (!pending) { if (modal.open) close(); return; }
       document.getElementById('net-origin').textContent = pending.origin;
       document.getElementById('net-directive').textContent = pending.directive ? 'Blocked by ' + pending.directive : '';
-      reviewOrigin();
+      const warnings = document.getElementById('net-warning-list');
+      if (warnings) {
+        warnings.dataset.artifact = pending.artifactID;
+        warnings.replaceChildren();
+        document.body.dispatchEvent(new CustomEvent('exhibit:network-origin-warning'));
+      }
       document.getElementById('net-never').disabled = false;
       document.getElementById('net-allow').disabled = false;
       prompt.show(frame());
@@ -116,15 +111,6 @@ export const networkPrompt = {
       if (req !== pending || req.frame !== frame() || req.artifactID !== artifactId()) return false;
       document.getElementById('net-never').disabled = false;
       document.getElementById('net-allow').disabled = false;
-      if (r?.status === 409) {
-        const result = await r.json().catch(function () { return {}; });
-        if (req !== pending || req.frame !== frame() || req.artifactID !== artifactId()) return false;
-        if (result.code === 'connection_data_policy') {
-          report(result.error);
-          reviewOrigin();
-          return false;
-        }
-      }
       if (!r || !r.ok) { report('✗ Failed to save the decision for ' + origin); return false; }
       return true;
     }
@@ -147,7 +133,7 @@ export const networkPrompt = {
       // available nowhere the visitor will look. So the report is handed to
       // the page's explanation instead of the queue — never both, since the
       // whole claim is that this session asks nothing and writes nothing.
-      if (readOnly() && d.reason !== 'connection_data_policy') {
+      if (readOnly()) {
         explain(String(d.origin || ''), String(d.directive || ''));
         return;
       }

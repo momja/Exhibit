@@ -266,7 +266,7 @@ func (ro *Router) performRelay(w http.ResponseWriter, r *http.Request) {
 				status, code, message = 429, "connection_quota", "This connection has reached its daily request limit."
 			}
 			if errors.Is(err, connectors.ErrEgress) {
-				status, code, message = 403, "connection_egress", "The connection grant does not permit this data destination."
+				status, code, message = 403, "connection_egress", "The connection does not permit this request or redirect."
 			}
 			if errors.Is(err, connectors.ErrStandin) {
 				status, code, message = 403, "credential_misuse", "A credential stand-in was used outside its approved origin or position. The request was blocked."
@@ -301,18 +301,20 @@ func (ro *Router) executeRelay(ctx context.Context, viewer int64, a *store.Artif
 	if !g.Reads || relayWrite(req.Method) && !g.Writes {
 		return nil, &relayRefusal{status: 403, code: "relay_consent_required", message: "This artifact needs your permission to use the relay."}
 	}
-	if ro.cfg.Connections == nil && ro.cfg.ConnectionPolicy != nil {
-		policies, policyErr := ro.cfg.ConnectionPolicy.DataPolicies(ctx, viewer, a.ID)
-		if policyErr != nil {
-			return nil, policyErr
-		}
-		if len(policies) > 0 {
-			return nil, &relayRefusal{status: 403, code: "connections_disabled", message: "Connections are disabled for this instance. Ask the operator to re-enable them before using this connected artifact."}
-		}
-	}
 	o, err := origin.NormalizeOrigin(req.URL.Scheme + "://" + req.URL.Host)
 	if err != nil {
 		return nil, &relayRefusal{status: 400, code: "invalid_url", message: "Use an HTTPS API URL."}
+	}
+	if ro.cfg.Connections == nil && ro.cfg.ConnectionPolicy != nil {
+		grants, grantErr := ro.cfg.ConnectionPolicy.Grants(ctx, viewer, a.ID)
+		if grantErr != nil {
+			return nil, grantErr
+		}
+		for _, grant := range grants {
+			if slices.Contains(grant.Connection.Origins, o) {
+				return nil, &relayRefusal{status: 403, code: "connections_disabled", message: "Connections are disabled for this instance. Ask the operator to re-enable them before using this connection."}
+			}
+		}
 	}
 	if delay := ro.relayRuntime.reserveRequest(viewer, a.ID, o); delay > 0 {
 		return nil, relayThrottle(delay)
@@ -360,16 +362,26 @@ func (ro *Router) executeRelay(ctx context.Context, viewer int64, a *store.Artif
 		if readErr != nil {
 			return nil, readErr
 		}
-		canCache = len(grants) == 0
+		for _, grant := range grants {
+			if slices.Contains(grant.Connection.Origins, o) {
+				canCache = false
+				break
+			}
+		}
 	}
 	var cacheKey [32]byte
 	if canCache {
-		policy, policyErr := ro.relayPolicy(ctx, viewer, a)
-		if policyErr != nil {
-			return nil, policyErr
-		}
+		// Public unauthenticated cache entries depend on the artifact's origin
+		// approvals, not unrelated credential grants or saved provenance.
+		origins := append([]string{}, allowed...)
+		slices.Sort(origins)
+		scope, _ := json.Marshal(struct {
+			Viewer           int64
+			Artifact, Source string
+			Origins          []string
+		}{viewer, a.ID, a.SourceBlobID, origins})
 		digest := requestDigest(req)
-		cacheKey = sha256.Sum256(append([]byte(policy), digest[:]...))
+		cacheKey = sha256.Sum256(append(scope, digest[:]...))
 		if hit := ro.relayRuntime.cached(cacheKey); hit != nil {
 			cached = true
 			return hit, nil
@@ -427,9 +439,8 @@ func (ro *Router) relayPolicy(ctx context.Context, viewer int64, a *store.Artifa
 	allowed = append([]string{}, allowed...)
 	slices.Sort(allowed)
 	type binding struct {
-		Connection   string
-		Destinations []string
-		Sharing      bool
+		Connection string
+		Sharing    bool
 	}
 	bindings := []binding{}
 	policy := ro.cfg.Connections
@@ -442,31 +453,21 @@ func (ro *Router) relayPolicy(ctx context.Context, viewer int64, a *store.Artifa
 			return "", err
 		}
 		for _, g := range grants {
-			dest := append([]string{}, g.PermittedEgress...)
-			slices.Sort(dest)
-			bindings = append(bindings, binding{g.Connection.ID, dest, g.ShareWithRecipients})
+			bindings = append(bindings, binding{g.Connection.ID, g.ShareWithRecipients})
 		}
 		retained, err := policy.DataPolicies(ctx, viewer, a.ID)
 		if err != nil {
 			return "", err
 		}
-		// A recipient records custody when receiving an owner's shared data.
-		// That copy adds no authority and must not invalidate the very response
-		// it protects. Fingerprint the intersection for each connection, so
-		// duplicate custody rows and later narrowing copies are equivalent to
-		// the same effective restriction. Sharing affects row eligibility in
-		// DataPolicies, rather than the authority of an already selected row.
-		dataDestinations := map[string][]string{}
+		// Provenance supports sharing/private-frame controls. Deduplicate
+		// copies so recording a recipient's first response does not invalidate
+		// its host. Legacy destination lists carry no authority.
+		dataConnections := map[string]bool{}
 		for _, p := range retained {
-			if current, exists := dataDestinations[p.ConnectionID]; exists {
-				dataDestinations[p.ConnectionID] = slices.DeleteFunc(current, func(o string) bool { return !slices.Contains(p.Origins, o) })
-			} else {
-				dataDestinations[p.ConnectionID] = append([]string{}, p.Origins...)
-			}
+			dataConnections[p.ConnectionID] = true
 		}
-		for id, dest := range dataDestinations {
-			slices.Sort(dest)
-			bindings = append(bindings, binding{"data:" + id, slices.Compact(dest), false})
+		for id := range dataConnections {
+			bindings = append(bindings, binding{"data:" + id, false})
 		}
 	}
 	slices.SortFunc(bindings, func(a, b binding) int { return strings.Compare(a.Connection, b.Connection) })

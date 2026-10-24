@@ -42,6 +42,10 @@ func TestSystemPromptDescribesOnlyEnabledNetworkCapabilities(t *testing.T) {
 	assert.Contains(t, enabled, "Only when this operator enables stand-ins")
 	assert.Contains(t, enabled, "never ask for a key, password, setup token or access URL")
 	assert.NotContains(t, enabled, "prefer zero external references")
+	assert.Contains(t, enabled, "Connection grants are additive")
+	assert.Contains(t, enabled, "multiple connections and other approved APIs and CDNs work together")
+	assert.Contains(t, enabled, "cannot guarantee where response data goes")
+	assert.NotContains(t, enabled, "approves its data destinations")
 
 	widget := buildSystemPrompt("", CreateOpts{NetworkRelayEnabled: true, ConnectionsEnabled: true, WidgetOnly: true})
 	assert.Contains(t, widget, "Widgets cannot use Exhibit's relay or connections")

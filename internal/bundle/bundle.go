@@ -39,13 +39,14 @@ const maxBundleFile = 64 << 20
 // a reference to an Exhibit's user's connection. Local credentials are acquired
 // again by the runner, outside the artifact frame.
 type ConnectionRequirement struct {
-	Name         string   `json:"name"`
-	Kind         string   `json:"kind"`
-	Origin       string   `json:"origin"`
-	Header       string   `json:"header,omitempty"`
-	DailyLimit   int      `json:"daily_limit,omitempty"`
-	CacheMinutes int      `json:"cache_minutes,omitempty"`
-	DataOrigins  []string `json:"data_origins,omitempty"`
+	Name         string `json:"name"`
+	Kind         string `json:"kind"`
+	Origin       string `json:"origin"`
+	Header       string `json:"header,omitempty"`
+	DailyLimit   int    `json:"daily_limit,omitempty"`
+	CacheMinutes int    `json:"cache_minutes,omitempty"`
+	// DataOrigins is ignored legacy metadata; network_allowlist is authoritative.
+	DataOrigins []string `json:"data_origins,omitempty"`
 }
 type Files struct {
 	Page  string `json:"page"`
@@ -112,18 +113,6 @@ func (b *Bundle) validate() error {
 		}
 		if requirement.DailyLimit < 0 || requirement.CacheMinutes < 0 || requirement.CacheMinutes > 525600 {
 			return errors.New("invalid connection request or response reuse limit")
-		}
-		if len(requirement.DataOrigins) == 0 {
-			requirement.DataOrigins = []string{o}
-		}
-		requirement.DataOrigins, err = origin.NormalizeOrigins(append(requirement.DataOrigins, o))
-		if err != nil {
-			return errors.New("invalid connection data destinations")
-		}
-		for _, destination := range requirement.DataOrigins {
-			if !allowed[destination] {
-				return errors.New("connection data destination must be in the bundle allowlist")
-			}
 		}
 	}
 	if b.State == nil {
@@ -194,15 +183,17 @@ Or run the same folder or ZIP with the Go runner:
 Use Connections in the local page to enter credentials again. They stay in the
 runner's memory until it stops; they never reach the app frame or state.json.
 EXHIBIT_CONNECTIONS can optionally hold JSON entries with origin, kind, header,
-secret, username, password, access_url, daily_limit, cache_minutes and data_origins
-fields instead of using the form. A Basic connection can accept an HTTPS URL
+secret, username, password, access_url, daily_limit and cache_minutes fields
+instead of using the form. A Basic connection can accept an HTTPS URL
 with embedded credentials; its private base path stays in the runner. Do not put that
 environment variable or a secret file in a shared bundle.
 
-Every connection defaults to keeping data at its source origin. Use the trusted
-Connections form to explicitly approve any other allowed destinations. These
-data policies survive disconnects and restarts beside state.json. Request limits
-and response reuse apply while this runner is running; reconnect after restarting.
+The app can use every approved origin, with or without a connection. Each
+connection adds authentication only for its own origin; it does not change the
+network allowlist. Credentials are never forwarded to another origin during
+redirects. Legacy data_origins metadata and saved policy files are ignored.
+Request limits and response reuse apply while this runner is running; reconnect
+after restarting.
 Older unsupported connector requirements must be exported again and reconnected
 using a generic connection. No setup token is redeemed by the runner.
 

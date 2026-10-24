@@ -21,10 +21,9 @@ type connectionCard struct {
 	Usage    []store.ConnectionUsageArtifact
 }
 type connectionGrantPreview struct {
-	Connection   connectors.Connection
-	Destinations []string
-	ReadText     string
-	Sharing      bool
+	Connection connectors.Connection
+	ReadText   string
+	Sharing    bool
 }
 type connectionPageView struct {
 	Favicon          template.URL
@@ -35,7 +34,6 @@ type connectionPageView struct {
 	Providers        []connectors.Provider
 	VendorProviders  []connectors.VendorProviderInfo
 	Grants           []connectors.Grant
-	DataPolicies     []store.ConnectionDataPolicy
 	CanClearData     bool
 	Relay            store.RelayGrant
 	Activity         []store.RelayActivity
@@ -110,15 +108,7 @@ func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error
 		}
 		v.IsOwner = v.Artifact.OwnerID == viewer
 		v.CanClearData = v.IsOwner || v.Artifact.ShareStateMode != store.ShareStateShared
-		if policy := ro.connectionPolicy(); policy != nil {
-			v.DataPolicies, err = policy.DataPolicies(r.Context(), viewer, id)
-			if err != nil {
-				return v, err
-			}
-		}
-		// Retained data remains protected after the operator disables every
-		// experimental engine. Its authorized viewer must still be able to
-		// inspect those restrictions and explicitly clear their saved data.
+		// Optional saved-data cleanup remains available with the engines off.
 		if !v.Enabled {
 			return v, nil
 		}
@@ -160,8 +150,7 @@ func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error
 		selected := r.URL.Query().Get("connection")
 		for _, c := range v.Connections {
 			if c.ID == selected {
-				destinations := strings.FieldsFunc(r.URL.Query().Get("egress"), func(r rune) bool { return r == ',' || r == ' ' || r == '\n' })
-				v.Preview = &connectionGrantPreview{Connection: c.Connection, Destinations: destinations, ReadText: strings.Join(c.Capabilities, ", "), Sharing: r.URL.Query().Get("sharing") == "on"}
+				v.Preview = &connectionGrantPreview{Connection: c.Connection, ReadText: strings.Join(c.Capabilities, ", "), Sharing: r.URL.Query().Get("sharing") == "on"}
 			}
 		}
 	}
@@ -270,15 +259,9 @@ func (ro *Router) exportRelayBundle(w http.ResponseWriter, r *http.Request) {
 			}
 			for _, o := range g.Connection.Origins {
 				if allowedOrigins[o] {
-					destinations := []string{}
-					for _, destination := range append(append([]string{}, g.Connection.Origins...), g.PermittedEgress...) {
-						if allowedOrigins[destination] {
-							destinations = append(destinations, destination)
-						}
-					}
 					requirements = append(requirements, bundle.ConnectionRequirement{
 						Name: g.Connection.Name, Kind: kind, Origin: o, Header: g.Connection.Header,
-						DailyLimit: g.Connection.DailyLimit, CacheMinutes: g.Connection.CacheMinutes, DataOrigins: destinations,
+						DailyLimit: g.Connection.DailyLimit, CacheMinutes: g.Connection.CacheMinutes,
 					})
 				}
 			}

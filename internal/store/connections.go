@@ -72,10 +72,10 @@ type ConnectionGrantRecord struct {
 	CreatedAt           time.Time
 }
 
-// ConnectionDataPolicy protects saved provider data independently of whether
-// the connection or grant still exists. Origins contains the complete approved
-// data destinations, including the provider's reviewed origins. It contains no
-// credential, private recipe path, or provider response.
+// ConnectionDataPolicy retains saved-data provenance for sharing and private
+// render controls after a connection is removed. Origins is legacy destination
+// metadata and supplies no network authority. It contains no credential,
+// private recipe path, or provider response.
 type ConnectionDataPolicy struct {
 	ArtifactID          string   `json:"artifact_id"`
 	ConnectionID        string   `json:"connection_id"`

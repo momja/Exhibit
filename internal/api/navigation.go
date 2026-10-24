@@ -6,11 +6,9 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/momja/Exhibit/internal/connectors"
-	"github.com/momja/Exhibit/internal/origin"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -21,8 +19,8 @@ func (ro *Router) connectionPolicy() *connectors.Service {
 	return ro.cfg.ConnectionPolicy
 }
 
-// Data policies keep protecting saved responses after credentials or grants
-// are removed, and while acquisition or relay flags are disabled.
+// Retained provenance keeps saved-data sharing and private-frame controls
+// available after a credential is removed. It does not restrict network access.
 func (ro *Router) hasConnectionDataPolicies(ctx context.Context, viewer int64, artifact string) (bool, error) {
 	policy := ro.connectionPolicy()
 	if policy == nil {
@@ -80,9 +78,8 @@ func (ro *Router) connectionDocumentProtected(ctx context.Context, viewer int64,
 	return ro.hasConnectionDataPolicies(ctx, viewer, artifact)
 }
 
-// A link opened by the trusted host is an egress channel just like fetch or an
-// image. Check the current policy for each activation, including an activation
-// after a first-use permission dialog has been left open.
+// Link capability consent is independent of connection grants. Check the
+// current host authority and validate the destination before each activation.
 func (ro *Router) checkArtifactNavigation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if !ro.relayHumanRequest(w, r) {
@@ -112,20 +109,6 @@ func (ro *Router) checkArtifactNavigation(w http.ResponseWriter, r *http.Request
 		target.User != nil || target.Host == "" || (target.Scheme != "https" && target.Scheme != "http") {
 		writeError(w, http.StatusBadRequest, "Choose an HTTP or HTTPS link without credentials.")
 		return
-	}
-	if policy := ro.connectionPolicy(); policy != nil {
-		policies, err := policy.DataPolicies(r.Context(), viewer, a.ID)
-		if err != nil {
-			writeError(w, http.StatusServiceUnavailable, "Connection policy is unavailable.")
-			return
-		}
-		destination, normalizeErr := origin.NormalizeOrigin(target.Scheme + "://" + target.Host)
-		for _, dataPolicy := range policies {
-			if normalizeErr != nil || !slices.Contains(dataPolicy.Origins, destination) {
-				writeError(w, http.StatusForbidden, "This connection does not permit opening links to that destination. Review its data destinations in Connections.")
-				return
-			}
-		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"url": target.String()})
 }

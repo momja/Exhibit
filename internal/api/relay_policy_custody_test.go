@@ -50,7 +50,7 @@ func TestRelayPolicyRemainsValidWhenSharedResponseRetainsRecipientCustody(t *tes
 	require.NoError(t, s.RetainSharedConnectionDataPolicies(ctx, recipient.ID, id))
 	after, err = ro.relayPolicy(ctx, recipient.ID, a)
 	require.NoError(t, err)
-	assert.Equal(t, before, after, "narrowing a custody copy does not change the intersection already enforced")
+	assert.Equal(t, before, after, "recording a duplicate provenance copy does not invalidate its host")
 
 	require.NoError(t, ro.cfg.Connections.Revoke(ctx, owner.ID, connection.ID))
 	before, err = ro.relayPolicy(ctx, recipient.ID, a)
@@ -58,5 +58,5 @@ func TestRelayPolicyRemainsValidWhenSharedResponseRetainsRecipientCustody(t *tes
 	require.NoError(t, ro.cfg.Connections.ClearData(ctx, owner.ID, id))
 	after, err = ro.relayPolicy(ctx, recipient.ID, a)
 	require.NoError(t, err)
-	assert.Equal(t, before, after, "owner reset cannot alter restrictions on the recipient's retained copy")
+	assert.Equal(t, before, after, "owner reset cannot alter the recipient's retained provenance")
 }
