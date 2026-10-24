@@ -5,9 +5,9 @@ build: assets
 
 # Build the embedded static assets into the go:embed-served asset dir by running
 # every web/ workspace's build (see scripts/build-assets.sh — the same script the
-# Dockerfile's Node stage runs). Requires Node at build time only. The output is
+# Dockerfile's Node stage runs). This asset step requires Node. The output is
 # NOT committed to git; it's regenerated on every build, so the running server
-# still needs no Node and no network.
+# serves the assets without fetching them. Pi also needs Node at runtime.
 assets:
 	sh scripts/build-assets.sh
 

@@ -17,6 +17,9 @@ server
 data/
 *.db
 .git/
+.env
+.env.*
+.exhibit-setup/
 
 # Not build inputs. Nothing embeds from any of these: the only go:embed outside
 # internal/api's assets, templates and migrations is internal/agent's

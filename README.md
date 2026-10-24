@@ -14,6 +14,28 @@ Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs
 
 ## Quick start
 
+### Set up with an agent
+
+Paste this into a coding agent that can run commands on the machine where you
+want Exhibit installed:
+
+```text
+Set up Exhibit on this machine. Use https://github.com/momja/Exhibit and read
+docs/agent-setup.md, then follow docs/agent-setup-compose.md. Perform the setup,
+including installing missing dependencies, saving environment configuration,
+starting Exhibit, and verifying it works. Default to a local-only Docker Compose
+installation. Inspect existing tools, configuration, and data before changing
+anything, and preserve them on re-runs. Ask me only for choices or credentials
+you cannot infer; let me enter secrets locally. Finish with the reachable URLs,
+data/config locations, restart/log commands, and any unfinished verification.
+```
+
+Prefer a source build? Use the same prompt with `docs/agent-setup-source.md`
+in place of `docs/agent-setup-compose.md`. The [agent setup guide](docs/agent-setup.md)
+explains supported platforms and what the agent will do.
+
+### Set up manually
+
 The fastest way to run Exhibit is Docker Compose. Read **[docs/deployment.md](./docs/deployment.md)**.
 
 The rest of this section is for building and running **from source** for
@@ -26,14 +48,16 @@ on most systems:
 
 | Tool | Version | Why |
 |------|---------|-----|
-| [Go](https://go.dev/dl/) | 1.25+ | Compiles the server. |
-| [Node.js](https://nodejs.org/) + npm | 22+ | Bundles assets (such as [CodeMirror](https://codemirror.net/), [Phosphor](https://phosphoricons.com/)) at build time via `make assets`, and runs `pi` at runtime. |
+| [Go](https://go.dev/dl/) | version in `go.mod` or newer | Compiles the server. |
+| [Node.js](https://nodejs.org/) + npm | compatible with the pinned Pi version; see `Dockerfile` | Bundles assets (such as [CodeMirror](https://codemirror.net/), [Phosphor](https://phosphoricons.com/)) at build time via `make assets`, and runs `pi` at runtime. |
 | [`pi`](https://github.com/earendil-works/pi) | see `PI_VERSION` in the `Dockerfile` | The AI agent harness the server spawns per chat session. Requires Node ≥22.19.0. Install with `npm install -g --engine-strict @earendil-works/pi-coding-agent@<PI_VERSION>`. Without it the server starts but every agent feature fails. |
 
 `make` is also required.
 
 Optional:
 
+- Python 3 with fontTools and Brotli — subsets the icon font; without them the
+  build warns and embeds the full font. See the [source setup guide](docs/agent-setup-source.md).
 - [`golangci-lint`](https://golangci-lint.run) — only for `make lint` (see [Linting](#linting)).
 
 ```bash
@@ -47,10 +71,11 @@ make assets && go run ./cmd/server
 open http://localhost:8080
 ```
 
-With no env vars set it defaults to `localhost` origins and a `dev-token` auth
-token, which is fine locally. Set `AUTH_TOKEN` and the origins before exposing it
-to a network — see [docs/deployment.md](./docs/deployment.md) for the full
-configuration reference.
+With no env vars set it defaults to `localhost` origins, a `dev-token` API token,
+and listeners on all interfaces. A fresh self-hosted instance seeds the local
+login `admin` / `changeme`; change that password immediately. The agent guides
+bind the listeners to loopback and save a generated API token. See
+[docs/deployment.md](./docs/deployment.md) for the full configuration reference.
 
 ## Building
 

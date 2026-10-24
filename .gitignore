@@ -19,7 +19,7 @@ $RECYCLE.BIN/
 data/
 server
 
-# Node is build-time only (make assets / the Dockerfile's Node stage); its
+# Frontend assets are generated at build time (make assets / the Dockerfile); their
 # fetched/bundled output is produced at build time, not committed to git.
 node_modules/
 
@@ -41,3 +41,6 @@ node_modules/
 # Clerk CLI writes local API keys here. Never commit credentials.
 .env
 .env.*
+
+# Machine-local launchers, Compose overlay, Pi runtime, and setup logs.
+/.exhibit-setup/

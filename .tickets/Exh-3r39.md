@@ -1,6 +1,6 @@
 ---
 id: Exh-3r39
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T21:20:06Z
@@ -34,3 +34,9 @@ README.md and docs/deployment.md already document individual commands and config
 4. Each guide contains concrete verification and troubleshooting steps, plus a final handoff with usable URLs and stop/restart/log commands. Missing credentials or unsupported platforms are reported clearly rather than described as a completed setup.
 5. Walk through each documented path in a clean supported environment, record platform and results, and verify restart persistence and safe re-runs without overwriting an existing installation's data or configuration.
 
+
+## Notes
+
+**2026-10-24T22:04:36Z**
+
+Implemented README prompts plus shared, Compose, and source setup runbooks. Validated fresh Compose data and a clean Ubuntu ARM64 source build, login and artifact/render/state flows, restart/re-run persistence, pinned Pi, environment loading, and Git/Docker exclusions. Results and untested platform/provider steps are recorded in docs/agent-setup-validation.md.
