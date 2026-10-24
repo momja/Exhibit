@@ -39,12 +39,12 @@ origins and a `dev-token` auth token, which is fine for trying it out locally.
 Env vars, all optional except `AUTH_TOKEN`.
 
 > [!NOTE]
-> Out of the box Exhibit is single-user: there is no login, and `AUTH_TOKEN` is
-> a single shared static token, not a real auth boundary. If you're exposing an
-> instance beyond your own machine, give it a login — see
-> [Logging in](#3-logging-in-optional) for the three supported ways, two of
-> which also give you more than one user — or be comfortable with the
-> consequences of running without one.
+> **Self-hosted authentication is the default; Clerk is opt-in.** A fresh instance
+> with no authentication configuration creates a local `admin` account with
+> password `changeme`; change it after first login. You can use local accounts or
+> configure your own OIDC provider without a Clerk account, keys, or service.
+> See [Logging in](#3-logging-in-optional). `AUTH_TOKEN` is a separate API credential.
+
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
@@ -374,6 +374,26 @@ Single-quote the hash: it contains `$`, which your shell will otherwise eat.
 
 To combine it with §3.3, set both: the login page then offers the password form
 and a button through to your provider.
+
+### Verify a deployment without Clerk
+
+The same built server supports both deployment modes; no separate build or
+source changes are needed. Leave both `CLERK_PUBLISHABLE_KEY` and
+`CLERK_SECRET_KEY` unset for self-hosting. The server does not automatically load
+`.env.local`; only explicitly passing it to a process launcher loads those keys.
+
+Run this smoke test after building the server and its assets:
+
+```bash
+python3 scripts/smoke-self-hosted.py /absolute/path/to/server
+```
+
+It starts the binary with an explicit clean environment and temporary database,
+then verifies default local login, rejection of wrong passwords and anonymous
+API access, authenticated API access, and immediate session revocation at logout.
+It also checks that login and gallery HTML contain no Clerk bootstrap. Its
+process and temporary database are cleaned up afterwards. OIDC discovery,
+exchange, and token validation are covered by `go test ./internal/auth`.
 
 ### Hosted Exhibit: Clerk
 

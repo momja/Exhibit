@@ -34,3 +34,7 @@ Enabled auth_passkey.used_for_sign_in on selected development instance through C
 **2026-10-24: Phosphor panel icons**
 
 Added self-hosted Phosphor SVG masks via the existing icon build and Clerk appearance elements: account/security navigation, manage-account/sign-out/add-account actions, passkeys, arrows, edit, and password visibility. Retains SDK semantics/ARIA and provider brand icons. Browser verified signup masks render and password toggle switches input type, eye/eye-slash mask, and accessible label. Signed-in panel mappings inspected against Clerk source; no user created for testing. Refreshed mobile signup screenshot. Assets/server build and all 363 gallery tests pass.
+
+**2026-10-24: Prove default self-hosted deployment**
+
+Started the exact hosted-preview binary separately with env -i, no Clerk/OIDC/login configuration, and a fresh database on ports 8098/8099. It bootstraps the existing local admin flow. Added scripts/smoke-self-hosted.py: starts the provided binary with a clean environment/temp database and verifies local form, absence of Clerk bootstrap, wrong-password/anonymous rejection, successful local session/API access, and replay rejection after logout. Smoke test passes. Focused local/OIDC/Clerk auth and API tests pass uncached. Browser local login shows zero external resource requests and no Clerk global. Saved self-hosted login screenshot; corrected stale deployment documentation that claimed the default had no login.
