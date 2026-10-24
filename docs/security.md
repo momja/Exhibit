@@ -9,7 +9,8 @@ The one-paragraph threat model: an artifact is **untrusted code that executes in
 the visitor's browser**. The server never executes it — artifact bytes are inert
 data at rest, stored and served. What must be protected is therefore (a) the app's
 session and API from artifact code, (b) the visitor from silent network egress,
-and (c) the server itself during ingest-time fetching. Each gets its own mechanism
+and (c) the server itself during ingest-time fetching and optional API relay
+requests. Each gets its own mechanism
 below, and every hard boundary is browser- or kernel-enforced machinery, never our
 own code convention.
 
@@ -1553,3 +1554,50 @@ gets the same explicit decision an ingest would (av-hrtv). If a real control is
 ever wanted here it is per-directive allowlists — approve an origin for
 `script-src` only, so a fetch to it is browser-blocked regardless of any scan —
 which is enforcement rather than marking, and a separate, larger change.
+
+## Experimental relay and credential custody
+
+Relay access is a separate viewer/artifact grant, never implied by an origin
+approval. The frame holds no provider credential or app-owned render-policy
+authority. A document-bound bridge returns response bytes only to its opaque
+frame. Widgets, public links and direct render visits cannot use the relay.
+
+Connector grants are additive to artifact network approvals. Each connection
+supplies credentials only to matching API origins. A grant does not narrow the
+CSP or revoke another approved API, CDN, stylesheet, font or image origin.
+Multiple connections and approved unauthenticated requests can coexist. Origin
+approval, relay consent and credential grants remain independent checks.
+
+Credential custody protects secrets while Exhibit holds them. Once response data
+is returned to artifact code, Exhibit cannot guarantee that it stays at the API:
+the artifact can save it or send it to other approved origins. Removing a grant,
+revoking a credential or disabling connectors does not restrict unrelated approved
+network access or require clearing state. Saved provenance remains relevant to
+explicit sharing/export consent and private render boundaries; legacy destination
+fields are inert compatibility metadata. Optional cleanup erases saved state,
+without changing network approvals or grants; open pages may still hold copies.
+
+The shared HTTPS gate checks each redirect, rejects non-public DNS answers and
+dials a checked literal, applies a guest header allowlist, caps decoded bytes
+and time, and never inherits an environment proxy. First-party injection runs
+afresh after each destination check. Credentials and connector caches are
+encrypted at rest, and only metadata is logged. Basic access URLs are parsed
+only in trusted app code; credentials and private base paths
+remain encrypted and absent from artifact metadata. Per-connection daily
+request limits and encrypted response reuse apply across artifacts and devices.
+Local exports enforce the same boundary with
+opaque frames, exact Host/Origin/session checks and locally acquired secrets.
+The full security and validation contract is in
+[relay-connectors.md](relay-connectors.md).
+
+Vendor forward mode is explicitly distinct from injection. Composio's current
+API redacts managed credentials, so Exhibit passes a sanitized, approved request
+to its proxy. The common egress gate checks initial exact origin, operator
+policy, all public DNS answers, allowed headers, body size and deadline, then
+bounds and filters the returned response. It cannot pin the vendor's provider
+dial, inspect its redirects or scrub secrets it never held. Grant previews
+identify this mode and the vendor's payload-retention boundary; vendor bodies
+never enter trusted app DOM or Exhibit activity logs. Native/Nango injection
+continues checking and authorizing each directly dialed hop. Vendor errors are
+normalized without retaining upstream body text. Per-engine anonymous aggregate
+counters carry no request, credential, connection or account identity.

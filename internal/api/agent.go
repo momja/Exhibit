@@ -171,7 +171,8 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 			writeError(w, http.StatusTooManyRequests, refusal.Message())
 			return agent.CreateOpts{}, false
 		}
-		return agent.CreateOpts{OwnerID: ownerID, Provider: pk.Provider, Model: pk.Model, APIKey: pk.APIKey, PlatformPaid: true}, true
+		return agent.CreateOpts{OwnerID: ownerID, Provider: pk.Provider, Model: pk.Model, APIKey: pk.APIKey, PlatformPaid: true,
+			NetworkRelayEnabled: ro.cfg.Relay.Enabled, ConnectionsEnabled: ro.cfg.Connections != nil && ro.cfg.Relay.Enabled}, true
 	}
 	k, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerID)
 	if err != nil {
@@ -187,7 +188,8 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 		writeError(w, http.StatusPreconditionFailed, "stored API key is unreadable — re-enter it in agent settings")
 		return agent.CreateOpts{}, false
 	}
-	return agent.CreateOpts{OwnerID: ownerID, Provider: k.Provider, Model: k.Model, APIKey: apiKey}, true
+	return agent.CreateOpts{OwnerID: ownerID, Provider: k.Provider, Model: k.Model, APIKey: apiKey,
+		NetworkRelayEnabled: ro.cfg.Relay.Enabled, ConnectionsEnabled: ro.cfg.Connections != nil && ro.cfg.Relay.Enabled}, true
 }
 
 // writeAgentCreateError answers a refused Create. The session limit

@@ -24,6 +24,39 @@ func TestSystemPromptCarriesNoArtifactText(t *testing.T) {
 	assert.NotContains(t, sys, "set_state(id")
 }
 
+func TestSystemPromptDescribesOnlyEnabledNetworkCapabilities(t *testing.T) {
+	disabled := buildSystemPrompt("", CreateOpts{})
+	assert.Contains(t, disabled, "relay is disabled")
+	assert.NotContains(t, disabled, "Exhibit relays the request")
+	assert.NotContains(t, disabled, "list_connections()")
+	assert.Contains(t, disabled, "opaque response")
+
+	enabled := buildSystemPrompt("", CreateOpts{NetworkRelayEnabled: true, ConnectionsEnabled: true})
+	assert.Contains(t, enabled, "including APIs without CORS headers")
+	assert.Contains(t, enabled, "Each origin needs the user's approval")
+	assert.Contains(t, enabled, "Never use a public CORS proxy or mode: 'no-cors'")
+	assert.Contains(t, enabled, "do not build a backend")
+	assert.Contains(t, enabled, "list_connections()")
+	assert.Contains(t, enabled, "Agents never write connector recipes or grants")
+	assert.Contains(t, enabled, "await window.exhibit.connections.list()")
+	assert.Contains(t, enabled, "Only when this operator enables stand-ins")
+	assert.Contains(t, enabled, "never ask for a key, password, setup token or access URL")
+	assert.NotContains(t, enabled, "prefer zero external references")
+	assert.Contains(t, enabled, "Connection grants are additive")
+	assert.Contains(t, enabled, "multiple connections and other approved APIs and CDNs work together")
+	assert.Contains(t, enabled, "cannot guarantee where response data goes")
+	assert.NotContains(t, enabled, "approves its data destinations")
+	assert.Contains(t, enabled, "Read-only connections permit GET and HEAD")
+	assert.Contains(t, enabled, "even for a read-only GraphQL query")
+	assert.Contains(t, enabled, "matching connection's write capability and separate relay write consent")
+	assert.Contains(t, enabled, "use a GET alternative when write access is absent")
+
+	widget := buildSystemPrompt("", CreateOpts{NetworkRelayEnabled: true, ConnectionsEnabled: true, WidgetOnly: true})
+	assert.Contains(t, widget, "Widgets cannot use Exhibit's relay or connections")
+	assert.NotContains(t, widget, "Exhibit relays the request")
+	assert.NotContains(t, widget, "list_connections()")
+}
+
 // Untrusted text reaches the model only as a tool result, so the prompt tells it
 // so. The contract is static: it names no per-session secret, because the
 // boundary is the conversation's structure and not a marker inside a string.

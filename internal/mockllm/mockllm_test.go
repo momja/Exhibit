@@ -31,6 +31,17 @@ func msg(role, content string) chatMessage {
 	return chatMessage{Role: role, Content: raw}
 }
 
+func TestArxivFixtureUsesTheDirectAPI(t *testing.T) {
+	plan := decide([]chatMessage{msg("system", "You are Exhibit."), msg("user", "Build an arXiv paper search app")})
+	assert.Equal(t, "create_artifact", plan.toolName)
+	body, ok := plan.toolArgs["body"].(string)
+	assert.True(t, ok)
+	assert.Contains(t, body, "fetch('https://export.arxiv.org/api/query?")
+	assert.NotContains(t, body, "corsproxy")
+	assert.NotContains(t, body, "allorigins")
+	assert.NotContains(t, body, "no-cors")
+}
+
 // A session with an artifact never starts by writing: nothing about the
 // artifact is in the conversation until the model reads it.
 func TestDecideReadsBeforeItChanges(t *testing.T) {

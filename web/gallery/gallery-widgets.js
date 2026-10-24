@@ -26,7 +26,10 @@ export function initializeGalleryWidgets(root) {
     if (widget.frame.parentNode === well) return;
     // Re-entry may be hours later. The app-origin redirect mints a fresh
     // render credential on demand rather than reusing the page's old token.
-    if (widget.reload) widget.frame.src = well.dataset.widgetReload;
+    if (widget.reload) {
+      if (widget.frame.dataset.widgetWrapper !== undefined) widget.frame.removeAttribute('srcdoc');
+      widget.frame.src = well.dataset.widgetReload;
+    }
     well.classList.add('has-frame');
     well.append(widget.frame);
     widget.frame.dispatchEvent(new Event('exhibit:widget-mounted', { bubbles: true }));

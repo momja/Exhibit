@@ -60,6 +60,12 @@
     <div id="messages"></div>
     <div id="history"></div>
     <div class="composer">
+      <div id="agent-network-warnings" hx-get="/partials/network-warnings"
+           hx-trigger="load, exhibit:artifact-saved from:body"
+           hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
+      <div id="agent-connection-requests" hx-get="/partials/agent-connection-requests"
+           hx-trigger="load, exhibit:artifact-saved from:body, exhibit:connection-requested from:body"
+           hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
       <div id="question-load-error" role="status" hidden>Could not load the questions. <button type="button" id="question-retry">Try again</button></div>
       <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> Preview updated — tap Preview to view</button>
       <div id="snippet-chips"></div>
@@ -86,12 +92,12 @@
        hx-swap="innerHTML">{{template "agentPreview" .Preview}}</div>
 </div>
 
-{{if .BYOK}}
 {{/* The same runtime network-permission dialog the detail page hosts
      (av-6xvs). This pane embeds the same render document behind the same
      sandbox and sits on the same app origin, so it has the trusted chrome the
      prompt needs — it simply never had the prompt. */}}
 {{template "networkPrompt"}}
+{{if .BYOK}}
 <div id="key-modal" class="modal-overlay" hidden>
   <div class="modal" role="dialog" aria-modal="true">
     <h2>Agent API key</h2>
@@ -149,6 +155,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 <script type="module" src="/assets/gallery/agent-resize.js"></script>
 <script type="module" src="/assets/gallery/agent-questions.js"></script>
 <script type="module" src="/assets/gallery/message-actions.js"></script>
+{{template "componentScripts"}}
 </body>
 </html>{{end}}
 
@@ -169,7 +176,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
      Data: agentPreviewData (agentui.go). */}}
 {{define "agentPreview"}}<div class="preview-bar">
       <span class="title" id="pv-title">{{if .HasArtifact}}{{.Title}}{{else}}Preview{{end}}</span>
-      {{if .HasArtifact}}<button type="button" id="pv-open" class="preview-open" data-direct-open-artifact="{{.ID}}" data-direct-open-url="{{.OpenURL}}" aria-label="Open in new tab" title="Open in new tab"><span class="lbl">Open </span><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
+      {{if .HasArtifact}}<button type="button" id="pv-open" class="preview-open" data-direct-open-artifact="{{.ID}}" data-direct-open-url="{{.OpenURL}}" aria-label="Open in new tab" title="{{if .ConnectionProtected}}Connected data is available in the isolated Exhibit preview.{{else}}Open in new tab{{end}}"{{if .ConnectionProtected}} disabled{{end}}><span class="lbl">{{if .ConnectionProtected}}Preview only{{else}}Open{{end}} </span><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
       <a id="pv-detail" href="{{.DetailURL}}">Details</a>{{end}}
       <span class="spacer"></span>
       <button class="snip-btn" id="snip-btn"{{if not .HasArtifact}} disabled hidden{{end}} onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
@@ -180,8 +187,10 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
          tile — which is exactly the "no widget yet" state, so it needs no
          empty case of its own. */}}
     {{if .HasArtifact}}<div class="pv-widget">{{template "cardWidget" .Widget}}<span class="pv-widget-label">Gallery widget</span></div>{{end}}
-    <div id="frame-wrap">
-      {{if .HasArtifact}}<iframe id="pv-frame" src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>Your tool will appear here.</span></div>{{end}}
+    <div id="frame-wrap"{{if .FramePolicyEnabled}} data-controller="relay-host" data-relay-host-artifact-id-value="{{.ID}}" data-relay-host-frame-selector-value="#pv-frame" data-relay-host-policy-value="{{.RelayPolicy}}"{{end}}>
+      {{if .FramePolicyEnabled}}<template data-relay-host-target="framePolicy"><meta http-equiv="Content-Security-Policy" content="{{.RelayFramePolicy}}"></template>{{end}}
+      {{if .HasArtifact}}<iframe id="pv-frame" {{if .FramePolicyEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>Your tool will appear here.</span></div>{{end}}
+      {{if .RelayEnabled}}{{template "relayConsent" .}}{{end}}
     </div>{{end}}
 
 {{/* agentHistory is the history pane's list: every conversation kept with the

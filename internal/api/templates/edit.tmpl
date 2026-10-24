@@ -224,8 +224,13 @@
   <details class="details-panel" id="source-panel" open>
     <summary>{{template "panelCaret"}} Artifact source</summary>
     <div class="panel-body">
+      <div id="source-network-warnings" hx-get="/partials/network-warnings?artifact={{.ID}}"
+           hx-trigger="exhibit:network-warnings-changed from:body"
+           hx-swap="innerHTML">{{template "networkWarnings" .NetworkWarnings}}</div>
       <textarea id="body" data-revision="{{.SourceRevision}}">{{.Src}}</textarea>
-      <div id="scan-result"></div>
+      <div id="scan-result" hx-get="/partials/network-approval?artifact={{.ID}}&amp;mode=edit"
+           hx-trigger="exhibit:network-approval-changed from:body"
+           hx-swap="innerHTML" hx-sync="this:replace"></div>
     </div>
   </details>
 

@@ -120,7 +120,8 @@ func TestNewPageCarriesTheIngestPanel(t *testing.T) {
 	assert.Contains(t, page, `<textarea id="body" placeholder=`)
 	assert.Contains(t, page, `<input class="field" type="text" id="url-input"`)
 	assert.Contains(t, page, `<input type="checkbox" id="snapshot-toggle" checked>`)
-	assert.Contains(t, page, `<div id="scan-result"></div>`)
+	assert.Contains(t, page, `<div id="scan-result">`)
+	assert.Contains(t, page, `id="network-approval" hx-get="/partials/network-approval"`)
 	assert.Contains(t, page, `<div id="status"></div>`)
 	assert.Contains(t, page, `onclick="ingest()"`)
 	assert.Contains(t, page, `Add to library`)
@@ -159,7 +160,7 @@ func TestNewPageKeepsApproveThenPatchFlow(t *testing.T) {
 	js := galleryAsset(t, r, "/assets/gallery/new.js")
 
 	assert.Contains(t, js, `await apiFetch('/api/artifacts', {`)
-	assert.Contains(t, js, `function showApproval(id, footprint)`)
+	assert.Contains(t, js, `function showApproval(id)`)
 	assert.Contains(t, js, `body: JSON.stringify({network_allowlist: selected})`)
 	// Done means gone: the page hands off to the artifact's own detail page.
 	assert.Contains(t, js, `location.href = href;`)

@@ -53,6 +53,10 @@ func serverError(w http.ResponseWriter, r *http.Request, label string, err error
 // outside the caller's library exactly as it reports one that doesn't exist,
 // and the handler must not undo that by answering differently (av-ep8k).
 func writeArtifactError(w http.ResponseWriter, r *http.Request, label string, err error) {
+	if errors.Is(err, store.ErrConnectionSharing) {
+		connectionError(w, err)
+		return
+	}
 	var resource string
 	if errors.Is(err, store.ErrSourceChanged) {
 		resource = "source"
@@ -151,10 +155,11 @@ func extractTitle(body string) string {
 }
 
 type createArtifactResponse struct {
-	Artifact         *store.Artifact `json:"artifact"`
-	NetworkFootprint []string        `json:"network_footprint"`
-	Snapshot         *snapshotReport `json:"snapshot,omitempty"`
-	RenderURL        string          `json:"render_url"`
+	Artifact         *store.Artifact   `json:"artifact"`
+	NetworkFootprint []string          `json:"network_footprint"`
+	NetworkWarnings  []scanner.Warning `json:"network_warnings"`
+	Snapshot         *snapshotReport   `json:"snapshot,omitempty"`
+	RenderURL        string            `json:"render_url"`
 }
 
 // snapshotReport tells the caller what the snapshot transform did with their
@@ -514,6 +519,7 @@ func (ro *Router) createArtifact(w http.ResponseWriter, r *http.Request) {
 	resp := createArtifactResponse{
 		Artifact:         a,
 		NetworkFootprint: footprint,
+		NetworkWarnings:  scanner.Warnings(req.Body, req.URL),
 		Snapshot:         snapReport,
 		RenderURL:        ro.cfg.RenderOrigin + "/a/" + id,
 	}
@@ -553,9 +559,10 @@ func (ro *Router) getArtifact(w http.ResponseWriter, r *http.Request) {
 		}
 		type artifactWithBody struct {
 			*store.Artifact
-			Body string `json:"body"`
+			Body            string            `json:"body"`
+			NetworkWarnings []scanner.Warning `json:"network_warnings"`
 		}
-		writeJSON(w, http.StatusOK, artifactWithBody{Artifact: a, Body: string(body)})
+		writeJSON(w, http.StatusOK, artifactWithBody{Artifact: a, Body: string(body), NetworkWarnings: scanner.Warnings(string(body), a.SourceURL)})
 		return
 	}
 
@@ -642,6 +649,12 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	if a == nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
+	}
+	if mode, _ := updates["share_state_mode"].(string); mode == store.ShareStateShared && ro.cfg.Connections != nil {
+		if err := ro.cfg.Connections.ValidateArtifactSharing(r.Context(), ownerID, id); err != nil {
+			connectionError(w, err)
+			return
+		}
 	}
 
 	if !ro.expandSourceEdits(w, r, a, updates, false) {
@@ -764,6 +777,7 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updateArtifactResponse{
 		Artifact:         a,
 		NetworkFootprint: footprint,
+		NetworkWarnings:  scanner.Warnings(newBody, a.SourceURL),
 		FootprintChanged: footprintChanged,
 	})
 }
@@ -775,9 +789,10 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 // mirroring the two-step ingest scan→approval gate (spec §6.2) without ever
 // seeding the allowlist from a scan.
 type updateArtifactResponse struct {
-	Artifact         *store.Artifact `json:"artifact"`
-	NetworkFootprint []string        `json:"network_footprint"`
-	FootprintChanged bool            `json:"footprint_changed"`
+	Artifact         *store.Artifact   `json:"artifact"`
+	NetworkFootprint []string          `json:"network_footprint"`
+	NetworkWarnings  []scanner.Warning `json:"network_warnings"`
+	FootprintChanged bool              `json:"footprint_changed"`
 }
 
 // allowlistStrings reads the network_allowlist value out of a decoded PATCH
@@ -832,12 +847,13 @@ func sameOrigins(a, b []string) bool {
 // update from a source that has not changed. Snapshot reports what the re-run
 // of the ingest pipeline did, mirroring create.
 type refetchArtifactResponse struct {
-	Artifact         *store.Artifact `json:"artifact"`
-	Updated          bool            `json:"updated"`
-	NetworkFootprint []string        `json:"network_footprint"`
-	FootprintChanged bool            `json:"footprint_changed"`
-	UndecidedOrigins []string        `json:"undecided_origins"`
-	Snapshot         *snapshotReport `json:"snapshot,omitempty"`
+	Artifact         *store.Artifact   `json:"artifact"`
+	Updated          bool              `json:"updated"`
+	NetworkFootprint []string          `json:"network_footprint"`
+	NetworkWarnings  []scanner.Warning `json:"network_warnings"`
+	FootprintChanged bool              `json:"footprint_changed"`
+	UndecidedOrigins []string          `json:"undecided_origins"`
+	Snapshot         *snapshotReport   `json:"snapshot,omitempty"`
 }
 
 // refetchArtifact re-fetches an artifact's source URL and replaces the stored
@@ -1015,6 +1031,7 @@ func (ro *Router) refetchArtifact(w http.ResponseWriter, r *http.Request) {
 			Artifact:         artifact,
 			Updated:          updated,
 			NetworkFootprint: footprint,
+			NetworkWarnings:  scanner.Warnings(newBody, a.SourceURL),
 			FootprintChanged: footprintChanged,
 			UndecidedOrigins: undecided,
 			Snapshot:         snapReport,

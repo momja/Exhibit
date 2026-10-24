@@ -576,3 +576,121 @@ valid again (ABA is intentionally content-based). A restore that only changes
 state does not invalidate source. An identical rewrite preserves identity;
 rewriting different bytes mints a fresh identity even within the same second.
 Do not derive tokens from bytes, parse them or use them to order versions.
+
+## Experimental relay and connections
+
+Acquisition and relay routes require their operator feature flags plus a browser session or
+service-token principal. Scoped agent tokens cannot configure connections,
+submit credentials, edit grants, schedule work or directly spend relay authority.
+Relay requests additionally need app-owned authority for the current render
+policy; the artifact bridge supplies it without exposing it to artifact code.
+
+```text
+GET    /api/connections                         Safe connection metadata and providers
+POST   /api/connections                         Acquire a native connection in app chrome
+PATCH  /api/connections/:connectionID           Change native connection write permission
+DELETE /api/connections/:connectionID           Revoke a connection
+POST   /api/connections/oauth/github/begin      Begin bound GitHub consent
+GET    /api/connections/oauth/github/callback   Complete one-shot bound consent
+POST   /api/connections/vendor/begin            Begin a reviewed managed connection
+POST   /api/connections/vendor/complete         Poll and finish a browser-bound managed flow
+GET    /api/artifacts/:id/connections           Current viewer's connection grants
+POST   /api/artifacts/:id/connections           Grant a saved connection to this artifact
+DELETE /api/artifacts/:id/connections/:id       Remove a connection grant
+DELETE /api/artifacts/:id/connection-data       Clear saved data and obsolete provenance
+POST   /api/artifacts/:id/connections/:id/standin  Obtain an inert short-lived handle
+GET    /api/artifacts/:id/relay-grant            Read the viewer's relay consent
+PUT    /api/artifacts/:id/relay-grant            Set {reads, writes} consent
+POST   /api/artifacts/:id/relay                  Perform a checked request for this frame
+POST   /api/artifacts/:id/navigation-check       Validate a host-opened link against current policy
+GET    /api/artifacts/:id/relay-schedules        List declarative refreshes
+POST   /api/artifacts/:id/relay-schedules        Create a refresh
+DELETE /api/artifacts/:id/relay-schedules/:id    Remove a refresh
+GET    /api/artifacts/:id/relay-bundle           Download an owner-scoped runnable ZIP
+GET    /api/artifacts/:id/agent-connections     Agent-safe connection metadata
+POST   /api/artifacts/:id/agent-connections     Ask the person to connect a provider
+```
+
+A relay request is `{url, method, headers, body_base64}`; headers map strings to
+strings. A completed exchange returns
+`{status, status_text, headers, body_base64, url}`. The host returns those bytes
+to the opaque frame as a `Response`, never as app-origin markup. Limits are one
+MiB request bodies and four MiB decoded response bodies. Origin approval, relay
+consent, connector grants and operator policy are checked independently.
+The host supplies `X-Exhibit-Relay-Policy` for relay, connection metadata,
+stand-ins, link validation and state synchronization. A stale source or request-
+authority token returns 409; reopen the artifact to refresh it. Requests from
+ordinary state API clients continue to work without that optional header.
+
+Native connection creation accepts a named reviewed `recipe`: `api-key`,
+`bearer` or `basic`. Generic recipes use an exact HTTPS `origin`;
+API keys additionally choose a permitted `header`. Acquisition fields are
+accepted only in the trusted app interface and never appear in list responses.
+Basic additionally accepts `access_url`, a pasted HTTPS URL with embedded
+credentials, instead of `origin`/`username`/`password`. It separates the origin,
+credentials and base path before encryption; public metadata exposes only a
+virtual root endpoint. An artifact fetching `/accounts` at that origin reaches
+`/accounts` beneath the private base path. There is no setup-token claim flow.
+Optional `daily_limit` and `cache_minutes` cap daily provider requests and reuse
+responses across all artifacts and devices; zero means unlimited requests or
+no response reuse, respectively.
+`PATCH /api/connections/:connectionID` accepts `{allow_writes: boolean}` for
+an active native API key, Bearer or Basic connection owned by the current person.
+This human-only action changes whether that credential may make API writes
+across all artifacts using it. It preserves the encrypted credential and its
+identity, origin, header, daily limit and response reuse settings. It does not
+change provider-side scopes or per-artifact relay consent; an artifact still
+needs its separate relay write grant and approved origin. The trusted UI
+refreshes its cards from the server after success, and affected artifacts must
+be reopened under the updated authority. OAuth/managed scope changes require
+reconnection through their reviewed consent flow.
+
+A grant accepts `connection_id` and explicit `share_with_recipients` consent.
+Grants are additive: artifact origin approvals remain the network boundary,
+with credentials attached only at matching API origins. Multiple connections and
+approved standalone APIs/CDNs work together. Legacy `permitted_egress` and bundle
+`data_origins` fields are accepted only as inert compatibility metadata. A schedule
+accepts `{url, state_key, interval_hours}` and stores a successful text response in the
+viewer's artifact state without executing artifact code. See
+[relay-connectors.md](relay-connectors.md) for exact boundaries and operator
+configuration, and [the runnable examples](../examples/connectors/README.md).
+
+Removing access or revoking a credential stops future credential use while saved
+responses and unrelated origin approvals remain. Returned data can be sent to
+other origins the artifact is approved to contact; a grant does not promise that
+response data stays at its source. Retained provenance still requires explicit
+consent to share connected state. The separate human-only `DELETE connection-data`
+action optionally clears the viewer's effective state and owner version-state
+snapshots when applicable, plus obsolete provenance owned by that viewer, in one
+transaction. It does not change origin approvals or active connection grants.
+Recipients cannot clear a shared board; the owner must do that. Cleanup remains
+available with acquisition disabled. Previously open pages may retain copies of
+data they already read.
+
+Managed OAuth begins with `{provider}` and returns `{session_id,url,expires_at}`.
+Open the provider URL, then submit `{session_id,name}` to `vendor/complete`.
+It returns 202 while pending or 201 with connected metadata. The server verifies
+the browser binding, provider, owner and exact flow tags before accepting a
+vendor connection; frontend messages cannot establish that authority.
+
+Managed connections are selected with the generic `vendor` entry in the trusted
+connect UI. Operator-reviewed provider settings select Nango (`inject`) or
+Composio (`forward`). Safe connection metadata includes `engine`,
+`delivery_mode` and `reconnect_recommended`; external vendor references remain
+server-only. The begin/complete API keeps its browser-bound session contract.
+Managed errors include `code` with `needs_reconnect`, `rate_limited`, `refused`
+or `upstream_error`. A changed provider engine affects new connections; existing
+ones continue on their pinned engine until explicitly reconnected/revoked.
+
+`GET /api/admin/connector-usage` is operator-only and returns `period_start`,
+`period_end` and `usage`: the current UTC month's aggregate `management_calls`,
+`inject_calls` and `forward_calls`, plus `stored_connections`, grouped by
+`engine` and `provider`. Failed attempts count; cache hits do not. The response
+is `no-store` and remains available when acquisition engines are disabled.
+
+Local relay throttling returns HTTP `429` with `code: relay_rate_limited` and a
+numeric `Retry-After` header. The trusted browser host retries GET/HEAD requests
+within a one-minute retry budget, rechecking current policy on every attempt.
+Writes, provider HTTP responses, daily connection quotas and permission errors
+are returned without automatic retries. Frame abort or navigation cancels a
+pending retry.

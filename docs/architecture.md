@@ -856,3 +856,54 @@ A share lives until deleted. There is no expiry, and `POST /api/shares` refuses 
 - **Not a predictor.** Policy sits at the runtime boundary.
 - **Not the owner of TLS or backup targets.** The release is the image and a config
   contract.
+
+## Experimental relay and connector boundary
+
+The optional relay and connector engines perform reviewed, bounded HTTPS
+requests while artifact execution stays in the browser. Ordinary API fetches,
+credential injection and declarative fetch-to-state schedules share
+`internal/egress`; no artifact server script or QuickJS runtime is introduced.
+Document-bound host authority and current-policy checks bind each request
+to the intended artifact and viewer. ZIP exports include a local relay
+and acquire local credentials again. See [relay-connectors.md](relay-connectors.md)
+for the configuration, ownership rules, portable runners and recorded decision
+superseding the synchronous backend POC.
+
+Native connectors are generic API key, Bearer and Basic credential policies.
+A pasted Basic credential URL is split in trusted app code into an origin,
+encrypted credentials and an encrypted private base path. The relay maps
+artifact paths under that base without disclosing it. User-selected daily request
+limits and encrypted GET response reuse are enforced per connection across
+artifacts and devices.
+Owners can edit native API-key, Bearer and Basic write permissions in trusted
+app chrome without replacing encrypted credentials or artifact grants. Edits
+serialize with requests and revocation. Connection capabilities participate in
+each attached artifact's policy binding, so an open artifact must renew its
+authority after permission changes; per-artifact relay consent remains separate.
+No provider-specific API-key or Basic connector, or setup-token claim code, is shipped.
+Native OAuth remains limited to the reviewed provider set.
+
+Connector grants are additive. The artifact origin allowlist determines network
+access and the render CSP; each granted connection supplies credentials only at
+its matching API origin. Multiple distinct connectors and approved standalone
+APIs/CDNs coexist. Adding, removing, revoking or disabling a connector does not
+intersect unrelated approvals or require clearing state. Viewer and agent chrome
+use the ordinary network approval flow, and schedules and portable runners
+apply the same separation between origin permission and credential use.
+
+Once response bytes reach the artifact, its code can save or send them to other
+approved origins. Credential custody cannot guarantee response-data non-egress.
+Retained provenance still supports explicit connected-state sharing consent and
+private render boundaries; legacy destination fields confer no network authority.
+Optional saved-state cleanup does not affect origin approvals or connection grants.
+
+Managed authentication uses a swappable vendor engine beside the native
+request-authorizing Engine interface. Nango injects retrieved credentials into
+Exhibit's own checked HTTP hops. Composio currently exposes redacted credentials
+and therefore uses the explicit forward-mode boundary: common initial URL,
+public-address preflight, headers, quota/cache and response caps, while the
+vendor owns provider dialing and redirects. No additional artifact-facing relay
+or server code runtime is introduced. Connections pin engine, external reference
+and reviewed policy; configuration changes affect new connections, and existing
+ones retain their original engine until reconnection. Aggregate monthly
+engine/provider attempts and current stored-connection counts are operator-only.

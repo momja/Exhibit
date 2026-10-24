@@ -81,6 +81,24 @@
   function send(path, opts) {
     opts = Object.assign({}, opts || {});
     opts.headers = apiHeaders(opts.headers);
+    // Only the app supplies a frame's current policy. A guest state message
+    // cannot choose or omit this header, including on recipient writes.
+    var statePath = /^\/api\/artifacts\/([^/]+)\/state(?:\/import)?(?:\?|$)/.exec(path);
+    if (statePath) {
+      var root = document.querySelector('[data-relay-host-artifact-id-value]');
+      var frameId = root?.dataset.relayHostArtifactIdValue;
+      var policy = root?.dataset.relayHostPolicyValue;
+      if (!frameId && typeof ID === 'string' && typeof NAVIGATION_POLICY === 'string') {
+        frameId = ID;
+        policy = NAVIGATION_POLICY;
+      }
+      if (frameId && typeof policy === 'string' && statePath[1] === encodeURIComponent(frameId)) {
+        for (var name of Object.keys(opts.headers)) {
+          if (name.toLowerCase() === 'x-exhibit-relay-policy') delete opts.headers[name];
+        }
+        opts.headers['X-Exhibit-Relay-Policy'] = policy;
+      }
+    }
     var hasContentType = Object.keys(opts.headers).some(function(k) {
       return k.toLowerCase() === 'content-type';
     });
@@ -124,6 +142,16 @@
       return Promise.resolve(refused('This artifact cannot save data for you.'));
     }
     return send(path, opts);
+  };
+
+  // This POST validates an existing viewer capability and grants nothing.
+  // Recipients may use it without acquiring any owner editing authority.
+  window.apiNavigationCheck = function(artifactId, destination, policy) {
+    return send('/api/artifacts/' + encodeURIComponent(artifactId) + '/navigation-check', {
+      method: 'POST',
+      headers: { 'X-Exhibit-Relay-Policy': policy },
+      body: JSON.stringify({ url: destination })
+    });
   };
 
   // apiEventSource is the one API call apiFetch cannot make: EventSource sets

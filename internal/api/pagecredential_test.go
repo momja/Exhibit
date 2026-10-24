@@ -73,6 +73,11 @@ var appOriginGETRoutePaths = []pageRoute{
 	// everyone else's account, but a credential over your own that outlives
 	// the logout you performed because you were worried about it.
 	{route: "/profile", path: "/profile"},
+	{route: "/connections", path: "/connections?artifact={id}"},
+	{route: "/partials/connections", path: "/partials/connections?artifact={id}"},
+	{route: "/partials/network-warnings", path: "/partials/network-warnings?artifact={id}"},
+	{route: "/partials/network-approval", path: "/partials/network-approval?artifact={id}&mode=new"},
+	{route: "/partials/agent-connection-requests", path: "/partials/agent-connection-requests?artifact={id}"},
 
 	// htmx fragments: page markup by another name, so they are held to the
 	// same rule as the pages they are swapped into.
@@ -102,6 +107,13 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/artifacts/", path: "/api/artifacts"},
 	{route: "/api/artifacts/{artifactID}/", path: "/api/artifacts/{id}"},
 	{route: "/api/artifacts/{artifactID}/state", path: "/api/artifacts/{id}/state"},
+	{route: "/api/artifacts/{artifactID}/connections", path: "/api/artifacts/{id}/connections"},
+	{route: "/api/artifacts/{artifactID}/agent-connections", path: "/api/artifacts/{id}/agent-connections"},
+	{route: "/api/artifacts/{artifactID}/relay-bundle", path: "/api/artifacts/{id}/relay-bundle"},
+	{route: "/api/artifacts/{artifactID}/relay-grant", path: "/api/artifacts/{id}/relay-grant"},
+	{route: "/api/artifacts/{artifactID}/relay-schedules", path: "/api/artifacts/{id}/relay-schedules"},
+	{route: "/api/connections", path: "/api/connections"},
+	{route: "/api/connections/oauth/github/callback", path: "/api/connections/oauth/github/callback"},
 	{route: "/api/artifacts/{artifactID}/assets", path: "/api/artifacts/{id}/assets"},
 	{route: "/api/artifacts/{artifactID}/assets/export", path: "/api/artifacts/{id}/assets/export"},
 	{route: "/api/artifacts/{artifactID}/export", path: "/api/artifacts/{id}/export"},
@@ -119,6 +131,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/collections/", path: "/api/collections"},
 	{route: "/api/tags/", path: "/api/tags"},
 	{route: "/api/admin/users/", path: "/api/admin/users"},
+	{route: "/api/admin/connector-usage", path: "/api/admin/connector-usage"},
 
 	// The login flow, registered only when a login is configured. Requested
 	// last, because logging out is one of them.

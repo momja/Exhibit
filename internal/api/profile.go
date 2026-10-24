@@ -130,9 +130,28 @@ func profileName(u *store.User) (name string, isSubject bool) {
 // active sessions, export — and a page laid out in cards takes each of those
 // as an addition rather than a redesign.
 type profilePageData struct {
-	Favicon template.URL
-	Account profileAccount
+	Favicon     template.URL
+	Account     profileAccount
+	Connections profileConnectionAllowance
 	pageCredentials
+}
+
+type profileConnectionAllowance struct {
+	Enabled   bool
+	Native    string
+	OAuth     string
+	Vendor    string
+	Schedules string
+}
+
+func connectionLimitDescription(n int, noun string) string {
+	if n < 0 {
+		return "Unlimited"
+	}
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 // profilePage renders the account surface.
@@ -173,9 +192,19 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 			"Its library belongs to whoever can reach the origin; removing it is the operator's to do on the host."
 	}
 
+	var connectionAllowance profileConnectionAllowance
+	if ro.cfg.Relay.Enabled || ro.cfg.Connections != nil {
+		allowance, err := ro.resolveAllowance(ctx, ownerIDFromCtx(ctx))
+		if err != nil {
+			serverError(w, r, "profile connection allowance", err)
+			return
+		}
+		connectionAllowance = profileConnectionAllowance{Enabled: true, Native: connectionLimitDescription(allowance.Connections.Native, "connection"), OAuth: connectionLimitDescription(allowance.Connections.OAuth, "connection"), Vendor: connectionLimitDescription(allowance.Connections.Vendor, "connection"), Schedules: connectionLimitDescription(allowance.Schedules, "schedule")}
+	}
 	page, err := renderPage("profile", profilePageData{
 		Favicon:         template.URL(exhibitLogoDataURI),
 		Account:         acct,
+		Connections:     connectionAllowance,
 		pageCredentials: ro.pageCredentials(r),
 	})
 	if err != nil {
@@ -263,6 +292,32 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ownerID := ownerIDFromCtx(ctx)
+	// Revoke remote credentials only after the same last-admin refusal the
+	// final store transaction enforces. Otherwise a refused deletion would
+	// needlessly disconnect the only administrator's external accounts.
+	u, err := ro.cfg.Store.GetUser(ctx, ownerID)
+	if errors.Is(err, store.ErrNotFound) || err == nil && u == nil {
+		writeError(w, 404, "no such account")
+		return
+	}
+	if err != nil {
+		serverError(w, r, "delete account precheck", err)
+		return
+	}
+	last, err := ro.isLastEnabledAdmin(ctx, u)
+	if err != nil {
+		serverError(w, r, "delete account admin precheck", err)
+		return
+	}
+	if last {
+		writeError(w, 409, "this is the only account that can administer this instance. Make another account an admin first, then delete this one.")
+		return
+	}
+	if err := ro.revokeAccountConnections(ctx, ownerID); err != nil {
+		slog.WarnContext(ctx, "account deletion waiting for connection revocation", slog.Int64("owner_id", ownerID), slog.String("error", err.Error()))
+		writeError(w, 503, "External account connections could not all be revoked. Your account and library remain. Some connections may already have been disconnected. Re-enable any disabled connector phase, check the provider, and retry deletion.")
+		return
+	}
 	queued, err := ro.cfg.Store.DeleteAccount(ctx, ownerID)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
@@ -299,6 +354,42 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Account erasure must not leave a billable vendor connection, or an OAuth
+// authorization, behind after its local record disappears. Revocation is
+// idempotent (providers' 404 is success), so a provider outage leaves the
+// account intact and retrying finishes any remaining external cleanup.
+func (ro *Router) revokeAccountConnections(ctx context.Context, ownerID int64) error {
+	if ro.cfg.Connections == nil {
+		if registry, ok := ro.cfg.Store.(interface {
+			ListConnections(context.Context, int64) ([]*store.ConnectionRecord, error)
+		}); ok {
+			records, err := registry.ListConnections(ctx, ownerID)
+			if err != nil {
+				return err
+			}
+			for _, c := range records {
+				if c.Kind == "oauth" || c.Kind == "vendor" {
+					return errors.New("remote connector revocation requires its operator configuration")
+				}
+			}
+		}
+		return nil
+	}
+	connections, err := ro.cfg.Connections.List(ctx, ownerID)
+	if err != nil {
+		return err
+	}
+	for _, c := range connections {
+		if c.Kind == "native" {
+			continue
+		}
+		if err := ro.cfg.Connections.Revoke(ctx, ownerID, c.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // fillDeleteSection populates what the danger zone states before anyone

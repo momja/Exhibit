@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/export"
+	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -59,6 +60,9 @@ func (ro *Router) exportArtifact(w http.ResponseWriter, r *http.Request) {
 		// while pointing at a URL that dies with the instance.
 		serverError(w, r, "export: materialize", err)
 		return
+	}
+	if ro.cfg.Relay.Enabled {
+		doc = export.RelayNote(doc, scanner.FetchOrigins(body))
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

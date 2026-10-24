@@ -17,9 +17,9 @@
      asset, never a CDN. Loaded only for the owner: a recipient's page has no
      share controls and cannot approve an origin, so nothing on it changes
      and it should not carry the library that refreshes them. */}}
-{{if .Share}}<script src="/assets/htmx/htmx.min.js"></script>{{end}}
+{{if or .Share .RelayEnabled}}<script src="/assets/htmx/htmx.min.js"></script>{{end}}
 </head>
-<body>
+<body{{if .RelayEnabled}} data-controller="relay-host" data-relay-host-artifact-id-value="{{.ID}}" data-relay-host-frame-selector-value=".panels > iframe" data-relay-host-policy-value="{{.RelayPolicy}}"{{end}}>
 {{/* The artifact is the page (Exh-ghuv). It fills the window, and the page's
      own chrome is one floating pill of controls over it, which the visitor
      can drag to any corner or put away against a side edge. The two-row
@@ -31,7 +31,7 @@
        Clipboard read/write is instead proxied through the host via the shim's
        capability bridge, gated by per-artifact first-use approval. Native
        keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. */}}
-  <iframe src="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy" title="{{.Title}}"></iframe>
+  <iframe {{if .RelayEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy" title="{{.Title}}"></iframe>
 </div>
 <div class="pip" id="pip" role="toolbar" aria-label="Artifact controls">
   <a class="pip-btn" href="/" aria-label="Back to gallery" title="Gallery"><i class="ph ph-arrow-left" aria-hidden="true"></i></a>
@@ -80,7 +80,8 @@
        hx-swap="innerHTML">{{template "capabilityPopover" .Capability}}</div>
 </div>
 <div class="pip-popup pip-menu action-menu" id="pip-menu" hidden>
-  <button type="button" id="direct-open-toolbar"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</button>
+  <button type="button" id="direct-open-toolbar"{{if .ConnectionProtected}} disabled title="Connected data is available in the isolated Exhibit preview."{{end}}><i class="ph ph-arrow-square-out" aria-hidden="true"></i> {{if .ConnectionProtected}}Connected preview only{{else}}Open in new tab{{end}}</button>
+  {{if or .RelayEnabled .ConnectionProtected}}<a href="/connections?artifact={{.ID}}"><i class="ph ph-plugs-connected" aria-hidden="true"></i> {{if .RelayEnabled}}Connections &amp; relay{{else}}Saved data{{end}}</a>{{end}}
   {{/* Everything from here to the divider belongs to the artifact's OWNER
        (av-awr4). A recipient reached this page through a grant, which is read
        access to the artifact and nothing else, so each of these would answer
@@ -142,7 +143,7 @@
       <p id="capability-warning-detail"></p>
     </details>
   </div>
-  <button type="button" class="banner-action" id="direct-open-banner"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</button>
+  <button type="button" class="banner-action" id="direct-open-banner"{{if .ConnectionProtected}} disabled title="Connected data is available in the isolated Exhibit preview."{{end}}><i class="ph ph-arrow-square-out" aria-hidden="true"></i> {{if .ConnectionProtected}}Connected preview only{{else}}Open in new tab{{end}}</button>
 </div>
 {{/* The recipient's answer to a CSP-blocked origin (av-awr4): explain, do not
      ask. Only the artifact's owner may widen its allowlist, so the runtime
@@ -307,6 +308,7 @@
 
 {{template "networkPrompt"}}
 {{template "directOpenPrompt" .}}
+{{if .RelayEnabled}}{{template "relayConsent" .}}{{template "componentScripts"}}{{end}}
 <script>
 const TOKEN = {{.Token}};
 {{/* READ_ONLY and TOKEN are one decision, made server-side per request
@@ -333,6 +335,10 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const STATE_WRITABLE = {{if .StateWritable}}true{{else}}false{{end}};
 const SHARED_STATE = {{if .SharedState}}true{{else}}false{{end}};
 const ID = {{.ID}};
+const RELAY_ENABLED = {{if .RelayEnabled}}true{{else}}false{{end}};
+const CONNECTION_PROTECTED = {{if .ConnectionProtected}}true{{else}}false{{end}};
+const NAVIGATION_POLICY = {{.RelayPolicy}};
+const PUBLIC_NAVIGATION = {{if .PublicNavigation}}true{{else}}false{{end}};
 const SOURCE_URL = {{.SourceURL}};
 let sourceRevision = {{.SourceRevision}};
 {{/* The app-origin route that mints a render token and redirects to it, used

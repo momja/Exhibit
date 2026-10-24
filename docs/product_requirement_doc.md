@@ -692,3 +692,31 @@ again before it changes anything.
 The static core and the eventual multi-user service share ~90% of the code; the only
 real additions later are the auth middleware, a storage backend swap, and shares —
 each made cheap by decisions taken in step 1.
+
+## Experimental external APIs and connections
+
+Opt-in relay access lets an artifact call approved HTTPS APIs with ordinary
+browser `fetch`, including providers without CORS support. Reviewed connectors
+keep account credentials outside artifacts, agents, state and exports; a person
+configures and grants each connection in Exhibit. Relay reads and writes have
+separate consent. Grants identify the API origins that may receive credentials;
+connections belong to the current viewer unless sharing is explicitly approved.
+Connector grants are additive: the artifact's origin approvals remain its network
+boundary, so multiple connectors and approved standalone APIs/CDNs work together.
+A connector does not restrict unrelated traffic or guarantee where response data
+goes after artifact code receives it. Revoking or disabling a connection preserves
+other network approvals and saved state; optional data cleanup is never required
+to approve another origin. Sharing or exporting connected saved data still
+requires explicit consent.
+
+Artifacts continue executing only in browsers. Declarative scheduled fetches
+can update saved data for widgets without executing an artifact backend. A
+portable ZIP contains the app, saved state and a local relay, with credentials
+re-entered locally. A plain HTML export identifies origins that need a relay.
+All phases are experimental and off by default; the implemented behavior and
+examples are specified in [relay-connectors.md](relay-connectors.md).
+
+Generic API key, Bearer and Basic connections include user-set daily request
+limits and response reuse. Basic accepts a pasted HTTPS credential URL in the
+trusted connect UI. Credentials are sent only to the matching API origin;
+other approved requests continue without that credential.

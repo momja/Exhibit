@@ -32,6 +32,20 @@ func TestMintedTokenVerifiesAndCarriesTheOwner(t *testing.T) {
 	}
 }
 
+func TestPolicyScopeCannotBeChangedOrReusedForAnotherDocument(t *testing.T) {
+	s := NewRandomSigner()
+	scope := PolicyScope("artifact-1", "policy-a")
+	token := s.MintViewer(scope, 7, 9)
+	if _, err := s.Verify(token, scope); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []string{"artifact-1", PolicyScope("artifact-1", "policy-b"), PolicyScope("artifact-2", "policy-a"), PolicyScope(VersionScope("artifact-1", 1), "policy-a")} {
+		if _, err := s.Verify(token, target); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("policy-bound token verified against %q", target)
+		}
+	}
+}
+
 // History holds what the live document never shows, so a token for the live
 // document must not open it. The scope is mixed into the signature, so this is a
 // property of the tag and not of any field a verifier could forget to compare:

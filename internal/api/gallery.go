@@ -19,6 +19,7 @@ import (
 	"github.com/momja/Exhibit/internal/artifacticon"
 	"github.com/momja/Exhibit/internal/color"
 	"github.com/momja/Exhibit/internal/rendertoken"
+	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/momja/Exhibit/internal/tile"
 )
@@ -61,7 +62,12 @@ type renderURLs struct {
 	// rather than from every call site remembering to ask. A page that learns
 	// to serve public visitors (av-eu3v, av-epnt) inherits the property by
 	// marking the request; it cannot get the token flavour wrong separately.
-	anonymous bool
+	anonymous                   bool
+	navigationWithoutCredential bool
+	// The callback is request-scoped like the minted viewer credential. A
+	// failed policy read selects the protective wrapper, never an open frame.
+	widgetProtected func(string) (bool, error)
+	documentPolicy  func(string) (string, bool, error)
 }
 
 // renderURLs relies on ro.tokens being non-nil (see the signer field's
@@ -70,11 +76,18 @@ type renderURLs struct {
 func (ro *Router) renderURLs(r *http.Request) renderURLs {
 	viewer := ownerIDFromCtx(r.Context())
 	return renderURLs{
-		origin:    ro.cfg.RenderOrigin,
-		signer:    ro.tokens,
-		ownerID:   viewer,
-		viewerID:  viewer,
-		anonymous: publicVisitor(r.Context()),
+		origin:                      ro.cfg.RenderOrigin,
+		signer:                      ro.tokens,
+		ownerID:                     viewer,
+		viewerID:                    viewer,
+		anonymous:                   publicVisitor(r.Context()),
+		navigationWithoutCredential: publicVisitor(r.Context()) || (!ro.loginEnabled() && ro.cfg.AuthToken == ""),
+		widgetProtected: func(artifact string) (bool, error) {
+			return ro.hasConnectionDataPolicies(r.Context(), viewer, artifact)
+		},
+		documentPolicy: func(artifact string) (string, bool, error) {
+			return ro.renderDocumentPolicy(r.Context(), viewer, artifact)
+		},
 	}
 }
 
@@ -109,7 +122,30 @@ func (u renderURLs) mint(id string) string {
 // they go through openArtifact, which mints at click time (a token embedded in
 // a link goes stale while the page sits open).
 func (u renderURLs) artifact(id string) string {
-	return u.origin + "/a/" + id + "?" + rendertoken.Param + "=" + u.mint(id)
+	policy, err := u.policyPath(id)
+	if err != nil {
+		return u.origin + "/a/" + id + "?" + rendertoken.Param + "=invalid"
+	}
+	scope := id
+	if policy != "" {
+		scope = rendertoken.PolicyScope(scope, policy)
+	}
+	return u.origin + "/a/" + id + policySuffix(policy) + "?" + rendertoken.Param + "=" + u.mint(scope)
+}
+
+func (u renderURLs) policyPath(id string) (string, error) {
+	if u.documentPolicy == nil || u.anonymous {
+		return "", nil
+	}
+	policy, _, err := u.documentPolicy(id)
+	return policy, err
+}
+
+func policySuffix(policy string) string {
+	if policy == "" {
+		return ""
+	}
+	return "/p/" + policy
 }
 
 // version returns the tokened URL of one earlier version of an artifact, for an
@@ -125,12 +161,27 @@ func (u renderURLs) artifact(id string) string {
 // token that names anybody else all the same.
 func (u renderURLs) version(id string, seq int) string {
 	scope := rendertoken.VersionScope(id, seq)
-	return u.origin + "/a/" + id + "/versions/" + strconv.Itoa(seq) + "?" + rendertoken.Param + "=" + u.signer.Mint(scope, u.ownerID)
+	policy, err := u.policyPath(id)
+	if err != nil {
+		return u.origin + "/a/" + id + "/versions/" + strconv.Itoa(seq) + "?" + rendertoken.Param + "=invalid"
+	}
+	if policy != "" {
+		scope = rendertoken.PolicyScope(scope, policy)
+	}
+	return u.origin + "/a/" + id + policySuffix(policy) + "/versions/" + strconv.Itoa(seq) + "?" + rendertoken.Param + "=" + u.signer.Mint(scope, u.ownerID)
 }
 
 // widget returns the tokened URL of an artifact's widget document.
 func (u renderURLs) widget(id string) string {
-	return u.origin + "/w/" + id + "?" + rendertoken.Param + "=" + u.mint(id)
+	policy, err := u.policyPath(id)
+	if err != nil {
+		return u.origin + "/w/" + id + "?" + rendertoken.Param + "=invalid"
+	}
+	scope := id
+	if policy != "" {
+		scope = rendertoken.PolicyScope(scope, policy)
+	}
+	return u.origin + "/w/" + id + policySuffix(policy) + "?" + rendertoken.Param + "=" + u.mint(scope)
 }
 
 // cacheBust appends the per-render stamp that makes a browser actually refetch
@@ -219,12 +270,25 @@ func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 		share = &view
 	}
 
-	page, err := renderDetailPage(a, ro.renderURLs(r).ownedBy(a.OwnerID), creds, share)
+	policy, err := ro.relayPolicy(r.Context(), viewerID, a)
+	if err != nil {
+		serverError(w, r, "relay policy", err)
+		return
+	}
+	protected, err := ro.hasConnectionDataPolicies(r.Context(), viewerID, a.ID)
+	if err != nil {
+		serverError(w, r, "connection protection", err)
+		return
+	}
+	page, err := renderDetailPage(a, ro.renderURLs(r).ownedBy(a.OwnerID), creds, share, detailNetworkPolicy{policy, protected})
 	if err != nil {
 		serverError(w, r, "gallery detail render", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if ro.cfg.Relay.Enabled || ro.connectionPolicy() != nil {
+		w.Header().Set("Content-Security-Policy", ro.renderURLs(r).framePolicy(a.ID, ro.cfg.AppOrigin))
+	}
 	fmt.Fprint(w, page)
 }
 
@@ -300,6 +364,9 @@ func openURL(artifactID string) string {
 // It grants nothing extra — a top-level render of an artifact they may already
 // read, under that artifact's own unchanged CSP.
 func (ro *Router) openArtifact(w http.ResponseWriter, r *http.Request) {
+	if !trustedFrameRefresh(w, r) {
+		return
+	}
 	id := urlParamID(r, "artifactID")
 	urls := ro.renderURLs(r)
 	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(urls.viewerID), id)
@@ -310,6 +377,20 @@ func (ro *Router) openArtifact(w http.ResponseWriter, r *http.Request) {
 	if a == nil {
 		ro.notFound(w, r)
 		return
+	}
+	if r.URL.Query().Get("direct") == "1" {
+		// The app may have been open before this artifact acquired private
+		// connection data. Its old controls must not open that data top-level.
+		w.Header().Set("Cache-Control", "no-store")
+		protected, err := ro.hasConnectionDataPolicies(r.Context(), urls.viewerID, a.ID)
+		if err != nil {
+			http.Error(w, "Connection policy is unavailable.", http.StatusServiceUnavailable)
+			return
+		}
+		if protected {
+			http.Error(w, "Connected data is available in the isolated Exhibit preview.", http.StatusForbidden)
+			return
+		}
 	}
 	// The token is minted as the artifact's owner because that is who the
 	// render surface checks it against; the visitor stays the state principal.
@@ -741,7 +822,8 @@ type widgetView struct {
 	Hue      int
 	// Title is the owning artifact's title, used for the frame's accessible
 	// name — an iframe needs one, and "<artifact> widget" is what it is.
-	Title string
+	Title   string
+	Wrapped bool
 }
 
 // sharePanelView is the owner's share panel (av-6xjd) — the three independent
@@ -864,6 +946,10 @@ func newWidgetView(a *store.Artifact, urls renderURLs) widgetView {
 	}
 	if a.WidgetBlobID != "" {
 		v.URL = urls.widget(a.ID)
+		if urls.widgetProtected != nil && !urls.anonymous {
+			protected, err := urls.widgetProtected(a.ID)
+			v.Wrapped = protected || err != nil
+		}
 	}
 	return v
 }
@@ -964,7 +1050,15 @@ type detailPageData struct {
 	// this page hangs off, and deliberately not a second one, because two
 	// flags are two things to keep in agreement and the disagreement is the
 	// bug.
-	Share *sharePanelView
+	Share               *sharePanelView
+	RelayPolicy         string
+	ConnectionProtected bool
+	PublicNavigation    bool
+}
+
+type detailNetworkPolicy struct {
+	Token     string
+	Protected bool
 }
 
 // renderDetailPage builds the viewer page for whoever this request is.
@@ -977,21 +1071,28 @@ type detailPageData struct {
 // stays: it reports what this tool may reach, which is a fact about the
 // artifact running in the recipient's browser and exactly what the CSP-block
 // explanation refers back to. What goes is the link to change it.
-func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials, share *sharePanelView) (string, error) {
+func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials, share *sharePanelView, policies ...detailNetworkPolicy) (string, error) {
+	policy := detailNetworkPolicy{}
+	if len(policies) > 0 {
+		policy = policies[0]
+	}
 	viewerPreference := strconv.FormatInt(urls.viewerID, 10)
 	if urls.anonymous {
 		viewerPreference = "anonymous"
 	}
 	return renderPage("detail", detailPageData{
-		Favicon:        template.URL(artifacticon.DataURI(a.Tags)),
-		Share:          share,
-		ID:             a.ID,
-		Title:          a.Title,
-		Created:        a.CreatedAt.Format("Jan 2, 2006 15:04"),
-		FrameURL:       urls.artifact(a.ID),
-		OpenURL:        openURL(a.ID),
-		SourceURL:      a.SourceURL,
-		SourceRevision: store.ContentRevision(a.SourceBlobID),
+		Favicon:             template.URL(artifacticon.DataURI(a.Tags)),
+		Share:               share,
+		RelayPolicy:         policy.Token,
+		ConnectionProtected: policy.Protected,
+		PublicNavigation:    (urls.anonymous || urls.navigationWithoutCredential) && !policy.Protected,
+		ID:                  a.ID,
+		Title:               a.Title,
+		Created:             a.CreatedAt.Format("Jan 2, 2006 15:04"),
+		FrameURL:            urls.artifact(a.ID),
+		OpenURL:             openURL(a.ID),
+		SourceURL:           a.SourceURL,
+		SourceRevision:      store.ContentRevision(a.SourceBlobID),
 
 		ViewerPreference: viewerPreference,
 		// Read through the same constant the store resolves the mode with, so
@@ -1006,7 +1107,8 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 }
 
 type editPageData struct {
-	AssetPanel assetPanelView
+	AssetPanel      assetPanelView
+	NetworkWarnings []scanner.Warning
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
 	Favicon        template.URL
@@ -1111,6 +1213,7 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 	// a blocked origin is a decision already made and belongs in Blocked.
 	unapproved := diffOrigins(networkFootprint(src, urls.origin), allowlist, blocked)
 	return renderPage("edit", editPageData{
+		NetworkWarnings:     scanner.Warnings(src, a.SourceURL),
 		Favicon:             template.URL(exhibitLogoDataURI),
 		ID:                  a.ID,
 		Title:               a.Title,

@@ -47,6 +47,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/momja/Exhibit/internal/connectors"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -71,6 +72,8 @@ type Entitlements struct {
 	// booting with Enforced and no value for it is refused rather than
 	// defaulted.
 	DefaultStorageBytes int64
+	DefaultConnections  connectors.Limits
+	DefaultSchedules    int
 }
 
 // EntitlementsFromEnv reads the configuration, returning an error the caller
@@ -92,6 +95,27 @@ func EntitlementsFromEnv() (Entitlements, error) {
 	e := Entitlements{
 		Enforced:    enforced,
 		DefaultPlan: strings.TrimSpace(os.Getenv(envEntitlementsDefaultPlan)),
+	}
+	if e.Enforced {
+		e.DefaultConnections = connectors.Limits{Native: 25, OAuth: 10, Vendor: 3}
+		e.DefaultSchedules = 10
+	}
+	for _, item := range []struct {
+		name string
+		dest *int
+	}{
+		{"ENTITLEMENTS_DEFAULT_NATIVE_CONNECTIONS", &e.DefaultConnections.Native},
+		{"ENTITLEMENTS_DEFAULT_OAUTH_CONNECTIONS", &e.DefaultConnections.OAuth},
+		{"ENTITLEMENTS_DEFAULT_VENDOR_CONNECTIONS", &e.DefaultConnections.Vendor},
+		{"ENTITLEMENTS_DEFAULT_RELAY_SCHEDULES", &e.DefaultSchedules},
+	} {
+		if raw := strings.TrimSpace(os.Getenv(item.name)); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil || n < 0 {
+				return Entitlements{}, fmt.Errorf("%s must be a non-negative count", item.name)
+			}
+			*item.dest = n
+		}
 	}
 	raw := strings.TrimSpace(os.Getenv(envEntitlementsDefaultBytes))
 	if raw != "" {
@@ -193,14 +217,16 @@ type Allowance struct {
 	Plan string
 	// Storage is the ceiling on stored bytes — read by av-10bw's quota gate,
 	// which never learns *why* the owner has the limit they have.
-	Storage Limit
+	Storage     Limit
+	Connections connectors.Limits
+	Schedules   int
 }
 
 // unlimitedAllowance is what an instance with limits switched off resolves to
 // for every owner. Spelled once, and constructed rather than zero-valued,
 // because Limit's zero value refuses everything.
 func unlimitedAllowance(plan string) Allowance {
-	return Allowance{Plan: plan, Storage: Limit{Unlimited: true}}
+	return Allowance{Plan: plan, Storage: Limit{Unlimited: true}, Connections: connectors.Limits{Native: -1, OAuth: -1, Vendor: -1}, Schedules: -1}
 }
 
 // resolve folds one stored entitlement together with this instance's defaults
@@ -225,7 +251,20 @@ func (e Entitlements) resolve(ent store.Entitlement) (Allowance, error) {
 	if !e.Enforced {
 		return unlimitedAllowance(e.DefaultPlan), nil
 	}
-	out := Allowance{Plan: e.DefaultPlan, Storage: Limit{Bytes: e.DefaultStorageBytes}}
+	out := Allowance{Plan: e.DefaultPlan, Storage: Limit{Bytes: e.DefaultStorageBytes}, Connections: e.DefaultConnections, Schedules: e.DefaultSchedules}
+	for _, item := range []struct {
+		value *int64
+		dest  *int
+	}{
+		{ent.ConnectionNativeLimit, &out.Connections.Native}, {ent.ConnectionOAuthLimit, &out.Connections.OAuth}, {ent.ConnectionVendorLimit, &out.Connections.Vendor}, {ent.RelayScheduleLimit, &out.Schedules},
+	} {
+		if item.value != nil {
+			if *item.value < 0 || *item.value > 1_000_000 {
+				return Allowance{}, fmt.Errorf("%w: connection or schedule limit is invalid", store.ErrInvalidEntitlement)
+			}
+			*item.dest = int(*item.value)
+		}
+	}
 	if limit := ent.StorageLimitBytes; limit != nil {
 		if *limit < 0 {
 			// Unreachable through the API, which refuses it, and through the
