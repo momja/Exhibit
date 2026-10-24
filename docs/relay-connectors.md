@@ -197,6 +197,14 @@ Grant the saved connection to the artifact, review its capabilities and credenti
 destinations, approve its API origin, then enable relay reads. API changes require
 the separate write grant and a connector recipe that permits writes.
 
+The read/write boundary currently follows HTTP methods: read-only connections
+permit GET and HEAD. A POST, including a GraphQL query that only reads data,
+requires both the connection's write capability and the viewer's relay write
+consent. Before an optional POST optimization, artifacts should inspect the
+matching connection's safe runtime capabilities and use a GET alternative when
+write access is absent. A write-capable connection for another origin supplies
+no permission for this request.
+
 **Connection grants are additive.** The artifact's approved origins remain its
 network boundary. A connection supplies credentials only to its matching API
 origin; attaching it does not narrow unrelated traffic. An artifact may use two
