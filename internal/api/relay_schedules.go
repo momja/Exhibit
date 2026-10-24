@@ -197,7 +197,7 @@ func (ro *Router) refreshSchedule(ctx context.Context, job store.RelaySchedule) 
 	}
 	policy, err := ro.relayPolicy(ctx, job.ViewerID, a)
 	if err != nil {
-		return 0, "Could not verify the data destination policy."
+		return 0, "Could not verify the artifact's current access."
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", job.URL, nil)
 	if err != nil {

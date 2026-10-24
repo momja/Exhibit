@@ -63,6 +63,11 @@ func TestNativeSecretsStaySealedAndOnlyReachTheGrantedOrigin(t *testing.T) {
 		fmt.Fprintf(w, `{"result":"ok","reflected":"%s"}`, r.Header.Get("Authorization"))
 	}))
 	defer provider.Close()
+	standalone := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Empty(t, r.Header.Get("Authorization"))
+		fmt.Fprint(w, `{"public":true}`)
+	}))
+	defer standalone.Close()
 	c, err := s.Create(ctx, 1, CreateRequest{Name: "Personal API", Recipe: "bearer", Origin: provider.URL, Secret: secret}, UnlimitedLimits())
 	require.NoError(t, err)
 	data, err := json.Marshal(c)
@@ -74,7 +79,7 @@ func TestNativeSecretsStaySealedAndOnlyReachTheGrantedOrigin(t *testing.T) {
 	assert.NotContains(t, records[0].EncryptedSecret, secret)
 	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID})
 	require.NoError(t, err)
-	gate := testGate(t, provider.URL, "https://elsewhere.example.test")
+	gate := testGate(t, provider.URL, standalone.URL)
 	req, err := http.NewRequest(http.MethodGet, provider.URL+"/data", nil)
 	require.NoError(t, err)
 	req.Header.Set("Authorization", "attacker")
@@ -83,12 +88,13 @@ func TestNativeSecretsStaySealedAndOnlyReachTheGrantedOrigin(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(response.Body), secret)
 	assert.Contains(t, string(response.Body), "credential redacted")
-	_, err = doRequest(t, s, 1, gate, "https://elsewhere.example.test/collect")
-	assert.ErrorIs(t, err, ErrEgress)
-	assert.Equal(t, int32(1), seen.Load())
-	allowed, err := s.AllowedEgress(ctx, 1, "app", []string{provider.URL, "https://elsewhere.example.test"})
+	response, err = doRequest(t, s, 1, gate, standalone.URL+"/public")
 	require.NoError(t, err)
-	assert.Equal(t, []string{provider.URL}, allowed)
+	assert.JSONEq(t, `{"public":true}`, string(response.Body))
+	assert.Equal(t, int32(1), seen.Load())
+	allowed, err := s.AllowedEgress(ctx, 1, "app", []string{provider.URL, standalone.URL})
+	require.NoError(t, err)
+	assert.Equal(t, []string{provider.URL, standalone.URL}, allowed)
 	_, err = s.cfg.Store.GetConnection(ctx, 2, c.ID)
 	assert.ErrorIs(t, err, store.ErrNotFound)
 	_, err = s.Grant(ctx, 2, "app", GrantRequest{ConnectionID: c.ID})
@@ -146,7 +152,8 @@ func TestBasicCredentialURLCacheAndDurableQuotaAcrossArtifacts(t *testing.T) {
 		grant, err := s.Grant(ctx, 1, artifactID, GrantRequest{ConnectionID: c.ID})
 		require.NoError(t, err)
 		assert.Empty(t, grant.PermittedEgress)
-		assert.Contains(t, grant.Consent, "nowhere else")
+		assert.Contains(t, grant.Consent, "Credentials are sent only to: "+provider.URL)
+		assert.Contains(t, grant.Consent, "independently approved origins")
 	}
 	gate := testGate(t, provider.URL)
 	for i := 0; i < 5; i++ {
@@ -262,7 +269,7 @@ func TestConnectionDailyQuotaCountsProviderRedirectHops(t *testing.T) {
 	assert.Equal(t, int32(1), received.Load(), "the second redirect hop must not spend a second provider request")
 }
 
-func TestLegacyNativeBasicShapeMigratesWithoutLosingCredentialOrCustody(t *testing.T) {
+func TestLegacyNativeBasicShapeMigratesWithoutLosingCredentialOrProvenance(t *testing.T) {
 	s, path := testService(t)
 	ctx := context.Background()
 	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -319,7 +326,7 @@ func TestLegacyNativeBasicShapeMigratesWithoutLosingCredentialOrCustody(t *testi
 	require.NoError(t, s.Ungrant(ctx, 1, "app", record.ID))
 	policies, err = s.DataPolicies(ctx, 1, "app")
 	require.NoError(t, err)
-	require.Len(t, policies, 1, "migration and later disconnection must retain saved data custody")
+	require.Len(t, policies, 1, "migration and later disconnection must retain saved-data provenance")
 }
 
 func TestConnectionDailyQuotaIsAtomicAcrossArtifactsAndServiceInstances(t *testing.T) {
@@ -665,21 +672,32 @@ func TestSharedStateAndPublicLinksNeedExplicitConnectionConsent(t *testing.T) {
 	}
 }
 
-func TestFinancialDestinationPolicyAlsoGuardsUnauthenticatedRedirects(t *testing.T) {
+func TestApprovedUnauthenticatedRedirectsAreIndependentOfFinancialConnections(t *testing.T) {
 	s, _ := testService(t)
 	ctx := context.Background()
-	var escaped atomic.Int32
-	attacker := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { escaped.Add(1) }))
-	defer attacker.Close()
-	allowed := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, attacker.URL+"/collect", 307) }))
+	var received atomic.Int32
+	destination := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received.Add(1)
+		assert.Empty(t, r.Header.Get("Authorization"))
+	}))
+	defer destination.Close()
+	allowed := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Empty(t, r.Header.Get("Authorization"))
+		http.Redirect(w, r, destination.URL+"/public", 307)
+	}))
 	defer allowed.Close()
 	c, err := s.Create(ctx, 1, CreateRequest{Name: "Bank", Recipe: "bearer", Origin: "https://bank.example.test", Secret: "private-bank-token"}, UnlimitedLimits())
 	require.NoError(t, err)
 	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID, PermittedEgress: []string{allowed.URL}})
 	require.NoError(t, err)
-	_, err = doRequest(t, s, 1, testGate(t, allowed.URL, attacker.URL), allowed.URL+"/forward")
-	assert.ErrorIs(t, err, ErrEgress)
-	assert.Zero(t, escaped.Load())
+	_, err = doRequest(t, s, 1, testGate(t, allowed.URL, destination.URL), allowed.URL+"/forward")
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), received.Load())
+	_, err = doRequest(t, s, 1, testGate(t, allowed.URL), allowed.URL+"/forward")
+	var denied *egress.DeniedError
+	require.ErrorAs(t, err, &denied)
+	assert.Equal(t, destination.URL, denied.Origin)
+	assert.Equal(t, int32(1), received.Load())
 }
 
 func TestBasicClientCanUseOnlyAStandinAccessURL(t *testing.T) {

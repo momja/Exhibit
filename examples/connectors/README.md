@@ -76,8 +76,9 @@ before using the form. Exhibit performs no token claim or redemption.
 
 Choose optional daily request and response reuse limits for the connection.
 They apply across every artifact and device using it, with reusable responses
-served without spending another provider request. Leave additional destinations
-empty to keep data at the API's origin; every connection starts with that rule.
+served without spending another provider request. Each connection supplies its
+credential only at its matching API origin. Other approved APIs and CDNs remain
+available, including when several connections are attached to the same artifact.
 Approve the API origin, grant the connection to your artifact and allow relay
 reads before fetching. Credential setup belongs in Exhibit's interface.
 

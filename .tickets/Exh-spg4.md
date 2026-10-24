@@ -40,3 +40,7 @@ EXPERIMENTAL; part of Exh-g2vv; builds on phase 1.
 **2026-10-22T16:01:53Z**
 
 Implemented encrypted generic API key/Bearer/Basic acquisition and management UI, viewer grants, destination policy, response scrubbing, per-connection quota/cache, account cleanup and agent-safe metadata. Retained data policy survives disconnect and credential deletion; explicit atomic cleanup clears saved data/history before releasing obsolete restrictions. HTTPbin native flow verified live. Real Basic-auth API acceptance is tracked in Exh-3kvx because no external account credentials are available.
+
+**2026-10-24T04:12:45Z**
+
+Product correction (2026-10-24, Exh-s47o): connections are additive to independent artifact origin approvals. Remove the global response-data destination ceiling and its configuration controls; connection grants bind credentials to the matching origin. Source-only defaults apply to credential delivery. Once responses reach artifact code they may use other artifact-approved origins. No state clearing/reconnection is required for existing approved traffic.

@@ -18,10 +18,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Exercise the real render CSP, runtime reporter, trusted prompt, htmx review
-// and CSS together. The approval was already persisted: connection custody is
-// the reason this stylesheet remains blocked, including in the agent preview.
-func TestNetworkOriginBrowserExplainsConnectionPolicyAndPreservesApproval(t *testing.T) {
+// An already-approved stylesheet must load alongside multiple connections in
+// both host pages, without a prompt or any saved-data cleanup. A new origin
+// still requires ordinary approval while those connections remain attached.
+func TestNetworkOriginBrowserKeepsApprovedStylesheetAlongsideConnections(t *testing.T) {
 	browser, err := chromium.New(chromiumtest.Start(t))
 	require.NoError(t, err)
 	ctx, cancel, err := browser.Tab(context.Background())
@@ -41,17 +41,22 @@ func TestNetworkOriginBrowserExplainsConnectionPolicyAndPreservesApproval(t *tes
 	ro.cfg.Relay.Enabled = true
 	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = ro.cfg.Connections
+	apiOrigins := []string{"https://first.example.test", "https://second.example.test"}
 	body := `<!doctype html><html><head><link rel="stylesheet" href="` + cdn.URL + `/theme.css"></head><body><h1>Connected app</h1></body></html>`
 	id := createArtifact(t, ro, map[string]any{
 		"title": "Connected app", "body": body,
-		"network_allowlist": []string{cdn.URL, originPolicyAPI},
+		"network_allowlist": append([]string{cdn.URL}, apiOrigins...),
 	})
-	connection, err := ro.cfg.Connections.Create(t.Context(), 1, connectors.CreateRequest{
-		Name: "Example API", Recipe: "bearer", Origin: originPolicyAPI, Secret: "fixture-only-credential",
-	}, connectors.UnlimitedLimits())
-	require.NoError(t, err)
-	_, err = ro.cfg.Connections.Grant(t.Context(), 1, id, connectors.GrantRequest{ConnectionID: connection.ID})
-	require.NoError(t, err)
+	connections := []*connectors.Connection{}
+	for _, apiOrigin := range apiOrigins {
+		connection, err := ro.cfg.Connections.Create(t.Context(), 1, connectors.CreateRequest{
+			Name: "Example API", Recipe: "bearer", Origin: apiOrigin, Secret: "fixture-only-credential",
+		}, connectors.UnlimitedLimits())
+		require.NoError(t, err)
+		_, err = ro.cfg.Connections.Grant(t.Context(), 1, id, connectors.GrantRequest{ConnectionID: connection.ID})
+		require.NoError(t, err)
+		connections = append(connections, connection)
+	}
 	before, err := ro.cfg.Store.ListOriginDecisions(t.Context(), 1, id)
 	require.NoError(t, err)
 
@@ -77,40 +82,44 @@ func TestNetworkOriginBrowserExplainsConnectionPolicyAndPreservesApproval(t *tes
 		require.True(t, ok, expression)
 	}
 	for _, path := range []string{"/artifacts/" + id, "/agent?artifact=" + id} {
-		run(chromedp.Navigate(app.URL+path), chromedp.Poll[chromedp.Void](`
-!document.getElementById('net-modal')?.hidden && !!document.querySelector('#net-warning-list [data-connection-data-blocked]')`))
+		callsBefore := stylesheetCalls.Load()
+		run(chromedp.Navigate(app.URL + path))
+		require.Eventually(t, func() bool { return stylesheetCalls.Load() > callsBefore }, 5*time.Second, 10*time.Millisecond)
 		if path == "/agent?artifact="+id {
 			// This fixture has no model API key; dismiss the agent's independent
 			// first-use dialog before interacting with the preview's notice.
 			run(chromedp.Poll[chromedp.Void](`!document.getElementById('key-modal').hidden`),
 				chromedp.Click(chromedp.CSS(`#key-modal button[onclick="closeKeyModal()"]`)))
 		}
-		check(`document.getElementById('net-title').innerText === 'Connection data protection'`)
-		check(`document.getElementById('net-warning-list').innerText.includes('Your origin approval is saved.')`)
-		check(`getComputedStyle(document.getElementById('net-allow')).display === 'none' && getComputedStyle(document.getElementById('net-never')).display === 'none'`)
-		check(`document.getElementById('net-once').innerText === 'Close'`)
-		check(`document.querySelector('#net-warning-list a').getAttribute('href') === '/connections?artifact=` + id + `'`)
-		run(chromedp.Click(chromedp.CSS("#net-once")))
-		run(chromedp.Poll[chromedp.Void](`document.getElementById('net-modal').hidden`))
-		assert.Zero(t, stylesheetCalls.Load(), "the explanation must not weaken the actual CSP: %s", path)
+		check(`document.getElementById('net-modal').hidden`)
 	}
 	after, err := ro.cfg.Store.ListOriginDecisions(t.Context(), 1, id)
 	require.NoError(t, err)
-	assert.Equal(t, before, after, "reading and closing the explanation preserves the saved approval")
+	assert.Equal(t, before, after, "both pages use the saved approval without rewriting it")
 
-	// The same prompt still offers a working approval when no connection data
-	// restricts the destination. The stylesheet loads only after that approval.
+	// Attaching connections cannot veto an ordinary new-origin approval.
 	ordinaryID := createArtifact(t, ro, map[string]any{
 		"title": "Ordinary app", "body": body, "network_allowlist": []string{},
 	})
+	for _, connection := range connections {
+		_, err = ro.cfg.Connections.Grant(t.Context(), 1, ordinaryID, connectors.GrantRequest{ConnectionID: connection.ID})
+		require.NoError(t, err)
+	}
+	callsBefore := stylesheetCalls.Load()
 	run(chromedp.Navigate(app.URL+"/artifacts/"+ordinaryID), chromedp.Poll[chromedp.Void](`
-!document.getElementById('net-modal')?.hidden && !!document.querySelector('#net-warning-list [data-network-origin-reviewed]')`))
+!document.getElementById('net-modal')?.hidden`))
 	check(`document.getElementById('net-title').innerText === 'Allow network access?'`)
 	check(`getComputedStyle(document.getElementById('net-allow')).display !== 'none' && getComputedStyle(document.getElementById('net-never')).display !== 'none'`)
 	check(`document.getElementById('net-once').innerText === 'Block once'`)
-	assert.Zero(t, stylesheetCalls.Load())
-	run(chromedp.Click(chromedp.CSS("#net-allow")), chromedp.Poll[chromedp.Void](`document.getElementById('net-modal').hidden`))
-	require.Eventually(t, func() bool { return stylesheetCalls.Load() > 0 }, 5*time.Second, 10*time.Millisecond)
+	assert.Equal(t, callsBefore, stylesheetCalls.Load(), "the unapproved request is blocked before approval")
+	// Approval renews the trusted host as well as its frame. Wait for that
+	// navigation before evaluating the new page's modal state.
+	approved, err := chromedp.RunResponse(ctx, chromedp.Click(chromedp.CSS("#net-allow")))
+	require.NoError(t, err)
+	require.NotNil(t, approved)
+	assert.EqualValues(t, http.StatusOK, approved.Status)
+	check(`document.getElementById('net-modal').hidden`)
+	require.Eventually(t, func() bool { return stylesheetCalls.Load() > callsBefore }, 5*time.Second, 10*time.Millisecond)
 	allowed, err := ro.cfg.Store.AllowedOrigins(t.Context(), 1, ordinaryID)
 	require.NoError(t, err)
 	assert.Contains(t, allowed, cdn.URL)

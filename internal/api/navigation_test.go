@@ -33,7 +33,7 @@ func navigationCall(t *testing.T, ro *Router, id, destination, policy string) *h
 	return w
 }
 
-func TestNavigationCannotBypassConnectionDestinationsOrStaleHostPolicy(t *testing.T) {
+func TestNavigationPermissionsRemainIndependentOfConnectionsAndRejectStaleHosts(t *testing.T) {
 	ro, registry := newScopedTestRouter(t)
 	ctx := context.Background()
 	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
@@ -55,16 +55,16 @@ func TestNavigationCannotBypassConnectionDestinationsOrStaleHostPolicy(t *testin
 		assert.Contains(t, w.Body.String(), destination)
 	}
 	w := navigationCall(t, ro, id, "https://attacker.example/?data=private", "")
-	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code, "the link capability is independent of connector destinations")
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
-	// Turning off the experiment must not discard the data restrictions.
+	// Disabling or disconnecting a connector does not restrict unrelated links.
 	ro.cfg.ConnectionPolicy = service
 	ro.cfg.Connections = nil
-	assert.Equal(t, http.StatusForbidden, navigationCall(t, ro, id, "https://attacker.example/", "").Code)
+	assert.Equal(t, http.StatusOK, navigationCall(t, ro, id, "https://attacker.example/", "").Code)
 	require.NoError(t, service.Ungrant(ctx, 1, id, c.ID))
-	assert.Equal(t, http.StatusForbidden, navigationCall(t, ro, id, "https://attacker.example/", "").Code, "removing credential authority retains saved-data restrictions")
+	assert.Equal(t, http.StatusOK, navigationCall(t, ro, id, "https://attacker.example/", "").Code)
 	require.NoError(t, service.Revoke(ctx, 1, c.ID))
-	assert.Equal(t, http.StatusForbidden, navigationCall(t, ro, id, "https://attacker.example/", "").Code, "revoking the credential retains saved-data restrictions")
+	assert.Equal(t, http.StatusOK, navigationCall(t, ro, id, "https://attacker.example/", "").Code)
 	assert.Equal(t, http.StatusOK, navigationCall(t, ro, id, "https://reports.example.test/result", "").Code)
 	grant, err := registry.Issue(1, id, "")
 	require.NoError(t, err)
@@ -164,7 +164,7 @@ func TestRevokedConnectionStillProtectsRenderNavigationAndSavedData(t *testing.T
 			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 			assert.Contains(t, w.Body.String(), "PRIVATE-RETAINED-5923")
 			assert.Contains(t, w.Header().Get("Content-Security-Policy"), "https://api.example.test")
-			assert.NotContains(t, w.Header().Get("Content-Security-Policy"), "https://attacker.example")
+			assert.Contains(t, w.Header().Get("Content-Security-Policy"), "https://attacker.example", "saved provenance never narrows an approved origin")
 		} else {
 			assert.Equal(t, http.StatusForbidden, w.Code)
 			assert.NotContains(t, w.Body.String(), "PRIVATE-RETAINED-5923")

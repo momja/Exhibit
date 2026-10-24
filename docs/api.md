@@ -594,9 +594,9 @@ GET    /api/connections/oauth/github/callback   Complete one-shot bound consent
 POST   /api/connections/vendor/begin            Begin a reviewed managed connection
 POST   /api/connections/vendor/complete         Poll and finish a browser-bound managed flow
 GET    /api/artifacts/:id/connections           Current viewer's connection grants
-POST   /api/artifacts/:id/connections           Grant a saved connection and destinations
+POST   /api/artifacts/:id/connections           Grant a saved connection to this artifact
 DELETE /api/artifacts/:id/connections/:id       Remove a connection grant
-DELETE /api/artifacts/:id/connection-data       Clear saved data and obsolete own restrictions
+DELETE /api/artifacts/:id/connection-data       Clear saved data and obsolete provenance
 POST   /api/artifacts/:id/connections/:id/standin  Obtain an inert short-lived handle
 GET    /api/artifacts/:id/relay-grant            Read the viewer's relay consent
 PUT    /api/artifacts/:id/relay-grant            Set {reads, writes} consent
@@ -617,9 +617,9 @@ to the opaque frame as a `Response`, never as app-origin markup. Limits are one
 MiB request bodies and four MiB decoded response bodies. Origin approval, relay
 consent, connector grants and operator policy are checked independently.
 The host supplies `X-Exhibit-Relay-Policy` for relay, connection metadata,
-stand-ins, link validation and state synchronization. A changed source or
-destination policy returns 409 and requires reopening the artifact. Requests
-from ordinary state API clients continue to work without that optional header.
+stand-ins, link validation and state synchronization. A stale source or request-
+authority token returns 409; reopen the artifact to refresh it. Requests from
+ordinary state API clients continue to work without that optional header.
 
 Native connection creation accepts a named reviewed `recipe`: `api-key`,
 `bearer` or `basic`. Generic recipes use an exact HTTPS `origin`;
@@ -632,22 +632,28 @@ virtual root endpoint. An artifact fetching `/accounts` at that origin reaches
 `/accounts` beneath the private base path. There is no setup-token claim flow.
 Optional `daily_limit` and `cache_minutes` cap daily provider requests and reuse
 responses across all artifacts and devices; zero means unlimited requests or
-no response reuse, respectively. Every connection starts with no additional data
-destinations, widened only by explicit approval.
-A grant includes `connection_id`, `permitted_egress` origins and explicit
-`share_with_recipients` consent. A schedule accepts
-`{url, state_key, interval_hours}` and stores a successful text response in the
+no response reuse, respectively.
+A grant accepts `connection_id` and explicit `share_with_recipients` consent.
+Grants are additive: artifact origin approvals remain the network boundary,
+with credentials attached only at matching API origins. Multiple connections and
+approved standalone APIs/CDNs work together. Legacy `permitted_egress` and bundle
+`data_origins` fields are accepted only as inert compatibility metadata. A schedule
+accepts `{url, state_key, interval_hours}` and stores a successful text response in the
 viewer's artifact state without executing artifact code. See
 [relay-connectors.md](relay-connectors.md) for exact boundaries and operator
 configuration, and [the runnable examples](../examples/connectors/README.md).
 
-Removing access or revoking a credential retains the data-destination policy
-protecting cached state. The separate human-only `DELETE connection-data`
-action clears the viewer's effective state, owner version-state snapshots when
-applicable, and obsolete policies owned by that viewer in one transaction.
-Active grants and a shared owner's policies remain. Recipients cannot clear a
-shared board; the owner must do that. Cleanup remains available with acquisition
-disabled. Previously open pages may retain copies of data they already read.
+Removing access or revoking a credential stops future credential use while saved
+responses and unrelated origin approvals remain. Returned data can be sent to
+other origins the artifact is approved to contact; a grant does not promise that
+response data stays at its source. Retained provenance still requires explicit
+consent to share connected state. The separate human-only `DELETE connection-data`
+action optionally clears the viewer's effective state and owner version-state
+snapshots when applicable, plus obsolete provenance owned by that viewer, in one
+transaction. It does not change origin approvals or active connection grants.
+Recipients cannot clear a shared board; the owner must do that. Cleanup remains
+available with acquisition disabled. Previously open pages may retain copies of
+data they already read.
 
 Managed OAuth begins with `{provider}` and returns `{session_id,url,expires_at}`.
 Open the provider URL, then submit `{session_id,name}` to `vendor/complete`.

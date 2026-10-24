@@ -80,8 +80,8 @@
        hx-swap="innerHTML">{{template "capabilityPopover" .Capability}}</div>
 </div>
 <div class="pip-popup pip-menu action-menu" id="pip-menu" hidden>
-  <button type="button" id="direct-open-toolbar"{{if .ConnectionProtected}} disabled title="Connected data must stay inside Exhibit, where its data destinations are enforced."{{end}}><i class="ph ph-arrow-square-out" aria-hidden="true"></i> {{if .ConnectionProtected}}Connected preview only{{else}}Open in new tab{{end}}</button>
-  {{if or .RelayEnabled .ConnectionProtected}}<a href="/connections?artifact={{.ID}}"><i class="ph ph-plugs-connected" aria-hidden="true"></i> {{if .RelayEnabled}}Connections &amp; relay{{else}}Saved data protection{{end}}</a>{{end}}
+  <button type="button" id="direct-open-toolbar"{{if .ConnectionProtected}} disabled title="Connected data is available in the isolated Exhibit preview."{{end}}><i class="ph ph-arrow-square-out" aria-hidden="true"></i> {{if .ConnectionProtected}}Connected preview only{{else}}Open in new tab{{end}}</button>
+  {{if or .RelayEnabled .ConnectionProtected}}<a href="/connections?artifact={{.ID}}"><i class="ph ph-plugs-connected" aria-hidden="true"></i> {{if .RelayEnabled}}Connections &amp; relay{{else}}Saved data{{end}}</a>{{end}}
   {{/* Everything from here to the divider belongs to the artifact's OWNER
        (av-awr4). A recipient reached this page through a grant, which is read
        access to the artifact and nothing else, so each of these would answer
@@ -143,7 +143,7 @@
       <p id="capability-warning-detail"></p>
     </details>
   </div>
-  <button type="button" class="banner-action" id="direct-open-banner"{{if .ConnectionProtected}} disabled title="Connected data must stay inside Exhibit, where its data destinations are enforced."{{end}}><i class="ph ph-arrow-square-out" aria-hidden="true"></i> {{if .ConnectionProtected}}Connected preview only{{else}}Open in new tab{{end}}</button>
+  <button type="button" class="banner-action" id="direct-open-banner"{{if .ConnectionProtected}} disabled title="Connected data is available in the isolated Exhibit preview."{{end}}><i class="ph ph-arrow-square-out" aria-hidden="true"></i> {{if .ConnectionProtected}}Connected preview only{{else}}Open in new tab{{end}}</button>
 </div>
 {{/* The recipient's answer to a CSP-blocked origin (av-awr4): explain, do not
      ask. Only the artifact's owner may widen its allowlist, so the runtime

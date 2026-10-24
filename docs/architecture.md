@@ -863,8 +863,8 @@ The optional relay and connector engines perform reviewed, bounded HTTPS
 requests while artifact execution stays in the browser. Ordinary API fetches,
 credential injection and declarative fetch-to-state schedules share
 `internal/egress`; no artifact server script or QuickJS runtime is introduced.
-Document-bound host authority and current-policy checks keep a newly granted
-connection from empowering an older frame. ZIP exports include a local relay
+Document-bound host authority and current-policy checks bind each request
+to the intended artifact and viewer. ZIP exports include a local relay
 and acquire local credentials again. See [relay-connectors.md](relay-connectors.md)
 for the configuration, ownership rules, portable runners and recorded decision
 superseding the synchronous backend POC.
@@ -872,20 +872,25 @@ superseding the synchronous backend POC.
 Native connectors are generic API key, Bearer and Basic credential policies.
 A pasted Basic credential URL is split in trusted app code into an origin,
 encrypted credentials and an encrypted private base path. The relay maps
-artifact paths under that base without disclosing it. Every connection defaults
-to no other data destinations. User-selected daily request limits and encrypted
-GET response reuse are enforced per connection across artifacts and devices.
+artifact paths under that base without disclosing it. User-selected daily request
+limits and encrypted GET response reuse are enforced per connection across
+artifacts and devices.
 No provider-specific API-key or Basic connector, or setup-token claim code, is shipped.
 Native OAuth remains limited to the reviewed provider set.
 
-Origin approval and connection data custody are separate inputs to the render
-CSP. The render reporter distinguishes approved origins excluded by custody
-from undecided origins and blocked redirects. Trusted viewer and agent chrome
-ask the server to review each reported destination before offering approval;
-connection restrictions show an explanation and a link to Connections instead.
-The origin-decision API rechecks custody before accepting an allow, including
-retained policies after revocation or feature shutdown. These diagnostics never
-widen either the CSP or the connection's data destinations.
+Connector grants are additive. The artifact origin allowlist determines network
+access and the render CSP; each granted connection supplies credentials only at
+its matching API origin. Multiple distinct connectors and approved standalone
+APIs/CDNs coexist. Adding, removing, revoking or disabling a connector does not
+intersect unrelated approvals or require clearing state. Viewer and agent chrome
+use the ordinary network approval flow, and schedules and portable runners
+apply the same separation between origin permission and credential use.
+
+Once response bytes reach the artifact, its code can save or send them to other
+approved origins. Credential custody cannot guarantee response-data non-egress.
+Retained provenance still supports explicit connected-state sharing consent and
+private render boundaries; legacy destination fields confer no network authority.
+Optional saved-state cleanup does not affect origin approvals or connection grants.
 
 Managed authentication uses a swappable vendor engine beside the native
 request-authorizing Engine interface. Nango injects retrieved credentials into

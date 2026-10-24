@@ -35,19 +35,18 @@ type ServerOptions struct {
 	Gate *egress.Gate
 }
 type localConnection struct {
-	Origin       string   `json:"origin"`
-	Kind         string   `json:"kind"`
-	Header       string   `json:"header,omitempty"`
-	Secret       string   `json:"secret,omitempty"`
-	Username     string   `json:"username,omitempty"`
-	Password     string   `json:"password,omitempty"`
-	AccessURL    string   `json:"access_url,omitempty"`
-	DailyLimit   int      `json:"daily_limit,omitempty"`
-	CacheMinutes int      `json:"cache_minutes,omitempty"`
-	DataOrigins  []string `json:"data_origins,omitempty"`
-	BasePath     string   `json:"-"`
-	Day          string   `json:"-"`
-	Calls        int      `json:"-"`
+	Origin       string `json:"origin"`
+	Kind         string `json:"kind"`
+	Header       string `json:"header,omitempty"`
+	Secret       string `json:"secret,omitempty"`
+	Username     string `json:"username,omitempty"`
+	Password     string `json:"password,omitempty"`
+	AccessURL    string `json:"access_url,omitempty"`
+	DailyLimit   int    `json:"daily_limit,omitempty"`
+	CacheMinutes int    `json:"cache_minutes,omitempty"`
+	BasePath     string `json:"-"`
+	Day          string `json:"-"`
+	Calls        int    `json:"-"`
 }
 type relayRequest struct {
 	URL        string            `json:"url"`
@@ -66,6 +65,7 @@ type relayResponse struct {
 type cachedResponse struct {
 	response *egress.Response
 	expires  time.Time
+	origin   string
 }
 
 type Server struct {
@@ -73,7 +73,6 @@ type Server struct {
 	options         ServerOptions
 	csrf            string
 	framePolicy     string
-	dataPolicies    map[string][]string
 	gate            *egress.Gate
 	hosts           map[string]bool
 	mu              sync.Mutex
@@ -95,10 +94,7 @@ func NewServer(app *Bundle, options ServerOptions) (*Server, error) {
 	if _, err := rand.Read(token); err != nil {
 		return nil, err
 	}
-	s := &Server{app: app, options: options, csrf: base64.RawURLEncoding.EncodeToString(token), framePolicy: rand.Text(), dataPolicies: map[string][]string{}, hosts: map[string]bool{}, state: map[string]string{}, connections: map[string]localConnection{}, connectionLocks: map[string]*sync.Mutex{}, cache: map[string]cachedResponse{}, active: make(chan struct{}, 8)}
-	for _, requirement := range app.Manifest.Connections {
-		s.dataPolicies[requirement.Origin] = slices.Clone(requirement.DataOrigins)
-	}
+	s := &Server{app: app, options: options, csrf: base64.RawURLEncoding.EncodeToString(token), framePolicy: rand.Text(), hosts: map[string]bool{}, state: map[string]string{}, connections: map[string]localConnection{}, connectionLocks: map[string]*sync.Mutex{}, cache: map[string]cachedResponse{}, active: make(chan struct{}, 8)}
 	for _, host := range options.AllowedHosts {
 		if strings.ContainsAny(host, "/\\?#@ \t\r\n") || host == "" {
 			return nil, errors.New("invalid local runner host")
@@ -120,33 +116,6 @@ func NewServer(app *Bundle, options ServerOptions) (*Server, error) {
 	if s.state == nil {
 		s.state = map[string]string{}
 	}
-	if options.StatePath != "" {
-		if raw, err := os.ReadFile(options.StatePath + ".policy.json"); err == nil {
-			var policy struct {
-				DataPolicies map[string][]string `json:"data_policies"`
-				// Preserve the restrictive policy written by older runners.
-				LegacyOrigins []string `json:"financial_origins"`
-			}
-			if len(raw) > 64<<10 || json.Unmarshal(raw, &policy) != nil || (len(policy.DataPolicies) == 0 && len(policy.LegacyOrigins) == 0) {
-				return nil, errors.New("invalid saved local connection data policy")
-			}
-			for _, entry := range policy.LegacyOrigins {
-				if policy.DataPolicies == nil {
-					policy.DataPolicies = map[string][]string{}
-				}
-				policy.DataPolicies[entry] = []string{entry}
-			}
-			for source, destinations := range policy.DataPolicies {
-				c, err := s.prepareConnection(localConnection{Origin: source, Kind: "bearer", Secret: "policy-validation", DataOrigins: destinations})
-				if err != nil {
-					return nil, errors.New("saved local connection data policy does not match this bundle")
-				}
-				s.dataPolicies[source] = c.DataOrigins
-			}
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
-	}
 	if options.Gate != nil {
 		s.gate = options.Gate
 	} else {
@@ -165,10 +134,6 @@ func NewServer(app *Bundle, options ServerOptions) (*Server, error) {
 		for _, c := range connections {
 			c, err := s.prepareConnection(c)
 			if err != nil {
-				s.Close()
-				return nil, err
-			}
-			if err := s.recordDataPolicyLocked(c.Origin, c.DataOrigins); err != nil {
 				s.Close()
 				return nil, err
 			}
@@ -201,7 +166,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// The header also forces a direct, top-level visit into an opaque
 		// sandbox, where it cannot read the connect page or the host token.
 		s.mu.Lock()
-		origins := strings.Join(s.allowedDataOriginsLocked(), " ")
+		origins := strings.Join(s.app.Manifest.NetworkAllowlist, " ")
 		policy := s.framePolicy
 		state, _ := json.Marshal(s.state)
 		s.mu.Unlock()
@@ -364,12 +329,7 @@ func (s *Server) relay(w http.ResponseWriter, r *http.Request) {
 		s.policyError(w)
 		return
 	}
-	allowed := s.allowedDataOriginsLocked()
-	if !slices.Contains(allowed, o) {
-		s.mu.Unlock()
-		s.error(w, "Connected data may not be sent to this destination", 403)
-		return
-	}
+	allowed := s.app.Manifest.NetworkAllowlist
 	connection, connected := s.connections[o]
 	for _, requirement := range s.app.Manifest.Connections {
 		if requirement.Origin == o && !connected {
@@ -403,15 +363,18 @@ func (s *Server) relay(w http.ResponseWriter, r *http.Request) {
 	response, err := s.gate.DoAuthorized(r.Context(), req, func(hop *http.Request) error {
 		hopOrigin, err := origin.NormalizeOrigin(hop.URL.Scheme + "://" + hop.URL.Host)
 		if err != nil || !slices.Contains(allowed, hopOrigin) {
-			return errors.New("connected data destinations remain restricted after disconnect")
+			return errors.New("destination is not approved for this app")
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if subtle.ConstantTimeCompare([]byte(input.Policy), []byte(s.framePolicy)) != 1 {
 			return errLocalPolicy
 		}
-		if !connected || hopOrigin != o {
+		if !connected {
 			return nil
+		}
+		if hopOrigin != o {
+			return errors.New("connector redirects must stay at their authorized origin")
 		}
 		if connection.BasePath != "" && (!safeAccessPath(hop.URL.Path) || (hop.URL.Path != connection.BasePath && !strings.HasPrefix(hop.URL.Path, connection.BasePath+"/"))) {
 			return errors.New("redirect leaves the connection's private base path")
@@ -467,7 +430,7 @@ func (s *Server) relay(w http.ResponseWriter, r *http.Request) {
 				delete(s.cache, key)
 			}
 		}
-		s.cache[cacheKey] = cachedResponse{response, time.Now().Add(time.Duration(connection.CacheMinutes) * time.Minute)}
+		s.cache[cacheKey] = cachedResponse{response, time.Now().Add(time.Duration(connection.CacheMinutes) * time.Minute), o}
 	}
 	s.writeRelay(w, response)
 }
@@ -475,7 +438,7 @@ func (s *Server) relay(w http.ResponseWriter, r *http.Request) {
 func (s *Server) policyError(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(409)
-	_ = json.NewEncoder(w).Encode(map[string]any{"error": "Connections changed; reloading the app with its current network policy", "reload": true})
+	_ = json.NewEncoder(w).Encode(map[string]any{"error": "Connections changed; reloading the app", "reload": true})
 }
 
 func scrubLocalResponse(connection localConnection, response *egress.Response) {
@@ -593,15 +556,6 @@ func (s *Server) prepareConnection(c localConnection) (localConnection, error) {
 	if c.DailyLimit < 0 || c.CacheMinutes < 0 || c.CacheMinutes > 525600 {
 		return c, errors.New("enter nonnegative request and response reuse limits (reuse at most 525600 minutes)")
 	}
-	c.DataOrigins, err = origin.NormalizeOrigins(append(slices.Clone(c.DataOrigins), o))
-	if err != nil {
-		return c, errors.New("invalid connection data destinations")
-	}
-	for _, destination := range c.DataOrigins {
-		if !slices.Contains(s.app.Manifest.NetworkAllowlist, destination) {
-			return c, errors.New("connection data destination must be in the bundle allowlist")
-		}
-	}
 	switch c.Kind {
 	case "bearer":
 		if c.Secret == "" {
@@ -624,16 +578,6 @@ func (s *Server) prepareConnection(c localConnection) (localConnection, error) {
 	return c, nil
 }
 
-// Every retained connection policy restricts all outbound channels. Disconnect
-// removes authority to authenticate, without releasing data already in state.
-func (s *Server) allowedDataOriginsLocked() []string {
-	allowed := slices.Clone(s.app.Manifest.NetworkAllowlist)
-	for _, destinations := range s.dataPolicies {
-		allowed = slices.DeleteFunc(allowed, func(entry string) bool { return !slices.Contains(destinations, entry) })
-	}
-	return allowed
-}
-
 func (s *Server) requirements() []ConnectionRequirement {
 	result := append([]ConnectionRequirement(nil), s.app.Manifest.Connections...)
 	for _, o := range s.app.Manifest.NetworkAllowlist {
@@ -653,15 +597,10 @@ func (s *Server) connectPage(w http.ResponseWriter, message string) {
 	// A native form's Origin may become null under no-referrer. Keep its
 	// same-origin evidence for CSRF validation without disclosing it off-site.
 	w.Header().Set("Referrer-Policy", "same-origin")
-	type destination struct {
-		Origin   string
-		Approved bool
-	}
 	type row struct {
 		ConnectionRequirement
-		Connected    bool
-		Index        int
-		Destinations []destination
+		Connected bool
+		Index     int
 	}
 	rows := []row{}
 	s.mu.Lock()
@@ -674,11 +613,7 @@ func (s *Server) connectPage(w http.ResponseWriter, message string) {
 			}
 		}
 		entry := row{ConnectionRequirement: requirement, Connected: connected, Index: i}
-		for _, allowed := range s.app.Manifest.NetworkAllowlist {
-			if allowed != requirement.Origin {
-				entry.Destinations = append(entry.Destinations, destination{allowed, slices.Contains(s.dataPolicies[requirement.Origin], allowed)})
-			}
-		}
+
 		rows = append(rows, entry)
 	}
 	s.mu.Unlock()
@@ -700,7 +635,7 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 	if r.PostForm.Get("action") == "disconnect" {
 		s.mu.Lock()
 		delete(s.connections, requirement.Origin)
-		s.cache = map[string]cachedResponse{}
+		s.clearConnectionCacheLocked(requirement.Origin)
 		s.framePolicy = rand.Text()
 		s.mu.Unlock()
 		s.connectPage(w, "Connection removed from this runner.")
@@ -719,45 +654,26 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 		s.connectPage(w, "Enter whole numbers for request and response reuse limits.")
 		return
 	}
-	c, err := s.prepareConnection(localConnection{Origin: requirement.Origin, Kind: r.PostForm.Get("kind"), Header: r.PostForm.Get("header"), Secret: r.PostForm.Get("secret"), Username: r.PostForm.Get("username"), Password: r.PostForm.Get("password"), AccessURL: r.PostForm.Get("access_url"), DailyLimit: dailyLimit, CacheMinutes: cacheMinutes, DataOrigins: r.PostForm["data_origins"]})
+	c, err := s.prepareConnection(localConnection{Origin: requirement.Origin, Kind: r.PostForm.Get("kind"), Header: r.PostForm.Get("header"), Secret: r.PostForm.Get("secret"), Username: r.PostForm.Get("username"), Password: r.PostForm.Get("password"), AccessURL: r.PostForm.Get("access_url"), DailyLimit: dailyLimit, CacheMinutes: cacheMinutes})
 	if err != nil {
 		s.connectPage(w, err.Error())
 		return
 	}
 	s.mu.Lock()
-	if err := s.recordDataPolicyLocked(c.Origin, c.DataOrigins); err != nil {
-		s.mu.Unlock()
-		s.connectPage(w, "Could not save this app's local data policy. The connection was not stored.")
-		return
-	}
-
 	s.connections[c.Origin] = c
-	s.cache = map[string]cachedResponse{}
+	s.clearConnectionCacheLocked(c.Origin)
 	s.framePolicy = rand.Text()
 	s.mu.Unlock()
 	s.connectPage(w, "Connected locally. Credentials remain in the runner's memory until it stops.")
 }
 
-// Explicit trusted approval changes a policy. A disconnect never changes it.
-func (s *Server) recordDataPolicyLocked(source string, destinations []string) error {
-	policies := make(map[string][]string, len(s.dataPolicies)+1)
-	for entry, allowed := range s.dataPolicies {
-		policies[entry] = slices.Clone(allowed)
-	}
-	policies[source] = slices.Clone(destinations)
-	if s.options.StatePath != "" {
-		raw, _ := json.Marshal(map[string]any{"data_policies": policies})
-		filename := s.options.StatePath + ".policy.json"
-		if err := os.WriteFile(filename+".tmp", raw, 0600); err != nil {
-			return err
-		}
-		if err := os.Rename(filename+".tmp", filename); err != nil {
-			return err
+func (s *Server) clearConnectionCacheLocked(connectedOrigin string) {
+	for key, cached := range s.cache {
+		if cached.origin == connectedOrigin {
+			delete(s.cache, key)
 		}
 	}
-	s.dataPolicies = policies
-	return nil
 }
 
 var hostTemplate = template.Must(template.New("host").Parse(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}}</title><style>html,body{height:100%;margin:0;font:15px system-ui;background:#f6f7f8;color:#172126}body{display:flex;flex-direction:column}header{display:flex;align-items:center;gap:20px;padding:12px 20px;border-bottom:1px solid #ddd}header strong{flex:1}a{color:#146350}iframe{border:0;width:100%;flex:1;background:white}.label{font-size:12px;color:#5c676c}</style></head><body><header><strong>{{.Title}}</strong><span class="label">Exhibit · local relay</span><a href="/__exhibit/connect" target="_blank" rel="noopener">Connections</a></header><iframe id="exhibit-app" title="{{.Title}}" sandbox="allow-scripts" src="/__exhibit/render"></iframe><script type="module">{{.Script}}</script></body></html>`))
-var connectTemplate = template.Must(template.New("connect").Parse(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local connections · {{.Title}}</title><style>body{margin:40px auto;padding:0 20px;max-width:720px;font:16px/1.5 system-ui;color:#172126;background:#f6f7f8}a{color:#146350}form{padding:24px;background:white;border:1px solid #dce0e1;border-radius:12px;margin:20px 0}h2{font-size:19px;margin:0}label{display:block;margin:14px 0}input,select,button{font:inherit;padding:9px;border:1px solid #bcc6c5;border-radius:6px;max-width:100%;box-sizing:border-box}input{display:block;width:100%}input[type=checkbox]{display:inline;width:auto}button{cursor:pointer;background:#146350;color:white;margin-right:8px}.muted{font-size:14px;color:#52615f}.message{padding:12px;background:#e2eee8}code{overflow-wrap:anywhere}small{display:block}fieldset{border:1px solid #dce0e1;border-radius:6px;margin-top:20px}</style></head><body><a href="/">← Back to app</a><h1>Local connections</h1><p>Connect {{.Title}} on this machine. Credentials stay outside the app frame and are held only until this runner stops. Reconnect after restarting.</p><p class="muted">Every connection keeps data at its own origin by default. Explicitly approve any other destination below. Saved data policies survive disconnecting and restarting. The app's allowed origins are: {{.Origins}}.</p>{{if .Message}}<p class="message" role="status">{{.Message}}</p>{{end}}{{range .Rows}}<form method="post" action="/__exhibit/connect" autocomplete="off" data-connection-form><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="index" value="{{.Index}}"><h2>{{.Name}}</h2><code>{{.Origin}}</code><p class="muted">{{if .Connected}}Connected locally{{else}}No local credentials{{end}}</p><label>Connection kind<select name="kind"><option value="bearer" {{if eq .Kind "bearer"}}selected{{end}}>Bearer token</option><option value="api-key" {{if eq .Kind "api-key"}}selected{{end}}>API key header</option><option value="basic" {{if eq .Kind "basic"}}selected{{end}}>Basic authentication</option></select></label><div data-kinds="bearer api-key"><label>API key or bearer token<input type="password" name="secret" autocomplete="new-password"></label></div><div data-kinds="api-key"><label>API key header<input name="header" value="{{if .Header}}{{.Header}}{{else}}X-API-Key{{end}}"></label></div><div data-kinds="basic"><label>Basic access URL (HTTPS with embedded username and password)<input type="password" name="access_url" autocomplete="new-password" placeholder="https://user:password@api.example/private-base"></label><p class="muted">Or enter the credentials separately when the API has no private base path.</p><label>Basic username<input name="username" autocomplete="off"></label><label>Basic password<input type="password" name="password" autocomplete="new-password"></label></div><label>Maximum provider requests per UTC day (optional)<input type="number" name="daily_limit" min="0" step="1" value="{{if .DailyLimit}}{{.DailyLimit}}{{end}}"></label><label>Reuse successful GET/HEAD responses for minutes (optional)<input type="number" name="cache_minutes" min="0" max="525600" step="1" value="{{if .CacheMinutes}}{{.CacheMinutes}}{{end}}"></label><fieldset><legend>Data may go to</legend><p>{{.Origin}} (this connection's source)</p>{{range .Destinations}}<label><input type="checkbox" name="data_origins" value="{{.Origin}}" {{if .Approved}}checked{{end}}> Explicitly allow {{.Origin}}</label>{{end}}</fieldset><small class="muted">Credentials are used only for this origin. Reconnecting replaces the current local connection. Limits and reuse apply during this runner session.</small><p><button name="action" value="connect">Connect locally</button>{{if .Connected}}<button name="action" value="disconnect">Disconnect</button>{{end}}</p></form>{{else}}<p>This app has no allowed external origins.</p>{{end}}<script type="module">{{.Script}}</script></body></html>`))
+var connectTemplate = template.Must(template.New("connect").Parse(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local connections · {{.Title}}</title><style>body{margin:40px auto;padding:0 20px;max-width:720px;font:16px/1.5 system-ui;color:#172126;background:#f6f7f8}a{color:#146350}form{padding:24px;background:white;border:1px solid #dce0e1;border-radius:12px;margin:20px 0}h2{font-size:19px;margin:0}label{display:block;margin:14px 0}input,select,button{font:inherit;padding:9px;border:1px solid #bcc6c5;border-radius:6px;max-width:100%;box-sizing:border-box}input{display:block;width:100%}button{cursor:pointer;background:#146350;color:white;margin-right:8px}.muted{font-size:14px;color:#52615f}.message{padding:12px;background:#e2eee8}code{overflow-wrap:anywhere}small{display:block}</style></head><body><a href="/">← Back to app</a><h1>Local connections</h1><p>Connect {{.Title}} on this machine. Credentials stay outside the app frame and are held only until this runner stops. Reconnect after restarting.</p><p class="muted">Connections add authentication for their own origin. The app can also call other approved origins without a connection. The app's allowed origins are: {{.Origins}}.</p>{{if .Message}}<p class="message" role="status">{{.Message}}</p>{{end}}{{range .Rows}}<form method="post" action="/__exhibit/connect" autocomplete="off" data-connection-form><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="index" value="{{.Index}}"><h2>{{.Name}}</h2><code>{{.Origin}}</code><p class="muted">{{if .Connected}}Connected locally{{else}}No local credentials{{end}}</p><label>Connection kind<select name="kind"><option value="bearer" {{if eq .Kind "bearer"}}selected{{end}}>Bearer token</option><option value="api-key" {{if eq .Kind "api-key"}}selected{{end}}>API key header</option><option value="basic" {{if eq .Kind "basic"}}selected{{end}}>Basic authentication</option></select></label><div data-kinds="bearer api-key"><label>API key or bearer token<input type="password" name="secret" autocomplete="new-password"></label></div><div data-kinds="api-key"><label>API key header<input name="header" value="{{if .Header}}{{.Header}}{{else}}X-API-Key{{end}}"></label></div><div data-kinds="basic"><label>Basic access URL (HTTPS with embedded username and password)<input type="password" name="access_url" autocomplete="new-password" placeholder="https://user:password@api.example/private-base"></label><p class="muted">Or enter the credentials separately when the API has no private base path.</p><label>Basic username<input name="username" autocomplete="off"></label><label>Basic password<input type="password" name="password" autocomplete="new-password"></label></div><label>Maximum provider requests per UTC day (optional)<input type="number" name="daily_limit" min="0" step="1" value="{{if .DailyLimit}}{{.DailyLimit}}{{end}}"></label><label>Reuse successful GET/HEAD responses for minutes (optional)<input type="number" name="cache_minutes" min="0" max="525600" step="1" value="{{if .CacheMinutes}}{{.CacheMinutes}}{{end}}"></label><small class="muted">Credentials are used only for this origin. Reconnecting replaces the current local connection. Limits and reuse apply during this runner session.</small><p><button name="action" value="connect">Connect locally</button>{{if .Connected}}<button name="action" value="disconnect">Disconnect</button>{{end}}</p></form>{{else}}<p>This app has no allowed external origins.</p>{{end}}<script type="module">{{.Script}}</script></body></html>`))

@@ -427,8 +427,9 @@
 
 {{/* The runtime network-permission dialog (av-kmwj), shared by every page that
      embeds an artifact: the detail viewer and the agent chat's preview pane
-     (av-6xvs). Both pages share the approval actions and the connection-policy
-     notice — web/gallery/network-prompt.js drives them with these shared ids.
+     (av-6xvs). One definition because the two pages must offer the same three
+     answers with the same ids — web/gallery/network-prompt.js drives it and
+     addresses those ids by name.
 
      It lives in app chrome and never inside the artifact's frame: the artifact
      owns that DOM and could draw a convincing forgery of this dialog. The
@@ -437,33 +438,21 @@
      interpolated as markup here. */}}
 {{define "networkPrompt"}}<div id="net-modal" class="modal-overlay" hidden>
   <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="net-title">
-    <h2 id="net-title"><span class="net-review-pending">Checking network access…</span><span class="net-approval-copy">Allow network access?</span><span class="net-policy-copy">Connection data protection</span><span class="net-readonly-copy">Network access blocked</span></h2>
+    <h2 id="net-title">Allow network access?</h2>
     <p>This artifact tried to contact <code id="net-origin"></code> and was blocked.</p>
     <p class="text-sm muted" id="net-directive"></p>
     <div id="net-warning-list" hx-get="/partials/network-warnings"
          hx-trigger="exhibit:network-origin-warning from:body"
-         hx-vals='js:{artifact: document.getElementById("net-warning-list").dataset.artifact, origin: document.getElementById("net-warning-list").dataset.origin}'
+         hx-vals='js:{artifact: document.getElementById("net-warning-list").dataset.artifact}'
          hx-swap="innerHTML" hx-sync="this:replace"></div>
-    <p class="net-approval-explanation">Allowing adds this origin to the artifact's allowlist and reloads the artifact so the request can retry. You can revoke it later in allowlist settings.</p>
+    <p>Allowing adds this origin to the artifact's allowlist and reloads the artifact so the request can retry. You can revoke it later in allowlist settings.</p>
     <div class="modal-actions">
       <button type="button" class="btn btn-sec" id="net-never">Don't ask again</button>
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="net-once"><span class="net-approval-copy">Block once</span><span class="net-review-pending">Close</span><span class="net-policy-copy">Close</span><span class="net-readonly-copy">Close</span></button>
+      <button type="button" class="btn btn-sec" id="net-once">Block once</button>
       <button type="button" class="btn" id="net-allow"><i class="ph ph-globe-hemisphere-west"></i> Allow origin</button>
     </div>
   </div>
-</div>{{end}}
-
-{{define "networkOriginWarnings"}}<div data-network-origin-reviewed{{if .ConnectionBlocked}} data-connection-data-blocked{{end}}{{if not .CanApprove}} data-network-origin-readonly{{end}}>
-  {{if .ConnectionBlocked}}
-    {{if .AlreadyApproved}}<p><strong>Your origin approval is saved.</strong></p>{{end}}
-    <p>This artifact uses connection data whose allowed destinations exclude <code>{{.Origin}}</code>. These rules also apply to external stylesheets, fonts and scripts.</p>
-    <p>Review the connection's data destinations, or embed the external assets in the artifact. Saved data can keep earlier restrictions after access changes.</p>
-    <p><a class="btn btn-sec" href="{{.ManageURL}}"><i class="ph ph-shield-check" aria-hidden="true"></i> Review connection rules</a></p>
-  {{else if not .CanApprove}}
-    <p>The artifact's owner controls its network approvals.</p>
-  {{end}}
-  {{template "networkWarnings" .Warnings}}
 </div>{{end}}
 
 {{define "assetPanelRows"}}

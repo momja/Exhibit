@@ -48,3 +48,7 @@ Existing connections created from the built-in recipe (experimental, so only sta
 **2026-10-23T05:38:56Z**
 
 Removed the built-in connector, acquisition flow and examples. Generic Basic credential URLs now keep credentials/private bases encrypted; user daily limits and GET reuse work connection-wide, with quota reserved on every provider hop. All connections default to no other destinations. Shape-based migration 040 converts existing Basic native records, preserves grants/custody/limits and invalidates old viewer-scrubbed cache entries. Native, API/export and Go/Node parity fixtures pass; race-tested bundle suite passes. Full integration suite will be recorded with the vendor follow-up. Local runner credentials and counters keep their documented per-session lifetime.
+
+**2026-10-24T04:12:45Z**
+
+Clarified by user on 2026-10-24 (Exh-s47o): connectors are additive. The earlier "data may go nowhere else" default is superseded for response data; credentials remain limited to the connection's reviewed origin, while other approved traffic stays available. Per-connection limits, generic Basic acquisition, provider removal and all other acceptance criteria remain in effect.

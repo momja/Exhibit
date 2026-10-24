@@ -388,7 +388,7 @@ func (ro *Router) openArtifact(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if protected {
-			http.Error(w, "Connected data must stay inside Exhibit, where its data destinations are enforced.", http.StatusForbidden)
+			http.Error(w, "Connected data is available in the isolated Exhibit preview.", http.StatusForbidden)
 			return
 		}
 	}

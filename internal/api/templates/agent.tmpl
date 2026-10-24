@@ -176,7 +176,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
      Data: agentPreviewData (agentui.go). */}}
 {{define "agentPreview"}}<div class="preview-bar">
       <span class="title" id="pv-title">{{if .HasArtifact}}{{.Title}}{{else}}Preview{{end}}</span>
-      {{if .HasArtifact}}<button type="button" id="pv-open" class="preview-open" data-direct-open-artifact="{{.ID}}" data-direct-open-url="{{.OpenURL}}" aria-label="Open in new tab" title="{{if .ConnectionProtected}}Connected data must stay inside Exhibit, where its data destinations are enforced.{{else}}Open in new tab{{end}}"{{if .ConnectionProtected}} disabled{{end}}><span class="lbl">{{if .ConnectionProtected}}Preview only{{else}}Open{{end}} </span><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
+      {{if .HasArtifact}}<button type="button" id="pv-open" class="preview-open" data-direct-open-artifact="{{.ID}}" data-direct-open-url="{{.OpenURL}}" aria-label="Open in new tab" title="{{if .ConnectionProtected}}Connected data is available in the isolated Exhibit preview.{{else}}Open in new tab{{end}}"{{if .ConnectionProtected}} disabled{{end}}><span class="lbl">{{if .ConnectionProtected}}Preview only{{else}}Open{{end}} </span><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
       <a id="pv-detail" href="{{.DetailURL}}">Details</a>{{end}}
       <span class="spacer"></span>
       <button class="snip-btn" id="snip-btn"{{if not .HasArtifact}} disabled hidden{{end}} onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>

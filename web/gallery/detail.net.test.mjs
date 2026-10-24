@@ -95,11 +95,7 @@ test("the host announces itself immediately, not only on a future frame load", (
 });
 
 test("a blocked origin is prompted for in app chrome, not in the frame", async () => {
-  const { byId, document, postFromFrame } = loadDetail();
-  const reviews = [];
-  document.body.addEventListener("exhibit:network-origin-warning", () => {
-    reviews.push({ ...byId("net-warning-list").dataset });
-  });
+  const { byId, postFromFrame } = loadDetail();
 
   assert.equal(byId("net-modal").hidden, true, "no prompt before anything is blocked");
   await postFromFrame(report("https://cdn.example.com", "script-src-elem"));
@@ -108,30 +104,6 @@ test("a blocked origin is prompted for in app chrome, not in the frame", async (
   assert.equal(byId("net-origin").textContent, "https://cdn.example.com",
     "the origin is set as text, never as markup");
   assert.equal(byId("net-directive").textContent, "Blocked by script-src-elem");
-  assert.deepEqual(reviews, [{ artifact: ID, origin: "https://cdn.example.com" }],
-    "the server reviews the actual blocked destination before offering approval");
-});
-
-test("a changed connection policy refreshes the explanation without reloading", async () => {
-  const { byId, document, frame, api, postFromFrame, capabilitiesChanged } = loadDetail({ responses: [
-    { ok: false, status: 409, json: async () => ({
-      code: "connection_data_policy", error: "Connection data protection blocks this destination."
-    }) }
-  ] });
-  const before = frame.src;
-  let reviews = 0;
-  document.body.addEventListener("exhibit:network-origin-warning", () => reviews++);
-
-  await postFromFrame(report("https://cdn.example.com"));
-  await byId("net-allow").click();
-
-  assert.equal(originCalls(api).length, 1);
-  assert.equal(reviews, 2, "the stale approval is replaced by a fresh server policy review");
-  assert.equal(byId("net-modal").hidden, false);
-  assert.equal(byId("net-warning-list").dataset.origin, "https://cdn.example.com");
-  assert.match(byId("al-status").textContent, /Connection data protection/);
-  assert.equal(frame.src, before, "a refused approval cannot restart the same prompt loop");
-  assert.deepEqual(capabilitiesChanged, []);
 });
 
 test("Allow records an allow decision and reloads the frame under the new CSP", async () => {
@@ -328,20 +300,4 @@ test("a read-only visitor is not asked a question they cannot answer", async () 
   assert.deepEqual(originCalls(api), []);
   assert.deepEqual(capabilitiesChanged, [],
     "a visitor who cannot approve changes no posture");
-});
-
-test("a recipient can read the explanation for an approved but restricted destination", async () => {
-  const { byId, document, api, postFromFrame } = loadDetail({ readOnly: true });
-  let reviewed = false;
-  document.body.addEventListener("exhibit:network-origin-warning", () => { reviewed = true; });
-
-  await postFromFrame({ ...report("https://cdn.example.com", "style-src-elem"),
-    reason: "connection_data_policy" });
-
-  assert.equal(byId("net-modal").hidden, false);
-  assert.equal(byId("net-origin").textContent, "https://cdn.example.com");
-  assert.equal(reviewed, true, "the server supplies the read-only policy explanation");
-  await byId("net-once").click();
-  assert.equal(byId("net-modal").hidden, true);
-  assert.deepEqual(originCalls(api), [], "closing the notice never writes an origin decision");
 });

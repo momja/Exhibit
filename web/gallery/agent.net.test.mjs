@@ -98,32 +98,6 @@ test("Allow writes the decision and re-renders the pane rather than reassigning 
   assert.equal(page.byId("net-modal").hidden, true);
 });
 
-test("connection policy conflicts keep the preview and refresh its network explanation", async () => {
-  const page = await loadAgent({ responses: [
-    { ok: true, status: 200, json: async () => ({ configured: false }) }, // boot's key status
-    { ok: false, status: 409, json: async () => ({
-      code: "connection_data_policy", error: "Connection data protection blocks this destination."
-    }) }
-  ] });
-  const frame = page.byId("pv-frame");
-  frame.contentWindow = { posted: [], postMessage() {} };
-  const before = frame.src;
-  let reviews = 0, reloads = 0;
-  page.document.body.addEventListener("exhibit:network-origin-warning", () => reviews++);
-  page.document.body.addEventListener("exhibit:artifact-saved", () => reloads++);
-
-  await page.postFromFrame(report("https://cdn.example.com"), frame.contentWindow);
-  await page.byId("net-allow").click();
-
-  assert.equal(reviews, 2);
-  assert.equal(page.byId("net-warning-list").dataset.artifact, ID);
-  assert.equal(page.byId("net-warning-list").dataset.origin, "https://cdn.example.com");
-  assert.equal(page.byId("net-modal").hidden, false);
-  assert.equal(frame.src, before);
-  assert.equal(reloads, 0, "a policy conflict must not refetch the preview pane");
-  assert.ok(page.byId("messages").children.some(c => /Connection data protection/.test(c.textContent)));
-});
-
 // A chat session that has not created anything yet has no artifact to decide
 // about, and the id the route would need does not exist. Prompting would ask
 // about an origin with nowhere to record the answer.
