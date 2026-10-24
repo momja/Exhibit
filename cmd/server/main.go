@@ -235,23 +235,29 @@ func main() {
 			slog.Bool("guardrail", guardrail != nil))
 	}
 
-	// Identity (av-30rj). Unset OIDC_ISSUER is the default and the whole of
-	// the single-user path: no provider, no /auth routes, static token and
-	// owner 1 as before. Set, it is the one constructor a provider swap
-	// touches — everything downstream is provider-agnostic.
-	identity := newIdentityProvider(context.Background(), appOrigin)
-	// The second login path (av-q30x), and the one that needs no identity
-	// server at all. Since av-rzvf its accounts live in the users table, so
-	// there are two independent reasons an instance has a local login: the
-	// environment credential below, and any account already provisioned.
-	localCredential := newLocalCredential()
+	// Hosted deployments use Clerk; self-hosters retain the independent OIDC
+	// and local-password paths. Incomplete Clerk configuration must fail closed.
+	var hostedLogin *auth.Clerk
+	if os.Getenv("CLERK_PUBLISHABLE_KEY") != "" || os.Getenv("CLERK_SECRET_KEY") != "" {
+		var err error
+		hostedLogin, err = auth.NewClerk(os.Getenv("CLERK_PUBLISHABLE_KEY"), os.Getenv("CLERK_SECRET_KEY"), appOrigin, renderOrigin)
+		if err != nil {
+			fatal("configure Clerk", err)
+		}
+	}
+	var identity auth.IdentityProvider
+	var localCredential *auth.Credential
+	if hostedLogin == nil {
+		identity = newIdentityProvider(context.Background(), appOrigin)
+		localCredential = newLocalCredential()
+	}
 	localUsers, err := st.CountLocalCredentials(context.Background())
 	if err != nil {
 		fatal("count local accounts", err)
 	}
 	// An instance with no way in at all gets one (av-jviu), so a fresh
 	// deployment is usable without a CLI round-trip and a restart.
-	if localUsers == 0 && identity == nil && localCredential == nil {
+	if hostedLogin == nil && localUsers == 0 && identity == nil && localCredential == nil {
 		if err := seedDefaultAdmin(context.Background(), st); err != nil {
 			fatal("create the default admin account", err)
 		}
@@ -260,7 +266,9 @@ func main() {
 	if localUsers > 0 {
 		slog.Info("local accounts present", slog.Int64("count", localUsers))
 	}
-	warnIfDefaultPassword(context.Background(), st)
+	if hostedLogin == nil {
+		warnIfDefaultPassword(context.Background(), st)
+	}
 	if identity != nil || localCredential != nil || localUsers > 0 {
 		if n, err := st.DeleteExpiredSessions(context.Background()); err != nil {
 			slog.Warn("prune expired sessions", slog.String("err", err.Error()))
@@ -269,7 +277,7 @@ func main() {
 		}
 	}
 
-	router := api.NewRouter(api.Config{
+	routerConfig := api.Config{
 		Store:               st,
 		Blob:                bl,
 		AppOrigin:           appOrigin,
@@ -288,7 +296,14 @@ func main() {
 		EmbedOrigins:        embedOrigins,
 		Chromium:            browser,
 		MaxRequestBodyBytes: maxBodyBytes,
-	})
+	}
+	if hostedLogin != nil {
+		routerConfig.AuthToken = os.Getenv("AUTH_TOKEN")
+		routerConfig.Clerk = hostedLogin
+		routerConfig.ClerkPublishableKey = hostedLogin.PublishableKey
+		routerConfig.ClerkFrontendAPI = hostedLogin.FrontendAPI
+	}
+	router := api.NewRouter(routerConfig)
 
 	// One listener or two (av-xath). Two is the default and the shape an
 	// operator-supplied proxy expects: a hostname mapped to each port. A

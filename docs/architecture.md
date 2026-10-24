@@ -641,6 +641,20 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
 - **Guardrail** (av-gust): with `GUARDRAIL_*`, `ext/guard.ts` screens each user
   message on Pi's `input` hook; a failed screen blocks. `security.md` §5.4.
 
+### Hosted authentication
+
+Configured Clerk keys select the hosted login path. `internal/auth/clerk.go`
+verifies Clerk browser cookies through the official Go SDK with cached signing
+keys, enforcing the application's issuer and `APP_ORIGIN`. `internal/api/clerk.go`
+resolves the verified subject to the existing user/owner model. It does not mint
+an Exhibit session or match users by email. Invalid cookies follow the ordinary
+route gates; the login page can refresh an expired token through ClerkJS.
+
+Self-hosted password and OIDC paths retain the session architecture below. In
+hosted mode their routes and cookies are inactive, default-admin seeding is
+skipped, and the default development service token is disabled. API and SSE
+requests still require authentication when no operator service token is set.
+
 ### 3.8 Login: two paths, one session layer (av-30rj, av-q30x, av-rzvf)
 
 Login is optional: an identity provider, or local login name and password. Both end

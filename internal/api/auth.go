@@ -61,7 +61,7 @@ const (
 const DefaultSessionTTL = 30 * 24 * time.Hour
 
 // identityEnabled reports whether this instance delegates login to a provider.
-func (ro *Router) identityEnabled() bool { return ro.cfg.Identity != nil }
+func (ro *Router) identityEnabled() bool { return ro.cfg.Clerk == nil && ro.cfg.Identity != nil }
 
 // localLoginEnabled reports whether this instance has passwords of its own
 // (av-q30x, av-rzvf) — either the environment credential, or at least one
@@ -72,7 +72,7 @@ func (ro *Router) identityEnabled() bool { return ro.cfg.Identity != nil }
 // provision accounts with the CLI and unset the environment pair afterwards.
 // Neither set is the single-user default, unchanged.
 func (ro *Router) localLoginEnabled() bool {
-	return ro.cfg.LocalCredential != nil || ro.cfg.LocalUsers
+	return ro.cfg.Clerk == nil && (ro.cfg.LocalCredential != nil || ro.cfg.LocalUsers)
 }
 
 // loginEnabled reports whether this instance has *any* way for a person to log
@@ -84,7 +84,9 @@ func (ro *Router) localLoginEnabled() bool {
 //
 // False is still the default and still means single-user: static token, owner 1,
 // no gate.
-func (ro *Router) loginEnabled() bool { return ro.identityEnabled() || ro.localLoginEnabled() }
+func (ro *Router) loginEnabled() bool {
+	return ro.cfg.Clerk != nil || ro.identityEnabled() || ro.localLoginEnabled()
+}
 
 func (ro *Router) sessionTTL() time.Duration {
 	if ro.cfg.SessionTTL > 0 {
@@ -105,6 +107,17 @@ func (ro *Router) setupAuthRoutes(r chi.Router) {
 	// The single entry point, whatever is configured: the gate redirects here,
 	// and this decides whether that means a form or a trip to the provider.
 	r.Get("/auth/login", ro.authLogin)
+	if ro.cfg.Clerk != nil {
+		r.Get("/auth/signup", ro.authLogin)
+		r.Get("/auth/clerk/ready", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-store")
+			if _, ok := ro.sessionUser(r); !ok {
+				http.Error(w, "Your account cannot access Exhibit. Contact the administrator.", http.StatusForbidden)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})
+	}
 	if ro.localLoginEnabled() {
 		// The only endpoint that answers a guessed credential, and so the only
 		// one that is throttled (av-t21v). It sits on the route rather than in
@@ -132,6 +145,10 @@ func (ro *Router) setupAuthRoutes(r chi.Router) {
 // behaviour and the right one: a page whose only control is "continue to the
 // provider" is a choice that does not exist, presented as one.
 func (ro *Router) authLogin(w http.ResponseWriter, r *http.Request) {
+	if ro.cfg.Clerk != nil {
+		ro.renderClerkLogin(w, r, "")
+		return
+	}
 	if !ro.localLoginEnabled() {
 		ro.authStartSSO(w, r)
 		return
@@ -383,6 +400,10 @@ func (ro *Router) startSession(w http.ResponseWriter, r *http.Request, user *sto
 // leave a usable credential in anything that had already copied it; deleting
 // the row is what makes the session unusable on the very next request.
 func (ro *Router) authLogout(w http.ResponseWriter, r *http.Request) {
+	if ro.cfg.Clerk != nil {
+		ro.renderClerkLogin(w, r, "logout")
+		return
+	}
 	if c, err := r.Cookie(sessionCookieName); err == nil && c.Value != "" {
 		if err := ro.cfg.Store.DeleteSession(r.Context(), c.Value); err != nil {
 			slog.Warn("revoke session", slog.String("err", err.Error()))
@@ -452,6 +473,9 @@ func (ro *Router) failLogin(w http.ResponseWriter, msg string, attrs ...slog.Att
 // An instance with no login configured issues no sessions, so it recognizes
 // none: a cookie presented there is somebody else's leftover, not a credential.
 func (ro *Router) sessionUser(r *http.Request) (int64, bool) {
+	if ro.cfg.Clerk != nil {
+		return ro.clerkSessionUser(r)
+	}
 	if !ro.loginEnabled() {
 		return 0, false
 	}

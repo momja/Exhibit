@@ -12,3 +12,9 @@ assignee: Max Omdal
 
 Use selected Clerk application app_3L7s3OLDRhgo3j6lkYE3xOwfS19 for hosted login. No existing users to migrate. Preserve local-password and OIDC for self-hosters. Add visible auth controls, protect routes, retain owner scoping and test both modes.
 
+
+## Notes
+
+**2026-10-24T05:06:27Z**
+
+Implemented hosted Clerk mode in feature/Exh-wi2y/hosted-clerk. Preserved self-hosted password/OIDC; disabled hosted default credentials; added cookie isolation check, login/signup/user controls, SDK session verification, ownership mapping, docs, and tests. Validation: Go auth/API/server tests passed, focused Clerk/auth regressions passed, go vet passed, gallery 361/361 tests passed with NODE_OPTIONS=--experimental-vm-modules, server builds. Clerk skills installed. CLI doctor reports not logged in/not linked/no keys. Await user CLI auth login on t3code as maxomdal before targeting selected app app_3L7s3OLDRhgo3j6lkYE3xOwfS19. Remaining: CLI init/link as appropriate and env pull, real app startup/browser auth verification/screenshots. No real Clerk users created; no environment files read.

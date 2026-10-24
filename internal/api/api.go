@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -26,8 +27,19 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
+// HostedLogin keeps the hosted provider separate from self-hosted credentials.
+type HostedLogin interface {
+	Middleware(http.Handler) http.Handler
+	Subject(*http.Request) string
+	Email(context.Context, string) (string, error)
+}
+
 // Config holds the dependencies and configuration for the API router.
 type Config struct {
+	Clerk               HostedLogin
+	ClerkPublishableKey string
+	ClerkFrontendAPI    string
+
 	Store        store.Store
 	Blob         blob.Store
 	AppOrigin    string
@@ -371,6 +383,9 @@ func (ro *Router) setupRoutes() {
 	// Login gate for the server-rendered pages (av-30rj). A pass-through
 	// unless an identity provider is configured, so a single-user instance
 	// is unaffected.
+	if ro.cfg.Clerk != nil {
+		ro.Use(ro.cfg.Clerk.Middleware)
+	}
 	ro.Use(ro.sessionGate)
 
 	// The login flow — registered only when a provider is configured
