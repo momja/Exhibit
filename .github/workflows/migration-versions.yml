@@ -1,0 +1,25 @@
+name: Migration versions
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  migration-versions:
+    name: Migration versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Use the event's merge commit so collisions with the base branch count.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Reject duplicate SQL and reserved Go migration versions
+        run: go test ./internal/store -run '^TestNoMigrationVersionIsUsedTwice$' -count=1 -v
