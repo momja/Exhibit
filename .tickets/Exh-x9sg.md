@@ -5,7 +5,7 @@ deps: [Exh-poaf]
 links: []
 created: 2026-10-20T06:24:35Z
 type: feature
-priority: 2
+priority: 1
 assignee: Max Omdal
 parent: Exh-xvtt
 ---
