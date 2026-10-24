@@ -4,6 +4,7 @@
 Usage: python3 scripts/smoke-self-hosted.py /absolute/path/to/server
 Uses a temporary database, loopback ports, and an explicit clean environment.
 """
+import base64
 import http.cookiejar
 import pathlib
 import socket
@@ -57,6 +58,16 @@ def run(binary):
             'ADDR': f'127.0.0.1:{port}', 'RENDER_ADDR': f'127.0.0.1:{render_port}',
             'DATA_DIR': directory, 'PI_BIN': '/nonexistent',
         }
+        # Match Compose's implicit service credential. Hosted startup must refuse
+        # it before listening, even when the value came from the environment.
+        hosted_env = dict(env, DATA_DIR=directory + '/hosted',
+                          RENDER_ORIGIN=f'http://render.test:{render_port}',
+                          CLERK_PUBLISHABLE_KEY='pk_test_' + base64.b64encode(b'example.clerk.accounts.dev$').decode().rstrip('='),
+                          CLERK_SECRET_KEY='sk_test_example', AUTH_TOKEN='dev-token')
+        refused = subprocess.run([binary], env=hosted_env, cwd=directory,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+        check(refused.returncode != 0 and b'hosted login refuses the default dev-token' in refused.stdout,
+              'Hosted startup accepted the Compose default service token')
         with tempfile.TemporaryFile() as log:
             process = subprocess.Popen([binary], env=env, cwd=directory, stdout=log, stderr=log)
             try:
@@ -83,7 +94,7 @@ def run(binary):
                 request('/auth/logout')
                 check(request('/api/artifacts', headers={'Cookie': session})[0] == 401,
                       'Logged-out session still accepted')
-                print('PASS: clean-environment startup; local login form; no Clerk bootstrap;')
+                print('PASS: hosted dev-token refusal; clean-environment startup; local login form; no Clerk bootstrap;')
                 print('      anonymous/wrong-password rejection; local session/API access; logout revocation.')
             finally:
                 process.terminate()

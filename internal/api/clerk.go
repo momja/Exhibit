@@ -1,13 +1,10 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
-
-	"github.com/momja/Exhibit/internal/store"
 )
 
 // Only public configuration reaches templates. The secret key stays in auth.Clerk.
@@ -28,16 +25,11 @@ func (ro *Router) clerkSessionUser(r *http.Request) (int64, bool) {
 	if subject == "" {
 		return 0, false
 	}
-	u, err := ro.cfg.Store.GetUserByExternalID(r.Context(), subject)
-	if errors.Is(err, store.ErrNotFound) {
-		// Fetch the email once, for a new identity. Never link accounts by email:
-		// Clerk's stable user ID is the identity and Exhibit retains ownership IDs.
-		email, fetchErr := ro.cfg.Clerk.Email(r.Context(), subject)
-		if fetchErr != nil {
-			return 0, false
-		}
-		u, err = ro.cfg.Store.UpsertUser(r.Context(), subject, email)
+	identity, err := ro.cfg.Clerk.Identity(r)
+	if err != nil || identity.Subject != subject {
+		return 0, false
 	}
+	u, err := ro.cfg.Store.UpsertHostedUser(r.Context(), subject, identity.Email, identity.SessionCreatedAt)
 	if err != nil || u == nil || u.Disabled {
 		return 0, false
 	}

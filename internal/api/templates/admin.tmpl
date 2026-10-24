@@ -30,7 +30,8 @@
 <main class="settings">
 <div class="lede">
   <h2>Who can sign in.</h2>
-  <p>You are this instance&#39;s user directory. Create accounts here, reset a forgotten password, and switch an account off when someone should no longer have access. There is no registration form and no email anywhere in this.</p>
+  {{if .Clerk}}<p>People sign up and manage their credentials through Clerk. Manage their Exhibit roles, access, and entitlements here.</p>{{else}}
+  <p>You are this instance&#39;s user directory. Create accounts here, reset a forgotten password, and switch an account off when someone should no longer have access. There is no registration form and no email anywhere in this.</p>{{end}}
 </div>
 
 <div class="card">
@@ -50,7 +51,7 @@
       {{/* An identity the provider issued has no password here to reset, so
            the row says which kind it is rather than offering a control that
            could not work. */}}
-      <td>{{if eq .Kind "local"}}<i class="ph ph-key" aria-hidden="true"></i> Password{{else}}<i class="ph ph-shield-check" aria-hidden="true"></i> Identity provider{{end}}</td>
+      <td>{{if eq .Kind "unavailable"}}Unavailable in hosted mode{{else if eq .Kind "local"}}<i class="ph ph-key" aria-hidden="true"></i> Password{{else}}<i class="ph ph-shield-check" aria-hidden="true"></i> Identity provider{{end}}</td>
       <td>{{if .IsAdmin}}<span class="badge badge-admin">Admin</span>{{else}}Member{{end}}</td>
       <td>{{if .Disabled}}<span class="badge badge-off">Disabled</span>{{else}}Active{{end}}</td>
       {{/* What this account is allowed (av-2p8z). The plan label is shown when
@@ -64,8 +65,8 @@
         {{if .Entitlement.Ref}}<div class="muted text-sm settings-ref">{{.Entitlement.Ref}}</div>{{end}}
       </td>
       <td class="settings-actions">
-        {{if eq .Kind "local"}}<button type="button" class="btn btn-sec btn-sm" data-action="password" data-user-id="{{.ID}}" data-user-name="{{.Name}}"><i class="ph ph-key"></i> Reset password</button>{{end}}
-        <button type="button" class="btn btn-sec btn-sm" data-action="role" data-user-id="{{.ID}}" data-user-name="{{.Name}}" data-admin="{{.IsAdmin}}">{{if .IsAdmin}}<i class="ph ph-arrow-down"></i> Demote{{else}}<i class="ph ph-arrow-up"></i> Make admin{{end}}</button>
+        {{if and (not $.Clerk) (eq .Kind "local")}}<button type="button" class="btn btn-sec btn-sm" data-action="password" data-user-id="{{.ID}}" data-user-name="{{.Name}}"><i class="ph ph-key"></i> Reset password</button>{{end}}
+        {{if or (ne .Kind "unavailable") .IsAdmin}}<button type="button" class="btn btn-sec btn-sm" data-action="role" data-user-id="{{.ID}}" data-user-name="{{.Name}}" data-admin="{{.IsAdmin}}">{{if .IsAdmin}}<i class="ph ph-arrow-down"></i> Demote{{else}}<i class="ph ph-arrow-up"></i> Make admin{{end}}</button>{{end}}
         <button type="button" class="btn btn-sec btn-sm" data-action="entitlement" data-user-id="{{.ID}}" data-user-name="{{.Name}}" data-plan="{{.Entitlement.Plan}}" data-ref="{{.Entitlement.Ref}}"{{with .Entitlement.StorageLimitBytes}} data-storage-limit="{{.}}"{{end}}><i class="ph ph-sliders"></i> Entitlement</button>
         {{if .Disabled}}<button type="button" class="btn btn-sec btn-sm" data-action="enable" data-user-id="{{.ID}}" data-user-name="{{.Name}}"><i class="ph ph-check"></i> Enable</button>{{else}}<button type="button" class="btn btn-danger btn-sm" data-action="disable" data-user-id="{{.ID}}" data-user-name="{{.Name}}"><i class="ph ph-prohibit"></i> Disable</button>{{end}}
       </td>
@@ -132,7 +133,7 @@
   {{end}}
 </div>
 
-<div class="card">
+{{if not .Clerk}}<div class="card">
   <h3 class="settings-h3">Add an account</h3>
   <div class="settings-form">
     <label class="settings-label" for="new-username">Login name</label>
@@ -147,6 +148,8 @@
     </div>
   </div>
 </div>
+
+{{end}}
 
 {{/* One dialog reused by every row, filled from the row's data- attributes.
      A dialog rather than the chained window.prompt()s the password reset uses:

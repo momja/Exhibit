@@ -16,9 +16,11 @@ type hostedLoginStub struct{}
 
 func (hostedLoginStub) Middleware(next http.Handler) http.Handler { return next }
 func (hostedLoginStub) Subject(r *http.Request) string            { return r.Header.Get("Test-Clerk-Subject") }
-func (hostedLoginStub) Email(context.Context, string) (string, error) {
-	return "person@example.com", nil
+func (hostedLoginStub) Identity(r *http.Request) (auth.HostedIdentity, error) {
+	return auth.HostedIdentity{Subject: r.Header.Get("Test-Clerk-Subject"), Email: "person@example.com", SessionCreatedAt: time.Now().UnixMilli()}, nil
 }
+func (hostedLoginStub) ResolveEmail(context.Context, string) (string, error)  { return "", nil }
+func (hostedLoginStub) RevokeSessions(context.Context, string) (int64, error) { return 0, nil }
 
 func TestClerkHostedMode(t *testing.T) {
 	cred, err := auth.NewCredential("selfhost", "$2a$10$N9qo8uLOickgx2ZMRZoMy.Mrq4H/M2dYs6qVu0Y0lJ4YFjIsWJc.1W")
@@ -80,4 +82,43 @@ func TestClerkLoginRedirectsToSecurePublicOrigin(t *testing.T) {
 	ro.ServeHTTP(w, r)
 	require.Equal(t, http.StatusSeeOther, w.Code)
 	require.Equal(t, "https://app.test/auth/signup?next=%2F", w.Header().Get("Location"))
+}
+
+type emailHostedLogin struct {
+	hostedLoginStub
+	email string
+}
+
+func (h *emailHostedLogin) Identity(r *http.Request) (auth.HostedIdentity, error) {
+	identity, err := h.hostedLoginStub.Identity(r)
+	identity.Email = h.email
+	return identity, err
+}
+func (h *emailHostedLogin) ResolveEmail(_ context.Context, email string) (string, error) {
+	if email == h.email {
+		return "clerk:member", nil
+	}
+	return "", nil
+}
+func TestClerkEmailChangeUpdatesProfileAndShareLookup(t *testing.T) {
+	h := &emailHostedLogin{email: "old@example.test"}
+	ro, st := newLoginTestRouter(t, nil, nil, func(c *Config) { c.Clerk = h })
+	req := httptest.NewRequest("GET", "https://app.test/auth/clerk/ready", nil)
+	req.Header.Set("Test-Clerk-Subject", "clerk:member")
+	oldID, ok := ro.clerkSessionUser(req)
+	require.True(t, ok)
+	h.email = "new@example.test"
+	// Recipient resolution must already use the new address before the recipient
+	// revisits Exhibit and before the cached local profile is refreshed.
+	_, err := ro.resolveRecipient(context.Background(), "old@example.test")
+	require.ErrorIs(t, err, store.ErrNotFound)
+	recipient, err := ro.resolveRecipient(context.Background(), h.email)
+	require.NoError(t, err)
+	require.Equal(t, oldID, recipient.ID)
+	id, ok := ro.clerkSessionUser(req)
+	require.True(t, ok)
+	require.Equal(t, oldID, id)
+	u, err := st.GetUser(context.Background(), id)
+	require.NoError(t, err)
+	require.Equal(t, h.email, u.Email)
 }

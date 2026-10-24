@@ -16,7 +16,12 @@ export default class extends Controller {
         await clerk.signOut({ redirectUrl: '/auth/login' });
         window.location.replace('/auth/login');
       } else if (this.modeValue === 'user') {
-        if (clerk.isSignedIn) clerk.mountUserButton(this.mountTarget);
+        if (clerk.isSignedIn) {
+          // The server enforces Exhibit-owned deletion before rendering this page.
+          // Refresh persisted client data so the panel reflects that permission.
+          await clerk.user.reload();
+          if (this.element.isConnected) clerk.mountUserButton(this.mountTarget);
+        }
       } else if (clerk.isSignedIn) {
         await clerk.session.getToken();
         const response = await fetch('/auth/clerk/ready', { credentials: 'same-origin' });

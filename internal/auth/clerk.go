@@ -7,10 +7,13 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
 	"github.com/clerk/clerk-sdk-go/v2/jwks"
+	"github.com/clerk/clerk-sdk-go/v2/session"
 	"github.com/clerk/clerk-sdk-go/v2/user"
 )
 
@@ -21,6 +24,9 @@ type Clerk struct {
 	FrontendAPI    string
 	middleware     func(http.Handler) http.Handler
 	users          *user.Client
+	sessions       *session.Client
+	cacheMu        sync.Mutex
+	identities     map[string]cachedHostedIdentity
 	appOrigin      string
 }
 
@@ -60,7 +66,7 @@ func newClerk(publishableKey, appOrigin string, config *clerk.ClientConfig) (*Cl
 	if err != nil || origin.Host == "" || (origin.Scheme != "http" && origin.Scheme != "https") || origin.Path != "" {
 		return nil, errors.New("Clerk requires an absolute APP_ORIGIN without a path")
 	}
-	c := &Clerk{appOrigin: appOrigin, PublishableKey: publishableKey, FrontendAPI: u.String(), users: user.NewClient(config)}
+	c := &Clerk{appOrigin: appOrigin, PublishableKey: publishableKey, FrontendAPI: u.String(), users: user.NewClient(config), sessions: session.NewClient(config), identities: make(map[string]cachedHostedIdentity)}
 	c.middleware = func(next http.Handler) http.Handler {
 		return clerkhttp.WithHeaderAuthorization(
 			clerkhttp.AuthorizationFailureHandler(next),
@@ -111,18 +117,133 @@ func (c *Clerk) Subject(r *http.Request) string {
 	return "clerk:" + claims.Subject
 }
 
-func (c *Clerk) Email(ctx context.Context, externalID string) (string, error) {
-	u, err := c.users.Get(ctx, strings.TrimPrefix(externalID, "clerk:"))
+// HostedIdentity binds the immutable provider session creation time to its user.
+// JWT iat is refreshed frequently and cannot be used as a deletion fence.
+type HostedIdentity struct {
+	Subject          string
+	Email            string
+	SessionCreatedAt int64
+}
+
+type cachedHostedIdentity struct {
+	identity HostedIdentity
+	expires  time.Time
+}
+
+// Identity periodically refreshes provider status and profile data. The local
+// deletion fence is checked on every request, independently of this small cache.
+func (c *Clerk) Identity(r *http.Request) (HostedIdentity, error) {
+	subject := c.Subject(r)
+	if subject == "" {
+		return HostedIdentity{}, errors.New("invalid Clerk session")
+	}
+	claims, _ := clerk.SessionClaimsFromContext(r.Context())
+	c.cacheMu.Lock()
+	cached, ok := c.identities[claims.SessionID]
+	c.cacheMu.Unlock()
+	if ok && time.Now().Before(cached.expires) && cached.identity.Subject == subject {
+		return cached.identity, nil
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	sess, err := c.sessions.Get(ctx, claims.SessionID)
+	if err != nil {
+		return HostedIdentity{}, err
+	}
+	if sess.Status != "active" || "clerk:"+sess.UserID != subject || sess.CreatedAt <= 0 {
+		return HostedIdentity{}, errors.New("Clerk session is unavailable")
+	}
+	u, err := c.users.Get(ctx, sess.UserID)
+	if err != nil {
+		return HostedIdentity{}, err
+	}
+	if u.Banned || u.Locked {
+		return HostedIdentity{}, errors.New("Clerk account is unavailable")
+	}
+	// Provider-side enforcement, not CSS hiding: users must erase their library
+	// through Exhibit so cleanup and the last-administrator guard cannot be skipped.
+	if u.DeleteSelfEnabled {
+		u, err = c.users.Update(ctx, u.ID, &user.UpdateParams{DeleteSelfEnabled: clerk.Bool(false)})
+		if err != nil {
+			return HostedIdentity{}, err
+		}
+		if u.DeleteSelfEnabled {
+			return HostedIdentity{}, errors.New("Clerk self-deletion must be disabled")
+		}
+	}
+	identity := HostedIdentity{Subject: subject, Email: primaryVerifiedEmail(u), SessionCreatedAt: sess.CreatedAt}
+	c.cacheMu.Lock()
+	if len(c.identities) >= 1024 {
+		clear(c.identities)
+	}
+	c.identities[claims.SessionID] = cachedHostedIdentity{identity, time.Now().Add(30 * time.Second)}
+	c.cacheMu.Unlock()
+	return identity, nil
+}
+
+func primaryVerifiedEmail(u *clerk.User) string {
+	for _, address := range u.EmailAddresses {
+		if u.PrimaryEmailAddressID != nil && address.ID == *u.PrimaryEmailAddressID && address.Verification != nil && address.Verification.Status == "verified" {
+			return address.EmailAddress
+		}
+	}
+	return ""
+}
+
+// ResolveEmail consults current verified primary addresses at grant time rather
+// than trusting a historical display address in Exhibit's users table.
+func (c *Clerk) ResolveEmail(ctx context.Context, email string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	users, err := c.users.List(ctx, &user.ListParams{EmailAddresses: []string{email}, ListParams: clerk.ListParams{Limit: clerk.Int64(2)}})
 	if err != nil {
 		return "", err
 	}
-	if u.Banned || u.Locked {
-		return "", errors.New("Clerk account is unavailable")
+	if users.TotalCount != 1 || len(users.Users) != 1 {
+		return "", nil
 	}
-	for _, address := range u.EmailAddresses {
-		if u.PrimaryEmailAddressID != nil && address.ID == *u.PrimaryEmailAddressID {
-			return address.EmailAddress, nil
+	u := users.Users[0]
+	if u.Banned || u.Locked || !strings.EqualFold(primaryVerifiedEmail(u), email) {
+		return "", nil
+	}
+	return "clerk:" + u.ID, nil
+}
+
+// RevokeSessions ends provider sessions and returns their latest creation time.
+// Include inactive sessions too: a recently ended session can still have a
+// cached JWT. The returned provider timestamp keeps erasure safe across clock skew.
+func (c *Clerk) RevokeSessions(ctx context.Context, externalID string) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	id := strings.TrimPrefix(externalID, "clerk:")
+	var cutoff, offset int64
+	for {
+		list, err := c.sessions.List(ctx, &session.ListParams{UserID: &id, ListParams: clerk.ListParams{Limit: clerk.Int64(100), Offset: &offset}})
+		if err != nil {
+			return 0, err
+		}
+		if len(list.Sessions) == 0 {
+			break
+		}
+		for _, sess := range list.Sessions {
+			cutoff = max(cutoff, sess.CreatedAt)
+			if sess.Status == "active" {
+				if _, err := c.sessions.Revoke(ctx, &session.RevokeParams{ID: sess.ID}); err != nil {
+					return 0, err
+				}
+			}
+		}
+		offset += int64(len(list.Sessions))
+		if offset >= list.TotalCount {
+			break
 		}
 	}
-	return "", nil
+	c.cacheMu.Lock()
+	for sid, cached := range c.identities {
+		if cached.identity.Subject == externalID {
+			delete(c.identities, sid)
+		}
+	}
+	c.cacheMu.Unlock()
+	return cutoff, nil
 }

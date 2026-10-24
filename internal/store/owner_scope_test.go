@@ -526,6 +526,7 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// keyed by the provider's external id, not by owner_id. They are
 		// exempt because they sit upstream of owner scoping, not outside it.
 		"UpsertUser":            "resolves a provider identity to an owner; there is no owner yet",
+		"UpsertHostedUser":      "resolves a verified hosted identity with its durable erasure fence; no owner exists yet",
 		"GetUser":               "keyed by user id, which *is* the owner id",
 		"CreateSession":         "session rows carry their own UserID; the caller has just authenticated",
 		"GetSession":            "looks up a bearer credential before any owner is known",
@@ -558,9 +559,11 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// question about the instance's directory rather than about anybody's
 		// library. The caller that spends the answer is owner-scoped where it
 		// counts — CreateShare refuses to share an artifact you do not own.
-		"GetUserByEmail":  "resolves a typed handle to an account; the owner scoping is on the share it feeds (av-6xjd)",
-		"SetUserAdmin":    "keyed by the user id it acts on; an instance-admin operation (av-utap)",
-		"SetUserDisabled": "keyed by the user id it acts on; an instance-admin operation (av-utap)",
+		"GetUserByEmail":        "resolves a typed handle to an account; the owner scoping is on the share it feeds (av-6xjd)",
+		"SetUserAdmin":          "keyed by the user id it acts on; an instance-admin operation (av-utap)",
+		"SetUserDisabled":       "keyed by the user id it acts on; an instance-admin operation (av-utap)",
+		"SetHostedUserAdmin":    "keyed by the target user id; hosted instance-admin operation",
+		"SetHostedUserDisabled": "keyed by the target user id; hosted instance-admin operation",
 
 		// Entitlements (av-2p8z), on exactly SetUserAdmin's grounds. The
 		// int64 SetEntitlement takes is the *target* account, not the

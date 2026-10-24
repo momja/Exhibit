@@ -31,7 +31,9 @@ import (
 type HostedLogin interface {
 	Middleware(http.Handler) http.Handler
 	Subject(*http.Request) string
-	Email(context.Context, string) (string, error)
+	Identity(*http.Request) (auth.HostedIdentity, error)
+	ResolveEmail(context.Context, string) (string, error)
+	RevokeSessions(context.Context, string) (int64, error)
 }
 
 // Config holds the dependencies and configuration for the API router.

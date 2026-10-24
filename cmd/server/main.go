@@ -299,6 +299,9 @@ func main() {
 	}
 	if hostedLogin != nil {
 		routerConfig.AuthToken = os.Getenv("AUTH_TOKEN")
+		if routerConfig.AuthToken == "dev-token" {
+			fatal("configure Clerk", errors.New("hosted login refuses the default dev-token; unset AUTH_TOKEN or configure a strong operator token"))
+		}
 		routerConfig.Clerk = hostedLogin
 		routerConfig.ClerkPublishableKey = hostedLogin.PublishableKey
 		routerConfig.ClerkFrontendAPI = hostedLogin.FrontendAPI

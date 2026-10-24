@@ -412,7 +412,8 @@ default `admin` account. Without Clerk keys, self-hosted authentication continue
 as described below, including password and OIDC support. Existing accounts and
 credentials are not removed when changing modes.
 
-Hosted mode also disables the default `dev-token` service credential. To enable
+Hosted mode disables the implicit service credential and refuses startup if
+`AUTH_TOKEN=dev-token`, including when Compose supplies that default. To enable
 operator API access, explicitly configure a strong `AUTH_TOKEN`; otherwise only
 browser sessions and scoped agent credentials authenticate private API requests.
 
@@ -443,13 +444,28 @@ The backend validates signatures, expiry, issuer, authorized party, and session
 status, then maps `clerk:<user-id>` to Exhibit's local user ID. Emails do not link
 identities. Exhibit still owns library access, administrator roles, entitlements,
 and disabled-account checks. Local disabling takes effect on the next request;
-Clerk session revocation takes effect when the current short-lived token expires.
-No long-lived Exhibit session is issued for a Clerk login.
+Clerk session revocation takes effect within the short-lived JWT/cache window
+(the profile/session cache lasts at most 30 seconds).
+No long-lived Exhibit session is issued for a Clerk login. Provider profiles and
+session creation times are refreshed through Clerk with a bounded cache; share
+recipients are resolved against current verified primary emails at grant time,
+never historical email labels in the local database.
 
 As with the existing identity-provider path, the first local user becomes the
 instance administrator. Complete that first sign-up before opening registration
 to other people. Library deletion removes Exhibit data, not the Clerk identity;
-the browser signs out afterwards and a subsequent login starts an empty library.
+all provider sessions are revoked before erasure. A durable deletion fence rejects
+sessions created at or before deletion, including after a restart or a subsequent
+fresh login. The fence includes the latest provider session timestamp to tolerate
+clock skew. A fresh login starts an empty library.
+
+Exhibit disables Clerk self-deletion for each user before admitting them, enforcing
+it through the Backend API so the account panel cannot bypass library cleanup or
+last-admin protection. Use Exhibit's profile page to erase a library. Hosted admin
+screens cannot create local accounts, reset their passwords, or promote non-Clerk
+identities; admin succession counts only enabled Clerk identities. Operators who
+delete identities directly in the Clerk Dashboard remain responsible for local
+data cleanup and administrator recovery.
 
 For this project's selected application, authenticate the CLI on the development
 machine with `npx -y clerk@latest auth login`. Link the existing application
