@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 
+	"github.com/momja/Exhibit/internal/origin"
 	"github.com/momja/Exhibit/internal/scanner"
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -20,6 +22,15 @@ type networkApprovalView struct {
 	New      bool
 	Origins  []networkApprovalOrigin
 	Warnings []scanner.Warning
+}
+
+type networkOriginWarningsView struct {
+	Warnings          []scanner.Warning
+	Origin            string
+	ConnectionBlocked bool
+	AlreadyApproved   bool
+	CanApprove        bool
+	ManageURL         string
 }
 
 func (ro *Router) networkUIArtifact(w http.ResponseWriter, r *http.Request) (*store.Artifact, string) {
@@ -52,6 +63,10 @@ func writeNetworkFragment(w http.ResponseWriter, r *http.Request, name string, d
 }
 
 func (ro *Router) networkWarningsPartial(w http.ResponseWriter, r *http.Request) {
+	if candidate := r.URL.Query().Get("origin"); candidate != "" {
+		ro.networkOriginWarningsPartial(w, r, candidate)
+		return
+	}
 	if r.URL.Query().Get("artifact") == "" {
 		writeNetworkFragment(w, r, "networkWarnings", []scanner.Warning{})
 		return
@@ -60,6 +75,43 @@ func (ro *Router) networkWarningsPartial(w http.ResponseWriter, r *http.Request)
 	if artifact != nil {
 		writeNetworkFragment(w, r, "networkWarnings", scanner.Warnings(body, artifact.SourceURL))
 	}
+}
+
+func (ro *Router) networkOriginWarningsPartial(w http.ResponseWriter, r *http.Request, candidate string) {
+	w.Header().Set("Cache-Control", "no-store")
+	viewer := ownerIDFromCtx(r.Context())
+	artifact, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(viewer), r.URL.Query().Get("artifact"))
+	if err != nil {
+		fragmentServerError(w, r, "load origin network review artifact", err)
+		return
+	}
+	if artifact == nil {
+		fragmentNotFound(w)
+		return
+	}
+	normalized, err := origin.NormalizeOrigin(candidate)
+	if err != nil {
+		http.Error(w, "Invalid network origin.", http.StatusBadRequest)
+		return
+	}
+	allowed, err := ro.connectionOrigins(r.Context(), viewer, artifact.ID, []string{normalized})
+	if err != nil {
+		fragmentServerError(w, r, "check network review connection policy", err)
+		return
+	}
+	body, err := ro.readBlobString(r.Context(), artifact.SourceBlobID)
+	if err != nil {
+		fragmentServerError(w, r, "read origin network review source", err)
+		return
+	}
+	writeNetworkFragment(w, r, "networkOriginWarnings", networkOriginWarningsView{
+		Warnings:          scanner.Warnings(body, artifact.SourceURL),
+		Origin:            normalized,
+		ConnectionBlocked: !slices.Contains(allowed, normalized),
+		AlreadyApproved:   slices.Contains(artifact.NetworkAllowlist, normalized),
+		CanApprove:        viewer > 0 && artifact.OwnerID == viewer,
+		ManageURL:         "/connections?artifact=" + url.QueryEscape(artifact.ID),
+	})
 }
 
 func (ro *Router) networkApprovalPartial(w http.ResponseWriter, r *http.Request) {

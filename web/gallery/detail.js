@@ -713,7 +713,7 @@ window.addEventListener('message', function(e) {
   const req = { id: String(d.id), audio: !!d.audio, video: !!d.video, frame, generation: previewGeneration };
   if (!req.audio && !req.video) return;
   if (typeof CONNECTION_PROTECTED === 'boolean' && CONNECTION_PROTECTED) {
-    replyMedia(req.id, false, 'Connected data must stay inside Exhibit; capture devices are unavailable in this preview.', 'NotAllowedError');
+    replyMedia(req, false, 'Connected data must stay inside Exhibit; capture devices are unavailable in this preview.', 'NotAllowedError');
     return;
   }
   // Approved means approved for every device this request named: a camera-only
