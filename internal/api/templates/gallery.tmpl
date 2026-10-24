@@ -7,6 +7,7 @@
 <title>Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
+{{template "clerkScripts" .Clerk}}
 <link rel="stylesheet" href="/assets/phosphor/regular.css">
 <link rel="stylesheet" href="/assets/gallery/tokens.css">
 <link rel="stylesheet" href="/assets/gallery/components.css">
@@ -63,6 +64,7 @@
        needs explanation or a confirmation beside it, and none of that fits a
        menu item. */}}
   <a class="btn btn-sec icon-btn" href="/profile" aria-label="Your account" title="Your account"><i class="ph ph-user-circle" aria-hidden="true"></i></a>
+{{if .Clerk}}<div data-controller="clerk" data-clerk-mode-value="user"><div data-clerk-target="mount"></div><span data-clerk-target="status" role="status"></span></div>{{end}}
 </header>
 <main>
 {{/* Cards share their tile, title, status marks, and action menu with every

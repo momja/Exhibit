@@ -37,6 +37,8 @@ import (
 // a page that cannot distinguish them would either send doomed mutations or
 // refuse legitimate ones.
 type pageCredentials struct {
+	Clerk *clerkView
+
 	// Token is the bearer credential the page's fetches carry, or "" when the
 	// visitor already has one (a session cookie the browser attaches
 	// automatically) or is entitled to none.
@@ -111,6 +113,7 @@ func (ro *Router) pageCredentials(r *http.Request) pageCredentials {
 	p := principalFromCtx(ctx)
 	readOnly := p.ReadOnly
 	return pageCredentials{
+		Clerk: ro.clerkView(),
 		Token: ro.pageToken(ctx, anonymous),
 		// Derived from the resolved Principal, not recomputed from
 		// publicVisitor: ReadOnly is its own field precisely because a future

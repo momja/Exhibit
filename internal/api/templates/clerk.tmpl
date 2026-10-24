@@ -1,0 +1,37 @@
+{{define "clerkScripts"}}{{if .}}
+<meta name="clerk-publishable-key" content="{{.PublishableKey}}">
+<meta name="clerk-frontend-api" content="{{.FrontendAPI}}">
+<script type="module" src="/assets/gallery/clerk.js"></script>
+{{end}}{{end}}
+
+{{define "clerkLogin"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Account — Exhibit</title>
+<link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
+{{template "pwaHead"}}
+<link rel="stylesheet" href="/assets/phosphor/regular.css">
+<link rel="stylesheet" href="/assets/gallery/tokens.css">
+<link rel="stylesheet" href="/assets/gallery/components.css">
+<link rel="stylesheet" href="/assets/gallery/login.css">
+{{template "clerkScripts" .Clerk}}
+</head>
+<body class="login-page">
+<main class="login login-clerk">
+<div class="login-mark">{{.LogoSVG}}</div>
+<h1 class="login-title">Exhibit</h1>
+<p class="login-sub">Your library, wherever you work.</p>
+<div data-controller="clerk" data-clerk-mode-value="{{.Mode}}" data-clerk-next-value="{{.Next}}">
+ <p data-clerk-target="status" role="status">Loading your account…</p>
+ <div data-clerk-target="mount"></div>
+ <div data-clerk-target="recovery" hidden>
+  <button class="btn btn-sec" type="button" data-action="clerk#retry">Try again</button>
+  <a class="btn btn-sec" href="/auth/logout">Sign out to switch accounts</a>
+ </div>
+</div>
+<noscript>Enable JavaScript to sign in to Exhibit.</noscript>
+</main>
+</body>
+</html>{{end}}
