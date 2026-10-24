@@ -46,6 +46,10 @@ func TestSystemPromptDescribesOnlyEnabledNetworkCapabilities(t *testing.T) {
 	assert.Contains(t, enabled, "multiple connections and other approved APIs and CDNs work together")
 	assert.Contains(t, enabled, "cannot guarantee where response data goes")
 	assert.NotContains(t, enabled, "approves its data destinations")
+	assert.Contains(t, enabled, "Read-only connections permit GET and HEAD")
+	assert.Contains(t, enabled, "even for a read-only GraphQL query")
+	assert.Contains(t, enabled, "matching connection's write capability and separate relay write consent")
+	assert.Contains(t, enabled, "use a GET alternative when write access is absent")
 
 	widget := buildSystemPrompt("", CreateOpts{NetworkRelayEnabled: true, ConnectionsEnabled: true, WidgetOnly: true})
 	assert.Contains(t, widget, "Widgets cannot use Exhibit's relay or connections")
