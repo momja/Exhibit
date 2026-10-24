@@ -62,7 +62,6 @@ func vendorFailure(engine, code string) *VendorError { return &VendorError{Engin
 type VendorProvider struct {
 	Name         string   `json:"name"`
 	Origins      []string `json:"origins"`
-	AllowWrites  bool     `json:"allow_writes"`
 	Engine       string   `json:"engine,omitempty"`
 	AuthConfigID string   `json:"auth_config_id,omitempty"`
 	Toolkit      string   `json:"toolkit,omitempty"`
@@ -350,7 +349,7 @@ func (s *Service) saveVendor(ctx context.Context, ownerID int64, name, provider,
 		}
 		spec.Origins[i] = normalized
 	}
-	r := recipe{Origins: append([]string{}, spec.Origins...), Header: "Authorization", Scheme: "Bearer ", AllowWrites: spec.AllowWrites, Sensitivity: "personal", DailyLimit: spec.DailyLimit, CacheSeconds: spec.CacheMinutes * 60, VendorProvider: provider, VendorEngine: spec.Engine, VendorSpec: &spec, VendorOwnerTag: ownerTag}
+	r := recipe{Origins: append([]string{}, spec.Origins...), Header: "Authorization", Scheme: "Bearer ", Sensitivity: "personal", DailyLimit: spec.DailyLimit, CacheSeconds: spec.CacheMinutes * 60, VendorProvider: provider, VendorEngine: spec.Engine, VendorSpec: &spec, VendorOwnerTag: ownerTag}
 	return s.save(ctx, ownerID, name, provider, "vendor", r, credential{VendorConnectionID: ref}, limits)
 }
 
@@ -359,7 +358,7 @@ func (s *Service) vendorConnectionSpec(ctx context.Context, rec *store.Connectio
 	if provider == "" {
 		provider = rec.Provider
 	}
-	spec := VendorProvider{Name: rec.Name, Origins: append([]string{}, r.Origins...), AllowWrites: r.AllowWrites, Engine: rec.Engine}
+	spec := VendorProvider{Name: rec.Name, Origins: append([]string{}, r.Origins...), Engine: rec.Engine}
 	if r.VendorSpec != nil {
 		spec = *r.VendorSpec
 		spec.Origins = append([]string{}, r.VendorSpec.Origins...)

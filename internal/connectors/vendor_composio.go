@@ -104,11 +104,7 @@ func (e composioEngine) Forward(ctx context.Context, req *http.Request, spec Ven
 		return nil, ErrEgress
 	}
 	switch req.Method {
-	case http.MethodGet, http.MethodHead:
-	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-		if !spec.Spec.AllowWrites {
-			return nil, ErrEgress
-		}
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	default:
 		return nil, vendorFailure(e.ID(), VendorRefused)
 	}

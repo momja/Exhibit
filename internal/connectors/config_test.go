@@ -155,3 +155,18 @@ func TestVendorOperatorConfigRejectsUnsupportedAndUnreviewedConfiguration(t *tes
 		})
 	}
 }
+
+// Exh-cxzb removed allow_writes. An operator map that still sets it is refused
+// with the field and provider named, not as an anonymous unknown option.
+func TestVendorOperatorConfigNamesRemovedAllowWrites(t *testing.T) {
+	cleanConfigEnv(t)
+	t.Setenv("CONNECTORS_ENABLED", "true")
+	t.Setenv("CONNECTORS_VENDOR_ENABLED", "true")
+	t.Setenv("CONNECTORS_VENDOR_NAMESPACE", "instance")
+	t.Setenv("CONNECTORS_COMPOSIO_API_KEY", "composio-operator-key")
+	t.Setenv("CONNECTORS_VENDOR_PROVIDERS", `{"linear":{"engine":"composio","auth_config_id":"ac_linear","origins":["https://api.linear.app"],"allow_writes":false}}`)
+	_, err := ConfigFromEnv()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"linear" sets allow_writes`)
+	assert.NotContains(t, err.Error(), "composio-operator-key")
+}

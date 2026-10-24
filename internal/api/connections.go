@@ -3,7 +3,6 @@ package api
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -108,29 +107,6 @@ func (ro *Router) deleteConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(204)
-}
-
-func (ro *Router) updateConnectionPermissions(w http.ResponseWriter, r *http.Request) {
-	s := ro.connectionService(w, r)
-	if s == nil {
-		return
-	}
-	var input map[string]json.RawMessage
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	var allowWrites *bool
-	raw, present := input["allow_writes"]
-	if len(input) != 1 || !present || json.Unmarshal(raw, &allowWrites) != nil || allowWrites == nil {
-		writeError(w, http.StatusBadRequest, "provide only allow_writes as true or false")
-		return
-	}
-	connection, err := s.UpdatePermissions(r.Context(), ownerIDFromCtx(r.Context()), urlParamID(r, "connectionID"), *allowWrites)
-	if err != nil {
-		connectionError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, connection)
 }
 
 func (ro *Router) connectionArtifact(w http.ResponseWriter, r *http.Request) (*connectors.Service, *store.Artifact) {

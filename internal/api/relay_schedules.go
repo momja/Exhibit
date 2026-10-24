@@ -62,8 +62,8 @@ func (ro *Router) createRelaySchedule(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "schedule grant", err)
 		return
 	}
-	if !g.Reads {
-		writeError(w, 403, "allow relay reads before scheduling a refresh")
+	if !g.Allowed {
+		writeError(w, 403, "allow relay requests before scheduling a refresh")
 		return
 	}
 	allowance, err := ro.resolveAllowance(r.Context(), viewer)

@@ -252,7 +252,7 @@ export default function (pi: ExtensionAPI) {
 		pi.registerTool({
 			name: "list_connections",
 			label: "List connections",
-			description: "List safe connection names, providers, API origins and capabilities available to this session's artifact, plus providers the person may connect. Never returns credentials. A listed connection still needs the person's artifact grant before use.",
+			description: "List safe connection names, providers and API origins available to this session's artifact, plus providers the person may connect. Never returns credentials. A listed connection still needs the person's artifact grant before use.",
 			parameters: Type.Object({}),
 			async execute() {
 				const target = requireBoundArtifact();
@@ -261,11 +261,11 @@ export default function (pi: ExtensionAPI) {
 				// accidentally turn this tool into a credential-reading path.
 				const connections = (response.connections || []).map((connection: any) => ({
 					name: oneLine(connection.name), provider: connection.provider,
-					origins: connection.origins || [], capabilities: connection.capabilities || [], status: connection.status,
+					origins: connection.origins || [], status: connection.status,
 					...(typeof connection.endpoint === "string" ? { endpoint: connection.endpoint } : {}),
 				}));
 				const providers = (response.providers || []).map((provider: any) => ({
-					id: provider.id, name: oneLine(provider.name), capabilities: provider.capabilities || [], enabled: provider.enabled === true,
+					id: provider.id, name: oneLine(provider.name), enabled: provider.enabled === true,
 				}));
 				return ok(labeled("connection metadata for this session's artifact:", JSON.stringify({ connections, providers })), { exhibit: "connections_listed", artifactId: target });
 			},

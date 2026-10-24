@@ -123,7 +123,7 @@ func TestRetainedProvenanceDoesNotRestrictApprovedRelayWithAcquisitionDisabled(t
 	require.NoError(t, err)
 	require.NoError(t, service.Ungrant(t.Context(), 1, id, c.ID))
 	s, _ := ro.relayStore()
-	require.NoError(t, s.SetRelayGrant(t.Context(), 1, id, store.RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(t.Context(), 1, id, store.RelayGrant{Allowed: true}))
 	for _, enabled := range []bool{false, true} {
 		if enabled {
 			ro.cfg.Connections = service
@@ -158,7 +158,7 @@ func TestConnectionDataResetDiscardsAnInFlightScheduledResponse(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, service.Ungrant(t.Context(), 1, id, c.ID))
 	s, _ := ro.relayStore()
-	require.NoError(t, s.SetRelayGrant(t.Context(), 1, id, store.RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(t.Context(), 1, id, store.RelayGrant{Allowed: true}))
 	done := make(chan string, 1)
 	go func() {
 		_, reason := ro.refreshSchedule(t.Context(), store.RelaySchedule{ArtifactID: id, ViewerID: 1, URL: upstream.URL, StateKey: "balance"})

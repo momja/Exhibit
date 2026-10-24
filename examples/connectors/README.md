@@ -45,7 +45,7 @@ jq -n --rawfile body examples/connectors/arxiv.html \
 ## Fieldnotes: unauthenticated relay
 
 Open Fieldnotes in Exhibit's artifact frame. Review and approve
-`https://export.arxiv.org`, allow relay reads in **Connections & relay**, and
+`https://export.arxiv.org`, allow relay requests in **Connections & relay**, and
 search for a topic. Existing origin approvals alone do not enable the relay.
 The app waits for a search action before making any request and spaces repeated
 requests by at least three seconds, as the
@@ -57,7 +57,7 @@ requests. A failed search keeps saved papers and the previous results available.
 Create a **Bearer token** connection named HTTPbin example with origin
 `https://httpbin.org` and a disposable demonstration token. HTTPbin accepts any
 bearer value. Grant it to **Connection check**, approve its origin, and open the
-artifact. Select **Check connection** and allow relay reads. The result shows
+artifact. Select **Check connection** and allow relay requests. The result shows
 `authenticated: true`; the echoed token is redacted before it reaches the page.
 This demonstrates the complete connection form, grant, consent and authenticated
 request without needing an external account.

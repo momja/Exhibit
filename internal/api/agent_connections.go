@@ -14,19 +14,17 @@ import (
 // connection or persistence record. No future credential field can silently
 // become part of the model's context when a connector implementation changes.
 type agentConnectionMetadata struct {
-	Name         string   `json:"name"`
-	Provider     string   `json:"provider"`
-	Origins      []string `json:"origins"`
-	Capabilities []string `json:"capabilities"`
-	Status       string   `json:"status"`
-	Endpoint     string   `json:"endpoint,omitempty"`
+	Name     string   `json:"name"`
+	Provider string   `json:"provider"`
+	Origins  []string `json:"origins"`
+	Status   string   `json:"status"`
+	Endpoint string   `json:"endpoint,omitempty"`
 }
 
 type agentConnectionProvider struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Capabilities []string `json:"capabilities"`
-	Enabled      bool     `json:"enabled"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
 }
 
 func (ro *Router) connectionRequestStore(w http.ResponseWriter) store.ConnectionRequestStore {
@@ -66,14 +64,14 @@ func (ro *Router) agentConnections(w http.ResponseWriter, r *http.Request) {
 	for _, connection := range connections {
 		metadata = append(metadata, agentConnectionMetadata{
 			Name: connection.Name, Provider: connection.Provider, Origins: connection.Origins,
-			Capabilities: connection.Capabilities, Status: connection.Status,
+			Status:   connection.Status,
 			Endpoint: connection.Endpoint,
 		})
 	}
 	providers := make([]agentConnectionProvider, 0)
 	for _, provider := range ro.cfg.Connections.Providers() {
 		providers = append(providers, agentConnectionProvider{
-			ID: provider.ID, Name: provider.Name, Capabilities: provider.Capabilities, Enabled: provider.Enabled,
+			ID: provider.ID, Name: provider.Name, Enabled: provider.Enabled,
 		})
 	}
 	pending, err := requests.ListArtifactConnectionRequests(r.Context(), ownerID, artifactID)

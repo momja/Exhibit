@@ -7,7 +7,7 @@ import { requestRelay } from './relay-request.js';
 // authority. Upstream bytes are returned as data and never touch app markup.
 export default class extends Controller {
   static values = { artifactId: String, frameSelector: String, policy: String };
-  static targets = ['consent', 'destination', 'writeCopy', 'readCopy', 'error', 'allow', 'framePolicy'];
+  static targets = ['consent', 'destination', 'error', 'allow', 'framePolicy'];
 
   connect() {
     // An initially unbound agent page can create its first artifact. The
@@ -158,15 +158,10 @@ export default class extends Controller {
     if (!response.ok) throw new Error('Could not read relay permissions.');
     const grant = await response.json();
     if (!this.active || signal.aborted) return false;
-    const writes = !['GET', 'HEAD'].includes(input.method.toUpperCase());
-    if (grant.reads && (!writes || grant.writes)) return true;
+    if (grant.allowed) return true;
     if (!this.hasConsentTarget) return false;
     this.destinationTarget.textContent = new URL(input.url).origin;
-    this.writeCopyTarget.hidden = !writes;
-    this.readCopyTarget.hidden = writes;
-    this.allowTarget.textContent = writes ? 'Allow reads and writes' : 'Allow reads';
     this.errorTarget.textContent = '';
-    this.nextGrant = { reads: true, writes: writes || grant.writes };
     this.returnFocus = document.activeElement;
     return new Promise(resolve => {
       const abort = () => this.finishConsent(false);
@@ -182,7 +177,7 @@ export default class extends Controller {
     this.allowTarget.disabled = true;
     try {
       const response = await viewerFetch('/api/artifacts/' + encodeURIComponent(this.artifactIdValue) + '/relay-grant', {
-        method: 'PUT', body: JSON.stringify(this.nextGrant)
+        method: 'PUT', body: JSON.stringify({ allowed: true })
       });
       if (!response.ok) throw new Error('Could not save relay permission.');
       if (this.resolveConsent === resolve && this.generation === generation) this.finishConsent(true);

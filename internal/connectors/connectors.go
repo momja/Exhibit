@@ -106,7 +106,6 @@ type Connection struct {
 	Provider             string     `json:"provider"`
 	Kind                 string     `json:"kind"`
 	Origins              []string   `json:"origins"`
-	Capabilities         []string   `json:"capabilities"`
 	Sensitivity          string     `json:"sensitivity"`
 	Status               string     `json:"status"`
 	CreatedAt            time.Time  `json:"created_at"`
@@ -122,22 +121,21 @@ type Connection struct {
 }
 
 type Provider struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Kind         string   `json:"kind"`
-	Description  string   `json:"description"`
-	Capabilities []string `json:"capabilities"`
-	Sensitivity  string   `json:"sensitivity"`
-	Enabled      bool     `json:"enabled"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Kind        string `json:"kind"`
+	Description string `json:"description"`
+	Sensitivity string `json:"sensitivity"`
+	Enabled     bool   `json:"enabled"`
 }
 
 func (s *Service) Providers() []Provider {
 	return []Provider{
-		{"api-key", "API key", "native", "A key injected into a reviewed header at the origin you choose.", []string{"read"}, "personal", true},
-		{"bearer", "Bearer token", "native", "A token sent in the Authorization header to one origin.", []string{"read"}, "personal", true},
-		{"basic", "HTTP Basic", "native", "A username and password, or a pasted HTTPS URL containing both. Credentials are sent only to that origin.", []string{"read"}, "personal", true},
-		{"github", "GitHub", "oauth", "Connect GitHub using the operator's registered OAuth application.", []string{"read profile", "read repositories"}, "personal", s.cfg.OAuthEnabled && s.cfg.GitHub.ClientID != "" && s.cfg.GitHub.ClientSecret != ""},
-		{"vendor", "Managed OAuth", "vendor", "Connect a provider approved by this instance's operator.", []string{"read"}, "personal", s.cfg.VendorEnabled && s.cfg.Vendor.configured()},
+		{"api-key", "API key", "native", "A key injected into a reviewed header at the origin you choose.", "personal", true},
+		{"bearer", "Bearer token", "native", "A token sent in the Authorization header to one origin.", "personal", true},
+		{"basic", "HTTP Basic", "native", "A username and password, or a pasted HTTPS URL containing both. Credentials are sent only to that origin.", "personal", true},
+		{"github", "GitHub", "oauth", "Connect GitHub using the operator's registered OAuth application.", "personal", s.cfg.OAuthEnabled && s.cfg.GitHub.ClientID != "" && s.cfg.GitHub.ClientSecret != ""},
+		{"vendor", "Managed OAuth", "vendor", "Connect a provider approved by this instance's operator.", "personal", s.cfg.VendorEnabled && s.cfg.Vendor.configured()},
 	}
 }
 
@@ -156,7 +154,6 @@ type CreateRequest struct {
 	AccessURL          string `json:"access_url,omitempty"`
 	DailyLimit         int    `json:"daily_limit,omitempty"`
 	CacheMinutes       int    `json:"cache_minutes,omitempty"`
-	AllowWrites        bool   `json:"allow_writes,omitempty"`
 	VendorProvider     string `json:"vendor_provider,omitempty"`
 	VendorConnectionID string `json:"vendor_connection_id,omitempty"`
 }
@@ -165,7 +162,6 @@ type recipe struct {
 	Origins        []string        `json:"origins"`
 	Header         string          `json:"header"`
 	Scheme         string          `json:"scheme"`
-	AllowWrites    bool            `json:"allow_writes"`
 	Sensitivity    string          `json:"sensitivity"`
 	DailyLimit     int             `json:"daily_limit"`
 	CacheSeconds   int             `json:"cache_seconds"`
@@ -209,7 +205,7 @@ func (s *Service) Create(ctx context.Context, ownerID int64, in CreateRequest, l
 	if in.AccessURL != "" && provider != "basic" {
 		return nil, fmt.Errorf("%w: a credential URL is supported only for Basic authentication", ErrInvalid)
 	}
-	r := recipe{Sensitivity: "personal", AllowWrites: in.AllowWrites, DailyLimit: in.DailyLimit, CacheSeconds: in.CacheMinutes * 60}
+	r := recipe{Sensitivity: "personal", DailyLimit: in.DailyLimit, CacheSeconds: in.CacheMinutes * 60}
 	c := credential{}
 	switch provider {
 	case "api-key", "bearer", "basic":
@@ -348,10 +344,6 @@ func (s *Service) metadata(ctx context.Context, rec *store.ConnectionRecord) (*C
 	if err := json.Unmarshal([]byte(rec.RecipeJSON), &r); err != nil {
 		return nil, errors.New("invalid stored connection policy")
 	}
-	caps := []string{"read"}
-	if r.AllowWrites {
-		caps = append(caps, "write")
-	}
 	used, err := s.cfg.Store.ConnectionRequestsToday(ctx, rec.ID, s.cfg.Now())
 	if err != nil {
 		return nil, err
@@ -360,7 +352,7 @@ func (s *Service) metadata(ctx context.Context, rec *store.ConnectionRecord) (*C
 	if r.Endpoint != "" {
 		endpoint = "/" // The private base path is never metadata.
 	}
-	connection := &Connection{ID: rec.ID, Name: rec.Name, Provider: rec.Provider, Kind: rec.Kind, Origins: r.Origins, Capabilities: caps, Sensitivity: r.Sensitivity, Status: rec.Status, CreatedAt: rec.CreatedAt, LastUsedAt: rec.LastUsedAt, DailyLimit: r.DailyLimit, RequestsToday: used, CacheMinutes: r.CacheSeconds / 60, Endpoint: endpoint, Header: r.Header, Engine: "native", DeliveryMode: VendorInject}
+	connection := &Connection{ID: rec.ID, Name: rec.Name, Provider: rec.Provider, Kind: rec.Kind, Origins: r.Origins, Sensitivity: r.Sensitivity, Status: rec.Status, CreatedAt: rec.CreatedAt, LastUsedAt: rec.LastUsedAt, DailyLimit: r.DailyLimit, RequestsToday: used, CacheMinutes: r.CacheSeconds / 60, Endpoint: endpoint, Header: r.Header, Engine: "native", DeliveryMode: VendorInject}
 	if rec.Status == "reconnect" {
 		connection.Status = VendorNeedsReconnect
 		connection.ReconnectRecommended = true
@@ -602,7 +594,7 @@ func (s *Service) grantMetadata(ctx context.Context, g store.ConnectionGrantReco
 	if err != nil {
 		return nil, err
 	}
-	consent := "Can " + strings.Join(meta.Capabilities, ", ") + " using " + meta.Name + ". Credentials are sent only to: " + strings.Join(meta.Origins, ", ") + ". Other network access follows this artifact's independently approved origins."
+	consent := "Uses " + meta.Name + ". The provider's permissions for this credential decide what it can read or change. Credentials are sent only to: " + strings.Join(meta.Origins, ", ") + ". Other network access follows this artifact's independently approved origins."
 	if meta.DeliveryMode == VendorForward {
 		consent += " Requests and responses pass through " + meta.Engine + " in forward mode."
 	}
@@ -752,9 +744,6 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 		// Operator API keys are also credentials. A vendor may reflect them in
 		// a proxy payload; unlike opaque provider tokens, these are known here.
 		c.ExtraSecrets = append(c.ExtraSecrets, s.vendorOperatorSecrets()...)
-	}
-	if req.Method != http.MethodGet && req.Method != http.MethodHead && !r.AllowWrites {
-		return nil, fmt.Errorf("%w: connection grants read access only", ErrEgress)
 	}
 	// A generic virtual root hides every pasted URL's private base path.
 	// Redirects are checked against the same base before reinjecting a secret.

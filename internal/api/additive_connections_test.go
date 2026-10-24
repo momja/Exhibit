@@ -30,7 +30,7 @@ func TestRelayStandaloneCacheSurvivesUnrelatedConnectionChanges(t *testing.T) {
 	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = ro.cfg.Connections
 	s, _ := ro.relayStore()
-	require.NoError(t, s.SetRelayGrant(ctx, 1, id, store.RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(ctx, 1, id, store.RelayGrant{Allowed: true}))
 	request := relayRequest{URL: public.URL}
 	for range 2 {
 		w := relayCall(t, ro, id, request, "")
@@ -112,7 +112,7 @@ func TestConnectionsAddCredentialsWithoutNarrowingApprovedTraffic(t *testing.T) 
 	require.NoError(t, err)
 	assert.Equal(t, before, after, "changing only legacy destination metadata cannot invalidate the host")
 	s, _ := ro.relayStore()
-	require.NoError(t, s.SetRelayGrant(ctx, 1, id, store.RelayGrant{Reads: true}))
+	require.NoError(t, s.SetRelayGrant(ctx, 1, id, store.RelayGrant{Allowed: true}))
 	for _, target := range base {
 		w := relayCall(t, ro, id, relayRequest{URL: target, Headers: map[string]string{
 			"Authorization": "Bearer forged", "X-API-Key": "forged",

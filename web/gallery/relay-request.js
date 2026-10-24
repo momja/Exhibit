@@ -1,5 +1,6 @@
-// Only Exhibit throttle refusals are retried here. Provider responses, writes,
-// quota failures and permission changes retain their normal observable result.
+// Only Exhibit throttle refusals of GET/HEAD are retried here. Other methods,
+// provider responses, quota failures and permission changes retain their
+// normal observable result.
 export async function requestRelay(send, method, signal) {
   const deadline = Date.now() + 60000;
   const read = ['GET', 'HEAD'].includes(method.toUpperCase());
