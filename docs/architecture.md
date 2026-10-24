@@ -1035,6 +1035,11 @@ encrypted credentials and an encrypted private base path. The relay maps
 artifact paths under that base without disclosing it. User-selected daily request
 limits and encrypted GET response reuse are enforced per connection across
 artifacts and devices.
+Owners can edit native API-key, Bearer and Basic write permissions in trusted
+app chrome without replacing encrypted credentials or artifact grants. Edits
+serialize with requests and revocation. Connection capabilities participate in
+each attached artifact's policy binding, so an open artifact must renew its
+authority after permission changes; per-artifact relay consent remains separate.
 No provider-specific API-key or Basic connector, or setup-token claim code, is shipped.
 Native OAuth remains limited to the reviewed provider set.
 

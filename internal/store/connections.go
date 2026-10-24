@@ -323,6 +323,19 @@ func (s *SQLiteStore) MarkVendorConnectionReconnect(ctx context.Context, ownerID
 func (s *SQLiteStore) UpdateConnectionSecret(ctx context.Context, ownerID int64, id, encrypted string) error {
 	return s.exactlyOneRow(ctx, `UPDATE connections SET encrypted_secret=? WHERE id=? AND owner_id=? AND status='active'`, encrypted, id, ownerID)
 }
+
+// UpdateConnectionPermissions changes only the write permission of an active
+// native connection. Updating the JSON path preserves unknown recipe fields
+// and never reads or replaces the encrypted credential.
+func (s *SQLiteStore) UpdateConnectionPermissions(ctx context.Context, ownerID int64, id string, allowWrites bool) error {
+	permission := "false"
+	if allowWrites {
+		permission = "true"
+	}
+	return s.exactlyOneRow(ctx, `UPDATE connections SET recipe_json=json_set(recipe_json,'$.allow_writes',json(?))
+ WHERE id=? AND owner_id=? AND status='active' AND kind='native' AND provider IN ('api-key','bearer','basic')`, permission, id, ownerID)
+}
+
 func (s *SQLiteStore) TouchConnection(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE connections SET last_used_at=datetime('now') WHERE id=? AND status='active'`, id)
 	return err

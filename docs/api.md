@@ -606,6 +606,7 @@ policy; the artifact bridge supplies it without exposing it to artifact code.
 ```text
 GET    /api/connections                         Safe connection metadata and providers
 POST   /api/connections                         Acquire a native connection in app chrome
+PATCH  /api/connections/:connectionID           Change native connection write permission
 DELETE /api/connections/:connectionID           Revoke a connection
 POST   /api/connections/oauth/github/begin      Begin bound GitHub consent
 GET    /api/connections/oauth/github/callback   Complete one-shot bound consent
@@ -651,6 +652,17 @@ virtual root endpoint. An artifact fetching `/accounts` at that origin reaches
 Optional `daily_limit` and `cache_minutes` cap daily provider requests and reuse
 responses across all artifacts and devices; zero means unlimited requests or
 no response reuse, respectively.
+`PATCH /api/connections/:connectionID` accepts `{allow_writes: boolean}` for
+an active native API key, Bearer or Basic connection owned by the current person.
+This human-only action changes whether that credential may make API writes
+across all artifacts using it. It preserves the encrypted credential and its
+identity, origin, header, daily limit and response reuse settings. It does not
+change provider-side scopes or per-artifact relay consent; an artifact still
+needs its separate relay write grant and approved origin. The trusted UI
+refreshes its cards from the server after success, and affected artifacts must
+be reopened under the updated authority. OAuth/managed scope changes require
+reconnection through their reviewed consent flow.
+
 A grant accepts `connection_id` and explicit `share_with_recipients` consent.
 Grants are additive: artifact origin approvals remain the network boundary,
 with credentials attached only at matching API origins. Multiple connections and

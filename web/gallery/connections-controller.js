@@ -105,6 +105,34 @@ export default class extends Controller {
     });
   }
 
+  async savePermissions(event) {
+    const form = event.currentTarget;
+    const editor = form.closest('.connection-permissions');
+    const error = form.querySelector('[data-connection-permissions-error]');
+    await this.action(event, async () => {
+      error.textContent = '';
+      try {
+        const data = new FormData(form);
+        await this.request('/api/connections/' + encodeURIComponent(form.dataset.connectionId), {
+          method: 'PATCH', body: JSON.stringify({ allow_writes: data.get('allow_writes') === 'on' })
+        });
+        this.changed('Permissions saved. Reopen affected artifacts to use the updated permissions.');
+      } catch (failure) {
+        editor.open = true;
+        error.textContent = failure.message;
+      }
+    });
+  }
+
+  cancelPermissions(event) {
+    const editor = event.currentTarget.closest('.connection-permissions');
+    const form = editor.querySelector('form');
+    form.reset();
+    form.querySelector('[data-connection-permissions-error]').textContent = '';
+    editor.open = false;
+    editor.querySelector('summary').focus();
+  }
+
   grant(event) {
     this.action(event, async () => {
       const data = new FormData(event.currentTarget);
