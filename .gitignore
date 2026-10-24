@@ -37,3 +37,7 @@ node_modules/
 /.claude/
 
 /.paper-canvas/
+
+# Clerk CLI writes local API keys here. Never commit credentials.
+.env
+.env.*

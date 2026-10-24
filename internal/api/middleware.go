@@ -103,7 +103,7 @@ func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if ro.cfg.AuthToken == "" {
+		if ro.cfg.AuthToken == "" && !ro.loginEnabled() {
 			next.ServeHTTP(w, r)
 			return
 		}

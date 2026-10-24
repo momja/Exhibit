@@ -302,6 +302,17 @@ func (ro *Router) grantShares(w http.ResponseWriter, r *http.Request, ownerID in
 // That is account-management work (av-g2dx, av-utap), not sharing work, and is
 // deliberately not pulled in here.
 func (ro *Router) resolveRecipient(ctx context.Context, name string) (*store.User, error) {
+	if ro.cfg.Clerk != nil {
+		subject, err := ro.cfg.Clerk.ResolveEmail(ctx, auth.NormalizeLoginName(name))
+		if err != nil {
+			return nil, err
+		}
+		if subject == "" {
+			return nil, store.ErrNotFound
+		}
+		return ro.cfg.Store.GetUserByExternalID(ctx, subject)
+	}
+
 	u, err := ro.cfg.Store.GetUserByExternalID(ctx, auth.LocalExternalID(name))
 	if err == nil {
 		return u, nil

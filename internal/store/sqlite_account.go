@@ -11,6 +11,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 // AccountSummary is what deleting an account would destroy, counted so the
@@ -109,11 +110,36 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 // operator who really means it still has the CLI. ErrNotFound when there is no
 // such account.
 func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string, error) {
+	return s.deleteAccount(ctx, userID, false, 0)
+}
+
+// DeleteHostedAccount adds a durable session fence to the ordinary erasure.
+// Keep it after deletion: it contains no library payload, only the information
+// required to refuse credentials issued before erasure, across server restarts.
+// sessionCutoff is the largest provider session creation time observed during
+// revocation, so even provider timestamps ahead of our wall clock are fenced.
+func (s *SQLiteStore) DeleteHostedAccount(ctx context.Context, userID int64, sessionCutoff int64) ([]string, error) {
+	return s.deleteAccount(ctx, userID, true, sessionCutoff)
+}
+
+func (s *SQLiteStore) deleteAccount(ctx context.Context, userID int64, hosted bool, sessionCutoff int64) ([]string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }() // no-op once committed
+
+	guard := lastEnabledAdminGuard
+	if hosted {
+		guard = lastEnabledHostedAdminGuard
+		// The guard below may refuse deletion; rollback also removes this fence.
+		if _, err := tx.ExecContext(ctx, `INSERT INTO hosted_account_deletions (external_id, deleted_at_ms)
+			SELECT external_id, ? FROM users WHERE id=? AND substr(external_id,1,6)='clerk:'
+			ON CONFLICT(external_id) DO UPDATE SET deleted_at_ms=MAX(deleted_at_ms,excluded.deleted_at_ms)`, max(time.Now().UnixMilli(), sessionCutoff), userID); err != nil {
+			return nil, err
+		}
+		guard = "substr(external_id,1,6)='clerk:' AND (" + guard + ")"
+	}
 
 	// Revoke durable write authority in the same transaction as erasure. An
 	// unbound create may already hold its operation guard while staging bytes:
@@ -137,7 +163,7 @@ func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string
 	// A refusal rolls back the execution fence above along with everything
 	// else in this transaction.
 	res, err := tx.ExecContext(ctx,
-		"DELETE FROM users WHERE id = ?1 AND "+lastEnabledAdminGuard, userID)
+		"DELETE FROM users WHERE id = ?1 AND "+guard, userID)
 	if err != nil {
 		return nil, err
 	}

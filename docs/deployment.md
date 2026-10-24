@@ -39,12 +39,12 @@ origins and a `dev-token` auth token, which is fine for trying it out locally.
 Env vars, all optional except `AUTH_TOKEN`.
 
 > [!NOTE]
-> Out of the box Exhibit is single-user: there is no login, and `AUTH_TOKEN` is
-> a single shared static token, not a real auth boundary. If you're exposing an
-> instance beyond your own machine, give it a login — see
-> [Logging in](#3-logging-in-optional) for the three supported ways, two of
-> which also give you more than one user — or be comfortable with the
-> consequences of running without one.
+> **Self-hosted authentication is the default; Clerk is opt-in.** A fresh instance
+> with no authentication configuration creates a local `admin` account with
+> password `changeme`; change it after first login. You can use local accounts or
+> configure your own OIDC provider without a Clerk account, keys, or service.
+> See [Logging in](#3-logging-in-optional). `AUTH_TOKEN` is a separate API credential.
+
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
@@ -374,6 +374,106 @@ Single-quote the hash: it contains `$`, which your shell will otherwise eat.
 
 To combine it with §3.3, set both: the login page then offers the password form
 and a button through to your provider.
+
+### Verify a deployment without Clerk
+
+The same built server supports both deployment modes; no separate build or
+source changes are needed. Leave both `CLERK_PUBLISHABLE_KEY` and
+`CLERK_SECRET_KEY` unset for self-hosting. The server does not automatically load
+`.env.local`; only explicitly passing it to a process launcher loads those keys.
+
+Run this smoke test after building the server and its assets:
+
+```bash
+python3 scripts/smoke-self-hosted.py /absolute/path/to/server
+```
+
+It starts the binary with an explicit clean environment and temporary database,
+then verifies default local login, rejection of wrong passwords and anonymous
+API access, authenticated API access, and immediate session revocation at logout.
+It also checks that login and gallery HTML contain no Clerk bootstrap. Its
+process and temporary database are cleaned up afterwards. OIDC discovery,
+exchange, and token validation are covered by `go test ./internal/auth`.
+
+### Hosted Exhibit: Clerk
+
+Set `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` to enable hosted login.
+Both are required; partial configuration fails startup. Set `APP_ORIGIN` to the
+exact public origin, including scheme and port, because session tokens are
+restricted to that origin. The secret key is used only by the Go backend.
+`RENDER_ORIGIN` must use a different hostname from `APP_ORIGIN`, even during
+development: Clerk's short-lived cookie is readable by JavaScript, and cookies
+are not isolated by port. Startup rejects a shared hostname so artifact code
+cannot read the hosted session cookie.
+
+Clerk mode takes precedence over local-password and OIDC configuration. It does
+not register those login routes, accept old Exhibit session cookies, or seed the
+default `admin` account. Without Clerk keys, self-hosted authentication continues
+as described below, including password and OIDC support. Existing accounts and
+credentials are not removed when changing modes.
+
+Hosted mode disables the implicit service credential and refuses startup if
+`AUTH_TOKEN=dev-token`, including when Compose supplies that default. To enable
+operator API access, explicitly configure a strong `AUTH_TOKEN`; otherwise only
+browser sessions and scoped agent credentials authenticate private API requests.
+
+The project uses Clerk's Go SDK and the JavaScript SDK, without introducing a
+frontend bundler. `/auth/login` and `/auth/signup` mount Clerk's account controls;
+the library header adds the signed-in user menu. Clerk's scripts load from the
+application's Frontend API domain only in hosted mode. Self-hosters do not load
+Clerk scripts or contact Clerk.
+
+Clerk's appearance settings map to Exhibit tokens in
+`web/gallery/clerk-appearance.js`, so account components share the app's
+light/dark colors, typography, field borders, and button styling. The browser
+SDK and UI bundle versions are pinned in `clerk-client.js` for predictable
+component styling.
+
+Passkeys are enabled on the selected development instance, including autofill
+and the sign-in button. After signing up with email or a social provider, open
+the profile menu, **Manage account → Security**, and add a passkey. Enrollment
+requires a secure browser context; use the HTTPS preview. Passkeys are scoped
+to their registration domain, so enroll separately on the eventual production
+domain. Production configuration remains a separate deployment step.
+
+[Desktop sign-in](screenshots/Exh-wi2y/01-signin-desktop.png) ·
+[Mobile sign-up](screenshots/Exh-wi2y/02-signup-mobile.png)
+
+Clerk verifies browser sessions and refreshes its short-lived `__session` cookie.
+The backend validates signatures, expiry, issuer, authorized party, and session
+status, then maps `clerk:<user-id>` to Exhibit's local user ID. Emails do not link
+identities. Exhibit still owns library access, administrator roles, entitlements,
+and disabled-account checks. Local disabling takes effect on the next request;
+Clerk session revocation takes effect within the short-lived JWT/cache window
+(the profile/session cache lasts at most 30 seconds).
+No long-lived Exhibit session is issued for a Clerk login. Provider profiles and
+session creation times are refreshed through Clerk with a bounded cache; share
+recipients are resolved against current verified primary emails at grant time,
+never historical email labels in the local database.
+
+As with the existing identity-provider path, the first local user becomes the
+instance administrator. Complete that first sign-up before opening registration
+to other people. Library deletion removes Exhibit data, not the Clerk identity;
+all provider sessions are revoked before erasure. A durable deletion fence rejects
+sessions created at or before deletion, including after a restart or a subsequent
+fresh login. The fence includes the latest provider session timestamp to tolerate
+clock skew. A fresh login starts an empty library.
+
+Exhibit disables Clerk self-deletion for each user before admitting them, enforcing
+it through the Backend API so the account panel cannot bypass library cleanup or
+last-admin protection. Use Exhibit's profile page to erase a library. Hosted admin
+screens cannot create local accounts, reset their passwords, or promote non-Clerk
+identities; admin succession counts only enabled Clerk identities. Operators who
+delete identities directly in the Clerk Dashboard remain responsible for local
+data cleanup and administrator recovery.
+
+For this project's selected application, authenticate the CLI on the development
+machine with `npx -y clerk@latest auth login`. Link the existing application
+`app_3L7s3OLDRhgo3j6lkYE3xOwfS19` and pull development keys using the CLI. Never
+create an accountless replacement. Go does not automatically load `.env` files;
+provide these variables through the process launcher or deployment secret store.
+Use the selected application's production instance and configure its domain
+before production deployment.
 
 ### 3.3 Delegate login to an OIDC provider
 

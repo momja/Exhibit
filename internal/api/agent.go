@@ -479,7 +479,7 @@ func (ro *Router) authorizeEventStream(r *http.Request) (Principal, bool) {
 	if ownerID, ok := ro.sessionUser(r); ok {
 		return Principal{OwnerID: ownerID, Kind: PrincipalSession}, true
 	}
-	if ro.cfg.AuthToken == "" {
+	if ro.cfg.AuthToken == "" && !ro.loginEnabled() {
 		return Principal{OwnerID: defaultOwnerID, Kind: PrincipalNone}, true
 	}
 	// The ticket names the owner it was minted for, so redeeming it resolves
