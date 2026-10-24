@@ -61,8 +61,15 @@ run. CI forbids focused tests. One worker and zero retries keep the first
 failure visible; `retain-on-failure` preserves its trace. App startup and test
 execution have bounded timeouts.
 
-GitHub Actions runs **Browser regression** on every PR targeting main, pushes
-to main, and manual dispatch on GitHub-hosted Ubuntu 24.04. It installs Chromium,
+GitHub Actions reports **Browser regression** on every PR targeting main, pushes
+to main, and manual dispatch on GitHub-hosted Ubuntu 24.04. Automatic runs whose
+entire diff is confined to `.tickets/` report success without installing tools,
+building, or running tests. Mixed changes run the full suite; manual dispatch
+always runs it. The workflow itself stays unfiltered so ticket-only changes
+still receive the required check. PR comparisons cover the whole proposed merge,
+and renames into or out of `.tickets/` check both paths.
+
+For other changes, it installs Chromium,
 builds assets/server, runs Go tests (including the gallery Node suite), verifies
 the existing Stimulus Chromium tests passed rather than skipped, then runs
 Playwright. Missing optional S3/Pi integrations remain outside this gate.
