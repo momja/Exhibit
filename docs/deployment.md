@@ -6,9 +6,6 @@
 
 ## 1. Run it
 
-For an agent to install dependencies, save configuration, and verify Exhibit on
-your machine, use the [copy-paste agent setup guides](agent-setup.md).
-
 Clone the repo:
 
 ```bash

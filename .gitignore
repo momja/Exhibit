@@ -41,6 +41,3 @@ node_modules/
 # Clerk CLI writes local API keys here. Never commit credentials.
 .env
 .env.*
-
-# Machine-local launchers, Compose overlay, Pi runtime, and setup logs.
-/.exhibit-setup/

@@ -16,23 +16,22 @@ Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs
 
 ### Set up with an agent
 
-Paste this into a coding agent that can run commands on the machine where you
-want Exhibit installed:
+Copy this into a coding agent with terminal access to the machine where you want
+Exhibit installed:
 
 ```text
-Set up Exhibit on this machine. Use https://github.com/momja/Exhibit and read
-docs/agent-setup.md, then follow docs/agent-setup-compose.md. Perform the setup,
-including installing missing dependencies, saving environment configuration,
-starting Exhibit, and verifying it works. Default to a local-only Docker Compose
-installation. Inspect existing tools, configuration, and data before changing
-anything, and preserve them on re-runs. Ask me only for choices or credentials
-you cannot infer; let me enter secrets locally. Finish with the reachable URLs,
-data/config locations, restart/log commands, and any unfinished verification.
-```
+Clone https://github.com/momja/Exhibit.git (or reuse an existing checkout), read
+README.md and docs/deployment.md, and follow those instructions to install any
+missing dependencies and deploy Exhibit on this machine. Choose a suitable
+deployment method, carry out the setup, verify it works, and show me how to open
+Exhibit and start using it.
 
-Prefer a source build? Use the same prompt with `docs/agent-setup-source.md`
-in place of `docs/agent-setup-compose.md`. The [agent setup guide](docs/agent-setup.md)
-explains supported platforms and what the agent will do.
+Use docs/deployment.md as the reference for environment variables. Explain which
+settings I need and help me save them in a local configuration file that the
+chosen deployment actually loads. Have me enter any values you need from me in a
+local editor or the deployment's secret settings, never in chat. Keep secrets
+out of Git and preserve any existing configuration and data.
+```
 
 ### Set up manually
 
