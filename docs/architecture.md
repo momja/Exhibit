@@ -878,6 +878,15 @@ GET response reuse are enforced per connection across artifacts and devices.
 No provider-specific API-key or Basic connector, or setup-token claim code, is shipped.
 Native OAuth remains limited to the reviewed provider set.
 
+Origin approval and connection data custody are separate inputs to the render
+CSP. The render reporter distinguishes approved origins excluded by custody
+from undecided origins and blocked redirects. Trusted viewer and agent chrome
+ask the server to review each reported destination before offering approval;
+connection restrictions show an explanation and a link to Connections instead.
+The origin-decision API rechecks custody before accepting an allow, including
+retained policies after revocation or feature shutdown. These diagnostics never
+widen either the CSP or the connection's data destinations.
+
 Managed authentication uses a swappable vendor engine beside the native
 request-authorizing Engine interface. Nango injects retrieved credentials into
 Exhibit's own checked HTTP hops. Composio currently exposes redacted credentials

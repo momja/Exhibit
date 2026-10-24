@@ -54,6 +54,7 @@ function shimSource({ cache = {}, anonymous = false, widget = false, versionView
     String(versionView),           // %t VERSION_VIEW
     "[]",                          // %s ALLOWED_ORIGINS
     "[]",                          // %s BLOCKED_ORIGINS
+    "[]",                          // %s RESTRICTED_ORIGINS
     JSON.stringify(cache),         // %s the inlined state
     ""                             // %s the capability bridges — the widget
                                    //    narrowing, which keeps this harness to

@@ -199,6 +199,19 @@ write grant and a connector recipe that permits writes. Every connection default
 to its own origin and nowhere else, widened only by explicit approval. Its
 effective network policy also
 restricts other browser egress paths, not just `fetch` through the relay.
+
+An artifact's saved origin approvals and its connection data destinations are
+separate checks. Approving a CDN does not allow connected data to leave for that
+CDN: external stylesheets, fonts and scripts are subject to the same destination
+ceiling. When this blocks a request, the artifact viewer and agent preview show
+**Connection data protection**, confirm any saved origin approval, and link to
+the artifact's connection rules. They do not offer another ineffective origin
+approval. Embed external assets in the artifact to avoid adding a destination,
+or review the connection's destinations explicitly in Connections.
+The runtime approval API rechecks the current ceiling and returns
+`409 connection_data_policy` if a rule changed while an approval was open;
+the host refreshes the explanation without reloading the artifact.
+
 Changing a grant invalidates the app's previous render authority; reopen the
 frame under the current policy before receiving connected data.
 Removing an artifact grant or revoking a connection stops credential use while

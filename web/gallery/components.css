@@ -216,6 +216,18 @@ input,select,textarea{font-size:var(--field-font-size)}
    on this page rather than navigating away. */
 button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:pointer}
 
+/* The server reviews both origin approval and connection data custody before
+ * offering an action. Pending/failed reviews leave only Close available. */
+#net-modal .net-approval-copy,#net-modal .net-policy-copy,#net-modal .net-readonly-copy,
+#net-modal .net-approval-explanation,#net-modal #net-allow,#net-modal #net-never{display:none}
+#net-modal:has([data-network-origin-reviewed]) .net-review-pending{display:none}
+#net-modal:has([data-connection-data-blocked]) .net-policy-copy{display:inline}
+#net-modal:has([data-network-origin-reviewed]):not(:has([data-connection-data-blocked])):has([data-network-origin-readonly]) .net-readonly-copy{display:inline}
+#net-modal:has([data-network-origin-reviewed]):not(:has([data-connection-data-blocked],[data-network-origin-readonly])) .net-approval-copy{display:inline}
+#net-modal:has([data-network-origin-reviewed]):not(:has([data-connection-data-blocked],[data-network-origin-readonly])) .net-approval-explanation{display:block}
+#net-modal:has([data-network-origin-reviewed]):not(:has([data-connection-data-blocked],[data-network-origin-readonly])) #net-allow,
+#net-modal:has([data-network-origin-reviewed]):not(:has([data-connection-data-blocked],[data-network-origin-readonly])) #net-never{display:inline-flex}
+
 /* --- version viewer ---------------------------------------------------------
  * An earlier version of an artifact shown running, to look at and not to keep.
  * The chat's preview pane and the edit page's Versions panel swap the same
