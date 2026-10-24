@@ -214,16 +214,11 @@ https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathnam
 	}
 	status, _ = request("https://api.example/redirect")
 	if status == 200 || otherCalls.Load() != 0 {
-		t.Fatal("Node default connection policy allowed another destination")
+		t.Fatal("Node followed a cross-origin connector redirect")
 	}
-	form.Set("data_origins", "https://second.example")
-	form.Add("data_origins", "https://inward.example")
-	response = localRequest(t, client, base, authority, "POST", "/__exhibit/connect", form.Encode(), "", "application/x-www-form-urlencoded")
-	response.Body.Close()
-	refreshPolicy()
-	status, result = request("https://api.example/redirect")
-	if status != 200 || result.URL != "https://second.example/final" {
-		t.Fatalf("Node allowed redirect failed: %d %#v", status, result)
+	status, result = request("https://second.example/data")
+	if status != 200 || result.Status != 200 {
+		t.Fatalf("Node connection blocked a standalone approved origin: %d %#v", status, result)
 	}
 	for _, target := range []string{"https://api.example/private", "https://api.example/unapproved", "https://api.example/compressed", "https://inward.example/data", "https://127.0.0.1/", "https://2130706433/", "https://0177.0.0.1/", "https://0x7f000001/", "https://[::ffff:127.0.0.1]/", "https://100.100.100.200/", "http://api.example/data"} {
 		status, _ := request(target)
@@ -240,8 +235,8 @@ https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathnam
 	}
 	refreshPolicy()
 	response = localRequest(t, client, base, authority, "GET", "/__exhibit/render", "", "", "")
-	if strings.Contains(response.Header.Get("Content-Security-Policy"), "second.example") {
-		t.Error("Node connected frame retained another data destination")
+	if !strings.Contains(response.Header.Get("Content-Security-Policy"), "second.example") {
+		t.Error("Node connection narrowed the artifact network policy")
 	}
 	response.Body.Close()
 	for i := 0; i < 2; i++ {
@@ -258,8 +253,8 @@ https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathnam
 		t.Fatalf("Node Basic daily quota did not stop provider contact: status %d, %d calls", status, calls.Load()-before)
 	}
 	status, _ = request("https://second.example/data")
-	if status == 200 {
-		t.Error("Node allowed connected data egress to a different origin")
+	if status != 200 {
+		t.Error("Node connection blocked an approved standalone origin")
 	}
 	previousOtherCalls := otherCalls.Load()
 	for _, action := range []string{"disconnect", "connect"} {
@@ -268,8 +263,8 @@ https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathnam
 		response.Body.Close()
 		refreshPolicy()
 		status, _ = request("https://second.example/data")
-		if status == 200 {
-			t.Errorf("Node %s widened connected egress", action)
+		if status != 200 {
+			t.Errorf("Node %s blocked unrelated approved traffic", action)
 		}
 		if action == "connect" {
 			status, _ = request("https://api.example/redirect")
@@ -277,9 +272,10 @@ https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathnam
 				t.Error("Node replacement credential permitted connected redirect egress")
 			}
 		}
-		if otherCalls.Load() != previousOtherCalls {
-			t.Fatalf("Node %s contacted a forbidden connected destination", action)
+		if otherCalls.Load() != previousOtherCalls+1 {
+			t.Fatalf("Node %s blocked standalone traffic or forwarded a connector redirect", action)
 		}
+		previousOtherCalls = otherCalls.Load()
 	}
 	restarted := runNode(t, app, hook, nodeDirectory)
 	restartedAuthority := strings.TrimPrefix(restarted, "http://")
@@ -289,8 +285,8 @@ https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathnam
 	restartedPolicy := policyPattern.FindStringSubmatch(bodyText(t, response))[1]
 	payload, _ := json.Marshal(relayRequest{URL: "https://second.example/data", Method: "GET", Policy: restartedPolicy, Headers: map[string]string{}})
 	response = localRequest(t, client, restarted, restartedAuthority, "POST", "/__exhibit/relay", string(payload), restartedCSRF, "application/json")
-	if response.StatusCode == 200 || otherCalls.Load() != previousOtherCalls {
-		t.Fatal("Node restart lost connected data-destination policy")
+	if response.StatusCode != 200 || otherCalls.Load() != previousOtherCalls+1 {
+		t.Fatal("Node restart blocked an unrelated approved origin")
 	}
 	response.Body.Close()
 }

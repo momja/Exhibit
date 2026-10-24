@@ -118,8 +118,8 @@ export default class extends Controller {
           if (!response.ok) throw new Error('Could not approve the connection origin.');
         }
       }
-      await this.request(this.artifactPath('/connections'), { method: 'POST', body: JSON.stringify({ connection_id: connectionId, permitted_egress: String(data.get('egress') || '').split(/[\s,]+/).filter(Boolean), share_with_recipients: data.get('sharing') === 'on' }) });
-      this.changed('Connection access granted. Reopen the artifact to use its updated network policy.');
+      await this.request(this.artifactPath('/connections'), { method: 'POST', body: JSON.stringify({ connection_id: connectionId, share_with_recipients: data.get('sharing') === 'on' }) });
+      this.changed('Connection access granted.');
     });
   }
 
@@ -132,9 +132,9 @@ export default class extends Controller {
 
   clearData(event) {
     this.action(event, async () => {
-      if (!window.confirm('Clear this artifact’s saved data and your old connection restrictions? This also clears the owner’s saved version data when you own the artifact. Active grants still apply. Previously open pages may retain data; reopened pages can use the remaining approved destinations.')) return;
+      if (!window.confirm('Clear this artifact’s saved data? This also clears saved version data when you own the artifact. Connection grants and network approvals stay in place. Open pages may still hold copies.')) return;
       await this.request(this.artifactPath('/connection-data'), { method: 'DELETE' });
-      this.changed('Saved data and old restrictions cleared. Reopen the artifact before using it.');
+      this.changed('Saved data cleared.');
     });
   }
 

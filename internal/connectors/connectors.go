@@ -27,7 +27,7 @@ import (
 var (
 	ErrDisabled = errors.New("this experimental connector phase is disabled")
 	ErrInvalid  = errors.New("invalid connection configuration")
-	ErrEgress   = errors.New("connection grant does not permit this data destination")
+	ErrEgress   = errors.New("connection does not permit this request")
 	ErrStandin  = errors.New("stand-in credential used outside its authorized position or origin")
 )
 
@@ -90,8 +90,8 @@ func (s *Service) ValidateArtifactSharing(ctx context.Context, ownerID int64, id
 	return s.cfg.Store.ValidateConnectionSharing(ctx, ownerID, id)
 }
 
-// DataPolicies remains available with all acquisition engines disabled. Saved
-// data retains its restrictions after disconnection or credential revocation.
+// DataPolicies retains saved-data provenance and sharing consent after
+// disconnection or credential revocation. It does not authorize network access.
 func (s *Service) DataPolicies(ctx context.Context, viewerID int64, artifactID string) ([]store.ConnectionDataPolicy, error) {
 	return s.cfg.Store.ListConnectionDataPolicies(ctx, viewerID, artifactID)
 }
@@ -135,7 +135,7 @@ func (s *Service) Providers() []Provider {
 	return []Provider{
 		{"api-key", "API key", "native", "A key injected into a reviewed header at the origin you choose.", []string{"read"}, "personal", true},
 		{"bearer", "Bearer token", "native", "A token sent in the Authorization header to one origin.", []string{"read"}, "personal", true},
-		{"basic", "HTTP Basic", "native", "A username and password, or a pasted HTTPS URL containing both. Data stays at this origin unless you explicitly approve another.", []string{"read"}, "personal", true},
+		{"basic", "HTTP Basic", "native", "A username and password, or a pasted HTTPS URL containing both. Credentials are sent only to that origin.", []string{"read"}, "personal", true},
 		{"github", "GitHub", "oauth", "Connect GitHub using the operator's registered OAuth application.", []string{"read profile", "read repositories"}, "personal", s.cfg.OAuthEnabled && s.cfg.GitHub.ClientID != "" && s.cfg.GitHub.ClientSecret != ""},
 		{"vendor", "Managed OAuth", "vendor", "Connect a provider approved by this instance's operator.", []string{"read"}, "personal", s.cfg.VendorEnabled && s.cfg.Vendor.configured()},
 	}
@@ -531,7 +531,8 @@ func withinPrivateBase(u *url.URL, base string) bool {
 }
 
 type GrantRequest struct {
-	ConnectionID        string   `json:"connection_id"`
+	ConnectionID string `json:"connection_id"`
+	// PermittedEgress is legacy consent metadata, not network authorization.
 	PermittedEgress     []string `json:"permitted_egress"`
 	ShareWithRecipients bool     `json:"share_with_recipients"`
 }
@@ -601,11 +602,7 @@ func (s *Service) grantMetadata(ctx context.Context, g store.ConnectionGrantReco
 	if err != nil {
 		return nil, err
 	}
-	dest := "nowhere else"
-	if len(g.PermittedEgress) > 0 {
-		dest = strings.Join(g.PermittedEgress, ", ")
-	}
-	consent := "Can " + strings.Join(meta.Capabilities, ", ") + " using " + meta.Name + "; can send data to: " + dest + "."
+	consent := "Can " + strings.Join(meta.Capabilities, ", ") + " using " + meta.Name + ". Credentials are sent only to: " + strings.Join(meta.Origins, ", ") + ". Other network access follows this artifact's independently approved origins."
 	if meta.DeliveryMode == VendorForward {
 		consent += " Requests and responses pass through " + meta.Engine + " in forward mode."
 	}
@@ -630,21 +627,12 @@ func (s *Service) Ungrant(ctx context.Context, viewerID int64, artifactID, id st
 	return s.cfg.Store.DeleteConnectionGrant(ctx, viewerID, artifactID, id)
 }
 
-// AllowedEgress is the intersection of every retained data policy's destinations.
-// It is used for browser CSP as well as relay enforcement: credential custody
-// alone cannot stop an artifact from sending the data it just read elsewhere.
-func (s *Service) AllowedEgress(ctx context.Context, viewerID int64, artifactID string, base []string) ([]string, error) {
-	policies, err := s.DataPolicies(ctx, viewerID, artifactID)
-	if err != nil {
-		return nil, err
-	}
-	out := append([]string{}, base...)
-	for _, p := range policies {
-		out = slices.DeleteFunc(out, func(o string) bool {
-			return !slices.Contains(p.Origins, o)
-		})
-	}
-	return out, nil
+// AllowedEgress preserves the artifact's independently approved origins.
+// Attaching a credential neither approves a new origin nor restricts other
+// approved APIs or assets. Retained provenance and legacy consent metadata
+// have no network authority.
+func (s *Service) AllowedEgress(_ context.Context, _ int64, _ string, base []string) ([]string, error) {
+	return append([]string{}, base...), nil
 }
 
 // Engine authorizes a request only after the common egress gate has validated
@@ -655,7 +643,7 @@ type Engine interface {
 }
 
 // VendorEngine owns only managed authentication and delivery. Exhibit checks
-// all grants, destinations, request limits and cache custody before calling it.
+// the matching grant, independent origin approvals, limits and cache before calling it.
 // Inject engines add credentials after each checked hop; forward engines send
 // only a sanitized request whose target the common gate preflighted.
 type VendorEngine interface {
@@ -684,10 +672,6 @@ func (NativeEngine) Authorize(_ context.Context, req *http.Request, _ *store.Con
 }
 
 func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req *http.Request, gate *egress.Gate) (*egress.Response, error) {
-	policies, err := s.DataPolicies(ctx, viewerID, artifactID)
-	if err != nil {
-		return nil, err
-	}
 	grants, err := s.Grants(ctx, viewerID, artifactID)
 	if err != nil {
 		return nil, err
@@ -695,11 +679,6 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 	target := requestOrigin(req.URL)
 	if err = s.checkStandinMisuse(viewerID, artifactID, req, target); err != nil {
 		return nil, err
-	}
-	for _, p := range policies {
-		if !slices.Contains(p.Origins, target) {
-			return nil, ErrEgress
-		}
 	}
 	var chosen *Grant
 	for i := range grants {
@@ -711,17 +690,10 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 		}
 	}
 	if chosen == nil {
-		// A data destination can redirect too. Apply the data policy intersection
-		// at every validated hop even when this request injects no credential.
-		return gate.DoAuthorized(ctx, req, func(hop *http.Request) error {
-			for _, p := range policies {
-				next := requestOrigin(hop.URL)
-				if !slices.Contains(p.Origins, next) {
-					return ErrEgress
-				}
-			}
-			return nil
-		})
+		// The artifact's gate owns origin approval, including redirects. An
+		// unrelated approved request never acquires a connector credential,
+		// even if it redirects to an origin that has a connection attached.
+		return gate.Do(ctx, req)
 	}
 	rec, err := s.cfg.Store.GetGrantedConnection(ctx, viewerID, artifactID, chosen.Connection.ID)
 	if err != nil {
@@ -738,9 +710,8 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 		return nil, fmt.Errorf("%w: shared-state or public-link artifact needs the owner's explicit sharing consent", ErrEgress)
 	}
 	if chosen.ViewerID != viewerID {
-		// Persist the recipient's custody before either a live or cached
-		// provider response can be saved in their own state. Owner reset or
-		// deletion must not release copies held by another viewer.
+		// Keep provenance for the recipient's saved copies independently of
+		// the owner's sharing and cleanup actions.
 		if err = s.cfg.Store.RetainSharedConnectionDataPolicies(ctx, viewerID, artifactID); err != nil {
 			return nil, err
 		}

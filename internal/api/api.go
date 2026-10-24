@@ -138,8 +138,8 @@ type Config struct {
 	MaxRequestBodyBytes int64
 	Relay               RelayConfig
 	Connections         *connectors.Service
-	// Stored data-destination policy outlives the feature switch. Disabling
-	// acquisition must not let previously connected data leave its grant.
+	// Saved connection provenance and sharing controls outlive acquisition.
+	// Network authority always comes from the artifact's origin approvals.
 	ConnectionPolicy *connectors.Service
 }
 

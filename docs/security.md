@@ -1560,24 +1560,29 @@ which is enforcement rather than marking, and a separate, larger change.
 Relay access is a separate viewer/artifact grant, never implied by an origin
 approval. The frame holds no provider credential or app-owned render-policy
 authority. A document-bound bridge returns response bytes only to its opaque
-frame. Current network policy constrains all browser egress paths for connected
-data; grant changes invalidate earlier render authority. Widgets, public links
-and direct render visits cannot use the relay.
+frame. Widgets, public links and direct render visits cannot use the relay.
 
-Saved origin approval cannot override a current or retained connection data
-restriction. The trusted network dialog reviews the destination on the server
-before offering approval, and explains custody blocks with a link to connection
-settings. The decision endpoint checks the same ceiling at write time, so a
-stale dialog cannot produce an ineffective approval/reload loop. Stylesheets,
-fonts and scripts remain subject to the data destination policy.
+Connector grants are additive to artifact network approvals. Each connection
+supplies credentials only to matching API origins. A grant does not narrow the
+CSP or revoke another approved API, CDN, stylesheet, font or image origin.
+Multiple connections and approved unauthenticated requests can coexist. Origin
+approval, relay consent and credential grants remain independent checks.
+
+Credential custody protects secrets while Exhibit holds them. Once response data
+is returned to artifact code, Exhibit cannot guarantee that it stays at the API:
+the artifact can save it or send it to other approved origins. Removing a grant,
+revoking a credential or disabling connectors does not restrict unrelated approved
+network access or require clearing state. Saved provenance remains relevant to
+explicit sharing/export consent and private render boundaries; legacy destination
+fields are inert compatibility metadata. Optional cleanup erases saved state,
+without changing network approvals or grants; open pages may still hold copies.
 
 The shared HTTPS gate checks each redirect, rejects non-public DNS answers and
 dials a checked literal, applies a guest header allowlist, caps decoded bytes
 and time, and never inherits an environment proxy. First-party injection runs
 afresh after each destination check. Credentials and connector caches are
-encrypted at rest, and only metadata is logged. Every connection defaults
-to no other data destination, widened only by explicit approval. Basic access
-URLs are parsed only in trusted app code; credentials and private base paths
+encrypted at rest, and only metadata is logged. Basic access URLs are parsed
+only in trusted app code; credentials and private base paths
 remain encrypted and absent from artifact metadata. Per-connection daily
 request limits and encrypted response reuse apply across artifacts and devices.
 Local exports enforce the same boundary with

@@ -93,7 +93,7 @@ Nango providers and Composio providers can operate together.
 
 The vendor interface covers start, completion, status, injection or forwarding,
 and revocation. Exhibit retains grants, entitlement checks, the allowlist,
-destination policy, quota reservations, encrypted caching, stand-ins and logs.
+credential-origin binding, quota reservations, encrypted caching, stand-ins and logs.
 Vendor errors become `needs_reconnect`, `rate_limited`, `refused` or
 `upstream_error`, with safe messages shared by the relay and trusted UI.
 
@@ -190,33 +190,33 @@ headers; partial and uncacheable responses do not replace a full response.
 The generic-connection migration converts earlier experimental native records
 with a Basic authorization recipe by their stored shape. It retains their IDs,
 encrypted credentials, private endpoint mapping, quota/cache settings, grants
-and saved-data restrictions. Existing artifacts continue using their public
+and saved-data provenance. Existing artifacts continue using their public
 paths; no reconnect is required.
 
-Grant the saved connection to the artifact, review the generated capability and
-data-destination text, then enable relay reads. API changes require the separate
-write grant and a connector recipe that permits writes. Every connection defaults
-to its own origin and nowhere else, widened only by explicit approval. Its
-effective network policy also
-restricts other browser egress paths, not just `fetch` through the relay.
+Grant the saved connection to the artifact, review its capabilities and credential
+destinations, approve its API origin, then enable relay reads. API changes require
+the separate write grant and a connector recipe that permits writes.
 
-An artifact's saved origin approvals and its connection data destinations are
-separate checks. Approving a CDN does not allow connected data to leave for that
-CDN: external stylesheets, fonts and scripts are subject to the same destination
-ceiling. When this blocks a request, the artifact viewer and agent preview show
-**Connection data protection**, confirm any saved origin approval, and link to
-the artifact's connection rules. They do not offer another ineffective origin
-approval. Embed external assets in the artifact to avoid adding a destination,
-or review the connection's destinations explicitly in Connections.
-The runtime approval API rechecks the current ceiling and returns
-`409 connection_data_policy` if a rule changed while an approval was open;
-the host refreshes the explanation without reloading the artifact.
+**Connection grants are additive.** The artifact's approved origins remain its
+network boundary. A connection supplies credentials only to its matching API
+origin; attaching it does not narrow unrelated traffic. An artifact may use two
+connections at different origins alongside an approved public API, stylesheet,
+font or CDN. Each matching API receives only its own credential; approved
+standalone requests carry no connector credential. Unapproved origins still
+require the ordinary network approval, and operator policy remains enforced.
+The viewer and agent preview use the same origin-approval flow.
 
-Changing a grant invalidates the app's previous render authority; reopen the
-frame under the current policy before receiving connected data.
-Removing an artifact grant or revoking a connection stops credential use while
-retaining its saved-data destination policy. Clear the saved data and release
-that policy explicitly in Connections before widening destinations again.
+Credential custody protects the secret. Once an API response reaches artifact
+code, that code can process it, save it and send it to other approved origins.
+Exhibit cannot guarantee that returned data stays at the source API. Review the
+artifact and its network permissions before giving it sensitive account access.
+
+Removing a grant or revoking a connection stops future credential use without
+changing other origin approvals or deleting saved responses. Disabling connectors
+does not narrow approved standalone network access. Optional **Clear saved data**
+removes stored state; it is never required to approve an origin or use another
+connection. Legacy `permitted_egress`, `data_origins` and retained policy records
+remain compatibility/provenance metadata only, with no network authority.
 
 Connections belong to the current viewer. A recipient uses their own connection
 unless the owner explicitly shares a connection and its data. Public links do
@@ -235,34 +235,35 @@ grants or retrieve secrets.
 When enabled, `window.exhibit.connections.get(connectionId)` obtains an inert,
 expiring stand-in. The relay accepts it only for its viewer, connection,
 designated header and reviewed origin; misuse is refused. Stand-ins do not
-replace the destination policy and should never be persisted in source, state,
+grant network permission and should never be persisted in source, state,
 widgets or transcripts. Native attach-by-origin remains the simpler path.
 
 ## Request boundary
 
 The frame uses a document-bound host bridge; the host pins the artifact and
-viewer. Its app-owned authority for the render's current policy is absent from
-artifact source and state. Responses are returned as bytes to the opaque frame,
-where the shim constructs a `Response`; host code never inserts provider bytes
-into its DOM. A new grant cannot empower a document rendered under an older,
-broader policy. Viewer authentication and the same policy checks apply to direct
-relay API calls.
+viewer. Its app-owned authority is absent from artifact source and state.
+Responses return as bytes to the opaque frame, where the shim constructs a
+`Response`; host code never inserts provider bytes into its DOM. Current artifact
+origin approvals, viewer relay consent and matching connection grants are checked
+on requests. A connector never changes the artifact's other approved origins.
+The same checks apply to direct relay API calls and scheduled fetches.
 
-The host also checks external-link destinations against the current data policy,
-including after first-use approval, and binds state resyncs to that policy.
+External links retain their ordinary artifact approval flow. Connector grants
+add no response-data destination ceiling to links, scripts, styles, fonts, image
+loads or other browser requests. Source and document authority checks continue
+to protect the trusted host bridge and state synchronization.
+
 Private connected documents open only inside Exhibit, with an opaque sandbox
-and an exact parent frame policy. Their URLs and signed token scopes include an
-opaque policy fingerprint, so a cleared or changed policy invalidates old URLs
-before source or saved data is served. Artifact frames cannot use the app's
-fresh-token routes to escape that binding. Gallery widgets keep showing their saved data
-inside a script-free app-owned wrapper that pins navigation to that widget's
-render path. An anonymous public view without a connection data policy keeps
-its existing approved-link behavior. Explicit public shares remain public only
-after the owner approves sharing for every connection data policy.
-HTTPS previews require the browser's iframe Fetch Metadata header. On plain
-HTTP development origins, where browsers omit that header, the browser's
-referrer must instead name the exact trusted app origin. The trusted widget
-wrapper sends only that origin; render documents still send no referrer.
+and an exact parent frame policy. Their URLs and signed scopes remain bound to
+the authorized document; artifact frames cannot use app-owned fresh-token routes
+to escape that binding. Gallery widgets show saved data inside a script-free
+app-owned wrapper pinned to the widget's render path. Explicit owner consent is
+still required to share connected saved data, including data retained after
+revocation. These privacy and sharing checks do not limit the artifact's approved
+network origins. HTTPS previews require the browser's iframe Fetch Metadata
+header. On plain HTTP development origins, where browsers omit it, the referrer
+must instead name the exact trusted app origin. The trusted widget wrapper sends
+only that origin; render documents still send no referrer.
 
 `internal/egress` enforces all of the following for native and inject-mode
 connections, ordinary relay requests, acquisition flows and refreshes. Forward
@@ -309,7 +310,7 @@ URLs, request paths or query strings.
 The artifact's connection page can schedule a credential-free GET URL, a saved
 state key and an interval of one hour to one year. A stable random initial
 offset spreads provider traffic; workers claim due rows and recheck access,
-entitlements, origin approval, relay grants and connector policy at execution.
+entitlements, origin approval, relay grants and matching connector authorization at execution.
 Only a successful UTF-8 text/JSON response of at most one MiB replaces the key;
 errors preserve the previous value. A worker never interprets JavaScript,
 templates or provider responses as code. Widgets only read saved state.
@@ -343,11 +344,12 @@ checked DNS literals and caps decompression. Both render artifact code in an
 opaque frame, including direct visits to the render URL. Exact Host checks,
 Origin checks and a per-session CSRF token protect local mutation and relay
 endpoints. The host permits only local frame navigation, and connection changes
-rotate the render policy token before new data can be returned. Connection
-requirements narrow the frame CSP, and a nonsecret `state.json.policy.json`
-sidecar retains local data restrictions after disconnect, credential
-replacement and runner restarts. Response bytes never enter the host DOM.
-The listener defaults to loopback. An explicitly exposed listener can configure
+rotate the render authority before new data can be returned. The manifest’s
+approved origins determine the frame CSP; local connections add credentials
+only at matching origins. Multiple connections and approved standalone requests
+work together after disconnects, credential replacement and runner restarts.
+Legacy policy sidecars do not narrow network access. Response bytes never enter
+the host DOM. The listener defaults to loopback. An explicitly exposed listener can configure
 an additional exact authority using `EXHIBIT_PUBLIC_HOST` or `-public-host`.
 
 ## Backend decision and validation
@@ -382,13 +384,24 @@ Validation commands: `make assets`, `go test ./...`, and `go vet ./...`.
 Security checks include the real Chromium bridge/widget tests and race tests
 for the egress gate, connector engine and standalone runners. Review images are
 in [screenshots/Exh-g2vv](screenshots/Exh-g2vv).
-Shared native/Nango/Composio fixtures cover grants, custody, allowlists,
+Shared native/Nango/Composio fixtures cover grants, credential custody, allowlists,
 quota/cache and feature flags. Managed fixtures also cover bound consent,
 engine changes with existing connections and pending flows, normalized errors,
 reconnect state, revocation, response caps and persistent cost counters. The
 full normal Go suite passes. A broader store race run reached the default
 ten-minute timeout in the large account-deletion fixture; focused affected
 store races pass.
+
+Additive-permission regressions exercise two distinct connections alongside a
+standalone API/CDN, both managed engines together, origin approval while
+connections are attached, schedules, legacy saved policies and independent
+response reuse. Go and Node runners use the same parity fixture. Chromium loads
+an approved stylesheet in both the viewer and agent preview without an access
+prompt. The running ticket visualizer also loads its previously approved CDN
+icons while GitHub relay requests return successfully, without clearing state
+or changing the saved approvals. Updated interface evidence is in
+[screenshots/Exh-s47o](screenshots/Exh-s47o).
+
 Live generic Basic account access, registered GitHub OAuth, Nango and Composio
 staging flows/costs and one live model generation require external credentials; those checks are tracked in
 [Exh-3kvx](../.tickets/Exh-3kvx.md).

@@ -22,8 +22,7 @@
  *   reload()     - how to refetch the render document so a widened CSP applies.
  *                  A CSP is a response header fixed at load, so a new policy
  *                  needs a new document, and each page reaches one differently.
- *   readOnly()   - optional; true refuses approval prompts. Connection data
- *                  restrictions still get a server-reviewed explanation.
+ *   readOnly()   - optional; true refuses the prompt outright.
  *   explain(o,d) - optional; where a refused report goes instead of the
  *                  dialog. A visitor who cannot record an answer is not asked,
  *                  but the block still has to be accounted for somewhere or
@@ -64,15 +63,6 @@
       let pending = null;
       const queue = [];
 
-      function reviewOrigin() {
-        const warnings = document.getElementById('net-warning-list');
-        if (!warnings || !pending) return;
-        warnings.dataset.artifact = artifactId();
-        warnings.dataset.origin = pending.origin;
-        warnings.replaceChildren();
-        document.body.dispatchEvent(new CustomEvent('exhibit:network-origin-warning'));
-      }
-
       // Advances to the next queued report, or closes the dialog when the
       // queue is empty. Every dismissal path goes through here, so "next" and
       // "close" are one behaviour rather than two that can disagree.
@@ -89,7 +79,12 @@
         document.getElementById('net-origin').textContent = pending.origin;
         document.getElementById('net-directive').textContent =
           pending.directive ? 'Blocked by ' + pending.directive : '';
-        reviewOrigin();
+        const warnings = document.getElementById('net-warning-list');
+        if (warnings) {
+          warnings.dataset.artifact = artifactId();
+          warnings.replaceChildren();
+          document.body.dispatchEvent(new CustomEvent('exhibit:network-origin-warning'));
+        }
         modal.hidden = false;
         // Land on the safe answer, the way the link prompt does.
         document.getElementById('net-once').focus();
@@ -105,16 +100,6 @@
           method: 'POST',
           body: JSON.stringify({ origin: origin, decision: decision, source: 'runtime' })
         }).catch(function () { return null; });
-        if (r?.status === 409) {
-          const result = await r.json().catch(function () { return {}; });
-          if (result.code === 'connection_data_policy') {
-            report(result.error);
-            // The connection policy may have changed while this dialog was
-            // open. Re-render its explanation and keep the current document.
-            if (pending?.origin === origin) reviewOrigin();
-            return false;
-          }
-        }
         if (!r || !r.ok) { report('✗ Failed to save the decision for ' + origin); return false; }
         return true;
       }
@@ -131,11 +116,13 @@
         // no answer. The render preamble already stays silent for an anonymous
         // render; this is the same fact on the side that owns the dialog.
         //
-        // Ordinary undecided origins get the page's read-only explanation.
-        // An already-approved destination excluded by connection data policy
-        // uses the shared informational dialog. Its server-rendered review
-        // hides approval actions for both owners and recipients.
-        if (readOnly() && d.reason !== 'connection_data_policy') {
+        // Refused is not the same as unmentioned. A recipient's artifact is
+        // frozen at whatever its owner approved (av-awr4), and if that set is
+        // missing an origin the tool needs, the tool fails with the reason
+        // available nowhere the visitor will look. So the report is handed to
+        // the page's explanation instead of the queue — never both, since the
+        // whole claim is that this session asks nothing and writes nothing.
+        if (readOnly()) {
           explain(String(d.origin || ''), String(d.directive || ''));
           return;
         }

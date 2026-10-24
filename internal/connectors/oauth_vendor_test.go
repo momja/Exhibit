@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/momja/Exhibit/internal/egress"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -180,8 +181,10 @@ func TestManagedOAuthRemainsInsideViewerGrantsGateAndIdlePruning(t *testing.T) {
 	assert.NotContains(t, string(response.Body), "nango-access-secret-5783")
 	assert.NotContains(t, string(response.Body), "nango-refresh-secret-1648")
 	assert.Equal(t, int32(1), authorized.Load())
-	_, err = doRequest(t, s, 1, testGate(t, "https://attacker.example.test"), "https://attacker.example.test/steal")
-	assert.ErrorIs(t, err, ErrEgress)
+	_, err = doRequest(t, s, 1, testGate(t, provider.URL), "https://unapproved.example.test/data")
+	var denied *egress.DeniedError
+	require.ErrorAs(t, err, &denied)
+	assert.Equal(t, "https://unapproved.example.test", denied.Origin)
 	s.cfg.Now = func() time.Time { return time.Now().Add(45 * 24 * time.Hour) }
 	n, err := s.PruneIdle(ctx)
 	require.NoError(t, err)
