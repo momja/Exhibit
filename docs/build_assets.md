@@ -6,23 +6,22 @@ section states the rule; this page shows the mechanism — how the frontend asse
 
 ## 1. The rule
 
-The server's frontend assets ship embedded in the Go binary via `go:embed`.
-The full product also needs Node at runtime for the Pi agent subprocess and
-network access to its model provider. The frontend assets — the
+The running server ships as a single Go binary with its frontend assets embedded via
+`go:embed`, and needs **no Node runtime and no network egress**. But those assets — the
 CodeMirror editor bundle, the Phosphor Icons CSS + webfont, htmx — are *generated* by
 Node tooling (esbuild, vendoring scripts). Rather than commit that generated output,
 we produce it fresh whenever the binary is built.
 
-> **Asset generation happens at build time.** The build generates the assets into
+> **Node is a build-time-only dependency.** The build generates the assets into
 > `internal/api/assets/`; nothing under that directory is committed to git. Production
 > carries only the built bytes.
 >
 > One workspace needs more than Node: `web/icons` subsets the Phosphor font with
-> python3 + fonttools/brotli (§6) — used only at build time.
+> python3 + fonttools/brotli (§7) — a build-time-only dependency like Node itself.
 
-This keeps generated output out of version control without requiring the running
-server to fetch frontend assets. Node remains installed for Pi; see the
-[source setup guide](agent-setup-source.md) for the complete runtime prerequisites.
+This keeps generated output out of version control (no stale bundles, no noisy diffs on
+dependency bumps) while preserving the deployment promise: one small image, one process,
+no Node at runtime.
 
 ## 2. Asset workspaces
 
@@ -66,10 +65,8 @@ The `Dockerfile` is a three-stage build:
 2. **`builder` stage** (`golang:1.25`) — copies the source, then overlays the freshly
    built assets with `COPY --from=assets /app/internal/api/assets/ ./internal/api/assets/`
    so `go:embed` finds them at compile time, then `go build`.
-3. **runtime stage** (`node:22-bookworm-slim`) — carries the compiled binary,
-   Node, and the Pi version pinned in `PI_VERSION`. Pi runs as a server subprocess
-   and needs network access to the selected provider. Assets are embedded in
-   the binary rather than fetched at runtime.
+3. **runtime stage** (`distroless/static-debian12`) — carries only the compiled binary.
+   No Node, no assets on disk, no network egress.
 
 `.dockerignore` excludes both `node_modules/` and `internal/api/assets/` from the build
 context. This guarantees the Go stage embeds **only** what the Node stage produced inside

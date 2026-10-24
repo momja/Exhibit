@@ -41,9 +41,8 @@ safety" (§12).
 ## 2. Service language & framework
 
 **Decided: Go.** The product's entire value rests on being trivially self-hostable, and
-Go fits that goal precisely: it compiles the server and embedded assets to one
-static binary; the product image also carries Node and Pi for the agent. Its
-concurrency model handles the
+Go fits that goal precisely: it compiles to one static binary with no runtime, which
+becomes a ~15–25 MB `scratch`/`distroless` image; its concurrency model handles the
 frequent small state write-through calls without an async framework; and the SQLite +
 FTS5 + blob design has mature, dependency-light Go support. (Python + FastAPI would have
 ported the architecture cleanly too, at the cost of a heavier image and a process
@@ -209,8 +208,8 @@ here: Monaco is excellent but ships a much larger bundle and a VS Code-grade fea
 you don't need for viewing/lightly editing self-contained files.
 
 Bundle CodeMirror (and the gallery's JS) with `esbuild` into a static asset the Go binary
-serves via `go:embed`. Asset bundling runs at build time; Node also remains a
-production dependency for the Pi agent subprocess.
+serves via `go:embed`. No Node runtime in production — Node is a build-time-only
+dependency.
 
 Lint the editor source with ESLint (flat config, `@eslint/js` recommended rules) before
 it's bundled: `cd web/editor && npm run lint`. The config mirrors the esbuild target
@@ -642,10 +641,9 @@ and replaces any need for a CLI tool.
 
 ## 12. Deployment
 
-**Image:** multi-stage Docker build — Node builds the frontend assets, Go compiles
-the server with those assets embedded, and the Node-based runtime carries that
-binary plus the pinned Pi package. The server spawns Pi per agent session. See
-the [agent setup guides](agent-setup.md) for Compose and source installations.
+**Image:** multi-stage Docker build — build with the Go toolchain (and Node only to
+bundle CodeMirror/gallery JS), copy the single binary + embedded assets into
+`distroless`/`scratch`. One small image, one process.
 
 **TLS / reverse proxy: the operator's, not ours.** We don't ship or require a proxy.
 The service serves plain HTTP on a bound port; whatever sits in front (Caddy, Traefik,

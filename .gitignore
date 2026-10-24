@@ -19,7 +19,7 @@ $RECYCLE.BIN/
 data/
 server
 
-# Frontend assets are generated at build time (make assets / the Dockerfile); their
+# Node is build-time only (make assets / the Dockerfile's Node stage); its
 # fetched/bundled output is produced at build time, not committed to git.
 node_modules/
 

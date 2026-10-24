@@ -6,10 +6,8 @@
 
 ## 1. Run it
 
-For an agent to install dependencies, save configuration, and verify the full
-setup on your machine, use the [copy-paste agent setup guides](agent-setup.md).
-Their default is loopback-only access; the base Compose file below publishes
-both ports on all interfaces.
+For an agent to install dependencies, save configuration, and verify Exhibit on
+your machine, use the [copy-paste agent setup guides](agent-setup.md).
 
 Clone the repo:
 
@@ -24,10 +22,10 @@ Then run it with Compose:
 docker compose up
 ```
 
-or configure your origins and a strong API bearer token:
+or configure your origins (auth token is currently a placeholder. It's required but does not actually authenticate):
 
 ```bash
-AUTH_TOKEN="$(openssl rand -hex 32)" \
+AUTH_TOKEN=changeme \
 APP_ORIGIN=https://app.example.com \
 RENDER_ORIGIN=https://artifacts.example.com \
 docker compose up
@@ -48,7 +46,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 > with no authentication configuration creates a local `admin` account with
 > password `changeme`; change it after first login. You can use local accounts or
 > configure your own OIDC provider without a Clerk account, keys, or service.
-> See [Logging in](#3-logging-in). `AUTH_TOKEN` is a separate API credential.
+> See [Logging in](#3-logging-in-optional). `AUTH_TOKEN` is a separate API credential.
 
 
 | Variable | Default | Meaning |
@@ -194,12 +192,12 @@ grant's id, or never issued, previews as Exhibit's name and logo and is
 indistinguishable from any other dead link. A chat app that already unfurled a
 link keeps its copy after you revoke it; that is outside any server's reach.
 
-## 3. Logging in
+## 3. Logging in (optional)
 
-Self-hosted instances use local accounts by default: with no other authentication
-configured, an empty database seeds `admin` / `changeme`. Change that password
-immediately (§3.2). An external login provider is optional; leaving
-authentication settings unset does not disable browser login.
+Three supported ways to put a login in front of an instance. None is more
+"official" than the others; pick whichever fits what you already run. Setting
+none of them leaves the instance as it has always been: no login, no gate,
+`AUTH_TOKEN` and a single owner.
 
 Proxy auth ([§3.1](#31-authenticate-at-your-proxy)) secures a **single-user**
 library — it is one door in front of one owner. The other two each give you as
@@ -215,10 +213,9 @@ matter operationally.
 Exhibit already expects you to bring your own reverse proxy and TLS (§5), and
 the same proxy is a perfectly good place to put authentication: Authelia,
 Tailscale (or `tailscale serve`), oauth2-proxy, or plain HTTP basic auth all
-work, because they gate the request before it ever reaches the app. Exhibit's
-local login remains behind that gate unless you have chosen OIDC; proxy auth
-does not turn off Exhibit's own login or default-account bootstrap. Change the
-seeded password or configure your own bootstrap credential before exposure.
+work, because they gate the request before it ever reaches the app. Nothing
+needs configuring in Exhibit for this — leave `OIDC_ISSUER` unset and the
+instance stays a single-user library behind whatever door you put on it.
 
 Gate the **app origin**. The render origin serves artifacts and share links,
 which are meant to be openable by people who have no account.
