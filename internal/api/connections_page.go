@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,8 +18,9 @@ import (
 
 type connectionCard struct {
 	connectors.Connection
-	LastUsed string
-	Usage    []store.ConnectionUsageArtifact
+	LastUsed    string
+	Usage       []store.ConnectionUsageArtifact
+	AllowWrites bool
 }
 type connectionGrantPreview struct {
 	Connection connectors.Connection
@@ -95,7 +97,7 @@ func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error
 			if err != nil {
 				return v, err
 			}
-			v.Connections = append(v.Connections, connectionCard{Connection: c, LastUsed: used, Usage: usage})
+			v.Connections = append(v.Connections, connectionCard{Connection: c, LastUsed: used, Usage: usage, AllowWrites: slices.Contains(c.Capabilities, "write")})
 		}
 	}
 	if id := r.URL.Query().Get("artifact"); id != "" {

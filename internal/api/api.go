@@ -641,6 +641,7 @@ func (ro *Router) setupRoutes() {
 		})
 		r.Get("/api/connections", ro.listConnections)
 		r.Post("/api/connections", ro.createConnection)
+		r.Patch("/api/connections/{connectionID}", ro.updateConnectionPermissions)
 		r.Delete("/api/connections/{connectionID}", ro.deleteConnection)
 		r.Post("/api/connections/oauth/github/begin", ro.beginConnectionOAuth)
 		r.Post("/api/connections/vendor/begin", ro.beginConnectionVendor)

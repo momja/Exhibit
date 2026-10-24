@@ -205,6 +205,19 @@ matching connection's safe runtime capabilities and use a GET alternative when
 write access is absent. A write-capable connection for another origin supplies
 no permission for this request.
 
+To edit an existing native API key, Bearer or Basic connection, find its card
+under **Saved connections** and open **Edit permissions**. Change **Allow this
+credential to make API changes**, then **Save permissions**. This permits or
+blocks POST, PUT, PATCH and DELETE for every artifact using that connection;
+the saved credential is unchanged. Reopen affected artifacts after saving.
+
+This setting is separate from the artifact's **Relay permissions**. Writes need
+both the connection's permission and **Allow writes and changes** on that
+artifact, alongside its origin approval. The API provider's own permissions
+still apply: enabling writes in Exhibit cannot add scopes to a read-only key.
+OAuth and managed provider scope changes use a new reviewed consent flow rather
+than this native permission editor. **Cancel** discards an unsaved edit.
+
 **Connection grants are additive.** The artifact's approved origins remain its
 network boundary. A connection supplies credentials only to its matching API
 origin; attaching it does not narrow unrelated traffic. An artifact may use two

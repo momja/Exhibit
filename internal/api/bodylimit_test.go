@@ -89,6 +89,7 @@ var writeRoutes = []struct {
 	{"POST", "/api/artifacts/{artifactID}/relay-schedules", true},
 	{"DELETE", "/api/artifacts/{artifactID}/relay-schedules/{scheduleID}", false},
 	{"POST", "/api/connections", true},
+	{"PATCH", "/api/connections/{connectionID}", true},
 	{"DELETE", "/api/connections/{connectionID}", false},
 	{"POST", "/api/connections/oauth/github/begin", true},
 	{"POST", "/api/connections/vendor/begin", true},
