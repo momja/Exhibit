@@ -179,4 +179,21 @@ func TestGalleryActionMenuDuplicationBrowser(t *testing.T) {
 	correct, err = chromedp.Run(ctx, chromedp.Evaluate[bool](`document.activeElement.id === '`+trigger[1:]+`'`))
 	require.NoError(t, err)
 	require.True(t, correct, "closing the feature dialog restores its visible menu trigger")
+
+	// Removing an open modal releases its native top-layer state. Reconnecting
+	// the same element produces one functioning controller, with fresh focus.
+	require.NoError(t, chromedp.Do(ctx,
+		chromedp.KeyEvent(kb.ArrowDown), chromedp.KeyEvent(kb.End), chromedp.KeyEvent(kb.Enter),
+		chromedp.Poll[chromedp.Void](`document.querySelector('[data-duplicate-dialog]').open`),
+		chromedp.Evaluate[chromedp.Void](`window.removedModal = document.querySelector('[data-duplicate-dialog]'); window.modalParent = removedModal.parentElement; removedModal.remove()`),
+		chromedp.Poll[chromedp.Void](`!removedModal.open`),
+		chromedp.Evaluate[chromedp.Void](`modalParent.append(removedModal)`),
+		chromedp.Focus(chromedp.CSS(trigger)),
+		chromedp.KeyEvent(kb.ArrowDown), chromedp.KeyEvent(kb.End), chromedp.KeyEvent(kb.Enter),
+		chromedp.Poll[chromedp.Void](`removedModal.open && document.activeElement === removedModal.querySelector('[name="title"]')`),
+		chromedp.KeyEvent(kb.Escape),
+	))
+	correct, err = chromedp.Run(ctx, chromedp.Evaluate[bool](`!removedModal.open && document.activeElement.id === '`+trigger[1:]+`'`))
+	require.NoError(t, err)
+	require.True(t, correct, "reconnected modal dismisses and restores focus")
 }

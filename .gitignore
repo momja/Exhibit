@@ -37,3 +37,8 @@ node_modules/
 /.claude/
 
 /.paper-canvas/
+
+# Browser regression reports and temporary diagnostics.
+/e2e/playwright-report/
+/e2e/test-results/
+/e2e/artifacts/

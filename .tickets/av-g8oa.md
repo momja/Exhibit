@@ -1,6 +1,6 @@
 ---
 id: av-g8oa
-status: open
+status: closed
 deps: [av-e1sr]
 links: []
 created: 2026-07-07T05:44:36Z
@@ -21,7 +21,7 @@ Second step in [av-f3cp](av-f3cp.md), immediately after the [harness](av-e1sr.md
 - Existing chromedp integration tests, including the Stimulus action-menu tests from [Exh-16ds](Exh-16ds.md), currently skip without a browser. Set `CHROMIUM_TEST_BINARY` explicitly to the executable from this Playwright installation, check that it exists and is executable, and verify the required component cases pass rather than skip. Keep their current optional local behavior. Optional S3/Pi integration suites are outside this first gate.
 - Require the Playwright command to execute tests and fail on missing browsers, failures, empty discovery, or focused tests (`forbidOnly` in CI). Start with one worker, no automatic retries, `trace: 'retain-on-failure'`, and screenshots on failure. This retains the original failing attempt without relying on a retry to capture it. See [trace options](https://playwright.dev/docs/trace-viewer#recording-a-trace).
 - Give app startup and the suite bounded timeouts, with the job limit comfortably longer so reports can finish. Upload `playwright-report/`, `test-results/` (including trace ZIPs/screenshots), and captured server logs on failure, including failures without a browser trace such as startup errors. Use failure-safe artifact steps and a documented retention period, initially 14 days.
-- Document the stable check and the repository setting needed to require it before merge. A workflow alone does not enforce branch protection. Enabling the required check is a rollout action to settle with the user, then apply after the check has reported. Do not silently enable unrelated rules. Main currently has no classic protection and its listed ruleset is disabled.
+- Document the stable check and the repository setting needed to require it before merge. A workflow alone does not enforce branch protection. The user approved enabling this required check on 2026-10-23; apply it after the check reports green. Do not silently enable unrelated rules. Main currently has no classic protection and its listed ruleset is disabled.
 
 ## Acceptance Criteria
 
@@ -35,3 +35,10 @@ Second step in [av-f3cp](av-f3cp.md), immediately after the [harness](av-e1sr.md
 
 Coverage mapping and maintenance guidance moved to [Exh-gtz1](Exh-gtz1.md). Browser caching is a measured optimization, not an acceptance criterion. A blocking changed-path guard needs a separate usefulness decision after real coverage exists.
 
+## Implementation — 2026-10-23
+
+Implemented the first hosted Ubuntu workflow with Node 24, Go from go.mod, locked Chromium, existing Go/Node/component checks, six Playwright journeys, and 14-day failure evidence. Selects the installed headless shell through Playwright public APIs and rejects skipped required component results. actionlint passed. Hosted failure/green-run validation and required-check activation are PR rollout steps; user approved merge enforcement on 2026-10-23.
+
+## Hosted failure proof — 2026-10-23
+
+[Run 39906606070](https://github.com/momja/Exhibit/actions/runs/39906606070) passed all Go/Node/required Chromium checks and all six real Playwright journeys. Only the temporary intentional assertion failed. Downloaded and inspected its artifact: trace ZIP, failure screenshot, HTML report, server log, and Go JSON results are present. The probe is removed from the final suite. The approved required-check rule will be activated after the restored run is green; rollout evidence is recorded on [PR #198](https://github.com/momja/Exhibit/pull/198).

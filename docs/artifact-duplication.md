@@ -11,9 +11,11 @@ original title followed by ` (copy)` and two unchecked options:
   state and is therefore included.
 
 The shared action-menu controller emits `exhibit:duplicate` with the artifact
-ID, title, and visible menu trigger. The feature's existing form owns saving
-and returns focus to that trigger when dismissed. See
-[UI components](ui-components.md) for the reusable menu definition.
+ID, title, and visible menu trigger. The shared native-modal Stimulus controller
+opens the dialog, sets initial focus, and returns focus to that trigger on
+cancellation. The feature's form owns saving and vetoes dismissal while a
+request is in flight. Escape, Cancel, and backdrop use the same guard. See
+[UI components](ui-components.md) for the reusable menu and modal contracts.
 
 The copy always keeps the current source, optional gallery widget, current
 stored assets and any older assets referenced by that content, source URL,
@@ -26,12 +28,13 @@ After success, the modal closes and a bubbling `exhibit:artifacts-changed` event
 asks its gallery to clear the active search and reset paging. The existing
 htmx search form refreshes `/partials/gallery-grid`, using the same card partial
 as the initial page. Clearing the search ensures a renamed copy remains visible.
-The page does not navigate or reload. A failed refresh can be retried without
+The new card title receives focus after the refresh; its replacement menu and
+modal remain usable. The page does not navigate or reload. A failed refresh can be retried without
 repeating the mutation.
 
-![Duplicate artifact modal](screenshots/Exh-9j7e/01-duplicate-modal.png)
+![Duplicate artifact modal](screenshots/Exh-b5hv/01-duplicate-modal.png)
 
-[Phone layout](screenshots/Exh-9j7e/02-duplicate-mobile.png)
+[Phone layout](screenshots/Exh-b5hv/02-duplicate-mobile.png)
 
 ## API and persistence
 
