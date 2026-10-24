@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -44,6 +45,13 @@ func (ro *Router) clerkSessionUser(r *http.Request) (int64, bool) {
 }
 
 func (ro *Router) renderClerkLogin(w http.ResponseWriter, r *http.Request, mode string) {
+	// Clerk relies on secure browser APIs. When deployed behind an HTTPS
+	// proxy, move old direct HTTP links to the configured public origin.
+	origin, err := url.Parse(ro.cfg.AppOrigin)
+	if err == nil && origin.Scheme == "https" && r.Host != origin.Host {
+		http.Redirect(w, r, ro.cfg.AppOrigin+r.URL.RequestURI(), http.StatusSeeOther)
+		return
+	}
 	if mode == "" {
 		mode = "signin"
 		if r.URL.Path == "/auth/signup" {

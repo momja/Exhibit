@@ -1,5 +1,15 @@
 let clientPromise;
 
+const loadTimeout = 15000;
+
+function withTimeout(promise, message) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), loadTimeout); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 function loadScript(src, publishableKey) {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
@@ -14,7 +24,8 @@ function loadScript(src, publishableKey) {
 }
 
 export function clerkClient() {
-  if (!clientPromise) clientPromise = loadClient();
+  if (!clientPromise) clientPromise = withTimeout(loadClient(),
+    'The account service did not respond. Reload this page to retry. If this continues, check whether your browser or network is blocking Clerk.');
   return clientPromise;
 }
 

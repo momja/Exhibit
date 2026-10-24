@@ -30,7 +30,7 @@ func TestClerkHostedMode(t *testing.T) {
 		c.AuthToken = ""
 	})
 	request := func(method, path, subject string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest(method, path, nil)
+		r := httptest.NewRequest(method, "https://app.test"+path, nil)
 		if subject != "" {
 			r.Header.Set("Test-Clerk-Subject", subject)
 		}
@@ -71,4 +71,13 @@ func TestClerkHostedMode(t *testing.T) {
 	w := httptest.NewRecorder()
 	ro.ServeHTTP(w, r)
 	require.Equal(t, 401, w.Code)
+}
+
+func TestClerkLoginRedirectsToSecurePublicOrigin(t *testing.T) {
+	ro, _ := newLoginTestRouter(t, nil, nil, func(c *Config) { c.Clerk = hostedLoginStub{} })
+	r := httptest.NewRequest("GET", "http://old-host:8096/auth/signup?next=%2F", nil)
+	w := httptest.NewRecorder()
+	ro.ServeHTTP(w, r)
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	require.Equal(t, "https://app.test/auth/signup?next=%2F", w.Header().Get("Location"))
 }

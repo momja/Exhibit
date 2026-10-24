@@ -22,3 +22,7 @@ Implemented hosted Clerk mode in feature/Exh-wi2y/hosted-clerk. Preserved self-h
 **2026-10-24T05:14:42Z**
 
 CLI authenticated and linked selected Exhibit application; env pull wrote development keys to ignored .env.local without inspecting contents. Doctor passes all auth/link/key checks (production instance not configured). Development app running at http://t3code:8096, isolated renderer hostname on port 8097. Verified live Clerk sign-in/sign-up controls and unauthenticated private API 401; captured desktop/mobile screenshots and fixed nested-card/overflow layout. Focused API tests and server rebuild pass. User must perform first sign-up to verify signed-in user menu; no test user created in the existing Clerk application.
+
+**2026-10-24T05:24:31Z**
+
+User reported indefinite Loading your account. Browser inspection found missing Web Crypto on HTTP preview; HTTPS via tailnet-only Tailscale Serve port 8444 now proxies the app and old login/signup links redirect to configured HTTPS origin. Verified secureContext=true, crypto.subtle available, live signup form rendered, no console errors. Added 15-second SDK/script loading timeout with actionable error; two timeout tests and focused Go Clerk tests pass. This removes an observed HTTP compatibility problem; user must confirm their browser now loads/signs up. Preview renderer remains HTTP on distinct hostname; full artifact rendering from HTTPS preview needs a separate HTTPS render origin before claiming full end-to-end app validation.
