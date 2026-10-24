@@ -1564,6 +1564,13 @@ frame. Current network policy constrains all browser egress paths for connected
 data; grant changes invalidate earlier render authority. Widgets, public links
 and direct render visits cannot use the relay.
 
+Saved origin approval cannot override a current or retained connection data
+restriction. The trusted network dialog reviews the destination on the server
+before offering approval, and explains custody blocks with a link to connection
+settings. The decision endpoint checks the same ceiling at write time, so a
+stale dialog cannot produce an ineffective approval/reload loop. Stylesheets,
+fonts and scripts remain subject to the data destination policy.
+
 The shared HTTPS gate checks each redirect, rejects non-public DNS answers and
 dials a checked literal, applies a guest header allowlist, caps decoded bytes
 and time, and never inherits an environment proxy. First-party injection runs
