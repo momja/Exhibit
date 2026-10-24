@@ -3,5 +3,9 @@
 import { Application } from '../stimulus/stimulus.js';
 import ActionMenuController from './action-menu-controller.js';
 
+import ClerkController from './clerk-controller.js';
+
 export const application = Application.start();
 application.register('action-menu', ActionMenuController);
+
+application.register('clerk', ClerkController);

@@ -58,6 +58,8 @@ const (
 )
 
 var accountTables = map[string]accountTable{
+	"hosted_account_deletions": {reachNone,
+		"identity erasure cutoffs survive deletion to reject old hosted sessions; no library payload is retained", ""},
 	"users": {reachExplicit, "the account itself, and the guard that may refuse the whole operation",
 		"SELECT COUNT(*) FROM users WHERE id = ?1"},
 	"artifacts": {reachExplicit, "the library, by owner_id — and the row every cascade below hangs from",

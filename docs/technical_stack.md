@@ -33,6 +33,7 @@ safety" (§12).
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
 | Agent harness | **Pi** (`pi --mode rpc` sidecar per session; TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
+| Hosted login | Clerk Go SDK + ClerkJS / Clerk UI from the application Frontend API domain; enabled only by Clerk configuration | Replacing self-hosted login |
 | Login (optional) | Generic OIDC via discovery — `coreos/go-oidc/v3` + `golang.org/x/oauth2`, exchanged once for our own session (§10) | auth at the operator's proxy (also supported); vendor SDK (rejected) |
 | TLS / proxy | **Operator's choice** — app serves plain HTTP, takes origin config | (not shipped) |
 | Backup/replication | Litestream sidecar (Compose profile) | Turso/libSQL (HA) |
@@ -550,6 +551,15 @@ no CDN:
 ```
 
 Either path, the rule is fixed: **Phosphor Icons, self-hosted, no external icon CDN.**
+
+Clerk's embedded panels use the same pinned Phosphor package. The icon build
+exports a small explicit SVG mask set from its regular-weight paths; the shared
+`clerk-appearance.js` applies these through Clerk's named appearance elements.
+Masks inherit `currentColor`, retaining Clerk's labels and click handlers. Password
+visibility follows the input type. Provider logos retain their original branding.
+When upgrading Clerk UI, verify the named icon slots and password toggle in the
+sign-in form, user menu, and account/security panels.
+
 
 **Anything that rotates is a path, not a glyph (av-c7hu).** Browsers snap a
 glyph's baseline to whole device pixels, so a spinning webfont icon turns about

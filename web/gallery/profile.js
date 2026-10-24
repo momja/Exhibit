@@ -101,7 +101,7 @@
       // whatever this instance does with an unauthenticated visitor happen —
       // the login page, or the public library — rather than this script
       // deciding on its behalf.
-      window.location.href = '/';
+      window.location.href = document.querySelector('meta[name="clerk-publishable-key"]') ? '/auth/logout' : '/';
     } catch (err) {
       // Network error or other fetch failure. The request may or may not have
       // reached the server, so the outcome is unknown. Instruct the person to

@@ -263,7 +263,35 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ownerID := ownerIDFromCtx(ctx)
-	queued, err := ro.cfg.Store.DeleteAccount(ctx, ownerID)
+	var queued []string
+	var err error
+	if ro.cfg.Clerk != nil {
+		u, lookupErr := ro.cfg.Store.GetUser(ctx, ownerID)
+		if lookupErr != nil {
+			serverError(w, r, "load account for deletion", lookupErr)
+			return
+		}
+		last, checkErr := ro.isLastEnabledHostedAdmin(ctx, u)
+		if checkErr != nil {
+			serverError(w, r, "check hosted administrator", checkErr)
+			return
+		}
+		if last {
+			writeError(w, http.StatusConflict, "Make another hosted account an administrator before deleting this one.")
+			return
+		}
+		// Revoke every provider session, including other browsers. If Clerk is
+		// unavailable, preserve the library and report failure instead of relying
+		// on a client redirect that an API caller would never follow.
+		sessionCutoff, revokeErr := ro.cfg.Clerk.RevokeSessions(ctx, u.ExternalID)
+		if revokeErr != nil {
+			serverError(w, r, "revoke hosted sessions", revokeErr)
+			return
+		}
+		queued, err = ro.cfg.Store.DeleteHostedAccount(ctx, ownerID, sessionCutoff)
+	} else {
+		queued, err = ro.cfg.Store.DeleteAccount(ctx, ownerID)
+	}
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "no such account")
@@ -316,7 +344,12 @@ func (ro *Router) fillDeleteSection(ctx context.Context, u *store.User, acct *pr
 	acct.ShareCount = sum.Shares
 	acct.Storage = humanize.Bytes(sum.StorageBytes)
 
-	last, err := ro.isLastEnabledAdmin(ctx, u)
+	var last bool
+	if ro.cfg.Clerk != nil {
+		last, err = ro.isLastEnabledHostedAdmin(ctx, u)
+	} else {
+		last, err = ro.isLastEnabledAdmin(ctx, u)
+	}
 	if err != nil {
 		return err
 	}

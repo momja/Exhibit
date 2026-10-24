@@ -106,6 +106,7 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 	ctx := context.Background()
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id > 23",
+		"DROP TABLE hosted_account_deletions",
 		"DROP TRIGGER remember_historical_asset_identity",
 		"DROP TRIGGER remember_current_asset_identity",
 		"DROP TABLE asset_identities",
@@ -222,6 +223,7 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	// shares.recipient_id blocks that column's DROP.
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id >= 28",
+		"DROP TABLE hosted_account_deletions",
 		"DROP TRIGGER remember_historical_asset_identity",
 		"DROP TRIGGER remember_current_asset_identity",
 		"DROP TABLE asset_identities",

@@ -38,3 +38,8 @@
 .login-or::before,.login-or::after{content:"";flex:1;height:1px;background:var(--color-hairline)}
 
 .login-sso{width:100%;justify-content:center;text-decoration:none;text-align:center}
+
+/* Clerk supplies its own card; keep the shared brand header without nesting
+ * two cards, and constrain the vendor UI on narrow screens. */
+.login-clerk{max-width:400px;background:transparent;box-shadow:none;padding:0;gap:var(--space-4)}
+.login-clerk>[data-controller="clerk"]{width:100%;min-width:0}

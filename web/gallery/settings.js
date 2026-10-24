@@ -183,7 +183,7 @@
     }, 'Saving the entitlement for ' + who);
   });
 
-  document.getElementById('create-user').addEventListener('click', async function() {
+  document.getElementById('create-user')?.addEventListener('click', async function() {
     const username = document.getElementById('new-username').value.trim();
     const password = document.getElementById('new-password').value;
     if (!username) { say('A login name is required.', true); return; }
