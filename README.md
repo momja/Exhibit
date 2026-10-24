@@ -61,28 +61,6 @@ make run         # go run ./cmd/server
 make lint        # golangci-lint run ./...
 ```
 
-### Migration numbers
-
-The **Migration versions** GitHub Actions check runs on every pull request's
-merge commit and on merge queue groups. It rejects duplicate SQL migration
-numbers and SQL migrations using a number reserved by a Go migration. Run it
-locally with:
-
-```bash
-go test ./internal/store -run '^TestNoMigrationVersionIsUsedTwice$' -count=1 -v
-```
-
-The repository's **Migration versions** ruleset requires this check and an
-up-to-date branch before merging to `main`. If another PR takes your migration
-number first, update your branch and choose the next available number. Keep
-this job name stable: the ruleset refers to it by name. The workflow deliberately
-has no path filters, so every PR can report the required check.
-
-The ruleset configuration is recorded in
-[.github/rulesets/migration-versions.json](.github/rulesets/migration-versions.json).
-GitHub rulesets are configured through the repository settings or API; committing
-this JSON alone does not apply it.
-
 ### Linting
 
 `make lint` runs [golangci-lint](https://golangci-lint.run) (config in
