@@ -19,7 +19,7 @@
 {{template "clerkScripts" .Clerk}}
 </head>
 <body class="login-page">
-<main class="login">
+<main class="login login-clerk">
 <div class="login-mark">{{.LogoSVG}}</div>
 <h1 class="login-title">Exhibit</h1>
 <p class="login-sub">Your library, wherever you work.</p>
@@ -27,8 +27,6 @@
  <p data-clerk-target="status" role="status">Loading your account…</p>
  <div data-clerk-target="mount"></div>
 </div>
-{{if eq .Mode "signin"}}<p><a href="/auth/signup">Create an account</a></p>{{end}}
-{{if eq .Mode "signup"}}<p><a href="/auth/login">Already have an account? Sign in</a></p>{{end}}
 <noscript>Enable JavaScript to sign in to Exhibit.</noscript>
 </main>
 </body>

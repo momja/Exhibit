@@ -402,6 +402,9 @@ the library header adds the signed-in user menu. Clerk's scripts load from the
 application's Frontend API domain only in hosted mode. Self-hosters do not load
 Clerk scripts or contact Clerk.
 
+[Desktop sign-in](screenshots/Exh-wi2y/01-signin-desktop.png) ·
+[Mobile sign-up](screenshots/Exh-wi2y/02-signup-mobile.png)
+
 Clerk verifies browser sessions and refreshes its short-lived `__session` cookie.
 The backend validates signatures, expiry, issuer, authorized party, and session
 status, then maps `clerk:<user-id>` to Exhibit's local user ID. Emails do not link
