@@ -1,5 +1,6 @@
 import { Controller } from '../stimulus/stimulus.js';
 import { clerkClient } from './clerk-client.js';
+import { clerkAuthAppearance } from './clerk-appearance.js';
 
 export default class extends Controller {
   static targets = ['mount', 'status'];
@@ -22,7 +23,7 @@ export default class extends Controller {
         if (!response.ok) throw new Error('Your account cannot access Exhibit. Contact the administrator.');
         window.location.replace(this.nextValue);
       } else {
-        const options = { routing: 'hash', forceRedirectUrl: this.nextValue };
+        const options = { routing: 'hash', forceRedirectUrl: this.nextValue, appearance: clerkAuthAppearance };
         if (this.modeValue === 'signup') clerk.mountSignUp(this.mountTarget, options);
         else clerk.mountSignIn(this.mountTarget, options);
       }

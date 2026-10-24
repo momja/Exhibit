@@ -43,4 +43,3 @@
  * two cards, and constrain the vendor UI on narrow screens. */
 .login-clerk{max-width:400px;background:transparent;box-shadow:none;padding:0;gap:var(--space-4)}
 .login-clerk>[data-controller="clerk"]{width:100%;min-width:0}
-.login-clerk .cl-rootBox,.login-clerk .cl-cardBox{width:100%;max-width:100%}

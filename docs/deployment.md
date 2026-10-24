@@ -402,6 +402,19 @@ the library header adds the signed-in user menu. Clerk's scripts load from the
 application's Frontend API domain only in hosted mode. Self-hosters do not load
 Clerk scripts or contact Clerk.
 
+Clerk's appearance settings map to Exhibit tokens in
+`web/gallery/clerk-appearance.js`, so account components share the app's
+light/dark colors, typography, field borders, and button styling. The browser
+SDK and UI bundle versions are pinned in `clerk-client.js` for predictable
+component styling.
+
+Passkeys are enabled on the selected development instance, including autofill
+and the sign-in button. After signing up with email or a social provider, open
+the profile menu, **Manage account → Security**, and add a passkey. Enrollment
+requires a secure browser context; use the HTTPS preview. Passkeys are scoped
+to their registration domain, so enroll separately on the eventual production
+domain. Production configuration remains a separate deployment step.
+
 [Desktop sign-in](screenshots/Exh-wi2y/01-signin-desktop.png) ·
 [Mobile sign-up](screenshots/Exh-wi2y/02-signup-mobile.png)
 

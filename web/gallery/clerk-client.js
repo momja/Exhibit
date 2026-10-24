@@ -1,3 +1,5 @@
+import { clerkAppearance } from './clerk-appearance.js';
+
 let clientPromise;
 
 const loadTimeout = 15000;
@@ -34,11 +36,12 @@ async function loadClient() {
   const frontend = document.querySelector('meta[name="clerk-frontend-api"]')?.content;
   if (!publishableKey || !frontend) throw new Error('Account service is not configured.');
   await Promise.all([
-    loadScript(`${frontend}/npm/@clerk/ui@1/dist/ui.browser.js`),
-    loadScript(`${frontend}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`, publishableKey),
+    loadScript(`${frontend}/npm/@clerk/ui@1.41.2/dist/ui.browser.js`),
+    loadScript(`${frontend}/npm/@clerk/clerk-js@6.40.1/dist/clerk.browser.js`, publishableKey),
   ]);
   await window.Clerk.load({
     ui: { ClerkUI: window.__internal_ClerkUICtor },
+    appearance: clerkAppearance,
     signInUrl: '/auth/login',
     signUpUrl: '/auth/signup',
     afterSignOutUrl: '/auth/login',

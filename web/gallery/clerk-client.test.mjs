@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const source = await readFile(new URL('./clerk-client.js', import.meta.url), 'utf8');
+const source = (await readFile(new URL('./clerk-client.js', import.meta.url), 'utf8'))
+  .replace("'./clerk-appearance.js'", JSON.stringify(new URL('./clerk-appearance.js', import.meta.url).href));
 
 for (const stage of ['script download', 'SDK initialization']) {
   test(`Clerk reports a timeout during ${stage}`, async t => {
