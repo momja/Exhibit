@@ -22,7 +22,7 @@ func TestDetailPageCarriesFloatingControls(t *testing.T) {
 	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds, nil)
 	require.NoError(t, err)
 
-	// Back, divider, grip, posture, divider, then the buttons and the ⋮ menu.
+	// Back, divider, grip, title, divider, then the buttons and the ⋮ menu.
 	order := []string{`class="pip-btn" href="/"`, `class="pip-sep"`, `id="pip-grip"`, `id="pip-title"`, `class="pip-sep"`, `id="pip-more"`}
 	at := 0
 	for _, marker := range order {
@@ -34,8 +34,7 @@ func TestDetailPageCarriesFloatingControls(t *testing.T) {
 		assert.Contains(t, page, `id="`+id+`"`, "pip.js binds to #%s", id)
 	}
 	assert.Contains(t, page, `<script type="module" src="/assets/gallery/pip.js"></script>`)
-	assert.Contains(t, page, `<h1 class="pip-info-title" id="pip-info-title">Pill Tool</h1>`)
-	assert.NotContains(t, page, `class="pip-title-text"`)
+	assert.Contains(t, page, `<span class="pip-title-text" id="pip-title-text">Pill Tool</span>`)
 	assert.Contains(t, page, `aria-controls="pip-menu"`)
 
 	for _, gone := range []string{"<header>", `id="sheet-toggle"`, `id="actions-sheet"`, `id="sheet-scrim"`, `class="toolbar"`} {
