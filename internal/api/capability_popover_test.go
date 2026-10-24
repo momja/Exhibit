@@ -35,23 +35,24 @@ func TestCapabilityPopoverTriggerIsFocusable(t *testing.T) {
 	assert.Contains(t, page, `<div class="capability-popover-header">Sandbox posture</div>`)
 }
 
-// On the detail page the receipt is opened by the posture button (Exh-ghuv),
-// named by the artifact title in the popup and the posture mark. The receipt itself is the same partial the card
+// On the detail page the receipt is opened by the artifact's title (Exh-ghuv):
+// a real button that names the card it controls, with the posture mark in
+// front of the title text. The receipt itself is the same partial the card
 // uses, rendered for every artifact.
-func TestDetailPagePostureButtonOpensTheReceipt(t *testing.T) {
+func TestDetailPageTitleOpensThePostureReceipt(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Titled")
 	page := getPage(t, r, "/artifacts/"+id)
 
-	assert.Contains(t, page, `<button type="button" class="pip-title" id="pip-title" title="About this artifact" aria-labelledby="pip-info-title pip-posture" aria-expanded="false" aria-controls="pip-info">`,
-		"the button names itself from the popup title, then the posture")
+	assert.Contains(t, page, `<button type="button" class="pip-title" id="pip-title" title="About this artifact" aria-labelledby="pip-title-text pip-posture" aria-expanded="false" aria-controls="pip-info">`,
+		"the button names itself title first, then the posture")
 	assert.Contains(t, page, `<div class="pip-popup pip-info" id="pip-info" role="region" aria-label="About this artifact" tabindex="-1" hidden>`)
 	assert.Contains(t, page, `<span class="pip-posture" data-posture-glyph><i class="ph ph-shield-check" aria-hidden="true"></i><span class="sr-only">Sandboxed.</span></span>`,
-		"a sandboxed artifact's mark is the shield, and the posture button's name says so")
+		"a sandboxed artifact's mark is the shield, and the title button's name says so")
 	assert.Contains(t, page, `<div class="capability-popover" id="capability-popover-`+id+`">`)
 	assert.Contains(t, page, `<div class="capability-popover-header">Sandbox posture</div>`)
 	assert.NotContains(t, page, "data-capability-trigger",
-		"the posture button is the trigger here; a second one would be a second way to open the same receipt")
+		"the title is the trigger here; a second one would be a second way to open the same receipt")
 }
 
 // With grants the mark lists them in the cluster's order, and its sr-only

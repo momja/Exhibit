@@ -1,6 +1,6 @@
 ---
 id: av-e1sr
-status: in_progress
+status: open
 deps: []
 links: []
 created: 2026-07-07T05:44:12Z
@@ -11,7 +11,7 @@ parent: av-f3cp
 ---
 # e2e: isolated harness and state round-trip flagship
 
-First implementation step in [av-f3cp](av-f3cp.md), authorized on 2026-10-23. Establish a small Playwright workspace and one test proving the storage bridge works through the built application.
+First implementation step in [av-f3cp](av-f3cp.md), pending discussion of the refreshed plan. Establish a small Playwright workspace and one test proving the storage bridge works through the built application.
 
 ## Design
 

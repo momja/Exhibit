@@ -1,6 +1,6 @@
 ---
 id: av-g8oa
-status: in_progress
+status: open
 deps: [av-e1sr]
 links: []
 created: 2026-07-07T05:44:36Z
@@ -21,7 +21,7 @@ Second step in [av-f3cp](av-f3cp.md), immediately after the [harness](av-e1sr.md
 - Existing chromedp integration tests, including the Stimulus action-menu tests from [Exh-16ds](Exh-16ds.md), currently skip without a browser. Set `CHROMIUM_TEST_BINARY` explicitly to the executable from this Playwright installation, check that it exists and is executable, and verify the required component cases pass rather than skip. Keep their current optional local behavior. Optional S3/Pi integration suites are outside this first gate.
 - Require the Playwright command to execute tests and fail on missing browsers, failures, empty discovery, or focused tests (`forbidOnly` in CI). Start with one worker, no automatic retries, `trace: 'retain-on-failure'`, and screenshots on failure. This retains the original failing attempt without relying on a retry to capture it. See [trace options](https://playwright.dev/docs/trace-viewer#recording-a-trace).
 - Give app startup and the suite bounded timeouts, with the job limit comfortably longer so reports can finish. Upload `playwright-report/`, `test-results/` (including trace ZIPs/screenshots), and captured server logs on failure, including failures without a browser trace such as startup errors. Use failure-safe artifact steps and a documented retention period, initially 14 days.
-- Document the stable check and the repository setting needed to require it before merge. A workflow alone does not enforce branch protection. The user approved enabling this required check on 2026-10-23; apply it after the check reports green. Do not silently enable unrelated rules. Main currently has no classic protection and its listed ruleset is disabled.
+- Document the stable check and the repository setting needed to require it before merge. A workflow alone does not enforce branch protection. Enabling the required check is a rollout action to settle with the user, then apply after the check has reported. Do not silently enable unrelated rules. Main currently has no classic protection and its listed ruleset is disabled.
 
 ## Acceptance Criteria
 
