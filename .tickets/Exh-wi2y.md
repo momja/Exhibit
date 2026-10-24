@@ -30,3 +30,7 @@ User reported indefinite Loading your account. Browser inspection found missing 
 **2026-10-24T05:32:49Z**
 
 Enabled auth_passkey.used_for_sign_in on selected development instance through Clerk CLI after schema check and dry-run; re-pull confirms true, autofill/button enabled, satisfies_second_factor true. Production remains unconfigured. Added shared Clerk appearance using Exhibit tokens, matching typography/buttons/fields/panels and light/dark mode. Pinned currently used SDK/UI CDN versions and replaced structural CSS selectors with appearance settings. Browser confirmed Use passkey instead, exact brand colors, dark token colors, and no overflow at 390px. Refreshed screenshots. Build and Clerk loading timeout tests pass. Passkey enrollment requires user sign-up/sign-in and their own authenticator; not performed on their behalf.
+
+**2026-10-24: Phosphor panel icons**
+
+Added self-hosted Phosphor SVG masks via the existing icon build and Clerk appearance elements: account/security navigation, manage-account/sign-out/add-account actions, passkeys, arrows, edit, and password visibility. Retains SDK semantics/ARIA and provider brand icons. Browser verified signup masks render and password toggle switches input type, eye/eye-slash mask, and accessible label. Signed-in panel mappings inspected against Clerk source; no user created for testing. Refreshed mobile signup screenshot. Assets/server build and all 363 gallery tests pass.

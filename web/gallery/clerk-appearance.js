@@ -1,3 +1,14 @@
+// Replace only documented icon slots. Retain the SVG's dimensions and ARIA
+// attributes; a currentColor mask follows light/dark themes and button states.
+function phosphorIcon(name) {
+  return {
+    backgroundColor: 'currentColor',
+    mask: `url("/assets/phosphor/${name}.svg") center / contain no-repeat`,
+    WebkitMask: `url("/assets/phosphor/${name}.svg") center / contain no-repeat`,
+    '& > *': { visibility: 'hidden' },
+  };
+}
+
 // Map Clerk's supported appearance API to Exhibit tokens. CSS variables keep
 // open account dialogs in sync when the system changes light/dark mode.
 export const clerkAppearance = {
@@ -21,6 +32,19 @@ export const clerkAppearance = {
     borderRadius: 'var(--radius-md)',
   },
   elements: {
+    navbarButtonIcon__account: phosphorIcon('user-circle'),
+    navbarButtonIcon__security: phosphorIcon('shield-check'),
+    userButtonPopoverActionButtonIcon__manageAccount: phosphorIcon('gear'),
+    userButtonPopoverActionButtonIcon__signOut: phosphorIcon('sign-out'),
+    userButtonPopoverActionButtonIcon__signOutAll: phosphorIcon('sign-out'),
+    userButtonPopoverActionButtonIcon__addAccount: phosphorIcon('plus'),
+    passkeyIcon: phosphorIcon('fingerprint'),
+    buttonArrowIcon: phosphorIcon('arrow-right'),
+    identityPreviewEditButtonIcon: phosphorIcon('pencil-simple'),
+    formFieldInputShowPasswordIcon: phosphorIcon('eye'),
+    formFieldInputGroup: {
+      '&:has(input[type="text"]) .cl-formFieldInputShowPasswordIcon': phosphorIcon('eye-slash'),
+    },
     cardBox: { borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)', border: '1px solid var(--color-hairline)' },
     card: { background: 'var(--color-panel)', boxShadow: 'none', padding: 'var(--space-8)' },
     headerTitle: { color: 'var(--color-ink)', fontSize: '20px', fontWeight: 600, letterSpacing: '-0.01em' },

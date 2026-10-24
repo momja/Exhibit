@@ -552,6 +552,15 @@ no CDN:
 
 Either path, the rule is fixed: **Phosphor Icons, self-hosted, no external icon CDN.**
 
+Clerk's embedded panels use the same pinned Phosphor package. The icon build
+exports a small explicit SVG mask set from its regular-weight paths; the shared
+`clerk-appearance.js` applies these through Clerk's named appearance elements.
+Masks inherit `currentColor`, retaining Clerk's labels and click handlers. Password
+visibility follows the input type. Provider logos retain their original branding.
+When upgrading Clerk UI, verify the named icon slots and password toggle in the
+sign-in form, user menu, and account/security panels.
+
+
 **Anything that rotates is a path, not a glyph (av-c7hu).** Browsers snap a
 glyph's baseline to whole device pixels, so a spinning webfont icon turns about
 a point a fraction of a pixel off its own center and wobbles; on the agent
