@@ -439,8 +439,9 @@ func (ro *Router) relayPolicy(ctx context.Context, viewer int64, a *store.Artifa
 	allowed = append([]string{}, allowed...)
 	slices.Sort(allowed)
 	type binding struct {
-		Connection string
-		Sharing    bool
+		Connection   string
+		Sharing      bool
+		Capabilities []string
 	}
 	bindings := []binding{}
 	policy := ro.cfg.Connections
@@ -453,7 +454,9 @@ func (ro *Router) relayPolicy(ctx context.Context, viewer int64, a *store.Artifa
 			return "", err
 		}
 		for _, g := range grants {
-			bindings = append(bindings, binding{g.Connection.ID, g.ShareWithRecipients})
+			capabilities := append([]string{}, g.Connection.Capabilities...)
+			slices.Sort(capabilities)
+			bindings = append(bindings, binding{g.Connection.ID, g.ShareWithRecipients, capabilities})
 		}
 		retained, err := policy.DataPolicies(ctx, viewer, a.ID)
 		if err != nil {
@@ -467,7 +470,7 @@ func (ro *Router) relayPolicy(ctx context.Context, viewer int64, a *store.Artifa
 			dataConnections[p.ConnectionID] = true
 		}
 		for id := range dataConnections {
-			bindings = append(bindings, binding{"data:" + id, false})
+			bindings = append(bindings, binding{"data:" + id, false, nil})
 		}
 	}
 	slices.SortFunc(bindings, func(a, b binding) int { return strings.Compare(a.Connection, b.Connection) })
