@@ -37,20 +37,18 @@
   <a class="pip-btn" href="/" aria-label="Back to gallery" title="Gallery"><i class="ph ph-arrow-left" aria-hidden="true"></i></a>
   <span class="pip-sep"></span>
   <button type="button" class="pip-grip" id="pip-grip" title="Drag to move" aria-label="Move controls. Drag them, or use the arrow keys. Past the left or right edge puts them away."></button>
-  {{/* The title is the button that opens the info card, and the posture mark
-       in front of it is the cluster's summary (Exh-ghuv). The mark is an htmx
+  {{/* The posture button opens the info card and summarizes the cluster (Exh-ghuv). The mark is an htmx
        target (av-mf1x): after a runtime origin approval the prompt fires
        exhibit:capabilities-changed on <body>, and the mark and the receipt in
        the card each take their half of the same fragment. For a recipient
        htmx is not loaded and these attributes are inert, since they cannot
        approve anything and so there is nothing to refresh. */}}
-  <button type="button" class="pip-title" id="pip-title" title="About this artifact" aria-labelledby="pip-title-text pip-posture" aria-expanded="false" aria-controls="pip-info">
+  <button type="button" class="pip-title" id="pip-title" title="About this artifact" aria-labelledby="pip-info-title pip-posture" aria-expanded="false" aria-controls="pip-info">
     <span id="pip-posture"
           hx-get="/partials/capability-cluster?artifact={{.ID}}"
           hx-trigger="exhibit:capabilities-changed from:body"
           hx-select=".pip-posture"
           hx-swap="innerHTML">{{template "postureGlyph" .Capability}}</span>
-    <span class="pip-title-text" id="pip-title-text">{{.Title}}</span>
     <i class="ph ph-caret-down pip-caret" aria-hidden="true"></i>
   </button>
   <span class="pip-sep"></span>
@@ -60,7 +58,7 @@
   {{if .Share}}<button type="button" class="pip-btn" id="share-open" aria-label="Share" title="Share"><i class="ph ph-share-network" aria-hidden="true"></i></button>{{end}}
   <button type="button" class="pip-btn" id="pip-more" aria-label="More actions" title="More" aria-expanded="false" aria-controls="pip-menu"><i class="ph ph-dots-three-vertical" aria-hidden="true"></i></button>
 </div>
-{{/* The info card: facts about the artifact, opened from the title. The
+{{/* The info card: facts about the artifact, opened from the posture button. The
      receipt stays for everyone, and the link to change it does not. What this
      artifact may reach is a fact about the tool running in the visitor's own
      browser, the one piece of the owner's configuration a recipient has a
@@ -72,6 +70,7 @@
      blurred, and either makes it the containing block of a fixed-position
      child, which would pin the card to the pill instead of the window. */}}
 <div class="pip-popup pip-info" id="pip-info" role="region" aria-label="About this artifact" tabindex="-1" hidden>
+  <h1 class="pip-info-title" id="pip-info-title">{{.Title}}</h1>
   <div class="pip-info-meta">Created {{.Created}}</div>
   <div id="capability-cluster"
        hx-get="/partials/capability-cluster?artifact={{.ID}}"
