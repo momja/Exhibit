@@ -764,6 +764,10 @@ type Store interface {
 	// later one. The returned ID is the integer the rest of the schema
 	// already calls owner_id.
 	UpsertUser(ctx context.Context, externalID, email string) (*User, error)
+	UpsertHostedUser(ctx context.Context, externalID, email string, sessionCreatedAt int64) (*User, error)
+	DeleteHostedAccount(ctx context.Context, userID int64, sessionCutoff int64) ([]string, error)
+	SetHostedUserAdmin(ctx context.Context, userID int64, admin bool) error
+	SetHostedUserDisabled(ctx context.Context, userID int64, disabled bool) error
 	GetUser(ctx context.Context, id int64) (*User, error)
 	// GetUserByExternalID is the same row reached by the key a *person* is
 	// known by — a provider subject, or `local:<name>` — for callers holding

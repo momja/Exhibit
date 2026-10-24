@@ -26,6 +26,7 @@ const files = [
   // page script calls instead of building an Authorization header itself.
   "tokens.css", "components.css", "components.js", "api.js", "api-module.js",
   "controllers.js", "action-menu-controller.js", "modal-controller.js",
+  "clerk.js", "clerk-controller.js", "clerk-client.js", "clerk-appearance.js",
   "index.css", "index.js", "gallery.js", "gallery-widgets.js", "duplicate.js",
   "new.css", "new.js",
   "detail.css", "detail.js", "direct-open.js", "pip.js", "pip-placement.js",

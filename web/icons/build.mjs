@@ -98,3 +98,14 @@ writeFileSync(path.join(outDir, "regular.css"), css);
 
 console.log(`Vendored Phosphor Icons (regular) -> ${path.relative(process.cwd(), outDir)} ` +
   `(${matched.size}/${used.size} registry classes matched, ${kept} rules kept, ${dropped} dropped, font ${subset ? "subset" : "FULL"})`);
+
+// Clerk's SVG icon slots use same-origin masks, generated from the same pinned
+// Phosphor package as the gallery font. Keep this list explicit and small.
+const maskNames = ['arrow-right', 'eye', 'eye-slash', 'fingerprint', 'gear', 'pencil-simple', 'plus', 'shield-check', 'sign-out', 'user-circle'];
+const selection = JSON.parse(readFileSync(path.join(src, 'selection.json'), 'utf8'));
+for (const name of maskNames) {
+  const entry = selection.icons.find(entry => entry.properties.name.split(', ').includes(name));
+  if (!entry) throw new Error(`Missing Phosphor mask: ${name}`);
+  const paths = entry.icon.paths.map(d => `<path d="${d}"/>`).join('');
+  writeFileSync(path.join(outDir, `${name}.svg`), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">${paths}</svg>\n`);
+}

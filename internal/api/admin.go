@@ -146,7 +146,8 @@ type adminUserView struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
-	// Kind is "local" or "sso" — which columns are populated, said in the
+	// Kind is "local", "sso", or "unavailable" in a hosted deployment for
+	// a retained non-Clerk identity — which login can be used, said in the
 	// word the UI uses. It is what tells an admin that "reset password" is
 	// meaningless for a row their identity provider owns.
 	Kind      string    `json:"kind"`
@@ -184,6 +185,9 @@ func (ro *Router) adminUserView(u *store.User) adminUserView {
 	kind := "sso"
 	if u.HasPassword {
 		kind = "local"
+	}
+	if ro.cfg.Clerk != nil && !isHostedUser(u) {
+		kind = "unavailable"
 	}
 	return adminUserView{
 		ID: u.ID, Name: u.Email, Email: u.Email, Kind: kind,
@@ -271,6 +275,10 @@ type createUserRequest struct {
 // name" stays the schema invariant external_id's UNIQUE constraint already
 // makes it, rather than a rule two code paths each implement.
 func (ro *Router) createAdminUser(w http.ResponseWriter, r *http.Request) {
+	if ro.cfg.Clerk != nil {
+		writeError(w, http.StatusForbidden, "hosted accounts sign up through Clerk; local account creation is disabled")
+		return
+	}
 	var req createUserRequest
 	if !decodeJSON(w, r, &req) {
 		return
@@ -409,6 +417,10 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	if ro.cfg.Clerk != nil && req.Password != nil {
+		writeError(w, http.StatusForbidden, "hosted passwords are managed through Clerk")
+		return
+	}
 	// Resolved once, up front: every branch below needs the account to exist,
 	// and a missing one must answer exactly as adminOnly's refusal does.
 	target, err := ro.cfg.Store.GetUser(r.Context(), id)
@@ -418,6 +430,11 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		serverError(w, r, "admin lookup user", err)
+		return
+	}
+
+	if ro.cfg.Clerk != nil && req.IsAdmin != nil && *req.IsAdmin && !isHostedUser(target) {
+		writeError(w, http.StatusBadRequest, "only a Clerk account can administer a hosted deployment")
 		return
 	}
 
@@ -438,7 +455,11 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 	// nothing else half-applied — a request that fails, fails before it has
 	// changed anything.
 	if req.IsAdmin != nil && *req.IsAdmin != target.IsAdmin {
-		if err := ro.cfg.Store.SetUserAdmin(r.Context(), id, *req.IsAdmin); err != nil {
+		setAdmin := ro.cfg.Store.SetUserAdmin
+		if ro.cfg.Clerk != nil {
+			setAdmin = ro.cfg.Store.SetHostedUserAdmin
+		}
+		if err := setAdmin(r.Context(), id, *req.IsAdmin); err != nil {
 			ro.writeAdminChangeError(w, r, "admin set role", err)
 			return
 		}
@@ -446,7 +467,11 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 			slog.Int64("user_id", id), slog.Bool("is_admin", *req.IsAdmin))
 	}
 	if req.Disabled != nil && *req.Disabled != target.Disabled {
-		if err := ro.cfg.Store.SetUserDisabled(r.Context(), id, *req.Disabled); err != nil {
+		setDisabled := ro.cfg.Store.SetUserDisabled
+		if ro.cfg.Clerk != nil {
+			setDisabled = ro.cfg.Store.SetHostedUserDisabled
+		}
+		if err := setDisabled(r.Context(), id, *req.Disabled); err != nil {
 			ro.writeAdminChangeError(w, r, "admin set disabled", err)
 			return
 		}
