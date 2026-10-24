@@ -42,3 +42,7 @@ Started the exact hosted-preview binary separately with env -i, no Clerk/OIDC/lo
 **2026-10-24: Independent review round 1 fixes**
 
 Codex review-agent confirmed four initial concerns and found hosted local-admin provisioning could undermine succession. Claude Code security-review confirmed the Compose dev-token bypass; lifecycle/email defects were below its security exploitability threshold but remain correctness fixes. Implemented hosted dev-token startup refusal; current verified-email lookup for grants and bounded profile refresh; provider-enforced user self-deletion disable; provider session revocation plus durable deletion cutoff including provider timestamps; hosted-only atomic admin succession/provisioning safeguards. Focused authentication/store/API tests pass, including restart/replay, clock skew, concurrency, and upstream failure. Separate self-host smoke remains the regression proof. Beginning independent second review on this fix snapshot.
+
+**2026-10-24: Review round 2 recovery fix**
+
+Codex confirmed the five prior fixes, then found a signed-in/locally-disabled user was trapped on the login error without a switch-account action. Added explicit retry and sign-out controls, with tests for denied access and transient network failure (no automatic signout). Added SDK multi-page revocation/ended-session timestamp coverage. Preparing final review snapshot; full Go suite still running, gallery 363 tests and vet passed before this two-test recovery addition.

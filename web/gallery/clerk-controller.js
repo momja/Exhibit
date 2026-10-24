@@ -3,7 +3,7 @@ import { clerkClient } from './clerk-client.js';
 import { clerkAuthAppearance } from './clerk-appearance.js';
 
 export default class extends Controller {
-  static targets = ['mount', 'status'];
+  static targets = ['mount', 'status', 'recovery'];
   static values = { mode: String, next: { type: String, default: '/' } };
 
   async connect() {
@@ -12,6 +12,7 @@ export default class extends Controller {
       if (!this.element.isConnected) return;
       this.clerk = clerk;
       this.statusTarget.textContent = '';
+      if (this.hasRecoveryTarget) this.recoveryTarget.hidden = true;
       if (this.modeValue === 'logout') {
         await clerk.signOut({ redirectUrl: '/auth/login' });
         window.location.replace('/auth/login');
@@ -33,8 +34,15 @@ export default class extends Controller {
         else clerk.mountSignIn(this.mountTarget, options);
       }
     } catch (error) {
-      if (this.element.isConnected) this.statusTarget.textContent = error.message;
+      if (this.element.isConnected) {
+        this.statusTarget.textContent = error.message;
+        if (this.hasRecoveryTarget) this.recoveryTarget.hidden = false;
+      }
     }
+  }
+
+  retry() {
+    window.location.reload();
   }
 
   disconnect() {

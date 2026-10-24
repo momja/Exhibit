@@ -113,3 +113,42 @@ func TestClerkPrimaryEmailMustBeVerified(t *testing.T) {
 	u.EmailAddresses[0].Verification.Status = "verified"
 	require.Equal(t, "unverified@example.test", primaryVerifiedEmail(u))
 }
+
+func TestClerkRevocationPaginatesAndIncludesEndedSessionTimestamps(t *testing.T) {
+	var offsets, revoked []string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/sessions" {
+			offset := r.URL.Query().Get("offset")
+			offsets = append(offsets, offset)
+			var sessions []any
+			switch offset {
+			case "0":
+				sessions = []any{map[string]any{"id": "one", "status": "active", "created_at": 100}, map[string]any{"id": "two", "status": "ended", "created_at": 900}}
+			case "2":
+				sessions = []any{map[string]any{"id": "three", "status": "active", "created_at": 300}}
+			default:
+				t.Errorf("unexpected offset %q", offset)
+			}
+			json.NewEncoder(w).Encode(map[string]any{"data": sessions, "total_count": 3})
+			return
+		}
+		if r.Method == "POST" {
+			revoked = append(revoked, r.URL.Path)
+			json.NewEncoder(w).Encode(map[string]any{"status": "revoked"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer backend.Close()
+	cfg := &clerk.ClientConfig{}
+	cfg.Key = clerk.String("sk_test_example")
+	cfg.URL = clerk.String(backend.URL)
+	c, err := newClerk("pk_test_"+base64.RawStdEncoding.EncodeToString([]byte("example.clerk.accounts.dev$")), "https://app.test", cfg)
+	require.NoError(t, err)
+	cutoff, err := c.RevokeSessions(context.Background(), "clerk:user_one")
+	require.NoError(t, err)
+	require.Equal(t, int64(900), cutoff)
+	require.Equal(t, []string{"0", "2"}, offsets)
+	require.Equal(t, []string{"/sessions/one/revoke", "/sessions/three/revoke"}, revoked)
+}
