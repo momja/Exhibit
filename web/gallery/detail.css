@@ -51,13 +51,12 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .pip-title{height:var(--pip-control);min-width:0;flex:0 1 auto;display:inline-flex;align-items:center;gap:6px;padding:0 8px 0 9px;
   border:0;border-radius:calc(var(--pip-control) / 2);background:none;color:var(--color-ink);font:inherit;font-weight:600;cursor:pointer}
 .pip-title:hover,.pip-title:focus-visible,.pip-title[aria-expanded=true]{background:var(--color-hover-fill)}
-.pip-title-text{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* The posture mark: neutral like the cluster it summarizes, never a verdict. */
 #pip-posture,.pip-posture{display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;color:var(--color-muted)}
 .pip-posture .ph{font-size:15px}
 .pip-posture .capability-count{font-size:11.5px;font-weight:650;margin-right:2px}
 .pip-caret{font-size:12px;color:var(--color-muted);flex:0 0 auto}
-@media (max-width:480px){ .pip-title-text{max-width:110px} .pip-sep{display:none} }
+@media (max-width:480px){ .pip-sep{display:none} }
 
 /* The info card and the ⋮ menu. pip.js sets the side, width and max height. */
 .pip-popup{position:fixed;z-index:40;padding:6px;background:var(--color-panel);border:1px solid var(--color-hairline-strong);border-radius:var(--radius-lg);
@@ -65,6 +64,7 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .pip-popup[hidden]{display:none}
 @keyframes pip-pop{from{opacity:0;scale:.96}}
 .pip-menu{min-width:236px;font-size:13px}
+.pip-info-title{margin:0;padding:6px 10px 0;font-size:15px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
 .pip-info-meta{padding:6px 10px 0;color:var(--color-muted);font-size:11.5px}
 /* The receipt is the shared capabilityPopover partial, which is a hidden
    hover popover elsewhere; here it is the card's body, always shown. */

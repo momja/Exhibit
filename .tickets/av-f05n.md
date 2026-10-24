@@ -1,7 +1,7 @@
 ---
 id: av-f05n
-status: open
-deps: [av-e1sr, av-g8oa]
+status: in_progress
+deps: [av-e1sr, av-g8oa, Exh-b5hv]
 links: []
 created: 2026-07-07T05:44:49Z
 type: feature
@@ -13,9 +13,9 @@ parent: av-f3cp
 
 Third step in [av-f3cp](av-f3cp.md): use the upcoming shared modal to cover one complete UI lifecycle after the [harness](av-e1sr.md) and [CI gate](av-g8oa.md) exist. Broader ingest/sharing/search/tag journeys moved to [Exh-jtv1](Exh-jtv1.md).
 
-## Consumer and prerequisite to settle
+## Approved consumer and prerequisite
 
-The proposed first consumer is gallery Duplicate: it already starts from a Stimulus action menu, opens a native dialog, saves through the API, dispatches `exhibit:artifacts-changed`, refreshes server-rendered gallery cards through htmx, and focuses the new card. Its dialog is currently feature-owned, not a shared Stimulus modal. Confirm this consumer and identify/link the upcoming modal implementation ticket before starting the shared-modal portion. If another consumer is chosen, retain the same observable lifecycle criteria.
+The first consumer, approved on 2026-10-23, is gallery Duplicate: it already starts from a Stimulus action menu, opens a native dialog, saves through the API, dispatches `exhibit:artifacts-changed`, refreshes server-rendered gallery cards through htmx, and focuses the new card. Its dialog is currently feature-owned, not a shared Stimulus modal. The controller and migration are tracked in [Exh-b5hv](Exh-b5hv.md), which is a prerequisite for this coverage.
 
 This story tests that component when it ships; it does not implement the shared modal or invent a new product flow. The existing `TestActionMenuBrowser` and `TestGalleryActionMenuDuplicationBrowser` remain focused component coverage. Avoid duplicating all their menu/controller internals in Playwright.
 
