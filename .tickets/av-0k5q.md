@@ -1,8 +1,8 @@
 ---
 id: av-0k5q
 status: open
-deps: []
-links: [av-v991, av-ec0t, av-7k7b, av-20xv, av-6xjd]
+deps: [Exh-35gj]
+links: [av-v991, av-ec0t, av-7k7b, av-20xv, av-6xjd, Exh-35gj]
 created: 2026-08-06T21:59:24Z
 type: feature
 priority: 3
@@ -93,3 +93,7 @@ Whose state rows does a recipient write? av-q0ub already keys state by
 the shipped default and costs nothing new. The anonymous park board wants the
 opposite: one board everyone shares. Both are wanted, so it is a per-share
 setting rather than a global rule. av-v991 owns it and now carries the decision.
+
+**2026-10-25T18:10:58Z**
+
+DECISION (2026-10-25): directed shares exist now (av-lrae, av-awr4), so 'Shared with me' has data. Navigation chosen: B2 — gallery spaces (My library / Shared with me / Shared by me) as a bottom tab bar on phones and a left rail on desktop, one partial with two CSS layouts; collections and tags stay filters, in a bottom sheet on phones with active filters as chips. Tabs show only once a second space has content. The shared space filters by owner, not by tag (tags are the owner's). A 'waiting on you' badge has no data behind it and is out of scope. Blocked on epic Exh-35gj (shares split + recipient index + owner-scoping performance).
