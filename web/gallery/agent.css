@@ -160,6 +160,7 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:100}
 .modal-overlay[hidden]{display:none}
 .modal{background:var(--color-panel);border-radius:10px;padding:20px;width:380px;max-width:92vw;box-shadow:var(--shadow-modal)}
+#key-modal .modal{max-height:calc(100dvh - 32px);overflow-y:auto}
 .modal h2{font-size:16px;font-weight:600}
 .modal p.note{font-size:12px;color:var(--color-muted);margin-top:6px;line-height:1.5}
 .modal label{display:block;font-size:12px;color:var(--color-ink-mid);margin:12px 0 4px}

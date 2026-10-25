@@ -114,7 +114,7 @@ func TestPlatformModeAgentPageHasNoKeyUI(t *testing.T) {
 	body := w.Body.String()
 
 	for _, absent := range []string{
-		"key-btn", "key-modal", "key-provider", "key-model", "key-secret",
+		"key-btn", "key-modal", "key-provider", "key-model", "key-secret", "key-thinking",
 		"openKeyModal()", "Bring your own key",
 		"exhibit-mock", "platform-secret-key",
 	} {
@@ -136,7 +136,7 @@ func TestBYOKAgentPageRendersKeyUI(t *testing.T) {
 	body := w.Body.String()
 
 	for _, present := range []string{
-		"key-btn", "key-modal", "key-provider", "key-model", "key-secret",
+		"key-btn", "key-modal", "key-provider", "key-model", "key-secret", "key-thinking",
 		"Bring your own key", "const BYOK = true",
 	} {
 		assert.Contains(t, body, present)

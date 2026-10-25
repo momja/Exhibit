@@ -394,7 +394,7 @@ DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 ## Agent (build/modify with AI, BYO key)
 
 ```
-PUT    /api/agent/key                        Store provider API key {"provider","model","api_key"} (encrypted at rest)
+PUT    /api/agent/key                        Store provider settings {"provider","model","api_key","thinking_level"?} (key encrypted at rest)
 GET    /api/agent/key                        Key status (masked hint only — the key is never returned)
 DELETE /api/agent/key                        Remove the stored key
 POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact, "resume_session_id"?: continue a kept conversation of that artifact; omitted, the session is a new conversation} -> {"id","sse_ticket",…}
@@ -406,6 +406,17 @@ GET    /api/agent/sessions/:id/events        SSE event stream (?ticket= auth —
 GET    /api/artifacts/:id/transcripts        Conversations kept with an artifact -> {"head_seq", "transcripts": [{session_id, title, version_seq, resumable, updated_at}]}
 GET    /api/artifacts/:id/transcripts/:sid   One conversation as what was said in it -> {…summary, "head_seq", "messages": [{role, text}]}
 ```
+
+`thinking_level` accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
+or `max`. Empty uses the environment baseline (`AGENT_THINKING_LEVEL`, default
+`medium`); omitted leaves an existing preference unchanged. GET returns the
+saved `thinking_level` alongside the provider, model, and masked key hint.
+An empty `api_key` keeps the stored key for the same provider, so changing
+thinking or model does not require re-entering it. Invalid thinking levels
+return `400`. These settings are per owner and apply when chats or widget
+sessions start or resume. In hosted/platform mode all key/settings methods
+return `404`, stored personal preferences are ignored, and only the environment
+baseline is used.
 
 A conversation is kept as Pi's own session file and tied to the artifact
 version it was last working against (`version_seq`, read against `head_seq`);

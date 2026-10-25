@@ -22,7 +22,11 @@ func TestThinkingLevelFromEnv(t *testing.T) {
 			t.Setenv("AGENT_THINKING_LEVEL", " \t"+level+"\n")
 			got, err := ThinkingLevelFromEnv()
 			require.NoError(t, err)
-			assert.Equal(t, level, got)
+			want := level
+			if want == "" {
+				want = "medium"
+			}
+			assert.Equal(t, want, got)
 		})
 	}
 	for _, invalid := range []string{"auto", "HIGH", "extra-high", "high medium", "--help"} {
@@ -49,17 +53,24 @@ func TestRealPiThinkingLevelFromEnvironment(t *testing.T) {
 	defer app.Close()
 
 	for _, tt := range []struct {
-		name   string
-		level  string
-		resume bool
-		want   string
+		name       string
+		level      string
+		ownerLevel string
+		hosted     bool
+		resume     bool
+		want       string
 	}{
 		{name: "new default", want: "medium"},
 		{name: "new configured", level: "high", want: "high"},
 		{name: "new disabled", level: "off", want: "off"},
-		{name: "resume saved", resume: true, want: "high"},
+		{name: "new owner preference", level: "high", ownerLevel: "low", want: "low"},
+		{name: "new owner disabled", level: "high", ownerLevel: "off", want: "off"},
+		{name: "hosted ignores owner preference", level: "low", ownerLevel: "high", hosted: true, want: "low"},
+		{name: "resume default baseline", resume: true, want: "medium"},
 		{name: "resume overridden", level: "low", resume: true, want: "low"},
 		{name: "resume disabled", level: "off", resume: true, want: "off"},
+		{name: "resume owner preference", level: "high", ownerLevel: "low", resume: true, want: "low"},
+		{name: "hosted resume ignores owner preference", ownerLevel: "off", hosted: true, resume: true, want: "medium"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("AGENT_THINKING_LEVEL", tt.level)
@@ -70,6 +81,7 @@ func TestRealPiThinkingLevelFromEnvironment(t *testing.T) {
 			m.cfg.APIBaseURL = app.URL
 			m.cfg.ThinkingLevel = level
 			opts := CreateOpts{OwnerID: 7, Provider: "anthropic", Model: "claude-sonnet-4-5", APIKey: "not-used"}
+			opts.ThinkingLevel, opts.PlatformPaid = tt.ownerLevel, tt.hosted
 			if tt.resume {
 				require.NoError(t, m.st.PutArtifact(t.Context(), &store.Artifact{
 					ID: "artifact", OwnerID: 7, Title: "Title", SourceBlobID: "body", Tier: 1,
