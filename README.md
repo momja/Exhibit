@@ -21,7 +21,7 @@ Copy this into a coding agent with terminal access:
 ```text
 Clone https://github.com/momja/Exhibit.git (or reuse an existing checkout), read
 README.md and docs/deployment.md, then ask me how and where I want to deploy:
-Docker Compose, running from source, or Fly.io. Wait for my choice before
+Docker Compose or running from source. Wait for my choice before
 installing dependencies or deploying. Then follow the relevant instructions,
 carry out the setup, verify it works, and show me how to open Exhibit and start
 using it.
