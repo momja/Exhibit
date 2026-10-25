@@ -16,15 +16,15 @@ Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs
 
 ### Set up with an agent
 
-Copy this into a coding agent with terminal access to the machine where you want
-Exhibit installed:
+Copy this into a coding agent with terminal access:
 
 ```text
 Clone https://github.com/momja/Exhibit.git (or reuse an existing checkout), read
-README.md and docs/deployment.md, and follow those instructions to install any
-missing dependencies and deploy Exhibit on this machine. Choose a suitable
-deployment method, carry out the setup, verify it works, and show me how to open
-Exhibit and start using it.
+README.md and docs/deployment.md, then ask me how and where I want to deploy:
+Docker Compose, running from source, or Fly.io. Wait for my choice before
+installing dependencies or deploying. Then follow the relevant instructions,
+carry out the setup, verify it works, and show me how to open Exhibit and start
+using it.
 
 Use docs/deployment.md as the reference for environment variables. Explain which
 settings I need and help me save them in a local configuration file that the

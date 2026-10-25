@@ -29,6 +29,8 @@ be loaded by the chosen deployment.
   to the existing setup documentation.
 - The prompt asks the agent to perform setup, verify the deployment, and help the
   person start using Exhibit.
+- The agent asks how and where to deploy (Docker Compose, from source, or Fly.io)
+  and waits for the person's choice before installing dependencies or deploying.
 - Environment configuration happens locally, without asking for values in chat,
   and existing configuration/data and secrets are handled appropriately.
 - Implementation is limited to the README and this ticket; no additional guides,
