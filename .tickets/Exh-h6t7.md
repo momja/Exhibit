@@ -1,6 +1,6 @@
 ---
 id: Exh-h6t7
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T21:59:38Z
@@ -27,3 +27,7 @@ Delivered a 30-second 1920x1080 60fps MP4 with an original soundtrack, silent ve
 **2026-10-25T00:41:43Z**
 
 Reopened for requested revision: keep every click and its control fully visible through the crop, and replace the subdued soundtrack with a brighter upbeat track.
+
+**2026-10-25T01:05:42Z**
+
+Revision 2 delivered: camera padding and retimed Share motion keep all ten click controls, click pulses and the full pointer path visible. Automated framing audit checks every frame at 60fps; manually reviewed click frames and browser seeks at all ten click times. Replaced the minor-key ambient bed with an original 120 BPM C-major arrangement with bright piano/mallet notes, bass and light percussion. Both revised MP4s pass full decoding, exactly 1800 frames/30s at 1080p60, AAC/headroom and fast-start checks. OpenFilm direct media/audio review passed; its optional Studio web-renderer review timed out under software WebGL and is documented. Updated original video/source links and preserved v1. Revised master: http://t3code:8918/exhibit-demo-30s-v2.mp4
