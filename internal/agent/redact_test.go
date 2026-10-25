@@ -77,3 +77,36 @@ func TestRedactModelIdentityOverATranscript(t *testing.T) {
 	assert.NotContains(t, string(out), "openai")
 	assert.Contains(t, string(out), `"hi"`)
 }
+
+func TestHostedProviderErrorDetailsAreRemovedFromEveryEventShape(t *testing.T) {
+	const detail = "401 private-provider-diagnostic: API key expired"
+	message := map[string]any{"role": "assistant", "stopReason": "error", "errorMessage": detail}
+	for _, event := range []map[string]any{
+		{"type": "message_start", "message": message},
+		{"type": "message_update", "assistantMessageEvent": map[string]any{"type": "error", "reason": "error", "error": message}},
+		{"type": "message_end", "message": message},
+		{"type": "turn_end", "message": message},
+		{"type": "agent_end", "messages": []any{message}, "willRetry": false},
+		{"type": "auto_retry_start", "errorMessage": detail, "attempt": 1},
+		{"type": "auto_retry_end", "finalError": detail, "success": false},
+		{"type": "compaction_end", "errorMessage": detail, "aborted": false},
+		{"type": "extension_error", "error": detail},
+	} {
+		t.Run(event["type"].(string), func(t *testing.T) {
+			line, err := json.Marshal(event)
+			require.NoError(t, err)
+			s := newDetachedSession(t, "")
+			assert.Equal(t, line, s.redact(line), "BYOK keeps the original diagnostics")
+			s.hideModelIdentity = true
+			out := s.redact(line)
+			assert.NotContains(t, string(out), detail)
+			assert.Contains(t, string(out), platformAgentFailureMessage)
+			assert.Contains(t, string(line), detail, "redaction does not mutate the original event")
+		})
+	}
+}
+
+func TestHostedProviderErrorRedactionPreservesArtifactData(t *testing.T) {
+	line := []byte(`{"type":"tool_execution_start","toolName":"set_state","args":{"key":"diagnostics","value":{"type":"auto_retry_start","errorMessage":"invalid API key"}}}`)
+	assert.Equal(t, line, redactModelIdentity(line))
+}

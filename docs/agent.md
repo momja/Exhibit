@@ -920,8 +920,15 @@ from 0.99.1 through 1.3.0 retain Exhibit's RPC and session contracts:
   is false, including authentication errors that contain no text deltas.
   Hosted/platform mode shows a generic failure message for every provider
   failure, without mentioning credentials or including provider error details.
+  The server also replaces diagnostic error text in hosted message, retry,
+  compaction and extension events before retaining or streaming them.
   BYOK users are told to update rejected or expired keys; other BYOK failures
   retain the provider's error detail.
+  Each failed assistant response writes one `ERROR` log named
+  `agent provider request failed`, with `session_id`, `provider`, `model` and
+  the complete `err` string reported by Pi. Logging happens before hosted
+  redaction; conversation content is not included. Pi's original session file
+  remains private and unchanged for persistence and resume.
   Failures that Pi is retrying and user cancellations do not create error
   bubbles; the composer continues to follow `agent_settled`.
 - Session files remain version 3 JSONL. Exhibit keeps Pi's bytes, restores
