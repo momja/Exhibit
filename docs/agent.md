@@ -918,9 +918,10 @@ from 0.99.1 through 1.3.0 retain Exhibit's RPC and session contracts:
   reconciliation. Guardrail usage remains separately reported operator spend.
   Chat displays a final provider failure from `agent_end` when `willRetry`
   is false, including authentication errors that contain no text deltas.
-  Rejected or expired keys tell BYOK users to update their key; platform users
-  are directed to the person managing the instance. Other failures retain the
-  provider's error detail.
+  Hosted/platform mode shows a generic failure message for every provider
+  failure, without mentioning credentials or including provider error details.
+  BYOK users are told to update rejected or expired keys; other BYOK failures
+  retain the provider's error detail.
   Failures that Pi is retrying and user cancellations do not create error
   bubbles; the composer continues to follow `agent_settled`.
 - Session files remain version 3 JSONL. Exhibit keeps Pi's bytes, restores

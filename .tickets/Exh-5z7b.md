@@ -15,7 +15,7 @@ Provider failures are delivered in assistant message_end events but agent.js ign
 
 ## Acceptance Criteria
 
-Show one useful provider error in chat when a final assistant message fails; keep cancellation and retries correct; add focused browser-module tests; verify with an actual provider failure.
+Show one useful provider error in chat when a final assistant message fails; hosted mode uses a generic failure message with no API key or provider details, while BYOK mode can explain key recovery; keep cancellation and retries correct; add focused browser-module tests; verify with an actual provider failure.
 
 
 ## Notes
@@ -27,3 +27,9 @@ Reproduced the deployed artifact-edit failure: agent_start and exhibit_source_pr
 Completed the interrupted provider-error fix. Final failed runs now display one error; rejected/expired/invalid keys explain how BYOK users can update their key, while platform users are directed to the instance owner. Other failures retain provider details. Automatic retries stay quiet until exhausted, successful retries stay clear, and cancellation does not appear as a provider failure. Settlement still controls the composer.
 
 Validation: make assets; go build ./cmd/server; go test ./internal/api -run '^TestGalleryPageScriptSuite$' -count=1; git diff --check. Three provider-error regressions failed against the original implementation. A live browser using the real Pi 1.4.0 sidecar and a local HTTP 401 provider displayed the actionable message exactly once after preparation and settled normally. Screenshot: docs/screenshots/Exh-5z7b/provider-key-error.png. Production artifact/widget revisions were unchanged by the diagnostic. Production has not been redeployed.
+
+**2026-10-25T01:29:54Z**
+
+Hosted-mode follow-up: every final provider failure now displays only "The agent could not complete your request. Please try again." in chat. No provider error detail or API-key explanation is shown in hosted failure messages; BYOK retains actionable key recovery and provider diagnostics. Updated acceptance criteria and documentation.
+
+Validation: full gallery page-script suite passed, server rebuilt, and a real-Pi hosted session against the local HTTP 401 provider showed exactly one generic error with no key control. Added regression cases for authentication, expired keys, arbitrary provider text containing credential details, and missing detail. Saved hosted-generic-error.png alongside the existing BYOK screenshot. Production remains undeployed.

@@ -534,12 +534,11 @@ function handleAgentEvent(ev) {
 }
 
 function providerFailureMessage(detail) {
+  if (!BYOK) return 'The agent could not complete your request. Please try again.';
   detail = detail || 'The AI provider could not complete the request.';
   const rejectedKey = /\b401\b|(?:invalid|expired|revoked) api key|api key.*(?:invalid|expired|revoked)/i.test(detail);
   if (rejectedKey) {
-    return BYOK
-      ? 'Your AI provider rejected the API key. Update it using the key button above, then try again.'
-      : 'The AI provider rejected this instance’s API key. Contact the person who manages Exhibit.';
+    return 'Your AI provider rejected the API key. Update it using the key button above, then try again.';
   }
   return 'Agent request failed: ' + detail;
 }

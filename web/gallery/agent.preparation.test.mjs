@@ -78,18 +78,25 @@ test('expired and invalid API key errors explain how to recover without an HTTP 
   }
 });
 
-test('platform authentication failures direct users to the instance owner', async () => {
-  const page = await boot(() => json({id: 'session'}));
-  await page.type('connection test');
-  await page.window.send();
-  emit(page, {type: 'agent_end', messages: [{role: 'assistant', stopReason: 'error', errorMessage: '401 Unauthorized'}], willRetry: false});
-  assert.equal(errors(page).length, 1);
-  assert.match(errors(page)[0].textContent, /Contact the person who manages Exhibit/);
-  assert.doesNotMatch(errors(page)[0].textContent, /key button/);
+test('hosted provider failures show only a generic message, regardless of error detail', async () => {
+  for (const errorMessage of [
+    '401 Unauthorized',
+    'Your API key has expired.',
+    'OpenRouter: 503 Service unavailable; API key diagnostic-credential',
+    undefined,
+  ]) {
+    const page = await boot(() => json({id: 'session'}));
+    await page.type('connection test');
+    await page.window.send();
+    emit(page, {type: 'agent_end', messages: [{role: 'assistant', stopReason: 'error', errorMessage}], willRetry: false});
+    emit(page, {type: 'agent_settled'});
+    assert.equal(errors(page).length, 1);
+    assert.equal(errors(page)[0].textContent, 'The agent could not complete your request. Please try again.');
+  }
 });
 
 test('retryable provider failures stay quiet until retries finish', async () => {
-  const page = await boot(() => json({id: 'session'}));
+  const page = await boot(() => json({id: 'session'}), {byok: true});
   await page.type('connection test');
   await page.window.send();
   const message = {role: 'assistant', stopReason: 'error', errorMessage: '503 Service unavailable'};
@@ -133,7 +140,7 @@ test('successes, cancellations, and tool errors are not provider failures', asyn
 });
 
 test('provider failures without detail still give a useful message', async () => {
-  const page = await boot(() => json({id: 'session'}));
+  const page = await boot(() => json({id: 'session'}), {byok: true});
   await page.type('connection test');
   await page.window.send();
   emit(page, {type: 'agent_end', messages: [{role: 'assistant', stopReason: 'error'}], willRetry: false});
