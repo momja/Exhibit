@@ -1,6 +1,6 @@
 ---
 id: Exh-phjp
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-25T15:10:59Z
@@ -20,3 +20,9 @@ Read and validate AGENT_THINKING_LEVEL during server startup. Pass an explicit P
 
 Supported levels are off, minimal, low, medium, high, xhigh, and max. Invalid values fail startup. A configured value reaches Pi for fresh and resumed sessions. Unset preserves existing behavior. Deployment documentation and focused tests cover the contract.
 
+
+## Notes
+
+**2026-10-25T15:19:26Z**
+
+Implemented AGENT_THINKING_LEVEL startup validation, a shared Pi --thinking override for fresh/resumed sessions, Compose forwarding, and deployment/agent documentation. Unset preserves existing defaults and saved thinking levels. Verified with real Pi RPC state tests, make assets, go test ./internal/agent ./internal/api ./cmd/server -timeout=10m, a built-server invalid-setting startup check, and Compose unset/high/off checks.

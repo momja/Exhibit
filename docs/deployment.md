@@ -58,6 +58,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `MAX_REQUEST_BODY_BYTES` | `33554432` (32 MiB) | The largest request body any route accepts, in bytes. A bigger one is refused `413` before it is read. The default fits a snapshot that vendored a wasm runtime, exported and pasted back, with room to spare. A write peaks at about ten times its size in memory, so lower it on a small machine. Anything but a positive number is a **startup failure**; there is no value that turns the limit off |
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
 | `PI_BIN` | `pi` | Path to the AI agent executable. The Docker image installs it; set this only when running from source with `pi` somewhere other than `PATH` |
+| `AGENT_THINKING_LEVEL` | *(unset)* | Instance-wide thinking level for all agent sessions: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. Unset uses Pi's default (`medium` for new conversations) or a resumed conversation's saved level. Invalid values fail startup; Pi adjusts valid levels to the model's capabilities |
 | `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
 | `AGENT_API_KEY` | *(unset)* | The instance's **own** provider key for the AI agent. Unset = bring-your-own-key, the default and what every existing instance does. Set = platform mode; read [§4.1](#41-letting-the-instance-supply-the-agent-key-platform-mode) before you set it |
 | `AGENT_PROVIDER` | *(unset)* | Which provider `AGENT_API_KEY` belongs to — `anthropic`, `openai`, `google`, `openrouter`, `opencode-go`. **Required** when the key is set; missing or unrecognized is a startup failure, not a surprise at the first session |
@@ -655,6 +656,15 @@ ships everything it needs. Nothing to configure for the default: each user
 brings their own provider key, entered in the UI and
 encrypted at rest under `EXHIBIT_SECRET`. That is the right shape for a
 self-hosted library, where the operator is the user and the key is theirs.
+
+Set `AGENT_THINKING_LEVEL` to control thinking effort across the instance,
+for example `AGENT_THINKING_LEVEL=high docker compose up -d`. It applies to
+BYOK and platform sessions, widget generation, and resumed conversations.
+Restart the service after changing it; the new setting takes effect when a
+session starts or resumes and overrides that conversation's saved thinking
+level. Leaving it unset preserves Pi's default (`medium` for new conversations)
+and each resumed conversation's saved level. Pi adjusts the requested level to
+what the selected model supports; models without reasoning use `off`.
 
 ### 4.1 Letting the instance supply the agent key (platform mode)
 

@@ -186,6 +186,10 @@ func main() {
 	if err != nil {
 		fatal("configure the platform agent key", err)
 	}
+	thinkingLevel, err := agent.ThinkingLevelFromEnv()
+	if err != nil {
+		fatal("configure the agent thinking level", err)
+	}
 	// Usage-policy guardrail (av-gust): GUARDRAIL_* unset is no guardrail;
 	// partly set is fatal, because the operator believes one is running.
 	guardrail, err := agent.GuardrailFromEnv()
@@ -213,11 +217,12 @@ func main() {
 		slog.Warn("pi binary not found; agent support disabled", slog.String("pi_bin", piBin))
 	} else {
 		agentMgr, err = agent.New(agent.Config{
-			PiBin:       path,
-			WorkRoot:    dataDir + "/agent",
-			APIBaseURL:  appOrigin,
-			Credentials: agentCreds,
-			MockLLMURL:  mockLLMURL,
+			PiBin:         path,
+			WorkRoot:      dataDir + "/agent",
+			APIBaseURL:    appOrigin,
+			Credentials:   agentCreds,
+			MockLLMURL:    mockLLMURL,
+			ThinkingLevel: thinkingLevel,
 			// In platform mode the model is not the user's to know, so Pi's
 			// own identifiers are stripped from the event stream and the
 			// persisted transcript too (av-siqf).

@@ -56,6 +56,9 @@ type Config struct {
 	MockLLMURL   string // when set, sessions may use the "exhibit-mock" provider
 	IdleTimeout  time.Duration
 	SystemPrompt string // optional override of the role prompt; empty uses the default
+	// ThinkingLevel overrides Pi's thinking level for every new or resumed
+	// session. Empty keeps Pi's default or the saved conversation's level.
+	ThinkingLevel string
 	// HideModelIdentity strips the provider/model identifiers out of Pi's
 	// event stream and persisted transcripts (av-siqf). It is set when the
 	// instance supplies the credential itself, where the model is not the
@@ -325,6 +328,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	// default. The isolated environment below still supplies only this key.
 	if opts.Model != "" {
 		args = append(args, "--provider", opts.Provider, "--model", opts.Model)
+	}
+	if m.cfg.ThinkingLevel != "" {
+		args = append(args, "--thinking", m.cfg.ThinkingLevel)
 	}
 	if m.cfg.Guardrail != nil {
 		args = append(args, "-e", m.guardPath)

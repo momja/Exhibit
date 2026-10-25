@@ -861,6 +861,7 @@ capture leaves the sandbox only as data posted to that host.
 | Env | Meaning |
 |-----|---------|
 | `PI_BIN` | pi executable (default `pi`). If missing, the server boots and every agent route answers `503`: a broken install, not a configuration |
+| `AGENT_THINKING_LEVEL` | instance-wide Pi thinking override: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. Applies to BYOK, platform, widget, and resumed sessions via `--thinking`; invalid values fail startup. Unset preserves Pi's default (`medium` for new conversations) or the saved session level. Pi adjusts the level to model support |
 | `EXHIBIT_SECRET` | optional server secret for key encryption (else `data/secret.key` is generated) |
 | `MOCK_LLM_URL` | dev/test only: enables the `exhibit-mock` provider pointing at `cmd/mockllm` |
 | `AGENT_API_KEY` | the instance's own provider key — set it to enable platform mode; unset is BYOK |
