@@ -581,13 +581,9 @@ func (ro *Router) setupRoutes() {
 				// Artifact-centric tag routes
 				r.Post("/tags/{tagID}", ro.addArtifactTag)
 				r.Delete("/tags/{tagID}", ro.removeArtifactTag)
-				// Who can open this artifact (av-6xjd): its anonymous link and
-				// every account holding a grant. Read-only here, because a
-				// share row has an id of its own and is minted and revoked
-				// under /api/shares by that id. What this adds is the question
-				// neither of those can answer — what is true right now — and
-				// you cannot audit what you cannot list.
+				// Owner-only sharing audit and recipient-addressed grant revocation.
 				r.Get("/shares", ro.listArtifactShares)
+				r.Delete("/grants", ro.deleteGrant)
 				// Agent conversations kept with this artifact (av-y7td): the
 				// list, and one as what was said in it. Owner-only, and
 				// absent from agentSubResources, so a session steered by text

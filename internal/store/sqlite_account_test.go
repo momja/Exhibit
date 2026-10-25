@@ -266,7 +266,8 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 
 	require.NoError(t, s.SetOriginDecision(ctx, member.ID, deletedArtifact,
 		"https://api.example.test", "allow", "user"))
-	require.NoError(t, s.CreateShare(ctx, member.ID, &Share{ID: "member-share", ArtifactID: deletedArtifact}))
+	_, createdLinkErr := s.CreateAnonymousLink(ctx, member.ID, deletedArtifact)
+	require.NoError(t, createdLinkErr)
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))
 	require.NoError(t, s.SetAgentKey(ctx, &AgentKey{OwnerID: member.ID, Provider: "anthropic", KeyCiphertext: "sealed"}))
 	require.NoError(t, s.SaveTranscript(ctx, member.ID, Transcript{ArtifactID: deletedArtifact, SessionID: "sess-1", SessionFile: "{}\n"}))
@@ -371,7 +372,8 @@ func TestDeleteAccountTouchesNoOtherAccount(t *testing.T) {
 	require.NoError(t, fx.s.PutArtifact(ctx, &Artifact{
 		ID: "admin-artifact", OwnerID: fx.admin.ID, Title: "Theirs", SourceBlobID: "admin-body", Tier: Tier1}))
 	require.NoError(t, fx.s.CreateTag(ctx, &Tag{ID: "admin-tag", OwnerID: fx.admin.ID, Name: "theirs"}))
-	require.NoError(t, fx.s.CreateShare(ctx, fx.admin.ID, &Share{ID: "admin-share", ArtifactID: "admin-artifact"}))
+	createdLink, createdLinkErr := fx.s.CreateAnonymousLink(ctx, fx.admin.ID, "admin-artifact")
+	require.NoError(t, createdLinkErr)
 	require.NoError(t, fx.s.CreateSession(ctx, &Session{
 		ID: "session-admin", UserID: fx.admin.ID, ExpiresAt: time.Now().Add(time.Hour)}))
 
@@ -384,7 +386,7 @@ func TestDeleteAccountTouchesNoOtherAccount(t *testing.T) {
 	tags, err := fx.s.ListTags(ctx, fx.admin.ID)
 	require.NoError(t, err)
 	assert.Len(t, tags, 1)
-	sh, err := fx.s.GetShare(ctx, fx.admin.ID, "admin-share")
+	sh, err := fx.s.GetShare(ctx, fx.admin.ID, createdLink.ID)
 	require.NoError(t, err)
 	assert.NotNil(t, sh, "somebody else's share link still resolves")
 	_, err = fx.s.GetSession(ctx, "session-admin")
@@ -447,8 +449,8 @@ func TestGetAccountSummaryCountsWhatDeletionWouldDestroy(t *testing.T) {
 	// link is singular (av-lrae) and seedEverything already minted it. That is
 	// the more interesting count anyway — the sentence this number appears in
 	// is about people who will lose their access.
-	require.NoError(t, fx.s.CreateShare(ctx, fx.member.ID,
-		&Share{ID: "member-share-2", ArtifactID: deletedArtifact, RecipientID: &fx.admin.ID}))
+	_, createdGrantErr := fx.s.CreateGrant(ctx, fx.member.ID, deletedArtifact, fx.admin.ID)
+	require.NoError(t, createdGrantErr)
 	sum, err = fx.s.GetAccountSummary(ctx, fx.member.ID)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), sum.Shares)
@@ -456,7 +458,8 @@ func TestGetAccountSummaryCountsWhatDeletionWouldDestroy(t *testing.T) {
 	// Another account's library is not in the count.
 	require.NoError(t, fx.s.PutArtifact(ctx, &Artifact{
 		ID: "admin-artifact", OwnerID: fx.admin.ID, Title: "Theirs", SourceBlobID: "admin-body", Tier: Tier1}))
-	require.NoError(t, fx.s.CreateShare(ctx, fx.admin.ID, &Share{ID: "admin-share", ArtifactID: "admin-artifact"}))
+	_, createdLinkErr := fx.s.CreateAnonymousLink(ctx, fx.admin.ID, "admin-artifact")
+	require.NoError(t, createdLinkErr)
 	sum, err = fx.s.GetAccountSummary(ctx, fx.member.ID)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), sum.Artifacts)

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/momja/Exhibit/internal/store"
 )
 
 // frameAncestors returns the frame-ancestors directive value, failing if it is
@@ -116,12 +115,12 @@ func TestShareFrameAncestors(t *testing.T) {
 // policy naming the app origin as well would also pass.
 func TestServeShareWithoutEmbedOriginsIsFramableByAnyone(t *testing.T) {
 	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
-	if err := st.CreateShare(context.Background(), 1,
-		&store.Share{ID: "sh1", ArtifactID: "abc"}); err != nil {
+	createdLink, err := st.CreateAnonymousLink(context.Background(), 1, "abc")
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	csp := serveShare(t, rd, "sh1").Header().Get("Content-Security-Policy")
+	csp := serveShare(t, rd, createdLink.ID).Header().Get("Content-Security-Policy")
 	if fa := frameAncestors(t, csp); fa != "*" {
 		t.Fatalf("an unconfigured share must be framable by anyone, got frame-ancestors %q", fa)
 	}
@@ -139,12 +138,12 @@ func TestServeShareWithoutEmbedOriginsIsFramableByAnyone(t *testing.T) {
 func TestServeShareHonorsConfiguredEmbedOrigins(t *testing.T) {
 	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>hi</body></html>")
 	rd.cfg.EmbedOrigins = []string{"https://landing.example", "https://docs.example"}
-	if err := st.CreateShare(context.Background(), 1,
-		&store.Share{ID: "sh1", ArtifactID: "abc"}); err != nil {
+	createdLink, err := st.CreateAnonymousLink(context.Background(), 1, "abc")
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	fa := frameAncestors(t, serveShare(t, rd, "sh1").Header().Get("Content-Security-Policy"))
+	fa := frameAncestors(t, serveShare(t, rd, createdLink.ID).Header().Get("Content-Security-Policy"))
 	want := "https://app.test https://landing.example https://docs.example"
 	if fa != want {
 		t.Fatalf("share frame-ancestors\n got %q\nwant %q", fa, want)

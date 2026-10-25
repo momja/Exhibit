@@ -81,16 +81,12 @@ func TestABulkGrantReportsEveryNameSeparately(t *testing.T) {
 
 	// Bob already holds a grant, so his row reports what is true rather than
 	// failing the request: the owner wanted him to have access and he has it.
-	require.NoError(t, ro.cfg.Store.CreateShare(ctx, defaultOwnerID, &store.Share{
-		ID: "existing-bob", ArtifactID: artifactID,
-		RecipientID: userIDOf(t, ro, "bob"),
-	}))
+	_, createdGrantErr := ro.cfg.Store.CreateGrant(ctx, defaultOwnerID, artifactID, userIDOf(t, ro, "bob"))
+	require.NoError(t, createdGrantErr)
 
 	results := grantTo(t, ro, artifactID, []string{"alice", "bob", "tpyo"})
 	require.Len(t, results, 3)
-	assert.Equal(t, grantResult{Name: "alice", Status: grantStatusGranted,
-		ShareID: results[0].ShareID}, results[0])
-	assert.NotEmpty(t, results[0].ShareID)
+	assert.Equal(t, grantResult{Name: "alice", Status: grantStatusGranted}, results[0])
 	assert.Equal(t, grantStatusExisting, results[1].Status)
 	assert.Equal(t, grantStatusUnknown, results[2].Status,
 		"a name nobody holds must be reported, or the owner believes their friend has access")
@@ -441,11 +437,11 @@ func seedLocalAccount(t *testing.T, ro *Router, name string) int64 {
 	return u.ID
 }
 
-func userIDOf(t *testing.T, ro *Router, name string) *int64 {
+func userIDOf(t *testing.T, ro *Router, name string) int64 {
 	t.Helper()
 	u, err := ro.cfg.Store.GetUserByExternalID(context.Background(), auth.LocalExternalID(name))
 	require.NoError(t, err)
-	return &u.ID
+	return u.ID
 }
 
 func grantTo(t *testing.T, ro *Router, artifactID string, names []string) []grantResult {

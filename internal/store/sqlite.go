@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 
@@ -1387,25 +1388,44 @@ func (s *SQLiteStore) InstanceAgentSpend(ctx context.Context, since time.Time) (
 		since.UTC().Format(datetimeLayout))
 }
 
-// CreateShare mints a share of an artifact, so it is gated on owning that
-// artifact — otherwise a share row would be a way to publish someone else's
-// library, through the deliberately unauthenticated /s/:id path or, now, by
-// granting it to oneself.
-//
-// A nil RecipientID mints the artifact's anonymous link; a set one grants that
-// account. Both uniqueness rules are the schema's (av-lrae), so a second link
-// or a repeat grant surfaces as ErrDuplicateShare — a refusal, not a fault.
-func (s *SQLiteStore) CreateShare(ctx context.Context, ownerID int64, sh *Share) error {
-	if err := s.ownsArtifact(ctx, ownerID, sh.ArtifactID); err != nil {
-		return err
+// CreateGrant grants access to one named account. A missing recipient fails
+// before any insert, so forgetting it can never mint a public link.
+func (s *SQLiteStore) CreateGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) (*Share, error) {
+	if recipientID <= 0 {
+		return nil, errors.New("recipient_id must be positive")
 	}
+	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
+		return nil, err
+	}
+	id := uuid.New().String()
 	_, err := s.db.ExecContext(ctx,
 		"INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, ?)",
-		sh.ID, sh.ArtifactID, sh.RecipientID)
+		id, artifactID, recipientID)
 	if isUniqueViolation(err) {
-		return ErrDuplicateShare
+		return nil, ErrDuplicateShare
 	}
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return &Share{ID: id, ArtifactID: artifactID, RecipientID: &recipientID}, nil
+}
+
+// CreateAnonymousLink explicitly publishes the artifact through /s/:id.
+// Uniqueness is enforced by the schema, just as it is for grants.
+func (s *SQLiteStore) CreateAnonymousLink(ctx context.Context, ownerID int64, artifactID string) (*Share, error) {
+	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
+		return nil, err
+	}
+	id := uuid.New().String()
+	_, err := s.db.ExecContext(ctx,
+		"INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, NULL)", id, artifactID)
+	if isUniqueViolation(err) {
+		return nil, ErrDuplicateShare
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &Share{ID: id, ArtifactID: artifactID}, nil
 }
 
 // GetShare resolves a share the caller owns (through its artifact), of either
@@ -1452,6 +1472,14 @@ func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...a
 func (s *SQLiteStore) DeleteShare(ctx context.Context, ownerID int64, id string) error {
 	return s.execOwned(ctx,
 		"DELETE FROM shares WHERE id=? AND "+ownedArtifact, id, ownerID)
+}
+
+// DeleteGrant revokes one (artifact, recipient) grant. Missing grants and
+// artifacts outside this owner's library both return ErrNotFound, like DeleteShare.
+func (s *SQLiteStore) DeleteGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) error {
+	return s.execOwned(ctx,
+		"DELETE FROM shares WHERE artifact_id=? AND recipient_id=? AND "+ownedArtifact,
+		artifactID, recipientID, ownerID)
 }
 
 // ListArtifactShares enumerates one artifact's shares for its owner (av-6xjd)

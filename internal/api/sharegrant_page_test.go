@@ -50,9 +50,8 @@ func newGrantedInstance(t *testing.T) grantedInstance {
 	in := newTwoOwnerInstance(t)
 	ctx := context.Background()
 
-	require.NoError(t, in.ro.cfg.Store.CreateShare(ctx, in.ownerOne, &store.Share{
-		ID: "grant-to-two", ArtifactID: in.artifactOne, RecipientID: &in.ownerTwo,
-	}))
+	_, createdGrantErr := in.ro.cfg.Store.CreateGrant(ctx, in.ownerOne, in.artifactOne, in.ownerTwo)
+	require.NoError(t, createdGrantErr)
 	// The recipient's own rows on somebody else's artifact — av-q0ub's
 	// (artifact, viewer) key, which is what "their own state inlined" means.
 	require.NoError(t, in.ro.cfg.Store.SetState(ctx,
@@ -85,8 +84,8 @@ func TestAGrantIsWhatOpensTheOrdinaryArtifactURL(t *testing.T) {
 			"owners' libraries")
 	assert.NotContains(t, before.Body.String(), ownerOneTitle)
 
-	require.NoError(t, in.ro.cfg.Store.CreateShare(context.Background(), in.ownerOne,
-		&store.Share{ID: "grant-to-two", ArtifactID: in.artifactOne, RecipientID: &in.ownerTwo}))
+	_, createdGrantErr := in.ro.cfg.Store.CreateGrant(context.Background(), in.ownerOne, in.artifactOne, in.ownerTwo)
+	require.NoError(t, createdGrantErr)
 
 	after := in.get(t, "/artifacts/"+in.artifactOne, in.cookieTwo)
 	require.Equal(t, http.StatusOK, after.Code)

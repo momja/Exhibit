@@ -35,9 +35,9 @@ func (f *fakeSnapshotter) Snapshot(_ context.Context, pageURL string) ([]byte, e
 }
 
 // newPreviewRenderer is a renderer with one artifact titled title, its
-// anonymous link "the-link", a grant "the-grant" and the generic card, and the
+// anonymous link, a grant and the generic card, and the
 // snapshotter given (nil for none).
-func newPreviewRenderer(t *testing.T, title string, snap Snapshotter) (*Renderer, *store.SQLiteStore) {
+func newPreviewRenderer(t *testing.T, title string, snap Snapshotter) (*Renderer, *store.SQLiteStore, string, string) {
 	t.Helper()
 	rd, st := newTestRenderer(t, "other", "<html></html>")
 	ctx := context.Background()
@@ -54,16 +54,18 @@ func newPreviewRenderer(t *testing.T, title string, snap Snapshotter) (*Renderer
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateShare(ctx, 1, &store.Share{ID: "the-link", ArtifactID: "abc"}); err != nil {
+	createdLink, err := st.CreateAnonymousLink(ctx, 1, "abc")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateShare(ctx, 1, &store.Share{ID: "the-grant", ArtifactID: "abc", RecipientID: &recipient.ID}); err != nil {
+	createdGrant, err := st.CreateGrant(ctx, 1, "abc", recipient.ID)
+	if err != nil {
 		t.Fatal(err)
 	}
 	rd.cfg.PreviewImagePNG = genericPNG
 	rd.cfg.Snapshotter = snap
 	rd.previews = newPreviewCache(snap)
-	return rd, st
+	return rd, st, createdLink.ID, createdGrant.ID
 }
 
 func servePreviewImage(t *testing.T, rd *Renderer, shareID string) *httptest.ResponseRecorder {
@@ -81,9 +83,9 @@ func servePreviewImage(t *testing.T, rd *Renderer, shareID string) *httptest.Res
 // image, ahead of anything else in <head> — a crawler that stops reading early
 // must still have read these.
 func TestALiveLinkCarriesThePreviewTags(t *testing.T) {
-	rd, _ := newPreviewRenderer(t, "Run Log", nil)
+	rd, _, link, _ := newPreviewRenderer(t, "Run Log", nil)
 
-	w := serveShareRaw(t, rd, "the-link")
+	w := serveShareRaw(t, rd, link)
 	if w.Code != 200 {
 		t.Fatalf("got %d: %s", w.Code, w.Body.String())
 	}
@@ -95,8 +97,8 @@ func TestALiveLinkCarriesThePreviewTags(t *testing.T) {
 		`<meta property="og:type" content="website">`,
 		`<meta property="og:title" content="Run Log">`,
 		`<meta property="og:description" content="` + previewDescription + `">`,
-		`<meta property="og:url" content="https://render.test/s/the-link">`,
-		`<meta property="og:image" content="https://render.test/s/the-link/og.png">`,
+		`<meta property="og:url" content="https://render.test/s/` + link + `">`,
+		`<meta property="og:image" content="https://render.test/s/` + link + `/og.png">`,
 		`<meta property="og:image:type" content="image/png">`,
 		`<meta property="og:image:width" content="1056">`,
 		`<meta property="og:image:height" content="528">`,
@@ -117,12 +119,12 @@ func TestALiveLinkCarriesThePreviewTags(t *testing.T) {
 // after them, a crawler keeps the page's title and image, or stops reading
 // before it reaches ours.
 func TestPreviewTagsLeadAnAttributedHead(t *testing.T) {
-	rd, _ := newPreviewRenderer(t, "Run Log", nil)
+	rd, _, link, _ := newPreviewRenderer(t, "Run Log", nil)
 	if err := rd.cfg.Blob.Put(context.Background(), "abc-blob", strings.NewReader(
 		`<html><head prefix="og: https://ogp.me/ns#"><meta property="og:title" content="Source page"></head><body></body></html>`)); err != nil {
 		t.Fatal(err)
 	}
-	body := serveShareRaw(t, rd, "the-link").Body.String()
+	body := serveShareRaw(t, rd, link).Body.String()
 	head := strings.Index(body, `<head prefix="og: https://ogp.me/ns#">`)
 	ours := strings.Index(body, `content="Run Log"`)
 	theirs := strings.Index(body, `content="Source page"`)
@@ -136,7 +138,7 @@ func TestPreviewTagsLeadAnAttributedHead(t *testing.T) {
 // crawled, and carrying them there would put a share URL into a page that has
 // no share.
 func TestOnlyTheShareDocumentCarriesPreviewTags(t *testing.T) {
-	rd, _ := newPreviewRenderer(t, "Run Log", nil)
+	rd, _, _, _ := newPreviewRenderer(t, "Run Log", nil)
 	if body := serve(t, rd, "abc"); strings.Contains(body, "og:") {
 		t.Fatal("the owner's own render must not carry link-preview tags")
 	}
@@ -145,8 +147,8 @@ func TestOnlyTheShareDocumentCarriesPreviewTags(t *testing.T) {
 // The title is the owner's text, or a fetched page's. It is an attribute value
 // here and must stay one.
 func TestPreviewTagsEscapeTheTitle(t *testing.T) {
-	rd, _ := newPreviewRenderer(t, `"><script>alert(1)</script>`, nil)
-	body := serveShareRaw(t, rd, "the-link").Body.String()
+	rd, _, link, _ := newPreviewRenderer(t, `"><script>alert(1)</script>`, nil)
+	body := serveShareRaw(t, rd, link).Body.String()
 	if strings.Contains(body, `"><script>alert(1)`) {
 		t.Fatal("the title escaped its attribute")
 	}
@@ -160,19 +162,19 @@ func TestPreviewTagsEscapeTheTitle(t *testing.T) {
 // that came from an artifact. Identical bytes, or the preview of a pasted id
 // would say which kind of dead it is.
 func TestDeadLinksCarryOnlyGenericTagsAndAreIndistinguishable(t *testing.T) {
-	rd, st := newPreviewRenderer(t, "Secret Ledger", nil)
+	rd, st, link, grant := newPreviewRenderer(t, "Secret Ledger", nil)
 	// Revoking the live link is what makes a revoked id; a grant and an
 	// unissued id stand beside it.
-	before := serveShareRaw(t, rd, "the-link")
+	before := serveShareRaw(t, rd, link)
 	if before.Code != 200 {
 		t.Fatalf("the link must serve before it is revoked, got %d", before.Code)
 	}
-	if err := st.DeleteShare(context.Background(), 1, "the-link"); err != nil {
+	if err := st.DeleteShare(context.Background(), 1, link); err != nil {
 		t.Fatal(err)
 	}
 
 	var first string
-	for _, id := range []string{"the-grant", "the-link", "never-issued"} {
+	for _, id := range []string{grant, link, "never-issued"} {
 		w := serveShareRaw(t, rd, id)
 		if w.Code != 404 {
 			t.Fatalf("%s: got %d, want 404", id, w.Code)
@@ -195,7 +197,7 @@ func TestDeadLinksCarryOnlyGenericTagsAndAreIndistinguishable(t *testing.T) {
 		if first == "" {
 			first = body
 		} else if body != first {
-			t.Fatalf("%s answered differently from the-grant:\n%s\nvs\n%s", id, body, first)
+			t.Fatalf("%s answered differently from %s:\n%s\nvs\n%s", id, grant, body, first)
 		}
 	}
 }
@@ -204,10 +206,10 @@ func TestDeadLinksCarryOnlyGenericTagsAndAreIndistinguishable(t *testing.T) {
 // URL — never the artifact document — and drawn once for a burst of unfurls.
 func TestPreviewImageIsTheSharedWidgetSnapshotted(t *testing.T) {
 	snap := &fakeSnapshotter{png: []byte("widget-png")}
-	rd, _ := newPreviewRenderer(t, "Run Log", snap)
+	rd, _, link, _ := newPreviewRenderer(t, "Run Log", snap)
 
 	for range 3 {
-		w := servePreviewImage(t, rd, "the-link")
+		w := servePreviewImage(t, rd, link)
 		if w.Code != 200 || w.Body.String() != "widget-png" {
 			t.Fatalf("got %d %q", w.Code, w.Body.String())
 		}
@@ -221,7 +223,7 @@ func TestPreviewImageIsTheSharedWidgetSnapshotted(t *testing.T) {
 	if n := snap.calls.Load(); n != 1 {
 		t.Fatalf("three unfurls drew %d snapshots, want 1", n)
 	}
-	if got := snap.urls[0]; got != "https://render.test/s/the-link/widget" {
+	if got := snap.urls[0]; got != "https://render.test/s/"+link+"/widget" {
 		t.Fatalf("snapshotted %q, want the shared widget", got)
 	}
 }
@@ -230,14 +232,14 @@ func TestPreviewImageIsTheSharedWidgetSnapshotted(t *testing.T) {
 // is still in the cache: the share row is resolved first, every time.
 func TestARevokedLinkServesNoCachedSnapshot(t *testing.T) {
 	snap := &fakeSnapshotter{png: []byte("widget-png")}
-	rd, st := newPreviewRenderer(t, "Run Log", snap)
-	if w := servePreviewImage(t, rd, "the-link"); w.Code != 200 {
+	rd, st, link, grant := newPreviewRenderer(t, "Run Log", snap)
+	if w := servePreviewImage(t, rd, link); w.Code != 200 {
 		t.Fatalf("got %d", w.Code)
 	}
-	if err := st.DeleteShare(context.Background(), 1, "the-link"); err != nil {
+	if err := st.DeleteShare(context.Background(), 1, link); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"the-link", "the-grant", "never-issued"} {
+	for _, id := range []string{link, grant, "never-issued"} {
 		w := servePreviewImage(t, rd, id)
 		if w.Code != 404 || strings.Contains(w.Body.String(), "widget-png") {
 			t.Fatalf("%s: got %d %q, want a plain 404", id, w.Code, w.Body.String())
@@ -249,15 +251,15 @@ func TestARevokedLinkServesNoCachedSnapshot(t *testing.T) {
 // is remembered like a success, so a widget that cannot be drawn is not
 // retried on every unfurl.
 func TestPreviewImageFallsBackToTheGenericCard(t *testing.T) {
-	rd, _ := newPreviewRenderer(t, "Run Log", nil)
-	if w := servePreviewImage(t, rd, "the-link"); w.Code != 200 || w.Body.String() != string(genericPNG) {
+	rd, _, link, _ := newPreviewRenderer(t, "Run Log", nil)
+	if w := servePreviewImage(t, rd, link); w.Code != 200 || w.Body.String() != string(genericPNG) {
 		t.Fatalf("with no snapshotter: got %d %q", w.Code, w.Body.String())
 	}
 
 	failing := &fakeSnapshotter{err: errors.New("browser gone")}
-	rd, _ = newPreviewRenderer(t, "Run Log", failing)
+	rd, _, link, _ = newPreviewRenderer(t, "Run Log", failing)
 	for range 2 {
-		if w := servePreviewImage(t, rd, "the-link"); w.Code != 200 || w.Body.String() != string(genericPNG) {
+		if w := servePreviewImage(t, rd, link); w.Code != 200 || w.Body.String() != string(genericPNG) {
 			t.Fatalf("with a failing snapshotter: got %d %q", w.Code, w.Body.String())
 		}
 	}
@@ -301,7 +303,7 @@ func TestPreviewCacheIsBounded(t *testing.T) {
 
 // The generic card is static artwork, served to anyone.
 func TestGenericPreviewImage(t *testing.T) {
-	rd, _ := newPreviewRenderer(t, "Run Log", nil)
+	rd, _, _, _ := newPreviewRenderer(t, "Run Log", nil)
 	w := httptest.NewRecorder()
 	rd.ServePreviewImage(w, httptest.NewRequest("GET", "/og.png", nil))
 	if w.Code != 200 || w.Body.String() != string(genericPNG) || w.Header().Get("Content-Type") != "image/png" {

@@ -92,13 +92,14 @@ func TestShareInlinesTheOwnersState(t *testing.T) {
 	if err := st.SetState(ctx, 1, "abc", store.ViewerID(otherViewer), "note", "SHOULD-NOT-APPEAR"); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateShare(ctx, 1, &store.Share{ID: "sh1", ArtifactID: "abc"}); err != nil {
+	createdLink, err := st.CreateAnonymousLink(ctx, 1, "abc")
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest("GET", "/s/sh1", nil)
+	req := httptest.NewRequest("GET", "/s/"+createdLink.ID, nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("shareID", "sh1")
+	rctx.URLParams.Add("shareID", createdLink.ID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 	rd.ServeShare(w, req)

@@ -219,8 +219,8 @@ func TestProfileDeleteSectionCountsLiveShares(t *testing.T) {
 	// A grant, not a second link: an artifact has exactly one anonymous link
 	// (av-lrae) and seedLibrary already minted it. The count the copy carries
 	// is "people who will lose access", which a grant is squarely part of.
-	require.NoError(t, in.st.CreateShare(context.Background(), in.member.ID,
-		&store.Share{ID: "to-the-admin", ArtifactID: id, RecipientID: &in.admin.ID}))
+	_, createdGrantErr := in.st.CreateGrant(context.Background(), in.member.ID, id, in.admin.ID)
+	require.NoError(t, createdGrantErr)
 
 	page := in.page(t)
 	assert.Contains(t, page, "<strong>1 artifact</strong>")

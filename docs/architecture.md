@@ -110,11 +110,16 @@ The only way data changes. Full route reference: `api.md`.
 - `GET/PUT/DELETE …/widget`: the card widget (av-fafu, `widgets.md`). `PUT` reports
   which widget origins the artifact's allowlist does not cover, and never seeds it.
   Each save is a version; an unchanged save records nothing.
-- `POST /api/shares`, `DELETE /api/shares/:id`: one route mints both kinds
-  (av-lrae). `recipients` makes a bulk grant answered per name (`granted` |
+- `POST /api/shares`: dispatches to explicit `CreateGrant` and
+  `CreateAnonymousLink` store paths (Exh-a9l6). `recipients` makes a bulk grant
+  answered per name (`granted` |
   `already_shared` | `unknown` | `ambiguous` | `self`; `unknown` deliberately
   confirms non-existence, av-6xjd). No recipients mints the one anonymous link;
   `replace: true` rotates it in one transaction.
+- `DELETE /api/shares/:id`: revoke the anonymous link, owner-only.
+- `DELETE /api/artifacts/:id/grants?recipient=:userID`: revoke one grant,
+  owner-only; recipient is a query parameter (av-hh1o). Missing grants answer 404,
+  matching link deletes. Grant views carry recipient ids, never row ids.
 - `GET /api/artifacts/:id/shares`: link and grants, owner-only (a recipient gets 404).
 - `DELETE /api/account`: erase the caller's own account and library (av-4wyq). Takes
   no id, requires a session (not the service token) and the typed confirmation
@@ -307,8 +312,11 @@ and writes state.
   token becomes a quoted prefix phrase (av-hic3).
 - **Shares**: `shares` plus rollups `artifacts.share_grant_count` and `share_link`,
   maintained only by triggers that recompute (migration 029, av-6xjd). Go never
-  writes them. `ReplaceAnonymousLink` rotates in one transaction. Recipients resolve
-  by `local:<name>` external id, then email; ambiguous email is refused
+  writes them. `CreateGrant` requires a positive recipient id; only
+  `CreateAnonymousLink` mints a public link, so an omitted grant recipient fails
+  closed (Exh-a9l6). `DeleteGrant` addresses (artifact, recipient) with owner
+  scoping in SQL. `ReplaceAnonymousLink` rotates in one transaction. Recipients
+  resolve by `local:<name>` external id, then email; ambiguous email is refused
   (`ErrAmbiguousUser`).
 - **Assets**: `artifact_assets`, bytes in the blob store, content-addressed per
   owner and never across owners (av-20fk). Deletability depends only on recorded

@@ -311,14 +311,14 @@
     </form>
     <div class="share-people-list" tabindex="0" role="region" aria-label="People with access">
     <ul class="share-grants" id="share-grants">
-      {{range .Shares.Grants}}<li class="share-grant" data-share-id="{{.ID}}">
+      {{range .Shares.Grants}}<li class="share-grant" data-recipient-id="{{.RecipientID}}">
         <span class="share-grant-name">{{.Name}}</span>
         {{/* A disabled account is shown rather than filtered: a row that
              silently vanishes is a row the owner cannot revoke and does not
              know exists. */}}
         {{if .Disabled}}<span class="text-sm muted">account disabled</span>{{end}}
         <span class="spacer"></span>
-        <button type="button" class="btn btn-sm btn-sec" data-action="revoke" data-share-id="{{.ID}}" aria-label="Revoke access for {{.Name}}"><i class="ph ph-x"></i> Revoke</button>
+        <button type="button" class="btn btn-sm btn-sec" data-action="revoke" data-recipient-id="{{.RecipientID}}" aria-label="Revoke access for {{.Name}}"><i class="ph ph-x"></i> Revoke</button>
       </li>{{end}}
     </ul>
     <p class="text-sm muted" id="share-empty"{{if .Shares.Grants}} hidden{{end}}>Nobody else has been given access.</p>

@@ -81,9 +81,8 @@ type createShareResponse struct {
 // Name is echoed back as typed so a caller can pair a result with the field it
 // came from, and so the page can say which spelling failed.
 type grantResult struct {
-	Name    string `json:"name"`
-	Status  string `json:"status"`
-	ShareID string `json:"share_id,omitempty"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
 }
 
 // The outcomes a handle can have. `unknown` is the one that matters: this
@@ -139,7 +138,7 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 	// Verify the artifact exists in this owner's library. Minting a share for
 	// someone else's artifact would publish it through the deliberately
 	// unauthenticated /s/:id path, so this is the sharpest of the ownership
-	// checks — and CreateShare re-asserts it in SQL besides.
+	// checks — and both creation methods re-assert it in SQL besides.
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerID, req.ArtifactID)
 	if err != nil {
 		serverError(w, r, "create share artifact lookup", err)
@@ -158,48 +157,29 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 	if len(req.Recipients) > 0 {
 		if req.Replace {
 			writeError(w, http.StatusBadRequest,
-				"replace applies to the artifact's public link, not to a grant: revoke a grant with DELETE /api/shares/:id")
+				"replace applies to the artifact's public link, not to a grant: revoke a grant with DELETE /api/artifacts/:id/grants?recipient=:userID")
 			return
 		}
 		ro.grantShares(w, r, ownerID, req.ArtifactID, req.Recipients)
 		return
 	}
 
-	sh := &store.Share{
-		ID:         uuid.New().String(),
-		ArtifactID: req.ArtifactID,
-	}
-
-	// Replace is one store call rather than a delete followed by a create,
-	// because the failure between those two leaves the artifact with no link —
-	// worse than either the old one or the new one (see the Store interface).
+	var sh *store.Share
 	if req.Replace {
-		replaced, err := ro.cfg.Store.ReplaceAnonymousLink(r.Context(), ownerID, req.ArtifactID, sh.ID)
-		if err != nil {
-			if errors.Is(err, store.ErrDuplicateShare) {
-				writeError(w, http.StatusConflict, "this artifact already has a public link")
-				return
-			}
-			writeArtifactError(w, r, "replace share link", err)
-			return
-		}
-		sh = replaced
-		slog.DebugContext(r.Context(), "share link replaced",
-			slog.String("share_id", sh.ID), slog.String("artifact_id", req.ArtifactID))
-	} else if err := ro.cfg.Store.CreateShare(r.Context(), ownerID, sh); err != nil {
-		// The artifact already has its one link (av-lrae). That is a schema
-		// invariant doing its job, so it is the caller's answer — 409 — rather
-		// than a 500 reporting our own constraint as a fault.
+		sh, err = ro.cfg.Store.ReplaceAnonymousLink(r.Context(), ownerID, req.ArtifactID, uuid.New().String())
+	} else {
+		sh, err = ro.cfg.Store.CreateAnonymousLink(r.Context(), ownerID, req.ArtifactID)
+	}
+	if err != nil {
 		if errors.Is(err, store.ErrDuplicateShare) {
 			writeError(w, http.StatusConflict, "this artifact already has a public link")
 			return
 		}
-		writeArtifactError(w, r, "create share", err)
+		writeArtifactError(w, r, "create share link", err)
 		return
-	} else {
-		slog.DebugContext(r.Context(), "share created",
-			slog.String("share_id", sh.ID), slog.String("artifact_id", req.ArtifactID))
 	}
+	slog.DebugContext(r.Context(), "share link created",
+		slog.String("share_id", sh.ID), slog.String("artifact_id", req.ArtifactID))
 
 	resp := createShareResponse{
 		Share:    sh,
@@ -264,13 +244,12 @@ func (ro *Router) grantShares(w http.ResponseWriter, r *http.Request, ownerID in
 			// self-grant is visible instead of looking like it worked.
 			res.Status = grantStatusSelf
 		default:
-			sh := &store.Share{ID: uuid.New().String(), ArtifactID: artifactID, RecipientID: &u.ID}
-			err := ro.cfg.Store.CreateShare(r.Context(), ownerID, sh)
+			_, err := ro.cfg.Store.CreateGrant(r.Context(), ownerID, artifactID, u.ID)
 			switch {
 			case err == nil:
-				res.Status, res.ShareID = grantStatusGranted, sh.ID
+				res.Status = grantStatusGranted
 				slog.DebugContext(r.Context(), "share granted",
-					slog.String("share_id", sh.ID), slog.String("artifact_id", artifactID),
+					slog.String("artifact_id", artifactID),
 					slog.Int64("recipient_id", u.ID))
 			case errors.Is(err, store.ErrDuplicateShare):
 				// One grant per (artifact, person) is a unique index, so this
@@ -360,8 +339,7 @@ type shareLinkView struct {
 }
 
 type shareGrantView struct {
-	ID          string `json:"id"`
-	RecipientID int64  `json:"recipient_id"`
+	RecipientID int64 `json:"recipient_id"`
 	// Name is the label a person recognizes, resolved by shareRecipientLabel.
 	// It is attacker-influenced text — a login name, or an address a provider
 	// reported — so every surface that renders it must escape it. On the page
@@ -387,7 +365,7 @@ func newArtifactSharesView(shares []store.ArtifactShare, shareURL func(string) s
 			view.Link = &link
 			continue
 		}
-		g := shareGrantView{ID: sh.ID, RecipientID: *sh.RecipientID}
+		g := shareGrantView{RecipientID: *sh.RecipientID}
 		if sh.Recipient != nil {
 			g.Name = shareRecipientLabel(sh.Recipient)
 			g.Disabled = sh.Recipient.Disabled
@@ -453,5 +431,29 @@ func (ro *Router) deleteShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.DebugContext(r.Context(), "share deleted", slog.String("share_id", id))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// deleteGrant names the recipient in a query parameter, never a path segment.
+// The store keeps the owner predicate in the DELETE itself.
+func (ro *Router) deleteGrant(w http.ResponseWriter, r *http.Request) {
+	if principalFromCtx(r.Context()).ReadOnly {
+		writeError(w, http.StatusForbidden, "read-only visitor may not mutate")
+		return
+	}
+	recipients := r.URL.Query()["recipient"]
+	if len(recipients) != 1 {
+		writeError(w, http.StatusBadRequest, "one recipient is required")
+		return
+	}
+	recipientID, err := strconv.ParseInt(recipients[0], 10, 64)
+	if err != nil || recipientID <= 0 {
+		writeError(w, http.StatusBadRequest, "recipient must be a positive user id")
+		return
+	}
+	if err := ro.cfg.Store.DeleteGrant(r.Context(), ownerIDFromCtx(r.Context()), urlParamID(r, "artifactID"), recipientID); err != nil {
+		writeArtifactError(w, r, "delete grant", err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }

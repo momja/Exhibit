@@ -668,12 +668,14 @@ type Store interface {
 	// Shares. A share is minted and revoked by the artifact's owner, so those
 	// two are owner-scoped; resolving one to serve it is not (below).
 	//
-	// CreateShare mints either kind: a nil Share.RecipientID is the artifact's
-	// one anonymous link, a set one is a grant to that account. Both
-	// uniqueness rules live in the schema, so a second link or a repeated
-	// grant comes back as ErrDuplicateShare rather than as a silently
-	// accepted duplicate.
-	CreateShare(ctx context.Context, ownerID int64, s *Share) error
+	// Creation paths are explicit: grants require a positive recipient id;
+	// only CreateAnonymousLink publishes an artifact without an account.
+	// Both return ErrDuplicateShare for a second link or a repeated grant.
+	CreateGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) (*Share, error)
+	CreateAnonymousLink(ctx context.Context, ownerID int64, artifactID string) (*Share, error)
+	// DeleteGrant addresses a grant by artifact and recipient, never its row id.
+	// A missing grant returns ErrNotFound, matching DeleteShare.
+	DeleteGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) error
 	GetShare(ctx context.Context, ownerID int64, id string) (*Share, error)
 	// ListArtifactShares is the enumeration half of sharing (av-6xjd): every
 	// share of one artifact, link and grants alike, each grant carrying the
