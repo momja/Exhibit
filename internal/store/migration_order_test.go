@@ -69,7 +69,7 @@ func TestEveryMigrationIsAboveTheVersionsAlreadyShipped(t *testing.T) {
 	// computed from the current tree — and because a new file numbered into a
 	// gap in this list is exactly what must fail.
 	shipped := map[int64]bool{}
-	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34} {
+	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36} {
 		shipped[v] = true
 	}
 	for _, v := range goMigrationVersions {
@@ -106,6 +106,7 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 	ctx := context.Background()
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id > 23",
+		"ALTER TABLE agent_keys DROP COLUMN thinking_level",
 		"DROP TABLE hosted_account_deletions",
 		"DROP TRIGGER remember_historical_asset_identity",
 		"DROP TRIGGER remember_current_asset_identity",
@@ -223,6 +224,7 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	// shares.recipient_id blocks that column's DROP.
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id >= 28",
+		"ALTER TABLE agent_keys DROP COLUMN thinking_level",
 		"DROP TABLE hosted_account_deletions",
 		"DROP TRIGGER remember_historical_asset_identity",
 		"DROP TRIGGER remember_current_asset_identity",

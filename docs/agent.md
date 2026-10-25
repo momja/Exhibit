@@ -287,6 +287,15 @@ widget branch so the path is covered end to end. Note the button's route is
   AES-256-GCM (`internal/secrets`) under the server secret (`EXHIBIT_SECRET`
   env, else a generated `data/secret.key`), and is never returned — GET yields
   only `sk-…1234`-style hints.
+- The same page saves an optional per-owner `thinking_level` with the key.
+  Empty means **Use server default**: `AGENT_THINKING_LEVEL`, or `medium`
+  when unset. An explicit level overrides that baseline in BYOK mode. A
+  settings save can keep the masked API key; omitting `thinking_level` from
+  PUT keeps the saved preference, while an explicit empty string clears it.
+  Hosted/platform sessions ignore personal levels and use the baseline only.
+  The resolved level is passed with `--thinking` for new and resumed sessions
+  and widget generation, so saved conversations cannot restore an old level
+  over the current setting. Pi adjusts it to the selected model's support.
 - At session spawn the key is decrypted and handed to the pi subprocess via a
   provider-specific env var (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
   `GEMINI_API_KEY`, `OPENCODE_API_KEY`, …) — never argv, never page JS. The
@@ -295,6 +304,10 @@ widget branch so the path is covered end to end. Note the button's route is
   read the operator's `~/.pi/agent/auth.json` — a stored login there would
   otherwise take precedence over the BYO key and silently bill the operator's
   account.
+
+![BYOK API-key settings with a thinking preference](screenshots/Exh-phjp/agent-thinking-settings.png)
+
+[Phone layout](screenshots/Exh-phjp/agent-thinking-settings-mobile.png).
 
 The same env carries the exhibit-side contract, and nothing broader than the
 session needs:
@@ -861,6 +874,7 @@ capture leaves the sandbox only as data posted to that host.
 | Env | Meaning |
 |-----|---------|
 | `PI_BIN` | pi executable (default `pi`). If missing, the server boots and every agent route answers `503`: a broken install, not a configuration |
+| `AGENT_THINKING_LEVEL` | instance baseline (default `medium`): `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. BYOK owners may override it on the API-key page; hosted/platform sessions use only this baseline. Applied to new/resumed sessions and widget generation via `--thinking`; invalid values fail startup. Pi adjusts the level to model support |
 | `EXHIBIT_SECRET` | optional server secret for key encryption (else `data/secret.key` is generated) |
 | `MOCK_LLM_URL` | dev/test only: enables the `exhibit-mock` provider pointing at `cmd/mockllm` |
 | `AGENT_API_KEY` | the instance's own provider key — set it to enable platform mode; unset is BYOK |

@@ -110,6 +110,18 @@
     <label for="key-model">Model</label>
     <input type="text" id="key-model" list="model-suggestions" placeholder="e.g. claude-sonnet-4-5">
     <datalist id="model-suggestions"></datalist>
+    <label for="key-thinking">Thinking level</label>
+    <select id="key-thinking" aria-describedby="key-thinking-help">
+      <option value="">Use server default</option>
+      <option value="off">Off</option>
+      <option value="minimal">Minimal</option>
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+      <option value="xhigh">Extra high</option>
+      <option value="max">Max</option>
+    </select>
+    <p class="note" id="key-thinking-help">Higher levels can take longer. Available levels depend on the model. Applies to new or resumed conversations.</p>
     <label for="key-secret">API key</label>
     <input type="password" id="key-secret" placeholder="sk-…" autocomplete="off">
     <div id="key-error" class="modal-error" hidden></div>

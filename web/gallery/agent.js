@@ -29,6 +29,7 @@ const pendingQuestions = new Set();
 let sendingQuestionMessage = false;
 let keyConfigured = false;
 let configuredProvider = null;   // provider the stored key currently belongs to, or null
+let configuredThinkingLevel = ''; // empty follows the server baseline
 let pendingSnippets = [];   // [{image:{data,mimeType}, descriptor, thumbUrl}]
 let snippetMode = false;
 // A brief arrived from /new but there was no key to send it with. saveKey
@@ -101,6 +102,8 @@ async function refreshKeyStatus() {
   const d = await r.json();
   keyConfigured = !!d.configured;
   configuredProvider = keyConfigured ? d.provider : null;
+  configuredThinkingLevel = d.thinking_level || '';
+  document.getElementById('key-thinking').value = configuredThinkingLevel;
   const btn = document.getElementById('key-btn');
   const label = document.getElementById('key-btn-label');
   if (keyConfigured) {
@@ -159,6 +162,7 @@ function clearMaskedKey(secret) {
 function openKeyModal() {
   if (!BYOK) return;
   document.getElementById('key-error').hidden = true;
+  document.getElementById('key-thinking').value = configuredThinkingLevel;
   const secret = document.getElementById('key-secret');
   if (keyConfigured) { showMaskedKey(secret); } else { clearMaskedKey(secret); }
   document.getElementById('key-modal').hidden = false;
@@ -190,6 +194,7 @@ function closeKeyModal() { document.getElementById('key-modal').hidden = true; }
 async function saveKey() {
   const provider = document.getElementById('key-provider').value;
   const model = document.getElementById('key-model').value.trim();
+  const thinking_level = document.getElementById('key-thinking').value;
   const secretInput = document.getElementById('key-secret');
   const errEl = document.getElementById('key-error');
   errEl.hidden = true;
@@ -202,7 +207,7 @@ async function saveKey() {
     api_key = secretInput.value.trim();
     if (!api_key) { errEl.textContent = 'Enter the API key.'; errEl.hidden = false; return; }
   }
-  const r = await apiFetch('/api/agent/key', {method:'PUT', body: JSON.stringify({provider, model, api_key})});
+  const r = await apiFetch('/api/agent/key', {method:'PUT', body: JSON.stringify({provider, model, api_key, thinking_level})});
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));
     errEl.textContent = d.error || 'Failed to save key.';

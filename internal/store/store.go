@@ -273,6 +273,7 @@ type AgentKey struct {
 	OwnerID       int64     `json:"owner_id"`
 	Provider      string    `json:"provider"`
 	Model         string    `json:"model"`
+	ThinkingLevel string    `json:"thinking_level"` // empty inherits the instance baseline
 	KeyCiphertext string    `json:"-"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

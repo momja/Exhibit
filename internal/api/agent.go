@@ -19,9 +19,10 @@ import (
 // short hint — page JS never sees the key again after entry.
 
 type putAgentKeyRequest struct {
-	Provider string `json:"provider"`
-	Model    string `json:"model"`
-	APIKey   string `json:"api_key"`
+	Provider      string  `json:"provider"`
+	Model         string  `json:"model"`
+	APIKey        string  `json:"api_key"`
+	ThinkingLevel *string `json:"thinking_level"` // omitted preserves the saved preference
 }
 
 func (ro *Router) putAgentKey(w http.ResponseWriter, r *http.Request) {
@@ -35,18 +36,32 @@ func (ro *Router) putAgentKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported provider")
 		return
 	}
-	ownerID := ownerIDFromCtx(r.Context())
-
-	// An empty api_key means "keep the currently stored key" — lets the UI
-	// save a model/provider-label change without forcing re-entry of the
-	// secret (Exh-454g). Only valid when a key for this provider already
-	// exists; switching providers still needs a fresh key.
-	if req.APIKey == "" {
-		existing, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerID)
-		if err != nil {
-			serverError(w, r, "get agent key", err)
+	if req.ThinkingLevel != nil {
+		*req.ThinkingLevel = strings.TrimSpace(*req.ThinkingLevel)
+		if !agent.ValidThinkingLevel(*req.ThinkingLevel) {
+			writeError(w, http.StatusBadRequest, "unsupported thinking_level: use off, minimal, low, medium, high, xhigh, max, or empty for the server default")
 			return
 		}
+	}
+	ownerID := ownerIDFromCtx(r.Context())
+	existing, err := ro.cfg.Store.GetAgentKey(r.Context(), ownerID)
+	if err != nil {
+		serverError(w, r, "get agent key", err)
+		return
+	}
+	thinkingLevel := ""
+	if existing != nil {
+		thinkingLevel = existing.ThinkingLevel
+	}
+	if req.ThinkingLevel != nil {
+		thinkingLevel = *req.ThinkingLevel
+	}
+
+	// An empty api_key means "keep the currently stored key" — lets the UI
+	// change model or thinking without re-entering the secret (Exh-454g).
+	// Switching providers still needs a fresh key.
+	plain, sealed := req.APIKey, ""
+	if req.APIKey == "" {
 		if existing == nil {
 			writeError(w, http.StatusBadRequest, "api_key is required")
 			return
@@ -55,35 +70,31 @@ func (ro *Router) putAgentKey(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "api_key is required when changing provider")
 			return
 		}
-		plain, err := ro.cfg.Secrets.Decrypt(existing.KeyCiphertext)
+		plain, err = ro.cfg.Secrets.Decrypt(existing.KeyCiphertext)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "api_key is required")
 			return
 		}
-		row := &store.AgentKey{OwnerID: ownerID, Provider: req.Provider, Model: req.Model, KeyCiphertext: existing.KeyCiphertext}
-		if err := ro.cfg.Store.SetAgentKey(r.Context(), row); err != nil {
-			serverError(w, r, "store agent key", err)
+		sealed = existing.KeyCiphertext
+	} else {
+		sealed, err = ro.cfg.Secrets.Encrypt(plain)
+		if err != nil {
+			serverError(w, r, "seal agent key", err)
 			return
 		}
-		slog.InfoContext(r.Context(), "agent key model updated",
-			slog.String("provider", req.Provider), slog.String("model", req.Model))
-		writeJSON(w, http.StatusOK, agentKeyStatus(req.Provider, req.Model, plain))
-		return
 	}
-
-	sealed, err := ro.cfg.Secrets.Encrypt(req.APIKey)
-	if err != nil {
-		serverError(w, r, "seal agent key", err)
-		return
+	row := &store.AgentKey{
+		OwnerID: ownerID, Provider: req.Provider, Model: req.Model,
+		ThinkingLevel: thinkingLevel, KeyCiphertext: sealed,
 	}
-	row := &store.AgentKey{OwnerID: ownerID, Provider: req.Provider, Model: req.Model, KeyCiphertext: sealed}
 	if err := ro.cfg.Store.SetAgentKey(r.Context(), row); err != nil {
 		serverError(w, r, "store agent key", err)
 		return
 	}
-	slog.InfoContext(r.Context(), "agent key configured",
-		slog.String("provider", req.Provider), slog.String("model", req.Model))
-	writeJSON(w, http.StatusOK, agentKeyStatus(req.Provider, req.Model, req.APIKey))
+	slog.InfoContext(r.Context(), "agent settings saved",
+		slog.String("provider", req.Provider), slog.String("model", req.Model),
+		slog.String("thinking_level", thinkingLevel))
+	writeJSON(w, http.StatusOK, agentKeyStatus(row, plain))
 }
 
 func (ro *Router) getAgentKey(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +115,7 @@ func (ro *Router) getAgentKey(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"configured": false})
 		return
 	}
-	writeJSON(w, http.StatusOK, agentKeyStatus(k.Provider, k.Model, plain))
+	writeJSON(w, http.StatusOK, agentKeyStatus(k, plain))
 }
 
 func (ro *Router) deleteAgentKey(w http.ResponseWriter, r *http.Request) {
@@ -116,12 +127,13 @@ func (ro *Router) deleteAgentKey(w http.ResponseWriter, r *http.Request) {
 }
 
 // agentKeyStatus is the masked shape both GET and PUT return.
-func agentKeyStatus(provider, model, plainKey string) map[string]any {
+func agentKeyStatus(key *store.AgentKey, plainKey string) map[string]any {
 	return map[string]any{
-		"configured": true,
-		"provider":   provider,
-		"model":      model,
-		"key_hint":   maskKey(plainKey),
+		"configured":     true,
+		"provider":       key.Provider,
+		"model":          key.Model,
+		"thinking_level": key.ThinkingLevel,
+		"key_hint":       maskKey(plainKey),
 	}
 }
 
@@ -187,7 +199,10 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 		writeError(w, http.StatusPreconditionFailed, "stored API key is unreadable — re-enter it in agent settings")
 		return agent.CreateOpts{}, false
 	}
-	return agent.CreateOpts{OwnerID: ownerID, Provider: k.Provider, Model: k.Model, APIKey: apiKey}, true
+	return agent.CreateOpts{
+		OwnerID: ownerID, Provider: k.Provider, Model: k.Model, APIKey: apiKey,
+		ThinkingLevel: k.ThinkingLevel,
+	}, true
 }
 
 // writeAgentCreateError answers a refused Create. The session limit

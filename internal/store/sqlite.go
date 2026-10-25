@@ -1297,12 +1297,13 @@ func (s *SQLiteStore) ClearStateAsViewer(ctx context.Context, viewerID ViewerID,
 
 func (s *SQLiteStore) SetAgentKey(ctx context.Context, k *AgentKey) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO agent_keys (owner_id, provider, model, key_ciphertext, updated_at)
-         VALUES (?, ?, ?, ?, datetime('now'))
+		`INSERT INTO agent_keys (owner_id, provider, model, thinking_level, key_ciphertext, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))
          ON CONFLICT(owner_id) DO UPDATE SET provider=excluded.provider,
-             model=excluded.model, key_ciphertext=excluded.key_ciphertext,
+             model=excluded.model, thinking_level=excluded.thinking_level,
+             key_ciphertext=excluded.key_ciphertext,
              updated_at=excluded.updated_at`,
-		k.OwnerID, k.Provider, k.Model, k.KeyCiphertext)
+		k.OwnerID, k.Provider, k.Model, k.ThinkingLevel, k.KeyCiphertext)
 	return err
 }
 
@@ -1310,8 +1311,8 @@ func (s *SQLiteStore) GetAgentKey(ctx context.Context, ownerID int64) (*AgentKey
 	k := &AgentKey{OwnerID: ownerID}
 	var updated string
 	err := s.db.QueryRowContext(ctx,
-		"SELECT provider, model, key_ciphertext, updated_at FROM agent_keys WHERE owner_id=?",
-		ownerID).Scan(&k.Provider, &k.Model, &k.KeyCiphertext, &updated)
+		"SELECT provider, model, thinking_level, key_ciphertext, updated_at FROM agent_keys WHERE owner_id=?",
+		ownerID).Scan(&k.Provider, &k.Model, &k.ThinkingLevel, &k.KeyCiphertext, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

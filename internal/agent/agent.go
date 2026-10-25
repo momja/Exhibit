@@ -56,6 +56,9 @@ type Config struct {
 	MockLLMURL   string // when set, sessions may use the "exhibit-mock" provider
 	IdleTimeout  time.Duration
 	SystemPrompt string // optional override of the role prompt; empty uses the default
+	// ThinkingLevel is the instance baseline for new and resumed sessions.
+	// Empty defaults to medium. BYOK owners may override it in CreateOpts.
+	ThinkingLevel string
 	// HideModelIdentity strips the provider/model identifiers out of Pi's
 	// event stream and persisted transcripts (av-siqf). It is set when the
 	// instance supplies the credential itself, where the model is not the
@@ -129,6 +132,9 @@ func New(cfg Config, st store.Store) (*Manager, error) {
 	if cfg.IdleTimeout == 0 {
 		cfg.IdleTimeout = 30 * time.Minute
 	}
+	if cfg.ThinkingLevel == "" {
+		cfg.ThinkingLevel = DefaultThinkingLevel
+	}
 	if err := os.MkdirAll(cfg.WorkRoot, 0o755); err != nil {
 		return nil, fmt.Errorf("create agent work root: %w", err)
 	}
@@ -185,6 +191,9 @@ type CreateOpts struct {
 	Provider string
 	Model    string
 	APIKey   string // decrypted, handed to the subprocess env only
+	// ThinkingLevel is the BYOK owner's preference; empty uses the instance
+	// baseline. Platform-paid sessions always use the instance baseline.
+	ThinkingLevel string
 	// ArtifactID non-empty means modify mode: the session is scoped to that
 	// artifact, and the agent reads its source with get_artifact — nothing about
 	// the artifact is put in the prompt, because a URL-ingested artifact carries
@@ -326,6 +335,11 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	if opts.Model != "" {
 		args = append(args, "--provider", opts.Provider, "--model", opts.Model)
 	}
+	thinkingLevel := m.cfg.ThinkingLevel
+	if !opts.PlatformPaid && opts.ThinkingLevel != "" {
+		thinkingLevel = opts.ThinkingLevel
+	}
+	args = append(args, "--thinking", thinkingLevel)
 	if m.cfg.Guardrail != nil {
 		args = append(args, "-e", m.guardPath)
 	}
