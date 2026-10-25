@@ -105,10 +105,12 @@ var accountTables = map[string]accountTable{
 	// account, which is a row on somebody else's artifact and therefore the
 	// second place a person's data lives outside their own library. Only
 	// artifact_state's trigger otherwise reaches that far.
-	"shares": {reachCascade,
+	"share_links": {reachCascade, "cascades from artifacts(id) for the links of this library",
+		"SELECT COUNT(*) FROM share_links WHERE artifact_id = '" + deletedArtifact + "'"},
+	"share_grants": {reachCascade,
 		"cascades from artifacts(id) for the shares of this library, and from users(id) for the " +
 			"grants this person held on somebody else's artifact",
-		"SELECT COUNT(*) FROM shares WHERE artifact_id = '" + deletedArtifact + "' OR recipient_id = ?1"},
+		"SELECT COUNT(*) FROM share_grants WHERE artifact_id = '" + deletedArtifact + "' OR recipient_id = ?1"},
 	"sessions": {reachCascade,
 		"cascades from users(id), which is what signs the account out everywhere rather than in one browser",
 		"SELECT COUNT(*) FROM sessions WHERE user_id = ?1"},
@@ -268,6 +270,13 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 		"https://api.example.test", "allow", "user"))
 	_, createdLinkErr := s.CreateAnonymousLink(ctx, member.ID, deletedArtifact)
 	require.NoError(t, createdLinkErr)
+	// A grant held on another owner's artifact must disappear with the user,
+	// even though that artifact survives account deletion (Exh-grj9).
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{
+		ID: "grant-source", OwnerID: admin.ID, Title: "Granted", SourceBlobID: "grant-source-body", Tier: Tier1,
+	}))
+	_, grantErr := s.CreateGrant(ctx, admin.ID, "grant-source", member.ID)
+	require.NoError(t, grantErr)
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))
 	require.NoError(t, s.SetAgentKey(ctx, &AgentKey{OwnerID: member.ID, Provider: "anthropic", KeyCiphertext: "sealed"}))
 	require.NoError(t, s.SaveTranscript(ctx, member.ID, Transcript{ArtifactID: deletedArtifact, SessionID: "sess-1", SessionFile: "{}\n"}))
@@ -465,9 +474,9 @@ func TestGetAccountSummaryCountsWhatDeletionWouldDestroy(t *testing.T) {
 	assert.Equal(t, int64(1), sum.Artifacts)
 	assert.Equal(t, int64(2), sum.Shares)
 
-	// An account with nothing counts zero rather than failing.
+	// The admin also owns the fixture artifact granting access to the member.
 	sum, err = fx.s.GetAccountSummary(ctx, fx.admin.ID)
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), sum.Artifacts)
-	assert.Equal(t, int64(1), sum.Shares)
+	assert.Equal(t, int64(2), sum.Artifacts)
+	assert.Equal(t, int64(2), sum.Shares)
 }

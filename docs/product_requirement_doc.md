@@ -160,17 +160,10 @@ artifacts(
   microphone_approved,     --   document's Permissions-Policy (§6.3)
   geolocation_approved,    -- likewise for location, and the same header
   widget_blob_id,          -- the card's widget document; empty = default tile (§5.5)
-  share_state_mode,        -- whose state a recipient writes: their own, or the
+  share_state_mode         -- whose state a recipient writes: their own, or the
                            -- owner's shared board. One answer per ARTIFACT, not
                            -- per grant, which would admit one recipient on their
                            -- own rows while another writes the owner's.
-  share_grant_count,       -- how many accounts hold a grant, and whether the
-  share_link               --   one anonymous link exists. Denormalized rollups
-                           --   of `shares`, trigger-maintained the way
-                           --   tags_text is: the gallery asks this of every
-                           --   card and the answer changes only when a share
-                           --   row is written. They are what makes the card
-                           --   badge, and therefore auditing, possible (§7).
 )
 -- one decision per (artifact, origin), cascading with the artifact (§6)
 artifact_network_origins(
@@ -206,16 +199,14 @@ artifact_tags(artifact_id, tag_id)
 -- wrote it. One user across any number of devices is still one set of rows —
 -- that is §5.3's whole promise, and nothing here is keyed by device.
 artifact_state(artifact_id, user_id, key, value, updated_at)
--- sharing as a row, §7. No expiry column: a share lives until it is deleted.
--- recipient_id NULL is the artifact's one anonymous link, where the unguessable
--- id is the whole authorization; set, the row is a GRANT to that account, which
--- opens the artifact at its ordinary URL and needs no secret. Two unique
--- indexes make both facts schema invariants: one grant per (artifact, person),
--- and — through a PARTIAL index, since SQLite treats every NULL in a unique
--- index as distinct — one anonymous link per artifact. The old `public` column
--- was dropped with av-lrae: it means exactly `recipient_id IS NULL`, and it was
--- never enforced anyway (av-20xv).
-shares(id, artifact_id, recipient_id)
+-- Links are capability URLs; grants name accounts (Exh-grj9, §7).
+-- Links keep their ids through migration 038, preserving /s/:id URLs.
+share_links(id, artifact_id UNIQUE)
+-- Composite primary key, WITHOUT ROWID; recipient-leading covering index
+-- share_grants_by_recipient supports lookup by account.
+share_grants(artifact_id, recipient_id, PRIMARY KEY (artifact_id, recipient_id))
+-- Both cascade with the artifact; grants also cascade with the recipient.
+-- Card sharing indicators are computed by COUNT / EXISTS, not stored rollups.
 ```
 
 ### 4.5 Identity & auth
@@ -487,16 +478,12 @@ known.
 
 Sharing is a first-class resource, not an export-to-file action.
 
-- A share is a row: `shares(id, artifact_id, recipient_id)`. A row with no
-  recipient is the artifact's single anonymous link; one naming an account is a
-  grant to that person, who opens the artifact at its ordinary URL — the link
-  does not carry the grant, so the artifact URL *is* the share URL.
-- Served at `GET /s/:shareId` with no auth, from the isolated render origin, under the
-  artifact's own CSP allowlist. **Only the anonymous link is served there.** A
-  grant's id is not a URL — identity at the door is its authorization — so it
-  answers exactly what an id that was never issued answers. Otherwise every
-  grant would silently mint another unguessable public link, and revoking the
-  public one would revoke none of them.
+- `share_links(id, artifact_id)` holds each artifact's single anonymous link;
+  `share_grants(artifact_id, recipient_id)` holds one grant per account, with no
+  grant id (Exh-grj9). A recipient opens the ordinary artifact URL after signing in.
+- `GET /s/:shareId` serves only a `share_links` id, with no auth, from the isolated
+  render origin under the artifact's CSP. Holding the link authorizes access;
+  grants require the named account. Migration 038 preserves existing link ids.
 - **A grantee gets the ordinary artifact page, in a read-only mode** (av-awr4).
   Same URL, same template: what a grant buys is running the tool, not a second
   surface. The page withholds everything a grant does not carry — the source,
@@ -681,7 +668,7 @@ again before it changes anything.
    `PUT /api/artifacts/:id/state`), plus a separate in-memory `sessionStorage`
    namespace in the framed case; extend to IndexedDB and `window.storage`. Unlocks
    cross-device use.
-3. **Sharing:** `shares` rows, public `/s/:id`, self-contained `.html` export.
+3. **Sharing:** `share_links` and `share_grants`, public `/s/:id`, self-contained `.html` export.
 4. **Tier 2 (only if demand):** in-browser Babel transpile first; CDN allowlist for
    `script-src`; ingest-time bundling only if render performance demands it.
 5. **Multi-user (only if demand):** activate real identity behind the existing auth

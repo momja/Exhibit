@@ -257,7 +257,8 @@ it safe behind the no-auth share path (§7).
   The render origin never holds a session: a top-level render runs artifact script.
   Claims are named (`o=1.e=….<tag>`, av-6axy); `p`, the viewer principal, is
   omitted when equal to `o` (`MintViewer`) and set on a recipient's frame (av-awr4).
-  `s` carries a share row id (reserved for av-7k7b; nothing reads it yet). Duplicate or unknown keys are rejected, and so
+  `s` is reserved for an anonymous link id, never a grant (av-7k7b, Exh-grj9;
+  no production caller sets or reads it yet). Duplicate or unknown keys are rejected, and so
   is a token carrying both `a` and `p`. An `anonymous` claim (av-wmp6) renders with no state
   inlined and no write-through; it is in the MAC because it subtracts authority.
   A share still inlines the owner's state. `security.md` §1.3.
@@ -284,7 +285,7 @@ owner's id behaves exactly like a missing one: reads return nothing, writes retu
 `GetAnonymousShareUnscoped`, and for assets `ArtifactAssetsUnscoped` and
 `GetArtifactAssetUnscoped`. Callers stay inside `internal/render` (test-enforced;
 `grep Unscoped` is the audit). The share accessor resolves only the anonymous link,
-in the query, so a grant id is never a public URL (av-lrae).
+from `share_links`; grants have no id or public URL (Exh-grj9).
 
 **Non-owners use parallel accessors, never a widened predicate** (av-lrae).
 `GetArtifactReadableBy(viewer)` resolves when the viewer owns the artifact or a
@@ -310,14 +311,15 @@ and writes state.
   (`store.ExtractSearchText`), and tag names, via the `source_text`/`tags_text`
   shadows kept by triggers and the API (av-b6o9). Queries are literal text: each
   token becomes a quoted prefix phrase (av-hic3).
-- **Shares**: `shares` plus rollups `artifacts.share_grant_count` and `share_link`,
-  maintained only by triggers that recompute (migration 029, av-6xjd). Go never
-  writes them. `CreateGrant` requires a positive recipient id; only
-  `CreateAnonymousLink` mints a public link, so an omitted grant recipient fails
-  closed (Exh-a9l6). `DeleteGrant` addresses (artifact, recipient) with owner
-  scoping in SQL. `ReplaceAnonymousLink` rotates in one transaction. Recipients
-  resolve by `local:<name>` external id, then email; ambiguous email is refused
-  (`ErrAmbiguousUser`).
+- **Shares**: `share_links(id, artifact_id UNIQUE)` and
+  `share_grants(artifact_id, recipient_id)` with a composite primary key,
+  `WITHOUT ROWID`, and covering `share_grants_by_recipient` index (038, Exh-grj9).
+  Artifact reads compute the badge's grant count and link existence; no rollup
+  columns or share triggers remain. `CreateGrant` requires a positive recipient
+  id; only `CreateAnonymousLink` publishes a link (Exh-a9l6). `DeleteGrant`
+  addresses (artifact, recipient), owner-scoped. `ReplaceAnonymousLink` rotates
+  in one transaction. Recipients resolve by `local:<name>` external id, then
+  email; ambiguous email is refused (`ErrAmbiguousUser`).
 - **Assets**: `artifact_assets`, bytes in the blob store, content-addressed per
   owner and never across owners (av-20fk). Deletability depends only on recorded
   facts (artifact gone, generation superseded, owner asked), never on a literal in
@@ -552,7 +554,8 @@ On a 5xx refresh the existing controls stay, disabled, so nothing is replayed an
 unsent names survive. On the card, `shareBadgeView` shows one glyph for the strongest
 fact (shared data > public link > named people) and none for private. Since av-uvc6
 it lives in `capabilityCluster` (folded in by `newCardCapabilityView`), and the
-popover gets a Sharing section; the detail receipt omits it.
+popover gets a Sharing section; the detail receipt omits it. Artifact list/get
+queries derive these indicators from `share_grants` / `share_links` (Exh-grj9).
 
 **Card** (av-uvc6): `capabilityView.Compact` drops the "Sandboxed" label, so a
 private sandboxed artifact shows no marks.
@@ -843,11 +846,13 @@ ingest-time transform, degrades to a report, and never seeds the allowlist.
 
 ## 7. Sharing
 
-A share is a row: `shares(id, artifact_id, recipient_id)`. `GET /s/:shareId` serves
-the artifact through the same read-only render surface and CSP, with no app auth,
-because the link row is the authorization. Only a row with no recipient answers
-there; a grant's id buys nothing (§3.3). The `.html` export is the service-free
-fallback.
+Anonymous links live in `share_links(id, artifact_id)`; directed grants in
+`share_grants(artifact_id, recipient_id)`, with no grant id (Exh-grj9).
+`GET /s/:shareId` resolves only a link id and serves the read-only render surface
+and CSP with no app auth: holding the link is the authorization. Recipients sign
+in and open the ordinary artifact URL. Migration 038 keeps existing link ids,
+including the keys of cached OG snapshots; Down regenerates discarded grant ids
+and loses their original row order. The `.html` export is the service-free fallback.
 
 A pasted link unfurls through OpenGraph tags and a picture of its widget (§3.2,
 av-rclm). Every id that is not a live link previews as Exhibit and nothing else.

@@ -77,7 +77,7 @@ func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 	require.NoError(t, s.SetState(ctx, OwnerID(owner), id, ViewerID(owner), "seed", "value"))
 	require.NoError(t, s.SaveTranscript(ctx, owner, Transcript{ArtifactID: id, SessionID: "session-" + id, Title: "seed", SessionFile: "{}\n"}))
 	// Stable fixture identity for the table-driven GetShare/DeleteShare cases.
-	_, err = s.db.ExecContext(ctx, "INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, NULL)", "share-"+id, id)
+	_, err = s.db.ExecContext(ctx, "INSERT INTO share_links (id, artifact_id) VALUES (?, ?)", "share-"+id, id)
 	require.NoError(t, err)
 	require.NoError(t, s.CreateTag(ctx, &Tag{ID: "tag-" + id, OwnerID: owner, Name: "tag-" + id}))
 	require.NoError(t, s.CreateCollection(ctx, &Collection{ID: "col-" + id, OwnerID: owner, Name: "col-" + id}))
@@ -392,15 +392,15 @@ func TestUnscopedAccessorsAreDeliberatelyOwnerBlind(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, missing)
 
-	// Owner-blind, and no wider than that. A grant's id is not a credential —
+	// Owner-blind, and no wider than that. A granted artifact id is not a credential —
 	// identity at the door is (av-lrae) — so it must not resolve on the one
 	// accessor that takes an id and asks nothing else.
 	recipient := alice
-	createdGrant, createdGrantErr := s.CreateGrant(ctx, bob, "bobs", recipient)
+	_, createdGrantErr := s.CreateGrant(ctx, bob, "bobs", recipient)
 	require.NoError(t, createdGrantErr)
-	grant, err := s.GetAnonymousShareUnscoped(ctx, createdGrant.ID)
-	require.NoError(t, err, "a grant id is absent here, not an error")
-	assert.Nil(t, grant, "a grant is not reachable by its id alone")
+	grant, err := s.GetAnonymousShareUnscoped(ctx, "bobs")
+	require.NoError(t, err, "a granted artifact id is absent here, not an error")
+	assert.Nil(t, grant, "a grant does not make the artifact id a public link")
 }
 
 // TestUnscopedAccessorsAreCalledOnlyFromTheRenderSurface is AC#6's tripwire,

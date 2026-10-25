@@ -45,7 +45,9 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 	var sum AccountSummary
 	err := s.db.QueryRowContext(ctx, `
         SELECT (SELECT COUNT(*) FROM artifacts WHERE owner_id = ?1),
-               (SELECT COUNT(*) FROM shares
+               (SELECT COUNT(*) FROM share_links
+                 WHERE artifact_id IN (SELECT id FROM artifacts WHERE owner_id = ?1)) +
+               (SELECT COUNT(*) FROM share_grants
                  WHERE artifact_id IN (SELECT id FROM artifacts WHERE owner_id = ?1))`,
 		userID).Scan(&sum.Artifacts, &sum.Shares)
 	if err != nil {
@@ -85,7 +87,7 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 //     erasure, so an already-authorized unbound create cannot recreate data
 //     after deletion. Historical attribution remains for accounting.
 //   - `artifacts` (owner_id) — takes artifact_tags, artifact_collections,
-//     artifact_network_origins, shares, agent_transcripts and artifact_state
+//     artifact_network_origins, share_links, share_grants, agent_transcripts and artifact_state
 //     with it by ON DELETE CASCADE, and keeps artifacts_fts in step through
 //     the triggers migration 010 installed.
 //   - `tags`, `collections`, `agent_keys` (owner_id) — no cascade reaches

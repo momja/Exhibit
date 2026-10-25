@@ -58,14 +58,14 @@ func newPreviewRenderer(t *testing.T, title string, snap Snapshotter) (*Renderer
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdGrant, err := st.CreateGrant(ctx, 1, "abc", recipient.ID)
+	_, err = st.CreateGrant(ctx, 1, "abc", recipient.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	rd.cfg.PreviewImagePNG = genericPNG
 	rd.cfg.Snapshotter = snap
 	rd.previews = newPreviewCache(snap)
-	return rd, st, createdLink.ID, createdGrant.ID
+	return rd, st, createdLink.ID, "abc"
 }
 
 func servePreviewImage(t *testing.T, rd *Renderer, shareID string) *httptest.ResponseRecorder {
@@ -157,13 +157,13 @@ func TestPreviewTagsEscapeTheTitle(t *testing.T) {
 	}
 }
 
-// Every id that is not a live link — a grant's, a revoked link's, one never
+// Every id that is not a live link — a granted artifact's, a revoked link's, one never
 // issued — answers the same 404, carrying Exhibit's generic tags and nothing
 // that came from an artifact. Identical bytes, or the preview of a pasted id
 // would say which kind of dead it is.
 func TestDeadLinksCarryOnlyGenericTagsAndAreIndistinguishable(t *testing.T) {
 	rd, st, link, grant := newPreviewRenderer(t, "Secret Ledger", nil)
-	// Revoking the live link is what makes a revoked id; a grant and an
+	// Revoking the live link is what makes a revoked id; a granted artifact and an
 	// unissued id stand beside it.
 	before := serveShareRaw(t, rd, link)
 	if before.Code != 200 {

@@ -28,7 +28,7 @@ func TestDuplicateArtifactOptionsAndIndependentMetadata(t *testing.T) {
 				createdLink, createdLinkErr := s.CreateAnonymousLink(ctx, alice, "source")
 				require.NoError(t, createdLinkErr)
 				recipient := bob
-				createdGrant, createdGrantErr := s.CreateGrant(ctx, alice, "source", recipient)
+				_, createdGrantErr := s.CreateGrant(ctx, alice, "source", recipient)
 				require.NoError(t, createdGrantErr)
 				require.NoError(t, s.SaveTranscript(ctx, alice, Transcript{ArtifactID: "source", SessionID: "conversation", SessionFile: "{}\n"}))
 				_, err := s.CommitVersion(ctx, alice, "source", VersionChange{BodyBlobID: strPtr("new-body")})
@@ -72,9 +72,10 @@ func TestDuplicateArtifactOptionsAndIndependentMetadata(t *testing.T) {
 					assert.Equal(t, ShareStateShared, a.ShareStateMode)
 					assert.True(t, a.SharePublicLink)
 					assert.Equal(t, 1, a.ShareGrantCount)
-					for _, sh := range shares {
-						assert.NotContains(t, []string{createdLink.ID, createdGrant.ID}, sh.ID)
-					}
+					assert.NotEqual(t, createdLink.ID, shares[0].ID)
+					assert.Empty(t, shares[1].ID)
+					require.NotNil(t, shares[1].RecipientID)
+					assert.Equal(t, recipient, *shares[1].RecipientID)
 				} else {
 					assert.Empty(t, shares)
 					assert.Equal(t, ShareStateOwn, a.ShareStateMode)

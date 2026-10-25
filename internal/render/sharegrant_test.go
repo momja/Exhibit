@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // serveShareRaw fetches /s/:id the way whoever holds the URL would — no
@@ -24,17 +25,8 @@ func serveShareRaw(t *testing.T, rd *Renderer, shareID string) *httptest.Respons
 	return w
 }
 
-// av-lrae: grants and anonymous links share one table, and /s/:id resolves a
-// row by id alone — so the moment the accessor stops distinguishing them,
-// every grant id becomes a working public URL. Grant an artifact to three
-// people and you have silently minted three unguessable links serving it to
-// anyone with no account; switch the public link off believing the artifact is
-// now private, and three ids still serve it.
-//
-// Both halves are asserted in one test on purpose. Each is only interesting
-// against the other: a refusal that also refused the link would be a broken
-// share route, and a link that served would say nothing about the grant. A
-// refactor that breaks either shows up here against the one it did not break.
+// Exh-grj9: a grant makes the ordinary artifact readable by its recipient,
+// but guessing that artifact id at /s/:id must not publish it.
 func TestAShareLinkServesAndAGrantIsNotAURL(t *testing.T) {
 	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>shared</body></html>")
 	ctx := context.Background()
@@ -47,7 +39,7 @@ func TestAShareLinkServesAndAGrantIsNotAURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdGrant, err := st.CreateGrant(ctx, 1, "abc", recipient.ID)
+	_, err = st.CreateGrant(ctx, 1, "abc", recipient.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,13 +52,13 @@ func TestAShareLinkServesAndAGrantIsNotAURL(t *testing.T) {
 	// id that was never issued gets — otherwise the route answers whether a
 	// given id names a live grant, which is a membership oracle over exactly
 	// the ids a grant model must not leak.
-	grant := serveShareRaw(t, rd, createdGrant.ID)
+	grant := serveShareRaw(t, rd, "abc")
 	unknown := serveShareRaw(t, rd, "no-such-share")
 	if grant.Code != 404 {
-		t.Fatalf("a grant id must not serve the artifact at /s/, got %d: %s", grant.Code, grant.Body.String())
+		t.Fatalf("a granted artifact id must not serve the artifact at /s/, got %d: %s", grant.Code, grant.Body.String())
 	}
 	if grant.Code != unknown.Code || grant.Body.String() != unknown.Body.String() {
-		t.Fatalf("a grant id must answer exactly what an unissued id answers: %d %q vs %d %q",
+		t.Fatalf("a granted artifact id must answer exactly what an unissued id answers: %d %q vs %d %q",
 			grant.Code, grant.Body.String(), unknown.Code, unknown.Body.String())
 	}
 
@@ -76,12 +68,12 @@ func TestAShareLinkServesAndAGrantIsNotAURL(t *testing.T) {
 	if err := st.DeleteShare(ctx, 1, createdLink.ID); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{createdLink.ID, createdGrant.ID} {
+	for _, id := range []string{createdLink.ID, "abc"} {
 		if w := serveShareRaw(t, rd, id); w.Code != 404 {
 			t.Fatalf("nothing may serve %q publicly once the link is revoked, got %d", id, w.Code)
 		}
 	}
-	if sh, err := st.GetShare(ctx, 1, createdGrant.ID); err != nil || sh == nil {
+	if sh, err := st.GetArtifactReadableBy(ctx, store.ViewerID(recipient.ID), "abc"); err != nil || sh == nil {
 		t.Fatalf("revoking the public link must not revoke the grant: %v %v", sh, err)
 	}
 }

@@ -950,7 +950,9 @@ func TestMigration015DropsShareExpiry(t *testing.T) {
 // same place as a migrated one.
 func TestFreshSchemaHasNoShareExpiry(t *testing.T) {
 	s := newTestStore(t)
-	assert.False(t, tableHasColumn(t, s.db, "shares", "expires_at"))
+	for _, table := range []string{"share_links", "share_grants"} {
+		assert.False(t, tableHasColumn(t, s.db, table, "expires_at"))
+	}
 }
 
 // tableHasColumn reports whether table defines column name.

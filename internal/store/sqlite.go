@@ -145,12 +145,10 @@ func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
 // a new artifact is always 'own' and the mode is a decision somebody made
 // rather than one an ingest inherited.
 //
-// share_grant_count and share_link are read and NEVER written from Go. They
-// are trigger-maintained rollups of the shares table (migration 029), like
-// tags_text — a caller that could set them could tell the gallery an artifact
-// is private while three accounts hold grants on it.
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, share_state_mode, share_grant_count, share_link, (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = artifacts.id)"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.widget_blob_id, a.share_state_mode, a.share_grant_count, a.share_link, (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = a.id)"
+// Sharing indicators are derived from indexed tables on every read (Exh-grj9),
+// so badges follow link/grant writes and cascades without rollup triggers.
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, share_state_mode, (SELECT COUNT(*) FROM share_grants g WHERE g.artifact_id = artifacts.id), EXISTS (SELECT 1 FROM share_links l WHERE l.artifact_id = artifacts.id), (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = artifacts.id)"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.widget_blob_id, a.share_state_mode, (SELECT COUNT(*) FROM share_grants g WHERE g.artifact_id = a.id), EXISTS (SELECT 1 FROM share_links l WHERE l.artifact_id = a.id), (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = a.id)"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -251,8 +249,8 @@ func (s *SQLiteStore) GetArtifactUnscoped(ctx context.Context, id string) (*Arti
 // viewer id twice, so a zero value — a caller that forgot to resolve a
 // principal — matches no owner and no grant and fails closed.
 const readableByViewer = `(artifacts.owner_id = ?
-      OR EXISTS (SELECT 1 FROM shares
-                  WHERE shares.artifact_id = artifacts.id AND shares.recipient_id = ?))`
+      OR EXISTS (SELECT 1 FROM share_grants
+                  WHERE share_grants.artifact_id = artifacts.id AND share_grants.recipient_id = ?))`
 
 // GetArtifactReadableBy resolves an artifact this viewer may read — see the
 // Store interface comment for why reaching a shared artifact is a second
@@ -440,8 +438,7 @@ var approvalArtifactColumns = func() map[string]bool {
 // the generic loop below (handled and stripped first), so listing it here
 // would just be a second place that claim could be made and forgotten.
 // Everything else naming an artifacts column — id, owner_id, source_blob_id,
-// widget_blob_id, created_at, updated_at, tags_text and the share_grant_count
-// / share_link rollups (all trigger-maintained) — is
+// widget_blob_id, created_at, updated_at and tags_text — is
 // deliberately excluded: an update map here is a handler-decoded PATCH body
 // (updateArtifact decodes into map[string]any and passes the keys through), so
 // an unvalidated key is a column the *caller* chose. widget_blob_id matters
@@ -1390,24 +1387,23 @@ func (s *SQLiteStore) InstanceAgentSpend(ctx context.Context, since time.Time) (
 
 // CreateGrant grants access to one named account. A missing recipient fails
 // before any insert, so forgetting it can never mint a public link.
-func (s *SQLiteStore) CreateGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) (*Share, error) {
+func (s *SQLiteStore) CreateGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) (*Grant, error) {
 	if recipientID <= 0 {
 		return nil, errors.New("recipient_id must be positive")
 	}
 	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
 		return nil, err
 	}
-	id := uuid.New().String()
 	_, err := s.db.ExecContext(ctx,
-		"INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, ?)",
-		id, artifactID, recipientID)
+		"INSERT INTO share_grants (artifact_id, recipient_id) VALUES (?, ?)",
+		artifactID, recipientID)
 	if isUniqueViolation(err) {
 		return nil, ErrDuplicateShare
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &Share{ID: id, ArtifactID: artifactID, RecipientID: &recipientID}, nil
+	return &Grant{ArtifactID: artifactID, RecipientID: recipientID}, nil
 }
 
 // CreateAnonymousLink explicitly publishes the artifact through /s/:id.
@@ -1418,7 +1414,7 @@ func (s *SQLiteStore) CreateAnonymousLink(ctx context.Context, ownerID int64, ar
 	}
 	id := uuid.New().String()
 	_, err := s.db.ExecContext(ctx,
-		"INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, NULL)", id, artifactID)
+		"INSERT INTO share_links (id, artifact_id) VALUES (?, ?)", id, artifactID)
 	if isUniqueViolation(err) {
 		return nil, ErrDuplicateShare
 	}
@@ -1428,57 +1424,43 @@ func (s *SQLiteStore) CreateAnonymousLink(ctx context.Context, ownerID int64, ar
 	return &Share{ID: id, ArtifactID: artifactID}, nil
 }
 
-// GetShare resolves a share the caller owns (through its artifact), of either
-// kind — the read behind revoking one, and revoking a grant is as much the
-// owner's business as revoking the link. Serving one to its visitor is
-// GetAnonymousShareUnscoped instead, because there the row is the
-// authorization and only a link's ever was.
+// GetShare resolves a link owned through its artifact. Grants have no ids.
 func (s *SQLiteStore) GetShare(ctx context.Context, ownerID int64, id string) (*Share, error) {
 	return s.getShareWhere(ctx,
-		`SELECT id, artifact_id, recipient_id FROM shares
+		`SELECT id, artifact_id FROM share_links
 		  WHERE id=? AND `+ownedArtifact, id, ownerID)
 }
 
-// GetAnonymousShareUnscoped resolves an artifact's anonymous link with no
-// owner check — see the Store interface comment for why it is narrowed to the
-// link rather than free to resolve any share row. `grep Unscoped` is the
-// audit, and the `recipient_id IS NULL` here is what keeps that audit's answer
-// small: an id is the whole authorization on this path, so the only rows
-// reachable by id alone must be the ones whose id was ever meant to be one.
+// GetAnonymousShareUnscoped resolves only a link, with no owner check. The
+// unscoped read surface stays inside internal/render; grants have no link id.
 func (s *SQLiteStore) GetAnonymousShareUnscoped(ctx context.Context, id string) (*Share, error) {
 	return s.getShareWhere(ctx,
-		"SELECT id, artifact_id, recipient_id FROM shares WHERE id=? AND recipient_id IS NULL", id)
+		"SELECT id, artifact_id FROM share_links WHERE id=?", id)
 }
 
 func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...any) (*Share, error) {
 	row := s.db.QueryRowContext(ctx, query, args...)
 	var sh Share
-	// NULL is the anonymous link, so the nullable scan target is carrying the
-	// distinction rather than papering over a missing value.
-	var recipient sql.NullInt64
-	err := row.Scan(&sh.ID, &sh.ArtifactID, &recipient)
+	err := row.Scan(&sh.ID, &sh.ArtifactID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if recipient.Valid {
-		sh.RecipientID = &recipient.Int64
-	}
 	return &sh, nil
 }
 
 func (s *SQLiteStore) DeleteShare(ctx context.Context, ownerID int64, id string) error {
 	return s.execOwned(ctx,
-		"DELETE FROM shares WHERE id=? AND "+ownedArtifact, id, ownerID)
+		"DELETE FROM share_links WHERE id=? AND "+ownedArtifact, id, ownerID)
 }
 
 // DeleteGrant revokes one (artifact, recipient) grant. Missing grants and
 // artifacts outside this owner's library both return ErrNotFound, like DeleteShare.
 func (s *SQLiteStore) DeleteGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) error {
 	return s.execOwned(ctx,
-		"DELETE FROM shares WHERE artifact_id=? AND recipient_id=? AND "+ownedArtifact,
+		"DELETE FROM share_grants WHERE artifact_id=? AND recipient_id=? AND "+ownedArtifact,
 		artifactID, recipientID, ownerID)
 }
 
@@ -1492,14 +1474,16 @@ func (s *SQLiteStore) DeleteGrant(ctx context.Context, ownerID int64, artifactID
 // whole point (userScan) is that there is only one of it. Two statements, both
 // bounded by the artifact's share count, cost less than that duplication.
 //
-// The ordering puts the link first (recipient_id IS NULL sorts before NOT NULL
-// as 0 before 1) and then grants oldest-first, so the list does not reshuffle
-// itself as people are added.
+// Links come first, then grants in stable recipient-id order. Grant creation
+// order is not stored in the composite primary key (Exh-grj9).
 func (s *SQLiteStore) ListArtifactShares(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactShare, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, artifact_id, recipient_id FROM shares
-		  WHERE artifact_id = ? AND `+ownedArtifact+`
-		  ORDER BY (recipient_id IS NOT NULL), rowid`, artifactID, ownerID)
+		`SELECT id, artifact_id, recipient_id FROM (
+		 SELECT id, artifact_id, NULL AS recipient_id FROM share_links
+		 UNION ALL
+		 SELECT '', artifact_id, recipient_id FROM share_grants
+		 ) WHERE artifact_id = ? AND `+ownedArtifact+`
+		 ORDER BY recipient_id`, artifactID, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -1585,11 +1569,11 @@ func (s *SQLiteStore) ReplaceAnonymousLink(ctx context.Context, ownerID int64, a
 	defer func() { _ = tx.Rollback() }() // no-op once committed
 
 	if _, err := tx.ExecContext(ctx,
-		"DELETE FROM shares WHERE artifact_id=? AND recipient_id IS NULL", artifactID); err != nil {
+		"DELETE FROM share_links WHERE artifact_id=?", artifactID); err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx,
-		"INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, NULL)",
+		"INSERT INTO share_links (id, artifact_id) VALUES (?, ?)",
 		newID, artifactID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrDuplicateShare
