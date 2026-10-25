@@ -1095,12 +1095,21 @@ func (s *Session) handleLine(line []byte) {
 		// The authoritative final message: role decides the row's source,
 		// provider/model name the spend, usage is the meter.
 		var msg struct {
-			Role     string          `json:"role"`
-			Provider string          `json:"provider"`
-			Model    string          `json:"model"`
-			Usage    json.RawMessage `json:"usage"`
+			Role         string          `json:"role"`
+			Provider     string          `json:"provider"`
+			Model        string          `json:"model"`
+			StopReason   string          `json:"stopReason"`
+			ErrorMessage string          `json:"errorMessage"`
+			Usage        json.RawMessage `json:"usage"`
 		}
 		if json.Unmarshal(probe.Message, &msg) == nil {
+			if msg.Role == "assistant" && msg.StopReason == "error" {
+				// Keep provider diagnostics server-side before hosted events are
+				// redacted. Log only the error, never the conversation payload.
+				slog.Error("agent provider request failed", slog.String("session_id", s.ID),
+					slog.String("provider", msg.Provider), slog.String("model", msg.Model),
+					slog.String("err", msg.ErrorMessage))
+			}
 			if u, ok := decodeUsage(msg.Usage); ok {
 				s.noteMessageUsage(msg.Role, msg.Provider, msg.Model, u)
 			}

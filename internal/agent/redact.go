@@ -34,8 +34,11 @@ import (
 // modelIdentityFields are the keys removed from a Pi message envelope.
 var modelIdentityFields = []string{"api", "provider", "model"}
 
-// redactModelIdentity strips the model identifiers from one JSON document —
-// an event line — leaving everything else as it was.
+const platformAgentFailureMessage = "The agent could not complete your request. Please try again."
+
+// redactModelIdentity strips model identifiers and provider failure details
+// from one JSON document. Error text can identify the provider or describe its
+// credentials, so hosted clients receive only a generic failure message.
 //
 // The match is structural rather than by key name alone: a field is removed
 // only from an object that also carries a "role", which is Pi's message
@@ -56,7 +59,20 @@ func redactModelIdentity(doc []byte) []byte {
 	if err := dec.Decode(&v); err != nil {
 		return doc
 	}
-	if !stripModelIdentity(v) {
+	changed := stripModelIdentity(v)
+	// These fields belong to the event envelope, not arbitrary artifact data
+	// nested inside it. Cover retry and compaction failures as well as messages.
+	if event, ok := v.(map[string]any); ok {
+		switch event["type"] {
+		case "auto_retry_start", "compaction_end":
+			changed = redactProviderError(event, "errorMessage") || changed
+		case "auto_retry_end":
+			changed = redactProviderError(event, "finalError") || changed
+		case "extension_error":
+			changed = redactProviderError(event, "error") || changed
+		}
+	}
+	if !changed {
 		return doc
 	}
 	out, err := json.Marshal(v)
@@ -66,9 +82,8 @@ func redactModelIdentity(doc []byte) []byte {
 	return out
 }
 
-// stripModelIdentity walks a decoded document, removing the identity fields
-// from every message envelope it finds. It reports whether anything changed,
-// so an untouched line is broadcast as the exact bytes Pi wrote.
+// stripModelIdentity removes message identifiers and assistant failure details.
+// It reports whether anything changed, so untouched lines keep Pi's bytes.
 func stripModelIdentity(v any) bool {
 	changed := false
 	switch t := v.(type) {
@@ -79,6 +94,9 @@ func stripModelIdentity(v any) bool {
 					delete(t, f)
 					changed = true
 				}
+			}
+			if t["role"] == "assistant" && t["stopReason"] == "error" {
+				changed = redactProviderError(t, "errorMessage") || changed
 			}
 		}
 		for _, child := range t {
@@ -94,4 +112,13 @@ func stripModelIdentity(v any) bool {
 		}
 	}
 	return changed
+}
+
+func redactProviderError(fields map[string]any, name string) bool {
+	detail, ok := fields[name].(string)
+	if !ok || detail == "" || detail == platformAgentFailureMessage {
+		return false
+	}
+	fields[name] = platformAgentFailureMessage
+	return true
 }
