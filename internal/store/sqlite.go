@@ -316,6 +316,35 @@ func hasIndexableChar(token string) bool {
 }
 
 func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error) {
+	query, args := listArtifactsQuery(opts)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*Artifact
+	for rows.Next() {
+		a, err := scanArtifact(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.attachTags(ctx, results); err != nil {
+		return nil, err
+	}
+	if err := s.attachAllowlists(ctx, results); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+func listArtifactsQuery(opts ListOptions) (string, []any) {
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 50
@@ -378,30 +407,7 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 	query += " ORDER BY julianday(a.created_at) DESC, a.id DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, opts.Offset)
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []*Artifact
-	for rows.Next() {
-		a, err := scanArtifact(rows)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, a)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if err := s.attachTags(ctx, results); err != nil {
-		return nil, err
-	}
-	if err := s.attachAllowlists(ctx, results); err != nil {
-		return nil, err
-	}
-	return results, nil
+	return query, args
 }
 
 // ApprovalColumns are the first-use capability approval columns: the
@@ -598,16 +604,24 @@ func withoutKey(m map[string]any, key string) map[string]any {
 	return out
 }
 
-// ownedArtifact is the owner-scoped EXISTS predicate the artifact-child
-// tables filter through — the shape the tag joins established. Written once
-// so every child query spells ownership the same way.
-const ownedArtifact = `artifact_id IN (SELECT id FROM artifacts WHERE owner_id=?)`
+// ownedArtifact is the owner-only predicate every artifact-child query uses.
+// Correlating through the artifact's primary key checks just that row. Keep
+// ownership here, once, and separate from readableByViewer: a grant must never
+// widen a child mutation. outerTable is a table name or alias from our SQL,
+// never caller input; the predicate binds exactly one owner ID.
+func ownedArtifact(outerTable string) string {
+	return `EXISTS (SELECT 1 FROM artifacts WHERE artifacts.id = ` + outerTable + `.artifact_id AND artifacts.owner_id = ?)`
+}
+
+func listOriginDecisionsQuery() string {
+	return `SELECT origin, decision, source, created_at, updated_at
+		   FROM artifact_network_origins WHERE artifact_id=? AND ` + ownedArtifact("artifact_network_origins") + `
+		  ORDER BY origin`
+}
 
 func (s *SQLiteStore) ListOriginDecisions(ctx context.Context, ownerID int64, artifactID string) ([]OriginDecision, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT origin, decision, source, created_at, updated_at
-		   FROM artifact_network_origins WHERE artifact_id=? AND `+ownedArtifact+`
-		  ORDER BY origin`, artifactID, ownerID)
+		listOriginDecisionsQuery(), artifactID, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -628,7 +642,7 @@ func (s *SQLiteStore) ListOriginDecisions(ctx context.Context, ownerID int64, ar
 func (s *SQLiteStore) AllowedOrigins(ctx context.Context, ownerID int64, artifactID string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT origin FROM artifact_network_origins
-		  WHERE artifact_id=? AND decision=? AND `+ownedArtifact+`
+		  WHERE artifact_id=? AND decision=? AND `+ownedArtifact("artifact_network_origins")+`
 		  ORDER BY origin`, artifactID, DecisionAllow, ownerID)
 	if err != nil {
 		return nil, err
@@ -686,7 +700,7 @@ func (s *SQLiteStore) DeleteOriginDecision(ctx context.Context, ownerID int64, a
 		o = normalized
 	}
 	_, err := s.db.ExecContext(ctx,
-		"DELETE FROM artifact_network_origins WHERE artifact_id=? AND origin=? AND "+ownedArtifact,
+		"DELETE FROM artifact_network_origins WHERE artifact_id=? AND origin=? AND "+ownedArtifact("artifact_network_origins"),
 		artifactID, o, ownerID)
 	return err
 }
@@ -987,7 +1001,7 @@ func (s *SQLiteStore) AddArtifactToCollection(ctx context.Context, ownerID int64
 func (s *SQLiteStore) RemoveArtifactFromCollection(ctx context.Context, ownerID int64, artifactID, collectionID string) error {
 	_, err := s.db.ExecContext(ctx,
 		`DELETE FROM artifact_collections WHERE artifact_id=? AND collection_id=?
-		    AND `+ownedArtifact+`
+		    AND `+ownedArtifact("artifact_collections")+`
 		    AND collection_id IN (SELECT id FROM collections WHERE owner_id=?)`,
 		artifactID, collectionID, ownerID, ownerID)
 	return err
@@ -1085,7 +1099,7 @@ func (s *SQLiteStore) AddArtifactTag(ctx context.Context, ownerID int64, artifac
 func (s *SQLiteStore) RemoveArtifactTag(ctx context.Context, ownerID int64, artifactID, tagID string) error {
 	res, err := s.db.ExecContext(ctx,
 		`DELETE FROM artifact_tags WHERE artifact_id=? AND tag_id=?
-		    AND artifact_id IN (SELECT id FROM artifacts WHERE owner_id=?)
+		    AND `+ownedArtifact("artifact_tags")+`
 		    AND tag_id IN (SELECT id FROM tags WHERE owner_id=?)`,
 		artifactID, tagID, ownerID, ownerID)
 	if err != nil {
@@ -1142,9 +1156,13 @@ func (s *SQLiteStore) attachTags(ctx context.Context, arts []*Artifact) error {
 // addition to the owner predicate — the two are ANDed, never substituted for
 // one another.
 
+func getStateQuery() string {
+	return "SELECT key, value FROM artifact_state WHERE artifact_id=? AND user_id=? AND " + ownedArtifact("artifact_state")
+}
+
 func (s *SQLiteStore) GetState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID) (map[string]string, error) {
 	rows, err := s.db.QueryContext(ctx,
-		"SELECT key, value FROM artifact_state WHERE artifact_id=? AND user_id=? AND "+ownedArtifact,
+		getStateQuery(),
 		artifactID, int64(userID), int64(ownerID))
 	if err != nil {
 		return nil, err
@@ -1178,7 +1196,7 @@ func (s *SQLiteStore) SetState(ctx context.Context, ownerID OwnerID, artifactID 
 // caller asked for.
 func (s *SQLiteStore) DeleteState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID, key string) error {
 	_, err := s.db.ExecContext(ctx,
-		"DELETE FROM artifact_state WHERE artifact_id=? AND user_id=? AND key=? AND "+ownedArtifact,
+		"DELETE FROM artifact_state WHERE artifact_id=? AND user_id=? AND key=? AND "+ownedArtifact("artifact_state"),
 		artifactID, int64(userID), key, int64(ownerID))
 	return err
 }
@@ -1190,7 +1208,7 @@ func (s *SQLiteStore) DeleteState(ctx context.Context, ownerID OwnerID, artifact
 // different, deliberate act that no route grants today.
 func (s *SQLiteStore) ClearState(ctx context.Context, ownerID OwnerID, artifactID string, userID ViewerID) error {
 	_, err := s.db.ExecContext(ctx,
-		"DELETE FROM artifact_state WHERE artifact_id=? AND user_id=? AND "+ownedArtifact,
+		"DELETE FROM artifact_state WHERE artifact_id=? AND user_id=? AND "+ownedArtifact("artifact_state"),
 		artifactID, int64(userID), int64(ownerID))
 	return err
 }
@@ -1428,7 +1446,7 @@ func (s *SQLiteStore) CreateAnonymousLink(ctx context.Context, ownerID int64, ar
 func (s *SQLiteStore) GetShare(ctx context.Context, ownerID int64, id string) (*Share, error) {
 	return s.getShareWhere(ctx,
 		`SELECT id, artifact_id FROM share_links
-		  WHERE id=? AND `+ownedArtifact, id, ownerID)
+		  WHERE id=? AND `+ownedArtifact("share_links"), id, ownerID)
 }
 
 // GetAnonymousShareUnscoped resolves only a link, with no owner check. The
@@ -1453,15 +1471,24 @@ func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...a
 
 func (s *SQLiteStore) DeleteShare(ctx context.Context, ownerID int64, id string) error {
 	return s.execOwned(ctx,
-		"DELETE FROM share_links WHERE id=? AND "+ownedArtifact, id, ownerID)
+		"DELETE FROM share_links WHERE id=? AND "+ownedArtifact("share_links"), id, ownerID)
 }
 
 // DeleteGrant revokes one (artifact, recipient) grant. Missing grants and
 // artifacts outside this owner's library both return ErrNotFound, like DeleteShare.
 func (s *SQLiteStore) DeleteGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) error {
 	return s.execOwned(ctx,
-		"DELETE FROM share_grants WHERE artifact_id=? AND recipient_id=? AND "+ownedArtifact,
+		"DELETE FROM share_grants WHERE artifact_id=? AND recipient_id=? AND "+ownedArtifact("share_grants"),
 		artifactID, recipientID, ownerID)
+}
+
+func listArtifactSharesQuery() string {
+	return `SELECT id, artifact_id, recipient_id FROM (
+		 SELECT id, artifact_id, NULL AS recipient_id FROM share_links
+		 UNION ALL
+		 SELECT '', artifact_id, recipient_id FROM share_grants
+		 ) AS artifact_shares WHERE artifact_id = ? AND ` + ownedArtifact("artifact_shares") + `
+		 ORDER BY recipient_id`
 }
 
 // ListArtifactShares enumerates one artifact's shares for its owner (av-6xjd)
@@ -1478,12 +1505,7 @@ func (s *SQLiteStore) DeleteGrant(ctx context.Context, ownerID int64, artifactID
 // order is not stored in the composite primary key (Exh-grj9).
 func (s *SQLiteStore) ListArtifactShares(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactShare, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, artifact_id, recipient_id FROM (
-		 SELECT id, artifact_id, NULL AS recipient_id FROM share_links
-		 UNION ALL
-		 SELECT '', artifact_id, recipient_id FROM share_grants
-		 ) WHERE artifact_id = ? AND `+ownedArtifact+`
-		 ORDER BY recipient_id`, artifactID, ownerID)
+		listArtifactSharesQuery(), artifactID, ownerID)
 	if err != nil {
 		return nil, err
 	}

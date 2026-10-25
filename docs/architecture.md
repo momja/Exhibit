@@ -277,9 +277,11 @@ Blob:   put/get/delete by id
 **`Blob.Delete` is idempotent** (av-7jcq): a missing id is success, matching S3.
 
 **Owner scoping is in the queries** (av-ep8k). Every artifact-naming method takes
-`owner_id` and filters in SQL; child tables use an owner-scoped `EXISTS`. Another
-owner's id behaves exactly like a missing one: reads return nothing, writes return
-`ErrNotFound`, handlers answer 404, never 403.
+`owner_id` and filters in SQL; child tables use an owner-scoped correlated
+`EXISTS` on the artifact's primary key. The `artifacts_owner` index on `owner_id`
+serves the library listing. Another owner's id behaves exactly like a missing
+one: reads return nothing, writes return `ErrNotFound`, handlers answer 404,
+never 403.
 
 **Unscoped accessors are named for it**: `GetArtifactUnscoped`,
 `GetAnonymousShareUnscoped`, and for assets `ArtifactAssetsUnscoped` and
