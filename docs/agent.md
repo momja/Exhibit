@@ -916,6 +916,13 @@ from 0.99.1 through 1.3.0 retain Exhibit's RPC and session contracts:
 - `agent_settled` remains the end of automatic work. `message_end` carries
   final assistant usage; `get_session_stats` supplies cumulative totals for
   reconciliation. Guardrail usage remains separately reported operator spend.
+  Chat displays a final provider failure from `agent_end` when `willRetry`
+  is false, including authentication errors that contain no text deltas.
+  Rejected or expired keys tell BYOK users to update their key; platform users
+  are directed to the person managing the instance. Other failures retain the
+  provider's error detail.
+  Failures that Pi is retrying and user cancellations do not create error
+  bubbles; the composer continues to follow `agent_settled`.
 - Session files remain version 3 JSONL. Exhibit keeps Pi's bytes, restores
   them with `--session`, and runs from `/` so the recorded directory exists
   on resume. An actual 0.99.1 transcript is kept under `internal/api/testdata`

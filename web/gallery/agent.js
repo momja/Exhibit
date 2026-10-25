@@ -389,6 +389,18 @@ function handleAgentEvent(ev) {
     case 'agent_start':
       setStreaming(true);
       break;
+    case 'agent_end': {
+      // Failed messages may be retried automatically. Only surface the final
+      // failure; agent_settled still owns the composer's streaming lifecycle.
+      if (ev.willRetry) break;
+      const message = ev.messages?.findLast(m => m.role === 'assistant');
+      if (message?.stopReason === 'error') {
+        removeThinking();
+        curAssistantEl = null;
+        addMsg('err', providerFailureMessage(message.errorMessage));
+      }
+      break;
+    }
     case 'agent_settled':
       setStreaming(false);
       curAssistantEl = null;
@@ -519,6 +531,17 @@ function handleAgentEvent(ev) {
       addMsg('sys', 'Provider hiccup — retrying (' + ev.attempt + '/' + ev.maxAttempts + ')…');
       break;
   }
+}
+
+function providerFailureMessage(detail) {
+  detail = detail || 'The AI provider could not complete the request.';
+  const rejectedKey = /\b401\b|(?:invalid|expired|revoked) api key|api key.*(?:invalid|expired|revoked)/i.test(detail);
+  if (rejectedKey) {
+    return BYOK
+      ? 'Your AI provider rejected the API key. Update it using the key button above, then try again.'
+      : 'The AI provider rejected this instance’s API key. Contact the person who manages Exhibit.';
+  }
+  return 'Agent request failed: ' + detail;
 }
 
 function toolLabel(name, args) {
