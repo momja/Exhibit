@@ -7,6 +7,7 @@ CREATE TABLE share_links (
 CREATE TABLE share_grants (
     artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
     recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     PRIMARY KEY (artifact_id, recipient_id)
 ) WITHOUT ROWID;
 CREATE INDEX share_grants_by_recipient ON share_grants(recipient_id);
@@ -14,8 +15,13 @@ CREATE INDEX share_grants_by_recipient ON share_grants(recipient_id);
 -- Keep link identities: /s/:id URLs and cached OG snapshots use them.
 INSERT INTO share_links (id, artifact_id)
     SELECT id, artifact_id FROM shares WHERE recipient_id IS NULL;
-INSERT INTO share_grants (artifact_id, recipient_id)
-    SELECT artifact_id, recipient_id FROM shares WHERE recipient_id IS NOT NULL;
+-- Legacy shares have no timestamp. Preserve their insertion (rowid) order
+-- with synthetic millisecond timestamps, safely before any newly created grant.
+INSERT INTO share_grants (artifact_id, recipient_id, created_at)
+    SELECT artifact_id, recipient_id,
+           strftime('%Y-%m-%dT%H:%M:%fZ', '2000-01-01',
+                    (row_number() OVER (ORDER BY rowid) / 1000.0) || ' seconds')
+      FROM shares WHERE recipient_id IS NOT NULL;
 
 -- DROP TABLE removes shares' indexes and shares_counts_sync_* triggers.
 -- DROP COLUMN requires that no surviving index, view, trigger or constraint
@@ -25,8 +31,8 @@ ALTER TABLE artifacts DROP COLUMN share_link;
 ALTER TABLE artifacts DROP COLUMN share_grant_count;
 
 -- +goose Down
--- Grant ids and original row order were discarded by Up and cannot return.
--- Regenerate grant ids; link ids, recipients and artifact associations survive.
+-- Grant ids and link/grant interleaving were discarded by Up and cannot return.
+-- Regenerate grant ids; link ids, recipients and relative grant order survive.
 CREATE TABLE shares (
     id TEXT PRIMARY KEY,
     artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
@@ -35,7 +41,8 @@ CREATE TABLE shares (
 INSERT INTO shares (id, artifact_id, recipient_id)
     SELECT id, artifact_id, NULL FROM share_links;
 INSERT INTO shares (id, artifact_id, recipient_id)
-    SELECT lower(hex(randomblob(16))), artifact_id, recipient_id FROM share_grants;
+    SELECT lower(hex(randomblob(16))), artifact_id, recipient_id FROM share_grants
+     ORDER BY artifact_id, created_at, recipient_id;
 CREATE UNIQUE INDEX shares_artifact_recipient ON shares(artifact_id, recipient_id);
 CREATE UNIQUE INDEX shares_one_anonymous_link ON shares(artifact_id) WHERE recipient_id IS NULL;
 DROP TABLE share_grants;

@@ -39,16 +39,22 @@ type AccountSummary struct {
 	StorageBytes int64 `json:"storage_bytes"`
 }
 
+func accountSummaryQuery() string {
+	// Enumerate the owner's artifacts first, then look up shares by artifact_id.
+	// A correlated ownedArtifact check here would scan every share in the instance.
+	return `
+        SELECT (SELECT COUNT(*) FROM artifacts WHERE owner_id = ?),
+               (SELECT COUNT(*) FROM share_links
+                 WHERE artifact_id IN (SELECT id FROM artifacts WHERE owner_id = ?)) +
+               (SELECT COUNT(*) FROM share_grants
+                 WHERE artifact_id IN (SELECT id FROM artifacts WHERE owner_id = ?))`
+}
+
 // GetAccountSummary counts the owner's artifacts, the live shares over them,
 // and the bytes they are holding.
 func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (AccountSummary, error) {
 	var sum AccountSummary
-	err := s.db.QueryRowContext(ctx, `
-        SELECT (SELECT COUNT(*) FROM artifacts WHERE owner_id = ?),
-               (SELECT COUNT(*) FROM share_links
-                 WHERE `+ownedArtifact("share_links")+`) +
-               (SELECT COUNT(*) FROM share_grants
-                 WHERE `+ownedArtifact("share_grants")+`)`,
+	err := s.db.QueryRowContext(ctx, accountSummaryQuery(),
 		userID, userID, userID).Scan(&sum.Artifacts, &sum.Shares)
 	if err != nil {
 		return sum, err

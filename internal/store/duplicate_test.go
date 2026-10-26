@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -73,6 +74,8 @@ func TestDuplicateArtifactOptionsAndIndependentMetadata(t *testing.T) {
 					assert.True(t, a.SharePublicLink)
 					assert.Equal(t, 1, a.ShareGrantCount)
 					assert.NotEqual(t, createdLink.ID, shares[0].ID)
+					_, err := uuid.Parse(shares[0].ID)
+					require.NoError(t, err, "duplicated links use the same UUID format as newly created links")
 					assert.Empty(t, shares[1].ID)
 					require.NotNil(t, shares[1].RecipientID)
 					assert.Equal(t, recipient, *shares[1].RecipientID)

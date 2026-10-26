@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
@@ -17,10 +18,12 @@ func TestShareSplitUpgradeAndDown(t *testing.T) {
 	db, err := sql.Open("sqlite", path)
 	require.NoError(t, err)
 	_, err = db.Exec(`PRAGMA foreign_keys=ON;
-        INSERT INTO users(id, external_id) VALUES (1, 'owner'), (2, 'recipient');
+        INSERT INTO users(id, external_id) VALUES (1, 'owner'), (2, 'recipient'), (9, 'nine'), (12, 'twelve'), (3, 'three');
         INSERT INTO artifacts(id, owner_id, source_blob_id) VALUES ('a', 1, 'body'), ('b', 1, 'body-b');
         INSERT INTO shares(id, artifact_id, recipient_id) VALUES
-            ('existing-url', 'a', NULL), ('old-grant-id', 'a', 2), ('grant-only-id', 'b', 2);`)
+            ('nine-grant', 'a', 9), ('grant-only-id', 'b', 2),
+            ('twelve-grant', 'a', 12), ('existing-url', 'a', NULL),
+            ('three-grant', 'a', 3), ('old-grant-id', 'a', 2);`)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
@@ -36,13 +39,29 @@ func TestShareSplitUpgradeAndDown(t *testing.T) {
 		sh, err := s.GetAnonymousShareUnscoped(ctx, id)
 		require.NoError(t, err)
 		assert.Nil(t, sh, "a legacy grant id must never become a public URL")
+		owned, err := s.GetShare(ctx, alice, id)
+		require.NoError(t, err)
+		assert.Nil(t, owned, "a discarded grant id cannot resolve as an owner's link")
+		require.ErrorIs(t, s.DeleteShare(ctx, alice, id), ErrNotFound)
 	}
 	for _, id := range []string{"a", "b"} {
 		a, err := s.GetArtifactReadableBy(ctx, ViewerID(2), id)
 		require.NoError(t, err)
 		require.NotNil(t, a)
-		assert.Equal(t, 1, a.ShareGrantCount)
+		if id == "a" {
+			assert.Equal(t, 4, a.ShareGrantCount)
+		} else {
+			assert.Equal(t, 1, a.ShareGrantCount)
+		}
 		assert.Equal(t, id == "a", a.SharePublicLink)
+	}
+	listed, err := s.ListArtifactShares(ctx, 1, "a")
+	require.NoError(t, err)
+	require.Len(t, listed, 5)
+	assert.Equal(t, "existing-url", listed[0].ID, "the link comes first even when created between grants")
+	for i, recipient := range []int64{9, 12, 3, 2} {
+		require.NotNil(t, listed[i+1].RecipientID)
+		assert.Equal(t, recipient, *listed[i+1].RecipientID, "legacy rowid order survives upgrade")
 	}
 	var oldObjects int
 	require.NoError(t, s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master
@@ -62,8 +81,13 @@ func TestShareSplitUpgradeAndDown(t *testing.T) {
 	var grants int
 	var publicLink bool
 	require.NoError(t, s.db.QueryRow(`SELECT share_grant_count, share_link FROM artifacts WHERE id='a'`).Scan(&grants, &publicLink))
-	assert.Equal(t, 1, grants)
+	assert.Equal(t, 4, grants)
 	assert.True(t, publicLink)
+	var restoredOrder string
+	require.NoError(t, s.db.QueryRow(`SELECT group_concat(recipient_id) FROM (
+        SELECT recipient_id FROM shares WHERE artifact_id='a' AND recipient_id IS NOT NULL ORDER BY rowid
+    )`).Scan(&restoredOrder))
+	assert.Equal(t, "9,12,3,2", restoredOrder, "Down preserves relative grant order for the old application")
 	// Restored 029 triggers must still track writes for the old application.
 	_, err = s.db.Exec(`DELETE FROM shares WHERE artifact_id='a'`)
 	require.NoError(t, err)
@@ -102,4 +126,55 @@ func TestGrantLookupByRecipientUsesCoveringIndex(t *testing.T) {
 	require.NoError(t, rows.Err())
 	require.Len(t, plans, 1)
 	assert.Contains(t, plans[0], "SEARCH share_grants USING COVERING INDEX share_grants_by_recipient (recipient_id=?)")
+}
+
+// Separate additions retain creation order, independent of the composite PK.
+// A submission completed within one millisecond has the documented id tie-break.
+func TestGrantCreationOrderSurvivesLinkRotationAndDuplication(t *testing.T) {
+	f := newGrantFixture(t)
+	ctx := context.Background()
+	_, err := f.s.db.Exec(`INSERT INTO users(id, external_id) VALUES (9, 'nine'), (12, 'twelve'), (3, 'three')`)
+	require.NoError(t, err)
+	for _, recipient := range []int64{9, 12, 3} {
+		_, err := f.s.CreateGrant(ctx, alice, f.artifactID, recipient)
+		require.NoError(t, err)
+		// Model separate additions, keeping their millisecond timestamps distinct.
+		time.Sleep(2 * time.Millisecond)
+	}
+	_, err = f.s.CreateAnonymousLink(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	_, err = f.s.ReplaceAnonymousLink(ctx, alice, f.artifactID, "rotated")
+	require.NoError(t, err)
+	created, err := f.s.DuplicateArtifact(ctx, alice, f.artifactID, ArtifactDuplicate{
+		ID: "copy", Title: "Copy", BodyBlobID: "copy-body", SourceVersion: 1, CopyShareSettings: true,
+	})
+	require.NoError(t, err)
+	require.True(t, created)
+	for _, artifactID := range []string{f.artifactID, "copy"} {
+		listed, err := f.s.ListArtifactShares(ctx, alice, artifactID)
+		require.NoError(t, err)
+		require.Len(t, listed, 4)
+		assert.NotEmpty(t, listed[0].ID)
+		assert.Nil(t, listed[0].RecipientID)
+		for i, recipient := range []int64{9, 12, 3} {
+			assert.Empty(t, listed[i+1].ID)
+			require.NotNil(t, listed[i+1].Recipient)
+			assert.Equal(t, recipient, listed[i+1].Recipient.ID)
+		}
+	}
+	var copiedTimestamps int
+	require.NoError(t, f.s.db.QueryRow(`SELECT COUNT(*) FROM share_grants original
+        JOIN share_grants copy ON copy.recipient_id=original.recipient_id AND copy.created_at=original.created_at
+        WHERE original.artifact_id=? AND copy.artifact_id='copy'`, f.artifactID).Scan(&copiedTimestamps))
+	assert.Equal(t, 3, copiedTimestamps)
+
+	_, err = f.s.db.Exec(`UPDATE share_grants SET created_at='2026-01-01T00:00:00.123Z' WHERE artifact_id=?`, f.artifactID)
+	require.NoError(t, err)
+	listed, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	require.Len(t, listed, 4)
+	assert.Equal(t, "rotated", listed[0].ID)
+	for i, recipient := range []int64{3, 9, 12} {
+		assert.Equal(t, recipient, *listed[i+1].RecipientID, "millisecond ties use recipient id")
+	}
 }
