@@ -81,9 +81,6 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 // is a second place to update when the schema moves, and the one that gets
 // forgotten is the one that leaves data behind.
 //
-//   - `agent_executions` — live attempts are interrupted atomically with the
-//     erasure, so an already-authorized unbound create cannot recreate data
-//     after deletion. Historical attribution remains for accounting.
 //   - `artifacts` (owner_id) — takes artifact_tags, artifact_collections,
 //     artifact_network_origins, shares, agent_transcripts and artifact_state
 //     with it by ON DELETE CASCADE, and keeps artifacts_fts in step through
@@ -141,18 +138,6 @@ func (s *SQLiteStore) deleteAccount(ctx context.Context, userID int64, hosted bo
 		guard = "substr(external_id,1,6)='clerk:' AND (" + guard + ")"
 	}
 
-	// Revoke durable write authority in the same transaction as erasure. An
-	// unbound create may already hold its operation guard while staging bytes:
-	// if its insert committed first we erase it below; if it commits after us,
-	// PutAgentArtifact's assignment check must refuse it. Manager cleanup runs
-	// only after successful deletion and cannot close this transactional gap.
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE agent_executions SET status='interrupted'
-		 WHERE status IN `+liveAgentStatuses+`
-		   AND conversation_id IN (SELECT id FROM agent_conversations WHERE owner_id=?)`, userID); err != nil {
-		return nil, err
-	}
-
 	// Collect blob ids while the rows that name them still exist.
 	blobIDs, err := artifactBlobIDs(ctx, tx, userID)
 	if err != nil {
@@ -160,8 +145,8 @@ func (s *SQLiteStore) deleteAccount(ctx context.Context, userID int64, hosted bo
 	}
 
 	// The users row carries the guard against losing the last enabled admin.
-	// A refusal rolls back the execution fence above along with everything
-	// else in this transaction.
+	// A refusal rolls back the hosted deletion fence above along with
+	// everything else in this transaction.
 	res, err := tx.ExecContext(ctx,
 		"DELETE FROM users WHERE id = ?1 AND "+guard, userID)
 	if err != nil {
