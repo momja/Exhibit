@@ -479,4 +479,12 @@ func TestGetAccountSummaryCountsWhatDeletionWouldDestroy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), sum.Artifacts)
 	assert.Equal(t, int64(2), sum.Shares)
+
+	// An account with nothing counts zero rather than failing, even when both
+	// share tables contain rows belonging to other accounts.
+	empty, err := fx.s.UpsertUser(ctx, "sub-empty", "empty@example.test")
+	require.NoError(t, err)
+	sum, err = fx.s.GetAccountSummary(ctx, empty.ID)
+	require.NoError(t, err)
+	assert.Equal(t, AccountSummary{}, sum)
 }
