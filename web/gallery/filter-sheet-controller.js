@@ -27,8 +27,13 @@ export default class FilterSheetController extends Controller {
         event.clientY < rect.top || event.clientY > rect.bottom) this.close();
   }
 
+  // The close event is a queued task, so the user may already have moved on
+  // by the time it fires. Return focus only if nothing else has taken it.
   closed() {
-    this.triggerTarget.focus();
+    const active = document.activeElement;
+    if (!active || active === document.body || this.dialogTarget.contains(active)) {
+      this.triggerTarget.focus();
+    }
   }
 
   disconnect() {
