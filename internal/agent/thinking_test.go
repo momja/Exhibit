@@ -119,7 +119,9 @@ func TestRealPiThinkingLevelFromEnvironment(t *testing.T) {
 				}
 				s, err := m.Create(t.Context(), opts)
 				require.NoError(t, err)
-				ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+				// Local Pi starts asynchronously; include cold module loading while
+				// the full Go suite also runs API/browser integration tests.
+				ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 				defer cancel()
 				line, err := s.roundTrip(ctx, map[string]any{"type": "get_state"})
 				require.NoError(t, err)
