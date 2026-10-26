@@ -23,7 +23,7 @@ func TestGalleryFilterQueryPlans(t *testing.T) {
 
 func TestGalleryFilterIndexesMigration(t *testing.T) {
 	s := newTestStore(t)
-	require.NoError(t, goose.DownTo(s.db, "migrations", 44))
+	require.NoError(t, goose.DownTo(s.db, "migrations", 40))
 	var count int
 	require.NoError(t, s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name IN ('artifact_tags_by_tag', 'artifact_collections_by_collection')`).Scan(&count))
 	assert.Zero(t, count)

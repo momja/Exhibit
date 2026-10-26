@@ -503,7 +503,7 @@ My library and Shared by me accept repeated `?tag=<name>` and
 (AND). Unknown, empty, or foreign values return 400; duplicates are removed.
 Collection IDs distinguish collections even when their names are identical.
 The store's `MatchAllFilters` and `CollectionIDs` options provide this selection
-without changing the API's existing any-name-per-axis behavior. Migration 045
+without changing the API's existing any-name-per-axis behavior. Migration 041
 adds reverse membership indexes; query-plan tests guard against scans of
 `artifact_tags` and `artifact_collections`.
 

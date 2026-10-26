@@ -11,10 +11,10 @@ import (
 
 func TestOwnerScopedQueryPlans(t *testing.T) {
 	s := newTestStore(t)
-	// Exercise 044's Down (via DownTo 43, so later migrations do not shift
+	// Exercise 040's Down (via DownTo 39, so later migrations do not shift
 	// which one is undone) and the upgrade from layer 2 as well as the fresh
 	// migration path newTestStore already took.
-	require.NoError(t, goose.DownTo(s.db, "migrations", 43))
+	require.NoError(t, goose.DownTo(s.db, "migrations", 39))
 	var indexes int
 	require.NoError(t, s.db.QueryRowContext(t.Context(),
 		"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='artifacts_owner'").Scan(&indexes))

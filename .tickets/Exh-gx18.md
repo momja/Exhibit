@@ -33,7 +33,7 @@ ListOptions already supports Tags and Collections but no gallery exposes them. A
 
 **2026-10-26T02:38:26Z**
 
-Decisions: gallery tags and collection IDs are repeatable AND filters; unknown, empty, or foreign choices return 400 and duplicates are removed. Existing API name-filter OR behavior is preserved via opt-in MatchAllFilters and CollectionIDs store options. Incoming shares expose owner filters through the same UI. Successful first-page htmx responses re-render chips, hidden search parameters and both option lists; request settings explicitly inherit in htmx 4. The phone sheet uses a registered Stimulus controller wrapping native dialog focus containment/dismissal and returning focus to Filter. Migration 045 adds reverse membership indexes after EXPLAIN confirmed scans; plan tests cover plain/search and shared-only variants. No-option full-page HTML matches base exactly for empty and five-card libraries.
+Decisions: gallery tags and collection IDs are repeatable AND filters; unknown, empty, or foreign choices return 400 and duplicates are removed. Existing API name-filter OR behavior is preserved via opt-in MatchAllFilters and CollectionIDs store options. Incoming shares expose owner filters through the same UI. Successful first-page htmx responses re-render chips, hidden search parameters and both option lists; request settings explicitly inherit in htmx 4. The phone sheet uses a registered Stimulus controller wrapping native dialog focus containment/dismissal and returning focus to Filter. Migration 041 adds reverse membership indexes after EXPLAIN confirmed scans; plan tests cover plain/search and shared-only variants. No-option full-page HTML matches base exactly for empty and five-card libraries.
 
 **2026-10-26T02:54:36Z**
 
