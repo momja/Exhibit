@@ -15,6 +15,7 @@ ph-arrow-left
 ph-arrow-square-out
 ph-arrow-up
 ph-arrows-clockwise
+ph-books
 ph-camera
 ph-caret-down
 ph-caret-right
@@ -58,6 +59,7 @@ ph-sliders
 ph-sparkle
 ph-stop
 ph-trash
+ph-tray-arrow-down
 ph-user-circle
 ph-user-plus
 ph-users-three

@@ -129,3 +129,33 @@ main{padding:10px 12px}
 .card-by{display:flex;align-items:center;gap:6px;padding:0 8px 7px;font-size:12px;color:var(--color-muted);min-width:0}
 .card-owner-initial{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:var(--color-subtle);color:var(--color-ink-mid);font-size:10px}
 .card-owner-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Spaces occupy a rail only when sharing has content. The aside is separate
+ * from the nav so future filter sections can sit underneath it. */
+.gallery-layout{display:grid;grid-template-columns:208px minmax(0,1fr);min-height:calc(100vh - var(--header-height))}
+.gallery-layout main{min-width:0}
+.gallery-rail{padding:10px 8px;border-right:1px solid var(--color-hairline-strong);background:var(--color-panel)}
+.gallery-spaces ul{display:flex;flex-direction:column;gap:4px;list-style:none}
+.gallery-spaces a{display:flex;align-items:center;gap:6px;min-height:44px;padding:8px;border-radius:var(--radius-md);color:var(--color-ink-mid);text-decoration:none;font-size:13px;line-height:20px}
+.gallery-spaces a:hover{background:var(--color-hover-fill)}
+.gallery-spaces a[aria-current=page]{background:var(--color-accent-tint);color:var(--color-accent);font-weight:600}
+.gallery-spaces a:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
+.gallery-spaces i{flex:0 0 auto;font-size:20px;line-height:1}
+.space-label-wide{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.space-count{flex:0 0 auto;margin-left:auto;font-size:12px;font-variant-numeric:tabular-nums}
+.space-label-short{display:none}
+
+/* At narrow widths, keep the last card and paging control above the fixed
+ * tabs, including the home indicator on phones with a safe-area inset. */
+@media (max-width:767px){
+  [data-gallery]:has(.gallery-layout)>header{padding-top:env(safe-area-inset-top,0px);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .gallery-layout{display:block}
+  .gallery-layout main{padding-bottom:calc(80px + env(safe-area-inset-bottom,0px));padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+  .gallery-rail{position:fixed;inset:auto 0 0;z-index:30;border-right:0;border-top:1px solid var(--color-hairline-strong);padding:4px max(8px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+  .gallery-spaces ul{flex-direction:row;gap:8px}
+  .gallery-spaces li{flex:1;min-width:0}
+  .gallery-spaces a{flex-direction:column;justify-content:center;gap:4px;min-height:56px;padding:6px 4px;font-size:12px;line-height:16px}
+  .space-label-short{display:inline}
+  .space-count{display:none}
+  .space-label-wide{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+}
