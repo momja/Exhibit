@@ -468,9 +468,24 @@ Offsets mean another tab's adds or deletes can shift page boundaries until a
 refresh. Search debounces and replaces the grid from offset zero; search and paging
 share one `hx-sync` scope per gallery, and query revisions drop stale responses.
 Shared pieces:
-`gallerygrid.go` (a `galleryDefinition` supplies DOM id, paths, store filters,
-empty-state copy; the owner always comes from the request), the `gallerygrid.tmpl`
+`gallerygrid.go` (a `galleryDefinition` supplies DOM id, paths, selection, and
+empty-state copy; the default selection remains owner-scoped), the `gallerygrid.tmpl`
 partials, and the `web/gallery/gallery.js` module.
+
+**Shared galleries** (Exh-u9b1): `/shared` lists incoming grants through
+`ListArtifactsSharedWith`; `/shared-by-me` uses the owner's `SharedOnly`
+selection (named grants or a public link). Both use the same search, paging,
+and retry partials as the library. Incoming cards show owner attribution and
+omit owner actions and capability/sharing glyphs. Their widget tokens preserve
+the recipient as viewer, and remounts use the parallel readable-by
+`/artifacts/:id/widget/viewer/open` route; the owner-only refresh stays unchanged.
+Repeated `?owner=<id>` parameters are validated against `SharedWithOwners`,
+canonicalized and deduplicated, then carried by search, paging and retry URLs.
+Malformed or unavailable owners return 400. Spaces navigation is a later story.
+
+Screenshots: [Shared with me](screenshots/Exh-u9b1/01-shared-with-me-desktop.png),
+[phone](screenshots/Exh-u9b1/02-shared-with-me-mobile.png), and
+[Shared by me](screenshots/Exh-u9b1/03-shared-by-me-desktop.png).
 
 **Reusable UI behavior** (Exh-16ds): Go partials own markup, shared CSS owns style,
 and Stimulus controllers own browser state and lifecycle. Register controllers in

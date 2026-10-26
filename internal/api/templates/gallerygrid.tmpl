@@ -3,7 +3,7 @@
 {{define "gallerySearch"}}<form class="search-row" role="search" id="{{.ID}}-search" data-gallery-search
       hx-get="{{.FragmentPath}}" hx-trigger="submit, exhibit:gallery-search"
       hx-target="#{{.ID}}-results" hx-swap="innerHTML" hx-sync="#{{.ID}}:replace">
-  <i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
+  {{range $name, $values := .Parameters}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}<i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
   <input type="text" name="q" data-gallery-query placeholder="Search artifacts…" value="{{.Query}}" autocomplete="off" aria-label="Search artifacts" aria-keyshortcuts="/">
   <kbd class="search-kbd" aria-hidden="true">/</kbd>
   <button class="search-clear" type="button" data-gallery-clear aria-label="Clear search" hidden><i class="ph ph-x" aria-hidden="true"></i></button>
@@ -35,7 +35,7 @@
      popover controls to their own handlers. */}}
 {{define "galleryCard"}}<div class="card" data-href="/artifacts/{{.ArtifactID}}">
   {{template "cardWidget" .Widget}}
-  <div class="card-meta"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>{{template "tagDots" .}}{{template "capabilityCluster" .Capability}}
-    {{template "actionMenu" .Actions}}
-  </div>
+  <div class="card-meta"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>{{template "tagDots" .}}{{if not .ReadOnly}}{{template "capabilityCluster" .Capability}}{{end}}
+    {{if .Actions.Items}}{{template "actionMenu" .Actions}}{{end}}
+  </div>{{if .OwnerName}}<div class="card-by"><span class="card-owner-initial" aria-hidden="true">{{.OwnerInitial}}</span><span class="card-owner-name">{{.OwnerName}}</span></div>{{end}}
 </div>{{end}}

@@ -415,6 +415,11 @@ func (ro *Router) setupRoutes() {
 
 		// Gallery UI
 		r.Get("/", ro.galleryIndex)
+		r.Get("/shared", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryPage(w, r, sharedGallery) })
+		r.Get("/shared-by-me", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryPage(w, r, sharedByGallery) })
+		r.Get("/partials/gallery-grid/shared", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryGrid(w, r, sharedGallery) })
+		r.Get("/partials/gallery-grid/shared-by-me", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryGrid(w, r, sharedByGallery) })
+		r.Get("/artifacts/{artifactID}/widget/viewer/open", ro.openReadableGalleryWidget)
 		r.Get("/new", ro.galleryNew)
 		r.Get("/artifacts/{artifactID}", ro.galleryDetail)
 		r.Get("/artifacts/{artifactID}/edit", ro.galleryEdit)

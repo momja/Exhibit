@@ -58,14 +58,12 @@ type pageOwnerRoute struct {
 	ownerScoped bool
 	ownPath     string
 	foreignPath string
-	// scopedByHandler marks a route that IS owner-scoped but not by this
-	// walk's own mechanism (sessionGate + ownerMiddleware resolving the owner
-	// for a handler that trusts ownerIDFromCtx). Its handler resolves the
-	// owner itself instead — the SSE route is the one case, because
-	// EventSource sets no headers and so cannot sit behind either middleware.
-	// This is a distinct claim from "not owner-scoped at all" (why alone):
-	// the row still promises per-owner isolation, just proven by a different
-	// test, which coveredBy must name.
+	// scopedByHandler marks routes whose principal scope is proven by a
+	// dedicated test instead of this walk's ordinary-library fixture. The
+	// SSE handler resolves its own owner; shared galleries need grants and
+	// links absent from that fixture. Their tests must also prove that the
+	// page group supplies the single-user principal.
+	// This still promises principal isolation, backed by coveredBy.
 	scopedByHandler bool
 	// coveredBy is the test file that pins ownership for a scopedByHandler
 	// row, since this walk cannot exercise it directly. Required exactly when
@@ -80,6 +78,13 @@ type pageOwnerRoute struct {
 // appOriginGETOwnerScope is every GET route the app mux registers. A route
 // missing from here fails the walk on purpose.
 var appOriginGETOwnerScope = []pageOwnerRoute{
+	// These selections need grants/links, unlike the ordinary owner library.
+	// Their dedicated tests cover both session and single-user principals.
+	{route: "/shared", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Viewer selection; TestSharedGalleryRoutesResolveSingleUserOwner and TestSharedGalleryRecipientCardsAndRevocation"},
+	{route: "/shared-by-me", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Owner shared-only selection; TestSharedGalleryRoutesResolveSingleUserOwner and TestSharedByGallerySelection"},
+	{route: "/partials/gallery-grid/shared", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Same viewer selection as /shared"},
+	{route: "/partials/gallery-grid/shared-by-me", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Same owner shared-only selection as /shared-by-me"},
+	{route: "/artifacts/{artifactID}/widget/viewer/open", ownerScoped: true, ownPath: "/artifacts/{id}/widget/viewer/open", foreignPath: "/artifacts/{id}/widget/viewer/open"},
 	// The server-rendered pages and their htmx fragments: everything that
 	// reads the library on the visitor's behalf without going through the
 	// API's auth group. These are the routes this ticket is about.
