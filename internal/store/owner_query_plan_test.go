@@ -11,7 +11,7 @@ import (
 
 func TestOwnerScopedQueryPlans(t *testing.T) {
 	s := newTestStore(t)
-	// Exercise 044's Down and the upgrade from layer 2 as well as the fresh
+	// Exercise 040's Down and the upgrade from layer 2 as well as the fresh
 	// migration path newTestStore already took.
 	require.NoError(t, goose.Down(s.db, "migrations"))
 	var indexes int
