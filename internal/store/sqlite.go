@@ -612,12 +612,24 @@ func withoutKey(m map[string]any, key string) map[string]any {
 	return out
 }
 
-// ownedArtifact is the owner-only predicate every artifact-child query uses.
-// Correlating through the artifact's primary key checks just that row. Keep
-// ownership here, once, and separate from readableByViewer: a grant must never
-// widen a child mutation. outerTable is a table name or alias from our SQL,
-// never caller input; the predicate binds exactly one owner ID.
+// ownedArtifact checks an artifact-child row's owner, separately from
+// readableByViewer: a grant must never widen a child mutation.
+//
+// This correlated check is efficient only when the outer query pins
+// <outerTable>.artifact_id = ? (or a single child row by primary key, as share
+// link lookups do). Enumerating an owner's library must instead drive from
+// artifacts(owner_id), then look up child rows by artifact_id.
+//
+// outerTable must be a known table or alias from our SQL; unknown identifiers
+// panic before they can be spliced into SQL. The predicate binds one owner ID.
 func ownedArtifact(outerTable string) string {
+	switch outerTable {
+	case "artifact_network_origins", "artifact_collections", "artifact_tags",
+		"artifact_state", "share_links", "share_grants", "artifact_shares",
+		"v", "artifact_versions", "agent_transcripts", "artifact_version_assets":
+	default:
+		panic("ownedArtifact: unknown outer table or alias: " + outerTable)
+	}
 	return `EXISTS (SELECT 1 FROM artifacts WHERE artifacts.id = ` + outerTable + `.artifact_id AND artifacts.owner_id = ?)`
 }
 
@@ -1411,11 +1423,11 @@ func (s *SQLiteStore) InstanceAgentSpend(ctx context.Context, since time.Time) (
 		since.UTC().Format(datetimeLayout))
 }
 
-// CreateGrant grants access to one named account. A missing recipient fails
-// before any insert, so forgetting it can never mint a public link.
+// CreateGrant grants access to one named account. A nonpositive recipient returns
+// ErrInvalidRecipient before any insert, so forgetting it cannot mint a public link.
 func (s *SQLiteStore) CreateGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) (*Grant, error) {
 	if recipientID <= 0 {
-		return nil, errors.New("recipient_id must be positive")
+		return nil, ErrInvalidRecipient
 	}
 	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
 		return nil, err
@@ -1452,9 +1464,12 @@ func (s *SQLiteStore) CreateAnonymousLink(ctx context.Context, ownerID int64, ar
 
 // GetShare resolves a link owned through its artifact. Grants have no ids.
 func (s *SQLiteStore) GetShare(ctx context.Context, ownerID int64, id string) (*Share, error) {
-	return s.getShareWhere(ctx,
-		`SELECT id, artifact_id FROM share_links
-		  WHERE id=? AND `+ownedArtifact("share_links"), id, ownerID)
+	return s.getShareWhere(ctx, getShareQuery(), id, ownerID)
+}
+
+func getShareQuery() string {
+	return `SELECT id, artifact_id FROM share_links
+		  WHERE id=? AND ` + ownedArtifact("share_links")
 }
 
 // GetAnonymousShareUnscoped resolves only a link, with no owner check. The
@@ -1477,9 +1492,14 @@ func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...a
 	return &sh, nil
 }
 
+// DeleteShare revokes only an anonymous link owned by the caller. Grant ids,
+// missing ids and links owned by someone else return ErrNotFound.
 func (s *SQLiteStore) DeleteShare(ctx context.Context, ownerID int64, id string) error {
-	return s.execOwned(ctx,
-		"DELETE FROM share_links WHERE id=? AND "+ownedArtifact("share_links"), id, ownerID)
+	return s.execOwned(ctx, deleteShareQuery(), id, ownerID)
+}
+
+func deleteShareQuery() string {
+	return "DELETE FROM share_links WHERE id=? AND " + ownedArtifact("share_links")
 }
 
 // DeleteGrant revokes one (artifact, recipient) grant. Missing grants and
@@ -1492,11 +1512,11 @@ func (s *SQLiteStore) DeleteGrant(ctx context.Context, ownerID int64, artifactID
 
 func listArtifactSharesQuery() string {
 	return `SELECT id, artifact_id, recipient_id FROM (
-		 SELECT id, artifact_id, NULL AS recipient_id FROM share_links
+		 SELECT id, artifact_id, NULL AS recipient_id, NULL AS created_at FROM share_links
 		 UNION ALL
-		 SELECT '', artifact_id, recipient_id FROM share_grants
+		 SELECT NULL, artifact_id, recipient_id, created_at FROM share_grants
 		 ) AS artifact_shares WHERE artifact_id = ? AND ` + ownedArtifact("artifact_shares") + `
-		 ORDER BY recipient_id`
+		 ORDER BY recipient_id IS NOT NULL, created_at, recipient_id`
 }
 
 // ListArtifactShares enumerates one artifact's shares for its owner (av-6xjd)
@@ -1509,8 +1529,8 @@ func listArtifactSharesQuery() string {
 // whole point (userScan) is that there is only one of it. Two statements, both
 // bounded by the artifact's share count, cost less than that duplication.
 //
-// Links come first, then grants in stable recipient-id order. Grant creation
-// order is not stored in the composite primary key (Exh-grj9).
+// Links come first explicitly, then grants in creation order. Grants created
+// in the same millisecond tie-break by recipient id (Exh-grj9).
 func (s *SQLiteStore) ListArtifactShares(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactShare, error) {
 	rows, err := s.db.QueryContext(ctx,
 		listArtifactSharesQuery(), artifactID, ownerID)
@@ -1521,10 +1541,12 @@ func (s *SQLiteStore) ListArtifactShares(ctx context.Context, ownerID int64, art
 	out := []ArtifactShare{}
 	for rows.Next() {
 		var sh ArtifactShare
+		var linkID sql.NullString
 		var recipient sql.NullInt64
-		if err := rows.Scan(&sh.ID, &sh.ArtifactID, &recipient); err != nil {
+		if err := rows.Scan(&linkID, &sh.ArtifactID, &recipient); err != nil {
 			return nil, err
 		}
+		sh.ID = linkID.String
 		if recipient.Valid {
 			id := recipient.Int64
 			sh.RecipientID = &id

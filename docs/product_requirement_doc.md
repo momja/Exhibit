@@ -200,11 +200,11 @@ artifact_tags(artifact_id, tag_id)
 -- that is §5.3's whole promise, and nothing here is keyed by device.
 artifact_state(artifact_id, user_id, key, value, updated_at)
 -- Links are capability URLs; grants name accounts (Exh-grj9, §7).
--- Links keep their ids through migration 038, preserving /s/:id URLs.
+-- Links keep their ids through migration 043, preserving /s/:id URLs.
 share_links(id, artifact_id UNIQUE)
 -- Composite primary key, WITHOUT ROWID; recipient-leading covering index
 -- share_grants_by_recipient supports lookup by account.
-share_grants(artifact_id, recipient_id, PRIMARY KEY (artifact_id, recipient_id))
+share_grants(artifact_id, recipient_id, created_at, PRIMARY KEY (artifact_id, recipient_id))
 -- Both cascade with the artifact; grants also cascade with the recipient.
 -- Card sharing indicators are computed by COUNT / EXISTS, not stored rollups.
 ```
@@ -479,11 +479,14 @@ known.
 Sharing is a first-class resource, not an export-to-file action.
 
 - `share_links(id, artifact_id)` holds each artifact's single anonymous link;
-  `share_grants(artifact_id, recipient_id)` holds one grant per account, with no
-  grant id (Exh-grj9). A recipient opens the ordinary artifact URL after signing in.
+  `share_grants(artifact_id, recipient_id, created_at)` holds one grant per account, with no
+  grant id (Exh-grj9). The panel lists the link first, then grants by millisecond
+  creation time, with recipient id breaking ties. Legacy grants retain their
+  old rowid order through synthetic timestamps; duplicates retain grant order.
+  A recipient opens the ordinary artifact URL after signing in.
 - `GET /s/:shareId` serves only a `share_links` id, with no auth, from the isolated
   render origin under the artifact's CSP. Holding the link authorizes access;
-  grants require the named account. Migration 038 preserves existing link ids.
+  grants require the named account. Migration 043 preserves existing link ids.
 - **A grantee gets the ordinary artifact page, in a read-only mode** (av-awr4).
   Same URL, same template: what a grant buys is running the tool, not a second
   surface. The page withholds everything a grant does not carry — the source,

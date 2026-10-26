@@ -243,6 +243,12 @@ func TestTheFragmentRendersTheSameListTheFullPageDoes(t *testing.T) {
 
 	fragment := getPage(t, ro, "/partials/share-panel?artifact="+artifactID)
 	page := getPage(t, ro, "/artifacts/"+artifactID)
+	for _, html := range []string{page, fragment} {
+		require.Contains(t, html, "Link Access")
+		require.Contains(t, html, `id="share-add-form"`)
+		assert.Less(t, strings.Index(html, "Link Access"), strings.Index(html, `id="share-add-form"`),
+			"the public link appears above the people list on initial render and after refresh")
+	}
 	assert.Contains(t, page, `id="share-add-form" method="post" action="/api/shares"`)
 	assert.Contains(t, page, `id="share-close">Done</button>`)
 	assert.Contains(t, page, `hx-trigger="exhibit:shares-changed from:body"`)
