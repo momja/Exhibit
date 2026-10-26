@@ -25,7 +25,7 @@ Rules:
 - Reading another owner's artifact is a *viewer* accessor (architecture §3.3: 'Non-owners use parallel accessors, never a widened predicate'). Do not widen ownedArtifact or ListArtifacts' owner predicate. The returned artifacts must be the same ones GetArtifactReadableBy resolves; add a test asserting every listed id resolves through it and that a revoked grant disappears from the list.
 - Must use share_grants_by_recipient: add these queries to owner_query_plan_test.go asserting SEARCH share_grants USING ... share_grants_by_recipient and no SCAN of artifacts/share_grants. (See the review note on #209: a correlated EXISTS without an outer artifact_id filter scans the whole child table — do not repeat that.)
 - A disabled owner's artifacts: decide and test (recommend: still listed, since GetArtifactReadableBy still resolves them; if it does not, match it).
-- No migration expected. If one turns out necessary, take the next number above every version on main AND origin/feature/Exh-g2vv/relay-connectors (which holds 038-042).
+- No migration expected. If one turns out necessary, take the next number above every version on main.
 
 ## Acceptance Criteria
 
