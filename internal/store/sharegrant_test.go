@@ -93,7 +93,7 @@ func TestCreateGrantRefusesNonPositiveRecipientsWithoutPublishing(t *testing.T) 
 			f := newGrantFixture(t)
 			ctx := context.Background()
 			grant, err := f.s.CreateGrant(ctx, alice, f.artifactID, recipientID)
-			require.EqualError(t, err, "recipient_id must be positive")
+			require.ErrorIs(t, err, ErrInvalidRecipient)
 			assert.Nil(t, grant)
 
 			var rows, links int
@@ -134,6 +134,23 @@ func TestOneArtifactCarriesALinkAndAGrantPerPerson(t *testing.T) {
 	assert.Empty(t, shares[2].ID)
 	assert.Equal(t, bob, *shares[1].RecipientID)
 	assert.Equal(t, toCarol, *shares[2].RecipientID)
+
+	// Grants have no link id; neither an empty id nor their artifact/recipient
+	// identity may resolve or revoke them through the anonymous-link accessor.
+	for _, id := range []string{shares[1].ID, f.artifactID, fmt.Sprint(bobsGrant.RecipientID), "never-issued"} {
+		grant, err := f.s.GetShare(ctx, alice, id)
+		require.NoError(t, err)
+		assert.Nil(t, grant)
+		require.ErrorIs(t, f.s.DeleteShare(ctx, alice, id), ErrNotFound)
+	}
+	unchanged, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	assert.Equal(t, shares, unchanged, "id-based revocation leaves links and grants intact")
+
+	require.NoError(t, f.s.DeleteShare(ctx, alice, createdLink.ID))
+	remaining, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	assert.Equal(t, shares[1:], remaining, "removing the link leaves every grant intact")
 }
 
 // seedThirdAccount adds an account beyond alice and bob and returns its id, for

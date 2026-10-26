@@ -1385,11 +1385,11 @@ func (s *SQLiteStore) InstanceAgentSpend(ctx context.Context, since time.Time) (
 		since.UTC().Format(datetimeLayout))
 }
 
-// CreateGrant grants access to one named account. A missing recipient fails
-// before any insert, so forgetting it can never mint a public link.
+// CreateGrant grants access to one named account. A nonpositive recipient returns
+// ErrInvalidRecipient before any insert, so forgetting it cannot mint a public link.
 func (s *SQLiteStore) CreateGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) (*Grant, error) {
 	if recipientID <= 0 {
-		return nil, errors.New("recipient_id must be positive")
+		return nil, ErrInvalidRecipient
 	}
 	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
 		return nil, err
@@ -1451,6 +1451,8 @@ func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...a
 	return &sh, nil
 }
 
+// DeleteShare revokes only an anonymous link owned by the caller. Grant ids,
+// missing ids and links owned by someone else return ErrNotFound.
 func (s *SQLiteStore) DeleteShare(ctx context.Context, ownerID int64, id string) error {
 	return s.execOwned(ctx,
 		"DELETE FROM share_links WHERE id=? AND "+ownedArtifact, id, ownerID)

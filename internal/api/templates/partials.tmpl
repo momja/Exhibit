@@ -299,6 +299,50 @@
      Data: sharePanelView (gallery.go). */}}
 {{define "sharePanelBody"}}<div class="share-cols" data-artifact-id="{{.ArtifactID}}">
   <section class="share-col">
+    <h3 class="text-sm muted">Link Access</h3>
+    {{/* A toggle, not a create button, because an artifact has exactly one
+         anonymous link (a partial unique index, av-lrae): on mints the row and
+         shows the URL, off deletes it and the URL dies. Nothing accumulates a
+         list of links whose destinations nobody remembers, and revoking has
+         exactly one meaning. */}}
+    {{/* The row's share id rides on the toggle itself: switching the link off
+         is a DELETE of that row, and the id is the only thing the page needs
+         to know about it. */}}
+    <label class="row">
+      <input type="checkbox" id="share-link-toggle" aria-describedby="share-link-permissions"{{if .Shares.Link}} checked data-share-id="{{.Shares.Link.ID}}"{{end}}>
+      <span class="spacer">Anyone with the link can open this artifact</span>
+    </label>
+    <p class="share-help" id="share-link-permissions">Anyone with the link can view your existing saved data, in either data mode. Public visitors cannot save changes back to your data.</p>
+    {{if .Shares.Link}}
+    <div class="share-link-row">
+      <input type="text" id="share-link-url" class="field" readonly value="{{.Shares.Link.URL}}" aria-label="Public link">
+      <button type="button" class="btn btn-sm btn-sec" id="share-link-copy"><i class="ph ph-copy"></i> Copy</button>
+    </div>
+    {{/* Rotation earns its own control: a leaked link wants replacing, and
+         toggling off then on gets there while leaving the user unsure it
+         worked. One step, and it says outright what it costs. */}}
+    <div class="btn-row">
+      <button type="button" class="btn btn-sm btn-sec" id="share-link-replace"><i class="ph ph-arrows-clockwise"></i> Replace link</button>
+      <span class="text-sm muted">The current link stops working.</span>
+    </div>
+    {{/* The shared tile (av-ei5h): an iframe snippet for the link's widget,
+         or its default tile when it has none (av-cp7j). The URL inside is
+         live exactly while this link is — replacing the link replaces it. */}}
+    {{if .WidgetEmbed}}
+    <details class="state-how-it-works" id="share-widget-details">
+      <summary><i class="ph ph-caret-right state-how-closed" aria-hidden="true"></i><i class="ph ph-caret-down state-how-open" aria-hidden="true"></i> Embed tile</summary>
+    <div class="share-link-row">
+      <input type="text" id="share-widget-embed" class="field" readonly value="{{.WidgetEmbed}}" aria-label="Shared widget embed code">
+      <button type="button" class="btn btn-sm btn-sec" id="share-widget-copy"><i class="ph ph-copy"></i> Copy</button>
+    </div>
+    <p class="text-sm muted">Embeddable tile showing this tool's saved data. Read-only, like the public link.</p>
+    </details>
+    {{end}}
+    {{end}}
+
+  </section>
+
+  <section class="share-col">
     <h3 class="text-sm muted">People</h3>
     {{/* One field taking several names and one submit: "gave friends access,
          dropped the link in the group chat" is one gesture, not three. The
@@ -354,50 +398,6 @@
       <p><strong>Switch to shared data:</strong> everyone with a personal grant uses your saved data. Their separate data is kept and becomes visible to them again if you switch back.</p>
       <p>Public links always show your saved data and remain read-only, whichever mode you choose.</p>
     </details>
-  </section>
-
-  <section class="share-col">
-    <h3 class="text-sm muted">Link Access</h3>
-    {{/* A toggle, not a create button, because an artifact has exactly one
-         anonymous link (a partial unique index, av-lrae): on mints the row and
-         shows the URL, off deletes it and the URL dies. Nothing accumulates a
-         list of links whose destinations nobody remembers, and revoking has
-         exactly one meaning. */}}
-    {{/* The row's share id rides on the toggle itself: switching the link off
-         is a DELETE of that row, and the id is the only thing the page needs
-         to know about it. */}}
-    <label class="row">
-      <input type="checkbox" id="share-link-toggle" aria-describedby="share-link-permissions"{{if .Shares.Link}} checked data-share-id="{{.Shares.Link.ID}}"{{end}}>
-      <span class="spacer">Anyone with the link can open this artifact</span>
-    </label>
-    <p class="share-help" id="share-link-permissions">Anyone with the link can view your existing saved data, in either data mode. Public visitors cannot save changes back to your data.</p>
-    {{if .Shares.Link}}
-    <div class="share-link-row">
-      <input type="text" id="share-link-url" class="field" readonly value="{{.Shares.Link.URL}}" aria-label="Public link">
-      <button type="button" class="btn btn-sm btn-sec" id="share-link-copy"><i class="ph ph-copy"></i> Copy</button>
-    </div>
-    {{/* Rotation earns its own control: a leaked link wants replacing, and
-         toggling off then on gets there while leaving the user unsure it
-         worked. One step, and it says outright what it costs. */}}
-    <div class="btn-row">
-      <button type="button" class="btn btn-sm btn-sec" id="share-link-replace"><i class="ph ph-arrows-clockwise"></i> Replace link</button>
-      <span class="text-sm muted">The current link stops working.</span>
-    </div>
-    {{/* The shared tile (av-ei5h): an iframe snippet for the link's widget,
-         or its default tile when it has none (av-cp7j). The URL inside is
-         live exactly while this link is — replacing the link replaces it. */}}
-    {{if .WidgetEmbed}}
-    <details class="state-how-it-works" id="share-widget-details">
-      <summary><i class="ph ph-caret-right state-how-closed" aria-hidden="true"></i><i class="ph ph-caret-down state-how-open" aria-hidden="true"></i> Embed tile</summary>
-    <div class="share-link-row">
-      <input type="text" id="share-widget-embed" class="field" readonly value="{{.WidgetEmbed}}" aria-label="Shared widget embed code">
-      <button type="button" class="btn btn-sm btn-sec" id="share-widget-copy"><i class="ph ph-copy"></i> Copy</button>
-    </div>
-    <p class="text-sm muted">Embeddable tile showing this tool's saved data. Read-only, like the public link.</p>
-    </details>
-    {{end}}
-    {{end}}
-
   </section>
 
 </div>{{end}}

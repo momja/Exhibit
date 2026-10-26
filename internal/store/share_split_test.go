@@ -39,6 +39,10 @@ func TestShareSplitUpgradeAndDown(t *testing.T) {
 		sh, err := s.GetAnonymousShareUnscoped(ctx, id)
 		require.NoError(t, err)
 		assert.Nil(t, sh, "a legacy grant id must never become a public URL")
+		owned, err := s.GetShare(ctx, alice, id)
+		require.NoError(t, err)
+		assert.Nil(t, owned, "a discarded grant id cannot resolve as an owner's link")
+		require.ErrorIs(t, s.DeleteShare(ctx, alice, id), ErrNotFound)
 	}
 	for _, id := range []string{"a", "b"} {
 		a, err := s.GetArtifactReadableBy(ctx, ViewerID(2), id)

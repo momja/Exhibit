@@ -34,6 +34,8 @@ var (
 	// a server fault. Being specific costs nothing here: the caller has
 	// already been proved to own the artifact.
 	ErrDuplicateShare = errors.New("a share for that artifact and recipient already exists")
+	// ErrInvalidRecipient means a grant was requested without a positive recipient id.
+	ErrInvalidRecipient = errors.New("recipient_id must be positive")
 	// ErrAmbiguousUser means a handle matched more than one account, which
 	// only email can do — external_id is UNIQUE. It is an error rather than a
 	// "first match wins" because the caller is about to give somebody access
@@ -657,18 +659,21 @@ type Store interface {
 	SessionAgentSpend(ctx context.Context, ownerID int64, sessionID string) (UsageTotals, error)
 	InstanceAgentSpend(ctx context.Context, since time.Time) (UsageTotals, error)
 
-	// Shares. A share is minted and revoked by the artifact's owner, so those
-	// two are owner-scoped; resolving one to serve it is not (below).
+	// Shares are created, listed and revoked by the artifact's owner.
+	// Anonymous links and grants are independent: revoking a link leaves all
+	// grants intact. Grants are revoked only by artifact and recipient.
 	//
-	// Creation paths are explicit: grants require a positive recipient id;
-	// only CreateAnonymousLink publishes an artifact without an account.
+	// Creation paths are explicit: CreateGrant returns ErrInvalidRecipient
+	// for a nonpositive recipient id. Only CreateAnonymousLink publishes an
+	// artifact without an account.
 	// Both return ErrDuplicateShare for a second link or a repeated grant.
 	CreateGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) (*Grant, error)
 	CreateAnonymousLink(ctx context.Context, ownerID int64, artifactID string) (*Share, error)
 	// DeleteGrant addresses a grant by artifact and recipient, never its row id.
 	// A missing grant returns ErrNotFound, matching DeleteShare.
 	DeleteGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) error
-	// GetShare resolves an owner's anonymous link by id.
+	// GetShare resolves only an owner's anonymous link by id; missing ids
+	// and ids owned by someone else return (nil, nil). Grants have no id.
 	GetShare(ctx context.Context, ownerID int64, id string) (*Share, error)
 	// ListArtifactShares is the enumeration half of sharing (av-6xjd): every
 	// share of one artifact: link first, then grants by creation time (recipient
@@ -676,9 +681,8 @@ type Store interface {
 	// Owner-scoped like the two above, because who an artifact has been given to is the owner's business and nobody else's —
 	// a recipient can see the artifact, never the guest list.
 	//
-	// It joins `users` rather than leaving the caller to resolve ids, because
-	// the alternative is a query per grant on a list whose whole purpose is to
-	// be read at a glance.
+	// It loads recipients from users in one query rather than leaving the
+	// caller to resolve each id separately.
 	ListArtifactShares(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactShare, error)
 	// ReplaceAnonymousLink rotates an artifact's public link: it deletes the
 	// existing one, if any, and mints newID in its place, in ONE transaction.
@@ -700,6 +704,8 @@ type Store interface {
 	// It queries share_links only; grants have no id (Exh-grj9). Keep callers
 	// inside internal/render so the unscoped read surface stays auditable.
 	GetAnonymousShareUnscoped(ctx context.Context, id string) (*Share, error)
+	// DeleteShare revokes only an owner-scoped anonymous link. Grant ids,
+	// missing ids and links owned by someone else return ErrNotFound.
 	DeleteShare(ctx context.Context, ownerID int64, id string) error
 
 	// --- Storage accounting (av-fw1b) ----------------------------------
