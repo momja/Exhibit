@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
-	"os/exec"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/momja/Exhibit/internal/agent"
 	"github.com/momja/Exhibit/internal/agentscope"
@@ -207,38 +210,34 @@ func main() {
 	if err := api.RequireSpendCaps(platformAgentKey, spendCaps); err != nil {
 		fatal("configure the agent spend caps", err)
 	}
-	// Agent sessions authenticate with a per-session credential scoped to one
-	// artifact, never the service token (av-e0yj). One registry, shared: the
-	// manager issues from it, the API resolves and enforces against it.
-	agentCreds := agentscope.NewRegistry()
-	var agentMgr *agent.Manager
-	piBin := getenv("PI_BIN", "pi")
-	if path, err := exec.LookPath(piBin); err != nil {
-		slog.Warn("pi binary not found; agent support disabled", slog.String("pi_bin", piBin))
-	} else {
-		agentMgr, err = agent.New(agent.Config{
-			PiBin:         path,
-			WorkRoot:      dataDir + "/agent",
-			APIBaseURL:    appOrigin,
-			Credentials:   agentCreds,
-			MockLLMURL:    mockLLMURL,
-			ThinkingLevel: thinkingLevel,
-			// In platform mode the model is not the user's to know, so Pi's
-			// own identifiers are stripped from the event stream and the
-			// persisted transcript too (av-siqf).
-			HideModelIdentity: platformAgentKey != nil,
-			Guardrail:         guardrail,
-			Caps:              spendCaps,
-			// The ceiling the API enforces, so a tool can refuse an oversized
-			// write before sending it rather than after (av-ombn).
-			MaxRequestBodyBytes: maxBodyBytes,
-		}, st)
-		if err != nil {
-			fatal("init agent manager", err)
-		}
-		slog.Info("agent support enabled", slog.String("pi_bin", path), slog.Bool("mock_llm", mockLLMURL != ""),
-			slog.Bool("guardrail", guardrail != nil))
+	executionConfig, err := agentExecutionConfigFromEnv()
+	if err != nil {
+		fatal("configure agent execution", err)
 	}
+	agentCreds := agentscope.NewRegistry()
+	workers, err := newWorkerCoordinator(context.Background(), executionConfig, dataDir, box, st, agentCreds, platformAgentKey != nil)
+	if err != nil {
+		fatal("initialize worker authority", err)
+	}
+	var agentMgr *agent.Manager
+	if executionConfig.Mode != "off" {
+		runner, runnerErr := workers.runner(getenv("PI_BIN", "pi"), dataDir+"/agent")
+		if runnerErr != nil && executionConfig.Mode == "local" {
+			slog.Warn("pi binary not found; agent support disabled")
+		} else if runnerErr != nil {
+			fatal("configure agent runner", runnerErr)
+		} else {
+			agentMgr, err = agent.New(agent.Config{Runner: runner, ReserveExecution: workers.reserve, MaxSessions: executionConfig.MaxWorkers,
+				APIBaseURL: appOrigin, Credentials: agentCreds, MockLLMURL: mockLLMURL, ThinkingLevel: thinkingLevel,
+				HideModelIdentity: platformAgentKey != nil, Guardrail: guardrail, Caps: spendCaps,
+				IdleTimeout: executionConfig.IdleRetention, MaxRequestBodyBytes: maxBodyBytes}, st)
+			if err != nil {
+				fatal("initialize agent manager", err)
+			}
+			slog.Info("agent execution enabled", "mode", executionConfig.Mode, "max_workers", executionConfig.MaxWorkers)
+		}
+	}
+	workers.start(agentMgr)
 
 	// Hosted deployments use Clerk; self-hosters retain the independent OIDC
 	// and local-password paths. Incomplete Clerk configuration must fail closed.
@@ -290,6 +289,8 @@ func main() {
 		AuthToken:           authToken,
 		Agent:               agentMgr,
 		AgentCredentials:    agentCreds,
+		AgentControl:        workers.control,
+		DeleteAgentOwner:    workers.deleteOwner,
 		Secrets:             box,
 		MockEnabled:         mockLLMURL != "",
 		PlatformAgentKey:    platformAgentKey,
@@ -335,22 +336,50 @@ func main() {
 			slog.String("app_origin", appOrigin),
 			slog.String("render_origin", renderOrigin),
 		)
-		if err := api.NewServer(addr, h).ListenAndServe(); err != nil {
+		if err := serveExhibit([]*http.Server{api.NewServer(addr, h)}, agentMgr, workers); err != nil {
 			fatal("server", err)
 		}
 		return
 	}
 
-	go func() {
-		slog.Info("render server listening", slog.String("addr", renderAddr))
-		if err := api.NewServer(renderAddr, router.RenderHandler()).ListenAndServe(); err != nil {
-			fatal("render server", err)
-		}
-	}()
-	slog.Info("app server listening", slog.String("addr", addr))
-	if err := api.NewServer(addr, router).ListenAndServe(); err != nil {
-		fatal("app server", err)
+	if err := serveExhibit([]*http.Server{api.NewServer(addr, router), api.NewServer(renderAddr, router.RenderHandler())}, agentMgr, workers); err != nil {
+		fatal("serve Exhibit", err)
 	}
+
+}
+
+// Keep the API available while active executions drain their final snapshots.
+func serveExhibit(servers []*http.Server, manager *agent.Manager, workers *workerCoordinator) error {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(stop)
+	failed := make(chan error, len(servers))
+	for _, server := range servers {
+		go func(server *http.Server) { failed <- server.ListenAndServe() }(server)
+	}
+	var serveErr error
+	select {
+	case <-stop:
+	case serveErr = <-failed:
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	if manager != nil {
+		serveErr = errors.Join(serveErr, manager.Shutdown(ctx))
+	}
+	close(workers.stop)
+	select {
+	case <-workers.done:
+	case <-ctx.Done():
+		serveErr = errors.Join(serveErr, ctx.Err())
+	}
+	for _, server := range servers {
+		serveErr = errors.Join(serveErr, server.Shutdown(ctx))
+	}
+	if errors.Is(serveErr, http.ErrServerClosed) {
+		return nil
+	}
+	return serveErr
 }
 
 // newIdentityProvider builds the OIDC provider from the environment, or

@@ -31,7 +31,7 @@ safety" (§12).
 | Partial re-render | **htmx** — self-hosted / embedded on app origin, no CDN (§9) | hand-rolled fetch-and-swap helper |
 | Reusable UI behavior | **Stimulus** — self-hosted ES module, Go partials own markup (§9) | explicit component initialization in vanilla JS |
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
-| Agent harness | **Pi** (`pi --mode rpc` sidecar per session; TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
+| Agent harness | **Pi 1.3.0 / Node 22.22.0** (`agentexec.Runner`: local or authenticated standalone `exhibit-agent`, one Sprite per assignment; core owns policy/ledger/keys; shared extensions in `internal/agentassets`; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | Hosted login | Clerk Go SDK + ClerkJS / Clerk UI from the application Frontend API domain; enabled only by Clerk configuration | Replacing self-hosted login |
 | Login (optional) | Generic OIDC via discovery — `coreos/go-oidc/v3` + `golang.org/x/oauth2`, exchanged once for our own session (§10) | auth at the operator's proxy (also supported); vendor SDK (rejected) |

@@ -37,6 +37,11 @@ out of Git and preserve any existing configuration and data.
 
 The fastest way to run Exhibit is Docker Compose. Read **[docs/deployment.md](./docs/deployment.md)**.
 
+The default image and `docker compose up` run the agent locally with bundled
+Node and Pi. Self-hosters need no separate worker service, Fly account, or worker
+configuration. Hosted deployments can explicitly select remote workers or Sprites;
+see [execution modes](./docs/deployment.md#43-execution-modes-and-standalone-workers).
+
 The rest of this section is for building and running **from source** for
 development.
 

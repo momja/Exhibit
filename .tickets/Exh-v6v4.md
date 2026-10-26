@@ -1,6 +1,6 @@
 ---
 id: Exh-v6v4
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-07-12T03:30:17Z
@@ -50,3 +50,9 @@ usage and spend Store dependencies are handled by Exh-hz3g.
    history; ordinary History projections and legacy conversations still work.
 4. Completed tool-call checkpoints and orderly final flush are covered, with
    interruption represented explicitly and no automatic unfinished-turn replay.
+
+## Notes
+
+**2026-10-20T07:30:54Z**
+
+Implemented fenced supervisor snapshot/read APIs, monotonic checkpoint persistence, tool/settled/final acknowledgements, and raw-file restore across standalone HTTP workers. Reviewed with review-agent and fixes re-reviewed. Real pinned-Pi HTTP tests cover cold replacement, stable conversation identity, provenance, and resume; browser History remains projected. Final stack verification is documented with the integration PR.

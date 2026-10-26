@@ -306,6 +306,11 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var workerCleanupErr error
+	if ro.cfg.DeleteAgentOwner != nil {
+		workerCleanupErr = ro.cfg.DeleteAgentOwner(ctx, ownerID)
+	}
+
 	// The rows are gone, which took the sessions with them (ON DELETE CASCADE
 	// on sessions.user_id) — so the browser is already signed out server-side.
 	// Clearing the cookie stops it presenting a credential no row backs.
@@ -321,8 +326,8 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	// person deleting their library must not be told succeeded. They do not
 	// stay on it, though — the ids are queued (av-8gyd), so the next startup
 	// finishes what this call could not.
-	if err := ro.reclaimBlobs(ctx, queued); err != nil {
-		serverError(w, r, "delete account blobs", err)
+	if err := errors.Join(workerCleanupErr, ro.reclaimBlobs(ctx, queued)); err != nil {
+		serverError(w, r, "delete account cleanup", err)
 		return
 	}
 
