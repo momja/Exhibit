@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,13 +19,14 @@ func TestUpgradeDropsDescopedAgentAuthorityTables(t *testing.T) {
 	require.NoError(t, s.SetAgentKey(t.Context(), &AgentKey{
 		OwnerID: 1, Provider: "anthropic", Model: "model", KeyCiphertext: "sealed-key",
 	}))
+	// Step down rather than delete 38's ledger row, so migrations above 38
+	// are undone too and the ledger has no gap goose would refuse.
+	require.NoError(t, goose.DownTo(s.db, "migrations", 37))
 	up, err := migrationsFS.ReadFile("migrations/035_agent_authority.sql")
 	require.NoError(t, err)
 	upOnly, _, found := strings.Cut(string(up), "-- +goose Down")
 	require.True(t, found)
 	_, err = s.db.ExecContext(t.Context(), upOnly)
-	require.NoError(t, err)
-	_, err = s.db.ExecContext(t.Context(), "DELETE FROM goose_db_version WHERE version_id = 38")
 	require.NoError(t, err)
 	require.NoError(t, s.Close())
 
