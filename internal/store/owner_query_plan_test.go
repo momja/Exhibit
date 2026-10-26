@@ -11,9 +11,9 @@ import (
 
 func TestOwnerScopedQueryPlans(t *testing.T) {
 	s := newTestStore(t)
-	// Exercise 039's Down and the upgrade from layer 2 as well as the fresh
+	// Exercise 044's Down and the upgrade from layer 2 as well as the fresh
 	// migration path newTestStore already took.
-	require.NoError(t, goose.DownTo(s.db, "migrations", 38))
+	require.NoError(t, goose.Down(s.db, "migrations"))
 	var indexes int
 	require.NoError(t, s.db.QueryRowContext(t.Context(),
 		"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='artifacts_owner'").Scan(&indexes))
@@ -34,6 +34,34 @@ func TestOwnerScopedQueryPlans(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			plan := explainQueryPlan(t, s, tc.query, tc.args...)
 			assert.Regexp(t, `SEARCH artifacts(?: EXISTS)? USING INDEX sqlite_autoindex_artifacts_1 \(id=\?\)`, plan)
+			assert.NotContains(t, plan, "SCAN artifacts")
+			assert.NotContains(t, plan, "LIST SUBQUERY")
+		})
+	}
+
+	t.Run("GetAccountSummary", func(t *testing.T) {
+		plan := explainQueryPlan(t, s, accountSummaryQuery(), alice, alice, alice)
+		assert.Regexp(t, `SEARCH artifacts USING (?:COVERING )?INDEX artifacts_owner \(owner_id=\?\)`, plan)
+		assert.Regexp(t, `SEARCH share_links USING (?:COVERING )?INDEX \S+ \(artifact_id=\?\)`, plan)
+		assert.Regexp(t, `SEARCH share_grants USING (?:COVERING INDEX \S+|PRIMARY KEY) \(artifact_id=\?\)`, plan)
+		assert.NotContains(t, plan, "SCAN share_links")
+		assert.NotContains(t, plan, "SCAN share_grants")
+		assert.NotContains(t, plan, "SCAN artifacts")
+	})
+
+	// These callers pin a share's primary key rather than artifact_id. They
+	// still check at most one artifact instead of enumerating the share table.
+	for _, tc := range []struct {
+		name, query string
+	}{
+		{"GetShare", getShareQuery()},
+		{"DeleteShare", deleteShareQuery()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := explainQueryPlan(t, s, tc.query, "share", alice)
+			assert.Contains(t, plan, "SEARCH share_links USING INDEX sqlite_autoindex_share_links_1 (id=?)")
+			assert.Regexp(t, `SEARCH artifacts(?: EXISTS)? USING INDEX sqlite_autoindex_artifacts_1 \(id=\?\)`, plan)
+			assert.NotContains(t, plan, "SCAN share_links")
 			assert.NotContains(t, plan, "SCAN artifacts")
 			assert.NotContains(t, plan, "LIST SUBQUERY")
 		})
@@ -93,6 +121,14 @@ func assertNoSharingTableScans(t *testing.T, plan string) {
 	// FTS5 describes its indexed MATCH as a virtual-table SCAN, and scalar
 	// counts may SCAN CONSTANT ROW. Neither is a scan of a library table.
 	assert.NotRegexp(t, `SCAN (?:artifacts|a|share_grants|g|share_links|l|users|u)(?:\s|$)`, plan)
+}
+
+func TestOwnedArtifactRejectsUnknownIdentifiers(t *testing.T) {
+	for _, identifier := range []string{"", "artifacts", "unknown_alias", "share_links; DROP TABLE artifacts", "share_links --"} {
+		t.Run(identifier, func(t *testing.T) {
+			require.Panics(t, func() { ownedArtifact(identifier) })
+		})
+	}
 }
 
 func explainQueryPlan(t *testing.T, s *SQLiteStore, query string, args ...any) string {

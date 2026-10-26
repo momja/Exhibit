@@ -116,7 +116,9 @@ The only way data changes. Full route reference: `api.md`.
   `already_shared` | `unknown` | `ambiguous` | `self`; `unknown` deliberately
   confirms non-existence, av-6xjd). No recipients mints the one anonymous link;
   `replace: true` rotates it in one transaction.
-- `DELETE /api/shares/:id`: revoke the anonymous link, owner-only.
+- `DELETE /api/shares/:id`: revoke the anonymous link, owner-only. Grant ids
+  answer 404 and leave grants intact; the store restricts lookup and deletion
+  by id to anonymous links.
 - `DELETE /api/artifacts/:id/grants?recipient=:userID`: revoke one grant,
   owner-only; recipient is a query parameter (av-hh1o). Missing grants answer 404,
   matching link deletes. Grant views carry recipient ids, never row ids.
@@ -278,10 +280,12 @@ Blob:   put/get/delete by id
 
 **Owner scoping is in the queries** (av-ep8k). Every artifact-naming method takes
 `owner_id` and filters in SQL; child tables use an owner-scoped correlated
-`EXISTS` on the artifact's primary key. The `artifacts_owner` index on `owner_id`
-serves the library listing. Another owner's id behaves exactly like a missing
-one: reads return nothing, writes return `ErrNotFound`, handlers answer 404,
-never 403.
+`EXISTS` on the artifact's primary key, with the outer query pinned to one
+artifact or child row. Queries across an owner's library, including account
+share counts, instead drive from the `artifacts_owner` index on `owner_id`
+and look up child rows by `artifact_id`. Another owner's id behaves exactly
+like a missing one: reads return nothing, writes return `ErrNotFound`, handlers
+answer 404, never 403.
 
 **Unscoped accessors are named for it**: `GetArtifactUnscoped`,
 `GetAnonymousShareUnscoped`, and for assets `ArtifactAssetsUnscoped` and
@@ -314,8 +318,11 @@ and writes state.
   shadows kept by triggers and the API (av-b6o9). Queries are literal text: each
   token becomes a quoted prefix phrase (av-hic3).
 - **Shares**: `share_links(id, artifact_id UNIQUE)` and
-  `share_grants(artifact_id, recipient_id)` with a composite primary key,
-  `WITHOUT ROWID`, and covering `share_grants_by_recipient` index (038, Exh-grj9).
+  `share_grants(artifact_id, recipient_id, created_at)` with a composite primary key,
+  `WITHOUT ROWID`, and covering `share_grants_by_recipient` index (043, Exh-grj9).
+  Millisecond `created_at` timestamps preserve grant order; legacy rows use
+  synthetic timestamps in old `shares.rowid` order. The panel lists the link
+  first, then grants by timestamp, with recipient id breaking millisecond ties.
   Artifact reads compute the badge's grant count and link existence; no rollup
   columns or share triggers remain. `CreateGrant` requires a positive recipient
   id; only `CreateAnonymousLink` publishes a link (Exh-a9l6). `DeleteGrant`
@@ -546,9 +553,9 @@ monogram tile when there is none. The frame is `pointer-events: none` and
 fragment route.
 
 **Sharing** (av-6xjd, av-tlpv): an owner-only `sharePanel` modal, rendered only
-when `detailPageData.Share` is non-nil, with three sections: people (one field,
-several names, each reported back), saved-data mode, and the public link (toggle
-plus replace). Named recipients write state per the mode; **public-link visitors
+when `detailPageData.Share` is non-nil, with three sections: the public link
+(toggle plus replace), people (one field, several names, each reported back),
+and saved-data mode. Named recipients write state per the mode; **public-link visitors
 see the owner's state in either mode and never write it back**. Changes apply
 immediately. The script is a native ES module. The body is an htmx target
 refreshed from `/partials/share-panel` on `exhibit:shares-changed`.
@@ -850,12 +857,12 @@ ingest-time transform, degrades to a report, and never seeds the allowlist.
 ## 7. Sharing
 
 Anonymous links live in `share_links(id, artifact_id)`; directed grants in
-`share_grants(artifact_id, recipient_id)`, with no grant id (Exh-grj9).
+`share_grants(artifact_id, recipient_id, created_at)`, with no grant id (Exh-grj9).
 `GET /s/:shareId` resolves only a link id and serves the read-only render surface
 and CSP with no app auth: holding the link is the authorization. Recipients sign
-in and open the ordinary artifact URL. Migration 038 keeps existing link ids,
+in and open the ordinary artifact URL. Migration 043 keeps existing link ids,
 including the keys of cached OG snapshots; Down regenerates discarded grant ids
-and loses their original row order. The `.html` export is the service-free fallback.
+while preserving relative grant order. The `.html` export is the service-free fallback.
 
 A pasted link unfurls through OpenGraph tags and a picture of its widget (§3.2,
 av-rclm). Every id that is not a live link previews as Exhibit and nothing else.
