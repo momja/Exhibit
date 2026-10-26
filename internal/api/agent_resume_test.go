@@ -304,6 +304,13 @@ func TestAChatOnAnArtifactThatHasHistoryStartsANewConversation(t *testing.T) {
 	id := createArtifact(t, r, map[string]any{"title": "Counter", "body": counterBody})
 	earlier := conversation(t, h, id, "make the button purple")
 	closeAndWait(t, r, earlier)
+	// Close hides the session before its terminal checkpoint finishes. Capture
+	// the old conversation only after that checkpoint and scratch cleanup,
+	// so its own final save cannot race the "untouched by a new chat" assertion.
+	require.Eventually(t, func() bool {
+		entries, err := os.ReadDir(h.workRoot)
+		return err == nil && len(entries) == 0
+	}, 5*time.Second, 20*time.Millisecond, "the previous worker must finish its final checkpoint")
 	before := keptConversation(t, r, id, earlier, 1)
 
 	fresh := conversation(t, h, id, "now make it red")
