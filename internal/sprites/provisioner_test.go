@@ -470,8 +470,10 @@ func TestNoCrossOwnerOrCredentialReuse(t *testing.T) {
 }
 
 func TestBootstrapFailureCleanupAndSanitizedErrors(t *testing.T) {
-	for _, scenario := range []string{"service-exit", "upload", "deadline", "bad-ready", "get-after-create", "malformed-create"} {
+	for _, scenario := range []string{"service-exit", "upload", "canceled-ready", "bad-ready", "get-after-create", "malformed-create"} {
 		t.Run(scenario, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			f := newFakeAPI(t)
 			config := testConfig(f)
 			request := testRequest()
@@ -486,9 +488,15 @@ func TestBootstrapFailureCleanupAndSanitizedErrors(t *testing.T) {
 					}
 					return false
 				}
-			case "deadline":
-				config.StartupTimeout = 30 * time.Millisecond
-				config.CheckReady = func(ctx context.Context, _ *Endpoint) error { <-ctx.Done(); return ctx.Err() }
+			case "canceled-ready":
+				// Cancel only after creation/bootstrap. A short wall-clock deadline
+				// can expire before creation on a busy host, leaving nothing to delete.
+				config.StartupTimeout = 10 * time.Second
+				config.CheckReady = func(ctx context.Context, _ *Endpoint) error {
+					cancel()
+					<-ctx.Done()
+					return ctx.Err()
+				}
 			case "bad-ready":
 				f.readyOverride = &ReadyResponse{Version: "1", PiVersion: "1.3.0", ExecutionID: "wrong", SessionID: request.Identity.SessionID}
 			case "get-after-create":
@@ -525,7 +533,7 @@ func TestBootstrapFailureCleanupAndSanitizedErrors(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = p.Provision(context.Background(), request)
+			_, err = p.Provision(ctx, request)
 			if err == nil {
 				t.Fatal("expected startup failure")
 			}
@@ -535,10 +543,24 @@ func TestBootstrapFailureCleanupAndSanitizedErrors(t *testing.T) {
 			if countCalls(f, "DELETE", "/v1/sprites/"+p.Name(request.Identity)) != 1 {
 				t.Error("failed startup did not clean up its Sprite")
 			}
-			if scenario == "deadline" && !errors.Is(err, context.DeadlineExceeded) {
-				t.Errorf("missing startup deadline: %v", err)
+			if scenario == "canceled-ready" && !errors.Is(err, context.Canceled) {
+				t.Errorf("missing startup cancellation: %v", err)
 			}
 		})
+	}
+}
+
+func TestExpiredStartupDoesNotDeleteAnUncreatedSprite(t *testing.T) {
+	f := newFakeAPI(t)
+	p := newTestProvisioner(t, f, nil)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	_, err := p.Provision(ctx, testRequest())
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected expired startup deadline, got %v", err)
+	}
+	if countCalls(f, "POST", "/v1/sprites") != 0 || countCalls(f, "DELETE", "/v1/sprites/"+p.Name(testRequest().Identity)) != 0 {
+		t.Fatal("startup expired before creation must not create or delete a Sprite")
 	}
 }
 
