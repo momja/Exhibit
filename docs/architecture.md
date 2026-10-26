@@ -481,7 +481,44 @@ the recipient as viewer, and remounts use the parallel readable-by
 `/artifacts/:id/widget/viewer/open` route; the owner-only refresh stays unchanged.
 Repeated `?owner=<id>` parameters are validated against `SharedWithOwners`,
 canonicalized and deduplicated, then carried by search, paging and retry URLs.
-Malformed or unavailable owners return 400. Spaces navigation is a later story.
+Malformed or unavailable owners return 400.
+
+**Spaces and filters** (Exh-2c2e, Exh-gx18): one `gallerySpaces` partial
+lays out My library, Shared with me, and Shared by me as a 208px desktop rail
+at widths of at least 768px, and fixed bottom tabs on phones. Per-viewer counts
+come from `SpaceCounts`, independently of search. The spaces nav appears when
+an incoming or outgoing share exists. The rail also appears for a solo library
+with tags or collections; a library with none of those or shares keeps its
+original page with no rail, tabs, or filter sheet.
+
+My library and Shared by me accept repeated `?tag=<name>` and
+`?collection=<id>` parameters. Every selected tag and collection is required
+(AND). Unknown, empty, or foreign values return 400; duplicates are removed.
+Collection IDs distinguish collections even when their names are identical.
+The store's `MatchAllFilters` and `CollectionIDs` options provide this selection
+without changing the API's existing any-name-per-axis behavior. Migration 045
+adds reverse membership indexes; query-plan tests guard against scans of
+`artifact_tags` and `artifact_collections`.
+
+Desktop Collections and Tags sections sit below spaces, with normalized tag
+color dots. Incoming shares show Owners in that same UI instead of private tags
+or collections. On phones, Filter beside search opens a native bottom-sheet
+`dialog`, managed by the registered `filter-sheet` Stimulus controller. Native
+modal focus containment, initial focus, Escape, backdrop and Done dismissal,
+and return focus to Filter share one close path.
+
+Filter links restart the grid at offset zero in the same htmx sync scope as
+search; filter clicks advance the query revision before htmx handles the click.
+Search parameters, next/retry URLs and `HX-Replace-Url` retain the selection.
+The grid partial renders removable active chips, plus Clear all for multiple
+filters. Successful first-page htmx responses also swap the search's hidden
+parameters and both sets of filter options out of band, using the same Go
+partials as the full page. htmx 4 request settings are explicitly inherited on
+the option containers. Paging only replaces its sentinel, without duplicating
+chips or touching the controls.
+
+Screenshots: [Filters in the desktop rail](screenshots/Exh-gx18/01-filters-desktop.png)
+and [phone filter sheet](screenshots/Exh-gx18/02-filters-phone.png).
 
 Screenshots: [Shared with me](screenshots/Exh-u9b1/01-shared-with-me-desktop.png),
 [phone](screenshots/Exh-u9b1/02-shared-with-me-mobile.png), and

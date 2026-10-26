@@ -370,28 +370,36 @@ func listArtifactsQuery(opts ListOptions) (string, []any) {
 		args = append(args, opts.OwnerID)
 	}
 
-	if len(opts.Tags) > 0 {
-		placeholders := make([]string, len(opts.Tags))
-		for i, t := range opts.Tags {
-			placeholders[i] = "?"
-			args = append(args, t)
+	// Each axis normally matches any value for compatibility with API callers.
+	// Gallery selections require every value, including stable collection IDs.
+	addMembership := func(values []string, table, join, column string) {
+		groups := [][]string{values}
+		if opts.MatchAllFilters {
+			groups = nil
+			for _, value := range values {
+				groups = append(groups, []string{value})
+			}
 		}
-		args = append(args, opts.OwnerID)
-		wheres = append(wheres, `a.id IN (SELECT at.artifact_id FROM artifact_tags at
-            JOIN tags t ON t.id = at.tag_id WHERE t.name IN (`+strings.Join(placeholders, ",")+`)
-            AND t.owner_id = ?)`)
+		for _, group := range groups {
+			if len(group) == 0 {
+				continue
+			}
+			placeholders := make([]string, len(group))
+			for i, value := range group {
+				placeholders[i] = "?"
+				args = append(args, value)
+			}
+			args = append(args, opts.OwnerID)
+			wheres = append(wheres, `a.id IN (SELECT membership.artifact_id FROM `+table+` membership
+				JOIN `+join+` choice ON choice.id = membership.`+column+` WHERE choice.name IN (`+strings.Join(placeholders, ",")+`) AND choice.owner_id = ?)`)
+		}
 	}
-
-	if len(opts.Collections) > 0 {
-		placeholders := make([]string, len(opts.Collections))
-		for i, c := range opts.Collections {
-			placeholders[i] = "?"
-			args = append(args, c)
-		}
-		args = append(args, opts.OwnerID)
-		wheres = append(wheres, `a.id IN (SELECT ac.artifact_id FROM artifact_collections ac
-            JOIN collections c ON c.id = ac.collection_id WHERE c.name IN (`+strings.Join(placeholders, ",")+`)
-            AND c.owner_id = ?)`)
+	addMembership(opts.Tags, "artifact_tags", "tags", "tag_id")
+	addMembership(opts.Collections, "artifact_collections", "collections", "collection_id")
+	for _, id := range opts.CollectionIDs {
+		wheres = append(wheres, `a.id IN (SELECT membership.artifact_id FROM artifact_collections membership
+			JOIN collections choice ON choice.id = membership.collection_id WHERE choice.id = ? AND choice.owner_id = ?)`)
+		args = append(args, id, opts.OwnerID)
 	}
 
 	for _, w := range wheres {

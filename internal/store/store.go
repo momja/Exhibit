@@ -343,6 +343,10 @@ type ListOptions struct {
 	Query       string
 	Tags        []string
 	Collections []string
+	// CollectionIDs requires membership in every given collection by stable ID.
+	CollectionIDs []string
+	// MatchAllFilters requires every named tag and collection, rather than any per axis.
+	MatchAllFilters bool
 	// SharedOnly keeps artifacts with a link or at least one grant. It never
 	// changes the owner scope.
 	SharedOnly bool

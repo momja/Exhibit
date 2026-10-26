@@ -14,7 +14,7 @@
 <link rel="stylesheet" href="/assets/gallery/index.css">
 </head>
 <body>
-<div id="{{.Grid.ID}}" data-gallery>
+<div id="{{.Grid.ID}}" data-gallery{{if .Grid.Filters.Sections}} data-controller="filter-sheet"{{end}}>
 <header>
   {{.LogoSVG}}
   {{/* The gallery's heading, hidden visually (index.css) but kept so the page
@@ -31,7 +31,8 @@
        the input's later sibling: index.css hides it with `input:focus ~` and
        `input:not(:placeholder-shown) ~`, so it disappears once the box is in
        use with no script involved. */}}
-  {{template "gallerySearch" .Grid}}
+  {{template "gallerySearch" .Grid}}{{if .Grid.Filters.Sections}}
+  <button class="btn btn-sec gallery-filter-trigger" type="button" data-filter-sheet-target="trigger" data-action="filter-sheet#open" aria-controls="{{.Grid.ID}}-filter-sheet" aria-haspopup="dialog"><i class="ph ph-sliders" aria-hidden="true"></i><span>Filter</span></button>{{end}}
   <span class="spacer"></span>
   {{/* Administration is a secondary control, and it appears only for an
        admin (av-utap). The hiding is a courtesy to everyone else, not a
@@ -66,14 +67,15 @@
   <a class="btn btn-sec icon-btn" href="/profile" aria-label="Your account" title="Your account"><i class="ph ph-user-circle" aria-hidden="true"></i></a>
 {{if .Clerk}}<div data-controller="clerk" data-clerk-mode-value="user"><div data-clerk-target="mount"></div><span data-clerk-target="status" role="status"></span></div>{{end}}
 </header>
-{{if .Spaces}}<div class="gallery-layout">{{template "gallerySpaces" .Spaces}}{{end -}}
+{{if or .Spaces .Grid.Filters.Sections}}<div class="gallery-layout{{if not .Spaces}} gallery-layout-solo{{end}}">{{template "gallerySpaces" .}}{{end -}}
 <main>{{if .Grid.Title}}<h2 class="gallery-title">{{.Grid.Title}}</h2>{{end}}
 {{/* Cards share their tile, title, status marks, and action menu with every
      gallery fragment. Card clicks open the viewer; menu actions have their
      own controls and are handled through delegation after htmx swaps. */}}
 {{template "galleryResults" .Grid}}
 </main>
-{{- if .Spaces}}</div>{{end}}
+{{- if or .Spaces .Grid.Filters.Sections}}</div>{{end}}{{if .Grid.Filters.Sections}}
+{{template "galleryFilterSheet" .Grid}}{{end}}
 {{if not .ReadOnly}}{{template "duplicateDialog" .Grid}}{{end}}
 </div>
 

@@ -45,6 +45,7 @@ type galleryEmptyState struct {
 
 type galleryGridData struct {
 	Title        string
+	Filters      galleryFilters
 	Parameters   url.Values
 	ID           string
 	FragmentPath string
@@ -69,13 +70,32 @@ func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, of
 	if grid.Empty.Message == "" {
 		grid.Empty.Message = "No artifacts in this gallery."
 	}
+	// Preserve filter parameters even if choices cannot be loaded for a retry.
+	grid.Parameters = url.Values{}
+	filterNames := []string{"tag", "collection"}
+	if gallery.ReadOnly {
+		filterNames = []string{"owner"}
+	}
+	for _, name := range filterNames {
+		if values := r.URL.Query()[name]; len(values) > 0 {
+			grid.Parameters[name] = append([]string(nil), values...)
+		}
+	}
+	if err := ro.loadGalleryFilters(r, gallery, &grid); err != nil {
+		return grid, err
+	}
 	var cards []galleryCard
 	var err error
 	if gallery.Select != nil {
 		cards, grid.Parameters, err = gallery.Select(ro, r, offset, galleryPageSize+1, grid.Query)
 	} else {
-		cards, err = ro.selectOwnedGallery(r, gallery.Filters, offset, galleryPageSize+1, grid.Query)
+		options := gallery.Filters
+		options.Tags = append(append([]string(nil), options.Tags...), grid.Parameters["tag"]...)
+		options.CollectionIDs = append(append([]string(nil), options.CollectionIDs...), grid.Parameters["collection"]...)
+		options.MatchAllFilters = true
+		cards, err = ro.selectOwnedGallery(r, options, offset, galleryPageSize+1, grid.Query)
 	}
+	grid.prepareFilterLinks(gallery)
 	if err != nil {
 		return grid, err
 	}
@@ -137,7 +157,7 @@ func (ro *Router) serveGalleryGrid(w http.ResponseWriter, r *http.Request, galle
 		}
 	}
 	grid, err := ro.loadGalleryGrid(r, gallery, offset)
-	if errors.Is(err, errGalleryOwner) {
+	if errors.Is(err, errGalleryOwner) || errors.Is(err, errGalleryFilter) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -147,7 +167,11 @@ func (ro *Router) serveGalleryGrid(w http.ResponseWriter, r *http.Request, galle
 		grid.RetryURL = grid.url(gallery.FragmentPath, offset)
 		status = http.StatusInternalServerError
 	}
-	fragment, err := renderPage("galleryGrid", grid)
+	partial := "galleryGrid"
+	if offset == 0 && r.Header.Get("HX-Request") != "" && status == http.StatusOK {
+		partial = "galleryFilterUpdate"
+	}
+	fragment, err := renderPage(partial, grid)
 	if err != nil {
 		fragmentServerError(w, r, "gallery grid render", err)
 		return

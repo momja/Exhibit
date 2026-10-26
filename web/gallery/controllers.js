@@ -9,3 +9,6 @@ export const application = Application.start();
 application.register('action-menu', ActionMenuController);
 
 application.register('clerk', ClerkController);
+
+import FilterSheetController from './filter-sheet-controller.js';
+application.register('filter-sheet', FilterSheetController);

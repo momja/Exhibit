@@ -147,7 +147,7 @@ func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
 
 func (ro *Router) serveGalleryPage(w http.ResponseWriter, r *http.Request, gallery galleryDefinition) {
 	grid, err := ro.loadGalleryGrid(r, gallery, 0)
-	if errors.Is(err, errGalleryOwner) {
+	if errors.Is(err, errGalleryOwner) || errors.Is(err, errGalleryFilter) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

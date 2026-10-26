@@ -1,13 +1,13 @@
-{{/* The rail can later hold tag/collection filter sections below this nav.
-     CSS lays out this same markup as a bottom tab bar on narrow screens. */}}
+{{/* Spaces and filters share a desktop rail. Only spaces become phone tabs. */}}
 {{define "gallerySpaces"}}<aside class="gallery-rail">
-  <nav class="gallery-spaces" aria-label="Library spaces">
-    <ul>{{range .}}
+  {{if .Spaces}}<nav class="gallery-spaces" aria-label="Library spaces">
+    <ul>{{range .Spaces}}
       <li><a href="{{.Path}}"{{if .Active}} aria-current="page"{{end}}>
         <i class="ph {{.Icon}}" aria-hidden="true"></i>
         <span class="space-label-wide">{{.Label}}</span><span class="space-label-short" aria-hidden="true">{{.ShortLabel}}</span>
         {{if .ShowCount}}<span class="space-count">{{.Count}}</span>{{end}}
       </a></li>{{end}}
     </ul>
-  </nav>
+  </nav>{{end}}
+  <div id="{{.Grid.ID}}-rail-filters" class="gallery-rail-filters" hx-target:inherited="#{{.Grid.ID}}-results" hx-swap:inherited="innerHTML" hx-sync:inherited="#{{.Grid.ID}}:replace" hx-include:inherited="#{{.Grid.ID}}-search [name=q]">{{template "galleryFilterOptions" .Grid}}</div>
 </aside>{{end}}
