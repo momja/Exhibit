@@ -182,7 +182,7 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 			"SELECT COUNT(*) FROM pragma_table_info('artifacts') WHERE name = ?", col).Scan(&n))
 		assert.Equal(t, 1, n, "artifacts.%s was not created by the upgrade", col)
 	}
-	// 043 supersedes 028/029: links and grants have separate keys and the
+	// 039 supersedes 028/029: links and grants have separate keys and the
 	// card indicators no longer need persisted columns or share triggers.
 	for _, table := range []string{"share_links", "share_grants"} {
 		var n int
@@ -284,7 +284,7 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	require.NoError(t, rows.Err())
 	assert.Equal(t, []string{"first"}, kept)
 
-	// The surviving legacy link is visible to the badge after 043 as well.
+	// The surviving legacy link is visible to the badge after 039 as well.
 	a, err := upgraded.GetArtifact(ctx, alice, "shared-twice")
 	require.NoError(t, err)
 	require.NotNil(t, a)
