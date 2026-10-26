@@ -319,7 +319,7 @@ and writes state.
   token becomes a quoted prefix phrase (av-hic3).
 - **Shares**: `share_links(id, artifact_id UNIQUE)` and
   `share_grants(artifact_id, recipient_id, created_at)` with a composite primary key,
-  `WITHOUT ROWID`, and covering `share_grants_by_recipient` index (043, Exh-grj9).
+  `WITHOUT ROWID`, and covering `share_grants_by_recipient` index (039, Exh-grj9).
   Millisecond `created_at` timestamps preserve grant order; legacy rows use
   synthetic timestamps in old `shares.rowid` order. The panel lists the link
   first, then grants by timestamp, with recipient id breaking millisecond ties.
@@ -875,7 +875,7 @@ Anonymous links live in `share_links(id, artifact_id)`; directed grants in
 `share_grants(artifact_id, recipient_id, created_at)`, with no grant id (Exh-grj9).
 `GET /s/:shareId` resolves only a link id and serves the read-only render surface
 and CSP with no app auth: holding the link is the authorization. Recipients sign
-in and open the ordinary artifact URL. Migration 043 keeps existing link ids,
+in and open the ordinary artifact URL. Migration 039 keeps existing link ids,
 including the keys of cached OG snapshots; Down regenerates discarded grant ids
 while preserving relative grant order. The `.html` export is the service-free fallback.
 
