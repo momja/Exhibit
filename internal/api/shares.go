@@ -122,10 +122,10 @@ func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 	// Any mention of either key is an error, whatever its value — one rule with
 	// no sub-cases. The first says out loud that a share now lives until it is
-	// deleted (DELETE /api/shares/:id is how it ends); the second, that a share
+	// deleted through its applicable revoke route; the second, that a share
 	// with no recipient is already the public one.
 	if req.ExpiresAt != nil {
-		http.Error(w, "expires_at is no longer supported: shares live until deleted (DELETE /api/shares/:id)", http.StatusBadRequest)
+		http.Error(w, "expires_at is no longer supported: shares live until revoked", http.StatusBadRequest)
 		return
 	}
 	if req.Public != nil {
@@ -256,6 +256,9 @@ func (ro *Router) grantShares(w http.ResponseWriter, r *http.Request, ownerID in
 				// is the schema reporting that the person already has access —
 				// which is what the owner wanted, and not an error to them.
 				res.Status = grantStatusExisting
+			case errors.Is(err, store.ErrInvalidRecipient):
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
 			default:
 				serverError(w, r, "create share grant", err)
 				return

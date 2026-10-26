@@ -114,17 +114,8 @@ func (s *SQLiteStore) DuplicateArtifact(ctx context.Context, ownerID int64, sour
 			if err != nil {
 				return false, err
 			}
-			if recipient.Valid {
-				if recipient.Int64 <= 0 {
-					return false, errors.New("recipient_id must be positive")
-				}
-				if _, err := tx.ExecContext(ctx, `INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, ?)`, id, d.ID, recipient.Int64); err != nil {
-					return false, err
-				}
-			} else {
-				if _, err := tx.ExecContext(ctx, `INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, NULL)`, id, d.ID); err != nil {
-					return false, err
-				}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, ?)`, id, d.ID, recipient); err != nil {
+				return false, err
 			}
 		}
 	}

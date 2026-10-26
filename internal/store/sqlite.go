@@ -1388,11 +1388,11 @@ func (s *SQLiteStore) InstanceAgentSpend(ctx context.Context, since time.Time) (
 		since.UTC().Format(datetimeLayout))
 }
 
-// CreateGrant grants access to one named account. A missing recipient fails
-// before any insert, so forgetting it can never mint a public link.
+// CreateGrant grants access to one named account. A nonpositive recipient returns
+// ErrInvalidRecipient before any insert, so forgetting it cannot mint a public link.
 func (s *SQLiteStore) CreateGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) (*Share, error) {
 	if recipientID <= 0 {
-		return nil, errors.New("recipient_id must be positive")
+		return nil, ErrInvalidRecipient
 	}
 	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
 		return nil, err
@@ -1428,15 +1428,13 @@ func (s *SQLiteStore) CreateAnonymousLink(ctx context.Context, ownerID int64, ar
 	return &Share{ID: id, ArtifactID: artifactID}, nil
 }
 
-// GetShare resolves a share the caller owns (through its artifact), of either
-// kind — the read behind revoking one, and revoking a grant is as much the
-// owner's business as revoking the link. Serving one to its visitor is
-// GetAnonymousShareUnscoped instead, because there the row is the
-// authorization and only a link's ever was.
+// GetShare resolves an anonymous link the caller owns through its artifact.
+// Grant ids, missing ids and links owned by someone else return (nil, nil).
+// Grants are listed by ListArtifactShares and revoked by DeleteGrant.
 func (s *SQLiteStore) GetShare(ctx context.Context, ownerID int64, id string) (*Share, error) {
 	return s.getShareWhere(ctx,
 		`SELECT id, artifact_id, recipient_id FROM shares
-		  WHERE id=? AND `+ownedArtifact, id, ownerID)
+		  WHERE id=? AND recipient_id IS NULL AND `+ownedArtifact, id, ownerID)
 }
 
 // GetAnonymousShareUnscoped resolves an artifact's anonymous link with no
@@ -1469,9 +1467,11 @@ func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...a
 	return &sh, nil
 }
 
+// DeleteShare revokes only an anonymous link owned by the caller. Grant ids,
+// missing ids and links owned by someone else return ErrNotFound.
 func (s *SQLiteStore) DeleteShare(ctx context.Context, ownerID int64, id string) error {
 	return s.execOwned(ctx,
-		"DELETE FROM shares WHERE id=? AND "+ownedArtifact, id, ownerID)
+		"DELETE FROM shares WHERE id=? AND recipient_id IS NULL AND "+ownedArtifact, id, ownerID)
 }
 
 // DeleteGrant revokes one (artifact, recipient) grant. Missing grants and

@@ -468,6 +468,8 @@ For restricted access, supply `recipients` with account login names or email add
 
 `GET /api/artifacts/:id/shares` returns `link` (`id`, `url`) and `grants` (`recipient_id`, `name`, `disabled`). Grants expose no row ID. Revoke by artifact and recipient query parameter; a missing or invalid recipient is `400`. A successful revoke returns `204`; a missing grant, unknown artifact or non-owner returns `404`, matching link deletes.
 
+`DELETE /api/shares/:id` removes only the anonymous link and leaves every grant intact. A grant's row ID returns `404`, just like an ID never issued; revoke grants only through the artifact and recipient route.
+
 A share has no lifetime of its own: it is live from the moment it is minted until the row is deleted, using the applicable revoke route above. There is no expiry, and a create request carrying `expires_at` is refused with `400` rather than quietly given a link that never expires.
 
 ## Your own account

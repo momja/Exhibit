@@ -93,7 +93,7 @@ func TestCreateGrantRefusesNonPositiveRecipientsWithoutPublishing(t *testing.T) 
 			f := newGrantFixture(t)
 			ctx := context.Background()
 			grant, err := f.s.CreateGrant(ctx, alice, f.artifactID, recipientID)
-			require.EqualError(t, err, "recipient_id must be positive")
+			require.ErrorIs(t, err, ErrInvalidRecipient)
 			assert.Nil(t, grant)
 
 			var rows, links int
@@ -120,8 +120,7 @@ func TestOneArtifactCarriesALinkAndAGrantPerPerson(t *testing.T) {
 	_, createdGrantErr := f.s.CreateGrant(ctx, alice, f.artifactID, toCarol)
 	require.NoError(t, createdGrantErr)
 
-	// Read back: the link and the grants stay told apart by recipient_id
-	// alone, which is the only thing that distinguishes them.
+	// Links resolve by id; grants resolve only through the owner's listing.
 	link, err := f.s.GetShare(ctx, alice, createdLink.ID)
 	require.NoError(t, err)
 	require.NotNil(t, link)
@@ -129,9 +128,20 @@ func TestOneArtifactCarriesALinkAndAGrantPerPerson(t *testing.T) {
 
 	grant, err := f.s.GetShare(ctx, alice, bobsGrant.ID)
 	require.NoError(t, err)
-	require.NotNil(t, grant)
-	require.NotNil(t, grant.RecipientID)
-	assert.Equal(t, bob, *grant.RecipientID)
+	assert.Nil(t, grant, "a grant id behaves like an id never issued")
+	require.ErrorIs(t, f.s.DeleteShare(ctx, alice, bobsGrant.ID), ErrNotFound)
+
+	shares, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	require.Len(t, shares, 3)
+	assert.Equal(t, bobsGrant.ID, shares[1].ID)
+	require.NotNil(t, shares[1].RecipientID)
+	assert.Equal(t, bob, *shares[1].RecipientID)
+
+	require.NoError(t, f.s.DeleteShare(ctx, alice, createdLink.ID))
+	remaining, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	assert.Equal(t, shares[1:], remaining, "removing the link leaves every grant intact")
 }
 
 // seedThirdAccount adds an account beyond alice and bob and returns its id, for

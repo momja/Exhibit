@@ -13,6 +13,60 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestDeleteShareRevokesOnlyTheAnonymousLink(t *testing.T) {
+	in := newGrantedInstance(t)
+	ctx := context.Background()
+	third, err := in.ro.cfg.Store.UpsertUser(ctx, "sub-third", "third@example.test")
+	require.NoError(t, err)
+	_, err = in.ro.cfg.Store.CreateGrant(ctx, in.ownerOne, in.granted, third.ID)
+	require.NoError(t, err)
+	link, err := in.ro.cfg.Store.CreateAnonymousLink(ctx, in.ownerOne, in.granted)
+	require.NoError(t, err)
+	before, err := in.ro.cfg.Store.ListArtifactShares(ctx, in.ownerOne, in.granted)
+	require.NoError(t, err)
+	require.Len(t, before, 3)
+
+	for _, id := range []string{before[1].ID, before[2].ID, "never-issued"} {
+		w := deleteGrantAs(in.ro, "/api/shares/"+id, in.cookieOne)
+		require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	}
+	after, err := in.ro.cfg.Store.ListArtifactShares(ctx, in.ownerOne, in.granted)
+	require.NoError(t, err)
+	assert.Equal(t, before, after, "grant ids cannot revoke grants or the link")
+
+	w := deleteGrantAs(in.ro, "/api/shares/"+link.ID, in.cookieOne)
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	remaining, err := in.ro.cfg.Store.ListArtifactShares(ctx, in.ownerOne, in.granted)
+	require.NoError(t, err)
+	assert.Equal(t, before[1:], remaining, "link revocation preserves every grant unchanged")
+	deleted, err := in.ro.cfg.Store.GetShare(ctx, in.ownerOne, link.ID)
+	require.NoError(t, err)
+	assert.Nil(t, deleted)
+	for _, recipientID := range []int64{in.ownerTwo, third.ID} {
+		readable, err := in.ro.cfg.Store.GetArtifactReadableBy(ctx, store.ViewerID(recipientID), in.granted)
+		require.NoError(t, err)
+		assert.NotNil(t, readable, "each recipient retains access after link revocation")
+	}
+}
+
+type invalidRecipientStore struct{ store.Store }
+
+func (s invalidRecipientStore) CreateGrant(context.Context, int64, string, int64) (*store.Share, error) {
+	return nil, fmt.Errorf("create grant: %w", store.ErrInvalidRecipient)
+}
+
+func TestCreateGrantInvalidRecipientIsABadRequest(t *testing.T) {
+	ro := newTestRouter(t)
+	seedLocalAccount(t, ro, "alice")
+	artifactID := seedShareableArtifact(t, ro, "Tool")
+	ro.cfg.Store = invalidRecipientStore{ro.cfg.Store}
+	w := do(t, ro, http.MethodPost, "/api/shares",
+		[]byte(fmt.Sprintf(`{"artifact_id":%q,"recipients":["alice"]}`, artifactID)))
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), store.ErrInvalidRecipient.Error())
+	assert.Empty(t, listShares(t, ro, artifactID).Grants)
+}
+
 func TestOwnerRevokesGrantByRecipient(t *testing.T) {
 	in := newGrantedInstance(t)
 	ctx := context.Background()

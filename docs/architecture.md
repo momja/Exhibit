@@ -116,7 +116,9 @@ The only way data changes. Full route reference: `api.md`.
   `already_shared` | `unknown` | `ambiguous` | `self`; `unknown` deliberately
   confirms non-existence, av-6xjd). No recipients mints the one anonymous link;
   `replace: true` rotates it in one transaction.
-- `DELETE /api/shares/:id`: revoke the anonymous link, owner-only.
+- `DELETE /api/shares/:id`: revoke the anonymous link, owner-only. Grant ids
+  answer 404 and leave grants intact; the store restricts lookup and deletion
+  by id to anonymous links.
 - `DELETE /api/artifacts/:id/grants?recipient=:userID`: revoke one grant,
   owner-only; recipient is a query parameter (av-hh1o). Missing grants answer 404,
   matching link deletes. Grant views carry recipient ids, never row ids.
@@ -542,9 +544,9 @@ monogram tile when there is none. The frame is `pointer-events: none` and
 fragment route.
 
 **Sharing** (av-6xjd, av-tlpv): an owner-only `sharePanel` modal, rendered only
-when `detailPageData.Share` is non-nil, with three sections: people (one field,
-several names, each reported back), saved-data mode, and the public link (toggle
-plus replace). Named recipients write state per the mode; **public-link visitors
+when `detailPageData.Share` is non-nil, with three sections: the public link
+(toggle plus replace), people (one field, several names, each reported back),
+and saved-data mode. Named recipients write state per the mode; **public-link visitors
 see the owner's state in either mode and never write it back**. Changes apply
 immediately. The script is a native ES module. The body is an htmx target
 refreshed from `/partials/share-panel` on `exhibit:shares-changed`.

@@ -81,7 +81,11 @@ func TestAShareLinkServesAndAGrantIsNotAURL(t *testing.T) {
 			t.Fatalf("nothing may serve %q publicly once the link is revoked, got %d", id, w.Code)
 		}
 	}
-	if sh, err := st.GetShare(ctx, 1, createdGrant.ID); err != nil || sh == nil {
-		t.Fatalf("revoking the public link must not revoke the grant: %v %v", sh, err)
+	shares, err := st.ListArtifactShares(ctx, 1, "abc")
+	if err != nil || len(shares) != 1 {
+		t.Fatalf("revoking the public link must leave exactly the grant: %v %v", shares, err)
+	}
+	if sh := shares[0]; sh.ID != createdGrant.ID || sh.RecipientID == nil || *sh.RecipientID != recipient.ID {
+		t.Fatalf("revoking the public link must leave the grant unchanged: %+v", sh)
 	}
 }
