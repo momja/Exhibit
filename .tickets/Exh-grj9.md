@@ -12,7 +12,7 @@ tags: [sharing, store, schema, migration]
 ---
 # Split the shares table into share_links and share_grants
 
-One migration (043, above relay-connectors migrations 038–042; check migration_order_test.go, the Go migrations, and the CI unique-migration-number guard) that:
+One migration (039, the next above main's 038; check migration_order_test.go, the Go migrations, and the CI unique-migration-number guard) that:
 
 - Creates `share_links(id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL UNIQUE REFERENCES artifacts(id) ON DELETE CASCADE)` and `share_grants(artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), PRIMARY KEY (artifact_id, recipient_id)) WITHOUT ROWID` plus `CREATE INDEX share_grants_by_recipient ON share_grants(recipient_id)` (the WITHOUT ROWID secondary index carries the PK columns, so it is covering).
 - Copies existing rows: `recipient_id IS NULL` rows into share_links keeping their ids (existing /s/:id URLs must keep working); grant rows into share_grants with synthetic millisecond timestamps preserving their old rowid order.
