@@ -65,12 +65,12 @@ func TestNoMigrationVersionIsUsedTwice(t *testing.T) {
 // first instance to restart.
 func TestEveryMigrationIsAboveTheVersionsAlreadyShipped(t *testing.T) {
 	// The versions in a deployed ledger before this branch: every .sql file
-	// main shipped, plus the Go migrations at 8, 12 and 23. Written out rather
-	// than derived, because "what is already deployed" is history and cannot be
+	// main shipped, relay-connectors versions 038–042, plus the Go migrations
+	// at 8, 12 and 23. Written out rather than derived, because "what is already deployed" is history and cannot be
 	// computed from the current tree — and because a new file numbered into a
 	// gap in this list is exactly what must fail.
 	shipped := map[int64]bool{}
-	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37} {
+	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42} {
 		shipped[v] = true
 	}
 	for _, v := range goMigrationVersions {
@@ -182,7 +182,7 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 			"SELECT COUNT(*) FROM pragma_table_info('artifacts') WHERE name = ?", col).Scan(&n))
 		assert.Equal(t, 1, n, "artifacts.%s was not created by the upgrade", col)
 	}
-	// 038 supersedes 028/029: links and grants have separate keys and the
+	// 043 supersedes 028/029: links and grants have separate keys and the
 	// card indicators no longer need persisted columns or share triggers.
 	for _, table := range []string{"share_links", "share_grants"} {
 		var n int
@@ -284,7 +284,7 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	require.NoError(t, rows.Err())
 	assert.Equal(t, []string{"first"}, kept)
 
-	// The surviving legacy link is visible to the badge after 038 as well.
+	// The surviving legacy link is visible to the badge after 043 as well.
 	a, err := upgraded.GetArtifact(ctx, alice, "shared-twice")
 	require.NoError(t, err)
 	require.NotNil(t, a)

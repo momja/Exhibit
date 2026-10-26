@@ -1474,16 +1474,16 @@ func (s *SQLiteStore) DeleteGrant(ctx context.Context, ownerID int64, artifactID
 // whole point (userScan) is that there is only one of it. Two statements, both
 // bounded by the artifact's share count, cost less than that duplication.
 //
-// Links come first, then grants in stable recipient-id order. Grant creation
-// order is not stored in the composite primary key (Exh-grj9).
+// Links come first explicitly, then grants in creation order. Grants created
+// in the same millisecond tie-break by recipient id (Exh-grj9).
 func (s *SQLiteStore) ListArtifactShares(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactShare, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, artifact_id, recipient_id FROM (
-		 SELECT id, artifact_id, NULL AS recipient_id FROM share_links
+		 SELECT id, artifact_id, NULL AS recipient_id, NULL AS created_at FROM share_links
 		 UNION ALL
-		 SELECT '', artifact_id, recipient_id FROM share_grants
+		 SELECT NULL, artifact_id, recipient_id, created_at FROM share_grants
 		 ) WHERE artifact_id = ? AND `+ownedArtifact+`
-		 ORDER BY recipient_id`, artifactID, ownerID)
+		 ORDER BY recipient_id IS NOT NULL, created_at, recipient_id`, artifactID, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -1491,10 +1491,12 @@ func (s *SQLiteStore) ListArtifactShares(ctx context.Context, ownerID int64, art
 	out := []ArtifactShare{}
 	for rows.Next() {
 		var sh ArtifactShare
+		var linkID sql.NullString
 		var recipient sql.NullInt64
-		if err := rows.Scan(&sh.ID, &sh.ArtifactID, &recipient); err != nil {
+		if err := rows.Scan(&linkID, &sh.ArtifactID, &recipient); err != nil {
 			return nil, err
 		}
+		sh.ID = linkID.String
 		if recipient.Valid {
 			id := recipient.Int64
 			sh.RecipientID = &id

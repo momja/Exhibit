@@ -312,8 +312,11 @@ and writes state.
   shadows kept by triggers and the API (av-b6o9). Queries are literal text: each
   token becomes a quoted prefix phrase (av-hic3).
 - **Shares**: `share_links(id, artifact_id UNIQUE)` and
-  `share_grants(artifact_id, recipient_id)` with a composite primary key,
-  `WITHOUT ROWID`, and covering `share_grants_by_recipient` index (038, Exh-grj9).
+  `share_grants(artifact_id, recipient_id, created_at)` with a composite primary key,
+  `WITHOUT ROWID`, and covering `share_grants_by_recipient` index (043, Exh-grj9).
+  Millisecond `created_at` timestamps preserve grant order; legacy rows use
+  synthetic timestamps in old `shares.rowid` order. The panel lists the link
+  first, then grants by timestamp, with recipient id breaking millisecond ties.
   Artifact reads compute the badge's grant count and link existence; no rollup
   columns or share triggers remain. `CreateGrant` requires a positive recipient
   id; only `CreateAnonymousLink` publishes a link (Exh-a9l6). `DeleteGrant`
@@ -847,12 +850,12 @@ ingest-time transform, degrades to a report, and never seeds the allowlist.
 ## 7. Sharing
 
 Anonymous links live in `share_links(id, artifact_id)`; directed grants in
-`share_grants(artifact_id, recipient_id)`, with no grant id (Exh-grj9).
+`share_grants(artifact_id, recipient_id, created_at)`, with no grant id (Exh-grj9).
 `GET /s/:shareId` resolves only a link id and serves the read-only render surface
 and CSP with no app auth: holding the link is the authorization. Recipients sign
-in and open the ordinary artifact URL. Migration 038 keeps existing link ids,
+in and open the ordinary artifact URL. Migration 043 keeps existing link ids,
 including the keys of cached OG snapshots; Down regenerates discarded grant ids
-and loses their original row order. The `.html` export is the service-free fallback.
+while preserving relative grant order. The `.html` export is the service-free fallback.
 
 A pasted link unfurls through OpenGraph tags and a picture of its widget (§3.2,
 av-rclm). Every id that is not a live link previews as Exhibit and nothing else.

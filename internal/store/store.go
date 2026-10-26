@@ -671,9 +671,9 @@ type Store interface {
 	// GetShare resolves an owner's anonymous link by id.
 	GetShare(ctx context.Context, ownerID int64, id string) (*Share, error)
 	// ListArtifactShares is the enumeration half of sharing (av-6xjd): every
-	// share of one artifact, link and grants alike, each grant carrying the
-	// account it names. Owner-scoped like the two above, because who an
-	// artifact has been given to is the owner's business and nobody else's —
+	// share of one artifact: link first, then grants by creation time (recipient
+	// id breaks millisecond ties), each grant carrying the account it names.
+	// Owner-scoped like the two above, because who an artifact has been given to is the owner's business and nobody else's —
 	// a recipient can see the artifact, never the guest list.
 	//
 	// It joins `users` rather than leaving the caller to resolve ids, because

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ErrArtifactChanged refuses a clone assembled from a source whose content or
@@ -89,14 +91,11 @@ func (s *SQLiteStore) DuplicateArtifact(ctx context.Context, ownerID int64, sour
 		}
 	}
 	if d.CopyShareSettings {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO share_grants (artifact_id, recipient_id)
-            SELECT ?, recipient_id FROM share_grants WHERE artifact_id=?`, d.ID, sourceID); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO share_grants (artifact_id, recipient_id, created_at)
+            SELECT ?, recipient_id, created_at FROM share_grants WHERE artifact_id=?`, d.ID, sourceID); err != nil {
 			return false, err
 		}
-		id, err := NewAssetID()
-		if err != nil {
-			return false, err
-		}
+		id := uuid.New().String()
 		if _, err := tx.ExecContext(ctx, `INSERT INTO share_links (id, artifact_id)
             SELECT ?, ? FROM share_links WHERE artifact_id=?`, id, d.ID, sourceID); err != nil {
 			return false, err

@@ -331,7 +331,7 @@ func TestDeletingARecipientTakesTheirGrantsAndTheirState(t *testing.T) {
 	assert.Equal(t, 1, countStateRowsFor(t, s, alice))
 }
 
-// AC#8. The grant dies with the artifact too, through the cascade shares has
+// AC#8. The grant dies with the artifact too, through the cascade share_grants has
 // carried since 001 — so revoking everybody is a consequence of deleting the
 // thing, not a second step somebody has to remember.
 func TestDeletingTheArtifactTakesItsGrants(t *testing.T) {
