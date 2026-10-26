@@ -739,8 +739,9 @@ furniture as admin, no shared authority.
 
 - **Sign out** (nw-a1ef) is a `POST` form to `/auth/logout`, rendered only when a
   session exists (a no-login instance registers no such route).
-- **Display name** (`profileName`): email, else provider subject, else the sign-in
-  route.
+- **Display name** (`store.User.DisplayName`, also used by shared artifact
+  listings): email, else provider subject or local login name. With neither,
+  profile describes the sign-in route.
 - **Delete library** (av-4wyq): the copy says an IdP login still works and lands in
   a new, empty account; it states the live share count; it takes two steps, the
   second the typed phrase `delete my library`, checked server-side. Storage size is

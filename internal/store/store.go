@@ -343,8 +343,31 @@ type ListOptions struct {
 	Query       string
 	Tags        []string
 	Collections []string
-	Limit       int
-	Offset      int
+	// SharedOnly keeps artifacts with a link or at least one grant. It never
+	// changes the owner scope.
+	SharedOnly bool
+	Limit      int
+	Offset     int
+}
+
+// SharedListOptions filters a viewer's incoming grants. Tags and collections
+// belong to the artifact's owner; this space filters by owner instead.
+type SharedListOptions struct {
+	OwnerIDs []int64
+	Query    string
+	Limit    int
+	Offset   int
+}
+
+type SharedArtifact struct {
+	*Artifact
+	OwnerName string
+}
+
+type SharedOwner struct {
+	ID    int64
+	Name  string
+	Count int
 }
 
 // ArtifactSnapshot is a staged refetch ready to commit. Empty SourceBlobID
@@ -418,6 +441,15 @@ type Store interface {
 	// reason in this type's comment.
 	GetArtifactReadableBy(ctx context.Context, viewerID ViewerID, id string) (*Artifact, error)
 	ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error)
+	// ListArtifactsSharedWith lists incoming grants, excluding the viewer's
+	// own artifacts, in the same order and with the same search/paging as
+	// ListArtifacts. Like GetArtifactReadableBy, it includes disabled owners.
+	ListArtifactsSharedWith(ctx context.Context, viewer ViewerID, opts SharedListOptions) ([]*SharedArtifact, error)
+	// SharedWithOwners counts incoming artifacts per owner, ordered by display
+	// name then ID. SpaceCounts counts incoming artifacts and owned artifacts
+	// with any share, respectively; neither count depends on list filters.
+	SharedWithOwners(ctx context.Context, viewer ViewerID) ([]SharedOwner, error)
+	SpaceCounts(ctx context.Context, viewer ViewerID) (sharedWith, sharedBy int, err error)
 	UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error
 	// ReplaceArtifactSnapshot atomically switches the body, asset generation,
 	// search text and timestamp, and queues superseded blobs for deletion.

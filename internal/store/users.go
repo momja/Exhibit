@@ -1,6 +1,9 @@
 package store
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // User is one identity that has logged in to this instance (av-30rj).
 //
@@ -54,6 +57,20 @@ type User struct {
 	// directory renders a row per account and would otherwise issue a query
 	// per row. Unlike the password hash, none of it is a credential.
 	Entitlement Entitlement `json:"entitlement"`
+}
+
+// DisplayName is the account name used by profile and shared artifact listings:
+// email, otherwise the provider's subject or the local login name. isSubject
+// lets profile label an opaque provider identifier. An empty identity leaves
+// the presentation layer to describe the sign-in route instead.
+func (u *User) DisplayName() (name string, isSubject bool) {
+	if u.Email != "" {
+		return u.Email, false
+	}
+	if localName, ok := strings.CutPrefix(u.ExternalID, "local:"); ok {
+		return localName, false
+	}
+	return u.ExternalID, u.ExternalID != ""
 }
 
 // NewLocalUser is CreateLocalUser's argument: the three strings that name a

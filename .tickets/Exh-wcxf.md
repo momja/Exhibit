@@ -1,6 +1,6 @@
 ---
 id: Exh-wcxf
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-26T01:02:13Z
@@ -34,3 +34,9 @@ Rules:
 - Revoked grant, deleted artifact, deleted recipient, and self-owned artifact cases tested.
 - Shared-by includes link-only and grant-only artifacts, excludes private ones.
 
+
+## Notes
+
+**2026-10-26T01:10:22Z**
+
+Implementation decisions: retain disabled owners to match GetArtifactReadableBy; SharedArtifact embeds *Artifact with OwnerName; SharedWithOwners sorts by display name then owner ID. User.DisplayName centralizes email/provider-subject/local-name fallback for profile and listings. Recipient-first CROSS JOIN keeps owner/FTS variants on share_grants_by_recipient. No migration needed.

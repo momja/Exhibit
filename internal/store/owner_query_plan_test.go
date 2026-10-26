@@ -48,6 +48,51 @@ func TestOwnerScopedQueryPlans(t *testing.T) {
 		// temporary B-tree; artifacts_owner only narrows the owner's rows.
 		assert.Contains(t, plan, "USE TEMP B-TREE FOR ORDER BY")
 	})
+
+	for _, tc := range []struct {
+		name string
+		opts SharedListOptions
+	}{
+		{"all", SharedListOptions{}},
+		{"owners", SharedListOptions{OwnerIDs: []int64{alice, bob}}},
+		{"search", SharedListOptions{Query: "chart"}},
+		{"owners and search", SharedListOptions{OwnerIDs: []int64{alice}, Query: "chart"}},
+	} {
+		t.Run("ListArtifactsSharedWith/"+tc.name, func(t *testing.T) {
+			query, args := listArtifactsSharedWithQuery(ViewerID(bob), tc.opts)
+			plan := explainQueryPlan(t, s, query, args...)
+			assertRecipientQueryPlan(t, plan)
+		})
+	}
+	t.Run("SharedWithOwners", func(t *testing.T) {
+		plan := explainQueryPlan(t, s, sharedWithOwnersQuery(), bob, bob)
+		assertRecipientQueryPlan(t, plan)
+	})
+	t.Run("SpaceCounts", func(t *testing.T) {
+		plan := explainQueryPlan(t, s, spaceCountsQuery(), bob, bob, bob)
+		assertRecipientQueryPlan(t, plan)
+		assert.Contains(t, plan, "SEARCH a USING INDEX artifacts_owner (owner_id=?)")
+	})
+	t.Run("ListArtifacts/SharedOnly", func(t *testing.T) {
+		query, args := listArtifactsQuery(ListOptions{OwnerID: alice, SharedOnly: true})
+		plan := explainQueryPlan(t, s, query, args...)
+		assert.Contains(t, plan, "SEARCH a USING INDEX artifacts_owner (owner_id=?)")
+		assertNoSharingTableScans(t, plan)
+	})
+}
+
+func assertRecipientQueryPlan(t *testing.T, plan string) {
+	t.Helper()
+	assert.Regexp(t, `SEARCH share_grants USING (?:COVERING )?INDEX share_grants_by_recipient \(recipient_id=\?\)`, plan)
+	assert.Contains(t, plan, "SEARCH a USING INDEX sqlite_autoindex_artifacts_1 (id=?)")
+	assertNoSharingTableScans(t, plan)
+}
+
+func assertNoSharingTableScans(t *testing.T, plan string) {
+	t.Helper()
+	// FTS5 describes its indexed MATCH as a virtual-table SCAN, and scalar
+	// counts may SCAN CONSTANT ROW. Neither is a scan of a library table.
+	assert.NotRegexp(t, `SCAN (?:artifacts|a|share_grants|g|share_links|l|users|u)(?:\s|$)`, plan)
 }
 
 func explainQueryPlan(t *testing.T, s *SQLiteStore, query string, args ...any) string {

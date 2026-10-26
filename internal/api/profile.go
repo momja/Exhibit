@@ -37,8 +37,8 @@ type profileAccount struct {
 	// the single-user default, and no `users` row exists behind it. The page
 	// says so rather than rendering an account it invented.
 	SignedIn bool
-	// Name is what the page puts at the top of the Account section — see
-	// profileName for how it is resolved and why the rule is not admin.go's.
+	// Name is what the page puts at the top of the Account section, resolved
+	// by store.User.DisplayName alongside shared artifact owner names.
 	Name string
 	// NameIsSubject marks a Name that came from `external_id` rather than
 	// `email`: an opaque provider subject, true but unreadable. The template
@@ -92,37 +92,6 @@ type profileAccount struct {
 	DeleteBlocked string
 }
 
-// profileName resolves the one name this page can put on the account.
-//
-// admin.go's rule is `u.Email` and nothing else (newAdminUserView), and that
-// is right for a *table*: an identity whose provider sent no email renders one
-// blank cell among many, which is cosmetic. Here the name *is* the section, so
-// the same rule renders the page's only content empty. And an empty email is a
-// shape to expect rather than a corrupt row — `users.email` is NOT NULL and
-// defaults to the empty string (migration 013), a portable second key beside
-// `external_id` rather than something an identity provider guarantees.
-//
-// So: the email when there is one; otherwise the subject the provider knows
-// this person by, which is opaque but true and is the string an operator would
-// need to find the row; otherwise nothing, and the template states the sign-in
-// route instead. A local account never reaches the second step —
-// CreateLocalUser writes the login name into both columns — so the opaque case
-// belongs to identity providers alone.
-//
-// Deliberately local to this page rather than pushed into admin.go: the
-// fallback exists because a name rendered alone must not be blank, and that is
-// a property of this layout, not of the row. If a third surface ever needs the
-// same answer, that is when it earns a shared helper.
-func profileName(u *store.User) (name string, isSubject bool) {
-	if u.Email != "" {
-		return u.Email, false
-	}
-	if u.ExternalID != "" {
-		return u.ExternalID, true
-	}
-	return "", false
-}
-
 // profilePageData feeds /profile.
 //
 // Sections, from the first one, even though only Account has content today:
@@ -156,7 +125,7 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 		return
 	default:
 		acct.SignedIn = true
-		acct.Name, acct.NameIsSubject = profileName(u)
+		acct.Name, acct.NameIsSubject = u.DisplayName()
 		acct.HasPassword = u.HasPassword
 		if err := ro.fillDeleteSection(ctx, u, &acct); err != nil {
 			serverError(w, r, "profile delete section", err)

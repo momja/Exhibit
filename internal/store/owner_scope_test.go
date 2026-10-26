@@ -490,7 +490,10 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// row names on it, and nothing else. What keeps that narrow is that it
 		// is a *separate* accessor rather than a wider predicate inside
 		// ownedArtifact, which every mutating query would have inherited.
-		"GetArtifactReadableBy": "takes the VIEWER, deliberately not the owner; read-only by construction (av-lrae)",
+		"GetArtifactReadableBy":   "takes the VIEWER, deliberately not the owner; read-only by construction (av-lrae)",
+		"ListArtifactsSharedWith": "takes the VIEWER; lists only incoming grants, never widens the owner predicate (Exh-wcxf)",
+		"SharedWithOwners":        "takes the VIEWER; counts only incoming grants by owner (Exh-wcxf)",
+		"SpaceCounts":             "takes the VIEWER; counts incoming grants and the viewer’s own shared artifacts (Exh-wcxf)",
 
 		// The state methods a viewer reaches (av-v991), on the same grounds one
 		// step further: they take a ViewerID and no owner because a viewer

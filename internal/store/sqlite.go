@@ -122,11 +122,13 @@ func parseTS(s string) time.Time {
 	return time.Time{}
 }
 
-func scanArtifact(rows interface{ Scan(...any) error }) (*Artifact, error) {
+// extra receives columns appended to artifactCols by a listing's joins.
+func scanArtifact(rows interface{ Scan(...any) error }, extra ...any) (*Artifact, error) {
 	var a Artifact
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	err := rows.Scan(&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.GeolocationApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareGrantCount, &a.SharePublicLink, &a.VersionSeq)
+	columns := []any{&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.GeolocationApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareGrantCount, &a.SharePublicLink, &a.VersionSeq}
+	err := rows.Scan(append(columns, extra...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -345,11 +347,6 @@ func (s *SQLiteStore) ListArtifacts(ctx context.Context, opts ListOptions) ([]*A
 }
 
 func listArtifactsQuery(opts ListOptions) (string, []any) {
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-
 	var (
 		query  string
 		args   []any
@@ -400,12 +397,23 @@ func listArtifactsQuery(opts ListOptions) (string, []any) {
 	for _, w := range wheres {
 		query += " AND " + w
 	}
+	if opts.SharedOnly {
+		query += " AND " + artifactHasShares
+	}
+
+	return artifactListPage(query, args, opts.Limit, opts.Offset)
+}
+
+func artifactListPage(query string, args []any, limit, offset int) (string, []any) {
+	if limit <= 0 {
+		limit = 50
+	}
 
 	// Paging needs a total order even when several artifacts share a timestamp.
 	// SQLite's default timestamps and RFC3339 (including subsecond clone
 	// timestamps) sort differently as text. Compare their actual instants.
 	query += " ORDER BY julianday(a.created_at) DESC, a.id DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, opts.Offset)
+	args = append(args, limit, offset)
 
 	return query, args
 }
