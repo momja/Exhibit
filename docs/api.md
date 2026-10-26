@@ -460,7 +460,7 @@ DELETE /api/artifacts/:id/grants?recipient=:userID  Revoke a grant (owner only)
 GET    /s/:shareID                 View anonymously shared artifact (render origin)
 ```
 
-An anonymous link is a capability URL: anyone holding it can view the artifact without an account. It resolves on the render origin under the artifact's own CSP. Each artifact has at most one anonymous link; creating another returns `409`. Send `{"artifact_id":"...","replace":true}` to rotate it atomically, invalidating the old URL. A successful link create or replacement returns `201` with `share` (`id`, `artifact_id`) and `share_url`. Migration 043 preserves existing link ids and their URLs (Exh-grj9).
+An anonymous link is a capability URL: anyone holding it can view the artifact without an account. It resolves on the render origin under the artifact's own CSP. Each artifact has at most one anonymous link; creating another returns `409`. Send `{"artifact_id":"...","replace":true}` to rotate it atomically, invalidating the old URL. A successful link create or replacement returns `201` with `share` (`id`, `artifact_id`) and `share_url`. Migration 039 preserves existing link ids and their URLs (Exh-grj9).
 
 For restricted access, supply `recipients` with account login names or email addresses. This creates directed grants: recipients sign in and open the ordinary `/artifacts/:id` page. Grants have no ID; only `share_links.id` resolves at `/s/:shareID` (Exh-grj9). The response is `200` with a `results` entry per name (`granted`, `already_shared`, `unknown`, `ambiguous`, or `self`). `replace` is refused on grant requests. The store uses separate `CreateGrant` and `CreateAnonymousLink` paths; a grant requires a positive recipient ID, so a missing recipient cannot publish a link.
 
