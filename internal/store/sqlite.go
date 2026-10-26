@@ -153,28 +153,16 @@ const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, cre
 const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.widget_blob_id, a.share_state_mode, (SELECT COUNT(*) FROM share_grants g WHERE g.artifact_id = a.id), EXISTS (SELECT 1 FROM share_links l WHERE l.artifact_id = a.id), (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = a.id)"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := putArtifactTx(ctx, tx, a); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-type artifactExecutor interface {
-	ExecContext(context.Context, string, ...any) (sql.Result, error)
-}
-
-// Shared by ordinary creates and the durable agent create+binding transaction.
-func putArtifactTx(ctx context.Context, tx artifactExecutor, a *Artifact) error {
 	now := a.CreatedAt
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	_, err := tx.ExecContext(ctx,
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	_, err = tx.ExecContext(ctx,
 		`INSERT INTO artifacts (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, source_text, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.ID, a.OwnerID, a.Title, a.SourceBlobID, a.SourceURL, a.Tier, a.DownloadsApproved, a.ClipboardApproved, a.LinksApproved, a.CameraApproved, a.MicrophoneApproved, a.GeolocationApproved, a.WidgetBlobID, a.SourceText,
@@ -199,7 +187,7 @@ func putArtifactTx(ctx context.Context, tx artifactExecutor, a *Artifact) error 
 	if err := replaceAllowedOriginsTx(ctx, tx, a.ID, a.NetworkAllowlist, "user"); err != nil {
 		return err
 	}
-	return nil
+	return tx.Commit()
 }
 
 // ownsArtifact reports whether ownerID owns artifactID. It is the one place
@@ -741,7 +729,7 @@ func (s *SQLiteStore) ReplaceAllowedOrigins(ctx context.Context, ownerID int64, 
 	return tx.Commit()
 }
 
-func replaceAllowedOriginsTx(ctx context.Context, tx artifactExecutor, artifactID string, origins []string, source string) error {
+func replaceAllowedOriginsTx(ctx context.Context, tx *sql.Tx, artifactID string, origins []string, source string) error {
 	// Only allow rows are in scope. Block rows are decisions this caller
 	// doesn't know about ("don't ask again", exhibit-fr7) and survive.
 	if _, err := tx.ExecContext(ctx,
