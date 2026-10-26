@@ -1,8 +1,8 @@
 ---
 id: Exh-i0ll
-status: in_progress
+status: closed
 deps: []
-links: [Exh-yvhp, Exh-099b, av-rcwx, av-4bzn, Exh-p4zz, Exh-nueb]
+links: [Exh-yvhp, Exh-099b, av-rcwx, av-4bzn, Exh-p4zz, Exh-nueb, Exh-ituu, Exh-8vjo]
 created: 2026-07-12T03:30:17Z
 type: epic
 priority: 2
@@ -156,3 +156,9 @@ with the implementation; this ticket is the planning authority until then.
    idle compute release, retained-storage cost, and bounded capacity failure.
    Operators have documented rollout, rollback, cleanup, and failure diagnosis.
 
+
+## Notes
+
+**2026-10-26T06:00:36Z**
+
+Closed: de-scoped 2026-10-26. There is no scaling problem yet, so execution stays local. The authority layer that reached main through #189 is removed by Exh-ituu; recovery PR #215 is closed unmerged. The complete tested stack (#189-#192) survives at 3dff8a1288a3377edb586ac81777f33c2af8dfc9. If scaling becomes real, first measure per-session load on the local path and evaluate a single multi-conversation harness (Pi Durable) before reviving remote workers.

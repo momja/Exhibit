@@ -19,7 +19,7 @@ func TestAgentThinkingPreferenceSurvivesUpgradeAndRestart(t *testing.T) {
 	// credential that the migration must preserve and default to inheritance.
 	_, err = s.db.ExecContext(t.Context(), "ALTER TABLE agent_keys DROP COLUMN thinking_level")
 	require.NoError(t, err)
-	_, err = s.db.ExecContext(t.Context(), "DELETE FROM goose_db_version WHERE version_id = 37")
+	_, err = s.db.ExecContext(t.Context(), "DELETE FROM goose_db_version WHERE version_id >= 37")
 	require.NoError(t, err)
 	require.NoError(t, s.Close())
 

@@ -1,6 +1,6 @@
 ---
 id: Exh-hz3g
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-07-12T18:03:33Z
@@ -58,3 +58,9 @@ boundary for standalone execution. The worker must have no Store dependency.
 4. The current UI and renderer bridges require no new origin, public worker
    endpoint, browser-held worker token, or CORS allowance.
 
+
+## Notes
+
+**2026-10-26T06:00:37Z**
+
+Closed: de-scoped 2026-10-26. There is no scaling problem yet, so execution stays local. The authority layer that reached main through #189 is removed by Exh-ituu; recovery PR #215 is closed unmerged. The complete tested stack (#189-#192) survives at 3dff8a1288a3377edb586ac81777f33c2af8dfc9. If scaling becomes real, first measure per-session load on the local path and evaluate a single multi-conversation harness (Pi Durable) before reviving remote workers.

@@ -1186,7 +1186,7 @@ func (s *Session) handleLine(line []byte) {
 		}
 	}
 
-	s.broadcast(s.redact(bytes.Clone(line)))
+	s.broadcast(s.redact(line))
 }
 
 // redact applies the platform-mode filter to one event line on its way out of
