@@ -94,14 +94,3 @@ func TestGrantIsSafeForConcurrentUse(t *testing.T) {
 	wg.Wait()
 	assert.Equal(t, "artifact-a", g.Scope().ArtifactID)
 }
-
-// Fenced credentials cannot be constructed with a validator but no operation
-// guard: resolving a token only establishes point-in-time validity.
-func TestFencedGrantRequiresCompleteAuthority(t *testing.T) {
-	reg := NewRegistry()
-	_, err := reg.IssueFenced(1, "artifact", "conversation", Execution{ID: "e", WorkerID: "w", Generation: 1}, nil, nil, nil)
-	require.Error(t, err)
-	require.Nil(t, reg.Resolve("exagent_retired"))
-	assert.True(t, IsCredential("exagent_retired"))
-	assert.False(t, IsCredential("operator-token"))
-}

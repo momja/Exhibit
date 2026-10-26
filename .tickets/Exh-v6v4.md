@@ -1,6 +1,6 @@
 ---
 id: Exh-v6v4
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-07-12T03:30:17Z
@@ -50,3 +50,9 @@ usage and spend Store dependencies are handled by Exh-hz3g.
    history; ordinary History projections and legacy conversations still work.
 4. Completed tool-call checkpoints and orderly final flush are covered, with
    interruption represented explicitly and no automatic unfinished-turn replay.
+
+## Notes
+
+**2026-10-26T06:00:37Z**
+
+Closed: de-scoped 2026-10-26. There is no scaling problem yet, so execution stays local. The authority layer that reached main through #189 is removed by Exh-ituu; recovery PR #215 is closed unmerged. The complete tested stack (#189-#192) survives at 3dff8a1288a3377edb586ac81777f33c2af8dfc9. If scaling becomes real, first measure per-session load on the local path and evaluate a single multi-conversation harness (Pi Durable) before reviving remote workers.
