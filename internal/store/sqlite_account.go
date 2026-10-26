@@ -39,15 +39,23 @@ type AccountSummary struct {
 	StorageBytes int64 `json:"storage_bytes"`
 }
 
+func accountSummaryQuery() string {
+	// Enumerate the owner's artifacts first, then look up shares by artifact_id.
+	// A correlated ownedArtifact check here would scan every share in the instance.
+	return `
+        SELECT (SELECT COUNT(*) FROM artifacts WHERE owner_id = ?),
+               (SELECT COUNT(*) FROM share_links
+                 WHERE artifact_id IN (SELECT id FROM artifacts WHERE owner_id = ?)) +
+               (SELECT COUNT(*) FROM share_grants
+                 WHERE artifact_id IN (SELECT id FROM artifacts WHERE owner_id = ?))`
+}
+
 // GetAccountSummary counts the owner's artifacts, the live shares over them,
 // and the bytes they are holding.
 func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (AccountSummary, error) {
 	var sum AccountSummary
-	err := s.db.QueryRowContext(ctx, `
-        SELECT (SELECT COUNT(*) FROM artifacts WHERE owner_id = ?1),
-               (SELECT COUNT(*) FROM shares
-                 WHERE artifact_id IN (SELECT id FROM artifacts WHERE owner_id = ?1))`,
-		userID).Scan(&sum.Artifacts, &sum.Shares)
+	err := s.db.QueryRowContext(ctx, accountSummaryQuery(),
+		userID, userID, userID).Scan(&sum.Artifacts, &sum.Shares)
 	if err != nil {
 		return sum, err
 	}
@@ -82,7 +90,7 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 // forgotten is the one that leaves data behind.
 //
 //   - `artifacts` (owner_id) — takes artifact_tags, artifact_collections,
-//     artifact_network_origins, shares, agent_transcripts and artifact_state
+//     artifact_network_origins, share_links, share_grants, agent_transcripts and artifact_state
 //     with it by ON DELETE CASCADE, and keeps artifacts_fts in step through
 //     the triggers migration 010 installed.
 //   - `tags`, `collections`, `agent_keys` (owner_id) — no cascade reaches

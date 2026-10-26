@@ -1,6 +1,6 @@
 ---
 id: Exh-gx18
-status: in_progress
+status: closed
 deps: [Exh-2c2e]
 links: []
 created: 2026-10-26T01:02:13Z
@@ -28,3 +28,13 @@ ListOptions already supports Tags and Collections but no gallery exposes them. A
 - No rail or sheet for a library with no tags, collections or shares.
 - Docs and screenshots updated; av-0k5q and the epic closed on the branch.
 
+
+## Notes
+
+**2026-10-26T02:38:26Z**
+
+Decisions: gallery tags and collection IDs are repeatable AND filters; unknown, empty, or foreign choices return 400 and duplicates are removed. Existing API name-filter OR behavior is preserved via opt-in MatchAllFilters and CollectionIDs store options. Incoming shares expose owner filters through the same UI. Successful first-page htmx responses re-render chips, hidden search parameters and both option lists; request settings explicitly inherit in htmx 4. The phone sheet uses a registered Stimulus controller wrapping native dialog focus containment/dismissal and returning focus to Filter. Migration 041 adds reverse membership indexes after EXPLAIN confirmed scans; plan tests cover plain/search and shared-only variants. No-option full-page HTML matches base exactly for empty and five-card libraries.
+
+**2026-10-26T02:54:36Z**
+
+Verification: go build ./... and go vet ./... pass. The full go test ./... suite passes with the repository-pinned Pi 1.3.0, Node page-script suite, and CHROMIUM_TEST_BINARY set to Chromium 1248 (1,103 API cases; API package 369.957s). Phone and desktop filter browser cases also passed three consecutive targeted runs. Browser waits explicitly return Boolean values and wait for asynchronous dialog focus restoration. make lint matches all 28 base diagnostics exactly (15 errcheck, 2 goimports, 1 ineffassign, 8 staticcheck, 2 unused), with no new findings. Shot-scraper captures refreshed for 1280x900 desktop and 390x844 phone sheet; the screenshot build-tag test reproduces them.

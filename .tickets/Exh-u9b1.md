@@ -1,6 +1,6 @@
 ---
 id: Exh-u9b1
-status: in_progress
+status: closed
 deps: [Exh-wcxf]
 links: []
 created: 2026-10-26T01:02:13Z
@@ -29,3 +29,17 @@ Serve the two new spaces through the existing gallery machinery (internal/api/ga
 - Library '/' output unchanged (existing tests untouched).
 - go test ./... and the Node suite pass; screenshots updated with shot-scraper for any changed page.
 
+
+## Notes
+
+**2026-10-26T01:36:26Z**
+
+Implementation decisions: repeated owner filters are validated against SharedWithOwners; malformed or unavailable owners return 400, and accepted IDs are canonicalized and deduplicated. Recipient cards omit the action menu and capability/share cluster entirely. Widget remounts use the parallel readable-by /artifacts/:id/widget/viewer/open route; the owner-only route stays unchanged. No migration or spaces navigation added.
+
+**2026-10-26T01:57:20Z**
+
+Validation: go build ./..., go vet ./..., and go test ./... pass on the implementation, with CHROMIUM_TEST_BINARY set for browser tests (the Go suite includes the Node page-script suite). Existing gallerygrid_test.go is unchanged. Shot-scraper captures cover incoming shares at desktop and phone widths and outgoing shares at desktop width.
+
+**2026-10-26T01:58:30Z**
+
+Final lint comparison: make lint reports exactly the same 28 findings as origin/feature/Exh-wcxf/shared-listings (15 errcheck, 2 goimports, 1 ineffassign, 8 staticcheck, 2 unused); no introduced or resolved findings. The new routes are included in the owner-scope, CSRF, and credential audit tables.

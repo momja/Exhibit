@@ -73,6 +73,11 @@ type getRoute struct {
 // to the mux without adding a row here fails the suite on purpose: the point is
 // that someone states, once, whether the new handler reads or writes.
 var appOriginGETRoutes = []getRoute{
+	{route: "/shared"},
+	{route: "/shared-by-me"},
+	{route: "/partials/gallery-grid/shared"},
+	{route: "/partials/gallery-grid/shared-by-me"},
+	{route: "/artifacts/{artifactID}/widget/viewer/open"},
 	// Server-rendered pages and htmx fragments. All reads; the pages that
 	// change things do it from page JS through the API's unsafe methods.
 	{route: "/"},

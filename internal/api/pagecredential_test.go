@@ -53,6 +53,11 @@ type pageRoute struct {
 // without a row is a page nobody checked for the leak this file exists to
 // prevent.
 var appOriginGETRoutePaths = []pageRoute{
+	{route: "/shared", path: "/shared"},
+	{route: "/shared-by-me", path: "/shared-by-me"},
+	{route: "/partials/gallery-grid/shared", path: "/partials/gallery-grid/shared"},
+	{route: "/partials/gallery-grid/shared-by-me", path: "/partials/gallery-grid/shared-by-me"},
+	{route: "/artifacts/{artifactID}/widget/viewer/open", path: "/artifacts/{id}/widget/viewer/open"},
 	// The server-rendered pages — the ones that carry a bootstrap <script>,
 	// and therefore the whole point of this file.
 	{route: "/", path: "/"},

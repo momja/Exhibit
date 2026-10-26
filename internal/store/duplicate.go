@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ErrArtifactChanged refuses a clone assembled from a source whose content or
@@ -60,7 +62,7 @@ func (s *SQLiteStore) DuplicateArtifact(ctx context.Context, ownerID int64, sour
 	}
 
 	// Let the initial-version trigger establish the clone's own history. Sharing
-	// rollups and searchable tags are maintained by their existing triggers.
+	// indicators are derived on read; searchable tags keep their existing triggers.
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = tx.ExecContext(ctx, `INSERT INTO artifacts
 	 (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved,
@@ -89,34 +91,14 @@ func (s *SQLiteStore) DuplicateArtifact(ctx context.Context, ownerID int64, sour
 		}
 	}
 	if d.CopyShareSettings {
-		// Materialize recipients before inserts: this database has one connection,
-		// and no cursor should remain open while we write fresh identities.
-		shareRows, err := tx.QueryContext(ctx, `SELECT recipient_id FROM shares WHERE artifact_id=?`, sourceID)
-		if err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO share_grants (artifact_id, recipient_id, created_at)
+            SELECT ?, recipient_id, created_at FROM share_grants WHERE artifact_id=?`, d.ID, sourceID); err != nil {
 			return false, err
 		}
-		var recipients []sql.NullInt64
-		for shareRows.Next() {
-			var recipient sql.NullInt64
-			if err := shareRows.Scan(&recipient); err != nil {
-				shareRows.Close()
-				return false, err
-			}
-			recipients = append(recipients, recipient)
-		}
-		err = shareRows.Err()
-		shareRows.Close()
-		if err != nil {
+		id := uuid.New().String()
+		if _, err := tx.ExecContext(ctx, `INSERT INTO share_links (id, artifact_id)
+            SELECT ?, ? FROM share_links WHERE artifact_id=?`, id, d.ID, sourceID); err != nil {
 			return false, err
-		}
-		for _, recipient := range recipients {
-			id, err := NewAssetID()
-			if err != nil {
-				return false, err
-			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, ?)`, id, d.ID, recipient); err != nil {
-				return false, err
-			}
 		}
 	}
 	if err := tx.Commit(); err != nil {

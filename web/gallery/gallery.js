@@ -50,6 +50,13 @@ export function initializeGallery(root) {
     search();
   });
 
+  // Capture runs before the link's htmx handler records this request's revision.
+  root.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-gallery-filter]') || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    clearTimeout(timer);
+    revision++;
+  }, true);
+
   // hx-sync coordinates searches and pages within this gallery. Revisions
   // also cover the debounce interval and a response already reading its body:
   // neither may swap old results or update the URL after the query changes.

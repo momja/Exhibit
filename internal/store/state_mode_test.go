@@ -33,8 +33,8 @@ func newSharedFixture(t *testing.T, mode string) sharedFixture {
 	ctx := context.Background()
 	putOwnedArtifact(t, s, alice, "alices")
 	recipient := bob
-	require.NoError(t, s.CreateShare(ctx, alice,
-		&Share{ID: "to-bob", ArtifactID: "alices", RecipientID: &recipient}))
+	_, createdGrantErr := s.CreateGrant(ctx, alice, "alices", recipient)
+	require.NoError(t, createdGrantErr)
 	if mode != ShareStateOwn {
 		_, err := s.db.ExecContext(ctx,
 			"UPDATE artifacts SET share_state_mode = ? WHERE id = ?", mode, "alices")
@@ -197,7 +197,7 @@ func TestRevokingAGrantRevokesTheWrite(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, f.s.SetStateAsViewer(ctx, ViewerID(bob), f.artifactID, "note", "bob's"))
-	require.NoError(t, f.s.DeleteShare(ctx, alice, "to-bob"))
+	require.NoError(t, f.s.DeleteGrant(ctx, alice, f.artifactID, bob))
 
 	assert.ErrorIs(t, f.s.SetStateAsViewer(ctx, ViewerID(bob), f.artifactID, "note", "still bob's?"),
 		ErrNotFound)

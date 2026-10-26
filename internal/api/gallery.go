@@ -7,6 +7,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -141,13 +142,30 @@ func cacheBust(url string) string {
 }
 
 func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
-	grid, err := ro.loadGalleryGrid(r, libraryGallery, 0)
+	ro.serveGalleryPage(w, r, libraryGallery)
+}
+
+func (ro *Router) serveGalleryPage(w http.ResponseWriter, r *http.Request, gallery galleryDefinition) {
+	grid, err := ro.loadGalleryGrid(r, gallery, 0)
+	if errors.Is(err, errGalleryOwner) || errors.Is(err, errGalleryFilter) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		serverError(w, r, "gallery index list artifacts", err)
 		return
 	}
+	sharedWith, sharedBy, err := ro.cfg.Store.SpaceCounts(r.Context(), store.ViewerID(ownerIDFromCtx(r.Context())))
+	if err != nil {
+		serverError(w, r, "gallery space counts", err)
+		return
+	}
 
-	page, err := renderGalleryPage(grid, ro.pageCredentials(r), ro.adminRequest(r))
+	creds := ro.pageCredentials(r)
+	if gallery.ReadOnly {
+		creds.ReadOnly = true
+	}
+	page, err := renderGalleryPage(grid, newGallerySpaces(gallery.PagePath, sharedWith, sharedBy), creds, ro.adminRequest(r))
 	if err != nil {
 		serverError(w, r, "gallery index render", err)
 		return
@@ -846,12 +864,15 @@ func newShareBadgeView(a *store.Artifact) shareBadgeView {
 // av-41se, av-uvc6), and nothing at all for a sandboxed, private artifact;
 // Widget renders the card's tile (av-fafu).
 type galleryCard struct {
-	ArtifactID string
-	Title      string
-	Tags       []tagView
-	Capability capabilityView
-	Widget     widgetView
-	Actions    actionMenuView
+	ReadOnly     bool
+	OwnerName    string
+	OwnerInitial string
+	ArtifactID   string
+	Title        string
+	Tags         []tagView
+	Capability   capabilityView
+	Widget       widgetView
+	Actions      actionMenuView
 }
 
 // newWidgetView builds a card's tile view model, minting the tile frame's
@@ -888,6 +909,7 @@ type galleryPageData struct {
 	// LogoSVG is the compiled-in brand mark (logo.go), trusted markup.
 	LogoSVG template.HTML
 	Grid    galleryGridData
+	Spaces  []gallerySpace
 	pageCredentials
 	// IsAdmin reveals the header link to /admin/users (av-utap). It decides
 	// what the page *offers* and nothing else: the route carries its own
@@ -897,11 +919,12 @@ type galleryPageData struct {
 	IsAdmin bool
 }
 
-func renderGalleryPage(grid galleryGridData, creds pageCredentials, isAdmin bool) (string, error) {
+func renderGalleryPage(grid galleryGridData, spaces []gallerySpace, creds pageCredentials, isAdmin bool) (string, error) {
 	return renderPage("gallery", galleryPageData{
 		Favicon:         template.URL(exhibitLogoDataURI),
 		LogoSVG:         template.HTML(exhibitLogoSVG),
 		Grid:            grid,
+		Spaces:          spaces,
 		pageCredentials: creds,
 		IsAdmin:         isAdmin,
 	})

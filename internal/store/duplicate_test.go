@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,9 +26,11 @@ func TestDuplicateArtifactOptionsAndIndependentMetadata(t *testing.T) {
 				require.NoError(t, s.AddArtifactTag(ctx, alice, "source", "tag"))
 				require.NoError(t, s.CreateCollection(ctx, &Collection{ID: "collection", OwnerID: alice, Name: "Work"}))
 				require.NoError(t, s.AddArtifactToCollection(ctx, alice, "source", "collection"))
-				require.NoError(t, s.CreateShare(ctx, alice, &Share{ID: "link", ArtifactID: "source"}))
+				createdLink, createdLinkErr := s.CreateAnonymousLink(ctx, alice, "source")
+				require.NoError(t, createdLinkErr)
 				recipient := bob
-				require.NoError(t, s.CreateShare(ctx, alice, &Share{ID: "grant", ArtifactID: "source", RecipientID: &recipient}))
+				_, createdGrantErr := s.CreateGrant(ctx, alice, "source", recipient)
+				require.NoError(t, createdGrantErr)
 				require.NoError(t, s.SaveTranscript(ctx, alice, Transcript{ArtifactID: "source", SessionID: "conversation", SessionFile: "{}\n"}))
 				_, err := s.CommitVersion(ctx, alice, "source", VersionChange{BodyBlobID: strPtr("new-body")})
 				require.NoError(t, err)
@@ -70,9 +73,12 @@ func TestDuplicateArtifactOptionsAndIndependentMetadata(t *testing.T) {
 					assert.Equal(t, ShareStateShared, a.ShareStateMode)
 					assert.True(t, a.SharePublicLink)
 					assert.Equal(t, 1, a.ShareGrantCount)
-					for _, sh := range shares {
-						assert.NotContains(t, []string{"link", "grant"}, sh.ID)
-					}
+					assert.NotEqual(t, createdLink.ID, shares[0].ID)
+					_, err := uuid.Parse(shares[0].ID)
+					require.NoError(t, err, "duplicated links use the same UUID format as newly created links")
+					assert.Empty(t, shares[1].ID)
+					require.NotNil(t, shares[1].RecipientID)
+					assert.Equal(t, recipient, *shares[1].RecipientID)
 				} else {
 					assert.Empty(t, shares)
 					assert.Equal(t, ShareStateOwn, a.ShareStateMode)

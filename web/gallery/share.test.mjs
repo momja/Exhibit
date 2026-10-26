@@ -67,8 +67,8 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
     if (!prevented) await submit();
   };
   const composition = (type) => panel.dispatchEvent({ type, target: page.byId('share-add-input') });
-  const revoke = (id) => panel.dispatchEvent({ type: 'click', target: {
-    closest: (selector) => selector === '[data-action="revoke"]' ? { dataset: { shareId: id } } : null
+  const revoke = (recipientId) => panel.dispatchEvent({ type: 'click', target: {
+    closest: (selector) => selector === '[data-action="revoke"]' ? { dataset: { recipientId } } : null
   } });
   const refresh = async (saved = {}) => {
     await panel.dispatchEvent({ type: 'htmx:before:swap', target: page.byId('share-body') });
@@ -156,10 +156,10 @@ test('mode, revoke, and replacement each persist without a Save action', async (
   const page = await loadShare({ link: 'public', responses: [response(), response(), response({ share: { id: 'rotated' } })] });
   await page.mode('shared');
   await page.refresh({ stateMode: 'shared' });
-  await page.revoke('old-grant');
+  await page.revoke('42');
   await page.refresh();
   await page.click('share-link-replace', true);
-  assert.deepEqual(paths(page.api), ['PATCH /api/artifacts/' + ID, 'DELETE /api/shares/old-grant', 'POST /api/shares']);
+  assert.deepEqual(paths(page.api), ['PATCH /api/artifacts/' + ID, 'DELETE /api/artifacts/' + ID + '/grants?recipient=42', 'POST /api/shares']);
   assert.deepEqual(JSON.parse(page.api.calls[0].body), { share_state_mode: 'shared' });
   assert.deepEqual(JSON.parse(page.api.calls[2].body), { artifact_id: ID, replace: true });
   await page.refresh({ link: 'rotated' });
@@ -176,7 +176,7 @@ test('the mutation lock prevents duplicates both during the API request and befo
   await page.submit();
   await page.mode('shared');
   await page.linkOn(true);
-  await page.revoke('grant-1');
+  await page.revoke('42');
   await page.click('share-close');
   assert.equal(page.api.calls.length, 1);
   assert.equal(page.byId('share-panel').hidden, false);
@@ -236,7 +236,7 @@ test('failed revoke and rotation retain the saved list and old link', async () =
   const page = await loadShare({ link: 'public', responses: [{ ok: false, status: 500 }, { ok: false, status: 500 }] });
   const rows = [{ name: 'alice' }];
   page.byId('share-grants').children = rows;
-  await page.revoke('grant-1');
+  await page.revoke('42');
   assert.strictEqual(page.byId('share-grants').children, rows);
   assert.match(page.byId('share-status').textContent, /Could not revoke access/);
   await page.refresh();
@@ -361,14 +361,14 @@ test('concurrent grant and public-link revocations treat DELETE 404 as success',
   const page = await loadShare({ link: 'public', responses: [
     { ok: false, status: 404 }, { ok: false, status: 404 }
   ] });
-  await page.revoke('already-gone');
+  await page.revoke('42');
   await page.refresh();
   assert.equal(page.byId('share-status').textContent, '✓ Changes saved');
   await page.linkOn(false);
   await page.refresh({ link: '' });
   assert.equal(page.byId('share-status').textContent, '✓ Changes saved');
   assert.equal(page.byId('share-link-toggle').checked, false);
-  assert.deepEqual(paths(page.api), ['DELETE /api/shares/already-gone', 'DELETE /api/shares/public']);
+  assert.deepEqual(paths(page.api), ['DELETE /api/artifacts/' + ID + '/grants?recipient=42', 'DELETE /api/shares/public']);
 });
 
 test('404 responses to grants and mode changes still report failure', async () => {

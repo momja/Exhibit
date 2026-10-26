@@ -34,6 +34,8 @@ var (
 	// a server fault. Being specific costs nothing here: the caller has
 	// already been proved to own the artifact.
 	ErrDuplicateShare = errors.New("a share for that artifact and recipient already exists")
+	// ErrInvalidRecipient means a grant was requested without a positive recipient id.
+	ErrInvalidRecipient = errors.New("recipient_id must be positive")
 	// ErrAmbiguousUser means a handle matched more than one account, which
 	// only email can do — external_id is UNIQUE. It is an error rather than a
 	// "first match wins" because the caller is about to give somebody access
@@ -128,12 +130,8 @@ type Artifact struct {
 	// the gallery card reads it (av-6xjd) — how many accounts hold a grant,
 	// and whether its one anonymous link exists.
 	//
-	// They are denormalized columns kept current by triggers, exactly as
-	// tags_text is (migration 029, following av-b6o9's precedent), because the
-	// alternative is a join on every gallery render to answer a question whose
-	// answer changes only when a share row is written. Like tags_text they are
-	// read-only from here: no caller writes them, and PutArtifact and
-	// UpdateArtifact leave them to the schema.
+	// They are computed by artifact reads over share_grants and share_links
+	// (Exh-grj9), never persisted or caller-writable.
 	//
 	// They exist so a library can be *audited*. The failure to design against
 	// is the share made months ago and forgotten, so the card's badge has to be
@@ -231,28 +229,21 @@ type OriginDecision struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Share is one artifact made reachable by somebody who does not own it. It has
-// no lifetime of its own: a share lives until its row is deleted (av-8ipt
-// dropped the never-set expires_at column).
-//
-// RecipientID is the whole of what distinguishes the two kinds (av-lrae).
-// Nil is the anonymous link, where the unguessable id is the entire
-// authorization because there is no identity at the door to check; set, it is
-// a grant to that account, which opens the artifact at its ordinary URL and
-// needs no secret. Exactly one link and at most one grant per person are
-// possible, enforced by two unique indexes rather than by any handler.
-//
-// The old `public` column is deliberately absent: it was accepted, stored and
-// never read (av-20xv), and once a recipient exists it means exactly
-// `RecipientID == nil` — two fields for one fact, with nothing stopping them
-// disagreeing.
+// Share is an artifact's anonymous link. Its unguessable id authorizes /s/:id.
+// There is at most one link per artifact; it lives until deleted (av-8ipt).
 type Share struct {
-	ID          string `json:"id"`
-	ArtifactID  string `json:"artifact_id"`
-	RecipientID *int64 `json:"recipient_id"`
+	ID         string `json:"id"`
+	ArtifactID string `json:"artifact_id"`
 }
 
-// ArtifactShare is a share row together with the account it names, which is
+// Grant names an account allowed to read an artifact. It has no id or URL:
+// the composite (artifact, recipient) key is its identity (Exh-grj9).
+type Grant struct {
+	ArtifactID  string `json:"artifact_id"`
+	RecipientID int64  `json:"recipient_id"`
+}
+
+// ArtifactShare combines a link or grant with the account it names, which is
 // what the owner's share panel actually lists (av-6xjd): a grant is only
 // legible as the person it was given to, and revoking one means picking a
 // person out of a list.
@@ -263,8 +254,11 @@ type Share struct {
 // `local:<name>` for a local account and an opaque provider subject for an
 // OIDC one, and reducing that to text is presentation, not persistence.
 type ArtifactShare struct {
-	Share
-	Recipient *User `json:"recipient"`
+	// ID is set only for the link; RecipientID is set only for grants.
+	ID          string `json:"id,omitempty"`
+	ArtifactID  string `json:"artifact_id"`
+	RecipientID *int64 `json:"recipient_id"`
+	Recipient   *User  `json:"recipient"`
 }
 
 // AgentKey is an owner's BYO agent provider credential. KeyCiphertext is the
@@ -351,8 +345,35 @@ type ListOptions struct {
 	Query       string
 	Tags        []string
 	Collections []string
-	Limit       int
-	Offset      int
+	// CollectionIDs requires membership in every given collection by stable ID.
+	CollectionIDs []string
+	// MatchAllFilters requires every named tag and collection, rather than any per axis.
+	MatchAllFilters bool
+	// SharedOnly keeps artifacts with a link or at least one grant. It never
+	// changes the owner scope.
+	SharedOnly bool
+	Limit      int
+	Offset     int
+}
+
+// SharedListOptions filters a viewer's incoming grants. Tags and collections
+// belong to the artifact's owner; this space filters by owner instead.
+type SharedListOptions struct {
+	OwnerIDs []int64
+	Query    string
+	Limit    int
+	Offset   int
+}
+
+type SharedArtifact struct {
+	*Artifact
+	OwnerName string
+}
+
+type SharedOwner struct {
+	ID    int64
+	Name  string
+	Count int
 }
 
 // ArtifactSnapshot is a staged refetch ready to commit. Empty SourceBlobID
@@ -426,6 +447,15 @@ type Store interface {
 	// reason in this type's comment.
 	GetArtifactReadableBy(ctx context.Context, viewerID ViewerID, id string) (*Artifact, error)
 	ListArtifacts(ctx context.Context, opts ListOptions) ([]*Artifact, error)
+	// ListArtifactsSharedWith lists incoming grants, excluding the viewer's
+	// own artifacts, in the same order and with the same search/paging as
+	// ListArtifacts. Like GetArtifactReadableBy, it includes disabled owners.
+	ListArtifactsSharedWith(ctx context.Context, viewer ViewerID, opts SharedListOptions) ([]*SharedArtifact, error)
+	// SharedWithOwners counts incoming artifacts per owner, ordered by display
+	// name then ID. SpaceCounts counts incoming artifacts and owned artifacts
+	// with any share, respectively; neither count depends on list filters.
+	SharedWithOwners(ctx context.Context, viewer ViewerID) ([]SharedOwner, error)
+	SpaceCounts(ctx context.Context, viewer ViewerID) (sharedWith, sharedBy int, err error)
 	UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error
 	// ReplaceArtifactSnapshot atomically switches the body, asset generation,
 	// search text and timestamp, and queues superseded blobs for deletion.
@@ -665,25 +695,30 @@ type Store interface {
 	SessionAgentSpend(ctx context.Context, ownerID int64, sessionID string) (UsageTotals, error)
 	InstanceAgentSpend(ctx context.Context, since time.Time) (UsageTotals, error)
 
-	// Shares. A share is minted and revoked by the artifact's owner, so those
-	// two are owner-scoped; resolving one to serve it is not (below).
+	// Shares are created, listed and revoked by the artifact's owner.
+	// Anonymous links and grants are independent: revoking a link leaves all
+	// grants intact. Grants are revoked only by artifact and recipient.
 	//
-	// CreateShare mints either kind: a nil Share.RecipientID is the artifact's
-	// one anonymous link, a set one is a grant to that account. Both
-	// uniqueness rules live in the schema, so a second link or a repeated
-	// grant comes back as ErrDuplicateShare rather than as a silently
-	// accepted duplicate.
-	CreateShare(ctx context.Context, ownerID int64, s *Share) error
+	// Creation paths are explicit: CreateGrant returns ErrInvalidRecipient
+	// for a nonpositive recipient id. Only CreateAnonymousLink publishes an
+	// artifact without an account.
+	// Both return ErrDuplicateShare for a second link or a repeated grant.
+	CreateGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) (*Grant, error)
+	CreateAnonymousLink(ctx context.Context, ownerID int64, artifactID string) (*Share, error)
+	// DeleteGrant addresses a grant by artifact and recipient, never its row id.
+	// A missing grant returns ErrNotFound, matching DeleteShare.
+	DeleteGrant(ctx context.Context, ownerID int64, artifactID string, recipientID int64) error
+	// GetShare resolves only an owner's anonymous link by id; missing ids
+	// and ids owned by someone else return (nil, nil). Grants have no id.
 	GetShare(ctx context.Context, ownerID int64, id string) (*Share, error)
 	// ListArtifactShares is the enumeration half of sharing (av-6xjd): every
-	// share of one artifact, link and grants alike, each grant carrying the
-	// account it names. Owner-scoped like the two above, because who an
-	// artifact has been given to is the owner's business and nobody else's —
+	// share of one artifact: link first, then grants by creation time (recipient
+	// id breaks millisecond ties), each grant carrying the account it names.
+	// Owner-scoped like the two above, because who an artifact has been given to is the owner's business and nobody else's —
 	// a recipient can see the artifact, never the guest list.
 	//
-	// It joins `users` rather than leaving the caller to resolve ids, because
-	// the alternative is a query per grant on a list whose whole purpose is to
-	// be read at a glance.
+	// It loads recipients from users in one query rather than leaving the
+	// caller to resolve each id separately.
 	ListArtifactShares(ctx context.Context, ownerID int64, artifactID string) ([]ArtifactShare, error)
 	// ReplaceAnonymousLink rotates an artifact's public link: it deletes the
 	// existing one, if any, and mints newID in its place, in ONE transaction.
@@ -702,21 +737,11 @@ type Store interface {
 	// authorization (architecture §7) and there is no owner to compare
 	// against by design.
 	//
-	// It cannot return a grant, and that narrowing is the accessor's reason
-	// to exist rather than a filter bolted onto it (av-lrae). A share row is
-	// the authorization only while there is nobody at the door to check; a
-	// grant names somebody, so under the grant model its id is meant to buy
-	// nothing. Both kinds live in one table now, so an accessor that returned
-	// either would quietly make every grant id a working public URL — three
-	// grants would be three unguessable links serving the artifact to anyone
-	// with no account, and toggling the public link off would revoke none of
-	// them. Refusing here makes that unrepresentable instead of checked, and
-	// keeps `grep Unscoped` an honest account of what the un-owner-scoped
-	// read surface reaches: the link, and nothing else.
-	//
-	// A grant's id is therefore indistinguishable from an id that never
-	// existed, for the same reason every other refusal in this interface is.
+	// It queries share_links only; grants have no id (Exh-grj9). Keep callers
+	// inside internal/render so the unscoped read surface stays auditable.
 	GetAnonymousShareUnscoped(ctx context.Context, id string) (*Share, error)
+	// DeleteShare revokes only an owner-scoped anonymous link. Grant ids,
+	// missing ids and links owned by someone else return ErrNotFound.
 	DeleteShare(ctx context.Context, ownerID int64, id string) error
 
 	// --- Storage accounting (av-fw1b) ----------------------------------

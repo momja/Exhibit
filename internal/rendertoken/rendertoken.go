@@ -99,7 +99,7 @@ const (
 	// private state in it. A key that has to be *absent* to mean "not
 	// anonymous" has no falsy value to be confused about.
 	claimAnonymous = "a"
-	// claimShare is the share row this render happens under. Absent means the
+	// claimShare is the anonymous link id this render happens under. Absent means the
 	// render is not a share.
 	claimShare = "s"
 )
@@ -165,11 +165,8 @@ type Claims struct {
 	// unauthenticated visitor. The artifact renders; nobody's state does. It
 	// leaves ViewerID zero, because there is no principal to name.
 	Anonymous bool
-	// ShareID is the share row this render happens under, empty when it is not
-	// a share. Nothing reads it yet: it is carried so the share routes av-7k7b
-	// adds can tell "opened as a recipient" from "opened as the owner" out of
-	// the credential itself, rather than from a parameter the recipient could
-	// edit.
+	// ShareID is an anonymous share_links.id, never a grant (Exh-grj9).
+	// Reserved for av-7k7b: no production caller sets or reads it yet.
 	ShareID string
 }
 

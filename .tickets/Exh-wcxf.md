@@ -1,6 +1,6 @@
 ---
 id: Exh-wcxf
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-26T01:02:13Z
@@ -25,7 +25,7 @@ Rules:
 - Reading another owner's artifact is a *viewer* accessor (architecture §3.3: 'Non-owners use parallel accessors, never a widened predicate'). Do not widen ownedArtifact or ListArtifacts' owner predicate. The returned artifacts must be the same ones GetArtifactReadableBy resolves; add a test asserting every listed id resolves through it and that a revoked grant disappears from the list.
 - Must use share_grants_by_recipient: add these queries to owner_query_plan_test.go asserting SEARCH share_grants USING ... share_grants_by_recipient and no SCAN of artifacts/share_grants. (See the review note on #209: a correlated EXISTS without an outer artifact_id filter scans the whole child table — do not repeat that.)
 - A disabled owner's artifacts: decide and test (recommend: still listed, since GetArtifactReadableBy still resolves them; if it does not, match it).
-- No migration expected. If one turns out necessary, take the next number above every version on main AND origin/feature/Exh-g2vv/relay-connectors (which holds 038-042).
+- No migration expected. If one turns out necessary, take the next number above every version on main.
 
 ## Acceptance Criteria
 
@@ -34,3 +34,9 @@ Rules:
 - Revoked grant, deleted artifact, deleted recipient, and self-owned artifact cases tested.
 - Shared-by includes link-only and grant-only artifacts, excludes private ones.
 
+
+## Notes
+
+**2026-10-26T01:10:22Z**
+
+Implementation decisions: retain disabled owners to match GetArtifactReadableBy; SharedArtifact embeds *Artifact with OwnerName; SharedWithOwners sorts by display name then owner ID. User.DisplayName centralizes email/provider-subject/local-name fallback for profile and listings. Recipient-first CROSS JOIN keeps owner/FTS variants on share_grants_by_recipient. No migration needed.

@@ -112,7 +112,8 @@ func TestDuplicateArtifactOptionsValidationAndOwnerBoundaries(t *testing.T) {
 	require.NoError(t, ro.cfg.Store.SetState(ctx, 1, id, 1, "mine", "owner"))
 	require.NoError(t, ro.cfg.Store.SetState(ctx, 1, id, 2, "private", "viewer"))
 	require.NoError(t, ro.cfg.Store.UpdateArtifact(ctx, 1, id, map[string]any{"share_state_mode": "shared"}))
-	require.NoError(t, ro.cfg.Store.CreateShare(ctx, 1, &store.Share{ID: "original-share", ArtifactID: id}))
+	createdLink, createdLinkErr := ro.cfg.Store.CreateAnonymousLink(ctx, 1, id)
+	require.NoError(t, createdLinkErr)
 	for _, copySettings := range []bool{false, true} {
 		for _, copyData := range []bool{false, true} {
 			req := duplicateRequest(" Copy ")
@@ -133,7 +134,7 @@ func TestDuplicateArtifactOptionsValidationAndOwnerBoundaries(t *testing.T) {
 			require.NoError(t, err)
 			if copySettings {
 				require.Len(t, shares, 1)
-				assert.NotEqual(t, "original-share", shares[0].ID)
+				assert.NotEqual(t, createdLink.ID, shares[0].ID)
 				assert.Equal(t, "shared", a.ShareStateMode)
 			} else {
 				assert.Empty(t, shares)

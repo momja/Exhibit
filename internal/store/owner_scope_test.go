@@ -76,7 +76,9 @@ func putOwnedArtifact(t *testing.T, s *SQLiteStore, owner int64, id string) {
 	require.NoError(t, s.RecordBlobSize(ctx, "asset-blob", 1))
 	require.NoError(t, s.SetState(ctx, OwnerID(owner), id, ViewerID(owner), "seed", "value"))
 	require.NoError(t, s.SaveTranscript(ctx, owner, Transcript{ArtifactID: id, SessionID: "session-" + id, Title: "seed", SessionFile: "{}\n"}))
-	require.NoError(t, s.CreateShare(ctx, owner, &Share{ID: "share-" + id, ArtifactID: id}))
+	// Stable fixture identity for the table-driven GetShare/DeleteShare cases.
+	_, err = s.db.ExecContext(ctx, "INSERT INTO share_links (id, artifact_id) VALUES (?, ?)", "share-"+id, id)
+	require.NoError(t, err)
 	require.NoError(t, s.CreateTag(ctx, &Tag{ID: "tag-" + id, OwnerID: owner, Name: "tag-" + id}))
 	require.NoError(t, s.CreateCollection(ctx, &Collection{ID: "col-" + id, OwnerID: owner, Name: "col-" + id}))
 }
@@ -220,14 +222,24 @@ func ownerCases() []ownerCase {
 			seq, err := s.HeadVersionSeq(ctx, o, id)
 			return seq == 0, err
 		}},
-		{"CreateShare", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
-			// A grant rather than a second anonymous link, because the
-			// artifact already carries its one link and the schema refuses
-			// another (av-lrae) — the denial under test has to be about
-			// ownership, not about the link already existing.
-			recipient := otherOwner(id)
-			return false, s.CreateShare(ctx, o,
-				&Share{ID: "planted-share-" + id, ArtifactID: id, RecipientID: &recipient})
+		{"CreateGrant", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, err := s.CreateGrant(ctx, o, id, otherOwner(id))
+			return false, err
+		}},
+		{"CreateAnonymousLink", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			_, err := s.CreateAnonymousLink(ctx, o, id)
+			// The owner already has a fixture link. A duplicate still proves
+			// the owner check passed; a stranger must get ErrNotFound first.
+			if errors.Is(err, ErrDuplicateShare) {
+				return false, nil
+			}
+			return false, err
+		}},
+		{"DeleteGrant", denyErrNotFound, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
+			if _, err := s.CreateGrant(ctx, ownerOf(id), id, otherOwner(id)); err != nil && !errors.Is(err, ErrDuplicateShare) {
+				return false, err
+			}
+			return false, s.DeleteGrant(ctx, o, id, otherOwner(id))
 		}},
 		{"GetShare", denyEmptyRead, func(ctx context.Context, s *SQLiteStore, o int64, id string) (bool, error) {
 			sh, err := s.GetShare(ctx, o, "share-"+id)
@@ -380,15 +392,15 @@ func TestUnscopedAccessorsAreDeliberatelyOwnerBlind(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, missing)
 
-	// Owner-blind, and no wider than that. A grant's id is not a credential —
+	// Owner-blind, and no wider than that. A granted artifact id is not a credential —
 	// identity at the door is (av-lrae) — so it must not resolve on the one
 	// accessor that takes an id and asks nothing else.
 	recipient := alice
-	require.NoError(t, s.CreateShare(ctx, bob,
-		&Share{ID: "grant-to-alice", ArtifactID: "bobs", RecipientID: &recipient}))
-	grant, err := s.GetAnonymousShareUnscoped(ctx, "grant-to-alice")
-	require.NoError(t, err, "a grant id is absent here, not an error")
-	assert.Nil(t, grant, "a grant is not reachable by its id alone")
+	_, createdGrantErr := s.CreateGrant(ctx, bob, "bobs", recipient)
+	require.NoError(t, createdGrantErr)
+	grant, err := s.GetAnonymousShareUnscoped(ctx, "bobs")
+	require.NoError(t, err, "a granted artifact id is absent here, not an error")
+	assert.Nil(t, grant, "a grant does not make the artifact id a public link")
 }
 
 // TestUnscopedAccessorsAreCalledOnlyFromTheRenderSurface is AC#6's tripwire,
@@ -478,7 +490,10 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// row names on it, and nothing else. What keeps that narrow is that it
 		// is a *separate* accessor rather than a wider predicate inside
 		// ownedArtifact, which every mutating query would have inherited.
-		"GetArtifactReadableBy": "takes the VIEWER, deliberately not the owner; read-only by construction (av-lrae)",
+		"GetArtifactReadableBy":   "takes the VIEWER, deliberately not the owner; read-only by construction (av-lrae)",
+		"ListArtifactsSharedWith": "takes the VIEWER; lists only incoming grants, never widens the owner predicate (Exh-wcxf)",
+		"SharedWithOwners":        "takes the VIEWER; counts only incoming grants by owner (Exh-wcxf)",
+		"SpaceCounts":             "takes the VIEWER; counts incoming grants and the viewer’s own shared artifacts (Exh-wcxf)",
 
 		// The state methods a viewer reaches (av-v991), on the same grounds one
 		// step further: they take a ViewerID and no owner because a viewer
@@ -558,7 +573,7 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// GetUserByExternalID's grounds: it answers "who is this name", a
 		// question about the instance's directory rather than about anybody's
 		// library. The caller that spends the answer is owner-scoped where it
-		// counts — CreateShare refuses to share an artifact you do not own.
+		// counts — CreateGrant refuses to share an artifact you do not own.
 		"GetUserByEmail":        "resolves a typed handle to an account; the owner scoping is on the share it feeds (av-6xjd)",
 		"SetUserAdmin":          "keyed by the user id it acts on; an instance-admin operation (av-utap)",
 		"SetUserDisabled":       "keyed by the user id it acts on; an instance-admin operation (av-utap)",
