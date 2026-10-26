@@ -604,12 +604,24 @@ func withoutKey(m map[string]any, key string) map[string]any {
 	return out
 }
 
-// ownedArtifact is the owner-only predicate every artifact-child query uses.
-// Correlating through the artifact's primary key checks just that row. Keep
-// ownership here, once, and separate from readableByViewer: a grant must never
-// widen a child mutation. outerTable is a table name or alias from our SQL,
-// never caller input; the predicate binds exactly one owner ID.
+// ownedArtifact checks an artifact-child row's owner, separately from
+// readableByViewer: a grant must never widen a child mutation.
+//
+// This correlated check is efficient only when the outer query pins
+// <outerTable>.artifact_id = ? (or a single child row by primary key, as share
+// link lookups do). Enumerating an owner's library must instead drive from
+// artifacts(owner_id), then look up child rows by artifact_id.
+//
+// outerTable must be a known table or alias from our SQL; unknown identifiers
+// panic before they can be spliced into SQL. The predicate binds one owner ID.
 func ownedArtifact(outerTable string) string {
+	switch outerTable {
+	case "artifact_network_origins", "artifact_collections", "artifact_tags",
+		"artifact_state", "share_links", "share_grants", "artifact_shares",
+		"v", "artifact_versions", "agent_transcripts", "artifact_version_assets":
+	default:
+		panic("ownedArtifact: unknown outer table or alias: " + outerTable)
+	}
 	return `EXISTS (SELECT 1 FROM artifacts WHERE artifacts.id = ` + outerTable + `.artifact_id AND artifacts.owner_id = ?)`
 }
 
@@ -1444,9 +1456,12 @@ func (s *SQLiteStore) CreateAnonymousLink(ctx context.Context, ownerID int64, ar
 
 // GetShare resolves a link owned through its artifact. Grants have no ids.
 func (s *SQLiteStore) GetShare(ctx context.Context, ownerID int64, id string) (*Share, error) {
-	return s.getShareWhere(ctx,
-		`SELECT id, artifact_id FROM share_links
-		  WHERE id=? AND `+ownedArtifact("share_links"), id, ownerID)
+	return s.getShareWhere(ctx, getShareQuery(), id, ownerID)
+}
+
+func getShareQuery() string {
+	return `SELECT id, artifact_id FROM share_links
+		  WHERE id=? AND ` + ownedArtifact("share_links")
 }
 
 // GetAnonymousShareUnscoped resolves only a link, with no owner check. The
@@ -1470,8 +1485,11 @@ func (s *SQLiteStore) getShareWhere(ctx context.Context, query string, args ...a
 }
 
 func (s *SQLiteStore) DeleteShare(ctx context.Context, ownerID int64, id string) error {
-	return s.execOwned(ctx,
-		"DELETE FROM share_links WHERE id=? AND "+ownedArtifact("share_links"), id, ownerID)
+	return s.execOwned(ctx, deleteShareQuery(), id, ownerID)
+}
+
+func deleteShareQuery() string {
+	return "DELETE FROM share_links WHERE id=? AND " + ownedArtifact("share_links")
 }
 
 // DeleteGrant revokes one (artifact, recipient) grant. Missing grants and

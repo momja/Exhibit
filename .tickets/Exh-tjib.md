@@ -16,6 +16,6 @@ tags: [store, performance, migration]
 
 Scope:
 - Replace the IN form with a correlated primary-key check, `EXISTS (SELECT 1 FROM artifacts WHERE artifacts.id = <tbl>.artifact_id AND artifacts.owner_id = ?)`. It must name the outer table, so it becomes a small helper; keep it one definition and keep the semantics identical (owner_scope_test.go and the AGrantDoesNotWidenAnyOwnerScopedMethod test stay green unchanged).
-- Migration (next free number after story 2's, i.e. 039 if story 2 takes 038) adding `CREATE INDEX artifacts_owner ON artifacts(owner_id)` for the gallery listing.
+- Migration `044_artifacts_owner.sql`, above relay's 038–042 and the split-shares migration's 043 after restacking, adding `CREATE INDEX artifacts_owner ON artifacts(owner_id)` for the gallery listing and owner-wide queries.
 - A test asserting the plans: per-artifact child queries SEARCH artifacts by primary key; ListArtifacts uses artifacts_owner.
 

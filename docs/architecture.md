@@ -278,10 +278,12 @@ Blob:   put/get/delete by id
 
 **Owner scoping is in the queries** (av-ep8k). Every artifact-naming method takes
 `owner_id` and filters in SQL; child tables use an owner-scoped correlated
-`EXISTS` on the artifact's primary key. The `artifacts_owner` index on `owner_id`
-serves the library listing. Another owner's id behaves exactly like a missing
-one: reads return nothing, writes return `ErrNotFound`, handlers answer 404,
-never 403.
+`EXISTS` on the artifact's primary key, with the outer query pinned to one
+artifact or child row. Queries across an owner's library, including account
+share counts, instead drive from the `artifacts_owner` index on `owner_id`
+and look up child rows by `artifact_id`. Another owner's id behaves exactly
+like a missing one: reads return nothing, writes return `ErrNotFound`, handlers
+answer 404, never 403.
 
 **Unscoped accessors are named for it**: `GetArtifactUnscoped`,
 `GetAnonymousShareUnscoped`, and for assets `ArtifactAssetsUnscoped` and
