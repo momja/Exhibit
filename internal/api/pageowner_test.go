@@ -117,6 +117,8 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 		ownPath: "/partials/tag-panel?artifact={id}", foreignPath: "/partials/tag-panel?artifact={id}"},
 	{route: "/partials/edit-versions", ownerScoped: true,
 		ownPath: "/partials/edit-versions?artifact={id}", foreignPath: "/partials/edit-versions?artifact={id}"},
+	{route: "/partials/edit-origins", ownerScoped: true,
+		ownPath: "/partials/edit-origins?artifact={id}", foreignPath: "/partials/edit-origins?artifact={id}"},
 	// The capability badge + popover (av-mf1x). Owner-scoped like the detail
 	// page it is swapped into: another tenant without a grant gets the 404
 	// the page gives them, while a recipient with a grant reads the posture

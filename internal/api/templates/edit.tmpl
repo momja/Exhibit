@@ -57,40 +57,11 @@
     <summary id="security-summary">{{template "panelCaret"}} <span id="security-summary-text"></span></summary>
     <div class="panel-body security-body">
       <div class="security-col">
-        <h3 class="text-sm muted">Network allowlist</h3>
-        <div id="allowlist-rows">
-          {{range .Allowlist}}<div class="allowlist-row" data-origin="{{.}}">
-            <code title="{{.}}">{{.}}</code>
-            <button type="button" class="btn btn-sm btn-sec" data-action="remove">Remove</button>
-          </div>{{end}}
-        </div>
-        {{if .Unapproved}}
-        <h3 class="text-sm muted">Referenced, not approved</h3>
-        <div id="unapproved-rows">
-          {{range .Unapproved}}<div class="allowlist-row" data-origin="{{.}}">
-            <code title="{{.}}">{{.}}</code>
-            <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
-          </div>{{end}}
-        </div>
-        {{end}}
-        {{if .Blocked}}
-        {{/* Origins with an explicit block decision (exhibit-x87). They never
-             reach the CSP; they are listed so a "don't ask again" answer stays
-             visible and reversible instead of reading as merely undecided. */}}
-        <h3 class="text-sm muted">Blocked</h3>
-        <div id="blocked-rows">
-          {{range .Blocked}}<div class="allowlist-row" data-origin="{{.}}">
-            <code title="{{.}}">{{.}}</code>
-            <span class="text-sm muted">blocked</span>
-            {{/* Forget drops the decision entirely rather than overriding it,
-                 returning the origin to undecided so the runtime prompt may ask
-                 again (av-kmwj). Without it, "don't ask again" is a one-way
-                 trap: a blocked origin never prompts on its own. */}}
-            <button type="button" class="btn btn-sm btn-sec" data-action="forget">Forget</button>
-            <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
-          </div>{{end}}
-        </div>
-        {{end}}
+        <div id="origin-lists"
+             hx-get="/partials/edit-origins?artifact={{.ID}}"
+             hx-trigger="exhibit:origin-draft-changed from:body"
+             hx-sync="this:replace"
+             hx-swap="innerHTML">{{template "editOriginLists" .}}</div>
         <div class="row" style="margin-top:8px">
           <input type="text" id="al-add-input" class="field" placeholder="Add origin (https://example.com)">
           <button type="button" class="btn btn-sm" id="al-add-btn">Add</button>
@@ -325,6 +296,7 @@ const ID = {{.ID}};
 {{/* The persisted title, not the (editable) title field: the erase-all
      confirmation must name the artifact the server will actually wipe. */ -}}
 let TITLE = {{.Title}};
+const INITIAL_SOURCE_FOOTPRINT = {{.NetworkFootprint}};
 let allowlist = {{.Allowlist}};
 let unapproved = {{.Unapproved}};
 let blocked = {{.Blocked}};

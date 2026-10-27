@@ -11,7 +11,7 @@ async function load(responses, widgetBody = '<b>my tile</b>') {
  const api = recordingApi(responses);
  const timers = [];
  const page = loadPageScript([], {
-  TOKEN:'', READ_ONLY:false, ID:'art-1',
+  TOKEN:'', READ_ONLY:false, ID:'art-1', INITIAL_SOURCE_FOOTPRINT:[],
   allowlist:[], unapproved:[], blocked:[],
   downloadsApproved:false, clipboardApproved:false, linksApproved:false,
   cameraApproved:false, microphoneApproved:false, geolocationApproved:false,
@@ -64,6 +64,16 @@ test('an empty default widget is left absent', async()=>{
  assert.equal(p.api.calls.length,1);
  assert.equal(p.byId('status').textContent,'✓ Saved');
  assert.equal(p.timers.length,0);
+});
+
+test('Save and leave accepts whitespace typed into an empty default widget', async()=>{
+ const p=await load([sourceSaved],'');
+ p.byId('widget-src').value=' \n ';
+ assert.equal(p.context.artifactDirty(),true);
+ assert.equal(await p.context.saveEditorChanges(),true);
+ assert.equal(p.context.artifactDirty(),false);
+ assert.deepEqual(p.api.calls.map(call=>call.method),['PATCH']);
+ assert.equal(p.byId('status').textContent,'✓ Saved');
 });
 
 test('the page Save creates a newly written widget', async()=>{

@@ -1053,6 +1053,7 @@ type editPageData struct {
 	Allowlist           []string
 	Blocked             []string
 	Unapproved          []string
+	NetworkFootprint    []string
 	DownloadsApproved   bool
 	ClipboardApproved   bool
 	LinksApproved       bool
@@ -1125,18 +1126,10 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 	if navigation.URL == "" {
 		navigation = editNavigation{URL: "/", Label: "My library"}
 	}
-	allowlist, blocked := []string{}, []string{}
-	for _, d := range decisions {
-		switch d.Decision {
-		case store.DecisionAllow:
-			allowlist = append(allowlist, d.Origin)
-		case store.DecisionBlock:
-			blocked = append(blocked, d.Origin)
-		}
-	}
 	// Only origins with no decision at all are "referenced, not approved" —
 	// a blocked origin is a decision already made and belongs in Blocked.
-	unapproved := diffOrigins(networkFootprint(src, urls.origin), allowlist, blocked)
+	footprint := networkFootprint(src, urls.origin)
+	origins := newEditOriginsView(footprint, decisions)
 	return renderPage("edit", editPageData{
 		Return:              navigation,
 		Favicon:             template.URL(exhibitLogoDataURI),
@@ -1146,9 +1139,10 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 		SourceRevision:      store.ContentRevision(a.SourceBlobID),
 		WidgetRevision:      store.ContentRevision(a.WidgetBlobID),
 		pageCredentials:     creds,
-		Allowlist:           allowlist,
-		Blocked:             blocked,
-		Unapproved:          unapproved,
+		Allowlist:           origins.Allowlist,
+		Blocked:             origins.Blocked,
+		Unapproved:          origins.Unapproved,
+		NetworkFootprint:    footprint,
 		WidgetSrc:           widgetSrc,
 		Widget:              newWidgetView(a, urls),
 		CanGenerateWidget:   canGenerate,

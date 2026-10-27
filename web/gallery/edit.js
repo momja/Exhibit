@@ -4,6 +4,7 @@
  *   TOKEN / READ_ONLY - this visitor's API credential, decided server-side
  *                       per request (av-5imk); spent via api.js's apiFetch
  *   ID                - the artifact id
+ *   INITIAL_SOURCE_FOOTPRINT - origins referenced by the saved artifact source
  *   allowlist         - approved network origins (mutable working copy)
  *   unapproved        - origins the current body references that carry no
  *                        decision at all (mutable working copy)
@@ -131,31 +132,11 @@ document.getElementById('geo-select').addEventListener('change', function(e) {
   renderSecurityPanel();
 });
 
-document.getElementById('allowlist-rows').addEventListener('click', function(e) {
-  const btn = e.target.closest('[data-action="remove"]');
-  if (!btn) return;
-  const origin = btn.closest('.allowlist-row').dataset.origin;
-  allowlist = allowlist.filter(o => o !== origin);
-  renderSecurityPanel();
+const originLists = document.getElementById('origin-lists');
+let sourceFootprint = [...INITIAL_SOURCE_FOOTPRINT];
+originLists.addEventListener('htmx:config:request', function(e) {
+  e.detail.ctx.request.body.set('draft', JSON.stringify({allowlist, blocked, unapproved}));
 });
-
-// "Allow" in either the undecided or the blocked section moves the origin into
-// the working allowlist; Save upserts it as an allow decision, which is also
-// what overrides a previous block.
-function bindAllowSection(containerId, take) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  el.addEventListener('click', function(e) {
-    const btn = e.target.closest('[data-action="allow"]');
-    if (!btn) return;
-    const origin = btn.closest('.allowlist-row').dataset.origin;
-    take(origin);
-    if (!allowlist.includes(origin)) allowlist.push(origin);
-    renderSecurityPanel();
-  });
-}
-bindAllowSection('unapproved-rows', o => { unapproved = unapproved.filter(x => x !== o); });
-bindAllowSection('blocked-rows', o => { blocked = blocked.filter(x => x !== o); });
 
 // "Forget" drops a block decision instead of overriding it: the origin returns
 // to undecided, so the runtime network prompt (av-kmwj) may ask about it again.
@@ -163,17 +144,18 @@ bindAllowSection('blocked-rows', o => { blocked = blocked.filter(x => x !== o); 
 // block rows alone — so Save deletes these through the per-origin route.
 // Collected here and applied there, like every other edit on this page.
 let forgotten = [];
-const blockedRows = document.getElementById('blocked-rows');
-if (blockedRows) {
-  blockedRows.addEventListener('click', function(e) {
-    const btn = e.target.closest('[data-action="forget"]');
-    if (!btn) return;
-    const origin = btn.closest('.allowlist-row').dataset.origin;
-    blocked = blocked.filter(x => x !== origin);
-    if (!forgotten.includes(origin)) forgotten.push(origin);
-    renderSecurityPanel();
-  });
-}
+originLists.addEventListener('click', function(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const origin = btn.closest('.allowlist-row').dataset.origin;
+  switch (btn.dataset.action) {
+    case 'remove': allowlist = allowlist.filter(o => o !== origin); break;
+    case 'allow': if (!allowlist.includes(origin)) allowlist.push(origin); break;
+    case 'forget': if (!forgotten.includes(origin)) forgotten.push(origin); break;
+    default: return;
+  }
+  renderSecurityPanel();
+});
 
 document.getElementById('al-add-btn').addEventListener('click', function() {
   const inp = document.getElementById('al-add-input');
@@ -187,65 +169,25 @@ document.getElementById('al-add-input').addEventListener('keydown', function(e) 
   if (e.key === 'Enter') { e.preventDefault(); document.getElementById('al-add-btn').click(); }
 });
 
-// Builds one allowlist/unapproved/blocked row via createElement + textContent
-// rather than interpolated markup — origins are user/scanner-controlled and can
-// contain HTML metacharacters (av-tux9), same reasoning as detail.js's
-// renderBadges().
-//
-// actions is a list of [label, action] pairs rendered left to right. It is a
-// list because a blocked row carries two answers (Forget and Allow, av-kmwj)
-// where the others carry one; the last is the row's primary and gets the solid
-// button, except for a destructive "remove", which never is.
-function buildOriginRow(origin, actions, note) {
-  const row = document.createElement('div');
-  row.className = 'allowlist-row';
-  row.dataset.origin = origin;
-  const code = document.createElement('code');
-  code.textContent = origin;
-  code.title = origin;
-  row.appendChild(code);
-  // A note labels the row's state (e.g. "blocked") so an explicit block
-  // decision never renders identically to a merely undecided origin.
-  if (note) {
-    const tag = document.createElement('span');
-    tag.className = 'text-sm muted';
-    tag.textContent = note;
-    row.appendChild(tag);
-  }
-  actions.forEach(function(a, i) {
-    const [label, action] = a;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = (i === actions.length - 1 && action !== 'remove') ? 'btn btn-sm' : 'btn btn-sm btn-sec';
-    btn.dataset.action = action;
-    btn.textContent = label;
-    row.appendChild(btn);
-  });
-  return row;
+function originGroups(allowed, denied, forgotten = []) {
+  const approved = new Set(allowed);
+  const forgottenSet = new Set(forgotten);
+  const blocks = denied.filter(origin => !approved.has(origin) && !forgottenSet.has(origin));
+  const decided = new Set([...allowed, ...blocks]);
+  return {blocked: blocks, unapproved: sourceFootprint.filter(origin => !decided.has(origin))};
 }
 
-function renderOriginSection(containerId, origins, note, actions) {
-  const rows = document.getElementById(containerId);
-  if (!rows) return; // section absent because it rendered empty server-side
-  const heading = rows.previousElementSibling;
-  rows.innerHTML = '';
-  origins.forEach(o => rows.appendChild(buildOriginRow(o, actions, note)));
-  const show = origins.length > 0;
-  rows.style.display = show ? '' : 'none';
-  if (heading) heading.style.display = show ? '' : 'none';
+function applySavedAllowlist(previous, confirmed) {
+  // Rebase the working copy onto the confirmed save without losing edits
+  // made while the request was pending.
+  const removed = new Set(previous.filter(origin => !allowlist.includes(origin)));
+  const added = allowlist.filter(origin => !previous.includes(origin));
+  allowlist = [...new Set([...confirmed.filter(origin => !removed.has(origin)), ...added])];
 }
 
 function renderSecurityPanel() {
-  const alRows = document.getElementById('allowlist-rows');
-  alRows.innerHTML = '';
-  allowlist.forEach(o => alRows.appendChild(buildOriginRow(o, [['Remove', 'remove']])));
-
-  // Both sections offer "Allow"; the blocked one labels each row so an explicit
-  // "don't ask again" reads differently from an undecided origin, and adds
-  // "Forget" to drop the decision back to undecided. Each section (and its
-  // heading) hides once emptied.
-  renderOriginSection('unapproved-rows', unapproved, null, [['Allow', 'allow']]);
-  renderOriginSection('blocked-rows', blocked, 'blocked', [['Forget', 'forget'], ['Allow', 'allow']]);
+  ({blocked, unapproved} = originGroups(allowlist, savedArtifact.blocked, forgotten));
+  document.body.dispatchEvent(new CustomEvent('exhibit:origin-draft-changed'));
 
   document.getElementById('security-summary-text').textContent =
     allowlist.length + (allowlist.length === 1 ? ' origin' : ' origins') +
@@ -255,8 +197,8 @@ function renderSecurityPanel() {
     ' · camera: ' + (cameraApproved ? 'always allow' : 'ask first') +
     ' · microphone: ' + (microphoneApproved ? 'always allow' : 'ask first') +
     ' · location: ' + (geolocationApproved ? 'always allow' : 'ask first');
+  editorChanged();
 }
-renderSecurityPanel();
 
 // Keep the approval gate across retries when a later widget save fails.
 let pendingSourceFootprint = [];
@@ -276,7 +218,7 @@ function artifactDirty() {
   const {title: savedTitle, body: savedBody, ...savedSettings} = savedArtifact;
   // Sources can be many megabytes. Compare their strings directly rather
   // than serializing another copy on every input event.
-  return pendingSourceFootprint.length > 0 || forgotten.length > 0 || title !== savedTitle || body !== savedBody || JSON.stringify(settings) !== JSON.stringify(savedSettings) || !!widgetPanel?.isDirty();
+  return linksApprovedDirty || cameraApprovedDirty || microphoneApprovedDirty || geolocationApprovedDirty || pendingSourceFootprint.length > 0 || forgotten.length > 0 || title !== savedTitle || body !== savedBody || JSON.stringify(settings) !== JSON.stringify(savedSettings) || !!widgetPanel?.isDirty();
 }
 
 function discardArtifact() {
@@ -333,7 +275,13 @@ async function save() {
     return false;
   }
   document.getElementById('body').dataset.revision = data.artifact?.source_revision;
-  savedArtifact = {...submitted, title: payload.title};
+  // PATCH overrides blocks only for submitted allow decisions. A queued Forget
+  // remains an unsaved operation until its own DELETE succeeds below.
+  const savedAllowlist = data.artifact?.network_allowlist ?? submitted.allowlist;
+  const savedBlocks = savedArtifact.blocked.filter(origin => !savedAllowlist.includes(origin));
+  if (JSON.stringify(allowlist) === JSON.stringify(submitted.allowlist)) allowlist = [...savedAllowlist];
+  if (data.footprint_changed) sourceFootprint = data.network_footprint || [];
+  savedArtifact = {...submitted, title: payload.title, allowlist: [...savedAllowlist], forgotten: [], ...originGroups(savedAllowlist, savedBlocks)};
   if (document.getElementById('title').value === submitted.title) document.getElementById('title').value = payload.title;
   if (typeof TITLE !== 'undefined') TITLE = payload.title;
   document.title = 'Edit: ' + payload.title + ' — Exhibit';
@@ -347,8 +295,9 @@ async function save() {
   // leaves every decision exactly as it was. A forget that fails is reported
   // rather than swallowed: the row is already gone from the panel, so silence
   // would show an origin as undecided that the next render still suppresses.
-  if (forgotten.length > 0 && !(await forgetBlockedOrigins(status))) return false;
-  savedArtifact.forgotten = [];
+  const originsSaved = submitted.forgotten.length === 0 || await forgetBlockedOrigins(status, submitted);
+  renderSecurityPanel();
+  if (!originsSaved) return false;
   if (widgetPanel && !(await widgetPanel.save())) {
     status.textContent = 'Artifact saved, but the widget was not saved. ' +
       document.getElementById('widget-status').textContent;
@@ -372,13 +321,15 @@ async function save() {
 // Deletes each forgotten block decision through the per-origin route. Returns
 // false (and says which origin) on the first failure, leaving the rest in
 // `forgotten` so a retried Save picks up where this one stopped.
-async function forgetBlockedOrigins(status) {
+async function forgetBlockedOrigins(status, submitted) {
   // An origin the user forgot and then re-added to the allowlist is not
   // forgotten — the PATCH just wrote it as an allow decision, and deleting it
   // here would silently undo the newer of the two answers.
-  forgotten = forgotten.filter(o => !allowlist.includes(o));
-  while (forgotten.length > 0) {
-    const origin = forgotten[0];
+  for (const origin of submitted.forgotten) {
+    if (savedArtifact.allowlist.includes(origin)) {
+      forgotten = forgotten.filter(o => o !== origin);
+      continue;
+    }
     const r = await apiFetch('/api/artifacts/' + encodeURIComponent(ID) +
       '/origins?origin=' + encodeURIComponent(origin), {
       method: 'DELETE'
@@ -387,7 +338,8 @@ async function forgetBlockedOrigins(status) {
       status.textContent = '✗ Saved, but could not forget ' + origin;
       return false;
     }
-    forgotten.shift();
+    forgotten = forgotten.filter(o => o !== origin);
+    Object.assign(savedArtifact, originGroups(savedArtifact.allowlist, savedArtifact.blocked.filter(o => o !== origin)));
   }
   return true;
 }
@@ -422,14 +374,15 @@ async function approveOrigins() {
   // overwrite would drop origins the security panel approved that the new
   // body's footprint doesn't happen to reference.
   const merged = Array.from(new Set([...allowlist, ...selected]));
-  const previousAllowlist = JSON.stringify(allowlist);
+  const previousAllowlist = [...allowlist];
   const r = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
     body: JSON.stringify({network_allowlist: merged})
   });
   if (!r.ok) { status.textContent = '✗ Failed to update allowlist'; return; }
-  if (JSON.stringify(allowlist) === previousAllowlist) allowlist = merged;
+  applySavedAllowlist(previousAllowlist, merged);
   savedArtifact.allowlist = [...merged];
+  Object.assign(savedArtifact, originGroups(merged, savedArtifact.blocked));
   renderSecurityPanel();
   finishEdit();
 }
@@ -499,7 +452,7 @@ const widgetPanel = (function() {
     const submitted = src.value;
     const body = submitted.trim();
     if (!body) {
-      if (!hasWidget) return true;
+      if (!hasWidget) { savedWidget = submitted; return true; }
       status.textContent = '✗ Widget source cannot be empty. Use Remove to restore the default tile.';
       return false;
     }
@@ -668,6 +621,7 @@ const widgetPanel = (function() {
 
 savedArtifact = artifactDraft();
 registerEditorSection('artifact', {isDirty: artifactDirty, save, discard: discardArtifact});
+renderSecurityPanel();
 // Legacy entry links can use the same-origin referrer on their first request.
 // Record the server's validated answer in the URL before a reload or bookmark.
 if (document.body.dataset.editorReturnUrl && window.history?.replaceState) {

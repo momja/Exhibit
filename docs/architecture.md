@@ -589,6 +589,12 @@ section's dirty check, save, and discard. The registered `unsaved-changes`
 Stimulus controller guards links with a native dialog (Keep editing, Discard
 changes, Save and leave) and supplies native browser leave protection. A failed
 or partial save keeps the editor open; edits made during a save remain dirty.
+Security edits notify that guard immediately. Origin groups are derived from
+the last saved source footprint, confirmed decisions, and pending edits;
+`/partials/edit-origins` renders their working copy through htmx without
+persisting it. Saves reconcile allowed, blocked, and undecided origins while
+retaining later edits, and touched capability selectors remain dirty until
+their explicit decision has been saved.
 
 Screenshots: [desktop editor](screenshots/Exh-7182/01-editor-desktop.png),
 [phone editor](screenshots/Exh-7182/02-editor-phone.png),

@@ -88,6 +88,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/partials/card-widget", path: "/partials/card-widget?artifact={id}"},
 	{route: "/partials/tag-panel", path: "/partials/tag-panel?artifact={id}"},
 	{route: "/partials/edit-versions", path: "/partials/edit-versions?artifact={id}"},
+	{route: "/partials/edit-origins", path: "/partials/edit-origins?artifact={id}"},
 	{route: "/partials/asset-panel", path: "/partials/asset-panel?artifact={id}"},
 	{route: "/partials/capability-cluster", path: "/partials/capability-cluster?artifact={id}"},
 	{route: "/partials/share-panel", path: "/partials/share-panel?artifact={id}"},
