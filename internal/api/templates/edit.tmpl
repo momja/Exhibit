@@ -18,11 +18,11 @@
 </head>
 <body data-controller="unsaved-changes" data-editor-return-url="{{.Return.URL}}" data-action="click->unsaved-changes#navigate input->unsaved-changes#refresh change->unsaved-changes#refresh exhibit:editor-changed->unsaved-changes#refresh exhibit:editor-exit->unsaved-changes#allowExit pageshow@window->unsaved-changes#restore beforeunload@window->unsaved-changes#beforeUnload">
 <header>
-  <a class="editor-return" href="{{.Return.URL}}"><i class="ph ph-arrow-left" aria-hidden="true"></i> {{.Return.Label}}</a>
+  <a class="editor-return" href="{{.Return.URL}}" title="{{.Return.Label}}"><i class="ph ph-arrow-left" aria-hidden="true"></i> <span class="editor-return-label">{{.Return.Label}}</span></a>
   <span class="spacer"></span>
   <div class="editor-actions">
-    <a class="btn btn-sec" href="/artifacts/{{.ID}}"><i class="ph ph-eye" aria-hidden="true"></i> View artifact</a>
-    <button type="button" class="btn" id="save-button" data-save-editor><i class="ph ph-check" aria-hidden="true"></i> Save changes</button>
+    <a class="btn btn-sec" href="/artifacts/{{.ID}}" aria-label="View artifact" title="View artifact"><i class="ph ph-eye" aria-hidden="true"></i> <span class="editor-action-label">View artifact</span></a>
+    <button type="button" class="btn" id="save-button" data-save-editor aria-label="Save changes" title="Save changes"><i class="ph ph-check" aria-hidden="true"></i> <span class="editor-action-label">Save changes</span></button>
   </div>
 </header>
 <main>
