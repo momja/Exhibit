@@ -719,8 +719,10 @@ Configured Clerk keys select the hosted login path. `internal/auth/clerk.go`
 verifies Clerk browser cookies through the official Go SDK with cached signing
 keys, enforcing the application's issuer and `APP_ORIGIN`. ClerkJS also keeps the
 minute-long `__session` cookie fresh, so every authenticated page loads it, but
-only after the page's `load` event and an idle period, capped at five seconds
-(Exh-g0fx); the login page, where Clerk is the page, loads it at once. `internal/api/clerk.go`
+only after the page's `load` event and an idle period (Exh-g0fx). The wait is
+capped at five seconds, and never runs past fifteen seconds before the
+session token's `exp`, so a page admitted on a nearly spent token still renews
+it in time. The login page, where Clerk is the page, loads it at once. `internal/api/clerk.go`
 resolves the verified subject to the existing user/owner model. It does not mint
 an Exhibit session or match users by email. Invalid cookies follow the ordinary
 route gates; the login page can refresh an expired token through ClerkJS.

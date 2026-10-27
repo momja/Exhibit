@@ -39,16 +39,36 @@ export function clerkClientAfterLoad() {
 // A widget frame that never finishes loading would hold the load event, and
 // the session cookie with it, so waiting for it is capped.
 const settleCap = 5000;
+// Clerk needs this long, at most, to start and renew a token.
+const renewalMargin = 15000;
 
 function pageSettled() {
+  // The wait must not outlive the token Clerk is there to renew: a page
+  // admitted with seconds left would otherwise lose its session to the next
+  // request it makes, and reload into the login flow.
+  const cap = Math.min(settleCap, msUntilSessionExpires() - renewalMargin);
   return new Promise(resolve => {
+    if (cap <= 0) return resolve();
+    const timer = setTimeout(resolve, cap);
+    const done = () => { clearTimeout(timer); resolve(); };
     const whenIdle = () => (window.requestIdleCallback
-      ? window.requestIdleCallback(resolve, { timeout: 2000 })
-      : setTimeout(resolve, 0));
-    if (document.readyState === 'complete') return whenIdle();
-    window.addEventListener('load', whenIdle, { once: true });
-    setTimeout(whenIdle, settleCap);
+      ? window.requestIdleCallback(done, { timeout: 2000 })
+      : setTimeout(done, 0));
+    if (document.readyState === 'complete') whenIdle();
+    else window.addEventListener('load', whenIdle, { once: true });
   });
+}
+
+// The session cookie is Clerk's JWT and readable by design; only its expiry is
+// read here, and anything unreadable counts as already expired.
+function msUntilSessionExpires() {
+  const cookie = document.cookie.split('; ').find(c => c.startsWith('__session='));
+  try {
+    const payload = cookie.slice('__session='.length).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(payload)).exp * 1000 - Date.now();
+  } catch {
+    return 0;
+  }
 }
 
 export function clerkClient() {
