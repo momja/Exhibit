@@ -224,17 +224,29 @@ func (c *Clerk) lapsedSessionUser(r *http.Request) (string, error) {
 	return c.tokenUser(r.Context(), cookie.Value)
 }
 
-// checkSameUser refuses directives whose session is not the lapsed session's
-// user, so a handshake can renew this browser's session and nothing else.
+// checkSameUser refuses directives unless every session cookie among them
+// belongs to the lapsed session's user and replaces the one the server reads
+// (host-only, at the root), so a handshake can renew this browser's session
+// and nothing else.
 func (c *Clerk) checkSameUser(r *http.Request, directives []string) error {
 	before, err := c.lapsedSessionUser(r)
 	if err != nil {
 		return err
 	}
+	renewed := false
 	for _, d := range directives {
 		cookie, err := http.ParseSetCookie(d)
-		if err != nil || cookie.Name != "__session" {
+		if err != nil {
+			return err
+		}
+		if cookie.Name != "__session" && !strings.HasPrefix(cookie.Name, "__session_") {
 			continue
+		}
+		if cookie.Domain != "" || (cookie.Path != "" && cookie.Path != "/") {
+			return errors.New("the handshake set a session cookie the server would not read")
+		}
+		if cookie.Value == "" || cookie.MaxAge < 0 {
+			continue // a removal renews nothing
 		}
 		after, err := c.tokenUser(r.Context(), cookie.Value)
 		if err != nil {
@@ -243,9 +255,12 @@ func (c *Clerk) checkSameUser(r *http.Request, directives []string) error {
 		if after != before {
 			return errors.New("the handshake renewed a different user's session")
 		}
-		return nil
+		renewed = renewed || cookie.Name == "__session"
 	}
-	return errors.New("the handshake returned no session")
+	if !renewed {
+		return errors.New("the handshake returned no session")
+	}
+	return nil
 }
 
 // tokenUser verifies a session token's signature and issuer, deliberately
@@ -368,10 +383,9 @@ func (c *Clerk) signingKey(ctx context.Context, kid string) (any, error) {
 		return key, nil
 	}
 	c.keysMu.Lock()
-	fresh := time.Since(c.keysFetched) < time.Hour
-	wait := 10 * time.Second
-	if fresh {
-		wait = 5 * time.Minute
+	wait := 5 * time.Minute
+	if c.keysFetched.Before(c.keysAttempted) {
+		wait = 10 * time.Second // the last fetch failed
 	}
 	tooSoon := time.Since(c.keysAttempted) < wait
 	c.keysMu.Unlock()

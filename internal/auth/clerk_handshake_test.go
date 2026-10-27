@@ -344,6 +344,31 @@ func TestHandshakeOnlyRenewsTheLapsedSessionsUser(t *testing.T) {
 			assert.Equal(t, "3", setCookies(w)[handshakeCountCookie].Value)
 		})
 	}
+	// Review of Exh-8409, round three: every session cookie in the bundle is
+	// checked, and each must replace the one the server reads.
+	for name, directives := range map[string]func(f *handshakeFixture) []string{
+		"a second session for someone else": func(f *handshakeFixture) []string {
+			return append(f.renewal(t, "user_one"), "__session="+f.session(t, "user_attacker", false)+"; Path=/")
+		},
+		"a suffixed session for someone else": func(f *handshakeFixture) []string {
+			return append(f.renewal(t, "user_one"), "__session_V5P0="+f.session(t, "user_attacker", false)+"; Path=/")
+		},
+		"a session scoped to another domain": func(f *handshakeFixture) []string {
+			return []string{"__session=" + f.session(t, "user_one", false) + "; Path=/; Domain=app.test"}
+		},
+		"a session scoped to another path": func(f *handshakeFixture) []string {
+			return []string{"__session=" + f.session(t, "user_one", false) + "; Path=/admin"}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newHandshakeFixture(t)
+			f.directives = directives(f)
+			back, jar := f.start(t, "/")
+			w := f.finish(back, withNonce, jar)
+			assert.False(t, sessionSet(w))
+			assert.Equal(t, "3", setCookies(w)[handshakeCountCookie].Value)
+		})
+	}
 	t.Run("a renewal with no session sets nothing", func(t *testing.T) {
 		f := newHandshakeFixture(t)
 		f.directives = []string{"__client_uat=0; Path=/"}
@@ -476,4 +501,18 @@ func TestHandshakeSigningKeysExpireAndFailedRefreshesDoNotRenewThem(t *testing.T
 	_, err = f.c.signingKey(ctx, "ins_key")
 	require.NoError(t, err)
 	require.Equal(t, 3, f.jwksCalls)
+
+	// Review of Exh-8409, round three: a refresh that fails while the set is
+	// fresh is retried as soon as one that fails after it expired. (The set
+	// is six minutes old, so an unknown id may refetch.)
+	f.c.keysFetched = f.c.keysFetched.Add(-6 * time.Minute)
+	f.c.keysAttempted = f.c.keysFetched
+	f.jwksDown = true
+	_, err = f.c.signingKey(ctx, "rotated_in")
+	require.Error(t, err)
+	require.Equal(t, 4, f.jwksCalls)
+	f.c.keysAttempted = f.c.keysAttempted.Add(-11 * time.Second)
+	_, err = f.c.signingKey(ctx, "rotated_in")
+	require.Error(t, err)
+	require.Equal(t, 5, f.jwksCalls)
 }
