@@ -23,6 +23,9 @@
  *   geolocationApproved - persisted first-use location approval (mutable)
  */
 
+import { apiFetch, apiEventSource } from './api-module.js';
+import { registerEditorSection, editorChanged, saveEditorChanges } from './editor-session.js';
+
 // --- CodeMirror islands ----------------------------------------------------
 // Both source fields get the same editor: the artifact's own body and its
 // gallery widget are both single-file HTML documents, and there is no reason
@@ -257,12 +260,49 @@ renderSecurityPanel();
 
 // Keep the approval gate across retries when a later widget save fails.
 let pendingSourceFootprint = [];
+let savedArtifact;
+
+function artifactDraft() {
+  return {
+    title: document.getElementById('title').value,
+    body: document.getElementById('body').value,
+    allowlist: [...allowlist], unapproved: [...unapproved], blocked: [...blocked], forgotten: [...forgotten],
+    downloadsApproved, clipboardApproved, linksApproved, cameraApproved, microphoneApproved, geolocationApproved
+  };
+}
+
+function artifactDirty() {
+  const {title, body, ...settings} = artifactDraft();
+  const {title: savedTitle, body: savedBody, ...savedSettings} = savedArtifact;
+  // Sources can be many megabytes. Compare their strings directly rather
+  // than serializing another copy on every input event.
+  return pendingSourceFootprint.length > 0 || forgotten.length > 0 || title !== savedTitle || body !== savedBody || JSON.stringify(settings) !== JSON.stringify(savedSettings) || !!widgetPanel?.isDirty();
+}
+
+function discardArtifact() {
+  const draft = savedArtifact;
+  document.getElementById('title').value = draft.title;
+  setSource('body', draft.body);
+  allowlist = [...draft.allowlist]; unapproved = [...draft.unapproved]; blocked = [...draft.blocked]; forgotten = [...draft.forgotten];
+  downloadsApproved = draft.downloadsApproved; clipboardApproved = draft.clipboardApproved;
+  linksApproved = draft.linksApproved; cameraApproved = draft.cameraApproved;
+  microphoneApproved = draft.microphoneApproved; geolocationApproved = draft.geolocationApproved;
+  for (const [id, value] of [['dl-select', downloadsApproved], ['clip-select', clipboardApproved], ['link-select', linksApproved], ['cam-select', cameraApproved], ['mic-select', microphoneApproved], ['geo-select', geolocationApproved]]) {
+    document.getElementById(id).value = String(value);
+  }
+  linksApprovedDirty = cameraApprovedDirty = microphoneApprovedDirty = geolocationApprovedDirty = false;
+  pendingSourceFootprint = [];
+  document.getElementById('scan-result').style.display = 'none';
+  widgetPanel?.discard();
+  renderSecurityPanel();
+}
 
 async function save() {
+  const submitted = artifactDraft();
   const title = document.getElementById('title').value.trim();
   const body  = document.getElementById('body').value;
   const status = document.getElementById('status');
-  if (!body.trim()) { status.textContent = 'Body cannot be empty.'; return; }
+  if (!body.trim()) { status.textContent = 'Body cannot be empty.'; return false; }
   status.textContent = 'Saving…';
   document.getElementById('scan-result').style.display = 'none';
   const payload = {
@@ -290,19 +330,29 @@ async function save() {
     status.textContent = resp.status === 409
       ? '✗ Source changed elsewhere. Your edits are still here. Copy them before reloading, then compare and retry.'
       : '✗ Error: ' + (data.error || resp.statusText);
-    return;
+    return false;
   }
   document.getElementById('body').dataset.revision = data.artifact?.source_revision;
+  savedArtifact = {...submitted, title: payload.title};
+  if (document.getElementById('title').value === submitted.title) document.getElementById('title').value = payload.title;
+  if (typeof TITLE !== 'undefined') TITLE = payload.title;
+  document.title = 'Edit: ' + payload.title + ' — Exhibit';
+  if (linksApproved === submitted.linksApproved) linksApprovedDirty = false;
+  if (cameraApproved === submitted.cameraApproved) cameraApprovedDirty = false;
+  if (microphoneApproved === submitted.microphoneApproved) microphoneApprovedDirty = false;
+  if (geolocationApproved === submitted.geolocationApproved) geolocationApprovedDirty = false;
+  document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'));
   if (data.footprint_changed) pendingSourceFootprint = data.network_footprint || [];
   // Blocks the user chose to forget, applied after the PATCH so a failed save
   // leaves every decision exactly as it was. A forget that fails is reported
   // rather than swallowed: the row is already gone from the panel, so silence
   // would show an origin as undecided that the next render still suppresses.
-  if (forgotten.length > 0 && !(await forgetBlockedOrigins(status))) return;
+  if (forgotten.length > 0 && !(await forgetBlockedOrigins(status))) return false;
+  savedArtifact.forgotten = [];
   if (widgetPanel && !(await widgetPanel.save())) {
     status.textContent = 'Artifact saved, but the widget was not saved. ' +
       document.getElementById('widget-status').textContent;
-    return;
+    return false;
   }
   status.textContent = '✓ Saved';
   // If the edited body changed the network footprint, the server re-ran the
@@ -311,9 +361,12 @@ async function save() {
   // never seeded from the scan; only the origins the user selects are written.
   if (pendingSourceFootprint.length > 0) {
     showApproval(pendingSourceFootprint);
-    return;
+    status.textContent = 'Saved. Review network access below before leaving.';
+    editorChanged();
+    return false;
   }
-  setTimeout(() => { window.location.href = '/artifacts/' + ID; }, 500);
+  finishEdit();
+  return true;
 }
 
 // Deletes each forgotten block decision through the per-origin route. Returns
@@ -369,17 +422,23 @@ async function approveOrigins() {
   // overwrite would drop origins the security panel approved that the new
   // body's footprint doesn't happen to reference.
   const merged = Array.from(new Set([...allowlist, ...selected]));
+  const previousAllowlist = JSON.stringify(allowlist);
   const r = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
     body: JSON.stringify({network_allowlist: merged})
   });
   if (!r.ok) { status.textContent = '✗ Failed to update allowlist'; return; }
+  if (JSON.stringify(allowlist) === previousAllowlist) allowlist = merged;
+  savedArtifact.allowlist = [...merged];
+  renderSecurityPanel();
   finishEdit();
 }
 
 function finishEdit() {
-  document.getElementById('status').textContent = '✓ Saved — reloading…';
-  setTimeout(() => { window.location.href = '/artifacts/' + ID; }, 400);
+  pendingSourceFootprint = [];
+  document.getElementById('scan-result').style.display = 'none';
+  document.getElementById('status').textContent = '✓ Saved';
+  editorChanged();
 }
 
 function esc(s) {
@@ -399,6 +458,7 @@ async function deleteArtifact() {
       status.textContent = '✗ Error: ' + (txt.trim() || resp.statusText);
       return;
     }
+    document.body.dispatchEvent(new CustomEvent('exhibit:editor-exit'));
     window.location.href = '/';
   } catch (e) {
     status.textContent = '✗ Error: ' + e.message;
@@ -419,6 +479,7 @@ const widgetPanel = (function() {
   const generateBtn = document.getElementById('widget-generate');
   if (!src) return;
   let hasWidget = !!src.value.trim();
+  let savedWidget = src.value;
 
   function refreshPreview() {
     document.body.dispatchEvent(new CustomEvent('exhibit:widget-saved'));
@@ -435,7 +496,8 @@ const widgetPanel = (function() {
   }
 
   async function saveWidget() {
-    const body = src.value.trim();
+    const submitted = src.value;
+    const body = submitted.trim();
     if (!body) {
       if (!hasWidget) return true;
       status.textContent = '✗ Widget source cannot be empty. Use Remove to restore the default tile.';
@@ -455,6 +517,7 @@ const widgetPanel = (function() {
       }
       const data = await r.json();
       src.dataset.revision = data.widget_revision;
+      savedWidget = submitted;
       // A widget shares the artifact's allowlist, so an origin missing from it
       // is already blocked at render — a fact to report, not a pending
       // approval. The allowlist panel above is where it would be granted.
@@ -463,6 +526,7 @@ const widgetPanel = (function() {
         : '✓ Saved';
       setHasWidget(true);
       refreshPreview();
+      editorChanged();
       return true;
     } catch (e) {
       status.textContent = '✗ ' + e.message;
@@ -486,9 +550,11 @@ const widgetPanel = (function() {
       }
       src.dataset.revision = r.headers.get('X-Widget-Revision');
       setSource('widget-src', '');
+      savedWidget = '';
       status.textContent = '✓ Removed';
       setHasWidget(false);
       refreshPreview();
+      editorChanged();
     } catch (e) {
       status.textContent = '✗ ' + e.message;
     }
@@ -557,6 +623,8 @@ const widgetPanel = (function() {
                 if (src.value === generationBuffer) {
                   setSource('widget-src', snapshot.body || '');
                   src.dataset.revision = snapshot.widget_revision;
+                  savedWidget = snapshot.body || '';
+                  editorChanged();
                 }
               }
             } catch (err) { /* the tile still rendered; the source can be re-read */ }
@@ -591,5 +659,31 @@ const widgetPanel = (function() {
       }
     });
   }
-  return { save: saveWidget };
+  return {
+    save: saveWidget,
+    isDirty: () => src.value !== savedWidget,
+    discard: () => setSource('widget-src', savedWidget)
+  };
 })();
+
+savedArtifact = artifactDraft();
+registerEditorSection('artifact', {isDirty: artifactDirty, save, discard: discardArtifact});
+// Legacy entry links can use the same-origin referrer on their first request.
+// Record the server's validated answer in the URL before a reload or bookmark.
+if (document.body.dataset.editorReturnUrl && window.history?.replaceState) {
+  const address = new URL(location.href);
+  address.searchParams.set('return_to', document.body.dataset.editorReturnUrl);
+  window.history.replaceState(window.history.state, '', address);
+}
+document.querySelectorAll('[data-save-editor]').forEach(button => button.addEventListener('click', async () => {
+  const buttons = document.querySelectorAll('[data-save-editor]');
+  buttons.forEach(control => { control.disabled = true; });
+  try { await saveEditorChanges(); }
+  finally { buttons.forEach(control => { control.disabled = false; }); }
+}));
+document.querySelector('[data-delete-artifact]')?.addEventListener('click', deleteArtifact);
+document.getElementById('title').addEventListener('input', () => {
+  document.getElementById('edit-title').textContent = document.getElementById('title').value || 'Untitled';
+});
+// Existing approval controls are rendered by the legacy footprint panel.
+Object.assign(window, {approveOrigins, finishEdit});

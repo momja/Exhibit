@@ -26,15 +26,15 @@ const BLOCKED = "https://tracker.example.com";
 // Loads edit.js with the bootstrap globals its page template renders, plus the
 // one delegated container the blocked-origins section needs. Rows are looked up
 // through `closest`, which is what the real handler calls on the click target.
-function loadEdit({ blocked = [BLOCKED], allowlist = [], responses = [] } = {}) {
+async function loadEdit({ blocked = [BLOCKED], allowlist = [], responses = [] } = {}) {
   const api = recordingApi(responses);
-  const page = loadPageScript(EDIT_JS, {
+  const page = loadPageScript([], {
     TOKEN: "", READ_ONLY: false, ID,
     allowlist, unapproved: [], blocked,
     downloadsApproved: false, clipboardApproved: false, linksApproved: false,
     cameraApproved: false, microphoneApproved: false, geolocationApproved: false,
     apiFetch: api.apiFetch,
-    alert: () => {}, confirm: () => true
+    alert: () => {}, confirm: () => true, CustomEvent: class { constructor(type) { this.type = type; } }
   }, {
     // save() refuses an empty body before it reaches anything else, so the
     // fields it reads have to hold what the page would have rendered.
@@ -42,6 +42,9 @@ function loadEdit({ blocked = [BLOCKED], allowlist = [], responses = [] } = {}) 
     "body": { value: "<html><body>hi</body></html>" },
     "scan-result": { style: {} }
   });
+
+  const module = await page.loadModule(EDIT_JS, ['save']);
+  Object.assign(page.context, module);
 
   // Stands in for one server-rendered .allowlist-row: the button the user
   // clicks, and the row element it resolves to.
@@ -63,7 +66,7 @@ const originCalls = (api) => api.calls.filter((c) => c.path.includes("/origins")
 const saveButton = (page) => page.context.save;
 
 test("Forget deletes the decision through the per-origin route", async () => {
-  const page = loadEdit();
+  const page = await loadEdit();
   page.clickRow("forget", BLOCKED);
   await saveButton(page)();
 
@@ -75,7 +78,7 @@ test("Forget deletes the decision through the per-origin route", async () => {
 });
 
 test("the forget lands after the PATCH, so a failed save changes nothing", async () => {
-  const page = loadEdit({
+  const page = await loadEdit({
     responses: [{ ok: false, status: 400, json: async () => ({ error: "nope" }) }]
   });
   page.clickRow("forget", BLOCKED);
@@ -86,7 +89,7 @@ test("the forget lands after the PATCH, so a failed save changes nothing", async
 });
 
 test("a failed forget is reported rather than passed off as a clean save", async () => {
-  const page = loadEdit({
+  const page = await loadEdit({
     responses: [
       { ok: true, status: 200, json: async () => ({}) },              // the PATCH
       { ok: false, status: 500, json: async () => ({}) }               // the DELETE
@@ -103,7 +106,7 @@ test("an origin forgotten and then re-allowed keeps the allow", async () => {
   // Forget moves it out of `blocked`; Allow puts it into the allowlist, which
   // the PATCH writes as an allow decision. Deleting it afterwards would undo
   // the newer of the two answers.
-  const page = loadEdit();
+  const page = await loadEdit();
   page.clickRow("forget", BLOCKED);
   page.context.allowlist.push(BLOCKED);
   await saveButton(page)();
@@ -115,12 +118,12 @@ test("an origin forgotten and then re-allowed keeps the allow", async () => {
 // another tab, so an untouched select must not ship it: a Save that wrote it
 // back would revoke a newer approval nobody asked to revoke.
 test("the location select ships only when it was touched", async () => {
-  const untouched = loadEdit({ blocked: [] });
+  const untouched = await loadEdit({ blocked: [] });
   await saveButton(untouched)();
   const [first] = untouched.api.calls.filter((c) => c.method === "PATCH");
   assert.equal("geolocation_approved" in JSON.parse(first.body), false);
 
-  const touched = loadEdit({ blocked: [] });
+  const touched = await loadEdit({ blocked: [] });
   await touched.byId("geo-select").dispatchEvent({ type: "change", target: { value: "true" } });
   await saveButton(touched)();
   const [second] = touched.api.calls.filter((c) => c.method === "PATCH");

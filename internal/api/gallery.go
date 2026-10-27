@@ -285,7 +285,7 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	canGenerate, generateHint := ro.widgetGenerateAvailability(r)
-	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint, versions)
+	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint, versions, editorReturn(r, a))
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
@@ -1029,6 +1029,7 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 }
 
 type editPageData struct {
+	Return     editNavigation
 	AssetPanel assetPanelView
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
@@ -1120,7 +1121,10 @@ func newVersionViews(versions []store.Version) []versionView {
 	return out
 }
 
-func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version) (string, error) {
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation) (string, error) {
+	if navigation.URL == "" {
+		navigation = editNavigation{URL: "/", Label: "My library"}
+	}
 	allowlist, blocked := []string{}, []string{}
 	for _, d := range decisions {
 		switch d.Decision {
@@ -1134,6 +1138,7 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 	// a blocked origin is a decision already made and belongs in Blocked.
 	unapproved := diffOrigins(networkFootprint(src, urls.origin), allowlist, blocked)
 	return renderPage("edit", editPageData{
+		Return:              navigation,
 		Favicon:             template.URL(exhibitLogoDataURI),
 		ID:                  a.ID,
 		Title:               a.Title,

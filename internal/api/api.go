@@ -463,6 +463,7 @@ func (ro *Router) setupRoutes() {
 		// decides whether to return to it: swapped into the chat's preview pane
 		// from the History card, and into the edit page's Versions panel.
 		r.Get("/partials/version-viewer", ro.versionViewerPartial)
+		r.Get("/partials/edit-versions", ro.editVersionsPartial)
 		r.Get("/partials/card-widget", ro.cardWidgetPartial)
 		// The edit page's Tags panel, re-rendered after each tag change.
 		r.Get("/partials/tag-panel", ro.tagPanelPartial)

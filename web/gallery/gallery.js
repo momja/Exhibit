@@ -2,10 +2,12 @@
 // in their templates; this module owns only typing, shortcuts and request races.
 import { initializeGalleryWidgets } from './gallery-widgets.js';
 import { initializeDuplication } from './duplicate.js';
+import { initializeGalleryReturn } from './gallery-return.js';
 
 export function initializeGallery(root) {
   initializeGalleryWidgets(root);
   initializeDuplication(root);
+  initializeGalleryReturn(root);
   const form = root.querySelector('[data-gallery-search]');
   const input = root.querySelector('[data-gallery-query]');
   const clear = root.querySelector('[data-gallery-clear]');

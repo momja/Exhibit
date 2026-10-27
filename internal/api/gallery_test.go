@@ -258,7 +258,7 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.Contains(t, page, `class="action-menu-container card-actions" data-controller="action-menu"`)
 	assert.Contains(t, page, `aria-label="Actions for Openless" title="Actions" aria-haspopup="menu" aria-expanded="false" aria-controls="card-actions-`+id+`"`)
 	assert.Contains(t, page, `id="card-actions-`+id+`" role="menu" aria-labelledby="card-actions-`+id+`-trigger"`)
-	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit" role="menuitem"`)
+	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit?return_to=%2F" role="menuitem"`)
 	assert.Contains(t, page, `<script type="module" src="/assets/gallery/controllers.js"></script>`)
 	assert.NotContains(t, page, `class="card-edit"`)
 
@@ -513,7 +513,7 @@ func TestEditPageShowsBlockedOriginsDistinctlyFromUndecided(t *testing.T) {
 	decisions := []store.OriginDecision{
 		{Origin: "https://blocked.example.com", Decision: store.DecisionBlock, Source: "runtime"},
 	}
-	page, err := renderEditPage(a, decisions, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, decisions, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let blocked = ["https://blocked.example.com"];`,
@@ -538,7 +538,7 @@ func TestEditPageCanForgetABlockDecision(t *testing.T) {
 	decisions := []store.OriginDecision{
 		{Origin: "https://tracker.example.com", Decision: store.DecisionBlock, Source: "runtime"},
 	}
-	page, err := renderEditPage(a, decisions, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, decisions, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 	assert.Contains(t, page, `data-action="forget"`)
 	assert.Contains(t, page, `data-action="allow"`,
@@ -561,7 +561,7 @@ func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
 	payload := `https://x"><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Edit XSS", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderEditPage(a, allowDecisions(payload), nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, allowDecisions(payload), nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `<code title="https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
@@ -579,7 +579,7 @@ func TestEditPageNeverOffersTheRenderOrigin(t *testing.T) {
 		CreatedAt: time.Now()}
 	src := `<img src="https://render.test/a/abc123/assets/0f.png">` +
 		`<script src="https://cdn.example.com/lib.js"></script>`
-	page, err := renderEditPage(a, nil, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, nil, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let unapproved = ["https://cdn.example.com"];`)
@@ -592,7 +592,7 @@ func TestEditPageSurfacesUnapprovedOriginsWithoutSeedingAllowlist(t *testing.T) 
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "No auto-seed", Tier: store.Tier1,
 		CreatedAt: time.Now()}
 	src := `<script src="https://cdn.example.com/lib.js"></script>`
-	page, err := renderEditPage(a, nil, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, nil, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `data-origin="https://cdn.example.com"`)
@@ -612,7 +612,7 @@ func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 	payload := `https://evil</script><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Script Breakout", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderEditPage(a, allowDecisions(payload), nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, allowDecisions(payload), nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let allowlist = ["https://evil\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e"];`,
@@ -627,7 +627,7 @@ func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 func TestEditPageShowsLinksCapabilitySelect(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Links", Tier: store.Tier1,
 		CreatedAt: time.Now(), LinksApproved: true}
-	page, err := renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `<span class="spacer">External links</span>`)
@@ -635,7 +635,7 @@ func TestEditPageShowsLinksCapabilitySelect(t *testing.T) {
 	assert.Contains(t, page, "let linksApproved = true;")
 
 	a.LinksApproved = false
-	page, err = renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err = renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 	assert.Contains(t, page, "let linksApproved = false;")
 
