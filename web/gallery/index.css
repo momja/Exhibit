@@ -181,7 +181,10 @@ main{padding:10px 12px}
 .gallery-filter-heading h2{font-size:18px;font-weight:600}
 .gallery-filter-done{width:100%;margin-top:16px;min-height:44px}
 @media (max-width:767px){
-  .gallery-filter-trigger{display:inline-flex;flex:0 0 auto;min-height:36px;gap:4px;padding:6px}
+  /* The gallery header is nested, so body>header control sizing does not apply. */
+  header .btn{height:var(--header-control-size);min-height:var(--header-control-size);padding-top:0;padding-bottom:0}
+  header .icon-btn{width:var(--header-control-size)}
+  .gallery-filter-trigger{display:inline-flex;flex:0 0 auto;gap:4px;padding:0 6px}
   [data-controller~=filter-sheet]>header{gap:8px}
   .gallery-rail-filters{display:none}
   .gallery-layout-solo>.gallery-rail{display:none}
