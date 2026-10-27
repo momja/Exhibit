@@ -430,6 +430,12 @@ func (ro *Router) sessionGate(next http.Handler) http.Handler {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		// A hosted session whose minute-long token lapsed while the page was
+		// closed renews through Clerk's handshake, with no login page and no
+		// script in between (Exh-8409).
+		if ro.cfg.Clerk != nil && ro.cfg.Clerk.HandshakeRedirect(w, r) {
+			return
+		}
 		dest := "/auth/login"
 		if returnTo := safeNext(r.URL.RequestURI()); returnTo != "" {
 			dest += "?next=" + url.QueryEscape(returnTo)

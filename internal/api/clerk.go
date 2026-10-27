@@ -11,13 +11,17 @@ import (
 type clerkView struct {
 	PublishableKey string
 	FrontendAPI    string
+	// How long the request's session token has left, in milliseconds, so the
+	// page knows how long it may put off starting ClerkJS (Exh-g0fx). Zero
+	// when there is none, which starts it at once.
+	SessionExpiresInMS int64
 }
 
-func (ro *Router) clerkView() *clerkView {
+func (ro *Router) clerkView(r *http.Request) *clerkView {
 	if ro.cfg.Clerk == nil {
 		return nil
 	}
-	return &clerkView{ro.cfg.ClerkPublishableKey, ro.cfg.ClerkFrontendAPI}
+	return &clerkView{ro.cfg.ClerkPublishableKey, ro.cfg.ClerkFrontendAPI, ro.cfg.Clerk.SessionExpiresIn(r).Milliseconds()}
 }
 
 func (ro *Router) clerkSessionUser(r *http.Request) (int64, bool) {
@@ -60,7 +64,7 @@ func (ro *Router) renderClerkLogin(w http.ResponseWriter, r *http.Request, mode 
 		Clerk   *clerkView
 		Mode    string
 		Next    string
-	}{template.URL(exhibitLogoDataURI), template.HTML(exhibitLogoSVG), ro.clerkView(), mode, next})
+	}{template.URL(exhibitLogoDataURI), template.HTML(exhibitLogoSVG), ro.clerkView(r), mode, next})
 	if err != nil {
 		serverError(w, r, "Clerk login render", err)
 		return

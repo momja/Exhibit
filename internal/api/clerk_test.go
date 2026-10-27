@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,8 +17,21 @@ type hostedLoginStub struct{}
 
 func (hostedLoginStub) Middleware(next http.Handler) http.Handler { return next }
 func (hostedLoginStub) Subject(r *http.Request) string            { return r.Header.Get("Test-Clerk-Subject") }
+func (hostedLoginStub) SessionExpiresIn(r *http.Request) time.Duration {
+	if r.Header.Get("Test-Clerk-Subject") == "" {
+		return 0
+	}
+	return 42 * time.Second
+}
 func (hostedLoginStub) Identity(r *http.Request) (auth.HostedIdentity, error) {
 	return auth.HostedIdentity{Subject: r.Header.Get("Test-Clerk-Subject"), Email: "person@example.com", SessionCreatedAt: time.Now().UnixMilli()}, nil
+}
+func (hostedLoginStub) HandshakeRedirect(w http.ResponseWriter, r *http.Request) bool {
+	if r.Header.Get("Test-Clerk-Handshake") == "" {
+		return false
+	}
+	http.Redirect(w, r, "https://example.clerk.accounts.dev/v1/client/handshake", http.StatusTemporaryRedirect)
+	return true
 }
 func (hostedLoginStub) ResolveEmail(context.Context, string) (string, error)  { return "", nil }
 func (hostedLoginStub) RevokeSessions(context.Context, string) (int64, error) { return 0, nil }
@@ -52,6 +66,24 @@ func TestClerkHostedMode(t *testing.T) {
 	require.Equal(t, 404, request("GET", "/auth/sso", "").Code)
 	require.Equal(t, 302, request("GET", "/", "").Code)
 	require.Equal(t, 401, request("GET", "/api/artifacts", "").Code)
+	// Exh-8409: a lapsed hosted session renews through the handshake when the
+	// provider can, before falling back to the login page; fragments and the
+	// API never take a cross-site redirect.
+	for _, path := range []string{"/", "/artifacts/a1", "/partials/gallery-grid", "/api/artifacts"} {
+		r := httptest.NewRequest("GET", "https://app.test"+path, nil)
+		r.Header.Set("Test-Clerk-Handshake", "1")
+		if path == "/partials/gallery-grid" {
+			r.Header.Set("HX-Request", "true")
+		}
+		w := httptest.NewRecorder()
+		ro.ServeHTTP(w, r)
+		if strings.HasPrefix(path, "/partials/") || strings.HasPrefix(path, "/api/") {
+			require.Equal(t, 401, w.Code, path)
+			continue
+		}
+		require.Equal(t, http.StatusTemporaryRedirect, w.Code, path)
+		require.True(t, strings.HasPrefix(w.Header().Get("Location"), "https://example.clerk.accounts.dev/v1/client/handshake"), path)
+	}
 	first := request("GET", "/auth/clerk/ready", "clerk:user_one")
 	require.Equal(t, 204, first.Code)
 	second := request("GET", "/auth/clerk/ready", "clerk:user_two")
@@ -61,7 +93,12 @@ func TestClerkHostedMode(t *testing.T) {
 	two, err := st.GetUserByExternalID(context.Background(), "clerk:user_two")
 	require.NoError(t, err)
 	require.NotEqual(t, one.ID, two.ID)
-	require.Equal(t, 200, request("GET", "/", "clerk:user_one").Code)
+	page := request("GET", "/", "clerk:user_one")
+	require.Equal(t, 200, page.Code)
+	// Exh-g0fx: the page learns how long its token has left from the server,
+	// whose clock the token is checked against.
+	require.Contains(t, page.Body.String(), `<meta name="clerk-session-expires-in" content="42000">`)
+	require.Contains(t, request("GET", "/auth/login", "").Body.String(), `<meta name="clerk-session-expires-in" content="0">`)
 	// Both identities have the same email, but distinct libraries and permissions.
 	require.NoError(t, st.SetUserDisabled(context.Background(), two.ID, true))
 	require.Equal(t, 403, request("GET", "/auth/clerk/ready", "clerk:user_two").Code)

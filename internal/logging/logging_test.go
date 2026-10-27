@@ -292,3 +292,20 @@ func TestStatusWriterPreservesOptionalInterfaces(t *testing.T) {
 	assert.NoError(t, p.Push("/x", nil))
 	assert.True(t, mock.pushed)
 }
+
+// Review of Exh-8409: a browser returning from Clerk's handshake carries
+// fresh session credentials in its URL, which the debug log must not keep.
+func TestRequestLogRedactsHandshakeCredentials(t *testing.T) {
+	got := redactQuery("q=charts&__clerk_handshake=eyJ.secret.sig&__clerk_handshake_nonce=n&__exhibit_hs=s&__clerk_db_jwt=dvb")
+	for _, secret := range []string{"eyJ.secret.sig", "=n&", "=s&", "dvb"} {
+		if strings.Contains(got+"&", secret) {
+			t.Fatalf("query %q still contains %q", got, secret)
+		}
+	}
+	if !strings.Contains(got, "q=charts") {
+		t.Fatalf("query %q lost an ordinary parameter", got)
+	}
+	if plain := "q=charts&page=2"; redactQuery(plain) != plain {
+		t.Fatalf("a query with nothing to redact was rewritten: %q", redactQuery(plain))
+	}
+}

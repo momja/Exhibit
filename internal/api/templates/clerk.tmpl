@@ -1,4 +1,5 @@
 {{define "clerkScripts"}}{{if .}}
+<meta name="clerk-session-expires-in" content="{{.SessionExpiresInMS}}">
 <meta name="clerk-publishable-key" content="{{.PublishableKey}}">
 <meta name="clerk-frontend-api" content="{{.FrontendAPI}}">
 <script type="module" src="{{asset "gallery/clerk.js"}}"></script>
