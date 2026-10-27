@@ -31,6 +31,9 @@ import (
 type HostedLogin interface {
 	Middleware(http.Handler) http.Handler
 	Subject(*http.Request) string
+	// HandshakeRedirect renews a lapsed session through the provider rather
+	// than the login page when it can, reporting whether it redirected.
+	HandshakeRedirect(http.ResponseWriter, *http.Request) bool
 	Identity(*http.Request) (auth.HostedIdentity, error)
 	ResolveEmail(context.Context, string) (string, error)
 	RevokeSessions(context.Context, string) (int64, error)

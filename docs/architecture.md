@@ -727,7 +727,23 @@ counted down on the page's monotonic clock, so a device clock that is off
 cannot stretch the wait. The login page, where Clerk is the page, loads it at once. `internal/api/clerk.go`
 resolves the verified subject to the existing user/owner model. It does not mint
 an Exhibit session or match users by email. Invalid cookies follow the ordinary
-route gates; the login page can refresh an expired token through ClerkJS.
+route gates, with one step before the login page (Exh-8409): a page navigation
+whose token lapsed while `__client_uat` still says the browser is signed in goes
+through Clerk's handshake (`internal/auth/clerk_handshake.go`, ported from
+`@clerk/backend`, which the Go SDK lacks). The Frontend API sends the browser
+back with a nonce, redeemed over the Backend API, or a JWT verified against the
+instance JWKS, and the server sets the cookies they carry. No script runs. The
+return is bound to the flow that started it, like an OAuth state: a random
+value in a `__Host-` cookie (on HTTPS) and in the return URL must match, and is
+spent either way. That proves the return is this browser's handshake, not that
+what it carries is this browser's session, so the renewed `__session` must also
+belong to the same Clerk user as the lapsed one, whose signature still
+verifies; a browser with no lapsed token gets the login page. Together they
+keep a nonce smuggled in on a link or a planted cookie from signing a browser
+in as someone else. The return URL is rebuilt on `APP_ORIGIN`, a separate
+cookie caps retries at three, and the JWKS is trusted for an hour after the
+last successful fetch, with refetches rate-limited and coalesced. Anything the handshake cannot renew goes to the login page,
+which refreshes the token through ClerkJS.
 
 Self-hosted password and OIDC paths retain the session architecture below. In
 hosted mode their routes and cookies are inactive, default-admin seeding is
