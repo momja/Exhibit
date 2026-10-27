@@ -99,7 +99,7 @@ func TestGalleryEditPageMountsEditor(t *testing.T) {
 	// that mounts it on the body textarea, which stays present as the form's
 	// source of truth.
 	assert.Contains(t, page, `<script src="/assets/editor.js"></script>`)
-	assert.Contains(t, page, `<script src="/assets/gallery/edit.js"></script>`)
+	assert.Contains(t, page, `<script type="module" src="/assets/gallery/edit.js"></script>`)
 	editJS, err := embeddedAssets.ReadFile("assets/gallery/edit.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(editJS), "ArtifactEditor.mount")

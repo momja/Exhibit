@@ -110,6 +110,8 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/partials/agent-transcript"},
 	{route: "/partials/card-widget"},
 	{route: "/partials/tag-panel"},
+	{route: "/partials/edit-versions"},
+	{route: "/partials/edit-origins"},
 	{route: "/partials/asset-panel"},
 	// The capability badge + popover (av-mf1x), re-rendered after a runtime
 	// origin approval. A read for the same reason: the posture it reports is
