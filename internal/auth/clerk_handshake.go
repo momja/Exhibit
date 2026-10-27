@@ -62,6 +62,13 @@ const handshakeTokenParam = "__clerk_handshake"
 // development setup) has no such prefix.
 const handshakeStateParam = "__exhibit_hs"
 
+// The state proves the return belongs to this browser's handshake, not that
+// what it carries is this browser's session: a nonce somebody else obtained
+// can ride along on the link that starts one, or arrive in a cookie planted
+// on the parent domain. So the renewed session must also be the same Clerk
+// user as the lapsed one. A lapsed token's signature still verifies, and a
+// browser with none to show gets the login page.
+//
 // The count of handshakes started in a row is a cookie of its own, outliving
 // each state, so a browser whose renewed cookies still do not verify reaches
 // the login page after three tries rather than going round forever.
@@ -94,6 +101,9 @@ func (c *Clerk) HandshakeRedirect(w http.ResponseWriter, r *http.Request) bool {
 	if count >= maxHandshakeRedirects {
 		return false
 	}
+	if _, err := c.lapsedSessionUser(r); err != nil {
+		return false
+	}
 	var devBrowser string
 	if c.development {
 		// A development instance knows its browser by this token rather than
@@ -111,6 +121,11 @@ func (c *Clerk) HandshakeRedirect(w http.ResponseWriter, r *http.Request) bool {
 	stateValue := base64.RawURLEncoding.EncodeToString(state)
 	back := *r.URL
 	bq := back.Query()
+	// Whatever the handshake would return must come from Clerk, never from
+	// the link that started it.
+	for _, p := range handshakeURLParams {
+		bq.Del(p)
+	}
 	bq.Set(handshakeStateParam, stateValue)
 	back.RawQuery = bq.Encode()
 
@@ -151,6 +166,9 @@ func (c *Clerk) completeHandshake(w http.ResponseWriter, r *http.Request) bool {
 	}
 	if err == nil {
 		err = checkDirectives(directives)
+	}
+	if err == nil {
+		err = c.checkSameUser(r, directives)
 	}
 	if err != nil {
 		// The page continues without a session, and its gate sends it to the
@@ -194,6 +212,65 @@ func (c *Clerk) handshakeDirectives(r *http.Request) ([]string, error) {
 		return c.handshakeTokenCookies(r.Context(), token)
 	}
 	return nil, errors.New("the handshake returned neither a nonce nor a token")
+}
+
+// lapsedSessionUser is the Clerk user of the request's session token, which
+// may have expired but must carry the instance's signature.
+func (c *Clerk) lapsedSessionUser(r *http.Request) (string, error) {
+	cookie, err := r.Cookie("__session")
+	if err != nil {
+		return "", err
+	}
+	return c.tokenUser(r.Context(), cookie.Value)
+}
+
+// checkSameUser refuses directives whose session is not the lapsed session's
+// user, so a handshake can renew this browser's session and nothing else.
+func (c *Clerk) checkSameUser(r *http.Request, directives []string) error {
+	before, err := c.lapsedSessionUser(r)
+	if err != nil {
+		return err
+	}
+	for _, d := range directives {
+		cookie, err := http.ParseSetCookie(d)
+		if err != nil || cookie.Name != "__session" {
+			continue
+		}
+		after, err := c.tokenUser(r.Context(), cookie.Value)
+		if err != nil {
+			return err
+		}
+		if after != before {
+			return errors.New("the handshake renewed a different user's session")
+		}
+		return nil
+	}
+	return errors.New("the handshake returned no session")
+}
+
+// tokenUser verifies a session token's signature and issuer, deliberately
+// not its expiry, and returns its subject. Whether the token is current is
+// the middleware's question on the next request.
+func (c *Clerk) tokenUser(ctx context.Context, token string) (string, error) {
+	parsed, err := josejwt.ParseSigned(token)
+	if err != nil {
+		return "", err
+	}
+	if len(parsed.Headers) != 1 || parsed.Headers[0].Algorithm != "RS256" {
+		return "", errors.New("Clerk session token is not RS256")
+	}
+	key, err := c.signingKey(ctx, parsed.Headers[0].KeyID)
+	if err != nil {
+		return "", err
+	}
+	var claims josejwt.Claims
+	if err := parsed.Claims(key, &claims); err != nil {
+		return "", err
+	}
+	if claims.Issuer != c.FrontendAPI || claims.Subject == "" {
+		return "", errors.New("Clerk session token is not this instance's")
+	}
+	return claims.Subject, nil
 }
 
 func (c *Clerk) stateCookieName() string {
@@ -274,29 +351,43 @@ func (c *Clerk) handshakeTokenCookies(ctx context.Context, token string) ([]stri
 	return payload.Handshake, nil
 }
 
-// signingKey is the instance's public key with this id. The set is kept for
-// an hour, as @clerk/backend keeps it, so a rotated-out key stops being
-// trusted. An id it does not hold refetches at most every five minutes, and
-// one fetch at a time, so tokens naming made-up ids cannot turn into a stream
-// of Backend API calls.
+// signingKey is the instance's public key with this id. The set is trusted
+// for an hour after it was last fetched successfully, as @clerk/backend keeps
+// it, so a rotated-out key stops being trusted; a failed refresh never
+// extends that. Fetches are one at a time, an id the fresh set lacks
+// refetches at most every five minutes, and a failed fetch is retried after
+// ten seconds, so tokens naming made-up ids cannot become a stream of Backend
+// API calls.
 func (c *Clerk) signingKey(ctx context.Context, kid string) (any, error) {
-	c.keysMu.Lock()
-	defer c.keysMu.Unlock()
-	age := time.Since(c.keysFetched)
-	if key, ok := c.keys[kid]; ok && age < time.Hour {
+	if key, ok := c.cachedKey(kid); ok {
 		return key, nil
 	}
-	if age < 5*time.Minute {
-		return nil, errors.New("Clerk handshake token names an unknown signing key")
+	c.keysFetchMu.Lock()
+	defer c.keysFetchMu.Unlock()
+	if key, ok := c.cachedKey(kid); ok {
+		return key, nil
+	}
+	c.keysMu.Lock()
+	fresh := time.Since(c.keysFetched) < time.Hour
+	wait := 10 * time.Second
+	if fresh {
+		wait = 5 * time.Minute
+	}
+	tooSoon := time.Since(c.keysAttempted) < wait
+	c.keysMu.Unlock()
+	if tooSoon {
+		return nil, errors.New("Clerk token names an unknown signing key")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	set, err := c.jwks.Get(ctx, &jwks.GetParams{})
-	c.keysFetched = time.Now()
+	c.keysMu.Lock()
+	defer c.keysMu.Unlock()
+	c.keysAttempted = time.Now()
 	if err != nil {
 		return nil, err
 	}
-	c.keys = map[string]any{}
+	c.keys, c.keysFetched = map[string]any{}, c.keysAttempted
 	for _, k := range set.Keys {
 		if k != nil {
 			c.keys[k.KeyID] = k.Key
@@ -305,7 +396,14 @@ func (c *Clerk) signingKey(ctx context.Context, kid string) (any, error) {
 	if key, ok := c.keys[kid]; ok {
 		return key, nil
 	}
-	return nil, errors.New("Clerk handshake token names an unknown signing key")
+	return nil, errors.New("Clerk token names an unknown signing key")
+}
+
+func (c *Clerk) cachedKey(kid string) (any, bool) {
+	c.keysMu.Lock()
+	defer c.keysMu.Unlock()
+	key, ok := c.keys[kid]
+	return key, ok && time.Since(c.keysFetched) < time.Hour
 }
 
 // checkDirectives refuses a directive that is not one header value. Net/http

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	jose "github.com/go-jose/go-jose/v3"
@@ -18,27 +19,79 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// handshakeClerk is a development-instance Clerk whose Backend API is a test
-// server answering the handshake payload with directives, counting calls.
-func handshakeClerk(t *testing.T, directives []string, status int) (*Clerk, *int) {
+// handshakeFixture is a development-instance Clerk whose Backend API is a test
+// server: it serves the instance's signing key and answers the handshake
+// payload with directives, counting both.
+type handshakeFixture struct {
+	c          *Clerk
+	key        *rsa.PrivateKey
+	directives []string
+	status     int
+	jwksDown   bool
+	nonceCalls int
+	jwksCalls  int
+}
+
+func newHandshakeFixture(t *testing.T) *handshakeFixture {
 	t.Helper()
-	calls := 0
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	f := &handshakeFixture{key: key, status: http.StatusOK}
+	jwk := jose.JSONWebKey{Key: &key.PublicKey, KeyID: "ins_key", Algorithm: "RS256", Use: "sig"}
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "Bearer sk_test_example", r.Header.Get("Authorization"))
-		require.Equal(t, "/clients/handshake_payload", r.URL.Path)
-		require.Equal(t, "nonce_example", r.URL.Query().Get("nonce"))
-		calls++
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"directives": directives}))
+		switch r.URL.Path {
+		case "/jwks":
+			f.jwksCalls++
+			if f.jwksDown {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			require.NoError(t, json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwk}}))
+		case "/clients/handshake_payload":
+			require.Equal(t, "nonce_example", r.URL.Query().Get("nonce"))
+			f.nonceCalls++
+			w.WriteHeader(f.status)
+			require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"directives": f.directives}))
+		default:
+			t.Errorf("unexpected Backend API call %s", r.URL.Path)
+		}
 	}))
 	t.Cleanup(backend.Close)
 	config := &clerk.ClientConfig{}
 	config.Key = clerk.String("sk_test_example")
 	config.URL = clerk.String(backend.URL)
-	c, err := newClerk("pk_test_"+base64.RawStdEncoding.EncodeToString([]byte("example.clerk.accounts.dev$")), "https://app.test", config)
+	f.c, err = newClerk("pk_test_"+base64.RawStdEncoding.EncodeToString([]byte("example.clerk.accounts.dev$")), "https://app.test", config)
 	require.NoError(t, err)
-	return c, &calls
+	return f
+}
+
+// token signs claims with key under kid.
+func (f *handshakeFixture) token(t *testing.T, key *rsa.PrivateKey, kid string, headers map[string]string, claims map[string]any) string {
+	t.Helper()
+	opts := (&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", kid)
+	for k, v := range headers {
+		opts = opts.WithHeader(jose.HeaderKey(k), v)
+	}
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: key}, opts)
+	require.NoError(t, err)
+	token, err := josejwt.Signed(signer).Claims(claims).CompactSerialize()
+	require.NoError(t, err)
+	return token
+}
+
+// session is a session token for user, expired when lapsed.
+func (f *handshakeFixture) session(t *testing.T, user string, lapsed bool) string {
+	exp := time.Now().Add(time.Minute)
+	if lapsed {
+		exp = time.Now().Add(-time.Minute)
+	}
+	return f.token(t, f.key, "ins_key", nil, map[string]any{"iss": f.c.FrontendAPI, "sub": user, "sid": "sess_" + user, "azp": "https://app.test", "exp": exp.Unix(), "iat": exp.Add(-time.Minute).Unix()})
+}
+
+func (f *handshakeFixture) renewal(t *testing.T, user string) []string {
+	return []string{"__session=" + f.session(t, user, false) + "; Path=/; SameSite=Lax", "__client_uat=1793000001; Path=/; SameSite=Lax"}
 }
 
 func pageRequest(target string, cookies map[string]string) *http.Request {
@@ -50,36 +103,42 @@ func pageRequest(target string, cookies map[string]string) *http.Request {
 	return r
 }
 
-// startHandshake runs the outbound leg for target and returns the URL Clerk
-// would send the browser back to, plus the cookies the browser then holds.
-func startHandshake(t *testing.T, c *Clerk, target string) (*url.URL, map[string]string) {
+// lapsed is the cookies of a browser whose user_one session token lapsed.
+func (f *handshakeFixture) lapsed(t *testing.T) map[string]string {
+	return map[string]string{"__session": f.session(t, "user_one", true), clientUATCookie: "1793000000", devBrowserCookie: "dvb_example"}
+}
+
+// start runs the outbound leg for target and returns the URL Clerk would send
+// the browser back to, plus the cookies the browser then holds.
+func (f *handshakeFixture) start(t *testing.T, target string) (*url.URL, map[string]string) {
 	t.Helper()
-	r := pageRequest(target, map[string]string{"__session": "expired.jwt.value", clientUATCookie: "1793000000", devBrowserCookie: "dvb_example"})
+	jar := f.lapsed(t)
 	w := httptest.NewRecorder()
 	var redirected bool
-	c.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected = c.HandshakeRedirect(w, r) })).ServeHTTP(w, r)
+	f.c.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected = f.c.HandshakeRedirect(w, r) })).ServeHTTP(w, pageRequest(target, jar))
 	require.True(t, redirected)
 	loc, err := url.Parse(w.Header().Get("Location"))
 	require.NoError(t, err)
 	back, err := url.Parse(loc.Query().Get("redirect_url"))
 	require.NoError(t, err)
-	jar := map[string]string{}
 	for _, cookie := range w.Result().Cookies() {
 		jar[cookie.Name] = cookie.Value
 	}
 	return back, jar
 }
 
-// returnFrom builds the browser's return request: the URL Clerk redirects to
-// with extra query parameters added, carrying the browser's cookies.
-func returnFrom(back *url.URL, extra url.Values, cookies map[string]string) *http.Request {
+// finish sends the browser's return: the URL Clerk redirects to with extra
+// query parameters added, carrying the browser's cookies.
+func (f *handshakeFixture) finish(back *url.URL, extra url.Values, cookies map[string]string) *httptest.ResponseRecorder {
 	u := *back
 	q := u.Query()
 	for k, vs := range extra {
 		q[k] = vs
 	}
 	u.RawQuery = q.Encode()
-	return pageRequest(u.RequestURI(), cookies)
+	w := httptest.NewRecorder()
+	f.c.Middleware(http.NotFoundHandler()).ServeHTTP(w, pageRequest(u.RequestURI(), cookies))
+	return w
 }
 
 func setCookies(w *httptest.ResponseRecorder) map[string]*http.Cookie {
@@ -90,14 +149,20 @@ func setCookies(w *httptest.ResponseRecorder) map[string]*http.Cookie {
 	return out
 }
 
+func sessionSet(w *httptest.ResponseRecorder) bool {
+	_, ok := setCookies(w)["__session"]
+	return ok
+}
+
+var withNonce = url.Values{handshakeNonceParam: {"nonce_example"}}
+
 // Exh-8409: a page request whose token lapsed while the browser stayed signed
 // in to Clerk renews through the handshake rather than the login page.
 func TestHandshakeRedirectSendsLapsedSessionToFrontendAPI(t *testing.T) {
-	c, _ := handshakeClerk(t, nil, http.StatusOK)
-	r := pageRequest("/?q=charts", map[string]string{"__session": "expired.jwt.value", clientUATCookie: "1793000000", devBrowserCookie: "dvb_example"})
+	f := newHandshakeFixture(t)
 	w := httptest.NewRecorder()
 	var redirected bool
-	c.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected = c.HandshakeRedirect(w, r) })).ServeHTTP(w, r)
+	f.c.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected = f.c.HandshakeRedirect(w, r) })).ServeHTTP(w, pageRequest("/?q=charts", f.lapsed(t)))
 
 	require.True(t, redirected)
 	require.Equal(t, http.StatusTemporaryRedirect, w.Code)
@@ -128,42 +193,55 @@ func TestHandshakeRedirectSendsLapsedSessionToFrontendAPI(t *testing.T) {
 	assert.Empty(t, stateCookie.Domain)
 	assert.Equal(t, "1", cookies[handshakeCountCookie].Value)
 
-	_, again := startHandshake(t, c, "/")
+	_, again := f.start(t, "/")
 	assert.NotEqual(t, state, again["__Host-exhibit_clerk_hs"], "every handshake gets its own state")
 }
 
 func TestHandshakeRedirectDeclinesWhatItCannotRenew(t *testing.T) {
-	signedIn := map[string]string{clientUATCookie: "1793000000", devBrowserCookie: "dvb_example"}
-	tests := []struct {
-		name    string
-		request func() *http.Request
-	}{
-		{"signed out of Clerk", func() *http.Request {
-			return pageRequest("/", map[string]string{clientUATCookie: "0", devBrowserCookie: "dvb_example"})
-		}},
-		{"never signed in", func() *http.Request { return pageRequest("/", map[string]string{devBrowserCookie: "dvb_example"}) }},
-		{"not a page load", func() *http.Request {
-			r := pageRequest("/partials/gallery-grid", signedIn)
+	f := newHandshakeFixture(t)
+	with := func(edit func(map[string]string)) map[string]string {
+		jar := f.lapsed(t)
+		edit(jar)
+		return jar
+	}
+	forger, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	tests := map[string]func() *http.Request{
+		"signed out of Clerk": func() *http.Request {
+			return pageRequest("/", with(func(j map[string]string) { j[clientUATCookie] = "0" }))
+		},
+		"never signed in": func() *http.Request {
+			return pageRequest("/", with(func(j map[string]string) { delete(j, clientUATCookie) }))
+		},
+		"no lapsed token to renew": func() *http.Request {
+			return pageRequest("/", with(func(j map[string]string) { delete(j, "__session") }))
+		},
+		"a lapsed token nobody signed": func() *http.Request {
+			return pageRequest("/", with(func(j map[string]string) {
+				j["__session"] = f.token(t, forger, "ins_key", nil, map[string]any{"iss": f.c.FrontendAPI, "sub": "user_one"})
+			}))
+		},
+		"not a page load": func() *http.Request {
+			r := pageRequest("/partials/gallery-grid", f.lapsed(t))
 			r.Header.Set("Sec-Fetch-Dest", "empty")
 			return r
-		}},
-		{"not a GET", func() *http.Request {
-			r := pageRequest("/", signedIn)
+		},
+		"not a GET": func() *http.Request {
+			r := pageRequest("/", f.lapsed(t))
 			r.Method = http.MethodPost
 			return r
-		}},
-		{"development browser unknown", func() *http.Request {
-			return pageRequest("/", map[string]string{clientUATCookie: "1793000000"})
-		}},
-		{"already tried three times", func() *http.Request {
-			return pageRequest("/", map[string]string{clientUATCookie: "1793000000", devBrowserCookie: "dvb_example", handshakeCountCookie: "3"})
-		}},
+		},
+		"development browser unknown": func() *http.Request {
+			return pageRequest("/", with(func(j map[string]string) { delete(j, devBrowserCookie) }))
+		},
+		"already tried three times": func() *http.Request {
+			return pageRequest("/", with(func(j map[string]string) { j[handshakeCountCookie] = "3" }))
+		},
 	}
-	c, _ := handshakeClerk(t, nil, http.StatusOK)
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for name, request := range tests {
+		t.Run(name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			assert.False(t, c.HandshakeRedirect(w, tt.request()))
+			assert.False(t, f.c.HandshakeRedirect(w, request()))
 			assert.Empty(t, w.Header().Get("Location"))
 			assert.Empty(t, w.Result().Cookies())
 		})
@@ -171,27 +249,25 @@ func TestHandshakeRedirectDeclinesWhatItCannotRenew(t *testing.T) {
 }
 
 func TestHandshakeAcceptsHTMLWithoutFetchMetadata(t *testing.T) {
-	c, _ := handshakeClerk(t, nil, http.StatusOK)
-	r := pageRequest("/", map[string]string{clientUATCookie: "1793000000", devBrowserCookie: "dvb_example"})
+	f := newHandshakeFixture(t)
+	r := pageRequest("/", f.lapsed(t))
 	r.Header.Del("Sec-Fetch-Dest")
 	r.Header.Set("Accept", "text/html,application/xhtml+xml")
-	assert.True(t, c.HandshakeRedirect(httptest.NewRecorder(), r))
+	assert.True(t, f.c.HandshakeRedirect(httptest.NewRecorder(), r))
 }
 
 func TestHandshakeReturnSetsCookiesAndCleansURL(t *testing.T) {
-	directives := []string{"__session=fresh.jwt; Path=/; SameSite=Lax", "__client_uat=1793000001; Path=/; SameSite=Lax"}
-	c, calls := handshakeClerk(t, directives, http.StatusOK)
-	back, jar := startHandshake(t, c, "/?q=charts")
-	r := returnFrom(back, url.Values{handshakeNonceParam: {"nonce_example"}, devBrowserCookie: {"dvb_new"}}, jar)
-	w := httptest.NewRecorder()
-	c.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Fatal("the page rendered before its cookies were set") })).ServeHTTP(w, r)
+	f := newHandshakeFixture(t)
+	f.directives = f.renewal(t, "user_one")
+	back, jar := f.start(t, "/?q=charts")
+	w := f.finish(back, url.Values{handshakeNonceParam: {"nonce_example"}, devBrowserCookie: {"dvb_new"}}, jar)
 
-	assert.Equal(t, 1, *calls)
+	assert.Equal(t, 1, f.nonceCalls)
 	require.Equal(t, http.StatusFound, w.Code)
 	assert.Equal(t, "https://app.test/?q=charts", w.Header().Get("Location"))
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	set := w.Header().Values("Set-Cookie")
-	for _, d := range directives {
+	for _, d := range f.directives {
 		assert.Contains(t, set, d)
 	}
 	spent := setCookies(w)["__Host-exhibit_clerk_hs"]
@@ -202,57 +278,98 @@ func TestHandshakeReturnSetsCookiesAndCleansURL(t *testing.T) {
 // Review of Exh-8409: the return is bound to the browser and the flow that
 // started it. A return that cannot show that is refused, whatever it carries.
 func TestHandshakeReturnIsBoundToTheFlowThatStartedIt(t *testing.T) {
-	c, calls := handshakeClerk(t, []string{"__session=attacker.jwt; Path=/"}, http.StatusOK)
-	back, jar := startHandshake(t, c, "/")
+	f := newHandshakeFixture(t)
+	f.directives = f.renewal(t, "user_one")
+	back, jar := f.start(t, "/")
 	forged := *back
 	fq := forged.Query()
 	fq.Set(handshakeStateParam, "guessed")
 	forged.RawQuery = fq.Encode()
 
-	for name, r := range map[string]*http.Request{
+	for name, tc := range map[string]struct {
+		back *url.URL
+		jar  map[string]string
+	}{
 		// The attacker's link, in a browser that never started a handshake.
-		"no handshake started": returnFrom(back, url.Values{handshakeNonceParam: {"nonce_example"}}, nil),
-		// The victim's browser is mid-handshake, but the link is not the
-		// return of that handshake.
-		"another flow's state": returnFrom(&forged, url.Values{handshakeNonceParam: {"nonce_example"}}, jar),
+		"no handshake started": {back, f.lapsed(t)},
+		// The browser is mid-handshake, but the link is not that handshake's
+		// return.
+		"another flow's state": {&forged, jar},
 		// A sibling domain can plant a cookie without the __Host- prefix.
-		"a planted cookie": returnFrom(&forged, url.Values{handshakeNonceParam: {"nonce_example"}}, map[string]string{"exhibit_clerk_hs": "guessed"}),
+		"a planted cookie": {&forged, map[string]string{"exhibit_clerk_hs": "guessed"}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			c.Middleware(http.NotFoundHandler()).ServeHTTP(w, r)
-			assert.Equal(t, 0, *calls)
-			assert.NotContains(t, w.Header().Values("Set-Cookie"), "__session=attacker.jwt; Path=/")
+			w := f.finish(tc.back, withNonce, tc.jar)
+			assert.Equal(t, 0, f.nonceCalls)
+			assert.False(t, sessionSet(w))
 			assert.Equal(t, "3", setCookies(w)[handshakeCountCookie].Value, "the page goes to the login page")
 		})
 	}
 
-	// And a genuine return is completed once: replaying it is refused.
-	r := returnFrom(back, url.Values{handshakeNonceParam: {"nonce_example"}}, jar)
-	w := httptest.NewRecorder()
-	c.Middleware(http.NotFoundHandler()).ServeHTTP(w, r)
-	assert.Equal(t, 1, *calls)
+	// A genuine return is completed once: replaying it is refused.
+	assert.True(t, sessionSet(f.finish(back, withNonce, jar)))
+	assert.Equal(t, 1, f.nonceCalls)
 	jar["__Host-exhibit_clerk_hs"] = "" // what the browser holds after the spend
-	w = httptest.NewRecorder()
-	c.Middleware(http.NotFoundHandler()).ServeHTTP(w, returnFrom(back, url.Values{handshakeNonceParam: {"nonce_example"}}, jar))
-	assert.Equal(t, 1, *calls)
+	assert.False(t, sessionSet(f.finish(back, withNonce, jar)))
+	assert.Equal(t, 1, f.nonceCalls)
+}
+
+// Review of Exh-8409, round two: the state proves the return is this
+// browser's handshake, not that what it carries is this browser's session.
+// Whatever an attacker smuggles in, the renewal must be the lapsed session's
+// own user.
+func TestHandshakeOnlyRenewsTheLapsedSessionsUser(t *testing.T) {
+	t.Run("a result on the link that starts the handshake is dropped", func(t *testing.T) {
+		f := newHandshakeFixture(t)
+		back, _ := f.start(t, "/?__clerk_handshake_nonce=attacker_nonce&__clerk_handshake=attacker.jwt&q=1")
+		assert.Empty(t, back.Query().Get(handshakeNonceParam))
+		assert.Empty(t, back.Query().Get(handshakeTokenParam))
+		assert.Equal(t, "1", back.Query().Get("q"))
+	})
+	for name, deliver := range map[string]func(jar map[string]string) url.Values{
+		"in the URL": func(map[string]string) url.Values { return withNonce },
+		// A cookie planted on the parent domain, with the genuine state.
+		"in a planted cookie": func(jar map[string]string) url.Values {
+			jar[handshakeNonceParam] = "nonce_example"
+			return nil
+		},
+	} {
+		t.Run("someone else's session delivered "+name, func(t *testing.T) {
+			f := newHandshakeFixture(t)
+			f.directives = f.renewal(t, "user_attacker")
+			back, jar := f.start(t, "/")
+			w := f.finish(back, deliver(jar), jar)
+			assert.Equal(t, 1, f.nonceCalls)
+			assert.False(t, sessionSet(w), "the attacker's session is not set")
+			assert.Equal(t, "3", setCookies(w)[handshakeCountCookie].Value)
+		})
+	}
+	t.Run("a renewal with no session sets nothing", func(t *testing.T) {
+		f := newHandshakeFixture(t)
+		f.directives = []string{"__client_uat=0; Path=/"}
+		back, jar := f.start(t, "/")
+		w := f.finish(back, withNonce, jar)
+		assert.NotContains(t, w.Header().Values("Set-Cookie"), "__client_uat=0; Path=/")
+	})
 }
 
 func TestHandshakeFailureFallsBackWithoutCookies(t *testing.T) {
 	for name, tc := range map[string]struct {
-		directives []string
+		directives func(*handshakeFixture) []string
 		status     int
 	}{
-		"backend refuses":                 {[]string{"__session=x"}, http.StatusBadRequest},
-		"directive is not a header value": {[]string{"__session=x\r\nLocation: https://evil.test"}, http.StatusOK},
+		"backend refuses": {func(f *handshakeFixture) []string { return f.renewal(t, "user_one") }, http.StatusBadRequest},
+		"directive is not a header value": {func(f *handshakeFixture) []string {
+			return []string{"__session=" + f.session(t, "user_one", false) + "\r\nLocation: https://evil.test"}
+		}, http.StatusOK},
 	} {
 		t.Run(name, func(t *testing.T) {
-			c, calls := handshakeClerk(t, tc.directives, tc.status)
-			back, jar := startHandshake(t, c, "/artifacts/a1")
-			w := httptest.NewRecorder()
-			c.Middleware(http.NotFoundHandler()).ServeHTTP(w, returnFrom(back, url.Values{handshakeNonceParam: {"nonce_example"}}, jar))
+			f := newHandshakeFixture(t)
+			f.directives, f.status = tc.directives(f), tc.status
+			back, jar := f.start(t, "/artifacts/a1")
+			w := f.finish(back, withNonce, jar)
 
-			assert.Equal(t, 1, *calls)
+			assert.Equal(t, 1, f.nonceCalls)
 			require.Equal(t, http.StatusFound, w.Code)
 			assert.Equal(t, "https://app.test/artifacts/a1", w.Header().Get("Location"))
 			cookies := setCookies(w)
@@ -269,29 +386,27 @@ func TestHandshakeFailureFallsBackWithoutCookies(t *testing.T) {
 // instead of in the URL. Without the state the return is not completed at
 // all, so a cookie left behind can never cause a loop.
 func TestHandshakeReadsCookieDeliveredResults(t *testing.T) {
-	c, calls := handshakeClerk(t, []string{"__session=fresh.jwt; Path=/"}, http.StatusOK)
-	back, jar := startHandshake(t, c, "/")
+	f := newHandshakeFixture(t)
+	f.directives = f.renewal(t, "user_one")
+	back, jar := f.start(t, "/")
 	jar[handshakeNonceParam] = "nonce_example"
-	w := httptest.NewRecorder()
-	c.Middleware(http.NotFoundHandler()).ServeHTTP(w, returnFrom(back, nil, jar))
-	assert.Equal(t, 1, *calls)
-	assert.Contains(t, w.Header().Values("Set-Cookie"), "__session=fresh.jwt; Path=/")
+	assert.True(t, sessionSet(f.finish(back, nil, jar)))
+	assert.Equal(t, 1, f.nonceCalls)
 
 	reached := false
-	c.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { reached = true })).ServeHTTP(httptest.NewRecorder(), pageRequest("/", jar))
+	f.c.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { reached = true })).ServeHTTP(httptest.NewRecorder(), pageRequest("/", jar))
 	assert.True(t, reached, "a leftover nonce cookie is ignored outside a handshake's return")
-	assert.Equal(t, 1, *calls)
+	assert.Equal(t, 1, f.nonceCalls)
 }
 
 // Review of Exh-8409: the cleaned URL is a path on the app's own origin even
 // when the requested path looks like a link to another one.
 func TestHandshakeReturnNeverRedirectsOffSite(t *testing.T) {
-	c, _ := handshakeClerk(t, nil, http.StatusBadRequest)
+	f := newHandshakeFixture(t)
+	f.status = http.StatusBadRequest
 	for _, path := range []string{"//evil.test/path", "/\\evil.test/path"} {
-		back, jar := startHandshake(t, c, path)
-		w := httptest.NewRecorder()
-		c.Middleware(http.NotFoundHandler()).ServeHTTP(w, returnFrom(back, url.Values{handshakeNonceParam: {"nonce_example"}}, jar))
-		loc := w.Header().Get("Location")
+		back, jar := f.start(t, path)
+		loc := f.finish(back, withNonce, jar).Header().Get("Location")
 		assert.True(t, strings.HasPrefix(loc, "https://app.test/"), loc)
 	}
 }
@@ -299,73 +414,66 @@ func TestHandshakeReturnNeverRedirectsOffSite(t *testing.T) {
 // A development Frontend API answers with the directives in a JWT signed by
 // the instance's key, whatever format was asked for.
 func TestHandshakeTokenIsVerifiedBeforeItsCookiesAreSet(t *testing.T) {
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
+	f := newHandshakeFixture(t)
 	forger, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
-	jwk := jose.JSONWebKey{Key: &key.PublicKey, KeyID: "ins_key", Algorithm: "RS256", Use: "sig"}
-	jwksCalls := 0
-	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/jwks", r.URL.Path)
-		jwksCalls++
-		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwk}}))
-	}))
-	defer backend.Close()
-	config := &clerk.ClientConfig{}
-	config.Key = clerk.String("sk_test_example")
-	config.URL = clerk.String(backend.URL)
-	c, err := newClerk("pk_test_"+base64.RawStdEncoding.EncodeToString([]byte("example.clerk.accounts.dev$")), "https://app.test", config)
-	require.NoError(t, err)
-	sign := func(k *rsa.PrivateKey, category string) string {
-		opts := (&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", "ins_key")
-		if category != "" {
-			opts = opts.WithHeader("cat", category)
-		}
-		signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: k}, opts)
-		require.NoError(t, err)
-		token, err := josejwt.Signed(signer).Claims(map[string]any{"handshake": []string{"__session=fresh.jwt; Path=/"}}).CompactSerialize()
-		require.NoError(t, err)
-		return token
+	renewal := f.renewal(t, "user_one")
+	handshake := func(key *rsa.PrivateKey, category string) string {
+		return f.token(t, key, "ins_key", map[string]string{"cat": category}, map[string]any{"handshake": renewal})
 	}
 	for _, tt := range []struct {
-		name    string
-		token   string
-		cookies []string
+		name  string
+		token string
+		set   bool
 	}{
-		{"signed by the instance", sign(key, "cl_B7d4PD111AAA"), []string{"__session=fresh.jwt; Path=/"}},
-		{"signed by anyone else", sign(forger, "cl_B7d4PD111AAA"), nil},
-		{"a machine token's category", sign(key, "cl_B7d4PD333AAA"), nil},
+		{"signed by the instance", handshake(f.key, "cl_B7d4PD111AAA"), true},
+		{"signed by anyone else", handshake(forger, "cl_B7d4PD111AAA"), false},
+		{"a machine token's category", handshake(f.key, "cl_B7d4PD333AAA"), false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			back, jar := startHandshake(t, c, "/")
-			w := httptest.NewRecorder()
-			c.Middleware(http.NotFoundHandler()).ServeHTTP(w, returnFrom(back, url.Values{handshakeTokenParam: {tt.token}}, jar))
+			back, jar := f.start(t, "/")
+			w := f.finish(back, url.Values{handshakeTokenParam: {tt.token}}, jar)
 			require.Equal(t, http.StatusFound, w.Code)
 			assert.Equal(t, "https://app.test/", w.Header().Get("Location"))
-			var set []string
-			for _, line := range w.Header().Values("Set-Cookie") {
-				if !strings.Contains(line, "exhibit_clerk_") {
-					set = append(set, line)
-				}
-			}
-			assert.Equal(t, tt.cookies, set)
+			assert.Equal(t, tt.set, sessionSet(w))
 		})
 	}
-	assert.Equal(t, 1, jwksCalls, "the signing key is fetched once and kept")
+	assert.Equal(t, 1, f.jwksCalls, "the signing key is fetched once and kept")
 
-	// Review of Exh-8409: a token naming a key nobody has does not buy a
-	// Backend API call per request.
-	unknown := func() string {
-		signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: forger}, (&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", "made_up"))
-		require.NoError(t, err)
-		token, err := josejwt.Signed(signer).Claims(map[string]any{"handshake": []string{"__session=x; Path=/"}}).CompactSerialize()
-		require.NoError(t, err)
-		return token
-	}()
+	// A token naming a key nobody has does not buy a Backend API call per
+	// request.
+	unknown := f.token(t, forger, "made_up", nil, map[string]any{"handshake": renewal})
 	for range 5 {
-		back, jar := startHandshake(t, c, "/")
-		c.Middleware(http.NotFoundHandler()).ServeHTTP(httptest.NewRecorder(), returnFrom(back, url.Values{handshakeTokenParam: {unknown}}, jar))
+		back, jar := f.start(t, "/")
+		f.finish(back, url.Values{handshakeTokenParam: {unknown}}, jar)
 	}
-	assert.Equal(t, 1, jwksCalls, "unknown key ids refetch at most every five minutes")
+	assert.Equal(t, 1, f.jwksCalls, "unknown key ids refetch at most every five minutes")
+}
+
+// Review of Exh-8409, round two: keys are trusted for an hour after the last
+// successful fetch, and a failed refresh does not extend that.
+func TestHandshakeSigningKeysExpireAndFailedRefreshesDoNotRenewThem(t *testing.T) {
+	f := newHandshakeFixture(t)
+	ctx := t.Context()
+	_, err := f.c.signingKey(ctx, "ins_key")
+	require.NoError(t, err)
+	require.Equal(t, 1, f.jwksCalls)
+
+	// An hour on, with the Backend API down: the old key is not trusted.
+	f.c.keysFetched = f.c.keysFetched.Add(-61 * time.Minute)
+	f.c.keysAttempted = f.c.keysFetched
+	f.jwksDown = true
+	_, err = f.c.signingKey(ctx, "ins_key")
+	require.Error(t, err)
+	require.Equal(t, 2, f.jwksCalls)
+	_, err = f.c.signingKey(ctx, "ins_key")
+	require.Error(t, err, "still not trusted after the failed refresh")
+	require.Equal(t, 2, f.jwksCalls, "and the failure is not retried at once")
+
+	// Recovery is retried soon, not five minutes later.
+	f.jwksDown = false
+	f.c.keysAttempted = f.c.keysAttempted.Add(-11 * time.Second)
+	_, err = f.c.signingKey(ctx, "ins_key")
+	require.NoError(t, err)
+	require.Equal(t, 3, f.jwksCalls)
 }

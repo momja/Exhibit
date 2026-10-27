@@ -728,10 +728,14 @@ back with a nonce, redeemed over the Backend API, or a JWT verified against the
 instance JWKS, and the server sets the cookies they carry. No script runs. The
 return is bound to the flow that started it, like an OAuth state: a random
 value in a `__Host-` cookie (on HTTPS) and in the return URL must match, and is
-spent either way, so a link carrying someone else's nonce cannot sign a browser
-in as them. The return URL is rebuilt on `APP_ORIGIN`, a separate cookie caps
-retries at three, and unknown signing-key ids refetch the JWKS at most every
-five minutes. Anything the handshake cannot renew goes to the login page,
+spent either way. That proves the return is this browser's handshake, not that
+what it carries is this browser's session, so the renewed `__session` must also
+belong to the same Clerk user as the lapsed one, whose signature still
+verifies; a browser with no lapsed token gets the login page. Together they
+keep a nonce smuggled in on a link or a planted cookie from signing a browser
+in as someone else. The return URL is rebuilt on `APP_ORIGIN`, a separate
+cookie caps retries at three, and the JWKS is trusted for an hour after the
+last successful fetch, with refetches rate-limited and coalesced. Anything the handshake cannot renew goes to the login page,
 which refreshes the token through ClerkJS.
 
 Self-hosted password and OIDC paths retain the session architecture below. In

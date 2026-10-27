@@ -32,8 +32,10 @@ type Clerk struct {
 	backend       clerk.Backend
 	jwks          *jwks.Client
 	keysMu        sync.Mutex
+	keysFetchMu   sync.Mutex
 	keys          map[string]any
-	keysFetched   time.Time
+	keysFetched   time.Time // last successful fetch
+	keysAttempted time.Time // last fetch, successful or not
 	development   bool
 	secureCookies bool
 }
