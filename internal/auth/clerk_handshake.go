@@ -2,6 +2,9 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -11,7 +14,7 @@ import (
 	"time"
 
 	"github.com/clerk/clerk-sdk-go/v2"
-	clerkjwt "github.com/clerk/clerk-sdk-go/v2/jwt"
+	"github.com/clerk/clerk-sdk-go/v2/jwks"
 	josejwt "github.com/go-jose/go-jose/v3/jwt"
 )
 
@@ -28,29 +31,41 @@ import (
 // nonce. The server exchanges the nonce for fresh cookies over the Backend
 // API and the page loads with no script involved. The Go SDK does not
 // implement it, so this file does, with the same eligibility rules and loop
-// guard.
+// guard, and with its return bound to the browser that started it.
 const (
 	handshakeNonceParam = "__clerk_handshake_nonce"
 	clientUATCookie     = "__client_uat"
 	devBrowserCookie    = "__clerk_db_jwt"
-	// handshakePendingCookie marks a browser this server sent to the
-	// handshake, and counts how many times in a row. Only such a browser may
-	// redeem a nonce: one arriving on a link somebody else sent would
-	// otherwise sign this browser in as whoever obtained it.
-	handshakePendingCookie = "exhibit_clerk_handshake"
-	// Long enough for a slow network's round trip through the Frontend API.
-	handshakePendingSeconds = 60
 	// The Backend API version whose handshake payload this file reads.
 	handshakeAPIVersion = "2026-05-12"
 	// A browser that keeps returning without a usable token is sent to the
 	// login page instead, the same limit Clerk's SDK uses.
 	maxHandshakeRedirects = 3
+	// Long enough for a slow network's round trip through the Frontend API.
+	handshakeCookieSeconds = 60
 )
 
 // The Frontend API may answer with the earlier form instead of a nonce: the
 // directives themselves, in a JWT signed with the instance's session key.
 // Development instances do, whatever format was asked for.
 const handshakeTokenParam = "__clerk_handshake"
+
+// A handshake's return is bound to the browser that started it, the way an
+// OAuth state is. Starting one puts a random value in an HttpOnly cookie and
+// in the URL Clerk sends the browser back to; only a return carrying both,
+// matching, is completed, and completing one spends the value. Without that,
+// a link carrying a nonce somebody else obtained would sign this browser in
+// as them.
+//
+// Over HTTPS the cookie takes the __Host- prefix, which a sibling domain cannot
+// set, so the value cannot be planted from one either. Plain HTTP (a local
+// development setup) has no such prefix.
+const handshakeStateParam = "__exhibit_hs"
+
+// The count of handshakes started in a row is a cookie of its own, outliving
+// each state, so a browser whose renewed cookies still do not verify reaches
+// the login page after three tries rather than going round forever.
+const handshakeCountCookie = "exhibit_clerk_handshakes"
 
 // Session tokens and handshake tokens share a signing key, so a token's
 // category is what says it is not, say, a machine token (@clerk/backend's
@@ -59,7 +74,7 @@ var handshakeTokenCategories = map[string]bool{"": true, "cl_B7d4PD111AAA": true
 
 // handshakeURLParams are what the handshake appends to the page's URL on the
 // way back; none belong in the address bar afterward.
-var handshakeURLParams = []string{handshakeNonceParam, handshakeTokenParam, "__clerk_help", devBrowserCookie}
+var handshakeURLParams = []string{handshakeStateParam, handshakeNonceParam, handshakeTokenParam, "__clerk_help", devBrowserCookie}
 
 // HandshakeRedirect sends a page request whose session token is missing or
 // lapsed to Clerk's handshake, when the browser is still signed in there, and
@@ -75,16 +90,11 @@ func (c *Clerk) HandshakeRedirect(w http.ResponseWriter, r *http.Request) bool {
 	if uat, err := r.Cookie(clientUATCookie); err != nil || uat.Value == "" || uat.Value == "0" {
 		return false
 	}
-	redirects := pendingHandshakes(r)
-	if redirects >= maxHandshakeRedirects {
+	count := handshakeCount(r)
+	if count >= maxHandshakeRedirects {
 		return false
 	}
-	q := url.Values{}
-	q.Set("redirect_url", c.appOrigin+r.URL.RequestURI())
-	q.Set("__clerk_api_version", handshakeAPIVersion)
-	q.Set("suffixed_cookies", "false")
-	q.Set("__clerk_hs_reason", "session-token-expired")
-	q.Set("format", "nonce")
+	var devBrowser string
 	if c.development {
 		// A development instance knows its browser by this token rather than
 		// a cookie on its own domain.
@@ -92,40 +102,52 @@ func (c *Clerk) HandshakeRedirect(w http.ResponseWriter, r *http.Request) bool {
 		if err != nil || db.Value == "" {
 			return false
 		}
-		q.Set(devBrowserCookie, db.Value)
+		devBrowser = db.Value
 	}
-	c.setPendingHandshakes(w, redirects+1)
+	state := make([]byte, 32)
+	if _, err := rand.Read(state); err != nil {
+		return false
+	}
+	stateValue := base64.RawURLEncoding.EncodeToString(state)
+	back := *r.URL
+	bq := back.Query()
+	bq.Set(handshakeStateParam, stateValue)
+	back.RawQuery = bq.Encode()
+
+	q := url.Values{}
+	q.Set("redirect_url", c.appOrigin+back.RequestURI())
+	q.Set("__clerk_api_version", handshakeAPIVersion)
+	q.Set("suffixed_cookies", "false")
+	q.Set("__clerk_hs_reason", "session-token-expired")
+	q.Set("format", "nonce")
+	if devBrowser != "" {
+		q.Set(devBrowserCookie, devBrowser)
+	}
+	c.setHandshakeCookie(w, c.stateCookieName(), stateValue, handshakeCookieSeconds)
+	c.setHandshakeCookie(w, handshakeCountCookie, strconv.Itoa(count+1), handshakeCookieSeconds)
 	w.Header().Set("Cache-Control", "no-store")
 	http.Redirect(w, r, c.FrontendAPI+"/v1/client/handshake?"+q.Encode(), http.StatusTemporaryRedirect)
 	return true
 }
 
-// completeHandshake answers a browser returning from the handshake: it sets
-// the cookies the nonce stands for and sends the browser on to the page it
+// completeHandshake answers a browser returning from the handshake it started:
+// it sets the cookies Clerk sent back and sends the browser on to the page it
 // asked for, without the handshake's parameters. It reports whether the
 // request was such a return.
 func (c *Clerk) completeHandshake(w http.ResponseWriter, r *http.Request) bool {
-	if r.Method != http.MethodGet || pendingHandshakes(r) == 0 {
+	query := r.URL.Query()
+	returned := query.Get(handshakeStateParam)
+	if r.Method != http.MethodGet || returned == "" {
 		return false
 	}
-	nonce, token := r.URL.Query().Get(handshakeNonceParam), r.URL.Query().Get(handshakeTokenParam)
-	if nonce == "" && token == "" {
-		// A production Frontend API may hand the nonce back as a cookie. One
-		// left behind must not cost a Backend API call on every request, so
-		// it is only spent when the token it would replace is unusable.
-		if cookie, err := r.Cookie(handshakeNonceParam); err == nil && isDocumentRequest(r) && !c.hasUsableToken(r) {
-			nonce = cookie.Value
-		}
-	}
-	if nonce == "" && token == "" {
-		return false
-	}
+	// Spent whatever happens next, so a return is completed at most once.
+	c.setHandshakeCookie(w, c.stateCookieName(), "", -1)
+	w.Header().Set("Cache-Control", "no-store")
+
 	var directives []string
-	var err error
-	if nonce != "" {
-		directives, err = c.handshakeCookies(r.Context(), nonce)
-	} else {
-		directives, err = c.handshakeTokenCookies(r.Context(), token)
+	err := errors.New("the handshake was not started by this browser")
+	if started, cerr := r.Cookie(c.stateCookieName()); cerr == nil && subtle.ConstantTimeCompare([]byte(started.Value), []byte(returned)) == 1 {
+		directives, err = c.handshakeDirectives(r)
 	}
 	if err == nil {
 		err = checkDirectives(directives)
@@ -136,47 +158,65 @@ func (c *Clerk) completeHandshake(w http.ResponseWriter, r *http.Request) bool {
 		// handshake would only fail the same way more slowly.
 		slog.Warn("Clerk handshake could not be completed", "err", err)
 		directives = nil
-		c.setPendingHandshakes(w, maxHandshakeRedirects)
+		c.setHandshakeCookie(w, handshakeCountCookie, strconv.Itoa(maxHandshakeRedirects), handshakeCookieSeconds)
 	}
 	for _, d := range directives {
 		w.Header().Add("Set-Cookie", d)
 	}
 	clean := *r.URL
-	q := clean.Query()
 	for _, p := range handshakeURLParams {
-		q.Del(p)
+		query.Del(p)
 	}
-	clean.RawQuery = q.Encode()
-	clean.Scheme, clean.Host = "", ""
-	w.Header().Set("Cache-Control", "no-store")
-	http.Redirect(w, r, clean.RequestURI(), http.StatusFound)
+	clean.RawQuery = query.Encode()
+	// Absolute, on the app's own origin: a path like //elsewhere must stay a
+	// path on this site rather than become a link to another.
+	http.Redirect(w, r, c.appOrigin+clean.RequestURI(), http.StatusFound)
 	return true
 }
 
-// pendingHandshakes is how many handshakes this browser has started in a row
-// without coming back with a usable token; zero when it started none.
-func pendingHandshakes(r *http.Request) int {
-	cookie, err := r.Cookie(handshakePendingCookie)
+// handshakeDirectives reads what Clerk sent back, from the URL or, as a
+// production Frontend API may deliver it, a cookie: a nonce to redeem or a
+// signed token to verify.
+func (c *Clerk) handshakeDirectives(r *http.Request) ([]string, error) {
+	value := func(name string) string {
+		if v := r.URL.Query().Get(name); v != "" {
+			return v
+		}
+		if cookie, err := r.Cookie(name); err == nil {
+			return cookie.Value
+		}
+		return ""
+	}
+	if nonce := value(handshakeNonceParam); nonce != "" {
+		return c.handshakeCookies(r.Context(), nonce)
+	}
+	if token := value(handshakeTokenParam); token != "" {
+		return c.handshakeTokenCookies(r.Context(), token)
+	}
+	return nil, errors.New("the handshake returned neither a nonce nor a token")
+}
+
+func (c *Clerk) stateCookieName() string {
+	if c.secureCookies {
+		return "__Host-exhibit_clerk_hs"
+	}
+	return "exhibit_clerk_hs"
+}
+
+func (c *Clerk) setHandshakeCookie(w http.ResponseWriter, name, value string, maxAge int) {
+	http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: "/", MaxAge: maxAge,
+		HttpOnly: true, Secure: c.secureCookies, SameSite: http.SameSiteLaxMode})
+}
+
+// handshakeCount is how many handshakes this browser has started in the last
+// minute without settling.
+func handshakeCount(r *http.Request) int {
+	cookie, err := r.Cookie(handshakeCountCookie)
 	if err != nil {
 		return 0
 	}
 	n, _ := strconv.Atoi(cookie.Value)
 	return max(n, 0)
-}
-
-// setPendingHandshakes records the count; it is never cleared on success,
-// because a browser that renews its token stops asking, and the count lapses
-// with the cookie.
-func (c *Clerk) setPendingHandshakes(w http.ResponseWriter, n int) {
-	http.SetCookie(w, &http.Cookie{Name: handshakePendingCookie, Value: strconv.Itoa(n), Path: "/",
-		MaxAge: handshakePendingSeconds, HttpOnly: true, Secure: c.secureCookies, SameSite: http.SameSiteLaxMode})
-}
-
-// hasUsableToken reports whether the request's session token verified, which
-// the middleware has already decided by the time this runs.
-func (c *Clerk) hasUsableToken(r *http.Request) bool {
-	_, ok := clerk.SessionClaimsFromContext(r.Context())
-	return ok
 }
 
 type handshakePayload struct {
@@ -234,25 +274,38 @@ func (c *Clerk) handshakeTokenCookies(ctx context.Context, token string) ([]stri
 	return payload.Handshake, nil
 }
 
-// signingKey is the instance's public key with this id. Keys rotate rarely,
-// and a handshake is on the path to a page, so they are kept.
+// signingKey is the instance's public key with this id. The set is kept for
+// an hour, as @clerk/backend keeps it, so a rotated-out key stops being
+// trusted. An id it does not hold refetches at most every five minutes, and
+// one fetch at a time, so tokens naming made-up ids cannot turn into a stream
+// of Backend API calls.
 func (c *Clerk) signingKey(ctx context.Context, kid string) (any, error) {
 	c.keysMu.Lock()
-	key, ok := c.keys[kid]
-	c.keysMu.Unlock()
-	if ok {
+	defer c.keysMu.Unlock()
+	age := time.Since(c.keysFetched)
+	if key, ok := c.keys[kid]; ok && age < time.Hour {
 		return key, nil
+	}
+	if age < 5*time.Minute {
+		return nil, errors.New("Clerk handshake token names an unknown signing key")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	jwk, err := clerkjwt.GetJSONWebKey(ctx, &clerkjwt.GetJSONWebKeyParams{KeyID: kid, JWKSClient: c.jwks})
+	set, err := c.jwks.Get(ctx, &jwks.GetParams{})
+	c.keysFetched = time.Now()
 	if err != nil {
 		return nil, err
 	}
-	c.keysMu.Lock()
-	c.keys[kid] = jwk.Key
-	c.keysMu.Unlock()
-	return jwk.Key, nil
+	c.keys = map[string]any{}
+	for _, k := range set.Keys {
+		if k != nil {
+			c.keys[k.KeyID] = k.Key
+		}
+	}
+	if key, ok := c.keys[kid]; ok {
+		return key, nil
+	}
+	return nil, errors.New("Clerk handshake token names an unknown signing key")
 }
 
 // checkDirectives refuses a directive that is not one header value. Net/http

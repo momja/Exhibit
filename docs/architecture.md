@@ -725,10 +725,13 @@ whose token lapsed while `__client_uat` still says the browser is signed in goes
 through Clerk's handshake (`internal/auth/clerk_handshake.go`, ported from
 `@clerk/backend`, which the Go SDK lacks). The Frontend API sends the browser
 back with a nonce, redeemed over the Backend API, or a JWT verified against the
-instance JWKS, and the server sets the cookies they carry. No script runs. Only
-a browser this server sent may redeem one (an HttpOnly marker cookie, which also
-caps retries at three), so a link carrying someone else's nonce cannot sign a
-browser in as them. Anything the handshake cannot renew goes to the login page,
+instance JWKS, and the server sets the cookies they carry. No script runs. The
+return is bound to the flow that started it, like an OAuth state: a random
+value in a `__Host-` cookie (on HTTPS) and in the return URL must match, and is
+spent either way, so a link carrying someone else's nonce cannot sign a browser
+in as them. The return URL is rebuilt on `APP_ORIGIN`, a separate cookie caps
+retries at three, and unknown signing-key ids refetch the JWKS at most every
+five minutes. Anything the handshake cannot renew goes to the login page,
 which refreshes the token through ClerkJS.
 
 Self-hosted password and OIDC paths retain the session architecture below. In

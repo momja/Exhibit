@@ -33,6 +33,7 @@ type Clerk struct {
 	jwks          *jwks.Client
 	keysMu        sync.Mutex
 	keys          map[string]any
+	keysFetched   time.Time
 	development   bool
 	secureCookies bool
 }
