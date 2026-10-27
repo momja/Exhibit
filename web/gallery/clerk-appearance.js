@@ -1,10 +1,13 @@
 // Replace only documented icon slots. Retain the SVG's dimensions and ARIA
 // attributes; a currentColor mask follows light/dark themes and button states.
+// Resolved beside this module, so the icons share its build-versioned,
+// immutable URL prefix (Exh-hl64) rather than revalidating on every visit.
 function phosphorIcon(name) {
+  const url = new URL(`../phosphor/${name}.svg`, import.meta.url).href;
   return {
     backgroundColor: 'currentColor',
-    mask: `url("/assets/phosphor/${name}.svg") center / contain no-repeat`,
-    WebkitMask: `url("/assets/phosphor/${name}.svg") center / contain no-repeat`,
+    mask: `url("${url}") center / contain no-repeat`,
+    WebkitMask: `url("${url}") center / contain no-repeat`,
     '& > *': { visibility: 'hidden' },
   };
 }

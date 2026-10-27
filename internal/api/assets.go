@@ -34,6 +34,11 @@ var embeddedAssets embed.FS
 // The unversioned /assets/... paths still serve, for anything that names a
 // file directly (the manifest's icons, a stylesheet's absolute url()), with a
 // content ETag and no-cache: they revalidate rather than refetch.
+//
+// One binary holds one tree, so a page rendered before a deploy that asks for
+// a module afterward gets the new build's bytes. That skew is not new — the
+// unversioned URLs always had it — and the fallback below keeps those bytes
+// out of every cache under the old version's name.
 const versionedAssetPrefix = "/assets/v/"
 
 var assetFiles, assetVersion = hashAssets()
@@ -66,7 +71,10 @@ func hashAssets() (map[string]string, string) {
 			return err
 		}
 		sum := sha256.Sum256(b)
-		etags[name] = `"` + hex.EncodeToString(sum[:16]) + `"`
+		// Weak, because the compressor may gzip the response: the bytes on
+		// the wire differ by encoding while the content does not, and a
+		// strong validator would let If-Range splice ranges of the two.
+		etags[name] = `W/"` + hex.EncodeToString(sum[:16]) + `"`
 		tree.Write([]byte(name + "\x00"))
 		tree.Write(sum[:])
 		return nil

@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -216,4 +217,37 @@ func TestPagesReferenceOnlyVersionedAssets(t *testing.T) {
 		assert.Contains(t, page, versionedAssetPrefix+assetVersion+"/", path)
 		assert.NotRegexp(t, `(src|href)="/assets/[^v]`, page, path)
 	}
+}
+
+// The compressor may gzip an asset, so its validator is weak: a range against
+// it is answered whole rather than spliced from the other representation, and
+// a range request is never compressed.
+func TestAssetRangesAreNeverSplicedAcrossEncodings(t *testing.T) {
+	r := newTestRouter(t)
+	want, err := embeddedAssets.ReadFile("assets/gallery/index.css")
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("GET", "/assets/gallery/index.css", nil))
+	etag := w.Header().Get("ETag")
+	require.True(t, strings.HasPrefix(etag, `W/"`), etag)
+
+	req := httptest.NewRequest("GET", "/assets/gallery/index.css", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("Range", "bytes=10-19")
+	req.Header.Set("If-Range", etag)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code, "If-Range needs a strong validator")
+	assert.Empty(t, w.Header().Get("Content-Encoding"))
+	assert.Equal(t, string(want), w.Body.String())
+
+	req = httptest.NewRequest("GET", "/assets/gallery/index.css", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("Range", "bytes=10-19")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusPartialContent, w.Code)
+	assert.Empty(t, w.Header().Get("Content-Encoding"))
+	assert.Equal(t, string(want[10:20]), w.Body.String())
 }
