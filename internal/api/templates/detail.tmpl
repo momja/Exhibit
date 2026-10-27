@@ -8,17 +8,17 @@
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
 {{template "clerkScripts" .Clerk}}
-<link rel="stylesheet" href="/assets/phosphor/regular.css">
-<link rel="stylesheet" href="/assets/gallery/tokens.css">
-<link rel="stylesheet" href="/assets/gallery/components.css">
-<link rel="stylesheet" href="/assets/gallery/detail.css">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/detail.css"}}">
 {{/* htmx swaps the share panel's body after a grant, a revoke or a link
      change (av-6m3e), and the posture mark and receipt after an origin
      approval (av-mf1x); self-hosted from the app origin like every other
      asset, never a CDN. Loaded only for the owner: a recipient's page has no
      share controls and cannot approve an origin, so nothing on it changes
      and it should not carry the library that refreshes them. */}}
-{{if .Share}}<script src="/assets/htmx/htmx.min.js"></script>{{end}}
+{{if .Share}}<script src="{{asset "htmx/htmx.min.js"}}"></script>{{end}}
 </head>
 <body>
 {{/* The artifact is the page (Exh-ghuv). It fills the window, and the page's
@@ -355,18 +355,18 @@ let cameraApproved = {{if .Capability.CameraApproved}}true{{else}}false{{end}};
 let microphoneApproved = {{if .Capability.MicrophoneApproved}}true{{else}}false{{end}};
 let geolocationApproved = {{if .Capability.GeolocationApproved}}true{{else}}false{{end}};
 </script>
-<script src="/assets/gallery/api.js"></script>
-<script src="/assets/gallery/components.js"></script>
-<script src="/assets/gallery/state-api.js"></script>
+<script src="{{asset "gallery/api.js"}}"></script>
+<script src="{{asset "gallery/components.js"}}"></script>
+<script src="{{asset "gallery/state-api.js"}}"></script>
 {{/* The runtime network prompt (av-kmwj), shared with the agent chat page
      (av-6xvs). Before detail.js, which installs it at load. */}}
-<script src="/assets/gallery/network-prompt.js"></script>
-<script src="/assets/gallery/detail.js"></script>
-<script type="module" src="/assets/gallery/direct-open.js"></script>
+<script src="{{asset "gallery/network-prompt.js"}}"></script>
+<script src="{{asset "gallery/detail.js"}}"></script>
+<script type="module" src="{{asset "gallery/direct-open.js"}}"></script>
 {{/* The share panel's script, loaded only where the panel exists. It resolves
      everything by id inside #share-panel and tolerates the panel's absence, so
      the guard is a courtesy rather than the control. */}}
-{{if .Share}}<script type="module" src="/assets/gallery/share.js"></script>{{end}}
-<script type="module" src="/assets/gallery/pip.js"></script>
+{{if .Share}}<script type="module" src="{{asset "gallery/share.js"}}"></script>{{end}}
+<script type="module" src="{{asset "gallery/pip.js"}}"></script>
 </body>
 </html>{{end}}

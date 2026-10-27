@@ -8,10 +8,10 @@
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
 {{template "clerkScripts" .Clerk}}
-<link rel="stylesheet" href="/assets/phosphor/regular.css">
-<link rel="stylesheet" href="/assets/gallery/tokens.css">
-<link rel="stylesheet" href="/assets/gallery/components.css">
-<link rel="stylesheet" href="/assets/gallery/index.css">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/index.css"}}">
 </head>
 <body>
 <div id="{{.Grid.ID}}" data-gallery{{if .Grid.Filters.Sections}} data-controller="filter-sheet"{{end}}>
@@ -93,10 +93,10 @@ const TOKEN = {{.Token}};
      html/template's JS escaper pads a {{value}} boolean with spaces. */ -}}
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 </script>
-<script src="/assets/gallery/api.js"></script>
-<script src="/assets/gallery/components.js"></script>
-<script src="/assets/htmx/htmx.min.js"></script>
+<script src="{{asset "gallery/api.js"}}"></script>
+<script src="{{asset "gallery/components.js"}}"></script>
+<script src="{{asset "htmx/htmx.min.js"}}"></script>
 {{template "componentScripts"}}
-<script type="module" src="/assets/gallery/index.js"></script>
+<script type="module" src="{{asset "gallery/index.js"}}"></script>
 </body>
 </html>{{end}}

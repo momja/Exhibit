@@ -166,7 +166,7 @@ func TestProfileDeleteSectionIsLive(t *testing.T) {
 	assert.NotContains(t, page, `id="delete-account" disabled`)
 	assert.Contains(t, page, `id="delete-confirm"`, "the confirmation step renders server-side")
 	assert.Contains(t, page, "delete my library", "the phrase that has to be typed is shown")
-	assert.Contains(t, page, `src="/assets/gallery/profile.js"`)
+	assert.Contains(t, page, `src="`+assetURL("gallery/profile.js")+`"`)
 }
 
 // The wording this ticket is emphatic about. An identity provider account

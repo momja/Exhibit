@@ -18,7 +18,12 @@ var templatesFS embed.FS
 // contextual auto-escaping covers every interpolation — titles and tag names
 // in markup, per-request values (token, artifact id, allowlist) in the inline
 // JS bootstrap — so no hand escaping is needed in the templates.
-var pageTemplates = template.Must(template.ParseFS(templatesFS, "templates/*.tmpl"))
+//
+// Templates name embedded files with {{asset "gallery/index.js"}}, which
+// yields the cacheable, build-versioned URL (assets.go).
+var pageTemplates = template.Must(template.New("").Funcs(template.FuncMap{
+	"asset": assetURL,
+}).ParseFS(templatesFS, "templates/*.tmpl"))
 
 // renderPage executes one of the named page templates to a string.
 func renderPage(name string, data any) (string, error) {

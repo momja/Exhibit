@@ -177,7 +177,7 @@ func TestTranscriptFragmentShowsTheConversationReadOnly(t *testing.T) {
 	assert.Contains(t, frag, `role="status"`)
 	page := getPage(t, r, "/agent?artifact="+id)
 	assert.Contains(t, page, `<template id="agent-message-template"><div class="agent-message" data-agent-message>`)
-	assert.Contains(t, page, `<script type="module" src="/assets/gallery/message-actions.js"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/message-actions.js")+`"></script>`)
 	assert.Equal(t, 1, strings.Count(page, `data-message-action="copy"`), "the live template carries the same action row")
 	// Nothing in it talks to the live session.
 	assert.NotContains(t, frag, "composer")
@@ -282,7 +282,7 @@ func TestTheCardPutsTheRollbackToThePersonAndKeepsTheEscapeSecondary(t *testing.
 	assert.Contains(t, frag, `role="status"`)
 	page := getPage(t, r, "/agent?artifact="+id)
 	assert.Contains(t, page, `<template id="agent-message-template"><div class="agent-message" data-agent-message>`)
-	assert.Contains(t, page, `<script type="module" src="/assets/gallery/message-actions.js"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/message-actions.js")+`"></script>`)
 	assert.Equal(t, 1, strings.Count(page, `data-message-action="copy"`), "the live template carries the same action row")
 }
 

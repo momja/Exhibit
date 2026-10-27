@@ -269,7 +269,7 @@ func TestEditPageListsVersionsAndOffersRestoreOnEarlierOnes(t *testing.T) {
 	assert.Contains(t, page, `id="versions-rows"`)
 	assert.Contains(t, page, `id="versions-status"`)
 	assert.Contains(t, page, "Versions (2)")
-	assert.Contains(t, page, `/assets/gallery/versions.js`)
+	assert.Contains(t, page, assetURL("gallery/versions.js"))
 
 	// v1 can be restored; v2 is the one you are on.
 	assert.Contains(t, page, `data-action="restore" data-seq="1"`)

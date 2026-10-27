@@ -256,7 +256,7 @@ func TestEditPageSectionsAreSymmetricPanels(t *testing.T) {
 	assert.Contains(t, page, `id="save-button" onclick="save()"`)
 	assert.NotContains(t, page, `id="widget-save"`)
 	assert.NotContains(t, page, `Save widget</button>`)
-	assert.Contains(t, page, `<script src="/assets/editor.js"></script>`)
+	assert.Contains(t, page, `<script src="`+assetURL("editor.js")+`"></script>`)
 }
 
 // Both source fields get CodeMirror, and it is mounted per panel rather than

@@ -416,7 +416,7 @@ func TestDetailPageWiresCapabilityClusterSwapToHtmx(t *testing.T) {
 	id := createTestArtifact(t, r, "Swap wiring")
 	page := getPage(t, r, "/artifacts/"+id)
 
-	assert.Contains(t, page, `<script src="/assets/htmx/htmx.min.js"></script>`)
+	assert.Contains(t, page, `<script src="`+assetURL("htmx/htmx.min.js")+`"></script>`)
 	assert.NotContains(t, page, "unpkg.com")
 	assert.Contains(t, page, `id="capability-cluster"`)
 	assert.Contains(t, page, `hx-get="/partials/capability-cluster?artifact=`+id+`"`)

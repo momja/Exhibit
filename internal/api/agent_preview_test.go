@@ -37,7 +37,7 @@ func TestAgentPreviewFragmentMatchesThePagesPane(t *testing.T) {
 	assert.NotContains(t, fragment, `href="/artifacts/`+id+`/open"`)
 	assert.Contains(t, page, `id="direct-open-modal"`)
 	assert.Contains(t, page, `data-viewer="1"`)
-	assert.Contains(t, page, `<script type="module" src="/assets/gallery/direct-open.js"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/direct-open.js")+`"></script>`)
 	assert.NotContains(t, fragment, `id="direct-open-modal"`, "dialog stays outside swapped preview")
 	assert.Contains(t, fragment, `href="/artifacts/`+id+`"`)
 }
@@ -105,7 +105,7 @@ func TestAgentPageWiresPreviewSwapToHtmx(t *testing.T) {
 	r := newTestRouter(t)
 	page := getPage(t, r, "/agent")
 
-	assert.Contains(t, page, `<script src="/assets/htmx/htmx.min.js"></script>`)
+	assert.Contains(t, page, `<script src="`+assetURL("htmx/htmx.min.js")+`"></script>`)
 	// No htmx-config override: every error status a fragment fetch can return
 	// is designed swap content (404/500 fragments) or a reload (401
 	// HX-Refresh), so the v4 defaults stand (av-3cdp).

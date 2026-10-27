@@ -19,10 +19,10 @@
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
 {{template "clerkScripts" .Clerk}}
-<link rel="stylesheet" href="/assets/phosphor/regular.css">
-<link rel="stylesheet" href="/assets/gallery/tokens.css">
-<link rel="stylesheet" href="/assets/gallery/components.css">
-<link rel="stylesheet" href="/assets/gallery/new.css">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/new.css"}}">
 </head>
 <body>
 <header>
@@ -126,7 +126,7 @@
 </div>
 </main>
 
-<script src="/assets/editor.js"></script>
+<script src="{{asset "editor.js"}}"></script>
 <script>
 const TOKEN = {{.Token}};
 {{/* READ_ONLY and TOKEN are one decision, made server-side per request
@@ -139,7 +139,7 @@ const TOKEN = {{.Token}};
      html/template's JS escaper pads a {{value}} boolean with spaces. */ -}}
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 </script>
-<script src="/assets/gallery/api.js"></script>
-<script src="/assets/gallery/new.js"></script>
+<script src="{{asset "gallery/api.js"}}"></script>
+<script src="{{asset "gallery/new.js"}}"></script>
 </body>
 </html>{{end}}

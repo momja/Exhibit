@@ -261,5 +261,5 @@ func TestAgentPageServes(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `id="agent-layout"`)
 	assert.Contains(t, w.Body.String(), `id="agent-pane-resizer" role="separator" tabindex="0"`)
 	assert.Contains(t, w.Body.String(), `aria-controls="pane-chat"`)
-	assert.Contains(t, w.Body.String(), `<script type="module" src="/assets/gallery/agent-resize.js"></script>`)
+	assert.Contains(t, w.Body.String(), `<script type="module" src="`+assetURL("gallery/agent-resize.js")+`"></script>`)
 }
