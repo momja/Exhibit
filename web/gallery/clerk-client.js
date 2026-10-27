@@ -25,6 +25,32 @@ function loadScript(src, publishableKey) {
   });
 }
 
+// Ordinary pages need Clerk for two things the first paint does not: keeping
+// the minute-long session cookie fresh, and drawing the account button. Its
+// two scripts are close to half a megabyte of JavaScript to compile, plus
+// round trips to the Frontend API, and on a phone that work competed with the
+// page and its widget frames during launch (Exh-g0fx). So those pages start
+// Clerk once the page has loaded and the main thread is idle. The login page,
+// where Clerk *is* the page, still calls clerkClient directly.
+export function clerkClientAfterLoad() {
+  return pageSettled().then(clerkClient);
+}
+
+// A widget frame that never finishes loading would hold the load event, and
+// the session cookie with it, so waiting for it is capped.
+const settleCap = 5000;
+
+function pageSettled() {
+  return new Promise(resolve => {
+    const whenIdle = () => (window.requestIdleCallback
+      ? window.requestIdleCallback(resolve, { timeout: 2000 })
+      : setTimeout(resolve, 0));
+    if (document.readyState === 'complete') return whenIdle();
+    window.addEventListener('load', whenIdle, { once: true });
+    setTimeout(whenIdle, settleCap);
+  });
+}
+
 export function clerkClient() {
   if (!clientPromise) clientPromise = withTimeout(loadClient(),
     'The account service did not respond. Reload this page to retry. If this continues, check whether your browser or network is blocking Clerk.');

@@ -1,5 +1,5 @@
 import { Controller } from '../stimulus/stimulus.js';
-import { clerkClient } from './clerk-client.js';
+import { clerkClient, clerkClientAfterLoad } from './clerk-client.js';
 import { clerkAuthAppearance } from './clerk-appearance.js';
 
 export default class extends Controller {
@@ -8,7 +8,9 @@ export default class extends Controller {
 
   async connect() {
     try {
-      const clerk = await clerkClient();
+      // The account button rides on an ordinary page; the other modes are
+      // login pages, where nothing else is waiting.
+      const clerk = await (this.modeValue === 'user' ? clerkClientAfterLoad() : clerkClient());
       if (!this.element.isConnected) return;
       this.clerk = clerk;
       this.statusTarget.textContent = '';
