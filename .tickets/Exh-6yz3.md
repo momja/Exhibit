@@ -1,6 +1,6 @@
 ---
 id: Exh-6yz3
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-26T19:19:53Z
