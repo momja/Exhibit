@@ -28,6 +28,13 @@ type Clerk struct {
 	cacheMu        sync.Mutex
 	identities     map[string]cachedHostedIdentity
 	appOrigin      string
+	// For the handshake (clerk_handshake.go).
+	backend       clerk.Backend
+	jwks          *jwks.Client
+	keysMu        sync.Mutex
+	keys          map[string]any
+	development   bool
+	secureCookies bool
 }
 
 type clerkSessionState struct {
@@ -66,11 +73,12 @@ func newClerk(publishableKey, appOrigin string, config *clerk.ClientConfig) (*Cl
 	if err != nil || origin.Host == "" || (origin.Scheme != "http" && origin.Scheme != "https") || origin.Path != "" {
 		return nil, errors.New("Clerk requires an absolute APP_ORIGIN without a path")
 	}
-	c := &Clerk{appOrigin: appOrigin, PublishableKey: publishableKey, FrontendAPI: u.String(), users: user.NewClient(config), sessions: session.NewClient(config), identities: make(map[string]cachedHostedIdentity)}
+	c := &Clerk{appOrigin: appOrigin, PublishableKey: publishableKey, FrontendAPI: u.String(), users: user.NewClient(config), sessions: session.NewClient(config), identities: make(map[string]cachedHostedIdentity),
+		backend: clerk.NewBackend(&config.BackendConfig), jwks: jwks.NewClient(config), keys: map[string]any{}, development: strings.HasPrefix(publishableKey, "pk_test_"), secureCookies: origin.Scheme == "https"}
 	c.middleware = func(next http.Handler) http.Handler {
 		return clerkhttp.WithHeaderAuthorization(
 			clerkhttp.AuthorizationFailureHandler(next),
-			clerkhttp.JWKSClient(jwks.NewClient(config)),
+			clerkhttp.JWKSClient(c.jwks),
 			clerkhttp.AuthorizationJWTExtractor(func(r *http.Request) string {
 				cookie, err := r.Cookie("__session")
 				if err != nil {
@@ -86,10 +94,17 @@ func newClerk(publishableKey, appOrigin string, config *clerk.ClientConfig) (*Cl
 }
 
 // Middleware leaves unauthenticated requests to Exhibit's existing route gates.
-// Invalid/expired cookies follow the same path, allowing the login page to load
-// ClerkJS and renew a session instead of trapping the browser behind a 401.
+// Invalid/expired cookies follow the same path: a page's gate offers them the
+// handshake first (HandshakeRedirect), and otherwise the login page, which
+// loads ClerkJS and renews a session instead of trapping the browser behind a
+// 401. A browser returning from the handshake is answered here.
 func (c *Clerk) Middleware(next http.Handler) http.Handler {
-	verified := c.middleware(next)
+	verified := c.middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if c.completeHandshake(w, r) {
+			return
+		}
+		next.ServeHTTP(w, r)
+	}))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if cookie, err := r.Cookie("__session"); err == nil && cookie.Value != "" && r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" {
 			if origin := r.Header.Get("Origin"); origin != "" && origin != c.appOrigin {
