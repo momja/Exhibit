@@ -16,6 +16,12 @@ type hostedLoginStub struct{}
 
 func (hostedLoginStub) Middleware(next http.Handler) http.Handler { return next }
 func (hostedLoginStub) Subject(r *http.Request) string            { return r.Header.Get("Test-Clerk-Subject") }
+func (hostedLoginStub) SessionExpiresIn(r *http.Request) time.Duration {
+	if r.Header.Get("Test-Clerk-Subject") == "" {
+		return 0
+	}
+	return 42 * time.Second
+}
 func (hostedLoginStub) Identity(r *http.Request) (auth.HostedIdentity, error) {
 	return auth.HostedIdentity{Subject: r.Header.Get("Test-Clerk-Subject"), Email: "person@example.com", SessionCreatedAt: time.Now().UnixMilli()}, nil
 }
@@ -61,7 +67,12 @@ func TestClerkHostedMode(t *testing.T) {
 	two, err := st.GetUserByExternalID(context.Background(), "clerk:user_two")
 	require.NoError(t, err)
 	require.NotEqual(t, one.ID, two.ID)
-	require.Equal(t, 200, request("GET", "/", "clerk:user_one").Code)
+	page := request("GET", "/", "clerk:user_one")
+	require.Equal(t, 200, page.Code)
+	// Exh-g0fx: the page learns how long its token has left from the server,
+	// whose clock the token is checked against.
+	require.Contains(t, page.Body.String(), `<meta name="clerk-session-expires-in" content="42000">`)
+	require.Contains(t, request("GET", "/auth/login", "").Body.String(), `<meta name="clerk-session-expires-in" content="0">`)
 	// Both identities have the same email, but distinct libraries and permissions.
 	require.NoError(t, st.SetUserDisabled(context.Background(), two.ID, true))
 	require.Equal(t, 403, request("GET", "/auth/clerk/ready", "clerk:user_two").Code)

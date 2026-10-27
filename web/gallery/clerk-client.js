@@ -49,26 +49,37 @@ function pageSettled() {
   const cap = Math.min(settleCap, msUntilSessionExpires() - renewalMargin);
   return new Promise(resolve => {
     if (cap <= 0) return resolve();
-    const timer = setTimeout(resolve, cap);
-    const done = () => { clearTimeout(timer); resolve(); };
+    const timer = setTimeout(done, cap);
+    // A page put away mid-wait — a background tab, the back/forward cache —
+    // has its timers paused while its token keeps ageing, so coming back is
+    // the moment to stop waiting.
+    const onVisible = () => { if (document.visibilityState === 'visible') done(); };
+    const onShow = event => { if (event.persisted) done(); };
     const whenIdle = () => (window.requestIdleCallback
       ? window.requestIdleCallback(done, { timeout: 2000 })
       : setTimeout(done, 0));
+    function done() {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onShow);
+      window.removeEventListener('load', whenIdle);
+      resolve();
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onShow);
     if (document.readyState === 'complete') whenIdle();
     else window.addEventListener('load', whenIdle, { once: true });
   });
 }
 
-// The session cookie is Clerk's JWT and readable by design; only its expiry is
-// read here, and anything unreadable counts as already expired.
+// The server says how long the token had left when it rendered the page, on
+// the clock the token is checked against; time since then is measured on the
+// page's monotonic clock, which starts before the response arrived and so
+// errs early. The device's wall clock, which may be off by any amount, is
+// never consulted. No figure counts as already expired.
 function msUntilSessionExpires() {
-  const cookie = document.cookie.split('; ').find(c => c.startsWith('__session='));
-  try {
-    const payload = cookie.slice('__session='.length).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(atob(payload)).exp * 1000 - Date.now();
-  } catch {
-    return 0;
-  }
+  const left = Number(document.querySelector('meta[name="clerk-session-expires-in"]')?.content);
+  return Number.isFinite(left) ? left - window.performance.now() : 0;
 }
 
 export function clerkClient() {

@@ -32,28 +32,30 @@ for (const stage of ['script download', 'SDK initialization']) {
 
 // Exh-g0fx: ordinary pages start Clerk after load, when the main thread is idle,
 // and a load event held up by a slow frame cannot postpone it past the cap.
-const sessionCookie = secondsLeft => {
-  const payload = Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + secondsLeft })).toString('base64url');
-  return `__client_uat=1; __session=eyJhbGciOiJSUzI1NiJ9.${payload}.sig`;
-};
-
-function fakePage(t, readyState, cookie = sessionCookie(60)) {
-  const scripts = [], listeners = {}, idle = [];
+function fakePage(t, readyState, expiresIn = '60000') {
+  const scripts = [], listeners = {}, docListeners = {}, idle = [];
   const old = { document: globalThis.document, window: globalThis.window };
   globalThis.document = {
     readyState,
-    cookie,
-    querySelector: selector => ({ content: selector.includes('publishable') ? 'pk_test_example' : 'https://example.clerk.accounts.dev' }),
+    visibilityState: 'visible',
+    querySelector: selector => {
+      if (selector.includes('expires-in')) return expiresIn === null ? null : { content: expiresIn };
+      return { content: selector.includes('publishable') ? 'pk_test_example' : 'https://example.clerk.accounts.dev' };
+    },
     createElement: () => ({ dataset: {} }),
     head: { append: script => scripts.push(script) },
+    addEventListener: (name, fn) => { docListeners[name] = fn; },
+    removeEventListener: () => {},
   };
   globalThis.window = {
     Clerk: { load: () => new Promise(() => {}) },
+    performance: { now: () => 0 },
     addEventListener: (name, fn) => { listeners[name] = fn; },
+    removeEventListener: () => {},
     requestIdleCallback: fn => idle.push(fn),
   };
   t.after(() => { globalThis.document = old.document; globalThis.window = old.window; });
-  return { scripts, listeners, idle };
+  return { scripts, listeners, docListeners, idle };
 }
 
 const flush = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
@@ -88,15 +90,16 @@ test('a page whose load event never arrives still starts Clerk at the cap', asyn
 });
 
 // Review of Exh-g0fx: a page admitted on a nearly spent token must not wait
-// past the point where Clerk can still renew it.
-for (const [name, cookie] of [
-  ['a nearly expired session', sessionCookie(14)],
-  ['no session cookie', '__client_uat=0'],
-  ['an unreadable session cookie', '__session=not-a-jwt'],
+// past the point where Clerk can still renew it. The figure is the server's,
+// so the device's clock cannot stretch it.
+for (const [name, expiresIn] of [
+  ['a nearly expired session', '14000'],
+  ['no session figure', null],
+  ['an unreadable session figure', 'soon'],
 ]) {
   test(`${name} starts Clerk at once`, async t => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
-    const page = fakePage(t, 'interactive', cookie);
+    const page = fakePage(t, 'interactive', expiresIn);
     const { clerkClientAfterLoad } = await import(`data:text/javascript,${encodeURIComponent(source)}#${encodeURIComponent(name)}`);
     clerkClientAfterLoad().catch(() => {});
     await flush();
@@ -106,16 +109,35 @@ for (const [name, cookie] of [
 
 test('the wait ends early enough to renew a session expiring soon', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const page = fakePage(t, 'interactive', sessionCookie(17));
+  const page = fakePage(t, 'interactive', '17000');
   const { clerkClientAfterLoad } = await import(`data:text/javascript,${encodeURIComponent(source)}#soon`);
   clerkClientAfterLoad().catch(() => {});
-  t.mock.timers.tick(1500);
+  t.mock.timers.tick(1999);
   await flush();
   assert.equal(page.scripts.length, 0);
-  t.mock.timers.tick(1000);
+  t.mock.timers.tick(1);
   await flush();
   assert.equal(page.scripts.length, 2);
 });
+
+// Review of Exh-g0fx: a page put away mid-wait has its timers paused while
+// its token keeps ageing, so returning to it starts Clerk at once.
+for (const [name, comeBack] of [
+  ['becoming visible again', page => page.docListeners.visibilitychange()],
+  ['a back/forward cache restore', page => page.listeners.pageshow({ persisted: true })],
+]) {
+  test(`${name} ends the wait`, async t => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const page = fakePage(t, 'interactive');
+    const { clerkClientAfterLoad } = await import(`data:text/javascript,${encodeURIComponent(source)}#${encodeURIComponent(name)}`);
+    clerkClientAfterLoad().catch(() => {});
+    await flush();
+    assert.equal(page.scripts.length, 0);
+    comeBack(page);
+    await flush();
+    assert.equal(page.scripts.length, 2);
+  });
+}
 
 test('an already loaded page starts Clerk at the next idle period', async t => {
   const page = fakePage(t, 'complete');
