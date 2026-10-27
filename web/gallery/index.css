@@ -32,7 +32,7 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inl
  * fits the input's 30px right padding, the same slot the clear button uses. */
 .search-kbd{position:absolute;right:6px;top:50%;transform:translateY(-50%);min-width:20px;padding:1px 6px;border:1px solid var(--color-border);border-bottom-width:2px;border-radius:4px;background:var(--color-subtle);color:var(--color-muted);font:12px/16px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;pointer-events:none}
 .search-row input:focus~.search-kbd,.search-row input:not(:placeholder-shown)~.search-kbd{display:none}
-@media (pointer:coarse){.search-kbd{display:none}}
+@media (pointer:coarse),(max-width:767px){.search-kbd{display:none}}
 /* The clear control sits inside the box's right edge, where it takes no room
  * from the input when there is nothing to clear. */
 .search-clear{position:absolute;right:4px;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:var(--radius-pill);background:none;color:var(--color-muted);font-size:13px;cursor:pointer}
@@ -184,10 +184,16 @@ main{padding:10px 12px}
   /* The gallery header is nested, so body>header control sizing does not apply. */
   header .btn{height:var(--header-control-size);min-height:var(--header-control-size);padding-top:0;padding-bottom:0}
   header .icon-btn{width:var(--header-control-size)}
+  .search-row input:placeholder-shown{padding-right:9px}
   .gallery-filter-trigger{display:inline-flex;flex:0 0 auto;gap:4px;padding:0 6px}
   [data-controller~=filter-sheet]>header{gap:8px}
   .gallery-rail-filters{display:none}
   .gallery-layout-solo>.gallery-rail{display:none}
   .gallery-layout-solo main{padding-bottom:12px}
   .gallery-filter-chips a{min-height:44px}
+}
+
+@media (max-width:360px){
+  header{padding-left:8px;padding-right:8px}
+  [data-controller~=filter-sheet]>header{gap:4px}
 }
