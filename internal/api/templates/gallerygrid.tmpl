@@ -4,7 +4,7 @@
       hx-get="{{.FragmentPath}}" hx-trigger="submit, exhibit:gallery-search"
       hx-target="#{{.ID}}-results" hx-swap="innerHTML" hx-sync="#{{.ID}}:replace">
   {{if .Filters.Sections}}{{template "gallerySearchParameters" .}}{{end}}<i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
-  <input type="text" name="q" data-gallery-query placeholder="Search artifacts…" value="{{.Query}}" autocomplete="off" aria-label="Search artifacts" aria-keyshortcuts="/">
+  <input type="text" name="q" data-gallery-query placeholder="Search" value="{{.Query}}" autocomplete="off" aria-label="Search artifacts" aria-keyshortcuts="/">
   <kbd class="search-kbd" aria-hidden="true">/</kbd>
   <button class="search-clear" type="button" data-gallery-clear aria-label="Clear search" hidden><i class="ph ph-x" aria-hidden="true"></i></button>
 </form>{{end}}

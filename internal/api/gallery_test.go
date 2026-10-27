@@ -186,7 +186,7 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 	page := w.Body.String()
 
 	assert.Contains(t, page, `<input type="text" name="q" data-gallery-query`)
-	assert.Contains(t, page, `placeholder="Search artifacts…"`)
+	assert.Contains(t, page, `placeholder="Search"`)
 	assert.Contains(t, page, `hx-get="/partials/gallery-grid"`)
 	assert.Contains(t, page, `hx-target="#library-gallery-results"`)
 	assert.Contains(t, page, `<script type="module" src="/assets/gallery/index.js"></script>`)
