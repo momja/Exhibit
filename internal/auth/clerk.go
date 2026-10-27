@@ -123,6 +123,18 @@ func (c *Clerk) Middleware(next http.Handler) http.Handler {
 	})
 }
 
+// SessionExpiresIn is how long the request's verified session token has left,
+// or zero without one. It is measured on the server's clock, the one the
+// token is checked against, so a page can schedule its renewal without
+// trusting the device's.
+func (c *Clerk) SessionExpiresIn(r *http.Request) time.Duration {
+	claims, ok := clerk.SessionClaimsFromContext(r.Context())
+	if !ok || claims.Expiry == nil {
+		return 0
+	}
+	return max(time.Until(time.Unix(*claims.Expiry, 0)), 0)
+}
+
 func (c *Clerk) Subject(r *http.Request) string {
 	claims, ok := clerk.SessionClaimsFromContext(r.Context())
 	if !ok || claims.Issuer != c.FrontendAPI || claims.Subject == "" || claims.SessionID == "" || claims.Expiry == nil {

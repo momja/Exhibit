@@ -37,6 +37,8 @@ type HostedLogin interface {
 	Identity(*http.Request) (auth.HostedIdentity, error)
 	ResolveEmail(context.Context, string) (string, error)
 	RevokeSessions(context.Context, string) (int64, error)
+	// SessionExpiresIn is how long the request's session token has left.
+	SessionExpiresIn(*http.Request) time.Duration
 }
 
 // Config holds the dependencies and configuration for the API router.

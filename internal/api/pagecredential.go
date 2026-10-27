@@ -113,7 +113,7 @@ func (ro *Router) pageCredentials(r *http.Request) pageCredentials {
 	p := principalFromCtx(ctx)
 	readOnly := p.ReadOnly
 	return pageCredentials{
-		Clerk: ro.clerkView(),
+		Clerk: ro.clerkView(r),
 		Token: ro.pageToken(ctx, anonymous),
 		// Derived from the resolved Principal, not recomputed from
 		// publicVisitor: ReadOnly is its own field precisely because a future
