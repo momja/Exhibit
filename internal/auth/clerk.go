@@ -28,6 +28,16 @@ type Clerk struct {
 	cacheMu        sync.Mutex
 	identities     map[string]cachedHostedIdentity
 	appOrigin      string
+	// For the handshake (clerk_handshake.go).
+	backend       clerk.Backend
+	jwks          *jwks.Client
+	keysMu        sync.Mutex
+	keysFetchMu   sync.Mutex
+	keys          map[string]any
+	keysFetched   time.Time // last successful fetch
+	keysAttempted time.Time // last fetch, successful or not
+	development   bool
+	secureCookies bool
 }
 
 type clerkSessionState struct {
@@ -66,11 +76,12 @@ func newClerk(publishableKey, appOrigin string, config *clerk.ClientConfig) (*Cl
 	if err != nil || origin.Host == "" || (origin.Scheme != "http" && origin.Scheme != "https") || origin.Path != "" {
 		return nil, errors.New("Clerk requires an absolute APP_ORIGIN without a path")
 	}
-	c := &Clerk{appOrigin: appOrigin, PublishableKey: publishableKey, FrontendAPI: u.String(), users: user.NewClient(config), sessions: session.NewClient(config), identities: make(map[string]cachedHostedIdentity)}
+	c := &Clerk{appOrigin: appOrigin, PublishableKey: publishableKey, FrontendAPI: u.String(), users: user.NewClient(config), sessions: session.NewClient(config), identities: make(map[string]cachedHostedIdentity),
+		backend: clerk.NewBackend(&config.BackendConfig), jwks: jwks.NewClient(config), keys: map[string]any{}, development: strings.HasPrefix(publishableKey, "pk_test_"), secureCookies: origin.Scheme == "https"}
 	c.middleware = func(next http.Handler) http.Handler {
 		return clerkhttp.WithHeaderAuthorization(
 			clerkhttp.AuthorizationFailureHandler(next),
-			clerkhttp.JWKSClient(jwks.NewClient(config)),
+			clerkhttp.JWKSClient(c.jwks),
 			clerkhttp.AuthorizationJWTExtractor(func(r *http.Request) string {
 				cookie, err := r.Cookie("__session")
 				if err != nil {
@@ -86,10 +97,17 @@ func newClerk(publishableKey, appOrigin string, config *clerk.ClientConfig) (*Cl
 }
 
 // Middleware leaves unauthenticated requests to Exhibit's existing route gates.
-// Invalid/expired cookies follow the same path, allowing the login page to load
-// ClerkJS and renew a session instead of trapping the browser behind a 401.
+// Invalid/expired cookies follow the same path: a page's gate offers them the
+// handshake first (HandshakeRedirect), and otherwise the login page, which
+// loads ClerkJS and renews a session instead of trapping the browser behind a
+// 401. A browser returning from the handshake is answered here.
 func (c *Clerk) Middleware(next http.Handler) http.Handler {
-	verified := c.middleware(next)
+	verified := c.middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if c.completeHandshake(w, r) {
+			return
+		}
+		next.ServeHTTP(w, r)
+	}))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if cookie, err := r.Cookie("__session"); err == nil && cookie.Value != "" && r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" {
 			if origin := r.Header.Get("Origin"); origin != "" && origin != c.appOrigin {
@@ -103,6 +121,18 @@ func (c *Clerk) Middleware(next http.Handler) http.Handler {
 		}
 		verified.ServeHTTP(w, r)
 	})
+}
+
+// SessionExpiresIn is how long the request's verified session token has left,
+// or zero without one. It is measured on the server's clock, the one the
+// token is checked against, so a page can schedule its renewal without
+// trusting the device's.
+func (c *Clerk) SessionExpiresIn(r *http.Request) time.Duration {
+	claims, ok := clerk.SessionClaimsFromContext(r.Context())
+	if !ok || claims.Expiry == nil {
+		return 0
+	}
+	return max(time.Until(time.Unix(*claims.Expiry, 0)), 0)
 }
 
 func (c *Clerk) Subject(r *http.Request) string {

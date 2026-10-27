@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -113,6 +114,31 @@ func (w *statusWriter) Push(target string, opts *http.PushOptions) error {
 // developer wants in test environments. Server errors (5xx) are always
 // promoted to error level and client errors (4xx) to warn, so a noisy log
 // still surfaces real problems without requiring debug mode.
+// credentialQueryParams carry credentials in a URL, and are logged as
+// [redacted]. A browser returning from Clerk's handshake (Exh-8409) carries a
+// signed bundle of fresh session cookies, a nonce for one, or the state that
+// binds them to it.
+var credentialQueryParams = []string{"__clerk_handshake", "__clerk_handshake_nonce", "__clerk_db_jwt", "__exhibit_hs"}
+
+func redactQuery(raw string) string {
+	q, err := url.ParseQuery(raw)
+	if err != nil {
+		// Unparseable, so it cannot be redacted selectively.
+		return "[unparseable]"
+	}
+	redacted := false
+	for _, name := range credentialQueryParams {
+		if q.Has(name) {
+			q.Set(name, "[redacted]")
+			redacted = true
+		}
+	}
+	if !redacted {
+		return raw
+	}
+	return q.Encode()
+}
+
 func RequestMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -135,7 +161,7 @@ func RequestMiddleware(next http.Handler) http.Handler {
 			attrs = append(attrs,
 				slog.String("remote", r.RemoteAddr),
 				slog.Int("bytes", sw.bytes),
-				slog.String("query", r.URL.RawQuery),
+				slog.String("query", redactQuery(r.URL.RawQuery)),
 				slog.String("request_id", r.Header.Get("X-Request-ID")),
 			)
 		}
