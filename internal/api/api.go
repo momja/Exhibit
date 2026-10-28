@@ -201,7 +201,9 @@ var gzipWriterPool = sync.Pool{
 func compressor() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !acceptsGzip(r.Header.Get("Accept-Encoding")) {
+			// A range is a range of the identity bytes; compressing the
+			// slice would answer with neither representation's range.
+			if !acceptsGzip(r.Header.Get("Accept-Encoding")) || r.Header.Get("Range") != "" {
 				next.ServeHTTP(w, r)
 				return
 			}

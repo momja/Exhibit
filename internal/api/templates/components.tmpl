@@ -1,7 +1,7 @@
 {{/* Include once on an app page using shared controllers. The native module
      imports only app-origin assets, starts one application, and registers
      controllers explicitly. htmx fragments contain markup only. */}}
-{{define "componentScripts"}}<script type="module" src="/assets/gallery/controllers.js"></script>{{end}}
+{{define "componentScripts"}}<script type="module" src="{{asset "gallery/controllers.js"}}"></script>{{end}}
 
 {{/* Data: actionMenuView. A link navigates normally; an event item dispatches
      its named, bubbling feature event with its payload and the visible trigger

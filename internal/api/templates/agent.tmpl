@@ -18,15 +18,15 @@
 {{template "pwaHead"}}
 {{template "clerkScripts" .Clerk}}
 <title>Agent — Exhibit</title>
-<link rel="stylesheet" href="/assets/phosphor/regular.css">
-<link rel="stylesheet" href="/assets/gallery/tokens.css">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
 {{/* components.css joins the other pages' layering here (tokens → components →
      page sheet) because the preview pane now renders the shared cardWidget
      component (av-fafu). agent.css still loads last, so its own .btn/.spacer
      definitions keep winning. */}}
-<link rel="stylesheet" href="/assets/gallery/components.css">
-<link rel="stylesheet" href="/assets/gallery/agent.css">
-<script src="/assets/htmx/htmx.min.js"></script>
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/agent.css"}}">
+<script src="{{asset "htmx/htmx.min.js"}}"></script>
 </head>
 <body>
 <header>
@@ -150,18 +150,18 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const BYOK = {{if .BYOK}}true{{else}}false{{end}};
 let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 </script>
-<script src="/assets/gallery/api.js"></script>
-<script src="/assets/gallery/state-api.js"></script>
-<script src="/assets/gallery/network-prompt.js"></script>
+<script src="{{asset "gallery/api.js"}}"></script>
+<script src="{{asset "gallery/state-api.js"}}"></script>
+<script src="{{asset "gallery/network-prompt.js"}}"></script>
 {{/* components.js carries the widget-tile health watcher (av-fafu); the
      preview pane renders a tile, so it needs it like the gallery does. */}}
-<script src="/assets/gallery/components.js"></script>
-<script type="module" src="/assets/gallery/agent.js"></script>
+<script src="{{asset "gallery/components.js"}}"></script>
+<script type="module" src="{{asset "gallery/agent.js"}}"></script>
 {{template "directOpenPrompt" .DirectOpen}}
-<script type="module" src="/assets/gallery/direct-open.js"></script>
-<script type="module" src="/assets/gallery/agent-resize.js"></script>
-<script type="module" src="/assets/gallery/agent-questions.js"></script>
-<script type="module" src="/assets/gallery/message-actions.js"></script>
+<script type="module" src="{{asset "gallery/direct-open.js"}}"></script>
+<script type="module" src="{{asset "gallery/agent-resize.js"}}"></script>
+<script type="module" src="{{asset "gallery/agent-questions.js"}}"></script>
+<script type="module" src="{{asset "gallery/message-actions.js"}}"></script>
 </body>
 </html>{{end}}
 

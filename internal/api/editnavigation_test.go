@@ -58,7 +58,7 @@ func TestEditorNavigationMarkupAndVersionRefresh(t *testing.T) {
 	page := getPage(t, ro, editURL(id, "/?q=tool"))
 	assert.Contains(t, page, `class="editor-return" href="/?q=tool"`)
 	assert.Contains(t, page, `data-controller="unsaved-changes"`)
-	assert.Contains(t, page, `type="module" src="/assets/gallery/edit.js"`)
+	assert.Contains(t, page, `type="module" src="`+assetURL("gallery/edit.js")+`"`)
 	assert.NotContains(t, page, `onclick="save()"`)
 	assert.Contains(t, page, "Save and leave")
 	assert.Contains(t, page, "View artifact")

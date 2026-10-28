@@ -13,10 +13,10 @@
 <title>Not found — Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
-<link rel="stylesheet" href="/assets/phosphor/regular.css">
-<link rel="stylesheet" href="/assets/gallery/tokens.css">
-<link rel="stylesheet" href="/assets/gallery/components.css">
-<link rel="stylesheet" href="/assets/gallery/notfound.css">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/notfound.css"}}">
 </head>
 <body>
 <header>
@@ -71,6 +71,6 @@
     </form>
   </div>
 </main>
-<script src="/assets/gallery/notfound.js"></script>
+<script src="{{asset "gallery/notfound.js"}}"></script>
 </body>
 </html>{{end}}

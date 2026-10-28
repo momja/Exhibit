@@ -203,13 +203,13 @@ func TestOnlyTheOwnerGetsTheSharePanel(t *testing.T) {
 	assert.Contains(t, owner, `id="share-open"`)
 	assert.Contains(t, owner, `id="share-link-toggle"`)
 	assert.Contains(t, owner, `id="share-add-input"`)
-	assert.Contains(t, owner, `<script type="module" src="/assets/gallery/share.js"></script>`)
+	assert.Contains(t, owner, `<script type="module" src="`+assetURL("gallery/share.js")+`"></script>`)
 
 	recipient := responseText(in.get(t, "/artifacts/"+in.granted, in.cookieTwo))
 	assert.NotContains(t, recipient, `id="share-panel"`)
 	assert.NotContains(t, recipient, `id="share-open"`)
-	assert.NotContains(t, recipient, "/assets/gallery/share.js")
-	assert.NotContains(t, recipient, "/assets/htmx/htmx.min.js",
+	assert.NotContains(t, recipient, "gallery/share.js")
+	assert.NotContains(t, recipient, "htmx/htmx.min.js",
 		"a page with no panel to swap should not carry the library that swaps it")
 }
 

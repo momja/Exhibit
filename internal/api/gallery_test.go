@@ -124,7 +124,7 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 	assert.Contains(t, page, `<div id="tag-edit-modal" class="modal-overlay" hidden>`)
 	assert.Contains(t, page, `data-color="#6B7280"`) // store.DefaultTagColor preset
 	assert.Contains(t, page, `id="tag-edit-delete"`)
-	assert.Contains(t, page, `<script type="module" src="/assets/gallery/tags.js"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/tags.js")+`"></script>`)
 	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/tags.js"), "exhibit:tags-changed")
 }
 
@@ -189,7 +189,7 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 	assert.Contains(t, page, `placeholder="Search"`)
 	assert.Contains(t, page, `hx-get="/partials/gallery-grid"`)
 	assert.Contains(t, page, `hx-target="#library-gallery-results"`)
-	assert.Contains(t, page, `<script type="module" src="/assets/gallery/index.js"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/index.js")+`"></script>`)
 	assert.NotContains(t, page, `>Search</button>`)
 }
 
@@ -259,7 +259,7 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.Contains(t, page, `aria-label="Actions for Openless" title="Actions" aria-haspopup="menu" aria-expanded="false" aria-controls="card-actions-`+id+`"`)
 	assert.Contains(t, page, `id="card-actions-`+id+`" role="menu" aria-labelledby="card-actions-`+id+`-trigger"`)
 	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit?return_to=%2F" role="menuitem"`)
-	assert.Contains(t, page, `<script type="module" src="/assets/gallery/controllers.js"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/controllers.js")+`"></script>`)
 	assert.NotContains(t, page, `class="card-edit"`)
 
 	// av-uvc6: one meta row under the tile, and no created date on it.
@@ -379,7 +379,7 @@ func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 		"the opaque-origin allow= delegation is a no-op and must be removed in favor of the bridge")
 	// The host frame mediates clipboard requests posted by the shim; the
 	// handler lives in the static page script the detail page loads.
-	assert.Contains(t, page, `<script src="/assets/gallery/detail.js"></script>`)
+	assert.Contains(t, page, `<script src="`+assetURL("gallery/detail.js")+`"></script>`)
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(detailJS), "__avClipboard",
@@ -445,7 +445,7 @@ func TestDetailPagePromptsForBlockedNetworkOrigins(t *testing.T) {
 
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
-	assert.Contains(t, page, `<script src="/assets/gallery/network-prompt.js"></script>`,
+	assert.Contains(t, page, `<script src="`+assetURL("gallery/network-prompt.js")+`"></script>`,
 		"the dialog is inert without the module that drives it")
 	assert.Contains(t, string(detailJS), "ExhibitNetworkPrompt.install",
 		"the viewer installs the shared prompt rather than hand-rolling one")
@@ -480,7 +480,7 @@ func TestAgentPageHostsTheNetworkPrompt(t *testing.T) {
 	assert.Contains(t, page, `id="net-once"`)
 	assert.Contains(t, page, `id="net-never"`)
 	assert.Contains(t, page, `<code id="net-origin"></code>`)
-	assert.Contains(t, page, `<script src="/assets/gallery/network-prompt.js"></script>`)
+	assert.Contains(t, page, `<script src="`+assetURL("gallery/network-prompt.js")+`"></script>`)
 
 	agentJS, err := embeddedAssets.ReadFile("assets/gallery/agent.js")
 	require.NoError(t, err)

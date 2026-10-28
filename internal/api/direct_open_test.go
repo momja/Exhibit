@@ -30,7 +30,7 @@ func TestDirectOpenPromptForEveryViewer(t *testing.T) {
 			assert.Contains(t, page, `id="`+id+`"`)
 		}
 		assert.NotContains(t, page, `href="/artifacts/art-1/open"`, "no link can bypass confirmation through modified clicks")
-		assert.Contains(t, page, `<script type="module" src="/assets/gallery/direct-open.js"></script>`)
+		assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/direct-open.js")+`"></script>`)
 
 		urls.viewerID = 43
 		other, err := renderDetailPage(a, urls, creds, nil)

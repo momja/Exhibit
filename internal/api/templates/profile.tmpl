@@ -22,10 +22,10 @@
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
 {{template "clerkScripts" .Clerk}}
-<link rel="stylesheet" href="/assets/phosphor/regular.css">
-<link rel="stylesheet" href="/assets/gallery/tokens.css">
-<link rel="stylesheet" href="/assets/gallery/components.css">
-<link rel="stylesheet" href="/assets/gallery/settings.css">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/settings.css"}}">
 </head>
 <body>
 {{template "settingsHeader" "Your account"}}
@@ -186,7 +186,7 @@ const TOKEN = {{.Token}};
      this rather than inventing a credential of its own. */ -}}
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 </script>
-<script src="/assets/gallery/api.js"></script>
-<script src="/assets/gallery/profile.js"></script>
+<script src="{{asset "gallery/api.js"}}"></script>
+<script src="{{asset "gallery/profile.js"}}"></script>
 </body>
 </html>{{end}}

@@ -2,7 +2,7 @@
 <meta name="clerk-session-expires-in" content="{{.SessionExpiresInMS}}">
 <meta name="clerk-publishable-key" content="{{.PublishableKey}}">
 <meta name="clerk-frontend-api" content="{{.FrontendAPI}}">
-<script type="module" src="/assets/gallery/clerk.js"></script>
+<script type="module" src="{{asset "gallery/clerk.js"}}"></script>
 {{end}}{{end}}
 
 {{define "clerkLogin"}}<!DOCTYPE html>
@@ -13,10 +13,10 @@
 <title>Account — Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
-<link rel="stylesheet" href="/assets/phosphor/regular.css">
-<link rel="stylesheet" href="/assets/gallery/tokens.css">
-<link rel="stylesheet" href="/assets/gallery/components.css">
-<link rel="stylesheet" href="/assets/gallery/login.css">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/login.css"}}">
 {{template "clerkScripts" .Clerk}}
 </head>
 <body class="login-page">

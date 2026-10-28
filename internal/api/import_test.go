@@ -182,7 +182,7 @@ func TestImportControlsAndAssetPartial(t *testing.T) {
 	page := httptest.NewRecorder()
 	r.ServeHTTP(page, httptest.NewRequest("GET", "/artifacts/"+id+"/edit", nil))
 	require.Equal(t, http.StatusOK, page.Code)
-	for _, s := range []string{`id="state-import"`, `id="assets-import"`, `id="state-import-file"`, `id="assets-import-file"`, `type="module" src="/assets/gallery/storage-import.js"`, `type="module" src="/assets/gallery/assets.js"`} {
+	for _, s := range []string{`id="state-import"`, `id="assets-import"`, `id="state-import-file"`, `id="assets-import-file"`, `type="module" src="` + assetURL("gallery/storage-import.js") + `"`, `type="module" src="` + assetURL("gallery/assets.js") + `"`} {
 		assert.Contains(t, page.Body.String(), s)
 	}
 	seedExportAssets(t, r, id)
