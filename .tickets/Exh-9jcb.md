@@ -1,6 +1,6 @@
 ---
 id: Exh-9jcb
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-28T15:15:05Z
@@ -30,3 +30,9 @@ Suggested layout: internal/agent/prompts/*.tmpl (plain text/template; loader tri
 - Existing prompt_test.go, guard tests and ext tests pass
 - docs/agent.md notes where prompts live
 
+
+## Notes
+
+**2026-10-28T15:35:30Z**
+
+Shipped: system prompts, mode paragraphs, notices, generate-widget turn, and guardrail screen/classifier/policy moved to .tmpl files. Agent tool descriptions and tool-result strings in ext/exhibit.ts and ext/questions.ts deliberately stay inline beside their tool definitions; follow-up if wanted.
