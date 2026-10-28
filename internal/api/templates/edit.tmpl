@@ -227,7 +227,7 @@
       <div class="widget-source">
         <textarea id="widget-src" data-revision="{{.WidgetRevision}}" spellcheck="false" placeholder="A complete HTML document for the tile. Leave this empty to keep the default tile.">{{.WidgetSrc}}</textarea>
         {{/* Generate takes no prompt: the button IS the request, and the whole
-             instruction lives server-side (widget.go's generateWidgetPrompt
+             instruction lives server-side (agent.GenerateWidgetPrompt, prompts/generate_widget.tmpl
              plus the session's WidgetOnly system prompt), so there is nothing
              here for a caller to put into the model's context. Disabled with
              its reason in the title when the agent can't run. */}}

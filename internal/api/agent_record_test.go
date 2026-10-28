@@ -170,7 +170,8 @@ func TestASessionsScratchDirectoryGoesWhenItEnds(t *testing.T) {
 		require.NoError(t, err)
 		var dirs []string
 		for _, e := range entries {
-			if e.IsDir() {
+			// prompts/ is the extension's, materialized beside guard.ts.
+			if e.IsDir() && e.Name() != "prompts" {
 				dirs = append(dirs, e.Name())
 			}
 		}

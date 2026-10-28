@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/momja/Exhibit/internal/agent"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -185,14 +186,6 @@ func (ro *Router) putWidget(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// generateWidgetPrompt is the entire user turn the "Generate widget" button
-// sends. It is a server-side constant on purpose: the button takes no input, so
-// there is nothing a caller can put into the model's context through this
-// route. Everything that makes the result a *widget* — read the artifact
-// first, follow the tile contract, touch nothing but set_widget — is in the
-// session's system prompt (agent.CreateOpts.WidgetOnly), not here.
-const generateWidgetPrompt = "Build the gallery widget for this artifact."
-
 // generateWidget starts a one-shot agent session that writes this artifact's
 // widget, and returns its session id immediately.
 //
@@ -227,7 +220,7 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 		writeAgentCreateError(w, r, "create widget agent session", err)
 		return
 	}
-	if err := s.Prompt(r.Context(), generateWidgetPrompt, nil, nil); err != nil {
+	if err := s.Prompt(r.Context(), agent.GenerateWidgetPrompt, nil, nil); err != nil {
 		// The session is useless without its prompt; don't leave the
 		// subprocess running until the idle reaper notices.
 		ro.cfg.Agent.Close(s.OwnerID, s.ID)
