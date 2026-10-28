@@ -36,3 +36,19 @@ func TestPromptsMatchGoldens(t *testing.T) {
 		require.Equal(t, string(want), got, name)
 	}
 }
+
+// A WorkRoot left by an older binary may hold outdated prompt files; startup
+// must overwrite them with the embedded bytes guard.ts is meant to read.
+func TestMaterializeExtPromptsOverwritesStaleFiles(t *testing.T) {
+	dir := t.TempDir()
+	stale := filepath.Join(dir, "guard_policy.tmpl")
+	require.NoError(t, os.WriteFile(stale, []byte("outdated"), 0o644))
+
+	require.NoError(t, materializeExtPrompts(dir))
+
+	want, err := extFS.ReadFile("ext/prompts/guard_policy.tmpl")
+	require.NoError(t, err)
+	got, err := os.ReadFile(stale)
+	require.NoError(t, err)
+	require.Equal(t, string(want), string(got))
+}
