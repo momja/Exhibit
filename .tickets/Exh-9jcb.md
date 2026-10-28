@@ -1,6 +1,6 @@
 ---
 id: Exh-9jcb
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-28T15:15:05Z
@@ -21,7 +21,7 @@ Known inline prompts:
 
 ## Design
 
-Suggested layout: internal/agent/prompts/*.md (or .tmpl), one file per prompt, loaded via embed.FS and parsed once at init (fail fast on parse error). buildSystemPrompt keeps its composition logic and the SystemPrompt override semantics; only the text moves. Keep the 'what is absent' invariant: no artifact title/id interpolated into system prompt templates (av-e0yj, av-5s7g). For guard.ts, decide whether the Pi extension reads a file shipped beside it or the text is inlined at build; it must stay a fixed, non-user-controlled string.
+Suggested layout: internal/agent/prompts/*.tmpl (plain text/template; loader trims the trailing newline editors add), one file per prompt, loaded via embed.FS and parsed once at init (fail fast on parse error). buildSystemPrompt keeps its composition logic and the SystemPrompt override semantics; only the text moves. Keep the 'what is absent' invariant: no artifact title/id interpolated into system prompt templates (av-e0yj, av-5s7g). For guard.ts, decide whether the Pi extension reads a file shipped beside it or the text is inlined at build; it must stay a fixed, non-user-controlled string.
 
 ## Acceptance Criteria
 
