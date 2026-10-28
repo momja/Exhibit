@@ -86,22 +86,36 @@ func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, of
 	}
 	var cards []galleryCard
 	var err error
+	limit := galleryPageSize
+	if r.URL.Path == gallery.PagePath {
+		if visible, parseErr := strconv.Atoi(r.URL.Query().Get("visible")); parseErr == nil && visible > limit {
+			limit = min(visible, 480)
+		}
+	}
 	if gallery.Select != nil {
-		cards, grid.Parameters, err = gallery.Select(ro, r, offset, galleryPageSize+1, grid.Query)
+		cards, grid.Parameters, err = gallery.Select(ro, r, offset, limit+1, grid.Query)
 	} else {
 		options := gallery.Filters
 		options.Tags = append(append([]string(nil), options.Tags...), grid.Parameters["tag"]...)
 		options.CollectionIDs = append(append([]string(nil), options.CollectionIDs...), grid.Parameters["collection"]...)
 		options.MatchAllFilters = true
-		cards, err = ro.selectOwnedGallery(r, options, offset, galleryPageSize+1, grid.Query)
+		cards, err = ro.selectOwnedGallery(r, options, offset, limit+1, grid.Query)
 	}
 	grid.prepareFilterLinks(gallery)
 	if err != nil {
 		return grid, err
 	}
-	if len(cards) > galleryPageSize {
-		cards = cards[:galleryPageSize]
-		grid.NextURL = grid.url(gallery.FragmentPath, offset+galleryPageSize)
+	if len(cards) > limit {
+		cards = cards[:limit]
+		grid.NextURL = grid.url(gallery.FragmentPath, offset+limit)
+	}
+	for i := range cards {
+		for j := range cards[i].Actions.Items {
+			item := &cards[i].Actions.Items[j]
+			if item.Href == "/artifacts/"+cards[i].ArtifactID+"/edit" {
+				item.Href = editURL(cards[i].ArtifactID, grid.url(gallery.PagePath, 0))
+			}
+		}
 	}
 	grid.Cards = cards
 	return grid, nil

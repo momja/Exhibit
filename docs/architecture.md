@@ -573,6 +573,34 @@ the request settles as a denial, and a blocked origin is explained in chrome wit
 button. `/artifacts/:id/open` uses the same accessor. Recipients write state per
 `share_state_mode` (av-v991).
 
+**Edit navigation**: the editor names its return destination, carried in a
+validated `return_to` query parameter. It accepts library spaces and the same
+artifact, defaults to My library, and uses a same-origin referrer for legacy
+entry links. Its ES module records that answer in the address for reloads and
+bookmarks. Gallery Edit links retain the search and filters; a per-tab scroll
+record and a bounded `visible` count restore up to 480 freshly rendered cards.
+The artifact pill's icon-only squares-four control always opens My library;
+Edit remains in its action menu.
+
+Save changes stays in the editor. Source and widget writes retain their
+optimistic-concurrency tokens, and the versions rows refresh from
+`/partials/edit-versions` through htmx. `editor-session.js` coordinates each
+section's dirty check, save, and discard. The registered `unsaved-changes`
+Stimulus controller guards links with a native dialog (Keep editing, Discard
+changes, Save and leave) and supplies native browser leave protection. A failed
+or partial save keeps the editor open; edits made during a save remain dirty.
+Security edits notify that guard immediately. Origin groups are derived from
+the last saved source footprint, confirmed decisions, and pending edits;
+`/partials/edit-origins` renders their working copy through htmx without
+persisting it. Saves reconcile allowed, blocked, and undecided origins while
+retaining later edits, and touched capability selectors remain dirty until
+their explicit decision has been saved.
+
+Screenshots: [desktop editor](screenshots/Exh-7182/01-editor-desktop.png),
+[phone editor](screenshots/Exh-7182/02-editor-phone.png),
+[leave dialog](screenshots/Exh-7182/03-unsaved-phone.png), and
+[Library control](screenshots/Exh-7182/04-library-pill-phone.png).
+
 **Edit page**: the state inspector (av-hg5f) renders each value through a control
 inferred from its shape, with no raw JSON editing, fetched on first open, saved via
 the state routes. Its Export JSON (Exh-k8p6) downloads the saved state as a flat

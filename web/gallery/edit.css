@@ -8,6 +8,18 @@ header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bot
 header h1{font-size:18px;font-weight:600;flex:1}
 header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
 main{padding:24px;max-width:900px;margin:0 auto}
+.editor-return{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:50%;overflow-wrap:anywhere}
+.editor-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.edit-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.edit-heading h1{font-size:24px;line-height:1.25;overflow-wrap:anywhere}
+.edit-heading p{margin-bottom:4px}
+.edit-card>label{display:block;margin-bottom:6px}
+.editor-leave-dialog{margin:auto;padding:24px;border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-panel);color:var(--color-ink);width:min(480px,calc(100% - 32px));box-shadow:var(--shadow-modal)}
+.editor-leave-dialog::backdrop{background:var(--overlay)}
+.editor-leave-dialog h2{font-size:19px;margin-bottom:12px}
+.editor-leave-dialog p{font-size:14px;line-height:1.6;color:var(--color-ink-mid);margin-bottom:20px}
+.editor-leave-dialog .btn-row{flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:600px){header>.spacer{display:none}body>header{height:auto;min-height:var(--header-height);flex-wrap:nowrap;padding:8px 16px;gap:8px}.editor-return{max-width:none;flex:1;min-height:44px}.editor-return-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.editor-actions{width:auto;justify-content:flex-end}.editor-actions .btn{width:44px;min-height:44px;justify-content:center;padding:0}.editor-action-label{display:none}.editor-actions .ph{font-size:18px}.editor-leave-dialog .btn{min-height:44px}main{padding:20px 16px}.edit-heading{align-items:flex-start;flex-direction:column;gap:8px}.edit-heading h1{font-size:21px}.edit-card{padding:16px}.edit-card>.btn-row{flex-wrap:wrap}.editor-leave-dialog{padding:20px}.editor-leave-dialog .btn-row .btn{flex:1 1 auto}}
 .edit-card{background:var(--color-panel);border-radius:10px;padding:20px;box-shadow:var(--shadow-card)}
 .edit-card h2{font-size:15px;font-weight:600;margin-bottom:12px;color:var(--color-ink-soft)}
 .edit-card>input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:var(--field-font-size);margin-bottom:10px;outline:none}

@@ -102,6 +102,27 @@ the same feature guard. Form contents and asynchronous saving belong to the
 story implementing them. Existing dialogs retain their implementations until
 migrated.
 
+## Unsaved changes
+
+The editor's body uses the registered `unsaved-changes` controller with the
+`editorLeaveDialog` partial. Its `dialog` target supplies native focus
+containment; its `status` target reports whether there are unsaved edits.
+Escape and Keep editing close the dialog and return focus to the link.
+Browser reload, Back, and tab closure use the native beforeunload prompt.
+Protection resets on pageshow when browser Back restores a cached editor.
+Confirmed deletion and version restoration emit `exhibit:editor-exit` before
+navigating, so they do not ask for the same discard decision twice.
+
+Sections register `isDirty`, asynchronous `save`, and `discard` operations with
+`editor-session.js`. A successful save returns `true`; a failed or incomplete
+save leaves its error on the page and returns `false`. The coordinator shares
+in-flight saves, stops on failure, and checks for further edits before allowing
+navigation. It preserves server-confirmed changes after partial saves.
+The source and widget section tracks the submitted snapshot, so text entered
+while a request is pending remains unsaved. Section code emits
+`exhibit:editor-changed` when its internal working copy changes without a form
+input event; CodeMirror emits input on its underlying textarea.
+
 ## Testing
 
 The existing Node suite tests feature logic in its small DOM. Stimulus

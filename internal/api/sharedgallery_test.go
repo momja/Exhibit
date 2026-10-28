@@ -144,7 +144,7 @@ func TestSharedByGallerySelection(t *testing.T) {
 	assert.Contains(t, all, linkOnly)
 	assert.NotContains(t, all, private)
 	assert.NotContains(t, all, in.artifactTwo)
-	// Own cards execute the identical partial as the library's cards.
+	// Own cards execute the same partial; only Edit's return destination differs.
 	req := httptest.NewRequest("GET", "/", nil)
 	req = req.WithContext(withPrincipal(req.Context(), Principal{OwnerID: in.ownerOne, Kind: PrincipalSession}))
 	owned, err := in.ro.loadGalleryGrid(req, libraryGallery, 0)
@@ -153,11 +153,12 @@ func TestSharedByGallerySelection(t *testing.T) {
 	require.NoError(t, err)
 	first, err := renderPage("galleryCard", shared.Cards[0])
 	require.NoError(t, err)
+	assert.Contains(t, first, "return_to=%2Fshared-by-me")
 	for _, card := range owned.Cards {
 		if card.ArtifactID == shared.Cards[0].ArtifactID {
 			same, err := renderPage("galleryCard", card)
 			require.NoError(t, err)
-			assert.Equal(t, normalizePerRender(same), normalizePerRender(first))
+			assert.Equal(t, normalizePerRender(same), strings.ReplaceAll(normalizePerRender(first), "return_to=%2Fshared-by-me", "return_to=%2F"))
 			return
 		}
 	}

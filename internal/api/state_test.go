@@ -197,7 +197,7 @@ func TestEditPageRendersStatePanel(t *testing.T) {
 
 	// The erase confirmation names the artifact, so the page bootstrap has to
 	// carry the persisted title (not the editable title field).
-	assert.Contains(t, page, `const TITLE = "Stateful";`)
+	assert.Contains(t, page, `let TITLE = "Stateful";`)
 }
 
 // The panel's script is embedded and served from the app origin, and holds the

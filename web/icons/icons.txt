@@ -58,6 +58,7 @@ ph-sign-out
 ph-sliders
 ph-sparkle
 ph-stop
+ph-squares-four
 ph-trash
 ph-tray-arrow-down
 ph-user-circle

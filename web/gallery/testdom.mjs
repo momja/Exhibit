@@ -149,6 +149,9 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
     URL,
     Response,
     Blob,
+    CustomEvent: class {
+      constructor(type, options = {}) { this.type = type; Object.assign(this, options); }
+    },
     // The download bridge gates on `d.bytes instanceof ArrayBuffer`, and a vm
     // context is its own realm. Without the outer constructor in here, a
     // buffer a test builds fails that check and the bridge returns early — so
