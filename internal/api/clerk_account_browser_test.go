@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -47,6 +49,20 @@ func testClerkAccountBrowser(t *testing.T, pending bool) {
 	require.NoError(t, err)
 	_, err = st.UpsertHostedUser(ctx, "clerk:member", "member@example.test", hosted.createdAt)
 	require.NoError(t, err)
+
+	// Seed through the actual write route so storage and deletion exercise stored
+	// bytes, reference accounting, and the local blob backend together.
+	const artifactBody = "<!doctype html><title>Weekly tracker</title><p>Production settings integration</p>"
+	payload, err := json.Marshal(map[string]any{"title": "Weekly tracker", "body": artifactBody, "network_allowlist": []string{}})
+	require.NoError(t, err)
+	request := httptest.NewRequest("POST", "/api/artifacts", strings.NewReader(string(payload)))
+	request.Header.Set("Test-Clerk-Subject", "clerk:member")
+	request.Header.Set("Content-Type", "application/json")
+	created := httptest.NewRecorder()
+	ro.ServeHTTP(created, request)
+	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
+	var artifact createArtifactResponse
+	require.NoError(t, json.Unmarshal(created.Body.Bytes(), &artifact))
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/gallery/clerk-client.js") {
 			w.Header().Set("Content-Type", "text/javascript")
@@ -83,7 +99,10 @@ func testClerkAccountBrowser(t *testing.T, pending bool) {
 	require.NoError(t, err)
 	run(chromedp.WaitVisible(chromedp.CSS(`#delete-account`)))
 	check(`location.pathname === '/settings' && document.title === 'Settings — Exhibit'`)
-	check(`document.querySelector('#storage').textContent.includes('0 B')`)
+	check(fmt.Sprintf(`document.querySelector('#storage').textContent.includes(%q) && document.querySelector('#storage').textContent.includes('1 artifact')`, fmt.Sprintf("%d B", len(artifactBody))))
+	run(chromedp.WaitVisible(chromedp.CSS(`#test-account-button`)))
+	check(`document.querySelectorAll('[data-clerk-mode-value="user"]').length === 1 && document.querySelector('header #test-account-button') != null`)
+
 	check(`getComputedStyle(document.querySelector('[data-account-deletion-target="finish"]')).display === 'none'`)
 	run(chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`import(%q).then(({application}) => { window.accountApplication = application; }).catch(error => { window.accountImportError = error.stack; })`, assetURL("gallery/controllers.js"))),
 		chromedp.Poll[chromedp.Void](`window.accountApplication?.getControllerForElementAndIdentifier(document.querySelector('[data-clerk-mode-value="manage"]'), 'clerk') != null`),
@@ -97,11 +116,11 @@ func testClerkAccountBrowser(t *testing.T, pending bool) {
 	check(`!document.querySelector('#delete-confirm-go').disabled`)
 	run(click(`#delete-cancel`))
 	check(`document.querySelector('#delete-phrase').value === '' && document.querySelector('#delete-confirm').hidden`)
-	// Capture only the real server-rendered custom page, not the provider stub chrome.
+	// Capture the production layout; only the provider boundary is stubbed.
 	capture := func(name string) {
 		if dir := os.Getenv("ACCOUNT_SCREENSHOT_DIR"); dir != "" {
 			require.NoError(t, os.MkdirAll(dir, 0755))
-			shot, err := chromedp.Run(ctx, chromedp.Screenshot(chromedp.CSS(`.settings`)))
+			shot, err := chromedp.Run(ctx, chromedp.Screenshot(chromedp.CSS(`body`)))
 			require.NoError(t, err)
 			require.NoError(t, os.WriteFile(filepath.Join(dir, name), shot, 0644))
 		}
@@ -132,6 +151,11 @@ func testClerkAccountBrowser(t *testing.T, pending bool) {
 	}
 	check(`location.pathname === '/auth/logout'`)
 	require.Equal(t, []string{"clerk:member"}, hosted.deleted)
+	body, err := ro.cfg.Blob.Get(ctx, artifact.Artifact.SourceBlobID)
+	if body != nil {
+		_ = body.Close()
+	}
+	require.ErrorIs(t, err, fs.ErrNotExist, "account erasure removes the artifact bytes, not just its rows")
 	queued, err := st.PendingHostedIdentityDeletions(ctx)
 	require.NoError(t, err)
 	if pending {
@@ -148,7 +172,7 @@ const clerk = {
  isSignedIn:true, user:{reload: async () => {}},
  openUserProfile(options) { window.profileOpens++; window.profileOptions = options; },
  mountUserButton(element, options) {
-  const button = document.createElement('button'); button.id = 'test-account-button'; button.textContent = 'Your account';
+  const button = document.createElement('button'); button.id = 'test-account-button'; button.setAttribute('aria-label', 'Your account'); button.className = 'btn btn-sec icon-btn'; const glyph = document.createElement('i'); glyph.className = 'ph ph-user-circle'; glyph.setAttribute('aria-hidden', 'true'); button.append(glyph);
   button.onclick = () => {
    if (document.querySelector('#test-account-menu')) return;
    const menu = document.createElement('nav'); menu.id = 'test-account-menu';

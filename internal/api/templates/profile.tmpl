@@ -1,18 +1,6 @@
-{{/* Your own account (av-qo05, epic av-g2dx). Data: profilePageData
-     (profile.go).
-
-     A person acting on themselves. It wears /admin/users' furniture — the
-     settings shell below, settings.css, the settingsHeader partial — and
-     shares none of its authority: that page passes adminOnly because it
-     reaches other accounts, this one reads only ownerIDFromCtx's.
-
-     Laid out as sections from the first one, though only Account has content
-     today. The BYO agent key, active sessions and export are the rest of
-     av-g2dx, and each should land as a new card rather than a rearrangement.
-
-     Login names, email addresses and provider subjects are all text this
-     instance did not author, and they reach the markup as template values
-     where html/template's contextual escaping keeps them text. */}}
+{{/* Own-account settings. Data: profilePageData (profile.go). Clerk owns
+     profile and security; this page owns storage and library deletion. All
+     data is resolved from the session owner, never an account ID in the URL. */}}
 {{define "profile"}}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -28,7 +16,12 @@
 <link rel="stylesheet" href="{{asset "gallery/settings.css"}}">
 </head>
 <body>
-{{template "settingsHeader" "Settings"}}
+<header class="account-settings-header">
+  <a class="account-settings-brand" href="/" aria-label="Back to library">Exhibit</a>
+  <span class="account-settings-separator" aria-hidden="true">/</span>
+  <h1>Settings</h1>
+  {{if .Clerk}}{{template "accountControl" .Clerk}}{{end}}
+</header>
 <main class="settings">
 <div class="lede">
   <h2>Settings.</h2>
@@ -106,26 +99,8 @@
 </div>
 {{end}}
 
-{{/* The danger zone (section: av-qo05; the deletion behind it: av-4wyq).
-
-     The copy is the hard part and it is load-bearing. Deleting here erases
-     what Exhibit holds and cannot touch the identity provider that issued the
-     login — and because users.external_id is UNIQUE and the row is created
-     just-in-time at login, the same person signing in again lands in a new,
-     empty account. The confirmation says that outright: someone who deletes,
-     finds their login still works and concludes nothing happened is worse off
-     than someone who never had the button at all.
-
-     Two steps rather than one. The first states what goes, including how many
-     shares other people hold that stop working; the second asks for a
-     typed phrase. A click can be a mis-tap, and there is no undo anywhere near
-     this — no soft delete, no trash, no snapshot (av-1rvm covers state
-     durability separately).
-
-     Both steps render server-side, revealed by profile.js rather than built by
-     it. These are the most important sentences on the page, and a component
-     with exactly one definition, in a template, is this project's rule for
-     precisely that reason. */}}
+{{/* Go owns both confirmation steps. Hosted deletion also removes the Clerk
+     identity; self-hosted deletion leaves its external provider untouched. */}}
 {{template "accountDeletion" .}}
 </main>
 
@@ -153,10 +128,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
        with no account here guaranteed and no way to be told it stopped
        working. */}}
   <p class="settings-danger-copy">This account holds <strong>{{.Account.Artifacts}}</strong>.{{if .Account.ShareCount}} Deleting it breaks <strong>{{.Account.Shares}}</strong> that other people may be holding.{{end}}</p>
-  {{/* What deletion reaches stops at this instance, and which sentence says so
-       depends on where the sign-in lives. Telling someone with a password here
-       that their identity provider is unaffected would name a provider they do
-       not have. */}}
+  {{/* State the different reach of hosted and self-hosted deletion. */}}
   {{if .Clerk}}
   <p class="settings-danger-copy">Your profile and sign-in methods stored with Clerk will also be deleted. Your Google, Apple, or other provider accounts are unaffected.</p>
   {{else if not .Account.HasPassword}}
