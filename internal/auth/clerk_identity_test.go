@@ -152,3 +152,42 @@ func TestClerkRevocationPaginatesAndIncludesEndedSessionTimestamps(t *testing.T)
 	require.Equal(t, []string{"0", "2"}, offsets)
 	require.Equal(t, []string{"/sessions/one/revoke", "/sessions/three/revoke"}, revoked)
 }
+
+func TestClerkDeleteUserUsesBackendSDKAndAcceptsMissingUser(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusNotFound, http.StatusServiceUnavailable} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			calls := 0
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				require.Equal(t, http.MethodDelete, r.Method)
+				require.Equal(t, "/users/user_one", r.URL.Path)
+				require.Equal(t, "Bearer sk_test_example", r.Header.Get("Authorization"))
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				if status == http.StatusOK {
+					json.NewEncoder(w).Encode(map[string]any{"id": "user_one", "object": "user", "deleted": true})
+				} else {
+					json.NewEncoder(w).Encode(map[string]any{"errors": []any{map[string]any{"code": "not_available", "message": "unavailable"}}})
+				}
+			}))
+			defer backend.Close()
+			cfg := &clerk.ClientConfig{}
+			cfg.Key, cfg.URL = clerk.String("sk_test_example"), clerk.String(backend.URL)
+			c, err := newClerk("pk_test_"+base64.RawStdEncoding.EncodeToString([]byte("example.clerk.accounts.dev$")), "https://app.test", cfg)
+			require.NoError(t, err)
+			c.identities["one"] = cachedHostedIdentity{identity: HostedIdentity{Subject: "clerk:user_one"}}
+			c.identities["two"] = cachedHostedIdentity{identity: HostedIdentity{Subject: "clerk:user_two"}}
+			err = c.DeleteUser(context.Background(), "clerk:user_one")
+			if status == http.StatusServiceUnavailable {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, 1, calls)
+			require.NotContains(t, c.identities, "one")
+			require.Contains(t, c.identities, "two")
+			require.Error(t, c.DeleteUser(context.Background(), "local:one"))
+			require.Equal(t, 1, calls)
+		})
+	}
+}

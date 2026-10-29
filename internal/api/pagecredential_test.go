@@ -78,6 +78,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	// everyone else's account, but a credential over your own that outlives
 	// the logout you performed because you were worried about it.
 	{route: "/profile", path: "/profile"},
+	{route: "/settings", path: "/settings"},
 
 	// htmx fragments: page markup by another name, so they are held to the
 	// same rule as the pages they are swapped into.

@@ -156,3 +156,6 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
   /* The back link collapses to its arrow, as on /new and the detail page. */
   .back-label{display:none}
 }
+
+/* Shared button display rules must not reveal deferred account actions. */
+.settings [hidden]{display:none!important}

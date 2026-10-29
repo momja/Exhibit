@@ -639,11 +639,21 @@ docker compose exec app /server user enable partner@example.com
 `user disable` revokes that account's sessions exactly as the screen does, and
 refuses the last admin for the same reason.
 
-**What is not here.** Managing your own account is `/profile`, not this CLI and
+**What is not here.** Managing your own account is `/settings` (`/profile` alias), not this CLI and
 not the admin screen: deleting your account and the library it owns lives there
 (and only there — nothing lets an admin delete somebody else's). Self-service
 password change and "sign out my other devices" do not exist yet on either
 surface.
+
+Hosted Clerk accounts use one account button. Its Profile and Security controls
+remain Clerk's own; a Settings menu item opens `/settings`, where storage usage
+and deletion of both the Exhibit library and Clerk sign-in account live.
+The server owns that operation through Clerk's backend
+SDK; direct Clerk self-deletion remains disabled. If Clerk cannot finish removal,
+Exhibit reports that deletion is pending and retries on startup and every minute.
+The deleted identity cannot reopen its library while that work is pending. This
+removes the Clerk account, not an upstream Google, Apple, or other provider account.
+Self-hosted OIDC deletion still leaves the external identity untouched.
 
 `/profile`'s deletion refuses the instance's last enabled admin, with the reason
 on the disabled control rather than as a surprise after the confirmation. If

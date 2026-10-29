@@ -277,3 +277,28 @@ func (c *Clerk) RevokeSessions(ctx context.Context, externalID string) (int64, e
 	c.cacheMu.Unlock()
 	return cutoff, nil
 }
+
+// DeleteUser uses the backend SDK so Exhibit can enforce cleanup and the last
+// administrator guard before removing the provider identity. A missing user is
+// success: retries may follow a crash after Clerk accepted the first delete.
+func (c *Clerk) DeleteUser(ctx context.Context, externalID string) error {
+	if !strings.HasPrefix(externalID, "clerk:") || len(externalID) == len("clerk:") {
+		return errors.New("account deletion requires a Clerk identity")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	_, err := c.users.Delete(ctx, strings.TrimPrefix(externalID, "clerk:"))
+	var apiErr *clerk.APIErrorResponse
+	if errors.As(err, &apiErr) && apiErr.HTTPStatusCode == http.StatusNotFound {
+		err = nil
+	}
+	// Forget cached sessions even on an uncertain provider response.
+	c.cacheMu.Lock()
+	for sid, cached := range c.identities {
+		if cached.identity.Subject == externalID {
+			delete(c.identities, sid)
+		}
+	}
+	c.cacheMu.Unlock()
+	return err
+}

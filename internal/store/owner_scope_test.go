@@ -540,13 +540,15 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// credential looked up before any owner is known, and a user row is
 		// keyed by the provider's external id, not by owner_id. They are
 		// exempt because they sit upstream of owner scoping, not outside it.
-		"UpsertUser":            "resolves a provider identity to an owner; there is no owner yet",
-		"UpsertHostedUser":      "resolves a verified hosted identity with its durable erasure fence; no owner exists yet",
-		"GetUser":               "keyed by user id, which *is* the owner id",
-		"CreateSession":         "session rows carry their own UserID; the caller has just authenticated",
-		"GetSession":            "looks up a bearer credential before any owner is known",
-		"DeleteSession":         "revocation by session id; the holder need not be resolved first",
-		"DeleteExpiredSessions": "a janitor over all rows, owned by no one",
+		"UpsertUser":                     "resolves a provider identity to an owner; there is no owner yet",
+		"PendingHostedIdentityDeletions": "system cleanup queue after owner rows have been erased; contains no artifact payload",
+		"CompleteHostedIdentityDeletion": "acknowledges provider cleanup by immutable external identity after its owner was erased",
+		"UpsertHostedUser":               "resolves a verified hosted identity with its durable erasure fence; no owner exists yet",
+		"GetUser":                        "keyed by user id, which *is* the owner id",
+		"CreateSession":                  "session rows carry their own UserID; the caller has just authenticated",
+		"GetSession":                     "looks up a bearer credential before any owner is known",
+		"DeleteSession":                  "revocation by session id; the holder need not be resolved first",
+		"DeleteExpiredSessions":          "a janitor over all rows, owned by no one",
 
 		// Local credentials (av-rzvf). The same reasoning one step further:
 		// these resolve or provision the identity an owner id *is*, so there

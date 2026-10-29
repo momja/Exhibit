@@ -312,6 +312,9 @@ func main() {
 		routerConfig.ClerkFrontendAPI = hostedLogin.FrontendAPI
 	}
 	router := api.NewRouter(routerConfig)
+	if hostedLogin != nil {
+		go router.RetryHostedAccountDeletions(context.Background())
+	}
 
 	// One listener or two (av-xath). Two is the default and the shape an
 	// operator-supplied proxy expects: a hostname mapped to each port. A

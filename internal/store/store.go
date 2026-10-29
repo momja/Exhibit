@@ -792,6 +792,8 @@ type Store interface {
 	UpsertUser(ctx context.Context, externalID, email string) (*User, error)
 	UpsertHostedUser(ctx context.Context, externalID, email string, sessionCreatedAt int64) (*User, error)
 	DeleteHostedAccount(ctx context.Context, userID int64, sessionCutoff int64) ([]string, error)
+	PendingHostedIdentityDeletions(context.Context) ([]string, error)
+	CompleteHostedIdentityDeletion(context.Context, string) error
 	SetHostedUserAdmin(ctx context.Context, userID int64, admin bool) error
 	SetHostedUserDisabled(ctx context.Context, userID int64, disabled bool) error
 	GetUser(ctx context.Context, id int64) (*User, error)

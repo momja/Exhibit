@@ -35,6 +35,7 @@ func (hostedLoginStub) HandshakeRedirect(w http.ResponseWriter, r *http.Request)
 }
 func (hostedLoginStub) ResolveEmail(context.Context, string) (string, error)  { return "", nil }
 func (hostedLoginStub) RevokeSessions(context.Context, string) (int64, error) { return 0, nil }
+func (hostedLoginStub) DeleteUser(context.Context, string) error              { return nil }
 
 func TestClerkHostedMode(t *testing.T) {
 	cred, err := auth.NewCredential("selfhost", "$2a$10$N9qo8uLOickgx2ZMRZoMy.Mrq4H/M2dYs6qVu0Y0lJ4YFjIsWJc.1W")
@@ -158,4 +159,46 @@ func TestClerkEmailChangeUpdatesProfileAndShareLookup(t *testing.T) {
 	u, err := st.GetUser(context.Background(), id)
 	require.NoError(t, err)
 	require.Equal(t, h.email, u.Email)
+}
+
+func TestClerkUnifiedAccountPages(t *testing.T) {
+	ro, st := newLoginTestRouter(t, nil, nil, func(c *Config) {
+		c.Clerk = hostedLoginStub{}
+		c.ClerkPublishableKey = "pk_test_example"
+		c.ClerkFrontendAPI = "https://example.clerk.accounts.dev"
+		c.AuthToken = ""
+	})
+	get := func(path, subject string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", path, nil)
+		r.Header.Set("Test-Clerk-Subject", subject)
+		w := httptest.NewRecorder()
+		ro.ServeHTTP(w, r)
+		return w
+	}
+	require.Equal(t, 204, get("/auth/clerk/ready", "clerk:admin").Code)
+	require.Equal(t, 204, get("/auth/clerk/ready", "clerk:member").Code)
+	member, err := st.GetUserByExternalID(context.Background(), "clerk:member")
+	require.NoError(t, err)
+	require.NoError(t, st.PutArtifact(context.Background(), &store.Artifact{ID: "account-artifact", OwnerID: member.ID, Title: "Member", SourceBlobID: "account-blob", Tier: store.Tier1, CreatedAt: time.Now(), UpdatedAt: time.Now()}))
+	require.NoError(t, st.RecordBlobSize(context.Background(), "account-blob", 12345))
+	page := get("/", "clerk:member")
+	require.Equal(t, 200, page.Code)
+	require.Equal(t, 1, strings.Count(page.Body.String(), `data-clerk-mode-value="user"`))
+	require.NotContains(t, page.Body.String(), `aria-label="Your account" title="Your account"`)
+
+	page = get("/settings", "clerk:member")
+	require.Equal(t, 200, page.Code)
+	require.Equal(t, "no-store", page.Header().Get("Cache-Control"))
+	require.Contains(t, page.Body.String(), "Settings — Exhibit")
+	require.Contains(t, page.Body.String(), "Manage profile")
+	require.Contains(t, page.Body.String(), "12.1 KiB")
+	require.Contains(t, page.Body.String(), "1 artifact")
+	require.Contains(t, page.Body.String(), "sign-in methods stored with Clerk")
+	require.Contains(t, page.Body.String(), "Delete my account permanently")
+	require.NotContains(t, page.Body.String(), "Signing in again will still work")
+	require.NotContains(t, get("/settings", "clerk:admin").Body.String(), "12.1 KiB")
+	require.Contains(t, get("/settings", "clerk:admin").Body.String(), "You are the only account")
+	require.Equal(t, 200, get("/profile", "clerk:member").Code)
+	require.Equal(t, 302, get("/settings", "").Code)
+
 }

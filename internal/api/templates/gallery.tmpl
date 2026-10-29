@@ -60,12 +60,10 @@
        state below still spells the affordance out in words, which is where
        someone arriving with nothing on the shelf learns it. */}}
   <a class="btn btn-sec icon-btn" href="/new" aria-label="Add artifact" title="Add artifact"><i class="ph ph-plus" aria-hidden="true"></i></a>
-  {{/* Static means static: an anchor to a page, no menu and no JS. What
-       belongs on that page — deletion, the agent key, active sessions — each
-       needs explanation or a confirmation beside it, and none of that fits a
-       menu item. */}}
-  <a class="btn btn-sec icon-btn" href="/profile" aria-label="Your account" title="Your account"><i class="ph ph-user-circle" aria-hidden="true"></i></a>
-{{if .Clerk}}<div data-controller="clerk" data-clerk-mode-value="user"><div data-clerk-target="mount"></div><span data-clerk-target="status" role="status"></span></div>{{end}}
+  {{/* One hosted account menu contains Profile, Settings, and Sign out.
+       The hidden settings link is recovery if Clerk cannot load. */}}
+{{if .Clerk}}<div data-controller="clerk" data-clerk-mode-value="user"><div data-clerk-target="mount"></div><span data-clerk-target="status" role="status"></span><a href="/settings" data-clerk-target="recovery" hidden>Settings</a></div>
+{{else}}<a class="btn btn-sec icon-btn" href="/settings" aria-label="Settings" title="Settings"><i class="ph ph-user-circle" aria-hidden="true"></i></a>{{end}}
 </header>
 {{if or .Spaces .Grid.Filters.Sections}}<div class="gallery-layout{{if not .Spaces}} gallery-layout-solo{{end}}">{{template "gallerySpaces" .}}{{end -}}
 <main>{{if .Grid.Title}}<h2 class="gallery-title">{{.Grid.Title}}</h2>{{end}}

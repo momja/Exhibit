@@ -118,9 +118,9 @@ func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string
 	return s.deleteAccount(ctx, userID, false, 0)
 }
 
-// DeleteHostedAccount adds a durable session fence to the ordinary erasure.
-// Keep it after deletion: it contains no library payload, only the information
-// required to refuse credentials issued before erasure, across server restarts.
+// DeleteHostedAccount adds a permanent identity fence and pending Clerk user
+// deletion to the ordinary erasure, atomically with the administrator guard.
+// The fence survives successful provider deletion and contains no library data.
 // sessionCutoff is the largest provider session creation time observed during
 // revocation, so even provider timestamps ahead of our wall clock are fenced.
 func (s *SQLiteStore) DeleteHostedAccount(ctx context.Context, userID int64, sessionCutoff int64) ([]string, error) {
@@ -138,9 +138,9 @@ func (s *SQLiteStore) deleteAccount(ctx context.Context, userID int64, hosted bo
 	if hosted {
 		guard = lastEnabledHostedAdminGuard
 		// The guard below may refuse deletion; rollback also removes this fence.
-		if _, err := tx.ExecContext(ctx, `INSERT INTO hosted_account_deletions (external_id, deleted_at_ms)
-			SELECT external_id, ? FROM users WHERE id=? AND substr(external_id,1,6)='clerk:'
-			ON CONFLICT(external_id) DO UPDATE SET deleted_at_ms=MAX(deleted_at_ms,excluded.deleted_at_ms)`, max(time.Now().UnixMilli(), sessionCutoff), userID); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO hosted_account_deletions (external_id, deleted_at_ms, delete_identity)
+			SELECT external_id, ?, 1 FROM users WHERE id=? AND substr(external_id,1,6)='clerk:'
+			ON CONFLICT(external_id) DO UPDATE SET deleted_at_ms=MAX(deleted_at_ms,excluded.deleted_at_ms), delete_identity=1, identity_deleted=0`, max(time.Now().UnixMilli(), sessionCutoff), userID); err != nil {
 			return nil, err
 		}
 		guard = "substr(external_id,1,6)='clerk:' AND (" + guard + ")"

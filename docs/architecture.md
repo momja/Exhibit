@@ -773,6 +773,26 @@ cookie caps retries at three, and the JWKS is trusted for an hour after the
 last successful fetch, with refetches rate-limited and coalesced. Anything the handshake cannot renew goes to the login page,
 which refreshes the token through ClerkJS.
 
+Hosted accounts use one Clerk user button. Clerk's Profile and Security UI
+remains unchanged; a custom **Settings** menu link leads to `/settings`.
+`/profile` remains a compatibility alias for that page. Settings shows storage
+usage and Exhibit account deletion, with a **Manage profile** button opening the
+standard Clerk profile modal. Go templates own Settings markup, and the shared
+`account-deletion` Stimulus controller owns confirmation behavior for both hosted
+and self-hosted accounts.
+
+Hosted deletion first revokes provider sessions, then atomically removes Exhibit
+rows, queues blob cleanup, permanently fences the Clerk identity, and records
+pending provider deletion in `hosted_account_deletions`. Only after that commit
+does the backend SDK delete the Clerk user. The last hosted administrator guard
+therefore runs before irreversible provider deletion. A failed Clerk delete
+returns `202` with an explicit pending message; the server retries on startup and
+every minute, treating an already missing provider user as success. Completion
+marks the pending work done but retains the identity fence. Legacy library-only
+erasure records retain their prior fresh-session behavior and are never queued
+for provider deletion. Clerk's direct self-deletion remains disabled so it cannot
+bypass Exhibit's cleanup or administrator guard.
+
 Self-hosted password and OIDC paths retain the session architecture below. In
 hosted mode their routes and cookies are inactive, default-admin seeding is
 skipped, and the default development service token is disabled. API and SSE
@@ -842,7 +862,7 @@ non-admin one.
   /api/admin/users`, `PATCH /api/admin/users/{id}` (also entitlements;
   `?entitlement=custom` lists overrides).
 
-### 3.8b Your own account: `/profile` (av-qo05)
+### 3.8b Your own settings: `/settings` (`/profile` alias; av-qo05)
 
 Resolved from `ownerIDFromCtx`, never the URL; a session is the authorization. Same
 furniture as admin, no shared authority.
@@ -852,7 +872,7 @@ furniture as admin, no shared authority.
 - **Display name** (`store.User.DisplayName`, also used by shared artifact
   listings): email, else provider subject or local login name. With neither,
   profile describes the sign-in route.
-- **Delete library** (av-4wyq): the copy says an IdP login still works and lands in
+- **Delete library** (av-4wyq, self-hosted): the copy says an IdP login still works and lands in
   a new, empty account; it states the live share count; it takes two steps, the
   second the typed phrase `delete my library`, checked server-side. Storage size is
   shown under Account, not in the confirmation (av-fw1b). Blocked states show a

@@ -18,7 +18,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Your account — Exhibit</title>
+<title>Settings — Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
 {{template "clerkScripts" .Clerk}}
@@ -28,15 +28,15 @@
 <link rel="stylesheet" href="{{asset "gallery/settings.css"}}">
 </head>
 <body>
-{{template "settingsHeader" "Your account"}}
+{{template "settingsHeader" "Settings"}}
 <main class="settings">
 <div class="lede">
-  <h2>Your account.</h2>
-  <p>What this instance knows about you, and what you can do about it. Everything here acts on your account alone — never anyone else&#39;s.</p>
+  <h2>Settings.</h2>
+  <p>Manage your storage and your Exhibit account.</p>
 </div>
 
 <div class="card">
-  <h3 class="settings-h3">Account</h3>
+  <h3 class="settings-h3">Profile</h3>
   {{if .Account.SignedIn}}
   <dl class="settings-facts">
     <dt>Signed in as</dt>
@@ -48,16 +48,15 @@
     <dd>{{if .Account.Name}}<span class="settings-name">{{.Account.Name}}</span>{{else}}<span class="muted">Signed in through your identity provider</span>{{end}}</dd>
     <dt>Sign-in</dt>
     <dd>{{if .Account.HasPassword}}<i class="ph ph-key" aria-hidden="true"></i> Password{{else}}<i class="ph ph-shield-check" aria-hidden="true"></i> Identity provider{{end}}</dd>
-    {{/* av-fw1b. Stated here, in the ordinary part of the page, because "how
-         much am I holding" is a question with no answer at all before this —
-         the only way to find out was to stat the blob directory on the host.
-         It is a figure, not a gate: nothing on this instance refuses anything
-         because of it. */}}
-    <dt>Storage</dt>
-    <dd><i class="ph ph-hard-drives" aria-hidden="true"></i> {{.Account.Storage}}</dd>
   </dl>
   {{if .Account.NameIsSubject}}<p class="muted text-sm settings-note">Your identity provider sent no email address for this account, so the name above is the subject identifier it does send. It is the string an administrator would use to find you.</p>{{end}}
-  {{if not .Account.HasPassword}}<p class="muted text-sm settings-note">Your identity provider owns this sign-in. There is no password here to change, and Exhibit cannot change one there.</p>{{end}}
+  {{if .Clerk}}
+  <div class="settings-foot" data-controller="clerk" data-clerk-mode-value="manage">
+    <button class="btn btn-sec" type="button" data-action="clerk#openProfile"><i class="ph ph-user-circle" aria-hidden="true"></i> Manage profile</button>
+    <span data-clerk-target="status" role="status"></span>
+  </div>
+  <p class="muted text-sm settings-note">Update your name, email, and sign-in methods in your profile.</p>
+  {{else if not .Account.HasPassword}}<p class="muted text-sm settings-note">Your identity provider owns this sign-in. There is no password here to change, and Exhibit cannot change one there.</p>{{end}}
   {{else}}
   {{/* No login is configured on this instance, so sessionGate is a
        pass-through, ownerMiddleware supplied the single-user default, and
@@ -67,6 +66,17 @@
   <p class="muted">This instance has no login configured, so there is no account to describe. Its library belongs to whoever can reach the origin, and the API is guarded by the service token alone.</p>
   {{end}}
 </div>
+
+{{if .Account.SignedIn}}
+<section class="card" id="storage" aria-labelledby="storage-heading">
+  <h3 class="settings-h3" id="storage-heading"><i class="ph ph-hard-drives" aria-hidden="true"></i> Storage</h3>
+  <dl class="settings-facts">
+    <dt>Storage used</dt><dd>{{.Account.Storage}}</dd>
+    <dt>Artifacts</dt><dd>{{.Account.Artifacts}}</dd>
+  </dl>
+  <p class="muted text-sm settings-note">Total storage used by your artifact files, widgets, saved versions, and stored assets.</p>
+</section>
+{{end}}
 
 {{/* Sign out (nw-a1ef). The session was revocable from the first day it
      existed, since /auth/logout deletes the row, and nothing in the UI ever
@@ -89,7 +99,7 @@
 {{if .Account.CanSignOut}}
 <div class="card">
   <h3 class="settings-h3">Sign out</h3>
-  <p class="settings-copy">Ends this session and revokes it here, so the cookie in this browser stops working on the next request rather than when it expires. Your library is untouched, and signing in again brings you back to it.</p>
+  <p class="settings-copy">Sign out of this device. Your library will be here when you return.</p>
   <form class="settings-foot" method="post" action="/auth/logout">
     <button class="btn btn-sec" type="submit"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</button>
   </form>
@@ -116,65 +126,7 @@
      it. These are the most important sentences on the page, and a component
      with exactly one definition, in a template, is this project's rule for
      precisely that reason. */}}
-<div class="card card-danger">
-  <h3 class="settings-h3 settings-h3-danger"><i class="ph ph-warning-octagon" aria-hidden="true"></i> Delete account</h3>
-  <p class="settings-danger-copy">Deleting your account erases everything you've created, including shared artifacts. Every artifact and its file, and all other account data. It is permanent. There is no undo, no trash, and no copy kept on this side.</p>
-  {{if .Account.SignedIn}}
-  {{/* Counted rather than gestured at, and shares first among equals: an
-       artifact is your own, but a share is access somebody else may be
-       relying on — a link anyone may hold, or a grant on their account —
-       with no account here guaranteed and no way to be told it stopped
-       working. */}}
-  <p class="settings-danger-copy">This account holds <strong>{{.Account.Artifacts}}</strong>.{{if .Account.ShareCount}} Deleting it breaks <strong>{{.Account.Shares}}</strong> that other people may be holding.{{end}}</p>
-  {{/* What deletion reaches stops at this instance, and which sentence says so
-       depends on where the sign-in lives. Telling someone with a password here
-       that their identity provider is unaffected would name a provider they do
-       not have. */}}
-  {{if not .Account.HasPassword}}
-  <p class="settings-danger-copy">Next time you sign in with your identity provider, you will be treated as a new user.</p>
-  {{end}}
-  {{end}}
-  <div class="settings-foot">
-    {{if .Account.DeleteBlocked}}
-    <button class="btn btn-danger" type="button" id="delete-account" disabled aria-describedby="delete-account-reason">
-      <i class="ph ph-trash" aria-hidden="true"></i> Delete account
-    </button>
-    <span class="muted text-sm" id="delete-account-reason">{{.Account.DeleteBlocked}}</span>
-    {{else}}
-    <button class="btn btn-danger" type="button" id="delete-account" aria-expanded="false" aria-controls="delete-confirm">
-      <i class="ph ph-trash" aria-hidden="true"></i> Delete account
-    </button>
-    {{end}}
-  </div>
-
-  {{if not .Account.DeleteBlocked}}
-  <div class="settings-confirm" id="delete-confirm" hidden>
-    {{/* Assembled from clauses that are each conditional on their own count,
-         because a sentence built around "your no artifacts" is how a
-         confirmation stops being read. */}}
-    <p class="settings-danger-copy"><strong>This cannot be undone.</strong> Everything created or owned by you is permanently inaccessible{{if .Account.ArtifactCount}} including {{.Account.Artifacts}} and everything saved inside{{end}}.{{if .Account.ShareCount}} {{.Account.Shares}} will stop working for whoever is holding them.{{end}}</p>
-    {{if .Account.HasPassword}}
-    <p class="settings-danger-copy">If you revisit this site, you will be treated as a new user.</p>
-    {{else}}
-    <p class="settings-danger-copy">Signing in again will still work via your identity provider. You will arrive at a new account, with an empty library.</p>
-    {{end}}
-    <label class="settings-label" for="delete-phrase">Type <code>delete my library</code> to confirm</label>
-    <input class="field settings-confirm-field" type="text" id="delete-phrase" autocomplete="off"
-           autocapitalize="none" spellcheck="false" placeholder="delete my library">
-    <div class="settings-foot">
-      <button class="btn btn-danger" type="button" id="delete-confirm-go" disabled>
-        <i class="ph ph-trash" aria-hidden="true"></i> Delete my library permanently
-      </button>
-      <button class="btn" type="button" id="delete-cancel">Cancel</button>
-    </div>
-  </div>
-  {{end}}
-  {{/* One live region for the outcome, the same idiom /admin/users uses. The
-       refusals worth reading in full are the ones this page can still get
-       after the button was enabled — the last-admin race, above all — so it is
-       a block of text rather than a toast that leaves. */}}
-  <div class="settings-status" id="profile-status" role="status" aria-live="polite" hidden></div>
-</div>
+{{template "accountDeletion" .}}
 </main>
 
 <script>
@@ -187,6 +139,71 @@ const TOKEN = {{.Token}};
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 </script>
 <script src="{{asset "gallery/api.js"}}"></script>
-<script src="{{asset "gallery/profile.js"}}"></script>
+<script type="module" src="{{asset "gallery/profile.js"}}"></script>
 </body>
 </html>{{end}}
+
+{{define "accountDeletion"}}<div class="card card-danger" data-controller="account-deletion" data-account-deletion-hosted-value="{{if .Clerk}}true{{else}}false{{end}}">
+  <h3 class="settings-h3 settings-h3-danger"><i class="ph ph-warning-octagon" aria-hidden="true"></i> Delete account</h3>
+  <p class="settings-danger-copy">Permanently delete your Exhibit account, library, saved data, and shared artifacts. This cannot be undone.</p>
+  {{if .Account.SignedIn}}
+  {{/* Counted rather than gestured at, and shares first among equals: an
+       artifact is your own, but a share is access somebody else may be
+       relying on — a link anyone may hold, or a grant on their account —
+       with no account here guaranteed and no way to be told it stopped
+       working. */}}
+  <p class="settings-danger-copy">This account holds <strong>{{.Account.Artifacts}}</strong>.{{if .Account.ShareCount}} Deleting it breaks <strong>{{.Account.Shares}}</strong> that other people may be holding.{{end}}</p>
+  {{/* What deletion reaches stops at this instance, and which sentence says so
+       depends on where the sign-in lives. Telling someone with a password here
+       that their identity provider is unaffected would name a provider they do
+       not have. */}}
+  {{if .Clerk}}
+  <p class="settings-danger-copy">Your profile and sign-in methods stored with Clerk will also be deleted. Your Google, Apple, or other provider accounts are unaffected.</p>
+  {{else if not .Account.HasPassword}}
+  <p class="settings-danger-copy">Next time you sign in with your identity provider, you will be treated as a new user.</p>
+  {{end}}
+  {{end}}
+  <div class="settings-foot">
+    {{if .Account.DeleteBlocked}}
+    <button class="btn btn-danger" type="button" id="delete-account" disabled data-account-deletion-target="trigger" aria-describedby="delete-account-reason">
+      <i class="ph ph-trash" aria-hidden="true"></i> Delete account
+    </button>
+    <span class="muted text-sm" id="delete-account-reason">{{.Account.DeleteBlocked}}</span>
+    {{else}}
+    <button class="btn btn-danger" type="button" id="delete-account" data-account-deletion-target="trigger" data-action="account-deletion#open" aria-expanded="false" aria-controls="delete-confirm">
+      <i class="ph ph-trash" aria-hidden="true"></i> Delete account
+    </button>
+    {{end}}
+  </div>
+
+  {{if not .Account.DeleteBlocked}}
+  <div class="settings-confirm" id="delete-confirm" hidden data-account-deletion-target="panel">
+    {{/* Assembled from clauses that are each conditional on their own count,
+         because a sentence built around "your no artifacts" is how a
+         confirmation stops being read. */}}
+    <p class="settings-danger-copy"><strong>This cannot be undone.</strong> Everything created or owned by you is permanently inaccessible{{if .Account.ArtifactCount}} including {{.Account.Artifacts}} and everything saved inside{{end}}.{{if .Account.ShareCount}} {{.Account.Shares}} will stop working for whoever is holding them.{{end}}</p>
+    {{if .Clerk}}
+    <p class="settings-danger-copy">Your Exhibit library and your sign-in account will be permanently deleted. You will be signed out on every device. This does not delete your Google, Apple, or other provider accounts.</p>
+    {{else if .Account.HasPassword}}
+    <p class="settings-danger-copy">If you revisit this site, you will be treated as a new user.</p>
+    {{else}}
+    <p class="settings-danger-copy">Signing in again will still work via your identity provider. You will arrive at a new account, with an empty library.</p>
+    {{end}}
+    <label class="settings-label" for="delete-phrase">Type <code>delete my library</code> to confirm</label>
+    <input class="field settings-confirm-field" type="text" id="delete-phrase" data-account-deletion-target="phrase" data-action="input->account-deletion#update" autocomplete="off"
+           autocapitalize="none" spellcheck="false" placeholder="delete my library">
+    <div class="settings-foot">
+      <button class="btn btn-danger" type="button" id="delete-confirm-go" data-account-deletion-target="submit" data-action="account-deletion#submit" disabled>
+        <i class="ph ph-trash" aria-hidden="true"></i> {{if .Clerk}}Delete my account permanently{{else}}Delete my library permanently{{end}}
+      </button>
+      <button class="btn" type="button" id="delete-cancel" data-account-deletion-target="cancel" data-action="account-deletion#cancel">Cancel</button>
+    </div>
+  </div>
+  {{end}}
+  {{/* One live region for the outcome, the same idiom /admin/users uses. The
+       refusals worth reading in full are the ones this page can still get
+       after the button was enabled — the last-admin race, above all — so it is
+       a block of text rather than a toast that leaves. */}}
+  {{if .Clerk}}<a class="btn btn-sec" href="/auth/logout" data-account-deletion-target="finish" hidden>Return to sign in</a>{{end}}
+  <div class="settings-status" id="profile-status" data-account-deletion-target="status" role="status" aria-live="polite" hidden></div>
+</div>{{end}}

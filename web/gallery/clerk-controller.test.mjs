@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 const source = (await readFile(new URL('./clerk-controller.js', import.meta.url), 'utf8'))
   .replace("import { Controller } from '../stimulus/stimulus.js';", 'const Controller = class {};')
   .replace("import { clerkClient, clerkClientAfterLoad } from './clerk-client.js';", 'const clerkClient = async () => globalThis.testClerk; const clerkClientAfterLoad = clerkClient;')
+  .replace("import { clerkUserButtonOptions } from './clerk-menu.js';", 'const clerkUserButtonOptions = () => ({});')
   .replace("import { clerkAuthAppearance } from './clerk-appearance.js';", 'const clerkAuthAppearance = {};');
 
 for (const failure of ['denied', 'network']) {
@@ -35,6 +36,7 @@ test('only the account button defers loading Clerk', async () => {
     .replace("import { Controller } from '../stimulus/stimulus.js';", 'const Controller = class {};')
     .replace("import { clerkClient, clerkClientAfterLoad } from './clerk-client.js';",
       "const clerkClient = async () => { globalThis.clerkCalls.push('now'); return globalThis.testClerk; }; const clerkClientAfterLoad = async () => { globalThis.clerkCalls.push('after-load'); return globalThis.testClerk; };")
+    .replace("import { clerkUserButtonOptions } from './clerk-menu.js';", 'const clerkUserButtonOptions = () => ({});')
     .replace("import { clerkAuthAppearance } from './clerk-appearance.js';", 'const clerkAuthAppearance = {};');
   globalThis.clerkCalls = calls;
   globalThis.testClerk = { isSignedIn: false, mountSignIn: () => {} };

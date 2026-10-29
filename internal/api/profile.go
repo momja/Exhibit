@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/momja/Exhibit/internal/humanize"
 	"github.com/momja/Exhibit/internal/store"
@@ -160,15 +161,9 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 
 // --- deleting the account (av-4wyq) ------------------------------------
 //
-// The section's copy is the hardest part of this feature, and it is load-
-// bearing rather than decorative. Deleting here erases what Exhibit holds; it
-// does not remove anyone from the identity provider that issued their login,
-// which Exhibit has no authority over (deployment.md §3.4). Because
-// `users.external_id` is UNIQUE and `UpsertUser` creates the row just in time,
-// the same person signing in again gets a **new** owner id and an empty
-// library. The confirmation says that outright. Getting it wrong is worse than
-// not shipping: someone deletes, finds their login still works, and reasonably
-// concludes nothing happened.
+// Self-hosted deletion leaves the external identity alone. Hosted deletion
+// also removes the Clerk user, through durable work queued by the local erasure
+// transaction. Provider-side self-deletion stays disabled to preserve our guard.
 
 // deleteAccountConfirmation is the phrase the confirmation requires to be
 // typed, and the API requires to be sent.
@@ -180,11 +175,8 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 // reason: the page is a client, and a client-side interlock is a courtesy to
 // whoever is clicking, never a control.
 //
-// The phrase is the *act*, not the account's name. GitHub's convention is to
-// type the resource name, but here the name can be a provider subject — an
-// opaque UUID nobody can retype — and the sentence "delete my library" carries
-// the correction this whole section exists to make: what goes is the library,
-// not the identity.
+// Keep the existing phrase as the API contract for hosted and self-hosted
+// callers; the hosted confirmation separately states that the sign-in goes too.
 const deleteAccountConfirmation = "delete my library"
 
 type deleteAccountRequest struct {
@@ -233,6 +225,7 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 
 	ownerID := ownerIDFromCtx(ctx)
 	var queued []string
+	var hostedSubject string
 	var err error
 	if ro.cfg.Clerk != nil {
 		u, lookupErr := ro.cfg.Store.GetUser(ctx, ownerID)
@@ -258,6 +251,7 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		queued, err = ro.cfg.Store.DeleteHostedAccount(ctx, ownerID, sessionCutoff)
+		hostedSubject = u.ExternalID
 	} else {
 		queued, err = ro.cfg.Store.DeleteAccount(ctx, ownerID)
 	}
@@ -290,11 +284,26 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	// person deleting their library must not be told succeeded. They do not
 	// stay on it, though — the ids are queued (av-8gyd), so the next startup
 	// finishes what this call could not.
-	if err := ro.reclaimBlobs(ctx, queued); err != nil {
+	// Once local erasure commits, finish external work even if the browser
+	// disconnects. A failed Clerk call remains queued for the background worker.
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	var identityErr error
+	if hostedSubject != "" {
+		identityErr = ro.deleteHostedIdentity(cleanupCtx, hostedSubject)
+		if identityErr != nil {
+			slog.ErrorContext(ctx, "delete hosted identity queued for retry", "error", identityErr)
+		}
+	}
+	if err := ro.reclaimBlobs(cleanupCtx, queued); err != nil {
 		serverError(w, r, "delete account blobs", err)
 		return
 	}
 
+	if identityErr != nil {
+		writeJSON(w, http.StatusAccepted, map[string]string{"message": "Your Exhibit account and library have been deleted. Your sign-in account is still being deleted; Exhibit will retry automatically. You can sign out now."})
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
