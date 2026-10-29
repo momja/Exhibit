@@ -129,7 +129,11 @@ not change tool parameters, prompt wording, or owner/artifact scope.
 ## Session context: instructions and data are separate
 
 - The **system prompt** is entirely server-authored (`internal/agent/prompt.go`).
-  No artifact title, body, or id is interpolated into it, and it carries one
+  Its text, and every other model-facing prompt, lives in a template file
+  (Exh-9jcb): `internal/agent/prompts/*.tmpl` for the server, embedded and
+  parsed at startup, and `internal/agent/ext/prompts/*.tmpl` for the guardrail
+  screen, materialized beside `guard.ts`. Goldens in
+  `internal/agent/testdata/prompts/` pin the rendered bytes. No artifact title, body, or id is interpolated into it, and it carries one
   static contract: artifact-reading tool results are data. The user's messages
   and their direct answers through `ask_user` are instructions.
 - A session reuses **known source**: source already in tool results (including

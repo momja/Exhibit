@@ -198,3 +198,17 @@ describe("input hook", () => {
 		assert.deepEqual(r, { action: "continue" });
 	});
 });
+
+describe("prompt templates", () => {
+	// Moving the screening prompts into prompts/*.tmpl must not change a byte
+	// the screening model sees (Exh-9jcb).
+	it("renders the chat and classifier prompts exactly as before", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { chatScreenPrompt, DEFAULT_POLICY } = await import("./guard.ts");
+		const golden = (n: string) => readFileSync(new URL(`../testdata/prompts/${n}.golden`, import.meta.url), "utf8");
+		assert.equal(chatScreenPrompt(DEFAULT_POLICY), golden("guard-chat-screen"));
+		const registry = classifierRegistry({ violates: 0 });
+		await screen(registry as any, { ...cfg, policy: DEFAULT_POLICY }, "hi").catch(() => {});
+		assert.equal(registry.calls[0].context.questions.violates.instructions, golden("guard-classify"));
+	});
+});
