@@ -146,6 +146,26 @@ func (ro *Router) deleteAgentGrant(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// agentCredentialPath is where an agent credential reads its own scope.
+const agentCredentialPath = "/api/agent/credential"
+
+type agentCredentialResponse struct {
+	ArtifactID string `json:"artifact_id"`
+}
+
+// getAgentCredential tells an agent credential which artifact it reaches
+// (Exh-q6xo), so a client configured with a URL and a token can find its
+// target without being told the id separately. It reports the scope and
+// nothing else; anybody but an agent gets 404.
+func (ro *Router) getAgentCredential(w http.ResponseWriter, r *http.Request) {
+	g := agentGrantFromCtx(r.Context())
+	if g == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, agentCredentialResponse{ArtifactID: g.Scope().ArtifactID})
+}
+
 // --- the detail page's External agents panel --------------------------------
 
 // agentGrantsPanelView is the owner's list of grants over one artifact.
@@ -153,7 +173,9 @@ type agentGrantsPanelView struct {
 	ArtifactID string
 	// MayIssue hides the issue form from a principal that would be refused.
 	MayIssue bool
-	Grants   []agentGrantRowView
+	// AppOrigin is what an agent's config names as the instance.
+	AppOrigin string
+	Grants    []agentGrantRowView
 }
 
 type agentGrantRowView struct {
@@ -168,7 +190,7 @@ func (ro *Router) agentGrantsPanel(r *http.Request, a *store.Artifact) (agentGra
 	if err != nil {
 		return agentGrantsPanelView{}, err
 	}
-	view := agentGrantsPanelView{ArtifactID: a.ID, MayIssue: ro.mayIssueAgentGrant(r)}
+	view := agentGrantsPanelView{ArtifactID: a.ID, MayIssue: ro.mayIssueAgentGrant(r), AppOrigin: ro.cfg.AppOrigin}
 	now := time.Now()
 	for _, g := range grants {
 		row := agentGrantRowView{ID: g.ID, Label: g.Label, Created: g.CreatedAt.Format("Jan 2, 2006"), LastUsed: "never used"}

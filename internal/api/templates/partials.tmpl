@@ -416,11 +416,23 @@
   <div class="modal agent-grants-modal" role="dialog" aria-modal="true" aria-labelledby="agent-grants-title">
     <h2 id="agent-grants-title"><i class="ph ph-plugs-connected"></i> External Agents</h2>
     <p class="text-sm muted">Let an agent of your own, like Claude Code or Cursor, edit this artifact. A token reaches this artifact's source, widget and saved data, and nothing else in your library. It cannot change what the artifact may reach on the network.</p>
-    <div id="agent-grant-issued" hidden>
+    <div id="agent-grant-issued" data-app-origin="{{.AgentGrants.AppOrigin}}" hidden>
       <p class="text-sm"><strong>Copy this token now.</strong> It is shown once and cannot be recovered; revoke it and issue another if it is lost.</p>
       <div class="share-link-row">
         <input type="text" id="agent-grant-token" class="field" readonly aria-label="New agent token">
         <button type="button" class="btn btn-sm btn-sec" id="agent-grant-copy"><i class="ph ph-copy"></i> Copy</button>
+      </div>
+      {{/* The config is filled in by agent-grants.js from the token and the
+           app origin above, as a field value, never as markup. */}}
+      <p class="text-sm">Install the connector once with <code>go install github.com/momja/Exhibit/cmd/exhibit-mcp@latest</code>, then add it to your agent. For Claude Code:</p>
+      <div class="share-link-row">
+        <input type="text" id="agent-grant-command" class="field" readonly aria-label="Claude Code command">
+        <button type="button" class="btn btn-sm btn-sec" id="agent-grant-command-copy"><i class="ph ph-copy"></i> Copy</button>
+      </div>
+      <p class="text-sm">For other clients (Claude Desktop, Cursor, ...), as MCP server JSON:</p>
+      <div class="share-link-row">
+        <textarea id="agent-grant-config" class="field agent-grant-config" rows="7" readonly aria-label="MCP server configuration"></textarea>
+        <button type="button" class="btn btn-sm btn-sec" id="agent-grant-config-copy"><i class="ph ph-copy"></i> Copy</button>
       </div>
     </div>
     <div id="agent-grants-body"

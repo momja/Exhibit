@@ -298,6 +298,7 @@ var agentSubResources = map[string][]string{
 //	PATCH  /api/artifacts/{id}          — only the session's own artifact
 //	*      /api/artifacts/{id}/{sub}    — only the session's own artifact, and
 //	                                      only the subs in agentSubResources
+//	GET    /api/agent/credential        — the credential's own scope
 //
 // Everything else is refused: DELETE of the artifact itself, the BYO provider
 // key, shares, tags, collections, transcripts, and every other artifact in the
@@ -325,6 +326,13 @@ func urlParamID(r *http.Request, key string) string {
 }
 
 func agentScopeAllows(scope agentscope.Scope, method, escapedPath string) bool {
+	// The one route outside /api/artifacts: a credential asking what it is
+	// (Exh-q6xo). It answers with the scope this function already enforces,
+	// so it widens nothing, and it is what lets an agent outside the server
+	// be configured with a token alone.
+	if escapedPath == agentCredentialPath {
+		return method == http.MethodGet
+	}
 	rest, ok := artifactsSubPath(escapedPath)
 	if !ok {
 		return false

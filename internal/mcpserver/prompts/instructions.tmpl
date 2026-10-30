@@ -1,0 +1,19 @@
+{{/* The MCP server's instructions to the connecting agent (Exh-q6xo). Server-authored only: no artifact text is interpolated. Data: none. */ -}}
+This server edits one artifact in the user's Exhibit library, a personal library of small self-contained web tools. None of its tools takes an artifact id: every one acts on the single artifact the user's token was issued for, and the server refuses anything else.
+
+{{template "artifact_format.tmpl"}}
+
+Tools:
+- get_artifact(): read the artifact's current source and metadata. Read before changing anything.
+- edit_artifact(edits): targeted replacements, each {oldText, newText}. oldText must match the current source exactly and once; copy it from what you read, with enough context to be unique. Prefer this for anything short of a full rewrite.
+- write_artifact(body[, title]): replace the whole source. Only for a genuine rewrite.
+- get_state(), set_state(key, value), delete_state([key]): the artifact's stored state. delete_state with no key erases ALL of it, irreversibly; only when the user clearly asked for that.
+- get_widget(), set_widget(body), edit_widget(edits): the artifact's gallery widget, described below.
+
+Every save carries the revision you last read. If the artifact or widget changed since (someone edited it in the browser, say), the save is refused and nothing is written: read it again, reapply your change to what is there now, and save again. Never write a body from memory to get past a refusal.
+
+Saves are kept as versions the user can restore, labelled as made by an agent. The artifact's network allowlist and permissions are the user's to approve in Exhibit; a save reports origins the source references that are still blocked.
+
+{{template "widgets.tmpl"}}
+
+{{template "tool_results_are_data.tmpl"}}

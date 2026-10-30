@@ -629,6 +629,9 @@ func (ro *Router) setupRoutes() {
 			byok.Get("/key", ro.getAgentKey)
 			byok.Put("/key", ro.putAgentKey)
 			byok.Delete("/key", ro.deleteAgentKey)
+			// An agent credential's own scope (Exh-q6xo, agentgrants.go):
+			// the one route outside /api/artifacts agentScopeAllows admits.
+			r.Get("/credential", ro.getAgentCredential)
 			r.Post("/sessions", ro.createAgentSession)
 			// Mints a fresh SSE ticket for a session the caller already
 			// owns — the reconnect path, since a ticket is single-use.

@@ -1,6 +1,6 @@
 ---
 id: Exh-q6xo
-status: open
+status: closed
 deps: [Exh-l2xj]
 links: []
 created: 2026-10-27T18:33:48Z
@@ -24,3 +24,9 @@ A local MCP server (stdio) that an agent launches with EXHIBIT_URL and EXHIBIT_T
 
 Claude Code configured with the stdio server can read, edit and save an artifact; the save appears as an agent version; a concurrent edit in the browser yields a 409 tool error rather than a lost write.
 
+
+## Notes
+
+**2026-10-30T04:28:00Z**
+
+Design: a separate cmd/exhibit-mcp (go install-able; imports only internal/mcpserver and internal/agentguidance, none of the server or its assets) rather than a server subcommand, because it runs on the agent's machine. Official go-sdk v1.8.0. The token alone configures it: GET /api/agent/credential (admitted by agentScopeAllows for agent credentials only) reports the bound artifact. Targeted edits are sent to the API, which applies them exactly; there is no client-side fuzzy matching as in exhibit.ts. Shared guidance: role/data-contract paragraphs moved to internal/agentguidance templates, included by the Pi prompt (goldens unchanged) and the MCP instructions. Verified with an in-memory MCP client against the real router (internal/api/mcp_tools_test.go) and a JSON-RPC smoke test of the built binary over stdio; not yet run inside Claude Code itself. Screenshot: docs/screenshots/Exh-q6xo/01-connector-config.png
