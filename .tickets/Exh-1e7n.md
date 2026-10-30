@@ -26,3 +26,7 @@ Implemented server-rendered CommonMark/GFM with Goldmark v2.1.9, raw HTML disabl
 **2026-10-30T15:58:21Z**
 
 CI follow-up: the existing desktop gallery-spaces browser test intermittently timed out on a pointer click (same failure reproduced in local repeated runs), while the Markdown browser test passed in CI. The unchanged failed CI job passed on rerun. Hardened the gallery test to wait for the first rendered frame and active cross-document view transition, since document load may precede pagereveal/transition creation. Kept real clicks and all navigation assertions. Twenty phone+desktop repeats (40 cases) passed; focused Standards and Spec reviews passed; Markdown browser regression passed again.
+
+**2026-10-30T16:05:28Z**
+
+CodeRabbit image finding verified with a failing HTTPS Markdown-image regression. Fixed in f5761e2: Goldmark emits escaped alt-text children without image elements, preventing automatic image URL requests. Inline/reference/formatted/linked image cases pass, and a real-browser request probe reports zero requests across live rendering and history. Targeted Markdown/browser tests and race checks pass. Fresh Standards and Spec reviews report no findings. Updated desktop/mobile edge screenshots include inert image labels.
