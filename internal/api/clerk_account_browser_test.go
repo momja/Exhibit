@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -63,9 +64,15 @@ func testClerkAccountBrowser(t *testing.T, pending bool) {
 	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
 	var artifact createArtifactResponse
 	require.NoError(t, json.Unmarshal(created.Body.Bytes(), &artifact))
+	var providerUnavailable atomic.Bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/gallery/clerk-client.js") {
 			w.Header().Set("Content-Type", "text/javascript")
+			w.Header().Set("Cache-Control", "no-store")
+			if providerUnavailable.Load() {
+				fmt.Fprint(w, `export async function clerkClient() { throw new Error('Account service unavailable'); } export const clerkClientAfterLoad = clerkClient;`)
+				return
+			}
 			fmt.Fprint(w, clerkAccountBrowserProvider)
 			return
 		}
@@ -91,8 +98,11 @@ func testClerkAccountBrowser(t *testing.T, pending bool) {
 		require.True(t, ok, expression)
 	}
 
-	run(chromedp.EmulateViewport(1100, 1200), chromedp.Navigate(srv.URL), chromedp.WaitVisible(chromedp.CSS(`#test-account-button`)), click(`#test-account-button`))
+	run(chromedp.EmulateViewport(1100, 1200), chromedp.Navigate(srv.URL), chromedp.WaitVisible(chromedp.CSS(`#test-account-button`)))
 	check(`document.querySelectorAll('#test-account-button').length === 1 && !document.querySelector('a[aria-label="Settings"]')`)
+	check(`document.querySelector('[data-clerk-target="recovery"]').hidden && getComputedStyle(document.querySelector('[data-clerk-target="recovery"]')).display === 'none'`)
+	run(click(`#test-account-button`))
+	check(`getComputedStyle(document.querySelector('#test-settings')).display !== 'none'`)
 	run(click(`#test-manage-profile`))
 	check(`window.profileOpens === 1 && window.profileOptions === undefined`)
 	_, err = chromedp.RunResponse(ctx, click(`#test-settings`))
@@ -102,6 +112,7 @@ func testClerkAccountBrowser(t *testing.T, pending bool) {
 	check(fmt.Sprintf(`document.querySelector('#storage').textContent.includes(%q) && document.querySelector('#storage').textContent.includes('1 artifact')`, fmt.Sprintf("%d B", len(artifactBody))))
 	run(chromedp.WaitVisible(chromedp.CSS(`#test-account-button`)))
 	check(`document.querySelectorAll('[data-clerk-mode-value="user"]').length === 1 && document.querySelector('header #test-account-button') != null`)
+	check(`document.querySelector('[data-clerk-target="recovery"]').hidden && getComputedStyle(document.querySelector('[data-clerk-target="recovery"]')).display === 'none'`)
 
 	check(`getComputedStyle(document.querySelector('[data-account-deletion-target="finish"]')).display === 'none'`)
 	run(chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`import(%q).then(({application}) => { window.accountApplication = application; }).catch(error => { window.accountImportError = error.stack; })`, assetURL("gallery/controllers.js"))),
@@ -136,6 +147,15 @@ func testClerkAccountBrowser(t *testing.T, pending bool) {
 	check(`document.documentElement.scrollWidth <= innerWidth`)
 	capture("settings-mobile.png")
 	run(chromedp.EmulateViewport(1100, 1200))
+	if !pending {
+		// Visibility follows the recovery state, not the header's anchor styling.
+		providerUnavailable.Store(true)
+		run(chromedp.Navigate(srv.URL), chromedp.WaitVisible(chromedp.CSS(`.account-control [data-clerk-target="recovery"]`)))
+		check(`!document.querySelector('.account-control [data-clerk-target="recovery"]').hidden && document.querySelector('.account-control [data-clerk-target="recovery"]').getAttribute('href') === '/settings' && !document.querySelector('#test-account-button')`)
+		providerUnavailable.Store(false)
+		run(chromedp.Navigate(srv.URL+"/settings"), chromedp.WaitVisible(chromedp.CSS(`#test-account-button`)))
+		check(`getComputedStyle(document.querySelector('.account-control [data-clerk-target="recovery"]')).display === 'none'`)
+	}
 	run(click(`#delete-account`), chromedp.SendKeys(chromedp.CSS(`#delete-phrase`), "delete my library"))
 	if !pending {
 		_, err := chromedp.RunResponse(ctx, click(`#delete-confirm-go`))
