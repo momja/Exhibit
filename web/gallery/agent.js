@@ -107,7 +107,7 @@ async function refreshKeyStatus() {
   const btn = document.getElementById('key-btn');
   const label = document.getElementById('key-btn-label');
   if (keyConfigured) {
-    btn.classList.remove('warn');
+    btn.classList.remove('btn-warn');
     label.textContent = d.provider + ' · ' + (d.model || 'default');
     document.getElementById('key-provider').value = d.provider;
     document.getElementById('key-model').value = d.model || '';
@@ -116,7 +116,7 @@ async function refreshKeyStatus() {
     cur.textContent = 'A key is already configured for ' + d.provider + '. Saving keeps it unless you delete the masked value below and enter a new one.';
     document.getElementById('key-delete').hidden = false;
   } else {
-    btn.classList.add('warn');
+    btn.classList.add('btn-warn');
     label.textContent = 'Set API key';
     document.getElementById('current-key').hidden = true;
     document.getElementById('key-delete').hidden = true;
@@ -1115,5 +1115,6 @@ function briefToMessage(brief) {
 })();
 
 // Inline handlers and htmx expressions are the legacy template boundary.
+document.getElementById('key-btn')?.addEventListener('click', openKeyModal);
 Object.assign(window, { openKeyModal, closeKeyModal, providerChanged, saveKey, deleteKey,
   showPane, openHistory, closeHistory, send, stopAgent, toggleSnippet, previewArtifactId });

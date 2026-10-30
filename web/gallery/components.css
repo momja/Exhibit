@@ -16,6 +16,7 @@
 .btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:var(--color-panel)}
 .btn-danger{background:var(--color-danger);color:var(--color-on-danger);border:none}
 .btn-danger:hover{background:var(--color-danger-hover)}
+.btn-warn,.btn-warn:hover{border-color:var(--color-warn-strong);color:var(--color-warn-ink-soft);background:var(--color-warn-tint)}
 /* Square, label-less .btn — the gallery header's "Add artifact" and profile
  * controls (av-qo05). A modifier rather than a page rule because it is the
  * .btn family's fourth member: it changes the box and nothing else, so it
@@ -45,25 +46,22 @@
 .btn-danger:disabled:hover{background:var(--color-danger)}
 
 /* --- app bar ---------------------------------------------------------- */
-/* Legacy bars outside the shared component retain their existing sizing. */
-body>header:not(.app-header){height:var(--header-height);padding-top:0;padding-bottom:0;flex-shrink:0}
-body>header:not(.app-header) .icon-btn{width:var(--header-control-size);height:var(--header-control-size)}
-body>header:not(.app-header) .btn:not(.icon-btn){padding-top:var(--space-1);padding-bottom:var(--space-1)}
-
 /* The gallery's dimensions are the baseline: 36px icon controls plus the
  * 1px bottom border on desktop; 32px controls on phones. Class-based sizing
  * works both directly under body and inside a gallery controller root. */
-.app-header{box-sizing:border-box;position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;height:37px;flex-shrink:0;padding:0 16px;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header)}
+.app-header{box-sizing:border-box;position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;min-height:var(--header-height);flex-shrink:0;padding:0 16px;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header)}
 .app-header .logo{height:24px;width:auto;display:block;flex:0 0 auto}
+.app-header a[hidden]{display:none}
 .app-header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;gap:5px}
 .app-header-title{font-size:18px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .app-header-back{min-width:0;flex:0 1 auto}
 .app-header-back-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .app-header-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}
 .app-header .btn{white-space:nowrap}
+.app-header .header-link-label{max-width:40vw;overflow:hidden;text-overflow:ellipsis}
 .app-header .btn.icon-btn{width:36px;height:36px}
 @media (max-width:767px){
-  .app-header{padding-top:env(safe-area-inset-top,0px);height:calc(33px + env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .app-header{padding-top:env(safe-area-inset-top,0px);min-height:calc(var(--header-height) + env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
   .app-header .btn{height:var(--header-control-size);min-height:var(--header-control-size);padding-top:0;padding-bottom:0}
   .app-header .btn.icon-btn{width:var(--header-control-size);height:var(--header-control-size)}
 }

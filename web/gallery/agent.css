@@ -4,13 +4,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);display:flex;flex-direction:column;height:100vh}
-header{background:var(--color-panel);border-bottom:1px solid var(--color-hairline);padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
-header a{color:var(--brand-blue);text-decoration:none;font-size:13px}
-header h1{font-size:16px;font-weight:600;flex:1}
 .banner-err{background:var(--color-danger-tint);border-bottom:1px solid var(--color-danger-tint-border);color:var(--color-danger-ink);padding:8px 20px;font-size:13px}
-.key-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;font-size:13px;border:1px solid var(--color-border);border-radius:6px;background:var(--color-panel);cursor:pointer;color:var(--color-ink-soft)}
-.key-btn:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
-.key-btn.warn{border-color:var(--color-warn-strong);color:var(--color-warn-ink-soft);background:var(--color-warn-tint)}
 .layout{display:flex;flex:1;overflow:hidden}
 .chat{position:relative;width:clamp(280px,var(--agent-chat-width,460px),calc(100% - 280px));min-width:280px;flex-shrink:0;display:flex;flex-direction:column;background:var(--color-panel);border-right:1px solid var(--color-hairline)}
 /* An invisible hit area straddles the panel's normal border without taking
@@ -115,9 +109,7 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .compose-row{--compose-control-size:40px;display:flex;gap:8px;align-items:flex-end}
 #input{flex:1;resize:none;border:1px solid var(--color-border);border-radius:8px;padding:9px 11px;font-size:var(--field-font-size);font-family:inherit;line-height:20px;outline:none;max-height:140px;min-height:var(--compose-control-size)}
 #input:focus{border-color:var(--brand-blue)}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:var(--brand-blue);color:var(--color-on-accent);border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:500}
-.btn:hover{background:var(--brand-blue-hover)}
-.btn:disabled{background:var(--color-accent-disabled);color:var(--color-on-accent-disabled);cursor:default}
+.compose-row>.btn:disabled{background:var(--color-accent-disabled);color:var(--color-on-accent-disabled);cursor:default}
 .btn-stop{background:var(--color-danger);color:var(--color-on-danger)}
 .btn-stop:hover{background:var(--color-danger-hover)}
 .compose-row>.btn{width:var(--compose-control-size);height:var(--compose-control-size);flex-shrink:0;justify-content:center;padding:0}
@@ -169,11 +161,6 @@ header h1{font-size:16px;font-weight:600;flex:1}
 .modal input:read-only{background:var(--color-ground);color:var(--color-ink-mid);cursor:default}
 .modal-error{color:var(--color-danger-hover);font-size:12px;margin-top:10px}
 .modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
-.btn-sec{background:var(--color-panel);color:var(--color-ink-soft);border:1px solid var(--color-border)}
-.btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:var(--color-panel)}
-.btn-danger{background:var(--color-danger);color:var(--color-on-danger)}
-.btn-danger:hover{background:var(--color-danger-hover)}
-.spacer{flex:1}
 .current-key{font-size:12.5px;color:var(--color-ink-mid);background:var(--color-subtle);border:1px solid var(--color-hairline);border-radius:6px;padding:8px 10px;margin-top:10px}
 
 /* Mobile (av-td4y): the two panes don't fit side by side, so a segmented
@@ -188,12 +175,6 @@ header h1{font-size:16px;font-weight:600;flex:1}
 @media (max-width:640px){
   /* dvh keeps the composer above the mobile URL bar instead of under it. */
   body{height:100dvh}
-  header{padding:10px 12px;gap:10px}
-  header a{font-size:18px;line-height:1}
-  header a .lbl{display:none}
-  header h1{font-size:15px}
-  .key-btn{max-width:45vw;white-space:nowrap;overflow:hidden}
-  #key-btn-label{overflow:hidden;text-overflow:ellipsis}
   .pane-switch{display:block}
   .pane-resizer{display:none}
   .chat,.preview{width:100%;min-width:0;flex:1}

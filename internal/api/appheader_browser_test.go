@@ -42,7 +42,7 @@ func TestAppHeaderBrowser(t *testing.T) {
 	for _, width := range []int64{1280, 768, 767, 600, 390, 320} {
 		_, err = chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 900, DeviceScaleFactor: 1})
 		require.NoError(t, err)
-		for _, path := range []string{"/", "/profile", "/new", "/admin/users", "/artifacts/" + id + "/edit?return_to=/artifacts/" + id} {
+		for _, path := range []string{"/", "/profile", "/new", "/admin/users", "/agent", "/not-a-page", "/artifacts/" + id + "/edit?return_to=/artifacts/" + id} {
 			t.Run(fmt.Sprintf("%d%s", width, path), func(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+path), chromedp.Poll[chromedp.Void](`document.querySelector('.app-header')`)))
 				metrics, err := chromedp.Run(ctx, chromedp.Evaluate[struct {
@@ -74,6 +74,74 @@ func TestAppHeaderBrowser(t *testing.T) {
 				require.Equal(t, height, metrics.Height)
 				require.Equal(t, padding, metrics.Padding)
 				require.True(t, metrics.Fits, "header controls and page stay within the viewport")
+				if path == "/agent" && width == 1280 {
+					require.NoError(t, chromedp.Do(ctx,
+						chromedp.Evaluate[chromedp.Void](`window.closeKeyModal()`),
+						chromedp.Click(chromedp.CSS(`#key-btn`)),
+						chromedp.Poll[chromedp.Void](`document.getElementById('key-modal').hidden === false`),
+						chromedp.Evaluate[chromedp.Void](`window.closeKeyModal()`),
+					))
+				}
+			})
+		}
+	}
+}
+
+// Use the actual header partial and page styles without loading the remote
+// provider. Provider mounting and auth behavior have their own integration
+// coverage; these cases exercise the hidden recovery and failure layout.
+func TestAppHeaderAccountStatesBrowser(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.Handle("/assets/", assetsHandler())
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		header, stylesheet := profileHeader(&clerkView{}), "settings.css"
+		if r.URL.Path == "/gallery" {
+			header, stylesheet = galleryHeader(galleryGridData{ID: "library-gallery"}, true, &clerkView{}), "index.css"
+		}
+		markup, err := renderPage("appHeader", header)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/gallery/tokens.css"><link rel="stylesheet" href="/assets/gallery/components.css"><link rel="stylesheet" href="/assets/gallery/%s"></head><body>%s<main>Page content</main></body></html>`, stylesheet, markup)
+	})
+	app := httptest.NewServer(mux)
+	defer app.Close()
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	for _, width := range []int64{1280, 390} {
+		_, err := chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 900, DeviceScaleFactor: 1})
+		require.NoError(t, err)
+		for _, path := range []string{"/settings", "/gallery"} {
+			t.Run(fmt.Sprintf("%d%s", width, path), func(t *testing.T) {
+				require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+path)))
+				hidden, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(() => {
+					const recovery = document.querySelector('[data-clerk-target="recovery"]');
+					return recovery.hidden && getComputedStyle(recovery).display === 'none' && recovery.getClientRects().length === 0;
+				})()`))
+				require.NoError(t, err)
+				require.True(t, hidden, "successful account loading must not reveal the recovery link")
+				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`
+					document.querySelector('[data-clerk-target="status"]').textContent = 'The account service did not respond. Reload this page to retry. If this continues, check whether your browser or network is blocking Clerk.';
+					document.querySelector('[data-clerk-target="recovery"]').hidden = false;
+				`)))
+				fits, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(() => {
+					const header = document.querySelector('.app-header').getBoundingClientRect();
+					const status = document.querySelector('[data-clerk-target="status"]').getBoundingClientRect();
+					const recovery = document.querySelector('[data-clerk-target="recovery"]').getBoundingClientRect();
+					return status.top >= header.top && status.bottom <= header.bottom &&
+						recovery.width > 0 && recovery.top >= header.top && recovery.bottom <= header.bottom &&
+						document.querySelector('main').getBoundingClientRect().top >= header.bottom &&
+						document.documentElement.scrollWidth <= innerWidth;
+				})()`))
+				require.NoError(t, err)
+				require.True(t, fits, "account-service errors remain visible inside the bar and above page content")
 			})
 		}
 	}

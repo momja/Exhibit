@@ -6,6 +6,7 @@ import "html/template"
 // route authorization remains independent of the navigation they render.
 type appHeaderView struct {
 	Title     string
+	TitleIcon string
 	HideTitle bool
 	Logo      template.HTML
 	Back      *appHeaderBack
@@ -23,9 +24,9 @@ type appHeaderBack struct {
 // An action is a link when Href is set, otherwise a native button. SaveEditor
 // connects the editor's existing save handler without adding inline script.
 type appHeaderAction struct {
-	Label, Icon, Href, ID string
-	IconOnly, Primary     bool
-	SaveEditor            bool
+	Label, Icon, Href, ID, LabelID string
+	IconOnly, Primary              bool
+	SaveEditor                     bool
 }
 
 func galleryHeader(grid galleryGridData, isAdmin bool, clerk *clerkView) appHeaderView {
@@ -67,4 +68,22 @@ func profileHeader(clerk *clerkView) appHeaderView {
 	header.Account = clerk != nil
 	header.Clerk = clerk
 	return header
+}
+
+func agentHeader(backURL string, byok bool) appHeaderView {
+	header := appHeaderView{
+		Title: "Agent", TitleIcon: "ph-robot",
+		Back: &appHeaderBack{URL: backURL, Label: "Back", CollapseLabel: true},
+	}
+	if byok {
+		header.Actions = []appHeaderAction{{Label: "API key", Icon: "ph-key", ID: "key-btn", LabelID: "key-btn-label"}}
+	}
+	return header
+}
+
+func notFoundHeader() appHeaderView {
+	return appHeaderView{
+		Title: "Exhibit", Logo: template.HTML(exhibitLogoSVG),
+		Actions: []appHeaderAction{{Label: "Add artifact", Icon: "ph-plus", Href: "/new", Primary: true}},
+	}
 }

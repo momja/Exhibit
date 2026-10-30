@@ -593,16 +593,16 @@ func (ro *Router) notFound(w http.ResponseWriter, r *http.Request) {
 // once in its header and draws the hero frame from the data URI, so one
 // artwork serves both without duplicating its element ids (logo.go).
 type notFoundPageData struct {
+	Header        appHeaderView
 	Favicon       template.URL
-	LogoSVG       template.HTML
 	LogoImage     template.URL
 	RequestedPath string
 }
 
 func renderNotFoundPage(requestedPath string) (string, error) {
 	return renderPage("notfound", notFoundPageData{
+		Header:        notFoundHeader(),
 		Favicon:       template.URL(exhibitLogoDataURI),
-		LogoSVG:       template.HTML(exhibitLogoSVG),
 		LogoImage:     template.URL(exhibitLogoDataURI),
 		RequestedPath: requestedPath,
 	})

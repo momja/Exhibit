@@ -24,7 +24,7 @@
 {{define "appHeader"}}<header class="app-header">
   {{if .Logo}}{{.Logo}}{{end}}
   {{with .Back}}<a class="app-header-back{{if .CollapseLabel}} app-header-back-collapse{{end}}" href="{{.URL}}" title="{{.Label}}"><i class="ph ph-arrow-left" aria-hidden="true"></i> <span class="app-header-back-label">{{.Label}}</span></a>{{end}}
-  {{if .Title}}<h1 class="app-header-title{{if .HideTitle}} sr-only{{end}}">{{.Title}}</h1>{{end}}
+  {{if .Title}}<h1 class="app-header-title{{if .HideTitle}} sr-only{{end}}">{{if .TitleIcon}}<i class="ph {{.TitleIcon}}" aria-hidden="true"></i> {{end}}{{.Title}}</h1>{{end}}
   {{with .Search}}{{template "galleryHeaderSearch" .}}{{end}}
   <span class="spacer"></span>
   {{if .Actions}}<div class="app-header-actions">
@@ -36,4 +36,4 @@
 {{define "appHeaderAction"}}{{if .Href}}<a class="btn{{if not .Primary}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}" href="{{.Href}}" aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</a>
 {{else}}<button type="button" class="btn{{if not .Primary}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}"{{if .ID}} id="{{.ID}}"{{end}}{{if .SaveEditor}} data-save-editor{{end}} aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</button>{{end}}{{end}}
 
-{{define "appHeaderActionContent"}}{{if .Icon}}<i class="ph {{.Icon}}" aria-hidden="true"></i>{{end}}{{if not .IconOnly}}<span class="header-link-label">{{.Label}}</span>{{end}}{{end}}
+{{define "appHeaderActionContent"}}{{if .Icon}}<i class="ph {{.Icon}}" aria-hidden="true"></i>{{end}}{{if not .IconOnly}}<span class="header-link-label"{{if .LabelID}} id="{{.LabelID}}"{{end}}>{{.Label}}</span>{{end}}{{end}}

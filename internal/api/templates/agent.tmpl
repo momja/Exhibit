@@ -20,23 +20,12 @@
 <title>Agent — Exhibit</title>
 <link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
-{{/* components.css joins the other pages' layering here (tokens → components →
-     page sheet) because the preview pane now renders the shared cardWidget
-     component (av-fafu). agent.css still loads last, so its own .btn/.spacer
-     definitions keep winning. */}}
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/agent.css"}}">
 <script src="{{asset "htmx/htmx.min.js"}}"></script>
 </head>
 <body>
-<header>
-  <a href="{{.BackURL}}">←<span class="lbl"> Back</span></a>
-  <h1><i class="ph ph-robot"></i> Agent</h1>
-  {{/* Platform mode renders no key control at all (av-siqf) — not a disabled
-       one. The instance supplies the credential, and which provider and model
-       it runs is not something this page reports. */}}
-  {{if .BYOK}}<button class="key-btn" id="key-btn" onclick="openKeyModal()"><i class="ph ph-key"></i> <span id="key-btn-label">API key</span></button>{{end}}
-</header>
+{{template "appHeader" .Header}}
 {{if not .AgentEnabled}}<div class="banner-err">Agent support is disabled: the <code>pi</code> binary was not found on this server.</div>{{end}}
 <div class="pane-switch">
   <div class="pane-tabs" role="tablist" aria-label="Chat or preview">

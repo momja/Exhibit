@@ -3,9 +3,6 @@
  * --brand-blue) and components.css (shared .btn/.field/... classes); only
  * 404-page-specific rules live here.
  *
- * The header block is index.css's verbatim, so the chrome above the fold is
- * pixel-identical to the gallery's rather than a near-miss copy.
- *
  * The --nf-* locals are the artboard's slate ramp, named for their role on
  * this page. Their values live in tokens.css (--color-slate-*) so the dark
  * palette can reach them from its one block (av-xie4). Two are darker than
@@ -15,10 +12,6 @@
  */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
-header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header);padding:12px 24px;display:flex;align-items:center;gap:16px}
-header h1{font-size:18px;font-weight:600}
-header .logo{height:28px;width:auto;display:block;flex:0 0 auto}
-header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;gap:5px}
 
 /* Two columns on the gallery ground: the hung (crooked) frame with its wall
  * label on the left, the copy and the real controls on the right. The top/
@@ -116,8 +109,6 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inl
 
 /* Phone: one column, frame centred, one way out plus search. */
 @media (max-width:640px){
-  header{padding:10px 24px;gap:10px}
-  .exhibit-404__add-label{display:none}
   .exhibit-404{grid-template-columns:minmax(0,1fr);padding:32px 24px 64px}
   .exhibit-404__stage{margin-left:0}
   .exhibit-404__frame{width:215px;margin:0 auto}

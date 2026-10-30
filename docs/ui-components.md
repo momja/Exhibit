@@ -18,12 +18,13 @@ and production needs no Node process or external asset service.
 
 ## App header
 
-The gallery, account (`/settings`, with `/profile` as an alias), artifact editor, account administration, and
-add-artifact pages render `{{template "appHeader" .Header}}` from
+The gallery, account (`/settings`, with `/profile` as an alias), artifact editor,
+account administration, agent, not-found, and add-artifact pages render `{{template "appHeader" .Header}}` from
 `templates/components.tmpl`. `appHeaderView` in `internal/api/appheader.go`
 supplies a title, optional logo/back link/search, and native link or button
 actions. Page constructors choose the actions; route guards still enforce
-permission independently. The gallery and hosted Settings retain the shared `accountControl` menu, including its recovery link.
+permission independently. The gallery and hosted Settings retain the shared
+`accountControl` menu, including its recovery link.
 
 For a title and return to the gallery, populate the page's `Header` with
 `subpageHeader("Page title")`. For a different destination, supply
@@ -34,6 +35,8 @@ to assistive technology without drawing it beside the logo.
 
 Each `appHeaderAction` has a `Label` and self-hosted Phosphor `Icon`. `Href`
 makes an anchor; otherwise it renders a button with an optional `ID`.
+`LabelID` identifies a label that a feature updates, such as the agent key
+status. An optional `TitleIcon` decorates the page title.
 `IconOnly` hides the visible label at every width; other action labels become
 visually hidden at 600px and below. Accessible names and tooltips remain.
 `Primary` selects the primary button style. The editor's `SaveEditor` flag
@@ -47,8 +50,9 @@ rendered gallery: 37px tall with 36px icon controls on desktop; 33px tall with
 32px controls at 767px and below, plus any phone top safe-area inset. Horizontal
 padding is 16px (8px at 360px and below), with 12px gaps. The gallery filter
 layout tightens gaps on narrow screens. Page styles only extend feature layout,
-not the bar's dimensions. The older 40px `--header-height` rules remain scoped
-to pages that have not adopted this component.
+not the bar's dimensions. `--header-height` supplies the shared minimum height;
+the bar grows when account-service errors need more room. Hidden account recovery links remain
+hidden until their controller reveals them.
 
 This is a static component: it needs no new Stimulus controller or script.
 Interactive features compose their existing controllers and native events.
@@ -58,7 +62,9 @@ Interactive features compose their existing controllers and native events.
 [Account](screenshots/Exh-arf2/account-desktop.png) ·
 [Editor](screenshots/Exh-arf2/editor-desktop.png) ·
 [Accounts](screenshots/Exh-arf2/admin-desktop.png) ·
-[Add artifact](screenshots/Exh-arf2/new-desktop.png)
+[Add artifact](screenshots/Exh-arf2/new-desktop.png) ·
+[Agent](screenshots/Exh-arf2/agent-desktop.png) ·
+[Not found](screenshots/Exh-arf2/notfound-desktop.png)
 
 ## Defining action menus
 

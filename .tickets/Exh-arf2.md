@@ -27,3 +27,7 @@ Extracted typed appHeaderView and shared appHeader partial/CSS; migrated gallery
 **2026-10-30T03:28:54Z**
 
 Rebased onto current origin/main before PR creation. Preserved the newly merged unified accountControl on gallery and hosted Settings, including recovery links; /profile remains an alias of /settings. Updated Clerk markup assertion, removed obsolete account-settings header CSS, and refreshed all screenshots. Post-rebase focused Go/browser tests (including Clerk account flow) passed in 25.9s; all 407 Node tests passed.
+
+**2026-10-30T03:45:57Z**
+
+Completed header migration for the remaining agent and not-found pages and deleted all body>header compatibility rules and page-level header CSS. Agent key actions now use the shared button/label markup with a native feature listener; shared button styling replaces the agent duplicates. Header height now comes from the shared responsive token and is a minimum, allowing account-service errors to expand the bar. Hidden account recovery anchors remain hidden. Added seven-page/six-width layout coverage, API-key button interaction, and gallery/Settings recovery and failure layout regression cases. Focused Go/browser suite passed (16.3s), all 407 Node tests passed, and screenshots were refreshed.

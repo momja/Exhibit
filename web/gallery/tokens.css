@@ -130,7 +130,7 @@
 
 	/* One app bar height on every page, so navigation never shifts content.
 	 * Small because the artifact page should give the artifact the room. */
-	--header-height:40px;
+	--header-height:37px;
 	/* Square controls in the bar; smaller than it so they don't touch its edges. */
 	--header-control-size:32px;
 
@@ -231,3 +231,6 @@
 		--overlay:rgba(0,0,0,.6);
 	}
 }
+
+/* Match the gallery bar at phone widths on every app page. */
+@media (max-width:767px){:root{--header-height:33px}}
