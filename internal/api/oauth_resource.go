@@ -43,8 +43,9 @@ func (ro *Router) protectedResourceMetadata() http.Handler {
 }
 
 // authorizationServers are the issuers whose tokens /mcp accepts, as the
-// metadata advertises them. None yet: a pasted grant needs no issuer.
-func (ro *Router) authorizationServers() []string { return nil }
+// metadata advertises them: this instance's own (oauth.go, Exh-rhlq), whose
+// access tokens are agent grants.
+func (ro *Router) authorizationServers() []string { return []string{ro.cfg.AppOrigin} }
 
 // agentToken is what a verified bearer value carries: the grant it acts
 // under, and a stable id the MCP transport binds a session to, so a session

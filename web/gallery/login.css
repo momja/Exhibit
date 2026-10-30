@@ -38,3 +38,10 @@
  * two cards, and constrain the vendor UI on narrow screens. */
 .login-clerk{max-width:400px;background:transparent;box-shadow:none;padding:0;gap:var(--space-4)}
 .login-clerk>[data-controller="clerk"]{width:100%;min-width:0}
+
+/* The MCP consent page (Exh-rhlq) shares the sign-in card. */
+.oauth-consent{max-width:460px;align-items:stretch}
+.oauth-consent .login-sub{line-height:1.5}
+.oauth-artifacts{border:0;display:flex;flex-direction:column;gap:var(--space-2);max-height:40vh;overflow-y:auto}
+.oauth-artifacts legend{margin-bottom:var(--space-3)}
+.oauth-artifact{display:flex;align-items:center;gap:var(--space-3);font-size:14px;padding:var(--space-2) 0;border-bottom:1px solid var(--color-hairline);overflow-wrap:anywhere}
