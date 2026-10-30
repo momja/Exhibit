@@ -3,13 +3,16 @@ package api
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/kb"
 	"github.com/momja/Exhibit/internal/chromium"
 	"github.com/momja/Exhibit/internal/chromium/chromiumtest"
 	"github.com/stretchr/testify/require"
@@ -144,5 +147,116 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 				require.True(t, fits, "account-service errors remain visible inside the bar and above page content")
 			})
 		}
+	}
+}
+
+// A new full-document app page must opt into the same component. Fragments
+// and render-origin artifact documents are deliberately outside this shell.
+func TestEveryAppPageUsesSharedHeader(t *testing.T) {
+	require.NoError(t, fs.WalkDir(templatesFS, "templates", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		source, err := templatesFS.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(source), "<!DOCTYPE html>") {
+			require.Contains(t, string(source), `{{template "appHeader" .Header}}`, path)
+		}
+		return nil
+	}))
+}
+
+func TestAuthAppHeaderBrowser(t *testing.T) {
+	ro := newTestRouter(t)
+	app := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/assets/") {
+			ro.ServeHTTP(w, r)
+			return
+		}
+		if r.URL.Path == "/local" {
+			ro.renderLogin(w, r, http.StatusOK, "/", "", "")
+			return
+		}
+		// Exercise the production hosted template without loading a remote SDK.
+		ro.renderClerkLogin(w, r, strings.TrimPrefix(r.URL.Path, "/"))
+	}))
+	defer app.Close()
+	ro.cfg.AppOrigin = app.URL
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	for _, width := range []int64{1280, 390, 320} {
+		_, err := chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 900, DeviceScaleFactor: 1})
+		require.NoError(t, err)
+		for _, mode := range []string{"local", "signin", "signup", "logout"} {
+			require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/"+mode)))
+			ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(() => {
+				const header = document.querySelector('[data-app-header]');
+				const rect = header.getBoundingClientRect();
+				return rect.height === (innerWidth <= 767 ? 33 : 37) && rect.width === innerWidth &&
+					!header.querySelector('a, button, [data-controller="clerk"]') &&
+					document.documentElement.scrollWidth <= innerWidth && document.querySelector('main').getBoundingClientRect().top >= rect.bottom;
+			})()`))
+			require.NoError(t, err)
+			require.True(t, ok, "%d /%s: auth uses the shared bar without authenticated controls", width, mode)
+		}
+	}
+}
+
+func TestFloatingAppHeaderBrowser(t *testing.T) {
+	ro := newTestRouter(t)
+	id := createArtifact(t, ro, map[string]any{"title": "Floating header", "body": "<!doctype html><h1>Tool</h1>"})
+	app := httptest.NewServer(ro)
+	defer app.Close()
+	ro.cfg.AppOrigin = app.URL
+	render := httptest.NewServer(ro.RenderHandler())
+	defer render.Close()
+	ro.cfg.RenderOrigin = render.URL
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, cancel = context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	run := func(actions ...chromedp.Action[chromedp.Void]) {
+		t.Helper()
+		require.NoError(t, chromedp.Do(ctx, actions...))
+	}
+	wait := func(expression string) { t.Helper(); run(chromedp.Poll[chromedp.Void](expression)) }
+	run(chromedp.Navigate(app.URL))
+	for _, width := range []int64{1280, 390} {
+		_, err := chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 900, DeviceScaleFactor: 1})
+		require.NoError(t, err)
+		run(chromedp.Evaluate[chromedp.Void](`localStorage.removeItem('exhibit.pipControls')`), chromedp.Navigate(app.URL+"/artifacts/"+id), chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`import(%q).then(({application}) => window.headerApplication = application)`, assetURL("gallery/controllers.js"))))
+		wait(`window.headerApplication?.getControllerForElementAndIdentifier(document.querySelector('[data-app-header]'), 'floating-header') != null`)
+		run(chromedp.Click(chromedp.CSS(`#pip-more`)))
+		wait(`!document.getElementById('pip-menu').hidden`)
+		run(chromedp.KeyEvent(kb.Escape))
+		wait(`document.getElementById('pip-menu').hidden && document.activeElement.id === 'pip-more'`)
+		run(chromedp.Click(chromedp.CSS(`#pip-title`)))
+		wait(`!document.getElementById('pip-info').hidden && document.activeElement.id === 'pip-info'`)
+		run(chromedp.KeyEvent(kb.Escape), chromedp.Focus(chromedp.CSS(`#pip-grip`)), chromedp.KeyEvent(kb.ArrowRight))
+		wait(`document.body.dataset.pipCorner === 'br'`)
+		run(chromedp.KeyEvent(kb.ArrowRight))
+		wait(`!document.getElementById('pip-tab').hidden && document.activeElement.id === 'pip-tab'`)
+		run(chromedp.KeyEvent(kb.Enter))
+		wait(`!document.getElementById('pip').hidden && document.activeElement.id === 'pip-grip'`)
+		run(chromedp.Evaluate[chromedp.Void](`window.savedHeader = document.querySelector('[data-app-header]'); window.savedHeader.remove()`))
+		wait(`window.headerApplication.getControllerForElementAndIdentifier(window.savedHeader, 'floating-header') == null`)
+		run(chromedp.Evaluate[chromedp.Void](`window.savedHeader.querySelector('#pip-more').click()`))
+		closed, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`window.savedHeader.querySelector('#pip-menu').hidden`))
+		require.NoError(t, err)
+		require.True(t, closed, "disconnected controls release their listeners")
+		run(chromedp.Evaluate[chromedp.Void](`document.body.append(window.savedHeader)`))
+		wait(`window.headerApplication.getControllerForElementAndIdentifier(window.savedHeader, 'floating-header') != null`)
+		run(chromedp.Click(chromedp.CSS(`#pip-more`)))
+		wait(`!document.getElementById('pip-menu').hidden`)
 	}
 }

@@ -947,12 +947,12 @@ func renderNewPage(creds pageCredentials) (string, error) {
 // long after the page was rendered — so its token is minted at click time
 // instead of going stale in the markup (av-c5aq).
 type detailPageData struct {
+	Header appHeaderView
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
 	Favicon        template.URL
 	ID             string
 	Title          string
-	Created        string
 	FrameURL       string
 	OpenURL        string
 	SourceURL      string
@@ -1000,11 +1000,11 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		viewerPreference = "anonymous"
 	}
 	return renderPage("detail", detailPageData{
+		Header:         artifactHeader(a, creds.ReadOnly, share != nil),
 		Favicon:        template.URL(artifacticon.DataURI(a.Tags)),
 		Share:          share,
 		ID:             a.ID,
 		Title:          a.Title,
-		Created:        a.CreatedAt.Format("Jan 2, 2006 15:04"),
 		FrameURL:       urls.artifact(a.ID),
 		OpenURL:        openURL(a.ID),
 		SourceURL:      a.SourceURL,

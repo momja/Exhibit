@@ -18,13 +18,17 @@ and production needs no Node process or external asset service.
 
 ## App header
 
-The gallery, account (`/settings`, with `/profile` as an alias), artifact editor,
-account administration, agent, not-found, and add-artifact pages render `{{template "appHeader" .Header}}` from
-`templates/components.tmpl`. `appHeaderView` in `internal/api/appheader.go`
-supplies a title, optional logo/back link/search, and native link or button
-actions. Page constructors choose the actions; route guards still enforce
-permission independently. The gallery and hosted Settings retain the shared
-`accountControl` menu, including its recovery link.
+Every full-document app page renders `{{template "appHeader" .Header}}` from
+`templates/components.tmpl`: gallery and shared-library views, Settings,
+artifact editor and viewer, account administration, agent, add-artifact,
+not-found, and both local and hosted authentication pages.
+`appHeaderView` in `internal/api/appheader.go` supplies page-owned content.
+The default variant provides a title, optional logo/back link/search, and
+native link or button actions. Route guards enforce permission independently.
+The gallery and hosted Settings retain the shared `accountControl` menu,
+including its recovery link. Authentication pages supply branding and their
+page title without signed-in navigation or account controls; local sign-in
+remains scriptless.
 
 For a title and return to the gallery, populate the page's `Header` with
 `subpageHeader("Page title")`. For a different destination, supply
@@ -54,8 +58,21 @@ not the bar's dimensions. `--header-height` supplies the shared minimum height;
 the bar grows when account-service errors need more room. Hidden account recovery links remain
 hidden until their controller reveals them.
 
-This is a static component: it needs no new Stimulus controller or script.
-Interactive features compose their existing controllers and native events.
+The artifact viewer uses the `Floating` variant, populated by
+`artifactHeader`. Its `floatingHeaderView` carries the title, created date,
+posture, and which owner actions are available. `floatingAppHeader` owns the
+pill, both popups, restore tab, and accessibility announcements; its styles
+live in `components.css`. The `floating-header` Stimulus controller connects
+`connectFloatingHeader` from `pip.js` and releases all listeners, observers,
+timers, and animation frames on disconnect. Dragging, docking, hiding,
+restoring, remembered placement, popup dismissal, and keyboard behavior are
+preserved. The artifact still fills the viewport beneath these controls.
+
+Standard headers need no new browser controller. Features compose their
+existing controllers and native events. A template audit guards every full
+app document against bypassing this component. Browser coverage includes the
+standard pages at six widths, authentication pages without signed-in controls,
+and floating-header interactions and disconnect/reconnect.
 
 [Desktop gallery](screenshots/Exh-arf2/gallery-desktop.png) ·
 [Phone gallery](screenshots/Exh-arf2/gallery-phone.png) ·
@@ -64,7 +81,9 @@ Interactive features compose their existing controllers and native events.
 [Accounts](screenshots/Exh-arf2/admin-desktop.png) ·
 [Add artifact](screenshots/Exh-arf2/new-desktop.png) ·
 [Agent](screenshots/Exh-arf2/agent-desktop.png) ·
-[Not found](screenshots/Exh-arf2/notfound-desktop.png)
+[Not found](screenshots/Exh-arf2/notfound-desktop.png) ·
+[Viewer](screenshots/Exh-arf2/viewer-desktop.png) ·
+[Sign in](screenshots/Exh-arf2/login-desktop.png)
 
 ## Defining action menus
 

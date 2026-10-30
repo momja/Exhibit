@@ -26,9 +26,9 @@
 <link rel="stylesheet" href="{{asset "gallery/login.css"}}">
 </head>
 <body class="login-page">
+{{template "appHeader" .Header}}
+<div class="login-content">
 <main class="login">
-  <div class="login-mark">{{.LogoSVG}}</div>
-  <h1 class="login-title">Exhibit</h1>
   <p class="login-sub">Sign in to your library.</p>
 
   {{if .Error}}
@@ -58,5 +58,6 @@
   <a class="btn btn-sec login-sso" href="{{.SSOHref}}"><i class="ph ph-shield-check"></i> Continue with your identity provider</a>
   {{end}}
 </main>
+</div>
 </body>
 </html>{{end}}

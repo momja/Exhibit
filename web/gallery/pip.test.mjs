@@ -21,9 +21,10 @@ async function loadControls(saved = { mode: 'corner', corner: 'bl' }) {
       setItem: (key, value) => { placement = value; }
     },
     addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
+    removeEventListener(type, fn) { listeners[type] = (listeners[type] || []).filter(listener => listener !== fn); },
     requestAnimationFrame: (fn) => frames.push(fn),
     setTimeout: (fn) => timers.push(fn),
-    ResizeObserver: class { observe() {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
     getComputedStyle: (el) => ({
       getPropertyValue: () => '12px',
       translate: el.renderedTranslate || el.style.translate
@@ -57,9 +58,10 @@ async function loadControls(saved = { mode: 'corner', corner: 'bl' }) {
     panel.querySelector = () => id === 'pip-menu' ? firstAction : null;
     panel.contains = (other) => other === panel || (id === 'pip-menu' && other === firstAction);
   }
-  await page.loadModule(PIP_JS);
+  const module = await page.loadModule(PIP_JS);
+  const dispose = module.connectFloatingHeader({querySelector: selector => page.byId(selector.slice(1))});
   return {
-    ...page,
+    ...page, dispose,
     setActive: (el) => { active = el; },
     fire: (type, event = {}) => (listeners[type] || []).forEach(fn => fn({ type, ...event })),
     flushFrames: () => frames.splice(0).forEach(fn => fn()),
@@ -139,4 +141,24 @@ test('grabbing a pill during a snap keeps its rendered position and grab offset'
   assert.equal(pill.style.translate, '420px 748px', 'moving 20px must move the pill 20px');
   page.fire('pointerup');
   assert.equal(page.document.body.classList.contains('pip-dragging'), false);
+});
+
+test('disconnect releases controls and suppresses pending animation work', async () => {
+  const page = await loadControls();
+  await page.byId('pip-hide').click();
+  page.dispose();
+  page.flushTimers();
+  page.flushFrames();
+  assert.notEqual(page.document.activeElement, page.byId('pip-tab'));
+  await page.byId('pip-more').click();
+  assert.equal(page.byId('pip-menu').hidden, true);
+});
+
+test('disconnect clears an unfinished restore-tab entrance', async () => {
+  const page = await loadControls();
+  await page.byId('pip-hide').click();
+  page.flushTimers();
+  assert.equal(page.byId('pip-tab').classList.contains('pip-tab-entering'), true);
+  page.dispose();
+  assert.equal(page.byId('pip-tab').classList.contains('pip-tab-entering'), false);
 });

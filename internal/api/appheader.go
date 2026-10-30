@@ -1,10 +1,14 @@
 package api
 
-import "html/template"
+import (
+	"github.com/momja/Exhibit/internal/store"
+	"html/template"
+)
 
 // appHeaderView composes a static app bar. Pages decide which actions to offer;
 // route authorization remains independent of the navigation they render.
 type appHeaderView struct {
+	Floating  *floatingHeaderView
 	Title     string
 	TitleIcon string
 	HideTitle bool
@@ -86,4 +90,24 @@ func notFoundHeader() appHeaderView {
 		Title: "Exhibit", Logo: template.HTML(exhibitLogoSVG),
 		Actions: []appHeaderAction{{Label: "Add artifact", Icon: "ph-plus", Href: "/new", Primary: true}},
 	}
+}
+
+func authPageHeader(title string) appHeaderView {
+	return appHeaderView{Title: title, Logo: template.HTML(exhibitLogoSVG)}
+}
+
+// The viewer keeps its draggable controls as a header variant. Its facts and
+// permissions are composed by the page, while the library owns the markup,
+// styling and controller lifecycle for the entire floating header.
+type floatingHeaderView struct {
+	ID, Title, Created, SourceURL string
+	ReadOnly, CanShare            bool
+	Capability                    capabilityView
+}
+
+func artifactHeader(a *store.Artifact, readOnly, canShare bool) appHeaderView {
+	return appHeaderView{Floating: &floatingHeaderView{
+		ID: a.ID, Title: a.Title, Created: a.CreatedAt.Format("Jan 2, 2006 15:04"), SourceURL: a.SourceURL,
+		ReadOnly: readOnly, CanShare: canShare, Capability: newCapabilityView(a, !readOnly),
+	}}
 }

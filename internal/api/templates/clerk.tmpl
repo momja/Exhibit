@@ -10,7 +10,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Account — Exhibit</title>
+<title>{{.Header.Title}} — Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
 <link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
@@ -20,9 +20,9 @@
 {{template "clerkScripts" .Clerk}}
 </head>
 <body class="login-page">
+{{template "appHeader" .Header}}
+<div class="login-content">
 <main class="login login-clerk">
-<div class="login-mark">{{.LogoSVG}}</div>
-<h1 class="login-title">Exhibit</h1>
 <p class="login-sub">Your library, wherever you work.</p>
 <div data-controller="clerk" data-clerk-mode-value="{{.Mode}}" data-clerk-next-value="{{.Next}}">
  <p data-clerk-target="status" role="status">Loading your account…</p>
@@ -34,6 +34,7 @@
 </div>
 <noscript>Enable JavaScript to sign in to Exhibit.</noscript>
 </main>
+</div>
 </body>
 </html>{{end}}
 
