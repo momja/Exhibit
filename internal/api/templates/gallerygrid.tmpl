@@ -16,9 +16,34 @@
      Replacing only the sentinel leaves existing widget frames running. */}}
 {{define "galleryGrid"}}{{if eq .Offset 0}}{{template "galleryFilterChips" .}}{{end}}{{range .Cards}}{{template "galleryCard" .}}{{end}}
 {{if .RetryURL}}{{template "galleryMore" .}}{{else}}
-  {{if and (not .Cards) (eq .Offset 0)}}{{if .Query}}<p class="empty">No artifacts match your search.</p>{{else if .Filters.Chips}}<p class="empty">No artifacts match your filters.</p>{{else}}<p class="empty">{{.Empty.Message}}{{if .Empty.ActionURL}} <a href="{{.Empty.ActionURL}}">{{.Empty.ActionLabel}}</a>.{{end}}</p>{{end}}{{end}}
+  {{if and (not .Cards) (eq .Offset 0)}}{{if .Query}}<p class="empty">No artifacts match your search.</p>{{else if .Filters.Chips}}<p class="empty">No artifacts match your filters.</p>{{else if .Empty.Welcome}}{{template "galleryWelcome" .Empty}}{{else}}<p class="empty">{{.Empty.Message}}{{if .Empty.ActionURL}} <a href="{{.Empty.ActionURL}}">{{.Empty.ActionLabel}}</a>.{{end}}</p>{{end}}{{end}}
   {{if .NextURL}}{{template "galleryMore" .}}{{end}}
 {{end}}{{end}}
+
+{{/* Only the library opts into this invitation. Search/filter misses and other
+     galleries keep their contextual empty states, including after htmx swaps. */}}
+{{define "galleryWelcome"}}<section class="gallery-welcome" aria-labelledby="gallery-welcome-title">
+  <div class="welcome-art" aria-hidden="true">
+    <div class="welcome-tool welcome-tool-list">
+      <i class="ph ph-check-square"></i><span>Daily habits</span>
+      <div class="welcome-checks"><i class="ph ph-check-circle"></i><span></span><i class="ph ph-check-circle"></i><span></span><i class="ph ph-circle"></i><span></span></div>
+    </div>
+    <div class="welcome-tool welcome-tool-timer">
+      <i class="ph ph-timer"></i><span>A little focus</span>
+      <div class="welcome-clock">25<span>:00</span></div>
+      <div class="welcome-progress"></div>
+    </div>
+    <div class="welcome-tool welcome-tool-chart">
+      <i class="ph ph-chart-bar"></i><span>Big picture</span>
+      <div class="welcome-bars"><span></span><span></span><span></span><span></span><span></span></div>
+    </div>
+  </div>
+  <p class="welcome-eyebrow">Welcome to Exhibit</p>
+  <h2 id="gallery-welcome-title">{{.Message}}</h2>
+  <p class="welcome-description">A tracker, a calculator, a tiny tool that makes your day easier. <br>Give it a home here, and make it yours.</p>
+  <a class="btn welcome-create" href="{{.ActionURL}}"><i class="ph ph-plus" aria-hidden="true"></i>{{.ActionLabel}}<i class="ph ph-arrow-right" aria-hidden="true"></i></a>
+  <p class="welcome-methods">Build with AI, paste HTML, or bring a page from the web.</p>
+</section>{{end}}
 
 {{define "galleryMore"}}<div class="gallery-more">
   <p class="gallery-error" data-gallery-load-error{{if not .RetryURL}} hidden{{end}}>Couldn’t load artifacts. Try again.</p>
