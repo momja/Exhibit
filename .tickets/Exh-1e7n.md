@@ -22,3 +22,7 @@ Markdown renders during streaming and in saved/resumed conversations. Raw HTML a
 **2026-10-30T07:18:24Z**
 
 Implemented server-rendered CommonMark/GFM with Goldmark v2.1.9, raw HTML disabled, unboxed agent/status messages, preserved Markdown Copy and contained mobile code/table scrolling. Standards and Spec reviews each found one P2 (per-delta snapshot amplification; blocked links reloading the page); both fixed in 7e37857 and fresh reviews report no remaining findings. Verified make build, full go test ./..., targeted Markdown race/browser/security tests, go vet, all 375 gallery Node tests, and all six Playwright journeys on isolated scratch ports. Seven before/after and mobile edge-case screenshots are included for the PR.
+
+**2026-10-30T15:58:21Z**
+
+CI follow-up: the existing desktop gallery-spaces browser test intermittently timed out on a pointer click (same failure reproduced in local repeated runs), while the Markdown browser test passed in CI. The unchanged failed CI job passed on rerun. Hardened the gallery test to wait for the first rendered frame and active cross-document view transition, since document load may precede pagereveal/transition creation. Kept real clicks and all navigation assertions. Twenty phone+desktop repeats (40 cases) passed; focused Standards and Spec reviews passed; Markdown browser regression passed again.
