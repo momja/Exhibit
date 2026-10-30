@@ -179,32 +179,9 @@ func (l *keyedLimiter) retryAfter(key string) time.Duration {
 	return time.Duration((1 - b.tokens) * float64(l.limit.refill))
 }
 
-// penalise charges key for one failed attempt.
-func (l *keyedLimiter) penalise(key string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	now := l.now()
-	b := l.lookup(key)
-	if b == nil {
-		b = &bucket{tokens: l.limit.burst, last: now}
-	} else {
-		b.refill(l.limit, now)
-	}
-	if b.tokens >= 1 {
-		b.tokens--
-	} else {
-		b.tokens = 0
-	}
-	l.keep(key, b)
-}
-
 // reserve atomically checks and debits one token from key's budget in a
-// single locked operation. It exists because retryAfter (check) and penalise
-// (debit) used to be two separate calls straddling the handler: concurrent
-// attempts could all call retryAfter, all see budget, and all proceed before
-// any of them called penalise — the rate limit would then bound nothing under
-// concurrency, exactly the shape of a credential-stuffing burst. A zero
+// single locked operation. Separate checks and debits would let concurrent
+// attempts all see budget and proceed before any of them charged it. A zero
 // return means a token was taken and the caller owns a debit it must return
 // with refund if the attempt turns out not to be chargeable; a nonzero return
 // means no token was taken and the caller must not proceed.

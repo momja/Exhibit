@@ -57,10 +57,6 @@ type galleryGridData struct {
 	Empty        galleryEmptyState
 }
 
-func galleryURL(path, query string, offset int) string {
-	return (galleryGridData{Query: query}).url(path, offset)
-}
-
 func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, offset int) (galleryGridData, error) {
 	grid := galleryGridData{
 		Title: gallery.Title, ID: gallery.ID, FragmentPath: gallery.FragmentPath,

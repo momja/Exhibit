@@ -24,10 +24,6 @@ import (
 	"github.com/momja/Exhibit/internal/blob"
 )
 
-// Configured reports whether an S3-compatible endpoint is available to test
-// against, for callers that want to branch rather than skip.
-func Configured() bool { return os.Getenv("EXHIBIT_TEST_S3_ENDPOINT") != "" }
-
 // S3OrSkip returns a blob.Store backed by the configured bucket, namespaced to
 // a key prefix unique to this test, or skips t when no endpoint is configured.
 //
