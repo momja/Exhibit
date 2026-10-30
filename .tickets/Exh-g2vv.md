@@ -1,6 +1,6 @@
 ---
 id: Exh-g2vv
-status: in_progress
+status: closed
 deps: []
 links: [Exh-co2m, Exh-h5va]
 created: 2026-10-22T06:50:04Z
@@ -67,3 +67,7 @@ Product correction (2026-10-24, Exh-s47o): connector grants are additive. The ar
 **2026-10-30 — Required V1 corrections ([Exh-k6gt](Exh-k6gt.md))**
 
 The decisions above supersede the earlier account-sharing opt-in and read/write permission language. Account access is personal only; migration 050 withdraws legacy shared-account flags while keeping saved results and their provenance. Sharing saved connected data remains an independent decision, explained at sharing and export. Custom setup is advanced and disabled by default. Contextual setup, actionable agent requests and in-place reconnection remain reusable groundwork for a future provider integration; this correction adds no service catalog.
+
+**2026-10-30T05:46:45Z**
+
+Completed required V1 corrections in Exh-k6gt: personal-only account access enforced in storage/relay and migration 050; saved results explained separately; custom setup gated under advanced configuration; contextual setup/authentication, actionable requests and same-ID reconnection. Rebased onto current origin/main (9b541f3), preserving the shared header and connected-data controls. Full Go suite, 439 gallery JS tests, browser journeys, assets build, vet and updated screenshots pass. The provider catalog remains future scope; credential-dependent live validation stays open in Exh-3kvx.
