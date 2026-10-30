@@ -171,7 +171,7 @@ func TestTranscriptFragmentShowsTheConversationReadOnly(t *testing.T) {
 	// The same bubbles and chips the live chat draws.
 	assert.Contains(t, frag, `<div class="msg user">make the button &lt;b&gt;green&lt;/b&gt;</div>`)
 	assert.Contains(t, frag, `<div class="tool-chip done"><i class="ph ph-check-circle"></i> Reading artifact source</div>`)
-	assert.Contains(t, frag, `<div class="msg assistant" data-message-content>Done.</div>`)
+	assert.Contains(t, frag, "<div class=\"msg assistant\" data-message-content><div data-message-source=\"Done.\"><p>Done.</p>\n</div></div>")
 	assert.Equal(t, 1, strings.Count(frag, `data-message-action="copy"`), "only agent text receives an action row")
 	assert.Contains(t, frag, `aria-label="Message actions"`)
 	assert.Contains(t, frag, `role="status"`)

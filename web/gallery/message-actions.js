@@ -5,7 +5,7 @@ const actions = {
   copy: {
     failureMessage: 'Could not copy. Select the text and copy manually.',
     async run({ content }) {
-      const text = content.textContent;
+      const text = content.querySelector('[data-message-source]')?.dataset.messageSource ?? content.textContent;
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
       } else {

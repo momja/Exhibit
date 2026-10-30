@@ -71,7 +71,7 @@ function spinnerIcon() {
 }
 function addMsg(cls, text) {
   // The server owns the message shell and action markup. Streaming text is
-  // browser-local state, so fill only its content slot as deltas arrive.
+  // browser-local state until the first server-rendered Markdown snapshot.
   const message = cls === 'assistant'
     ? document.getElementById('agent-message-template').content.firstElementChild.cloneNode(true)
     : el('div', 'msg ' + cls);
@@ -414,11 +414,21 @@ function handleAgentEvent(ev) {
     case 'message_update': {
       const d = ev.assistantMessageEvent;
       if (!d) break;
-      if (d.type === 'text_delta') {
+      if (d.type === 'text_delta' || (d.type === 'text_end' && (curAssistantEl || typeof ev.exhibitMessageHTML === 'string'))) {
         removeThinking();
         if (!curAssistantEl) curAssistantEl = addMsg('assistant', '');
-        curAssistantEl.textContent += d.delta;
+        if (typeof ev.exhibitMessageHTML === 'string') {
+          // Only server-rendered partials cross this boundary. Model text is
+          // never inserted as HTML; older/malformed events stay plain text.
+          window.htmx.swap({ sourceElement: curAssistantEl, target: curAssistantEl,
+            text: ev.exhibitMessageHTML, swap: 'innerHTML settle:0' });
+        } else {
+          const source = curAssistantEl.querySelector('[data-message-source]')?.dataset.messageSource ?? curAssistantEl.textContent;
+          if (d.type === 'text_delta') curAssistantEl.textContent = source + d.delta;
+          else if (typeof d.content === 'string') curAssistantEl.textContent = d.content;
+        }
         messagesEl.scrollTop = messagesEl.scrollHeight;
+        if (d.type === 'text_end') curAssistantEl = null;
       } else if (d.type === 'thinking_start' && !thinkingEl) {
         thinkingEl = el('div', 'thinking');
         thinkingEl.appendChild(spinnerIcon());
