@@ -204,7 +204,7 @@ func TestGalleryEmptyStateLinksToNewPage(t *testing.T) {
 	page := getPage(t, r, "/")
 
 	assert.Contains(t, page, `Welcome to Exhibit`)
-	assert.Contains(t, page, `href="/new"><i class="ph ph-plus" aria-hidden="true"></i>Create your first artifact`)
+	assert.Contains(t, page, `href="/new"><i class="ph ph-palette" aria-hidden="true"></i>Create your first artifact`)
 	assert.Contains(t, getPage(t, r, "/partials/gallery-grid"), `Welcome to Exhibit`)
 }
 

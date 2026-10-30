@@ -48,6 +48,7 @@ ph-magnifying-glass
 ph-map-pin
 ph-microphone
 ph-monitor
+ph-palette
 ph-paper-plane-right
 ph-pencil-simple
 ph-plus
