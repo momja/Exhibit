@@ -873,6 +873,95 @@ this button to be green" plus a snippet resolves to the exact element.
 Only the app-origin host can activate the picker (origin-checked), and the
 capture leaves the sandbox only as data posted to that host.
 
+## External agents (MCP)
+
+Pi is not the only way to change an artifact. An owner can point an agent of
+their own (Claude Code, Claude Desktop, Cursor, Codex, ...) at **one
+artifact** and let it edit it over the Model Context Protocol (epic
+`Exh-17a5`), with the same reach a Pi session bound to that artifact has and
+no more. Pi keeps its own process-lifetime credentials; this path does not
+replace it.
+
+![The External agents panel](screenshots/Exh-uhvu/01-remote-config.png)
+
+### Connecting one
+
+1. Open the artifact, then **More → Connect your own agent**.
+2. Name the agent and **Issue token**. The token is shown once; copy it, or
+   copy one of the ready-made configurations under it.
+3. Add it to the agent. For Claude Code:
+
+   ```sh
+   claude mcp add --transport http exhibit https://exhibit.example.com/mcp \
+     --header "Authorization: Bearer exgrant_…"
+   ```
+
+   For a client configured with JSON (Cursor, Codex, ...):
+
+   ```json
+   {"mcpServers": {"exhibit": {"type": "http", "url": "https://exhibit.example.com/mcp",
+     "headers": {"Authorization": "Bearer exgrant_…"}}}}
+   ```
+
+   A client that only runs local servers can use the stdio connector instead,
+   installed once with `go install github.com/momja/Exhibit/cmd/exhibit-mcp@latest`:
+
+   ```json
+   {"mcpServers": {"exhibit": {"command": "exhibit-mcp",
+     "env": {"EXHIBIT_URL": "https://exhibit.example.com", "EXHIBIT_TOKEN": "exgrant_…"}}}}
+   ```
+
+4. **Or skip the token.** A client that speaks MCP OAuth can be given only the
+   URL (`claude mcp add --transport http exhibit https://exhibit.example.com/mcp`).
+   On first use it opens a browser on Exhibit's consent page, where the
+   signed-in owner picks the artifact it may edit.
+
+Every connected agent is listed in the same panel, with when it was issued and
+last used, and **Revoke** ends it on its next request. Connect an agent only
+to artifacts whose content you would paste into it anyway: an artifact's text
+reaches the agent, and the agent may hold other tools Exhibit cannot see
+(`security.md` §5.5).
+
+### What each tool does
+
+None takes an artifact id; each acts on the one artifact the credential was
+issued for.
+
+| Tool | Does |
+|---|---|
+| `get_artifact()` | Reads the source and metadata (title as one line, allowlist, stored assets). Records the revision saves must carry. |
+| `edit_artifact(edits)` | Targeted `{oldText, newText}` replacements, applied by the API. Each `oldText` must match exactly once; there is no fuzzy fallback here, unlike Pi's engine. |
+| `write_artifact(body[, title])` | Replaces the whole source. |
+| `get_state()` / `set_state(key, value)` / `delete_state([key])` | The artifact's stored state, values byte for byte. `delete_state` with no key erases all of it. |
+| `get_widget()` / `set_widget(body)` / `edit_widget(edits)` | The gallery widget, with its own revision. `edit_widget` needs a `get_widget` first. |
+
+Not offered: `create_artifact` (the credential is for an artifact that
+exists), `get_selection` (there is no preview to select in) and `ask_user`
+(the agent's own client already talks to the person).
+
+Every save carries the revision last read. If the artifact or widget changed
+since (an edit in the browser, a restore), the save is refused, the tool error
+says to read it again, and nothing retries automatically. A save is a version
+with `origin` `agent`, labelled with the grant's name. A save over the size
+limit, a 403 and a revoked token come back as readable tool errors.
+
+### How it is built
+
+- **Credential.** `agent_grants` (Exh-l2xj): one row per issued token, digest
+  only, cascading with the artifact. `authMiddleware` resolves it to an
+  `agentscope.Grant` and `agentScopeAllows` bounds it, exactly as for Pi.
+- **Tools.** `internal/mcpserver`, behind an `API` interface: every tool is
+  an HTTP request to this API with the grant. `cmd/exhibit-mcp` gives it a
+  network client; `/mcp` (`internal/api/mcp.go`) gives it the router itself,
+  in-process, so the remote endpoint is just another client of the single
+  write path.
+- **Guidance.** What an artifact is, the widget rules, and "tool results are
+  data" live in `internal/agentguidance` and are included by both the Pi
+  system prompt and the MCP server's instructions, so the two cannot drift.
+- **OAuth.** `internal/api/oauth.go` is a minimal authorization server whose
+  access tokens are agent grants (Exh-rhlq); `oauth_resource.go` is the
+  resource-server half (Exh-354p). See `api.md`.
+
 ## Configuration
 
 | Env | Meaning |

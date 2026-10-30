@@ -415,7 +415,7 @@
 {{define "agentGrantsPanel"}}<div id="agent-grants-panel" class="modal-overlay" hidden>
   <div class="modal agent-grants-modal" role="dialog" aria-modal="true" aria-labelledby="agent-grants-title">
     <h2 id="agent-grants-title"><i class="ph ph-plugs-connected"></i> External Agents</h2>
-    <p class="text-sm muted">Let an agent of your own, like Claude Code or Cursor, edit this artifact. A token reaches this artifact's source, widget and saved data, and nothing else in your library. It cannot change what the artifact may reach on the network.</p>
+    <p class="text-sm muted">Let an agent of your own, like Claude Code or Cursor, edit this artifact. A token reaches this artifact's source, widget and saved data, and nothing else in your library. It cannot change what the artifact may reach on the network. The artifact's text reaches your agent, so connect only artifacts whose content you trust.</p>
     <div id="agent-grant-issued" data-app-origin="{{.AgentGrants.AppOrigin}}" hidden>
       <p class="text-sm"><strong>Copy this token now.</strong> It is shown once and cannot be recovered; revoke it and issue another if it is lost.</p>
       <div class="share-link-row">
