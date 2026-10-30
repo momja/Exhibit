@@ -100,10 +100,30 @@ type profileAccount struct {
 // active sessions, export — and a page laid out in cards takes each of those
 // as an addition rather than a redesign.
 type profilePageData struct {
-	Header  appHeaderView
-	Favicon template.URL
-	Account profileAccount
+	Header      appHeaderView
+	Favicon     template.URL
+	Account     profileAccount
+	Connections profileConnectionAllowance
 	pageCredentials
+}
+
+type profileConnectionAllowance struct {
+	CustomEnabled bool
+	Enabled       bool
+	Native        string
+	OAuth         string
+	Vendor        string
+	Schedules     string
+}
+
+func connectionLimitDescription(n int, noun string) string {
+	if n < 0 {
+		return "Unlimited"
+	}
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 // profilePage renders the account surface.
@@ -145,10 +165,20 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	creds := ro.pageCredentials(r)
+	var connectionAllowance profileConnectionAllowance
+	if ro.cfg.Relay.Enabled || ro.cfg.Connections != nil {
+		allowance, err := ro.resolveAllowance(ctx, ownerIDFromCtx(ctx))
+		if err != nil {
+			serverError(w, r, "profile connection allowance", err)
+			return
+		}
+		connectionAllowance = profileConnectionAllowance{Enabled: true, CustomEnabled: ro.cfg.Connections != nil && ro.cfg.Connections.CustomEnabled(), Native: connectionLimitDescription(allowance.Connections.Native, "connection"), OAuth: connectionLimitDescription(allowance.Connections.OAuth, "connection"), Vendor: connectionLimitDescription(allowance.Connections.Vendor, "connection"), Schedules: connectionLimitDescription(allowance.Schedules, "schedule")}
+	}
 	page, err := renderPage("profile", profilePageData{
 		Header:          profileHeader(creds.Clerk),
 		Favicon:         template.URL(exhibitLogoDataURI),
 		Account:         acct,
+		Connections:     connectionAllowance,
 		pageCredentials: creds,
 	})
 	if err != nil {
@@ -227,24 +257,40 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ownerID := ownerIDFromCtx(ctx)
+	// Revoke remote credentials only after the same last-admin refusal the
+	// final store transaction enforces. Otherwise a refused deletion would
+	// needlessly disconnect the only administrator's external accounts.
+	u, err := ro.cfg.Store.GetUser(ctx, ownerID)
+	if errors.Is(err, store.ErrNotFound) || err == nil && u == nil {
+		writeError(w, 404, "no such account")
+		return
+	}
+	if err != nil {
+		serverError(w, r, "delete account precheck", err)
+		return
+	}
+	var last bool
+	if ro.cfg.Clerk != nil {
+		last, err = ro.isLastEnabledHostedAdmin(ctx, u)
+	} else {
+		last, err = ro.isLastEnabledAdmin(ctx, u)
+	}
+	if err != nil {
+		serverError(w, r, "delete account admin precheck", err)
+		return
+	}
+	if last {
+		writeError(w, 409, "this is the only account that can administer this instance. Make another account an admin first, then delete this one.")
+		return
+	}
+	if err := ro.revokeAccountConnections(ctx, ownerID); err != nil {
+		slog.WarnContext(ctx, "account deletion waiting for connection revocation", slog.Int64("owner_id", ownerID), slog.String("error", err.Error()))
+		writeError(w, 503, "External account connections could not all be revoked. Your account and library remain. Some connections may already have been disconnected. Re-enable any disabled connector phase, check the provider, and retry deletion.")
+		return
+	}
 	var queued []string
 	var hostedSubject string
-	var err error
 	if ro.cfg.Clerk != nil {
-		u, lookupErr := ro.cfg.Store.GetUser(ctx, ownerID)
-		if lookupErr != nil {
-			serverError(w, r, "load account for deletion", lookupErr)
-			return
-		}
-		last, checkErr := ro.isLastEnabledHostedAdmin(ctx, u)
-		if checkErr != nil {
-			serverError(w, r, "check hosted administrator", checkErr)
-			return
-		}
-		if last {
-			writeError(w, http.StatusConflict, "Make another hosted account an administrator before deleting this one.")
-			return
-		}
 		// Revoke every provider session, including other browsers. If Clerk is
 		// unavailable, preserve the library and report failure instead of relying
 		// on a client redirect that an API caller would never follow.
@@ -308,6 +354,42 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Account erasure must not leave a billable vendor connection, or an OAuth
+// authorization, behind after its local record disappears. Revocation is
+// idempotent (providers' 404 is success), so a provider outage leaves the
+// account intact and retrying finishes any remaining external cleanup.
+func (ro *Router) revokeAccountConnections(ctx context.Context, ownerID int64) error {
+	if ro.cfg.Connections == nil {
+		if registry, ok := ro.cfg.Store.(interface {
+			ListConnections(context.Context, int64) ([]*store.ConnectionRecord, error)
+		}); ok {
+			records, err := registry.ListConnections(ctx, ownerID)
+			if err != nil {
+				return err
+			}
+			for _, c := range records {
+				if c.Kind == "oauth" || c.Kind == "vendor" {
+					return errors.New("remote connector revocation requires its operator configuration")
+				}
+			}
+		}
+		return nil
+	}
+	connections, err := ro.cfg.Connections.List(ctx, ownerID)
+	if err != nil {
+		return err
+	}
+	for _, c := range connections {
+		if c.Kind == "native" {
+			continue
+		}
+		if err := ro.cfg.Connections.Revoke(ctx, ownerID, c.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // fillDeleteSection populates what the danger zone states before anyone

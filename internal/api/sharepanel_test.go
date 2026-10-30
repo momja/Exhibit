@@ -209,8 +209,8 @@ func TestOnlyTheOwnerGetsTheSharePanel(t *testing.T) {
 	assert.NotContains(t, recipient, `id="share-panel"`)
 	assert.NotContains(t, recipient, `id="share-open"`)
 	assert.NotContains(t, recipient, "gallery/share.js")
-	assert.NotContains(t, recipient, "htmx/htmx.min.js",
-		"a page with no panel to swap should not carry the library that swaps it")
+	assert.Contains(t, recipient, "htmx/htmx.min.js",
+		"recipients still use the server-rendered network review and capability fragments")
 }
 
 // A recipient's name is text somebody else chose — a login name, or an address
@@ -278,6 +278,9 @@ func TestTheStateModeChoicesTrackSavedMode(t *testing.T) {
 	assert.Contains(t, page, "Everyone can view and update the same saved data. Changes affect everyone.")
 	assert.Contains(t, page, "Public visitors cannot save changes back to your data.")
 	assert.Contains(t, page, "Anyone with the link can view your existing saved data, in either data mode.")
+	assert.Contains(t, page, "This includes results saved from connected accounts.")
+	assert.Contains(t, page, "Sharing this tool never lets someone use your connected accounts. Each person connects their own accounts.")
+	assert.Contains(t, page, "Shared data includes results this tool saves from connected accounts.")
 	assert.Contains(t, page, `id="share-close">Done</button>`)
 	assert.NotContains(t, page, `data-counter=`)
 	assert.NotContains(t, page, "see how it works")

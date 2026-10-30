@@ -23,6 +23,7 @@
 <link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/new.css"}}">
+<script src="{{asset "htmx/htmx.min.js"}}"></script>
 </head>
 <body>
 {{template "appHeader" .Header}}
@@ -106,7 +107,13 @@
     <span>Snapshot assets into the file (recommended) — fetches the page&#39;s images, styles and scripts and inlines them so the artifact stays self-contained</span>
   </label>
 
-  <div id="scan-result"></div>
+  <div id="scan-result">
+    <div id="snapshot-report"></div>
+    <div id="network-approval" hx-get="/partials/network-approval"
+         hx-trigger="exhibit:network-approval-changed from:body"
+         hx-vals='js:{artifact: pendingIngestArtifactId, mode: "new"}'
+         hx-swap="innerHTML" hx-sync="this:replace"></div>
+  </div>
   <div id="status"></div>
 
   <div class="ingest-foot">

@@ -64,7 +64,9 @@ type pageCredentials struct {
 	// artifact they may reach, which is the same predicate the store's
 	// ...AsViewer methods enforce in SQL. The page and the server therefore
 	// agree by construction rather than by two rules that must be kept in step.
-	StateWritable bool
+	StateWritable      bool
+	RelayEnabled       bool
+	ConnectionsEnabled bool
 }
 
 // pageCredentials answers what this request's page render may embed.
@@ -113,8 +115,10 @@ func (ro *Router) pageCredentials(r *http.Request) pageCredentials {
 	p := principalFromCtx(ctx)
 	readOnly := p.ReadOnly
 	return pageCredentials{
-		Clerk: ro.clerkView(r),
-		Token: ro.pageToken(ctx, anonymous),
+		Clerk:              ro.clerkView(r),
+		Token:              ro.pageToken(ctx, anonymous),
+		RelayEnabled:       ro.cfg.Relay.Enabled && !anonymous,
+		ConnectionsEnabled: ro.cfg.Connections != nil && !anonymous,
 		// Derived from the resolved Principal, not recomputed from
 		// publicVisitor: ReadOnly is its own field precisely because a future
 		// principal (a shared artifact's viewer, av-7k7b) may be read-only

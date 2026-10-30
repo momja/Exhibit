@@ -57,7 +57,11 @@ type Entitlement struct {
 	// to unlimited on an instance that has limits switched on. Unlimited is an
 	// instance-wide state (limits switched off), which is why there is no
 	// sentinel value here for a reader to mistake for a byte count.
-	StorageLimitBytes *int64 `json:"storage_limit_bytes"`
+	StorageLimitBytes     *int64 `json:"storage_limit_bytes"`
+	ConnectionNativeLimit *int64 `json:"connection_native_limit"`
+	ConnectionOAuthLimit  *int64 `json:"connection_oauth_limit"`
+	ConnectionVendorLimit *int64 `json:"connection_vendor_limit"`
+	RelayScheduleLimit    *int64 `json:"relay_schedule_limit"`
 	// Ref is an opaque string an operator's own system uses to recognize this
 	// account, in the spirit of a ticket's --external-ref. Nothing parses it,
 	// nothing joins on it, and no code path behaves differently because of its
@@ -76,7 +80,7 @@ type Entitlement struct {
 // up. An account it set to the same numbers as the default still shows here,
 // because "this was provisioned deliberately" is the fact worth seeing.
 func (e Entitlement) IsDefault() bool {
-	return e.Plan == "" && e.StorageLimitBytes == nil && e.Ref == ""
+	return e.Plan == "" && e.StorageLimitBytes == nil && e.Ref == "" && e.ConnectionNativeLimit == nil && e.ConnectionOAuthLimit == nil && e.ConnectionVendorLimit == nil && e.RelayScheduleLimit == nil
 }
 
 // EntitlementPatch is a partial update, in updateUserRequest's shape: a nil
@@ -88,16 +92,24 @@ func (e Entitlement) IsDefault() bool {
 // NULL — which is how an admin puts an account back on the instance default
 // rather than merely lowering it to something.
 type EntitlementPatch struct {
-	Plan              *string
-	Ref               *string
-	SetStorageLimit   bool
-	StorageLimitBytes *int64
+	Plan                     *string
+	Ref                      *string
+	SetStorageLimit          bool
+	StorageLimitBytes        *int64
+	SetConnectionNativeLimit bool
+	ConnectionNativeLimit    *int64
+	SetConnectionOAuthLimit  bool
+	ConnectionOAuthLimit     *int64
+	SetConnectionVendorLimit bool
+	ConnectionVendorLimit    *int64
+	SetRelayScheduleLimit    bool
+	RelayScheduleLimit       *int64
 }
 
 // Empty reports whether the patch would change nothing, so a caller can skip
 // the write rather than issue an UPDATE with no assignments.
 func (p EntitlementPatch) Empty() bool {
-	return p.Plan == nil && p.Ref == nil && !p.SetStorageLimit
+	return p.Plan == nil && p.Ref == nil && !p.SetStorageLimit && !p.SetConnectionNativeLimit && !p.SetConnectionOAuthLimit && !p.SetConnectionVendorLimit && !p.SetRelayScheduleLimit
 }
 
 // SetEntitlement applies a patch to one account.
@@ -124,6 +136,28 @@ func (s *SQLiteStore) SetEntitlement(ctx context.Context, userID int64, p Entitl
 	}
 
 	sets, args := []string{}, []any{}
+	for _, limit := range []struct {
+		column string
+		set    bool
+		value  *int64
+	}{
+		{"connection_native_limit", p.SetConnectionNativeLimit, p.ConnectionNativeLimit},
+		{"connection_oauth_limit", p.SetConnectionOAuthLimit, p.ConnectionOAuthLimit},
+		{"connection_vendor_limit", p.SetConnectionVendorLimit, p.ConnectionVendorLimit},
+		{"relay_schedule_limit", p.SetRelayScheduleLimit, p.RelayScheduleLimit},
+	} {
+		if !limit.set {
+			continue
+		}
+		var value any
+		if limit.value != nil {
+			if *limit.value < 0 || *limit.value > 1_000_000 {
+				return fmt.Errorf("%w: %s is outside the supported count range", ErrInvalidEntitlement, limit.column)
+			}
+			value = *limit.value
+		}
+		sets, args = append(sets, limit.column+" = ?"), append(args, value)
+	}
 	if p.Plan != nil {
 		sets, args = append(sets, "plan = ?"), append(args, *p.Plan)
 	}
@@ -159,7 +193,7 @@ func (s *SQLiteStore) SetEntitlement(ctx context.Context, userID int64, p Entitl
 func (s *SQLiteStore) ListEntitlementOverrides(ctx context.Context) ([]*User, error) {
 	rows, err := s.db.QueryContext(ctx,
 		"SELECT "+userColumns+` FROM users
-          WHERE plan != '' OR storage_limit_bytes IS NOT NULL OR entitlement_ref != ''
+          WHERE plan != '' OR storage_limit_bytes IS NOT NULL OR entitlement_ref != '' OR connection_native_limit IS NOT NULL OR connection_oauth_limit IS NOT NULL OR connection_vendor_limit IS NOT NULL OR relay_schedule_limit IS NOT NULL
           ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -184,9 +218,10 @@ func (s *SQLiteStore) ListEntitlementOverrides(ctx context.Context) ([]*User, er
 // be a runtime "expected N destination arguments" from whichever query nobody
 // exercised. One definition, one place to extend.
 type userScan struct {
-	u       User
-	created any
-	limit   sql.NullInt64
+	u                User
+	created          any
+	limit            sql.NullInt64
+	connectionLimits [4]sql.NullInt64
 }
 
 // dest returns the scan destinations for userColumns, in order, followed by
@@ -196,6 +231,7 @@ func (s *userScan) dest(extra ...any) []any {
 		&s.u.ID, &s.u.ExternalID, &s.u.Email, &s.created, &s.u.IsAdmin,
 		&s.u.HasPassword, &s.u.Disabled,
 		&s.u.Entitlement.Plan, &s.limit, &s.u.Entitlement.Ref,
+		&s.connectionLimits[0], &s.connectionLimits[1], &s.connectionLimits[2], &s.connectionLimits[3],
 	}, extra...)
 }
 
@@ -207,6 +243,12 @@ func (s *userScan) user() *User {
 	if s.limit.Valid {
 		v := s.limit.Int64
 		s.u.Entitlement.StorageLimitBytes = &v
+	}
+	for i, dest := range []**int64{&s.u.Entitlement.ConnectionNativeLimit, &s.u.Entitlement.ConnectionOAuthLimit, &s.u.Entitlement.ConnectionVendorLimit, &s.u.Entitlement.RelayScheduleLimit} {
+		if s.connectionLimits[i].Valid {
+			v := s.connectionLimits[i].Int64
+			*dest = &v
+		}
 	}
 	out := s.u
 	return &out

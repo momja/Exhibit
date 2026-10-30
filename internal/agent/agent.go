@@ -219,6 +219,10 @@ type CreateOpts struct {
 	// ThinkingLevel is the BYOK owner's preference; empty uses the instance
 	// baseline. Platform-paid sessions always use the instance baseline.
 	ThinkingLevel string
+	// Platform facts are opt-in; a zero-value session must not promise a relay
+	// or register tools for connector support the operator has not enabled.
+	NetworkRelayEnabled bool
+	ConnectionsEnabled  bool
 	// ArtifactID non-empty means modify mode: the session is scoped to that
 	// artifact, and the agent reads its source with get_artifact — nothing about
 	// the artifact is put in the prompt, because a URL-ingested artifact carries
@@ -404,6 +408,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}
 	if opts.WidgetOnly {
 		cmd.Env = append(cmd.Env, "EXHIBIT_WIDGET_ONLY=1")
+	}
+	if opts.ConnectionsEnabled && opts.NetworkRelayEnabled && !opts.WidgetOnly {
+		cmd.Env = append(cmd.Env, "EXHIBIT_CONNECTIONS_ENABLED=1")
 	}
 	if m.cfg.MaxRequestBodyBytes > 0 {
 		cmd.Env = append(cmd.Env, "EXHIBIT_MAX_BODY_BYTES="+strconv.FormatInt(m.cfg.MaxRequestBodyBytes, 10))
@@ -1207,6 +1214,8 @@ func (s *Session) handleLine(line []byte) {
 				s.noteStateChanged(res.Details)
 			case "widget_saved":
 				s.noteWidgetSaved(res.Details)
+			case "connection_requested":
+				s.noteConnectionRequested(res.Details)
 			}
 		}
 	}
@@ -1248,6 +1257,7 @@ func (s *Session) noteArtifactSaved(details map[string]any) {
 		"title":      details["title"],
 		"renderUrl":  details["renderUrl"],
 		"footprint":  details["footprint"],
+		"warnings":   details["warnings"],
 	})
 	s.broadcast(ev)
 }
@@ -1287,6 +1297,18 @@ func (s *Session) noteWidgetSaved(details map[string]any) {
 		"artifactId": artifactID,
 		"widgetUrl":  details["widgetUrl"],
 		"unapproved": details["unapproved"],
+	})
+	s.broadcast(ev)
+}
+
+func (s *Session) noteConnectionRequested(details map[string]any) {
+	artifactID := s.ArtifactID()
+	if artifactID == "" {
+		return
+	}
+	ev, _ := json.Marshal(map[string]any{
+		"type": "exhibit_connection_requested", "artifactId": artifactID,
+		"provider": details["provider"], "requestId": details["requestId"],
 	})
 	s.broadcast(ev)
 }

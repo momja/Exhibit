@@ -9,9 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/connectors"
+	"github.com/momja/Exhibit/internal/egress"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,6 +49,89 @@ type deleteInstance struct {
 	// exactly one, so a test that needs the link asks for the one that exists
 	// instead of minting another.
 	shareID string
+}
+
+func seedAccountOAuthConnection(t *testing.T, in deleteInstance, id, token string, owner int64) {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{"oauth_token": map[string]string{"access_token": token, "token_type": "bearer"}})
+	require.NoError(t, err)
+	sealed, err := in.ro.cfg.Secrets.Encrypt(string(raw))
+	require.NoError(t, err)
+	require.NoError(t, in.st.(*store.SQLiteStore).CreateConnection(context.Background(), &store.ConnectionRecord{ID: id, OwnerID: owner, Name: id, Provider: "github", Kind: "oauth", RecipeJSON: `{"origins":["https://api.github.com"],"header":"Authorization","scheme":"Bearer ","sensitivity":"personal"}`, EncryptedSecret: sealed}, -1))
+}
+
+func TestAccountDeletionRevokesRemoteConnectionsAndCanRetryProviderOutage(t *testing.T) {
+	in := newDeleteInstance(t)
+	artifact := in.seedLibrary(t)
+	var unavailable atomic.Bool
+	unavailable.Store(true)
+	var first, second atomic.Int32
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]string
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		switch body["access_token"] {
+		case "remote-one-private-token":
+			first.Add(1)
+			w.WriteHeader(204)
+		case "remote-two-private-token":
+			second.Add(1)
+			if unavailable.Load() {
+				w.WriteHeader(503)
+			} else {
+				w.WriteHeader(204)
+			}
+		default:
+			t.Error("unknown revocation token")
+			w.WriteHeader(400)
+		}
+	}))
+	defer provider.Close()
+	in.ro.cfg.Relay.Enabled = true
+	in.ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: in.st.(*store.SQLiteStore), Box: in.ro.cfg.Secrets, OAuthEnabled: true, GitHub: connectors.OAuthProvider{ClientID: "operator", ClientSecret: "operator-secret", RevokeURL: provider.URL + "/revoke"}, GateFactory: func(o []string) (*egress.Gate, error) { return egress.NewForTests(o, egress.Limits{}) }})
+	seedAccountOAuthConnection(t, in, "a-remote", "remote-one-private-token", in.member.ID)
+	seedAccountOAuthConnection(t, in, "b-remote", "remote-two-private-token", in.member.ID)
+	w := in.deleteAccount(t)
+	require.Equal(t, 503, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "Some connections may already have been disconnected")
+	assert.NotContains(t, w.Body.String(), "remote-two-private-token")
+	_, err := in.st.GetUser(context.Background(), in.member.ID)
+	require.NoError(t, err)
+	a, err := in.st.GetArtifact(context.Background(), in.member.ID, artifact)
+	require.NoError(t, err)
+	require.NotNil(t, a)
+	remaining, err := in.ro.cfg.Connections.List(context.Background(), in.member.ID)
+	require.NoError(t, err)
+	require.Len(t, remaining, 1)
+	unavailable.Store(false)
+	w = in.deleteAccount(t)
+	require.Equal(t, 204, w.Code, w.Body.String())
+	assert.Equal(t, int32(1), first.Load())
+	assert.Equal(t, int32(2), second.Load())
+	_, err = in.st.GetUser(context.Background(), in.member.ID)
+	assert.ErrorIs(t, err, store.ErrNotFound)
+}
+
+func TestAccountDeletionDoesNotOrphanDisabledRemoteConnectors(t *testing.T) {
+	in := newDeleteInstance(t)
+	seedAccountOAuthConnection(t, in, "oauth-disabled", "private-token", in.member.ID)
+	w := in.deleteAccount(t)
+	assert.Equal(t, 503, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "Re-enable any disabled connector phase")
+	_, err := in.st.GetUser(context.Background(), in.member.ID)
+	require.NoError(t, err)
+}
+
+func TestLastAdminRefusalHappensBeforeConnectionRevocation(t *testing.T) {
+	in := newDeleteInstance(t)
+	var revocations atomic.Int32
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { revocations.Add(1); w.WriteHeader(204) }))
+	defer provider.Close()
+	in.ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: in.st.(*store.SQLiteStore), Box: in.ro.cfg.Secrets, OAuthEnabled: true, GitHub: connectors.OAuthProvider{RevokeURL: provider.URL}, GateFactory: func(o []string) (*egress.Gate, error) { return egress.NewForTests(o, egress.Limits{}) }})
+	seedAccountOAuthConnection(t, in, "admin-oauth", "private-admin-token", in.admin.ID)
+	in.cookie = sessionCookieFor(t, in.st, in.admin.ID, "admin-delete")
+	w := in.deleteAccount(t)
+	assert.Equal(t, 409, w.Code, w.Body.String())
+	assert.Zero(t, revocations.Load())
 }
 
 func newDeleteInstance(t *testing.T) deleteInstance {

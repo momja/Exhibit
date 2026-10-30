@@ -39,6 +39,11 @@ func (ro *Router) importState(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	unlock, allowed := ro.lockStateFramePolicy(w, r, id)
+	if !allowed {
+		return
+	}
+	defer unlock()
 	err = ro.cfg.Store.ImportState(r.Context(), ownerIDFromCtx(r.Context()), id, state, r.URL.Query().Get("replace") == "true")
 	if writeImportError(w, r, err) {
 		return

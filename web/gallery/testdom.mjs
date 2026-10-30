@@ -147,6 +147,7 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
     document,
     location: window.location,
     URL,
+    URLSearchParams,
     Response,
     Blob,
     CustomEvent: class {

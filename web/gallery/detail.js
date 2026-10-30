@@ -51,6 +51,11 @@ function mayApprove() {
   return !(typeof READ_ONLY === 'boolean' && READ_ONLY);
 }
 
+function needsHostReload() {
+  return (typeof RELAY_ENABLED === 'boolean' && RELAY_ENABLED) ||
+    (typeof CONNECTION_PROTECTED === 'boolean' && CONNECTION_PROTECTED);
+}
+
 // State bridge: the artifact runs in a sandboxed (opaque-origin) iframe and
 // cannot call the API itself. Its storage shim posts state writes here; we
 // forward them same-origin with the auth token. Validate the message shape and
@@ -135,7 +140,9 @@ async function resyncState() {
   if (!frame || !frame.contentWindow) return;
   let resp;
   try {
-    resp = await apiFetch(window.ExhibitState.url(ID));
+    const options = typeof NAVIGATION_POLICY === 'string'
+      ? { headers: { 'X-Exhibit-Relay-Policy': NAVIGATION_POLICY } } : undefined;
+    resp = await apiFetch(window.ExhibitState.url(ID), options);
   } catch (err) {
     return;
   }
@@ -206,6 +213,7 @@ window.addEventListener('message', function (e) {
 const stateReloadBtn = document.getElementById('state-changed-reload');
 if (stateReloadBtn) {
   stateReloadBtn.addEventListener('click', function () {
+    if (needsHostReload()) { window.location.reload(); return; }
     const frame = document.querySelector('iframe');
     if (frame) frame.src = OPEN_URL + '?r=' + Date.now();
     document.getElementById('state-changed-banner').hidden = true;
@@ -511,8 +519,26 @@ document.getElementById('clip-allow').addEventListener('click', async function()
 // nothing until the user allows.
 let pendingLink = null;
 let linkAllowPending = false;
+let linkRequestSequence = 0;
 
-window.addEventListener('message', function(e) {
+async function checkedLinkDestination(destination) {
+  // The server grants this narrow exemption to uncredentialed views with no
+  // connection data policies. A signed-in read-only recipient still checks
+  // their own policy through the authenticated viewer endpoint.
+  if (typeof PUBLIC_NAVIGATION === 'boolean' && PUBLIC_NAVIGATION) return destination;
+  try {
+    const response = await window.apiNavigationCheck(ID, destination,
+      typeof NAVIGATION_POLICY === 'string' ? NAVIGATION_POLICY : '');
+    const result = await response.json();
+    if (!response.ok || typeof result.url !== 'string') throw new Error(result.error || 'This link is not permitted.');
+    return result.url;
+  } catch (error) {
+    document.getElementById('al-status').textContent = error.message || 'Could not check this link. Try reopening the artifact.';
+    return null;
+  }
+}
+
+window.addEventListener('message', async function(e) {
   const d = e.data;
   if (!d || d.__avNavigate !== true || d.artifactId !== ID) return;
   const frame = document.querySelector('iframe');
@@ -524,14 +550,18 @@ window.addEventListener('message', function(e) {
     return;
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+  if (!linksApproved && !mayApprove()) return;
+  const sequence = ++linkRequestSequence;
+  const destination = await checkedLinkDestination(url.href);
+  if (!destination || sequence !== linkRequestSequence) return;
   if (linksApproved) {
-    window.open(url.href, '_blank', 'noopener');
+    window.open(destination, '_blank', 'noopener,noreferrer');
     return;
   }
   // Not ours to approve: the destination is dropped, which is what a denial
   // does and what the sandbox did before the bridge existed.
   if (!mayApprove()) return;
-  pendingLink = { url: url.href, host: url.hostname };
+  pendingLink = { url: destination, host: url.hostname };
   document.getElementById('link-host').textContent = url.hostname;
   document.getElementById('link-modal').hidden = false;
   // Move focus into the dialog so keyboard users land on the decision rather
@@ -578,8 +608,10 @@ document.getElementById('link-allow').addEventListener('click', async function()
   // the user approved — a dismissal or a newer link must not be overridden by
   // opening this URL after the fact.
   if (!ok || pendingLink !== link) return;
+  const destination = link && await checkedLinkDestination(link.url);
+  if (pendingLink !== link) return;
   closeLinkModal();
-  if (link) window.open(link.url, '_blank', 'noopener');
+  if (destination) window.open(destination, '_blank', 'noopener,noreferrer');
 });
 
 // Camera / microphone gate (av-mv3k): the only capability here that is decided
@@ -614,6 +646,10 @@ window.addEventListener('message', function(e) {
   if (!frame || e.source !== frame.contentWindow) return;
   const req = { id: String(d.id), audio: !!d.audio, video: !!d.video };
   if (!req.audio && !req.video) return;
+  if (typeof CONNECTION_PROTECTED === 'boolean' && CONNECTION_PROTECTED) {
+    replyMedia(req.id, false, 'Connected data must stay inside Exhibit; capture devices are unavailable in this preview.', 'NotAllowedError');
+    return;
+  }
   // Approved means approved for every device this request named: a camera-only
   // grant must still prompt when the artifact later asks for the microphone.
   const needsPrompt = (req.video && !cameraApproved) || (req.audio && !microphoneApproved);
@@ -743,6 +779,10 @@ window.addEventListener('message', function(e) {
   const frame = document.querySelector('iframe');
   if (!frame || e.source !== frame.contentWindow) return;
   const req = { id: d.id };
+  if (typeof CONNECTION_PROTECTED === 'boolean' && CONNECTION_PROTECTED) {
+    replyGeolocation(req.id, false, 'Connected data must stay inside Exhibit; location is unavailable in this preview.');
+    return;
+  }
   if (geolocationApproved) {
     // Nothing to decide. The approval exists; it just isn't spent in this
     // frame. Ask the frame to raise the banner, which offers the top-level
@@ -875,6 +915,9 @@ window.ExhibitNetworkPrompt.install({
     if (st) st.textContent = text;
   },
   reload: function () {
+    // The host's policy is bound to the approved origins and current source.
+    // Refresh it together with the frame after an origin approval.
+    if (needsHostReload()) { window.location.reload(); return; }
     const frame = document.querySelector('iframe');
     frame.src = OPEN_URL + '?r=' + Date.now();
     frame.addEventListener('load', function onload() {

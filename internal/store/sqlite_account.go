@@ -95,6 +95,11 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 //     the triggers migration 010 installed.
 //   - `tags`, `collections`, `agent_keys` (owner_id) — no cascade reaches
 //     these, since nothing about an artifact owns them; deleted here.
+//   - `connections` (owner_id), `artifact_connection_grants` (viewer_id),
+//     and `artifact_connection_data_policies` (viewer_id)
+//     belong to this account even on another owner's artifact. Connection
+//     deletion cascades to encrypted cache and quota rows. The API revokes
+//     remote OAuth accounts before entering this local erasure transaction.
 //   - `blob_sizes` (blob_id) — the recorded length of each blob the account's
 //     rows named, deleted last and only for ids no surviving row references
 //     (av-fw1b). Not owner-scoped: a length is a fact about bytes, and with
@@ -175,6 +180,9 @@ func (s *SQLiteStore) deleteAccount(ctx context.Context, userID int64, hosted bo
 		"DELETE FROM tags WHERE owner_id = ?",
 		"DELETE FROM collections WHERE owner_id = ?",
 		"DELETE FROM agent_keys WHERE owner_id = ?",
+		"DELETE FROM artifact_connection_grants WHERE viewer_id = ?",
+		"DELETE FROM artifact_connection_data_policies WHERE viewer_id = ?",
+		"DELETE FROM connections WHERE owner_id = ?",
 	} {
 		if _, err := tx.ExecContext(ctx, stmt, userID); err != nil {
 			return nil, err

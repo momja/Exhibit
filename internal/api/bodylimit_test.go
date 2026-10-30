@@ -15,6 +15,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/momja/Exhibit/internal/connectors"
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -76,6 +78,23 @@ var writeRoutes = []struct {
 	{"PUT", "/api/artifacts/{artifactID}/state", true},
 	{"DELETE", "/api/artifacts/{artifactID}/state", false},
 	{"DELETE", "/api/artifacts/{artifactID}/grants", false},
+	{"POST", "/api/artifacts/{artifactID}/agent-connections", true},
+	{"POST", "/api/artifacts/{artifactID}/connections", true},
+	{"DELETE", "/api/artifacts/{artifactID}/connections/{connectionID}", false},
+	{"DELETE", "/api/artifacts/{artifactID}/connection-data", false},
+	{"POST", "/api/artifacts/{artifactID}/connections/{connectionID}/standin", false},
+	{"DELETE", "/api/artifacts/{artifactID}/connection-requests/{requestID}", false},
+	{"POST", "/api/artifacts/{artifactID}/relay", true},
+	{"POST", "/api/artifacts/{artifactID}/navigation-check", true},
+	{"PUT", "/api/artifacts/{artifactID}/relay-grant", true},
+	{"POST", "/api/artifacts/{artifactID}/relay-schedules", true},
+	{"DELETE", "/api/artifacts/{artifactID}/relay-schedules/{scheduleID}", false},
+	{"POST", "/api/connections", true},
+	{"POST", "/api/connections/{connectionID}/reconnect", true},
+	{"DELETE", "/api/connections/{connectionID}", false},
+	{"POST", "/api/connections/oauth/github/begin", true},
+	{"POST", "/api/connections/vendor/begin", true},
+	{"POST", "/api/connections/vendor/complete", true},
 	{"DELETE", "/api/artifacts/{artifactID}/assets/{assetID}", false},
 	{"POST", "/api/artifacts/{artifactID}/origins", true},
 	{"DELETE", "/api/artifacts/{artifactID}/origins", false},
@@ -120,6 +139,9 @@ func bodyLimitRouter(t *testing.T) *Router {
 	cfg := ro.cfg
 	cfg.MaxRequestBodyBytes = testBodyLimit
 	cfg.LocalCredential = newTestCredential(t, "admin", "pw")
+	cfg.Relay.Enabled = true
+	cfg.Relay.SchedulesEnabled = true
+	cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: cfg.Store.(*store.SQLiteStore), Box: cfg.Secrets})
 	return NewRouter(cfg)
 }
 
@@ -195,6 +217,16 @@ func serveBody(ro *Router, method, path, contentType string, body io.Reader, con
 	req.ContentLength = contentLength
 	req.Header.Set("Authorization", "Bearer secret")
 	req.Header.Set("Content-Type", contentType)
+	// Runtime requests carry the app page's current policy, so this fixture
+	// reaches the decoder instead of correctly failing the stale-page fence.
+	if strings.HasPrefix(path, "/api/artifacts/") && (strings.HasSuffix(path, "/relay") || strings.HasSuffix(path, "/standin") || strings.HasSuffix(path, "/navigation-check")) {
+		id := strings.Split(strings.TrimPrefix(path, "/api/artifacts/"), "/")[0]
+		if a, err := ro.cfg.Store.GetArtifactReadableBy(req.Context(), store.ViewerID(defaultOwnerID), id); err == nil && a != nil {
+			if policy, err := ro.relayPolicy(req.Context(), defaultOwnerID, a); err == nil {
+				req.Header.Set("X-Exhibit-Relay-Policy", policy)
+			}
+		}
+	}
 	rec := httptest.NewRecorder()
 	ro.ServeHTTP(rec, req)
 	return rec
@@ -214,6 +246,9 @@ func seedBodyLimitFixtures(t *testing.T, ro *Router) *strings.Replacer {
 		"{sessionID}", "missing",
 		"{seq}", "1",
 		"{shareID}", "missing",
+		"{connectionID}", "missing",
+		"{requestID}", "missing",
+		"{scheduleID}", "missing",
 	)
 }
 
@@ -318,6 +353,41 @@ func TestDecodeJSONKeepsMalformedBodiesA400(t *testing.T) {
 	ro.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "invalid request body")
+}
+
+func TestDecodeStrictJSONRejectsTrailingInputWithinTheBodyLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		status     int
+	}{
+		{"whitespace", `{"secret":"private-credential"}` + "\n ", http.StatusNoContent},
+		{"unknown field", `{"secret":"private-credential","private-credential":"value"}`, http.StatusBadRequest},
+		{"second value", `{"secret":"private-credential"} {"secret":"another"}`, http.StatusBadRequest},
+		{"trailing garbage", `{"secret":"private-credential"} private-credential`, http.StatusBadRequest},
+		{"trailing overrun", `{"secret":"private-credential"}` + strings.Repeat(" ", testBodyLimit), http.StatusRequestEntityTooLarge},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := limitRequestBody(testBodyLimit)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var in struct {
+					Secret string `json:"secret"`
+				}
+				if decodeStrictJSON(w, r, &in) {
+					w.WriteHeader(http.StatusNoContent)
+				}
+			}))
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
+			req.ContentLength = -1
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			assert.Equal(t, tc.status, rec.Code, rec.Body.String())
+			assert.NotContains(t, rec.Body.String(), "private-credential")
+			if tc.status == http.StatusRequestEntityTooLarge {
+				var refusal bodyTooLargeResponse
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &refusal))
+				assert.Equal(t, int64(testBodyLimit), refusal.LimitBytes)
+			}
+		})
+	}
 }
 
 // decodeJSON is what turns an overrun into a 413 for a body of undeclared

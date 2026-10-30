@@ -1016,3 +1016,62 @@ A share lives until deleted. There is no expiry, and `POST /api/shares` refuses 
 - **Not a predictor.** Policy sits at the runtime boundary.
 - **Not the owner of TLS or backup targets.** The release is the image and a config
   contract.
+
+## Experimental relay and connector boundary
+
+The optional relay and connector engines perform reviewed, bounded HTTPS
+requests while artifact execution stays in the browser. Ordinary API fetches,
+credential injection and declarative fetch-to-state schedules share
+`internal/egress`; no artifact server script or QuickJS runtime is introduced.
+Document-bound host authority and current-policy checks bind each request
+to the intended artifact and viewer. ZIP exports include a local relay
+and acquire local credentials again. See [relay-connectors.md](relay-connectors.md)
+for the configuration, ownership rules, portable runners and recorded decision
+superseding the synchronous backend POC.
+
+Native custom connectors are generic API key, Bearer and Basic credential policies,
+behind `CONNECTORS_CUSTOM_ENABLED` and an explicit advanced setup surface.
+`CONNECTORS_ENABLED` alone enables the framework without a generic credential
+form. This is reusable groundwork; a broad named-service catalog is future scope.
+A pasted Basic credential URL is split in trusted app code into an origin,
+encrypted credentials and an encrypted private base path. The relay maps
+artifact paths under that base without disclosing it. User-selected daily request
+limits and encrypted GET response reuse are enforced per connection across
+artifacts and devices.
+Connections and relay consent carry no read/write distinction (Exh-cxzb): an
+HTTP method does not say what a request does, so the provider's credential scope
+is the only limit on what a connection may read or change. Relay consent is one
+decision per artifact and viewer.
+No provider-specific API-key or Basic connector, or setup-token claim code, is shipped.
+Native OAuth remains limited to the reviewed provider set.
+
+Connector grants are additive. The artifact origin allowlist determines network
+access and the render CSP; each granted connection supplies credentials only at
+its matching API origin. Multiple distinct connectors and approved standalone
+APIs/CDNs coexist. Adding, removing, revoking or disabling a connector does not
+intersect unrelated approvals or require clearing state. Viewer and agent chrome
+use the ordinary network approval flow, and schedules and portable runners
+apply the same separation between origin permission and credential use.
+
+Once response bytes reach the artifact, its code can save or send them to other
+approved origins. Credential custody cannot guarantee response-data non-egress.
+Connection grants authorize only their owner, including after a tool is shared.
+Migration 050 clears legacy shared-account flags. Saved-state visibility remains
+the separate decision expressed by the tool's own/shared data mode and public
+link. Retained provenance still supports private render boundaries; legacy
+destination fields confer no network authority.
+Optional saved-state cleanup does not affect origin approvals or connection grants.
+
+Managed authentication uses a swappable vendor engine beside the native
+request-authorizing Engine interface. Nango injects retrieved credentials into
+Exhibit's own checked HTTP hops. Composio currently exposes redacted credentials
+and therefore uses the explicit forward-mode boundary: common initial URL,
+public-address preflight, headers, quota/cache and response caps, while the
+vendor owns provider dialing and redirects. No additional artifact-facing relay
+or server code runtime is introduced. Connections pin engine, external reference
+and reviewed policy; configuration changes affect new connections, and existing
+ones retain their original engine through reconnection. Repairs replace credentials
+in place, retaining connection identity, tool grants, schedules and request quota,
+while invalidating cached responses and stand-ins. Tool context is carried in
+browser-bound setup state and return paths are generated from validated IDs.
+Aggregate monthly engine/provider attempts and current stored-connection counts are operator-only.

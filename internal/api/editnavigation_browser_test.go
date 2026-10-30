@@ -182,8 +182,10 @@ func TestEditNavigationPermissionSavesBrowser(t *testing.T) {
 			wait(`document.querySelector('.cm-editor') && document.querySelector('#blocked-rows [data-action="forget"]')`)
 			require.NoError(t, chromedp.Do(ctx, chromedp.SendKeys(chromedp.CSS(`#source-panel .cm-content`), `<script src="https://new.example.test/lib.js"></script>`)))
 			eval(`document.getElementById('save-button').click()`)
-			wait(`document.getElementById('scan-result').style.display === 'block' && document.getElementById('save-button').disabled === false`)
-			eval(`document.querySelectorAll('.al-origin').forEach(box=>box.checked=true); window.approveOrigins()`)
+			// Approval rows arrive in an htmx fragment after the container opens.
+			// Wait for the choices a person can actually see before approving.
+			wait(`document.getElementById('scan-result').style.display === 'block' && document.getElementById('save-button').disabled === false && document.querySelector('#scan-result .al-origin[value="https://new.example.test"]') && document.querySelector('#scan-result .al-origin[value="https://blocked.example.test"]') && document.querySelector('#scan-result button[onclick="approveOrigins()"]')`)
+			eval(`document.querySelectorAll('#scan-result .al-origin').forEach(box=>box.checked=true); document.querySelector('#scan-result button[onclick="approveOrigins()"]').click()`)
 			wait(`!document.getElementById('blocked-rows') && !document.getElementById('unapproved-rows') && document.querySelector('#allowlist-rows [data-origin="https://new.example.test"]') && document.querySelector('[data-unsaved-changes-target="status"]').textContent === 'All changes saved'`)
 			// The viewer's independent grant makes the bootstrap value stale.
 			require.Equal(t, http.StatusOK, doJSON(t, ro, "PATCH", "/api/artifacts/"+id, map[string]any{"geolocation_approved": true}).Code)

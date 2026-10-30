@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/connectors"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,6 +33,23 @@ func TestDirectOpenPromptForEveryViewer(t *testing.T) {
 		}
 		assert.NotContains(t, page, `href="/artifacts/art-1/open"`, "no link can bypass confirmation through modified clicks")
 		assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/direct-open.js")+`"></script>`)
+		if readOnly {
+			assert.NotContains(t, page, `href="/api/artifacts/art-1/export"`)
+		} else {
+			assert.Contains(t, page, `download title="Downloads this tool and its assets, without its saved data or connected accounts"`)
+		}
+		protected, err := renderDetailPage(a, urls, creds, nil, detailNetworkPolicy{Protected: true})
+		require.NoError(t, err)
+		assert.Contains(t, protected, `id="direct-open-toolbar" disabled`)
+		assert.Contains(t, protected, `href="/connections?artifact=art-1"`)
+		assert.Contains(t, protected, `</i> Saved data</a>`)
+		connectedCreds := creds
+		connectedCreds.RelayEnabled = true
+		connected, err := renderDetailPage(a, urls, connectedCreds, nil)
+		require.NoError(t, err)
+		assert.Contains(t, connected, `href="/connections?artifact=art-1"`)
+		assert.Contains(t, connected, `</i> Connections</a>`)
+		assert.NotContains(t, connected, `id="direct-open-toolbar" disabled`)
 
 		urls.viewerID = 43
 		other, err := renderDetailPage(a, urls, creds, nil)
@@ -48,10 +67,71 @@ func TestFramedOpenRemainsFreshTokenRedirect(t *testing.T) {
 	id := createTestArtifact(t, r, "Frame reload")
 	req := httptest.NewRequest(http.MethodGet, "/artifacts/"+id+"/open?r=123", nil)
 	req.Header.Set("Sec-Fetch-Dest", "iframe")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusFound, w.Code)
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	assert.Contains(t, w.Header().Get("Location"), "http://render.test/a/"+id+"?")
 	assert.NotContains(t, w.Body.String(), "direct-open-modal")
+}
+
+func TestUnconnectedDirectOpenStillMintsFreshAccess(t *testing.T) {
+	ro := newTestRouter(t)
+	id := createOwnArtifact(t, ro)
+	w := doJSON(t, ro, http.MethodGet, "/artifacts/"+id+"/open?direct=1&r=123", nil)
+	require.Equal(t, http.StatusFound, w.Code, w.Body.String())
+	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+	assert.Contains(t, w.Header().Get("Location"), "http://render.test/a/"+id+"?")
+	assert.NotContains(t, w.Header().Get("Location"), "direct=")
+}
+
+func TestDirectOpenRejectsCurrentPrivatePoliciesFromStalePages(t *testing.T) {
+	ro := newTestRouter(t)
+	ctx := context.Background()
+	id := createOwnArtifact(t, ro)
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = service
+	ro.cfg.ConnectionPolicy = service
+	ro.cfg.Relay.Enabled = true
+	stalePage := getPage(t, ro, "/artifacts/"+id)
+	assert.NotContains(t, stalePage, `id="direct-open-toolbar" disabled`)
+	c, err := service.Create(ctx, 1, connectors.CreateRequest{Name: "Private account", Recipe: "bearer", Origin: "https://api.example.test", Secret: "private-key"}, connectors.UnlimitedLimits())
+	require.NoError(t, err)
+	_, err = service.Grant(ctx, 1, id, connectors.GrantRequest{ConnectionID: c.ID})
+	require.NoError(t, err)
+	assert.Contains(t, getPage(t, ro, "/artifacts/"+id), `id="direct-open-toolbar" disabled`)
+
+	checkDirectAndFramedOpens := func() {
+		t.Helper()
+		// Missing metadata models HTTP t3code; document models HTTPS. A
+		// stale app page supplies a valid app referrer in either case.
+		for _, destination := range []string{"", "document"} {
+			req := httptest.NewRequest(http.MethodGet, "/artifacts/"+id+"/open?direct=1", nil)
+			req.Header.Set("Referer", ro.cfg.AppOrigin+"/artifacts/"+id)
+			req.Header.Set("Sec-Fetch-Dest", destination)
+			w := httptest.NewRecorder()
+			ro.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+			assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+			assert.Empty(t, w.Header().Get("Location"))
+		}
+		for _, destination := range []string{"", "iframe"} {
+			req := httptest.NewRequest(http.MethodGet, "/artifacts/"+id+"/open?r=123", nil)
+			req.Header.Set("Sec-Fetch-Dest", destination)
+			req.Header.Set("Sec-Fetch-Site", "same-origin")
+			w := httptest.NewRecorder()
+			ro.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusFound, w.Code, w.Body.String())
+			assert.Contains(t, w.Header().Get("Location"), "http://render.test/a/"+id+"/p/")
+		}
+	}
+	checkDirectAndFramedOpens()
+	// Saved-data restrictions survive removal of credential authority and
+	// disabled acquisition/relay flags; stale pages still cannot bypass them.
+	require.NoError(t, service.Ungrant(ctx, 1, id, c.ID))
+	require.NoError(t, service.Revoke(ctx, 1, c.ID))
+	ro.cfg.Connections = nil
+	ro.cfg.Relay.Enabled = false
+	checkDirectAndFramedOpens()
 }

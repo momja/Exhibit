@@ -60,6 +60,9 @@ const (
 var accountTables = map[string]accountTable{
 	"hosted_account_deletions": {reachNone,
 		"identity fences and durable provider-deletion work survive erasure; no library payload is retained", ""},
+	"artifact_relay_grants": {reachTrigger, "relay_account_delete erases viewer consent, including on another owner's artifact", "SELECT COUNT(*) FROM artifact_relay_grants WHERE viewer_id = ?1"},
+	"relay_activity":        {reachTrigger, "relay_account_delete erases the viewer's request metadata", "SELECT COUNT(*) FROM relay_activity WHERE viewer_id = ?1"},
+	"relay_schedules":       {reachTrigger, "relay_account_delete erases the viewer's scheduled fetches", "SELECT COUNT(*) FROM relay_schedules WHERE viewer_id = ?1"},
 	"users": {reachExplicit, "the account itself, and the guard that may refuse the whole operation",
 		"SELECT COUNT(*) FROM users WHERE id = ?1"},
 	"artifacts": {reachExplicit, "the library, by owner_id — and the row every cascade below hangs from",
@@ -70,6 +73,19 @@ var accountTables = map[string]accountTable{
 		"SELECT COUNT(*) FROM collections WHERE owner_id = ?1"},
 	"agent_keys": {reachExplicit, "the sealed BYO provider key, owner-scoped and reached by no cascade",
 		"SELECT COUNT(*) FROM agent_keys WHERE owner_id = ?1"},
+	"connections": {reachExplicit, "encrypted external account credentials belong to their viewer, independently of artifacts",
+		"SELECT COUNT(*) FROM connections WHERE owner_id = ?1"},
+	"artifact_connection_grants": {reachExplicit, "viewer grants are deleted explicitly; artifact and connection cascades revoke remaining grants",
+		"SELECT COUNT(*) FROM artifact_connection_grants WHERE viewer_id = ?1 OR artifact_id = '" + deletedArtifact + "'"},
+	"artifact_connection_data_policies": {reachExplicit, "retained data restrictions survive credential deletion but are erased with their viewer account or artifact",
+		"SELECT COUNT(*) FROM artifact_connection_data_policies WHERE viewer_id = ?1 OR artifact_id = '" + deletedArtifact + "'"},
+	"vendor_usage": {reachNone, "anonymous per-engine/provider/day cost totals hold no user or connection identity and retain spent usage after account deletion", ""},
+	"connection_usage": {reachCascade, "connection deletion erases its durable provider quota accounting",
+		"SELECT COUNT(*) FROM connection_usage WHERE connection_id = 'member-connection'"},
+	"connection_cache": {reachCascade, "connection deletion erases cached encrypted provider data",
+		"SELECT COUNT(*) FROM connection_cache WHERE connection_id = 'member-connection'"},
+	"artifact_connection_requests": {reachCascade, "pending trusted UI connection prompts cascade from their owner's artifacts",
+		"SELECT COUNT(*) FROM artifact_connection_requests WHERE artifact_id = '" + deletedArtifact + "' OR owner_id = ?1"},
 	// Not owner-scoped, and deliberately so (av-fw1b): a recorded length is a
 	// fact about bytes, and one blob id can be named by rows belonging to
 	// several owners once assets are shared (av-20fk). DeleteAccount collects
@@ -269,8 +285,17 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	}))
 	_, grantErr := s.CreateGrant(ctx, admin.ID, "grant-source", member.ID)
 	require.NoError(t, grantErr)
+	require.NoError(t, s.SetRelayGrant(ctx, member.ID, deletedArtifact, RelayGrant{Allowed: true}))
+	require.NoError(t, s.RecordRelayActivity(ctx, member.ID, deletedArtifact, RelayActivity{Origin: "https://api.example.test", Method: "GET", Status: 200, Bytes: 10}))
+	require.NoError(t, s.PutRelaySchedule(ctx, RelaySchedule{ID: "member-refresh", ViewerID: member.ID, ArtifactID: deletedArtifact, URL: "https://api.example.test/accounts", StateKey: "accounts", IntervalSeconds: 86400, NextRunAt: time.Now().Unix(), Enabled: true}, 10))
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))
 	require.NoError(t, s.SetAgentKey(ctx, &AgentKey{OwnerID: member.ID, Provider: "anthropic", KeyCiphertext: "sealed"}))
+	require.NoError(t, s.CreateConnection(ctx, &ConnectionRecord{ID: "member-connection", OwnerID: member.ID, Name: "member account", Provider: "bearer", Kind: "native", RecipeJSON: `{"origins":["https://api.example.test"]}`, EncryptedSecret: "sealed"}, -1))
+	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: deletedArtifact, ConnectionID: "member-connection", ViewerID: member.ID}))
+	require.NoError(t, s.ReserveConnectionRequest(ctx, "member-connection", 24, time.Now()))
+	require.NoError(t, s.PutConnectionCache(ctx, "member-connection", "hash", "sealed", time.Now().Add(time.Hour)))
+	_, err = s.RequestArtifactConnection(ctx, member.ID, deletedArtifact, "basic", "Read my accounts")
+	require.NoError(t, err)
 	require.NoError(t, s.SaveTranscript(ctx, member.ID, Transcript{ArtifactID: deletedArtifact, SessionID: "sess-1", SessionFile: "{}\n"}))
 	// The recorded lengths of the two blobs the artifact above names, so the
 	// blob_sizes residue is asserted against rows that were really there.

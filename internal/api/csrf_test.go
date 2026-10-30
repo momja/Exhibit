@@ -102,6 +102,11 @@ var appOriginGETRoutes = []getRoute{
 	// is the worst thing on this instance to make forgeable.
 	{route: "/profile"},
 	{route: "/settings"},
+	{route: "/connections"},
+	{route: "/partials/connections"},
+	{route: "/partials/network-warnings"},
+	{route: "/partials/network-approval"},
+	{route: "/partials/agent-connection-requests"},
 	{route: "/partials/gallery-grid"},
 	{route: "/partials/agent-preview"},
 	// The history pane (av-y7td): reads of what was said in earlier
@@ -147,6 +152,13 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/api/artifacts/"},
 	{route: "/api/artifacts/{artifactID}/"},
 	{route: "/api/artifacts/{artifactID}/state"},
+	{route: "/api/artifacts/{artifactID}/connections"},
+	{route: "/api/artifacts/{artifactID}/agent-connections"},
+	{route: "/api/artifacts/{artifactID}/relay-bundle"},
+	{route: "/api/artifacts/{artifactID}/relay-grant"},
+	{route: "/api/artifacts/{artifactID}/relay-schedules"},
+	{route: "/api/connections"},
+	{route: "/api/connections/oauth/github/callback", mutates: true, why: "provider authorization callback requires one-shot unpredictable state, PKCE and a matching HttpOnly browser-flow cookie bound to the live login session; forging the navigation cannot connect an attacker's account"},
 	// Out-of-line assets (av-20fk): a read of what an artifact stores beside
 	// its body — metadata only, never the bytes, and it mutates nothing.
 	{route: "/api/artifacts/{artifactID}/assets"},
@@ -175,6 +187,7 @@ var appOriginGETRoutes = []getRoute{
 	// accounts changes nothing; creating, disabling and resetting are the
 	// POST and PATCH on the same group.
 	{route: "/api/admin/users/"},
+	{route: "/api/admin/connector-usage"},
 
 	// The login flow: the only GET routes that change state, registered only
 	// when a login is configured. Each is safe for its own reason, not by the

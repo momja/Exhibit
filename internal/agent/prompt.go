@@ -86,6 +86,22 @@ func modePrompt(opts CreateOpts) string {
 	return ""
 }
 
+// Platform capabilities are explicit session facts. The default instance has
+// no relay; its prompt must never promise requests the server cannot service.
+func networkGuidance(opts CreateOpts) string {
+	if opts.WidgetOnly {
+		return "\n\n" + renderPrompt("network_widget", nil)
+	}
+	if !opts.NetworkRelayEnabled {
+		return "\n\n" + renderPrompt("network_disabled", nil)
+	}
+	guidance := "\n\n" + renderPrompt("network_relay", nil)
+	if opts.ConnectionsEnabled {
+		guidance += "\n\n" + renderPrompt("network_connections", nil)
+	}
+	return guidance
+}
+
 // buildSystemPrompt composes the session's system prompt: the role half
 // (overridable by config), the paragraph naming this session's mode, and the
 // always-present contract on how to read tool results.
@@ -98,7 +114,7 @@ func buildSystemPrompt(override string, opts CreateOpts) string {
 	if !opts.WidgetOnly {
 		guidance = "\n\n" + questionGuidance
 	}
-	return role + modePrompt(opts) + guidance + "\n\n" + dataContract
+	return role + networkGuidance(opts) + modePrompt(opts) + guidance + "\n\n" + dataContract
 }
 
 // selectionNotice is the fixed sentence appended to a prompt that carries a

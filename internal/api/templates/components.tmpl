@@ -88,7 +88,8 @@
        hx-swap="innerHTML">{{template "capabilityPopover" .Capability}}</div>
 </div>
 <div class="pip-popup pip-menu action-menu" id="pip-menu" hidden>
-  <button type="button" id="direct-open-toolbar"><i class="ph ph-arrow-square-out" aria-hidden="true"></i> Open in new tab</button>
+  <button type="button" id="direct-open-toolbar"{{if .ConnectionProtected}} disabled title="Connected data is available in the isolated Exhibit preview."{{end}}><i class="ph ph-arrow-square-out" aria-hidden="true"></i> {{if .ConnectionProtected}}Connected preview only{{else}}Open in new tab{{end}}</button>
+  {{if or .RelayEnabled .ConnectionProtected}}<a href="/connections?artifact={{.ID}}"><i class="ph ph-plugs-connected" aria-hidden="true"></i> {{if .RelayEnabled}}Connections{{else}}Saved data{{end}}</a>{{end}}
   {{/* Everything from here to the divider belongs to the artifact's OWNER
        (av-awr4). A recipient reached this page through a grant, which is read
        access to the artifact and nothing else, so each of these would answer
@@ -109,7 +110,7 @@
        back in, depending on no origin and no running instance. A plain link,
        because the response is an attachment — no JS, and it works from the
        page a visitor is already on. */}}
-  <a href="/api/artifacts/{{.ID}}/export" download><i class="ph ph-download-simple" aria-hidden="true"></i> Download file</a>
+  <a href="/api/artifacts/{{.ID}}/export" download title="Downloads this tool and its assets, without its saved data or connected accounts"><i class="ph ph-download-simple" aria-hidden="true"></i> Download file</a>
   {{if .SourceURL}}<button type="button" onclick="refetchSource()"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Update from source</button>{{end}}
   {{end}}
   <hr>

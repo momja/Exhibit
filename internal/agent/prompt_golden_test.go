@@ -11,10 +11,12 @@ import (
 
 var updatePromptGoldens = flag.Bool("update-prompt-goldens", false, "rewrite testdata/prompts/*.golden")
 
-// Moving prompt text into template files must not change a byte the model
-// sees. Each case is compared against output captured before the move.
+// Keep the rendered prompt stable across template refactors, including the
+// relay and connector guidance selected by instance capabilities.
 func TestPromptsMatchGoldens(t *testing.T) {
 	cases := map[string]string{
+		"system-relay.golden":       buildSystemPrompt("", CreateOpts{NetworkRelayEnabled: true}),
+		"system-connections.golden": buildSystemPrompt("", CreateOpts{NetworkRelayEnabled: true, ConnectionsEnabled: true}),
 		"system-default.golden":     buildSystemPrompt("", CreateOpts{}),
 		"system-edit.golden":        buildSystemPrompt("", CreateOpts{ArtifactID: "a"}),
 		"system-widget-only.golden": buildSystemPrompt("", CreateOpts{ArtifactID: "a", WidgetOnly: true}),
