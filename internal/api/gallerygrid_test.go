@@ -91,7 +91,7 @@ func TestGallerySearchFragmentResetsPagingAndEscapesQuery(t *testing.T) {
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	assert.NotContains(t, w.Body.String(), "<html")
 	assert.Contains(t, getPage(t, ro, "/partials/gallery-grid?q=missing"), "No artifacts match your search.")
-	assert.Equal(t, "/other?offset=24&q=a%26b%3C", galleryURL("/other", "a&b<", 24))
+	assert.Equal(t, "/other?offset=24&q=a%26b%3C", (galleryGridData{Query: "a&b<"}).url("/other", 24))
 	// A filtered first page is the same partial the full page embeds.
 	fragment := getPage(t, ro, "/partials/gallery-grid?q=Artifact")
 	assert.Contains(t, normalizePerRender(getPage(t, ro, "/?q=Artifact")), normalizePerRender(fragment))
