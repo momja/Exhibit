@@ -411,20 +411,6 @@
   <span class="state-glyph-data{{if eq . "own"}} state-glyph-separate{{end}}"><i class="ph ph-database"></i>{{if eq . "own"}}<i class="ph ph-database"></i><i class="ph ph-database"></i>{{end}}</span>
 </span>{{end}}
 
-{{/* settingsHeader is the sub-page header the account surfaces share: a back
-     link to the gallery and the page's own title, the same idiom new.tmpl and
-     detail.tmpl use. Data: the page title (a string).
-
-     It exists as a partial rather than inline markup because two pages will
-     wear it and they must not merge: this ticket's /admin/users (an admin
-     acting on the instance) and av-qwld's own-account settings page (a person
-     acting on themselves). Sharing the furniture is the point; sharing the
-     authority would be the bug — that lives on the route, in adminOnly. */}}
-{{define "settingsHeader"}}<header>
-  <a href="/">←<span class="back-label"> Gallery</span></a>
-  <h1>{{.}}</h1>
-</header>{{end}}
-
 {{/* The runtime network-permission dialog (av-kmwj), shared by every page that
      embeds an artifact: the detail viewer and the agent chat's preview pane
      (av-6xvs). One definition because the two pages must offer the same three

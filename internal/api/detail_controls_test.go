@@ -33,7 +33,8 @@ func TestDetailPageCarriesFloatingControls(t *testing.T) {
 	for _, id := range []string{"pip", "pip-info", "pip-menu", "pip-hide", "pip-tab", "pip-announce"} {
 		assert.Contains(t, page, `id="`+id+`"`, "pip.js binds to #%s", id)
 	}
-	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/pip.js")+`"></script>`)
+	assert.Contains(t, page, `data-controller="floating-header"`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/controllers.js")+`"></script>`)
 	assert.Contains(t, page, `<h1 class="pip-info-title" id="pip-info-title">Pill Tool</h1>`)
 	assert.NotContains(t, page, `class="pip-title-text"`)
 	assert.Contains(t, page, `aria-controls="pip-menu"`)

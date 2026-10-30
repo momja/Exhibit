@@ -56,7 +56,7 @@ func TestEditorNavigationMarkupAndVersionRefresh(t *testing.T) {
 	ro := newTestRouter(t)
 	id := createArtifact(t, ro, map[string]any{"title": "My tool", "body": "<h1>Tool</h1>"})
 	page := getPage(t, ro, editURL(id, "/?q=tool"))
-	assert.Contains(t, page, `class="editor-return" href="/?q=tool"`)
+	assert.Contains(t, page, `class="app-header-back" href="/?q=tool"`)
 	assert.Contains(t, page, `data-controller="unsaved-changes"`)
 	assert.Contains(t, page, `type="module" src="`+assetURL("gallery/edit.js")+`"`)
 	assert.NotContains(t, page, `onclick="save()"`)

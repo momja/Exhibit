@@ -9,19 +9,7 @@
  * internal/api/admin.go for where that authority actually lives. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
-/* The sub-page header idiom shared with /new and the detail page: back link,
- * then the page title. Kept identical so moving between them feels like one
- * app rather than three. */
-header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header);padding:var(--space-5) var(--space-8);display:flex;align-items:center;gap:var(--space-6)}
-header h1{font-size:18px;font-weight:600}
-header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
 main{padding:var(--space-8);max-width:900px;margin:0 auto}
-/* Match the approved account flow while retaining the ordinary admin header. */
-.account-settings-header{gap:var(--space-3);min-height:65px}
-.account-settings-header .account-settings-brand{font-size:18px;font-weight:650;color:var(--color-ink)}
-.account-settings-separator,.account-settings-header h1{font-size:13px;font-weight:400;color:var(--color-muted)}
-.account-settings-header .account-control{margin-left:auto}
-
 
 /* --- lede -------------------------------------------------------------- */
 .lede h2{font-size:28px;font-weight:650;letter-spacing:-.025em}
@@ -157,10 +145,7 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
 .settings-status.is-error{border-color:var(--color-danger);color:var(--color-danger-hover)}
 
 @media (max-width:640px){
-  header{padding:var(--space-5)}
   main{padding:var(--space-5)}
-  /* The back link collapses to its arrow, as on /new and the detail page. */
-  .back-label{display:none}
 }
 
 /* Shared button display rules must not reveal deferred account actions. */

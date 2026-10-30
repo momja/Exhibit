@@ -16,6 +16,75 @@ Stimulus is pinned in `web/stimulus/package.json`. `make assets` copies its ES
 module and MIT license into the embedded assets. The gallery remains unbundled,
 and production needs no Node process or external asset service.
 
+## App header
+
+Every full-document app page renders `{{template "appHeader" .Header}}` from
+`templates/components.tmpl`: gallery and shared-library views, Settings,
+artifact editor and viewer, account administration, agent, add-artifact,
+not-found, and both local and hosted authentication pages.
+`appHeaderView` in `internal/api/appheader.go` supplies page-owned content.
+The default variant provides a title, optional logo/back link/search, and
+native link or button actions. Route guards enforce permission independently.
+The gallery and hosted Settings retain the shared `accountControl` menu,
+including its recovery link. Authentication pages supply branding and their
+page title without signed-in navigation or account controls; local sign-in
+remains scriptless.
+
+For a title and return to the gallery, populate the page's `Header` with
+`subpageHeader("Page title")`. For a different destination, supply
+`Back: &appHeaderBack{URL: destination, Label: destinationName}`. Set
+`CollapseLabel` when the return label should become visually hidden on phones;
+otherwise long labels truncate. `HideTitle` keeps a gallery heading available
+to assistive technology without drawing it beside the logo.
+
+Each `appHeaderAction` has a `Label` and self-hosted Phosphor `Icon`. `Href`
+makes an anchor; otherwise it renders a button with an optional `ID`.
+`LabelID` identifies a label that a feature updates, such as the agent key
+status. An optional `TitleIcon` decorates the page title.
+`IconOnly` hides the visible label at every width; other action labels become
+visually hidden at 600px and below. Accessible names and tooltips remain.
+`Primary` selects the primary button style. The editor's `SaveEditor` flag
+retains its existing `data-save-editor` binding and unsaved-changes workflow.
+Gallery search and filter markup stays in `galleryHeaderSearch`; its existing
+Stimulus and htmx behavior remains attached to the stable gallery root.
+
+`.app-header` and its child classes in `components.css` own the layout, including
+when the bar is nested inside a gallery controller. The baseline is the
+rendered gallery: 37px tall with 36px icon controls on desktop; 33px tall with
+32px controls at 767px and below, plus any phone top safe-area inset. Horizontal
+padding is 16px (8px at 360px and below), with 12px gaps. The gallery filter
+layout tightens gaps on narrow screens. Page styles only extend feature layout,
+not the bar's dimensions. `--header-height` supplies the shared minimum height;
+the bar grows when account-service errors need more room. Hidden account recovery links remain
+hidden until their controller reveals them.
+
+The artifact viewer uses the `Floating` variant, populated by
+`artifactHeader`. Its `floatingHeaderView` carries the title, created date,
+posture, and which owner actions are available. `floatingAppHeader` owns the
+pill, both popups, restore tab, and accessibility announcements; its styles
+live in `components.css`. The `floating-header` Stimulus controller connects
+`connectFloatingHeader` from `pip.js` and releases all listeners, observers,
+timers, and animation frames on disconnect. Dragging, docking, hiding,
+restoring, remembered placement, popup dismissal, and keyboard behavior are
+preserved. The artifact still fills the viewport beneath these controls.
+
+Standard headers need no new browser controller. Features compose their
+existing controllers and native events. A template audit guards every full
+app document against bypassing this component. Browser coverage includes the
+standard pages at six widths, authentication pages without signed-in controls,
+and floating-header interactions and disconnect/reconnect.
+
+[Desktop gallery](screenshots/Exh-arf2/gallery-desktop.png) ·
+[Phone gallery](screenshots/Exh-arf2/gallery-phone.png) ·
+[Account](screenshots/Exh-arf2/account-desktop.png) ·
+[Editor](screenshots/Exh-arf2/editor-desktop.png) ·
+[Accounts](screenshots/Exh-arf2/admin-desktop.png) ·
+[Add artifact](screenshots/Exh-arf2/new-desktop.png) ·
+[Agent](screenshots/Exh-arf2/agent-desktop.png) ·
+[Not found](screenshots/Exh-arf2/notfound-desktop.png) ·
+[Viewer](screenshots/Exh-arf2/viewer-desktop.png) ·
+[Sign in](screenshots/Exh-arf2/login-desktop.png)
+
 ## Defining action menus
 
 A feature supplies an `actionMenuView`. Two different menus can be defined as:
@@ -130,7 +199,7 @@ integration uses a real browser through the existing `chromiumtest` helper:
 
 ```sh
 make assets
-go test ./internal/api -run 'Test(ActionMenuBrowser|GalleryActionMenuDuplicationBrowser)$' -count=1
+go test ./internal/api -run 'Test(AppHeaderBrowser|ActionMenuBrowser|GalleryActionMenuDuplicationBrowser)$' -count=1
 ```
 
 The helper finds a locally installed Playwright Chromium headless shell, or

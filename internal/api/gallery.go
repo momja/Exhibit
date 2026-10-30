@@ -593,16 +593,16 @@ func (ro *Router) notFound(w http.ResponseWriter, r *http.Request) {
 // once in its header and draws the hero frame from the data URI, so one
 // artwork serves both without duplicating its element ids (logo.go).
 type notFoundPageData struct {
+	Header        appHeaderView
 	Favicon       template.URL
-	LogoSVG       template.HTML
 	LogoImage     template.URL
 	RequestedPath string
 }
 
 func renderNotFoundPage(requestedPath string) (string, error) {
 	return renderPage("notfound", notFoundPageData{
+		Header:        notFoundHeader(),
 		Favicon:       template.URL(exhibitLogoDataURI),
-		LogoSVG:       template.HTML(exhibitLogoSVG),
 		LogoImage:     template.URL(exhibitLogoDataURI),
 		RequestedPath: requestedPath,
 	})
@@ -903,30 +903,22 @@ func newGalleryWidgetView(a *store.Artifact, urls renderURLs) widgetView {
 // colors the server-rendered SVG logo).
 
 type galleryPageData struct {
+	Header appHeaderView
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
 	Favicon template.URL
-	// LogoSVG is the compiled-in brand mark (logo.go), trusted markup.
-	LogoSVG template.HTML
 	Grid    galleryGridData
 	Spaces  []gallerySpace
 	pageCredentials
-	// IsAdmin reveals the header link to /admin/users (av-utap). It decides
-	// what the page *offers* and nothing else: the route carries its own
-	// adminOnly guard, so a visitor who reaches it by typing the URL is
-	// refused there rather than admitted by a template that forgot to hide a
-	// link. Hiding a control is a courtesy; the guard is the control.
-	IsAdmin bool
 }
 
 func renderGalleryPage(grid galleryGridData, spaces []gallerySpace, creds pageCredentials, isAdmin bool) (string, error) {
 	return renderPage("gallery", galleryPageData{
 		Favicon:         template.URL(exhibitLogoDataURI),
-		LogoSVG:         template.HTML(exhibitLogoSVG),
+		Header:          galleryHeader(grid, isAdmin, creds.Clerk),
 		Grid:            grid,
 		Spaces:          spaces,
 		pageCredentials: creds,
-		IsAdmin:         isAdmin,
 	})
 }
 
@@ -935,12 +927,14 @@ func renderGalleryPage(grid galleryGridData, spaces []gallerySpace, creds pageCr
 // per-request values it needs are the credential its script posts with and
 // whether it is allowed to post at all.
 type newPageData struct {
+	Header  appHeaderView
 	Favicon template.URL
 	pageCredentials
 }
 
 func renderNewPage(creds pageCredentials) (string, error) {
 	return renderPage("new", newPageData{
+		Header:          subpageHeader("Add artifact"),
 		Favicon:         template.URL(exhibitLogoDataURI),
 		pageCredentials: creds,
 	})
@@ -953,12 +947,12 @@ func renderNewPage(creds pageCredentials) (string, error) {
 // long after the page was rendered — so its token is minted at click time
 // instead of going stale in the markup (av-c5aq).
 type detailPageData struct {
+	Header appHeaderView
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
 	Favicon        template.URL
 	ID             string
 	Title          string
-	Created        string
 	FrameURL       string
 	OpenURL        string
 	SourceURL      string
@@ -1006,11 +1000,11 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		viewerPreference = "anonymous"
 	}
 	return renderPage("detail", detailPageData{
+		Header:         artifactHeader(a, creds.ReadOnly, share != nil),
 		Favicon:        template.URL(artifacticon.DataURI(a.Tags)),
 		Share:          share,
 		ID:             a.ID,
 		Title:          a.Title,
-		Created:        a.CreatedAt.Format("Jan 2, 2006 15:04"),
 		FrameURL:       urls.artifact(a.ID),
 		OpenURL:        openURL(a.ID),
 		SourceURL:      a.SourceURL,
@@ -1029,6 +1023,7 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 }
 
 type editPageData struct {
+	Header     appHeaderView
 	Return     editNavigation
 	AssetPanel assetPanelView
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
@@ -1131,6 +1126,7 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 	footprint := networkFootprint(src, urls.origin)
 	origins := newEditOriginsView(footprint, decisions)
 	return renderPage("edit", editPageData{
+		Header:              editorHeader(a.ID, navigation),
 		Return:              navigation,
 		Favicon:             template.URL(exhibitLogoDataURI),
 		ID:                  a.ID,

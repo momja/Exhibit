@@ -58,13 +58,19 @@ func (ro *Router) renderClerkLogin(w http.ResponseWriter, r *http.Request, mode 
 	if next == "" {
 		next = "/"
 	}
+	title := "Sign in"
+	if mode == "signup" {
+		title = "Create account"
+	} else if mode == "logout" {
+		title = "Sign out"
+	}
 	page, err := renderPage("clerkLogin", struct {
+		Header  appHeaderView
 		Favicon template.URL
-		LogoSVG template.HTML
 		Clerk   *clerkView
 		Mode    string
 		Next    string
-	}{template.URL(exhibitLogoDataURI), template.HTML(exhibitLogoSVG), ro.clerkView(r), mode, next})
+	}{authPageHeader(title), template.URL(exhibitLogoDataURI), ro.clerkView(r), mode, next})
 	if err != nil {
 		serverError(w, r, "Clerk login render", err)
 		return

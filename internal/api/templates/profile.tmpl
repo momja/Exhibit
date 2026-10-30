@@ -16,12 +16,7 @@
 <link rel="stylesheet" href="{{asset "gallery/settings.css"}}">
 </head>
 <body>
-<header class="account-settings-header">
-  <a class="account-settings-brand" href="/" aria-label="Back to library">Exhibit</a>
-  <span class="account-settings-separator" aria-hidden="true">/</span>
-  <h1>Settings</h1>
-  {{if .Clerk}}{{template "accountControl" .Clerk}}{{end}}
-</header>
+{{template "appHeader" .Header}}
 <main class="settings">
 <div class="lede">
   <h2>Settings.</h2>

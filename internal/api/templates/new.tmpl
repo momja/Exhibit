@@ -25,15 +25,7 @@
 <link rel="stylesheet" href="{{asset "gallery/new.css"}}">
 </head>
 <body>
-<header>
-  {{/* The app's sub-page header idiom (detail.tmpl): back link, then the page
-       title. Deliberately not a Library/Studio nav — there are two surfaces,
-       and a back link says so more plainly than a switcher would. The label
-       collapses to the bare arrow on phones, as it does on the detail page. */}}
-  <a href="/">←<span class="back-label"> Gallery</span></a>
-  <h1>Add artifact</h1>
-  <span class="spacer"></span>
-</header>
+{{template "appHeader" .Header}}
 <main>
 <div class="lede">
   <h2>Three ways in.</h2>

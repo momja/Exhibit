@@ -16,3 +16,6 @@ application.register('account-deletion', AccountDeletionController);
 
 import FilterSheetController from './filter-sheet-controller.js';
 application.register('filter-sheet', FilterSheetController);
+
+import FloatingHeaderController from './floating-header-controller.js';
+application.register('floating-header', FloatingHeaderController);
