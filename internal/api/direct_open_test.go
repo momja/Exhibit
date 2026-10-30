@@ -33,6 +33,23 @@ func TestDirectOpenPromptForEveryViewer(t *testing.T) {
 		}
 		assert.NotContains(t, page, `href="/artifacts/art-1/open"`, "no link can bypass confirmation through modified clicks")
 		assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/direct-open.js")+`"></script>`)
+		if readOnly {
+			assert.NotContains(t, page, `href="/api/artifacts/art-1/export"`)
+		} else {
+			assert.Contains(t, page, `download title="Downloads this tool and its assets, without its saved data or connected accounts"`)
+		}
+		protected, err := renderDetailPage(a, urls, creds, nil, detailNetworkPolicy{Protected: true})
+		require.NoError(t, err)
+		assert.Contains(t, protected, `id="direct-open-toolbar" disabled`)
+		assert.Contains(t, protected, `href="/connections?artifact=art-1"`)
+		assert.Contains(t, protected, `</i> Saved data</a>`)
+		connectedCreds := creds
+		connectedCreds.RelayEnabled = true
+		connected, err := renderDetailPage(a, urls, connectedCreds, nil)
+		require.NoError(t, err)
+		assert.Contains(t, connected, `href="/connections?artifact=art-1"`)
+		assert.Contains(t, connected, `</i> Connections</a>`)
+		assert.NotContains(t, connected, `id="direct-open-toolbar" disabled`)
 
 		urls.viewerID = 43
 		other, err := renderDetailPage(a, urls, creds, nil)

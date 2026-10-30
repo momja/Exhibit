@@ -1097,8 +1097,11 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 	if urls.anonymous {
 		viewerPreference = "anonymous"
 	}
+	header := artifactHeader(a, creds.ReadOnly, share != nil)
+	header.Floating.RelayEnabled = creds.RelayEnabled
+	header.Floating.ConnectionProtected = policy.Protected
 	return renderPage("detail", detailPageData{
-		Header:              artifactHeader(a, creds.ReadOnly, share != nil),
+		Header:              header,
 		Favicon:             template.URL(artifacticon.DataURI(a.Tags)),
 		Share:               share,
 		RelayPolicy:         policy.Token,

@@ -34,6 +34,7 @@ type connectionRequestView struct {
 	URL    string
 }
 type connectionPageView struct {
+	Header           appHeaderView
 	Advanced         bool
 	CustomEnabled    bool
 	BaseURL          string
@@ -79,7 +80,7 @@ func (ro *Router) connectionOrigins(ctx context.Context, viewer int64, artifact 
 }
 
 func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error) {
-	v := connectionPageView{Favicon: template.URL(exhibitLogoDataURI), Enabled: ro.cfg.Relay.Enabled, Connections: []connectionCard{}, Grants: []connectors.Grant{}, pageCredentials: ro.pageCredentials(r), SchedulesEnabled: ro.cfg.Relay.SchedulesEnabled}
+	v := connectionPageView{Header: subpageHeader("Connections"), Favicon: template.URL(exhibitLogoDataURI), Enabled: ro.cfg.Relay.Enabled, Connections: []connectionCard{}, Grants: []connectors.Grant{}, pageCredentials: ro.pageCredentials(r), SchedulesEnabled: ro.cfg.Relay.SchedulesEnabled}
 	v.Advanced = r.URL.Query().Get("advanced") == "1"
 	v.SelectedProvider = r.URL.Query().Get("provider")
 	q := url.Values{"artifact": {r.URL.Query().Get("artifact")}}
@@ -160,6 +161,7 @@ func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error
 		if v.Artifact == nil {
 			return v, store.ErrNotFound
 		}
+		v.Header.Back = &appHeaderBack{URL: "/artifacts/" + v.Artifact.ID, Label: "Return to tool", CollapseLabel: true}
 		v.IsOwner = v.Artifact.OwnerID == viewer
 		v.CanClearData = v.IsOwner || v.Artifact.ShareStateMode != store.ShareStateShared
 		// Optional saved-data cleanup remains available with the engines off.

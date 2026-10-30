@@ -3,7 +3,7 @@
 <title>Connections — Exhibit</title><link rel="icon" type="image/svg+xml" href="{{.Favicon}}">{{template "pwaHead"}}
 <link rel="stylesheet" href="{{asset "phosphor/regular.css"}}"><link rel="stylesheet" href="{{asset "gallery/tokens.css"}}"><link rel="stylesheet" href="{{asset "gallery/components.css"}}"><link rel="stylesheet" href="{{asset "gallery/settings.css"}}"><link rel="stylesheet" href="{{asset "gallery/connections.css"}}">
 <script src="{{asset "htmx/htmx.min.js"}}"></script></head><body>
-{{template "settingsHeader" "Connections"}}
+{{template "appHeader" .Header}}
 <main class="connect-page" data-controller="connections" data-connections-artifact-id-value="{{if .Artifact}}{{.Artifact.ID}}{{end}}" data-connections-return-url-value="{{.BaseURL}}">
   <div class="connect-lede"><div><span class="experimental-label"><i class="ph ph-flask" aria-hidden="true"></i> Experimental</span><h2>{{if .Advanced}}Advanced connections{{else}}Your connected accounts{{end}}</h2><p>{{if .Advanced}}Custom connections are for people who know their service’s API and credential settings.{{else}}Choose which tools can use your accounts. Your account access always stays personal.{{end}}</p></div><a class="connect-account-link" href="/settings"><i class="ph ph-user-circle" aria-hidden="true"></i> Settings</a></div>
   {{if .Advanced}}<p class="connect-section-intro"><a href="{{.BaseURL}}">Back to connected accounts</a></p>{{end}}
@@ -60,7 +60,7 @@
 {{end}}
 {{else}}<p class="connect-next-step">Open a tool’s Connections menu to choose which account it can use.</p>{{end}}
 {{if not .Advanced}}<details class="connect-advanced"><summary>Advanced · Experimental</summary><p>Custom API credentials, server request settings, scheduled fetches and diagnostics.</p><a href="{{.AdvancedURL}}">Open advanced connections</a></details>{{end}}
-{{end}}
+{{else}}{{template "connectionSavedData" .}}{{end}}
 {{end}}
 
 {{define "connectionSavedData"}}{{if .Artifact}}<section class="card connect-section"><div class="connect-section-head"><h3>Saved results are separate</h3><i class="ph ph-database" aria-hidden="true"></i></div><p class="connect-section-intro">Disconnecting an account stops future access. Results this tool has already saved remain in its saved data.</p>

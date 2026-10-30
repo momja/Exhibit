@@ -102,6 +102,8 @@ func authPageHeader(title string) appHeaderView {
 type floatingHeaderView struct {
 	ID, Title, Created, SourceURL string
 	ReadOnly, CanShare            bool
+	RelayEnabled                  bool
+	ConnectionProtected           bool
 	Capability                    capabilityView
 }
 
