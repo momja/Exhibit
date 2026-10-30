@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -64,12 +65,12 @@ func TestNoMigrationVersionIsUsedTwice(t *testing.T) {
 // first instance to restart.
 func TestEveryMigrationIsAboveTheVersionsAlreadyShipped(t *testing.T) {
 	// The versions in a deployed ledger before this branch: every .sql file
-	// main shipped, plus the Go migrations at 8, 12 and 23. Written out rather
-	// than derived, because "what is already deployed" is history and cannot be
-	// computed from the current tree — and because a new file numbered into a
-	// gap in this list is exactly what must fail.
+	// main shipped (through 038), plus the Go migrations at 8, 12 and 23.
+	// Written out rather than derived, because "what is already deployed" is
+	// history and cannot be computed from the current tree — and because a new
+	// file numbered into a gap in this list is exactly what must fail.
 	shipped := map[int64]bool{}
-	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36} {
+	for _, v := range []int64{1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38} {
 		shipped[v] = true
 	}
 	for _, v := range goMigrationVersions {
@@ -104,6 +105,7 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	require.NoError(t, goose.DownTo(s.db, "migrations", 37))
 	for _, stmt := range []string{
 		"DELETE FROM goose_db_version WHERE version_id > 23",
 		"ALTER TABLE agent_keys DROP COLUMN thinking_level",
@@ -180,25 +182,16 @@ func TestAnInstanceOnTheEarlierReleaseStillStarts(t *testing.T) {
 			"SELECT COUNT(*) FROM pragma_table_info('artifacts') WHERE name = ?", col).Scan(&n))
 		assert.Equal(t, 1, n, "artifacts.%s was not created by the upgrade", col)
 	}
-	// ...and 028 (av-lrae): shares gained a recipient, lost the flag nothing
-	// ever enforced, and acquired both uniqueness rules. Asserted here rather
-	// than only in the grant tests because this is the path a *deployed*
-	// instance takes, and a schema invariant that only holds on a fresh
-	// database is not an invariant.
-	var hasRecipient, hasPublic int
-	require.NoError(t, upgraded.db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM pragma_table_info('shares') WHERE name = 'recipient_id'").Scan(&hasRecipient))
-	assert.Equal(t, 1, hasRecipient, "shares.recipient_id was not created by the upgrade")
-	require.NoError(t, upgraded.db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM pragma_table_info('shares') WHERE name = 'public'").Scan(&hasPublic))
-	assert.Equal(t, 0, hasPublic, "shares.public survived the upgrade (av-20xv)")
-
-	for _, idx := range []string{"shares_artifact_recipient", "shares_one_anonymous_link"} {
+	// 039 supersedes 028/029: links and grants have separate keys and the
+	// card indicators no longer need persisted columns or share triggers.
+	for _, table := range []string{"share_links", "share_grants"} {
 		var n int
 		require.NoError(t, upgraded.db.QueryRowContext(ctx,
-			"SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?", idx).Scan(&n))
-		assert.Equal(t, 1, n, "%s was not created by the upgrade", idx)
+			"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&n))
+		assert.Equal(t, 1, n)
 	}
+	assert.False(t, artifactHasColumn(t, upgraded.db, "share_grant_count"))
+	assert.False(t, artifactHasColumn(t, upgraded.db, "share_link"))
 }
 
 // The upgrade hazard 028 had to design against: nothing before it stopped an
@@ -219,6 +212,7 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{
 		ID: "shared-twice", OwnerID: alice, Title: "shared twice", SourceBlobID: "b1", Tier: Tier1}))
 
+	require.NoError(t, goose.DownTo(s.db, "migrations", 37))
 	// Rewind 028 and plant the rows a pre-028 instance could hold. 029's
 	// triggers and columns (av-6xjd) come off first, since a trigger naming
 	// shares.recipient_id blocks that column's DROP.
@@ -278,7 +272,7 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	// One row left, and it is the earliest — the link most likely to be in
 	// somebody's hands already.
 	rows, err := upgraded.db.QueryContext(ctx,
-		"SELECT id FROM shares WHERE artifact_id = 'shared-twice'")
+		"SELECT id FROM share_links WHERE artifact_id = 'shared-twice'")
 	require.NoError(t, err)
 	defer rows.Close()
 	var kept []string
@@ -290,14 +284,10 @@ func TestAnInstanceHoldingSeveralSharesOfOneArtifactStillStarts(t *testing.T) {
 	require.NoError(t, rows.Err())
 	assert.Equal(t, []string{"first"}, kept)
 
-	// 029's rollups were backfilled from the rows that survived (av-6xjd). A
-	// library that predates the migration must not read as private on the
-	// gallery — the badge exists precisely for the share nobody remembers, and
-	// one that only appears on artifacts shared *after* the upgrade would miss
-	// every one of them.
-	var grants, link int
-	require.NoError(t, upgraded.db.QueryRowContext(ctx,
-		"SELECT share_grant_count, share_link FROM artifacts WHERE id = 'shared-twice'").Scan(&grants, &link))
-	assert.Equal(t, 0, grants)
-	assert.Equal(t, 1, link, "the surviving row is an anonymous link and the card must say so")
+	// The surviving legacy link is visible to the badge after 039 as well.
+	a, err := upgraded.GetArtifact(ctx, alice, "shared-twice")
+	require.NoError(t, err)
+	require.NotNil(t, a)
+	assert.Zero(t, a.ShareGrantCount)
+	assert.True(t, a.SharePublicLink)
 }

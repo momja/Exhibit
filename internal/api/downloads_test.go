@@ -95,7 +95,7 @@ func TestDetailPageRendersDownloadBridge(t *testing.T) {
 	// Host-side message handler for the shim's download messages, and the
 	// PATCH that persists the decision — both live in the static page script
 	// the detail page loads.
-	assert.Contains(t, page, `<script src="/assets/gallery/detail.js"></script>`)
+	assert.Contains(t, page, `<script src="`+assetURL("gallery/detail.js")+`"></script>`)
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(detailJS), "d.__avDownload !== true")

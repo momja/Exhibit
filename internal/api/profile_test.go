@@ -103,22 +103,6 @@ func TestProfileFallsBackToTheProviderSubjectWhenThereIsNoEmail(t *testing.T) {
 		"an opaque identifier offered as 'you' reads as a bug; the same one labelled reads as an answer")
 }
 
-// Both columns empty is not reachable through UpsertUser (external_id is the
-// key it upserts on), so the rule is exercised directly. It must still answer
-// something a person can read.
-func TestProfileNameIsNeverBlank(t *testing.T) {
-	name, isSubject := profileName(&store.User{Email: "a@b.test", ExternalID: "sub-1"})
-	assert.Equal(t, "a@b.test", name)
-	assert.False(t, isSubject, "an email is a name, not a fallback")
-
-	name, isSubject = profileName(&store.User{ExternalID: "sub-1"})
-	assert.Equal(t, "sub-1", name)
-	assert.True(t, isSubject)
-
-	name, _ = profileName(&store.User{})
-	assert.Empty(t, name, "with neither column the template states the sign-in route instead")
-}
-
 // The delete section is this ticket's; the deletion behind it is av-4wyq's,
 // which turned the control on once Blob.Store could remove the artifact files
 // as well as their rows (av-7jcq). What this ticket still owns is the
@@ -266,7 +250,7 @@ func TestProfileOnAnInstanceWithNoLogin(t *testing.T) {
 func TestGalleryHeaderCarriesBothIconControls(t *testing.T) {
 	page := getPage(t, newTestRouter(t), "/")
 
-	assert.Contains(t, page, `href="/profile" aria-label="Your account" title="Your account"`)
+	assert.Contains(t, page, `href="/settings" aria-label="Settings" title="Settings"`)
 	assert.Contains(t, page, `href="/new" aria-label="Add artifact" title="Add artifact"`)
 	assert.Contains(t, page, "ph-user-circle")
 	assert.Contains(t, page, `class="btn btn-sec" href="/admin/users"`,

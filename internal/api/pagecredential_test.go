@@ -53,6 +53,11 @@ type pageRoute struct {
 // without a row is a page nobody checked for the leak this file exists to
 // prevent.
 var appOriginGETRoutePaths = []pageRoute{
+	{route: "/shared", path: "/shared"},
+	{route: "/shared-by-me", path: "/shared-by-me"},
+	{route: "/partials/gallery-grid/shared", path: "/partials/gallery-grid/shared"},
+	{route: "/partials/gallery-grid/shared-by-me", path: "/partials/gallery-grid/shared-by-me"},
+	{route: "/artifacts/{artifactID}/widget/viewer/open", path: "/artifacts/{id}/widget/viewer/open"},
 	// The server-rendered pages — the ones that carry a bootstrap <script>,
 	// and therefore the whole point of this file.
 	{route: "/", path: "/"},
@@ -73,6 +78,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	// everyone else's account, but a credential over your own that outlives
 	// the logout you performed because you were worried about it.
 	{route: "/profile", path: "/profile"},
+	{route: "/settings", path: "/settings"},
 
 	// htmx fragments: page markup by another name, so they are held to the
 	// same rule as the pages they are swapped into.
@@ -82,6 +88,8 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/partials/agent-transcript", path: "/partials/agent-transcript?artifact={id}&session=s"},
 	{route: "/partials/card-widget", path: "/partials/card-widget?artifact={id}"},
 	{route: "/partials/tag-panel", path: "/partials/tag-panel?artifact={id}"},
+	{route: "/partials/edit-versions", path: "/partials/edit-versions?artifact={id}"},
+	{route: "/partials/edit-origins", path: "/partials/edit-origins?artifact={id}"},
 	{route: "/partials/asset-panel", path: "/partials/asset-panel?artifact={id}"},
 	{route: "/partials/capability-cluster", path: "/partials/capability-cluster?artifact={id}"},
 	{route: "/partials/share-panel", path: "/partials/share-panel?artifact={id}"},

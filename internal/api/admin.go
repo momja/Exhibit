@@ -545,6 +545,7 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 // marking which row is "you", so an admin about to disable themselves can see
 // that is what they are doing.
 type adminPageData struct {
+	Header  appHeaderView
 	Favicon template.URL
 	LogoSVG template.HTML
 	Users   []adminUserView
@@ -603,6 +604,7 @@ func (ro *Router) adminUsersPage(w http.ResponseWriter, r *http.Request) {
 		customViews = append(customViews, ro.adminUserView(u))
 	}
 	page, err := renderPage("admin", adminPageData{
+		Header:              subpageHeader("Accounts"),
 		Favicon:             template.URL(exhibitLogoDataURI),
 		LogoSVG:             template.HTML(exhibitLogoSVG),
 		Users:               views,

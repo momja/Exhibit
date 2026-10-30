@@ -1,7 +1,8 @@
 {{define "clerkScripts"}}{{if .}}
+<meta name="clerk-session-expires-in" content="{{.SessionExpiresInMS}}">
 <meta name="clerk-publishable-key" content="{{.PublishableKey}}">
 <meta name="clerk-frontend-api" content="{{.FrontendAPI}}">
-<script type="module" src="/assets/gallery/clerk.js"></script>
+<script type="module" src="{{asset "gallery/clerk.js"}}"></script>
 {{end}}{{end}}
 
 {{define "clerkLogin"}}<!DOCTYPE html>
@@ -9,19 +10,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Account — Exhibit</title>
+<title>{{.Header.Title}} — Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
-<link rel="stylesheet" href="/assets/phosphor/regular.css">
-<link rel="stylesheet" href="/assets/gallery/tokens.css">
-<link rel="stylesheet" href="/assets/gallery/components.css">
-<link rel="stylesheet" href="/assets/gallery/login.css">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/login.css"}}">
 {{template "clerkScripts" .Clerk}}
 </head>
 <body class="login-page">
+{{template "appHeader" .Header}}
+<div class="login-content">
 <main class="login login-clerk">
-<div class="login-mark">{{.LogoSVG}}</div>
-<h1 class="login-title">Exhibit</h1>
 <p class="login-sub">Your library, wherever you work.</p>
 <div data-controller="clerk" data-clerk-mode-value="{{.Mode}}" data-clerk-next-value="{{.Next}}">
  <p data-clerk-target="status" role="status">Loading your account…</p>
@@ -33,5 +34,14 @@
 </div>
 <noscript>Enable JavaScript to sign in to Exhibit.</noscript>
 </main>
+</div>
 </body>
 </html>{{end}}
+
+{{/* The same account entry point on the gallery and Settings. Clerk owns its
+     menu and modal; Exhibit only adds its Settings link through the SDK. */}}
+{{define "accountControl"}}{{if .}}<div class="account-control" data-controller="clerk" data-clerk-mode-value="user">
+  <div data-clerk-target="mount"></div>
+  <span data-clerk-target="status" role="status"></span>
+  <a href="/settings" data-clerk-target="recovery" hidden>Settings</a>
+</div>{{else}}<a class="btn btn-sec icon-btn" href="/settings" aria-label="Settings" title="Settings"><i class="ph ph-user-circle" aria-hidden="true"></i></a>{{end}}{{end}}

@@ -1,7 +1,7 @@
 // Keep Clerk's short-lived cookie fresh on every authenticated app page.
 import './controllers.js';
-import { clerkClient } from './clerk-client.js';
+import { clerkClientAfterLoad } from './clerk-client.js';
 
-clerkClient().catch(() => {
+clerkClientAfterLoad().catch(() => {
   // Auth controls show an actionable error; protected requests still fail closed.
 });

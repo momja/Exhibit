@@ -94,8 +94,8 @@ func TestDeleteAccountTakesStorageToZero(t *testing.T) {
 	// account that is not it. Both blobs go through the same funnel the
 	// handlers use, so the lengths are recorded the same way.
 	const body, tile = "<html><body>theirs</body></html>", "<html><body>their tile</body></html>"
-	require.NoError(t, putBlob(ctx, r.cfg.Store, r.cfg.Blob, "member-body", strings.NewReader(body)))
-	require.NoError(t, putBlob(ctx, r.cfg.Store, r.cfg.Blob, "member-widget", strings.NewReader(tile)))
+	require.NoError(t, r.putBlob(ctx, "member-body", strings.NewReader(body)))
+	require.NoError(t, r.putBlob(ctx, "member-widget", strings.NewReader(tile)))
 	require.NoError(t, r.cfg.Store.PutArtifact(ctx, &store.Artifact{
 		ID: "member-artifact", OwnerID: member.ID, Title: "Theirs",
 		SourceBlobID: "member-body", WidgetBlobID: "member-widget", Tier: store.Tier1,

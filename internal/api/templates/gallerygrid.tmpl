@@ -3,8 +3,8 @@
 {{define "gallerySearch"}}<form class="search-row" role="search" id="{{.ID}}-search" data-gallery-search
       hx-get="{{.FragmentPath}}" hx-trigger="submit, exhibit:gallery-search"
       hx-target="#{{.ID}}-results" hx-swap="innerHTML" hx-sync="#{{.ID}}:replace">
-  <i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
-  <input type="text" name="q" data-gallery-query placeholder="Search artifacts…" value="{{.Query}}" autocomplete="off" aria-label="Search artifacts" aria-keyshortcuts="/">
+  {{if .Filters.Sections}}{{template "gallerySearchParameters" .}}{{end}}<i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
+  <input type="text" name="q" data-gallery-query placeholder="Search" value="{{.Query}}" autocomplete="off" aria-label="Search artifacts" aria-keyshortcuts="/">
   <kbd class="search-kbd" aria-hidden="true">/</kbd>
   <button class="search-clear" type="button" data-gallery-clear aria-label="Clear search" hidden><i class="ph ph-x" aria-hidden="true"></i></button>
 </form>{{end}}
@@ -14,11 +14,32 @@
 
 {{/* Both the first page and every appended page execute this exact card loop.
      Replacing only the sentinel leaves existing widget frames running. */}}
-{{define "galleryGrid"}}{{range .Cards}}{{template "galleryCard" .}}{{end}}
+{{define "galleryGrid"}}{{if eq .Offset 0}}{{template "galleryFilterChips" .}}{{end}}{{range .Cards}}{{template "galleryCard" .}}{{end}}
 {{if .RetryURL}}{{template "galleryMore" .}}{{else}}
-  {{if and (not .Cards) (eq .Offset 0)}}{{if .Query}}<p class="empty">No artifacts match your search.</p>{{else}}<p class="empty">{{.Empty.Message}}{{if .Empty.ActionURL}} <a href="{{.Empty.ActionURL}}">{{.Empty.ActionLabel}}</a>.{{end}}</p>{{end}}{{end}}
+  {{if and (not .Cards) (eq .Offset 0)}}{{if .Query}}<p class="empty">No artifacts match your search.</p>{{else if .Filters.Chips}}<p class="empty">No artifacts match your filters.</p>{{else if .Empty.Welcome}}{{template "galleryWelcome" .Empty}}{{else}}<p class="empty">{{.Empty.Message}}{{if .Empty.ActionURL}} <a href="{{.Empty.ActionURL}}">{{.Empty.ActionLabel}}</a>.{{end}}</p>{{end}}{{end}}
   {{if .NextURL}}{{template "galleryMore" .}}{{end}}
 {{end}}{{end}}
+
+{{/* Only the library opts into this invitation. Search/filter misses and other
+     galleries keep their contextual empty states, including after htmx swaps. */}}
+{{define "galleryWelcome"}}<section class="gallery-welcome" aria-labelledby="gallery-welcome-title">
+  <div class="welcome-art" aria-hidden="true">
+    <div class="welcome-tool welcome-tool-list">
+      <i class="ph ph-check-square"></i>
+      <div class="welcome-checks"><i class="ph ph-check-circle"></i><span></span><i class="ph ph-check-circle"></i><span></span><i class="ph ph-circle"></i><span></span></div>
+    </div>
+    <div class="welcome-tool welcome-tool-timer">
+      <i class="ph ph-timer"></i>
+      <div class="welcome-progress"></div>
+    </div>
+    <div class="welcome-tool welcome-tool-chart">
+      <i class="ph ph-chart-bar"></i>
+      <div class="welcome-bars"><span></span><span></span><span></span><span></span><span></span></div>
+    </div>
+  </div>
+  <h2 class="welcome-eyebrow" id="gallery-welcome-title">{{.Message}}</h2>
+  <a class="btn welcome-create" href="{{.ActionURL}}"><i class="ph ph-palette" aria-hidden="true"></i>{{.ActionLabel}}</a>
+</section>{{end}}
 
 {{define "galleryMore"}}<div class="gallery-more">
   <p class="gallery-error" data-gallery-load-error{{if not .RetryURL}} hidden{{end}}>Couldn’t load artifacts. Try again.</p>
@@ -35,7 +56,32 @@
      popover controls to their own handlers. */}}
 {{define "galleryCard"}}<div class="card" data-href="/artifacts/{{.ArtifactID}}">
   {{template "cardWidget" .Widget}}
-  <div class="card-meta"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>{{template "tagDots" .}}{{template "capabilityCluster" .Capability}}
-    {{template "actionMenu" .Actions}}
-  </div>
+  <div class="card-meta"><a class="card-title" href="/artifacts/{{.ArtifactID}}">{{.Title}}</a>{{template "tagDots" .}}{{if not .ReadOnly}}{{template "capabilityCluster" .Capability}}{{end}}
+    {{if .Actions.Items}}{{template "actionMenu" .Actions}}{{end}}
+  </div>{{if .OwnerName}}<div class="card-by"><span class="card-owner-initial" aria-hidden="true">{{.OwnerInitial}}</span><span class="card-owner-name">{{.OwnerName}}</span></div>{{end}}
 </div>{{end}}
+
+{{define "gallerySearchParameters"}}<span id="{{.ID}}-search-parameters" hidden>{{range $name, $values := .Parameters}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}</span>{{end}}
+
+{{define "galleryFilterOptions"}}{{range .Filters.Sections}}<section class="gallery-filter-section"><h3>{{.Label}}</h3><ul>{{range .Options}}
+<li><a href="{{.PageURL}}" hx-get="{{.FragmentURL}}" data-gallery-filter data-active="{{.Active}}" aria-label="{{if .Active}}Remove{{else}}Add{{end}} {{.Label}} filter">{{if .Color}}<span class="gallery-filter-dot" style="--tag-color:{{.Color}}" aria-hidden="true"></span>{{end}}<span>{{.Label}}</span>{{if .Active}}<i class="ph ph-check" aria-hidden="true"></i>{{end}}</a></li>
+{{end}}</ul></section>{{end}}{{end}}
+
+{{define "galleryFilterChips"}}{{if .Filters.Chips}}<div class="gallery-filter-chips" aria-label="Active filters" hx-target:inherited="#{{.ID}}-results" hx-swap:inherited="innerHTML" hx-sync:inherited="#{{.ID}}:replace" hx-include:inherited="#{{.ID}}-search [name=q]">
+{{range .Filters.Chips}}<a href="{{.PageURL}}" hx-get="{{.FragmentURL}}" data-gallery-filter aria-label="Remove {{.Label}} filter">{{.Label}}<i class="ph ph-x" aria-hidden="true"></i></a>{{end}}
+{{if gt (len .Filters.Chips) 1}}<a class="gallery-filter-clear" href="{{.Filters.ClearPageURL}}" hx-get="{{.Filters.ClearFragmentURL}}" data-gallery-filter>Clear all</a>{{end}}
+</div>{{end}}{{end}}
+
+{{define "galleryFilterSheet"}}<dialog id="{{.ID}}-filter-sheet" class="gallery-filter-sheet" data-filter-sheet-target="dialog" data-action="cancel->filter-sheet#cancel click->filter-sheet#backdrop close->filter-sheet#closed" aria-labelledby="{{.ID}}-filter-title">
+<div class="gallery-filter-heading"><h2 id="{{.ID}}-filter-title">Filters</h2><button class="btn btn-sec icon-btn" type="button" data-action="filter-sheet#close" aria-label="Close filters"><i class="ph ph-x" aria-hidden="true"></i></button></div>
+<div id="{{.ID}}-sheet-filters" hx-target:inherited="#{{.ID}}-results" hx-swap:inherited="innerHTML" hx-sync:inherited="#{{.ID}}:replace" hx-include:inherited="#{{.ID}}-search [name=q]">{{template "galleryFilterOptions" .}}</div>
+<button class="btn btn-sec gallery-filter-done" type="button" data-action="filter-sheet#close">Done</button>
+</dialog>{{end}}
+
+{{/* Successful first-page htmx responses refresh external filter controls
+     from the same partials. Paging never duplicates chips or changes controls. */}}
+{{define "galleryFilterUpdate"}}{{template "galleryGrid" .}}
+<div hx-swap-oob="innerHTML:#{{.ID}}-search-parameters">{{range $name, $values := .Parameters}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}</div>
+<div hx-swap-oob="innerHTML:#{{.ID}}-rail-filters">{{template "galleryFilterOptions" .}}</div>
+<div hx-swap-oob="innerHTML:#{{.ID}}-sheet-filters">{{template "galleryFilterOptions" .}}</div>
+{{end}}

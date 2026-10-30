@@ -73,6 +73,11 @@ type getRoute struct {
 // to the mux without adding a row here fails the suite on purpose: the point is
 // that someone states, once, whether the new handler reads or writes.
 var appOriginGETRoutes = []getRoute{
+	{route: "/shared"},
+	{route: "/shared-by-me"},
+	{route: "/partials/gallery-grid/shared"},
+	{route: "/partials/gallery-grid/shared-by-me"},
+	{route: "/artifacts/{artifactID}/widget/viewer/open"},
 	// Server-rendered pages and htmx fragments. All reads; the pages that
 	// change things do it from page JS through the API's unsafe methods.
 	{route: "/"},
@@ -96,6 +101,7 @@ var appOriginGETRoutes = []getRoute{
 	// convenience GET would be forgeable by any page its owner visits, which
 	// is the worst thing on this instance to make forgeable.
 	{route: "/profile"},
+	{route: "/settings"},
 	{route: "/partials/gallery-grid"},
 	{route: "/partials/agent-preview"},
 	// The history pane (av-y7td): reads of what was said in earlier
@@ -105,6 +111,8 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/partials/agent-transcript"},
 	{route: "/partials/card-widget"},
 	{route: "/partials/tag-panel"},
+	{route: "/partials/edit-versions"},
+	{route: "/partials/edit-origins"},
 	{route: "/partials/asset-panel"},
 	// The capability badge + popover (av-mf1x), re-rendered after a runtime
 	// origin approval. A read for the same reason: the posture it reports is

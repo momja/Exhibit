@@ -1,0 +1,39 @@
+{{/* Network decision rows shared by the editor and its draft refresh. */}}
+{{define "editOriginLists"}}
+<div data-artifact-id="{{.ID}}">
+  <h3 class="text-sm muted">Network allowlist</h3>
+  <div id="allowlist-rows">
+    {{range .Allowlist}}<div class="allowlist-row" data-origin="{{.}}">
+      <code title="{{.}}">{{.}}</code>
+      <button type="button" class="btn btn-sm btn-sec" data-action="remove">Remove</button>
+    </div>{{end}}
+  </div>
+  {{if .Unapproved}}
+  <h3 class="text-sm muted">Referenced, not approved</h3>
+  <div id="unapproved-rows">
+    {{range .Unapproved}}<div class="allowlist-row" data-origin="{{.}}">
+      <code title="{{.}}">{{.}}</code>
+      <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
+    </div>{{end}}
+  </div>
+  {{end}}
+  {{if .Blocked}}
+  {{/* Origins with an explicit block decision (exhibit-x87). They never
+       reach the CSP; they are listed so a "don't ask again" answer stays
+       visible and reversible instead of reading as merely undecided. */}}
+  <h3 class="text-sm muted">Blocked</h3>
+  <div id="blocked-rows">
+    {{range .Blocked}}<div class="allowlist-row" data-origin="{{.}}">
+      <code title="{{.}}">{{.}}</code>
+      <span class="text-sm muted">blocked</span>
+      {{/* Forget drops the decision entirely rather than overriding it,
+           returning the origin to undecided so the runtime prompt may ask
+           again (av-kmwj). Without it, "don't ask again" is a one-way
+           trap: a blocked origin never prompts on its own. */}}
+      <button type="button" class="btn btn-sm btn-sec" data-action="forget">Forget</button>
+      <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
+    </div>{{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,7 @@ import (
 //
 // The tests here divide the same way the ticket does. The first group asserts
 // things the *database* refuses — written as raw INSERTs, deliberately going
-// around CreateShare, because an invariant a handler upholds is a convention
+// around the creation methods, because an invariant a handler upholds is a convention
 // and an invariant an index upholds is a fact. The second group asserts what a
 // recipient can and cannot reach, and the second half of that is the whole
 // argument for a separate accessor: every mutating method must still deny them
@@ -40,21 +41,21 @@ func newGrantFixture(t *testing.T) grantFixture {
 	return grantFixture{s: s, artifactID: "alices"}
 }
 
-// insertShare writes a share row directly, bypassing CreateShare entirely. The
+// insertShare writes a share row directly, bypassing the store creation methods. The
 // acceptance criteria say the *database* refuses a duplicate, so the test has
 // to ask the database rather than the method that knows better.
 func (f grantFixture) insertShare(id string, recipient *int64) error {
+	if recipient == nil {
+		_, err := f.s.db.ExecContext(context.Background(),
+			"INSERT INTO share_links (id, artifact_id) VALUES (?, ?)", id, f.artifactID)
+		return err
+	}
 	_, err := f.s.db.ExecContext(context.Background(),
-		"INSERT INTO shares (id, artifact_id, recipient_id) VALUES (?, ?, ?)",
-		id, f.artifactID, recipient)
+		"INSERT INTO share_grants (artifact_id, recipient_id) VALUES (?, ?)", f.artifactID, *recipient)
 	return err
 }
 
-// AC#2. The composite index does not deliver this and cannot: SQLite treats
-// every NULL in a unique index as distinct from every other NULL, so
-// UNIQUE(artifact_id, recipient_id) accepts any number of recipient-less rows.
-// The partial index is what makes the anonymous link singular, and this is the
-// test that fails if it is ever dropped as redundant.
+// The artifact UNIQUE constraint makes anonymous links singular.
 func TestTheDatabaseRefusesASecondAnonymousLink(t *testing.T) {
 	f := newGrantFixture(t)
 
@@ -65,9 +66,8 @@ func TestTheDatabaseRefusesASecondAnonymousLink(t *testing.T) {
 
 	// And through the store, where the refusal is typed so the API can answer
 	// 409 rather than reporting its own invariant as a fault.
-	assert.ErrorIs(t,
-		f.s.CreateShare(context.Background(), alice, &Share{ID: "link-3", ArtifactID: f.artifactID}),
-		ErrDuplicateShare)
+	_, err = f.s.CreateAnonymousLink(context.Background(), alice, f.artifactID)
+	assert.ErrorIs(t, err, ErrDuplicateShare)
 }
 
 // AC#3. Two grants of one artifact to one account would be two answers to a
@@ -81,10 +81,29 @@ func TestTheDatabaseRefusesTwoGrantsToOneUser(t *testing.T) {
 	require.Error(t, err, "a repeated grant must be refused by the schema, not by a handler")
 	assert.True(t, isUniqueViolation(err), "expected a UNIQUE constraint failure, got %v", err)
 
-	assert.ErrorIs(t,
-		f.s.CreateShare(context.Background(), alice,
-			&Share{ID: "grant-3", ArtifactID: f.artifactID, RecipientID: &recipient}),
-		ErrDuplicateShare)
+	_, err = f.s.CreateGrant(context.Background(), alice, f.artifactID, recipient)
+	assert.ErrorIs(t, err, ErrDuplicateShare)
+}
+
+// An omitted or invalid recipient must fail before INSERT, never take the
+// anonymous-link creation path. Check the error and both kinds of stored row.
+func TestCreateGrantRefusesNonPositiveRecipientsWithoutPublishing(t *testing.T) {
+	for _, recipientID := range []int64{0, -1} {
+		t.Run(fmt.Sprint(recipientID), func(t *testing.T) {
+			f := newGrantFixture(t)
+			ctx := context.Background()
+			grant, err := f.s.CreateGrant(ctx, alice, f.artifactID, recipientID)
+			require.ErrorIs(t, err, ErrInvalidRecipient)
+			assert.Nil(t, grant)
+
+			var rows, links int
+			require.NoError(t, f.s.db.QueryRowContext(ctx,
+				"SELECT (SELECT COUNT(*) FROM share_grants WHERE artifact_id=?1), (SELECT COUNT(*) FROM share_links WHERE artifact_id=?1)",
+				f.artifactID).Scan(&rows, &links))
+			assert.Zero(t, rows, "an invalid grant creates no row")
+			assert.Zero(t, links, "an invalid grant must never create an anonymous link")
+		})
+	}
 }
 
 // The control the two tests above need: the indexes must refuse *only* the
@@ -94,24 +113,44 @@ func TestOneArtifactCarriesALinkAndAGrantPerPerson(t *testing.T) {
 	ctx := context.Background()
 	toBob, toCarol := bob, seedThirdAccount(t, f.s)
 
-	require.NoError(t, f.s.CreateShare(ctx, alice, &Share{ID: "the-link", ArtifactID: f.artifactID}))
-	require.NoError(t, f.s.CreateShare(ctx, alice,
-		&Share{ID: "to-bob", ArtifactID: f.artifactID, RecipientID: &toBob}))
-	require.NoError(t, f.s.CreateShare(ctx, alice,
-		&Share{ID: "to-carol", ArtifactID: f.artifactID, RecipientID: &toCarol}))
+	createdLink, createdLinkErr := f.s.CreateAnonymousLink(ctx, alice, f.artifactID)
+	require.NoError(t, createdLinkErr)
+	bobsGrant, bobsGrantErr := f.s.CreateGrant(ctx, alice, f.artifactID, toBob)
+	require.NoError(t, bobsGrantErr)
+	_, createdGrantErr := f.s.CreateGrant(ctx, alice, f.artifactID, toCarol)
+	require.NoError(t, createdGrantErr)
 
-	// Read back: the link and the grants stay told apart by recipient_id
-	// alone, which is the only thing that distinguishes them.
-	link, err := f.s.GetShare(ctx, alice, "the-link")
+	// Links resolve by id; grants name a recipient and have no link identity.
+	link, err := f.s.GetShare(ctx, alice, createdLink.ID)
 	require.NoError(t, err)
 	require.NotNil(t, link)
-	assert.Nil(t, link.RecipientID, "no recipient is what makes it the anonymous link")
+	assert.Equal(t, createdLink.ID, link.ID)
 
-	grant, err := f.s.GetShare(ctx, alice, "to-bob")
+	assert.Equal(t, bob, bobsGrant.RecipientID)
+	shares, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)
 	require.NoError(t, err)
-	require.NotNil(t, grant)
-	require.NotNil(t, grant.RecipientID)
-	assert.Equal(t, bob, *grant.RecipientID)
+	require.Len(t, shares, 3)
+	assert.Empty(t, shares[1].ID, "grants have no link id")
+	assert.Empty(t, shares[2].ID)
+	assert.Equal(t, bob, *shares[1].RecipientID)
+	assert.Equal(t, toCarol, *shares[2].RecipientID)
+
+	// Grants have no link id; neither an empty id nor their artifact/recipient
+	// identity may resolve or revoke them through the anonymous-link accessor.
+	for _, id := range []string{shares[1].ID, f.artifactID, fmt.Sprint(bobsGrant.RecipientID), "never-issued"} {
+		grant, err := f.s.GetShare(ctx, alice, id)
+		require.NoError(t, err)
+		assert.Nil(t, grant)
+		require.ErrorIs(t, f.s.DeleteShare(ctx, alice, id), ErrNotFound)
+	}
+	unchanged, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	assert.Equal(t, shares, unchanged, "id-based revocation leaves links and grants intact")
+
+	require.NoError(t, f.s.DeleteShare(ctx, alice, createdLink.ID))
+	remaining, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)
+	require.NoError(t, err)
+	assert.Equal(t, shares[1:], remaining, "removing the link leaves every grant intact")
 }
 
 // seedThirdAccount adds an account beyond alice and bob and returns its id, for
@@ -151,8 +190,8 @@ func TestGetArtifactReadableByAdmitsTheOwnerAndTheGrantee(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, missing)
 
-	require.NoError(t, f.s.CreateShare(ctx, alice,
-		&Share{ID: "to-bob", ArtifactID: f.artifactID, RecipientID: &recipient}))
+	_, createdGrantErr := f.s.CreateGrant(ctx, alice, f.artifactID, recipient)
+	require.NoError(t, createdGrantErr)
 
 	granted, err := f.s.GetArtifactReadableBy(ctx, ViewerID(bob), f.artifactID)
 	require.NoError(t, err)
@@ -184,7 +223,8 @@ func TestAnAnonymousLinkGrantsNobodyInParticular(t *testing.T) {
 	f := newGrantFixture(t)
 	ctx := context.Background()
 
-	require.NoError(t, f.s.CreateShare(ctx, alice, &Share{ID: "the-link", ArtifactID: f.artifactID}))
+	_, createdLinkErr := f.s.CreateAnonymousLink(ctx, alice, f.artifactID)
+	require.NoError(t, createdLinkErr)
 
 	got, err := f.s.GetArtifactReadableBy(ctx, ViewerID(bob), f.artifactID)
 	require.NoError(t, err)
@@ -223,8 +263,8 @@ func TestAGrantDoesNotWidenAnyOwnerScopedMethod(t *testing.T) {
 
 			// Alice grants Bob her artifact. He can read it; that is all.
 			recipient := bob
-			require.NoError(t, s.CreateShare(ctx, alice,
-				&Share{ID: "to-bob", ArtifactID: "alices", RecipientID: &recipient}))
+			_, createdGrantErr := s.CreateGrant(ctx, alice, "alices", recipient)
+			require.NoError(t, createdGrantErr)
 			readable, err := s.GetArtifactReadableBy(ctx, ViewerID(bob), "alices")
 			require.NoError(t, err)
 			require.NotNil(t, readable, "the grant must actually be in force")
@@ -283,8 +323,8 @@ func TestDeletingARecipientTakesTheirGrantsAndTheirState(t *testing.T) {
 	// Alice keeps her admin rights, so deleting Bob is not refused as the last
 	// enabled admin.
 	recipient := bob
-	require.NoError(t, s.CreateShare(ctx, alice,
-		&Share{ID: "to-bob", ArtifactID: "alices", RecipientID: &recipient}))
+	_, createdGrantErr := s.CreateGrant(ctx, alice, "alices", recipient)
+	require.NoError(t, createdGrantErr)
 	// The state Bob wrote as a *viewer* of Alice's artifact: her artifact
 	// authorizes the reach, his id selects the rows (av-q0ub).
 	require.NoError(t, s.SetState(ctx, OwnerID(alice), "alices", ViewerID(bob), "bobs-key", "bobs-value"))
@@ -296,7 +336,7 @@ func TestDeletingARecipientTakesTheirGrantsAndTheirState(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 0, countShareRowsFor(t, s, bob),
-		"a deleted account's grants go with it (shares.recipient_id ON DELETE CASCADE)")
+		"a deleted account's grants go with it (share_grants.recipient_id ON DELETE CASCADE)")
 	assert.Equal(t, 0, countStateRowsFor(t, s, bob),
 		"and so does the state they wrote on somebody else's artifact (migration 014's trigger)")
 
@@ -308,7 +348,7 @@ func TestDeletingARecipientTakesTheirGrantsAndTheirState(t *testing.T) {
 	assert.Equal(t, 1, countStateRowsFor(t, s, alice))
 }
 
-// AC#8. The grant dies with the artifact too, through the cascade shares has
+// AC#8. The grant dies with the artifact too, through the cascade share_grants has
 // carried since 001 — so revoking everybody is a consequence of deleting the
 // thing, not a second step somebody has to remember.
 func TestDeletingTheArtifactTakesItsGrants(t *testing.T) {
@@ -317,8 +357,8 @@ func TestDeletingTheArtifactTakesItsGrants(t *testing.T) {
 	putOwnedArtifact(t, s, alice, "alices")
 
 	recipient := bob
-	require.NoError(t, s.CreateShare(ctx, alice,
-		&Share{ID: "to-bob", ArtifactID: "alices", RecipientID: &recipient}))
+	_, createdGrantErr := s.CreateGrant(ctx, alice, "alices", recipient)
+	require.NoError(t, createdGrantErr)
 	require.Equal(t, 1, countShareRowsFor(t, s, bob))
 
 	_, err := s.DeleteArtifact(ctx, alice, "alices")
@@ -338,7 +378,7 @@ func countShareRowsFor(t *testing.T, s *SQLiteStore, recipient int64) int {
 	t.Helper()
 	var n int
 	require.NoError(t, s.db.QueryRowContext(context.Background(),
-		"SELECT COUNT(*) FROM shares WHERE recipient_id = ?", recipient).Scan(&n))
+		"SELECT COUNT(*) FROM share_grants WHERE recipient_id = ?", recipient).Scan(&n))
 	return n
 }
 
@@ -394,19 +434,27 @@ func TestShareStateModeIsWritableOnlyAsOneOfItsTwoValues(t *testing.T) {
 	assert.Equal(t, ShareStateShared, a.ShareStateMode)
 }
 
-// The two rollups the gallery badge is built from (av-6xjd), asserted through
-// the accessor the gallery reads them by. They are trigger-maintained, so what
-// is under test is that minting and revoking a share moves them with no Go
-// code saying so — the property that makes the badge correct for a caller who
-// never heard of it.
+// Exh-grj9: both detail and list reads compute badge indicators directly,
+// with no share triggers or persisted rollup columns involved.
 func TestSharingAnArtifactUpdatesItsCardCounts(t *testing.T) {
 	f := newGrantFixture(t)
 	ctx := context.Background()
 	recipient := bob
+	var triggers int
+	require.NoError(t, f.s.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND tbl_name IN ('shares', 'share_links', 'share_grants')").Scan(&triggers))
+	require.Zero(t, triggers, "badge updates need no share triggers")
+	assert.False(t, artifactHasColumn(t, f.s.db, "share_link"))
+	assert.False(t, artifactHasColumn(t, f.s.db, "share_grant_count"))
 
 	read := func() (int, bool) {
 		a, err := f.s.GetArtifact(ctx, alice, f.artifactID)
 		require.NoError(t, err)
+		listed, err := f.s.ListArtifacts(ctx, ListOptions{OwnerID: alice})
+		require.NoError(t, err)
+		require.Len(t, listed, 1)
+		assert.Equal(t, a.ShareGrantCount, listed[0].ShareGrantCount)
+		assert.Equal(t, a.SharePublicLink, listed[0].SharePublicLink)
 		return a.ShareGrantCount, a.SharePublicLink
 	}
 
@@ -414,39 +462,37 @@ func TestSharingAnArtifactUpdatesItsCardCounts(t *testing.T) {
 	assert.Equal(t, 0, grants)
 	assert.False(t, link, "an artifact nobody has shared carries no marker at all")
 
-	require.NoError(t, f.s.CreateShare(ctx, alice, &Share{ID: "lnk", ArtifactID: f.artifactID}))
+	createdLink, createdLinkErr := f.s.CreateAnonymousLink(ctx, alice, f.artifactID)
+	require.NoError(t, createdLinkErr)
 	grants, link = read()
 	assert.Equal(t, 0, grants)
 	assert.True(t, link)
 
-	require.NoError(t, f.s.CreateShare(ctx, alice,
-		&Share{ID: "grant-bob", ArtifactID: f.artifactID, RecipientID: &recipient}))
+	_, createdGrantErr := f.s.CreateGrant(ctx, alice, f.artifactID, recipient)
+	require.NoError(t, createdGrantErr)
 	grants, link = read()
 	assert.Equal(t, 1, grants)
 	assert.True(t, link, "a grant does not disturb the link's count, nor the reverse")
 
-	require.NoError(t, f.s.DeleteShare(ctx, alice, "lnk"))
+	require.NoError(t, f.s.DeleteShare(ctx, alice, createdLink.ID))
 	grants, link = read()
 	assert.Equal(t, 1, grants)
 	assert.False(t, link)
 
-	require.NoError(t, f.s.DeleteShare(ctx, alice, "grant-bob"))
+	require.NoError(t, f.s.DeleteGrant(ctx, alice, f.artifactID, recipient))
 	grants, link = read()
 	assert.Equal(t, 0, grants)
 	assert.False(t, link, "revoking the last share returns the card to unmarked")
 }
 
-// Deleting the account a grant names retires the grant by FK cascade — and the
-// rollup has to follow, or the owner's card claims somebody can open the
-// artifact who has no account at all. No Go code participates; this is the
-// trigger finishing what the cascade started.
+// Account deletion cascades grants away; the next read must show that fact.
 func TestDeletingARecipientLeavesTheCardCountCorrect(t *testing.T) {
 	f := newGrantFixture(t)
 	ctx := context.Background()
 	recipient := bob
 
-	require.NoError(t, f.s.CreateShare(ctx, alice,
-		&Share{ID: "grant-bob", ArtifactID: f.artifactID, RecipientID: &recipient}))
+	_, createdGrantErr := f.s.CreateGrant(ctx, alice, f.artifactID, recipient)
+	require.NoError(t, createdGrantErr)
 	_, err := f.s.DeleteAccount(ctx, recipient)
 	require.NoError(t, err)
 
@@ -463,19 +509,20 @@ func TestListArtifactSharesNamesTheLinkAndEveryGrant(t *testing.T) {
 	ctx := context.Background()
 	recipient := bob
 
-	require.NoError(t, f.s.CreateShare(ctx, alice, &Share{ID: "lnk", ArtifactID: f.artifactID}))
-	require.NoError(t, f.s.CreateShare(ctx, alice,
-		&Share{ID: "grant-bob", ArtifactID: f.artifactID, RecipientID: &recipient}))
+	createdLink, createdLinkErr := f.s.CreateAnonymousLink(ctx, alice, f.artifactID)
+	require.NoError(t, createdLinkErr)
+	_, createdGrantErr := f.s.CreateGrant(ctx, alice, f.artifactID, recipient)
+	require.NoError(t, createdGrantErr)
 
 	shares, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)
 	require.NoError(t, err)
 	require.Len(t, shares, 2)
 
-	assert.Equal(t, "lnk", shares[0].ID)
+	assert.Equal(t, createdLink.ID, shares[0].ID)
 	assert.Nil(t, shares[0].RecipientID, "the link names nobody; that is what makes it the link")
 	assert.Nil(t, shares[0].Recipient)
 
-	assert.Equal(t, "grant-bob", shares[1].ID)
+	assert.Empty(t, shares[1].ID, "grants have no id")
 	require.NotNil(t, shares[1].Recipient)
 	assert.Equal(t, bob, shares[1].Recipient.ID)
 
@@ -494,14 +541,15 @@ func TestReplaceAnonymousLinkRotatesInOneStep(t *testing.T) {
 	ctx := context.Background()
 	recipient := bob
 
-	require.NoError(t, f.s.CreateShare(ctx, alice, &Share{ID: "old", ArtifactID: f.artifactID}))
+	createdLink, createdLinkErr := f.s.CreateAnonymousLink(ctx, alice, f.artifactID)
+	require.NoError(t, createdLinkErr)
 	fresh, err := f.s.ReplaceAnonymousLink(ctx, alice, f.artifactID, "new")
 	require.NoError(t, err)
 	assert.Equal(t, "new", fresh.ID)
 
 	// The old id is gone, which is the whole point: a leaked link stops
 	// working the moment it is replaced.
-	gone, err := f.s.GetAnonymousShareUnscoped(ctx, "old")
+	gone, err := f.s.GetAnonymousShareUnscoped(ctx, createdLink.ID)
 	require.NoError(t, err)
 	assert.Nil(t, gone)
 	live, err := f.s.GetAnonymousShareUnscoped(ctx, "new")
@@ -510,8 +558,8 @@ func TestReplaceAnonymousLinkRotatesInOneStep(t *testing.T) {
 
 	// Grants are untouched: replacing the public link is not a revocation of
 	// the people who were named.
-	require.NoError(t, f.s.CreateShare(ctx, alice,
-		&Share{ID: "grant-bob", ArtifactID: f.artifactID, RecipientID: &recipient}))
+	_, createdGrantErr := f.s.CreateGrant(ctx, alice, f.artifactID, recipient)
+	require.NoError(t, createdGrantErr)
 	_, err = f.s.ReplaceAnonymousLink(ctx, alice, f.artifactID, "newer")
 	require.NoError(t, err)
 	shares, err := f.s.ListArtifactShares(ctx, alice, f.artifactID)

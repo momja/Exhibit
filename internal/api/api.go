@@ -31,9 +31,15 @@ import (
 type HostedLogin interface {
 	Middleware(http.Handler) http.Handler
 	Subject(*http.Request) string
+	// HandshakeRedirect renews a lapsed session through the provider rather
+	// than the login page when it can, reporting whether it redirected.
+	HandshakeRedirect(http.ResponseWriter, *http.Request) bool
 	Identity(*http.Request) (auth.HostedIdentity, error)
 	ResolveEmail(context.Context, string) (string, error)
 	RevokeSessions(context.Context, string) (int64, error)
+	DeleteUser(context.Context, string) error
+	// SessionExpiresIn is how long the request's session token has left.
+	SessionExpiresIn(*http.Request) time.Duration
 }
 
 // Config holds the dependencies and configuration for the API router.
@@ -196,7 +202,9 @@ var gzipWriterPool = sync.Pool{
 func compressor() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !acceptsGzip(r.Header.Get("Accept-Encoding")) {
+			// A range is a range of the identity bytes; compressing the
+			// slice would answer with neither representation's range.
+			if !acceptsGzip(r.Header.Get("Accept-Encoding")) || r.Header.Get("Range") != "" {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -415,6 +423,11 @@ func (ro *Router) setupRoutes() {
 
 		// Gallery UI
 		r.Get("/", ro.galleryIndex)
+		r.Get("/shared", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryPage(w, r, sharedGallery) })
+		r.Get("/shared-by-me", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryPage(w, r, sharedByGallery) })
+		r.Get("/partials/gallery-grid/shared", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryGrid(w, r, sharedGallery) })
+		r.Get("/partials/gallery-grid/shared-by-me", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryGrid(w, r, sharedByGallery) })
+		r.Get("/artifacts/{artifactID}/widget/viewer/open", ro.openReadableGalleryWidget)
 		r.Get("/new", ro.galleryNew)
 		r.Get("/artifacts/{artifactID}", ro.galleryDetail)
 		r.Get("/artifacts/{artifactID}/edit", ro.galleryEdit)
@@ -441,7 +454,8 @@ func (ro *Router) setupRoutes() {
 		// guard: this handler reads ownerIDFromCtx and nothing else, so a
 		// session is the whole authorization. Registering the two beside each
 		// other is where that difference is visible.
-		r.Get("/profile", ro.profilePage)
+		r.Get("/settings", ro.profilePage)
+		r.Get("/profile", ro.profilePage) // compatibility with existing account links
 
 		// Server-rendered fragments, swapped into a live page by htmx
 		// (av-6m3e). They render the same template partials the full page
@@ -458,6 +472,8 @@ func (ro *Router) setupRoutes() {
 		// decides whether to return to it: swapped into the chat's preview pane
 		// from the History card, and into the edit page's Versions panel.
 		r.Get("/partials/version-viewer", ro.versionViewerPartial)
+		r.Get("/partials/edit-versions", ro.editVersionsPartial)
+		r.Get("/partials/edit-origins", ro.editOriginsPartial)
 		r.Get("/partials/card-widget", ro.cardWidgetPartial)
 		// The edit page's Tags panel, re-rendered after each tag change.
 		r.Get("/partials/tag-panel", ro.tagPanelPartial)
@@ -581,13 +597,9 @@ func (ro *Router) setupRoutes() {
 				// Artifact-centric tag routes
 				r.Post("/tags/{tagID}", ro.addArtifactTag)
 				r.Delete("/tags/{tagID}", ro.removeArtifactTag)
-				// Who can open this artifact (av-6xjd): its anonymous link and
-				// every account holding a grant. Read-only here, because a
-				// share row has an id of its own and is minted and revoked
-				// under /api/shares by that id. What this adds is the question
-				// neither of those can answer — what is true right now — and
-				// you cannot audit what you cannot list.
+				// Owner-only sharing audit and recipient-addressed grant revocation.
 				r.Get("/shares", ro.listArtifactShares)
+				r.Delete("/grants", ro.deleteGrant)
 				// Agent conversations kept with this artifact (av-y7td): the
 				// list, and one as what was said in it. Owner-only, and
 				// absent from agentSubResources, so a session steered by text

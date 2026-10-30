@@ -166,7 +166,7 @@ func TestProfileDeleteSectionIsLive(t *testing.T) {
 	assert.NotContains(t, page, `id="delete-account" disabled`)
 	assert.Contains(t, page, `id="delete-confirm"`, "the confirmation step renders server-side")
 	assert.Contains(t, page, "delete my library", "the phrase that has to be typed is shown")
-	assert.Contains(t, page, `src="/assets/gallery/profile.js"`)
+	assert.Contains(t, page, `src="`+assetURL("gallery/profile.js")+`"`)
 }
 
 // The wording this ticket is emphatic about. An identity provider account
@@ -219,8 +219,8 @@ func TestProfileDeleteSectionCountsLiveShares(t *testing.T) {
 	// A grant, not a second link: an artifact has exactly one anonymous link
 	// (av-lrae) and seedLibrary already minted it. The count the copy carries
 	// is "people who will lose access", which a grant is squarely part of.
-	require.NoError(t, in.st.CreateShare(context.Background(), in.member.ID,
-		&store.Share{ID: "to-the-admin", ArtifactID: id, RecipientID: &in.admin.ID}))
+	_, createdGrantErr := in.st.CreateGrant(context.Background(), in.member.ID, id, in.admin.ID)
+	require.NoError(t, createdGrantErr)
 
 	page := in.page(t)
 	assert.Contains(t, page, "<strong>1 artifact</strong>")

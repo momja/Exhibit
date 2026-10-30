@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,11 +16,12 @@ func TestAgentThinkingPreferenceSurvivesUpgradeAndRestart(t *testing.T) {
 	require.NoError(t, s.SetAgentKey(t.Context(), &AgentKey{
 		OwnerID: 1, Provider: "anthropic", Model: "model", KeyCiphertext: "sealed-key",
 	}))
+	require.NoError(t, goose.DownTo(s.db, "migrations", 37))
 	// Recreate the previous release's agent_keys and ledger, with an existing
 	// credential that the migration must preserve and default to inheritance.
 	_, err = s.db.ExecContext(t.Context(), "ALTER TABLE agent_keys DROP COLUMN thinking_level")
 	require.NoError(t, err)
-	_, err = s.db.ExecContext(t.Context(), "DELETE FROM goose_db_version WHERE version_id = 37")
+	_, err = s.db.ExecContext(t.Context(), "DELETE FROM goose_db_version WHERE version_id >= 37")
 	require.NoError(t, err)
 	require.NoError(t, s.Close())
 

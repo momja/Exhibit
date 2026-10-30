@@ -59,7 +59,7 @@ const (
 
 var accountTables = map[string]accountTable{
 	"hosted_account_deletions": {reachNone,
-		"identity erasure cutoffs survive deletion to reject old hosted sessions; no library payload is retained", ""},
+		"identity fences and durable provider-deletion work survive erasure; no library payload is retained", ""},
 	"users": {reachExplicit, "the account itself, and the guard that may refuse the whole operation",
 		"SELECT COUNT(*) FROM users WHERE id = ?1"},
 	"artifacts": {reachExplicit, "the library, by owner_id — and the row every cascade below hangs from",
@@ -105,10 +105,12 @@ var accountTables = map[string]accountTable{
 	// account, which is a row on somebody else's artifact and therefore the
 	// second place a person's data lives outside their own library. Only
 	// artifact_state's trigger otherwise reaches that far.
-	"shares": {reachCascade,
+	"share_links": {reachCascade, "cascades from artifacts(id) for the links of this library",
+		"SELECT COUNT(*) FROM share_links WHERE artifact_id = '" + deletedArtifact + "'"},
+	"share_grants": {reachCascade,
 		"cascades from artifacts(id) for the shares of this library, and from users(id) for the " +
 			"grants this person held on somebody else's artifact",
-		"SELECT COUNT(*) FROM shares WHERE artifact_id = '" + deletedArtifact + "' OR recipient_id = ?1"},
+		"SELECT COUNT(*) FROM share_grants WHERE artifact_id = '" + deletedArtifact + "' OR recipient_id = ?1"},
 	"sessions": {reachCascade,
 		"cascades from users(id), which is what signs the account out everywhere rather than in one browser",
 		"SELECT COUNT(*) FROM sessions WHERE user_id = ?1"},
@@ -152,14 +154,6 @@ var accountTables = map[string]accountTable{
 	// rows name the owner id they were attributed to and keep naming it.
 	"agent_usage": {reachNone,
 		"the spend ledger; the money was spent and the rows are accounting, not the person's data", ""},
-	"agent_conversations": {reachNone,
-		"conversation identity/generation and checkpoint digest only; attribution and fencing survive account deletion like the usage ledger, with no transcript content", ""},
-	"agent_executions": {reachNone,
-		"historical execution attribution for late usage and deduplication; DeleteAccount atomically interrupts live attempts before erasing owner rows", ""},
-	"agent_supervisor_credentials": {reachNone,
-		"expiring secret hashes and funding attribution only; permit bounded late accounting after deletion, never artifact access", ""},
-	"agent_usage_receipts": {reachNone,
-		"stable event identities and payload digests prevent accounting retries from double counting after deletion", ""},
 }
 
 // schemaTables is every table the live database reports, which is the only
@@ -266,7 +260,15 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 
 	require.NoError(t, s.SetOriginDecision(ctx, member.ID, deletedArtifact,
 		"https://api.example.test", "allow", "user"))
-	require.NoError(t, s.CreateShare(ctx, member.ID, &Share{ID: "member-share", ArtifactID: deletedArtifact}))
+	_, createdLinkErr := s.CreateAnonymousLink(ctx, member.ID, deletedArtifact)
+	require.NoError(t, createdLinkErr)
+	// A grant held on another owner's artifact must disappear with the user,
+	// even though that artifact survives account deletion (Exh-grj9).
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{
+		ID: "grant-source", OwnerID: admin.ID, Title: "Granted", SourceBlobID: "grant-source-body", Tier: Tier1,
+	}))
+	_, grantErr := s.CreateGrant(ctx, admin.ID, "grant-source", member.ID)
+	require.NoError(t, grantErr)
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))
 	require.NoError(t, s.SetAgentKey(ctx, &AgentKey{OwnerID: member.ID, Provider: "anthropic", KeyCiphertext: "sealed"}))
 	require.NoError(t, s.SaveTranscript(ctx, member.ID, Transcript{ArtifactID: deletedArtifact, SessionID: "sess-1", SessionFile: "{}\n"}))
@@ -371,7 +373,8 @@ func TestDeleteAccountTouchesNoOtherAccount(t *testing.T) {
 	require.NoError(t, fx.s.PutArtifact(ctx, &Artifact{
 		ID: "admin-artifact", OwnerID: fx.admin.ID, Title: "Theirs", SourceBlobID: "admin-body", Tier: Tier1}))
 	require.NoError(t, fx.s.CreateTag(ctx, &Tag{ID: "admin-tag", OwnerID: fx.admin.ID, Name: "theirs"}))
-	require.NoError(t, fx.s.CreateShare(ctx, fx.admin.ID, &Share{ID: "admin-share", ArtifactID: "admin-artifact"}))
+	createdLink, createdLinkErr := fx.s.CreateAnonymousLink(ctx, fx.admin.ID, "admin-artifact")
+	require.NoError(t, createdLinkErr)
 	require.NoError(t, fx.s.CreateSession(ctx, &Session{
 		ID: "session-admin", UserID: fx.admin.ID, ExpiresAt: time.Now().Add(time.Hour)}))
 
@@ -384,7 +387,7 @@ func TestDeleteAccountTouchesNoOtherAccount(t *testing.T) {
 	tags, err := fx.s.ListTags(ctx, fx.admin.ID)
 	require.NoError(t, err)
 	assert.Len(t, tags, 1)
-	sh, err := fx.s.GetShare(ctx, fx.admin.ID, "admin-share")
+	sh, err := fx.s.GetShare(ctx, fx.admin.ID, createdLink.ID)
 	require.NoError(t, err)
 	assert.NotNil(t, sh, "somebody else's share link still resolves")
 	_, err = fx.s.GetSession(ctx, "session-admin")
@@ -447,8 +450,8 @@ func TestGetAccountSummaryCountsWhatDeletionWouldDestroy(t *testing.T) {
 	// link is singular (av-lrae) and seedEverything already minted it. That is
 	// the more interesting count anyway — the sentence this number appears in
 	// is about people who will lose their access.
-	require.NoError(t, fx.s.CreateShare(ctx, fx.member.ID,
-		&Share{ID: "member-share-2", ArtifactID: deletedArtifact, RecipientID: &fx.admin.ID}))
+	_, createdGrantErr := fx.s.CreateGrant(ctx, fx.member.ID, deletedArtifact, fx.admin.ID)
+	require.NoError(t, createdGrantErr)
 	sum, err = fx.s.GetAccountSummary(ctx, fx.member.ID)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), sum.Shares)
@@ -456,15 +459,24 @@ func TestGetAccountSummaryCountsWhatDeletionWouldDestroy(t *testing.T) {
 	// Another account's library is not in the count.
 	require.NoError(t, fx.s.PutArtifact(ctx, &Artifact{
 		ID: "admin-artifact", OwnerID: fx.admin.ID, Title: "Theirs", SourceBlobID: "admin-body", Tier: Tier1}))
-	require.NoError(t, fx.s.CreateShare(ctx, fx.admin.ID, &Share{ID: "admin-share", ArtifactID: "admin-artifact"}))
+	_, createdLinkErr := fx.s.CreateAnonymousLink(ctx, fx.admin.ID, "admin-artifact")
+	require.NoError(t, createdLinkErr)
 	sum, err = fx.s.GetAccountSummary(ctx, fx.member.ID)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), sum.Artifacts)
 	assert.Equal(t, int64(2), sum.Shares)
 
-	// An account with nothing counts zero rather than failing.
+	// The admin also owns the fixture artifact granting access to the member.
 	sum, err = fx.s.GetAccountSummary(ctx, fx.admin.ID)
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), sum.Artifacts)
-	assert.Equal(t, int64(1), sum.Shares)
+	assert.Equal(t, int64(2), sum.Artifacts)
+	assert.Equal(t, int64(2), sum.Shares)
+
+	// An account with nothing counts zero rather than failing, even when both
+	// share tables contain rows belonging to other accounts.
+	empty, err := fx.s.UpsertUser(ctx, "sub-empty", "empty@example.test")
+	require.NoError(t, err)
+	sum, err = fx.s.GetAccountSummary(ctx, empty.ID)
+	require.NoError(t, err)
+	assert.Equal(t, AccountSummary{}, sum)
 }

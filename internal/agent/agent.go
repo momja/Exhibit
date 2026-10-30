@@ -41,7 +41,7 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-//go:embed ext/exhibit.ts ext/edit.ts ext/guard.ts ext/source-context.ts ext/questions.ts
+//go:embed ext/exhibit.ts ext/edit.ts ext/guard.ts ext/source-context.ts ext/questions.ts ext/prompts/*.tmpl
 var extFS embed.FS
 
 // Config for the Manager.
@@ -173,9 +173,34 @@ func New(cfg Config, st store.Store) (*Manager, error) {
 	if err := os.WriteFile(guardPath, guardSrc, 0o644); err != nil {
 		return nil, fmt.Errorf("materialize guard extension: %w", err)
 	}
+	// guard.ts reads its prompts from prompts/ beside itself.
+	if err := materializeExtPrompts(filepath.Join(cfg.WorkRoot, "prompts")); err != nil {
+		return nil, err
+	}
 	m := &Manager{cfg: cfg, st: st, extPath: extPath, guardPath: guardPath, sessions: map[string]*Session{}}
 	go m.reap()
 	return m, nil
+}
+
+// materializeExtPrompts writes the extension's prompt templates to dir.
+func materializeExtPrompts(dir string) error {
+	entries, err := extFS.ReadDir("ext/prompts")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create extension prompts dir: %w", err)
+	}
+	for _, e := range entries {
+		src, err := extFS.ReadFile("ext/prompts/" + e.Name())
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, e.Name()), src, 0o644); err != nil {
+			return fmt.Errorf("materialize extension prompt %s: %w", e.Name(), err)
+		}
+	}
+	return nil
 }
 
 // ImageContent is one inline image attached to a prompt, in Pi's RPC shape.
@@ -1186,7 +1211,7 @@ func (s *Session) handleLine(line []byte) {
 		}
 	}
 
-	s.broadcast(s.redact(bytes.Clone(line)))
+	s.broadcast(s.redact(line))
 }
 
 // redact applies the platform-mode filter to one event line on its way out of

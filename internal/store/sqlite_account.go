@@ -39,15 +39,23 @@ type AccountSummary struct {
 	StorageBytes int64 `json:"storage_bytes"`
 }
 
+func accountSummaryQuery() string {
+	// Enumerate the owner's artifacts first, then look up shares by artifact_id.
+	// A correlated ownedArtifact check here would scan every share in the instance.
+	return `
+        SELECT (SELECT COUNT(*) FROM artifacts WHERE owner_id = ?),
+               (SELECT COUNT(*) FROM share_links
+                 WHERE artifact_id IN (SELECT id FROM artifacts WHERE owner_id = ?)) +
+               (SELECT COUNT(*) FROM share_grants
+                 WHERE artifact_id IN (SELECT id FROM artifacts WHERE owner_id = ?))`
+}
+
 // GetAccountSummary counts the owner's artifacts, the live shares over them,
 // and the bytes they are holding.
 func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (AccountSummary, error) {
 	var sum AccountSummary
-	err := s.db.QueryRowContext(ctx, `
-        SELECT (SELECT COUNT(*) FROM artifacts WHERE owner_id = ?1),
-               (SELECT COUNT(*) FROM shares
-                 WHERE artifact_id IN (SELECT id FROM artifacts WHERE owner_id = ?1))`,
-		userID).Scan(&sum.Artifacts, &sum.Shares)
+	err := s.db.QueryRowContext(ctx, accountSummaryQuery(),
+		userID, userID, userID).Scan(&sum.Artifacts, &sum.Shares)
 	if err != nil {
 		return sum, err
 	}
@@ -81,11 +89,8 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 // is a second place to update when the schema moves, and the one that gets
 // forgotten is the one that leaves data behind.
 //
-//   - `agent_executions` — live attempts are interrupted atomically with the
-//     erasure, so an already-authorized unbound create cannot recreate data
-//     after deletion. Historical attribution remains for accounting.
 //   - `artifacts` (owner_id) — takes artifact_tags, artifact_collections,
-//     artifact_network_origins, shares, agent_transcripts and artifact_state
+//     artifact_network_origins, share_links, share_grants, agent_transcripts and artifact_state
 //     with it by ON DELETE CASCADE, and keeps artifacts_fts in step through
 //     the triggers migration 010 installed.
 //   - `tags`, `collections`, `agent_keys` (owner_id) — no cascade reaches
@@ -113,9 +118,9 @@ func (s *SQLiteStore) DeleteAccount(ctx context.Context, userID int64) ([]string
 	return s.deleteAccount(ctx, userID, false, 0)
 }
 
-// DeleteHostedAccount adds a durable session fence to the ordinary erasure.
-// Keep it after deletion: it contains no library payload, only the information
-// required to refuse credentials issued before erasure, across server restarts.
+// DeleteHostedAccount adds a permanent identity fence and pending Clerk user
+// deletion to the ordinary erasure, atomically with the administrator guard.
+// The fence survives successful provider deletion and contains no library data.
 // sessionCutoff is the largest provider session creation time observed during
 // revocation, so even provider timestamps ahead of our wall clock are fenced.
 func (s *SQLiteStore) DeleteHostedAccount(ctx context.Context, userID int64, sessionCutoff int64) ([]string, error) {
@@ -133,24 +138,12 @@ func (s *SQLiteStore) deleteAccount(ctx context.Context, userID int64, hosted bo
 	if hosted {
 		guard = lastEnabledHostedAdminGuard
 		// The guard below may refuse deletion; rollback also removes this fence.
-		if _, err := tx.ExecContext(ctx, `INSERT INTO hosted_account_deletions (external_id, deleted_at_ms)
-			SELECT external_id, ? FROM users WHERE id=? AND substr(external_id,1,6)='clerk:'
-			ON CONFLICT(external_id) DO UPDATE SET deleted_at_ms=MAX(deleted_at_ms,excluded.deleted_at_ms)`, max(time.Now().UnixMilli(), sessionCutoff), userID); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO hosted_account_deletions (external_id, deleted_at_ms, delete_identity)
+			SELECT external_id, ?, 1 FROM users WHERE id=? AND substr(external_id,1,6)='clerk:'
+			ON CONFLICT(external_id) DO UPDATE SET deleted_at_ms=MAX(deleted_at_ms,excluded.deleted_at_ms), delete_identity=1, identity_deleted=0`, max(time.Now().UnixMilli(), sessionCutoff), userID); err != nil {
 			return nil, err
 		}
 		guard = "substr(external_id,1,6)='clerk:' AND (" + guard + ")"
-	}
-
-	// Revoke durable write authority in the same transaction as erasure. An
-	// unbound create may already hold its operation guard while staging bytes:
-	// if its insert committed first we erase it below; if it commits after us,
-	// PutAgentArtifact's assignment check must refuse it. Manager cleanup runs
-	// only after successful deletion and cannot close this transactional gap.
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE agent_executions SET status='interrupted'
-		 WHERE status IN `+liveAgentStatuses+`
-		   AND conversation_id IN (SELECT id FROM agent_conversations WHERE owner_id=?)`, userID); err != nil {
-		return nil, err
 	}
 
 	// Collect blob ids while the rows that name them still exist.
@@ -160,8 +153,8 @@ func (s *SQLiteStore) deleteAccount(ctx context.Context, userID int64, hosted bo
 	}
 
 	// The users row carries the guard against losing the last enabled admin.
-	// A refusal rolls back the execution fence above along with everything
-	// else in this transaction.
+	// A refusal rolls back the hosted deletion fence above along with
+	// everything else in this transaction.
 	res, err := tx.ExecContext(ctx,
 		"DELETE FROM users WHERE id = ?1 AND "+guard, userID)
 	if err != nil {

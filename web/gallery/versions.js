@@ -4,7 +4,8 @@
  * the per-request global the page's inline bootstrap defines (ID) plus, through
  * api.js's apiFetch, this visitor's credential.
  *
- * The list itself is server-rendered (edit.tmpl); there is nothing to fetch.
+ * The list is server-rendered and htmx refreshes its rows after source or
+ * widget saves, preserving the editor's working copy and version preview.
  *
  * Looking is not script's business: a row's View button is an htmx swap of the
  * versionViewer fragment into the slot above the list (the markup carries the
@@ -72,6 +73,7 @@
       { method: 'POST' }
     ).then(function (res) {
       if (res.ok) {
+        document.body.dispatchEvent(new CustomEvent('exhibit:editor-exit'));
         window.location.reload();
         return;
       }

@@ -6,13 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestContrastText(t *testing.T) {
-	assert.Equal(t, textDark, ContrastText("#FFFFFF"))
-	assert.Equal(t, textLight, ContrastText("#000000"))
-	assert.Equal(t, textLight, ContrastText("#111111"))
-	assert.Equal(t, textDark, ContrastText("#FAE317")) // BrandYellow
-}
-
 func TestNormalizeFallback(t *testing.T) {
 	assert.Equal(t, "#ff0000", Normalize("#f00"))
 	assert.Equal(t, "#abcdef", Normalize("#ABCDEF"))

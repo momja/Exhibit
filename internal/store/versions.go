@@ -121,13 +121,17 @@ func scanVersion(artifactID string, row interface{ Scan(...any) error }) (*Versi
 	return v, nil
 }
 
+func listVersionsQuery() string {
+	return `SELECT ` + versionColumns + ` FROM artifact_versions v
+		  WHERE v.artifact_id = ? AND ` + ownedArtifact("v") + `
+		  ORDER BY v.seq DESC`
+}
+
 // ListVersions returns an artifact's history, newest first. Another owner's
 // artifact reads as having none, like every other artifact-scoped read.
 func (s *SQLiteStore) ListVersions(ctx context.Context, ownerID int64, artifactID string) ([]Version, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+versionColumns+` FROM artifact_versions v
-		  WHERE v.artifact_id = ? AND v.`+ownedArtifact+`
-		  ORDER BY v.seq DESC`, artifactID, ownerID)
+		listVersionsQuery(), artifactID, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +153,7 @@ func (s *SQLiteStore) ListVersions(ctx context.Context, ownerID int64, artifactI
 func (s *SQLiteStore) HeadVersionSeq(ctx context.Context, ownerID int64, artifactID string) (int, error) {
 	var seq sql.NullInt64
 	err := s.db.QueryRowContext(ctx,
-		`SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = ? AND `+ownedArtifact,
+		`SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = ? AND `+ownedArtifact("artifact_versions"),
 		artifactID, ownerID).Scan(&seq)
 	return int(seq.Int64), err
 }
@@ -159,7 +163,7 @@ func (s *SQLiteStore) HeadVersionSeq(ctx context.Context, ownerID int64, artifac
 func (s *SQLiteStore) GetVersion(ctx context.Context, ownerID int64, artifactID string, seq int) (*Version, error) {
 	v, err := scanVersion(artifactID, s.db.QueryRowContext(ctx,
 		`SELECT `+versionColumns+` FROM artifact_versions v
-		  WHERE v.artifact_id = ? AND v.seq = ? AND v.`+ownedArtifact,
+		  WHERE v.artifact_id = ? AND v.seq = ? AND `+ownedArtifact("v"),
 		artifactID, seq, ownerID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -189,7 +193,7 @@ func (s *SQLiteStore) GetVersionView(ctx context.Context, ownerID int64, artifac
 	var snapshot sql.NullString
 	err := s.db.QueryRowContext(ctx,
 		`SELECT body_blob_id, state_json FROM artifact_versions
-		  WHERE artifact_id = ? AND seq = ? AND `+ownedArtifact,
+		  WHERE artifact_id = ? AND seq = ? AND `+ownedArtifact("artifact_versions"),
 		artifactID, seq, ownerID).Scan(&body, &snapshot)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -252,7 +256,7 @@ func (s *SQLiteStore) RestoreVersion(ctx context.Context, ownerID int64, artifac
 	var state sql.NullString
 	err = tx.QueryRowContext(ctx,
 		`SELECT body_blob_id, widget_blob_id, state_json FROM artifact_versions
-		  WHERE artifact_id = ? AND seq = ? AND `+ownedArtifact,
+		  WHERE artifact_id = ? AND seq = ? AND `+ownedArtifact("artifact_versions"),
 		artifactID, seq, ownerID).Scan(&body, &widget, &state)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -295,7 +299,7 @@ func commitVersionTx(ctx context.Context, tx *sql.Tx, ownerID int64, artifactID 
 	var body, widget string
 	err := tx.QueryRowContext(ctx,
 		`SELECT v.seq, v.body_blob_id, v.widget_blob_id FROM artifact_versions v
-		  WHERE v.artifact_id = ? AND v.`+ownedArtifact+`
+		  WHERE v.artifact_id = ? AND `+ownedArtifact("v")+`
 		  ORDER BY v.seq DESC LIMIT 1`, artifactID, ownerID).Scan(&headSeq, &body, &widget)
 	if errors.Is(err, sql.ErrNoRows) {
 		// Another owner's artifact and one that never existed are the same

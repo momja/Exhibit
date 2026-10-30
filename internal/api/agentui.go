@@ -20,6 +20,7 @@ import (
 // '&' by default, which is what keeps this safe to embed in a <script>
 // block despite the title coming from user-authored artifact data.
 type agentPageData struct {
+	Header appHeaderView
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
 	Favicon template.URL
@@ -38,7 +39,6 @@ type agentPageData struct {
 	// either mode, and a platform instance with no pi binary must still show
 	// the banner rather than a key prompt that would fix nothing.
 	BYOK       bool
-	BackURL    string
 	Preview    agentPreviewData
 	DirectOpen struct{ ID, ViewerPreference, OpenURL string }
 }
@@ -137,7 +137,7 @@ func (ro *Router) agentPreviewPartial(w http.ResponseWriter, r *http.Request) {
 // with vanilla-JS islands; streaming arrives over SSE from the session's Pi
 // sidecar.
 //
-// BackURL mirrors the two ways this page is reached rather than hardcoding
+// The header return destination mirrors the two ways this page is reached rather than hardcoding
 // the gallery: the detail page's "Modify with agent" link (?artifact=<id>)
 // expects the back link to return to that artifact, and the add-artifact
 // page's brief form (bare /agent) expects it back on /new - otherwise
@@ -157,13 +157,13 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data := agentPageData{
+		Header:          agentHeader(backURL, !ro.platformMode()),
 		Favicon:         template.URL(exhibitLogoDataURI),
 		pageCredentials: ro.pageCredentials(r),
 		ArtifactJSON:    template.JS(artifactJSON),
 		MockEnabled:     ro.cfg.MockEnabled,
 		AgentEnabled:    ro.cfg.Agent != nil,
 		BYOK:            !ro.platformMode(),
-		BackURL:         backURL,
 		Preview:         ro.newAgentPreviewData(r, artifact),
 	}
 	data.DirectOpen.ID = data.Preview.ID

@@ -71,7 +71,7 @@ func TestAgentPageBackLinkMirrorsEntryPoint(t *testing.T) {
 	r := newTestRouter(t)
 
 	page := getPage(t, r, "/agent")
-	assert.Contains(t, page, `<a href="/new">←<span class="lbl"> Back</span></a>`)
+	assert.Contains(t, page, `class="app-header-back app-header-back-collapse" href="/new" title="Back"`)
 
 	id := createArtifact(t, r, map[string]any{
 		"title":             "Modify me",
@@ -79,7 +79,7 @@ func TestAgentPageBackLinkMirrorsEntryPoint(t *testing.T) {
 		"network_allowlist": []string{},
 	})
 	page = getPage(t, r, "/agent?artifact="+id)
-	assert.Contains(t, page, `<a href="/artifacts/`+id+`">←<span class="lbl"> Back</span></a>`)
+	assert.Contains(t, page, `class="app-header-back app-header-back-collapse" href="/artifacts/`+id+`" title="Back"`)
 }
 
 // Saving with an empty api_key should keep the existing key while still
@@ -261,5 +261,5 @@ func TestAgentPageServes(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `id="agent-layout"`)
 	assert.Contains(t, w.Body.String(), `id="agent-pane-resizer" role="separator" tabindex="0"`)
 	assert.Contains(t, w.Body.String(), `aria-controls="pane-chat"`)
-	assert.Contains(t, w.Body.String(), `<script type="module" src="/assets/gallery/agent-resize.js"></script>`)
+	assert.Contains(t, w.Body.String(), `<script type="module" src="`+assetURL("gallery/agent-resize.js")+`"></script>`)
 }

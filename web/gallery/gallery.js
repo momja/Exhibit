@@ -2,10 +2,12 @@
 // in their templates; this module owns only typing, shortcuts and request races.
 import { initializeGalleryWidgets } from './gallery-widgets.js';
 import { initializeDuplication } from './duplicate.js';
+import { initializeGalleryReturn } from './gallery-return.js';
 
 export function initializeGallery(root) {
   initializeGalleryWidgets(root);
   initializeDuplication(root);
+  initializeGalleryReturn(root);
   const form = root.querySelector('[data-gallery-search]');
   const input = root.querySelector('[data-gallery-query]');
   const clear = root.querySelector('[data-gallery-clear]');
@@ -49,6 +51,13 @@ export function initializeGallery(root) {
     syncClear();
     search();
   });
+
+  // Capture runs before the link's htmx handler records this request's revision.
+  root.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-gallery-filter]') || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    clearTimeout(timer);
+    revision++;
+  }, true);
 
   // hx-sync coordinates searches and pages within this gallery. Revisions
   // also cover the debounce interval and a response already reading its body:

@@ -253,10 +253,10 @@ func TestEditPageSectionsAreSymmetricPanels(t *testing.T) {
 	// the widget source is not a second-class field.
 	assert.Contains(t, page, `<textarea id="body" data-revision="`)
 	assert.Contains(t, page, `<textarea id="widget-src"`)
-	assert.Contains(t, page, `id="save-button" onclick="save()"`)
+	assert.Contains(t, page, `id="save-button" data-save-editor`)
 	assert.NotContains(t, page, `id="widget-save"`)
 	assert.NotContains(t, page, `Save widget</button>`)
-	assert.Contains(t, page, `<script src="/assets/editor.js"></script>`)
+	assert.Contains(t, page, `<script src="`+assetURL("editor.js")+`"></script>`)
 }
 
 // Both source fields get CodeMirror, and it is mounted per panel rather than
