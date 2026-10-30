@@ -8,13 +8,6 @@
  * each tile. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
-header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header);padding:0 16px;display:flex;align-items:center;gap:12px}
-/* The heading stays for screen-reader heading navigation but is not drawn:
- * the logo beside it already says which app this is (nw-h1dr). */
-header h1{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-header .logo{height:24px;width:auto;display:block;flex:0 0 auto}
-header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;gap:5px}
-
 /* Search in the app bar. It takes up to 340px and gives way first when the
  * bar runs out of room, so on a phone it fills whatever the logo and the two
  * icon buttons leave. min-width:0 on both the row and the input: a flex item
@@ -38,14 +31,6 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inl
 .search-clear{position:absolute;right:4px;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:var(--radius-pill);background:none;color:var(--color-muted);font-size:13px;cursor:pointer}
 .search-clear:hover{background:var(--color-hover-fill);color:var(--color-ink)}
 .search-clear[hidden]{display:none!important}
-
-/* On a phone the admin link drops its word (still its accessible name) so
- * search keeps a usable width. Same clip as .sr-only; the square box matches
- * the icon buttons beside it. */
-@media (max-width:600px){
-  header .btn:not(.icon-btn):has(.header-link-label){flex:0 0 auto;width:var(--header-control-size);height:var(--header-control-size);padding:0;justify-content:center;font-size:17px}
-  .header-link-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-}
 
 main{padding:10px 12px}
 /* min() inside the minmax: a bare 226px is a floor even when the container is
@@ -148,7 +133,6 @@ main{padding:10px 12px}
 /* At narrow widths, keep the last card and paging control above the fixed
  * tabs, including the home indicator on phones with a safe-area inset. */
 @media (max-width:767px){
-  [data-gallery]:has(.gallery-layout)>header{padding-top:env(safe-area-inset-top,0px);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
   .gallery-layout{display:block}
   .gallery-layout main{padding-bottom:calc(80px + env(safe-area-inset-bottom,0px));padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
   .gallery-rail{position:fixed;inset:auto 0 0;z-index:30;border-right:0;border-top:1px solid var(--color-hairline-strong);padding:4px max(8px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
@@ -181,12 +165,9 @@ main{padding:10px 12px}
 .gallery-filter-heading h2{font-size:18px;font-weight:600}
 .gallery-filter-done{width:100%;margin-top:16px;min-height:44px}
 @media (max-width:767px){
-  /* The gallery header is nested, so body>header control sizing does not apply. */
-  header .btn{height:var(--header-control-size);min-height:var(--header-control-size);padding-top:0;padding-bottom:0}
-  header .icon-btn{width:var(--header-control-size)}
   .search-row input:placeholder-shown{padding-right:9px}
   .gallery-filter-trigger{display:inline-flex;flex:0 0 auto;gap:4px;padding:0 6px}
-  [data-controller~=filter-sheet]>header{gap:8px}
+  [data-controller~=filter-sheet]>.app-header,[data-controller~=filter-sheet]>.app-header .app-header-actions{gap:8px}
   .gallery-rail-filters{display:none}
   .gallery-layout-solo>.gallery-rail{display:none}
   .gallery-layout-solo main{padding-bottom:12px}
@@ -194,6 +175,5 @@ main{padding:10px 12px}
 }
 
 @media (max-width:360px){
-  header{padding-left:8px;padding-right:8px}
-  [data-controller~=filter-sheet]>header{gap:4px}
+  [data-controller~=filter-sheet]>.app-header,[data-controller~=filter-sheet]>.app-header .app-header-actions{gap:4px}
 }

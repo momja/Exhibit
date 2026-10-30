@@ -224,8 +224,8 @@ func TestGalleryHeaderHasVisualSeparation(t *testing.T) {
 	// it: it is sticky (stays visible while scrolling) and carries a real
 	// shadow + stronger border rather than the same near-invisible hairline
 	// the cards use. A bare 1px #e0e0e0 border alone read as flush with content.
-	css := galleryAsset(t, r, "/assets/gallery/index.css")
-	assert.Contains(t, css, `header{position:sticky;top:0;z-index:20`)
+	css := galleryAsset(t, r, "/assets/gallery/components.css")
+	assert.Contains(t, css, `position:sticky;top:0;z-index:20`)
 	assert.Contains(t, css, `box-shadow:var(--shadow-header)`) // grep-friendly: 'box-shadow'
 	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/tokens.css"), `--shadow-header:0 1px 6px rgba(0,0,0,.07)`)
 }

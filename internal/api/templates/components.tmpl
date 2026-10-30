@@ -16,3 +16,24 @@
     {{else}}<button type="button" role="menuitem" tabindex="-1" data-action-menu-target="item" data-action="action-menu#select" data-action-menu-event-param="{{.Event}}" data-action-menu-payload-param="{{.Payload}}">{{if .Icon}}<i class="ph {{.Icon}}" aria-hidden="true"></i> {{end}}{{.Label}}</button>{{end}}{{end}}
   </div>
 </div>{{end}}
+
+{{/* Data: appHeaderView. Page code supplies navigation and actions; this
+     component owns the frame and responsive labels. Gallery search remains
+     a server-rendered partial, including its filter-sheet controller hooks.
+     Links/buttons stay native, so this static component needs no controller. */}}
+{{define "appHeader"}}<header class="app-header">
+  {{if .Logo}}{{.Logo}}{{end}}
+  {{with .Back}}<a class="app-header-back{{if .CollapseLabel}} app-header-back-collapse{{end}}" href="{{.URL}}" title="{{.Label}}"><i class="ph ph-arrow-left" aria-hidden="true"></i> <span class="app-header-back-label">{{.Label}}</span></a>{{end}}
+  {{if .Title}}<h1 class="app-header-title{{if .HideTitle}} sr-only{{end}}">{{.Title}}</h1>{{end}}
+  {{with .Search}}{{template "galleryHeaderSearch" .}}{{end}}
+  <span class="spacer"></span>
+  {{if .Actions}}<div class="app-header-actions">
+    {{range .Actions}}{{template "appHeaderAction" .}}{{end}}
+  </div>{{end}}
+  {{if .Account}}{{template "accountControl" .Clerk}}{{end}}
+</header>{{end}}
+
+{{define "appHeaderAction"}}{{if .Href}}<a class="btn{{if not .Primary}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}" href="{{.Href}}" aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</a>
+{{else}}<button type="button" class="btn{{if not .Primary}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}"{{if .ID}} id="{{.ID}}"{{end}}{{if .SaveEditor}} data-save-editor{{end}} aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</button>{{end}}{{end}}
+
+{{define "appHeaderActionContent"}}{{if .Icon}}<i class="ph {{.Icon}}" aria-hidden="true"></i>{{end}}{{if not .IconOnly}}<span class="header-link-label">{{.Label}}</span>{{end}}{{end}}

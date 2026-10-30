@@ -3,7 +3,7 @@
 //
 // It is admin.go's opposite number, and the pairing is the point. Both pages
 // read the same `users` rows and wear the same furniture — the settings shell,
-// settings.css, the settingsHeader partial — and they differ in exactly one
+// settings.css, the appHeader partial — and they differ in exactly one
 // thing, which is the thing that matters: authority. `/admin/users` reaches
 // *other* accounts, so it passes adminOnly. `/profile` reaches one account,
 // the caller's own, so a session is the whole authorization and there is no
@@ -100,6 +100,7 @@ type profileAccount struct {
 // active sessions, export — and a page laid out in cards takes each of those
 // as an addition rather than a redesign.
 type profilePageData struct {
+	Header  appHeaderView
 	Favicon template.URL
 	Account profileAccount
 	pageCredentials
@@ -143,10 +144,12 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 			"Its library belongs to whoever can reach the origin; removing it is the operator's to do on the host."
 	}
 
+	creds := ro.pageCredentials(r)
 	page, err := renderPage("profile", profilePageData{
+		Header:          profileHeader(creds.Clerk),
 		Favicon:         template.URL(exhibitLogoDataURI),
 		Account:         acct,
-		pageCredentials: ro.pageCredentials(r),
+		pageCredentials: creds,
 	})
 	if err != nil {
 		serverError(w, r, "profile render", err)

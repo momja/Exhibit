@@ -16,6 +16,50 @@ Stimulus is pinned in `web/stimulus/package.json`. `make assets` copies its ES
 module and MIT license into the embedded assets. The gallery remains unbundled,
 and production needs no Node process or external asset service.
 
+## App header
+
+The gallery, account (`/settings`, with `/profile` as an alias), artifact editor, account administration, and
+add-artifact pages render `{{template "appHeader" .Header}}` from
+`templates/components.tmpl`. `appHeaderView` in `internal/api/appheader.go`
+supplies a title, optional logo/back link/search, and native link or button
+actions. Page constructors choose the actions; route guards still enforce
+permission independently. The gallery and hosted Settings retain the shared `accountControl` menu, including its recovery link.
+
+For a title and return to the gallery, populate the page's `Header` with
+`subpageHeader("Page title")`. For a different destination, supply
+`Back: &appHeaderBack{URL: destination, Label: destinationName}`. Set
+`CollapseLabel` when the return label should become visually hidden on phones;
+otherwise long labels truncate. `HideTitle` keeps a gallery heading available
+to assistive technology without drawing it beside the logo.
+
+Each `appHeaderAction` has a `Label` and self-hosted Phosphor `Icon`. `Href`
+makes an anchor; otherwise it renders a button with an optional `ID`.
+`IconOnly` hides the visible label at every width; other action labels become
+visually hidden at 600px and below. Accessible names and tooltips remain.
+`Primary` selects the primary button style. The editor's `SaveEditor` flag
+retains its existing `data-save-editor` binding and unsaved-changes workflow.
+Gallery search and filter markup stays in `galleryHeaderSearch`; its existing
+Stimulus and htmx behavior remains attached to the stable gallery root.
+
+`.app-header` and its child classes in `components.css` own the layout, including
+when the bar is nested inside a gallery controller. The baseline is the
+rendered gallery: 37px tall with 36px icon controls on desktop; 33px tall with
+32px controls at 767px and below, plus any phone top safe-area inset. Horizontal
+padding is 16px (8px at 360px and below), with 12px gaps. The gallery filter
+layout tightens gaps on narrow screens. Page styles only extend feature layout,
+not the bar's dimensions. The older 40px `--header-height` rules remain scoped
+to pages that have not adopted this component.
+
+This is a static component: it needs no new Stimulus controller or script.
+Interactive features compose their existing controllers and native events.
+
+[Desktop gallery](screenshots/Exh-arf2/gallery-desktop.png) ·
+[Phone gallery](screenshots/Exh-arf2/gallery-phone.png) ·
+[Account](screenshots/Exh-arf2/account-desktop.png) ·
+[Editor](screenshots/Exh-arf2/editor-desktop.png) ·
+[Accounts](screenshots/Exh-arf2/admin-desktop.png) ·
+[Add artifact](screenshots/Exh-arf2/new-desktop.png)
+
 ## Defining action menus
 
 A feature supplies an `actionMenuView`. Two different menus can be defined as:
@@ -130,7 +174,7 @@ integration uses a real browser through the existing `chromiumtest` helper:
 
 ```sh
 make assets
-go test ./internal/api -run 'Test(ActionMenuBrowser|GalleryActionMenuDuplicationBrowser)$' -count=1
+go test ./internal/api -run 'Test(AppHeaderBrowser|ActionMenuBrowser|GalleryActionMenuDuplicationBrowser)$' -count=1
 ```
 
 The helper finds a locally installed Playwright Chromium headless shell, or

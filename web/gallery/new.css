@@ -7,9 +7,6 @@
  * to its own page (av-qo0j); the library sheet keeps search, grid and tags. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
-header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header);padding:var(--space-5) var(--space-8);display:flex;align-items:center;gap:var(--space-6)}
-header h1{font-size:18px;font-weight:600}
-header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
 main{padding:var(--space-8);max-width:900px;margin:0 auto}
 
 /* --- lede -------------------------------------------------------------- */
@@ -98,7 +95,4 @@ a.btn{text-decoration:none}
   .ingest-foot{flex-direction:column;align-items:stretch}
   .ingest-foot .spacer{display:none}
   .ingest-foot .btn{width:100%;justify-content:center}
-  /* The back link collapses to its arrow, as on the detail page — the header
-   * is one non-wrapping row and the page title needs the width. */
-  .back-label{display:none}
 }

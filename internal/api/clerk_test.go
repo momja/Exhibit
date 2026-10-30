@@ -191,7 +191,7 @@ func TestClerkUnifiedAccountPages(t *testing.T) {
 	require.Equal(t, "no-store", page.Header().Get("Cache-Control"))
 	require.Contains(t, page.Body.String(), "Settings — Exhibit")
 	require.Equal(t, 1, strings.Count(page.Body.String(), `data-clerk-mode-value="user"`), "Settings keeps the same single account menu as the gallery")
-	require.Contains(t, page.Body.String(), `class="account-settings-header"`)
+	require.Contains(t, page.Body.String(), `class="app-header"`)
 	require.NotContains(t, page.Body.String(), "Interactive demo")
 	require.NotContains(t, page.Body.String(), "128.4 MiB")
 	require.Contains(t, page.Body.String(), "Manage profile")
