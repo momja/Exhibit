@@ -355,6 +355,41 @@ func TestDecodeJSONKeepsMalformedBodiesA400(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "invalid request body")
 }
 
+func TestDecodeStrictJSONRejectsTrailingInputWithinTheBodyLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		status     int
+	}{
+		{"whitespace", `{"secret":"private-credential"}` + "\n ", http.StatusNoContent},
+		{"unknown field", `{"secret":"private-credential","private-credential":"value"}`, http.StatusBadRequest},
+		{"second value", `{"secret":"private-credential"} {"secret":"another"}`, http.StatusBadRequest},
+		{"trailing garbage", `{"secret":"private-credential"} private-credential`, http.StatusBadRequest},
+		{"trailing overrun", `{"secret":"private-credential"}` + strings.Repeat(" ", testBodyLimit), http.StatusRequestEntityTooLarge},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := limitRequestBody(testBodyLimit)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var in struct {
+					Secret string `json:"secret"`
+				}
+				if decodeStrictJSON(w, r, &in) {
+					w.WriteHeader(http.StatusNoContent)
+				}
+			}))
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
+			req.ContentLength = -1
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			assert.Equal(t, tc.status, rec.Code, rec.Body.String())
+			assert.NotContains(t, rec.Body.String(), "private-credential")
+			if tc.status == http.StatusRequestEntityTooLarge {
+				var refusal bodyTooLargeResponse
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &refusal))
+				assert.Equal(t, int64(testBodyLimit), refusal.LimitBytes)
+			}
+		})
+	}
+}
+
 // decodeJSON is what turns an overrun into a 413 for a body of undeclared
 // length. A handler that read r.Body itself would answer such a body with
 // whatever its own decode error path says (a 400 claiming the JSON was bad),

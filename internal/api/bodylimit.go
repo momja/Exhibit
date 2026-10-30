@@ -33,7 +33,7 @@
 // An undeclared length (chunked) is wrapped in http.MaxBytesReader, which
 // stops reading one byte past the limit; the handler's decode then fails,
 // and decodeJSON answers 413 rather than the 400 a malformed body gets.
-// This file owns all direct reads of r.Body, through decodeJSON and
+// This file owns all direct reads of r.Body, through the JSON decoders and
 // readImportFile; bodylimit_test.go walks the package's AST to keep it that way.
 package api
 
@@ -116,7 +116,29 @@ func limitRequestBody(limit int64) func(http.Handler) http.Handler {
 // for chunked requests too, not only for the ones limitRequestBody can refuse
 // from the header.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	err := json.NewDecoder(r.Body).Decode(v)
+	return decodeRequestJSON(w, r, v, false)
+}
+
+// decodeStrictJSON also rejects unknown fields and trailing values. Its error
+// response never includes decoder details, which can quote credential input.
+func decodeStrictJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	return decodeRequestJSON(w, r, v, true)
+}
+
+func decodeRequestJSON(w http.ResponseWriter, r *http.Request, v any, strict bool) bool {
+	decoder := json.NewDecoder(r.Body)
+	if strict {
+		decoder.DisallowUnknownFields()
+	}
+	err := decoder.Decode(v)
+	if err == nil && strict {
+		err = decoder.Decode(new(any))
+		if err == io.EOF {
+			err = nil
+		} else if err == nil {
+			err = errors.New("trailing data")
+		}
+	}
 	if err == nil {
 		return true
 	}
@@ -125,7 +147,11 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 		writeBodyTooLarge(w, tooLarge.Limit)
 		return false
 	}
-	writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+	message := "invalid request body"
+	if !strict {
+		message += ": " + err.Error()
+	}
+	writeError(w, http.StatusBadRequest, message)
 	return false
 }
 
