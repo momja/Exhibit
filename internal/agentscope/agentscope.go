@@ -20,9 +20,11 @@ package agentscope
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -168,4 +170,55 @@ func newToken() (string, error) {
 		return "", fmt.Errorf("generate agent session token: %w", err)
 	}
 	return "exagent_" + hex.EncodeToString(buf), nil
+}
+
+// --- Persisted grants (Exh-l2xj) --------------------------------------------
+//
+// An agent outside the server cannot hold a Registry grant: those live exactly
+// as long as the Pi subprocess they were minted for. The owner instead issues
+// a persisted grant, whose token is stored as a digest and resolved per
+// request. It resolves to a Grant like any other, so everything downstream of
+// authentication (agentScopeAllows, version provenance, the revision
+// preconditions) treats the two kinds identically.
+
+// persistedTokenPrefix marks a persisted grant's token. Like the session
+// token's prefix it carries no authority; it lets the middleware skip the
+// database for a value that cannot be one, and lets a person recognize a
+// leaked token for what it is.
+const persistedTokenPrefix = "exgrant_"
+
+// NewPersistedToken returns a fresh 256-bit token for a persisted grant and
+// the digest the store keeps in its place.
+func NewPersistedToken() (token, digest string, err error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", "", fmt.Errorf("generate agent grant token: %w", err)
+	}
+	token = persistedTokenPrefix + hex.EncodeToString(buf)
+	return token, PersistedTokenDigest(token), nil
+}
+
+// IsPersistedToken reports whether token has a persisted grant's shape.
+func IsPersistedToken(token string) bool {
+	return strings.HasPrefix(token, persistedTokenPrefix)
+}
+
+// PersistedTokenDigest is what the store keeps for token, and what a request's
+// bearer value is looked up by.
+func PersistedTokenDigest(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// Persisted returns the Grant a resolved persisted credential carries. It is
+// bound from the start, so BindArtifact never changes it, and its provenance
+// is fixed: versions it writes are labelled with the grant's label and
+// attributed to sessionID, both set by the owner at issue, never by the
+// agent.
+func Persisted(ownerID int64, artifactID, sessionID, label string) *Grant {
+	return &Grant{
+		sessionID: sessionID,
+		scope:     Scope{OwnerID: ownerID, ArtifactID: artifactID},
+		prompt:    label,
+	}
 }

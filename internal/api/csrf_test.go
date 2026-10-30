@@ -125,6 +125,9 @@ var appOriginGETRoutes = []getRoute{
 	// makes goes to /api/shares or the artifact PATCH, under an unsafe method
 	// Lax withholds the cookie from.
 	{route: "/partials/share-panel"},
+	// The External agents panel (Exh-l2xj). A read: issuing and revoking are
+	// POST and DELETE to /api/artifacts/:id/agent-grants.
+	{route: "/partials/agent-grants"},
 	// An earlier version of an artifact, shown running before a person decides
 	// whether to return to it (av-vw7r). A read that mints a short-lived token
 	// and changes nothing: the frame it carries is a render document that
@@ -159,6 +162,7 @@ var appOriginGETRoutes = []getRoute{
 	// Who can open an artifact (av-6xjd): the enumeration read. Minting and
 	// revoking live under /api/shares, on unsafe methods.
 	{route: "/api/artifacts/{artifactID}/shares"},
+	{route: "/api/artifacts/{artifactID}/agent-grants"},
 	// Version history: a read of an artifact's earlier versions. The restore is
 	// a POST.
 	{route: "/api/artifacts/{artifactID}/versions"},

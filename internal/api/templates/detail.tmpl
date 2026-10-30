@@ -18,7 +18,7 @@
      asset, never a CDN. Loaded only for the owner: a recipient's page has no
      share controls and cannot approve an origin, so nothing on it changes
      and it should not carry the library that refreshes them. */}}
-{{if .Share}}<script src="{{asset "htmx/htmx.min.js"}}"></script>{{end}}
+{{if or .Share .AgentGrants}}<script src="{{asset "htmx/htmx.min.js"}}"></script>{{end}}
 </head>
 <body>
 {{template "appHeader" .Header}}
@@ -138,6 +138,7 @@
      the write, which is asserted by running the page script
      (web/gallery/detail.recipient.test.mjs), not by reading this file. */}}
 {{if .Share}}{{template "sharePanel" .}}{{end}}
+{{if .AgentGrants}}{{template "agentGrantsPanel" .}}{{end}}
 
 <div id="dl-modal" class="modal-overlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dl-title">
@@ -284,6 +285,7 @@ let geolocationApproved = {{if .Capability.GeolocationApproved}}true{{else}}fals
      everything by id inside #share-panel and tolerates the panel's absence, so
      the guard is a courtesy rather than the control. */}}
 {{if .Share}}<script type="module" src="{{asset "gallery/share.js"}}"></script>{{end}}
+{{if .AgentGrants}}<script type="module" src="{{asset "gallery/agent-grants.js"}}"></script>{{end}}
 {{template "componentScripts"}}
 </body>
 </html>{{end}}

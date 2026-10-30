@@ -90,7 +90,7 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 // forgotten is the one that leaves data behind.
 //
 //   - `artifacts` (owner_id) — takes artifact_tags, artifact_collections,
-//     artifact_network_origins, share_links, share_grants, agent_transcripts and artifact_state
+//     artifact_network_origins, share_links, share_grants, agent_grants, agent_transcripts and artifact_state
 //     with it by ON DELETE CASCADE, and keeps artifacts_fts in step through
 //     the triggers migration 010 installed.
 //   - `tags`, `collections`, `agent_keys` (owner_id) — no cascade reaches

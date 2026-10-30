@@ -93,6 +93,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/partials/asset-panel", path: "/partials/asset-panel?artifact={id}"},
 	{route: "/partials/capability-cluster", path: "/partials/capability-cluster?artifact={id}"},
 	{route: "/partials/share-panel", path: "/partials/share-panel?artifact={id}"},
+	{route: "/partials/agent-grants", path: "/partials/agent-grants?artifact={id}"},
 	{route: "/partials/version-viewer", path: "/partials/version-viewer?artifact={id}&seq=1"},
 
 	// Static and public surfaces. They embed nothing per-request, which is
@@ -116,6 +117,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/artifacts/{artifactID}/origins", path: "/api/artifacts/{id}/origins"},
 	{route: "/api/artifacts/{artifactID}/widget", path: "/api/artifacts/{id}/widget"},
 	{route: "/api/artifacts/{artifactID}/shares", path: "/api/artifacts/{id}/shares"},
+	{route: "/api/artifacts/{artifactID}/agent-grants", path: "/api/artifacts/{id}/agent-grants"},
 	{route: "/api/artifacts/{artifactID}/versions", path: "/api/artifacts/{id}/versions"},
 	{route: "/api/artifacts/{artifactID}/transcripts", path: "/api/artifacts/{id}/transcripts"},
 	{route: "/api/artifacts/{artifactID}/transcripts/{sessionID}", path: "/api/artifacts/{id}/transcripts/s"},

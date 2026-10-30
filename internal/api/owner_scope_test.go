@@ -127,6 +127,9 @@ func TestArtifactRoutes404ForAnotherOwner(t *testing.T) {
 		{"GET transcript", "GET", "/api/artifacts/%s/transcripts/some-session", nil},
 		{"GET versions", "GET", "/api/artifacts/%s/versions", nil},
 		{"POST restore version", "POST", "/api/artifacts/%s/versions/1/restore", nil},
+		{"GET agent grants", "GET", "/api/artifacts/%s/agent-grants", nil},
+		{"POST agent grant", "POST", "/api/artifacts/%s/agent-grants", []byte(`{"label":"x"}`)},
+		{"DELETE agent grant", "DELETE", "/api/artifacts/%s/agent-grants/some-grant", nil},
 	}
 
 	for _, tc := range cases {

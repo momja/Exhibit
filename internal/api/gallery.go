@@ -227,17 +227,22 @@ func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	// The share panel is read only for the owner, and the read is skipped
 	// entirely for anybody else — a recipient may use the artifact, and who
 	// else was given it is not part of what a grant carries.
-	var share *sharePanelView
+	var panels *ownerPanels
 	if !creds.ReadOnly {
-		view, err := ro.sharePanel(r, a)
+		share, err := ro.sharePanel(r, a)
 		if err != nil {
 			serverError(w, r, "gallery detail shares", err)
 			return
 		}
-		share = &view
+		agents, err := ro.agentGrantsPanel(r, a)
+		if err != nil {
+			serverError(w, r, "gallery detail agent grants", err)
+			return
+		}
+		panels = &ownerPanels{Share: share, AgentGrants: agents}
 	}
 
-	page, err := renderDetailPage(a, ro.renderURLs(r).ownedBy(a.OwnerID), creds, share)
+	page, err := renderDetailPage(a, ro.renderURLs(r).ownedBy(a.OwnerID), creds, panels)
 	if err != nil {
 		serverError(w, r, "gallery detail render", err)
 		return
@@ -982,6 +987,17 @@ type detailPageData struct {
 	// flags are two things to keep in agreement and the disagreement is the
 	// bug.
 	Share *sharePanelView
+	// AgentGrants is the owner's External agents panel (Exh-l2xj), nil for
+	// anybody else on exactly Share's terms: who holds a credential over this
+	// artifact is the owner's business.
+	AgentGrants *agentGrantsPanelView
+}
+
+// ownerPanels are the detail page's owner-only modals, read together because
+// they are withheld together: nil for a recipient.
+type ownerPanels struct {
+	Share       sharePanelView
+	AgentGrants agentGrantsPanelView
 }
 
 // renderDetailPage builds the viewer page for whoever this request is.
@@ -994,15 +1010,21 @@ type detailPageData struct {
 // stays: it reports what this tool may reach, which is a fact about the
 // artifact running in the recipient's browser and exactly what the CSP-block
 // explanation refers back to. What goes is the link to change it.
-func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials, share *sharePanelView) (string, error) {
+func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials, panels *ownerPanels) (string, error) {
 	viewerPreference := strconv.FormatInt(urls.viewerID, 10)
 	if urls.anonymous {
 		viewerPreference = "anonymous"
 	}
+	var share *sharePanelView
+	var agentGrants *agentGrantsPanelView
+	if panels != nil {
+		share, agentGrants = &panels.Share, &panels.AgentGrants
+	}
 	return renderPage("detail", detailPageData{
-		Header:         artifactHeader(a, creds.ReadOnly, share != nil),
+		Header:         artifactHeader(a, creds.ReadOnly, share != nil, agentGrants != nil),
 		Favicon:        template.URL(artifacticon.DataURI(a.Tags)),
 		Share:          share,
+		AgentGrants:    agentGrants,
 		ID:             a.ID,
 		Title:          a.Title,
 		FrameURL:       urls.artifact(a.ID),

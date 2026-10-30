@@ -483,6 +483,9 @@ func (ro *Router) setupRoutes() {
 		// reload to show the new list would restart the tool the owner is
 		// looking at.
 		r.Get("/partials/share-panel", ro.sharePanelPartial)
+		// The External agents panel (Exh-l2xj), re-rendered after a grant
+		// is issued or revoked, for the share panel's reason.
+		r.Get("/partials/agent-grants", ro.agentGrantsPanelPartial)
 		// The capability badge + popover (av-isb3, av-41se), re-rendered
 		// after a runtime origin approval (av-mf1x). Same reason as the
 		// share panel: the frame reloads transparently under the widened
@@ -607,6 +610,14 @@ func (ro *Router) setupRoutes() {
 				// it.
 				r.Get("/transcripts", ro.listTranscripts)
 				r.Get("/transcripts/{sessionID}", ro.getTranscript)
+				// Owner-issued credentials for agents outside the server
+				// (Exh-l2xj, agentgrants.go). Owner-only, and absent from
+				// agentSubResources, so a grant cannot mint, list or revoke
+				// grants. The grant id is ours and opaque, so it can be a
+				// path segment.
+				r.Get("/agent-grants", ro.listAgentGrants)
+				r.Post("/agent-grants", ro.createAgentGrant)
+				r.Delete("/agent-grants/{grantID}", ro.deleteAgentGrant)
 			})
 		})
 

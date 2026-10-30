@@ -547,6 +547,7 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"GetUser":                        "keyed by user id, which *is* the owner id",
 		"CreateSession":                  "session rows carry their own UserID; the caller has just authenticated",
 		"GetSession":                     "looks up a bearer credential before any owner is known",
+		"ResolveAgentGrant":              "looks up a bearer credential before any owner is known (Exh-l2xj)",
 		"DeleteSession":                  "revocation by session id; the holder need not be resolved first",
 		"DeleteExpiredSessions":          "a janitor over all rows, owned by no one",
 
