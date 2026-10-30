@@ -14,7 +14,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/mcpserver"
 )
 
@@ -70,6 +69,9 @@ func (ro *Router) mcpHandler() http.Handler {
 		Logger:                     slog.Default(),
 	})
 	bearer := auth.RequireBearerToken(ro.verifyMCPToken, &auth.RequireBearerTokenOptions{
+		// Every 401 names the protected-resource metadata (Exh-354p), which
+		// is how an OAuth-capable client finds where to get a token.
+		ResourceMetadataURL: ro.protectedResourceMetadataURL(),
 		// A grant lives until it is revoked, so it carries no expiry; the
 		// verifier is asked on every request, which is what revocation needs.
 		AllowMissingExpiration: true,
@@ -77,21 +79,18 @@ func (ro *Router) mcpHandler() http.Handler {
 	return ro.mcpOriginCheck(bearer(stream))
 }
 
-// verifyMCPToken admits an owner-issued agent grant and nothing else. The
-// UserID it reports is the grant's id, which is what the SDK binds a session
-// to.
-func (ro *Router) verifyMCPToken(ctx context.Context, token string, r *http.Request) (*auth.TokenInfo, error) {
-	if !agentscope.IsPersistedToken(token) {
-		return nil, auth.ErrInvalidToken
-	}
-	g, err := ro.cfg.Store.ResolveAgentGrant(ctx, agentscope.PersistedTokenDigest(token))
+// verifyMCPToken admits what agentTokenVerifiers accepts and nothing else:
+// never a session or the service token, which no verifier recognizes. The
+// UserID it reports is what the SDK binds a session to.
+func (ro *Router) verifyMCPToken(ctx context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+	t, err := ro.verifyAgentToken(ctx, token)
 	if err != nil {
 		return nil, fmt.Errorf("resolve agent grant: %w", err)
 	}
-	if g == nil {
+	if t == nil {
 		return nil, auth.ErrInvalidToken
 	}
-	return &auth.TokenInfo{UserID: "grant:" + g.ID}, nil
+	return &auth.TokenInfo{UserID: t.bindingID}, nil
 }
 
 func (ro *Router) mcpOriginCheck(next http.Handler) http.Handler {

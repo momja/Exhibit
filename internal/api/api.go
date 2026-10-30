@@ -522,6 +522,12 @@ func (ro *Router) setupRoutes() {
 		ro.Method(method, mcpPath, mcpHandler)
 	}
 
+	// Where an MCP client learns how to get a token for /mcp (Exh-354p,
+	// RFC 9728): public, like the endpoint's own 401 that points here.
+	prm := ro.protectedResourceMetadata()
+	ro.Method(http.MethodGet, protectedResourcePath, prm)
+	ro.Method(http.MethodGet, protectedResourcePath+mcpPath, prm)
+
 	// The instance's public identity (av-4ac9). Registered here, outside the
 	// authenticated API group, because a visitor with no credential is
 	// precisely who needs it; a private instance answers 404 rather than

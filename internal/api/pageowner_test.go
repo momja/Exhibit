@@ -202,6 +202,8 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/api/artifacts/{artifactID}/transcripts", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/transcripts/{sessionID}", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/agent/key", why: "API group, covered by owner_scope_test.go"},
+	{route: "/.well-known/oauth-protected-resource", why: "public discovery metadata; reads no library"},
+	{route: "/.well-known/oauth-protected-resource/mcp", why: "public discovery metadata; reads no library"},
 	{route: "/mcp", why: "authenticates only an agent grant, whose owner and artifact every tool request carries (mcp_remote_test.go)"},
 	{route: "/api/agent/credential", why: "API group; answers only an agent credential, with its own scope (agentgrants_test.go)"},
 	{route: "/api/collections/", why: "API group, covered by owner_scope_test.go"},
