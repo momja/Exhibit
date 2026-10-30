@@ -1,0 +1,90 @@
+{
+	"version": "v1",
+	"description": "Exhibit's first component kit. CSS only: design tokens, gentle base styles for bare elements, and component classes over native HTML (<dialog>, <details>, popover, radio tabs). No script. Light and dark follow the system setting.",
+	"base": {
+		"description": "Zero-specificity defaults for body, headings, paragraphs, links, code and focus, plus two utilities.",
+		"classes": [".kit-muted", ".kit-display"]
+	},
+	"tokens": [
+		{ "name": "--kit-font", "description": "Body font stack." },
+		{ "name": "--kit-font-mono", "description": "Code font stack." },
+		{ "name": "--kit-text-sm / -md / -lg / -xl / -display", "description": "Type scale: 13, 15, 18, 24, 40px." },
+		{ "name": "--kit-space-1 … --kit-space-6", "description": "Spacing scale: 4, 8, 12, 16, 24, 32px." },
+		{ "name": "--kit-radius-sm / -md / -lg / -pill", "description": "Corner radii: 4, 8, 12px, fully round." },
+		{ "name": "--kit-color-ground / -panel / -subtle", "description": "Page background, raised surfaces, a well inside a surface." },
+		{ "name": "--kit-color-ink / -ink-soft / -muted", "description": "Primary, secondary and de-emphasized text." },
+		{ "name": "--kit-color-border / -hairline", "description": "Control borders and dividers." },
+		{ "name": "--kit-color-accent / -accent-hover / -on-accent / -accent-tint", "description": "The accent, its hover, text on an accent fill, and a selected-surface tint." },
+		{ "name": "--kit-color-danger / -success / -warn (+ -tint)", "description": "Status colors and their quiet surfaces." },
+		{ "name": "--kit-shadow-card / -raised", "description": "Card shadow and floating-surface shadow." },
+		{ "name": "--kit-focus-ring", "description": "box-shadow used for :focus-visible." }
+	],
+	"components": [
+		{
+			"name": "layout",
+			"description": "Page container and flex/grid helpers.",
+			"classes": [".kit-page", ".kit-stack", ".kit-row", ".kit-row--between", ".kit-grid", ".kit-spacer"],
+			"usage": "<main class=\"kit-page kit-stack\">\n  <div class=\"kit-row kit-row--between\"><h1>Title</h1><button class=\"kit-btn kit-btn--primary\">Add</button></div>\n  <div class=\"kit-grid\">…cards…</div>\n</main>"
+		},
+		{
+			"name": "button",
+			"description": "Buttons and button-styled links. Variants: primary, danger, ghost; sizes: sm, icon.",
+			"classes": [".kit-btn", ".kit-btn--primary", ".kit-btn--danger", ".kit-btn--ghost", ".kit-btn--sm", ".kit-btn--icon"],
+			"usage": "<button class=\"kit-btn kit-btn--primary\">Save</button>\n<button class=\"kit-btn\">Cancel</button>\n<button class=\"kit-btn kit-btn--ghost kit-btn--icon\" aria-label=\"More\">⋯</button>"
+		},
+		{
+			"name": "card",
+			"description": "Raised panel with optional header and footer, plus a stat block for a headline number.",
+			"classes": [".kit-card", ".kit-card__header", ".kit-card__title", ".kit-card__footer", ".kit-stat", ".kit-stat__label", ".kit-stat__value"],
+			"usage": "<section class=\"kit-card\">\n  <header class=\"kit-card__header\"><h2 class=\"kit-card__title\">This week</h2></header>\n  <div class=\"kit-stat\"><span class=\"kit-stat__label\">Distance</span><span class=\"kit-stat__value\">42 km</span></div>\n</section>"
+		},
+		{
+			"name": "field",
+			"description": "Labelled form fields. Invalid input is styled after the user interacts (:user-invalid). Checkboxes and radios use .kit-check.",
+			"classes": [".kit-field", ".kit-field__label", ".kit-field__hint", ".kit-input", ".kit-check"],
+			"usage": "<label class=\"kit-field\">\n  <span class=\"kit-field__label\">Name</span>\n  <input class=\"kit-input\" required>\n  <span class=\"kit-field__hint\">Required</span>\n</label>\n<label class=\"kit-check\"><input type=\"checkbox\"> Remember</label>"
+		},
+		{
+			"name": "badge",
+			"description": "Small status pills, and block notices for messages.",
+			"classes": [".kit-badge", ".kit-badge--accent", ".kit-badge--success", ".kit-badge--warn", ".kit-badge--danger", ".kit-notice", ".kit-notice--warn", ".kit-notice--danger", ".kit-notice--success"],
+			"usage": "<span class=\"kit-badge kit-badge--success\">Done</span>\n<p class=\"kit-notice kit-notice--warn\">Unsaved changes.</p>"
+		},
+		{
+			"name": "dialog",
+			"description": "Modal on the native <dialog> element. Open it without script using a button with commandfor/command=\"show-modal\", or call showModal(). A <form method=\"dialog\"> closes it.",
+			"classes": ["dialog.kit-dialog", ".kit-dialog__title", ".kit-dialog__actions"],
+			"usage": "<button class=\"kit-btn\" commandfor=\"confirm\" command=\"show-modal\">Delete…</button>\n<dialog id=\"confirm\" class=\"kit-dialog\">\n  <h2 class=\"kit-dialog__title\">Delete this item?</h2>\n  <form method=\"dialog\" class=\"kit-dialog__actions\">\n    <button class=\"kit-btn\" value=\"cancel\">Cancel</button>\n    <button class=\"kit-btn kit-btn--danger\" value=\"ok\">Delete</button>\n  </form>\n</dialog>"
+		},
+		{
+			"name": "disclosure",
+			"description": "Expandable section on native <details>. Stack several for an accordion; add the same name attribute to make them exclusive.",
+			"classes": ["details.kit-disclosure", ".kit-disclosure__body"],
+			"usage": "<details class=\"kit-disclosure\" name=\"faq\">\n  <summary>Question</summary>\n  <div class=\"kit-disclosure__body\">Answer</div>\n</details>"
+		},
+		{
+			"name": "menu",
+			"description": "Dropdown menu on the native popover attribute; the trigger uses popovertarget, so no script is needed to open or dismiss it.",
+			"classes": [".kit-menu", ".kit-menu__item"],
+			"usage": "<button class=\"kit-btn\" popovertarget=\"row-menu\">Actions</button>\n<div id=\"row-menu\" class=\"kit-menu\" popover>\n  <button class=\"kit-menu__item\">Rename</button>\n  <button class=\"kit-menu__item\">Duplicate</button>\n</div>"
+		},
+		{
+			"name": "tabs",
+			"description": "Tabs from radio inputs, no script. Up to six tabs; the Nth label shows the Nth child of .kit-tabs__panels. Give each tab group its own radio name.",
+			"classes": [".kit-tabs", ".kit-tabs__list", ".kit-tabs__panels"],
+			"usage": "<div class=\"kit-tabs\">\n  <div class=\"kit-tabs__list\" role=\"tablist\">\n    <label><input type=\"radio\" name=\"view\" checked> List</label>\n    <label><input type=\"radio\" name=\"view\"> Chart</label>\n  </div>\n  <div class=\"kit-tabs__panels\">\n    <div>…list…</div>\n    <div>…chart…</div>\n  </div>\n</div>"
+		},
+		{
+			"name": "table",
+			"description": "Data table with tabular numbers; .kit-num right-aligns a numeric cell.",
+			"classes": [".kit-table", ".kit-num"],
+			"usage": "<table class=\"kit-table\">\n  <thead><tr><th>Item</th><th class=\"kit-num\">Qty</th></tr></thead>\n  <tbody><tr><td>Apples</td><td class=\"kit-num\">3</td></tr></tbody>\n</table>"
+		},
+		{
+			"name": "empty",
+			"description": "Calm empty state for a list or view with nothing in it yet.",
+			"classes": [".kit-empty", ".kit-empty__title"],
+			"usage": "<div class=\"kit-empty\">\n  <p class=\"kit-empty__title\">No runs logged yet</p>\n  <p>Add your first run to see it here.</p>\n</div>"
+		}
+	]
+}

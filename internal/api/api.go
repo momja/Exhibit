@@ -629,6 +629,10 @@ func (ro *Router) setupRoutes() {
 			r.Delete("/sessions/{sessionID}", ro.closeAgentSession)
 		})
 
+		// The component kit (Exh-61ix): read-only, instance-wide.
+		r.Get("/api/kit", ro.listKit)
+		r.Get("/api/kit/{version}/components/{name}", ro.getKitComponent)
+
 		r.Route("/api/collections", func(r chi.Router) {
 			r.Get("/", ro.listCollections)
 			r.Post("/", ro.createCollection)

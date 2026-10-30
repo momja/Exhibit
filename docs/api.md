@@ -391,6 +391,21 @@ POST   /api/artifacts/:id/tags/:tagID                Add tag
 DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 ```
 
+## Component kit (experimental, Exh-61ix)
+
+```
+GET /api/kit                                   Every released kit version, newest first
+GET /api/kit/:version/components/:name         One component, with its stylesheet
+```
+
+`GET /api/kit` returns `{"latest":"v1","versions":[…]}`. Each version carries
+its `marker` (the `<meta name="exhibit-kit" content="vN">` line an artifact
+pins it with), `description`, `base`, `tokens` and `components` (name,
+description, classes, usage example); the index carries no CSS. Both routes
+are read-only and the same for every caller, so an agent session credential
+may read them too. Unknown versions and components are `404`. See
+[component-kit.md](component-kit.md).
+
 ## Agent (build/modify with AI, BYO key)
 
 ```

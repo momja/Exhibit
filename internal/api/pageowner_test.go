@@ -171,6 +171,8 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/manifest.json", why: "static app manifest, identical for every visitor"},
 	{route: "/favicon.ico", why: "static brand mark, identical for every visitor"},
 	{route: "/api/settings/public", why: "the instance's own name and description, deliberately readable by anyone"},
+	{route: "/api/kit", why: "the component kit Exhibit ships in the binary (Exh-61ix), identical for every caller; it reads no library data"},
+	{route: "/api/kit/{version}/components/{name}", why: "one component of the shipped kit (Exh-61ix), identical for every caller; it reads no library data"},
 
 	// Owner-independent by design rather than by omission.
 	{route: "/s/{shareID}", why: "the share row is the authorization (architecture.md §7); it redirects to the render origin and reads no library"},

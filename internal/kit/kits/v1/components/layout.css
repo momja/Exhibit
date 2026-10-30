@@ -1,0 +1,7 @@
+.kit-page{max-width:960px;margin:0 auto;padding:var(--kit-space-5) var(--kit-space-4)}
+.kit-stack{display:flex;flex-direction:column;gap:var(--kit-space-3)}
+.kit-row{display:flex;flex-wrap:wrap;align-items:center;gap:var(--kit-space-2)}
+.kit-row--between{justify-content:space-between}
+.kit-grid{display:grid;gap:var(--kit-space-4);grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr))}
+.kit-spacer{flex:1}
+.kit-row:has(> .kit-field){align-items:flex-start}

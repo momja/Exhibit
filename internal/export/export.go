@@ -30,6 +30,7 @@ import (
 
 	"golang.org/x/net/html"
 
+	"github.com/momja/Exhibit/internal/kit"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -47,9 +48,13 @@ type BlobReader func(blobID string) ([]byte, error)
 // the render surface does — but with `data:` values, since there is no route to
 // point at.
 //
-// An artifact with no assets comes back byte-identical. That is the common case
+// An artifact with no assets and no kit marker comes back byte-identical. That is the common case
 // and it costs nothing.
 func Materialize(body string, assets []store.ArtifactAsset, assetURL func(store.ArtifactAsset) string, read BlobReader) (string, error) {
+	// The pinned component kit is folded in for the same reason assets are:
+	// inside the service it is a reference, outside it must be bytes
+	// (Exh-61ix). A body pinning no kit is untouched by this step.
+	body = kit.Inline(body)
 	if len(assets) == 0 {
 		return body, nil
 	}

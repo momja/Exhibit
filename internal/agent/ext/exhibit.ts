@@ -2,10 +2,11 @@
  * Exhibit tools extension for Pi (Exh-hvaf, av-lvi1).
  *
  * Loaded by the exhibit service into every agent session it spawns
- * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model twelve
+ * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model fourteen
  * tools — create_artifact / write_artifact / edit_artifact / get_artifact for the document,
  * get_state / set_state / delete_state for the artifact's stored state,
  * set_widget / edit_widget / get_widget for the artifact's gallery-card widget (av-fafu), and
+ * list_kit / get_kit_component for Exhibit's shared component kit (Exh-61ix),
  * get_selection for the elements the user picked in the preview, and ask_user
  * for interactive questions in the chat. Artifact operations go through the exhibit HTTP API, so agent output enters the
  * library through the same single write path as every other ingest (scan,
@@ -191,6 +192,28 @@ function formatState(state: Record<string, string>): string {
  * constant at every call site; the content after it is the untrusted part. */
 function labeled(label: string, content: string): string {
 	return `${label}\n\n${content}`;
+}
+
+/** One kit version as the model reads it: the marker first, because that is
+ * the one line it must copy, then what the version offers. */
+function formatKit(k: any, latest: string): string {
+	const lines = [
+		`Component kit ${k.version}${k.version === latest ? " (latest)" : ""}. Pin it with this line inside <head>:`,
+		k.marker,
+		"",
+		k.description,
+		"",
+		`Base: ${k.base?.description ?? ""} Utilities: ${(k.base?.classes ?? []).join(" ")}`,
+		"",
+		"Tokens:",
+		...(k.tokens ?? []).map((t: any) => `- ${t.name}: ${t.description}`),
+		"",
+		"Components:",
+	];
+	for (const c of k.components ?? []) {
+		lines.push(`\n## ${c.name}: ${c.description}`, `classes: ${c.classes.join(" ")}`, c.usage);
+	}
+	return lines.join("\n");
 }
 
 // A title is one line of display text. It is the most attacker-controllable
@@ -709,6 +732,54 @@ export default function (pi: ExtensionAPI) {
 				}
 				throw err;
 			}
+		},
+	});
+
+	// The component kit (Exh-61ix). Both tools read Exhibit's own, instance-wide
+	// kit, so unlike every other tool here they name a version rather than act
+	// on the session's artifact — there is nothing of anyone's to target.
+	pi.registerTool({
+		name: "list_kit",
+		label: "List component kit",
+		description:
+			"List Exhibit's component kit: the marker that pins a version, its design tokens, " +
+			"and each component's classes and example markup. Defaults to the latest version; " +
+			"pass the version an existing artifact already pins to see what it can use.",
+		parameters: Type.Object({
+			version: Type.Optional(Type.String({ description: "Kit version, e.g. v1. Omit for the latest." })),
+		}),
+		async execute(_id, params) {
+			const index = await api("GET", "/api/kit");
+			const wanted = params.version || index.latest;
+			const k = (index.versions || []).find((v: any) => v.version === wanted);
+			if (!k) {
+				const known = (index.versions || []).map((v: any) => v.version).join(", ");
+				return ok(`There is no kit ${wanted}. Released versions: ${known}.`, {
+					exhibit: "kit_listed", version: wanted, missing: true,
+				});
+			}
+			return ok(formatKit(k, index.latest), { exhibit: "kit_listed", version: k.version });
+		},
+	});
+
+	pi.registerTool({
+		name: "get_kit_component",
+		label: "Read kit component",
+		description:
+			"Read one kit component's stylesheet, for when its classes and example in list_kit " +
+			"are not enough — to see exactly what a variant looks like before overriding it.",
+		parameters: Type.Object({
+			name: Type.String({ description: "Component name from list_kit, e.g. button." }),
+			version: Type.Optional(Type.String({ description: "Kit version. Omit for the latest." })),
+		}),
+		async execute(_id, params) {
+			const version = params.version || (await api("GET", "/api/kit")).latest;
+			const path = "/api/kit/" + encodeURIComponent(version) + "/components/" + encodeURIComponent(params.name);
+			const r = await api("GET", path);
+			const c = r.component;
+			return ok(`kit ${r.version} component "${c.name}": ${c.description}\n\n${c.css}`, {
+				exhibit: "kit_component_read", version: r.version, name: c.name,
+			});
 		},
 	});
 

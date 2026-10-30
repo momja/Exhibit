@@ -1,0 +1,2 @@
+.kit-empty{display:flex;flex-direction:column;align-items:center;gap:var(--kit-space-2);padding:var(--kit-space-6) var(--kit-space-4);text-align:center;color:var(--kit-color-muted)}
+.kit-empty__title{margin:0;font-size:var(--kit-text-md);font-weight:600;color:var(--kit-color-ink-soft)}

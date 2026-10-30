@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/artifacticon"
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/kit"
 	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/momja/Exhibit/internal/tile"
@@ -652,7 +653,10 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		origins = originPolicy{Allowed: a.NetworkAllowlist}
 	}
 
-	body := string(bodyBytes)
+	// The component kit (Exh-61ix) is materialized here, at the edge, like
+	// assets are at export: the stored body names a version, the served
+	// document carries its stylesheet. A body that pins none is untouched.
+	body := kit.Inline(string(bodyBytes))
 	if !widget {
 		body = injectFavicon(body, artifacticon.DataURI(a.Tags))
 	}

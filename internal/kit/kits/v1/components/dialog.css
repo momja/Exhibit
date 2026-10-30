@@ -1,0 +1,8 @@
+dialog.kit-dialog{
+	width:min(480px,calc(100vw - 2 * var(--kit-space-4)));padding:var(--kit-space-5);
+	border:0;border-radius:var(--kit-radius-lg);
+	background:var(--kit-color-panel);color:var(--kit-color-ink);box-shadow:var(--kit-shadow-raised);
+}
+dialog.kit-dialog::backdrop{background:rgba(0,0,0,.4)}
+.kit-dialog__title{margin:0 0 var(--kit-space-3);font-size:var(--kit-text-lg)}
+.kit-dialog__actions{display:flex;justify-content:flex-end;gap:var(--kit-space-2);margin-top:var(--kit-space-5)}
