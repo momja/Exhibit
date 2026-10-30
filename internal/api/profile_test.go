@@ -34,7 +34,7 @@ func TestProfileShowsResolvedConnectionAndScheduleLimits(t *testing.T) {
 	in.ro.cfg.Relay.Enabled = true
 	in.ro.cfg.Entitlements = Entitlements{Enforced: true, DefaultStorageBytes: 1 << 30, DefaultConnections: connectors.Limits{Native: 25, OAuth: 10, Vendor: 3}, DefaultSchedules: 10}
 	page := in.page(t)
-	for _, text := range []string{"Native secrets", "25 connections", "Native OAuth", "10 connections", "Managed OAuth", "3 connections", "Scheduled fetches", "10 schedules", `href="/connections"`} {
+	for _, text := range []string{"Custom connections", "25 connections", "Service accounts", "10 connections", "Managed accounts", "3 connections", "Scheduled fetches", "10 schedules", `href="/connections"`} {
 		assert.Contains(t, page, text)
 	}
 	native, oauth, vendor, schedules := int64(4), int64(2), int64(1), int64(0)

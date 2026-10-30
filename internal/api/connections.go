@@ -3,9 +3,7 @@ package api
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -115,24 +113,7 @@ func (ro *Router) reconnectConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in connectors.ReconnectRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	err := decoder.Decode(&in)
-	if err == nil {
-		err = decoder.Decode(new(any))
-		if err == io.EOF {
-			err = nil
-		} else if err == nil {
-			err = errors.New("trailing data")
-		}
-	}
-	if err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			writeBodyTooLarge(w, tooLarge.Limit)
-		} else {
-			writeError(w, http.StatusBadRequest, "Provide only replacement credential fields.")
-		}
+	if !decodeStrictJSON(w, r, &in) {
 		return
 	}
 	c, err := s.Reconnect(r.Context(), ownerIDFromCtx(r.Context()), urlParamID(r, "connectionID"), in)
