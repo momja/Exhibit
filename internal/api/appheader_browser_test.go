@@ -45,7 +45,7 @@ func TestAppHeaderBrowser(t *testing.T) {
 	for _, width := range []int64{1280, 768, 767, 600, 390, 320} {
 		_, err = chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 900, DeviceScaleFactor: 1})
 		require.NoError(t, err)
-		for _, path := range []string{"/", "/profile", "/new", "/admin/users", "/agent", "/not-a-page", "/artifacts/" + id + "/edit?return_to=/artifacts/" + id} {
+		for _, path := range []string{"/", "/profile", "/connections", "/connections?advanced=1&artifact=" + id, "/new", "/admin/users", "/agent", "/not-a-page", "/artifacts/" + id + "/edit?return_to=/artifacts/" + id} {
 			t.Run(fmt.Sprintf("%d%s", width, path), func(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+path), chromedp.Poll[chromedp.Void](`document.querySelector('.app-header')`)))
 				metrics, err := chromedp.Run(ctx, chromedp.Evaluate[struct {
