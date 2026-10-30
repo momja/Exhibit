@@ -91,7 +91,11 @@ func TestAgentMarkdownStream(t *testing.T) {
 		var event struct {
 			HTML string `json:"exhibitMessageHTML"`
 		}
-		require.NoError(t, json.Unmarshal(stream.renderEvent(line), &event))
+		rendered := stream.renderEvent(line)
+		if flush := stream.flush(); flush != nil {
+			rendered = flush
+		}
+		require.NoError(t, json.Unmarshal(rendered, &event))
 		return event.HTML
 	}
 	assert.Contains(t, fragment(markdownWireEvent("text_delta", "**bo", 1)), "<p>**bo</p>")
@@ -127,4 +131,58 @@ func TestAgentMarkdownConcurrentRendering(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestAgentMarkdownUnsafeLinksArePlainLabels(t *testing.T) {
+	for _, source := range []string{
+		"[**Unsafe label**](javascript:alert%281%29)",
+		"[Unsafe label](javascript&colon;alert%281%29)",
+		"[Unsafe label](java&#x73;cript:alert%281%29)",
+		"<javascript:alert(1)>",
+		"<data:text/html,hello>",
+	} {
+		rendered, err := agentMarkdown(source)
+		require.NoError(t, err)
+		assert.NotContains(t, string(rendered), "<a")
+		assert.NotEmpty(t, string(rendered))
+	}
+}
+
+func TestAgentMarkdownCoalescesLongRepliesAndFlushesInterruption(t *testing.T) {
+	var stream agentMarkdownStream
+	var wireBytes, snapshots int
+	var source strings.Builder
+	for i := 0; i < 4096; i++ {
+		delta := "0123456789abcdef"
+		source.WriteString(delta)
+		rendered := stream.renderEvent(markdownWireEvent("text_delta", delta, 0))
+		wireBytes += len(rendered)
+		var event map[string]any
+		require.NoError(t, json.Unmarshal(rendered, &event))
+		assert.Equal(t, delta, event["assistantMessageEvent"].(map[string]any)["delta"])
+		if _, ok := event["exhibitMessageHTML"]; ok {
+			snapshots++
+		}
+		// Model a stream with 256 tiny deltas between coalescing ticks.
+		if (i+1)%256 == 0 {
+			flushed := stream.flush()
+			require.NotNil(t, flushed)
+			wireBytes += len(flushed)
+			snapshots++
+		}
+	}
+	assert.Equal(t, 17, snapshots)
+	assert.Less(t, wireBytes, 3<<20, "a 64 KiB reply must not amplify into hundreds of MiB")
+	assert.Nil(t, stream.flush())
+	var final struct {
+		HTML string `json:"exhibitMessageHTML"`
+	}
+	require.NoError(t, json.Unmarshal(stream.renderEvent(markdownWireEvent("text_end", source.String(), 0)), &final))
+	assert.Contains(t, final.HTML, "<p>"+source.String()+"</p>")
+	assert.Nil(t, stream.flush())
+	stream.renderEvent(markdownWireEvent("text_delta", "**partial", 0))
+	stream.renderEvent(markdownWireEvent("text_delta", " on stop**", 0))
+	require.NoError(t, json.Unmarshal(stream.renderEvent([]byte(`{"type":"agent_settled"}`)), &final))
+	assert.Contains(t, final.HTML, "<strong>partial on stop</strong>")
+	assert.Nil(t, stream.flush())
 }

@@ -58,11 +58,18 @@ func markdownBrowserFixture(t *testing.T) (http.Handler, string, chan []byte) {
 		w.WriteHeader(http.StatusOK)
 		w.(http.Flusher).Flush()
 		var markdown agentMarkdownStream
+		ticker := time.NewTicker(agentMarkdownInterval)
+		defer ticker.Stop()
 		for {
 			select {
 			case line := <-events:
 				fmt.Fprintf(w, "data: %s\n\n", markdown.renderEvent(line))
 				w.(http.Flusher).Flush()
+			case <-ticker.C:
+				if line := markdown.flush(); line != nil {
+					fmt.Fprintf(w, "data: %s\n\n", line)
+					w.(http.Flusher).Flush()
+				}
 			case <-r.Context().Done():
 				return
 			}
@@ -140,7 +147,9 @@ func TestAgentMarkdownBrowser(t *testing.T) {
 	run(chromedp.Poll[chromedp.Void](`document.querySelector('#messages table') != null`),
 		chromedp.Evaluate[chromedp.Void](`document.querySelector('#messages .agent-message:last-child').scrollIntoView({block:'start'})`))
 	check(`!window.pwned && document.querySelectorAll('#messages script, #messages iframe, #messages style, #messages [hx-get], #messages img').length === 0`)
-	check(`Array.from(document.querySelectorAll('#messages a')).every(a => !a.getAttribute('href').toLowerCase().startsWith('javascript:'))`)
+	check(`!Array.from(document.querySelectorAll('#messages a')).some(a => a.textContent === 'Unsafe link')`)
+	run(chromedp.Evaluate[chromedp.Void](`window.pageMarker = 'still here'; Array.from(document.querySelectorAll('#messages p')).find(p => p.textContent.includes('Unsafe link')).click()`))
+	check(`window.pageMarker === 'still here' && document.querySelector('#messages table') != null`)
 	check(`document.documentElement.scrollWidth <= innerWidth && document.querySelector('#messages').scrollWidth <= document.querySelector('#messages').clientWidth`)
 	check(`document.querySelector('#messages table').scrollWidth > document.querySelector('#messages table').clientWidth`)
 	capture("04-mobile-edge-cases.png")

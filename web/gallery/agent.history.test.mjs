@@ -448,7 +448,7 @@ test('streamed response blocks keep their own message action shells', async () =
   const shells = [];
   byId('agent-message-template').content = { firstElementChild: {
     cloneNode() {
-      const content = { textContent: '' };
+      const content = { textContent: '', querySelector: () => null };
       const shell = { content, querySelector: () => content, actions: ['copy'] };
       shells.push(shell);
       return shell;

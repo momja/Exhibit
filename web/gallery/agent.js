@@ -385,6 +385,19 @@ let toolChips = {};          // toolCallId -> chip element
 
 function handleAgentEvent(ev) {
   document.dispatchEvent(new CustomEvent('exhibit:agent-event', {detail: {event: ev, sessionId}}));
+  if (typeof ev.exhibitMessageHTML === 'string' || typeof ev.exhibitMessageText === 'string') {
+    removeThinking();
+    if (!curAssistantEl) curAssistantEl = addMsg('assistant', '');
+    // Only server-rendered partials cross this boundary. Model text is never
+    // inserted as HTML; oversized or malformed events stay plain text.
+    if (typeof ev.exhibitMessageHTML === 'string') {
+      window.htmx.swap({ sourceElement: curAssistantEl, target: curAssistantEl,
+        text: ev.exhibitMessageHTML, swap: 'innerHTML settle:0' });
+    } else {
+      curAssistantEl.textContent = ev.exhibitMessageText;
+    }
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
   switch (ev.type) {
     case 'exhibit_questions':
       if (ev.pending) pendingQuestions.add(ev.requestId);
@@ -413,16 +426,11 @@ function handleAgentEvent(ev) {
       break;
     case 'message_update': {
       const d = ev.assistantMessageEvent;
-      if (!d) break;
+      if (!d || ev.exhibitMessagePending) break;
       if (d.type === 'text_delta' || (d.type === 'text_end' && (curAssistantEl || typeof ev.exhibitMessageHTML === 'string'))) {
         removeThinking();
         if (!curAssistantEl) curAssistantEl = addMsg('assistant', '');
-        if (typeof ev.exhibitMessageHTML === 'string') {
-          // Only server-rendered partials cross this boundary. Model text is
-          // never inserted as HTML; older/malformed events stay plain text.
-          window.htmx.swap({ sourceElement: curAssistantEl, target: curAssistantEl,
-            text: ev.exhibitMessageHTML, swap: 'innerHTML settle:0' });
-        } else {
+        if (typeof ev.exhibitMessageHTML !== 'string' && typeof ev.exhibitMessageText !== 'string') {
           const source = curAssistantEl.querySelector('[data-message-source]')?.dataset.messageSource ?? curAssistantEl.textContent;
           if (d.type === 'text_delta') curAssistantEl.textContent = source + d.delta;
           else if (typeof d.content === 'string') curAssistantEl.textContent = d.content;
