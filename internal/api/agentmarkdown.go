@@ -20,6 +20,13 @@ var agentMarkdownRenderer = html.New(
 	html.WithExtensions(extension.GFMHTMLRenderer),
 	html.WithNodeRendererDecorator(ast.KindLink, inertUnsafeLinks),
 	html.WithNodeRendererDecorator(ast.KindAutoLink, inertUnsafeLinks),
+	// Images would fetch their URLs without a click. Render their alt-text
+	// children with Goldmark's standard renderers, without an image element.
+	html.WithNodeRendererDecorator(ast.KindImage, func(_ html.NodeRenderer) html.NodeRenderer {
+		return html.NodeRendererFunc(func(_ io.Writer, _ []byte, _ ast.Node, _ bool, _ renderer.Context) (ast.WalkStatus, error) {
+			return ast.WalkContinue, nil
+		})
+	}),
 )
 
 // Goldmark normally gives blocked links an empty href, which reloads the chat

@@ -40,8 +40,9 @@ a network footprint awaiting approval.
 Assistant replies render CommonMark and GitHub Flavored Markdown using
 [Goldmark](https://github.com/yuin/goldmark), pinned in `go.mod`. Its safe renderer
 omits raw HTML; dangerous Markdown links render as plain labels. HTML attributes
-and heading IDs are not enabled. Fenced HTML remains escaped code. Person messages
-stay plain text in blue bubbles; assistant replies and status messages have no
+and heading IDs are not enabled. Fenced HTML remains escaped code. Markdown
+images display their alt text without creating image elements or automatic image
+requests. Person messages stay plain text in blue bubbles; assistant replies and status messages have no
 message box. Code blocks and tables scroll inside the pane on narrow screens.
 
 `internal/api/agentmarkdown.go` and the `agentMessageBody` template partial own

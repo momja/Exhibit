@@ -186,3 +186,20 @@ func TestAgentMarkdownCoalescesLongRepliesAndFlushesInterruption(t *testing.T) {
 	assert.Contains(t, final.HTML, "<strong>partial on stop</strong>")
 	assert.Nil(t, stream.flush())
 }
+
+func TestAgentMarkdownImagesRenderAltTextWithoutFetching(t *testing.T) {
+	for _, source := range []string{
+		`![Book cover](https://example.com/cover.png?conversation=private)`,
+		"![Book cover][cover]\n\n[cover]: https://example.com/cover.png",
+		`![Book **cover**](https://example.com/cover.png "Image title")`,
+		`[![Book cover](https://example.com/cover.png)](https://example.com/books)`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			rendered, err := agentMarkdown(source)
+			require.NoError(t, err)
+			assert.NotContains(t, string(rendered), "<img")
+			assert.Contains(t, string(rendered), "Book")
+			assert.Contains(t, string(rendered), "cover")
+		})
+	}
+}

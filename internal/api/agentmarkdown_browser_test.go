@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 
 const markdownBrowserOverview = "## Your reading list is ready\n\nUse **tags** to organize it, *search* to find a title, and `localStorage` to keep changes. ~~No setup needed.~~\n\n### What is included\n\n- [x] Save titles and links\n- [ ] Add your first book\n- Organize the collection\n  - Filter by tag\n  - Sort by title\n\n> Your list stays with this artifact.\n\n1. Open the preview.\n2. Add a book and try [search](https://example.com/search).\n\n```js\nconst title = \"The Left Hand of Darkness\";\nlocalStorage.setItem(\"book\", title);\n```"
 const markdownBrowserFence = "### Streaming an HTML example\n\nAn unfinished code fence still displays as code:\n\n```html\n<div class=\"reading-list\" data-description=\"a deliberately long line that should scroll inside this code block on a narrow phone\">\n  <script>window.pwned = true</script>"
-const markdownBrowserEdges = markdownBrowserFence + "\n</div>\n```\n\n| Feature | Desktop | Small phone | Status |\n| --- | --- | --- | --- |\n| Wide content | Scrolls within the message | Keeps the composer visible | Ready |\n\nA long link: https://example.com/reading/averylongunbrokentitlethatmustwrapwithoutwideningthechatpaneorhidingthecopybutton\n\n**HTML stays disabled.** Raw tags are omitted; fenced examples above remain readable.\n\n<script>window.pwned = true</script>\n\n<style>body{display:none}</style>\n\n<img src=x onerror=\"window.pwned=true\">\n\n<div hx-get=\"/should-not-run\" hx-trigger=\"load\">raw HTML</div>\n\n[Unsafe link](javascript&colon;alert%281%29) · [Safe link](https://example.com)"
+const markdownBrowserEdges = markdownBrowserFence + "\n</div>\n```\n\n| Feature | Desktop | Small phone | Status |\n| --- | --- | --- | --- |\n| Wide content | Scrolls within the message | Keeps the composer visible | Ready |\n\nA long link: https://example.com/reading/averylongunbrokentitlethatmustwrapwithoutwideningthechatpaneorhidingthecopybutton\n\n**HTML stays disabled.** Raw tags are omitted; fenced examples above remain readable.\n\n<script>window.pwned = true</script>\n\n<style>body{display:none}</style>\n\n<img src=x onerror=\"window.pwned=true\">\n\n<div hx-get=\"/should-not-run\" hx-trigger=\"load\">raw HTML</div>\n\n![Book cover](https://example.com/cover.png?conversation=private)\n\n[Unsafe link](javascript&colon;alert%281%29) · [Safe link](https://example.com)"
 
 // Use the actual page, assets, history routes and htmx. Only the Pi subprocess
 // boundary is replaced by a controllable stream of its delta-only wire events.
@@ -87,6 +88,13 @@ func TestAgentMarkdownBrowser(t *testing.T) {
 	defer cancel()
 	ctx, cancel = context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
+	var imageRequests atomic.Int64
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		imageRequests.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer imageServer.Close()
+	liveEdges := markdownBrowserEdges + "\n\n![Network probe](" + imageServer.URL + "/cover.png?conversation=private)"
 	handler, id, events := markdownBrowserFixture(t)
 	srv := httptest.NewServer(handler)
 	defer func() {
@@ -142,11 +150,12 @@ func TestAgentMarkdownBrowser(t *testing.T) {
 	check(`!window.pwned && document.querySelectorAll('#messages script, #messages iframe, #messages style').length === 0`)
 	check(`document.querySelector('#messages .agent-message:last-child pre').scrollWidth > document.querySelector('#messages .agent-message:last-child pre').clientWidth`)
 	capture("03-mobile-streaming-fence.png")
-	events <- markdownWireEvent("text_end", markdownBrowserEdges, 1)
+	events <- markdownWireEvent("text_end", liveEdges, 1)
 	events <- []byte(`{"type":"agent_settled"}`)
 	run(chromedp.Poll[chromedp.Void](`document.querySelector('#messages table') != null`),
 		chromedp.Evaluate[chromedp.Void](`document.querySelector('#messages .agent-message:last-child').scrollIntoView({block:'start'})`))
 	check(`!window.pwned && document.querySelectorAll('#messages script, #messages iframe, #messages style, #messages [hx-get], #messages img').length === 0`)
+	check(`document.querySelector('#messages .agent-message:last-child').textContent.includes('Book cover') && document.querySelector('#messages .agent-message:last-child').textContent.includes('Network probe')`)
 	check(`!Array.from(document.querySelectorAll('#messages a')).some(a => a.textContent === 'Unsafe link')`)
 	run(chromedp.Evaluate[chromedp.Void](`window.pageMarker = 'still here'; Array.from(document.querySelectorAll('#messages p')).find(p => p.textContent.includes('Unsafe link')).click()`))
 	check(`window.pageMarker === 'still here' && document.querySelector('#messages table') != null`)
@@ -158,6 +167,8 @@ func TestAgentMarkdownBrowser(t *testing.T) {
 	// Real htmx history swaps and continuation preserve both markup and source.
 	run(chromedp.Click(chromedp.CSS(`#history-btn`)), chromedp.WaitVisible(chromedp.CSS(`.history-item`)), chromedp.Click(chromedp.CSS(`.history-item`)), chromedp.WaitVisible(chromedp.CSS(`#history-messages table`)))
 	check(`document.querySelectorAll('#history-messages .agent-message').length === 2 && !window.pwned`)
+	check(`!document.querySelector('#history-messages img') && document.querySelector('#history-messages').textContent.includes('Book cover')`)
+	require.Zero(t, imageRequests.Load(), "Markdown images must never trigger automatic requests")
 	run(chromedp.Click(chromedp.CSS(`#history-messages [data-message-action=copy]`)))
 	check(fmt.Sprintf(`window.copied === %q`, markdownBrowserOverview))
 	run(chromedp.Click(chromedp.CSS(`[data-resume=markdown]`)), chromedp.Poll[chromedp.Void](`!document.querySelector('#pane-chat').classList.contains('history-open') && document.querySelector('#messages table') != null`),
