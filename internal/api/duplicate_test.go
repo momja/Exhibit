@@ -241,7 +241,8 @@ func TestDuplicateGalleryModalAndRefreshPartial(t *testing.T) {
 	page := getPage(t, ro, "/")
 	assert.Contains(t, page, `data-action-menu-event-param="exhibit:duplicate"`)
 	assert.Contains(t, page, `&#34;artifactID&#34;:&#34;`+id+`&#34;`)
-	assert.Contains(t, page, `<dialog class="duplicate-dialog"`)
+	assert.Contains(t, page, `<dialog class="modal-dialog duplicate-dialog"`)
+	assert.Contains(t, page, `data-controller="modal"`)
 	for _, name := range []string{"title", "copy_data", "copy_share_settings"} {
 		assert.Contains(t, page, `name="`+name+`"`)
 	}

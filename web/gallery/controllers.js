@@ -2,6 +2,7 @@
 // page scripts import this entry point. Register new shared controllers here.
 import { Application } from '../stimulus/stimulus.js';
 import ActionMenuController from './action-menu-controller.js';
+import ModalController from './modal-controller.js';
 import UnsavedChangesController from './unsaved-changes-controller.js';
 
 import ClerkController from './clerk-controller.js';
@@ -9,6 +10,7 @@ import AccountDeletionController from './account-deletion-controller.js';
 
 export const application = Application.start();
 application.register('action-menu', ActionMenuController);
+application.register('modal', ModalController);
 application.register('unsaved-changes', UnsavedChangesController);
 
 application.register('clerk', ClerkController);

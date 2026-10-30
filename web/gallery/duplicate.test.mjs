@@ -34,9 +34,18 @@ async function fixture(respond = async () => Response.json({ id: 'created-copy' 
   const newLink = el('new-link');
   query.value = 'original';
   dialog.open = false;
-  dialog.showModal = () => { dialog.open = true; };
-  dialog.close = () => { dialog.open = false; };
-  dialog.getBoundingClientRect = () => ({ left: 100, right: 580, top: 150, bottom: 510 });
+  // Feature tests model only the shared modal event contract. Native focus,
+  // backdrop, Escape, and Stimulus lifecycle run in the real-browser suite.
+  dialog.addEventListener('exhibit:modal-open', () => { dialog.open = true; });
+  async function dismiss() {
+    const event = { type: 'modal:before-close', defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    await dialog.dispatchEvent(event);
+    if (event.defaultPrevented) return;
+    dialog.open = false;
+    await dialog.dispatchEvent({ type: 'modal:closed' });
+  }
+  dialog.addEventListener('exhibit:modal-close', dismiss);
+  cancel.addEventListener('click', dismiss);
   dialog.querySelector = () => form;
   form.elements = { title, copy_data: data, copy_share_settings: share };
   form.querySelector = selector => ({
@@ -61,7 +70,7 @@ async function fixture(respond = async () => Response.json({ id: 'created-copy' 
   return { ...page, root, dialog, form, title, data, share, submit, cancel, status, trigger, query, newLink, calls, open, save, refreshes: () => refreshes };
 }
 
-test('opens from a menu action event with editable title and unchecked options; cancel restores menu focus', async () => {
+test('opens from a menu action event with editable title and unchecked options; cancellation does not mutate', async () => {
   const p = await fixture();
   await p.open();
   assert.equal(p.dialog.open, true);
@@ -71,13 +80,7 @@ test('opens from a menu action event with editable title and unchecked options; 
   assert.equal(p.share.checked, false);
   await p.cancel.click();
   assert.equal(p.dialog.open, false);
-  assert.equal(p.trigger.focused, true);
   assert.equal(p.calls.length, 0);
-  await p.open();
-  let prevented = false;
-  await p.dialog.dispatchEvent({ type: 'cancel', preventDefault() { prevented = true; } });
-  assert.equal(prevented, true);
-  assert.equal(p.dialog.open, false);
 });
 
 test('saves selected options, stays on gallery and requests a fresh first page even after renaming out of the search', async () => {
@@ -99,28 +102,6 @@ test('saves selected options, stays on gallery and requests a fresh first page e
   assert.equal(p.window.location.href, 'http://t3code:18380/?q=original', 'the script does not navigate or reload');
   await p.root.dispatchEvent({ type: 'htmx:after:swap' });
   assert.equal(p.newLink.focused, true);
-});
-
-test('dialog padding preserves edits, while clicks outside each edge dismiss the modal', async () => {
-  const p = await fixture();
-  for (const [inside, outside] of [
-    [[105, 330], [95, 330]],
-    [[575, 330], [585, 330]],
-    [[340, 155], [340, 145]],
-    [[340, 505], [340, 515]]
-  ]) {
-    await p.open();
-    p.title.value = 'My edited title';
-    p.data.checked = true;
-    await p.dialog.dispatchEvent({ type: 'click', target: p.dialog, clientX: inside[0], clientY: inside[1] });
-    assert.equal(p.dialog.open, true, 'padding belongs to the dialog');
-    assert.equal(p.title.value, 'My edited title');
-    assert.equal(p.data.checked, true);
-    await p.dialog.dispatchEvent({ type: 'click', target: p.dialog, clientX: outside[0], clientY: outside[1] });
-    assert.equal(p.dialog.open, false, 'the backdrop still dismisses');
-    assert.equal(p.trigger.focused, true);
-  }
-  assert.equal(p.calls.length, 0);
 });
 
 test('an uncertain failure retries the same identity and options, with no duplicate submissions while busy', async () => {
