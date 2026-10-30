@@ -30,7 +30,7 @@ type galleryDefinition struct {
 
 var libraryGallery = galleryDefinition{
 	ID: "library-gallery", PagePath: "/", FragmentPath: "/partials/gallery-grid",
-	Empty: galleryEmptyState{Message: "No artifacts yet.", ActionURL: "/new", ActionLabel: "Add your first artifact"},
+	Empty: galleryEmptyState{Welcome: true, Message: "Welcome to Exhibit", ActionURL: "/new", ActionLabel: "Create your first artifact"},
 }
 
 // Selection returns cards and validated URL parameters even when listing fails,
@@ -38,6 +38,7 @@ var libraryGallery = galleryDefinition{
 type gallerySelection func(*Router, *http.Request, int, int, string) ([]galleryCard, url.Values, error)
 
 type galleryEmptyState struct {
+	Welcome     bool
 	Message     string
 	ActionURL   string
 	ActionLabel string

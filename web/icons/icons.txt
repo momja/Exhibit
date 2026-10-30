@@ -24,6 +24,9 @@ ph-chat-circle-dots
 ph-arrow-right
 ph-check
 ph-check-circle
+ph-check-square
+ph-chart-bar
+ph-circle
 ph-clipboard
 ph-clipboard-text
 ph-clock-counter-clockwise
@@ -45,6 +48,7 @@ ph-magnifying-glass
 ph-map-pin
 ph-microphone
 ph-monitor
+ph-palette
 ph-paper-plane-right
 ph-pencil-simple
 ph-plus
@@ -59,6 +63,7 @@ ph-sliders
 ph-sparkle
 ph-stop
 ph-squares-four
+ph-timer
 ph-trash
 ph-tray-arrow-down
 ph-user-circle
