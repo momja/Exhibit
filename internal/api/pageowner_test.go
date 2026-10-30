@@ -163,6 +163,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	// route takes no id, so there is nothing to point it at somebody else
 	// with. That is what makes a bare session sufficient authorization for it
 	// where /admin/users needs adminOnly.
+	{route: "/settings", why: "settings read only the session owner; compatibility alias /profile exercises the same handler"},
 	{route: "/profile", why: "reads the caller's own users row and no library data; the account it names comes from ownerIDFromCtx, never from the request, so there is no foreign id it could be aimed at"},
 
 	// Static and instance-level surfaces: nothing per-visitor to scope.

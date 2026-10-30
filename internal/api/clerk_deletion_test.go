@@ -19,6 +19,9 @@ type deletionHostedLogin struct {
 	createdAt int64
 	revokeErr error
 	revoked   []string
+	deleteErr error
+	deleted   []string
+	onRevoke  func()
 }
 
 func (h *deletionHostedLogin) Identity(r *http.Request) (auth.HostedIdentity, error) {
@@ -27,7 +30,15 @@ func (h *deletionHostedLogin) Identity(r *http.Request) (auth.HostedIdentity, er
 
 func (h *deletionHostedLogin) RevokeSessions(_ context.Context, subject string) (int64, error) {
 	h.revoked = append(h.revoked, subject)
+	if h.onRevoke != nil {
+		h.onRevoke()
+	}
 	return h.createdAt, h.revokeErr
+}
+
+func (h *deletionHostedLogin) DeleteUser(_ context.Context, subject string) error {
+	h.deleted = append(h.deleted, subject)
+	return h.deleteErr
 }
 
 func TestClerkAccountDeletionRevokesSessionsAndFencesReplay(t *testing.T) {
@@ -53,6 +64,7 @@ func TestClerkAccountDeletionRevokesSessionsAndFencesReplay(t *testing.T) {
 	// Refuse the last usable administrator before making any provider change.
 	require.Equal(t, 409, request("DELETE", "/api/account", "clerk:admin").Code)
 	require.Empty(t, hosted.revoked)
+	require.Empty(t, hosted.deleted)
 
 	// A provider failure must preserve the library rather than relying on JS.
 	hosted.revokeErr = errors.New("provider unavailable")
@@ -72,12 +84,70 @@ func TestClerkAccountDeletionRevokesSessionsAndFencesReplay(t *testing.T) {
 	_, err = st.GetUserByExternalID(ctx, "clerk:member")
 	require.ErrorIs(t, err, store.ErrNotFound)
 
-	oldCreatedAt := hosted.createdAt
-	hosted.createdAt = time.Now().Add(time.Second).UnixMilli()
-	require.Equal(t, 204, request("GET", "/auth/clerk/ready", "clerk:member").Code)
-	fresh, err := st.GetUserByExternalID(ctx, "clerk:member")
+	require.Equal(t, []string{"clerk:member"}, hosted.deleted)
+	pending, err := st.PendingHostedIdentityDeletions(ctx)
 	require.NoError(t, err)
-	require.NotEqual(t, member.ID, fresh.ID)
-	hosted.createdAt = oldCreatedAt
-	require.Equal(t, 401, request("GET", "/api/artifacts", "clerk:member").Code)
+	require.Empty(t, pending)
+	hosted.createdAt = time.Now().Add(time.Second).UnixMilli()
+	require.Equal(t, 403, request("GET", "/auth/clerk/ready", "clerk:member").Code)
+}
+
+func TestClerkIdentityDeletionFailureIsDurableAndRetried(t *testing.T) {
+	ctx := context.Background()
+	hosted := &deletionHostedLogin{createdAt: time.Now().Add(-time.Hour).UnixMilli(), deleteErr: errors.New("provider unavailable")}
+	ro, st := newLoginTestRouter(t, nil, nil, func(c *Config) { c.Clerk = hosted; c.AuthToken = "" })
+	_, err := st.UpsertHostedUser(ctx, "clerk:admin", "admin@example.test", hosted.createdAt)
+	require.NoError(t, err)
+	member, err := st.UpsertHostedUser(ctx, "clerk:member", "member@example.test", hosted.createdAt)
+	require.NoError(t, err)
+	r := httptest.NewRequest("DELETE", "https://app.test/api/account", strings.NewReader(`{"confirm":"delete my library"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Test-Clerk-Subject", "clerk:member")
+	w := httptest.NewRecorder()
+	ro.ServeHTTP(w, r)
+	require.Equal(t, http.StatusAccepted, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), "retry automatically")
+	_, err = st.GetUser(ctx, member.ID)
+	require.ErrorIs(t, err, store.ErrNotFound)
+	pending, err := st.PendingHostedIdentityDeletions(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []string{"clerk:member"}, pending)
+	require.NoError(t, ro.drainHostedAccountDeletions(ctx))
+	pending, err = st.PendingHostedIdentityDeletions(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, pending, "a failed retry stays durable")
+	hosted.deleteErr = nil
+	require.NoError(t, ro.drainHostedAccountDeletions(ctx))
+	pending, err = st.PendingHostedIdentityDeletions(ctx)
+	require.NoError(t, err)
+	require.Empty(t, pending)
+	require.Equal(t, []string{"clerk:member", "clerk:member", "clerk:member"}, hosted.deleted)
+	_, err = st.UpsertHostedUser(ctx, "clerk:member", "member@example.test", time.Now().Add(time.Second).UnixMilli())
+	require.ErrorIs(t, err, store.ErrNotFound)
+}
+
+// A preflight check is only a snapshot. If another admin disappears during
+// revocation, the transactional guard must still run before Clerk user deletion.
+func TestClerkDeleteDoesNotRemoveProviderUserWhenStoreGuardRefuses(t *testing.T) {
+	ctx := context.Background()
+	hosted := &deletionHostedLogin{createdAt: time.Now().Add(-time.Hour).UnixMilli()}
+	ro, st := newLoginTestRouter(t, nil, nil, func(c *Config) { c.Clerk = hosted; c.AuthToken = "" })
+	admin, err := st.UpsertHostedUser(ctx, "clerk:admin", "admin@example.test", hosted.createdAt)
+	require.NoError(t, err)
+	member, err := st.UpsertHostedUser(ctx, "clerk:member", "member@example.test", hosted.createdAt)
+	require.NoError(t, err)
+	require.NoError(t, st.SetHostedUserAdmin(ctx, member.ID, true))
+	hosted.onRevoke = func() { require.NoError(t, st.SetHostedUserAdmin(ctx, admin.ID, false)) }
+	r := httptest.NewRequest("DELETE", "/api/account", strings.NewReader(`{"confirm":"delete my library"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Test-Clerk-Subject", "clerk:member")
+	w := httptest.NewRecorder()
+	ro.ServeHTTP(w, r)
+	require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	require.Empty(t, hosted.deleted)
+	_, err = st.GetUser(ctx, member.ID)
+	require.NoError(t, err)
+	pending, err := st.PendingHostedIdentityDeletions(ctx)
+	require.NoError(t, err)
+	require.Empty(t, pending)
 }

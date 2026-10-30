@@ -481,7 +481,7 @@ request, through middleware, in one place:
 | Where | Who resolves the owner | To what |
 |---|---|---|
 | API group (`/api/*`) | `authMiddleware` | the session's user, the agent grant's `OwnerID`, or `PUBLIC_OWNER_ID` for a public visitor; `ownerMiddleware` supplies the single-user default for a token-authenticated client |
-| Page group (`/`, `/new`, `/artifacts/…`, `/agent`, `/admin/users`, `/profile`, `/partials/*`) | `sessionGate` | the session's user — the same `sessionUser` lookup it already performed for §1.5, no longer discarded |
+| Page group (`/`, `/new`, `/artifacts/…`, `/agent`, `/admin/users`, `/settings`, `/profile`, `/partials/*`) | `sessionGate` | the session's user — the same `sessionUser` lookup it already performed for §1.5, no longer discarded |
 | Page group, instance with no login | `ownerMiddleware` | the single-user default |
 
 `ownerMiddleware` never overwrites an owner resolved upstream, which is what

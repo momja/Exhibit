@@ -1,0 +1,2551 @@
+<!doctype html>
+<html lang="en" style="scrollbar-gutter: stable;"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Exhibit — Account demo</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB2aWV3Qm94PSIwIDAgNDAuMzE2Nzk1IDQ5Ljk4MzM4NyIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJFeGhpYml0IGxvZ28iIGNsYXNzPSJsb2dvIiBmb2N1c2FibGU9ImZhbHNlIj4KICA8c3R5bGU+QG1lZGlhIChwcmVmZXJzLWNvbG9yLXNjaGVtZTpkYXJrKXsubG9nby13aXJle3N0cm9rZTojYjRiYWM0fS5sb2dvLW5haWx7ZmlsbDojYjRiYWM0fX08L3N0eWxlPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJsaW5lYXJHcmFkaWVudDI5NCI+CiAgICAgIDxzdG9wIHN0eWxlPSJzdG9wLWNvbG9yOiM4MDgwODA7c3RvcC1vcGFjaXR5OjEiIG9mZnNldD0iMCIvPgogICAgICA8c3RvcCBzdHlsZT0ic3RvcC1jb2xvcjojMDAwMDAwO3N0b3Atb3BhY2l0eTowIiBvZmZzZXQ9IjEiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImxpbmVhckdyYWRpZW50MjkyIj4KICAgICAgPHN0b3Agc3R5bGU9InN0b3AtY29sb3I6IzgwODA4MDtzdG9wLW9wYWNpdHk6MSIgb2Zmc2V0PSIwLjM5MzIyNTM0Ii8+CiAgICAgIDxzdG9wIHN0eWxlPSJzdG9wLWNvbG9yOiM4MDgwODA7c3RvcC1vcGFjaXR5OjAiIG9mZnNldD0iMSIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0ibGluZWFyR3JhZGllbnQyOTEiPgogICAgICA8c3RvcCBzdHlsZT0ic3RvcC1jb2xvcjojMDAwMDAwO3N0b3Atb3BhY2l0eToxIiBvZmZzZXQ9IjAiLz4KICAgICAgPHN0b3Agc3R5bGU9InN0b3AtY29sb3I6IzAwMDAwMDtzdG9wLW9wYWNpdHk6MCIgb2Zmc2V0PSIwLjY4MDIxMzgxIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGZpbHRlciBzdHlsZT0iY29sb3ItaW50ZXJwb2xhdGlvbi1maWx0ZXJzOnNSR0IiIGlkPSJmaWx0ZXIzMCIgeD0iLTAuMDE5MjExODg3IiB5PSItMC4wMTk0Njg4ODQiIHdpZHRoPSIxLjA3NTc4MDIiIGhlaWdodD0iMS4wNzU2OTkzIj4KICAgICAgPGZlRmxvb2QgcmVzdWx0PSJmbG9vZCIgaW49IlNvdXJjZUdyYXBoaWMiIGZsb29kLW9wYWNpdHk9IjAuNDk4MDM5IiBmbG9vZC1jb2xvcj0icmdiKDAsMCwwKSIvPgogICAgICA8ZmVHYXVzc2lhbkJsdXIgcmVzdWx0PSJibHVyIiBpbj0iU291cmNlR3JhcGhpYyIgc3RkRGV2aWF0aW9uPSIwLjMwMDAwMCIvPgogICAgICA8ZmVPZmZzZXQgcmVzdWx0PSJvZmZzZXQiIGluPSJibHVyIiBkeD0iMS40MDAwMDAiIGR5PSIxLjM1OTUxNyIvPgogICAgICA8ZmVDb21wb3NpdGUgcmVzdWx0PSJjb21wMSIgb3BlcmF0b3I9ImluIiBpbj0iZmxvb2QiIGluMj0ib2Zmc2V0Ii8+CiAgICAgIDxmZUNvbXBvc2l0ZSByZXN1bHQ9ImNvbXAyIiBvcGVyYXRvcj0ib3ZlciIgaW49IlNvdXJjZUdyYXBoaWMiIGluMj0iY29tcDEiLz4KICAgIDwvZmlsdGVyPgogICAgPHJhZGlhbEdyYWRpZW50IHhsaW5rOmhyZWY9IiNsaW5lYXJHcmFkaWVudDI5MSIgaWQ9InJhZGlhbEdyYWRpZW50MjkyIiBjeD0iNjQuMTUyMzA2IiBjeT0iMzguODc5OTU1IiBmeD0iNjQuMTUyMzA2IiBmeT0iMzguODc5OTU1IiByPSIwLjkwMjk1NzkyIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgZ3JhZGllbnRUcmFuc2Zvcm09Im1hdHJpeCg1LjA0Mzc5MTEsNS4yMzY0MDQ1LC00LjU5OTM0NjcsNC40MzAxNjcsLTg2LjE1NDc1MSwtNDY3Ljc1NDU5KSIvPgogICAgPHJhZGlhbEdyYWRpZW50IHhsaW5rOmhyZWY9IiNsaW5lYXJHcmFkaWVudDI5MiIgaWQ9InJhZGlhbEdyYWRpZW50Mjk0IiBjeD0iNjQuMTUyMzEzIiBjeT0iMzguODc5OTUxIiBmeD0iNjQuMTUyMzEzIiBmeT0iMzguODc5OTQ4IiByPSIwLjkwMjk1NzkyIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgZ3JhZGllbnRUcmFuc2Zvcm09Im1hdHJpeCgyLjk3OTUwNTgsMCwwLDIuOTc5NTA1OCwtMTMyLjU0ODUsLTc1LjQyNTUwOCkiLz4KICAgIDxyYWRpYWxHcmFkaWVudCB4bGluazpocmVmPSIjbGluZWFyR3JhZGllbnQyOTQiIGlkPSJyYWRpYWxHcmFkaWVudDI5NiIgY3g9IjYwLjY2ODUzNyIgY3k9IjQzLjA5ODg2MiIgZng9IjYwLjY2ODUzNyIgZnk9IjQzLjA5ODg2MiIgcj0iNC43MTY0MTExIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgZ3JhZGllbnRUcmFuc2Zvcm09Im1hdHJpeCgtMS41MDI2MTE5LDUuNzQ5OTY3LC0xLjkxNTk0NzcsLTAuNTAwNjg1NjIsMjM1LjAzMTAxLC0yOTcuNTc5NzcpIi8+CiAgPC9kZWZzPgogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0zNi4wODU0NSwtMzYuNjI1NDg5KSI+CiAgICA8cmVjdCBzdHlsZT0iZmlsbDojODA4MDgwO2ZpbGwtb3BhY2l0eToxO3N0cm9rZTojODA4MDgwO3N0cm9rZS13aWR0aDowO3N0cm9rZS1saW5lY2FwOnJvdW5kO3N0cm9rZS1kYXNoYXJyYXk6bm9uZTtwYWludC1vcmRlcjpzdHJva2UgbWFya2VycyBmaWxsO2ZpbHRlcjp1cmwoI2ZpbHRlcjMwKSIgd2lkdGg9IjM3LjQ3Njc5OSIgaGVpZ2h0PSIzNi45ODIwOSIgeD0iMzYuODA1NDUiIHk9IjQ3LjU0NzI2OCIvPgogICAgPHBhdGggc3R5bGU9ImNvbG9yOiMwMDAwMDA7ZmlsbDp1cmwoI3JhZGlhbEdyYWRpZW50Mjk2KTtzdHJva2Utd2lkdGg6Mi40MzIzMjtzdHJva2UtbGluZWNhcDpyb3VuZDstaW5rc2NhcGUtc3Ryb2tlOm5vbmUiIGQ9Ik0gNTguNDY3NzUyLDQwLjc0NzE0NSA0NS41NjAzMDcsNTguMzEwMjA0IGEgMC4yNjcyNTcyMSwwLjI2NzI1NzIxIDAgMCAwIDAuMDU3MDEsMC4zNzUyOTggMC4yNjcyNTcyMSwwLjI2NzI1NzIxIDAgMCAwIDAuMzc1MzAxLC0wLjA1NzAxIEwgNTguNDEwNzUsNDEuNzI1NzcgNjcuOTUwMDAzLDU4LjM3NjcwOSBhIDAuMjY3MjU3MjEsMC4yNjcyNTcyMSAwIDAgMCAwLjM2NTgsMC4wOTk3NyAwLjI2NzI1NzIxLDAuMjY3MjU3MjEgMCAwIDAgMC4wOTk3NywtMC4zNjU3OTkgeiIvPgogICAgPHJlY3Qgc3R5bGU9ImZpbGw6I2ZmZmZmZjtmaWxsLW9wYWNpdHk6MTtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS4wMDY0OTtzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtZGFzaGFycmF5Om5vbmUiIHdpZHRoPSIzNy40NzY3OTkiIGhlaWdodD0iMzYuOTgyMDkiIHg9IjM2LjgwNTQ1IiB5PSI0Ny41NDcyNjgiLz4KICAgIDxyZWN0IHN0eWxlPSJmaWxsOiMyMzU1OWU7ZmlsbC1vcGFjaXR5OjE7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuOTkyMjk7c3Ryb2tlLWxpbmVjYXA6cm91bmQ7c3Ryb2tlLWRhc2hhcnJheTpub25lO3BhaW50LW9yZGVyOnN0cm9rZSBtYXJrZXJzIGZpbGwiIHdpZHRoPSIxMi40NDczNTkiIGhlaWdodD0iMTYuMDY4NTY1IiB4PSI2MS4zNDE5OTUiIHk9IjY3Ljk2Nzg5NiIvPgogICAgPGNpcmNsZSBzdHlsZT0iZmlsbDp1cmwoI3JhZGlhbEdyYWRpZW50Mjk0KTtzdHJva2U6dXJsKCNyYWRpYWxHcmFkaWVudDI5Mik7c3Ryb2tlLXdpZHRoOjA7c3Ryb2tlLWxpbmVjYXA6cm91bmQ7c3Ryb2tlLWRhc2hhcnJheTpub25lO3BhaW50LW9yZGVyOnN0cm9rZSBtYXJrZXJzIGZpbGwiIGN4PSI1OC41OTM2NTEiIGN5PSI0MC40MTc1MzQiIHI9IjIuNjkwMzY4MiIvPgogICAgPHBhdGggc3R5bGU9ImZvbnQtd2VpZ2h0OmJvbGQ7Zm9udC1zaXplOjQxLjAyODJweDtsaW5lLWhlaWdodDowO2ZvbnQtZmFtaWx5OicuRGl3YW4gS3VmaSBQVUEnO3RleHQtYWxpZ246Y2VudGVyO2xldHRlci1zcGFjaW5nOjIuNDQwMzJweDt0ZXh0LWFuY2hvcjptaWRkbGU7ZmlsbDojZGUyODFkO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjk4NTIzO3N0cm9rZS1saW5lY2FwOnJvdW5kO3N0cm9rZS1kYXNoYXJyYXk6bm9uZTtwYWludC1vcmRlcjpzdHJva2UgbWFya2VycyBmaWxsIiBkPSJNIDYwLjM4MzUwMSw3Mi43ODE0MDcgSCAzNy4yOTA3MzYgViA0OC4wMzY2MzcgSCA2MC4zODM1MDEgViA1Mi44MjI3MyBIIDQ1LjQ4MTQ4NSB2IDQuMjcwOTI1IGggMTMuODI5OTI4IHYgNC43ODYwOTQgSCA0NS40ODE0ODUgdiA2LjExNTU2NSBoIDE0LjkwMjAxNiB6IiBhcmlhLWxhYmVsPSJFIi8+CiAgICA8cGF0aCBjbGFzcz0ibG9nby13aXJlIiBzdHJva2U9IiMwMDAwMDAiIHN0eWxlPSJmaWxsOm5vbmU7ZmlsbC1vcGFjaXR5OjE7c3Ryb2tlLXdpZHRoOjE7c3Ryb2tlLWxpbmVjYXA6cm91bmQ7c3Ryb2tlLWRhc2hhcnJheTpub25lIiBkPSJtIDUwLjk2Mjg1LDQ3Ljg1OTM2OCA1LjM1NjI2OCwtNy44NzQwNTIgNC45MDkxOSw4LjAwNzE2MyIvPgogICAgPHJlY3Qgc3R5bGU9ImZpbGw6I2ZhZTMxNztmaWxsLW9wYWNpdHk6MTtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MDtzdHJva2UtbGluZWNhcDpyb3VuZDtzdHJva2UtZGFzaGFycmF5Om5vbmU7c3Ryb2tlLW9wYWNpdHk6MTtwYWludC1vcmRlcjpzdHJva2UgbWFya2VycyBmaWxsIiB3aWR0aD0iMjMuMDU3NDUzIiBoZWlnaHQ9IjEwLjI0NTI4OCIgeD0iMzcuMzE4NDAxIiB5PSI3My43NzQwMTciLz4KICAgIDxjaXJjbGUgY2xhc3M9ImxvZ28tbmFpbCIgZmlsbD0iIzAwMDAwMCIgc3R5bGU9ImZpbGwtb3BhY2l0eToxO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDowO3N0cm9rZS1saW5lY2FwOnJvdW5kO3N0cm9rZS1kYXNoYXJyYXk6bm9uZTtwYWludC1vcmRlcjpzdHJva2UgbWFya2VycyBmaWxsIiBjeD0iNTYuMTMzNDc2IiBjeT0iMzguNzM0MjY4IiByPSIyLjEwODc3OTQiLz4KICA8L2c+Cjwvc3ZnPgo=">
+
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Exhibit">
+
+
+
+
+
+
+<style>@font-face {
+  font-family: "Phosphor";
+  src: url(data:font/woff2;base64,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) format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.ph {
+  /* use !important to prevent issues with browser extensions that change fonts */
+  font-family: "Phosphor" !important;
+  speak: never;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+
+  /* Enable Ligatures ================ */
+  letter-spacing: 0;
+  -webkit-font-feature-settings: "liga";
+  -moz-font-feature-settings: "liga=1";
+  -moz-font-feature-settings: "liga";
+  -ms-font-feature-settings: "liga" 1;
+  font-feature-settings: "liga";
+  -webkit-font-variant-ligatures: discretionary-ligatures;
+  font-variant-ligatures: discretionary-ligatures;
+
+  /* Better Font Rendering =========== */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-arrow-clockwise:before {
+  content: "\e036";
+}
+.ph.ph-arrow-counter-clockwise:before {
+  content: "\e038";
+}
+.ph.ph-arrow-down:before {
+  content: "\e03e";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-arrow-left:before {
+  content: "\e058";
+}
+
+
+
+
+
+
+
+
+.ph.ph-arrow-right:before {
+  content: "\e06c";
+}
+
+
+
+
+
+.ph.ph-arrow-square-out:before {
+  content: "\e5de";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-arrow-up:before {
+  content: "\e08e";
+}
+
+
+.ph.ph-arrows-clockwise:before {
+  content: "\e094";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-books:before {
+  content: "\e758";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-camera:before {
+  content: "\e10e";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-caret-down:before {
+  content: "\e136";
+}
+
+
+
+
+
+.ph.ph-caret-right:before {
+  content: "\e13a";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-chat-circle:before {
+  content: "\e168";
+}
+.ph.ph-chat-circle-dots:before {
+  content: "\e16c";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-check:before {
+  content: "\e182";
+}
+.ph.ph-check-circle:before {
+  content: "\e184";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-clipboard:before {
+  content: "\e196";
+}
+.ph.ph-clipboard-text:before {
+  content: "\e198";
+}
+
+
+
+
+.ph.ph-clock-counter-clockwise:before {
+  content: "\e1a0";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-code:before {
+  content: "\e1bc";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-copy:before {
+  content: "\e1ca";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-database:before {
+  content: "\e1de";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-dots-three-vertical:before {
+  content: "\e208";
+}
+
+.ph.ph-download-simple:before {
+  content: "\e20c";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-eye:before {
+  content: "\e220";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-frame-corners:before {
+  content: "\e626";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-gear:before {
+  content: "\e270";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-globe:before {
+  content: "\e288";
+}
+
+.ph.ph-globe-hemisphere-west:before {
+  content: "\e28c";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-hard-drives:before {
+  content: "\e2a0";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-key:before {
+  content: "\e2d6";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-link-simple:before {
+  content: "\e2e6";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-magnifying-glass:before {
+  content: "\e30c";
+}
+
+
+
+.ph.ph-map-pin:before {
+  content: "\e316";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-microphone:before {
+  content: "\e326";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-monitor:before {
+  content: "\e32e";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-paper-plane-right:before {
+  content: "\e396";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-pencil-simple:before {
+  content: "\e3b4";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-plus:before {
+  content: "\e3d4";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-prohibit:before {
+  content: "\e3de";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-robot:before {
+  content: "\e762";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-scissors:before {
+  content: "\eae0";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-share-network:before {
+  content: "\e408";
+}
+
+.ph.ph-shield-check:before {
+  content: "\e40c";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-sign-in:before {
+  content: "\e428";
+}
+.ph.ph-sign-out:before {
+  content: "\e42a";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-sliders:before {
+  content: "\e432";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-sparkle:before {
+  content: "\e6a2";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-squares-four:before {
+  content: "\e464";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-stop:before {
+  content: "\e46c";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-trash:before {
+  content: "\e4a6";
+}
+
+
+.ph.ph-tray-arrow-down:before {
+  content: "\e010";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-upload-simple:before {
+  content: "\e4c0";
+}
+
+
+
+.ph.ph-user-circle:before {
+  content: "\e4c4";
+}
+
+
+
+
+
+
+
+
+
+.ph.ph-user-plus:before {
+  content: "\e4d0";
+}
+
+
+
+
+
+
+.ph.ph-users-three:before {
+  content: "\e68e";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-warning:before {
+  content: "\e4e0";
+}
+.ph.ph-warning-circle:before {
+  content: "\e4e2";
+}
+
+.ph.ph-warning-octagon:before {
+  content: "\e4e4";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.ph.ph-x:before {
+  content: "\e4f6";
+}
+.ph.ph-x-circle:before {
+  content: "\e4f8";
+}
+
+
+
+
+
+</style>
+<style>/* Gallery design tokens — the shared vocabulary every gallery stylesheet and
+ * component builds on (av-xgik, foundation of the security-posture UI epic
+ * av-jafp). Loaded on every gallery page first, before components.css and the
+ * page sheet.
+ *
+ * --brand-blue / --brand-blue-hover mirror internal/color/brand.go — the Go
+ * constant still colors the server-rendered SVG logo, so keep the two in
+ * sync. They live here as committed CSS (instead of the old per-template
+ * inline <style> injection) so static stylesheets need no Go round-trip.
+ *
+ * Dark mode (av-xie4) follows the system setting and has no in-app toggle.
+ * Every color a page sheet uses comes from a token below, and the dark values
+ * are the one prefers-color-scheme block at the end of this file: a new
+ * component gets dark mode by using tokens, and a literal color in a page
+ * sheet is a component that stays light. In the dark block --brand-blue is
+ * the UI accent rather than the logo's blue — the logo keeps its own. */
+/* Opts every cross-document navigation between gallery/detail/edit into the
+ * View Transitions API (Exh-pb2k): instead of unloading straight to a blank
+ * default-white frame, the browser keeps the outgoing page's snapshot on
+ * screen and cross-fades to the incoming one. Lives here, not per-page,
+ * because it's a document-level opt-in and tokens.css is the one sheet every
+ * page loads first. No-op (ignored) in browsers without View Transitions
+ * support, so navigation there is unchanged. */
+@view-transition{
+	navigation:auto;
+}
+
+:root{
+	/* Native controls, scrollbars and form fields follow the page. It also
+	 * decides how embedded frames are composited: a frame whose own
+	 * color-scheme differs from this one's is drawn on an opaque canvas
+	 * (see the widget base stylesheet in internal/render). */
+	color-scheme:light dark;
+
+	/* brand / accent */
+	--brand-blue:#23559e;
+	--brand-blue-hover:#1a4076;
+	--color-accent:var(--brand-blue);
+	--color-on-accent:#fff;            /* text and icons on an accent fill */
+	--color-accent-disabled:#b7c3d9;   /* a disabled accent button's fill */
+	--color-on-accent-disabled:#fff;
+	--color-accent-tint:#eef4ff;       /* selected/suggested surfaces */
+	--color-accent-tint-border:#c4d7f7;
+	--color-accent-tint-strong:#dbe7fb;
+	--color-accent-tint-ink:#223344;
+
+	/* neutrals */
+	--color-ink:#111;             /* primary text */
+	--color-ink-soft:#333;        /* headings, strong secondary text */
+	--color-ink-mid:#555;         /* body copy that steps back */
+	--color-muted:#888;           /* metadata, secondary text */
+	--color-label:#7b828e;        /* small-caps field and column labels */
+	--color-faint:#aaa;           /* empty-state glyphs, optional-field hints */
+	--color-placeholder:#757575;  /* field placeholders (the browser's own light default) */
+	--color-ground:#f0f0f0;       /* page background */
+	--color-panel:#fff;           /* cards, header, modals */
+	--color-subtle:#f8f8f8;       /* a well inside a panel (scan results, chips) */
+	--color-hairline:#e0e0e0;     /* panel dividers */
+	--color-hairline-strong:#d9d9d9; /* header underline */
+	--color-border:#ddd;          /* control borders */
+	--color-card-border:#cfcfcf;  /* the gallery's flat cards */
+	--color-hover-fill:#e8e8e8;   /* pill behind a hovered icon control */
+	--color-press-fill:rgba(0,0,0,.12); /* a pressed control on a tinted chip */
+	--color-code-on-tint:#fff3;   /* inline code inside a tinted banner */
+	--color-on-accent-edge:rgba(255,255,255,.5); /* an edge drawn on an accent fill */
+	--color-tag-ring:rgba(0,0,0,.12);   /* keeps a ground-colored tag dot visible */
+
+	/* The 404 page's slate ramp. */
+	--color-slate-ink:#3a3f49;
+	--color-slate-body:#565c68;
+	--color-slate-medium:#6b717c;
+	--color-slate-muted:#6f7581;
+	--color-slate-placeholder:#7d838e;
+	--color-slate-rule:#d6dae0;
+
+	/* feedback */
+	--color-danger:#e00;
+	--color-danger-hover:#c00;
+	--color-on-danger:#fff;
+	--color-danger-tint:#fee;          /* error notices */
+	--color-danger-tint-border:#fbb;
+	--color-danger-ink:#900;
+	--color-danger-soft:#fdf3f3;       /* a quieter refusal (login, failed tool) */
+	--color-warn-tint:#fffbe6;         /* warning banners and notes */
+	--color-warn-tint-border:#ffe58f;
+	--color-warn-strong:#d48806;       /* warning icon, warning control border */
+	--color-warn-ink:#614700;
+	--color-warn-ink-soft:#8a6d00;
+	--color-info-tint:#f0f5ff;         /* a fact, not a problem */
+	--color-info-tint-border:#adc6ff;
+	--color-info-ink:#243c5a;
+	--color-success:#2a7d2a;
+	--color-success-tint:#f2faf2;
+	--color-success-tint-border:#bfe3bf;
+	--color-note-tint:#f3efe6;         /* neutral "custom" chip */
+	--color-note-ink:#7a6535;
+
+	/* Default card tile (components.css): saturation + lightness pairs
+	 * completed by the artifact's --tile-hue. */
+	--tile-face-top:58% 96%;
+	--tile-face-bottom:52% 89%;
+	--tile-mono-fill:60% 100% / .72;
+	--tile-mono-shadow:40% 30% / .16;
+	--tile-mono-ink:42% 34%;
+
+	/* elevation */
+	--shadow-header:0 1px 6px rgba(0,0,0,.07);
+	--shadow-card:0 1px 3px rgba(0,0,0,.08);
+	--shadow-card-hover:0 2px 8px rgba(0,0,0,.12);
+	--shadow-modal:0 4px 24px rgba(0,0,0,.25);
+	--shadow-raised:0 1px 2px rgba(0,0,0,.14);
+	--shadow-sheet:0 -4px 24px rgba(0,0,0,.25); /* a bottom sheet over the page */
+	--overlay:rgba(0,0,0,.4);
+
+	/* Every form control sizes itself from one of these, never a literal px:
+	 * iOS zooms in on focusing a field under 16px and does not zoom back out
+	 * (av-3qmf). The -code- variant is the monospace fields. */
+	--field-font-size:14px;
+	--field-code-font-size:12px;
+
+	/* spacing scale */
+	--space-1:4px;
+	--space-2:6px;
+	--space-3:8px;
+	--space-4:10px;
+	--space-5:12px;
+	--space-6:16px;
+	--space-7:20px;
+	--space-8:24px;
+
+	/* One app bar height on every page, so navigation never shifts content.
+	 * Small because the artifact page should give the artifact the room. */
+	--header-height:40px;
+	/* Square controls in the bar; smaller than it so they don't touch its edges. */
+	--header-control-size:32px;
+
+	/* radii */
+	--radius-sm:3px;   /* inline code, badges */
+	--radius-md:6px;   /* inputs, buttons */
+	--radius-lg:10px;  /* cards, modals */
+	--radius-pill:999px;
+}
+
+/* 16px is the exact threshold WebKit uses, so this removes the reason for the
+ * zoom rather than disabling zooming. Keyed on pointer, not width: a narrow
+ * desktop window has no keyboard, a landscape tablet is wide and touched. */
+@media (pointer:coarse){
+	:root{
+		--field-font-size:16px;
+		--field-code-font-size:16px;
+	}
+}
+
+/* Dark palette (av-xie4). A cool charcoal rather than black, so panels can sit
+ * one step above the ground and shadows still read. The accent turns from the
+ * logo's deep blue to a light one: no single blue reaches 4.5:1 both as link
+ * text on a dark panel and under white button text, so in the dark the accent
+ * fills take dark text instead (--color-on-accent), as danger fills do. */
+@media (prefers-color-scheme:dark){
+	:root{
+		--brand-blue:#7eaaf0;
+		--brand-blue-hover:#a1c2f5;
+		--color-on-accent:#0e1726;
+		--color-accent-disabled:#2f3b4e;
+		--color-on-accent-disabled:#8592a6;
+		--color-accent-tint:#1c2940;
+		--color-accent-tint-border:#34507a;
+		--color-accent-tint-strong:#2a3c5a;
+		--color-accent-tint-ink:#c8daf6;
+
+		--color-ink:#e8eaed;
+		--color-ink-soft:#ccd0d6;
+		--color-ink-mid:#abb0b8;
+		--color-muted:#9aa0a9;
+		--color-label:#9097a2;
+		--color-faint:#878c95;
+		--color-placeholder:#878c95;
+		--color-ground:#16181c;
+		--color-panel:#202328;
+		--color-subtle:#1a1d21;
+		--color-hairline:#2f333a;
+		--color-hairline-strong:#363b42;
+		--color-border:#41464f;
+		--color-card-border:#363b42;
+		--color-hover-fill:#2e3239;
+		--color-press-fill:rgba(255,255,255,.14);
+		--color-code-on-tint:rgba(255,255,255,.08);
+		--color-on-accent-edge:rgba(14,23,38,.35);
+		--color-tag-ring:rgba(255,255,255,.28);
+
+		--color-slate-ink:#cdd2da;
+		--color-slate-body:#adb3bd;
+		--color-slate-medium:#979da8;
+		--color-slate-muted:#8f96a1;
+		--color-slate-placeholder:#858b96;
+		--color-slate-rule:#363b42;
+
+		--color-danger:#f2726a;
+		--color-danger-hover:#ff9690;
+		--color-on-danger:#1f0b0a;
+		--color-danger-tint:#2e1817;
+		--color-danger-tint-border:#6b2c28;
+		--color-danger-ink:#ffa39d;
+		--color-danger-soft:#2a1716;
+		--color-warn-tint:#2a2310;
+		--color-warn-tint-border:#5e4b14;
+		--color-warn-strong:#e0a82e;
+		--color-warn-ink:#f0d68a;
+		--color-warn-ink-soft:#d6b95e;
+		--color-info-tint:#172238;
+		--color-info-tint-border:#2f4b78;
+		--color-info-ink:#c5d6f2;
+		--color-success:#7bd08a;
+		--color-success-tint:#152619;
+		--color-success-tint-border:#2d5a37;
+		--color-note-tint:#2b2619;
+		--color-note-ink:#d8c38f;
+
+		--tile-face-top:30% 23%;
+		--tile-face-bottom:32% 17%;
+		--tile-mono-fill:30% 32% / .55;
+		--tile-mono-shadow:0% 0% / .35;
+		--tile-mono-ink:60% 80%;
+
+		--shadow-header:0 1px 6px rgba(0,0,0,.4);
+		--shadow-card:0 1px 3px rgba(0,0,0,.4);
+		--shadow-card-hover:0 2px 8px rgba(0,0,0,.5);
+		--shadow-modal:0 6px 28px rgba(0,0,0,.6);
+		--shadow-raised:0 1px 2px rgba(0,0,0,.5);
+		--shadow-sheet:0 -6px 28px rgba(0,0,0,.6);
+		--overlay:rgba(0,0,0,.6);
+	}
+}
+</style>
+<style>/* Shared gallery components — the small, hand-authored layer the
+ * security-posture UI epic (av-jafp: card badge av-isb3, posture popover
+ * av-41se, edit-page management av-p0a1) builds on. Explicitly NOT a utility
+ * framework: a handful of audited classes over tokens.css (av-xgik). Loaded
+ * on every gallery page after tokens.css and before the page sheet, so a
+ * page sheet can still override or extend a component.
+ *
+ * The .btn family, .card surface, and .spacer moved here from the three page
+ * stylesheets, where they were triplicated verbatim; values are unchanged. */
+
+/* --- buttons ---------------------------------------------------------- */
+.btn{display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-3) 18px;background:var(--brand-blue);color:var(--color-on-accent);border:none;border-radius:var(--radius-md);font-size:14px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--brand-blue-hover)}
+.btn-sm{padding:5px var(--space-5);font-size:13px}
+.btn-sec{background:var(--color-panel);color:var(--color-ink-soft);border:1px solid var(--color-border)}
+.btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:var(--color-panel)}
+.btn-danger{background:var(--color-danger);color:var(--color-on-danger);border:none}
+.btn-danger:hover{background:var(--color-danger-hover)}
+/* Square, label-less .btn — the gallery header's "Add artifact" and profile
+ * controls (av-qo05). A modifier rather than a page rule because it is the
+ * .btn family's fourth member: it changes the box and nothing else, so it
+ * composes with .btn-sec and .btn-danger the way the others do. The side is a
+ * labelled .btn's own height, which is what makes an icon-only control a peer
+ * of one beside it rather than a smaller afterthought, and a comfortable tap
+ * target on a phone. The glyph runs a little larger than body text because it
+ * is now carrying the whole meaning; the words live in aria-label/title. */
+.icon-btn{width:36px;height:36px;padding:0;justify-content:center;flex:0 0 auto;font-size:17px}
+.icon-btn i{line-height:1}
+/* A swapped-in fragment error (av-3cdp): a /partials/* lookup for an artifact
+ * that is gone answers 404 with the fragmentError partial, and htmx 4 swaps
+ * 4xx responses — so the pane shows this notice instead of keeping a stale
+ * view with no explanation. Lives here because every gallery page loads this
+ * sheet while each of the four panes sits under a different page sheet. */
+.frag-error{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-4) var(--space-5);background:var(--color-danger-tint);border:1px solid var(--color-danger-tint-border);border-radius:var(--radius-md);color:var(--color-danger-ink);font-size:13px}
+.frag-error i{line-height:1}
+/* A control that is present but cannot act — /profile's delete button until
+ * av-4wyq lands. It stays legible rather than ghosted, because the reason
+ * beside it is the point and an unreadable control just sends the reader
+ * looking for the enabled one that does not exist. The hover rule is what
+ * keeps a disabled button from lighting up under the pointer as though it
+ * would do something. */
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn:disabled:hover{background:var(--brand-blue)}
+.btn-sec:disabled:hover{background:var(--color-panel);border-color:var(--color-border);color:var(--color-ink-soft)}
+.btn-danger:disabled:hover{background:var(--color-danger)}
+
+/* --- app bar ---------------------------------------------------------- */
+/* Height lives here so pages can't drift apart; everything else stays in each
+ * page sheet. `body>header` outranks the sheets' `header` padding rules. */
+body>header{height:var(--header-height);padding-top:0;padding-bottom:0;flex-shrink:0}
+body>header .icon-btn{width:var(--header-control-size);height:var(--header-control-size)}
+body>header .btn:not(.icon-btn){padding-top:var(--space-1);padding-bottom:var(--space-1)}
+
+/* --- surfaces --------------------------------------------------------- */
+.card{background:var(--color-panel);border-radius:var(--radius-lg);padding:var(--space-6);box-shadow:var(--shadow-card)}
+
+/* --- card widget (av-fafu) --------------------------------------------- */
+/* The tile at the top of an artifact card: either a live widget frame from the
+ * render origin, or the default monogram tile. Shared by the gallery card and
+ * the edit page's widget preview, which is why it lives here — both must show
+ * the same box, or "preview" would be a lie.
+ *
+ * The well bleeds to the card's edges (negative margins cancel .card's padding)
+ * and clips to the card's top corners, so the widget reads as the card's face
+ * rather than as content pasted inside it. Height is fixed: a tile is a
+ * fixed-size surface an author designs for, and letting it grow with content
+ * would make a row of cards ragged.
+ *
+ * pointer-events:none on the frame is the load-bearing rule. It makes the
+ * widget non-interactive by construction — clicks, drags, and scrolls all pass
+ * through to the card, whose handler opens the artifact — so "the widget is
+ * informative, tap it to open the tool" needs no event plumbing to enforce. */
+/* The well's own background is the card surface, not the page ground: the
+ * frame renders transparent by default, so whatever is behind it IS the tile's
+ * background — and a widget that paints nothing must still read as part of the
+ * card rather than as a hole cut in it. */
+.card-widget{position:relative;height:132px;margin:calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;border-radius:var(--radius-lg) var(--radius-lg) 0 0;overflow:hidden;background:var(--color-panel);border-bottom:1px solid var(--color-hairline)}
+.card-widget-frame{position:absolute;inset:0;z-index:1;display:block;width:100%;height:100%;border:0;background:transparent;pointer-events:none}
+/* Default tile: a monogram on a tint derived from the artifact id (--tile-hue
+ * comes from the server, so the same artifact always wears the same face).
+ * The saturation/lightness halves are tokens, so the tile darkens with the
+ * page while keeping its hue. */
+.card-widget-default{position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,hsl(var(--tile-hue) var(--tile-face-top)),hsl(calc(var(--tile-hue) + 28) var(--tile-face-bottom)))}
+/* With a live frame the monogram is a fallback, not a backdrop: widgets render
+ * on a transparent background by contract, so leaving it painted underneath
+ * would show through the widget. It comes back — and the frame goes — only
+ * when the widget fails to report itself healthy (components.js). */
+.card-widget.has-frame .card-widget-default{display:none}
+.card-widget.has-frame.widget-failed .card-widget-default{display:flex}
+.card-widget.has-frame.widget-failed .card-widget-frame{display:none}
+.card-widget-monogram{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:hsl(var(--tile-hue) var(--tile-mono-fill));box-shadow:0 1px 4px hsl(var(--tile-hue) var(--tile-mono-shadow));color:hsl(var(--tile-hue) var(--tile-mono-ink));font-size:22px;font-weight:600;letter-spacing:.5px}
+
+/* Collapsible section (<details>/<summary>) with a muted summary line — the
+ * edit page's security section (av-p0a1) was the first user; the artifact
+ * source and gallery widget sections (av-fafu) are the rest, which is why the
+ * caret rules below live here keyed on the component rather than on one
+ * panel's id.
+ *
+ * The caret is a real icon (not a UTF-8 triangle) so it stays legible at any
+ * size/zoom, and it sits outside the summary's text span so JS that refreshes
+ * that text (edit.js renderSecurityPanel) never wipes it out. Two glyphs
+ * (caret-right / caret-down) are swapped by [open] rather than rotating one in
+ * place: Phosphor's caret-right glyph isn't centered in its em-box, so a
+ * transform:rotate(90deg) pivots around the box's geometric center instead of
+ * the visible mark's, swinging it off to a corner at an angle. */
+.details-panel{background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:var(--space-3) var(--space-5)}
+.details-panel>summary{cursor:pointer;font-size:13px;color:var(--color-muted);list-style:none;display:flex;align-items:center;gap:var(--space-2)}
+.details-panel>summary::-webkit-details-marker{display:none}
+.details-caret{flex-shrink:0}
+.details-caret-open{display:none}
+.details-panel[open]>summary .details-caret-closed{display:none}
+.details-panel[open]>summary .details-caret-open{display:inline}
+/* The body of an open panel, separated from its summary by a hairline. Shared
+ * by all three panels so they open the same way. */
+.details-panel>.panel-body{margin-top:var(--space-5);padding-top:var(--space-5);border-top:1px solid var(--color-hairline)}
+
+/* --- controls --------------------------------------------------------- */
+/* Floor for controls no rule below names: an unstyled input inherits the UA's
+ * ~13.33px, under the zoom threshold just as surely as a chosen 14px. */
+input,select,textarea{font-size:var(--field-font-size)}
+/* And a surface: with color-scheme set, an unstyled field takes the browser's
+ * own dark field gray, which sits apart from every panel it is drawn on.
+ * :where() keeps this at zero specificity so any rule naming a field wins. */
+::placeholder{color:var(--color-placeholder)}
+:where(input:not([type=checkbox],[type=radio],[type=color],[type=range],[type=file]),select,textarea){background-color:var(--color-panel);color:var(--color-ink)}
+
+.field{width:100%;padding:var(--space-3) var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
+.field:focus{border-color:var(--brand-blue)}
+.select{padding:7px var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
+.select:focus{border-color:var(--brand-blue)}
+
+/* --- security-posture primitives -------------------------------------- */
+/* Inline origin/chip badge — the allowlist badges are the first user. */
+.badge{display:inline-block;background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm);margin-right:var(--space-1)}
+
+/* One allowlist entry: origin chip plus its remove/allow affordance. */
+.allowlist-row{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) 0;font-size:13px}
+.allowlist-row code{background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm)}
+
+/* Small inline posture indicator (icon + optional label) — the gallery card
+ * badge (av-isb3) and the popover header (av-41se) build on this. Neutral
+ * throughout, no green/amber: the allowlist is transparency, not a verdict
+ * (spec 6.2). Sandboxed (no .has-grants) stays fully muted; once a grant
+ * exists the cluster reads slightly darker (mid-slate) so the glyphs read as
+ * present information rather than a warning. */
+/* Hover paints a gray pill behind the glyphs (av-uvc6), the cue that they
+ * open something on click; it stays while the popover is open. */
+.capability-cluster{display:inline-flex;align-items:center;gap:var(--space-3);font-size:12px;color:var(--color-muted);cursor:pointer;border-radius:var(--radius-pill);padding:2px var(--space-2);margin:-2px calc(var(--space-2) * -1);transition:background-color .1s ease,color .1s ease}
+.capability-cluster.has-grants{color:var(--color-ink-soft)}
+.capability-cluster:hover,.capability-cluster:focus-visible,.capability-wrap.is-open .capability-cluster{background-color:var(--color-hover-fill);color:var(--color-ink-soft)}
+/* The sharing glyph (av-uvc6, formerly the card's share badge, av-6xjd).
+ * Ambient, and darkening along the share ladder; still no red, since a
+ * deliberate share is not a fault. */
+.capability-cluster .capability-share-granted{color:var(--color-ink-soft)}
+.capability-cluster .capability-share-public,.capability-cluster .capability-share-shared-data{color:var(--color-ink)}
+.capability-cluster .capability-glyph{display:inline-flex;align-items:center;font-size:14px;line-height:1}
+.capability-cluster .capability-count{color:var(--color-ink);font-weight:600}
+
+/* capability-wrap positions the popover (av-41se) relative to its trigger.
+ * The popover opens only on explicit activation — click/tap, or Enter/Space
+ * while the trigger has focus — handled by components.js; it does NOT open
+ * on hover or on mere keyboard focus (:focus-within intentionally left out
+ * of the visibility rule below). Hovering/focusing the trigger instead shows
+ * a plain affordance highlight (background/color change above) signalling
+ * it's clickable, without popping content open unasked. The popover stays a
+ * plain div (not display:none) so it's always in the a11y/tab tree —
+ * visibility is purely visual, gated on .is-open. */
+.capability-wrap{position:relative;display:inline-flex}
+.capability-popover{position:absolute;top:100%;right:0;margin-top:var(--space-3);z-index:30;width:260px;max-width:80vw;background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);padding:var(--space-5);font-size:12px;color:var(--color-ink-soft);text-align:left;visibility:hidden;opacity:0;pointer-events:none;transition:opacity .12s ease}
+.capability-wrap.is-open .capability-popover{visibility:visible;opacity:1;pointer-events:auto}
+/* Shared by the artifact pill and gallery card action menus. */
+.action-menu-container{position:relative;display:inline-flex}
+.action-menu-panel{position:absolute;right:0;top:calc(100% + 6px);min-width:180px;z-index:40}
+.action-menu{padding:6px;background:var(--color-panel);border:1px solid var(--color-hairline-strong);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);font-size:13px;cursor:default}
+.action-menu[hidden]{display:none}
+.action-menu a,.action-menu button{display:flex;width:100%;align-items:center;gap:10px;padding:7px 10px;border:0;border-radius:calc(var(--radius-lg) - 7px);background:none;color:var(--color-ink);font:inherit;text-align:left;text-decoration:none;cursor:pointer}
+.action-menu .ph{font-size:16px;width:18px;color:var(--color-muted)}
+.action-menu a:hover,.action-menu a:focus-visible,.action-menu button:hover,.action-menu button:focus-visible{background:var(--color-accent-tint);color:var(--brand-blue);outline:none}
+.action-menu a:hover .ph,.action-menu a:focus-visible .ph,.action-menu button:hover .ph,.action-menu button:focus-visible .ph{color:var(--brand-blue)}
+.action-menu hr{border:0;border-top:1px solid var(--color-hairline);margin:5px 4px}
+
+.capability-popover-header{font-weight:600;color:var(--color-ink);margin-bottom:var(--space-4)}
+.capability-popover-row{display:flex;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)}
+.capability-popover-row:last-child{margin-bottom:0}
+.capability-popover-label{color:var(--color-ink);font-weight:600;margin-bottom:var(--space-1)}
+.capability-popover-origins code{display:block;background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm);margin-top:var(--space-1);font-family:monospace;word-break:break-all}
+.capability-popover-section{padding-top:var(--space-4);border-top:1px solid var(--color-hairline)}
+.capability-popover-manage{display:block;margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--color-hairline);color:var(--brand-blue);text-decoration:none}
+.capability-popover-manage:hover{text-decoration:underline}
+
+/* --- banners ----------------------------------------------------------------
+ * A strip of page chrome that says something the tool inside the frame cannot be
+ * trusted to say: shown or hidden by script, never drawn by the artifact. They
+ * began as the detail page's (av-yvtb's module-worker warning, the blocked-origin
+ * and redirect explanations, av-v991's resync notice) and are shared now that the
+ * version viewer (av-vw7r) tells a person on two other pages that nothing they
+ * do in a preview is saved. Non-blocking, in the amber of the .allowlist notice. */
+.banner{display:flex;align-items:flex-start;gap:8px;padding:8px 20px;font-size:13px;flex-shrink:0;border-bottom:1px solid var(--color-warn-tint-border);background:var(--color-warn-tint);color:var(--color-warn-ink)}
+.banner[hidden]{display:none}
+.banner-warn i.ph-warning{color:var(--color-warn-strong);font-size:16px;flex-shrink:0;line-height:1.4}
+.banner-body{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0}
+.banner-details{font-size:12px}
+.banner-details>summary{cursor:pointer;color:var(--color-warn-ink-soft);width:fit-content;user-select:none}
+.banner-details>summary:hover{color:var(--color-warn-ink)}
+.banner-details>p{margin:6px 0 0;line-height:1.5}
+.banner-detail-url{margin-top:6px;word-break:break-all}
+.banner-detail-url code{background:var(--color-code-on-tint);padding:1px 5px;border-radius:3px;font-size:11px}
+.banner-action{color:var(--brand-blue);text-decoration:none;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;flex-shrink:0;line-height:1.4}
+.banner-action:hover{text-decoration:underline}
+/* The resync notice (av-v991) reports a fact rather than a problem, so it does
+   not borrow the warning banner's yellow — a page that shouts about somebody
+   else saving something trains people to dismiss it. */
+.banner-info{border-bottom-color:var(--color-info-tint-border);background:var(--color-info-tint);color:var(--color-info-ink)}
+.banner-info i.ph{color:var(--brand-blue);font-size:16px;flex-shrink:0;line-height:1.4}
+/* .banner-action is otherwise an anchor; the reload is a button because it acts
+   on this page rather than navigating away. */
+button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:pointer}
+
+/* --- version viewer ---------------------------------------------------------
+ * An earlier version of an artifact shown running, to look at and not to keep.
+ * The chat's preview pane and the edit page's Versions panel swap the same
+ * fragment in (the versionViewer partial), so both draw it from here. The bar is
+ * amber on purpose: it is the one thing that says this is not the artifact as it
+ * is, and a person deciding whether to return to it has to be able to tell. */
+.version-viewer{display:flex;flex-direction:column;min-height:0;border:1px solid var(--color-warn-tint-border);border-radius:var(--radius-lg);overflow:hidden;background:var(--color-panel)}
+.version-viewer-bar{display:flex;align-items:center;gap:var(--space-5);padding:var(--space-3) var(--space-6);background:var(--color-warn-tint);border-bottom:1px solid var(--color-warn-tint-border);font-size:13px;color:var(--color-ink-soft)}
+.version-viewer-bar .ph-eye{flex:0 0 auto;font-size:18px;color:var(--color-warn-summary)}
+/* The unsaved-changes notice (a .banner, above) sits flush under the bar, so it
+ * takes the bar's inset rather than the page-wide strip's, and its icon lines up
+ * with the eye's. */
+.version-viewer .banner{padding:var(--space-3) var(--space-6)}
+/* What it is, then the promise, on two lines of their own: the long label
+ * truncates rather than pushing the buttons onto a row of their own. */
+.version-viewer-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:2px}
+.version-viewer-what{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.version-viewer-meta{color:var(--color-warn-ink)}
+.version-viewer-note{font-size:12px;color:var(--color-warn-ink)}
+.version-viewer-actions{flex:0 0 auto;display:flex;gap:var(--space-3)}
+@media (max-width:640px){
+	.version-viewer-bar{flex-wrap:wrap}
+	.version-viewer-actions{flex:1 0 100%}
+}
+.version-viewer-body{position:relative;height:420px}
+.version-viewer-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--color-panel)}
+
+/* --- utilities -------------------------------------------------------- */
+.row{display:flex;align-items:center;gap:var(--space-3)}
+.spacer{flex:1}
+.muted{color:var(--color-muted)}
+.faint{color:var(--color-faint)}
+.text-sm{font-size:12px}
+/* Present for a screen reader, not drawn. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* --- tags: a neutral pill led by a dot in the tag's color --------------- */
+.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px;font-weight:500;line-height:1;background:var(--color-ground);color:var(--color-ink-mid)}
+.tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--color-muted);transition:opacity .12s ease}
+.tag-pill-label{overflow-wrap:anywhere}
+/* Tag color picker: presets + custom. */
+.color-presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.color-swatch{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.color-swatch.selected{border-color:var(--color-ink-soft)}
+.color-custom-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.color-custom-row input[type=color]{width:36px;height:30px;padding:0;border:1px solid var(--color-border);border-radius:6px;cursor:pointer}
+.color-custom-row input[type=text]{flex:1}
+</style>
+<style>/* The account-settings surfaces' stylesheet. Served from the app origin at
+ * /assets/gallery/settings.css. Loads after tokens.css (design tokens) and
+ * components.css (shared .btn/.card/.field/.badge classes); only these pages'
+ * rules live here.
+ *
+ * It is named for the surface rather than for the one page on it (av-utap's
+ * /admin/users) because the same shell is what av-qwld's own-account settings
+ * page will wear. The two pages differ in authority, not in furniture — see
+ * internal/api/admin.go for where that authority actually lives. */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
+/* The sub-page header idiom shared with /new and the detail page: back link,
+ * then the page title. Kept identical so moving between them feels like one
+ * app rather than three. */
+header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header);padding:var(--space-5) var(--space-8);display:flex;align-items:center;gap:var(--space-6)}
+header h1{font-size:18px;font-weight:600}
+header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
+main{padding:var(--space-8);max-width:900px;margin:0 auto}
+
+/* --- lede -------------------------------------------------------------- */
+.lede h2{font-size:28px;font-weight:650;letter-spacing:-.025em}
+.lede p{font-size:14px;color:var(--color-muted);margin-top:7px;line-height:1.55;max-width:620px}
+.settings>.card{margin-top:26px}
+.settings-h3{font-size:15px;font-weight:600;margin-bottom:var(--space-6)}
+
+/* --- the account table ------------------------------------------------- */
+/* The table is the page. It scrolls inside its own wrapper rather than
+ * widening the document: five columns and an action cluster do not fit a
+ * phone, and a horizontally scrolling <body><div class="settings-preview-screen"> is worse than a scrolling
+ * table. */
+.settings-table-wrap{overflow-x:auto}
+/* The min-width is what makes the wrapper's scroll actually happen. Without it
+ * a width:100% table meets a narrow container by crushing whichever column can
+ * still give — the account name, the one column nobody can afford to lose —
+ * instead of overflowing into the scroll this wrapper exists for. */
+.settings-table{width:100%;min-width:660px;border-collapse:collapse;font-size:13px}
+/* Headers take the cells' horizontal padding, not just the vertical: with a
+ * column added they otherwise run into each other as one word. */
+.settings-table th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--color-label);padding:0 var(--space-5) var(--space-3) 0;border-bottom:1px solid var(--color-hairline);white-space:nowrap}
+.settings-table td{padding:var(--space-5) var(--space-5) var(--space-5) 0;border-bottom:1px solid var(--color-hairline);vertical-align:middle}
+.settings-table tr:last-child td{border-bottom:none}
+.settings-name{font-weight:600;color:var(--color-ink-soft);word-break:break-all}
+/* A disabled account stays legible — it is a row an admin has to read to
+ * re-enable it — but reads as switched off rather than merely last. */
+.settings-table tr.is-disabled .settings-name{color:var(--color-muted)}
+.settings-actions{white-space:nowrap}
+.settings-actions .btn{margin-left:var(--space-2)}
+.settings-actions-col{text-align:right}
+.settings-actions{text-align:right}
+.settings-note{margin-top:var(--space-6);line-height:1.55}
+
+/* Role and status badges. .badge carries the neutral chip (components.css);
+ * these two say which chip it is. Admin borrows the brand tint rather than a
+ * new hue, and "disabled" is deliberately not the danger red — the account is
+ * switched off, not in error. */
+.badge-admin{background:var(--color-accent-tint);color:var(--brand-blue);font-weight:600}
+.badge-off{background:var(--color-ground);color:var(--color-label);font-weight:600}
+
+/* --- entitlements (av-2p8z) -------------------------------------------- */
+/* The cell states the *resolved* ceiling and badges the part that came from
+ * the row, because "5 GiB" without knowing whether it is this account's or the
+ * instance's answers half the question. "Custom" is a neutral chip rather than
+ * a warning colour: an account on its own entitlement is the normal state on
+ * an instance that grants any, not a fault. */
+.settings-entitlement{white-space:nowrap}
+.settings-limit{color:var(--color-ink-soft)}
+.badge-custom{background:var(--color-note-tint);color:var(--color-note-ink);font-weight:600;margin-left:var(--space-2)}
+/* The external reference is somebody else's identifier, so it is secondary to
+ * the limit above it and may be long — it wraps rather than widening the
+ * table's scroll. */
+.settings-ref{margin-top:2px;white-space:normal;word-break:break-all;max-width:220px}
+.settings-h4{font-size:13px;font-weight:600;margin:var(--space-7) 0 var(--space-5)}
+
+/* The entitlement editor. A native <dialog>, so the focus trap, the Escape
+ * key and the inert background are the browser's rather than three more
+ * listeners in settings.js. */
+/* margin:auto is not decoration — it is what centres a modal <dialog> in its
+ * top layer, and the page's reset zeroes the UA's own. Without it the dialog
+ * opens flush against the top-left corner. */
+.settings-dialog{margin:auto;border:1px solid var(--color-hairline);border-radius:var(--radius-md);background:var(--color-panel);color:var(--color-ink);padding:var(--space-7);max-width:440px;width:calc(100% - 2 * var(--space-5))}
+.settings-dialog::backdrop{background:var(--overlay)}
+.settings-dialog .settings-h3{margin-bottom:var(--space-5);word-break:break-all}
+/* The dialog's own refusal line. The page's status region is behind the
+ * backdrop, so a modal that reports its refusals there reports them nowhere. */
+.settings-dialog-error{margin-top:var(--space-5);font-size:13px;line-height:1.5;color:var(--color-danger-hover)}
+.settings-dialog-error[hidden]{display:none}
+
+/* --- the add-account form ---------------------------------------------- */
+.settings-form{display:flex;flex-direction:column;gap:var(--space-3)}
+.settings-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--color-label);margin-top:var(--space-3)}
+.settings-check{display:flex;align-items:center;gap:var(--space-3);font-size:13px;color:var(--color-ink-mid);margin-top:var(--space-5);cursor:pointer}
+.settings-foot{display:flex;align-items:center;gap:var(--space-5);margin-top:var(--space-6);flex-wrap:wrap}
+.settings-foot .muted{line-height:1.5;max-width:420px}
+
+/* --- account facts (/profile, av-qo05) --------------------------------- */
+/* The Account section is a short list of labelled facts rather than a table.
+ * There is exactly one row's worth of information here — a person reading
+ * about themselves, not an admin reading across a directory — and a table of
+ * one row is a table pretending. The labels reuse .settings-label's type so
+ * the two pages read as one surface. */
+.settings-facts{display:grid;grid-template-columns:auto 1fr;gap:var(--space-4) var(--space-7);align-items:baseline}
+.settings-facts dt{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--color-label);white-space:nowrap}
+/* An email address or a provider subject can be long and carries no spaces to
+ * break at, so it wraps mid-string rather than widening the card past the
+ * viewport — the same reason .settings-name does. */
+.settings-facts dd{font-size:14px;color:var(--color-ink-soft);word-break:break-all}
+.settings-facts dd i{color:var(--color-muted);margin-right:var(--space-1)}
+
+/* --- danger zone (/profile, av-qo05) ----------------------------------- */
+/* An irreversible action has to look unlike the rest of the page before it is
+ * read, not after. The card keeps the shared .card surface and adds a
+ * danger-tinted edge and heading, so it is still one of the page's sections
+ * rather than a second component that happens to be red. */
+.card-danger{border:1px solid var(--color-danger);box-shadow:none}
+.settings-h3-danger{display:flex;align-items:center;gap:var(--space-3);color:var(--color-danger-hover)}
+/* Body copy inside a card, danger-tinted or not. One rule with two names,
+ * because the two are the same paragraph: the danger zone's weight comes from
+ * the card's border and its heading, never from its sentences being a
+ * different size. */
+.settings-copy,.settings-danger-copy{font-size:13px;color:var(--color-ink-soft);line-height:1.55;max-width:620px}
+.settings-danger-copy+.settings-danger-copy{margin-top:var(--space-5)}
+/* The reason beside a disabled control shares the button's .settings-foot row
+ * and wraps under it on a narrow screen. A control that cannot act is useless
+ * without the sentence saying why, so the two travel together. */
+.settings-foot .btn:disabled+.muted{max-width:460px}
+
+/* --- the typed confirmation (av-4wyq) ---------------------------------- */
+/* Step two of the deletion, revealed in place rather than shown in a dialog:
+ * the sentences above it are what someone needs while deciding, and a modal
+ * would ask for a typed phrase with the consequences covered up. The inset
+ * rule marks it as a second, narrower step inside the same card. */
+.settings-confirm{margin-top:var(--space-6);padding-top:var(--space-6);border-top:1px solid var(--color-danger)}
+.settings-confirm[hidden]{display:none}
+.settings-confirm .settings-label{display:block;margin-top:var(--space-6)}
+/* The phrase is quoted, not styled: .settings-label uppercases and letter-spaces
+ * its text, and a label reading "TYPE DELETE MY LIBRARY" asks for something
+ * other than what the field is compared against. */
+.settings-confirm code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:var(--field-code-font-size);background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm);text-transform:none;letter-spacing:normal}
+/* Sized from .field's token and never a literal px: a hardcoded size opts the
+ * control out of the coarse-pointer bump, and iOS Safari then zooms the page
+ * in on focus and does not zoom back out (av-3qmf). The width cap is the
+ * phrase's own length, so the field reads as "type this short thing". */
+.settings-confirm-field{max-width:320px;margin-top:var(--space-3)}
+
+/* --- status ------------------------------------------------------------ */
+/* One live region for every outcome on the page, success or refusal. The
+ * refusals here are worth reading in full (the last-admin one explains what
+ * to do instead), so it is a block of text rather than a toast that leaves. */
+.settings-status{margin-top:var(--space-6);padding:var(--space-5) var(--space-6);border-radius:var(--radius-md);font-size:13px;line-height:1.5;background:var(--color-panel);border:1px solid var(--color-hairline);color:var(--color-ink-soft)}
+.settings-status[hidden]{display:none}
+.settings-status.is-error{border-color:var(--color-danger);color:var(--color-danger-hover)}
+
+@media (max-width:640px){
+  header{padding:var(--space-5)}
+  main{padding:var(--space-5)}
+  /* The back link collapses to its arrow, as on /new and the detail page. */
+  .back-label{display:none}
+}
+
+/* Shared button display rules must not reveal deferred account actions. */
+.settings [hidden]{display:none!important}
+</style>
+<style>html{scrollbar-gutter:stable}body{min-height:0}.settings-preview-screen{background:var(--color-ground);border-radius:16px;padding:16px;overflow:hidden}header{position:static}.settings-preview-screen main{padding:24px 0}body{background:transparent}</style></head>
+<body><div class="settings-preview-screen">
+<header class="demo-header">
+<button class="demo-brand" id="demo-home">Exhibit<span id="demo-breadcrumb"> / My library</span></button>
+<span class="demo-badge">Interactive demo · sample data</span>
+<div class="demo-account">
+<button class="demo-avatar" id="demo-account" aria-label="Open account menu" aria-expanded="false" aria-controls="demo-menu"><i class="ph ph-user-circle" aria-hidden="true"></i></button>
+<div class="demo-menu" id="demo-menu" hidden>
+<div class="demo-identity"><strong>Your account</strong><span>you@example.com</span></div>
+<button id="demo-profile"><i class="ph ph-user-circle" aria-hidden="true"></i> Profile</button>
+<button id="demo-open-settings"><i class="ph ph-gear" aria-hidden="true"></i> Settings</button>
+<button id="demo-signout"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</button>
+</div></div></header>
+<main id="demo-library"><div class="lede"><h2>My library</h2><p>Open your account menu in the top right, then choose Settings.</p></div>
+<div class="demo-artifacts"><article class="demo-artifact"><div class="demo-tile demo-tile-blue"><i class="ph ph-chart-bar" aria-hidden="true"></i></div><h3>Weekly tracker</h3><p>Your habits, at a glance.</p></article>
+<article class="demo-artifact"><div class="demo-tile demo-tile-green"><i class="ph ph-calendar-blank" aria-hidden="true"></i></div><h3>Trip planner</h3><p>A place for the next adventure.</p></article>
+<article class="demo-artifact"><div class="demo-tile demo-tile-amber"><i class="ph ph-list" aria-hidden="true"></i></div><h3>Reading list</h3><p>Something worth keeping.</p></article></div>
+<p class="demo-hint">Profile opens a simulated Clerk dialog. Settings and the deletion confirmation are interactive. No real account changes are made.</p></main>
+
+<main class="settings" id="demo-settings" hidden>
+<div class="lede">
+  <h2>Settings.</h2>
+  <p>Manage your storage and your Exhibit account.</p>
+</div>
+
+<div class="card">
+  <h3 class="settings-h3">Profile</h3>
+  
+  <dl class="settings-facts">
+    <dt>Signed in as</dt>
+    
+    <dd><span class="settings-name">you@example.com</span></dd>
+    <dt>Sign-in</dt>
+    <dd><i class="ph ph-shield-check" aria-hidden="true"></i> Identity provider</dd>
+  </dl>
+  
+  
+  <div class="settings-foot" data-controller="clerk" data-clerk-mode-value="manage">
+    <button class="btn btn-sec" type="button" data-action="clerk#openProfile"><i class="ph ph-user-circle" aria-hidden="true"></i> Manage profile</button>
+    <span data-clerk-target="status" role="status"></span>
+  </div>
+  <p class="muted text-sm settings-note">Update your name, email, and sign-in methods in your profile.</p>
+  
+  
+</div>
+
+
+<section class="card" id="storage" aria-labelledby="storage-heading">
+  <h3 class="settings-h3" id="storage-heading"><i class="ph ph-hard-drives" aria-hidden="true"></i> Storage</h3>
+  <dl class="settings-facts">
+    <dt>Storage used</dt><dd>128.4 MiB</dd>
+    <dt>Artifacts</dt><dd>3 artifacts</dd>
+  </dl>
+  <p class="muted text-sm settings-note">Total storage used by your artifact files, widgets, saved versions, and stored assets.</p>
+</section>
+
+
+
+
+<div class="card">
+  <h3 class="settings-h3">Sign out</h3>
+  <p class="settings-copy">Sign out of this device. Your library will be here when you return.</p>
+  <form class="settings-foot" onsubmit="return false">
+    <button class="btn btn-sec" type="submit"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</button>
+  </form>
+</div>
+
+
+
+<div class="card card-danger" data-controller="account-deletion" data-account-deletion-hosted-value="true">
+  <h3 class="settings-h3 settings-h3-danger"><i class="ph ph-warning-octagon" aria-hidden="true"></i> Delete account</h3>
+  <p class="settings-danger-copy">Permanently delete your Exhibit account, library, saved data, and shared artifacts. This cannot be undone.</p>
+  
+  
+  <p class="settings-danger-copy">This account holds <strong>3 artifacts</strong>.</p>
+  
+  
+  <p class="settings-danger-copy">Your profile and sign-in methods stored with Clerk will also be deleted. Your Google, Apple, or other provider accounts are unaffected.</p>
+  
+  
+  <div class="settings-foot">
+    
+    <button class="btn btn-danger" type="button" id="delete-account" data-account-deletion-target="trigger" data-action="account-deletion#open" aria-expanded="false" aria-controls="delete-confirm">
+      <i class="ph ph-trash" aria-hidden="true"></i> Delete account
+    </button>
+    
+  </div>
+
+  
+  <div class="settings-confirm" id="delete-confirm" data-account-deletion-target="panel" hidden="">
+    
+    <p class="settings-danger-copy"><strong>This cannot be undone.</strong> Everything created or owned by you is permanently inaccessible.</p>
+    
+    <p class="settings-danger-copy">Your Exhibit library and your sign-in account will be permanently deleted. You will be signed out on every device. This does not delete your Google, Apple, or other provider accounts.</p>
+    
+    <label class="settings-label" for="delete-phrase">Type <code>delete my library</code> to confirm</label>
+    <input class="field settings-confirm-field" type="text" id="delete-phrase" data-account-deletion-target="phrase" data-action="input-&gt;account-deletion#update" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="delete my library">
+    <div class="settings-foot">
+      <button class="btn btn-danger" type="button" id="delete-confirm-go" data-account-deletion-target="submit" data-action="account-deletion#submit" disabled="">
+        <i class="ph ph-trash" aria-hidden="true"></i> Delete my account permanently
+      </button>
+      <button class="btn" type="button" id="delete-cancel" data-account-deletion-target="cancel" data-action="account-deletion#cancel">Cancel</button>
+    </div>
+  </div>
+  
+  
+  <a class="btn btn-sec" href="#" data-account-deletion-target="finish" hidden="">Return to sign in</a>
+  <div class="settings-status" id="profile-status" data-account-deletion-target="status" role="status" aria-live="polite" hidden=""></div>
+</div>
+</main>
+
+
+
+
+
+
+<main id="demo-complete" hidden><div class="card"><h2 id="demo-complete-title">Demo complete</h2><p id="demo-complete-message"></p><button class="btn btn-sec" id="demo-restart">Restart demo</button></div></main>
+<dialog class="demo-dialog" id="demo-profile-dialog" aria-labelledby="demo-profile-title">
+<div class="demo-dialog-heading"><div><h2 id="demo-profile-title">Account</h2><p>Simulated Clerk profile · sample data</p></div><button class="demo-close" id="demo-close-profile" aria-label="Close profile">×</button></div>
+<div class="demo-profile-tabs"><button id="demo-profile-tab" aria-pressed="true">Profile</button><button id="demo-security-tab" aria-pressed="false">Security</button></div>
+<div id="demo-profile-content"><h3>Profile details</h3><dl><dt>Profile</dt><dd>You</dd><dt>Email address</dt><dd>you@example.com</dd><dt>Connected accounts</dt><dd>GitHub · demo-user</dd></dl></div>
+<div id="demo-security-content" hidden><h3>Security</h3><dl><dt>Password</dt><dd>Managed by your sign-in provider</dd><dt>Active devices</dt><dd>This browser</dd></dl></div>
+</dialog>
+<style>
+[hidden]{display:none!important}
+.settings-preview-screen{min-height:520px}
+.demo-header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;z-index:10;position:relative}
+.demo-brand{border:0;background:transparent;color:var(--color-ink);font:650 18px system-ui;cursor:pointer;text-align:left}
+.demo-brand span{font-size:13px;font-weight:400;color:var(--color-muted)}
+.demo-badge{color:var(--color-muted);font-size:11px;margin-left:auto}
+.demo-account{position:relative}
+.demo-avatar{display:grid;place-items:center;font-size:32px;background:var(--color-accent-tint);color:var(--brand-blue);border:1px solid var(--color-border);border-radius:50%;width:40px;height:40px;cursor:pointer}
+.demo-menu{position:absolute;right:0;top:48px;width:230px;background:var(--color-panel);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);padding:8px;z-index:50}
+.demo-identity{display:flex;flex-direction:column;padding:10px 12px;border-bottom:1px solid var(--color-border);margin-bottom:6px;gap:4px;font-size:13px}
+.demo-identity span{color:var(--color-muted);font-size:12px}
+.demo-menu>button{display:flex;gap:10px;align-items:center;width:100%;border:0;background:transparent;color:var(--color-ink);padding:11px 12px;text-align:left;border-radius:6px;font:14px system-ui;cursor:pointer}
+.demo-menu>button:hover,.demo-menu>button:focus-visible{background:var(--color-ground)}
+.demo-artifacts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:26px}
+.demo-artifact{background:var(--color-panel);border:1px solid var(--color-border);border-radius:10px;overflow:hidden}
+.demo-tile{height:145px;display:grid;place-items:center;font-size:42px}
+.demo-tile-blue{background:#dce8f5;color:#416387}.demo-tile-green{background:#dde9df;color:#52715b}.demo-tile-amber{background:#f1e6d2;color:#8a7140}
+.demo-artifact h3{font-size:15px;padding:16px 16px 6px}.demo-artifact p{font-size:12px;color:var(--color-muted);padding:0 16px 18px}
+.demo-hint{font-size:12px;line-height:1.6;color:var(--color-muted);margin-top:22px;max-width:650px}
+.demo-dialog{margin:auto;border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:28px;width:580px;max-width:calc(100% - 24px);color:var(--color-ink);background:var(--color-panel);box-shadow:var(--shadow-modal)}
+.demo-dialog::backdrop{background:#0006}
+.demo-dialog-heading{display:flex;justify-content:space-between;align-items:start;gap:16px}.demo-dialog-heading h2{font-size:24px}.demo-dialog-heading p{font-size:12px;color:var(--color-muted);margin-top:6px}
+.demo-close{border:0;background:none;color:var(--color-muted);font-size:28px;cursor:pointer;padding:0 4px}
+.demo-profile-tabs{display:flex;gap:16px;border-bottom:1px solid var(--color-border);margin:24px 0}.demo-profile-tabs button{background:none;border:0;padding:10px 0;color:var(--color-muted);font:600 14px system-ui;cursor:pointer}.demo-profile-tabs button[aria-pressed=true]{color:var(--brand-blue);box-shadow:0 2px var(--brand-blue)}
+.demo-dialog h3{font-size:18px}.demo-dialog dl{display:grid;grid-template-columns:1fr 1.5fr;gap:22px 18px;margin-top:26px;font-size:14px}.demo-dialog dt{color:var(--color-muted)}
+#demo-complete p{margin:16px 0;line-height:1.6;font-size:14px}
+@media(max-width:560px){.demo-header{padding:12px}.demo-brand span{display:none}.demo-badge{font-size:10px;max-width:120px;text-align:right}.demo-artifacts{grid-template-columns:1fr}.demo-tile{height:100px}.demo-dialog{padding:20px}.demo-dialog dl{grid-template-columns:1fr;gap:8px}.demo-dialog dd{margin-bottom:14px}}
+</style>
+<script>
+const byId = id => document.getElementById(id);
+const menu = byId('demo-menu');
+const accountButton = byId('demo-account');
+const dialog = byId('demo-profile-dialog');
+const trigger = byId('delete-account');
+const panel = byId('delete-confirm');
+const phrase = byId('delete-phrase');
+const submit = byId('delete-confirm-go');
+function closeMenu(){menu.hidden=true;accountButton.setAttribute('aria-expanded','false')}
+function view(id){for(const name of ['demo-library','demo-settings','demo-complete']) byId(name).hidden=name!==id;closeMenu();byId('demo-breadcrumb').textContent=id==='demo-library'?' / My library':id==='demo-settings'?' / Settings':' / Demo';window.scrollTo(0,0)}
+function closeConfirmation(){panel.hidden=true;trigger.setAttribute('aria-expanded','false');phrase.value='';submit.disabled=true}
+function openProfile(){closeMenu();dialog.showModal()}
+accountButton.onclick=()=>{menu.hidden=!menu.hidden;accountButton.setAttribute('aria-expanded',String(!menu.hidden));if(!menu.hidden)byId('demo-profile').focus()};
+byId('demo-home').onclick=()=>view('demo-library');
+byId('demo-open-settings').onclick=()=>view('demo-settings');
+byId('demo-profile').onclick=openProfile;
+document.querySelector('[data-action="clerk#openProfile"]').onclick=openProfile;
+byId('demo-close-profile').onclick=()=>dialog.close();
+byId('demo-profile-tab').onclick=()=>{byId('demo-profile-content').hidden=false;byId('demo-security-content').hidden=true;byId('demo-profile-tab').setAttribute('aria-pressed','true');byId('demo-security-tab').setAttribute('aria-pressed','false')};
+byId('demo-security-tab').onclick=()=>{byId('demo-profile-content').hidden=true;byId('demo-security-content').hidden=false;byId('demo-profile-tab').setAttribute('aria-pressed','false');byId('demo-security-tab').setAttribute('aria-pressed','true')};
+trigger.onclick=()=>{panel.hidden=false;trigger.setAttribute('aria-expanded','true');phrase.focus()};
+byId('delete-cancel').onclick=()=>{closeConfirmation();trigger.focus()};
+phrase.oninput=()=>{submit.disabled=phrase.value.trim().toLowerCase()!=='delete my library'};
+function complete(title,message){byId('demo-complete-title').textContent=title;byId('demo-complete-message').textContent=message;view('demo-complete')}
+submit.onclick=()=>{if(submit.disabled)return;complete('Deletion demo complete','In the app, this removes the Exhibit library and Clerk sign-in account. This demo made no account changes.');closeConfirmation()};
+function signout(){complete('Sign-out demo complete','In the app, this ends your session and takes you to sign in. Your library stays intact. This demo made no account changes.')}
+byId('demo-signout').onclick=signout;
+document.querySelector('form').onsubmit=event=>{event.preventDefault();signout()};
+byId('demo-restart').onclick=()=>{closeConfirmation();view('demo-library')};
+document.addEventListener('click',event=>{if(!event.target.closest('.demo-account'))closeMenu()});
+document.addEventListener('keydown',event=>{if(event.key==='Escape')closeMenu()});
+</script>
+</div></body></html>

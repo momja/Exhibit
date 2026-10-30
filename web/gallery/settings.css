@@ -16,6 +16,12 @@ header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bot
 header h1{font-size:18px;font-weight:600}
 header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
 main{padding:var(--space-8);max-width:900px;margin:0 auto}
+/* Match the approved account flow while retaining the ordinary admin header. */
+.account-settings-header{gap:var(--space-3);min-height:65px}
+.account-settings-header .account-settings-brand{font-size:18px;font-weight:650;color:var(--color-ink)}
+.account-settings-separator,.account-settings-header h1{font-size:13px;font-weight:400;color:var(--color-muted)}
+.account-settings-header .account-control{margin-left:auto}
+
 
 /* --- lede -------------------------------------------------------------- */
 .lede h2{font-size:28px;font-weight:650;letter-spacing:-.025em}
@@ -156,3 +162,6 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
   /* The back link collapses to its arrow, as on /new and the detail page. */
   .back-label{display:none}
 }
+
+/* Shared button display rules must not reveal deferred account actions. */
+.settings [hidden]{display:none!important}

@@ -139,3 +139,31 @@ Cases cover two different menus, escaped payloads, keyboard/focus, actual htmx
 replacements and appends, disconnect/reconnect, and the existing duplication
 dialog. Add browser integration cases for new controllers; keep the miniature
 Node DOM focused on feature logic.
+
+## Account menu and Settings
+
+The gallery and Settings header render the same `accountControl` template partial.
+Hosted accounts have one Clerk user button. `clerk-menu.js` adds a Settings link
+using Clerk's supported custom menu API. Clerk's Profile and Security screens
+retain their standard content. Settings lives at `/settings` (`/profile` is a
+compatibility alias) and offers storage usage, sign-out, and account deletion.
+Its Manage profile button opens the unmodified Clerk profile modal. The Settings
+header keeps that same account menu beside the Exhibit / Settings breadcrumb,
+matching the approved interactive demo. Storage and artifact counts come from
+the session owner, and the demo's sample data and simulated actions are confined
+to `designs/settings-demo.html`.
+
+The `account-deletion` controller is shared by hosted and self-hosted settings.
+It reveals the server-rendered confirmation, resets the phrase on cancellation,
+prevents duplicate requests, and displays the server's pending-deletion message
+when provider cleanup needs retrying. The server enforces the confirmation and
+last-administrator guard independently. `TestClerkAccountBrowser` covers the menu,
+profile launch, Settings navigation, real artifact byte accounting and erasure,
+confirmation, mobile layout, and complete or
+pending deletion, with the provider UI boundary stubbed.
+
+The screenshots show the real Settings page rendered with that provider stub:
+
+![Settings](screenshots/Exh-r6a0/settings.png)
+
+[Phone layout](screenshots/Exh-r6a0/settings-mobile.png)

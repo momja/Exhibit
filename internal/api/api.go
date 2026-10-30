@@ -37,6 +37,7 @@ type HostedLogin interface {
 	Identity(*http.Request) (auth.HostedIdentity, error)
 	ResolveEmail(context.Context, string) (string, error)
 	RevokeSessions(context.Context, string) (int64, error)
+	DeleteUser(context.Context, string) error
 	// SessionExpiresIn is how long the request's session token has left.
 	SessionExpiresIn(*http.Request) time.Duration
 }
@@ -453,7 +454,8 @@ func (ro *Router) setupRoutes() {
 		// guard: this handler reads ownerIDFromCtx and nothing else, so a
 		// session is the whole authorization. Registering the two beside each
 		// other is where that difference is visible.
-		r.Get("/profile", ro.profilePage)
+		r.Get("/settings", ro.profilePage)
+		r.Get("/profile", ro.profilePage) // compatibility with existing account links
 
 		// Server-rendered fragments, swapped into a live page by htmx
 		// (av-6m3e). They render the same template partials the full page

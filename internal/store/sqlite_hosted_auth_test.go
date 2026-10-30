@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHostedDeletionRequiresFreshSessionAcrossRestart(t *testing.T) {
+func TestHostedIdentityDeletionFencesEverySessionAcrossRestart(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "hosted.db")
 	s, err := OpenSQLite(path)
@@ -39,16 +39,19 @@ func TestHostedDeletionRequiresFreshSessionAcrossRestart(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.UpsertHostedUser(ctx, u.ExternalID, "new@example.test", oldSession)
 	require.ErrorIs(t, err, ErrNotFound)
-	fresh, err := s.UpsertHostedUser(ctx, u.ExternalID, "new@example.test", cutoff+1)
+
+	_, err = s.UpsertHostedUser(ctx, u.ExternalID, "new@example.test", cutoff+1)
+	require.ErrorIs(t, err, ErrNotFound, "even a fresh login cannot recreate an identity awaiting deletion")
+	pending, err := s.PendingHostedIdentityDeletions(ctx)
 	require.NoError(t, err)
-	require.NotEqual(t, u.ID, fresh.ID)
-	require.False(t, fresh.IsAdmin)
-	// An old browser cannot authenticate as the newly created owner either.
-	_, err = s.UpsertHostedUser(ctx, u.ExternalID, "stale@example.test", oldSession)
-	require.ErrorIs(t, err, ErrNotFound)
-	fresh, err = s.GetUser(ctx, fresh.ID)
+	require.Equal(t, []string{u.ExternalID}, pending)
+	require.NoError(t, s.CompleteHostedIdentityDeletion(ctx, u.ExternalID))
+	pending, err = s.PendingHostedIdentityDeletions(ctx)
 	require.NoError(t, err)
-	require.Equal(t, "new@example.test", fresh.Email)
+	require.Empty(t, pending)
+	_, err = s.UpsertHostedUser(ctx, u.ExternalID, "new@example.test", cutoff+2)
+	require.ErrorIs(t, err, ErrNotFound, "the fence remains after Clerk deletion completes")
+
 }
 
 func TestHostedDeleteGuardIgnoresUnusableLocalAdmin(t *testing.T) {
@@ -116,5 +119,19 @@ func TestHostedDeletionUsesProviderTimeWhenClockIsAhead(t *testing.T) {
 		require.ErrorIs(t, err, ErrNotFound)
 	}
 	_, err = s.UpsertHostedUser(ctx, member.ExternalID, member.Email, providerCutoff+1)
+	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestLegacyLibraryDeletionStillAllowsFreshSession(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	_, err := s.db.ExecContext(ctx, `INSERT INTO hosted_account_deletions (external_id, deleted_at_ms) VALUES ('clerk:legacy', 100)`)
 	require.NoError(t, err)
+	_, err = s.UpsertHostedUser(ctx, "clerk:legacy", "legacy@example.test", 100)
+	require.ErrorIs(t, err, ErrNotFound)
+	_, err = s.UpsertHostedUser(ctx, "clerk:legacy", "legacy@example.test", 101)
+	require.NoError(t, err)
+	pending, err := s.PendingHostedIdentityDeletions(ctx)
+	require.NoError(t, err)
+	require.Empty(t, pending, "upgrading must not delete legacy Clerk identities")
 }

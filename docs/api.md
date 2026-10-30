@@ -482,7 +482,9 @@ Erases the caller's account and everything this instance holds for it: every art
 
 The route takes **no id**. It acts on the account the request's own session resolved to and cannot name another, which is why a session is the whole authorization for it; `/api/admin/*` is where acting on somebody else lives. A request carrying the service token instead of a session is answered `404`: that credential is not a person, and would otherwise resolve to the single-user default owner. The exact `confirm` phrase is required (`400` otherwise), and the instance's last enabled admin is refused (`409`) — promote somebody else first.
 
-Deleting here cannot touch the identity provider that issued the login. The same person signing in again gets a **new, empty** account, because `external_id` is unique and the row is created at first login.
+For self-hosted OIDC, deletion leaves the identity provider untouched. The same person signing in again gets a **new, empty** account.
+
+For hosted Clerk accounts, deletion also removes the Clerk user through the backend SDK. Sessions are revoked first, and the local transaction records the identity deletion before the provider call. A provider failure after local erasure returns `202` with a JSON `message` explaining that sign-in account deletion is pending; the server retries at startup and every minute. Deleted identities are permanently blocked from recreating an Exhibit account. Deleting a Clerk user does not delete upstream Google, Apple, or other provider accounts. Clerk's own self-deletion control remains disabled so it cannot bypass Exhibit cleanup and the last-administrator guard.
 
 ## Render surface
 

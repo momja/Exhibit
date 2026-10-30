@@ -36,3 +36,11 @@
 </main>
 </body>
 </html>{{end}}
+
+{{/* The same account entry point on the gallery and Settings. Clerk owns its
+     menu and modal; Exhibit only adds its Settings link through the SDK. */}}
+{{define "accountControl"}}{{if .}}<div class="account-control" data-controller="clerk" data-clerk-mode-value="user">
+  <div data-clerk-target="mount"></div>
+  <span data-clerk-target="status" role="status"></span>
+  <a href="/settings" data-clerk-target="recovery" hidden>Settings</a>
+</div>{{else}}<a class="btn btn-sec icon-btn" href="/settings" aria-label="Settings" title="Settings"><i class="ph ph-user-circle" aria-hidden="true"></i></a>{{end}}{{end}}

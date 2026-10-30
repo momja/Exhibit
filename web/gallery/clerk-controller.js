@@ -1,12 +1,14 @@
 import { Controller } from '../stimulus/stimulus.js';
 import { clerkClient, clerkClientAfterLoad } from './clerk-client.js';
 import { clerkAuthAppearance } from './clerk-appearance.js';
+import { clerkUserButtonOptions } from './clerk-menu.js';
 
 export default class extends Controller {
   static targets = ['mount', 'status', 'recovery'];
   static values = { mode: String, next: { type: String, default: '/' } };
 
   async connect() {
+    if (this.modeValue === 'manage') return;
     try {
       // The account button rides on an ordinary page; the other modes are
       // login pages, where nothing else is waiting.
@@ -23,7 +25,7 @@ export default class extends Controller {
           // The server enforces Exhibit-owned deletion before rendering this page.
           // Refresh persisted client data so the panel reflects that permission.
           await clerk.user.reload();
-          if (this.element.isConnected) clerk.mountUserButton(this.mountTarget);
+          if (this.element.isConnected) clerk.mountUserButton(this.mountTarget, clerkUserButtonOptions());
         }
       } else if (clerk.isSignedIn) {
         await clerk.session.getToken();
@@ -40,6 +42,18 @@ export default class extends Controller {
         this.statusTarget.textContent = error.message;
         if (this.hasRecoveryTarget) this.recoveryTarget.hidden = false;
       }
+    }
+  }
+
+  async openProfile() {
+    this.statusTarget.textContent = 'Loading your profile…';
+    try {
+      const clerk = await clerkClient();
+      if (!this.element.isConnected) return;
+      this.statusTarget.textContent = '';
+      clerk.openUserProfile();
+    } catch (error) {
+      if (this.element.isConnected) this.statusTarget.textContent = error.message;
     }
   }
 

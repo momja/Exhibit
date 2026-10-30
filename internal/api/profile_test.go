@@ -250,7 +250,7 @@ func TestProfileOnAnInstanceWithNoLogin(t *testing.T) {
 func TestGalleryHeaderCarriesBothIconControls(t *testing.T) {
 	page := getPage(t, newTestRouter(t), "/")
 
-	assert.Contains(t, page, `href="/profile" aria-label="Your account" title="Your account"`)
+	assert.Contains(t, page, `href="/settings" aria-label="Settings" title="Settings"`)
 	assert.Contains(t, page, `href="/new" aria-label="Add artifact" title="Add artifact"`)
 	assert.Contains(t, page, "ph-user-circle")
 	assert.Contains(t, page, `class="btn btn-sec" href="/admin/users"`,
