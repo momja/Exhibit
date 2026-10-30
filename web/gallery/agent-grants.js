@@ -27,7 +27,7 @@ function initializeAgentGrantsPanel() {
 
   function forgetToken() {
     issuedGrantID = '';
-    byId('agent-grant-token').value = '';
+    ['agent-grant-token', 'agent-grant-command', 'agent-grant-config'].forEach((id) => { byId(id).value = ''; });
     byId('agent-grant-issued').hidden = true;
   }
 
@@ -50,6 +50,18 @@ function initializeAgentGrantsPanel() {
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape' && !panel.hidden) close();
   });
+
+  // The connector's configuration, for the token just issued. Values only:
+  // nothing here is parsed as markup.
+  function showConfig(token) {
+    const origin = byId('agent-grant-issued').dataset.appOrigin || '';
+    byId('agent-grant-token').value = token;
+    byId('agent-grant-command').value = 'claude mcp add exhibit --env EXHIBIT_URL=' + origin +
+      ' --env EXHIBIT_TOKEN=' + token + ' -- exhibit-mcp';
+    byId('agent-grant-config').value = JSON.stringify({ mcpServers: { exhibit: {
+      command: 'exhibit-mcp', env: { EXHIBIT_URL: origin, EXHIBIT_TOKEN: token }
+    } } }, null, 2);
+  }
 
   async function mutate(operation, failureMessage) {
     if (busy) return;
@@ -76,22 +88,28 @@ function initializeAgentGrantsPanel() {
       const data = await response.json();
       if (!data.token || !data.grant) throw new Error('missing token');
       issuedGrantID = data.grant.id;
-      byId('agent-grant-token').value = data.token;
+      showConfig(data.token);
       byId('agent-grant-issued').hidden = false;
       return '✓ Token issued';
     }, 'Could not issue a token. Try again.');
   });
 
+  function copyField(id, what) {
+    const field = byId(id);
+    field.select();
+    const fallback = 'Select the ' + what.toLowerCase() + ' and copy it.';
+    if (!navigator.clipboard) return status(fallback);
+    return navigator.clipboard.writeText(field.value)
+      .then(() => status('✓ ' + what + ' copied'))
+      .catch(() => status(fallback));
+  }
+
   panel.addEventListener('click', function(e) {
     const target = e.target;
     if (!target.closest) return;
-    if (target.closest('#agent-grant-copy')) {
-      const field = byId('agent-grant-token');
-      field.select();
-      if (!navigator.clipboard) return status('Select the token and copy it.');
-      return navigator.clipboard.writeText(field.value)
-        .then(() => status('✓ Token copied'))
-        .catch(() => status('Select the token and copy it.'));
+    for (const [button, field, what] of [['agent-grant-copy', 'agent-grant-token', 'Token'],
+      ['agent-grant-command-copy', 'agent-grant-command', 'Command'], ['agent-grant-config-copy', 'agent-grant-config', 'Configuration']]) {
+      if (target.closest('#' + button)) return copyField(field, what);
     }
     const revoke = target.closest('[data-action="revoke-agent-grant"]');
     if (!revoke || busy) return;

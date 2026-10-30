@@ -20,7 +20,7 @@ async function load(responses = []) {
     navigator: { clipboard: { writeText: async (text) => { copied.push(text); } } }
   }, {
     'agent-grants-panel': { hidden: true },
-    'agent-grant-issued': { hidden: true },
+    'agent-grant-issued': { hidden: true, dataset: { appOrigin: 'https://exhibit.test' } },
     'agent-grant-label': { value: '' }
   });
   page.document.body.addEventListener('exhibit:agent-grants-changed', () => events.push('changed'));
@@ -35,8 +35,8 @@ async function load(responses = []) {
   const revoke = (grantId) => panel.dispatchEvent({ type: 'click', target: {
     closest: (selector) => selector === '[data-action="revoke-agent-grant"]' ? { dataset: { grantId } } : null
   } });
-  const copy = () => panel.dispatchEvent({ type: 'click', target: {
-    closest: (selector) => selector === '#agent-grant-copy' ? page.byId('agent-grant-copy') : null
+  const copy = (button = 'agent-grant-copy') => panel.dispatchEvent({ type: 'click', target: {
+    closest: (selector) => selector === '#' + button ? page.byId(button) : null
   } });
   const refresh = () => panel.dispatchEvent({ type: 'htmx:after:swap', target: page.byId('agent-grants-body') });
   await page.loadModule(SCRIPT);
@@ -62,6 +62,14 @@ test('issuing shows the token once, outside the refreshed list, and copies it', 
   await page.copy();
   assert.deepEqual(page.copied, ['exgrant_secret']);
   assert.equal(page.byId('agent-grants-status').textContent, '✓ Token copied');
+
+  assert.equal(page.byId('agent-grant-command').value,
+    'claude mcp add exhibit --env EXHIBIT_URL=https://exhibit.test --env EXHIBIT_TOKEN=exgrant_secret -- exhibit-mcp');
+  assert.deepEqual(JSON.parse(page.byId('agent-grant-config').value), { mcpServers: { exhibit: {
+    command: 'exhibit-mcp', env: { EXHIBIT_URL: 'https://exhibit.test', EXHIBIT_TOKEN: 'exgrant_secret' } } } });
+  await page.copy('agent-grant-config-copy');
+  assert.equal(page.copied.length, 2);
+  assert.equal(page.byId('agent-grants-status').textContent, '✓ Configuration copied');
 });
 
 test('closing the panel forgets the token', async () => {
@@ -72,6 +80,7 @@ test('closing the panel forgets the token', async () => {
   await page.byId('agent-grants-close').click();
   assert.equal(page.panel.hidden, true);
   assert.equal(page.byId('agent-grant-token').value, '');
+  assert.equal(page.byId('agent-grant-config').value, '', 'the config carries the token too');
   assert.equal(page.byId('agent-grant-issued').hidden, true);
   assert.equal(page.byId('agent-grants-open').focused, true);
 });

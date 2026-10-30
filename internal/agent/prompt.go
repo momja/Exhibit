@@ -5,6 +5,8 @@ import (
 	"embed"
 	"strings"
 	"text/template"
+
+	"github.com/momja/Exhibit/internal/agentguidance"
 )
 
 // Every model-facing prompt lives in prompts/*.tmpl, one file per prompt, so
@@ -15,7 +17,11 @@ import (
 //go:embed prompts/*.tmpl
 var promptFS embed.FS
 
-var promptTemplates = template.Must(template.New("").Option("missingkey=error").ParseFS(promptFS, "prompts/*.tmpl"))
+// The shared guidance (agentguidance) is parsed into the same set, so a
+// prompt here includes it by file name: what an artifact is says the same
+// thing to Pi as to an agent reaching Exhibit over MCP.
+var promptTemplates = template.Must(template.Must(template.New("").Option("missingkey=error").
+	ParseFS(promptFS, "prompts/*.tmpl")).ParseFS(agentguidance.FS, "*.tmpl"))
 
 // renderPrompt executes prompts/<name>.tmpl. The single trailing newline an
 // editor adds to the file is not part of the prompt. Templates take only

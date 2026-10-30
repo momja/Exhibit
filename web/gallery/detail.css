@@ -60,6 +60,8 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 #agent-grant-issued{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--color-hairline);border-radius:8px}
 #agent-grant-issued[hidden]{display:none}
 #agent-grant-issued p{margin:0}
+#agent-grant-issued .share-link-row{align-items:flex-start}
+.agent-grant-config{resize:vertical;white-space:pre}
 .agent-grants{display:flex;flex-direction:column;gap:8px}
 .agent-grants .share-grant{flex-wrap:wrap}
 #agent-grants-status{flex:1}

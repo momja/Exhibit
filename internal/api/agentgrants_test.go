@@ -140,6 +140,21 @@ func TestAgentGrantReachesNothingButItsArtifact(t *testing.T) {
 	}
 }
 
+func TestAgentCredentialReportsItsOwnScopeOnly(t *testing.T) {
+	r := newTestRouter(t)
+	id := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
+	tok, _ := issueAgentGrant(t, r, id, "agent")
+
+	w := doWithToken(t, r, "GET", "/api/agent/credential", tok, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `{"artifact_id":"`+id+`"}`, w.Body.String())
+
+	w = doJSON(t, r, "GET", "/api/agent/credential", nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, "a person's credential has no agent scope")
+	w = doWithToken(t, r, "POST", "/api/agent/credential", tok, nil)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
 func TestRevokedAgentGrantIsUnauthorized(t *testing.T) {
 	r := newTestRouter(t)
 	id := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
@@ -249,10 +264,12 @@ func TestAgentGrantsPanelIsTheOwners(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	page := w.Body.String()
 	for _, id := range []string{"agent-grants-open", "agent-grants-panel", "agent-grants-body", "agent-grant-issued",
-		"agent-grant-token", "agent-grant-copy", "agent-grants-status", "agent-grants-close", "agent-grant-label"} {
+		"agent-grant-token", "agent-grant-copy", "agent-grants-status", "agent-grants-close", "agent-grant-label",
+		"agent-grant-command", "agent-grant-command-copy", "agent-grant-config", "agent-grant-config-copy"} {
 		assert.Contains(t, page, `id="`+id+`"`)
 	}
 	assert.Contains(t, page, "gallery/agent-grants.js")
+	assert.Contains(t, page, `data-app-origin="http://app.test"`, "the config names this instance")
 
 	w = doJSON(t, r, "GET", "/partials/agent-grants?artifact=no-such-artifact", nil)
 	assert.Equal(t, http.StatusNotFound, w.Code)
