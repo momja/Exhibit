@@ -189,3 +189,8 @@ input.state-input{max-width:340px}
 .modal input[type=text]:focus{border-color:var(--brand-blue)}
 .modal-error{color:var(--color-danger-hover);font-size:12px;margin-top:10px}
 .modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
+
+/* The component kit picker under the title (Exh-61ix). Wraps on a phone, so
+   the select and its note never push the page wider than the screen. */
+.kit-row{flex-wrap:wrap;margin-top:var(--space-2)}
+.kit-row .kit-picker{max-width:100%}

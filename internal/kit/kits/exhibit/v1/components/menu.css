@@ -1,0 +1,11 @@
+.kit-menu[popover]{
+	margin:0;padding:var(--kit-space-1);min-width:180px;
+	border:1px solid var(--kit-color-hairline);border-radius:var(--kit-radius-md);
+	background:var(--kit-color-panel);color:var(--kit-color-ink);box-shadow:var(--kit-shadow-raised);
+}
+.kit-menu__item{
+	display:flex;width:100%;align-items:center;gap:var(--kit-space-2);
+	padding:var(--kit-space-2) var(--kit-space-3);border:0;border-radius:var(--kit-radius-sm);
+	background:none;color:inherit;text-align:left;cursor:pointer;text-decoration:none;
+}
+.kit-menu__item:hover{background:var(--kit-color-subtle)}

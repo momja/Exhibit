@@ -27,6 +27,16 @@
   <label class="text-sm muted" for="title">Artifact title</label>
   <input type="text" id="title" value="{{.Title}}" placeholder="Title">
 
+  {{/* Which component kit draws this artifact (Exh-61ix). The source names
+       only the kit contract; the look is chosen here, saved with the page's
+       Save, and resolved on every render, so changing it touches neither the
+       source nor the version history. */}}
+  <div class="row kit-row">
+    <label class="text-sm muted" for="kit-select">Component kit</label>
+    {{template "kitPicker" .Kit}}
+    {{if not .UsesKit}}<span class="text-sm muted">This artifact's source does not use the component kit, so no kit applies until it does.</span>{{end}}
+  </div>
+
   {{/* The page is peer sections — tags, security, state, artifact source,
        gallery widget — each a .details-panel with the same caret and summary
        shape.

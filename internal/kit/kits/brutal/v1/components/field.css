@@ -1,0 +1,16 @@
+.kit-field{display:flex;flex-direction:column;gap:var(--kit-space-1)}
+.kit-field__label{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--kit-color-ink)}
+.kit-field__hint{font-size:var(--kit-text-sm);color:var(--kit-color-muted)}
+.kit-input{
+	width:100%;min-height:40px;padding:var(--kit-space-2) var(--kit-space-3);
+	border:2px solid var(--kit-color-border);border-radius:var(--kit-radius-md);
+	background:var(--kit-color-panel);color:var(--kit-color-ink);font-size:var(--kit-field-text);font-weight:500;
+}
+.kit-input:focus-visible{box-shadow:3px 3px 0 var(--kit-color-accent)}
+textarea.kit-input{min-height:80px;resize:vertical}
+.kit-input:user-invalid{border-color:var(--kit-color-danger);box-shadow:3px 3px 0 var(--kit-color-danger)}
+.kit-field:has(.kit-input:user-invalid) .kit-field__hint{color:var(--kit-color-danger);font-weight:700}
+.kit-check{display:inline-flex;align-items:center;gap:var(--kit-space-2);cursor:pointer;font-weight:600}
+.kit-check input{appearance:none;margin:0;width:20px;height:20px;border:2px solid var(--kit-color-border);background:var(--kit-color-panel);display:grid;place-content:center;cursor:pointer}
+.kit-check input:checked{background:var(--kit-color-accent)}
+.kit-check input:checked::after{content:"";width:10px;height:6px;border:solid var(--kit-color-on-accent);border-width:0 0 3px 3px;transform:translateY(-1px) rotate(-45deg)}

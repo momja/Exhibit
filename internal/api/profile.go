@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/momja/Exhibit/internal/humanize"
+	"github.com/momja/Exhibit/internal/kit"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -100,9 +101,10 @@ type profileAccount struct {
 // active sessions, export — and a page laid out in cards takes each of those
 // as an addition rather than a redesign.
 type profilePageData struct {
-	Header  appHeaderView
-	Favicon template.URL
-	Account profileAccount
+	Header     appHeaderView
+	Favicon    template.URL
+	Account    profileAccount
+	LibraryKit kitPickerView
 	pageCredentials
 }
 
@@ -144,11 +146,18 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 			"Its library belongs to whoever can reach the origin; removing it is the operator's to do on the host."
 	}
 
+	libraryKit, err := ro.cfg.Store.LibraryKit(ctx, ownerIDFromCtx(ctx))
+	if err != nil {
+		serverError(w, r, "profile library kit", err)
+		return
+	}
+
 	creds := ro.pageCredentials(r)
 	page, err := renderPage("profile", profilePageData{
 		Header:          profileHeader(creds.Clerk),
 		Favicon:         template.URL(exhibitLogoDataURI),
 		Account:         acct,
+		LibraryKit:      newKitPicker("library-kit", libraryKit, "Exhibit default ("+kit.Default()+")"),
 		pageCredentials: creds,
 	})
 	if err != nil {

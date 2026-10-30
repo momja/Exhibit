@@ -173,6 +173,14 @@ it safe behind the no-auth share path (§7).
   rows are inlined to mute the prompt); state, from the principal chosen by
   `Artifact.StatePrincipal` (`shared` mode inlines the owner's board, `own` the
   viewer's). The write path resolves through the same function (av-v991).
+- **Component kits** (Exh-61ix, experimental): a body naming a kit contract
+  with `<meta name="exhibit-kit" content="v1">` is served with a kit's
+  stylesheet inlined in its place (`kit.Inline`), for artifacts, widgets and
+  version views alike; export does the same (`export.Materialize`). The kit is
+  chosen outside the source and resolved per request under the artifact's
+  owner: `artifacts.kit`, else `library_settings.kit`, else the default. Not
+  versioned, like the allowlist. Released kits and contracts are immutable and
+  hash-pinned. `component-kit.md`.
 - **CSP** (`buildCSP`): baseline `default-src 'none'`. Every source is in one of two
   buckets: *network-reaching* (the allowlist, gated) or *local, no-egress*
   (unconditional): `script-src 'unsafe-inline' 'unsafe-eval' blob: data:`,
@@ -674,15 +682,17 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
 - **Single write path**: built-in tools disabled; one extension
   (`internal/agent/ext/exhibit.ts`) whose tools (`create_artifact`,
   `write_artifact`, `edit_artifact`, `get_artifact`, `get_state`, `set_state`,
-  `delete_state`, `set_widget`, `edit_widget`, `get_widget`, `get_selection`) call
-  the HTTP API or read selected elements. `ask_user` uses Pi's interactive RPC
+  `delete_state`, `set_widget`, `edit_widget`, `get_widget`, `list_kit`,
+  `get_kit_component`, `set_artifact_kit`, `get_selection`) call the HTTP API or read selected
+  elements. `ask_user` uses Pi's interactive RPC
   channel for chat questions (`agent.md`). Output is scanned like any ingest,
   never auto-approved.
 - **Scoped credential** (av-e0yj): `internal/agentscope` mints a token resolving to
   (owner, artifact). `authMiddleware` allows only `POST /api/artifacts` while
   unbound, then `GET`/`PATCH` on the bound artifact plus `agentSubResources`
   (`internal/api/middleware.go`): `state` and `widget` read/write, `assets`
-  read-only. Deny-by-default: a new agent tool needing a new sub-route must add it
+  read-only. The one route family outside the artifact it may reach is
+  `GET /api/kit…`, instance-wide data Exhibit ships (Exh-61ix). Deny-by-default: a new agent tool needing a new sub-route must add it
   there, or it 403s at runtime. Trust argument: `security.md` §5.3. The create binds it. No tool takes an id. Composes
   with owner scoping; neither half suffices alone. The grant is revoked when the
   subprocess exits or is killed; no credential outlives its process.

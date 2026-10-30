@@ -1,0 +1,123 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/momja/Exhibit/internal/kit"
+)
+
+func TestListKitDescribesKitsAndContractsWithoutStylesheets(t *testing.T) {
+	r := newTestRouter(t)
+
+	w := do(t, r, "GET", "/api/kit", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var got struct {
+		Default   string    `json:"default"`
+		Kits      []kitView `json:"kits"`
+		Contracts []struct {
+			kit.Contract
+			Marker string `json:"marker"`
+		} `json:"contracts"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, kit.Default(), got.Default)
+	require.Len(t, got.Kits, len(kit.IDs()))
+	for _, k := range got.Kits {
+		assert.Equal(t, "v1", k.Contract)
+	}
+	require.Len(t, got.Contracts, 1, "listed once, however many kits implement it")
+	assert.Equal(t, `<meta name="exhibit-kit" content="v1">`, got.Contracts[0].Marker)
+	require.NotEmpty(t, got.Contracts[0].Components)
+	for _, c := range got.Contracts[0].Components {
+		assert.Emptyf(t, c.CSS, "the index carries no CSS (%s)", c.Name)
+	}
+}
+
+func TestLibraryKitIsReadAndChosenByItsOwner(t *testing.T) {
+	r := newTestRouter(t)
+	// Another owner's choice is theirs alone: the caller reads and writes
+	// only their own (the owner-scope claim pageowner_test.go points here for).
+	require.NoError(t, r.cfg.Store.SetLibraryKit(context.Background(), otherOwner, "brutal/v1"))
+
+	var got struct{ Kit, Default string }
+	w := do(t, r, "GET", "/api/settings/kit", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, "", got.Kit)
+	assert.Equal(t, kit.Default(), got.Default)
+
+	require.Equal(t, http.StatusOK, doJSON(t, r, "PUT", "/api/settings/kit", map[string]any{"kit": "paper/v1"}).Code)
+	w = do(t, r, "GET", "/api/settings/kit", nil)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, "paper/v1", got.Kit)
+
+	assert.Equal(t, http.StatusBadRequest, doJSON(t, r, "PUT", "/api/settings/kit", map[string]any{"kit": "neon/v1"}).Code)
+	assert.Equal(t, http.StatusBadRequest, doJSON(t, r, "PUT", "/api/settings/kit", map[string]any{}).Code)
+}
+
+func TestArtifactKitIsSetThroughPatch(t *testing.T) {
+	r := newTestRouter(t)
+	id := createArtifact(t, r, map[string]any{"title": "A", "body": `<html><head><meta name="exhibit-kit" content="v1"></head></html>`})
+
+	require.Equal(t, http.StatusOK, doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{"kit": "brutal/v1"}).Code)
+	w := do(t, r, "GET", "/api/artifacts/"+id, nil)
+	var a struct{ Kit string }
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &a))
+	assert.Equal(t, "brutal/v1", a.Kit)
+
+	assert.Equal(t, http.StatusBadRequest, doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{"kit": "neon/v1"}).Code)
+	assert.Equal(t, http.StatusOK, doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{"kit": ""}).Code)
+}
+
+func TestGetKitComponentReturnsThatKitsStylesheet(t *testing.T) {
+	r := newTestRouter(t)
+
+	read := func(path string) kit.Component {
+		w := do(t, r, "GET", path, nil)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		var got struct {
+			Kit       string        `json:"kit"`
+			Component kit.Component `json:"component"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+		return got.Component
+	}
+	exhibit := read("/api/kit/exhibit/v1/components/button")
+	paper := read("/api/kit/paper/v1/components/button")
+	assert.Contains(t, exhibit.CSS, ".kit-btn")
+	assert.Equal(t, exhibit.Classes, paper.Classes, "one contract")
+	assert.NotEqual(t, exhibit.CSS, paper.CSS, "two looks")
+
+	assert.Equal(t, http.StatusNotFound, do(t, r, "GET", "/api/kit/exhibit/v999/components/button", nil).Code)
+	assert.Equal(t, http.StatusNotFound, do(t, r, "GET", "/api/kit/nope/v1/components/button", nil).Code)
+	assert.Equal(t, http.StatusNotFound, do(t, r, "GET", "/api/kit/exhibit/v1/components/nope", nil).Code)
+}
+
+// The kit is the one thing outside its artifact a session may read, and it may
+// only read it.
+func TestAgentCredentialMayReadTheKitOnly(t *testing.T) {
+	r, reg := newScopedTestRouter(t)
+	id := createArtifact(t, r, map[string]any{"title": "A", "body": "<html><body>a</body></html>"})
+	grant, err := reg.Issue(1, id, "")
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, doWithToken(t, r, "GET", "/api/kit", grant.Token(), nil).Code)
+	assert.Equal(t, http.StatusOK, doWithToken(t, r, "GET", "/api/kit/exhibit/v1/components/card", grant.Token(), nil).Code)
+	// The owner's library choice is library data, not shipped data.
+	assert.Equal(t, http.StatusForbidden, doWithToken(t, r, "GET", "/api/settings/kit", grant.Token(), nil).Code)
+
+	for _, c := range []struct{ method, path string }{
+		{"POST", "/api/kit"},
+		{"PUT", "/api/kit/exhibit/v1/components/card"},
+		{"GET", "/api/kitchen"},
+	} {
+		assert.Falsef(t, kitPathReadable(c.method, c.path), "%s %s", c.method, c.path)
+	}
+}

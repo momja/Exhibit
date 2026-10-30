@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/momja/Exhibit/internal/kit"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -63,7 +64,7 @@ func TestHeadInsertionIgnoresHeadTextThatIsNotTheElement(t *testing.T) {
 func TestMaterializeInjectsTheManifestAheadOfThePagesScripts(t *testing.T) {
 	body := `<html><!-- <head> --><head><script>fetch('https://cdn.test/app.wasm')</script></head></html>`
 
-	out, err := Materialize(body, []store.ArtifactAsset{{
+	out, err := Materialize(body, kit.Choice{}, []store.ArtifactAsset{{
 		BlobID: "b1", SourceURL: "https://cdn.test/app.wasm", ContentType: "application/wasm",
 	}}, func(store.ArtifactAsset) string { return "https://render.test/a/x/assets/as-1" },
 		func(string) ([]byte, error) { return []byte("\x00asm"), nil })
@@ -81,7 +82,18 @@ func TestMaterializeInjectsTheManifestAheadOfThePagesScripts(t *testing.T) {
 // An artifact with no assets is the common case and must come back untouched.
 func TestMaterializeLeavesAnAssetlessArtifactAlone(t *testing.T) {
 	body := `<html><head></head><body>hi</body></html>`
-	out, err := Materialize(body, nil, nil, nil)
+	out, err := Materialize(body, kit.Choice{}, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, body, out)
+}
+
+// The kit is a reference inside the service and must be bytes in the
+// exported file, or the file would restyle (or fail to style) depending on
+// which instance opens it (Exh-61ix). It is the kit chosen at export time.
+func TestMaterializeFoldsInTheChosenKit(t *testing.T) {
+	body := `<html><head><meta name="exhibit-kit" content="v1"></head><body></body></html>`
+	out, err := Materialize(body, kit.Choice{Library: "paper/v1"}, nil, nil, nil)
+	require.NoError(t, err)
+	assert.NotContains(t, out, `<meta name="exhibit-kit"`)
+	assert.Contains(t, out, `<style data-exhibit-kit="paper/v1">`)
 }

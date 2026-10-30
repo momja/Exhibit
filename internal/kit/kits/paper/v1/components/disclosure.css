@@ -1,0 +1,10 @@
+details.kit-disclosure{border-top:1px solid var(--kit-color-border);border-bottom:1px solid var(--kit-color-border)}
+details.kit-disclosure + details.kit-disclosure{border-top:0}
+details.kit-disclosure > summary{
+	display:flex;align-items:center;justify-content:space-between;
+	padding:var(--kit-space-3) 0;cursor:pointer;font-weight:500;font-style:italic;list-style:none;
+}
+details.kit-disclosure > summary::-webkit-details-marker{display:none}
+details.kit-disclosure > summary::after{content:"+";color:var(--kit-color-muted);font-weight:400}
+details.kit-disclosure[open] > summary::after{content:"\2212"}
+.kit-disclosure__body{padding:0 0 var(--kit-space-3)}

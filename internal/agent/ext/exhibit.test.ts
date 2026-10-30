@@ -755,3 +755,83 @@ for (const resource of ['artifact', 'widget']) {
     });
   });
 }
+
+describe("component kit tools (Exh-61ix)", () => {
+	const KIT_INDEX = {
+		default: "exhibit/v1",
+		kits: [
+			{ id: "exhibit/v1", name: "exhibit", version: "v1", contract: "v1", description: "Calm." },
+			{ id: "paper/v1", name: "paper", version: "v1", contract: "v1", description: "Serif." },
+		],
+		contracts: [{
+			contract: "v1",
+			marker: '<meta name="exhibit-kit" content="v1">',
+			description: "Shared markup.",
+			base: { description: "Defaults.", classes: [".kit-muted"] },
+			tokens: [{ name: "--kit-color-accent", description: "Accent." }],
+			components: [{ name: "button", description: "Buttons.", classes: [".kit-btn"], usage: '<button class="kit-btn">Go</button>' }],
+		}],
+	};
+	const kitFetch = (calls) => async (url, opts) => {
+		const path = String(url).replace("http://exhibit.test", "");
+		calls.push({ method: opts?.method, path, body: opts?.body });
+		if (path === "/api/kit") return { ok: true, text: async () => JSON.stringify(KIT_INDEX) };
+		const m = path.match(/^\/api\/kit\/(exhibit|paper)\/v1\/components\/button$/);
+		if (m) {
+			return { ok: true, text: async () => JSON.stringify({ kit: m[1] + "/v1", component: { name: "button", description: "Buttons.", css: "." + m[1] + "{}" } }) };
+		}
+		if (opts?.method === "PATCH") return { ok: true, text: async () => JSON.stringify({ artifact: { id: "art-1" } }) };
+		return { ok: false, status: 404, text: async () => JSON.stringify({ error: "no such kit component" }) };
+	};
+
+	it("list_kit leads with the contract's marker, then the contract, then the kits that draw it", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		const calls = [];
+		const result = await withFetch(kitFetch(calls), () => pi.tools.get("list_kit").execute("k", {}));
+		const text = result.content[0].text;
+		assert.match(text, /^Component kit contract v1\. Use it with this line inside <head>:\n<meta name="exhibit-kit" content="v1">/);
+		assert.ok(text.includes("never choose a look in the source"));
+		assert.ok(text.includes("## button: Buttons."));
+		assert.ok(text.includes('<button class="kit-btn">Go</button>'));
+		assert.ok(text.includes("- exhibit/v1 (default): Calm.\n- paper/v1: Serif."));
+		assert.deepEqual(calls.map(c => c.method), ["GET"]);
+	});
+
+	it("list_kit names the released contracts when asked for one that does not exist", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		const missing = await withFetch(kitFetch([]), () => pi.tools.get("list_kit").execute("k", { contract: "v9" }));
+		assert.equal(missing.content[0].text, "There is no kit contract v9. Released contracts: v1.");
+	});
+
+	it("get_kit_component reads one kit's stylesheet, defaulting to the default kit", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		const calls = [];
+		const result = await withFetch(kitFetch(calls), () => pi.tools.get("get_kit_component").execute("c", { name: "button" }));
+		assert.equal(result.content[0].text, 'kit exhibit/v1 component "button": Buttons.\n\n.exhibit{}');
+		assert.deepEqual(calls.map(c => c.path), ["/api/kit", "/api/kit/exhibit/v1/components/button"]);
+		const paper = await withFetch(kitFetch([]), () => pi.tools.get("get_kit_component").execute("c", { name: "button", kit: "paper" }));
+		assert.equal(paper.content[0].text, 'kit paper/v1 component "button": Buttons.\n\n.paper{}');
+	});
+
+	it("set_artifact_kit sets this artifact's kit outside its source and refreshes the preview", async (t) => {
+		needExhibit(t);
+		const pi = makePi();
+		await exhibitMod.default(pi);
+		const calls = [];
+		const result = await withFetch(kitFetch(calls), () => pi.tools.get("set_artifact_kit").execute("s", { kit: "paper" }));
+		assert.equal(result.content[0].text, "This artifact is now drawn with paper/v1.");
+		assert.equal(result.details.exhibit, "artifact_saved");
+		const patch = calls.find(c => c.method === "PATCH");
+		assert.match(patch.path, /^\/api\/artifacts\/[^/]+$/);
+		assert.deepEqual(JSON.parse(patch.body), { kit: "paper/v1" });
+
+		const unknown = await withFetch(kitFetch([]), () => pi.tools.get("set_artifact_kit").execute("s", { kit: "neon" }));
+		assert.equal(unknown.content[0].text, "There is no kit neon. Released kits: exhibit/v1, paper/v1.");
+	});
+});

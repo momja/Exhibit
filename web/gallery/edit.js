@@ -208,6 +208,7 @@ function artifactDraft() {
   return {
     title: document.getElementById('title').value,
     body: document.getElementById('body').value,
+    kit: document.getElementById('kit-select').value,
     allowlist: [...allowlist], unapproved: [...unapproved], blocked: [...blocked], forgotten: [...forgotten],
     downloadsApproved, clipboardApproved, linksApproved, cameraApproved, microphoneApproved, geolocationApproved
   };
@@ -224,6 +225,7 @@ function artifactDirty() {
 function discardArtifact() {
   const draft = savedArtifact;
   document.getElementById('title').value = draft.title;
+  document.getElementById('kit-select').value = draft.kit;
   setSource('body', draft.body);
   allowlist = [...draft.allowlist]; unapproved = [...draft.unapproved]; blocked = [...draft.blocked]; forgotten = [...draft.forgotten];
   downloadsApproved = draft.downloadsApproved; clipboardApproved = draft.clipboardApproved;
@@ -263,6 +265,9 @@ async function save() {
   if (cameraApprovedDirty) payload.camera_approved = cameraApproved;
   if (microphoneApprovedDirty) payload.microphone_approved = microphoneApproved;
   if (geolocationApprovedDirty) payload.geolocation_approved = geolocationApproved;
+  // The kit ships only when changed, for the same reason: another tab may
+  // have chosen one since this page loaded.
+  if (submitted.kit !== savedArtifact.kit) payload.kit = submitted.kit;
   const resp = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
     body: JSON.stringify(payload)
@@ -636,6 +641,7 @@ document.querySelectorAll('[data-save-editor]').forEach(button => button.addEven
   finally { buttons.forEach(control => { control.disabled = false; }); }
 }));
 document.querySelector('[data-delete-artifact]')?.addEventListener('click', deleteArtifact);
+document.getElementById('kit-select').addEventListener('change', editorChanged);
 document.getElementById('title').addEventListener('input', () => {
   document.getElementById('edit-title').textContent = document.getElementById('title').value || 'Untitled';
 });
