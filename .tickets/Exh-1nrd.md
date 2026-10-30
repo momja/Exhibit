@@ -30,3 +30,7 @@ Simplified per user feedback: removed all welcome text except Welcome to Exhibit
 **2026-10-30T04:49:31Z**
 
 Added a one-time CSS deck entrance: center card lifts in, then side cards fan out with staggered timing. Motion is gated by prefers-reduced-motion:no-preference. Built assets and server; browser checked start/mid/end at 320px without overflow, settled styles with motion disabled, and replay after htmx search-clear restoration.
+
+**2026-10-30T05:04:58Z**
+
+Finalized with a single Phosphor palette icon and refreshed all screenshots. Rebased the feature onto current origin/main without unrelated local ticket commits. Asset build, server build, and focused gallery/shared/new-page/icon/versioned-asset tests pass; independent review found no code issues.
