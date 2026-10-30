@@ -1,6 +1,6 @@
 ---
 id: Exh-uhvu
-status: in_progress
+status: closed
 deps: [Exh-l2xj]
 links: []
 created: 2026-10-27T18:33:48Z
@@ -23,3 +23,9 @@ Same tool surface as the stdio server, served in-process at APP_ORIGIN/mcp over 
 
 A remote MCP client with a pasted grant token can edit its artifact; a cookie-only or AUTH_TOKEN request to /mcp is 401.
 
+
+## Notes
+
+**2026-10-30T04:37:08Z**
+
+Design: tools loop back through the router in-process (loopbackAPI) with the session's own grant token, so every write passes the body limit, authMiddleware, agentScopeAllows, owner scoping and the revision checks exactly as cmd/exhibit-mcp's do. The loopback request gets a context that keeps cancellation and drops every value (chi's route context from the outer /mcp request otherwise misroutes it). Auth is the SDK's RequireBearerToken with a verifier that accepts only persisted grants; TokenInfo.UserID is the grant id, so a session cannot be continued under another grant. Cookies are never read; AUTH_TOKEN and Pi tokens get 401. A foreign Origin is 403; the SDK's localhost-Host check is disabled because a same-host reverse proxy would trip it. Only GET/POST/DELETE are registered. Live-tested with curl against a dev server; client tests use the SDK's StreamableClientTransport. Screenshot: docs/screenshots/Exh-uhvu/01-remote-config.png

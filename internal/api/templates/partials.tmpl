@@ -424,16 +424,26 @@
       </div>
       {{/* The config is filled in by agent-grants.js from the token and the
            app origin above, as a field value, never as markup. */}}
-      <p class="text-sm">Install the connector once with <code>go install github.com/momja/Exhibit/cmd/exhibit-mcp@latest</code>, then add it to your agent. For Claude Code:</p>
+      <p class="text-sm">Add it to Claude Code:</p>
       <div class="share-link-row">
         <input type="text" id="agent-grant-command" class="field" readonly aria-label="Claude Code command">
         <button type="button" class="btn btn-sm btn-sec" id="agent-grant-command-copy"><i class="ph ph-copy"></i> Copy</button>
       </div>
-      <p class="text-sm">For other clients (Claude Desktop, Cursor, ...), as MCP server JSON:</p>
+      <p class="text-sm">Or to another client (Cursor, Codex, ...) as a remote MCP server:</p>
       <div class="share-link-row">
         <textarea id="agent-grant-config" class="field agent-grant-config" rows="7" readonly aria-label="MCP server configuration"></textarea>
         <button type="button" class="btn btn-sm btn-sec" id="agent-grant-config-copy"><i class="ph ph-copy"></i> Copy</button>
       </div>
+      {{/* The stdio connector (Exh-q6xo), for a client that cannot reach a
+           remote server. */}}
+      <details class="state-how-it-works">
+        <summary><i class="ph ph-caret-right state-how-closed" aria-hidden="true"></i><i class="ph ph-caret-down state-how-open" aria-hidden="true"></i> Local connector</summary>
+        <p class="text-sm">For a client that only runs local servers: install <code>go install github.com/momja/Exhibit/cmd/exhibit-mcp@latest</code>, then configure:</p>
+        <div class="share-link-row">
+          <textarea id="agent-grant-stdio" class="field agent-grant-config" rows="7" readonly aria-label="Local MCP server configuration"></textarea>
+          <button type="button" class="btn btn-sm btn-sec" id="agent-grant-stdio-copy"><i class="ph ph-copy"></i> Copy</button>
+        </div>
+      </details>
     </div>
     <div id="agent-grants-body"
          hx-get="/partials/agent-grants?artifact={{.ID}}"

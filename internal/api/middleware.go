@@ -486,6 +486,11 @@ func (ro *Router) sessionGate(next http.Handler) http.Handler {
 }
 
 func isPublicPath(path string) bool {
+	// The remote MCP endpoint answers its own 401 (mcp.go): a client there
+	// is an agent holding a bearer token, never a browser to redirect.
+	if path == mcpPath {
+		return true
+	}
 	for _, prefix := range publicPathPrefixes {
 		if strings.HasPrefix(path, prefix) {
 			return true

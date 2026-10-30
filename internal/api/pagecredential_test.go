@@ -94,6 +94,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/partials/capability-cluster", path: "/partials/capability-cluster?artifact={id}"},
 	{route: "/partials/share-panel", path: "/partials/share-panel?artifact={id}"},
 	{route: "/partials/agent-grants", path: "/partials/agent-grants?artifact={id}"},
+	{route: "/mcp", path: "/mcp"},
 	{route: "/partials/version-viewer", path: "/partials/version-viewer?artifact={id}&seq=1"},
 
 	// Static and public surfaces. They embed nothing per-request, which is

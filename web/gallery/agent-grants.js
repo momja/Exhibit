@@ -27,7 +27,7 @@ function initializeAgentGrantsPanel() {
 
   function forgetToken() {
     issuedGrantID = '';
-    ['agent-grant-token', 'agent-grant-command', 'agent-grant-config'].forEach((id) => { byId(id).value = ''; });
+    ['agent-grant-token', 'agent-grant-command', 'agent-grant-config', 'agent-grant-stdio'].forEach((id) => { byId(id).value = ''; });
     byId('agent-grant-issued').hidden = true;
   }
 
@@ -55,10 +55,14 @@ function initializeAgentGrantsPanel() {
   // nothing here is parsed as markup.
   function showConfig(token) {
     const origin = byId('agent-grant-issued').dataset.appOrigin || '';
+    const authorization = 'Bearer ' + token;
     byId('agent-grant-token').value = token;
-    byId('agent-grant-command').value = 'claude mcp add exhibit --env EXHIBIT_URL=' + origin +
-      ' --env EXHIBIT_TOKEN=' + token + ' -- exhibit-mcp';
+    byId('agent-grant-command').value = 'claude mcp add --transport http exhibit ' + origin +
+      '/mcp --header "Authorization: ' + authorization + '"';
     byId('agent-grant-config').value = JSON.stringify({ mcpServers: { exhibit: {
+      type: 'http', url: origin + '/mcp', headers: { Authorization: authorization }
+    } } }, null, 2);
+    byId('agent-grant-stdio').value = JSON.stringify({ mcpServers: { exhibit: {
       command: 'exhibit-mcp', env: { EXHIBIT_URL: origin, EXHIBIT_TOKEN: token }
     } } }, null, 2);
   }
@@ -108,7 +112,8 @@ function initializeAgentGrantsPanel() {
     const target = e.target;
     if (!target.closest) return;
     for (const [button, field, what] of [['agent-grant-copy', 'agent-grant-token', 'Token'],
-      ['agent-grant-command-copy', 'agent-grant-command', 'Command'], ['agent-grant-config-copy', 'agent-grant-config', 'Configuration']]) {
+      ['agent-grant-command-copy', 'agent-grant-command', 'Command'], ['agent-grant-config-copy', 'agent-grant-config', 'Configuration'],
+      ['agent-grant-stdio-copy', 'agent-grant-stdio', 'Configuration']]) {
       if (target.closest('#' + button)) return copyField(field, what);
     }
     const revoke = target.closest('[data-action="revoke-agent-grant"]');
