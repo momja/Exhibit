@@ -26,3 +26,7 @@ Implemented a library-only welcome partial with decorative tool cards, a first-a
 **2026-10-30T04:40:53Z**
 
 Simplified per user feedback: removed all welcome text except Welcome to Exhibit and the creation button, including illustration labels and numeric timer. Preserved decorative graphics and accessible heading. Updated screenshots; focused empty-state test and server build pass.
+
+**2026-10-30T04:49:31Z**
+
+Added a one-time CSS deck entrance: center card lifts in, then side cards fan out with staggered timing. Motion is gated by prefers-reduced-motion:no-preference. Built assets and server; browser checked start/mid/end at 320px without overflow, settled styles with motion disabled, and replay after htmx search-clear restoration.
