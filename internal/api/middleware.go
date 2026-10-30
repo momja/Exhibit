@@ -84,17 +84,18 @@ func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// An owner-issued grant for an agent outside the server (Exh-l2xj).
-		// It resolves to the same kind of Grant as a Pi session's and takes
-		// the same path from here on, so it is held to exactly the same
-		// allowlist.
-		g, err := ro.resolvePersistedGrant(r, token)
+		// A credential for an agent outside the server: an owner-issued
+		// grant (Exh-l2xj), or whatever else agentTokenVerifiers accepts
+		// (Exh-354p). It resolves to the same kind of Grant as a Pi
+		// session's and takes the same path from here on, so it is held to
+		// exactly the same allowlist.
+		t, err := ro.verifyAgentToken(r.Context(), token)
 		if err != nil {
 			serverError(w, r, "resolve agent grant", err)
 			return
 		}
-		if g != nil {
-			serveAgentGrant(w, r, g, next)
+		if t != nil {
+			serveAgentGrant(w, r, t.grant, next)
 			return
 		}
 
@@ -208,31 +209,6 @@ func (ro *Router) resolveAgentGrant(token string) *agentscope.Grant {
 		return nil
 	}
 	return ro.cfg.AgentCredentials.Resolve(token)
-}
-
-// resolvePersistedGrant looks up an owner-issued agent grant by its token's
-// digest (Exh-l2xj), or returns nil. A value without the grant prefix cannot
-// be one, so it costs no query.
-//
-// The version provenance is fixed here, from the row: the session id names
-// the grant, and the label the owner gave it is the message. Nothing the
-// agent sends can change either.
-func (ro *Router) resolvePersistedGrant(r *http.Request, token string) (*agentscope.Grant, error) {
-	if !agentscope.IsPersistedToken(token) {
-		return nil, nil
-	}
-	row, err := ro.cfg.Store.ResolveAgentGrant(r.Context(), agentscope.PersistedTokenDigest(token))
-	if err != nil || row == nil {
-		return nil, err
-	}
-	return agentscope.Persisted(row.OwnerID, row.ArtifactID, persistedGrantSessionID(row.ID), row.Label), nil
-}
-
-// persistedGrantSessionID is the session id an owner-issued grant's versions
-// record. The prefix keeps it from ever naming a Pi conversation's
-// transcript.
-func persistedGrantSessionID(grantID string) string {
-	return "grant:" + grantID
 }
 
 // serveAgentGrant admits a request made with an agent credential, of either
@@ -413,6 +389,9 @@ var publicPathPrefixes = []string{
 	"/api/",
 	"/s/",
 	"/manifest.json",
+	// OAuth discovery documents (Exh-354p), read by MCP clients that have
+	// no session and never will.
+	"/.well-known/",
 	"/favicon",
 }
 

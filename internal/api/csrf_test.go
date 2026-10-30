@@ -132,6 +132,9 @@ var appOriginGETRoutes = []getRoute{
 	// stream, and it never reads a cookie: a forged request carries no
 	// credential it would accept.
 	{route: "/mcp"},
+	// OAuth protected-resource metadata (Exh-354p): static documents.
+	{route: "/.well-known/oauth-protected-resource"},
+	{route: "/.well-known/oauth-protected-resource/mcp"},
 	// An earlier version of an artifact, shown running before a person decides
 	// whether to return to it (av-vw7r). A read that mints a short-lived token
 	// and changes nothing: the frame it carries is a render document that
