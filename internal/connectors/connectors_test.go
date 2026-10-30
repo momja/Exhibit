@@ -501,7 +501,8 @@ func TestConnectionWideCacheScrubsForEachViewerAndCurrentStandin(t *testing.T) {
 	viewer, err := s.cfg.Store.UpsertUser(ctx, "recipient", "recipient@example.test")
 	require.NoError(t, err)
 	viewerID := viewer.ID
-	require.NoError(t, s.cfg.Store.CreateShare(ctx, 1, &store.Share{ID: "named-recipient", ArtifactID: "app", RecipientID: &viewerID}))
+	_, err = s.cfg.Store.CreateGrant(ctx, 1, "app", viewerID)
+	require.NoError(t, err)
 	c, err := s.Create(ctx, 1, CreateRequest{Name: "Shared cached API", Recipe: "bearer", Origin: provider.URL, Secret: originalSecret, DailyLimit: 1, CacheMinutes: 180}, UnlimitedLimits())
 	require.NoError(t, err)
 	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID, ShareWithRecipients: true})
@@ -661,7 +662,8 @@ func TestSharedStateAndPublicLinksNeedExplicitConnectionConsent(t *testing.T) {
 			if mode == "shared" {
 				require.NoError(t, s.cfg.Store.UpdateArtifact(ctx, 1, "app", map[string]any{"share_state_mode": store.ShareStateShared}))
 			} else {
-				require.NoError(t, s.cfg.Store.CreateShare(ctx, 1, &store.Share{ID: "public", ArtifactID: "app"}))
+				_, err = s.cfg.Store.CreateAnonymousLink(ctx, 1, "app")
+				require.NoError(t, err)
 			}
 			_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID})
 			assert.ErrorIs(t, err, ErrInvalid)
