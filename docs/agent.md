@@ -35,6 +35,34 @@ Exhibit HTTP API; `ask_user` uses Pi's interactive RPC channel. Agent output is 
 **never** auto-approved — the chat UI tells the user when a saved artifact has
 a network footprint awaiting approval.
 
+## Conversation rendering
+
+Assistant replies render CommonMark and GitHub Flavored Markdown using
+[Goldmark](https://github.com/yuin/goldmark), pinned in `go.mod`. Its safe renderer
+omits raw HTML; dangerous Markdown links render as plain labels. HTML attributes
+and heading IDs are not enabled. Fenced HTML remains escaped code. Markdown
+images display their alt text without creating image elements or automatic image
+requests. Person messages stay plain text in blue bubbles; assistant replies and
+status messages have no message box. Code blocks and tables scroll inside the pane on narrow screens.
+
+`internal/api/agentmarkdown.go` and the `agentMessageBody` template partial own
+rendering for both history and live SSE. Each SSE connection reconstructs Pi's
+text deltas; `text_end.content` replaces the reconstruction with authoritative
+text. Snapshots are coalesced to at most ten per second during streaming, with
+immediate renders at text-block completion or interruption. htmx swaps the
+partial into the existing message content slot, preserving its action buttons. Reconstruction is capped at 1 MiB per text block; larger
+live blocks fall back to escaped plain text. Copy uses the preserved Markdown
+source, including after history is continued, rather than concatenated DOM text.
+
+Regression coverage: `TestAgentMarkdownBrowser` exercises actual SSE, templates,
+htmx, Copy, history and continuation at desktop, 390px, and 320px widths. Capture
+its screenshots with:
+
+```sh
+AGENT_MARKDOWN_SCREENSHOT_DIR="$PWD/docs/screenshots/Exh-1e7n" \
+  go test ./internal/api -run '^TestAgentMarkdownBrowser$' -count=1
+```
+
 ## Scope: one session, one artifact
 
 A session reaches exactly one artifact, and that is enforced twice — once for

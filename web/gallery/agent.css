@@ -51,11 +51,35 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .resume-cancel:hover{color:var(--brand-blue)}
 .resume-status{font-size:12.5px;color:var(--color-danger-ink);min-height:1em}
 .resume-note{padding:14px 16px;border-top:1px solid var(--color-hairline);font-size:12.5px;color:var(--color-ink-mid);line-height:1.5}
-.msg{max-width:92%;padding:9px 12px;border-radius:10px;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
-.msg.user{align-self:flex-end;background:var(--brand-blue);color:var(--color-on-accent);border-bottom-right-radius:3px}
-.msg.assistant{align-self:flex-start;background:var(--color-ground);border-bottom-left-radius:3px}
-.msg.sys{align-self:center;background:var(--color-warn-tint);border:1px solid var(--color-warn-tint-border);color:var(--color-warn-ink);font-size:12.5px;max-width:100%}
-.msg.err{align-self:center;background:var(--color-danger-tint);border:1px solid var(--color-danger-tint-border);color:var(--color-danger-ink);font-size:12.5px;max-width:100%}
+.msg{max-width:92%;font-size:14px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.user{align-self:flex-end;padding:9px 12px;border-radius:10px 10px 3px 10px;background:var(--brand-blue);color:var(--color-on-accent)}
+.msg.assistant{align-self:flex-start}
+.msg.assistant [data-message-source]{white-space:normal}
+.msg.sys{align-self:center;color:var(--color-warn-ink);font-size:12.5px;max-width:100%}
+.msg.err{align-self:center;color:var(--color-danger-ink);font-size:12.5px;max-width:100%}
+/* Markdown is shared by live, saved, and resumed assistant messages. Long
+ * code and tables scroll within the message rather than widening the pane. */
+.msg.assistant :is(p,ul,ol,blockquote,pre,table,hr){margin-block:0 12px}
+.msg.assistant :is(h1,h2,h3,h4,h5,h6){font-weight:650;line-height:1.3;margin-block:18px 8px}
+.msg.assistant h1{font-size:1.45em}
+.msg.assistant h2{font-size:1.25em}
+.msg.assistant :is(h3,h4,h5,h6){font-size:1.08em}
+.msg.assistant [data-message-source]>:first-child{margin-top:0}
+.msg.assistant [data-message-source]>:last-child{margin-bottom:0}
+.msg.assistant :is(ul,ol){padding-left:24px}
+.msg.assistant li+li{margin-top:4px}
+.msg.assistant li>:last-child{margin-bottom:0}
+.msg.assistant blockquote{padding-left:12px;border-left:3px solid var(--color-border);color:var(--color-ink-mid)}
+.msg.assistant code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.88em;padding:2px 4px;border-radius:4px;background:var(--color-ground);white-space:break-spaces}
+.msg.assistant pre{max-width:100%;overflow-x:auto;padding:12px;border-radius:6px;background:var(--color-ground);white-space:pre;overflow-wrap:normal}
+.msg.assistant pre code{padding:0;background:transparent;white-space:pre}
+.msg.assistant table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse}
+.msg.assistant :is(th,td){border:1px solid var(--color-border);padding:6px 10px;text-align:left;min-width:90px}
+.msg.assistant th{background:var(--color-ground);font-weight:600}
+.msg.assistant a{color:var(--brand-blue);text-decoration:underline;text-underline-offset:2px}
+.msg.assistant a:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
+.msg.assistant input[type="checkbox"]{margin-right:6px}
+.msg.assistant hr{border:0;border-top:1px solid var(--color-border)}
 .msg .snip-thumb{display:block;max-width:180px;max-height:110px;border-radius:6px;border:1px solid var(--color-on-accent-edge);margin-top:6px}
 .tool-chip{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--color-ink-mid);background:var(--color-subtle);border:1px solid var(--color-hairline);border-radius:999px;padding:4px 12px}
 .tool-chip.done{color:var(--color-success);border-color:var(--color-success-tint-border);background:var(--color-success-tint)}
@@ -200,7 +224,7 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 }
 
 /* Keep the action strip below its bubble in live, historical and resumed chat. */
-.agent-message{align-self:flex-start;max-width:92%;min-width:0}
+.agent-message{align-self:stretch;max-width:100%;min-width:0}
 .agent-message .msg{max-width:100%}
 .message-actions{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:3px;white-space:normal}
 .message-action{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:32px;padding:5px 8px;border:0;border-radius:6px;background:transparent;color:var(--color-muted);font:inherit;font-size:12px;cursor:pointer}
