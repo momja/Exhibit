@@ -266,4 +266,6 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 
 /* One reusable hosted account control. Clerk supplies its avatar and menu. */
 .account-control{display:flex;align-items:center;gap:var(--space-3);min-width:0}
+/* Gallery header link styles must not reveal the Clerk recovery fallback. */
+.account-control [hidden]{display:none!important}
 .account-control [data-clerk-target="status"]:empty{display:none}
