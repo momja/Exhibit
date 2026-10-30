@@ -15,6 +15,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/momja/Exhibit/internal/chromium"
 	"github.com/momja/Exhibit/internal/chromium/chromiumtest"
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,6 +24,11 @@ import (
 // is needed. Run with: go test -tags screenshot ./internal/api -run '^TestCapturePersonalConnections$' -count=1.
 func TestCapturePersonalConnections(t *testing.T) {
 	ro, id, connectionID := newPersonalConnectionsFixture(t)
+	// Existing anonymous counters remain visible to the operator even when a
+	// managed account has been removed. No provider calls are made by the fixture.
+	for _, operation := range []string{"management", "management", "inject"} {
+		require.NoError(t, ro.cfg.Store.(*store.SQLiteStore).RecordVendorCall(t.Context(), "nango", "github", operation, time.Now()))
+	}
 	app := httptest.NewServer(ro)
 	defer app.Close()
 	ro.cfg.AppOrigin = app.URL

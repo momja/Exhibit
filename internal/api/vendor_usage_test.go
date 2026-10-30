@@ -34,15 +34,36 @@ func TestConnectorCostCountersAreOperatorOnlyAndSurviveDisabledEngines(t *testin
 	require.Len(t, report.Usage, 2)
 	assert.Equal(t, int64(1), report.Usage[0].ForwardCalls)
 	assert.Equal(t, int64(1), report.Usage[1].ManagementCalls)
-	// Operator reporting is available even with relay and engines disabled.
+	// Operator reporting lives only under Advanced, including after engines
+	// are disabled. The partial must retain it when htmx refreshes the page.
 	assert.Nil(t, in.ro.cfg.Connections)
-	in.ro.cfg.Relay.Enabled = true
-	w = in.do(t, http.MethodGet, "/connections", in.adminCookie, nil)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), "operator-provider")
-	assert.Contains(t, w.Body.String(), "Operator only")
-	w = in.do(t, http.MethodGet, "/connections", in.memberCookie, nil)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.NotContains(t, w.Body.String(), "operator-provider")
-	assert.NotContains(t, w.Body.String(), "Operator only")
+	for _, enabled := range []bool{true, false} {
+		in.ro.cfg.Relay.Enabled = enabled
+		for _, base := range []string{"/connections", "/partials/connections"} {
+			for _, tc := range []struct {
+				query   string
+				cookie  *http.Cookie
+				visible bool
+			}{
+				{"", in.adminCookie, false},
+				{"", in.memberCookie, false},
+				{"?advanced=1", in.adminCookie, true},
+				{"?advanced=1", in.memberCookie, false},
+			} {
+				w = in.do(t, http.MethodGet, base+tc.query, tc.cookie, nil)
+				require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+				if base == "/connections" {
+					assert.Contains(t, w.Body.String(), `id="connection-workspace"`)
+					assert.Contains(t, w.Body.String(), `hx-trigger="exhibit:connections-changed from:body"`)
+				}
+				for _, text := range []string{"operator-provider", "other-provider", "Operator only", "/api/admin/connector-usage"} {
+					if tc.visible {
+						assert.Contains(t, w.Body.String(), text, "relay=%t, path=%s", enabled, base+tc.query)
+					} else {
+						assert.NotContains(t, w.Body.String(), text, "relay=%t, path=%s", enabled, base+tc.query)
+					}
+				}
+			}
+		}
+	}
 }
