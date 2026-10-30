@@ -25,13 +25,13 @@ func ConfigFromEnv() (*Config, error) {
 	for _, flag := range []struct {
 		name  string
 		value *bool
-	}{{"CONNECTORS_OAUTH_ENABLED", &cfg.OAuthEnabled}, {"CONNECTORS_VENDOR_ENABLED", &cfg.VendorEnabled}, {"CONNECTORS_STANDINS_ENABLED", &cfg.StandinsEnabled}} {
+	}{{"CONNECTORS_CUSTOM_ENABLED", &cfg.CustomEnabled}, {"CONNECTORS_OAUTH_ENABLED", &cfg.OAuthEnabled}, {"CONNECTORS_VENDOR_ENABLED", &cfg.VendorEnabled}, {"CONNECTORS_STANDINS_ENABLED", &cfg.StandinsEnabled}} {
 		if *flag.value, err = configSwitch(flag.name); err != nil {
 			return nil, err
 		}
 	}
 	if !enabled {
-		if cfg.OAuthEnabled || cfg.VendorEnabled || cfg.StandinsEnabled {
+		if cfg.CustomEnabled || cfg.OAuthEnabled || cfg.VendorEnabled || cfg.StandinsEnabled {
 			return nil, errors.New("connector phase switches require CONNECTORS_ENABLED=true")
 		}
 		return nil, nil

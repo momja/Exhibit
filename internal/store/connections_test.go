@@ -62,7 +62,7 @@ func TestConnectionQuotaReservationSurvivesConcurrentRequests(t *testing.T) {
 	require.NoError(t, s.ReserveConnectionRequest(ctx, "quota", 24, now.Add(24*time.Hour)))
 }
 
-func TestConnectionGrantRequiresViewerOwnershipAndExplicitOwnerSharing(t *testing.T) {
+func TestConnectionGrantRequiresViewerOwnershipAndRejectsDelegation(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "connected", OwnerID: alice, Title: "Bank", Tier: Tier1, SourceBlobID: "body"}))
@@ -70,45 +70,57 @@ func TestConnectionGrantRequiresViewerOwnershipAndExplicitOwnerSharing(t *testin
 		require.NoError(t, s.CreateConnection(ctx, c, -1))
 	}
 	assert.ErrorIs(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "connected", ConnectionID: "owner", ViewerID: bob}), ErrNotFound)
-	assert.ErrorIs(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "connected", ConnectionID: "viewer", ViewerID: bob, ShareWithRecipients: true}), ErrNotFound)
+	for _, grant := range []ConnectionGrantRecord{
+		{ArtifactID: "connected", ConnectionID: "owner", ViewerID: alice, ShareWithRecipients: true},
+		{ArtifactID: "connected", ConnectionID: "viewer", ViewerID: bob, ShareWithRecipients: true},
+	} {
+		assert.ErrorIs(t, s.PutConnectionGrant(ctx, grant), ErrConnectionSharing)
+	}
 	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "connected", ConnectionID: "owner", ViewerID: alice}))
+	// Even an un-upgraded or directly restored legacy row cannot delegate.
+	_, err := s.db.ExecContext(ctx, `UPDATE artifact_connection_grants SET share_with_recipients=1`)
+	require.NoError(t, err)
 	grants, err := s.ListConnectionGrants(ctx, bob, "connected")
 	require.NoError(t, err)
 	assert.Empty(t, grants)
 	_, err = s.GetGrantedConnection(ctx, bob, "connected", "owner")
 	assert.ErrorIs(t, err, ErrNotFound)
-	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "connected", ConnectionID: "owner", ViewerID: alice, ShareWithRecipients: true}))
+	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "connected", ConnectionID: "viewer", ViewerID: bob}))
 	grants, err = s.ListConnectionGrants(ctx, bob, "connected")
 	require.NoError(t, err)
 	require.Len(t, grants, 1)
-	require.NoError(t, s.DeleteConnection(ctx, alice, "owner"))
+	assert.Equal(t, "viewer", grants[0].ConnectionID)
+	// A corrupted grant naming somebody else's connection also grants nothing.
+	_, err = s.db.ExecContext(ctx, `INSERT INTO artifact_connection_grants(artifact_id,connection_id,viewer_id) VALUES ('connected','owner',?)`, bob)
+	require.NoError(t, err)
 	grants, err = s.ListConnectionGrants(ctx, bob, "connected")
 	require.NoError(t, err)
-	assert.Empty(t, grants)
+	require.Len(t, grants, 1)
+	_, err = s.GetGrantedConnection(ctx, bob, "connected", "owner")
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-func TestConnectionSharingInvariantAlsoGuardsStoreMutations(t *testing.T) {
+func TestSavedResultSharingNeverDelegatesConnectionAccess(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "private-connected", OwnerID: alice, Title: "Private", SourceBlobID: "body", Tier: Tier1}))
-	require.NoError(t, s.CreateConnection(ctx, &ConnectionRecord{ID: "private-connection", OwnerID: alice, Name: "Bank", Provider: "basic", Kind: "native", RecipeJSON: "{}", EncryptedSecret: "sealed"}, -1))
-	grant := ConnectionGrantRecord{ArtifactID: "private-connected", ConnectionID: "private-connection", ViewerID: alice}
+	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "personal-connected", OwnerID: alice, Title: "Private", SourceBlobID: "body", Tier: Tier1}))
+	require.NoError(t, s.CreateConnection(ctx, &ConnectionRecord{ID: "personal-connection", OwnerID: alice, Name: "Bank", Provider: "basic", Kind: "native", RecipeJSON: "{}", EncryptedSecret: "sealed"}, -1))
+	grant := ConnectionGrantRecord{ArtifactID: "personal-connected", ConnectionID: "personal-connection", ViewerID: alice}
 	require.NoError(t, s.PutConnectionGrant(ctx, grant))
-	assert.ErrorIs(t, s.UpdateArtifact(ctx, alice, "private-connected", map[string]any{"share_state_mode": ShareStateShared}), ErrConnectionSharing)
-	_, shareErr := s.CreateAnonymousLink(ctx, alice, "private-connected")
-	assert.ErrorIs(t, shareErr, ErrConnectionSharing)
-	_, err := s.ReplaceAnonymousLink(ctx, alice, "private-connected", "public-rotated")
-	assert.ErrorIs(t, err, ErrConnectionSharing)
-	grant.ShareWithRecipients = true
+	require.NoError(t, s.UpdateArtifact(ctx, alice, "personal-connected", map[string]any{"share_state_mode": ShareStateShared}))
+	_, err := s.CreateAnonymousLink(ctx, alice, "personal-connected")
+	require.NoError(t, err)
+	_, err = s.ReplaceAnonymousLink(ctx, alice, "personal-connected", "public-rotated")
+	require.NoError(t, err)
 	require.NoError(t, s.PutConnectionGrant(ctx, grant))
-	_, shareErr = s.CreateAnonymousLink(ctx, alice, "private-connected")
-	require.NoError(t, shareErr)
-	require.NoError(t, s.UpdateArtifact(ctx, alice, "private-connected", map[string]any{"share_state_mode": ShareStateShared}))
-	grant.ShareWithRecipients = false
-	assert.ErrorIs(t, s.PutConnectionGrant(ctx, grant), ErrNotFound)
+	grants, err := s.ListConnectionGrants(ctx, bob, "personal-connected")
+	require.NoError(t, err)
+	assert.Empty(t, grants)
+	_, err = s.GetGrantedConnection(ctx, bob, "personal-connected", "personal-connection")
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-func TestConnectionOriginOverlapIsAtomicAndIncludesSharedOwnerBindings(t *testing.T) {
+func TestConnectionOriginOverlapIsAtomicAndPersonal(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "origin-collision", OwnerID: alice, Title: "App", SourceBlobID: "body", Tier: Tier1}))
@@ -143,8 +155,9 @@ func TestConnectionOriginOverlapIsAtomicAndIncludesSharedOwnerBindings(t *testin
 	require.NoError(t, err)
 	require.Len(t, grants, 1)
 	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "origin-collision", ConnectionID: "viewer", ViewerID: bob}))
-	assert.ErrorIs(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "origin-collision", ConnectionID: grants[0].ConnectionID, ViewerID: alice, ShareWithRecipients: true}), ErrConnectionOverlap)
-	require.NoError(t, s.DeleteConnectionGrant(ctx, bob, "origin-collision", "viewer"))
-	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "origin-collision", ConnectionID: grants[0].ConnectionID, ViewerID: alice, ShareWithRecipients: true}))
-	assert.ErrorIs(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "origin-collision", ConnectionID: "viewer", ViewerID: bob}), ErrConnectionOverlap)
+	assert.ErrorIs(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "origin-collision", ConnectionID: grants[0].ConnectionID, ViewerID: alice, ShareWithRecipients: true}), ErrConnectionSharing)
+	viewerGrants, err := s.ListConnectionGrants(ctx, bob, "origin-collision")
+	require.NoError(t, err)
+	require.Len(t, viewerGrants, 1)
+	assert.Equal(t, "viewer", viewerGrants[0].ConnectionID, "matching origins do not collide across different people's accounts")
 }

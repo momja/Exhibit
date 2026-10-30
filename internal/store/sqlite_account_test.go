@@ -291,7 +291,7 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))
 	require.NoError(t, s.SetAgentKey(ctx, &AgentKey{OwnerID: member.ID, Provider: "anthropic", KeyCiphertext: "sealed"}))
 	require.NoError(t, s.CreateConnection(ctx, &ConnectionRecord{ID: "member-connection", OwnerID: member.ID, Name: "member account", Provider: "bearer", Kind: "native", RecipeJSON: `{"origins":["https://api.example.test"]}`, EncryptedSecret: "sealed"}, -1))
-	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: deletedArtifact, ConnectionID: "member-connection", ViewerID: member.ID, ShareWithRecipients: true}))
+	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: deletedArtifact, ConnectionID: "member-connection", ViewerID: member.ID}))
 	require.NoError(t, s.ReserveConnectionRequest(ctx, "member-connection", 24, time.Now()))
 	require.NoError(t, s.PutConnectionCache(ctx, "member-connection", "hash", "sealed", time.Now().Add(time.Hour)))
 	_, err = s.RequestArtifactConnection(ctx, member.ID, deletedArtifact, "basic", "Read my accounts")

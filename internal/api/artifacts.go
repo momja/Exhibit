@@ -650,12 +650,6 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	if mode, _ := updates["share_state_mode"].(string); mode == store.ShareStateShared && ro.cfg.Connections != nil {
-		if err := ro.cfg.Connections.ValidateArtifactSharing(r.Context(), ownerID, id); err != nil {
-			connectionError(w, err)
-			return
-		}
-	}
 
 	if !ro.expandSourceEdits(w, r, a, updates, false) {
 		return

@@ -12,28 +12,7 @@ import (
 var ErrConnectionLimit = errors.New("connection limit reached")
 var ErrConnectionQuota = errors.New("connection daily request quota reached")
 var ErrConnectionOverlap = errors.New("this artifact already has a connection for that origin; disconnect the existing grant before attaching another")
-var ErrConnectionSharing = errors.New("review connections and explicitly enable sharing before publishing this artifact or sharing its state")
-
-type connectionSharingQuery interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}
-
-func validateConnectionSharing(ctx context.Context, q connectionSharingQuery, ownerID int64, artifactID string) error {
-	var n int
-	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM artifact_connection_data_policies WHERE artifact_id=? AND viewer_id=? AND share_with_recipients=0`, artifactID, ownerID).Scan(&n); err != nil {
-		return err
-	}
-	if n > 0 {
-		return ErrConnectionSharing
-	}
-	return nil
-}
-func (s *SQLiteStore) ValidateConnectionSharing(ctx context.Context, ownerID int64, artifactID string) error {
-	if err := s.ownsArtifact(ctx, ownerID, artifactID); err != nil {
-		return err
-	}
-	return validateConnectionSharing(ctx, s.db, ownerID, artifactID)
-}
+var ErrConnectionSharing = errors.New("connections are personal; recipients must connect their own accounts")
 
 func jsonMarshalStrings(values []string) (string, error) {
 	if values == nil {
@@ -81,17 +60,17 @@ type ConnectionDataPolicy struct {
 	ConnectionID        string   `json:"connection_id"`
 	ViewerID            int64    `json:"viewer_id"`
 	Origins             []string `json:"origins"`
-	ShareWithRecipients bool     `json:"share_with_recipients"`
+	ShareWithRecipients bool     `json:"-"`
 }
 
-// ListConnectionDataPolicies selects a viewer's retained policies and the
-// artifact owner's explicitly shared policies. Artifact access is authorized
+// ListConnectionDataPolicies selects a viewer's retained policies and policies
+// for saved results exposed by shared state. Artifact access is authorized
 // separately by the caller, as for ListConnectionGrants; public renders may
 // need an owner's shared policy without an authenticated viewer account.
 func (s *SQLiteStore) ListConnectionDataPolicies(ctx context.Context, viewerID int64, artifactID string) ([]ConnectionDataPolicy, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT p.artifact_id,p.connection_id,p.viewer_id,p.origins_json,p.share_with_recipients
+	rows, err := s.db.QueryContext(ctx, `SELECT p.artifact_id,p.connection_id,p.viewer_id,p.origins_json,0
  FROM artifact_connection_data_policies p JOIN artifacts a ON a.id=p.artifact_id
- WHERE p.artifact_id=? AND (p.viewer_id=? OR (p.share_with_recipients=1 AND p.viewer_id=a.owner_id))
+ WHERE p.artifact_id=? AND (p.viewer_id=? OR a.share_state_mode='shared')
  ORDER BY p.viewer_id,p.connection_id`, artifactID, viewerID)
 	if err != nil {
 		return nil, err
@@ -112,15 +91,40 @@ func (s *SQLiteStore) ListConnectionDataPolicies(ctx context.Context, viewerID i
 	return out, rows.Err()
 }
 
-// RetainSharedConnectionDataPolicies records custody before a recipient can
-// receive provider data using the owner's shared credential. The recipient
-// can save that response in their own state: an owner's later reset must not
-// release those copies. Repeated receipt can only narrow a retained copy.
+// RetainSharedConnectionDataPolicies preserves provenance for the owner of
+// shared state and for the authenticated viewer receiving it. Copies outlive
+// sharing modes and account grants; they confer no credential access.
 func (s *SQLiteStore) RetainSharedConnectionDataPolicies(ctx context.Context, viewerID int64, artifactID string) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO artifact_connection_data_policies(artifact_id,viewer_id,connection_id,origins_json,share_with_recipients)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := retainSharedConnectionDataPoliciesTx(ctx, tx, viewerID, artifactID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func retainSharedConnectionDataPoliciesTx(ctx context.Context, tx *sql.Tx, viewerID int64, artifactID string) error {
+	// Any participant can save connected results in the owner's shared state.
+	// Preserve the owner's custody before account/grant removal or a mode change.
+	_, err := tx.ExecContext(ctx, `INSERT INTO artifact_connection_data_policies(artifact_id,viewer_id,connection_id,origins_json,share_with_recipients)
+ SELECT p.artifact_id,a.owner_id,p.connection_id,p.origins_json,0
+ FROM artifact_connection_data_policies p JOIN artifacts a ON a.id=p.artifact_id
+ WHERE p.artifact_id=? AND a.share_state_mode='shared' AND p.viewer_id!=a.owner_id
+ AND (a.owner_id=? OR EXISTS(SELECT 1 FROM share_grants WHERE share_grants.artifact_id=a.id AND share_grants.recipient_id=?))
+ ON CONFLICT(artifact_id,viewer_id,connection_id) DO UPDATE SET origins_json=(
+  SELECT json_group_array(value) FROM (
+   SELECT value FROM json_each(artifact_connection_data_policies.origins_json)
+   INTERSECT SELECT value FROM json_each(excluded.origins_json) ORDER BY value))`, artifactID, viewerID, viewerID)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO artifact_connection_data_policies(artifact_id,viewer_id,connection_id,origins_json,share_with_recipients)
  SELECT p.artifact_id,?,p.connection_id,p.origins_json,0
  FROM artifact_connection_data_policies p JOIN artifacts a ON a.id=p.artifact_id
- WHERE p.artifact_id=? AND p.viewer_id=a.owner_id AND p.share_with_recipients=1 AND a.owner_id!=?
+ WHERE p.artifact_id=? AND a.share_state_mode='shared' AND p.viewer_id!=?
  AND EXISTS(SELECT 1 FROM share_grants WHERE share_grants.artifact_id=a.id AND share_grants.recipient_id=?)
  ON CONFLICT(artifact_id,viewer_id,connection_id) DO UPDATE SET origins_json=(
   SELECT json_group_array(value) FROM (
@@ -135,7 +139,7 @@ const connectionDataPolicySelect = `SELECT g.artifact_id,g.viewer_id,g.connectio
  (SELECT json_group_array(value) FROM (
    SELECT value FROM json_each(c.recipe_json,'$.origins')
    UNION SELECT value FROM json_each(g.permitted_egress_json) ORDER BY value
- )),g.share_with_recipients
+ )),0
  FROM artifact_connection_grants g JOIN connections c ON c.id=g.connection_id`
 
 // ClearConnectionData clears a viewer's effective saved state and releases
@@ -176,8 +180,7 @@ func (s *SQLiteStore) ClearConnectionData(ctx context.Context, viewerID int64, a
   SELECT 1 FROM artifact_connection_grants g JOIN connections c ON c.id=g.connection_id
   WHERE g.artifact_id=artifact_connection_data_policies.artifact_id
    AND g.connection_id=artifact_connection_data_policies.connection_id AND c.status='active'
-   AND (g.viewer_id=artifact_connection_data_policies.viewer_id OR
-    (g.share_with_recipients=1 AND g.viewer_id=(SELECT owner_id FROM artifacts WHERE id=g.artifact_id))))`, artifactID, viewerID); err != nil {
+   AND g.viewer_id=artifact_connection_data_policies.viewer_id)`, artifactID, viewerID); err != nil {
 		return err
 	}
 	// Preserve the existing policy if present; the UI may have narrowed it
@@ -195,7 +198,7 @@ type ConnectionUsageArtifact struct {
 	Title               string   `json:"title"`
 	ViewerID            int64    `json:"viewer_id"`
 	PermittedEgress     []string `json:"permitted_egress"`
-	ShareWithRecipients bool     `json:"share_with_recipients"`
+	ShareWithRecipients bool     `json:"-"`
 }
 
 func (s *SQLiteStore) ConnectionArtifacts(ctx context.Context, ownerID int64, id string) ([]ConnectionUsageArtifact, error) {
@@ -292,14 +295,13 @@ func (s *SQLiteStore) GetConnection(ctx context.Context, ownerID int64, id strin
 	return scanConnection(s.db.QueryRowContext(ctx, `SELECT `+connectionColumns+` FROM connections WHERE id=? AND owner_id=?`, id, ownerID))
 }
 
-// GetGrantedConnection reads only a grant already held by this viewer or an
-// owner's explicit opt-in grant. Callers must separately authorize artifact
-// viewing; a grant never confers access to the artifact itself. Reconnect rows
+// GetGrantedConnection reads only this viewer's grant to their own account.
+// Callers must separately authorize artifact viewing; a grant never confers access to the artifact itself. Reconnect rows
 // stay visible so an expired credential cannot become an unauthenticated relay.
 func (s *SQLiteStore) GetGrantedConnection(ctx context.Context, viewerID int64, artifactID, id string) (*ConnectionRecord, error) {
-	return scanConnection(s.db.QueryRowContext(ctx, `SELECT `+prefixedConnectionColumns()+` FROM connections c WHERE c.id=? AND c.status IN ('active','reconnect') AND EXISTS (
+	return scanConnection(s.db.QueryRowContext(ctx, `SELECT `+prefixedConnectionColumns()+` FROM connections c WHERE c.id=? AND c.owner_id=? AND c.status IN ('active','reconnect') AND EXISTS (
  SELECT 1 FROM artifact_connection_grants g JOIN artifacts a ON a.id=g.artifact_id
- WHERE g.connection_id=c.id AND g.artifact_id=? AND (g.viewer_id=? OR (g.share_with_recipients=1 AND g.viewer_id=a.owner_id)))`, id, artifactID, viewerID))
+ WHERE g.connection_id=c.id AND g.artifact_id=? AND g.viewer_id=c.owner_id)`, id, viewerID, artifactID))
 }
 
 func prefixedConnectionColumns() string {
@@ -333,6 +335,9 @@ func (s *SQLiteStore) DeleteConnection(ctx context.Context, ownerID int64, id st
 }
 
 func (s *SQLiteStore) PutConnectionGrant(ctx context.Context, g ConnectionGrantRecord) error {
+	if g.ShareWithRecipients {
+		return ErrConnectionSharing
+	}
 	raw, err := jsonMarshalStrings(g.PermittedEgress)
 	if err != nil {
 		return err
@@ -342,30 +347,27 @@ func (s *SQLiteStore) PutConnectionGrant(ctx context.Context, g ConnectionGrantR
 		return err
 	}
 	defer tx.Rollback()
-	// A shared owner grant applies to every recipient, including viewers who
-	// already attached their own account. Check both directions atomically so
-	// attachment order can never choose whose credential a schedule spends.
+	// Each viewer chooses their own account for an origin. A disconnected
+	// account keeps its binding reserved until repaired or explicitly removed.
 	var overlap bool
 	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM artifacts a
 	 JOIN connections nc ON nc.id=? AND nc.owner_id=?
 	 JOIN json_each(nc.recipe_json,'$.origins') no
 	 JOIN artifact_connection_grants og ON og.artifact_id=a.id AND og.connection_id!=nc.id
-	 JOIN connections oc ON oc.id=og.connection_id AND oc.status='active'
+	 JOIN connections oc ON oc.id=og.connection_id AND oc.status IN ('active','reconnect')
 	 JOIN json_each(oc.recipe_json,'$.origins') oo ON oo.value=no.value
-	 WHERE a.id=? AND (og.viewer_id=? OR (og.share_with_recipients=1 AND og.viewer_id=a.owner_id) OR (?=1 AND ?=a.owner_id)))`, g.ConnectionID, g.ViewerID, g.ArtifactID, g.ViewerID, g.ShareWithRecipients, g.ViewerID).Scan(&overlap)
+	 WHERE a.id=? AND og.viewer_id=? AND oc.owner_id=og.viewer_id)`, g.ConnectionID, g.ViewerID, g.ArtifactID, g.ViewerID).Scan(&overlap)
 	if err != nil {
 		return err
 	}
 	if overlap {
 		return ErrConnectionOverlap
 	}
-	// The connection must belong to the grant's viewer. Only an artifact owner
-	// may opt their own credential into use by share recipients.
+	// An account is usable only by its owner, including on shared tools.
 	res, err := tx.ExecContext(ctx, `INSERT INTO artifact_connection_grants(artifact_id,connection_id,viewer_id,permitted_egress_json,share_with_recipients)
- SELECT ?,c.id,?,?,? FROM connections c JOIN artifacts a ON a.id=?
- WHERE c.id=? AND c.owner_id=? AND c.status='active' AND (?=0 OR a.owner_id=?)
- AND (?=1 OR (a.share_state_mode!='shared' AND NOT EXISTS(SELECT 1 FROM share_links l WHERE l.artifact_id=a.id)))
- ON CONFLICT(artifact_id,connection_id,viewer_id) DO UPDATE SET permitted_egress_json=excluded.permitted_egress_json,share_with_recipients=excluded.share_with_recipients`, g.ArtifactID, g.ViewerID, raw, g.ShareWithRecipients, g.ArtifactID, g.ConnectionID, g.ViewerID, g.ShareWithRecipients, g.ViewerID, g.ShareWithRecipients)
+ SELECT ?,c.id,?,?,0 FROM connections c JOIN artifacts a ON a.id=?
+ WHERE c.id=? AND c.owner_id=? AND c.status='active'
+ ON CONFLICT(artifact_id,connection_id,viewer_id) DO UPDATE SET permitted_egress_json=excluded.permitted_egress_json,share_with_recipients=0`, g.ArtifactID, g.ViewerID, raw, g.ArtifactID, g.ConnectionID, g.ViewerID)
 	if err != nil {
 		return err
 	}
@@ -382,13 +384,23 @@ func (s *SQLiteStore) PutConnectionGrant(ctx context.Context, g ConnectionGrantR
 	if err != nil {
 		return err
 	}
+	if err := retainSharedConnectionDataPoliciesTx(ctx, tx, g.ViewerID, g.ArtifactID); err != nil {
+		return err
+	}
+	// Completing the owner's requested connection resolves that prompt. A
+	// recipient's personal grant cannot dismiss an owner's request.
+	if _, err = tx.ExecContext(ctx, `DELETE FROM artifact_connection_requests
+ WHERE artifact_id=? AND owner_id=?
+ AND provider=(SELECT provider FROM connections WHERE id=? AND owner_id=?)`, g.ArtifactID, g.ViewerID, g.ConnectionID, g.ViewerID); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
 func (s *SQLiteStore) ListConnectionGrants(ctx context.Context, viewerID int64, artifactID string) ([]ConnectionGrantRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT g.artifact_id,g.connection_id,g.viewer_id,g.permitted_egress_json,g.share_with_recipients,g.created_at
+	rows, err := s.db.QueryContext(ctx, `SELECT g.artifact_id,g.connection_id,g.viewer_id,g.permitted_egress_json,0,g.created_at
  FROM artifact_connection_grants g JOIN artifacts a ON a.id=g.artifact_id JOIN connections c ON c.id=g.connection_id
- WHERE g.artifact_id=? AND c.status IN ('active','reconnect') AND (g.viewer_id=? OR (g.share_with_recipients=1 AND g.viewer_id=a.owner_id)) ORDER BY g.viewer_id=? DESC,g.connection_id`, artifactID, viewerID, viewerID)
+ WHERE g.artifact_id=? AND c.status IN ('active','reconnect') AND g.viewer_id=? AND c.owner_id=g.viewer_id ORDER BY g.connection_id`, artifactID, viewerID)
 	if err != nil {
 		return nil, err
 	}

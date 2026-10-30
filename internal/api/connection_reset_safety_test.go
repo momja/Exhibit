@@ -21,7 +21,7 @@ func resetSafetyFixture(t *testing.T) (*Router, *connectors.Service, string, str
 	t.Helper()
 	ro := newTestRouter(t)
 	id := createOwnArtifact(t, ro)
-	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = service
 	c, err := service.Create(t.Context(), 1, connectors.CreateRequest{Name: "Account", Recipe: "bearer", Origin: "https://api.example.test", Secret: "secret"}, connectors.UnlimitedLimits())
 	require.NoError(t, err)
@@ -115,7 +115,7 @@ func TestRetainedProvenanceDoesNotRestrictApprovedRelayWithAcquisitionDisabled(t
 		assert.Empty(t, r.Header.Get("Authorization"))
 		fmt.Fprint(w, "standalone response")
 	}))
-	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = service
 	c, err := service.Create(t.Context(), 1, connectors.CreateRequest{Name: "Private account", Recipe: "bearer", Origin: "https://api.example.test", Secret: "secret"}, connectors.UnlimitedLimits())
 	require.NoError(t, err)
@@ -149,7 +149,7 @@ func TestConnectionDataResetDiscardsAnInFlightScheduledResponse(t *testing.T) {
 	ro.cfg.Relay = RelayConfig{Enabled: true, SchedulesEnabled: true, GateFactory: egress.NewForTests}
 	id := createOwnArtifact(t, ro)
 	require.NoError(t, ro.cfg.Store.SetOriginDecision(t.Context(), 1, id, upstream.URL, store.DecisionAllow, "test"))
-	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = service
 	ro.cfg.Connections = service
 	c, err := service.Create(t.Context(), 1, connectors.CreateRequest{Name: "Account", Recipe: "bearer", Origin: upstream.URL, Secret: "secret"}, connectors.UnlimitedLimits())

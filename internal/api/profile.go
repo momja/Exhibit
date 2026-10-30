@@ -108,11 +108,12 @@ type profilePageData struct {
 }
 
 type profileConnectionAllowance struct {
-	Enabled   bool
-	Native    string
-	OAuth     string
-	Vendor    string
-	Schedules string
+	CustomEnabled bool
+	Enabled       bool
+	Native        string
+	OAuth         string
+	Vendor        string
+	Schedules     string
 }
 
 func connectionLimitDescription(n int, noun string) string {
@@ -171,7 +172,7 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 			serverError(w, r, "profile connection allowance", err)
 			return
 		}
-		connectionAllowance = profileConnectionAllowance{Enabled: true, Native: connectionLimitDescription(allowance.Connections.Native, "connection"), OAuth: connectionLimitDescription(allowance.Connections.OAuth, "connection"), Vendor: connectionLimitDescription(allowance.Connections.Vendor, "connection"), Schedules: connectionLimitDescription(allowance.Schedules, "schedule")}
+		connectionAllowance = profileConnectionAllowance{Enabled: true, CustomEnabled: ro.cfg.Connections != nil && ro.cfg.Connections.CustomEnabled(), Native: connectionLimitDescription(allowance.Connections.Native, "connection"), OAuth: connectionLimitDescription(allowance.Connections.OAuth, "connection"), Vendor: connectionLimitDescription(allowance.Connections.Vendor, "connection"), Schedules: connectionLimitDescription(allowance.Schedules, "schedule")}
 	}
 	page, err := renderPage("profile", profilePageData{
 		Header:          profileHeader(creds.Clerk),

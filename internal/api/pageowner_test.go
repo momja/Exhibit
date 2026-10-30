@@ -260,7 +260,7 @@ func newTwoOwnerInstance(t *testing.T) twoOwnerInstance {
 	ro, st := newIdentityTestRouter(t, &stubProvider{})
 	ro.cfg.Relay.Enabled = true
 	ro.cfg.Relay.SchedulesEnabled = true
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: st.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: st.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ctx := context.Background()
 
 	one, err := st.UpsertUser(ctx, "sub-one", "one@example.test")
@@ -553,7 +553,7 @@ func TestSingleUserPagesStillRenderOwnerOnesLibrary(t *testing.T) {
 	r := newTestRouter(t)
 	r.cfg.Relay.Enabled = true
 	r.cfg.Relay.SchedulesEnabled = true
-	r.cfg.Connections = connectors.New(connectors.Config{Store: r.cfg.Store.(*store.SQLiteStore), Box: r.cfg.Secrets})
+	r.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: r.cfg.Store.(*store.SQLiteStore), Box: r.cfg.Secrets})
 	// Conditional network and connection fragments need a warning and a pending
 	// request to render. Use the same nonempty fixture as the session walk.
 	id := seedOwnedArtifact(t, r, defaultOwnerID, "single-user-artifact", "Single User Shelf", "Single user body", "Single user state")

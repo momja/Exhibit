@@ -68,11 +68,8 @@ func trustedFrameRefresh(w http.ResponseWriter, r *http.Request) bool {
 
 func (ro *Router) connectionDocumentProtected(ctx context.Context, viewer int64, artifact string, publicShare bool) (bool, error) {
 	if publicShare {
-		// Publishing intentionally discloses the owner's data. Verify that
-		// every current owner grant carries the required sharing consent.
-		if policy := ro.connectionPolicy(); policy != nil {
-			return false, policy.ValidateArtifactSharing(ctx, viewer, artifact)
-		}
+		// A public link deliberately publishes saved results, never credentials.
+
 		return false, nil
 	}
 	return ro.hasConnectionDataPolicies(ctx, viewer, artifact)

@@ -73,7 +73,7 @@ func TestDirectOpenRejectsCurrentPrivatePoliciesFromStalePages(t *testing.T) {
 	ro := newTestRouter(t)
 	ctx := context.Background()
 	id := createOwnArtifact(t, ro)
-	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.Connections = service
 	ro.cfg.ConnectionPolicy = service
 	ro.cfg.Relay.Enabled = true

@@ -68,7 +68,7 @@ func TestAgentConnectionRequestNoticeEscapesReasonAndLinksToConfiguration(t *tes
 	ro := newTestRouter(t)
 	s := ro.cfg.Store.(*store.SQLiteStore)
 	ro.cfg.Relay.Enabled = true
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: s, Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: s, Box: ro.cfg.Secrets})
 	id := createArtifact(t, ro, map[string]any{"title": "Budget", "body": "<h1>Budget</h1>"})
 	_, err := s.RequestArtifactConnection(context.Background(), 1, id, "basic", `<img src=x onerror=alert(1)> Read account balances`)
 	require.NoError(t, err)

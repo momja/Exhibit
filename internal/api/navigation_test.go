@@ -36,7 +36,7 @@ func navigationCall(t *testing.T, ro *Router, id, destination, policy string) *h
 func TestNavigationPermissionsRemainIndependentOfConnectionsAndRejectStaleHosts(t *testing.T) {
 	ro, registry := newScopedTestRouter(t)
 	ctx := context.Background()
-	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.Connections = service
 	id := createOwnArtifact(t, ro)
 	a, err := ro.cfg.Store.GetArtifact(ctx, 1, id)
@@ -107,7 +107,7 @@ func TestStateFrameResyncRequiresCurrentPolicyBeforeReturningPrivateData(t *test
 	require.NoError(t, err)
 	oldPolicy, err := ro.relayPolicy(ctx, 1, a)
 	require.NoError(t, err)
-	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = service
 	c, err := service.Create(ctx, 1, connectors.CreateRequest{Name: "Private account", Recipe: "bearer", Origin: "https://api.example.test", Secret: "secret"}, connectors.UnlimitedLimits())
 	require.NoError(t, err)
@@ -141,7 +141,7 @@ func TestRevokedConnectionStillProtectsRenderNavigationAndSavedData(t *testing.T
 	for _, destination := range []string{"https://api.example.test", "https://attacker.example"} {
 		require.NoError(t, ro.cfg.Store.SetOriginDecision(ctx, 1, id, destination, store.DecisionAllow, "test"))
 	}
-	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = service
 	c, err := service.Create(ctx, 1, connectors.CreateRequest{Name: "Private account", Recipe: "bearer", Origin: "https://api.example.test", Secret: "secret"}, connectors.UnlimitedLimits())
 	require.NoError(t, err)
@@ -179,7 +179,7 @@ func TestConnectedPrivateRenderRequiresTrustedFrameAndPublicShareIsExplicit(t *t
 	ro := newTestRouter(t)
 	ctx := context.Background()
 	id := createArtifact(t, ro, map[string]any{"title": "Private app", "body": "<h1>PRIVATE-SOURCE-5932</h1>"})
-	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = service // grants remain enforced with every flag off
 	c, err := service.Create(ctx, 1, connectors.CreateRequest{Name: "Account", Recipe: "bearer", Origin: "https://api.example.test", Secret: "private-key"}, connectors.UnlimitedLimits())
 	require.NoError(t, err)
@@ -213,7 +213,7 @@ func TestConnectedPrivateRenderRequiresTrustedFrameAndPublicShareIsExplicit(t *t
 	require.Equal(t, http.StatusOK, preview.Code, preview.Body.String())
 	assert.Contains(t, preview.Body.String(), "data-relay-src=")
 	assert.Contains(t, preview.Body.String(), `data-relay-host-target="framePolicy"`)
-	_, err = service.Grant(ctx, 1, id, connectors.GrantRequest{ConnectionID: c.ID, ShareWithRecipients: true})
+	_, err = service.Grant(ctx, 1, id, connectors.GrantRequest{ConnectionID: c.ID})
 	require.NoError(t, err)
 	w := doJSON(t, ro, http.MethodPost, "/api/shares", map[string]string{"artifact_id": id})
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())

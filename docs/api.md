@@ -606,6 +606,7 @@ policy; the artifact bridge supplies it without exposing it to artifact code.
 ```text
 GET    /api/connections                         Safe connection metadata and providers
 POST   /api/connections                         Acquire a native connection in app chrome
+POST   /api/connections/:connectionID/reconnect Repair a native connection in place
 DELETE /api/connections/:connectionID           Revoke a connection
 POST   /api/connections/oauth/github/begin      Begin bound GitHub consent
 GET    /api/connections/oauth/github/callback   Complete one-shot bound consent
@@ -639,8 +640,9 @@ stand-ins, link validation and state synchronization. A stale source or request-
 authority token returns 409; reopen the artifact to refresh it. Requests from
 ordinary state API clients continue to work without that optional header.
 
-Native connection creation accepts a named reviewed `recipe`: `api-key`,
-`bearer` or `basic`. Generic recipes use an exact HTTPS `origin`;
+Native connection creation requires `CONNECTORS_CUSTOM_ENABLED=true` in addition
+to the connector and relay switches. This advanced option accepts a reviewed
+`recipe`: `api-key`, `bearer` or `basic`. Generic recipes use an exact HTTPS `origin`;
 API keys additionally choose a permitted `header`. Acquisition fields are
 accepted only in the trusted app interface and never appear in list responses.
 Basic additionally accepts `access_url`, a pasted HTTPS URL with embedded
@@ -650,7 +652,25 @@ virtual root endpoint. An artifact fetching `/accounts` at that origin reaches
 `/accounts` beneath the private base path. There is no setup-token claim flow.
 Optional `daily_limit` and `cache_minutes` cap daily provider requests and reuse
 responses across all artifacts and devices; zero means unlimited requests or
-no response reuse, respectively.
+no response reuse, respectively. An optional `artifact_id` preserves the setup
+context and must name a tool readable by the caller. It does not grant access.
+
+`POST /api/connections/:connectionID/reconnect` accepts only replacement
+`secret`, `username`, `password` or `access_url` fields, according to the existing
+native recipe. It requires custom setup to be enabled and returns `200` with the
+same connection ID. Name, origin, header, Basic base path and limits cannot change
+through repair; a supplied Basic credential URL must match the saved origin and
+base path. Existing tool grants, schedules and spent request quota are retained.
+Response caches and stand-ins are invalidated after replacement.
+
+GitHub OAuth begins with `{name, artifact_id?, connection_id?}`; `connection_id`
+selects an existing owned OAuth connection to repair. Server-side one-shot state
+binds both IDs to the authenticated browser. Completion redirects to
+`/connections?artifact=...&connection=...&connected=github`; cancellation or a
+known-flow failure returns to that context with `connection_error=cancelled` or
+`failed`. The server generates the local return path rather than accepting an
+arbitrary redirect URL. Tool readability and connection ownership are rechecked.
+
 Connections and relay consent do not distinguish reads from writes (Exh-cxzb).
 An HTTP method says nothing reliable about what a request does: a GET can change
 data and a GraphQL query is a POST. The relay accepts GET, HEAD, POST, PUT, PATCH
@@ -660,7 +680,11 @@ a request can read or change; to restrict a connection, create a narrower
 credential at the provider. Connection metadata carries no `capabilities`
 field, and `allow_writes` is not accepted.
 
-A grant accepts `connection_id` and explicit `share_with_recipients` consent.
+A grant accepts `connection_id` for a connection owned by the current viewer.
+V1 has no shared-account grants: `share_with_recipients=true` is rejected,
+legacy shared flags are cleared by migration 050, and recipients connect their
+own accounts. The current viewer must own the selected connection even on a
+shared-data tool; shared saved results confer no credential authority.
 Grants are additive: artifact origin approvals remain the network boundary,
 with credentials attached only at matching API origins. Multiple connections and
 approved standalone APIs/CDNs work together. Legacy `permitted_egress` and bundle
@@ -673,29 +697,40 @@ configuration, and [the runnable examples](../examples/connectors/README.md).
 Removing access or revoking a credential stops future credential use while saved
 responses and unrelated origin approvals remain. Returned data can be sent to
 other origins the artifact is approved to contact; a grant does not promise that
-response data stays at its source. Retained provenance still requires explicit
-consent to share connected state. The separate human-only `DELETE connection-data`
-action optionally clears the viewer's effective state and owner version-state
+response data stays at its source. Saved-data visibility follows the tool's
+separate/shared data mode and its public link, independently of connection
+grants. A public link exposes the owner's saved data in either mode; a named
+recipient sees the owner's state only in shared mode. The separate human-only
+`DELETE connection-data` action optionally clears the viewer's effective state and owner version-state
 snapshots when applicable, plus obsolete provenance owned by that viewer, in one
 transaction. It does not change origin approvals or active connection grants.
 Recipients cannot clear a shared board; the owner must do that. Cleanup remains
 available with acquisition disabled. Previously open pages may retain copies of
 data they already read.
 
-Managed OAuth begins with `{provider}` and returns `{session_id,url,expires_at}`.
-Open the provider URL, then submit `{session_id,name}` to `vendor/complete`.
-It returns 202 while pending or 201 with connected metadata. The server verifies
-the browser binding, provider, owner and exact flow tags before accepting a
-vendor connection; frontend messages cannot establish that authority.
+Managed OAuth begins with `{provider, artifact_id?, connection_id?}` and returns
+`{session_id,url,expires_at}`. Open the provider URL, then submit `{session_id,name}`
+to `vendor/complete`. It returns 202 while pending or 201 with connected metadata
+and a generated `return_url` preserving the originating tool. The server verifies
+the browser binding, provider, owner, target connection and exact flow tags before
+accepting a vendor connection; frontend messages cannot establish that authority.
+An optional `connection_id` repairs that existing account in place, preserving
+grants, schedules and quota while invalidating response caches and stand-ins.
+Repair retains the pinned engine and reviewed policy, including its API origins;
+it does not silently adopt a new provider configuration. The original engine must
+remain configured. Remote cleanup failures leave the repair flow retryable.
 
-Managed connections are selected with the generic `vendor` entry in the trusted
-connect UI. Operator-reviewed provider settings select Nango (`inject`) or
+Configured managed services appear by name in the trusted connection UI.
+Agent connection requests use a provider ID returned by `list_connections`;
+there is no generic `vendor` request destination. Operator-reviewed provider
+settings select Nango (`inject`) or
 Composio (`forward`). Safe connection metadata includes `engine`,
 `delivery_mode` and `reconnect_recommended`; external vendor references remain
 server-only. The begin/complete API keeps its browser-bound session contract.
 Managed errors include `code` with `needs_reconnect`, `rate_limited`, `refused`
 or `upstream_error`. A changed provider engine affects new connections; existing
-ones continue on their pinned engine until explicitly reconnected/revoked.
+ones continue on their pinned engine, including through reconnection. Moving an
+account to a different engine requires a separate connection and new grants.
 
 `GET /api/admin/connector-usage` is operator-only and returns `period_start`,
 `period_end` and `usage`: the current UTC month's aggregate `management_calls`,

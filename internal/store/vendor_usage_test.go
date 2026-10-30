@@ -140,13 +140,13 @@ func TestVendorReconnectStatusPreservesExistingGrantAndRejectsNewGrants(t *testi
 	for _, id := range []string{"existing", "new"} {
 		require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: id, OwnerID: alice, Title: id, SourceBlobID: "body", Tier: Tier1}))
 	}
-	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "existing", ConnectionID: connection.ID, ViewerID: alice, ShareWithRecipients: true}))
+	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "existing", ConnectionID: connection.ID, ViewerID: alice}))
 	assert.ErrorIs(t, s.MarkVendorConnectionReconnect(ctx, bob, connection.ID), ErrNotFound)
 	require.NoError(t, s.MarkVendorConnectionReconnect(ctx, alice, connection.ID))
 	require.NoError(t, s.MarkVendorConnectionReconnect(ctx, alice, connection.ID))
 	assert.ErrorIs(t, s.CreateConnection(ctx, &ConnectionRecord{ID: "over-limit", OwnerID: alice, Name: "New", Provider: "slack", Kind: "vendor", Engine: "composio", RecipeJSON: "{}", EncryptedSecret: "sealed"}, 1), ErrConnectionLimit,
 		"a stored account needing reconnect still consumes vendor capacity")
-	for _, viewer := range []int64{alice, bob} {
+	for _, viewer := range []int64{alice} {
 		grants, err := s.ListConnectionGrants(ctx, viewer, "existing")
 		require.NoError(t, err)
 		require.Len(t, grants, 1)

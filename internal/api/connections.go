@@ -3,8 +3,11 @@ package api
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/momja/Exhibit/internal/connectors"
@@ -79,7 +82,10 @@ func (ro *Router) createConnection(w http.ResponseWriter, r *http.Request) {
 	if s == nil {
 		return
 	}
-	var in connectors.CreateRequest
+	var in struct {
+		connectors.CreateRequest
+		ArtifactID string `json:"artifact_id,omitempty"`
+	}
 	if !decodeJSON(w, r, &in) {
 		return
 	}
@@ -89,7 +95,10 @@ func (ro *Router) createConnection(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 503, "connection allowance could not be resolved")
 		return
 	}
-	c, err := s.Create(r.Context(), owner, in, limits.Connections)
+	if !ro.validConnectionSetup(w, r, owner, in.ArtifactID) {
+		return
+	}
+	c, err := s.Create(r.Context(), owner, in.CreateRequest, limits.Connections)
 	if err != nil {
 		connectionError(w, err)
 		return
@@ -97,6 +106,79 @@ func (ro *Router) createConnection(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 201, c)
 }
+
+// reconnectConnection repairs the same saved identity; only replacement
+// credential fields are accepted so granted destinations cannot change here.
+func (ro *Router) reconnectConnection(w http.ResponseWriter, r *http.Request) {
+	s := ro.connectionService(w, r)
+	if s == nil {
+		return
+	}
+	var in connectors.ReconnectRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	err := decoder.Decode(&in)
+	if err == nil {
+		err = decoder.Decode(new(any))
+		if err == io.EOF {
+			err = nil
+		} else if err == nil {
+			err = errors.New("trailing data")
+		}
+	}
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeBodyTooLarge(w, tooLarge.Limit)
+		} else {
+			writeError(w, http.StatusBadRequest, "Provide only replacement credential fields.")
+		}
+		return
+	}
+	c, err := s.Reconnect(r.Context(), ownerIDFromCtx(r.Context()), urlParamID(r, "connectionID"), in)
+	if err != nil {
+		connectionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c)
+}
+
+func (ro *Router) validConnectionSetup(w http.ResponseWriter, r *http.Request, owner int64, artifactID string) bool {
+	if artifactID == "" {
+		return true
+	}
+	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(owner), artifactID)
+	if err != nil {
+		connectionError(w, err)
+		return false
+	}
+	if a == nil {
+		connectionError(w, store.ErrNotFound)
+		return false
+	}
+	return true
+}
+
+func connectionSetupURL(setup connectors.SetupContext, connectionID, outcome string) string {
+	q := url.Values{}
+	if setup.ArtifactID != "" {
+		q.Set("artifact", setup.ArtifactID)
+	}
+	if connectionID == "" {
+		connectionID = setup.ConnectionID
+	}
+	if connectionID != "" {
+		q.Set("connection", connectionID)
+	}
+	if outcome != "" {
+		q.Set("connection_error", outcome)
+	}
+	if len(q) == 0 {
+		return "/connections"
+	}
+	return "/connections?" + q.Encode()
+}
+
 func (ro *Router) deleteConnection(w http.ResponseWriter, r *http.Request) {
 	s := ro.connectionService(w, r)
 	if s == nil {
@@ -188,6 +270,16 @@ const connectionFlowCookie = "exhibit_connection_oauth"
 const connectionVendorFlowCookie = "exhibit_connection_vendor"
 
 func (ro *Router) connectionOAuthBinding(r *http.Request, flowCookie string) string {
+	if ro.cfg.Clerk != nil {
+		// Clerk rotates session-token bytes during the provider round trip.
+		// Its verified subject plus the private flow cookie pins the account
+		// and browser without depending on Exhibit's self-hosted cookie.
+		subject := ro.cfg.Clerk.Subject(r)
+		if subject == "" {
+			return ""
+		}
+		return subject + ":" + flowCookie
+	}
 	if ro.loginEnabled() {
 		cookie, err := r.Cookie(sessionCookieName)
 		if err != nil {
@@ -204,6 +296,7 @@ func (ro *Router) beginConnectionOAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	var in struct {
 		Name string `json:"name"`
+		connectors.SetupContext
 	}
 	if !decodeJSON(w, r, &in) {
 		return
@@ -215,7 +308,7 @@ func (ro *Router) beginConnectionOAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	flow := base64.RawURLEncoding.EncodeToString(raw[:])
 	binding := ro.connectionOAuthBinding(r, flow)
-	destination, err := s.BeginOAuth(r.Context(), ownerIDFromCtx(r.Context()), binding, in.Name, strings.TrimSuffix(ro.cfg.AppOrigin, "/")+"/api/connections/oauth/github/callback")
+	destination, err := s.BeginOAuthFor(r.Context(), ownerIDFromCtx(r.Context()), binding, in.Name, strings.TrimSuffix(ro.cfg.AppOrigin, "/")+"/api/connections/oauth/github/callback", in.SetupContext)
 	if err != nil {
 		connectionError(w, err)
 		return
@@ -254,13 +347,26 @@ func (ro *Router) connectionOAuthCallback(w http.ResponseWriter, r *http.Request
 		writeError(w, 503, "connection allowance could not be resolved")
 		return
 	}
-	_, err = ro.cfg.Connections.CompleteOAuth(r.Context(), owner, ro.connectionOAuthBinding(r, cookie.Value), r.URL.Query().Get("state"), r.URL.Query().Get("code"), limits.Connections)
+	c, setup, err := ro.cfg.Connections.CompleteOAuthFor(r.Context(), owner, ro.connectionOAuthBinding(r, cookie.Value), r.URL.Query().Get("state"), r.URL.Query().Get("code"), limits.Connections)
+	w.Header().Set("Cache-Control", "no-store")
 	if err != nil {
-		connectionError(w, err)
+		if setup == nil {
+			connectionError(w, err)
+			return
+		}
+		outcome := "failed"
+		if r.URL.Query().Get("error") == "access_denied" {
+			outcome = "cancelled"
+		}
+		http.Redirect(w, r, connectionSetupURL(*setup, "", outcome), http.StatusSeeOther)
 		return
 	}
-	w.Header().Set("Cache-Control", "no-store")
-	http.Redirect(w, r, "/connections?connected=github", http.StatusSeeOther)
+	destination := connectionSetupURL(*setup, c.ID, "")
+	separator := "?"
+	if strings.Contains(destination, "?") {
+		separator = "&"
+	}
+	http.Redirect(w, r, destination+separator+"connected=github", http.StatusSeeOther)
 }
 func (ro *Router) beginConnectionVendor(w http.ResponseWriter, r *http.Request) {
 	s := ro.connectionService(w, r)
@@ -269,6 +375,7 @@ func (ro *Router) beginConnectionVendor(w http.ResponseWriter, r *http.Request) 
 	}
 	var in struct {
 		Provider string `json:"provider"`
+		connectors.SetupContext
 	}
 	if !decodeJSON(w, r, &in) {
 		return
@@ -284,7 +391,7 @@ func (ro *Router) beginConnectionVendor(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	flow := base64.RawURLEncoding.EncodeToString(random[:])
-	session, err := s.BeginVendorBound(r.Context(), ownerIDFromCtx(r.Context()), in.Provider, limits.Connections, ro.connectionOAuthBinding(r, flow))
+	session, err := s.BeginVendorFor(r.Context(), ownerIDFromCtx(r.Context()), in.Provider, limits.Connections, ro.connectionOAuthBinding(r, flow), in.SetupContext)
 	if err != nil {
 		connectionError(w, err)
 		return
@@ -316,7 +423,7 @@ func (ro *Router) completeConnectionVendor(w http.ResponseWriter, r *http.Reques
 		writeError(w, 503, "connection allowance could not be resolved")
 		return
 	}
-	c, ready, err := s.CompleteVendor(r.Context(), ownerIDFromCtx(r.Context()), ro.connectionOAuthBinding(r, cookie.Value), in.SessionID, in.Name, allowance.Connections)
+	c, ready, setup, err := s.CompleteVendorFor(r.Context(), ownerIDFromCtx(r.Context()), ro.connectionOAuthBinding(r, cookie.Value), in.SessionID, in.Name, allowance.Connections)
 	if err != nil {
 		connectionError(w, err)
 		return
@@ -325,5 +432,5 @@ func (ro *Router) completeConnectionVendor(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, 202, map[string]string{"status": "pending"})
 		return
 	}
-	writeJSON(w, 201, map[string]any{"status": "connected", "connection": c})
+	writeJSON(w, 201, map[string]any{"status": "connected", "connection": c, "return_url": connectionSetupURL(*setup, c.ID, "")})
 }

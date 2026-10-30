@@ -692,14 +692,17 @@ configures and grants each connection in Exhibit. Relay access is one consent
 per artifact; Exhibit does not classify requests as reads or writes, because an
 HTTP method cannot say what a request does — the provider's permissions for the
 credential decide that. Grants identify the API origins that may receive credentials;
-connections belong to the current viewer unless sharing is explicitly approved.
+connections belong only to the current viewer. Recipients connect their own
+accounts; sharing a tool never lets them act through the owner's account.
 Connector grants are additive: the artifact's origin approvals remain its network
 boundary, so multiple connectors and approved standalone APIs/CDNs work together.
 A connector does not restrict unrelated traffic or guarantee where response data
 goes after artifact code receives it. Revoking or disabling a connection preserves
 other network approvals and saved state; optional data cleanup is never required
-to approve another origin. Sharing or exporting connected saved data still
-requires explicit consent.
+to approve another origin. Saved results are separate from account access:
+shared-data mode, public links and saved-data exports can include connected
+results. Their interfaces explain this before sharing or downloading. A shared
+result never gives a recipient permission to use the original account.
 
 Artifacts continue executing only in browsers. Declarative scheduled fetches
 can update saved data for widgets without executing an artifact backend. A
@@ -708,7 +711,10 @@ re-entered locally. A plain HTML export identifies origins that need a relay.
 All phases are experimental and off by default; the implemented behavior and
 examples are specified in [relay-connectors.md](relay-connectors.md).
 
-Generic API key, Bearer and Basic connections include user-set daily request
-limits and response reuse. Basic accepts a pasted HTTPS credential URL in the
-trusted connect UI. Credentials are sent only to the matching API origin;
+Custom API key, Bearer and Basic connections are an advanced experimental
+option, enabled separately with `CONNECTORS_CUSTOM_ENABLED`, and include
+user-set daily request limits and response reuse. Ordinary setup should present
+named accounts without requiring API or authentication knowledge. A broad
+service catalog and future third-party provider integration are outside this epic.
+Basic accepts a pasted HTTPS credential URL in the trusted connect UI. Credentials are sent only to the matching API origin;
 other approved requests continue without that credential.

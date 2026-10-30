@@ -51,6 +51,7 @@ func (l Limits) For(kind string) int {
 }
 
 type Config struct {
+	CustomEnabled   bool
 	Store           *store.SQLiteStore
 	Box             *secrets.Box
 	OAuthEnabled    bool
@@ -86,13 +87,12 @@ func (s *Service) Usage(ctx context.Context, ownerID int64, id string) ([]store.
 	return s.cfg.Store.ConnectionArtifacts(ctx, ownerID, id)
 }
 
-func (s *Service) ValidateArtifactSharing(ctx context.Context, ownerID int64, id string) error {
-	return s.cfg.Store.ValidateConnectionSharing(ctx, ownerID, id)
-}
-
-// DataPolicies retains saved-data provenance and sharing consent after
+// DataPolicies retains saved-data provenance for authenticated readers after
 // disconnection or credential revocation. It does not authorize network access.
 func (s *Service) DataPolicies(ctx context.Context, viewerID int64, artifactID string) ([]store.ConnectionDataPolicy, error) {
+	if err := s.cfg.Store.RetainSharedConnectionDataPolicies(ctx, viewerID, artifactID); err != nil {
+		return nil, err
+	}
 	return s.cfg.Store.ListConnectionDataPolicies(ctx, viewerID, artifactID)
 }
 
@@ -129,11 +129,14 @@ type Provider struct {
 	Enabled     bool   `json:"enabled"`
 }
 
+// CustomEnabled reports whether this instance permits advanced credential setup.
+func (s *Service) CustomEnabled() bool { return s.cfg.CustomEnabled }
+
 func (s *Service) Providers() []Provider {
 	return []Provider{
-		{"api-key", "API key", "native", "A key injected into a reviewed header at the origin you choose.", "personal", true},
-		{"bearer", "Bearer token", "native", "A token sent in the Authorization header to one origin.", "personal", true},
-		{"basic", "HTTP Basic", "native", "A username and password, or a pasted HTTPS URL containing both. Credentials are sent only to that origin.", "personal", true},
+		{"api-key", "API key", "native", "A key injected into a reviewed header at the origin you choose.", "personal", s.cfg.CustomEnabled},
+		{"bearer", "Bearer token", "native", "A token sent in the Authorization header to one origin.", "personal", s.cfg.CustomEnabled},
+		{"basic", "HTTP Basic", "native", "A username and password, or a pasted HTTPS URL containing both. Credentials are sent only to that origin.", "personal", s.cfg.CustomEnabled},
 		{"github", "GitHub", "oauth", "Connect GitHub using the operator's registered OAuth application.", "personal", s.cfg.OAuthEnabled && s.cfg.GitHub.ClientID != "" && s.cfg.GitHub.ClientSecret != ""},
 		{"vendor", "Managed OAuth", "vendor", "Connect a provider approved by this instance's operator.", "personal", s.cfg.VendorEnabled && s.cfg.Vendor.configured()},
 	}
@@ -184,7 +187,7 @@ type credential struct {
 }
 
 func (s *Service) Create(ctx context.Context, ownerID int64, in CreateRequest, limits Limits) (*Connection, error) {
-	if s.cfg.Store == nil || s.cfg.Box == nil {
+	if !s.cfg.CustomEnabled || s.cfg.Store == nil || s.cfg.Box == nil {
 		return nil, ErrDisabled
 	}
 	if ownerID <= 0 {
@@ -529,15 +532,17 @@ type GrantRequest struct {
 	ShareWithRecipients bool     `json:"share_with_recipients"`
 }
 type Grant struct {
-	Connection          Connection `json:"connection"`
-	ArtifactID          string     `json:"artifact_id"`
-	ViewerID            int64      `json:"viewer_id"`
-	PermittedEgress     []string   `json:"permitted_egress"`
-	ShareWithRecipients bool       `json:"share_with_recipients"`
-	Consent             string     `json:"consent"`
+	Connection      Connection `json:"connection"`
+	ArtifactID      string     `json:"artifact_id"`
+	ViewerID        int64      `json:"viewer_id"`
+	PermittedEgress []string   `json:"permitted_egress"`
+	Consent         string     `json:"consent"`
 }
 
 func (s *Service) Grant(ctx context.Context, viewerID int64, artifactID string, in GrantRequest) (*Grant, error) {
+	if in.ShareWithRecipients {
+		return nil, fmt.Errorf("%w: connections are personal; recipients must connect their own accounts", ErrInvalid)
+	}
 	rec, err := s.cfg.Store.GetConnection(ctx, viewerID, in.ConnectionID)
 	if err != nil {
 		return nil, err
@@ -548,9 +553,6 @@ func (s *Service) Grant(ctx context.Context, viewerID int64, artifactID string, 
 	}
 	if artifact == nil {
 		return nil, store.ErrNotFound
-	}
-	if (artifact.ShareStateMode == store.ShareStateShared || artifact.SharePublicLink) && (!in.ShareWithRecipients || artifact.OwnerID != viewerID) {
-		return nil, fmt.Errorf("%w: shared-state or public-link artifacts require the owner's explicit connection sharing consent", ErrInvalid)
 	}
 	permitted, err := origin.NormalizeOrigins(in.PermittedEgress)
 	if err != nil {
@@ -598,7 +600,7 @@ func (s *Service) grantMetadata(ctx context.Context, g store.ConnectionGrantReco
 	if meta.DeliveryMode == VendorForward {
 		consent += " Requests and responses pass through " + meta.Engine + " in forward mode."
 	}
-	return &Grant{Connection: *meta, ArtifactID: g.ArtifactID, ViewerID: g.ViewerID, PermittedEgress: g.PermittedEgress, ShareWithRecipients: g.ShareWithRecipients, Consent: consent}, nil
+	return &Grant{Connection: *meta, ArtifactID: g.ArtifactID, ViewerID: g.ViewerID, PermittedEgress: g.PermittedEgress, Consent: consent}, nil
 }
 func (s *Service) Grants(ctx context.Context, viewerID int64, artifactID string) ([]Grant, error) {
 	rows, err := s.cfg.Store.ListConnectionGrants(ctx, viewerID, artifactID)
@@ -698,15 +700,8 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 	if artifact == nil {
 		return nil, store.ErrNotFound
 	}
-	if (artifact.ShareStateMode == store.ShareStateShared || artifact.SharePublicLink) && (!chosen.ShareWithRecipients || chosen.ViewerID != artifact.OwnerID) {
-		return nil, fmt.Errorf("%w: shared-state or public-link artifact needs the owner's explicit sharing consent", ErrEgress)
-	}
-	if chosen.ViewerID != viewerID {
-		// Keep provenance for the recipient's saved copies independently of
-		// the owner's sharing and cleanup actions.
-		if err = s.cfg.Store.RetainSharedConnectionDataPolicies(ctx, viewerID, artifactID); err != nil {
-			return nil, err
-		}
+	if rec.OwnerID != viewerID || chosen.ViewerID != viewerID {
+		return nil, store.ErrNotFound
 	}
 	lock, _ := s.locks.LoadOrStore(rec.ID, &sync.Mutex{})
 	mu := lock.(*sync.Mutex)

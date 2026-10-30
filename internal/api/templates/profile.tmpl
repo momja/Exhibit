@@ -68,15 +68,14 @@
 
 {{if .Connections.Enabled}}
 <div class="card">
-  <h3 class="settings-h3">Connections <span class="muted text-sm">Experimental</span></h3>
-  <p class="settings-copy">Your account's limits for external accounts and scheduled fetches. Credentials are configured in Exhibit and kept outside artifact code.</p>
-  <dl class="settings-facts">
-    <dt>Native secrets</dt><dd>{{.Connections.Native}}</dd>
-    <dt>Native OAuth</dt><dd>{{.Connections.OAuth}}</dd>
-    <dt>Managed OAuth</dt><dd>{{.Connections.Vendor}}</dd>
-    <dt>Scheduled fetches</dt><dd>{{.Connections.Schedules}}</dd>
-  </dl>
+  <h3 class="settings-h3">Connected accounts <span class="muted text-sm">Experimental</span></h3>
+  <p class="settings-copy">Choose which tools can use your accounts. Account access stays personal when you share a tool.</p>
   <div class="settings-foot"><a class="btn btn-sec" href="/connections"><i class="ph ph-key" aria-hidden="true"></i> Manage connections</a></div>
+  <details class="settings-note"><summary>Advanced · Experimental</summary>
+    <p class="settings-copy">Custom API setup and request diagnostics are for experienced users.{{if not .Connections.CustomEnabled}} Custom connection setup is disabled by this instance’s configuration.{{end}}</p>
+    <dl class="settings-facts"><dt>Custom connections</dt><dd>{{.Connections.Native}}</dd><dt>Service accounts</dt><dd>{{.Connections.OAuth}}</dd><dt>Managed accounts</dt><dd>{{.Connections.Vendor}}</dd><dt>Scheduled fetches</dt><dd>{{.Connections.Schedules}}</dd></dl>
+    <a href="/connections?advanced=1">Advanced connections</a>
+  </details>
 </div>
 {{end}}
 

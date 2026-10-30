@@ -69,7 +69,7 @@ func (ro *Router) agentConnections(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	providers := make([]agentConnectionProvider, 0)
-	for _, provider := range ro.cfg.Connections.Providers() {
+	for _, provider := range ro.connectionRequestProviders() {
 		providers = append(providers, agentConnectionProvider{
 			ID: provider.ID, Name: provider.Name, Enabled: provider.Enabled,
 		})
@@ -101,7 +101,7 @@ func (ro *Router) agentRequestConnection(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	providerEnabled := false
-	for _, provider := range ro.cfg.Connections.Providers() {
+	for _, provider := range ro.connectionRequestProviders() {
 		if provider.ID == req.Provider && provider.Enabled {
 			providerEnabled = true
 			break
@@ -126,7 +126,7 @@ func (ro *Router) agentRequestConnection(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"request": request, "status": "pending", "manage_url": "/connections?artifact=" + url.QueryEscape(artifactID),
+		"request": request, "status": "pending", "manage_url": ro.connectionRequestSetupURL(artifactID, req.Provider),
 	})
 }
 
@@ -141,4 +141,36 @@ func (ro *Router) dismissConnectionRequest(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Agent requests name only configured services; custom mechanisms stay opt-in.
+func (ro *Router) connectionRequestProviders() []agentConnectionProvider {
+	providers := []agentConnectionProvider{}
+	if ro.cfg.Connections == nil {
+		return providers
+	}
+	for _, p := range ro.cfg.Connections.Providers() {
+		if p.ID != "vendor" {
+			providers = append(providers, agentConnectionProvider{p.ID, p.Name, p.Enabled})
+		}
+	}
+	for _, p := range ro.cfg.Connections.VendorProviders() {
+		providers = append(providers, agentConnectionProvider{p.ID, p.Name, true})
+	}
+	return providers
+}
+
+func (ro *Router) connectionRequestSetupURL(artifactID, provider string) string {
+	q := url.Values{"artifact": {artifactID}, "provider": {provider}}
+	for _, p := range ro.cfg.Connections.Providers() {
+		if p.ID == provider && p.Kind == "native" {
+			q.Set("advanced", "1")
+		}
+	}
+	for _, p := range ro.cfg.Connections.VendorProviders() {
+		if p.ID == provider {
+			q.Set("provider", "vendor:"+provider)
+		}
+	}
+	return "/connections?" + q.Encode() + "#connection-setup"
 }

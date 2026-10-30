@@ -312,7 +312,7 @@
       <input type="checkbox" id="share-link-toggle" aria-describedby="share-link-permissions"{{if .Shares.Link}} checked data-share-id="{{.Shares.Link.ID}}"{{end}}>
       <span class="spacer">Anyone with the link can open this artifact</span>
     </label>
-    <p class="share-help" id="share-link-permissions">Anyone with the link can view your existing saved data, in either data mode. Public visitors cannot save changes back to your data.</p>
+    <p class="share-help" id="share-link-permissions">Anyone with the link can view your existing saved data, in either data mode. This includes results saved from connected accounts. Public visitors cannot save changes back to your data. They cannot use your connected accounts.</p>
     {{if .Shares.Link}}
     <div class="share-link-row">
       <input type="text" id="share-link-url" class="field" readonly value="{{.Shares.Link.URL}}" aria-label="Public link">
@@ -344,6 +344,7 @@
 
   <section class="share-col">
     <h3 class="text-sm muted">People</h3>
+    <p class="share-help">Sharing this tool never lets someone use your connected accounts. Each person connects their own accounts.</p>
     {{/* One field taking several names and one submit: "gave friends access,
          dropped the link in the group chat" is one gesture, not three. The
          field confirms existence deliberately — answering "added" for a name
@@ -392,6 +393,7 @@
         </label>
       </div>
     </fieldset>
+    <p class="share-help">Shared data includes results this tool saves from connected accounts. Review the saved data before sharing it. Changing these settings does not give anyone access to your accounts.</p>
     <details class="state-how-it-works" id="state-how-it-works">
       <summary><i class="ph ph-caret-right state-how-closed" aria-hidden="true"></i><i class="ph ph-caret-down state-how-open" aria-hidden="true"></i> What Happens When I Switch?</summary>
       <p><strong>Switch to separate data:</strong> you keep using your saved data. Each person returns to their own previously saved data, or starts empty if they have none. Your shared data is not copied to them.</p>

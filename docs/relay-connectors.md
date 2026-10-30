@@ -4,7 +4,9 @@ Artifacts keep executing in the browser. An optional relay performs bounded
 HTTPS requests, and reviewed connector engines inject credentials outside the
 artifact. The runnable examples are in
 [examples/connectors](../examples/connectors/README.md). This is experimental
-functionality with normal isolation, persistence and configuration behavior.
+groundwork for personal account access. Custom API setup is an advanced option,
+not the general-audience connection experience. A broad named-service catalog
+and its provider integration belong to a future epic; this change does not add one.
 
 ## Operator setup
 
@@ -19,7 +21,8 @@ DATA_DIR=/tmp/exhibit-connectors \
 ADDR=:18080 RENDER_ADDR=:18081 \
 APP_ORIGIN=http://t3code:18080 RENDER_ORIGIN=http://t3code:18081 \
 AUTH_TOKEN=your-dev-service-token \
-RELAY_ENABLED=true CONNECTORS_ENABLED=true RELAY_SCHEDULES_ENABLED=true \
+RELAY_ENABLED=true CONNECTORS_ENABLED=true CONNECTORS_CUSTOM_ENABLED=true \
+RELAY_SCHEDULES_ENABLED=true \
 go run ./cmd/server
 ```
 
@@ -32,7 +35,8 @@ decryption of existing connections.
 | Variable | Purpose |
 | --- | --- |
 | `RELAY_ENABLED` | Enable the authenticated API relay and its permission UI. |
-| `CONNECTORS_ENABLED` | Enable generic native API key, Bearer and Basic connections. |
+| `CONNECTORS_ENABLED` | Enable the experimental connection framework. |
+| `CONNECTORS_CUSTOM_ENABLED` | Also enable advanced custom API key, Bearer and Basic setup; off by default. |
 | `CONNECTORS_OAUTH_ENABLED` | Enable the reviewed native GitHub OAuth flow. |
 | `CONNECTORS_VENDOR_ENABLED` | Enable operator-reviewed managed OAuth providers. |
 | `CONNECTORS_STANDINS_ENABLED` | Enable short-lived placeholder credentials for clients that require a token value. |
@@ -40,7 +44,12 @@ decryption of existing connections.
 | `RELAY_ALLOW_ORIGINS` | Optional operator ceiling, as comma/space-separated exact origins. |
 | `RELAY_DENY_ORIGINS` | Operator origin denylist; denial wins over artifact approval. |
 
-Connector subphases require `CONNECTORS_ENABLED`; schedules require the relay.
+Connector subphases, including custom setup, require `CONNECTORS_ENABLED`;
+schedules require the relay. Enabling connections alone does not expose a generic
+credential form. Custom setup lives in the advanced connection settings, separate
+from named account connections. Existing native connections can still serve
+approved tools when custom setup is disabled; creating or repairing one requires
+the custom flag.
 Origins and viewer grants remain necessary after enabling any flag. No
 pre-existing allow row silently becomes a relay or connection grant.
 
@@ -112,13 +121,15 @@ inject to forward mode.
 Connections persist their engine, external reference and reviewed provider
 settings. Changing a provider's configured engine affects new connections and
 new flows only. Existing connections keep their original engine and policy;
-the UI recommends reconnection. Unusable credentials report `needs_reconnect`
-and show a reconnect action. Reconnection starts a new consent flow under the
-current configuration; revoke the old connection when ready. The original
-engine handles revocation and idle pruning even after the provider is switched.
-If an entitlement cap prevents keeping both, revoke the old connection first.
-Keep an old engine's operator key configured until its connections are removed.
-Migration 041 pins earlier managed connections to Nango and resolves their
+the UI reports changed configuration. Unusable credentials report `needs_reconnect`
+and show a reconnect action. Reconnection repairs the existing connection under
+its pinned engine and reviewed policy. It preserves the connection ID, tool
+grants, schedules and request quota; no second connection slot is needed.
+Cached responses and stand-ins are invalidated when the credential is replaced.
+It does not move an existing account to another vendor or expand its API origins.
+Keep the original engine's operator key configured until its connections are
+removed. A failed remote-account cleanup leaves repair retryable.
+Migration 048 pins earlier managed connections to Nango and resolves their
 legacy encrypted reference without transferring credentials between vendors.
 
 Operators can inspect **Vendor usage** on the Connections page or
@@ -165,9 +176,10 @@ providers may require cleanup in the provider's own settings.
 
 ## Using a connection
 
-Open **Connections & relay** from an artifact, or visit `/connections`. Add a
-named connection in Exhibit's app chrome. Generic connections choose an exact
-HTTPS origin and a reviewed credential position; API key headers cannot control
+Open **Connections** from a tool, or visit `/connections`. Existing configured
+named accounts use their account-specific setup. Custom credentials live under
+advanced setup and appear only when `CONNECTORS_CUSTOM_ENABLED=true`. Custom
+connections choose an exact HTTPS origin and a reviewed credential position; API key headers cannot control
 Host, cookies, browser identity or transport framing. Basic accepts either an
 origin, username and password or a pasted HTTPS URL with embedded credentials.
 The latter is split into origin, credentials and a private base path. Credentials
@@ -237,19 +249,48 @@ removes stored state; it is never required to approve an origin or use another
 connection. Legacy `permitted_egress`, `data_origins` and retained policy records
 remain compatibility/provenance metadata only, with no network authority.
 
-Connections belong to the current viewer. A recipient uses their own connection
-unless the owner explicitly shares a connection and its data. Public links do
-not use the relay. Shared-state/public-link artifacts require explicit owner
-sharing consent before attaching a connection because saved response data is
-part of the artifact's state. Sharing or exporting saved data is distinct from
-sharing a credential.
+Connections are personal in V1. A recipient connects their own account; sharing
+a tool never lets them use the owner's credential, cache authority or stand-in.
+The store and service enforce the current viewer as the connection owner,
+including relay requests and schedules. `share_with_recipients=true` is rejected.
+Migration 050 clears the old shared-credential flags without deleting saved
+results. Saved-result provenance remains with the shared-state owner and
+authenticated readers after grants are removed or sharing mode changes.
+Public links cannot use the relay.
+
+Saved results are a separate decision, governed by the tool's sharing settings.
+Named recipients use their own saved data in Separate Data mode; Shared Data
+uses the owner's saved data and lets recipients update it. A public link shows
+the owner's saved data in either mode, without letting visitors write it back.
+These results can include data previously fetched from a connected account.
+The share panel explains this before a link or shared-data mode is enabled.
+Connecting an account grants no permission to share its credential, and sharing
+saved data grants no account access. Removing a connection does not erase copies
+already saved or downloaded.
 
 Artifact code uses ordinary HTTPS `fetch` with no credentials. Safe granted
 metadata is available from `await window.exhibit.connections.list()`, including
 provider, origins and any public endpoint. Models can call `list_connections`
-and `request_connection`; requests appear in Exhibit and grant nothing until a
-person completes them. Agents cannot acquire credentials, submit recipes, edit
-grants or retrieve secrets.
+and `request_connection` using a provider ID from the returned list; configured
+managed services are named individually. Requests appear in Exhibit and grant nothing until a
+person completes them. Each request provides a setup action that keeps the
+originating tool in view. The person still reviews and allows the connection
+for that tool; merely asking or finishing sign-in grants no tool access.
+Agents cannot acquire credentials, submit recipes, edit grants or retrieve secrets.
+
+Setup begun from a tool keeps that context through native credential setup,
+GitHub consent and managed-provider consent. GitHub cancellation or a bound-flow
+failure returns to the same context with a recoverable error. Return destinations
+are generated from validated tool IDs, never accepted as arbitrary URLs.
+
+**Reconnect** repairs a saved connection instead of creating another one. Native
+repairs replace only the secret (or Basic username/password) and preserve the
+name, origin, credential header, base path and limits. A replacement Basic URL
+must match the stored destination and base path. OAuth and managed repairs bind
+the target ID and tool to the authenticated setup flow. Existing tool grants
+and schedules continue to refer to the same connection, while response caches
+and stand-ins are cleared. Reconnection does not approve new origins or add
+grants to another tool.
 
 When enabled, `window.exhibit.connections.get(connectionId)` obtains an inert,
 expiring stand-in. The relay accepts it only for its viewer, connection,
@@ -276,10 +317,11 @@ Private connected documents open only inside Exhibit, with an opaque sandbox
 and an exact parent frame policy. Their URLs and signed scopes remain bound to
 the authorized document; artifact frames cannot use app-owned fresh-token routes
 to escape that binding. Gallery widgets show saved data inside a script-free
-app-owned wrapper pinned to the widget's render path. Explicit owner consent is
-still required to share connected saved data, including data retained after
-revocation. These privacy and sharing checks do not limit the artifact's approved
-network origins. HTTPS previews require the browser's iframe Fetch Metadata
+app-owned wrapper pinned to the widget's render path. Saved-data provenance
+continues after revocation, while visibility follows the tool's existing sharing
+settings. A shared saved result never authorizes use of the account that supplied
+it. These privacy checks do not limit the artifact's approved network origins.
+HTTPS previews require the browser's iframe Fetch Metadata
 header. On plain HTTP development origins, where browsers omit it, the referrer
 must instead name the exact trusted app origin. The trusted widget wrapper sends
 only that origin; render documents still send no referrer.
@@ -340,11 +382,16 @@ the relay adds any granted connection's credential when the schedule runs.
 
 ## Portable exports
 
-**Download app** exports a ZIP with `index.html`, `state.json`, `exhibit.json`,
+**Download app** includes all current saved data, including connected-account
+results, in a ZIP with `index.html`, `state.json`, `exhibit.json`,
 the browser bridge, `serve.mjs` and a README. Its manifest contains allowed
 origins and nonsecret connection requirements, with no original connection IDs,
-access paths or credentials. The single-file HTML export lists origins that
-still require a relay. Neither form silently carries an Exhibit grant.
+access paths or credentials. Review saved results before giving the ZIP to
+someone else; erase unwanted saved data first if necessary. **Export JSON** also
+includes saved results but no connection credentials. The single-file **Download
+file** export includes source and assets, without stored localStorage data or
+connection credentials. It lists origins that still require a relay. Neither form
+silently carries an Exhibit grant.
 
 Unpack and run `node serve.mjs`, or build `go build ./cmd/exhibit-run` and run
 `exhibit-run app.zip`. The Go runner also accepts a directory. Node is covered
@@ -420,6 +467,16 @@ prompt. The running ticket visualizer also loads its previously approved CDN
 icons while GitHub relay requests return successfully, without clearing state
 or changing the saved approvals. Updated interface evidence is in
 [screenshots/Exh-s47o](screenshots/Exh-s47o).
+
+The personal-account and advanced-setup corrections are shown in
+[screenshots/Exh-k6gt](screenshots/Exh-k6gt):
+
+- [Personal connections on desktop](screenshots/Exh-k6gt/01-personal-connections-desktop.png)
+- [Personal connections on mobile in dark mode](screenshots/Exh-k6gt/02-personal-connections-mobile-dark.png)
+- [Advanced custom setup](screenshots/Exh-k6gt/03-advanced-custom-setup.png)
+- [Repairing an existing connection](screenshots/Exh-k6gt/04-reconnect-existing-account.png)
+- [Sharing saved results](screenshots/Exh-k6gt/05-sharing-saved-results.png)
+- [Relay consent](screenshots/Exh-k6gt/06-relay-consent.png)
 
 Live generic Basic account access, registered GitHub OAuth, Nango and Composio
 staging flows/costs and one live model generation require external credentials; those checks are tracked in

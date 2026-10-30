@@ -1575,9 +1575,14 @@ Credential custody protects secrets while Exhibit holds them. Once response data
 is returned to artifact code, Exhibit cannot guarantee that it stays at the API:
 the artifact can save it or send it to other approved origins. Removing a grant,
 revoking a credential or disabling connectors does not restrict unrelated approved
-network access or require clearing state. Saved provenance remains relevant to
-explicit sharing/export consent and private render boundaries; legacy destination
-fields are inert compatibility metadata. Optional cleanup erases saved state,
+network access or require clearing state. Connections are personal: the service
+and store require the current viewer to own each credential, and neither a
+named share nor a shared-data mode extends that authority. Legacy shared
+credential grants are cleared by migration 050; true `share_with_recipients`
+requests are rejected. Saved provenance remains relevant to private render
+boundaries. Existing saved-data sharing settings and exports can still disclose
+account results, which the share and export interfaces explain separately.
+Legacy destination fields are inert compatibility metadata. Optional cleanup erases saved state,
 without changing network approvals or grants; open pages may still hold copies.
 
 The shared HTTPS gate checks each redirect, rejects non-public DNS answers and

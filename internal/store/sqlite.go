@@ -553,19 +553,25 @@ func updateArtifactTx(ctx context.Context, tx *sql.Tx, ownerID int64, id string,
 			if !ok || !ValidShareStateMode(mode) {
 				return fmt.Errorf("share_state_mode must be %q or %q", ShareStateOwn, ShareStateShared)
 			}
-			if mode == ShareStateShared {
-				if err := validateConnectionSharing(ctx, tx, ownerID, id); err != nil {
-					return err
-				}
-			}
 		}
 		setClauses = append(setClauses, k+"=?")
 		args = append(args, v)
 	}
 	setClauses = append(setClauses, "updated_at=datetime('now')")
 	args = append(args, id, ownerID)
-	return execOwnedTx(ctx, tx,
-		"UPDATE artifacts SET "+strings.Join(setClauses, ", ")+" WHERE id=? AND owner_id=?", args...)
+	if _, changingMode := updates["share_state_mode"]; changingMode {
+		if err := retainSharedConnectionDataPoliciesTx(ctx, tx, ownerID, id); err != nil {
+			return err
+		}
+	}
+	if err := execOwnedTx(ctx, tx,
+		"UPDATE artifacts SET "+strings.Join(setClauses, ", ")+" WHERE id=? AND owner_id=?", args...); err != nil {
+		return err
+	}
+	if _, changingMode := updates["share_state_mode"]; changingMode {
+		return retainSharedConnectionDataPoliciesTx(ctx, tx, ownerID, id)
+	}
+	return nil
 }
 
 // execOwned runs a statement whose WHERE clause already carries the owner
@@ -1277,6 +1283,9 @@ func (s *SQLiteStore) GetStateAsViewer(ctx context.Context, viewerID ViewerID, a
 	if err != nil {
 		return nil, err
 	}
+	if err := s.RetainSharedConnectionDataPolicies(ctx, int64(viewerID), artifactID); err != nil {
+		return nil, err
+	}
 	return s.GetState(ctx, owner, artifactID, principal)
 }
 
@@ -1456,9 +1465,6 @@ func (s *SQLiteStore) CreateAnonymousLink(ctx context.Context, ownerID int64, ar
 		return nil, err
 	}
 	defer tx.Rollback()
-	if err := validateConnectionSharing(ctx, tx, ownerID, artifactID); err != nil {
-		return nil, err
-	}
 	id := uuid.New().String()
 	_, err = tx.ExecContext(ctx,
 		"INSERT INTO share_links (id, artifact_id) VALUES (?, ?)", id, artifactID)
@@ -1631,9 +1637,6 @@ func (s *SQLiteStore) ReplaceAnonymousLink(ctx context.Context, ownerID int64, a
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }() // no-op once committed
-	if err := validateConnectionSharing(ctx, tx, ownerID, artifactID); err != nil {
-		return nil, err
-	}
 
 	if _, err := tx.ExecContext(ctx,
 		"DELETE FROM share_links WHERE artifact_id=?", artifactID); err != nil {

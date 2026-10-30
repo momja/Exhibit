@@ -27,7 +27,7 @@ func TestRelayStandaloneCacheSurvivesUnrelatedConnectionChanges(t *testing.T) {
 	}))
 	ctx := t.Context()
 	require.NoError(t, ro.cfg.Store.SetOriginDecision(ctx, 1, id, "https://other.example.test", store.DecisionAllow, "test"))
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = ro.cfg.Connections
 	s, _ := ro.relayStore()
 	require.NoError(t, s.SetRelayGrant(ctx, 1, id, store.RelayGrant{Allowed: true}))
@@ -76,7 +76,7 @@ func TestConnectionsAddCredentialsWithoutNarrowingApprovedTraffic(t *testing.T) 
 
 	ro := newTestRouter(t)
 	ro.cfg.Relay = RelayConfig{Enabled: true, SchedulesEnabled: true, GateFactory: egress.NewForTests}
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = ro.cfg.Connections
 	id := createOwnArtifact(t, ro)
 	ctx := t.Context()

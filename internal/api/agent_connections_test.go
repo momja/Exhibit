@@ -16,7 +16,7 @@ func TestAgentConnectionToolsExposeMetadataAndQueueOnly(t *testing.T) {
 	ro, registry := newScopedTestRouter(t)
 	s := ro.cfg.Store.(*store.SQLiteStore)
 	ro.cfg.Relay.Enabled = true
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: s, Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: s, Box: ro.cfg.Secrets})
 	connection, err := ro.cfg.Connections.Create(context.Background(), 1, connectors.CreateRequest{
 		Name: "Reading list API", Recipe: "api-key", Origin: "https://api.example", Secret: "never-in-agent-context",
 	}, connectors.UnlimitedLimits())
@@ -68,7 +68,7 @@ func TestAgentConnectionRequestsRequireAnEnabledProviderAndRelay(t *testing.T) {
 	w := doJSON(t, ro, http.MethodGet, path, nil)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	ro.cfg.Relay.Enabled = true
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	for _, body := range []map[string]any{
 		{"provider": "attacker-recipe", "reason": "Not shipped policy"},
 		{"provider": "github", "reason": "Disabled phase"},

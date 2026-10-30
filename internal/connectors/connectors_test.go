@@ -32,7 +32,7 @@ func testService(t *testing.T) (*Service, string) {
 	t.Cleanup(func() { db.Close() })
 	box, err := secrets.Load("connection-test-key", "")
 	require.NoError(t, err)
-	s := New(Config{Store: db, Box: box, StandinsEnabled: true, GateFactory: func(origins []string) (*egress.Gate, error) { return egress.NewForTests(origins, egress.Limits{}) }})
+	s := New(Config{CustomEnabled: true, Store: db, Box: box, StandinsEnabled: true, GateFactory: func(origins []string) (*egress.Gate, error) { return egress.NewForTests(origins, egress.Limits{}) }})
 	require.NoError(t, db.PutArtifact(context.Background(), &store.Artifact{ID: "app", OwnerID: 1, Title: "Connected app", SourceBlobID: "body", Tier: store.Tier1}))
 	return s, path
 }
@@ -483,7 +483,7 @@ func TestConnectionCacheNeverStoresPartialOrVaryWildcardResponses(t *testing.T) 
 	}
 }
 
-func TestConnectionWideCacheScrubsForEachViewerAndCurrentStandin(t *testing.T) {
+func TestPersonalConnectionCacheScrubsForCurrentStandin(t *testing.T) {
 	s, _ := testService(t)
 	ctx := context.Background()
 	now := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
@@ -496,52 +496,34 @@ func TestConnectionWideCacheScrubsForEachViewerAndCurrentStandin(t *testing.T) {
 		fmt.Fprintf(w, `{"echo":%q}`, r.Header.Get("Authorization"))
 	}))
 	defer provider.Close()
-	_, err := s.cfg.Store.UpsertUser(ctx, "owner", "owner@example.test")
+	c, err := s.Create(ctx, 1, CreateRequest{Name: "Personal cached API", Recipe: "bearer", Origin: provider.URL, Secret: originalSecret, DailyLimit: 1, CacheMinutes: 180}, UnlimitedLimits())
 	require.NoError(t, err)
-	viewer, err := s.cfg.Store.UpsertUser(ctx, "recipient", "recipient@example.test")
-	require.NoError(t, err)
-	viewerID := viewer.ID
-	_, err = s.cfg.Store.CreateGrant(ctx, 1, "app", viewerID)
-	require.NoError(t, err)
-	c, err := s.Create(ctx, 1, CreateRequest{Name: "Shared cached API", Recipe: "bearer", Origin: provider.URL, Secret: originalSecret, DailyLimit: 1, CacheMinutes: 180}, UnlimitedLimits())
-	require.NoError(t, err)
-	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID, ShareWithRecipients: true})
+	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID})
 	require.NoError(t, err)
 	ownerHandle, err := s.Standin(ctx, 1, "app", c.ID)
-	require.NoError(t, err)
-	recipientHandle, err := s.Standin(ctx, viewerID, "app", c.ID)
 	require.NoError(t, err)
 	gate := testGate(t, provider.URL)
 	response, err := doRequest(t, s, 1, gate, provider.URL+"/data")
 	require.NoError(t, err)
 	assert.Contains(t, string(response.Body), ownerHandle.Value)
 	assert.NotContains(t, string(response.Body), originalSecret)
-	response, err = doRequest(t, s, viewerID, gate, provider.URL+"/data")
-	require.NoError(t, err)
-	assert.Contains(t, string(response.Body), recipientHandle.Value)
-	assert.NotContains(t, string(response.Body), ownerHandle.Value)
-	assert.NotContains(t, string(response.Body), originalSecret)
-	policies, err := s.DataPolicies(ctx, viewerID, "app")
-	require.NoError(t, err)
-	assert.Len(t, policies, 2, "receiving a cached shared response still records recipient custody")
 	// Rotation after a provider call must not lose the secret needed to scrub
 	// a still-fresh cached response that reflected the previous access token.
 	rotated, err := s.cfg.Box.Encrypt(`{"value":"rotated-credential-5061"}`)
 	require.NoError(t, err)
 	require.NoError(t, s.cfg.Store.UpdateConnectionSecret(ctx, 1, c.ID, rotated))
 	now = now.Add(61 * time.Minute)
-	freshHandle, err := s.Standin(ctx, viewerID, "app", c.ID)
+	freshHandle, err := s.Standin(ctx, 1, "app", c.ID)
 	require.NoError(t, err)
-	response, err = doRequest(t, s, viewerID, gate, provider.URL+"/data")
+	response, err = doRequest(t, s, 1, gate, provider.URL+"/data")
 	require.NoError(t, err)
 	assert.Contains(t, string(response.Body), freshHandle.Value)
-	assert.NotContains(t, string(response.Body), recipientHandle.Value)
 	assert.NotContains(t, string(response.Body), ownerHandle.Value)
 	assert.NotContains(t, string(response.Body), originalSecret)
-	assert.Equal(t, int32(1), received.Load(), "all viewers and renewed handles reuse one provider response")
+	assert.Equal(t, int32(1), received.Load(), "renewed handles reuse the same personal provider response")
 	// With no active handle a cache delivery uses the neutral redaction mask.
 	now = now.Add(61 * time.Minute)
-	response, err = doRequest(t, s, viewerID, gate, provider.URL+"/data")
+	response, err = doRequest(t, s, 1, gate, provider.URL+"/data")
 	require.NoError(t, err)
 	assert.Contains(t, string(response.Body), "[credential redacted]")
 	assert.NotContains(t, string(response.Body), standinPrefix)
@@ -652,7 +634,7 @@ func TestNativeCredentialIsNotForwardedAcrossRedirectOrigins(t *testing.T) {
 	assert.Zero(t, stolen.Load())
 }
 
-func TestSharedStateAndPublicLinksNeedExplicitConnectionConsent(t *testing.T) {
+func TestSharedStateAndPublicLinksKeepConnectionsPersonal(t *testing.T) {
 	for _, mode := range []string{"shared", "public"} {
 		t.Run(mode, func(t *testing.T) {
 			s, _ := testService(t)
@@ -666,10 +648,9 @@ func TestSharedStateAndPublicLinksNeedExplicitConnectionConsent(t *testing.T) {
 				require.NoError(t, err)
 			}
 			_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID})
-			assert.ErrorIs(t, err, ErrInvalid)
-			g, err := s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID, ShareWithRecipients: true})
 			require.NoError(t, err)
-			assert.True(t, g.ShareWithRecipients)
+			_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID, ShareWithRecipients: true})
+			assert.ErrorIs(t, err, ErrInvalid)
 		})
 	}
 }
@@ -789,4 +770,21 @@ func TestNativeConnectionCarriesItsCredentialForEveryMethod(t *testing.T) {
 		require.NoError(t, err, method)
 		assert.Equal(t, "Bearer every-method-secret", seen[method], method)
 	}
+}
+
+func TestCustomCredentialSetupRequiresExplicitConfiguration(t *testing.T) {
+	s, _ := testService(t)
+	s.cfg.CustomEnabled = false
+	assert.False(t, s.CustomEnabled())
+	for _, provider := range s.Providers() {
+		if provider.Kind == "native" {
+			assert.False(t, provider.Enabled)
+		}
+	}
+	_, err := s.Create(t.Context(), 1, CreateRequest{Name: "Personal API", Recipe: "bearer", Origin: "https://api.example.test", Secret: "secret"}, UnlimitedLimits())
+	assert.ErrorIs(t, err, ErrDisabled)
+	s.cfg.CustomEnabled = true
+	assert.True(t, s.CustomEnabled())
+	_, err = s.Create(t.Context(), 1, CreateRequest{Name: "Personal API", Recipe: "bearer", Origin: "https://api.example.test", Secret: "secret"}, UnlimitedLimits())
+	require.NoError(t, err)
 }

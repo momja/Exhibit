@@ -87,7 +87,7 @@ func TestAccountDeletionRevokesRemoteConnectionsAndCanRetryProviderOutage(t *tes
 	}))
 	defer provider.Close()
 	in.ro.cfg.Relay.Enabled = true
-	in.ro.cfg.Connections = connectors.New(connectors.Config{Store: in.st.(*store.SQLiteStore), Box: in.ro.cfg.Secrets, OAuthEnabled: true, GitHub: connectors.OAuthProvider{ClientID: "operator", ClientSecret: "operator-secret", RevokeURL: provider.URL + "/revoke"}, GateFactory: func(o []string) (*egress.Gate, error) { return egress.NewForTests(o, egress.Limits{}) }})
+	in.ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: in.st.(*store.SQLiteStore), Box: in.ro.cfg.Secrets, OAuthEnabled: true, GitHub: connectors.OAuthProvider{ClientID: "operator", ClientSecret: "operator-secret", RevokeURL: provider.URL + "/revoke"}, GateFactory: func(o []string) (*egress.Gate, error) { return egress.NewForTests(o, egress.Limits{}) }})
 	seedAccountOAuthConnection(t, in, "a-remote", "remote-one-private-token", in.member.ID)
 	seedAccountOAuthConnection(t, in, "b-remote", "remote-two-private-token", in.member.ID)
 	w := in.deleteAccount(t)
@@ -126,7 +126,7 @@ func TestLastAdminRefusalHappensBeforeConnectionRevocation(t *testing.T) {
 	var revocations atomic.Int32
 	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { revocations.Add(1); w.WriteHeader(204) }))
 	defer provider.Close()
-	in.ro.cfg.Connections = connectors.New(connectors.Config{Store: in.st.(*store.SQLiteStore), Box: in.ro.cfg.Secrets, OAuthEnabled: true, GitHub: connectors.OAuthProvider{RevokeURL: provider.URL}, GateFactory: func(o []string) (*egress.Gate, error) { return egress.NewForTests(o, egress.Limits{}) }})
+	in.ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: in.st.(*store.SQLiteStore), Box: in.ro.cfg.Secrets, OAuthEnabled: true, GitHub: connectors.OAuthProvider{RevokeURL: provider.URL}, GateFactory: func(o []string) (*egress.Gate, error) { return egress.NewForTests(o, egress.Limits{}) }})
 	seedAccountOAuthConnection(t, in, "admin-oauth", "private-admin-token", in.admin.ID)
 	in.cookie = sessionCookieFor(t, in.st, in.admin.ID, "admin-delete")
 	w := in.deleteAccount(t)

@@ -1029,7 +1029,10 @@ and acquire local credentials again. See [relay-connectors.md](relay-connectors.
 for the configuration, ownership rules, portable runners and recorded decision
 superseding the synchronous backend POC.
 
-Native connectors are generic API key, Bearer and Basic credential policies.
+Native custom connectors are generic API key, Bearer and Basic credential policies,
+behind `CONNECTORS_CUSTOM_ENABLED` and an explicit advanced setup surface.
+`CONNECTORS_ENABLED` alone enables the framework without a generic credential
+form. This is reusable groundwork; a broad named-service catalog is future scope.
 A pasted Basic credential URL is split in trusted app code into an origin,
 encrypted credentials and an encrypted private base path. The relay maps
 artifact paths under that base without disclosing it. User-selected daily request
@@ -1052,8 +1055,11 @@ apply the same separation between origin permission and credential use.
 
 Once response bytes reach the artifact, its code can save or send them to other
 approved origins. Credential custody cannot guarantee response-data non-egress.
-Retained provenance still supports explicit connected-state sharing consent and
-private render boundaries; legacy destination fields confer no network authority.
+Connection grants authorize only their owner, including after a tool is shared.
+Migration 050 clears legacy shared-account flags. Saved-state visibility remains
+the separate decision expressed by the tool's own/shared data mode and public
+link. Retained provenance still supports private render boundaries; legacy
+destination fields confer no network authority.
 Optional saved-state cleanup does not affect origin approvals or connection grants.
 
 Managed authentication uses a swappable vendor engine beside the native
@@ -1064,5 +1070,8 @@ public-address preflight, headers, quota/cache and response caps, while the
 vendor owns provider dialing and redirects. No additional artifact-facing relay
 or server code runtime is introduced. Connections pin engine, external reference
 and reviewed policy; configuration changes affect new connections, and existing
-ones retain their original engine until reconnection. Aggregate monthly
-engine/provider attempts and current stored-connection counts are operator-only.
+ones retain their original engine through reconnection. Repairs replace credentials
+in place, retaining connection identity, tool grants, schedules and request quota,
+while invalidating cached responses and stand-ins. Tool context is carried in
+browser-bound setup state and return paths are generated from validated IDs.
+Aggregate monthly engine/provider attempts and current stored-connection counts are operator-only.
