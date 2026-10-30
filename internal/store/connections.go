@@ -364,7 +364,7 @@ func (s *SQLiteStore) PutConnectionGrant(ctx context.Context, g ConnectionGrantR
 	res, err := tx.ExecContext(ctx, `INSERT INTO artifact_connection_grants(artifact_id,connection_id,viewer_id,permitted_egress_json,share_with_recipients)
  SELECT ?,c.id,?,?,? FROM connections c JOIN artifacts a ON a.id=?
  WHERE c.id=? AND c.owner_id=? AND c.status='active' AND (?=0 OR a.owner_id=?)
- AND (?=1 OR (a.share_state_mode!='shared' AND a.share_link=0))
+ AND (?=1 OR (a.share_state_mode!='shared' AND NOT EXISTS(SELECT 1 FROM share_links l WHERE l.artifact_id=a.id)))
  ON CONFLICT(artifact_id,connection_id,viewer_id) DO UPDATE SET permitted_egress_json=excluded.permitted_egress_json,share_with_recipients=excluded.share_with_recipients`, g.ArtifactID, g.ViewerID, raw, g.ShareWithRecipients, g.ArtifactID, g.ConnectionID, g.ViewerID, g.ShareWithRecipients, g.ViewerID, g.ShareWithRecipients)
 	if err != nil {
 		return err

@@ -38,6 +38,9 @@ func (ro *Router) openGalleryWidget(w http.ResponseWriter, r *http.Request) {
 // Recipients refresh widget credentials through viewer access, leaving the
 // owner accessor and its callers unchanged.
 func (ro *Router) openReadableGalleryWidget(w http.ResponseWriter, r *http.Request) {
+	if !trustedFrameRefresh(w, r) {
+		return
+	}
 	urls := ro.renderURLs(r)
 	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(urls.viewerID), urlParamID(r, "artifactID"))
 	if err != nil {

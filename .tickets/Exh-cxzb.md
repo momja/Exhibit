@@ -24,3 +24,8 @@ Native, OAuth and vendor connections carry no allow_writes setting or read/write
 **2026-10-24T17:47:55Z**
 
 Removed allow_writes from native, OAuth and vendor connections, the connection capabilities metadata, the saved-connection permission editor and PATCH /api/connections/:id (superseding Exh-oeaf), and the relay reads/writes pair. Relay consent is now one {allowed} grant per artifact and viewer covering GET, HEAD, POST, PUT, PATCH and DELETE. Migration 042 keeps grants that already covered every method, clears reads-only grants so viewers are asked again under the new copy, and strips allow_writes from stored recipes. CONNECTORS_VENDOR_PROVIDERS that still sets allow_writes refuses to load and names the provider. UI, agent prompt, docs and examples now say the provider's credential scope is the only limit. Screenshots refreshed from an isolated local instance; the demo instance was not redeployed. GET/HEAD-only throttle retries are unchanged (retry safety, not permission).
+
+
+## Rebase onto current main (2026-10-30)
+
+Connector migrations were renumbered from 036–042 to 043–049 because main now ships through 042. The single-consent migration is now 049. Sharing checks use main's split share tables, and relay guidance follows main's prompt-template layout.

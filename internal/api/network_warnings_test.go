@@ -60,7 +60,7 @@ func TestNetworkReviewPartialsUseSavedSourceAndPreserveBlockedDecisions(t *testi
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "opaque, unreadable")
 
-	_, err := renderEditPage(&store.Artifact{ID: id, Title: "App"}, nil, nil, `<script>fetch('/', {mode:'no-cors'})</script>`, "", testPageCreds, testRenderURLs("https://render.example"), false, "", nil)
+	_, err := renderEditPage(&store.Artifact{ID: id, Title: "App"}, nil, nil, `<script>fetch('/', {mode:'no-cors'})</script>`, "", testPageCreds, testRenderURLs("https://render.example"), false, "", nil, editNavigation{})
 	require.NoError(t, err, "the edit page includes the initial server-rendered warning region")
 }
 

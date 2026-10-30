@@ -16,7 +16,7 @@ EXPERIMENTAL; part of Exh-g2vv.
 
 The relay's main gap versus a backend is work while no page is open: digests, price alerts, fresh widgets. First answer: an artifact declares 'every N hours (random minute), fetch this allowlisted URL, using this connection, into this localStorage key'. The relay runs it under the same gate, grants and quotas; the widget reads the key. No artifact code runs on the server.
 
-- Respect provider guidance, e.g. SimpleFIN's daily fetch at a random minute with 5-day overlapping windows; transforming windows may need recipe help.
+- Respect provider guidance, such as a daily fetch at a random minute with overlapping date windows; transforming windows may need recipe help.
 - If declarative isn't enough, the next option is running the artifact itself on a schedule in the existing headless Chromium sidecar (CHROMIUM_CDP_URL, with request confinement as in security.md §1.10), not reviving a QuickJS backend.
 
 ## Acceptance Criteria

@@ -68,6 +68,25 @@ func TestRecipientWidgetRefreshKeepsConnectionDataProtected(t *testing.T) {
 	assert.NotContains(t, reload.Body.String(), "<script")
 }
 
+func TestRecipientWidgetRefreshRequiresTrustedFrame(t *testing.T) {
+	in := newGrantedInstance(t)
+	for _, site := range []string{"cross-site", "same-site", "same-origin"} {
+		req := httptest.NewRequest(http.MethodGet, "/artifacts/"+in.granted+"/widget/viewer/open", nil)
+		req.AddCookie(in.cookieTwo)
+		req.Header.Set("Sec-Fetch-Dest", "iframe")
+		req.Header.Set("Sec-Fetch-Site", site)
+		w := httptest.NewRecorder()
+		in.ro.ServeHTTP(w, req)
+		if site == "same-origin" {
+			assert.Equal(t, http.StatusFound, w.Code, w.Body.String())
+			assert.NotEmpty(t, w.Header().Get("Location"))
+		} else {
+			assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+			assert.Empty(t, w.Header().Get("Location"))
+		}
+	}
+}
+
 func TestPrivateWidgetBrowserShowsSavedDataAndBlocksSelfNavigation(t *testing.T) {
 	ro := newTestRouter(t)
 	ctx := context.Background()
