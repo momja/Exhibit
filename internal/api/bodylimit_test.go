@@ -108,6 +108,10 @@ var writeRoutes = []struct {
 	{"POST", "/api/shares/", true},
 	{"DELETE", "/api/shares/{shareID}", false},
 	{"POST", "/api/artifacts/{artifactID}/agent-grants", true},
+	// The remote MCP endpoint refuses this walk's service token before it
+	// reads anything; with a grant, the SDK reads under the same root limit.
+	{"POST", "/mcp", false},
+	{"DELETE", "/mcp", false},
 	{"DELETE", "/api/artifacts/{artifactID}/agent-grants/{grantID}", false},
 	{"POST", "/auth/local", true},
 	{"POST", "/auth/logout", false},

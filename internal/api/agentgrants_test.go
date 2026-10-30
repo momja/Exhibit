@@ -265,7 +265,8 @@ func TestAgentGrantsPanelIsTheOwners(t *testing.T) {
 	page := w.Body.String()
 	for _, id := range []string{"agent-grants-open", "agent-grants-panel", "agent-grants-body", "agent-grant-issued",
 		"agent-grant-token", "agent-grant-copy", "agent-grants-status", "agent-grants-close", "agent-grant-label",
-		"agent-grant-command", "agent-grant-command-copy", "agent-grant-config", "agent-grant-config-copy"} {
+		"agent-grant-command", "agent-grant-command-copy", "agent-grant-config", "agent-grant-config-copy",
+		"agent-grant-stdio", "agent-grant-stdio-copy"} {
 		assert.Contains(t, page, `id="`+id+`"`)
 	}
 	assert.Contains(t, page, "gallery/agent-grants.js")

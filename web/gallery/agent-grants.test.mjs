@@ -64,8 +64,10 @@ test('issuing shows the token once, outside the refreshed list, and copies it', 
   assert.equal(page.byId('agent-grants-status').textContent, '✓ Token copied');
 
   assert.equal(page.byId('agent-grant-command').value,
-    'claude mcp add exhibit --env EXHIBIT_URL=https://exhibit.test --env EXHIBIT_TOKEN=exgrant_secret -- exhibit-mcp');
+    'claude mcp add --transport http exhibit https://exhibit.test/mcp --header "Authorization: Bearer exgrant_secret"');
   assert.deepEqual(JSON.parse(page.byId('agent-grant-config').value), { mcpServers: { exhibit: {
+    type: 'http', url: 'https://exhibit.test/mcp', headers: { Authorization: 'Bearer exgrant_secret' } } } });
+  assert.deepEqual(JSON.parse(page.byId('agent-grant-stdio').value), { mcpServers: { exhibit: {
     command: 'exhibit-mcp', env: { EXHIBIT_URL: 'https://exhibit.test', EXHIBIT_TOKEN: 'exgrant_secret' } } } });
   await page.copy('agent-grant-config-copy');
   assert.equal(page.copied.length, 2);
@@ -81,6 +83,7 @@ test('closing the panel forgets the token', async () => {
   assert.equal(page.panel.hidden, true);
   assert.equal(page.byId('agent-grant-token').value, '');
   assert.equal(page.byId('agent-grant-config').value, '', 'the config carries the token too');
+  assert.equal(page.byId('agent-grant-stdio').value, '');
   assert.equal(page.byId('agent-grant-issued').hidden, true);
   assert.equal(page.byId('agent-grants-open').focused, true);
 });

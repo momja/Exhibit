@@ -511,6 +511,17 @@ func (ro *Router) setupRoutes() {
 	// share-row authorization, redirects to the render origin like above.
 	ro.Get("/s/{shareID}/widget", ro.serveShareWidget)
 
+	// The remote MCP endpoint (Exh-uhvu, mcp.go). Outside the API group: it
+	// authenticates itself, with an owner-issued agent grant and nothing
+	// else, and its tools reach the API group through the router like any
+	// other client.
+	// Streamable HTTP uses POST for messages, GET for the server's stream and
+	// DELETE to end a session; nothing else is registered.
+	mcpHandler := ro.mcpHandler()
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete} {
+		ro.Method(method, mcpPath, mcpHandler)
+	}
+
 	// The instance's public identity (av-4ac9). Registered here, outside the
 	// authenticated API group, because a visitor with no credential is
 	// precisely who needs it; a private instance answers 404 rather than

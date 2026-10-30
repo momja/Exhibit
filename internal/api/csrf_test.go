@@ -128,6 +128,10 @@ var appOriginGETRoutes = []getRoute{
 	// The External agents panel (Exh-l2xj). A read: issuing and revoking are
 	// POST and DELETE to /api/artifacts/:id/agent-grants.
 	{route: "/partials/agent-grants"},
+	// The remote MCP endpoint (Exh-uhvu). Its GET opens the server's event
+	// stream, and it never reads a cookie: a forged request carries no
+	// credential it would accept.
+	{route: "/mcp"},
 	// An earlier version of an artifact, shown running before a person decides
 	// whether to return to it (av-vw7r). A read that mints a short-lived token
 	// and changes nothing: the frame it carries is a render document that
