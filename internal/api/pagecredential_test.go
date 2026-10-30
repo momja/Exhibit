@@ -97,6 +97,8 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/mcp", path: "/mcp"},
 	{route: "/.well-known/oauth-protected-resource", path: "/.well-known/oauth-protected-resource"},
 	{route: "/.well-known/oauth-protected-resource/mcp", path: "/.well-known/oauth-protected-resource/mcp"},
+	{route: "/.well-known/oauth-authorization-server", path: "/.well-known/oauth-authorization-server"},
+	{route: "/oauth/authorize", path: "/oauth/authorize"},
 	{route: "/partials/version-viewer", path: "/partials/version-viewer?artifact={id}&seq=1"},
 
 	// Static and public surfaces. They embed nothing per-request, which is

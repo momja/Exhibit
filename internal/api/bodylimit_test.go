@@ -112,6 +112,12 @@ var writeRoutes = []struct {
 	// reads anything; with a grant, the SDK reads under the same root limit.
 	{"POST", "/mcp", false},
 	{"DELETE", "/mcp", false},
+	// The authorization server (Exh-rhlq). Registration is JSON. The token
+	// endpoint parses only a form, so this walk's JSON body is never read;
+	// the consent submit meets sessionGate's 401 first on a login instance.
+	{"POST", "/oauth/register", true},
+	{"POST", "/oauth/token", false},
+	{"POST", "/oauth/authorize", false},
 	{"DELETE", "/api/artifacts/{artifactID}/agent-grants/{grantID}", false},
 	{"POST", "/auth/local", true},
 	{"POST", "/auth/logout", false},

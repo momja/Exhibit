@@ -135,6 +135,10 @@ var appOriginGETRoutes = []getRoute{
 	// OAuth protected-resource metadata (Exh-354p): static documents.
 	{route: "/.well-known/oauth-protected-resource"},
 	{route: "/.well-known/oauth-protected-resource/mcp"},
+	{route: "/.well-known/oauth-authorization-server"},
+	// The consent page (Exh-rhlq). A read: the grant is made by the form's
+	// POST, which Lax withholds the cookie from cross-site.
+	{route: "/oauth/authorize"},
 	// An earlier version of an artifact, shown running before a person decides
 	// whether to return to it (av-vw7r). A read that mints a short-lived token
 	// and changes nothing: the frame it carries is a render document that

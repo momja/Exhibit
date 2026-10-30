@@ -467,7 +467,10 @@ func (ro *Router) sessionGate(next http.Handler) http.Handler {
 func isPublicPath(path string) bool {
 	// The remote MCP endpoint answers its own 401 (mcp.go): a client there
 	// is an agent holding a bearer token, never a browser to redirect.
-	if path == mcpPath {
+	// Likewise the OAuth endpoints an MCP client calls before it holds
+	// anything (oauth.go). The consent page is not among them: it is a page,
+	// and a visitor without a session is sent to sign in.
+	if path == mcpPath || path == oauthRegisterPath || path == oauthTokenPath {
 		return true
 	}
 	for _, prefix := range publicPathPrefixes {

@@ -154,6 +154,10 @@ type Router struct {
 	// sseTickets authenticates the agent event stream, the one route a
 	// browser cannot send a header on (av-rgp1). See ssetickets.go.
 	sseTickets *sseTicketStore
+	// oauthClientKey signs OAuth client ids and oauthCodes holds the
+	// authorization codes awaiting exchange (Exh-rhlq, oauth.go).
+	oauthClientKey [32]byte
+	oauthCodes     *oauthCodeStore
 }
 
 // compressibleTypes is the explicit set of response content types worth
@@ -352,11 +356,13 @@ func (cw *gzipResponseWriter) Close() error {
 // NewRouter constructs the chi router with all routes registered.
 func NewRouter(cfg Config) *Router {
 	r := &Router{
-		Mux:        chi.NewRouter(),
-		cfg:        cfg,
-		tokens:     renderSigner(cfg.Secrets),
-		logins:     newLoginLimiter(nil),
-		sseTickets: newSSETicketStore(sseTicketTTL),
+		Mux:            chi.NewRouter(),
+		cfg:            cfg,
+		tokens:         renderSigner(cfg.Secrets),
+		logins:         newLoginLimiter(nil),
+		sseTickets:     newSSETicketStore(sseTicketTTL),
+		oauthClientKey: oauthClientKey(cfg.Secrets),
+		oauthCodes:     newOAuthCodeStore(),
 	}
 	r.setupRoutes()
 	return r
@@ -457,6 +463,13 @@ func (ro *Router) setupRoutes() {
 		r.Get("/settings", ro.profilePage)
 		r.Get("/profile", ro.profilePage) // compatibility with existing account links
 
+		// The OAuth consent page for MCP clients (Exh-rhlq, oauth.go). A
+		// page like the others: sessionGate sends a visitor with no session
+		// to sign in and back, and the owner it resolves is whose artifacts
+		// are offered.
+		r.Get(oauthAuthorizePath, ro.authorizePage)
+		r.Post(oauthAuthorizePath, ro.authorizeDecision)
+
 		// Server-rendered fragments, swapped into a live page by htmx
 		// (av-6m3e). They render the same template partials the full page
 		// render uses, and carry no authority the page they belong to
@@ -527,6 +540,12 @@ func (ro *Router) setupRoutes() {
 	prm := ro.protectedResourceMetadata()
 	ro.Method(http.MethodGet, protectedResourcePath, prm)
 	ro.Method(http.MethodGet, protectedResourcePath+mcpPath, prm)
+	// The authorization server's discovery, registration and token
+	// endpoints (Exh-rhlq): public, because an MCP client calls them before
+	// it holds anything. The consent page is in the page group above.
+	ro.Get(authServerMetadataPath, ro.authServerMetadata)
+	ro.Post(oauthRegisterPath, ro.registerOAuthClient)
+	ro.Post(oauthTokenPath, ro.exchangeOAuthCode)
 
 	// The instance's public identity (av-4ac9). Registered here, outside the
 	// authenticated API group, because a visitor with no credential is

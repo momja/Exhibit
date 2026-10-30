@@ -1,0 +1,55 @@
+{{/* OAuth consent page for MCP clients (Exh-rhlq). Data: oauthConsentData
+     (oauth.go).
+
+     The owner chooses one artifact, and the client gets an agent grant over
+     that artifact and nothing else. Scriptless, like the login page: the form
+     posts itself.
+
+     ClientName was chosen by whoever registered the client, so it is shown as
+     a claim in quotes, beside the redirect host the browser will actually be
+     sent to, which is the one fact here the client cannot choose freely.
+     Titles are artifact text; html/template escapes both. */}}
+{{define "oauthConsent"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Connect an agent — Exhibit</title>
+{{template "pwaHead"}}
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/login.css"}}">
+</head>
+<body class="login-page">
+{{template "appHeader" .Header}}
+<div class="login-content">
+<main class="login oauth-consent">
+  {{if .Error}}<p class="login-error" role="alert"><i class="ph ph-warning-circle" aria-hidden="true"></i> {{.Error}}</p>{{end}}
+  {{with .Request}}
+  <p class="login-sub">An application calling itself <strong>“{{$.ClientName}}”</strong>, returning to <code>{{$.RedirectHost}}</code>, wants to edit one of your artifacts: its source, its widget and its saved data. It will not reach anything else in your library, and it cannot change what the artifact may reach on the network. You can revoke it from the artifact's page at any time.</p>
+  <form class="login-form" method="post" action="/oauth/authorize">
+    <input type="hidden" name="response_type" value="code">
+    <input type="hidden" name="client_id" value="{{.ClientID}}">
+    <input type="hidden" name="redirect_uri" value="{{.RedirectURI}}">
+    <input type="hidden" name="state" value="{{.State}}">
+    <input type="hidden" name="code_challenge" value="{{.CodeChallenge}}">
+    <input type="hidden" name="code_challenge_method" value="S256">
+    {{if .Resource}}<input type="hidden" name="resource" value="{{.Resource}}">{{end}}
+    {{if $.Artifacts}}
+    <fieldset class="oauth-artifacts">
+      <legend class="login-label">Which artifact may it edit?</legend>
+      {{range $.Artifacts}}<label class="oauth-artifact"><input type="radio" name="artifact_id" value="{{.ID}}"{{if eq .ID $.Selected}} checked{{end}} required> <span>{{.Title}}</span></label>
+      {{end}}
+    </fieldset>
+    <button class="btn login-submit" type="submit" name="decision" value="allow"><i class="ph ph-check"></i> Allow</button>
+    {{else}}
+    <p class="login-sub">Your library has no artifacts yet. Create one first.</p>
+    {{end}}
+    <button class="btn btn-sec login-submit" type="submit" name="decision" value="deny" formnovalidate>Deny</button>
+  </form>
+  {{end}}
+</main>
+</div>
+</body>
+</html>{{end}}
