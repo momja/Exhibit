@@ -632,6 +632,8 @@ func (ro *Router) setupRoutes() {
 		// The component kit (Exh-61ix): read-only, instance-wide.
 		r.Get("/api/kit", ro.listKit)
 		r.Get("/api/kit/{name}/{version}/components/{component}", ro.getKitComponent)
+		r.Get("/api/settings/kit", ro.getLibraryKit)
+		r.Put("/api/settings/kit", ro.setLibraryKit)
 
 		r.Route("/api/collections", func(r chi.Router) {
 			r.Get("/", ro.listCollections)

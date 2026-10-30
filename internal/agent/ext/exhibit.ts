@@ -2,11 +2,11 @@
  * Exhibit tools extension for Pi (Exh-hvaf, av-lvi1).
  *
  * Loaded by the exhibit service into every agent session it spawns
- * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model fourteen
+ * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model fifteen
  * tools — create_artifact / write_artifact / edit_artifact / get_artifact for the document,
  * get_state / set_state / delete_state for the artifact's stored state,
  * set_widget / edit_widget / get_widget for the artifact's gallery-card widget (av-fafu), and
- * list_kit / get_kit_component for Exhibit's shared component kits (Exh-61ix),
+ * list_kit / get_kit_component / set_artifact_kit for Exhibit's shared component kits (Exh-61ix),
  * get_selection for the elements the user picked in the preview, and ask_user
  * for interactive questions in the chat. Artifact operations go through the exhibit HTTP API, so agent output enters the
  * library through the same single write path as every other ingest (scan,
@@ -201,21 +201,16 @@ function findKit(index: any, wanted: string): any {
 	return kits.find((k: any) => k.id === wanted) ?? kits.filter((k: any) => k.name === wanted).pop();
 }
 
-/** The kit index as the model reads it: every kit with the marker that pins
- * it, then the contract the chosen kit implements, which is what the artifact
- * is written against. */
-function formatKit(index: any, chosen: any): string {
+/** The kit index as the model reads it: the marker for the contract first,
+ * because that is the one line it writes; then the contract, which is what it
+ * writes against; then the kits, which are looks chosen outside the source. */
+function formatKit(index: any, c: any): string {
 	const lines = [
-		"Component kits. Pin one with its line inside <head>. Kits on the same contract take identical markup, so changing kit is a one-line edit to the marker.",
-	];
-	for (const k of index.kits ?? []) {
-		const notes = [k.id === index.default ? "default" : "", `contract ${k.contract}`].filter(Boolean).join(", ");
-		lines.push(`- ${k.id} (${notes}): ${k.description}`, `  ${k.marker}`);
-	}
-	const c = (index.contracts ?? []).find((x: any) => x.contract === chosen.contract) ?? {};
-	lines.push(
+		`Component kit contract ${c.contract}. Use it with this line inside <head>:`,
+		c.marker,
 		"",
-		`Contract ${chosen.contract}, which ${chosen.id} implements. ${c.description ?? ""}`,
+		"Which kit draws the markup is not in the source: the artifact's kit setting, else the user's library kit, chooses it on every render. Write only against the contract below; never choose a look in the source.",
+		`${c.description ?? ""}`,
 		"",
 		`Base: ${c.base?.description ?? ""} Utilities: ${(c.base?.classes ?? []).join(" ")}`,
 		"",
@@ -223,9 +218,13 @@ function formatKit(index: any, chosen: any): string {
 		...(c.tokens ?? []).map((t: any) => `- ${t.name}: ${t.description}`),
 		"",
 		"Components:",
-	);
+	];
 	for (const comp of c.components ?? []) {
 		lines.push(`\n## ${comp.name}: ${comp.description}`, `classes: ${comp.classes.join(" ")}`, comp.usage);
+	}
+	lines.push("", `Kits on contract ${c.contract} (set one for this artifact with set_artifact_kit only when the user asks for a look):`);
+	for (const k of (index.kits ?? []).filter((k: any) => k.contract === c.contract)) {
+		lines.push(`- ${k.id}${k.id === index.default ? " (default)" : ""}: ${k.description}`);
 	}
 	return lines.join("\n");
 }
@@ -749,30 +748,32 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	// The component kits (Exh-61ix). Both tools read Exhibit's own,
-	// instance-wide kits, so unlike every other tool here they name a kit rather
-	// than act on the session's artifact — there is nothing of anyone's to target.
+	// The component kits (Exh-61ix). list_kit and get_kit_component read
+	// Exhibit's own, instance-wide kits, so unlike every other tool here they
+	// name a kit rather than act on the session's artifact. set_artifact_kit
+	// is the one that writes, and only this artifact's own kit setting.
 	pi.registerTool({
 		name: "list_kit",
-		label: "List component kits",
+		label: "List component kit",
 		description:
-			"List Exhibit's component kits and the marker that pins each, then the contract a kit " +
-			"implements: its design tokens and each component's classes and example markup. " +
-			"Describes the default kit unless you name another, such as the one an existing artifact pins.",
+			"List the component kit contract an artifact writes against — the marker line, design tokens, " +
+			"and each component's classes and example markup — and the kits that can draw it. " +
+			"Describes the newest contract unless you name the one an existing artifact uses.",
 		parameters: Type.Object({
-			kit: Type.Optional(Type.String({ description: "Kit ID such as paper/v1, or a name for its newest version. Omit for the default." })),
+			contract: Type.Optional(Type.String({ description: "Contract version such as v1, as in an artifact's marker. Omit for the newest." })),
 		}),
 		async execute(_id, params) {
 			const index = await api("GET", "/api/kit");
-			const wanted = params.kit || index.default;
-			const k = findKit(index, wanted);
-			if (!k) {
-				const known = (index.kits || []).map((x: any) => x.id).join(", ");
-				return ok(`There is no kit ${wanted}. Released kits: ${known}.`, {
-					exhibit: "kit_listed", kit: wanted, missing: true,
+			const contracts = index.contracts || [];
+			const wanted = params.contract || contracts[contracts.length - 1]?.contract;
+			const c = contracts.find((x: any) => x.contract === wanted);
+			if (!c) {
+				const known = contracts.map((x: any) => x.contract).join(", ");
+				return ok(`There is no kit contract ${wanted}. Released contracts: ${known}.`, {
+					exhibit: "kit_listed", contract: wanted, missing: true,
 				});
 			}
-			return ok(formatKit(index, k), { exhibit: "kit_listed", kit: k.id });
+			return ok(formatKit(index, c), { exhibit: "kit_listed", contract: c.contract });
 		},
 	});
 
@@ -800,6 +801,38 @@ export default function (pi: ExtensionAPI) {
 			const c = r.component;
 			return ok(`kit ${r.kit} component "${c.name}": ${c.description}\n\n${c.css}`, {
 				exhibit: "kit_component_read", kit: r.kit, name: c.name,
+			});
+		},
+	});
+
+	pi.registerTool({
+		name: "set_artifact_kit",
+		label: "Set artifact kit",
+		description:
+			"Choose which component kit draws this artifact, outside its source: a kit ID or name from " +
+			"list_kit, or an empty string to follow the user's library kit again. Only when the user asks " +
+			"for a look; it changes no source and makes no version.",
+		parameters: Type.Object({
+			kit: Type.String({ description: "Kit ID or name, or \"\" to follow the library kit." }),
+		}),
+		async execute(_id, params) {
+			let id = "";
+			if (params.kit) {
+				const index = await api("GET", "/api/kit");
+				const k = findKit(index, params.kit);
+				if (!k) {
+					return ok(`There is no kit ${params.kit}. Released kits: ${(index.kits || []).map((x: any) => x.id).join(", ")}.`, {
+						exhibit: "artifact_kit_set", kit: params.kit, missing: true,
+					});
+				}
+				id = k.id;
+			}
+			const target = requireBoundArtifact();
+			await api("PATCH", "/api/artifacts/" + encodeURIComponent(target), { kit: id });
+			// Reported as a save so the preview re-renders, though no source
+			// changed and no version was made: the look is resolved per render.
+			return ok(id ? `This artifact is now drawn with ${id}.` : "This artifact now follows the library kit.", {
+				exhibit: "artifact_saved", action: "restyled", artifactId: target, kit: id,
 			});
 		},
 	});

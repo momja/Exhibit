@@ -171,6 +171,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/manifest.json", why: "static app manifest, identical for every visitor"},
 	{route: "/favicon.ico", why: "static brand mark, identical for every visitor"},
 	{route: "/api/settings/public", why: "the instance's own name and description, deliberately readable by anyone"},
+	{route: "/api/settings/kit", why: "API group; the caller's own library kit, owner isolation covered by kit_test.go"},
 	{route: "/api/kit", why: "the component kit Exhibit ships in the binary (Exh-61ix), identical for every caller; it reads no library data"},
 	{route: "/api/kit/{name}/{version}/components/{component}", why: "one component of a shipped kit (Exh-61ix), identical for every caller; it reads no library data"},
 

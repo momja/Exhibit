@@ -613,6 +613,17 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// The artifact's component kit (Exh-61ix) is a released kit ID, or "" to
+	// follow the owner's library kit. Refused here and in the store: a kit
+	// nothing ships would quietly render with another one instead.
+	if v, ok := updates["kit"]; ok {
+		id, isString := v.(string)
+		if !isString || !store.ValidKitChoice(id) {
+			writeError(w, http.StatusBadRequest, "kit must be a released kit ID, or empty to follow the library's kit")
+			return
+		}
+	}
+
 	// The allowlist goes through the same origin normalization as ingest, for
 	// the same reason: this is the single write path, and the values land in a
 	// CSP header (av-i7hd). A rejected entry is named in the 400 so the edit

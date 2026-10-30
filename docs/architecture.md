@@ -173,12 +173,14 @@ it safe behind the no-auth share path (§7).
   rows are inlined to mute the prompt); state, from the principal chosen by
   `Artifact.StatePrincipal` (`shared` mode inlines the owner's board, `own` the
   viewer's). The write path resolves through the same function (av-v991).
-- **Component kits** (Exh-61ix, experimental): a body that pins a kit with
-  `<meta name="exhibit-kit" content="name/vN">` is served with that kit's
+- **Component kits** (Exh-61ix, experimental): a body naming a kit contract
+  with `<meta name="exhibit-kit" content="v1">` is served with a kit's
   stylesheet inlined in its place (`kit.Inline`), for artifacts, widgets and
-  version views alike; export does the same (`export.Materialize`). Kits on
-  one contract take identical markup, so swapping is a one-line edit. Released
-  kits and contracts are immutable and hash-pinned. `component-kit.md`.
+  version views alike; export does the same (`export.Materialize`). The kit is
+  chosen outside the source and resolved per request under the artifact's
+  owner: `artifacts.kit`, else `library_settings.kit`, else the default. Not
+  versioned, like the allowlist. Released kits and contracts are immutable and
+  hash-pinned. `component-kit.md`.
 - **CSP** (`buildCSP`): baseline `default-src 'none'`. Every source is in one of two
   buckets: *network-reaching* (the allowlist, gated) or *local, no-egress*
   (unconditional): `script-src 'unsafe-inline' 'unsafe-eval' blob: data:`,
@@ -681,7 +683,7 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
   (`internal/agent/ext/exhibit.ts`) whose tools (`create_artifact`,
   `write_artifact`, `edit_artifact`, `get_artifact`, `get_state`, `set_state`,
   `delete_state`, `set_widget`, `edit_widget`, `get_widget`, `list_kit`,
-  `get_kit_component`, `get_selection`) call the HTTP API or read selected
+  `get_kit_component`, `set_artifact_kit`, `get_selection`) call the HTTP API or read selected
   elements. `ask_user` uses Pi's interactive RPC
   channel for chat questions (`agent.md`). Output is scanned like any ingest,
   never auto-approved.

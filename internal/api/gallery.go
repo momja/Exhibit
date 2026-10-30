@@ -19,6 +19,7 @@ import (
 
 	"github.com/momja/Exhibit/internal/artifacticon"
 	"github.com/momja/Exhibit/internal/color"
+	"github.com/momja/Exhibit/internal/kit"
 	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/momja/Exhibit/internal/tile"
@@ -285,7 +286,12 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	canGenerate, generateHint := ro.widgetGenerateAvailability(r)
-	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint, versions, editorReturn(r, a))
+	libraryKit, err := ro.cfg.Store.LibraryKit(r.Context(), ownerID)
+	if err != nil {
+		serverError(w, r, "edit library kit", err)
+		return
+	}
+	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint, versions, editorReturn(r, a), libraryKit)
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
@@ -1071,6 +1077,10 @@ type editPageData struct {
 	Presets  []string
 	// Versions is the artifact's history, newest first, for the Versions panel.
 	Versions []versionView
+	// Kit is the artifact's own component kit choice (Exh-61ix), and UsesKit
+	// whether its source names a kit contract at all.
+	Kit     kitPickerView
+	UsesKit bool
 }
 
 // versionView is one row of the Versions panel.
@@ -1117,7 +1127,7 @@ func newVersionViews(versions []store.Version) []versionView {
 	return out
 }
 
-func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation) (string, error) {
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation, libraryKit string) (string, error) {
 	if navigation.URL == "" {
 		navigation = editNavigation{URL: "/", Label: "My library"}
 	}
@@ -1152,6 +1162,8 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 		CameraApproved:      a.CameraApproved,
 		MicrophoneApproved:  a.MicrophoneApproved,
 		GeolocationApproved: a.GeolocationApproved,
+		Kit:                 newKitPicker("kit-select", a.Kit, libraryKitLabel(libraryKit)),
+		UsesKit:             len(kit.Pinned(src)) > 0,
 	})
 }
 

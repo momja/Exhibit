@@ -133,14 +133,33 @@ func TestDefaultIsTheNewestExhibitKit(t *testing.T) {
 	assert.Contains(t, IDs(), "paper/v1")
 }
 
-func TestInlineReplacesAPinnedMarker(t *testing.T) {
-	k, _ := Get("exhibit/v1")
-	body := `<!doctype html><html><head><meta name="exhibit-kit" content="exhibit/v1"><title>t</title></head><body></body></html>`
+func TestInlineReplacesTheMarkerWithTheResolvedKit(t *testing.T) {
+	body := `<!doctype html><html><head><meta name="exhibit-kit" content="v1"><title>t</title></head><body></body></html>`
 
-	out := Inline(body)
+	exhibit, _ := Get("exhibit/v1")
+	assert.Contains(t, Inline(body, Choice{}), `<head><style data-exhibit-kit="exhibit/v1">`+exhibit.Stylesheet()+`</style><title>t</title>`)
 
+	paper, _ := Get("paper/v1")
+	out := Inline(body, Choice{Library: "paper/v1"})
 	assert.NotContains(t, out, `<meta name="exhibit-kit"`)
-	assert.Contains(t, out, `<head><style data-exhibit-kit="exhibit/v1">`+k.Stylesheet()+`</style><title>t</title>`)
+	assert.Contains(t, out, `<style data-exhibit-kit="paper/v1">`+paper.Stylesheet()+`</style>`)
+}
+
+func TestResolvePrefersTheArtifactThenTheLibraryThenTheDefault(t *testing.T) {
+	assert.Equal(t, "exhibit/v1", Resolve("v1", Choice{}).ID())
+	assert.Equal(t, "paper/v1", Resolve("v1", Choice{Library: "paper/v1"}).ID())
+	assert.Equal(t, "brutal/v1", Resolve("v1", Choice{Artifact: "brutal/v1", Library: "paper/v1"}).ID())
+	// A choice that no longer resolves falls through rather than failing.
+	assert.Equal(t, "paper/v1", Resolve("v1", Choice{Artifact: "gone/v1", Library: "paper/v1"}).ID())
+	assert.Nil(t, Resolve("v999", Choice{}), "nothing implements an unknown contract")
+}
+
+func TestEveryContractHasADefaultKit(t *testing.T) {
+	for _, c := range Contracts() {
+		k := Resolve(c, Choice{})
+		require.NotNilf(t, k, "contract %s", c)
+		assert.Equalf(t, DefaultName, k.Name, "contract %s has no %s kit, so artifacts on it fall back to an arbitrary one", c, DefaultName)
+	}
 }
 
 func TestInlineLeavesUnmarkedBodiesByteIdentical(t *testing.T) {
@@ -149,49 +168,42 @@ func TestInlineLeavesUnmarkedBodiesByteIdentical(t *testing.T) {
 		`<p>hello</p>`,
 		`<html><head><meta name="viewport" content="width=device-width"></head></html>`,
 	} {
-		assert.Equal(t, body, Inline(body))
+		assert.Equal(t, body, Inline(body, Choice{Library: "paper/v1"}))
 	}
 }
 
-func TestInlineLeavesAnUnknownVersionAlone(t *testing.T) {
-	body := `<head><meta name="exhibit-kit" content="exhibit/v999"></head>`
-	assert.Equal(t, body, Inline(body))
+func TestInlineLeavesAnUnknownContractAlone(t *testing.T) {
+	body := `<head><meta name="exhibit-kit" content="v999"></head>`
+	assert.Equal(t, body, Inline(body, Choice{}))
 }
 
-func TestInlineIncludesAVersionOnce(t *testing.T) {
-	body := `<head><meta name="exhibit-kit" content="exhibit/v1"><meta name=exhibit-kit content=exhibit/v1 /></head>`
-	out := Inline(body)
-	assert.Equal(t, 1, strings.Count(out, `<style data-exhibit-kit="exhibit/v1">`))
+func TestInlineIncludesAContractOnce(t *testing.T) {
+	body := `<head><meta name="exhibit-kit" content="v1"><meta name=exhibit-kit content=v1 /></head>`
+	out := Inline(body, Choice{})
+	assert.Equal(t, 1, strings.Count(out, `<style data-exhibit-kit=`))
 	assert.NotContains(t, out, "<meta")
 }
 
 func TestInlineIgnoresMarkersInScriptsAndComments(t *testing.T) {
-	body := `<head><!-- <meta name="exhibit-kit" content="exhibit/v1"> --><script>const m = '<meta name="exhibit-kit" content="exhibit/v1">';</script></head>`
-	assert.Equal(t, body, Inline(body))
+	body := `<head><!-- <meta name="exhibit-kit" content="v1"> --><script>const m = '<meta name="exhibit-kit" content="v1">';</script></head>`
+	assert.Equal(t, body, Inline(body, Choice{}))
 }
 
 func TestInlineAcceptsAttributeOrderAndCase(t *testing.T) {
-	body := `<HEAD><META CONTENT=" exhibit/v1 " NAME="exhibit-kit"></HEAD>`
-	out := Inline(body)
+	body := `<HEAD><META CONTENT=" v1 " NAME="exhibit-kit"></HEAD>`
+	out := Inline(body, Choice{})
 	assert.Contains(t, out, `<style data-exhibit-kit="exhibit/v1">`)
 	assert.NotContains(t, out, "META")
 }
 
 func TestPinned(t *testing.T) {
 	assert.Nil(t, Pinned(`<p>no kit</p>`))
-	assert.Equal(t, []string{"exhibit/v1", "exhibit/v999"}, Pinned(`<meta name="exhibit-kit" content="exhibit/v1"><meta name="exhibit-kit" content="exhibit/v999">`))
+	assert.Equal(t, []string{"v1", "v999"}, Pinned(`<meta name="exhibit-kit" content="v1"><meta name="exhibit-kit" content="v999">`))
 }
 
 func TestMarkerRoundTrips(t *testing.T) {
-	for _, id := range IDs() {
-		k, _ := Get(id)
-		assert.Equal(t, []string{id}, Pinned(k.Marker()))
+	for _, v := range Contracts() {
+		c, _ := GetContract(v)
+		assert.Equal(t, []string{v}, Pinned(c.Marker()))
 	}
-}
-
-func TestInlineIncludesEachPinnedKitInOrder(t *testing.T) {
-	out := Inline(`<head><meta name="exhibit-kit" content="paper/v1"><meta name="exhibit-kit" content="brutal/v1"></head>`)
-	paper := strings.Index(out, `<style data-exhibit-kit="paper/v1">`)
-	brutal := strings.Index(out, `<style data-exhibit-kit="brutal/v1">`)
-	assert.True(t, paper >= 0 && brutal > paper, "both inlined, in document order")
 }

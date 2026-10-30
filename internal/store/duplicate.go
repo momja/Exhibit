@@ -66,9 +66,9 @@ func (s *SQLiteStore) DuplicateArtifact(ctx context.Context, ownerID int64, sour
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = tx.ExecContext(ctx, `INSERT INTO artifacts
 	 (id, owner_id, title, source_blob_id, source_url, tier, downloads_approved, clipboard_approved,
-	 links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, source_text, share_state_mode, created_at, updated_at)
+	 links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, source_text, share_state_mode, kit, created_at, updated_at)
 	 SELECT ?, owner_id, ?, ?, source_url, tier, downloads_approved, clipboard_approved,
-	 links_approved, camera_approved, microphone_approved, geolocation_approved, ?, ?, CASE WHEN ? THEN share_state_mode ELSE 'own' END, ?, ?
+	 links_approved, camera_approved, microphone_approved, geolocation_approved, ?, ?, CASE WHEN ? THEN share_state_mode ELSE 'own' END, kit, ?, ?
 	 FROM artifacts WHERE id=? AND owner_id=?`, d.ID, d.Title, d.BodyBlobID, d.WidgetBlobID, d.SourceText, d.CopyShareSettings, now, now, sourceID, ownerID)
 	if err != nil {
 		return false, err

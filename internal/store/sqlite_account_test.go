@@ -70,6 +70,8 @@ var accountTables = map[string]accountTable{
 		"SELECT COUNT(*) FROM collections WHERE owner_id = ?1"},
 	"agent_keys": {reachExplicit, "the sealed BYO provider key, owner-scoped and reached by no cascade",
 		"SELECT COUNT(*) FROM agent_keys WHERE owner_id = ?1"},
+	"library_settings": {reachExplicit, "the owner's library preferences (Exh-61ix), keyed by owner and reached by no cascade",
+		"SELECT COUNT(*) FROM library_settings WHERE owner_id = ?1"},
 	// Not owner-scoped, and deliberately so (av-fw1b): a recorded length is a
 	// fact about bytes, and one blob id can be named by rows belonging to
 	// several owners once assets are shared (av-20fk). DeleteAccount collects
@@ -271,6 +273,7 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	require.NoError(t, grantErr)
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))
 	require.NoError(t, s.SetAgentKey(ctx, &AgentKey{OwnerID: member.ID, Provider: "anthropic", KeyCiphertext: "sealed"}))
+	require.NoError(t, s.SetLibraryKit(ctx, member.ID, "paper/v1"))
 	require.NoError(t, s.SaveTranscript(ctx, member.ID, Transcript{ArtifactID: deletedArtifact, SessionID: "sess-1", SessionFile: "{}\n"}))
 	// The recorded lengths of the two blobs the artifact above names, so the
 	// blob_sizes residue is asserted against rows that were really there.

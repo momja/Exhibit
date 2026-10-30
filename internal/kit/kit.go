@@ -3,30 +3,30 @@
 // share, so a library built over months reads as one interface rather than
 // forty.
 //
-// An artifact opts in by pinning a kit in its own source:
+// An artifact opts in by naming, in its own source, the kit contract its
+// markup is written against:
 //
-//	<meta name="exhibit-kit" content="exhibit/v1">
+//	<meta name="exhibit-kit" content="v1">
 //
-// Inline replaces that marker with the kit's stylesheet, exactly as released,
-// wherever the artifact leaves storage: the render surface and the export.
-// The stored body therefore stays small and authorable, and the exported file
-// is still one self-contained document — the kit is part of the file the
-// moment it leaves the service, never a live dependency.
+// The contract (contracts/v1.json) is what the artifact writes: components,
+// their classes and markup, and token names. Which kit draws that markup is
+// not in the source. It is chosen outside it — by the artifact's own setting,
+// else its owner's library setting, else the default kit — and resolved on
+// every request (Resolve), so changing it restyles an artifact without
+// touching its source or its history. Every kit implementing a contract takes
+// identical markup, which is what makes that swap safe.
 //
-// Every kit implements a contract (contracts/v1.json): the components, their
-// classes and markup, and the token names. The artifact is written against the
-// contract, so kits implementing the same one are interchangeable — swapping
-// "exhibit/v1" for "paper/v1" restyles the artifact and changes nothing else.
+// Inline replaces the marker with the resolved kit's stylesheet wherever the
+// artifact leaves storage: the render surface and the export. The stored body
+// stays small and authorable, and the exported file is still one
+// self-contained document, carrying whichever kit applied when it was made.
 //
 // Released kits and contracts are immutable. Changing one means adding a new
-// version directory, because an artifact pinned a year ago must render exactly
-// as it did then; a test hashes every released file to hold that. Moving an
-// artifact to another kit is an edit to its marker, which makes it a new
-// version of the artifact and therefore one restore away from undone.
+// version directory; a test hashes every released file to hold that.
 //
 // A meta element was chosen as the marker because nothing fetches it: the
-// footprint scanner reports no origin for it, and an unknown kit left in place
-// does nothing at all in a browser.
+// footprint scanner reports no origin for it, and an unknown contract left in
+// place does nothing at all in a browser.
 //
 // All kit rules sit in one cascade layer, `@layer exhibit-kit`. Unlayered
 // styles always beat layered ones, so whatever the artifact writes overrides
@@ -125,9 +125,9 @@ func (k *Kit) Component(name string) (Component, bool) {
 	return Component{}, false
 }
 
-// Marker is the markup that pins this kit.
-func (k *Kit) Marker() string {
-	return fmt.Sprintf(`<meta name="%s" content="%s">`, MarkerName, k.ID())
+// Marker is the markup an artifact writes to use this contract.
+func (c *Contract) Marker() string {
+	return fmt.Sprintf(`<meta name="%s" content="%s">`, MarkerName, c.Version)
 }
 
 var (
@@ -269,19 +269,80 @@ func Get(id string) (*Kit, bool) {
 	return k, ok
 }
 
-// Inline replaces each kit marker in body with that kit's stylesheet.
+// Choice is where an artifact's kit is chosen, nearest first: the artifact's
+// own setting, then its owner's library setting. Each is a kit ID or "".
+type Choice struct {
+	Artifact string
+	Library  string
+}
+
+// Resolve picks the kit that styles markup written against contract. It
+// takes the first choice that names a kit on that contract — or, when a
+// choice names a kit on another contract, the newest version of the same kit
+// that is on it — then falls back to the default kit, and returns nil only for
+// a contract nothing implements.
+func Resolve(contract string, choice Choice) *Kit {
+	for _, id := range []string{choice.Artifact, choice.Library, Default()} {
+		if id == "" {
+			continue
+		}
+		name := id
+		if k, ok := released[id]; ok {
+			if k.Contract.Version == contract {
+				return k
+			}
+			name = k.Name
+		}
+		if k := newestOn(name, contract); k != nil {
+			return k
+		}
+	}
+	for _, id := range ids {
+		if released[id].Contract.Version == contract {
+			return released[id]
+		}
+	}
+	return nil
+}
+
+func newestOn(name, contract string) *Kit {
+	var newest *Kit
+	for _, id := range ids {
+		if k := released[id]; k.Name == name && k.Contract.Version == contract {
+			newest = k
+		}
+	}
+	return newest
+}
+
+// GetContract returns a released contract by version.
+func GetContract(version string) (*Contract, bool) {
+	c, ok := contracts[version]
+	return c, ok
+}
+
+// Contracts lists every released contract version.
+func Contracts() []string {
+	versions := make([]string, 0, len(contracts))
+	for v := range contracts {
+		versions = append(versions, v)
+	}
+	sort.Slice(versions, func(i, j int) bool { return versionNumber(versions[i]) < versionNumber(versions[j]) })
+	return versions
+}
+
+// Inline replaces each kit marker in body with the stylesheet of the kit
+// choice resolves for that marker's contract.
 //
-// A kit pinned twice is inlined once; the second marker is dropped. A marker
-// naming no released kit is left exactly as written — it does nothing in a
-// browser, and silently substituting another kit would restyle the artifact
-// behind its author's back. Pinning several kits inlines each, in order; the
-// last one wins wherever they disagree, and a script may disable all but one. A body with no marker comes
-// back unchanged, which is every artifact that never opted in.
+// A contract named twice is inlined once; the second marker is dropped. A
+// marker naming no released contract is left exactly as written — it does
+// nothing in a browser. A body with no marker comes back unchanged, which is
+// every artifact that never opted in.
 //
 // The markers are found with the HTML tokenizer rather than a string search,
 // so the text of a script, a style block or a comment that happens to spell
 // the marker is never touched.
-func Inline(body string) string {
+func Inline(body string, choice Choice) string {
 	if !strings.Contains(body, MarkerName) {
 		return body
 	}
@@ -296,11 +357,11 @@ func Inline(body string) string {
 		}
 		width := len(z.Raw())
 		if tt == html.StartTagToken || tt == html.SelfClosingTagToken {
-			if id, ok := markerKit(z); ok {
-				if k, released := Get(id); released {
+			if contract, ok := markerContract(z); ok {
+				if k := Resolve(contract, choice); k != nil {
 					out.WriteString(body[copied:offset])
-					if !done[id] {
-						done[id] = true
+					if !done[contract] {
+						done[contract] = true
 						fmt.Fprintf(&out, `<style data-exhibit-kit="%s">%s</style>`, k.ID(), k.Stylesheet())
 					}
 					copied = offset + width
@@ -316,7 +377,8 @@ func Inline(body string) string {
 	return out.String()
 }
 
-// Pinned reports which kits body pins, released or not, in document order.
+// Pinned reports which contracts body's markers name, released or not, in
+// document order.
 func Pinned(body string) []string {
 	if !strings.Contains(body, MarkerName) {
 		return nil
@@ -329,16 +391,16 @@ func Pinned(body string) []string {
 			return pinned
 		}
 		if tt == html.StartTagToken || tt == html.SelfClosingTagToken {
-			if id, ok := markerKit(z); ok {
-				pinned = append(pinned, id)
+			if contract, ok := markerContract(z); ok {
+				pinned = append(pinned, contract)
 			}
 		}
 	}
 }
 
-// markerKit reads the current tag as a kit marker. It must be called
+// markerContract reads the current tag as a kit marker. It must be called
 // before anything else consumes the tokenizer's current token.
-func markerKit(z *html.Tokenizer) (string, bool) {
+func markerContract(z *html.Tokenizer) (string, bool) {
 	name, hasAttr := z.TagName()
 	if !bytes.Equal(name, []byte("meta")) || !hasAttr {
 		return "", false

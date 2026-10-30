@@ -126,6 +126,13 @@ type Artifact struct {
 	// The owner's share panel writes it through PATCH (av-6xjd); what the
 	// value *means* at render time is av-v991's.
 	ShareStateMode string `json:"share_state_mode"`
+	// Kit is the component kit this artifact chose for itself (Exh-61ix), a
+	// kit ID such as "paper/v1", or "" to follow its owner's library kit. The
+	// source says only which kit contract its markup is written against; the
+	// look is chosen here and resolved on every request (kit.Choice), so
+	// changing it restyles the artifact without touching its source or its
+	// version history.
+	Kit string `json:"kit"`
 	// ShareGrantCount and SharePublicLink are the artifact's sharing state as
 	// the gallery card reads it (av-6xjd) — how many accounts hold a grant,
 	// and whether its one anonymous link exists.
@@ -879,6 +886,12 @@ type Store interface {
 	// ErrInvalidEntitlement for a limit that is not one; ErrNotFound for an
 	// account that does not exist.
 	SetEntitlement(ctx context.Context, userID int64, p EntitlementPatch) error
+
+	// LibraryKit is the component kit an owner chose for their library
+	// (Exh-61ix): a kit ID, or "" for none. SetLibraryKit stores one; the
+	// store refuses an ID that is not a released kit.
+	LibraryKit(ctx context.Context, ownerID int64) (string, error)
+	SetLibraryKit(ctx context.Context, ownerID int64, kitID string) error
 	// ListEntitlementOverrides returns every account carrying an entitlement
 	// of its own — the drift surface. An entitlement an external system
 	// maintains can fall out of step with that system's view of reality, and
