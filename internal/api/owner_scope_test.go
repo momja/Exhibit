@@ -316,15 +316,15 @@ func TestShareRoutes404AcrossOwners(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code, "a share may only be minted by the artifact's owner")
 
 	// A share the other owner already holds cannot be revoked either.
-	require.NoError(t, r.cfg.Store.CreateShare(ctx, otherOwner,
-		&store.Share{ID: "foreign-share", ArtifactID: foreignID}))
-	w = do(t, r, "DELETE", "/api/shares/foreign-share", nil)
+	createdLink, createdLinkErr := r.cfg.Store.CreateAnonymousLink(ctx, otherOwner, foreignID)
+	require.NoError(t, createdLinkErr)
+	w = do(t, r, "DELETE", "/api/shares/"+createdLink.ID, nil)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 
 	// Read it back as its actual owner — deliberately not through the
 	// unscoped accessor, whose call sites the store's grep tripwire keeps to
 	// the render surface alone (av-ep8k AC#6).
-	sh, err := r.cfg.Store.GetShare(ctx, otherOwner, "foreign-share")
+	sh, err := r.cfg.Store.GetShare(ctx, otherOwner, createdLink.ID)
 	require.NoError(t, err)
 	assert.NotNil(t, sh, "the share must survive another owner's delete")
 }

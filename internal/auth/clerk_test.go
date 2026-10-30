@@ -57,7 +57,16 @@ func TestClerkVerifiesBrowserSession(t *testing.T) {
 			r := httptest.NewRequest("GET", "/", nil)
 			r.AddCookie(&http.Cookie{Name: "__session", Value: token})
 			called := 0
-			c.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called++; require.Equal(t, tt.want, c.Subject(r)) })).ServeHTTP(httptest.NewRecorder(), r)
+			c.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called++
+				require.Equal(t, tt.want, c.Subject(r))
+				if tt.name == "valid" {
+					require.InDelta(t, time.Minute.Seconds(), c.SessionExpiresIn(r).Seconds(), 2)
+				}
+				if tt.expired {
+					require.Zero(t, c.SessionExpiresIn(r))
+				}
+			})).ServeHTTP(httptest.NewRecorder(), r)
 			require.Equal(t, 1, called)
 		})
 	}

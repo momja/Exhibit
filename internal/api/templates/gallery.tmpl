@@ -3,75 +3,28 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Exhibit</title>
+<meta name="viewport" content="width=device-width,initial-scale=1{{if .Spaces}},viewport-fit=cover{{end}}">
+<title>{{if .Grid.Title}}{{.Grid.Title}} · {{end}}Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
 {{template "clerkScripts" .Clerk}}
-<link rel="stylesheet" href="/assets/phosphor/regular.css">
-<link rel="stylesheet" href="/assets/gallery/tokens.css">
-<link rel="stylesheet" href="/assets/gallery/components.css">
-<link rel="stylesheet" href="/assets/gallery/index.css">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/index.css"}}">
 </head>
 <body>
-<div id="{{.Grid.ID}}" data-gallery>
-<header>
-  {{.LogoSVG}}
-  {{/* The gallery's heading, hidden visually (index.css) but kept so the page
-       still has an h1 to navigate by. A visible "Exhibit" beside the logo
-       named the product, not the page (nw-h1dr). */}}
-  <h1>Gallery</h1>
-  {{/* Search sits in the app bar beside the logo (av-uvc6) rather than in a
-       row of its own above the grid: the library opens on the control you
-       use to find things in it, and the grid gets the height back.
-
-       `/` focuses it from anywhere on the page (av-6mdw, gallery.js). The key cap
-       after the input is how a sighted user learns that; aria-keyshortcuts is
-       how a screen reader does, so the cap itself is aria-hidden. It must stay
-       the input's later sibling: index.css hides it with `input:focus ~` and
-       `input:not(:placeholder-shown) ~`, so it disappears once the box is in
-       use with no script involved. */}}
-  {{template "gallerySearch" .Grid}}
-  <span class="spacer"></span>
-  {{/* Administration is a secondary control, and it appears only for an
-       admin (av-utap). The hiding is a courtesy to everyone else, not a
-       control: /admin/users carries its own adminOnly guard, so a visitor who
-       types the URL is refused there rather than admitted by a template that
-       forgot to hide a link.
-
-       It keeps its label while the two controls after it lose theirs. Being
-       conditional and rare is exactly why: collapsing it to a third anonymous
-       glyph would leave a row of icons that says nothing. The one exception
-       is a phone, where the header also holds search (av-uvc6) and the label
-       would crush the box to a few letters: there the word is hidden visually
-       but stays the link's name, and the title says it on hover. */}}
-  {{if .IsAdmin}}<a class="btn btn-sec" href="/admin/users" title="Accounts"><i class="ph ph-users-three" aria-hidden="true"></i><span class="header-link-label">Accounts</span></a>{{end}}
-  {{/* Two icon-only peers (av-qo05) — same box, same weight, so neither reads
-       as the "real" one. The header's subject is the library below it, and a
-       wide primary button made the header the loudest thing on a page it is
-       not about. Add artifact is still the library's one creation route —
-       ingest lives at /new (av-qo0j), the agent included — it just stops
-       shouting.
-
-       Dropping the visible label costs discoverability, so each carries an
-       aria-label (the accessible name, for screen readers and voice control)
-       and a title (the pointer tooltip, for everyone else). The empty-library
-       state below still spells the affordance out in words, which is where
-       someone arriving with nothing on the shelf learns it. */}}
-  <a class="btn btn-sec icon-btn" href="/new" aria-label="Add artifact" title="Add artifact"><i class="ph ph-plus" aria-hidden="true"></i></a>
-  {{/* Static means static: an anchor to a page, no menu and no JS. What
-       belongs on that page — deletion, the agent key, active sessions — each
-       needs explanation or a confirmation beside it, and none of that fits a
-       menu item. */}}
-  <a class="btn btn-sec icon-btn" href="/profile" aria-label="Your account" title="Your account"><i class="ph ph-user-circle" aria-hidden="true"></i></a>
-{{if .Clerk}}<div data-controller="clerk" data-clerk-mode-value="user"><div data-clerk-target="mount"></div><span data-clerk-target="status" role="status"></span></div>{{end}}
-</header>
-<main>
+<div id="{{.Grid.ID}}" data-gallery{{if .Grid.Filters.Sections}} data-controller="filter-sheet"{{end}}>
+{{template "appHeader" .Header}}
+{{if or .Spaces .Grid.Filters.Sections}}<div class="gallery-layout{{if not .Spaces}} gallery-layout-solo{{end}}">{{template "gallerySpaces" .}}{{end -}}
+<main>{{if .Grid.Title}}<h2 class="gallery-title">{{.Grid.Title}}</h2>{{end}}
 {{/* Cards share their tile, title, status marks, and action menu with every
      gallery fragment. Card clicks open the viewer; menu actions have their
      own controls and are handled through delegation after htmx swaps. */}}
 {{template "galleryResults" .Grid}}
 </main>
+{{- if or .Spaces .Grid.Filters.Sections}}</div>{{end}}{{if .Grid.Filters.Sections}}
+{{template "galleryFilterSheet" .Grid}}{{end}}
 {{if not .ReadOnly}}{{template "duplicateDialog" .Grid}}{{end}}
 </div>
 
@@ -89,10 +42,25 @@ const TOKEN = {{.Token}};
      html/template's JS escaper pads a {{value}} boolean with spaces. */ -}}
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 </script>
-<script src="/assets/gallery/api.js"></script>
-<script src="/assets/gallery/components.js"></script>
-<script src="/assets/htmx/htmx.min.js"></script>
+<script src="{{asset "gallery/api.js"}}"></script>
+<script src="{{asset "gallery/components.js"}}"></script>
+<script src="{{asset "htmx/htmx.min.js"}}"></script>
 {{template "componentScripts"}}
-<script type="module" src="/assets/gallery/index.js"></script>
+<script type="module" src="{{asset "gallery/index.js"}}"></script>
 </body>
 </html>{{end}}
+
+{{define "galleryHeaderSearch"}}
+  {{/* Search sits in the app bar beside the logo (av-uvc6) rather than in a
+       row of its own above the grid: the library opens on the control you
+       use to find things in it, and the grid gets the height back.
+
+       `/` focuses it from anywhere on the page (av-6mdw, gallery.js). The key cap
+       after the input is how a sighted user learns that; aria-keyshortcuts is
+       how a screen reader does, so the cap itself is aria-hidden. It must stay
+       the input's later sibling: index.css hides it with `input:focus ~` and
+       `input:not(:placeholder-shown) ~`, so it disappears once the box is in
+       use with no script involved. */}}
+  {{template "gallerySearch" .}}{{if .Filters.Sections}}
+  <button class="btn btn-sec gallery-filter-trigger" type="button" data-filter-sheet-target="trigger" data-action="filter-sheet#open" aria-controls="{{.ID}}-filter-sheet" aria-haspopup="dialog"><i class="ph ph-sliders" aria-hidden="true"></i><span>Filter</span></button>{{end}}
+{{end}}

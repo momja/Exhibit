@@ -5,15 +5,18 @@ import { loadPageScript } from './testdom.mjs';
 const asset = name => fileURLToPath(new URL('../../internal/api/assets/gallery/' + name, import.meta.url));
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const json = body => ({ok: true, status: 201, json: async () => body});
-async function boot(start, {prompt = () => json({}), restore = () => json({}), ticket = () => json({})} = {}) {
+async function boot(start, {prompt = () => json({}), restore = () => json({}), ticket = () => json({}), byok = false} = {}) {
   const calls = [];
   const streams = [];
   const timers = new Map();
   let next = 0;
   const page = loadPageScript([asset('state-api.js'), asset('network-prompt.js')], {
-    TOKEN: '', READ_ONLY: false, BYOK: false, artifact: {id: 'art-1', title: 'A'}, AbortController,
+    TOKEN: '', READ_ONLY: false, BYOK: byok, artifact: {id: 'art-1', title: 'A'}, AbortController,
     apiFetch: async (path, options = {}) => {
       calls.push({path, ...options});
+      if (path === '/api/agent/key' && (options.method || 'GET') === 'GET') {
+        return json({configured: true, provider: 'openrouter', model: 'test-model'});
+      }
       if (path === '/api/agent/sessions') return start(JSON.parse(options.body));
       if (path.endsWith('/prompt')) return prompt(path, JSON.parse(options.body));
       if (path.endsWith('/restore')) return restore(path, options);
@@ -38,6 +41,113 @@ async function boot(start, {prompt = () => json({}), restore = () => json({}), t
 const starts = page => page.calls.filter(c => c.path === '/api/agent/sessions');
 const prompts = page => page.calls.filter(c => c.path.endsWith('/prompt'));
 const deletes = page => page.calls.filter(c => c.method === 'DELETE');
+const emit = (page, event) => page.streams.at(-1).onmessage({data: JSON.stringify(event)});
+const errors = page => page.byId('messages').children.filter(message => message.className === 'msg err');
+
+test('a provider authentication failure after source preparation appears once when its run ends', async () => {
+  const page = await boot(() => json({id: 'session'}), {byok: true});
+  await page.type('connection test');
+  await page.window.send();
+  emit(page, {type: 'agent_start'});
+  emit(page, {type: 'exhibit_source_prepared'});
+  assert.ok(page.byId('messages').children.some(message => message.textContent === 'Prepared artifact source.'));
+  const message = {role: 'assistant', stopReason: 'error', content: [],
+    errorMessage: '401: {"message":"User not found.","code":401}'};
+  emit(page, {type: 'message_start', message});
+  emit(page, {type: 'message_end', message});
+  emit(page, {type: 'turn_end', message});
+  assert.equal(errors(page).length, 0);
+  emit(page, {type: 'agent_end', messages: [message], willRetry: false});
+  assert.equal(page.byId('stop-btn').style.display, '', 'the run stays active until agent_settled');
+  emit(page, {type: 'agent_settled'});
+  assert.equal(page.byId('stop-btn').style.display, 'none');
+  assert.equal(errors(page).length, 1);
+  assert.match(errors(page)[0].textContent, /provider rejected the API key.*key button above.*try again/);
+  await page.type('try again');
+  assert.equal(page.byId('send-btn').disabled, false);
+});
+
+test('expired and invalid API key errors explain how to recover without an HTTP status', async () => {
+  for (const errorMessage of ['Your API key has expired.', 'Invalid API key']) {
+    const page = await boot(() => json({id: 'session'}), {byok: true});
+    await page.type('connection test');
+    await page.window.send();
+    emit(page, {type: 'agent_end', messages: [{role: 'assistant', stopReason: 'error', errorMessage}], willRetry: false});
+    assert.equal(errors(page).length, 1);
+    assert.match(errors(page)[0].textContent, /provider rejected the API key.*key button above.*try again/);
+  }
+});
+
+test('hosted provider failures show only a generic message, regardless of error detail', async () => {
+  for (const errorMessage of [
+    '401 Unauthorized',
+    'Your API key has expired.',
+    'OpenRouter: 503 Service unavailable; API key diagnostic-credential',
+    undefined,
+  ]) {
+    const page = await boot(() => json({id: 'session'}));
+    await page.type('connection test');
+    await page.window.send();
+    emit(page, {type: 'agent_end', messages: [{role: 'assistant', stopReason: 'error', errorMessage}], willRetry: false});
+    emit(page, {type: 'agent_settled'});
+    assert.equal(errors(page).length, 1);
+    assert.equal(errors(page)[0].textContent, 'The agent could not complete your request. Please try again.');
+  }
+});
+
+test('retryable provider failures stay quiet until retries finish', async () => {
+  const page = await boot(() => json({id: 'session'}), {byok: true});
+  await page.type('connection test');
+  await page.window.send();
+  const message = {role: 'assistant', stopReason: 'error', errorMessage: '503 Service unavailable'};
+  emit(page, {type: 'agent_end', messages: [message], willRetry: true});
+  emit(page, {type: 'auto_retry_start', attempt: 1, maxAttempts: 1});
+  assert.equal(errors(page).length, 0);
+  emit(page, {type: 'agent_end', messages: [message], willRetry: false});
+  emit(page, {type: 'auto_retry_end', success: false, finalError: message.errorMessage});
+  emit(page, {type: 'agent_settled'});
+  assert.equal(errors(page).length, 1);
+  assert.match(errors(page)[0].textContent, /503 Service unavailable/);
+});
+
+test('a successful retry leaves no provider failure in chat', async () => {
+  const page = await boot(() => json({id: 'session'}));
+  await page.type('connection test');
+  await page.window.send();
+  const failed = {role: 'assistant', stopReason: 'error', errorMessage: '503 Service unavailable'};
+  emit(page, {type: 'agent_end', messages: [failed], willRetry: true});
+  emit(page, {type: 'auto_retry_start', attempt: 1, maxAttempts: 1});
+  const succeeded = {role: 'assistant', stopReason: 'stop'};
+  emit(page, {type: 'agent_end', messages: [failed, succeeded], willRetry: false});
+  emit(page, {type: 'auto_retry_end', success: true});
+  emit(page, {type: 'agent_settled'});
+  assert.equal(errors(page).length, 0);
+});
+
+test('successes, cancellations, and tool errors are not provider failures', async () => {
+  for (const finalMessage of [
+    {role: 'assistant', stopReason: 'stop'},
+    {role: 'assistant', stopReason: 'aborted', errorMessage: 'Aborted'},
+    {role: 'toolResult', isError: true, errorMessage: 'Tool failed'},
+  ]) {
+    const page = await boot(() => json({id: 'session'}));
+    await page.type('connection test');
+    await page.window.send();
+    emit(page, {type: 'agent_end', messages: [finalMessage], willRetry: false});
+    emit(page, {type: 'agent_settled'});
+    assert.equal(errors(page).length, 0);
+  }
+});
+
+test('provider failures without detail still give a useful message', async () => {
+  const page = await boot(() => json({id: 'session'}), {byok: true});
+  await page.type('connection test');
+  await page.window.send();
+  emit(page, {type: 'agent_end', messages: [{role: 'assistant', stopReason: 'error'}], willRetry: false});
+  emit(page, {type: 'agent_settled'});
+  assert.equal(errors(page).length, 1);
+  assert.match(errors(page)[0].textContent, /provider could not complete the request/);
+});
 
 test('composer button state follows draft changes and Send while preparation is active', async () => {
   const page = await boot(() => json({id: 'ready'}));

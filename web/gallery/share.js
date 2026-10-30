@@ -203,7 +203,7 @@ function initializeSharePanel() {
     const target = e.target;
     const revoke = target.closest ? target.closest('[data-action="revoke"]') : null;
     if (revoke) {
-      return mutate(() => request('/api/shares/' + encodeURIComponent(revoke.dataset.shareId), { method: 'DELETE' })
+      return mutate(() => request('/api/artifacts/' + encodeURIComponent(artifactID) + '/grants?recipient=' + encodeURIComponent(revoke.dataset.recipientId), { method: 'DELETE' })
         .then(() => ''), 'Could not revoke access. This person still appears in the list; try again.');
     }
     const button = target.closest ? target.closest('button') : target;

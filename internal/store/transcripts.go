@@ -55,6 +55,13 @@ func (s *SQLiteStore) SaveTranscript(ctx context.Context, ownerID int64, t Trans
 	return err
 }
 
+func listTranscriptsQuery() string {
+	return `SELECT session_id, title, version_seq, typeof(session_file) = 'text', updated_at
+		   FROM agent_transcripts
+		  WHERE artifact_id = ? AND ` + ownedArtifact("agent_transcripts") + `
+		  ORDER BY updated_at DESC, session_id`
+}
+
 // ListTranscripts returns an artifact's conversations, most recently active
 // first. Another owner's artifact reads as having none.
 //
@@ -63,10 +70,7 @@ func (s *SQLiteStore) SaveTranscript(ctx context.Context, ownerID int64, t Trans
 // stored file just to say whether it is there.
 func (s *SQLiteStore) ListTranscripts(ctx context.Context, ownerID int64, artifactID string) ([]Transcript, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT session_id, title, version_seq, typeof(session_file) = 'text', updated_at
-		   FROM agent_transcripts
-		  WHERE artifact_id = ? AND `+ownedArtifact+`
-		  ORDER BY updated_at DESC, session_id`,
+		listTranscriptsQuery(),
 		artifactID, ownerID)
 	if err != nil {
 		return nil, err
@@ -94,7 +98,7 @@ func (s *SQLiteStore) GetTranscript(ctx context.Context, ownerID int64, artifact
 	err := s.db.QueryRowContext(ctx,
 		`SELECT title, version_seq, session_file, messages, updated_at
 		   FROM agent_transcripts
-		  WHERE artifact_id = ? AND session_id = ? AND `+ownedArtifact,
+		  WHERE artifact_id = ? AND session_id = ? AND `+ownedArtifact("agent_transcripts"),
 		artifactID, sessionID, ownerID).Scan(&t.Title, &t.VersionSeq, &file, &t.Messages, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

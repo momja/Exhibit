@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,11 +17,25 @@ type hostedLoginStub struct{}
 
 func (hostedLoginStub) Middleware(next http.Handler) http.Handler { return next }
 func (hostedLoginStub) Subject(r *http.Request) string            { return r.Header.Get("Test-Clerk-Subject") }
+func (hostedLoginStub) SessionExpiresIn(r *http.Request) time.Duration {
+	if r.Header.Get("Test-Clerk-Subject") == "" {
+		return 0
+	}
+	return 42 * time.Second
+}
 func (hostedLoginStub) Identity(r *http.Request) (auth.HostedIdentity, error) {
 	return auth.HostedIdentity{Subject: r.Header.Get("Test-Clerk-Subject"), Email: "person@example.com", SessionCreatedAt: time.Now().UnixMilli()}, nil
 }
+func (hostedLoginStub) HandshakeRedirect(w http.ResponseWriter, r *http.Request) bool {
+	if r.Header.Get("Test-Clerk-Handshake") == "" {
+		return false
+	}
+	http.Redirect(w, r, "https://example.clerk.accounts.dev/v1/client/handshake", http.StatusTemporaryRedirect)
+	return true
+}
 func (hostedLoginStub) ResolveEmail(context.Context, string) (string, error)  { return "", nil }
 func (hostedLoginStub) RevokeSessions(context.Context, string) (int64, error) { return 0, nil }
+func (hostedLoginStub) DeleteUser(context.Context, string) error              { return nil }
 
 func TestClerkHostedMode(t *testing.T) {
 	cred, err := auth.NewCredential("selfhost", "$2a$10$N9qo8uLOickgx2ZMRZoMy.Mrq4H/M2dYs6qVu0Y0lJ4YFjIsWJc.1W")
@@ -52,6 +67,24 @@ func TestClerkHostedMode(t *testing.T) {
 	require.Equal(t, 404, request("GET", "/auth/sso", "").Code)
 	require.Equal(t, 302, request("GET", "/", "").Code)
 	require.Equal(t, 401, request("GET", "/api/artifacts", "").Code)
+	// Exh-8409: a lapsed hosted session renews through the handshake when the
+	// provider can, before falling back to the login page; fragments and the
+	// API never take a cross-site redirect.
+	for _, path := range []string{"/", "/artifacts/a1", "/partials/gallery-grid", "/api/artifacts"} {
+		r := httptest.NewRequest("GET", "https://app.test"+path, nil)
+		r.Header.Set("Test-Clerk-Handshake", "1")
+		if path == "/partials/gallery-grid" {
+			r.Header.Set("HX-Request", "true")
+		}
+		w := httptest.NewRecorder()
+		ro.ServeHTTP(w, r)
+		if strings.HasPrefix(path, "/partials/") || strings.HasPrefix(path, "/api/") {
+			require.Equal(t, 401, w.Code, path)
+			continue
+		}
+		require.Equal(t, http.StatusTemporaryRedirect, w.Code, path)
+		require.True(t, strings.HasPrefix(w.Header().Get("Location"), "https://example.clerk.accounts.dev/v1/client/handshake"), path)
+	}
 	first := request("GET", "/auth/clerk/ready", "clerk:user_one")
 	require.Equal(t, 204, first.Code)
 	second := request("GET", "/auth/clerk/ready", "clerk:user_two")
@@ -61,7 +94,12 @@ func TestClerkHostedMode(t *testing.T) {
 	two, err := st.GetUserByExternalID(context.Background(), "clerk:user_two")
 	require.NoError(t, err)
 	require.NotEqual(t, one.ID, two.ID)
-	require.Equal(t, 200, request("GET", "/", "clerk:user_one").Code)
+	page := request("GET", "/", "clerk:user_one")
+	require.Equal(t, 200, page.Code)
+	// Exh-g0fx: the page learns how long its token has left from the server,
+	// whose clock the token is checked against.
+	require.Contains(t, page.Body.String(), `<meta name="clerk-session-expires-in" content="42000">`)
+	require.Contains(t, request("GET", "/auth/login", "").Body.String(), `<meta name="clerk-session-expires-in" content="0">`)
 	// Both identities have the same email, but distinct libraries and permissions.
 	require.NoError(t, st.SetUserDisabled(context.Background(), two.ID, true))
 	require.Equal(t, 403, request("GET", "/auth/clerk/ready", "clerk:user_two").Code)
@@ -121,4 +159,50 @@ func TestClerkEmailChangeUpdatesProfileAndShareLookup(t *testing.T) {
 	u, err := st.GetUser(context.Background(), id)
 	require.NoError(t, err)
 	require.Equal(t, h.email, u.Email)
+}
+
+func TestClerkUnifiedAccountPages(t *testing.T) {
+	ro, st := newLoginTestRouter(t, nil, nil, func(c *Config) {
+		c.Clerk = hostedLoginStub{}
+		c.ClerkPublishableKey = "pk_test_example"
+		c.ClerkFrontendAPI = "https://example.clerk.accounts.dev"
+		c.AuthToken = ""
+	})
+	get := func(path, subject string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", path, nil)
+		r.Header.Set("Test-Clerk-Subject", subject)
+		w := httptest.NewRecorder()
+		ro.ServeHTTP(w, r)
+		return w
+	}
+	require.Equal(t, 204, get("/auth/clerk/ready", "clerk:admin").Code)
+	require.Equal(t, 204, get("/auth/clerk/ready", "clerk:member").Code)
+	member, err := st.GetUserByExternalID(context.Background(), "clerk:member")
+	require.NoError(t, err)
+	require.NoError(t, st.PutArtifact(context.Background(), &store.Artifact{ID: "account-artifact", OwnerID: member.ID, Title: "Member", SourceBlobID: "account-blob", Tier: store.Tier1, CreatedAt: time.Now(), UpdatedAt: time.Now()}))
+	require.NoError(t, st.RecordBlobSize(context.Background(), "account-blob", 12345))
+	page := get("/", "clerk:member")
+	require.Equal(t, 200, page.Code)
+	require.Equal(t, 1, strings.Count(page.Body.String(), `data-clerk-mode-value="user"`))
+	require.NotContains(t, page.Body.String(), `aria-label="Your account" title="Your account"`)
+
+	page = get("/settings", "clerk:member")
+	require.Equal(t, 200, page.Code)
+	require.Equal(t, "no-store", page.Header().Get("Cache-Control"))
+	require.Contains(t, page.Body.String(), "Settings — Exhibit")
+	require.Equal(t, 1, strings.Count(page.Body.String(), `data-clerk-mode-value="user"`), "Settings keeps the same single account menu as the gallery")
+	require.Contains(t, page.Body.String(), `class="app-header"`)
+	require.NotContains(t, page.Body.String(), "Interactive demo")
+	require.NotContains(t, page.Body.String(), "128.4 MiB")
+	require.Contains(t, page.Body.String(), "Manage profile")
+	require.Contains(t, page.Body.String(), "12.1 KiB")
+	require.Contains(t, page.Body.String(), "1 artifact")
+	require.Contains(t, page.Body.String(), "sign-in methods stored with Clerk")
+	require.Contains(t, page.Body.String(), "Delete my account permanently")
+	require.NotContains(t, page.Body.String(), "Signing in again will still work")
+	require.NotContains(t, get("/settings", "clerk:admin").Body.String(), "12.1 KiB")
+	require.Contains(t, get("/settings", "clerk:admin").Body.String(), "You are the only account")
+	require.Equal(t, 200, get("/profile", "clerk:member").Code)
+	require.Equal(t, 302, get("/settings", "").Code)
+
 }

@@ -41,7 +41,7 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-//go:embed ext/exhibit.ts ext/edit.ts ext/guard.ts ext/source-context.ts ext/questions.ts
+//go:embed ext/exhibit.ts ext/edit.ts ext/guard.ts ext/source-context.ts ext/questions.ts ext/prompts/*.tmpl
 var extFS embed.FS
 
 // Config for the Manager.
@@ -56,6 +56,9 @@ type Config struct {
 	MockLLMURL   string // when set, sessions may use the "exhibit-mock" provider
 	IdleTimeout  time.Duration
 	SystemPrompt string // optional override of the role prompt; empty uses the default
+	// ThinkingLevel is the instance baseline for new and resumed sessions.
+	// Empty defaults to medium. BYOK owners may override it in CreateOpts.
+	ThinkingLevel string
 	// HideModelIdentity strips the provider/model identifiers out of Pi's
 	// event stream and persisted transcripts (av-siqf). It is set when the
 	// instance supplies the credential itself, where the model is not the
@@ -129,6 +132,9 @@ func New(cfg Config, st store.Store) (*Manager, error) {
 	if cfg.IdleTimeout == 0 {
 		cfg.IdleTimeout = 30 * time.Minute
 	}
+	if cfg.ThinkingLevel == "" {
+		cfg.ThinkingLevel = DefaultThinkingLevel
+	}
 	if err := os.MkdirAll(cfg.WorkRoot, 0o755); err != nil {
 		return nil, fmt.Errorf("create agent work root: %w", err)
 	}
@@ -167,9 +173,34 @@ func New(cfg Config, st store.Store) (*Manager, error) {
 	if err := os.WriteFile(guardPath, guardSrc, 0o644); err != nil {
 		return nil, fmt.Errorf("materialize guard extension: %w", err)
 	}
+	// guard.ts reads its prompts from prompts/ beside itself.
+	if err := materializeExtPrompts(filepath.Join(cfg.WorkRoot, "prompts")); err != nil {
+		return nil, err
+	}
 	m := &Manager{cfg: cfg, st: st, extPath: extPath, guardPath: guardPath, sessions: map[string]*Session{}}
 	go m.reap()
 	return m, nil
+}
+
+// materializeExtPrompts writes the extension's prompt templates to dir.
+func materializeExtPrompts(dir string) error {
+	entries, err := extFS.ReadDir("ext/prompts")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create extension prompts dir: %w", err)
+	}
+	for _, e := range entries {
+		src, err := extFS.ReadFile("ext/prompts/" + e.Name())
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, e.Name()), src, 0o644); err != nil {
+			return fmt.Errorf("materialize extension prompt %s: %w", e.Name(), err)
+		}
+	}
+	return nil
 }
 
 // ImageContent is one inline image attached to a prompt, in Pi's RPC shape.
@@ -185,6 +216,9 @@ type CreateOpts struct {
 	Provider string
 	Model    string
 	APIKey   string // decrypted, handed to the subprocess env only
+	// ThinkingLevel is the BYOK owner's preference; empty uses the instance
+	// baseline. Platform-paid sessions always use the instance baseline.
+	ThinkingLevel string
 	// ArtifactID non-empty means modify mode: the session is scoped to that
 	// artifact, and the agent reads its source with get_artifact — nothing about
 	// the artifact is put in the prompt, because a URL-ingested artifact carries
@@ -326,6 +360,11 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	if opts.Model != "" {
 		args = append(args, "--provider", opts.Provider, "--model", opts.Model)
 	}
+	thinkingLevel := m.cfg.ThinkingLevel
+	if !opts.PlatformPaid && opts.ThinkingLevel != "" {
+		thinkingLevel = opts.ThinkingLevel
+	}
+	args = append(args, "--thinking", thinkingLevel)
 	if m.cfg.Guardrail != nil {
 		args = append(args, "-e", m.guardPath)
 	}
@@ -1095,12 +1134,21 @@ func (s *Session) handleLine(line []byte) {
 		// The authoritative final message: role decides the row's source,
 		// provider/model name the spend, usage is the meter.
 		var msg struct {
-			Role     string          `json:"role"`
-			Provider string          `json:"provider"`
-			Model    string          `json:"model"`
-			Usage    json.RawMessage `json:"usage"`
+			Role         string          `json:"role"`
+			Provider     string          `json:"provider"`
+			Model        string          `json:"model"`
+			StopReason   string          `json:"stopReason"`
+			ErrorMessage string          `json:"errorMessage"`
+			Usage        json.RawMessage `json:"usage"`
 		}
 		if json.Unmarshal(probe.Message, &msg) == nil {
+			if msg.Role == "assistant" && msg.StopReason == "error" {
+				// Keep provider diagnostics server-side before hosted events are
+				// redacted. Log only the error, never the conversation payload.
+				slog.Error("agent provider request failed", slog.String("session_id", s.ID),
+					slog.String("provider", msg.Provider), slog.String("model", msg.Model),
+					slog.String("err", msg.ErrorMessage))
+			}
 			if u, ok := decodeUsage(msg.Usage); ok {
 				s.noteMessageUsage(msg.Role, msg.Provider, msg.Model, u)
 			}
@@ -1163,7 +1211,7 @@ func (s *Session) handleLine(line []byte) {
 		}
 	}
 
-	s.broadcast(s.redact(bytes.Clone(line)))
+	s.broadcast(s.redact(line))
 }
 
 // redact applies the platform-mode filter to one event line on its way out of

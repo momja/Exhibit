@@ -66,7 +66,7 @@ func TestAppOriginPagesCarryPWAHeadTags(t *testing.T) {
 
 			body := w.Body.String()
 			assert.Contains(t, body, `<link rel="manifest" href="/manifest.json">`)
-			assert.Contains(t, body, `<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon-180.png">`)
+			assert.Contains(t, body, `<link rel="apple-touch-icon" href="`+assetURL("icons/apple-touch-icon-180.png")+`">`)
 			assert.Contains(t, body, `<meta name="apple-mobile-web-app-capable" content="yes">`)
 			assert.Contains(t, body, `<meta name="apple-mobile-web-app-status-bar-style" content="default">`)
 			assert.Contains(t, body, `<meta name="apple-mobile-web-app-title" content="Exhibit">`)

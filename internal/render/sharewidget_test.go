@@ -60,11 +60,12 @@ func newShareWidgetFixture(t *testing.T) (*Renderer, *store.SQLiteStore, string,
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateShare(ctx, 1, &store.Share{ID: "the-link", ArtifactID: "abc"}); err != nil {
+	createdLink, err := st.CreateAnonymousLink(ctx, 1, "abc")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateShare(ctx, 1, &store.Share{
-		ID: "the-grant", ArtifactID: "abc", RecipientID: &recipient.ID}); err != nil {
+	_, err = st.CreateGrant(ctx, 1, "abc", recipient.ID)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,7 +74,7 @@ func newShareWidgetFixture(t *testing.T) (*Renderer, *store.SQLiteStore, string,
 		AppOrigin: "https://app.test", RenderOrigin: "https://render.test",
 		Tokens: testTokens,
 	})
-	return rd, st, "the-link", "the-grant"
+	return rd, st, createdLink.ID, "abc"
 }
 
 // serveShareWidgetRaw fetches /s/:id/widget the way whoever holds the URL
@@ -145,7 +146,7 @@ func TestShareWidgetUsesArtifactCSPAndShareFraming(t *testing.T) {
 }
 
 // The widget route resolves the same link row as the artifact route, so it
-// inherits the same refusal: a grant's id is not a URL here either, and
+// inherits the same refusal: a granted artifact id is not a URL here either, and
 // revoking the link revokes the tile in full.
 func TestShareWidgetGrantIsNotAURL(t *testing.T) {
 	rd, st, link, grant := newShareWidgetFixture(t)
@@ -157,10 +158,10 @@ func TestShareWidgetGrantIsNotAURL(t *testing.T) {
 	got := serveShareWidgetRaw(t, rd, grant)
 	unknown := serveShareWidgetRaw(t, rd, "no-such-share")
 	if got.Code != 404 {
-		t.Fatalf("a grant id must not serve the widget at /s/, got %d: %s", got.Code, got.Body.String())
+		t.Fatalf("a granted artifact id must not serve the widget at /s/, got %d: %s", got.Code, got.Body.String())
 	}
 	if got.Code != unknown.Code || got.Body.String() != unknown.Body.String() {
-		t.Fatalf("a grant id must answer exactly what an unissued id answers: %d %q vs %d %q",
+		t.Fatalf("a granted artifact id must answer exactly what an unissued id answers: %d %q vs %d %q",
 			got.Code, got.Body.String(), unknown.Code, unknown.Body.String())
 	}
 
@@ -197,11 +198,12 @@ func TestShareWidgetServesTheDefaultTileWithoutWidget(t *testing.T) {
 	if err := rd.cfg.Store.SetState(ctx, 1, "plain", 1, "runs", `SECRET-STATE`); err != nil {
 		t.Fatal(err)
 	}
-	if err := rd.cfg.Store.CreateShare(ctx, 1, &store.Share{ID: "plain-link", ArtifactID: "plain"}); err != nil {
+	createdLink, err := rd.cfg.Store.CreateAnonymousLink(ctx, 1, "plain")
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	w := serveShareWidgetRaw(t, rd, "plain-link")
+	w := serveShareWidgetRaw(t, rd, createdLink.ID)
 	if w.Code != 200 {
 		t.Fatalf("expected the default tile, got %d", w.Code)
 	}

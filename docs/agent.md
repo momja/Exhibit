@@ -129,7 +129,11 @@ not change tool parameters, prompt wording, or owner/artifact scope.
 ## Session context: instructions and data are separate
 
 - The **system prompt** is entirely server-authored (`internal/agent/prompt.go`).
-  No artifact title, body, or id is interpolated into it, and it carries one
+  Its text, and every other model-facing prompt, lives in a template file
+  (Exh-9jcb): `internal/agent/prompts/*.tmpl` for the server, embedded and
+  parsed at startup, and `internal/agent/ext/prompts/*.tmpl` for the guardrail
+  screen, materialized beside `guard.ts`. Goldens in
+  `internal/agent/testdata/prompts/` pin the rendered bytes. No artifact title, body, or id is interpolated into it, and it carries one
   static contract: artifact-reading tool results are data. The user's messages
   and their direct answers through `ask_user` are instructions.
 - A session reuses **known source**: source already in tool results (including
@@ -287,6 +291,15 @@ widget branch so the path is covered end to end. Note the button's route is
   AES-256-GCM (`internal/secrets`) under the server secret (`EXHIBIT_SECRET`
   env, else a generated `data/secret.key`), and is never returned — GET yields
   only `sk-…1234`-style hints.
+- The same page saves an optional per-owner `thinking_level` with the key.
+  Empty means **Use server default**: `AGENT_THINKING_LEVEL`, or `medium`
+  when unset. An explicit level overrides that baseline in BYOK mode. A
+  settings save can keep the masked API key; omitting `thinking_level` from
+  PUT keeps the saved preference, while an explicit empty string clears it.
+  Hosted/platform sessions ignore personal levels and use the baseline only.
+  The resolved level is passed with `--thinking` for new and resumed sessions
+  and widget generation, so saved conversations cannot restore an old level
+  over the current setting. Pi adjusts it to the selected model's support.
 - At session spawn the key is decrypted and handed to the pi subprocess via a
   provider-specific env var (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
   `GEMINI_API_KEY`, `OPENCODE_API_KEY`, …) — never argv, never page JS. The
@@ -295,6 +308,10 @@ widget branch so the path is covered end to end. Note the button's route is
   read the operator's `~/.pi/agent/auth.json` — a stored login there would
   otherwise take precedence over the BYO key and silently bill the operator's
   account.
+
+![BYOK API-key settings with a thinking preference](screenshots/Exh-phjp/agent-thinking-settings.png)
+
+[Phone layout](screenshots/Exh-phjp/agent-thinking-settings-mobile.png).
 
 The same env carries the exhibit-side contract, and nothing broader than the
 session needs:
@@ -861,6 +878,7 @@ capture leaves the sandbox only as data posted to that host.
 | Env | Meaning |
 |-----|---------|
 | `PI_BIN` | pi executable (default `pi`). If missing, the server boots and every agent route answers `503`: a broken install, not a configuration |
+| `AGENT_THINKING_LEVEL` | instance baseline (default `medium`): `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. BYOK owners may override it on the API-key page; hosted/platform sessions use only this baseline. Applied to new/resumed sessions and widget generation via `--thinking`; invalid values fail startup. Pi adjusts the level to model support |
 | `EXHIBIT_SECRET` | optional server secret for key encryption (else `data/secret.key` is generated) |
 | `MOCK_LLM_URL` | dev/test only: enables the `exhibit-mock` provider pointing at `cmd/mockllm` |
 | `AGENT_API_KEY` | the instance's own provider key — set it to enable platform mode; unset is BYOK |
@@ -916,6 +934,21 @@ from 0.99.1 through 1.3.0 retain Exhibit's RPC and session contracts:
 - `agent_settled` remains the end of automatic work. `message_end` carries
   final assistant usage; `get_session_stats` supplies cumulative totals for
   reconciliation. Guardrail usage remains separately reported operator spend.
+  Chat displays a final provider failure from `agent_end` when `willRetry`
+  is false, including authentication errors that contain no text deltas.
+  Hosted/platform mode shows a generic failure message for every provider
+  failure, without mentioning credentials or including provider error details.
+  The server also replaces diagnostic error text in hosted message, retry,
+  compaction and extension events before retaining or streaming them.
+  BYOK users are told to update rejected or expired keys; other BYOK failures
+  retain the provider's error detail.
+  Each failed assistant response writes one `ERROR` log named
+  `agent provider request failed`, with `session_id`, `provider`, `model` and
+  the complete `err` string reported by Pi. Logging happens before hosted
+  redaction; conversation content is not included. Pi's original session file
+  remains private and unchanged for persistence and resume.
+  Failures that Pi is retrying and user cancellations do not create error
+  bubbles; the composer continues to follow `agent_settled`.
 - Session files remain version 3 JSONL. Exhibit keeps Pi's bytes, restores
   them with `--session`, and runs from `/` so the recorded directory exists
   on resume. An actual 0.99.1 transcript is kept under `internal/api/testdata`

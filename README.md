@@ -14,6 +14,27 @@ Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs
 
 ## Quick start
 
+### Set up with an agent
+
+Copy this into a coding agent with terminal access:
+
+```text
+Clone https://github.com/momja/Exhibit.git (or reuse an existing checkout), read
+README.md and docs/deployment.md, then ask me how and where I want to deploy:
+Docker Compose or running from source. Wait for my choice before
+installing dependencies or deploying. Then follow the relevant instructions,
+carry out the setup, verify it works, and show me how to open Exhibit and start
+using it.
+
+Use docs/deployment.md as the reference for environment variables. Explain which
+settings I need and help me save them in a local configuration file that the
+chosen deployment actually loads. Have me enter any values you need from me in a
+local editor or the deployment's secret settings, never in chat. Keep secrets
+out of Git and preserve any existing configuration and data.
+```
+
+### Set up manually
+
 The fastest way to run Exhibit is Docker Compose. Read **[docs/deployment.md](./docs/deployment.md)**.
 
 The rest of this section is for building and running **from source** for

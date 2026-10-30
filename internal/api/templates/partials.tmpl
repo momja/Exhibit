@@ -13,7 +13,7 @@
      document (internal/render) — artifacts are visitor-authored files and
      own their own <head> (architecture.md §1). */}}
 {{define "pwaHead"}}<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon-180.png">
+<link rel="apple-touch-icon" href="{{asset "icons/apple-touch-icon-180.png"}}">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Exhibit">{{end}}
@@ -299,64 +299,6 @@
      Data: sharePanelView (gallery.go). */}}
 {{define "sharePanelBody"}}<div class="share-cols" data-artifact-id="{{.ArtifactID}}">
   <section class="share-col">
-    <h3 class="text-sm muted">People</h3>
-    {{/* One field taking several names and one submit: "gave friends access,
-         dropped the link in the group chat" is one gesture, not three. The
-         field confirms existence deliberately — answering "added" for a name
-         nobody holds would leave the owner believing their friend has access
-         when the friend has none, which is discovered weeks later and by the
-         wrong person. */}}
-    <form class="share-add" id="share-add-form" method="post" action="/api/shares">
-      <input type="text" id="share-add-input" name="recipients" class="field" placeholder="Usernames or emails, separated by commas" autocomplete="off" data-1p-ignore data-bwignore="true" data-lpignore="true" data-protonpass-ignore="true" enterkeyhint="done" aria-label="Usernames or emails, separated by commas">
-    </form>
-    <div class="share-people-list" tabindex="0" role="region" aria-label="People with access">
-    <ul class="share-grants" id="share-grants">
-      {{range .Shares.Grants}}<li class="share-grant" data-share-id="{{.ID}}">
-        <span class="share-grant-name">{{.Name}}</span>
-        {{/* A disabled account is shown rather than filtered: a row that
-             silently vanishes is a row the owner cannot revoke and does not
-             know exists. */}}
-        {{if .Disabled}}<span class="text-sm muted">account disabled</span>{{end}}
-        <span class="spacer"></span>
-        <button type="button" class="btn btn-sm btn-sec" data-action="revoke" data-share-id="{{.ID}}" aria-label="Revoke access for {{.Name}}"><i class="ph ph-x"></i> Revoke</button>
-      </li>{{end}}
-    </ul>
-    <p class="text-sm muted" id="share-empty"{{if .Shares.Grants}} hidden{{end}}>Nobody else has been given access.</p>
-    </div>
-  </section>
-
-  <section class="share-col state-sharing" aria-labelledby="state-sharing-title">
-    <h3 id="state-sharing-title" class="text-sm muted">Saved Data for People with Access</h3>
-    <fieldset id="share-state-mode" data-saved-mode="{{if .StateModeShared}}shared{{else}}own{{end}}">
-      <legend class="sr-only">How people share saved app data</legend>
-      <div class="state-choices">
-        <label class="state-choice">
-          <input id="share-state-own" type="radio" name="share-state-mode" value="own"{{if not .StateModeShared}} checked{{end}}>
-          <span class="state-choice-content">
-            {{template "stateModeGlyph" "own"}}
-            <strong>Separate Data per Person</strong>
-            <span class="state-choice-description">Each person can view and update their own saved data. Their changes affect only them.</span>
-          </span>
-        </label>
-        <label class="state-choice">
-          <input id="share-state-shared" type="radio" name="share-state-mode" value="shared"{{if .StateModeShared}} checked{{end}}>
-          <span class="state-choice-content">
-            {{template "stateModeGlyph" "shared"}}
-            <strong>Shared Data for Everyone</strong>
-            <span class="state-choice-description">Everyone can view and update the same saved data. Changes affect everyone.</span>
-          </span>
-        </label>
-      </div>
-    </fieldset>
-    <details class="state-how-it-works" id="state-how-it-works">
-      <summary><i class="ph ph-caret-right state-how-closed" aria-hidden="true"></i><i class="ph ph-caret-down state-how-open" aria-hidden="true"></i> What Happens When I Switch?</summary>
-      <p><strong>Switch to separate data:</strong> you keep using your saved data. Each person returns to their own previously saved data, or starts empty if they have none. Your shared data is not copied to them.</p>
-      <p><strong>Switch to shared data:</strong> everyone with a personal grant uses your saved data. Their separate data is kept and becomes visible to them again if you switch back.</p>
-      <p>Public links always show your saved data and remain read-only, whichever mode you choose.</p>
-    </details>
-  </section>
-
-  <section class="share-col">
     <h3 class="text-sm muted">Link Access</h3>
     {{/* A toggle, not a create button, because an artifact has exactly one
          anonymous link (a partial unique index, av-lrae): on mints the row and
@@ -400,6 +342,64 @@
 
   </section>
 
+  <section class="share-col">
+    <h3 class="text-sm muted">People</h3>
+    {{/* One field taking several names and one submit: "gave friends access,
+         dropped the link in the group chat" is one gesture, not three. The
+         field confirms existence deliberately — answering "added" for a name
+         nobody holds would leave the owner believing their friend has access
+         when the friend has none, which is discovered weeks later and by the
+         wrong person. */}}
+    <form class="share-add" id="share-add-form" method="post" action="/api/shares">
+      <input type="text" id="share-add-input" name="recipients" class="field" placeholder="Usernames or emails, separated by commas" autocomplete="off" data-1p-ignore data-bwignore="true" data-lpignore="true" data-protonpass-ignore="true" enterkeyhint="done" aria-label="Usernames or emails, separated by commas">
+    </form>
+    <div class="share-people-list" tabindex="0" role="region" aria-label="People with access">
+    <ul class="share-grants" id="share-grants">
+      {{range .Shares.Grants}}<li class="share-grant" data-recipient-id="{{.RecipientID}}">
+        <span class="share-grant-name">{{.Name}}</span>
+        {{/* A disabled account is shown rather than filtered: a row that
+             silently vanishes is a row the owner cannot revoke and does not
+             know exists. */}}
+        {{if .Disabled}}<span class="text-sm muted">account disabled</span>{{end}}
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-sm btn-sec" data-action="revoke" data-recipient-id="{{.RecipientID}}" aria-label="Revoke access for {{.Name}}"><i class="ph ph-x"></i> Revoke</button>
+      </li>{{end}}
+    </ul>
+    <p class="text-sm muted" id="share-empty"{{if .Shares.Grants}} hidden{{end}}>Nobody else has been given access.</p>
+    </div>
+  </section>
+
+  <section class="share-col state-sharing" aria-labelledby="state-sharing-title">
+    <h3 id="state-sharing-title" class="text-sm muted">Saved Data for People with Access</h3>
+    <fieldset id="share-state-mode" data-saved-mode="{{if .StateModeShared}}shared{{else}}own{{end}}">
+      <legend class="sr-only">How people share saved app data</legend>
+      <div class="state-choices">
+        <label class="state-choice">
+          <input id="share-state-own" type="radio" name="share-state-mode" value="own"{{if not .StateModeShared}} checked{{end}}>
+          <span class="state-choice-content">
+            {{template "stateModeGlyph" "own"}}
+            <strong>Separate Data per Person</strong>
+            <span class="state-choice-description">Each person can view and update their own saved data. Their changes affect only them.</span>
+          </span>
+        </label>
+        <label class="state-choice">
+          <input id="share-state-shared" type="radio" name="share-state-mode" value="shared"{{if .StateModeShared}} checked{{end}}>
+          <span class="state-choice-content">
+            {{template "stateModeGlyph" "shared"}}
+            <strong>Shared Data for Everyone</strong>
+            <span class="state-choice-description">Everyone can view and update the same saved data. Changes affect everyone.</span>
+          </span>
+        </label>
+      </div>
+    </fieldset>
+    <details class="state-how-it-works" id="state-how-it-works">
+      <summary><i class="ph ph-caret-right state-how-closed" aria-hidden="true"></i><i class="ph ph-caret-down state-how-open" aria-hidden="true"></i> What Happens When I Switch?</summary>
+      <p><strong>Switch to separate data:</strong> you keep using your saved data. Each person returns to their own previously saved data, or starts empty if they have none. Your shared data is not copied to them.</p>
+      <p><strong>Switch to shared data:</strong> everyone with a personal grant uses your saved data. Their separate data is kept and becomes visible to them again if you switch back.</p>
+      <p>Public links always show your saved data and remain read-only, whichever mode you choose.</p>
+    </details>
+  </section>
+
 </div>{{end}}
 
 
@@ -410,20 +410,6 @@
   <svg viewBox="0 0 108 20" focusable="false">{{if eq . "own"}}<path d="M18 0V20M54 0V20M90 0V20"/>{{else}}<path d="M18 0V8H90V0M54 0V20"/>{{end}}</svg>
   <span class="state-glyph-data{{if eq . "own"}} state-glyph-separate{{end}}"><i class="ph ph-database"></i>{{if eq . "own"}}<i class="ph ph-database"></i><i class="ph ph-database"></i>{{end}}</span>
 </span>{{end}}
-
-{{/* settingsHeader is the sub-page header the account surfaces share: a back
-     link to the gallery and the page's own title, the same idiom new.tmpl and
-     detail.tmpl use. Data: the page title (a string).
-
-     It exists as a partial rather than inline markup because two pages will
-     wear it and they must not merge: this ticket's /admin/users (an admin
-     acting on the instance) and av-qwld's own-account settings page (a person
-     acting on themselves). Sharing the furniture is the point; sharing the
-     authority would be the bug — that lives on the route, in adminOnly. */}}
-{{define "settingsHeader"}}<header>
-  <a href="/">←<span class="back-label"> Gallery</span></a>
-  <h1>{{.}}</h1>
-</header>{{end}}
 
 {{/* The runtime network-permission dialog (av-kmwj), shared by every page that
      embeds an artifact: the detail viewer and the agent chat's preview pane

@@ -394,7 +394,7 @@ DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 ## Agent (build/modify with AI, BYO key)
 
 ```
-PUT    /api/agent/key                        Store provider API key {"provider","model","api_key"} (encrypted at rest)
+PUT    /api/agent/key                        Store provider settings {"provider","model","api_key","thinking_level"?} (key encrypted at rest)
 GET    /api/agent/key                        Key status (masked hint only — the key is never returned)
 DELETE /api/agent/key                        Remove the stored key
 POST   /api/agent/sessions                   Start a session {"artifact_id"?: scope it to an existing artifact, "resume_session_id"?: continue a kept conversation of that artifact; omitted, the session is a new conversation} -> {"id","sse_ticket",…}
@@ -406,6 +406,17 @@ GET    /api/agent/sessions/:id/events        SSE event stream (?ticket= auth —
 GET    /api/artifacts/:id/transcripts        Conversations kept with an artifact -> {"head_seq", "transcripts": [{session_id, title, version_seq, resumable, updated_at}]}
 GET    /api/artifacts/:id/transcripts/:sid   One conversation as what was said in it -> {…summary, "head_seq", "messages": [{role, text}]}
 ```
+
+`thinking_level` accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
+or `max`. Empty uses the environment baseline (`AGENT_THINKING_LEVEL`, default
+`medium`); omitted leaves an existing preference unchanged. GET returns the
+saved `thinking_level` alongside the provider, model, and masked key hint.
+An empty `api_key` keeps the stored key for the same provider, so changing
+thinking or model does not require re-entering it. Invalid thinking levels
+return `400`. These settings are per owner and apply when chats or widget
+sessions start or resume. In hosted/platform mode all key/settings methods
+return `404`, stored personal preferences are ignored, and only the environment
+baseline is used.
 
 A conversation is kept as Pi's own session file and tied to the artifact
 version it was last working against (`version_seq`, read against `head_seq`);
@@ -444,17 +455,22 @@ screenshot + selector to your next prompt. See [docs/agent.md](./docs/agent.md).
 POST   /api/shares                 Create anonymous link {"artifact_id":"..."}
 POST   /api/shares                 Grant access {"artifact_id":"...","recipients":["alice"]}
 GET    /api/artifacts/:id/shares    List the owner's anonymous link and grants
-DELETE /api/shares/:id             Revoke a link or grant (owner only)
+DELETE /api/shares/:id             Revoke an anonymous link (owner only)
+DELETE /api/artifacts/:id/grants?recipient=:userID  Revoke a grant (owner only)
 GET    /s/:shareID                 View anonymously shared artifact (render origin)
 ```
 
-An anonymous link is a capability URL: anyone holding it can view the artifact without an account. It resolves on the render origin under the artifact's own CSP. Each artifact has at most one anonymous link; creating another returns `409`. Send `{"artifact_id":"...","replace":true}` to rotate it atomically, invalidating the old URL. A successful link create or replacement returns `201` with `share` and `share_url`.
+An anonymous link is a capability URL: anyone holding it can view the artifact without an account. It resolves on the render origin under the artifact's own CSP. Each artifact has at most one anonymous link; creating another returns `409`. Send `{"artifact_id":"...","replace":true}` to rotate it atomically, invalidating the old URL. A successful link create or replacement returns `201` with `share` (`id`, `artifact_id`) and `share_url`. Migration 039 preserves existing link ids and their URLs (Exh-grj9).
 
-For restricted access, supply `recipients` with account login names or email addresses. This creates directed grants: recipients sign in and open the ordinary `/artifacts/:id` page. A grant's ID cannot be used as an anonymous `/s/:shareID` link. The response is `200` with a `results` entry per name (`granted`, `already_shared`, `unknown`, `ambiguous`, or `self`). `replace` is refused on grant requests.
+For restricted access, supply `recipients` with account login names or email addresses. This creates directed grants: recipients sign in and open the ordinary `/artifacts/:id` page. Grants have no ID; only `share_links.id` resolves at `/s/:shareID` (Exh-grj9). The response is `200` with a `results` entry per name (`granted`, `already_shared`, `unknown`, `ambiguous`, or `self`). `replace` is refused on grant requests. The store uses separate `CreateGrant` and `CreateAnonymousLink` paths; a grant requires a positive recipient ID, so a missing recipient cannot publish a link.
 
-`public` is no longer a share field. Any create request carrying it, including `public: false`, `public: true`, or `public: null`, returns `400` before creating or replacing any link or grant. Omit it and use `recipients` when access should require a named account. Share responses omit `public`; the presence of a recipient distinguishes a directed grant from an anonymous link.
+`public` is no longer a share field. Any create request carrying it, including `public: false`, `public: true`, or `public: null`, returns `400` before creating or replacing any link or grant. Omit it and use `recipients` when access should require a named account. Link responses omit `public` and `recipient_id`; grants are addressed by artifact and recipient.
 
-A share has no lifetime of its own: it is live from the moment it is minted until the row is deleted, and `DELETE /api/shares/:id` is how it ends. There is no expiry, and a create request carrying `expires_at` is refused with `400` rather than quietly given a link that never expires.
+`GET /api/artifacts/:id/shares` returns `link` (`id`, `url`) and `grants` (`recipient_id`, `name`, `disabled`). Grants expose no row ID. Revoke by artifact and recipient query parameter; a missing or invalid recipient is `400`. A successful revoke returns `204`; a missing grant, unknown artifact or non-owner returns `404`, matching link deletes.
+
+`DELETE /api/shares/:id` removes only the anonymous link and leaves every grant intact. A grant's row ID returns `404`, just like an ID never issued; revoke grants only through the artifact and recipient route.
+
+A share has no lifetime of its own: it is live from the moment it is minted until the row is deleted, using the applicable revoke route above. There is no expiry, and a create request carrying `expires_at` is refused with `400` rather than quietly given a link that never expires.
 
 ## Your own account
 
@@ -466,7 +482,9 @@ Erases the caller's account and everything this instance holds for it: every art
 
 The route takes **no id**. It acts on the account the request's own session resolved to and cannot name another, which is why a session is the whole authorization for it; `/api/admin/*` is where acting on somebody else lives. A request carrying the service token instead of a session is answered `404`: that credential is not a person, and would otherwise resolve to the single-user default owner. The exact `confirm` phrase is required (`400` otherwise), and the instance's last enabled admin is refused (`409`) — promote somebody else first.
 
-Deleting here cannot touch the identity provider that issued the login. The same person signing in again gets a **new, empty** account, because `external_id` is unique and the row is created at first login.
+For self-hosted OIDC, deletion leaves the identity provider untouched. The same person signing in again gets a **new, empty** account.
+
+For hosted Clerk accounts, deletion also removes the Clerk user through the backend SDK. Sessions are revoked first, and the local transaction records the identity deletion before the provider call. A provider failure after local erasure returns `202` with a JSON `message` explaining that sign-in account deletion is pending; the server retries at startup and every minute. Deleted identities are permanently blocked from recreating an Exhibit account. Deleting a Clerk user does not delete upstream Google, Apple, or other provider accounts. Clerk's own self-deletion control remains disabled so it cannot bypass Exhibit cleanup and the last-administrator guard.
 
 ## Render surface
 
@@ -480,7 +498,7 @@ GET  /s/:shareID/og.png  Link-preview image of a share: its widget, or the logo 
 GET  /og.png           The generic link-preview card (Exhibit's logo)
 ```
 
-A share document carries OpenGraph tags (`og:title`, `og:description`, `og:image`, `og:type`, `og:url`, `og:site_name`, `og:image:*`, `twitter:card`) naming the artifact and pointing `og:image` at `/s/:shareID/og.png`, a 1056x528 PNG of the share's widget. That route is `no-store`, and it serves the logo card when the instance runs no headless browser (`CHROMIUM_CDP_URL`) or the snapshot fails. Any id that is not a live anonymous link (a grant's id, a revoked link, or one never issued) gets the same `404` page, which carries only Exhibit's generic tags. See `security.md` §1.10.
+A share document carries OpenGraph tags (`og:title`, `og:description`, `og:image`, `og:type`, `og:url`, `og:site_name`, `og:image:*`, `twitter:card`) naming the artifact and pointing `og:image` at `/s/:shareID/og.png`, a 1056x528 PNG of the share's widget. That route is `no-store`, and it serves the logo card when the instance runs no headless browser (`CHROMIUM_CDP_URL`) or the snapshot fails. Any id that is not a live anonymous link (a legacy grant id, a revoked link, or one never issued) gets the same `404` page, which carries only Exhibit's generic tags. See `security.md` §1.10.
 
 The render surface sets `Content-Security-Policy` from the artifact's approved origins (its `decision='allow'` rows in `artifact_network_origins`), injects the storage shim with the artifact's state inlined, and serves the document `Cache-Control: no-store`. The iframe has `sandbox="allow-scripts"` without `allow-same-origin`, giving it an opaque origin.
 

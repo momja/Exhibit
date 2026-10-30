@@ -46,7 +46,7 @@ func TestHTMLRoutesRenderStyled404(t *testing.T) {
 			assert.Contains(t, page, `class="exhibit-404__frame"`,
 				"the 404 hero is the brand mark knocked off level")
 			assert.Contains(t, page, "Nothing hanging here.")
-			assert.Contains(t, page, `<link rel="stylesheet" href="/assets/gallery/notfound.css">`)
+			assert.Contains(t, page, `<link rel="stylesheet" href="`+assetURL("gallery/notfound.css")+`">`)
 			// The way out is the app's real controls, not decoration: the
 			// gallery link and a GET form the index already answers via ?q=.
 			assert.Contains(t, page, `<form class="exhibit-404__find" action="/" method="get">`)

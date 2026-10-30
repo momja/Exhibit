@@ -2,23 +2,18 @@
  * /assets/gallery/login.css. Loads after tokens.css (design tokens) and
  * components.css (.btn/.field), so only sign-in-specific rules live here.
  *
- * One centred card on the gallery's own ground, with the brand mark above it.
- * There is no header: the header's controls all lead somewhere this visitor
- * cannot go yet, and a chrome bar with nothing usable in it reads as a page
- * that failed rather than a door.
+ * One centred card below the shared app header. Authentication pages supply
+ * branding and a page title without signed-in navigation or account controls.
  */
 *{box-sizing:border-box;margin:0;padding:0}
-.login-page{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:var(--space-8)}
+.login-page{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh;display:flex;flex-direction:column}
+
+.login-content{flex:1;display:flex;align-items:center;justify-content:center;padding:var(--space-8);min-width:0}
 
 /* min-width:0 so a long error message wraps inside the card instead of
  * widening it past the max. */
 .login{width:100%;min-width:0;max-width:380px;background:var(--color-panel);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:32px var(--space-8) var(--space-8);display:flex;flex-direction:column;align-items:center}
 
-/* The mark is the same inline SVG the gallery header carries; the wrapper is
- * what sizes it, since the SVG itself is drawn at its own intrinsic size. */
-.login-mark{display:flex;margin-bottom:var(--space-6)}
-.login-mark .logo{height:56px;width:auto;display:block}
-.login-title{font-size:22px;font-weight:600;letter-spacing:-.01em}
 .login-sub{margin-top:var(--space-2);font-size:14px;color:var(--color-muted)}
 
 /* Failed sign-in. Tinted rather than loud: getting a password wrong is an

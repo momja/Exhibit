@@ -35,7 +35,10 @@ function mount(textarea) {
     html(),
     theme.of(themeFor(darkScheme.matches)),
     EditorView.updateListener.of((update) => {
-      if (update.docChanged) textarea.value = update.state.doc.toString();
+      if (update.docChanged) {
+        textarea.value = update.state.doc.toString();
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
     }),
   ];
   if (textarea.placeholder) extensions.push(placeholder(textarea.placeholder));

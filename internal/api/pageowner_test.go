@@ -58,14 +58,12 @@ type pageOwnerRoute struct {
 	ownerScoped bool
 	ownPath     string
 	foreignPath string
-	// scopedByHandler marks a route that IS owner-scoped but not by this
-	// walk's own mechanism (sessionGate + ownerMiddleware resolving the owner
-	// for a handler that trusts ownerIDFromCtx). Its handler resolves the
-	// owner itself instead — the SSE route is the one case, because
-	// EventSource sets no headers and so cannot sit behind either middleware.
-	// This is a distinct claim from "not owner-scoped at all" (why alone):
-	// the row still promises per-owner isolation, just proven by a different
-	// test, which coveredBy must name.
+	// scopedByHandler marks routes whose principal scope is proven by a
+	// dedicated test instead of this walk's ordinary-library fixture. The
+	// SSE handler resolves its own owner; shared galleries need grants and
+	// links absent from that fixture. Their tests must also prove that the
+	// page group supplies the single-user principal.
+	// This still promises principal isolation, backed by coveredBy.
 	scopedByHandler bool
 	// coveredBy is the test file that pins ownership for a scopedByHandler
 	// row, since this walk cannot exercise it directly. Required exactly when
@@ -80,6 +78,13 @@ type pageOwnerRoute struct {
 // appOriginGETOwnerScope is every GET route the app mux registers. A route
 // missing from here fails the walk on purpose.
 var appOriginGETOwnerScope = []pageOwnerRoute{
+	// These selections need grants/links, unlike the ordinary owner library.
+	// Their dedicated tests cover both session and single-user principals.
+	{route: "/shared", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Viewer selection; TestSharedGalleryRoutesResolveSingleUserOwner and TestSharedGalleryRecipientCardsAndRevocation"},
+	{route: "/shared-by-me", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Owner shared-only selection; TestSharedGalleryRoutesResolveSingleUserOwner and TestSharedByGallerySelection"},
+	{route: "/partials/gallery-grid/shared", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Same viewer selection as /shared"},
+	{route: "/partials/gallery-grid/shared-by-me", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Same owner shared-only selection as /shared-by-me"},
+	{route: "/artifacts/{artifactID}/widget/viewer/open", ownerScoped: true, ownPath: "/artifacts/{id}/widget/viewer/open", foreignPath: "/artifacts/{id}/widget/viewer/open"},
 	// The server-rendered pages and their htmx fragments: everything that
 	// reads the library on the visitor's behalf without going through the
 	// API's auth group. These are the routes this ticket is about.
@@ -110,6 +115,10 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 		ownPath: "/partials/asset-panel?artifact={id}", foreignPath: "/partials/asset-panel?artifact={id}"},
 	{route: "/partials/tag-panel", ownerScoped: true,
 		ownPath: "/partials/tag-panel?artifact={id}", foreignPath: "/partials/tag-panel?artifact={id}"},
+	{route: "/partials/edit-versions", ownerScoped: true,
+		ownPath: "/partials/edit-versions?artifact={id}", foreignPath: "/partials/edit-versions?artifact={id}"},
+	{route: "/partials/edit-origins", ownerScoped: true,
+		ownPath: "/partials/edit-origins?artifact={id}", foreignPath: "/partials/edit-origins?artifact={id}"},
 	// The capability badge + popover (av-mf1x). Owner-scoped like the detail
 	// page it is swapped into: another tenant without a grant gets the 404
 	// the page gives them, while a recipient with a grant reads the posture
@@ -154,6 +163,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	// route takes no id, so there is nothing to point it at somebody else
 	// with. That is what makes a bare session sufficient authorization for it
 	// where /admin/users needs adminOnly.
+	{route: "/settings", why: "settings read only the session owner; compatibility alias /profile exercises the same handler"},
 	{route: "/profile", why: "reads the caller's own users row and no library data; the account it names comes from ownerIDFromCtx, never from the request, so there is no foreign id it could be aimed at"},
 
 	// Static and instance-level surfaces: nothing per-visitor to scope.

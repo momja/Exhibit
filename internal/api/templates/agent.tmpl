@@ -18,25 +18,14 @@
 {{template "pwaHead"}}
 {{template "clerkScripts" .Clerk}}
 <title>Agent — Exhibit</title>
-<link rel="stylesheet" href="/assets/phosphor/regular.css">
-<link rel="stylesheet" href="/assets/gallery/tokens.css">
-{{/* components.css joins the other pages' layering here (tokens → components →
-     page sheet) because the preview pane now renders the shared cardWidget
-     component (av-fafu). agent.css still loads last, so its own .btn/.spacer
-     definitions keep winning. */}}
-<link rel="stylesheet" href="/assets/gallery/components.css">
-<link rel="stylesheet" href="/assets/gallery/agent.css">
-<script src="/assets/htmx/htmx.min.js"></script>
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/agent.css"}}">
+<script src="{{asset "htmx/htmx.min.js"}}"></script>
 </head>
 <body>
-<header>
-  <a href="{{.BackURL}}">←<span class="lbl"> Back</span></a>
-  <h1><i class="ph ph-robot"></i> Agent</h1>
-  {{/* Platform mode renders no key control at all (av-siqf) — not a disabled
-       one. The instance supplies the credential, and which provider and model
-       it runs is not something this page reports. */}}
-  {{if .BYOK}}<button class="key-btn" id="key-btn" onclick="openKeyModal()"><i class="ph ph-key"></i> <span id="key-btn-label">API key</span></button>{{end}}
-</header>
+{{template "appHeader" .Header}}
 {{if not .AgentEnabled}}<div class="banner-err">Agent support is disabled: the <code>pi</code> binary was not found on this server.</div>{{end}}
 <div class="pane-switch">
   <div class="pane-tabs" role="tablist" aria-label="Chat or preview">
@@ -110,6 +99,18 @@
     <label for="key-model">Model</label>
     <input type="text" id="key-model" list="model-suggestions" placeholder="e.g. claude-sonnet-4-5">
     <datalist id="model-suggestions"></datalist>
+    <label for="key-thinking">Thinking level</label>
+    <select id="key-thinking" aria-describedby="key-thinking-help">
+      <option value="">Use server default</option>
+      <option value="off">Off</option>
+      <option value="minimal">Minimal</option>
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+      <option value="xhigh">Extra high</option>
+      <option value="max">Max</option>
+    </select>
+    <p class="note" id="key-thinking-help">Higher levels can take longer. Available levels depend on the model. Applies to new or resumed conversations.</p>
     <label for="key-secret">API key</label>
     <input type="password" id="key-secret" placeholder="sk-…" autocomplete="off">
     <div id="key-error" class="modal-error" hidden></div>
@@ -138,18 +139,18 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const BYOK = {{if .BYOK}}true{{else}}false{{end}};
 let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 </script>
-<script src="/assets/gallery/api.js"></script>
-<script src="/assets/gallery/state-api.js"></script>
-<script src="/assets/gallery/network-prompt.js"></script>
+<script src="{{asset "gallery/api.js"}}"></script>
+<script src="{{asset "gallery/state-api.js"}}"></script>
+<script src="{{asset "gallery/network-prompt.js"}}"></script>
 {{/* components.js carries the widget-tile health watcher (av-fafu); the
      preview pane renders a tile, so it needs it like the gallery does. */}}
-<script src="/assets/gallery/components.js"></script>
-<script type="module" src="/assets/gallery/agent.js"></script>
+<script src="{{asset "gallery/components.js"}}"></script>
+<script type="module" src="{{asset "gallery/agent.js"}}"></script>
 {{template "directOpenPrompt" .DirectOpen}}
-<script type="module" src="/assets/gallery/direct-open.js"></script>
-<script type="module" src="/assets/gallery/agent-resize.js"></script>
-<script type="module" src="/assets/gallery/agent-questions.js"></script>
-<script type="module" src="/assets/gallery/message-actions.js"></script>
+<script type="module" src="{{asset "gallery/direct-open.js"}}"></script>
+<script type="module" src="{{asset "gallery/agent-resize.js"}}"></script>
+<script type="module" src="{{asset "gallery/agent-questions.js"}}"></script>
+<script type="module" src="{{asset "gallery/message-actions.js"}}"></script>
 </body>
 </html>{{end}}
 

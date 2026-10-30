@@ -420,8 +420,8 @@ func (ro *Router) authLogout(w http.ResponseWriter, r *http.Request) {
 // SSO/SSOHref are present only when a provider is *also* configured. The page
 // exists to offer a choice, and it must not offer one that does not exist.
 type loginPageData struct {
+	Header   appHeaderView
 	Favicon  template.URL
-	LogoSVG  template.HTML
 	Next     string
 	Username string
 	Error    string
@@ -433,8 +433,8 @@ type loginPageData struct {
 // safeNext — it is rendered into a hidden field and posted straight back.
 func (ro *Router) renderLogin(w http.ResponseWriter, r *http.Request, status int, next, username, errMsg string) {
 	data := loginPageData{
+		Header:   authPageHeader("Sign in"),
 		Favicon:  template.URL(exhibitLogoDataURI),
-		LogoSVG:  template.HTML(exhibitLogoSVG),
 		Next:     next,
 		Username: username,
 		Error:    errMsg,

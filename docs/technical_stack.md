@@ -358,6 +358,18 @@ behavior has ended up in one file. A module names its dependencies, so it can
 hold one component or one concern, and the page script becomes the list of
 modules it imports.
 
+**Asset URLs name the build (Exh-hl64).** Templates write
+`{{asset "gallery/index.js"}}`, never a literal `/assets/` path. It yields
+`/assets/v/<version>/gallery/index.js`, where the version hashes every embedded
+file, and that response is `Cache-Control: immutable`: a relaunched page reuses
+its scripts and styles without a round trip each, which on a phone is most of
+the wait. Versioning the whole tree rather than each file is what lets modules
+stay unbundled: a relative import resolves inside the same prefix, so it is
+versioned too. The unversioned paths still serve, revalidating by content
+ETag, for files named directly (manifest icons, a stylesheet's absolute
+`url()`). `TestPagesReferenceOnlyVersionedAssets` fails on a template that
+spells a path out.
+
 The browser resolves the imports, so the build doesn't change.
 `web/gallery/build.mjs` still copies each file verbatim, and the Go tests that
 assert on served bytes still read the source as written. Its `node --check`

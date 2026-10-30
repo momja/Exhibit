@@ -25,17 +25,8 @@ func serveShareRaw(t *testing.T, rd *Renderer, shareID string) *httptest.Respons
 	return w
 }
 
-// av-lrae: grants and anonymous links share one table, and /s/:id resolves a
-// row by id alone — so the moment the accessor stops distinguishing them,
-// every grant id becomes a working public URL. Grant an artifact to three
-// people and you have silently minted three unguessable links serving it to
-// anyone with no account; switch the public link off believing the artifact is
-// now private, and three ids still serve it.
-//
-// Both halves are asserted in one test on purpose. Each is only interesting
-// against the other: a refusal that also refused the link would be a broken
-// share route, and a link that served would say nothing about the grant. A
-// refactor that breaks either shows up here against the one it did not break.
+// Exh-grj9: a grant makes the ordinary artifact readable by its recipient,
+// but guessing that artifact id at /s/:id must not publish it.
 func TestAShareLinkServesAndAGrantIsNotAURL(t *testing.T) {
 	rd, st := newTestRenderer(t, "abc", "<html><head></head><body>shared</body></html>")
 	ctx := context.Background()
@@ -44,15 +35,16 @@ func TestAShareLinkServesAndAGrantIsNotAURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateShare(ctx, 1, &store.Share{ID: "the-link", ArtifactID: "abc"}); err != nil {
+	createdLink, err := st.CreateAnonymousLink(ctx, 1, "abc")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateShare(ctx, 1, &store.Share{
-		ID: "the-grant", ArtifactID: "abc", RecipientID: &recipient.ID}); err != nil {
+	_, err = st.CreateGrant(ctx, 1, "abc", recipient.ID)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if w := serveShareRaw(t, rd, "the-link"); w.Code != 200 {
+	if w := serveShareRaw(t, rd, createdLink.ID); w.Code != 200 {
 		t.Fatalf("the anonymous link must still serve the artifact, got %d: %s", w.Code, w.Body.String())
 	}
 
@@ -60,28 +52,35 @@ func TestAShareLinkServesAndAGrantIsNotAURL(t *testing.T) {
 	// id that was never issued gets — otherwise the route answers whether a
 	// given id names a live grant, which is a membership oracle over exactly
 	// the ids a grant model must not leak.
-	grant := serveShareRaw(t, rd, "the-grant")
+	grant := serveShareRaw(t, rd, "abc")
 	unknown := serveShareRaw(t, rd, "no-such-share")
 	if grant.Code != 404 {
-		t.Fatalf("a grant id must not serve the artifact at /s/, got %d: %s", grant.Code, grant.Body.String())
+		t.Fatalf("a granted artifact id must not serve the artifact at /s/, got %d: %s", grant.Code, grant.Body.String())
 	}
 	if grant.Code != unknown.Code || grant.Body.String() != unknown.Body.String() {
-		t.Fatalf("a grant id must answer exactly what an unissued id answers: %d %q vs %d %q",
+		t.Fatalf("a granted artifact id must answer exactly what an unissued id answers: %d %q vs %d %q",
 			grant.Code, grant.Body.String(), unknown.Code, unknown.Body.String())
 	}
 
 	// Revoking the link revokes public reach, in full. The grant row outlives
 	// it — that is the point of a grant — and must not keep the artifact
 	// publicly served afterwards.
-	if err := st.DeleteShare(ctx, 1, "the-link"); err != nil {
+	if err := st.DeleteShare(ctx, 1, createdLink.ID); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"the-link", "the-grant"} {
+	for _, id := range []string{createdLink.ID, "abc"} {
 		if w := serveShareRaw(t, rd, id); w.Code != 404 {
 			t.Fatalf("nothing may serve %q publicly once the link is revoked, got %d", id, w.Code)
 		}
 	}
-	if sh, err := st.GetShare(ctx, 1, "the-grant"); err != nil || sh == nil {
+	shares, err := st.ListArtifactShares(ctx, 1, "abc")
+	if err != nil || len(shares) != 1 {
+		t.Fatalf("revoking the public link must leave exactly the grant: %v %v", shares, err)
+	}
+	if sh := shares[0]; sh.ID != "" || sh.RecipientID == nil || *sh.RecipientID != recipient.ID {
+		t.Fatalf("revoking the public link must leave the grant unchanged: %+v", sh)
+	}
+	if sh, err := st.GetArtifactReadableBy(ctx, store.ViewerID(recipient.ID), "abc"); err != nil || sh == nil {
 		t.Fatalf("revoking the public link must not revoke the grant: %v %v", sh, err)
 	}
 }

@@ -256,8 +256,7 @@ func TestMemoryStaysBoundedUnderManyDistinctKeys(t *testing.T) {
 	const total = 100_000
 	for i := 0; i < total; i++ {
 		key := fmt.Sprintf("attacker-%d", i)
-		l.retryAfter(key)
-		l.penalise(key)
+		require.Zero(t, l.reserve(key))
 		// Sampled, not every iteration: the bound holds throughout, but
 		// asserting 100,000 times buys nothing a sparser check doesn't.
 		if i%1000 == 0 {
@@ -269,7 +268,7 @@ func TestMemoryStaysBoundedUnderManyDistinctKeys(t *testing.T) {
 	// Eviction drops the oldest generation, not the traffic in front of the
 	// limiter: a key that is being used right now is still counted.
 	for i := 0; i < int(perUsernameFailures.burst); i++ {
-		l.penalise("still-here")
+		require.Zero(t, l.reserve("still-here"))
 	}
 	assert.NotZero(t, l.retryAfter("still-here"))
 }
@@ -290,8 +289,8 @@ func TestFullyRefilledKeysAreForgotten(t *testing.T) {
 	clock := newTestClock()
 	l := newKeyedLimiter(perUsernameFailures, 64, clock.now)
 
-	l.penalise("someone")
-	l.penalise("someone")
+	require.Zero(t, l.reserve("someone"))
+	require.Zero(t, l.reserve("someone"))
 	require.Equal(t, 1, l.size())
 
 	clock.advance(perUsernameFailures.refill)
@@ -309,9 +308,9 @@ func TestBudgetRefillsWithTheClock(t *testing.T) {
 	clock := newTestClock()
 	l := newKeyedLimiter(rateLimit{burst: 2, refill: 10 * time.Second}, 8, clock.now)
 
-	l.penalise("k")
+	require.Zero(t, l.reserve("k"))
 	require.Zero(t, l.retryAfter("k"), "one of two spent")
-	l.penalise("k")
+	require.Zero(t, l.reserve("k"))
 	assert.InDelta(t, float64(10*time.Second), float64(l.retryAfter("k")), float64(time.Millisecond))
 
 	clock.advance(4 * time.Second)
@@ -327,10 +326,10 @@ func TestBudgetDoesNotAccumulatePastTheBurst(t *testing.T) {
 	clock := newTestClock()
 	l := newKeyedLimiter(rateLimit{burst: 2, refill: 10 * time.Second}, 8, clock.now)
 
-	l.penalise("k")
+	require.Zero(t, l.reserve("k"))
 	clock.advance(7 * 24 * time.Hour)
-	l.penalise("k")
-	l.penalise("k")
+	require.Zero(t, l.reserve("k"))
+	require.Zero(t, l.reserve("k"))
 	assert.NotZero(t, l.retryAfter("k"), "still exactly two failures' worth, no more")
 }
 

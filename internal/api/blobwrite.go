@@ -53,10 +53,7 @@ func (ro *Router) storeInitialArtifact(ctx context.Context, a *store.Artifact, b
 // request refused because of this ticket, which is the one thing it promised
 // not to do — and would leave the caller unable to tell that their artifact is
 // in fact there.
-func putBlob(ctx context.Context, st store.Store, blobs blob.Store, blobID string, r io.Reader) error {
-	return putMeasuredBlob(ctx, st, blobs, blobID, r, false)
-}
-
+//
 // With quotas enabled, an unrecorded blob cannot be published: its missing
 // length would let later writes spend space that is already occupied. The
 // caller stages bytes and only commits their references after this succeeds.

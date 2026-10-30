@@ -8,26 +8,23 @@
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
 {{template "clerkScripts" .Clerk}}
-<link rel="stylesheet" href="/assets/phosphor/regular.css">
-<link rel="stylesheet" href="/assets/gallery/tokens.css">
-<link rel="stylesheet" href="/assets/gallery/components.css">
-<link rel="stylesheet" href="/assets/gallery/edit.css">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/edit.css"}}">
 {{/* htmx drives the widget panel's preview swap (av-fafu); self-hosted from
      the app origin like every other asset, never a CDN. */}}
-<script src="/assets/htmx/htmx.min.js"></script>
+<script src="{{asset "htmx/htmx.min.js"}}"></script>
 </head>
-<body>
-<header>
-  <a href="/artifacts/{{.ID}}">← Back</a>
-  <h1>Edit Artifact</h1>
-  <span class="spacer"></span>
-</header>
+<body data-controller="unsaved-changes" data-editor-return-url="{{.Return.URL}}" data-action="click->unsaved-changes#navigate input->unsaved-changes#refresh change->unsaved-changes#refresh exhibit:editor-changed->unsaved-changes#refresh exhibit:editor-exit->unsaved-changes#allowExit pageshow@window->unsaved-changes#restore beforeunload@window->unsaved-changes#beforeUnload">
+{{template "appHeader" .Header}}
 <main>
+<div class="edit-heading"><div><p class="text-sm muted">Editing artifact</p><h1 id="edit-title">{{.Title}}</h1></div><span class="text-sm muted" role="status" data-unsaved-changes-target="status">All changes saved</span></div>
 <div class="edit-card">
-  <h2>Edit</h2>
 
   {{/* The title is the one field that belongs to no section, so it stays
        above them rather than being buried in one. */}}
+  <label class="text-sm muted" for="title">Artifact title</label>
   <input type="text" id="title" value="{{.Title}}" placeholder="Title">
 
   {{/* The page is peer sections — tags, security, state, artifact source,
@@ -53,40 +50,11 @@
     <summary id="security-summary">{{template "panelCaret"}} <span id="security-summary-text"></span></summary>
     <div class="panel-body security-body">
       <div class="security-col">
-        <h3 class="text-sm muted">Network allowlist</h3>
-        <div id="allowlist-rows">
-          {{range .Allowlist}}<div class="allowlist-row" data-origin="{{.}}">
-            <code title="{{.}}">{{.}}</code>
-            <button type="button" class="btn btn-sm btn-sec" data-action="remove">Remove</button>
-          </div>{{end}}
-        </div>
-        {{if .Unapproved}}
-        <h3 class="text-sm muted">Referenced, not approved</h3>
-        <div id="unapproved-rows">
-          {{range .Unapproved}}<div class="allowlist-row" data-origin="{{.}}">
-            <code title="{{.}}">{{.}}</code>
-            <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
-          </div>{{end}}
-        </div>
-        {{end}}
-        {{if .Blocked}}
-        {{/* Origins with an explicit block decision (exhibit-x87). They never
-             reach the CSP; they are listed so a "don't ask again" answer stays
-             visible and reversible instead of reading as merely undecided. */}}
-        <h3 class="text-sm muted">Blocked</h3>
-        <div id="blocked-rows">
-          {{range .Blocked}}<div class="allowlist-row" data-origin="{{.}}">
-            <code title="{{.}}">{{.}}</code>
-            <span class="text-sm muted">blocked</span>
-            {{/* Forget drops the decision entirely rather than overriding it,
-                 returning the origin to undecided so the runtime prompt may ask
-                 again (av-kmwj). Without it, "don't ask again" is a one-way
-                 trap: a blocked origin never prompts on its own. */}}
-            <button type="button" class="btn btn-sm btn-sec" data-action="forget">Forget</button>
-            <button type="button" class="btn btn-sm" data-action="allow">Allow</button>
-          </div>{{end}}
-        </div>
-        {{end}}
+        <div id="origin-lists"
+             hx-get="/partials/edit-origins?artifact={{.ID}}"
+             hx-trigger="exhibit:origin-draft-changed from:body"
+             hx-sync="this:replace"
+             hx-swap="innerHTML">{{template "editOriginLists" .}}</div>
         <div class="row" style="margin-top:8px">
           <input type="text" id="al-add-input" class="field" placeholder="Add origin (https://example.com)">
           <button type="button" class="btn btn-sm" id="al-add-btn">Add</button>
@@ -252,7 +220,7 @@
       <div class="widget-source">
         <textarea id="widget-src" data-revision="{{.WidgetRevision}}" spellcheck="false" placeholder="A complete HTML document for the tile. Leave this empty to keep the default tile.">{{.WidgetSrc}}</textarea>
         {{/* Generate takes no prompt: the button IS the request, and the whole
-             instruction lives server-side (widget.go's generateWidgetPrompt
+             instruction lives server-side (agent.GenerateWidgetPrompt, prompts/generate_widget.tmpl
              plus the session's WidgetOnly system prompt), so there is nothing
              here for a caller to put into the model's context. Disabled with
              its reason in the title when the agent can't run. */}}
@@ -273,7 +241,7 @@
        below and writes nothing; restoring reloads the page, because the source
        editor above holds the old text. */}}
   <details class="details-panel" id="versions-panel">
-    <summary>{{template "panelCaret"}} Versions ({{len .Versions}})</summary>
+    <summary>{{template "panelCaret"}} Versions</summary>
     <div class="panel-body">
       <p class="text-sm muted">
         Every change to this artifact's source or widget is kept, together with the data it
@@ -286,32 +254,26 @@
            looking is how a person decides, so deciding is offered where they
            are looking. Empty until a version is viewed. */}}
       <div id="version-viewer-slot"></div>
-      <div id="versions-rows">
-        {{range .Versions}}<div class="version-row" data-seq="{{.Seq}}">
-          <span class="version-seq">v{{.Seq}}</span>
-          <span class="version-what"><strong>{{.Label}}</strong>{{if .Message}} <span class="muted">— {{.Message}}</span>{{end}}</span>
-          <time class="text-sm muted version-when" datetime="{{.WhenISO}}">{{.When}}</time>
-          {{if .Current}}<span class="text-sm muted">current</span>{{else}}<button type="button" class="btn btn-sm btn-sec" data-action="view" data-seq="{{.Seq}}" hx-get="/partials/version-viewer?artifact={{$.ID | urlquery}}&amp;seq={{.Seq}}&amp;restorable=1" hx-target="#version-viewer-slot" hx-swap="innerHTML"><i class="ph ph-eye"></i> View</button> <button type="button" class="btn btn-sm btn-sec" data-action="restore" data-seq="{{.Seq}}"><i class="ph ph-arrow-counter-clockwise"></i> Restore</button>{{end}}
-        </div>{{end}}
-      </div>
+      <div id="versions-rows" hx-get="/partials/edit-versions?artifact={{.ID}}" hx-trigger="exhibit:artifact-saved from:body, exhibit:widget-saved from:body" hx-swap="innerHTML" hx-sync="this:replace">{{template "editVersionRows" .}}</div>
       <span id="versions-status" class="text-sm muted"></span>
     </div>
   </details>
 
   <div class="btn-row">
-    <button class="btn" id="save-button" onclick="save()"><i class="ph ph-check"></i> Save</button>
-    <a href="/artifacts/{{.ID}}"><button class="btn btn-sec" type="button"><i class="ph ph-x"></i> Cancel</button></a>
-    <span id="status"></span>
+    <a class="btn btn-sec" href="{{.Return.URL}}">Return to {{.Return.Label}}</a>
+    <span id="status" role="status"></span>
     <span class="spacer"></span>
-    <button class="btn btn-danger" type="button" onclick="deleteArtifact()"><i class="ph ph-trash"></i> Delete</button>
+    <button class="btn btn-danger" type="button" data-delete-artifact><i class="ph ph-trash" aria-hidden="true"></i> Delete</button>
   </div>
 </div>
 </main>
 {{template "editTagModal" .Presets}}
+{{template "editorLeaveDialog"}}
+{{template "componentScripts"}}
 {{/* components.js carries the widget-tile health watcher (av-fafu), which the
      widget panel's preview needs like any other page rendering a tile. */}}
-<script src="/assets/gallery/components.js"></script>
-<script src="/assets/editor.js"></script>
+<script src="{{asset "gallery/components.js"}}"></script>
+<script src="{{asset "editor.js"}}"></script>
 <script>
 const TOKEN = {{.Token}};
 {{/* READ_ONLY and TOKEN are one decision, made server-side per request
@@ -326,7 +288,8 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const ID = {{.ID}};
 {{/* The persisted title, not the (editable) title field: the erase-all
      confirmation must name the artifact the server will actually wipe. */ -}}
-const TITLE = {{.Title}};
+let TITLE = {{.Title}};
+const INITIAL_SOURCE_FOOTPRINT = {{.NetworkFootprint}};
 let allowlist = {{.Allowlist}};
 let unapproved = {{.Unapproved}};
 let blocked = {{.Blocked}};
@@ -340,15 +303,15 @@ let cameraApproved = {{if .CameraApproved}}true{{else}}false{{end}};
 let microphoneApproved = {{if .MicrophoneApproved}}true{{else}}false{{end}};
 let geolocationApproved = {{if .GeolocationApproved}}true{{else}}false{{end}};
 </script>
-<script src="/assets/gallery/api.js"></script>
-<script src="/assets/gallery/edit.js"></script>
-<script src="/assets/gallery/state-api.js"></script>
-<script type="module" src="/assets/gallery/state.js"></script>
-<script type="module" src="/assets/gallery/state-export.js"></script>
-<script type="module" src="/assets/gallery/assets.js"></script>
-<script type="module" src="/assets/gallery/storage-import.js"></script>
-<script type="module" src="/assets/gallery/assets-export.js"></script>
-<script type="module" src="/assets/gallery/versions.js"></script>
-<script type="module" src="/assets/gallery/tags.js"></script>
+<script src="{{asset "gallery/api.js"}}"></script>
+<script type="module" src="{{asset "gallery/edit.js"}}"></script>
+<script src="{{asset "gallery/state-api.js"}}"></script>
+<script type="module" src="{{asset "gallery/state.js"}}"></script>
+<script type="module" src="{{asset "gallery/state-export.js"}}"></script>
+<script type="module" src="{{asset "gallery/assets.js"}}"></script>
+<script type="module" src="{{asset "gallery/storage-import.js"}}"></script>
+<script type="module" src="{{asset "gallery/assets-export.js"}}"></script>
+<script type="module" src="{{asset "gallery/versions.js"}}"></script>
+<script type="module" src="{{asset "gallery/tags.js"}}"></script>
 </body>
 </html>{{end}}

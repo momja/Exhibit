@@ -3,7 +3,7 @@
 //
 // It is admin.go's opposite number, and the pairing is the point. Both pages
 // read the same `users` rows and wear the same furniture — the settings shell,
-// settings.css, the settingsHeader partial — and they differ in exactly one
+// settings.css, the appHeader partial — and they differ in exactly one
 // thing, which is the thing that matters: authority. `/admin/users` reaches
 // *other* accounts, so it passes adminOnly. `/profile` reaches one account,
 // the caller's own, so a session is the whole authorization and there is no
@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/momja/Exhibit/internal/humanize"
 	"github.com/momja/Exhibit/internal/store"
@@ -37,8 +38,8 @@ type profileAccount struct {
 	// the single-user default, and no `users` row exists behind it. The page
 	// says so rather than rendering an account it invented.
 	SignedIn bool
-	// Name is what the page puts at the top of the Account section — see
-	// profileName for how it is resolved and why the rule is not admin.go's.
+	// Name is what the page puts at the top of the Account section, resolved
+	// by store.User.DisplayName alongside shared artifact owner names.
 	Name string
 	// NameIsSubject marks a Name that came from `external_id` rather than
 	// `email`: an opaque provider subject, true but unreadable. The template
@@ -92,37 +93,6 @@ type profileAccount struct {
 	DeleteBlocked string
 }
 
-// profileName resolves the one name this page can put on the account.
-//
-// admin.go's rule is `u.Email` and nothing else (newAdminUserView), and that
-// is right for a *table*: an identity whose provider sent no email renders one
-// blank cell among many, which is cosmetic. Here the name *is* the section, so
-// the same rule renders the page's only content empty. And an empty email is a
-// shape to expect rather than a corrupt row — `users.email` is NOT NULL and
-// defaults to the empty string (migration 013), a portable second key beside
-// `external_id` rather than something an identity provider guarantees.
-//
-// So: the email when there is one; otherwise the subject the provider knows
-// this person by, which is opaque but true and is the string an operator would
-// need to find the row; otherwise nothing, and the template states the sign-in
-// route instead. A local account never reaches the second step —
-// CreateLocalUser writes the login name into both columns — so the opaque case
-// belongs to identity providers alone.
-//
-// Deliberately local to this page rather than pushed into admin.go: the
-// fallback exists because a name rendered alone must not be blank, and that is
-// a property of this layout, not of the row. If a third surface ever needs the
-// same answer, that is when it earns a shared helper.
-func profileName(u *store.User) (name string, isSubject bool) {
-	if u.Email != "" {
-		return u.Email, false
-	}
-	if u.ExternalID != "" {
-		return u.ExternalID, true
-	}
-	return "", false
-}
-
 // profilePageData feeds /profile.
 //
 // Sections, from the first one, even though only Account has content today:
@@ -130,6 +100,7 @@ func profileName(u *store.User) (name string, isSubject bool) {
 // active sessions, export — and a page laid out in cards takes each of those
 // as an addition rather than a redesign.
 type profilePageData struct {
+	Header  appHeaderView
 	Favicon template.URL
 	Account profileAccount
 	pageCredentials
@@ -156,7 +127,7 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 		return
 	default:
 		acct.SignedIn = true
-		acct.Name, acct.NameIsSubject = profileName(u)
+		acct.Name, acct.NameIsSubject = u.DisplayName()
 		acct.HasPassword = u.HasPassword
 		if err := ro.fillDeleteSection(ctx, u, &acct); err != nil {
 			serverError(w, r, "profile delete section", err)
@@ -173,10 +144,12 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 			"Its library belongs to whoever can reach the origin; removing it is the operator's to do on the host."
 	}
 
+	creds := ro.pageCredentials(r)
 	page, err := renderPage("profile", profilePageData{
+		Header:          profileHeader(creds.Clerk),
 		Favicon:         template.URL(exhibitLogoDataURI),
 		Account:         acct,
-		pageCredentials: ro.pageCredentials(r),
+		pageCredentials: creds,
 	})
 	if err != nil {
 		serverError(w, r, "profile render", err)
@@ -191,15 +164,9 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 
 // --- deleting the account (av-4wyq) ------------------------------------
 //
-// The section's copy is the hardest part of this feature, and it is load-
-// bearing rather than decorative. Deleting here erases what Exhibit holds; it
-// does not remove anyone from the identity provider that issued their login,
-// which Exhibit has no authority over (deployment.md §3.4). Because
-// `users.external_id` is UNIQUE and `UpsertUser` creates the row just in time,
-// the same person signing in again gets a **new** owner id and an empty
-// library. The confirmation says that outright. Getting it wrong is worse than
-// not shipping: someone deletes, finds their login still works, and reasonably
-// concludes nothing happened.
+// Self-hosted deletion leaves the external identity alone. Hosted deletion
+// also removes the Clerk user, through durable work queued by the local erasure
+// transaction. Provider-side self-deletion stays disabled to preserve our guard.
 
 // deleteAccountConfirmation is the phrase the confirmation requires to be
 // typed, and the API requires to be sent.
@@ -211,11 +178,8 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 // reason: the page is a client, and a client-side interlock is a courtesy to
 // whoever is clicking, never a control.
 //
-// The phrase is the *act*, not the account's name. GitHub's convention is to
-// type the resource name, but here the name can be a provider subject — an
-// opaque UUID nobody can retype — and the sentence "delete my library" carries
-// the correction this whole section exists to make: what goes is the library,
-// not the identity.
+// Keep the existing phrase as the API contract for hosted and self-hosted
+// callers; the hosted confirmation separately states that the sign-in goes too.
 const deleteAccountConfirmation = "delete my library"
 
 type deleteAccountRequest struct {
@@ -264,6 +228,7 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 
 	ownerID := ownerIDFromCtx(ctx)
 	var queued []string
+	var hostedSubject string
 	var err error
 	if ro.cfg.Clerk != nil {
 		u, lookupErr := ro.cfg.Store.GetUser(ctx, ownerID)
@@ -289,6 +254,7 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		queued, err = ro.cfg.Store.DeleteHostedAccount(ctx, ownerID, sessionCutoff)
+		hostedSubject = u.ExternalID
 	} else {
 		queued, err = ro.cfg.Store.DeleteAccount(ctx, ownerID)
 	}
@@ -321,11 +287,26 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	// person deleting their library must not be told succeeded. They do not
 	// stay on it, though — the ids are queued (av-8gyd), so the next startup
 	// finishes what this call could not.
-	if err := ro.reclaimBlobs(ctx, queued); err != nil {
+	// Once local erasure commits, finish external work even if the browser
+	// disconnects. A failed Clerk call remains queued for the background worker.
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	var identityErr error
+	if hostedSubject != "" {
+		identityErr = ro.deleteHostedIdentity(cleanupCtx, hostedSubject)
+		if identityErr != nil {
+			slog.ErrorContext(ctx, "delete hosted identity queued for retry", "error", identityErr)
+		}
+	}
+	if err := ro.reclaimBlobs(cleanupCtx, queued); err != nil {
 		serverError(w, r, "delete account blobs", err)
 		return
 	}
 
+	if identityErr != nil {
+		writeJSON(w, http.StatusAccepted, map[string]string{"message": "Your Exhibit account and library have been deleted. Your sign-in account is still being deleted; Exhibit will retry automatically. You can sign out now."})
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

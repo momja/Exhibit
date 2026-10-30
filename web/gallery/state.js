@@ -25,6 +25,7 @@
 
 import { apiFetch } from './api-module.js';
 import { withStateOperation } from './state-operations.js';
+import { registerEditorSection, editorChanged } from './editor-session.js';
 
 (function () {
   const panel = document.getElementById('state-panel');
@@ -208,6 +209,7 @@ import { withStateOperation } from './state-operations.js';
 
   function setStatus(text) {
     statusEl.textContent = text;
+    editorChanged();
   }
 
   function markDirty() {
@@ -527,7 +529,7 @@ import { withStateOperation } from './state-operations.js';
   async function saveState() {
     const doomed = entries.filter(e => e.deleted && e.saved !== null);
     const changed = entries.filter(e => !e.deleted && isChanged(e));
-    if (!doomed.length && !changed.length) { setStatus('Nothing to save.'); return; }
+    if (!doomed.length && !changed.length) { setStatus('Nothing to save.'); return true; }
     setStatus('Saving…');
     try {
       // Deletes first: a key removed and re-added in one session must end up
@@ -546,11 +548,12 @@ import { withStateOperation } from './state-operations.js';
     } catch (err) {
       setStatus('✗ ' + err.message);
       render();
-      return;
+      return false;
     }
     entries = entries.filter(e => !e.deleted);
     render();
     setStatus('✓ Saved — the artifact reads this on its next render.');
+    return true;
   }
 
   // Cancel rebuilds the working copy from what the server last confirmed, so
@@ -638,4 +641,13 @@ import { withStateOperation } from './state-operations.js';
   // Arriving at #state-panel opens the panel before this script runs, which
   // fires no toggle event.
   if (panel.open) loadState();
+  registerEditorSection('state', {
+    isDirty: () => entries.some(entry => entry.deleted ? entry.saved !== null : isChanged(entry)),
+    save: async () => {
+      const result = await withStateOperation(saveState);
+      if (!result) document.getElementById('status').textContent = statusEl.textContent;
+      return result;
+    },
+    discard: cancelEdits
+  });
 })();

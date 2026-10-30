@@ -8,13 +8,6 @@
  * each tile. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
-header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header);padding:0 16px;display:flex;align-items:center;gap:12px}
-/* The heading stays for screen-reader heading navigation but is not drawn:
- * the logo beside it already says which app this is (nw-h1dr). */
-header h1{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-header .logo{height:24px;width:auto;display:block;flex:0 0 auto}
-header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;gap:5px}
-
 /* Search in the app bar. It takes up to 340px and gives way first when the
  * bar runs out of room, so on a phone it fills whatever the logo and the two
  * icon buttons leave. min-width:0 on both the row and the input: a flex item
@@ -32,20 +25,12 @@ header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inl
  * fits the input's 30px right padding, the same slot the clear button uses. */
 .search-kbd{position:absolute;right:6px;top:50%;transform:translateY(-50%);min-width:20px;padding:1px 6px;border:1px solid var(--color-border);border-bottom-width:2px;border-radius:4px;background:var(--color-subtle);color:var(--color-muted);font:12px/16px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;pointer-events:none}
 .search-row input:focus~.search-kbd,.search-row input:not(:placeholder-shown)~.search-kbd{display:none}
-@media (pointer:coarse){.search-kbd{display:none}}
+@media (pointer:coarse),(max-width:767px){.search-kbd{display:none}}
 /* The clear control sits inside the box's right edge, where it takes no room
  * from the input when there is nothing to clear. */
 .search-clear{position:absolute;right:4px;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:var(--radius-pill);background:none;color:var(--color-muted);font-size:13px;cursor:pointer}
 .search-clear:hover{background:var(--color-hover-fill);color:var(--color-ink)}
 .search-clear[hidden]{display:none!important}
-
-/* On a phone the admin link drops its word (still its accessible name) so
- * search keeps a usable width. Same clip as .sr-only; the square box matches
- * the icon buttons beside it. */
-@media (max-width:600px){
-  header .btn:not(.icon-btn):has(.header-link-label){flex:0 0 auto;width:var(--header-control-size);height:var(--header-control-size);padding:0;justify-content:center;font-size:17px}
-  .header-link-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-}
 
 main{padding:10px 12px}
 /* min() inside the minmax: a bare 226px is a floor even when the container is
@@ -110,6 +95,62 @@ main{padding:10px 12px}
 .empty{color:var(--color-muted);font-size:14px;padding:20px 0}
 .empty a{color:var(--brand-blue)}
 
+/* A first artifact deserves more than a missing-results message. The welcome
+ * spans the grid and uses the shared palette in both color schemes. */
+.gallery-welcome{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:clamp(40px,8vh,88px) 20px 48px}
+.welcome-art{position:relative;width:340px;max-width:100%;height:200px;margin-bottom:32px;isolation:isolate}
+.welcome-art::before{content:"";position:absolute;inset:12px -24px -16px;border-radius:50%;background:radial-gradient(ellipse,var(--color-accent-tint-strong),transparent 70%);z-index:-1}
+.welcome-tool{position:absolute;width:136px;height:154px;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:16px;border:1px solid var(--color-accent-tint-border);border-radius:12px;background:var(--color-panel);box-shadow:var(--shadow-card);color:var(--color-accent);text-align:left}
+.welcome-tool>i{font-size:24px}
+.welcome-tool-timer>i{align-self:center;font-size:64px}
+.welcome-tool-list{left:0;top:28px;transform:rotate(-12deg)}
+.welcome-tool-timer{justify-content:center;left:50%;top:4px;transform:translateX(-50%);z-index:1;height:174px;background:var(--color-accent-tint)}
+.welcome-tool-chart{align-items:flex-end;right:0;top:28px;transform:rotate(12deg)}
+.welcome-checks{display:grid;grid-template-columns:14px 1fr;gap:7px;align-items:center;width:100%;font-size:14px}
+.welcome-checks>span{height:4px;border-radius:var(--radius-pill);background:var(--color-accent-tint-strong)}
+.welcome-checks>span:last-child{width:65%}
+.welcome-progress{width:100%;height:4px;border-radius:var(--radius-pill);background:var(--color-accent-tint-border);overflow:hidden}
+.welcome-progress::before{content:"";display:block;width:65%;height:100%;background:var(--color-accent)}
+.welcome-bars{display:flex;align-items:flex-end;gap:6px;height:52px;width:100%}
+.welcome-bars>span{flex:1;border-radius:3px 3px 0 0;background:var(--color-accent-tint-border);height:35%}
+.welcome-bars>span:nth-child(2){height:60%}
+.welcome-bars>span:nth-child(3){height:48%}
+.welcome-bars>span:nth-child(4){height:78%}
+.welcome-bars>span:nth-child(5){height:100%;background:var(--color-accent)}
+.welcome-eyebrow{color:var(--color-accent);font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px}
+.welcome-create{justify-content:center;gap:10px;min-height:48px;margin-top:28px;padding:12px 20px;text-decoration:none;font-size:15px}
+.welcome-create:focus-visible{outline:2px solid var(--color-accent);outline-offset:4px}
+.welcome-create .ph{font-size:18px}
+@media(max-width:480px){
+  .gallery-welcome{padding:36px 12px}
+  .welcome-art{width:280px;height:180px;margin-bottom:24px}
+  .welcome-tool{width:114px;height:140px;padding:12px}
+  .welcome-tool-timer{height:158px}
+}
+
+/* Deal the decorative cards once as the welcome partial appears. The base
+ * styles are the settled deck, so reduced motion needs no animation override. */
+@media (prefers-reduced-motion:no-preference){
+  .welcome-tool-timer{animation:welcome-deck-lift 600ms cubic-bezier(.22,1,.36,1) backwards}
+  .welcome-tool-list{animation:welcome-deck-left 800ms cubic-bezier(.22,1,.36,1) 120ms backwards}
+  .welcome-tool-chart{animation:welcome-deck-right 800ms cubic-bezier(.22,1,.36,1) 220ms backwards}
+  @keyframes welcome-deck-lift{
+    from{opacity:0;transform:translate(-50%,24px) rotate(-4deg) scale(.94)}
+    30%{opacity:1}
+    to{opacity:1;transform:translateX(-50%)}
+  }
+  @keyframes welcome-deck-left{
+    from{opacity:0;transform:translate(75%,6px) rotate(-4deg) scale(.94)}
+    25%{opacity:1}
+    to{opacity:1;transform:rotate(-12deg)}
+  }
+  @keyframes welcome-deck-right{
+    from{opacity:0;transform:translate(-75%,6px) rotate(4deg) scale(.94)}
+    25%{opacity:1}
+    to{opacity:1;transform:rotate(12deg)}
+  }
+}
+
 /* Native modal stays in the top layer above card widgets and menu popovers. */
 .duplicate-dialog h2{font-size:17px;font-weight:600;margin-bottom:20px}
 .duplicate-title-label{display:block;font-size:13px;color:var(--color-ink-mid);margin-bottom:6px}
@@ -122,3 +163,71 @@ main{padding:10px 12px}
 .duplicate-status:empty{display:none}
 .duplicate-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:22px}
 .duplicate-dialog :disabled{opacity:.65;cursor:default}
+
+.gallery-title{font-size:18px;font-weight:600;margin:6px 0 16px}
+.card-by{display:flex;align-items:center;gap:6px;padding:0 8px 7px;font-size:12px;color:var(--color-muted);min-width:0}
+.card-owner-initial{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:var(--color-subtle);color:var(--color-ink-mid);font-size:10px}
+.card-owner-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Spaces occupy a rail only when sharing has content. The aside is separate
+ * from the nav so future filter sections can sit underneath it. */
+.gallery-layout{display:grid;grid-template-columns:208px minmax(0,1fr);min-height:calc(100vh - var(--header-height))}
+.gallery-layout main{min-width:0}
+.gallery-rail{padding:10px 8px;border-right:1px solid var(--color-hairline-strong);background:var(--color-panel)}
+.gallery-spaces ul{display:flex;flex-direction:column;gap:4px;list-style:none}
+.gallery-spaces a{display:flex;align-items:center;gap:6px;min-height:44px;padding:8px;border-radius:var(--radius-md);color:var(--color-ink-mid);text-decoration:none;font-size:13px;line-height:20px}
+.gallery-spaces a:hover{background:var(--color-hover-fill)}
+.gallery-spaces a[aria-current=page]{background:var(--color-accent-tint);color:var(--color-accent);font-weight:600}
+.gallery-spaces a:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
+.gallery-spaces i{flex:0 0 auto;font-size:20px;line-height:1}
+.space-label-wide{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.space-count{flex:0 0 auto;margin-left:auto;font-size:12px;font-variant-numeric:tabular-nums}
+.space-label-short{display:none}
+
+/* At narrow widths, keep the last card and paging control above the fixed
+ * tabs, including the home indicator on phones with a safe-area inset. */
+@media (max-width:767px){
+  .gallery-layout{display:block}
+  .gallery-layout main{padding-bottom:calc(80px + env(safe-area-inset-bottom,0px));padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+  .gallery-rail{position:fixed;inset:auto 0 0;z-index:30;border-right:0;border-top:1px solid var(--color-hairline-strong);padding:4px max(8px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+  .gallery-spaces ul{flex-direction:row;gap:8px}
+  .gallery-spaces li{flex:1;min-width:0}
+  .gallery-spaces a{flex-direction:column;justify-content:center;gap:4px;min-height:56px;padding:6px 4px;font-size:12px;line-height:16px}
+  .space-label-short{display:inline}
+  .space-count{display:none}
+  .space-label-wide{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+}
+
+/* Filters share server markup in the rail and native phone dialog. */
+.gallery-filter-trigger{display:none}
+.gallery-filter-section{margin:20px 0 12px}
+.gallery-filter-section h3{padding:0 8px 6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--color-muted)}
+.gallery-filter-section ul{list-style:none}
+.gallery-filter-section a{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px;border-radius:var(--radius-md);color:var(--color-ink-mid);text-decoration:none;font-size:13px}
+.gallery-filter-section a:hover{background:var(--color-hover-fill)}
+.gallery-filter-section a[data-active=true]{background:var(--color-accent-tint);color:var(--color-accent)}
+.gallery-filter-section a>span:not(.gallery-filter-dot){min-width:0;overflow-wrap:anywhere}
+.gallery-filter-section i{margin-left:auto}
+.gallery-filter-dot{width:8px;height:8px;flex:0 0 auto;border-radius:50%;background:var(--tag-color);box-shadow:inset 0 0 0 1px var(--color-tag-ring)}
+.gallery-filter-chips{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:2px 0 10px}
+.gallery-filter-chips a{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 10px;border:1px solid var(--color-border);border-radius:var(--radius-pill);background:var(--color-panel);color:var(--color-ink-mid);font-size:12px;text-decoration:none}
+.gallery-filter-chips .gallery-filter-clear{border:0;background:none;color:var(--color-accent)}
+.gallery-filter-section a:focus-visible,.gallery-filter-chips a:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
+.gallery-filter-sheet{margin:auto auto 0;width:100%;max-width:560px;max-height:85dvh;overflow:auto;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));border:1px solid var(--color-border);border-radius:var(--radius-lg) var(--radius-lg) 0 0;background:var(--color-panel);color:var(--color-ink);box-shadow:var(--shadow-modal)}
+.gallery-filter-sheet::backdrop{background:var(--overlay)}
+.gallery-filter-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.gallery-filter-heading h2{font-size:18px;font-weight:600}
+.gallery-filter-done{width:100%;margin-top:16px;min-height:44px}
+@media (max-width:767px){
+  .search-row input:placeholder-shown{padding-right:9px}
+  .gallery-filter-trigger{display:inline-flex;flex:0 0 auto;gap:4px;padding:0 6px}
+  [data-controller~=filter-sheet]>.app-header,[data-controller~=filter-sheet]>.app-header .app-header-actions{gap:8px}
+  .gallery-rail-filters{display:none}
+  .gallery-layout-solo>.gallery-rail{display:none}
+  .gallery-layout-solo main{padding-bottom:12px}
+  .gallery-filter-chips a{min-height:44px}
+}
+
+@media (max-width:360px){
+  [data-controller~=filter-sheet]>.app-header,[data-controller~=filter-sheet]>.app-header .app-header-actions{gap:4px}
+}

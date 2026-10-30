@@ -4,10 +4,17 @@
  * edit-page-specific rules live here. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
-header{position:sticky;top:0;z-index:20;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header);padding:12px 24px;display:flex;align-items:center;gap:16px}
-header h1{font-size:18px;font-weight:600;flex:1}
-header a{color:var(--brand-blue);text-decoration:none;font-size:14px}
 main{padding:24px;max-width:900px;margin:0 auto}
+.edit-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.edit-heading h1{font-size:24px;line-height:1.25;overflow-wrap:anywhere}
+.edit-heading p{margin-bottom:4px}
+.edit-card>label{display:block;margin-bottom:6px}
+.editor-leave-dialog{margin:auto;padding:24px;border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-panel);color:var(--color-ink);width:min(480px,calc(100% - 32px));box-shadow:var(--shadow-modal)}
+.editor-leave-dialog::backdrop{background:var(--overlay)}
+.editor-leave-dialog h2{font-size:19px;margin-bottom:12px}
+.editor-leave-dialog p{font-size:14px;line-height:1.6;color:var(--color-ink-mid);margin-bottom:20px}
+.editor-leave-dialog .btn-row{flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:600px){.editor-leave-dialog .btn{min-height:44px}main{padding:20px 16px}.edit-heading{align-items:flex-start;flex-direction:column;gap:8px}.edit-heading h1{font-size:21px}.edit-card{padding:16px}.edit-card>.btn-row{flex-wrap:wrap}.editor-leave-dialog{padding:20px}.editor-leave-dialog .btn-row .btn{flex:1 1 auto}}
 .edit-card{background:var(--color-panel);border-radius:10px;padding:20px;box-shadow:var(--shadow-card)}
 .edit-card h2{font-size:15px;font-weight:600;margin-bottom:12px;color:var(--color-ink-soft)}
 .edit-card>input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:var(--field-font-size);margin-bottom:10px;outline:none}

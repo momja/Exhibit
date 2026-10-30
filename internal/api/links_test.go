@@ -97,7 +97,7 @@ func TestDetailPageRendersLinkBridge(t *testing.T) {
 
 	// Host-side message handler for the shim's navigation messages, plus the
 	// gate variable and the pendingLink hook the confirmation modal consumes.
-	assert.Contains(t, page, `<script src="/assets/gallery/detail.js"></script>`)
+	assert.Contains(t, page, `<script src="`+assetURL("gallery/detail.js")+`"></script>`)
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(detailJS), "d.__avNavigate !== true")

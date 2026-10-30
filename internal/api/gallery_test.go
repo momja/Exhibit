@@ -124,7 +124,7 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 	assert.Contains(t, page, `<div id="tag-edit-modal" class="modal-overlay" hidden>`)
 	assert.Contains(t, page, `data-color="#6B7280"`) // store.DefaultTagColor preset
 	assert.Contains(t, page, `id="tag-edit-delete"`)
-	assert.Contains(t, page, `<script type="module" src="/assets/gallery/tags.js"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/tags.js")+`"></script>`)
 	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/tags.js"), "exhibit:tags-changed")
 }
 
@@ -186,10 +186,10 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 	page := w.Body.String()
 
 	assert.Contains(t, page, `<input type="text" name="q" data-gallery-query`)
-	assert.Contains(t, page, `placeholder="Search artifacts…"`)
+	assert.Contains(t, page, `placeholder="Search"`)
 	assert.Contains(t, page, `hx-get="/partials/gallery-grid"`)
 	assert.Contains(t, page, `hx-target="#library-gallery-results"`)
-	assert.Contains(t, page, `<script type="module" src="/assets/gallery/index.js"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/index.js")+`"></script>`)
 	assert.NotContains(t, page, `>Search</button>`)
 }
 
@@ -224,8 +224,8 @@ func TestGalleryHeaderHasVisualSeparation(t *testing.T) {
 	// it: it is sticky (stays visible while scrolling) and carries a real
 	// shadow + stronger border rather than the same near-invisible hairline
 	// the cards use. A bare 1px #e0e0e0 border alone read as flush with content.
-	css := galleryAsset(t, r, "/assets/gallery/index.css")
-	assert.Contains(t, css, `header{position:sticky;top:0;z-index:20`)
+	css := galleryAsset(t, r, "/assets/gallery/components.css")
+	assert.Contains(t, css, `position:sticky;top:0;z-index:20`)
 	assert.Contains(t, css, `box-shadow:var(--shadow-header)`) // grep-friendly: 'box-shadow'
 	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/tokens.css"), `--shadow-header:0 1px 6px rgba(0,0,0,.07)`)
 }
@@ -258,8 +258,8 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.Contains(t, page, `class="action-menu-container card-actions" data-controller="action-menu"`)
 	assert.Contains(t, page, `aria-label="Actions for Openless" title="Actions" aria-haspopup="menu" aria-expanded="false" aria-controls="card-actions-`+id+`"`)
 	assert.Contains(t, page, `id="card-actions-`+id+`" role="menu" aria-labelledby="card-actions-`+id+`-trigger"`)
-	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit" role="menuitem"`)
-	assert.Contains(t, page, `<script type="module" src="/assets/gallery/controllers.js"></script>`)
+	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit?return_to=%2F" role="menuitem"`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/controllers.js")+`"></script>`)
 	assert.NotContains(t, page, `class="card-edit"`)
 
 	// av-uvc6: one meta row under the tile, and no created date on it.
@@ -379,7 +379,7 @@ func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 		"the opaque-origin allow= delegation is a no-op and must be removed in favor of the bridge")
 	// The host frame mediates clipboard requests posted by the shim; the
 	// handler lives in the static page script the detail page loads.
-	assert.Contains(t, page, `<script src="/assets/gallery/detail.js"></script>`)
+	assert.Contains(t, page, `<script src="`+assetURL("gallery/detail.js")+`"></script>`)
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(detailJS), "__avClipboard",
@@ -445,7 +445,7 @@ func TestDetailPagePromptsForBlockedNetworkOrigins(t *testing.T) {
 
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
-	assert.Contains(t, page, `<script src="/assets/gallery/network-prompt.js"></script>`,
+	assert.Contains(t, page, `<script src="`+assetURL("gallery/network-prompt.js")+`"></script>`,
 		"the dialog is inert without the module that drives it")
 	assert.Contains(t, string(detailJS), "ExhibitNetworkPrompt.install",
 		"the viewer installs the shared prompt rather than hand-rolling one")
@@ -480,7 +480,7 @@ func TestAgentPageHostsTheNetworkPrompt(t *testing.T) {
 	assert.Contains(t, page, `id="net-once"`)
 	assert.Contains(t, page, `id="net-never"`)
 	assert.Contains(t, page, `<code id="net-origin"></code>`)
-	assert.Contains(t, page, `<script src="/assets/gallery/network-prompt.js"></script>`)
+	assert.Contains(t, page, `<script src="`+assetURL("gallery/network-prompt.js")+`"></script>`)
 
 	agentJS, err := embeddedAssets.ReadFile("assets/gallery/agent.js")
 	require.NoError(t, err)
@@ -513,7 +513,7 @@ func TestEditPageShowsBlockedOriginsDistinctlyFromUndecided(t *testing.T) {
 	decisions := []store.OriginDecision{
 		{Origin: "https://blocked.example.com", Decision: store.DecisionBlock, Source: "runtime"},
 	}
-	page, err := renderEditPage(a, decisions, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, decisions, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let blocked = ["https://blocked.example.com"];`,
@@ -538,7 +538,7 @@ func TestEditPageCanForgetABlockDecision(t *testing.T) {
 	decisions := []store.OriginDecision{
 		{Origin: "https://tracker.example.com", Decision: store.DecisionBlock, Source: "runtime"},
 	}
-	page, err := renderEditPage(a, decisions, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, decisions, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 	assert.Contains(t, page, `data-action="forget"`)
 	assert.Contains(t, page, `data-action="allow"`,
@@ -561,7 +561,7 @@ func TestEditPageRendersAllowlistRowsInert(t *testing.T) {
 	payload := `https://x"><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Edit XSS", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderEditPage(a, allowDecisions(payload), nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, allowDecisions(payload), nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `<code title="https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;">https://x&#34;&gt;&lt;img src=x onerror=alert(1)&gt;</code>`,
@@ -579,7 +579,7 @@ func TestEditPageNeverOffersTheRenderOrigin(t *testing.T) {
 		CreatedAt: time.Now()}
 	src := `<img src="https://render.test/a/abc123/assets/0f.png">` +
 		`<script src="https://cdn.example.com/lib.js"></script>`
-	page, err := renderEditPage(a, nil, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, nil, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let unapproved = ["https://cdn.example.com"];`)
@@ -592,7 +592,7 @@ func TestEditPageSurfacesUnapprovedOriginsWithoutSeedingAllowlist(t *testing.T) 
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "No auto-seed", Tier: store.Tier1,
 		CreatedAt: time.Now()}
 	src := `<script src="https://cdn.example.com/lib.js"></script>`
-	page, err := renderEditPage(a, nil, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, nil, nil, src, "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `data-origin="https://cdn.example.com"`)
@@ -612,7 +612,7 @@ func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 	payload := `https://evil</script><img src=x onerror=alert(1)>`
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Script Breakout", Tier: store.Tier1,
 		CreatedAt: time.Now()}
-	page, err := renderEditPage(a, allowDecisions(payload), nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, allowDecisions(payload), nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `let allowlist = ["https://evil\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e"];`,
@@ -627,7 +627,7 @@ func TestEditPageInlinesAllowlistWithoutScriptBreakout(t *testing.T) {
 func TestEditPageShowsLinksCapabilitySelect(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Links", Tier: store.Tier1,
 		CreatedAt: time.Now(), LinksApproved: true}
-	page, err := renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err := renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `<span class="spacer">External links</span>`)
@@ -635,7 +635,7 @@ func TestEditPageShowsLinksCapabilitySelect(t *testing.T) {
 	assert.Contains(t, page, "let linksApproved = true;")
 
 	a.LinksApproved = false
-	page, err = renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil)
+	page, err = renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 	assert.Contains(t, page, "let linksApproved = false;")
 

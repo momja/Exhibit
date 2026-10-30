@@ -40,10 +40,9 @@ func TestNewPageOffersThreeRoutes(t *testing.T) {
 	// so a click selects the brief below rather than leaving the page.
 	assert.NotContains(t, page, `<a class="route" href="/agent">`)
 
-	// Sub-page header idiom (detail.tmpl): back link, then page title — not a
-	// Library/Studio segmented nav.
-	assert.Contains(t, page, `<a href="/">←<span class="back-label"> Gallery</span></a>`)
-	assert.Contains(t, page, `<h1>Add artifact</h1>`)
+	// The shared app header retains the gallery return and page title.
+	assert.Contains(t, page, `class="app-header-back app-header-back-collapse" href="/" title="Gallery"`)
+	assert.Contains(t, page, `<h1 class="app-header-title">Add artifact</h1>`)
 }
 
 // Order is the ticket (nw-d1dd): agent, then paste, then url.
@@ -204,7 +203,9 @@ func TestGalleryEmptyStateLinksToNewPage(t *testing.T) {
 	r := newTestRouter(t)
 	page := getPage(t, r, "/")
 
-	assert.Contains(t, page, `<p class="empty">No artifacts yet. <a href="/new">Add your first artifact</a>.</p>`)
+	assert.Contains(t, page, `Welcome to Exhibit`)
+	assert.Contains(t, page, `href="/new"><i class="ph ph-palette" aria-hidden="true"></i>Create your first artifact`)
+	assert.Contains(t, getPage(t, r, "/partials/gallery-grid"), `Welcome to Exhibit`)
 }
 
 // The 404 page's second action used to point at a /#upload fragment on the

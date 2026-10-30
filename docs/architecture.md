@@ -110,11 +110,18 @@ The only way data changes. Full route reference: `api.md`.
 - `GET/PUT/DELETE …/widget`: the card widget (av-fafu, `widgets.md`). `PUT` reports
   which widget origins the artifact's allowlist does not cover, and never seeds it.
   Each save is a version; an unchanged save records nothing.
-- `POST /api/shares`, `DELETE /api/shares/:id`: one route mints both kinds
-  (av-lrae). `recipients` makes a bulk grant answered per name (`granted` |
+- `POST /api/shares`: dispatches to explicit `CreateGrant` and
+  `CreateAnonymousLink` store paths (Exh-a9l6). `recipients` makes a bulk grant
+  answered per name (`granted` |
   `already_shared` | `unknown` | `ambiguous` | `self`; `unknown` deliberately
   confirms non-existence, av-6xjd). No recipients mints the one anonymous link;
   `replace: true` rotates it in one transaction.
+- `DELETE /api/shares/:id`: revoke the anonymous link, owner-only. Grant ids
+  answer 404 and leave grants intact; the store restricts lookup and deletion
+  by id to anonymous links.
+- `DELETE /api/artifacts/:id/grants?recipient=:userID`: revoke one grant,
+  owner-only; recipient is a query parameter (av-hh1o). Missing grants answer 404,
+  matching link deletes. Grant views carry recipient ids, never row ids.
 - `GET /api/artifacts/:id/shares`: link and grants, owner-only (a recipient gets 404).
 - `DELETE /api/account`: erase the caller's own account and library (av-4wyq). Takes
   no id, requires a session (not the service token) and the typed confirmation
@@ -252,7 +259,8 @@ it safe behind the no-auth share path (§7).
   The render origin never holds a session: a top-level render runs artifact script.
   Claims are named (`o=1.e=….<tag>`, av-6axy); `p`, the viewer principal, is
   omitted when equal to `o` (`MintViewer`) and set on a recipient's frame (av-awr4).
-  `s` carries a share row id (reserved for av-7k7b; nothing reads it yet). Duplicate or unknown keys are rejected, and so
+  `s` is reserved for an anonymous link id, never a grant (av-7k7b, Exh-grj9;
+  no production caller sets or reads it yet). Duplicate or unknown keys are rejected, and so
   is a token carrying both `a` and `p`. An `anonymous` claim (av-wmp6) renders with no state
   inlined and no write-through; it is in the MAC because it subtracts authority.
   A share still inlines the owner's state. `security.md` §1.3.
@@ -271,15 +279,19 @@ Blob:   put/get/delete by id
 **`Blob.Delete` is idempotent** (av-7jcq): a missing id is success, matching S3.
 
 **Owner scoping is in the queries** (av-ep8k). Every artifact-naming method takes
-`owner_id` and filters in SQL; child tables use an owner-scoped `EXISTS`. Another
-owner's id behaves exactly like a missing one: reads return nothing, writes return
-`ErrNotFound`, handlers answer 404, never 403.
+`owner_id` and filters in SQL; child tables use an owner-scoped correlated
+`EXISTS` on the artifact's primary key, with the outer query pinned to one
+artifact or child row. Queries across an owner's library, including account
+share counts, instead drive from the `artifacts_owner` index on `owner_id`
+and look up child rows by `artifact_id`. Another owner's id behaves exactly
+like a missing one: reads return nothing, writes return `ErrNotFound`, handlers
+answer 404, never 403.
 
 **Unscoped accessors are named for it**: `GetArtifactUnscoped`,
 `GetAnonymousShareUnscoped`, and for assets `ArtifactAssetsUnscoped` and
 `GetArtifactAssetUnscoped`. Callers stay inside `internal/render` (test-enforced;
 `grep Unscoped` is the audit). The share accessor resolves only the anonymous link,
-in the query, so a grant id is never a public URL (av-lrae).
+from `share_links`; grants have no id or public URL (Exh-grj9).
 
 **Non-owners use parallel accessors, never a widened predicate** (av-lrae).
 `GetArtifactReadableBy(viewer)` resolves when the viewer owns the artifact or a
@@ -305,11 +317,18 @@ and writes state.
   (`store.ExtractSearchText`), and tag names, via the `source_text`/`tags_text`
   shadows kept by triggers and the API (av-b6o9). Queries are literal text: each
   token becomes a quoted prefix phrase (av-hic3).
-- **Shares**: `shares` plus rollups `artifacts.share_grant_count` and `share_link`,
-  maintained only by triggers that recompute (migration 029, av-6xjd). Go never
-  writes them. `ReplaceAnonymousLink` rotates in one transaction. Recipients resolve
-  by `local:<name>` external id, then email; ambiguous email is refused
-  (`ErrAmbiguousUser`).
+- **Shares**: `share_links(id, artifact_id UNIQUE)` and
+  `share_grants(artifact_id, recipient_id, created_at)` with a composite primary key,
+  `WITHOUT ROWID`, and covering `share_grants_by_recipient` index (039, Exh-grj9).
+  Millisecond `created_at` timestamps preserve grant order; legacy rows use
+  synthetic timestamps in old `shares.rowid` order. The panel lists the link
+  first, then grants by timestamp, with recipient id breaking millisecond ties.
+  Artifact reads compute the badge's grant count and link existence; no rollup
+  columns or share triggers remain. `CreateGrant` requires a positive recipient
+  id; only `CreateAnonymousLink` publishes a link (Exh-a9l6). `DeleteGrant`
+  addresses (artifact, recipient), owner-scoped. `ReplaceAnonymousLink` rotates
+  in one transaction. Recipients resolve by `local:<name>` external id, then
+  email; ambiguous email is refused (`ErrAmbiguousUser`).
 - **Assets**: `artifact_assets`, bytes in the blob store, content-addressed per
   owner and never across owners (av-20fk). Deletability depends only on recorded
   facts (artifact gone, generation superseded, owner asked), never on a literal in
@@ -456,9 +475,61 @@ Offsets mean another tab's adds or deletes can shift page boundaries until a
 refresh. Search debounces and replaces the grid from offset zero; search and paging
 share one `hx-sync` scope per gallery, and query revisions drop stale responses.
 Shared pieces:
-`gallerygrid.go` (a `galleryDefinition` supplies DOM id, paths, store filters,
-empty-state copy; the owner always comes from the request), the `gallerygrid.tmpl`
+`gallerygrid.go` (a `galleryDefinition` supplies DOM id, paths, selection, and
+empty-state copy; the default selection remains owner-scoped), the `gallerygrid.tmpl`
 partials, and the `web/gallery/gallery.js` module.
+
+**Shared galleries** (Exh-u9b1): `/shared` lists incoming grants through
+`ListArtifactsSharedWith`; `/shared-by-me` uses the owner's `SharedOnly`
+selection (named grants or a public link). Both use the same search, paging,
+and retry partials as the library. Incoming cards show owner attribution and
+omit owner actions and capability/sharing glyphs. Their widget tokens preserve
+the recipient as viewer, and remounts use the parallel readable-by
+`/artifacts/:id/widget/viewer/open` route; the owner-only refresh stays unchanged.
+Repeated `?owner=<id>` parameters are validated against `SharedWithOwners`,
+canonicalized and deduplicated, then carried by search, paging and retry URLs.
+Malformed or unavailable owners return 400.
+
+**Spaces and filters** (Exh-2c2e, Exh-gx18): one `gallerySpaces` partial
+lays out My library, Shared with me, and Shared by me as a 208px desktop rail
+at widths of at least 768px, and fixed bottom tabs on phones. Per-viewer counts
+come from `SpaceCounts`, independently of search. The spaces nav appears when
+an incoming or outgoing share exists. The rail also appears for a solo library
+with tags or collections; a library with none of those or shares keeps its
+original page with no rail, tabs, or filter sheet.
+
+My library and Shared by me accept repeated `?tag=<name>` and
+`?collection=<id>` parameters. Every selected tag and collection is required
+(AND). Unknown, empty, or foreign values return 400; duplicates are removed.
+Collection IDs distinguish collections even when their names are identical.
+The store's `MatchAllFilters` and `CollectionIDs` options provide this selection
+without changing the API's existing any-name-per-axis behavior. Migration 041
+adds reverse membership indexes; query-plan tests guard against scans of
+`artifact_tags` and `artifact_collections`.
+
+Desktop Collections and Tags sections sit below spaces, with normalized tag
+color dots. Incoming shares show Owners in that same UI instead of private tags
+or collections. On phones, Filter beside search opens a native bottom-sheet
+`dialog`, managed by the registered `filter-sheet` Stimulus controller. Native
+modal focus containment, initial focus, Escape, backdrop and Done dismissal,
+and return focus to Filter share one close path.
+
+Filter links restart the grid at offset zero in the same htmx sync scope as
+search; filter clicks advance the query revision before htmx handles the click.
+Search parameters, next/retry URLs and `HX-Replace-Url` retain the selection.
+The grid partial renders removable active chips, plus Clear all for multiple
+filters. Successful first-page htmx responses also swap the search's hidden
+parameters and both sets of filter options out of band, using the same Go
+partials as the full page. htmx 4 request settings are explicitly inherited on
+the option containers. Paging only replaces its sentinel, without duplicating
+chips or touching the controls.
+
+Screenshots: [Filters in the desktop rail](screenshots/Exh-gx18/01-filters-desktop.png)
+and [phone filter sheet](screenshots/Exh-gx18/02-filters-phone.png).
+
+Screenshots: [Shared with me](screenshots/Exh-u9b1/01-shared-with-me-desktop.png),
+[phone](screenshots/Exh-u9b1/02-shared-with-me-mobile.png), and
+[Shared by me](screenshots/Exh-u9b1/03-shared-by-me-desktop.png).
 
 **Reusable UI behavior** (Exh-16ds): Go partials own markup, shared CSS owns style,
 and Stimulus controllers own browser state and lifecycle. Register controllers in
@@ -502,6 +573,34 @@ the request settles as a denial, and a blocked origin is explained in chrome wit
 button. `/artifacts/:id/open` uses the same accessor. Recipients write state per
 `share_state_mode` (av-v991).
 
+**Edit navigation**: the editor names its return destination, carried in a
+validated `return_to` query parameter. It accepts library spaces and the same
+artifact, defaults to My library, and uses a same-origin referrer for legacy
+entry links. Its ES module records that answer in the address for reloads and
+bookmarks. Gallery Edit links retain the search and filters; a per-tab scroll
+record and a bounded `visible` count restore up to 480 freshly rendered cards.
+The artifact pill's icon-only squares-four control always opens My library;
+Edit remains in its action menu.
+
+Save changes stays in the editor. Source and widget writes retain their
+optimistic-concurrency tokens, and the versions rows refresh from
+`/partials/edit-versions` through htmx. `editor-session.js` coordinates each
+section's dirty check, save, and discard. The registered `unsaved-changes`
+Stimulus controller guards links with a native dialog (Keep editing, Discard
+changes, Save and leave) and supplies native browser leave protection. A failed
+or partial save keeps the editor open; edits made during a save remain dirty.
+Security edits notify that guard immediately. Origin groups are derived from
+the last saved source footprint, confirmed decisions, and pending edits;
+`/partials/edit-origins` renders their working copy through htmx without
+persisting it. Saves reconcile allowed, blocked, and undecided origins while
+retaining later edits, and touched capability selectors remain dirty until
+their explicit decision has been saved.
+
+Screenshots: [desktop editor](screenshots/Exh-7182/01-editor-desktop.png),
+[phone editor](screenshots/Exh-7182/02-editor-phone.png),
+[leave dialog](screenshots/Exh-7182/03-unsaved-phone.png), and
+[Library control](screenshots/Exh-7182/04-library-pill-phone.png).
+
 **Edit page**: the state inspector (av-hg5f) renders each value through a control
 inferred from its shape, with no raw JSON editing, fetched on first open, saved via
 the state routes. Its Export JSON (Exh-k8p6) downloads the saved state as a flat
@@ -534,9 +633,9 @@ monogram tile when there is none. The frame is `pointer-events: none` and
 fragment route.
 
 **Sharing** (av-6xjd, av-tlpv): an owner-only `sharePanel` modal, rendered only
-when `detailPageData.Share` is non-nil, with three sections: people (one field,
-several names, each reported back), saved-data mode, and the public link (toggle
-plus replace). Named recipients write state per the mode; **public-link visitors
+when `detailPageData.Share` is non-nil, with three sections: the public link
+(toggle plus replace), people (one field, several names, each reported back),
+and saved-data mode. Named recipients write state per the mode; **public-link visitors
 see the owner's state in either mode and never write it back**. Changes apply
 immediately. The script is a native ES module. The body is an htmx target
 refreshed from `/partials/share-panel` on `exhibit:shares-changed`.
@@ -544,7 +643,8 @@ On a 5xx refresh the existing controls stay, disabled, so nothing is replayed an
 unsent names survive. On the card, `shareBadgeView` shows one glyph for the strongest
 fact (shared data > public link > named people) and none for private. Since av-uvc6
 it lives in `capabilityCluster` (folded in by `newCardCapabilityView`), and the
-popover gets a Sharing section; the detail receipt omits it.
+popover gets a Sharing section; the detail receipt omits it. Artifact list/get
+queries derive these indicators from `share_grants` / `share_links` (Exh-grj9).
 
 **Card** (av-uvc6): `capabilityView.Compact` drops the "Sandboxed" label, so a
 private sandboxed artifact shows no marks.
@@ -645,10 +745,53 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
 
 Configured Clerk keys select the hosted login path. `internal/auth/clerk.go`
 verifies Clerk browser cookies through the official Go SDK with cached signing
-keys, enforcing the application's issuer and `APP_ORIGIN`. `internal/api/clerk.go`
+keys, enforcing the application's issuer and `APP_ORIGIN`. ClerkJS also keeps the
+minute-long `__session` cookie fresh, so every authenticated page loads it, but
+only after the page's `load` event and an idle period (Exh-g0fx). The wait is
+capped at five seconds, never runs past fifteen seconds before the session
+token's `exp`, and ends when a page put away mid-wait comes back. The token's
+remaining lifetime comes from the server (`clerk-session-expires-in`) and is
+counted down on the page's monotonic clock, so a device clock that is off
+cannot stretch the wait. The login page, where Clerk is the page, loads it at once. `internal/api/clerk.go`
 resolves the verified subject to the existing user/owner model. It does not mint
 an Exhibit session or match users by email. Invalid cookies follow the ordinary
-route gates; the login page can refresh an expired token through ClerkJS.
+route gates, with one step before the login page (Exh-8409): a page navigation
+whose token lapsed while `__client_uat` still says the browser is signed in goes
+through Clerk's handshake (`internal/auth/clerk_handshake.go`, ported from
+`@clerk/backend`, which the Go SDK lacks). The Frontend API sends the browser
+back with a nonce, redeemed over the Backend API, or a JWT verified against the
+instance JWKS, and the server sets the cookies they carry. No script runs. The
+return is bound to the flow that started it, like an OAuth state: a random
+value in a `__Host-` cookie (on HTTPS) and in the return URL must match, and is
+spent either way. That proves the return is this browser's handshake, not that
+what it carries is this browser's session, so the renewed `__session` must also
+belong to the same Clerk user as the lapsed one, whose signature still
+verifies; a browser with no lapsed token gets the login page. Together they
+keep a nonce smuggled in on a link or a planted cookie from signing a browser
+in as someone else. The return URL is rebuilt on `APP_ORIGIN`, a separate
+cookie caps retries at three, and the JWKS is trusted for an hour after the
+last successful fetch, with refetches rate-limited and coalesced. Anything the handshake cannot renew goes to the login page,
+which refreshes the token through ClerkJS.
+
+Hosted accounts use one Clerk user button. Clerk's Profile and Security UI
+remains unchanged; a custom **Settings** menu link leads to `/settings`.
+`/profile` remains a compatibility alias for that page. Settings shows storage
+usage and Exhibit account deletion, with a **Manage profile** button opening the
+standard Clerk profile modal. Go templates own Settings markup, and the shared
+`account-deletion` Stimulus controller owns confirmation behavior for both hosted
+and self-hosted accounts.
+
+Hosted deletion first revokes provider sessions, then atomically removes Exhibit
+rows, queues blob cleanup, permanently fences the Clerk identity, and records
+pending provider deletion in `hosted_account_deletions`. Only after that commit
+does the backend SDK delete the Clerk user. The last hosted administrator guard
+therefore runs before irreversible provider deletion. A failed Clerk delete
+returns `202` with an explicit pending message; the server retries on startup and
+every minute, treating an already missing provider user as success. Completion
+marks the pending work done but retains the identity fence. Legacy library-only
+erasure records retain their prior fresh-session behavior and are never queued
+for provider deletion. Clerk's direct self-deletion remains disabled so it cannot
+bypass Exhibit's cleanup or administrator guard.
 
 Self-hosted password and OIDC paths retain the session architecture below. In
 hosted mode their routes and cookies are inactive, default-admin seeding is
@@ -719,16 +862,17 @@ non-admin one.
   /api/admin/users`, `PATCH /api/admin/users/{id}` (also entitlements;
   `?entitlement=custom` lists overrides).
 
-### 3.8b Your own account: `/profile` (av-qo05)
+### 3.8b Your own settings: `/settings` (`/profile` alias; av-qo05)
 
 Resolved from `ownerIDFromCtx`, never the URL; a session is the authorization. Same
 furniture as admin, no shared authority.
 
 - **Sign out** (nw-a1ef) is a `POST` form to `/auth/logout`, rendered only when a
   session exists (a no-login instance registers no such route).
-- **Display name** (`profileName`): email, else provider subject, else the sign-in
-  route.
-- **Delete library** (av-4wyq): the copy says an IdP login still works and lands in
+- **Display name** (`store.User.DisplayName`, also used by shared artifact
+  listings): email, else provider subject or local login name. With neither,
+  profile describes the sign-in route.
+- **Delete library** (av-4wyq, self-hosted): the copy says an IdP login still works and lands in
   a new, empty account; it states the live share count; it takes two steps, the
   second the typed phrase `delete my library`, checked server-side. Storage size is
   shown under Account, not in the confirmation (av-fw1b). Blocked states show a
@@ -835,11 +979,13 @@ ingest-time transform, degrades to a report, and never seeds the allowlist.
 
 ## 7. Sharing
 
-A share is a row: `shares(id, artifact_id, recipient_id)`. `GET /s/:shareId` serves
-the artifact through the same read-only render surface and CSP, with no app auth,
-because the link row is the authorization. Only a row with no recipient answers
-there; a grant's id buys nothing (§3.3). The `.html` export is the service-free
-fallback.
+Anonymous links live in `share_links(id, artifact_id)`; directed grants in
+`share_grants(artifact_id, recipient_id, created_at)`, with no grant id (Exh-grj9).
+`GET /s/:shareId` resolves only a link id and serves the read-only render surface
+and CSP with no app auth: holding the link is the authorization. Recipients sign
+in and open the ordinary artifact URL. Migration 039 keeps existing link ids,
+including the keys of cached OG snapshots; Down regenerates discarded grant ids
+while preserving relative grant order. The `.html` export is the service-free fallback.
 
 A pasted link unfurls through OpenGraph tags and a picture of its widget (§3.2,
 av-rclm). Every id that is not a live link previews as Exhibit and nothing else.

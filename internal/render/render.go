@@ -267,11 +267,9 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 // resolveShare is the front door for the share-authorized routes. It loads
 // the anonymous link row — the whole authorization on these routes
 // (architecture.md §7) — and the artifact it names, both owner-independent
-// by design, not by oversight. A grant's id arrives here as nothing: the
-// accessor is narrowed to recipient_id IS NULL (av-lrae), so serving one
-// would turn its id back into a capability URL and undo the reason grants
-// exist. Every miss answers 404, never 403, like the token-gated authorize
-// above.
+// by design, not by oversight. The accessor reads share_links only; grants
+// have no id and cannot authorize a capability URL (Exh-grj9). Every miss
+// answers 404, never 403, like the token-gated authorize above.
 func (rd *Renderer) resolveShare(w http.ResponseWriter, r *http.Request, shareID string) (*store.Artifact, bool) {
 	a, err := rd.lookupShare(r.Context(), shareID)
 	switch {

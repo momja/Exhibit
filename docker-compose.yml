@@ -18,6 +18,9 @@ services:
       - MAX_REQUEST_BODY_BYTES=${MAX_REQUEST_BODY_BYTES:-}
       # Agent settings, read from .env. Each one is optional: with none set the
       # agent runs on each user's own key (docs/deployment.md §4).
+      # Thinking baseline for every session (medium when unset). BYOK owners
+      # can override it in agent key settings; platform mode uses only this.
+      - AGENT_THINKING_LEVEL=${AGENT_THINKING_LEVEL:-}
       # Platform mode (docs/deployment.md §4.1):
       - AGENT_API_KEY=${AGENT_API_KEY:-}
       - AGENT_PROVIDER=${AGENT_PROVIDER:-}

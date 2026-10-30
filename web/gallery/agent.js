@@ -29,6 +29,7 @@ const pendingQuestions = new Set();
 let sendingQuestionMessage = false;
 let keyConfigured = false;
 let configuredProvider = null;   // provider the stored key currently belongs to, or null
+let configuredThinkingLevel = ''; // empty follows the server baseline
 let pendingSnippets = [];   // [{image:{data,mimeType}, descriptor, thumbUrl}]
 let snippetMode = false;
 // A brief arrived from /new but there was no key to send it with. saveKey
@@ -101,10 +102,12 @@ async function refreshKeyStatus() {
   const d = await r.json();
   keyConfigured = !!d.configured;
   configuredProvider = keyConfigured ? d.provider : null;
+  configuredThinkingLevel = d.thinking_level || '';
+  document.getElementById('key-thinking').value = configuredThinkingLevel;
   const btn = document.getElementById('key-btn');
   const label = document.getElementById('key-btn-label');
   if (keyConfigured) {
-    btn.classList.remove('warn');
+    btn.classList.remove('btn-warn');
     label.textContent = d.provider + ' · ' + (d.model || 'default');
     document.getElementById('key-provider').value = d.provider;
     document.getElementById('key-model').value = d.model || '';
@@ -113,7 +116,7 @@ async function refreshKeyStatus() {
     cur.textContent = 'A key is already configured for ' + d.provider + '. Saving keeps it unless you delete the masked value below and enter a new one.';
     document.getElementById('key-delete').hidden = false;
   } else {
-    btn.classList.add('warn');
+    btn.classList.add('btn-warn');
     label.textContent = 'Set API key';
     document.getElementById('current-key').hidden = true;
     document.getElementById('key-delete').hidden = true;
@@ -159,6 +162,7 @@ function clearMaskedKey(secret) {
 function openKeyModal() {
   if (!BYOK) return;
   document.getElementById('key-error').hidden = true;
+  document.getElementById('key-thinking').value = configuredThinkingLevel;
   const secret = document.getElementById('key-secret');
   if (keyConfigured) { showMaskedKey(secret); } else { clearMaskedKey(secret); }
   document.getElementById('key-modal').hidden = false;
@@ -190,6 +194,7 @@ function closeKeyModal() { document.getElementById('key-modal').hidden = true; }
 async function saveKey() {
   const provider = document.getElementById('key-provider').value;
   const model = document.getElementById('key-model').value.trim();
+  const thinking_level = document.getElementById('key-thinking').value;
   const secretInput = document.getElementById('key-secret');
   const errEl = document.getElementById('key-error');
   errEl.hidden = true;
@@ -202,7 +207,7 @@ async function saveKey() {
     api_key = secretInput.value.trim();
     if (!api_key) { errEl.textContent = 'Enter the API key.'; errEl.hidden = false; return; }
   }
-  const r = await apiFetch('/api/agent/key', {method:'PUT', body: JSON.stringify({provider, model, api_key})});
+  const r = await apiFetch('/api/agent/key', {method:'PUT', body: JSON.stringify({provider, model, api_key, thinking_level})});
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));
     errEl.textContent = d.error || 'Failed to save key.';
@@ -389,6 +394,18 @@ function handleAgentEvent(ev) {
     case 'agent_start':
       setStreaming(true);
       break;
+    case 'agent_end': {
+      // Failed messages may be retried automatically. Only surface the final
+      // failure; agent_settled still owns the composer's streaming lifecycle.
+      if (ev.willRetry) break;
+      const message = ev.messages?.findLast(m => m.role === 'assistant');
+      if (message?.stopReason === 'error') {
+        removeThinking();
+        curAssistantEl = null;
+        addMsg('err', providerFailureMessage(message.errorMessage));
+      }
+      break;
+    }
     case 'agent_settled':
       setStreaming(false);
       curAssistantEl = null;
@@ -519,6 +536,16 @@ function handleAgentEvent(ev) {
       addMsg('sys', 'Provider hiccup — retrying (' + ev.attempt + '/' + ev.maxAttempts + ')…');
       break;
   }
+}
+
+function providerFailureMessage(detail) {
+  if (!BYOK) return 'The agent could not complete your request. Please try again.';
+  detail = detail || 'The AI provider could not complete the request.';
+  const rejectedKey = /\b401\b|(?:invalid|expired|revoked) api key|api key.*(?:invalid|expired|revoked)/i.test(detail);
+  if (rejectedKey) {
+    return 'Your AI provider rejected the API key. Update it using the key button above, then try again.';
+  }
+  return 'Agent request failed: ' + detail;
 }
 
 function toolLabel(name, args) {
@@ -1088,5 +1115,6 @@ function briefToMessage(brief) {
 })();
 
 // Inline handlers and htmx expressions are the legacy template boundary.
+document.getElementById('key-btn')?.addEventListener('click', openKeyModal);
 Object.assign(window, { openKeyModal, closeKeyModal, providerChanged, saveKey, deleteKey,
   showPane, openHistory, closeHistory, send, stopAgent, toggleSnippet, previewArtifactId });
