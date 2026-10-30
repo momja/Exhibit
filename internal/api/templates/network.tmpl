@@ -19,7 +19,7 @@
 
 {{define "agentConnectionRequests"}}{{if .Requests}}<section class="connection-request-notice" role="status" aria-label="Connection setup requested">
   <strong><i class="ph ph-plugs-connected" aria-hidden="true"></i> Connection setup requested</strong>
-  {{range .Requests}}<p><b>{{.Provider}}</b> — {{.Reason}}</p>{{end}}
-  <a class="btn btn-sm btn-sec" href="{{.ManageURL}}">Configure connections <i class="ph ph-arrow-square-out" aria-hidden="true"></i></a>
-  <p class="text-sm muted">Configure and attach the connection in Exhibit to grant this artifact access.</p>
+  {{range .Requests}}<p><b>{{.Provider}}</b> — {{.Reason}}</p><a class="btn btn-sm btn-sec" href="{{.URL}}">{{.Action}}</a>{{end}}
+  <a class="btn btn-sm btn-sec" href="{{.ManageURL}}">Review accounts <i class="ph ph-arrow-square-out" aria-hidden="true"></i></a>
+  <p class="text-sm muted">Your account access stays personal. Only you can approve it for this tool.</p>
 </section>{{end}}{{end}}

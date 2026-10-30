@@ -39,7 +39,7 @@ func TestNetworkOriginBrowserKeepsApprovedStylesheetAlongsideConnections(t *test
 	defer cdn.Close()
 	ro := newTestRouter(t)
 	ro.cfg.Relay.Enabled = true
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = ro.cfg.Connections
 	apiOrigins := []string{"https://first.example.test", "https://second.example.test"}
 	body := `<!doctype html><html><head><link rel="stylesheet" href="` + cdn.URL + `/theme.css"></head><body><h1>Connected app</h1></body></html>`

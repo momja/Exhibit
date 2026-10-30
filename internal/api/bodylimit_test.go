@@ -90,6 +90,7 @@ var writeRoutes = []struct {
 	{"POST", "/api/artifacts/{artifactID}/relay-schedules", true},
 	{"DELETE", "/api/artifacts/{artifactID}/relay-schedules/{scheduleID}", false},
 	{"POST", "/api/connections", true},
+	{"POST", "/api/connections/{connectionID}/reconnect", true},
 	{"DELETE", "/api/connections/{connectionID}", false},
 	{"POST", "/api/connections/oauth/github/begin", true},
 	{"POST", "/api/connections/vendor/begin", true},
@@ -148,7 +149,7 @@ func bodyLimitRouter(t *testing.T) *Router {
 	cfg.MCPURL = "https://agents.example.test/mcp"
 	cfg.Relay.Enabled = true
 	cfg.Relay.SchedulesEnabled = true
-	cfg.Connections = connectors.New(connectors.Config{Store: cfg.Store.(*store.SQLiteStore), Box: cfg.Secrets})
+	cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: cfg.Store.(*store.SQLiteStore), Box: cfg.Secrets})
 	return NewRouter(cfg)
 }
 

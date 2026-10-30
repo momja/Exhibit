@@ -169,6 +169,8 @@ type vendorFlow struct {
 	expires  time.Time
 	resultID string
 	request  VendorFlowRequest
+	setup    SetupContext
+	repair   *store.ConnectionRecord
 }
 
 type VendorProviderInfo struct {
@@ -211,11 +213,42 @@ func (s *Service) BeginVendor(ctx context.Context, ownerID int64, provider strin
 	return s.BeginVendorBound(ctx, ownerID, provider, limits, "direct-service")
 }
 func (s *Service) BeginVendorBound(ctx context.Context, ownerID int64, provider string, limits Limits, binding string) (*VendorSession, error) {
+	return s.BeginVendorFor(ctx, ownerID, provider, limits, binding, SetupContext{})
+}
+
+func (s *Service) BeginVendorFor(ctx context.Context, ownerID int64, provider string, limits Limits, binding string, setup SetupContext) (*VendorSession, error) {
 	if !s.cfg.VendorEnabled {
 		return nil, ErrDisabled
 	}
+	if ownerID <= 0 || binding == "" {
+		return nil, ErrInvalid
+	}
+	if err := s.validateSetup(ctx, ownerID, setup); err != nil {
+		return nil, err
+	}
 	raw, ok := s.cfg.Vendor.Providers[provider]
-	if !ok || ownerID <= 0 || binding == "" {
+	ownerTag := s.cfg.Vendor.ownerTag(ownerID)
+	var repair *store.ConnectionRecord
+	if setup.ConnectionID != "" {
+		var err error
+		repair, err = s.cfg.Store.GetConnection(ctx, ownerID, setup.ConnectionID)
+		if err != nil {
+			return nil, err
+		}
+		if repair.Kind != "vendor" || repair.Provider != provider {
+			return nil, ErrInvalid
+		}
+		r, c, err := s.readCredential(repair)
+		if err != nil {
+			return nil, err
+		}
+		pinned, err := s.vendorConnectionSpec(ctx, repair, r, c)
+		if err != nil {
+			return nil, err
+		}
+		raw, ownerTag, ok = pinned.Spec, pinned.OwnerTag, true
+	}
+	if !ok {
 		return nil, ErrInvalid
 	}
 	spec := raw.defaults(provider)
@@ -236,12 +269,12 @@ func (s *Service) BeginVendorBound(ctx context.Context, ownerID int64, provider 
 			count++
 		}
 	}
-	if limits.Vendor >= 0 && count >= limits.Vendor {
+	if repair == nil && limits.Vendor >= 0 && count >= limits.Vendor {
 		return nil, store.ErrConnectionLimit
 	}
 	id := randomToken()
-	request := VendorFlowRequest{ID: id, OwnerTag: s.cfg.Vendor.ownerTag(ownerID), Provider: provider, Spec: spec}
-	flow := vendorFlow{ownerID: ownerID, provider: provider, binding: sha256.Sum256([]byte(binding)), expires: s.cfg.Now().Add(30 * time.Minute), request: request}
+	request := VendorFlowRequest{ID: id, OwnerTag: ownerTag, Provider: provider, Spec: spec}
+	flow := vendorFlow{ownerID: ownerID, provider: provider, binding: sha256.Sum256([]byte(binding)), expires: s.cfg.Now().Add(30 * time.Minute), request: request, setup: setup, repair: repair}
 	s.mu.Lock()
 	for oldID, f := range s.vendorFlows {
 		if !f.expires.After(s.cfg.Now()) {
@@ -276,14 +309,19 @@ func (s *Service) BeginVendorBound(ctx context.Context, ownerID int64, provider 
 // CompleteVendor polls only the server-created engine flow. The caller cannot
 // supply a remote connection identity, switch its engine, or alter its policy.
 func (s *Service) CompleteVendor(ctx context.Context, ownerID int64, binding, id, name string, limits Limits) (*Connection, bool, error) {
+	c, ready, _, err := s.CompleteVendorFor(ctx, ownerID, binding, id, name, limits)
+	return c, ready, err
+}
+
+func (s *Service) CompleteVendorFor(ctx context.Context, ownerID int64, binding, id, name string, limits Limits) (*Connection, bool, *SetupContext, error) {
 	if !s.cfg.VendorEnabled {
-		return nil, false, ErrDisabled
+		return nil, false, nil, ErrDisabled
 	}
 	s.mu.Lock()
 	_, exists := s.vendorFlows[id]
 	s.mu.Unlock()
 	if !exists {
-		return nil, false, ErrInvalid
+		return nil, false, nil, ErrInvalid
 	}
 	lock, _ := s.locks.LoadOrStore("vendor-flow:"+id, &sync.Mutex{})
 	mu := lock.(*sync.Mutex)
@@ -294,36 +332,73 @@ func (s *Service) CompleteVendor(ctx context.Context, ownerID int64, binding, id
 	s.mu.Unlock()
 	hash := sha256.Sum256([]byte(binding))
 	if !ok || flow.ownerID != ownerID || !flow.expires.After(s.cfg.Now()) || subtle.ConstantTimeCompare(hash[:], flow.binding[:]) != 1 {
-		return nil, false, fmt.Errorf("%w: managed OAuth session expired or did not match this browser", ErrInvalid)
+		return nil, false, nil, fmt.Errorf("%w: managed OAuth session expired or did not match this browser", ErrInvalid)
+	}
+	if err := s.validateSetup(ctx, ownerID, flow.setup); err != nil {
+		return nil, false, nil, err
 	}
 	if flow.resultID != "" {
 		record, err := s.cfg.Store.GetConnection(ctx, ownerID, flow.resultID)
 		if err != nil {
-			return nil, false, err
+			return nil, false, nil, err
 		}
 		c, err := s.metadata(ctx, record)
-		return c, true, err
+		return c, true, &flow.setup, err
 	}
 	engine, err := s.vendorEngine(flow.request.Spec.Engine)
 	if err != nil {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 	ref, complete, err := engine.Complete(ctx, flow.request)
 	if err != nil || !complete {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 	if strings.TrimSpace(name) == "" {
 		name = flow.request.Spec.Name
 	}
-	c, err := s.saveVendor(ctx, ownerID, name, flow.request.Provider, flow.request.OwnerTag, ref, flow.request.Spec, limits)
+	if err := s.validateSetup(ctx, ownerID, flow.setup); err != nil {
+		return nil, false, nil, err
+	}
+	var c *Connection
+	if flow.repair != nil {
+		lock, _ := s.locks.LoadOrStore(flow.repair.ID, &sync.Mutex{})
+		mu := lock.(*sync.Mutex)
+		mu.Lock()
+		defer mu.Unlock()
+		current, lookupErr := s.cfg.Store.GetConnection(ctx, ownerID, flow.repair.ID)
+		if lookupErr != nil {
+			return nil, false, &flow.setup, lookupErr
+		}
+		if current.EncryptedSecret != flow.repair.EncryptedSecret || current.RecipeJSON != flow.repair.RecipeJSON {
+			return nil, false, &flow.setup, ErrInvalid
+		}
+		r, old, readErr := s.readCredential(current)
+		if readErr != nil {
+			return nil, false, &flow.setup, readErr
+		}
+		previous, specErr := s.vendorConnectionSpec(ctx, current, r, old)
+		if specErr != nil {
+			return nil, false, &flow.setup, specErr
+		}
+		// Retire the previous remote account before losing its durable identity.
+		// A refusal leaves this flow retryable and all local grants intact.
+		if previous.ExternalRef != ref {
+			if err := engine.Revoke(ctx, previous); err != nil {
+				return nil, false, &flow.setup, err
+			}
+		}
+		c, err = s.repairCredential(ctx, flow.repair, credential{VendorConnectionID: ref}, ref)
+	} else {
+		c, err = s.saveVendor(ctx, ownerID, name, flow.request.Provider, flow.request.OwnerTag, ref, flow.request.Spec, limits)
+	}
 	if err != nil {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 	flow.resultID = c.ID
 	s.mu.Lock()
 	s.vendorFlows[id] = flow
 	s.mu.Unlock()
-	return c, true, nil
+	return c, true, &flow.setup, nil
 }
 
 func (s *Service) saveVendor(ctx context.Context, ownerID int64, name, provider, ownerTag, ref string, spec VendorProvider, limits Limits) (*Connection, error) {

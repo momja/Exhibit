@@ -9,7 +9,7 @@ import (
 
 func cleanConfigEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"CONNECTORS_ENABLED", "CONNECTORS_OAUTH_ENABLED", "CONNECTORS_VENDOR_ENABLED", "CONNECTORS_STANDINS_ENABLED", "CONNECTORS_GITHUB_CLIENT_ID", "CONNECTORS_GITHUB_CLIENT_SECRET", "CONNECTORS_GITHUB_SCOPES", "CONNECTORS_GITHUB_AUTH_URL", "CONNECTORS_GITHUB_TOKEN_URL", "CONNECTORS_GITHUB_REVOKE_URL", "CONNECTORS_GITHUB_REDIRECT_URL", "CONNECTORS_GITHUB_API_ORIGIN", "CONNECTORS_NANGO_SECRET_KEY", "CONNECTORS_NANGO_NAMESPACE", "CONNECTORS_NANGO_PROVIDERS", "CONNECTORS_NANGO_BASE_URL", "CONNECTORS_NANGO_IDLE_DAYS", "CONNECTORS_VENDOR_PROVIDERS", "CONNECTORS_VENDOR_NAMESPACE", "CONNECTORS_VENDOR_IDLE_DAYS", "CONNECTORS_COMPOSIO_API_KEY", "CONNECTORS_COMPOSIO_BASE_URL"} {
+	for _, key := range []string{"CONNECTORS_CUSTOM_ENABLED", "CONNECTORS_ENABLED", "CONNECTORS_OAUTH_ENABLED", "CONNECTORS_VENDOR_ENABLED", "CONNECTORS_STANDINS_ENABLED", "CONNECTORS_GITHUB_CLIENT_ID", "CONNECTORS_GITHUB_CLIENT_SECRET", "CONNECTORS_GITHUB_SCOPES", "CONNECTORS_GITHUB_AUTH_URL", "CONNECTORS_GITHUB_TOKEN_URL", "CONNECTORS_GITHUB_REVOKE_URL", "CONNECTORS_GITHUB_REDIRECT_URL", "CONNECTORS_GITHUB_API_ORIGIN", "CONNECTORS_NANGO_SECRET_KEY", "CONNECTORS_NANGO_NAMESPACE", "CONNECTORS_NANGO_PROVIDERS", "CONNECTORS_NANGO_BASE_URL", "CONNECTORS_NANGO_IDLE_DAYS", "CONNECTORS_VENDOR_PROVIDERS", "CONNECTORS_VENDOR_NAMESPACE", "CONNECTORS_VENDOR_IDLE_DAYS", "CONNECTORS_COMPOSIO_API_KEY", "CONNECTORS_COMPOSIO_BASE_URL"} {
 		t.Setenv(key, "")
 	}
 }
@@ -22,6 +22,7 @@ func TestOperatorConfigFlagsAreIndependentAndFailClosed(t *testing.T) {
 	cfg, err = ConfigFromEnv()
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
+	assert.False(t, cfg.CustomEnabled)
 	assert.False(t, cfg.OAuthEnabled)
 	assert.False(t, cfg.VendorEnabled)
 	assert.False(t, cfg.StandinsEnabled)
@@ -169,4 +170,18 @@ func TestVendorOperatorConfigNamesRemovedAllowWrites(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `"linear" sets allow_writes`)
 	assert.NotContains(t, err.Error(), "composio-operator-key")
+}
+
+func TestCustomConnectionsRequireExplicitOperatorOptIn(t *testing.T) {
+	cleanConfigEnv(t)
+	t.Setenv("CONNECTORS_CUSTOM_ENABLED", "true")
+	_, err := ConfigFromEnv()
+	require.Error(t, err)
+	t.Setenv("CONNECTORS_ENABLED", "true")
+	cfg, err := ConfigFromEnv()
+	require.NoError(t, err)
+	require.True(t, cfg.CustomEnabled)
+	t.Setenv("CONNECTORS_CUSTOM_ENABLED", "tru")
+	_, err = ConfigFromEnv()
+	require.Error(t, err)
 }

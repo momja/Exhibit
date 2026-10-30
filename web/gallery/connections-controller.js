@@ -2,7 +2,7 @@ import { Controller } from '../stimulus/stimulus.js';
 import { apiFetch, viewerFetch } from './api-module.js';
 
 export default class extends Controller {
-  static values = { artifactId: String };
+  static values = { artifactId: String, returnUrl: String };
   static targets = ['provider', 'fields', 'createForm', 'createError', 'createButton', 'feedback'];
 
   connect() { this.active = true; if (this.hasProviderTarget) this.providerChanged(); }
@@ -10,7 +10,7 @@ export default class extends Controller {
   disconnect() { this.active = false; this.vendorAbort?.abort(); }
 
   providerChanged() {
-    const provider = this.providerTarget.value;
+    const provider = this.providerTarget.value.split(':')[0];
     for (const section of this.fieldsTargets) {
       const active = section.dataset.recipes.split(' ').includes(provider);
       section.hidden = !active;
@@ -55,6 +55,10 @@ export default class extends Controller {
     await this.action(event, async () => {
       this.createErrorTarget.textContent = '';
       const data = Object.fromEntries(new FormData(this.createFormTarget));
+      const [recipe, vendorProvider] = data.recipe.split(':');
+      data.recipe = recipe;
+      data.vendor_provider = vendorProvider;
+      data.artifact_id = this.artifactIdValue;
       for (const field of ['daily_limit', 'cache_minutes']) {
         if (field in data) data[field] = Number(data[field] || 0);
       }
@@ -62,45 +66,71 @@ export default class extends Controller {
       if (vendorWindow) vendorWindow.opener = null;
       try {
         if (data.recipe === 'github') {
-          const result = await this.request('/api/connections/oauth/github/begin', { method: 'POST', body: JSON.stringify({ name: data.name }) });
+          const result = await this.request('/api/connections/oauth/github/begin', { method: 'POST', body: JSON.stringify({ name: data.name, artifact_id: this.artifactIdValue }) });
           window.location.assign(result.url);
           return;
         }
         if (data.recipe === 'vendor') {
           if (!vendorWindow) throw new Error('Allow popups to connect this provider, then try again.');
-          await this.connectVendor(data, vendorWindow);
+          const result = await this.connectVendor(data, vendorWindow);
+          this.setupFinished(result.connection.id);
         } else {
-        await this.request('/api/connections', { method: 'POST', body: JSON.stringify(data) });
+          const connection = await this.request('/api/connections', { method: 'POST', body: JSON.stringify(data) });
+          this.setupFinished(connection.id);
         }
-        this.createFormTarget.reset();
-        this.providerChanged();
-        this.changed('Connection saved. Choose an artifact to grant access.');
       } catch (error) { vendorWindow?.close(); this.createErrorTarget.textContent = error.message; }
     });
   }
 
   reconnect(event) {
-    const { connectionKind, provider, connectionName } = event.currentTarget.dataset;
-    this.providerTarget.value = connectionKind === 'vendor' ? 'vendor' : provider;
-    this.createFormTarget.elements.name.value = connectionName;
-    if (connectionKind === 'vendor') {
-      this.createFormTarget.elements.vendor_provider.value = provider;
-      if (!this.createFormTarget.elements.vendor_provider.value) {
-        this.feedbackTarget.textContent = 'This provider is no longer offered. Choose an available provider or revoke the saved connection.';
-        this.feedbackTarget.classList.add('is-error');
+    this.action(event, async () => {
+      const { connectionId, connectionKind, provider, connectionName } = event.currentTarget.dataset;
+      const context = { artifact_id: this.artifactIdValue, connection_id: connectionId };
+      if (connectionKind === 'oauth') {
+        const result = await this.request('/api/connections/oauth/github/begin', {
+          method: 'POST', body: JSON.stringify({ ...context, name: connectionName }),
+        });
+        window.location.assign(result.url);
+      } else if (connectionKind === 'vendor') {
+        const popup = window.open('about:blank', '_blank');
+        if (!popup) throw new Error('Allow popups to reconnect this account, then try again.');
+        popup.opener = null;
+        try {
+          const result = await this.connectVendor({ name: connectionName, vendor_provider: provider, connection_id: connectionId }, popup);
+          this.setupFinished(result.connection.id);
+        } catch (error) { popup.close(); throw error; }
       }
-    }
-    this.providerChanged();
-    this.createFormTarget.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    this.createFormTarget.elements.name.focus({ preventScroll: true });
+    });
+  }
+
+  repair(event) {
+    this.action(event, async () => {
+      const form = event.currentTarget;
+      const id = form.dataset.connectionId;
+      const credentials = Object.fromEntries(new FormData(form));
+      const connection = await this.request('/api/connections/' + encodeURIComponent(id) + '/reconnect', {
+        method: 'POST', body: JSON.stringify(credentials),
+      });
+      form.reset();
+      this.setupFinished(connection.id);
+    });
+  }
+
+  setupFinished(connectionId) {
+    // The base URL is rendered by Exhibit, never supplied by an artifact.
+    const destination = new URL(this.returnUrlValue, window.location.href);
+    destination.searchParams.set('connection', connectionId);
+    destination.searchParams.set('connected', '1');
+    destination.hash = this.artifactIdValue ? 'connection-access' : '';
+    window.location.assign(destination.href);
   }
 
   revoke(event) {
     this.action(event, async () => {
       const { connectionId, connectionName } = event.currentTarget.dataset;
-      if (!window.confirm('Revoke ' + connectionName + '? Artifacts using this connection will lose access.')) return;
+      if (!window.confirm('Disconnect ' + connectionName + '? Tools using this account will lose access. Saved results will remain.')) return;
       await this.request('/api/connections/' + encodeURIComponent(connectionId), { method: 'DELETE' });
-      this.changed('Connection revoked.');
+      this.changed('Account disconnected. Saved results remain.');
     });
   }
 
@@ -117,7 +147,7 @@ export default class extends Controller {
           if (!response.ok) throw new Error('Could not approve the connection origin.');
         }
       }
-      await this.request(this.artifactPath('/connections'), { method: 'POST', body: JSON.stringify({ connection_id: connectionId, share_with_recipients: data.get('sharing') === 'on' }) });
+      await this.request(this.artifactPath('/connections'), { method: 'POST', body: JSON.stringify({ connection_id: connectionId }) });
       this.changed('Connection access granted.');
     });
   }
@@ -170,13 +200,13 @@ export default class extends Controller {
 
   async connectVendor(data, popup) {
     this.vendorAbort = new AbortController();
-    const result = await this.request('/api/connections/vendor/begin', { method: 'POST', body: JSON.stringify({ provider: data.vendor_provider }), signal: this.vendorAbort.signal });
+    const result = await this.request('/api/connections/vendor/begin', { method: 'POST', body: JSON.stringify({ provider: data.vendor_provider, artifact_id: this.artifactIdValue, connection_id: data.connection_id }), signal: this.vendorAbort.signal });
     popup.location.replace(result.url);
     this.feedbackTarget.textContent = 'Complete consent in the provider window. This page will update when your account is connected.';
     const deadline = Date.now() + 10 * 60 * 1000;
     while (this.active && Date.now() < deadline) {
       const response = await this.request('/api/connections/vendor/complete', { method: 'POST', body: JSON.stringify({ session_id: result.session_id, name: data.name }), signal: this.vendorAbort.signal });
-      if (response.status === 'connected') { popup.close(); return; }
+      if (response.status === 'connected') { popup.close(); return response; }
       if (popup.closed) throw new Error('The provider window was closed before connecting. Try again when ready.');
       await new Promise(resolve => setTimeout(resolve, 2000));
     }

@@ -14,7 +14,7 @@ import (
 func TestDisabledConnectionManagerKeepsRetainedDataControlsAvailable(t *testing.T) {
 	ro := newTestRouter(t)
 	ctx := context.Background()
-	policy := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	policy := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	id := createOwnArtifact(t, ro)
 	connection, err := policy.Create(ctx, 1, connectors.CreateRequest{Name: "Private API", Recipe: "bearer", Origin: "https://private.example.test", Secret: "never-render-this-secret"}, connectors.UnlimitedLimits())
 	require.NoError(t, err)

@@ -16,7 +16,8 @@ the license is included here. The apps support narrow screens and dark mode.
 ## Load into Exhibit
 
 Start an isolated instance with `RELAY_ENABLED=true` and
-`CONNECTORS_ENABLED=true`. Enable `RELAY_SCHEDULES_ENABLED=true` to demonstrate
+`CONNECTORS_ENABLED=true` plus `CONNECTORS_CUSTOM_ENABLED=true` for the advanced
+custom-credential example. Enable `RELAY_SCHEDULES_ENABLED=true` to demonstrate
 updates while the page is closed. The full configuration and boundaries are in
 [relay-connectors.md](../../docs/relay-connectors.md).
 
@@ -45,7 +46,7 @@ jq -n --rawfile body examples/connectors/arxiv.html \
 ## Fieldnotes: unauthenticated relay
 
 Open Fieldnotes in Exhibit's artifact frame. Review and approve
-`https://export.arxiv.org`, allow relay requests in **Connections & relay**, and
+`https://export.arxiv.org`, allow relay requests in **Connections**, and
 search for a topic. Existing origin approvals alone do not enable the relay.
 The app waits for a search action before making any request and spaces repeated
 requests by at least three seconds, as the
@@ -54,6 +55,7 @@ requests. A failed search keeps saved papers and the previous results available.
 
 ## Connection check: live bearer connection
 
+Open the tool's **Connections** page, then its advanced custom-connection setup.
 Create a **Bearer token** connection named HTTPbin example with origin
 `https://httpbin.org` and a disposable demonstration token. HTTPbin accepts any
 bearer value. Grant it to **Connection check**, approve its origin, and open the
@@ -68,7 +70,7 @@ artifact's connection page.
 ## Generic Basic connections
 
 To connect an API that supplies a URL containing a username and password, choose
-**HTTP Basic** in Exhibit's connection form and paste the full HTTPS URL there.
+**HTTP Basic** in Exhibit's advanced custom-connection form and paste the full HTTPS URL there.
 Exhibit separates its origin, credentials and base path. The artifact only needs
 the public origin and endpoint shown in the connection metadata; it never sees
 the pasted URL or the Basic header. Redeem any provider setup token yourself
@@ -80,11 +82,14 @@ served without spending another provider request. Each connection supplies its
 credential only at its matching API origin. Other approved APIs and CDNs remain
 available, including when several connections are attached to the same artifact.
 Approve the API origin, grant the connection to your artifact and allow relay
-reads before fetching. Credential setup belongs in Exhibit's interface.
+requests before fetching. Credential setup belongs in Exhibit's interface.
+Connections are personal: sharing the example never lets someone use your token.
+Other people connect their own accounts. Shared-data mode and public links may
+still show results already saved by the example.
 
 ## Take either app off Exhibit
 
-Choose **Download app** in **Connections & relay**, unpack the ZIP, and run:
+Choose **Download app** in **Connections**, unpack the ZIP, and run:
 
 ```bash
 node serve.mjs
@@ -103,5 +108,6 @@ Bearer token.
 Only the app, its assets, saved state and nonsecret connection requirements are
 exported. Saved provider data is part of the artifact's state, so decide
 whether to keep or erase it before sharing the downloaded ZIP. A plain HTML
-export lists the origins needing a relay; opening HTML alone does not create
+export contains source and assets without the tool's stored localStorage data,
+and lists the origins needing a relay; opening HTML alone does not create
 an Exhibit connection or a local relay.

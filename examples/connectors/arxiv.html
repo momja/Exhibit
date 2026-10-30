@@ -60,7 +60,7 @@ async function search(nextOffset=0){
   try{
     lastRequest=Date.now();const response=await fetch(url,{headers:{Accept:"application/atom+xml"}});if(!response.ok)throw new Error(`arXiv returned HTTP ${response.status}. Please try again later.`);
     papers=parseFeed(await response.text());storage.write("arxiv:last",{query:currentQuery,sort:$("sort").value,papers,total,offset,at:Date.now()});$("status").textContent=`${total.toLocaleString()} papers found · Saved on this research desk`;
-  }catch(error){$("error").textContent=`${error.message} In Exhibit, approve https://export.arxiv.org and allow relay requests in Connections & relay. Your saved papers are still available.`;$("error").hidden=false;$("status").textContent="Search could not be completed."}
+  }catch(error){$("error").textContent=`${error.message} In Exhibit, approve https://export.arxiv.org and allow relay requests in Connections. Your saved papers are still available.`;$("error").hidden=false;$("status").textContent="Search could not be completed."}
   finally{busy=false;$("search-button").disabled=false;render()}
 }
 $("search-form").addEventListener("submit",event=>{event.preventDefault();search()});$("sort").addEventListener("change",()=>search());$("discover").addEventListener("click",()=>setView("discover"));$("saved").addEventListener("click",()=>setView("saved"));$("previous").addEventListener("click",()=>search(Math.max(0,offset-12)));$("next").addEventListener("click",()=>search(offset+12));for(const button of document.querySelectorAll("[data-query]"))button.addEventListener("click",()=>{$("query").value=button.dataset.query;search()});

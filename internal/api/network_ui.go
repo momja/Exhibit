@@ -89,7 +89,7 @@ func (ro *Router) networkApprovalPartial(w http.ResponseWriter, r *http.Request)
 }
 
 type agentConnectionRequestsView struct {
-	Requests  []store.ArtifactConnectionRequest
+	Requests  []connectionRequestView
 	ManageURL string
 }
 
@@ -110,10 +110,18 @@ func (ro *Router) agentConnectionRequestsPartial(w http.ResponseWriter, r *http.
 		fragmentNotFound(w)
 		return
 	}
-	view.Requests, err = requests.ListArtifactConnectionRequests(r.Context(), ownerIDFromCtx(r.Context()), artifactID)
+	pending, err := requests.ListArtifactConnectionRequests(r.Context(), ownerIDFromCtx(r.Context()), artifactID)
 	if err != nil {
 		fragmentServerError(w, r, "load connection requests", err)
 		return
+	}
+	page, err := ro.connectionPageView(r)
+	if err != nil {
+		fragmentServerError(w, r, "load connection request actions", err)
+		return
+	}
+	for _, request := range pending {
+		view.Requests = append(view.Requests, page.requestView(request))
 	}
 	view.ManageURL = "/connections?artifact=" + url.QueryEscape(artifactID)
 	writeNetworkFragment(w, r, "agentConnectionRequests", view)

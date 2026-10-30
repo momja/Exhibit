@@ -29,7 +29,7 @@ func TestPrivateWidgetWrapperPinsOnePathAndKeepsFreshReloadWrapped(t *testing.T)
 	ro := newTestRouter(t)
 	id := createOwnArtifact(t, ro)
 	require.Equal(t, http.StatusOK, putWidgetReq(t, ro, id, "<p>Account balance</p>").Code)
-	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = service
 	c, err := service.Create(context.Background(), 1, connectors.CreateRequest{Name: "Account", Recipe: "bearer", Origin: "https://api.example.test", Secret: "private-key"}, connectors.UnlimitedLimits())
 	require.NoError(t, err)
@@ -51,7 +51,7 @@ func TestPrivateWidgetWrapperPinsOnePathAndKeepsFreshReloadWrapped(t *testing.T)
 func TestRecipientWidgetRefreshKeepsConnectionDataProtected(t *testing.T) {
 	in := newGrantedInstance(t)
 	ctx := context.Background()
-	service := connectors.New(connectors.Config{Store: in.ro.cfg.Store.(*store.SQLiteStore), Box: in.ro.cfg.Secrets})
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: in.ro.cfg.Store.(*store.SQLiteStore), Box: in.ro.cfg.Secrets})
 	in.ro.cfg.ConnectionPolicy = service
 	connection, err := service.Create(ctx, in.ownerTwo, connectors.CreateRequest{Name: "Recipient account", Recipe: "bearer", Origin: "https://api.example.test", Secret: "private-key"}, connectors.UnlimitedLimits())
 	require.NoError(t, err)
@@ -90,7 +90,7 @@ func TestRecipientWidgetRefreshRequiresTrustedFrame(t *testing.T) {
 func TestPrivateWidgetBrowserShowsSavedDataAndBlocksSelfNavigation(t *testing.T) {
 	ro := newTestRouter(t)
 	ctx := context.Background()
-	service := connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	service := connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = service
 	id := createOwnArtifact(t, ro)
 	var forbiddenHits, renderHits atomic.Int64

@@ -53,3 +53,28 @@ func TestConnectionRequestsAreBoundedAndCascade(t *testing.T) {
 	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM artifact_connection_requests`).Scan(&count))
 	assert.Zero(t, count)
 }
+
+func TestPersonalGrantResolvesOnlyMatchingOwnerRequest(t *testing.T) {
+	s := newTestStore(t)
+	ctx := t.Context()
+	putVersioned(t, s, "app")
+	for _, provider := range []string{"bearer", "future_service"} {
+		_, err := s.RequestArtifactConnection(ctx, 1, "app", provider, "Connect this account")
+		require.NoError(t, err)
+	}
+	for _, account := range []struct {
+		owner int64
+		id    string
+	}{{2, "recipient"}, {1, "owner"}} {
+		putPolicyConnection(t, s, account.owner, account.id, "https://api.example.test")
+		require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: "app", ConnectionID: account.id, ViewerID: account.owner}))
+		requests, err := s.ListArtifactConnectionRequests(ctx, 1, "app")
+		require.NoError(t, err)
+		if account.owner == 2 {
+			assert.Len(t, requests, 2, "recipient setup cannot dismiss the owner's request")
+		} else {
+			require.Len(t, requests, 1)
+			assert.Equal(t, "future_service", requests[0].Provider)
+		}
+	}
+}

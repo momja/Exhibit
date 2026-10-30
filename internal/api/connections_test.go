@@ -22,7 +22,7 @@ import (
 func TestRelayBundleRetainsIndependentOriginsWhenConnectorsAreDisabled(t *testing.T) {
 	ro := newTestRouter(t)
 	ro.cfg.Relay.Enabled = true
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	id := createOwnArtifact(t, ro)
 	ctx := context.Background()
 	for _, origin := range []string{"https://api.example.test", "https://elsewhere.example.test"} {
@@ -60,7 +60,7 @@ func TestRelayBundleRetainsIndependentOriginsWhenConnectorsAreDisabled(t *testin
 func TestClearingConnectionDataIsAnExplicitHumanActionAndInvalidatesOldPages(t *testing.T) {
 	ro, registry := newScopedTestRouter(t)
 	ro.cfg.Relay.Enabled = true
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = ro.cfg.Connections
 	id := createOwnArtifact(t, ro)
 	ctx := context.Background()
@@ -106,7 +106,7 @@ func TestClearingConnectionDataIsAnExplicitHumanActionAndInvalidatesOldPages(t *
 func TestConnectionAPIOnlyAcquiresSecretsInTrustedAppAndReturnsMetadata(t *testing.T) {
 	ro, registry := newScopedTestRouter(t)
 	ro.cfg.Relay.Enabled = true
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	id := createOwnArtifact(t, ro)
 	body := map[string]any{"name": "Weather account", "recipe": "api-key", "origin": "https://api.example.test", "header": "X-API-Key", "secret": "never-return-secret-6921"}
 	grant, err := registry.Issue(1, id, "")
@@ -149,7 +149,7 @@ func TestConnectionAPIOnlyAcquiresSecretsInTrustedAppAndReturnsMetadata(t *testi
 func TestBasicCredentialURLStaysOutOfMetadataAndExport(t *testing.T) {
 	ro := newTestRouter(t)
 	ro.cfg.Relay.Enabled = true
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	id := createOwnArtifact(t, ro)
 	ctx := context.Background()
 	const origin = "https://api.example.test"
@@ -205,7 +205,7 @@ func TestManagedProviderIDExportsAsLocalBearerRequirement(t *testing.T) {
 	ro := newTestRouter(t)
 	ro.cfg.Relay.Enabled = true
 	s := ro.cfg.Store.(*store.SQLiteStore)
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: s, Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: s, Box: ro.cfg.Secrets})
 	ctx := context.Background()
 	id := createOwnArtifact(t, ro)
 	const origin = "https://api.example.test"
@@ -285,7 +285,7 @@ func TestConnectionSurfacesFollowTheSessionViewer(t *testing.T) {
 func TestConnectionOAuthCallbackRejectsForgedNavigation(t *testing.T) {
 	in := newProfileInstance(t, "connection-oauth-user", "oauth@example.test")
 	in.ro.cfg.Relay.Enabled = true
-	in.ro.cfg.Connections = connectors.New(connectors.Config{Store: in.st.(*store.SQLiteStore), Box: in.ro.cfg.Secrets, OAuthEnabled: true, GitHub: connectors.OAuthProvider{ClientID: "operator-client", ClientSecret: "operator-secret"}})
+	in.ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: in.st.(*store.SQLiteStore), Box: in.ro.cfg.Secrets, OAuthEnabled: true, GitHub: connectors.OAuthProvider{ClientID: "operator-client", ClientSecret: "operator-secret"}})
 	req := httptest.NewRequest(http.MethodPost, "/api/connections/oauth/github/begin", strings.NewReader(`{"name":"GitHub"}`))
 	req.AddCookie(in.cookie)
 	req.Header.Set("Content-Type", "application/json")
@@ -322,32 +322,30 @@ func TestConnectionOAuthCallbackRejectsForgedNavigation(t *testing.T) {
 	assert.Empty(t, connections)
 }
 
-func TestPrivateConnectorCannotBePublishedThroughASharingChange(t *testing.T) {
+func TestSharingSavedResultsNeverSharesAccountAccess(t *testing.T) {
 	ro := newTestRouter(t)
 	ro.cfg.Relay.Enabled = true
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	id := createOwnArtifact(t, ro)
 	c, err := ro.cfg.Connections.Create(context.Background(), 1, connectors.CreateRequest{Name: "Private bank", Recipe: "bearer", Origin: "https://api.example.test", Secret: "private-key"}, connectors.UnlimitedLimits())
 	require.NoError(t, err)
-	_, err = ro.cfg.Connections.Grant(context.Background(), 1, id, connectors.GrantRequest{ConnectionID: c.ID})
-	require.NoError(t, err)
-	w := doJSON(t, ro, http.MethodPost, "/api/shares", map[string]any{"artifact_id": id})
-	assert.Equal(t, 409, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), "explicitly enable sharing")
-	w = doJSON(t, ro, http.MethodPatch, "/api/artifacts/"+id, map[string]any{"share_state_mode": store.ShareStateShared})
-	assert.Equal(t, 409, w.Code, w.Body.String())
-	_, err = ro.cfg.Connections.Grant(context.Background(), 1, id, connectors.GrantRequest{ConnectionID: c.ID, ShareWithRecipients: true})
-	require.NoError(t, err)
+	path := "/api/artifacts/" + id + "/connections"
+	w := doJSON(t, ro, http.MethodPost, path, map[string]any{"connection_id": c.ID, "share_with_recipients": true})
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	w = doJSON(t, ro, http.MethodPost, path, map[string]any{"connection_id": c.ID})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	assert.NotContains(t, w.Body.String(), "share_with_recipients")
 	w = doJSON(t, ro, http.MethodPost, "/api/shares", map[string]any{"artifact_id": id})
-	require.Equal(t, 201, w.Code, w.Body.String())
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	w = doJSON(t, ro, http.MethodPatch, "/api/artifacts/"+id, map[string]any{"share_state_mode": store.ShareStateShared})
-	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
 }
 
 func TestConnectionAPICannotUseAnotherViewersSecretOrRaiseItsLimit(t *testing.T) {
 	ro := newTestRouter(t)
 	ro.cfg.Relay.Enabled = true
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
 	ro.cfg.Entitlements = Entitlements{Enforced: true, DefaultStorageBytes: 1 << 30, DefaultConnections: connectors.Limits{Native: 1, OAuth: 0, Vendor: 0}}
 	foreign, err := ro.cfg.Connections.Create(context.Background(), 2, connectors.CreateRequest{Name: "Other account", Recipe: "bearer", Origin: "https://api.example.test", Secret: "foreign-secret-2748"}, connectors.UnlimitedLimits())
 	require.NoError(t, err)

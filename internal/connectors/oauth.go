@@ -65,6 +65,8 @@ type oauthFlow struct {
 	binding                  [32]byte
 	verifier, name, redirect string
 	expires                  time.Time
+	setup                    SetupContext
+	repair                   *store.ConnectionRecord
 }
 
 func randomToken() string {
@@ -75,7 +77,11 @@ func randomToken() string {
 	return base64.RawURLEncoding.EncodeToString(b[:])
 }
 
-func (s *Service) BeginOAuth(_ context.Context, ownerID int64, binding, name, redirect string) (string, error) {
+func (s *Service) BeginOAuth(ctx context.Context, ownerID int64, binding, name, redirect string) (string, error) {
+	return s.BeginOAuthFor(ctx, ownerID, binding, name, redirect, SetupContext{})
+}
+
+func (s *Service) BeginOAuthFor(ctx context.Context, ownerID int64, binding, name, redirect string, setup SetupContext) (string, error) {
 	if !s.cfg.OAuthEnabled || s.cfg.GitHub.ClientID == "" || s.cfg.GitHub.ClientSecret == "" {
 		return "", ErrDisabled
 	}
@@ -89,7 +95,26 @@ func (s *Service) BeginOAuth(_ context.Context, ownerID int64, binding, name, re
 	if len(name) > 100 {
 		return "", ErrInvalid
 	}
-	flow := oauthFlow{ownerID: ownerID, binding: sha256.Sum256([]byte(binding)), verifier: oauth2.GenerateVerifier(), name: name, redirect: redirect, expires: s.cfg.Now().Add(10 * time.Minute)}
+	if err := s.validateSetup(ctx, ownerID, setup); err != nil {
+		return "", err
+	}
+	var repair *store.ConnectionRecord
+	if setup.ConnectionID != "" {
+		var err error
+		repair, err = s.cfg.Store.GetConnection(ctx, ownerID, setup.ConnectionID)
+		if err != nil {
+			return "", err
+		}
+		var policy recipe
+		if err := json.Unmarshal([]byte(repair.RecipeJSON), &policy); err != nil {
+			return "", err
+		}
+		if repair.Kind != "oauth" || repair.Provider != "github" || len(policy.Origins) != 1 || policy.Origins[0] != s.cfg.GitHub.APIOrigin {
+			return "", fmt.Errorf("%w: the saved service must match this sign-in provider", ErrInvalid)
+		}
+		name = repair.Name
+	}
+	flow := oauthFlow{ownerID: ownerID, binding: sha256.Sum256([]byte(binding)), verifier: oauth2.GenerateVerifier(), name: name, redirect: redirect, expires: s.cfg.Now().Add(10 * time.Minute), setup: setup, repair: repair}
 	state := randomToken()
 	s.mu.Lock()
 	for key, f := range s.flows {
@@ -107,8 +132,15 @@ func (s *Service) BeginOAuth(_ context.Context, ownerID int64, binding, name, re
 }
 
 func (s *Service) CompleteOAuth(ctx context.Context, ownerID int64, binding, state, code string, limits Limits) (*Connection, error) {
+	c, _, err := s.CompleteOAuthFor(ctx, ownerID, binding, state, code, limits)
+	return c, err
+}
+
+// A non-nil setup is returned only for a verified browser-bound flow. It lets
+// the UI return to the originating tool even after provider refusal.
+func (s *Service) CompleteOAuthFor(ctx context.Context, ownerID int64, binding, state, code string, limits Limits) (*Connection, *SetupContext, error) {
 	if !s.cfg.OAuthEnabled {
-		return nil, ErrDisabled
+		return nil, nil, ErrDisabled
 	}
 	s.mu.Lock()
 	flow, ok := s.flows[state]
@@ -117,19 +149,38 @@ func (s *Service) CompleteOAuth(ctx context.Context, ownerID int64, binding, sta
 	}
 	s.mu.Unlock()
 	hash := sha256.Sum256([]byte(binding))
-	if !ok || state == "" || code == "" || flow.ownerID != ownerID || !flow.expires.After(s.cfg.Now()) || subtle.ConstantTimeCompare(hash[:], flow.binding[:]) != 1 {
-		return nil, fmtOAuthState()
+	if !ok || state == "" || flow.ownerID != ownerID || !flow.expires.After(s.cfg.Now()) || subtle.ConstantTimeCompare(hash[:], flow.binding[:]) != 1 {
+		return nil, nil, fmtOAuthState()
+	}
+	if err := s.validateSetup(ctx, ownerID, flow.setup); err != nil {
+		return nil, nil, err
+	}
+	if code == "" {
+		return nil, &flow.setup, fmtOAuthState()
 	}
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, s.oauthClient())
 	token, err := s.cfg.GitHub.oauthConfig(flow.redirect).Exchange(ctx, code, oauth2.VerifierOption(flow.verifier))
 	if err != nil {
-		return nil, errors.New("GitHub authorization could not be completed; reconnect from Exhibit")
+		return nil, &flow.setup, errors.New("GitHub authorization could not be completed; reconnect from Exhibit")
+	}
+	if err := s.validateSetup(ctx, ownerID, flow.setup); err != nil {
+		return nil, nil, err
 	}
 	raw, err := json.Marshal(token)
 	if err != nil {
-		return nil, err
+		return nil, &flow.setup, err
 	}
-	return s.save(ctx, ownerID, flow.name, "github", "oauth", recipe{Origins: []string{s.cfg.GitHub.APIOrigin}, Header: "Authorization", Scheme: "Bearer ", Sensitivity: "personal"}, credential{OAuthToken: raw}, limits)
+	var c *Connection
+	if flow.repair != nil {
+		lock, _ := s.locks.LoadOrStore(flow.repair.ID, &sync.Mutex{})
+		mu := lock.(*sync.Mutex)
+		mu.Lock()
+		defer mu.Unlock()
+		c, err = s.repairCredential(ctx, flow.repair, credential{OAuthToken: raw}, flow.repair.ExternalRef)
+	} else {
+		c, err = s.save(ctx, ownerID, flow.name, "github", "oauth", recipe{Origins: []string{s.cfg.GitHub.APIOrigin}, Header: "Authorization", Scheme: "Bearer ", Sensitivity: "personal"}, credential{OAuthToken: raw}, limits)
+	}
+	return c, &flow.setup, err
 }
 func fmtOAuthState() error {
 	return fmt.Errorf("%w: OAuth state expired or did not match this browser session", ErrInvalid)

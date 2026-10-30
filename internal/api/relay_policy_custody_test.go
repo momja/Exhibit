@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRelayPolicyRemainsValidWhenSharedResponseRetainsRecipientCustody(t *testing.T) {
+func TestOwnerConnectionChangesDoNotAuthorizeRecipientRelay(t *testing.T) {
 	ro := newTestRouter(t)
 	ro.cfg.Relay.Enabled = true
 	s := ro.cfg.Store.(*store.SQLiteStore)
-	ro.cfg.Connections = connectors.New(connectors.Config{Store: s, Box: ro.cfg.Secrets})
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: s, Box: ro.cfg.Secrets})
 	ro.cfg.ConnectionPolicy = ro.cfg.Connections
 	ctx := context.Background()
 	owner, err := s.UpsertUser(ctx, "custody-owner", "owner@example.test")
@@ -30,9 +30,12 @@ func TestRelayPolicyRemainsValidWhenSharedResponseRetainsRecipientCustody(t *tes
 	}
 	connection, err := ro.cfg.Connections.Create(ctx, owner.ID, connectors.CreateRequest{Name: "Shared API", Recipe: "bearer", Origin: "https://api.example.test", Secret: "shared-secret"}, connectors.UnlimitedLimits())
 	require.NoError(t, err)
-	grant := connectors.GrantRequest{ConnectionID: connection.ID, ShareWithRecipients: true, PermittedEgress: []string{"https://old.example.test"}}
+	grant := connectors.GrantRequest{ConnectionID: connection.ID, PermittedEgress: []string{"https://old.example.test"}}
 	_, err = ro.cfg.Connections.Grant(ctx, owner.ID, id, grant)
 	require.NoError(t, err)
+	grants, err := ro.cfg.Connections.Grants(ctx, recipient.ID, id)
+	require.NoError(t, err)
+	assert.Empty(t, grants, "sharing a tool never delegates account access")
 	a, err := s.GetArtifactReadableBy(ctx, store.ViewerID(recipient.ID), id)
 	require.NoError(t, err)
 	before, err := ro.relayPolicy(ctx, recipient.ID, a)
@@ -40,7 +43,7 @@ func TestRelayPolicyRemainsValidWhenSharedResponseRetainsRecipientCustody(t *tes
 	require.NoError(t, s.RetainSharedConnectionDataPolicies(ctx, recipient.ID, id))
 	after, err := ro.relayPolicy(ctx, recipient.ID, a)
 	require.NoError(t, err)
-	assert.Equal(t, before, after, "receiving the first response must not invalidate its own host before state save")
+	assert.Equal(t, before, after, "owner grants must not enter a recipient’s relay policy")
 
 	grant.PermittedEgress = []string{"https://new.example.test"}
 	_, err = ro.cfg.Connections.Grant(ctx, owner.ID, id, grant)

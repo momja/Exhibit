@@ -34,7 +34,7 @@ type ConnectionRequestStore interface {
 	DeleteArtifactConnectionRequest(context.Context, int64, string, string) error
 }
 
-var connectionProviderPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,79}$`)
+var connectionProviderPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,79}$`)
 
 func (s *SQLiteStore) RequestArtifactConnection(ctx context.Context, ownerID int64, artifactID, provider, reason string) (*ArtifactConnectionRequest, error) {
 	reason = strings.TrimSpace(reason)

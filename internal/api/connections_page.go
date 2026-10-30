@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -22,9 +23,27 @@ type connectionCard struct {
 }
 type connectionGrantPreview struct {
 	Connection connectors.Connection
-	Sharing    bool
+}
+type connectionSetupOption struct {
+	ID   string
+	Name string
+}
+type connectionRequestView struct {
+	store.ArtifactConnectionRequest
+	Action string
+	URL    string
 }
 type connectionPageView struct {
+	Advanced         bool
+	CustomEnabled    bool
+	BaseURL          string
+	AdvancedURL      string
+	WorkspaceURL     string
+	SelectedProvider string
+	SetupProviders   []connectionSetupOption
+	Reconnect        *connectors.Connection
+	Notice           string
+	SetupFailed      bool
 	Favicon          template.URL
 	Enabled          bool
 	Artifact         *store.Artifact
@@ -39,7 +58,7 @@ type connectionPageView struct {
 	Schedules        []store.RelaySchedule
 	SchedulesEnabled bool
 	Allowance        Allowance
-	Requests         []store.ArtifactConnectionRequest
+	Requests         []connectionRequestView
 	Warnings         []scanner.Warning
 	Preview          *connectionGrantPreview
 	Operator         bool
@@ -61,6 +80,26 @@ func (ro *Router) connectionOrigins(ctx context.Context, viewer int64, artifact 
 
 func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error) {
 	v := connectionPageView{Favicon: template.URL(exhibitLogoDataURI), Enabled: ro.cfg.Relay.Enabled, Connections: []connectionCard{}, Grants: []connectors.Grant{}, pageCredentials: ro.pageCredentials(r), SchedulesEnabled: ro.cfg.Relay.SchedulesEnabled}
+	v.Advanced = r.URL.Query().Get("advanced") == "1"
+	v.SelectedProvider = r.URL.Query().Get("provider")
+	q := url.Values{"artifact": {r.URL.Query().Get("artifact")}}
+	v.BaseURL = "/connections?" + q.Encode()
+	q.Set("advanced", "1")
+	v.AdvancedURL = "/connections?" + q.Encode()
+	v.WorkspaceURL = "/partials/connections?artifact=" + url.QueryEscape(r.URL.Query().Get("artifact"))
+	if v.Advanced {
+		v.WorkspaceURL += "&advanced=1"
+	}
+	if r.URL.Query().Get("connected") != "" {
+		v.Notice = "Account connected. Existing tool permissions are unchanged."
+		if r.URL.Query().Get("artifact") != "" {
+			v.Notice += " Review access for this tool below."
+		}
+	}
+	if r.URL.Query().Get("connection_error") != "" {
+		v.SetupFailed = true
+		v.Notice = "The account was not connected. Your existing access has not changed. You can try again."
+	}
 	viewer := ownerIDFromCtx(r.Context())
 	var err error
 	v.Allowance, err = ro.resolveAllowance(r.Context(), viewer)
@@ -79,8 +118,17 @@ func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error
 		}
 	}
 	if v.Enabled && ro.cfg.Connections != nil {
+		v.CustomEnabled = ro.cfg.Connections.CustomEnabled()
 		v.Providers = ro.cfg.Connections.Providers()
+		for _, p := range v.Providers {
+			if p.Enabled && p.Kind != "vendor" && (p.Kind != "native" || v.Advanced) {
+				v.SetupProviders = append(v.SetupProviders, connectionSetupOption{p.ID, p.Name})
+			}
+		}
 		v.VendorProviders = ro.cfg.Connections.VendorProviders()
+		for _, p := range v.VendorProviders {
+			v.SetupProviders = append(v.SetupProviders, connectionSetupOption{"vendor:" + p.ID, p.Name})
+		}
 		connections, err := ro.cfg.Connections.List(r.Context(), viewer)
 		if err != nil {
 			return v, err
@@ -95,7 +143,14 @@ func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error
 				return v, err
 			}
 			v.Connections = append(v.Connections, connectionCard{Connection: c, LastUsed: used, Usage: usage})
+			if c.ID == r.URL.Query().Get("reconnect") {
+				copy := c
+				v.Reconnect = &copy
+			}
 		}
+	}
+	if r.URL.Query().Get("reconnect") != "" && v.Reconnect == nil {
+		return v, store.ErrNotFound
 	}
 	if id := r.URL.Query().Get("artifact"); id != "" {
 		v.Artifact, err = ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(viewer), id)
@@ -134,9 +189,12 @@ func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error
 			}
 		}
 		if s, ok := ro.cfg.Store.(store.ConnectionRequestStore); ok && v.IsOwner {
-			v.Requests, err = s.ListArtifactConnectionRequests(r.Context(), viewer, id)
-			if err != nil {
-				return v, err
+			requests, requestErr := s.ListArtifactConnectionRequests(r.Context(), viewer, id)
+			if requestErr != nil {
+				return v, requestErr
+			}
+			for _, request := range requests {
+				v.Requests = append(v.Requests, v.requestView(request))
 			}
 		}
 		if v.IsOwner {
@@ -149,11 +207,51 @@ func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error
 		selected := r.URL.Query().Get("connection")
 		for _, c := range v.Connections {
 			if c.ID == selected {
-				v.Preview = &connectionGrantPreview{Connection: c.Connection, Sharing: r.URL.Query().Get("sharing") == "on"}
+				v.Preview = &connectionGrantPreview{Connection: c.Connection}
 			}
 		}
 	}
 	return v, nil
+}
+
+func (v connectionPageView) requestView(request store.ArtifactConnectionRequest) connectionRequestView {
+	result := connectionRequestView{ArtifactConnectionRequest: request, Action: "Review connection options", URL: v.BaseURL + "#connection-setup"}
+	for _, c := range v.Connections {
+		if c.Provider == request.Provider || (request.Provider == "vendor" && c.Kind == "vendor") {
+			if c.Status == "active" {
+				result.Action = "Allow this tool"
+				result.URL = v.BaseURL + "&connection=" + url.QueryEscape(c.ID) + "#connection-access"
+			} else {
+				result.Action = "Reconnect account"
+				base := v.BaseURL
+				if c.Kind == "native" {
+					base = v.AdvancedURL
+				}
+				result.URL = base + "&reconnect=" + url.QueryEscape(c.ID) + "#connection-setup"
+			}
+			return result
+		}
+	}
+	for _, p := range v.Providers {
+		if p.ID == request.Provider && p.Enabled {
+			result.Action = "Connect account"
+			base := v.BaseURL
+			if p.Kind == "native" {
+				base = v.AdvancedURL
+				result.Action = "Set up custom connection"
+			}
+			result.URL = base + "&provider=" + url.QueryEscape(p.ID) + "#connection-setup"
+			return result
+		}
+	}
+	for _, p := range v.VendorProviders {
+		if p.ID == request.Provider {
+			result.Action = "Connect " + p.Name
+			result.URL = v.BaseURL + "&provider=" + url.QueryEscape("vendor:"+p.ID) + "#connection-setup"
+			return result
+		}
+	}
+	return result
 }
 
 func (ro *Router) connectionsPage(w http.ResponseWriter, r *http.Request) {
