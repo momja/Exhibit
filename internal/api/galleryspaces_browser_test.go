@@ -76,9 +76,12 @@ func TestGallerySpacesBrowser(t *testing.T) {
 			require.NoError(t, err)
 			check(`location.pathname === '/shared-by-me' && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '/shared-by-me'`, "keyboard activation navigates to outgoing shares")
 			for _, path := range []string{"/", "/shared"} {
-				// Wait for the outgoing snapshot to stop covering pointer targets,
-				// and for the full new document to load after each navigation.
-				require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.getAnimations().length === 0`)))
+				// Load can finish before pagereveal starts the cross-document
+				// transition, when getAnimations() is still empty. Wait for the
+				// first frame and its transition so the snapshot cannot eat a click.
+				require.NoError(t, chromedp.Do(ctx,
+					chromedp.Evaluate[chromedp.Void](`new Promise(resolve => requestAnimationFrame(resolve)).then(() => document.activeViewTransition?.finished)`, chromedp.EvalAwaitPromise),
+					chromedp.Poll[chromedp.Void](`document.getAnimations().length === 0`)))
 				_, err = chromedp.RunResponse(ctx, chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="`+path+`"]`)))
 				require.NoError(t, err)
 				check(`location.pathname === '`+path+`' && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '`+path+`'`, "plain links navigate and update the active space")
