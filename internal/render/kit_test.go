@@ -12,9 +12,9 @@ import (
 // version inlined, and so is its widget, so a card's tile and the tool it
 // opens share one look (Exh-61ix). The stored body keeps only the marker.
 func TestServeInlinesThePinnedKit(t *testing.T) {
-	marked := `<html><head><meta name="exhibit-kit" content="v1"></head><body>X</body></html>`
+	marked := `<html><head><meta name="exhibit-kit" content="exhibit/v1"></head><body>X</body></html>`
 	rd := newWidgetRenderer(t, "abc", marked, marked)
-	v1, _ := kit.Get("v1")
+	v1, _ := kit.Get("exhibit/v1")
 
 	artifact := httptest.NewRecorder()
 	rd.ServeArtifact(artifact, renderRequest("/a/abc", "abc", 1))
@@ -28,8 +28,8 @@ func TestServeInlinesThePinnedKit(t *testing.T) {
 		if strings.Contains(body, `<meta name="exhibit-kit"`) {
 			t.Fatalf("%s: marker must be replaced, got %s", name, body)
 		}
-		if !strings.Contains(body, `<style data-exhibit-kit="v1">`+v1.Stylesheet()+`</style>`) {
-			t.Fatalf("%s: kit v1 stylesheet must be inlined", name)
+		if !strings.Contains(body, `<style data-exhibit-kit="exhibit/v1">`+v1.Stylesheet()+`</style>`) {
+			t.Fatalf("%s: kit exhibit/v1 stylesheet must be inlined", name)
 		}
 	}
 

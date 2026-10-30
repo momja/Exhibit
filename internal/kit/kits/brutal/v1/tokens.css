@@ -1,0 +1,71 @@
+/* Brutal kit v1: design tokens. Same names as every kit on contract v1; an
+   artifact may redefine any of them on :root to restyle the kit. */
+:root{
+	color-scheme:light dark;
+	--kit-font:"Inter","Helvetica Neue",Arial,system-ui,sans-serif;
+	--kit-font-mono:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,monospace;
+	--kit-text-sm:13px;
+	--kit-text-md:15px;
+	--kit-text-lg:19px;
+	--kit-text-xl:28px;
+	--kit-text-display:52px;
+	--kit-field-text:15px;
+	--kit-space-1:4px;
+	--kit-space-2:8px;
+	--kit-space-3:12px;
+	--kit-space-4:16px;
+	--kit-space-5:24px;
+	--kit-space-6:32px;
+	--kit-radius-sm:0;
+	--kit-radius-md:0;
+	--kit-radius-lg:0;
+	--kit-radius-pill:0;
+	--kit-color-ground:#fff4d6;
+	--kit-color-panel:#fff;
+	--kit-color-subtle:#ffe9a8;
+	--kit-color-ink:#000;
+	--kit-color-ink-soft:#1a1a1a;
+	--kit-color-muted:#555;
+	--kit-color-border:#000;
+	--kit-color-hairline:#000;
+	--kit-color-accent:#ff4f9a;
+	--kit-color-accent-hover:#ff2d85;
+	--kit-color-on-accent:#000;
+	--kit-color-accent-tint:#ffd3e6;
+	--kit-color-danger:#ff3b30;
+	--kit-color-on-danger:#000;
+	--kit-color-danger-tint:#ffd6d3;
+	--kit-color-success:#00b86b;
+	--kit-color-success-tint:#c9f5df;
+	--kit-color-warn:#ffb000;
+	--kit-color-warn-tint:#ffe9b3;
+	--kit-shadow-card:4px 4px 0 var(--kit-color-border);
+	--kit-shadow-raised:8px 8px 0 var(--kit-color-border);
+	--kit-focus-ring:0 0 0 3px var(--kit-color-accent);
+}
+@media (pointer:coarse){
+	:root{--kit-field-text:16px}
+}
+@media (prefers-color-scheme:dark){
+	:root{
+		--kit-color-ground:#111;
+		--kit-color-panel:#1b1b1b;
+		--kit-color-subtle:#2a2a2a;
+		--kit-color-ink:#fff;
+		--kit-color-ink-soft:#eee;
+		--kit-color-muted:#aaa;
+		--kit-color-border:#fff;
+		--kit-color-hairline:#fff;
+		--kit-color-accent:#c6ff3d;
+		--kit-color-accent-hover:#d8ff7a;
+		--kit-color-on-accent:#000;
+		--kit-color-accent-tint:#33401a;
+		--kit-color-danger:#ff6b61;
+		--kit-color-on-danger:#000;
+		--kit-color-danger-tint:#4a1f1c;
+		--kit-color-success:#3ef0a0;
+		--kit-color-success-tint:#163d2b;
+		--kit-color-warn:#ffc640;
+		--kit-color-warn-tint:#40331a;
+	}
+}

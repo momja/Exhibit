@@ -6,7 +6,7 @@
  * tools — create_artifact / write_artifact / edit_artifact / get_artifact for the document,
  * get_state / set_state / delete_state for the artifact's stored state,
  * set_widget / edit_widget / get_widget for the artifact's gallery-card widget (av-fafu), and
- * list_kit / get_kit_component for Exhibit's shared component kit (Exh-61ix),
+ * list_kit / get_kit_component for Exhibit's shared component kits (Exh-61ix),
  * get_selection for the elements the user picked in the preview, and ask_user
  * for interactive questions in the chat. Artifact operations go through the exhibit HTTP API, so agent output enters the
  * library through the same single write path as every other ingest (scan,
@@ -194,24 +194,38 @@ function labeled(label: string, content: string): string {
 	return `${label}\n\n${content}`;
 }
 
-/** One kit version as the model reads it: the marker first, because that is
- * the one line it must copy, then what the version offers. */
-function formatKit(k: any, latest: string): string {
+/** Find a kit in the /api/kit index by ID ("paper/v1") or by name ("paper",
+ * meaning its newest version). The index lists each name oldest first. */
+function findKit(index: any, wanted: string): any {
+	const kits = index.kits ?? [];
+	return kits.find((k: any) => k.id === wanted) ?? kits.filter((k: any) => k.name === wanted).pop();
+}
+
+/** The kit index as the model reads it: every kit with the marker that pins
+ * it, then the contract the chosen kit implements, which is what the artifact
+ * is written against. */
+function formatKit(index: any, chosen: any): string {
 	const lines = [
-		`Component kit ${k.version}${k.version === latest ? " (latest)" : ""}. Pin it with this line inside <head>:`,
-		k.marker,
+		"Component kits. Pin one with its line inside <head>. Kits on the same contract take identical markup, so changing kit is a one-line edit to the marker.",
+	];
+	for (const k of index.kits ?? []) {
+		const notes = [k.id === index.default ? "default" : "", `contract ${k.contract}`].filter(Boolean).join(", ");
+		lines.push(`- ${k.id} (${notes}): ${k.description}`, `  ${k.marker}`);
+	}
+	const c = (index.contracts ?? []).find((x: any) => x.contract === chosen.contract) ?? {};
+	lines.push(
 		"",
-		k.description,
+		`Contract ${chosen.contract}, which ${chosen.id} implements. ${c.description ?? ""}`,
 		"",
-		`Base: ${k.base?.description ?? ""} Utilities: ${(k.base?.classes ?? []).join(" ")}`,
+		`Base: ${c.base?.description ?? ""} Utilities: ${(c.base?.classes ?? []).join(" ")}`,
 		"",
 		"Tokens:",
-		...(k.tokens ?? []).map((t: any) => `- ${t.name}: ${t.description}`),
+		...(c.tokens ?? []).map((t: any) => `- ${t.name}: ${t.description}`),
 		"",
 		"Components:",
-	];
-	for (const c of k.components ?? []) {
-		lines.push(`\n## ${c.name}: ${c.description}`, `classes: ${c.classes.join(" ")}`, c.usage);
+	);
+	for (const comp of c.components ?? []) {
+		lines.push(`\n## ${comp.name}: ${comp.description}`, `classes: ${comp.classes.join(" ")}`, comp.usage);
 	}
 	return lines.join("\n");
 }
@@ -735,30 +749,30 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	// The component kit (Exh-61ix). Both tools read Exhibit's own, instance-wide
-	// kit, so unlike every other tool here they name a version rather than act
-	// on the session's artifact — there is nothing of anyone's to target.
+	// The component kits (Exh-61ix). Both tools read Exhibit's own,
+	// instance-wide kits, so unlike every other tool here they name a kit rather
+	// than act on the session's artifact — there is nothing of anyone's to target.
 	pi.registerTool({
 		name: "list_kit",
-		label: "List component kit",
+		label: "List component kits",
 		description:
-			"List Exhibit's component kit: the marker that pins a version, its design tokens, " +
-			"and each component's classes and example markup. Defaults to the latest version; " +
-			"pass the version an existing artifact already pins to see what it can use.",
+			"List Exhibit's component kits and the marker that pins each, then the contract a kit " +
+			"implements: its design tokens and each component's classes and example markup. " +
+			"Describes the default kit unless you name another, such as the one an existing artifact pins.",
 		parameters: Type.Object({
-			version: Type.Optional(Type.String({ description: "Kit version, e.g. v1. Omit for the latest." })),
+			kit: Type.Optional(Type.String({ description: "Kit ID such as paper/v1, or a name for its newest version. Omit for the default." })),
 		}),
 		async execute(_id, params) {
 			const index = await api("GET", "/api/kit");
-			const wanted = params.version || index.latest;
-			const k = (index.versions || []).find((v: any) => v.version === wanted);
+			const wanted = params.kit || index.default;
+			const k = findKit(index, wanted);
 			if (!k) {
-				const known = (index.versions || []).map((v: any) => v.version).join(", ");
-				return ok(`There is no kit ${wanted}. Released versions: ${known}.`, {
-					exhibit: "kit_listed", version: wanted, missing: true,
+				const known = (index.kits || []).map((x: any) => x.id).join(", ");
+				return ok(`There is no kit ${wanted}. Released kits: ${known}.`, {
+					exhibit: "kit_listed", kit: wanted, missing: true,
 				});
 			}
-			return ok(formatKit(k, index.latest), { exhibit: "kit_listed", version: k.version });
+			return ok(formatKit(index, k), { exhibit: "kit_listed", kit: k.id });
 		},
 	});
 
@@ -767,18 +781,25 @@ export default function (pi: ExtensionAPI) {
 		label: "Read kit component",
 		description:
 			"Read one kit component's stylesheet, for when its classes and example in list_kit " +
-			"are not enough — to see exactly what a variant looks like before overriding it.",
+			"are not enough — to see exactly what a variant looks like in a kit before overriding it.",
 		parameters: Type.Object({
 			name: Type.String({ description: "Component name from list_kit, e.g. button." }),
-			version: Type.Optional(Type.String({ description: "Kit version. Omit for the latest." })),
+			kit: Type.Optional(Type.String({ description: "Kit ID or name. Omit for the default." })),
 		}),
 		async execute(_id, params) {
-			const version = params.version || (await api("GET", "/api/kit")).latest;
-			const path = "/api/kit/" + encodeURIComponent(version) + "/components/" + encodeURIComponent(params.name);
+			const index = await api("GET", "/api/kit");
+			const k = findKit(index, params.kit || index.default);
+			if (!k) {
+				return ok(`There is no kit ${params.kit}. Released kits: ${(index.kits || []).map((x: any) => x.id).join(", ")}.`, {
+					exhibit: "kit_component_read", kit: params.kit, missing: true,
+				});
+			}
+			const path = "/api/kit/" + encodeURIComponent(k.name) + "/" + encodeURIComponent(k.version) +
+				"/components/" + encodeURIComponent(params.name);
 			const r = await api("GET", path);
 			const c = r.component;
-			return ok(`kit ${r.version} component "${c.name}": ${c.description}\n\n${c.css}`, {
-				exhibit: "kit_component_read", version: r.version, name: c.name,
+			return ok(`kit ${r.kit} component "${c.name}": ${c.description}\n\n${c.css}`, {
+				exhibit: "kit_component_read", kit: r.kit, name: c.name,
 			});
 		},
 	});

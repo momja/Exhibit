@@ -1,10 +1,11 @@
-// Package kit is Exhibit's built-in component kit (Exh-61ix, experimental): a
-// versioned set of design tokens and component styles that artifacts can share,
-// so a library built over months reads as one interface rather than forty.
+// Package kit is Exhibit's built-in component kits (Exh-61ix, experimental):
+// named, versioned sets of design tokens and component styles that artifacts
+// share, so a library built over months reads as one interface rather than
+// forty.
 //
-// An artifact opts in by pinning a version in its own source:
+// An artifact opts in by pinning a kit in its own source:
 //
-//	<meta name="exhibit-kit" content="v1">
+//	<meta name="exhibit-kit" content="exhibit/v1">
 //
 // Inline replaces that marker with the kit's stylesheet, exactly as released,
 // wherever the artifact leaves storage: the render surface and the export.
@@ -12,15 +13,20 @@
 // is still one self-contained document — the kit is part of the file the
 // moment it leaves the service, never a live dependency.
 //
-// A released version is immutable. Changing the kit means adding kits/v2,
-// never editing kits/v1, because an artifact pinned a year ago must render
-// exactly as it did then; a test hashes every released version to hold that.
-// Moving an artifact to a newer kit is an edit to its marker, which makes it a
-// new version of the artifact and therefore one restore away from undone.
+// Every kit implements a contract (contracts/v1.json): the components, their
+// classes and markup, and the token names. The artifact is written against the
+// contract, so kits implementing the same one are interchangeable — swapping
+// "exhibit/v1" for "paper/v1" restyles the artifact and changes nothing else.
+//
+// Released kits and contracts are immutable. Changing one means adding a new
+// version directory, because an artifact pinned a year ago must render exactly
+// as it did then; a test hashes every released file to hold that. Moving an
+// artifact to another kit is an edit to its marker, which makes it a new
+// version of the artifact and therefore one restore away from undone.
 //
 // A meta element was chosen as the marker because nothing fetches it: the
-// footprint scanner reports no origin for it, and an unknown version left in
-// place does nothing at all in a browser.
+// footprint scanner reports no origin for it, and an unknown kit left in place
+// does nothing at all in a browser.
 //
 // All kit rules sit in one cascade layer, `@layer exhibit-kit`. Unlayered
 // styles always beat layered ones, so whatever the artifact writes overrides
@@ -41,27 +47,44 @@ import (
 	"golang.org/x/net/html"
 )
 
-//go:embed kits
+//go:embed kits contracts
 var kitsFS embed.FS
 
-// MarkerName is the meta element's name attribute that pins a kit version.
+// MarkerName is the meta element's name attribute that pins a kit.
 const MarkerName = "exhibit-kit"
 
 // Layer is the cascade layer every kit rule is wrapped in.
 const Layer = "exhibit-kit"
 
-// Kit is one released version.
-type Kit struct {
-	Version     string      `json:"version"`
+// DefaultName names the kit new artifacts use unless the user picks another.
+const DefaultName = "exhibit"
+
+// Contract is the markup an artifact writes: the components, their classes
+// and example markup, and the tokens it may style its own rules with. Kits
+// implementing the same contract differ only in how that markup looks, so
+// moving an artifact between them is a one-line change to its marker.
+// Contracts, like kits, never change once released.
+type Contract struct {
+	Version     string      `json:"contract"`
 	Description string      `json:"description"`
 	Base        Base        `json:"base"`
 	Tokens      []Token     `json:"tokens"`
 	Components  []Component `json:"components"`
-
-	stylesheet string
 }
 
-// Base describes the kit's element defaults and utility classes.
+// Kit is one released version of one named kit: a stylesheet implementing a
+// contract.
+type Kit struct {
+	Name        string    `json:"name"`
+	Version     string    `json:"version"`
+	Description string    `json:"description"`
+	Contract    *Contract `json:"-"`
+
+	stylesheet   string
+	componentCSS map[string]string
+}
+
+// Base describes the contract's element defaults and utility classes.
 type Base struct {
 	Description string   `json:"description"`
 	Classes     []string `json:"classes"`
@@ -73,8 +96,9 @@ type Token struct {
 	Description string `json:"description"`
 }
 
-// Component is one named unit of the kit: its description, the classes it
-// defines, an example of the markup it expects, and its stylesheet.
+// Component is one named unit of a contract: its description, the classes it
+// defines, an example of the markup it expects and, when read from a kit,
+// that kit's stylesheet for it.
 type Component struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
@@ -83,44 +107,79 @@ type Component struct {
 	CSS         string   `json:"css,omitempty"`
 }
 
-// Stylesheet is the version's complete CSS, in cascade order: tokens, base,
-// then components in manifest order, all inside the kit layer.
+// ID is what a marker names: "exhibit/v1".
+func (k *Kit) ID() string { return k.Name + "/" + k.Version }
+
+// Stylesheet is the kit's complete CSS, in cascade order: tokens, base, then
+// components in contract order, all inside the kit layer.
 func (k *Kit) Stylesheet() string { return k.stylesheet }
 
-// Component returns the named component, with its CSS.
+// Component returns the named component with this kit's CSS for it.
 func (k *Kit) Component(name string) (Component, bool) {
-	for _, c := range k.Components {
+	for _, c := range k.Contract.Components {
 		if c.Name == name {
+			c.CSS = k.componentCSS[name]
 			return c, true
 		}
 	}
 	return Component{}, false
 }
 
-// Marker is the markup that pins this version.
+// Marker is the markup that pins this kit.
 func (k *Kit) Marker() string {
-	return fmt.Sprintf(`<meta name="%s" content="%s">`, MarkerName, k.Version)
+	return fmt.Sprintf(`<meta name="%s" content="%s">`, MarkerName, k.ID())
 }
 
 var (
-	released = map[string]*Kit{}
-	versions []string
+	contracts = map[string]*Contract{}
+	released  = map[string]*Kit{}
+	ids       []string
 )
 
 func init() {
-	dirs, err := fs.ReadDir(kitsFS, "kits")
+	entries, err := fs.ReadDir(kitsFS, "contracts")
+	if err != nil {
+		panic("kit: read contracts: " + err.Error())
+	}
+	for _, e := range entries {
+		c := &Contract{}
+		if err := readJSON(path.Join("contracts", e.Name()), c); err != nil {
+			panic("kit: load contract " + e.Name() + ": " + err.Error())
+		}
+		if c.Version+".json" != e.Name() {
+			panic("kit: contract " + e.Name() + " declares version " + c.Version)
+		}
+		contracts[c.Version] = c
+	}
+
+	names, err := fs.ReadDir(kitsFS, "kits")
 	if err != nil {
 		panic("kit: read kits: " + err.Error())
 	}
-	for _, d := range dirs {
-		k, err := load(d.Name())
+	for _, n := range names {
+		versions, err := fs.ReadDir(kitsFS, path.Join("kits", n.Name()))
 		if err != nil {
-			panic("kit: load " + d.Name() + ": " + err.Error())
+			panic("kit: read kits/" + n.Name() + ": " + err.Error())
 		}
-		released[k.Version] = k
-		versions = append(versions, k.Version)
+		for _, v := range versions {
+			k, err := load(n.Name(), v.Name())
+			if err != nil {
+				panic("kit: load " + n.Name() + "/" + v.Name() + ": " + err.Error())
+			}
+			released[k.ID()] = k
+			ids = append(ids, k.ID())
+		}
 	}
-	sort.Slice(versions, func(i, j int) bool { return versionNumber(versions[i]) < versionNumber(versions[j]) })
+	sort.Slice(ids, func(i, j int) bool {
+		a, b := released[ids[i]], released[ids[j]]
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return versionNumber(a.Version) < versionNumber(b.Version)
+	})
+	if Default() == "" {
+		panic("kit: no " + DefaultName + " kit")
+	}
 }
 
 func versionNumber(v string) int {
@@ -129,36 +188,55 @@ func versionNumber(v string) int {
 	return n
 }
 
-func load(dir string) (*Kit, error) {
-	root := path.Join("kits", dir)
-	raw, err := kitsFS.ReadFile(path.Join(root, "manifest.json"))
+func readJSON(name string, v any) error {
+	raw, err := kitsFS.ReadFile(name)
 	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, v)
+}
+
+func load(name, version string) (*Kit, error) {
+	root := path.Join("kits", name, version)
+	var manifest struct {
+		Name        string `json:"name"`
+		Version     string `json:"version"`
+		Contract    string `json:"contract"`
+		Description string `json:"description"`
+	}
+	if err := readJSON(path.Join(root, "manifest.json"), &manifest); err != nil {
 		return nil, err
 	}
-	k := &Kit{}
-	if err := json.Unmarshal(raw, k); err != nil {
-		return nil, err
+	if manifest.Name != name || manifest.Version != version {
+		return nil, fmt.Errorf("manifest names %s/%s", manifest.Name, manifest.Version)
 	}
-	if k.Version != dir {
-		return nil, fmt.Errorf("manifest version %q does not match directory", k.Version)
+	contract, ok := contracts[manifest.Contract]
+	if !ok {
+		return nil, fmt.Errorf("no contract %q", manifest.Contract)
+	}
+	k := &Kit{
+		Name:         name,
+		Version:      version,
+		Description:  manifest.Description,
+		Contract:     contract,
+		componentCSS: map[string]string{},
 	}
 
 	var sheet strings.Builder
-	fmt.Fprintf(&sheet, "/* Exhibit component kit %s */\n@layer %s{\n", k.Version, Layer)
-	for _, name := range []string{"tokens.css", "base.css"} {
-		css, err := kitsFS.ReadFile(path.Join(root, name))
+	fmt.Fprintf(&sheet, "/* Exhibit component kit %s */\n@layer %s{\n", k.ID(), Layer)
+	for _, file := range []string{"tokens.css", "base.css"} {
+		css, err := kitsFS.ReadFile(path.Join(root, file))
 		if err != nil {
 			return nil, err
 		}
 		sheet.Write(css)
 	}
-	for i := range k.Components {
-		c := &k.Components[i]
+	for _, c := range contract.Components {
 		css, err := kitsFS.ReadFile(path.Join(root, "components", c.Name+".css"))
 		if err != nil {
 			return nil, err
 		}
-		c.CSS = string(css)
+		k.componentCSS[c.Name] = string(css)
 		sheet.Write(css)
 	}
 	sheet.WriteString("}\n")
@@ -166,24 +244,38 @@ func load(dir string) (*Kit, error) {
 	return k, nil
 }
 
-// Versions lists every released version, oldest first.
-func Versions() []string { return append([]string(nil), versions...) }
+// IDs lists every released kit, grouped by name, oldest version first.
+func IDs() []string { return append([]string(nil), ids...) }
 
-// Latest is the newest released version, the one new artifacts should pin.
-func Latest() string { return versions[len(versions)-1] }
+// Default is the newest version of the default kit, the one new artifacts
+// pin unless the user asks for another.
+func Default() string { return Latest(DefaultName) }
 
-// Get returns a released version.
-func Get(version string) (*Kit, bool) {
-	k, ok := released[version]
+// Latest is the newest released version of the named kit, or "" if there is
+// no kit by that name.
+func Latest(name string) string {
+	latest := ""
+	for _, id := range ids {
+		if released[id].Name == name {
+			latest = id
+		}
+	}
+	return latest
+}
+
+// Get returns a released kit by ID.
+func Get(id string) (*Kit, bool) {
+	k, ok := released[id]
 	return k, ok
 }
 
-// Inline replaces each kit marker in body with that version's stylesheet.
+// Inline replaces each kit marker in body with that kit's stylesheet.
 //
-// A version pinned twice is inlined once; the second marker is dropped. A
-// marker naming no released version is left exactly as written — it does
-// nothing in a browser, and silently substituting another version would
-// restyle the artifact behind its author's back. A body with no marker comes
+// A kit pinned twice is inlined once; the second marker is dropped. A marker
+// naming no released kit is left exactly as written — it does nothing in a
+// browser, and silently substituting another kit would restyle the artifact
+// behind its author's back. Pinning several kits inlines each, in order; the
+// last one wins wherever they disagree, and a script may disable all but one. A body with no marker comes
 // back unchanged, which is every artifact that never opted in.
 //
 // The markers are found with the HTML tokenizer rather than a string search,
@@ -204,12 +296,12 @@ func Inline(body string) string {
 		}
 		width := len(z.Raw())
 		if tt == html.StartTagToken || tt == html.SelfClosingTagToken {
-			if version, ok := markerVersion(z); ok {
-				if k, released := Get(version); released {
+			if id, ok := markerKit(z); ok {
+				if k, released := Get(id); released {
 					out.WriteString(body[copied:offset])
-					if !done[version] {
-						done[version] = true
-						fmt.Fprintf(&out, `<style data-exhibit-kit="%s">%s</style>`, k.Version, k.Stylesheet())
+					if !done[id] {
+						done[id] = true
+						fmt.Fprintf(&out, `<style data-exhibit-kit="%s">%s</style>`, k.ID(), k.Stylesheet())
 					}
 					copied = offset + width
 				}
@@ -224,7 +316,7 @@ func Inline(body string) string {
 	return out.String()
 }
 
-// Pinned reports which released versions body pins, in document order.
+// Pinned reports which kits body pins, released or not, in document order.
 func Pinned(body string) []string {
 	if !strings.Contains(body, MarkerName) {
 		return nil
@@ -237,16 +329,16 @@ func Pinned(body string) []string {
 			return pinned
 		}
 		if tt == html.StartTagToken || tt == html.SelfClosingTagToken {
-			if v, ok := markerVersion(z); ok {
-				pinned = append(pinned, v)
+			if id, ok := markerKit(z); ok {
+				pinned = append(pinned, id)
 			}
 		}
 	}
 }
 
-// markerVersion reads the current tag as a kit marker. It must be called
+// markerKit reads the current tag as a kit marker. It must be called
 // before anything else consumes the tokenizer's current token.
-func markerVersion(z *html.Tokenizer) (string, bool) {
+func markerKit(z *html.Tokenizer) (string, bool) {
 	name, hasAttr := z.TagName()
 	if !bytes.Equal(name, []byte("meta")) || !hasAttr {
 		return "", false

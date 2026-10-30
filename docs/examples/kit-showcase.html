@@ -1,6 +1,15 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<meta name="exhibit-kit" content="v1"><title>Run log</title></head>
+<meta name="color-scheme" content="light dark">
+<meta name="exhibit-kit" content="exhibit/v1">
+<meta name="exhibit-kit" content="paper/v1">
+<meta name="exhibit-kit" content="brutal/v1">
+<title>Kit showcase</title></head>
 <body><main class="kit-page kit-stack">
+<!-- Pins every kit so they can be compared; a real artifact pins one. Each
+     pinned kit is inlined as a <style data-exhibit-kit> element, and the
+     switcher disables all but the chosen one. The markup below never changes. -->
+<div class="kit-row kit-row--between"><span class="kit-muted">Kit: <code id="kit-name"></code></span>
+<div class="kit-row" id="kit-switcher"></div></div>
 <div class="kit-row kit-row--between"><h1>Run log</h1>
 <div class="kit-row"><button class="kit-btn" popovertarget="m">Actions</button><button class="kit-btn kit-btn--primary">Log a run</button></div></div>
 <div id="m" class="kit-menu" popover><button class="kit-menu__item">Export</button><button class="kit-menu__item">Reset</button></div>
@@ -22,8 +31,31 @@
 <div class="kit-row"><label class="kit-field" style="flex:1"><span class="kit-field__label">Distance (km)</span><input class="kit-input" value="5.0"><span class="kit-field__hint">Up to two decimals</span></label>
 <label class="kit-field" style="flex:1"><span class="kit-field__label">Notes</span><input class="kit-input" placeholder="How did it feel?"></label></div>
 <label class="kit-check"><input type="checkbox" checked> Count toward streak</label>
-<div class="kit-card__footer"><button class="kit-btn kit-btn--ghost">Cancel</button><button class="kit-btn kit-btn--danger">Delete</button><button class="kit-btn kit-btn--primary">Save</button></div></div>
+<div class="kit-card__footer"><button class="kit-btn kit-btn--ghost">Cancel</button><button class="kit-btn kit-btn--danger" commandfor="confirm" command="show-modal">Delete…</button><button class="kit-btn kit-btn--primary">Save</button></div></div>
+<dialog id="confirm" class="kit-dialog"><h2 class="kit-dialog__title">Delete this run?</h2><p>It will be removed from your streak.</p>
+<form method="dialog" class="kit-dialog__actions"><button class="kit-btn">Cancel</button><button class="kit-btn kit-btn--danger">Delete</button></form></dialog>
 <details class="kit-disclosure" open><summary>How is the streak counted?</summary><div class="kit-disclosure__body kit-muted">Any day with a logged run keeps it going.</div></details>
 <details class="kit-disclosure"><summary>Can I import from my watch?</summary><div class="kit-disclosure__body">Not yet.</div></details>
 <div class="kit-card"><div class="kit-empty"><p class="kit-empty__title">No races planned</p><p>Add a race to see a countdown here.</p></div></div>
-</main></body></html>
+</main>
+<script>
+const sheets = [...document.querySelectorAll("style[data-exhibit-kit]")];
+const switcher = document.getElementById("kit-switcher");
+function use(id) {
+  if (!sheets.some(s => s.dataset.exhibitKit === id)) id = sheets[0]?.dataset.exhibitKit;
+  for (const s of sheets) s.disabled = s.dataset.exhibitKit !== id;
+  for (const b of switcher.children) {
+    b.classList.toggle("kit-btn--primary", b.value === id);
+    b.setAttribute("aria-pressed", b.value === id);
+  }
+  document.getElementById("kit-name").textContent = id || "none inlined";
+  localStorage.setItem("kit", id);
+}
+for (const s of sheets) {
+  const b = Object.assign(document.createElement("button"), { className: "kit-btn kit-btn--sm", value: s.dataset.exhibitKit, textContent: s.dataset.exhibitKit.split("/")[0] });
+  b.onclick = () => use(b.value);
+  switcher.append(b);
+}
+use(localStorage.getItem("kit"));
+</script>
+</body></html>

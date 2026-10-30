@@ -90,9 +90,9 @@ func TestMaterializeLeavesAnAssetlessArtifactAlone(t *testing.T) {
 // exported file, or the file would restyle (or fail to style) depending on
 // which instance opens it (Exh-61ix).
 func TestMaterializeFoldsInThePinnedKit(t *testing.T) {
-	body := `<html><head><meta name="exhibit-kit" content="v1"></head><body></body></html>`
+	body := `<html><head><meta name="exhibit-kit" content="exhibit/v1"></head><body></body></html>`
 	out, err := Materialize(body, nil, nil, nil)
 	require.NoError(t, err)
 	assert.NotContains(t, out, `<meta name="exhibit-kit"`)
-	assert.Contains(t, out, `<style data-exhibit-kit="v1">`)
+	assert.Contains(t, out, `<style data-exhibit-kit="exhibit/v1">`)
 }

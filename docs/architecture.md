@@ -173,11 +173,12 @@ it safe behind the no-auth share path (§7).
   rows are inlined to mute the prompt); state, from the principal chosen by
   `Artifact.StatePrincipal` (`shared` mode inlines the owner's board, `own` the
   viewer's). The write path resolves through the same function (av-v991).
-- **Component kit** (Exh-61ix, experimental): a body that pins a kit version
-  with `<meta name="exhibit-kit" content="vN">` is served with that version's
+- **Component kits** (Exh-61ix, experimental): a body that pins a kit with
+  `<meta name="exhibit-kit" content="name/vN">` is served with that kit's
   stylesheet inlined in its place (`kit.Inline`), for artifacts, widgets and
-  version views alike; export does the same (`export.Materialize`). Released
-  versions are immutable and hash-pinned. `component-kit.md`.
+  version views alike; export does the same (`export.Materialize`). Kits on
+  one contract take identical markup, so swapping is a one-line edit. Released
+  kits and contracts are immutable and hash-pinned. `component-kit.md`.
 - **CSP** (`buildCSP`): baseline `default-src 'none'`. Every source is in one of two
   buckets: *network-reaching* (the allowlist, gated) or *local, no-egress*
   (unconditional): `script-src 'unsafe-inline' 'unsafe-eval' blob: data:`,

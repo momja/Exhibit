@@ -1,0 +1,2 @@
+.kit-empty{border:2px dashed var(--kit-color-border);display:flex;flex-direction:column;align-items:center;gap:var(--kit-space-2);padding:var(--kit-space-6) var(--kit-space-4);text-align:center;color:var(--kit-color-muted)}
+.kit-empty__title{margin:0;font-size:var(--kit-text-md);font-weight:900;text-transform:uppercase;color:var(--kit-color-ink)}

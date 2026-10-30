@@ -1,0 +1,14 @@
+.kit-badge{
+	display:inline-flex;align-items:center;gap:var(--kit-space-1);
+	padding:1px var(--kit-space-2);border:2px solid var(--kit-color-border);border-radius:var(--kit-radius-pill);
+	font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;line-height:1.4;
+	background:var(--kit-color-panel);color:var(--kit-color-ink);
+}
+.kit-badge--accent{background:var(--kit-color-accent);color:var(--kit-color-on-accent)}
+.kit-badge--success{background:var(--kit-color-success);color:#000}
+.kit-badge--warn{background:var(--kit-color-warn);color:#000}
+.kit-badge--danger{background:var(--kit-color-danger);color:#000}
+.kit-notice{padding:var(--kit-space-3);border:2px solid var(--kit-color-border);box-shadow:var(--kit-shadow-card);background:var(--kit-color-accent-tint);color:var(--kit-color-ink);font-weight:600}
+.kit-notice--warn{background:var(--kit-color-warn-tint)}
+.kit-notice--danger{background:var(--kit-color-danger-tint)}
+.kit-notice--success{background:var(--kit-color-success-tint)}

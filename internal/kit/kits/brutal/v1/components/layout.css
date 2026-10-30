@@ -5,3 +5,5 @@
 .kit-grid{display:grid;gap:var(--kit-space-4);grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr))}
 .kit-spacer{flex:1}
 .kit-row:has(> .kit-field){align-items:flex-start}
+/* A button beside fields lines up with their inputs, not their labels. */
+.kit-row:has(> .kit-field) > :not(.kit-field){align-self:flex-end}

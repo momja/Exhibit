@@ -146,7 +146,7 @@ var appOriginGETRoutes = []getRoute{
 	// unlocks, and therefore the ones a forged GET would be aimed at.
 	// The component kit (Exh-61ix): reads of data shipped in the binary.
 	{route: "/api/kit"},
-	{route: "/api/kit/{version}/components/{name}"},
+	{route: "/api/kit/{name}/{version}/components/{component}"},
 	{route: "/api/artifacts/"},
 	{route: "/api/artifacts/{artifactID}/"},
 	{route: "/api/artifacts/{artifactID}/state"},

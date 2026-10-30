@@ -27,3 +27,5 @@ Artifact with the marker renders and exports with v1 CSS inlined; unknown versio
 **2026-10-30T08:27:09Z**
 
 Built on feature/Exh-61ix/component-kit. Marker is <meta name="exhibit-kit" content="v1"> (nothing fetches a meta, so the footprint scanner ignores it). Kit rules live in @layer exhibit-kit so artifact CSS always wins. Released versions are hash-pinned by TestReleasedKitsAreImmutable. Tools: list_kit, get_kit_component. Docs: docs/component-kit.md.
+
+Kits are now named and implement a shared contract: markers are <meta name="exhibit-kit" content="name/vN">, and exhibit/v1 (default), paper/v1 and brutal/v1 all implement contract v1 (internal/kit/contracts/v1.json), so changing an artifact's kit is a one-line marker edit. TestEveryKitImplementsItsContract checks classes, component files and token names across kits. Component route is GET /api/kit/{name}/{version}/components/{component}.
