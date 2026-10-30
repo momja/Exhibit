@@ -203,9 +203,9 @@ func TestGalleryEmptyStateLinksToNewPage(t *testing.T) {
 	r := newTestRouter(t)
 	page := getPage(t, r, "/")
 
-	assert.Contains(t, page, `Your next idea belongs here.`)
+	assert.Contains(t, page, `Welcome to Exhibit`)
 	assert.Contains(t, page, `href="/new"><i class="ph ph-plus" aria-hidden="true"></i>Create your first artifact`)
-	assert.Contains(t, getPage(t, r, "/partials/gallery-grid"), `Your next idea belongs here.`)
+	assert.Contains(t, getPage(t, r, "/partials/gallery-grid"), `Welcome to Exhibit`)
 }
 
 // The 404 page's second action used to point at a /#upload fragment on the

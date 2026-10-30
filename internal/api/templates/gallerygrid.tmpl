@@ -25,24 +25,20 @@
 {{define "galleryWelcome"}}<section class="gallery-welcome" aria-labelledby="gallery-welcome-title">
   <div class="welcome-art" aria-hidden="true">
     <div class="welcome-tool welcome-tool-list">
-      <i class="ph ph-check-square"></i><span>Daily habits</span>
+      <i class="ph ph-check-square"></i>
       <div class="welcome-checks"><i class="ph ph-check-circle"></i><span></span><i class="ph ph-check-circle"></i><span></span><i class="ph ph-circle"></i><span></span></div>
     </div>
     <div class="welcome-tool welcome-tool-timer">
-      <i class="ph ph-timer"></i><span>A little focus</span>
-      <div class="welcome-clock">25<span>:00</span></div>
+      <i class="ph ph-timer"></i>
       <div class="welcome-progress"></div>
     </div>
     <div class="welcome-tool welcome-tool-chart">
-      <i class="ph ph-chart-bar"></i><span>Big picture</span>
+      <i class="ph ph-chart-bar"></i>
       <div class="welcome-bars"><span></span><span></span><span></span><span></span><span></span></div>
     </div>
   </div>
-  <p class="welcome-eyebrow">Welcome to Exhibit</p>
-  <h2 id="gallery-welcome-title">{{.Message}}</h2>
-  <p class="welcome-description">A tracker, a calculator, a tiny tool that makes your day easier. <br>Give it a home here, and make it yours.</p>
+  <h2 class="welcome-eyebrow" id="gallery-welcome-title">{{.Message}}</h2>
   <a class="btn welcome-create" href="{{.ActionURL}}"><i class="ph ph-plus" aria-hidden="true"></i>{{.ActionLabel}}<i class="ph ph-arrow-right" aria-hidden="true"></i></a>
-  <p class="welcome-methods">Build with AI, paste HTML, or bring a page from the web.</p>
 </section>{{end}}
 
 {{define "galleryMore"}}<div class="gallery-more">
