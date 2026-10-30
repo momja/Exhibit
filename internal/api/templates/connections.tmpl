@@ -12,7 +12,7 @@
   {{if .Enabled}}<div class="connect-layout">
     <section id="connection-workspace" hx-get="{{.WorkspaceURL}}" hx-trigger="exhibit:connections-changed from:body" hx-swap="innerHTML">{{template "connectionsBody" .}}</section>
     <aside class="connect-sidebar">{{template "connectionCreate" .}}<div class="connect-custody"><i class="ph ph-lock-key" aria-hidden="true"></i><div><strong>Your accounts stay yours.</strong><p>Sharing a tool never lets someone use your account. Each person connects their own.</p></div></div></aside>
-  </div>{{else}}<section class="card connect-empty"><i class="ph ph-plugs" aria-hidden="true"></i><h3>Connections are switched off.</h3><p>Connections are experimental and must be enabled by the person running this Exhibit instance. Your saved data stays in place.</p></section>{{template "connectionSavedData" .}}{{end}}
+  </div>{{else}}<section class="card connect-empty"><i class="ph ph-plugs" aria-hidden="true"></i><h3>Connections are switched off.</h3><p>Connections are experimental and must be enabled by the person running this Exhibit instance. Your saved data stays in place.</p></section><section id="connection-workspace" hx-get="{{.WorkspaceURL}}" hx-trigger="exhibit:connections-changed from:body" hx-swap="innerHTML">{{template "connectionsBody" .}}</section>{{end}}
 </main>
 <script>const TOKEN={{.Token}}; const READ_ONLY={{if .ReadOnly}}true{{else}}false{{end}};</script><script src="{{asset "gallery/api.js"}}"></script>{{template "componentScripts"}}
 </body></html>{{end}}
@@ -61,6 +61,7 @@
 {{else}}<p class="connect-next-step">Open a tool’s Connections menu to choose which account it can use.</p>{{end}}
 {{if not .Advanced}}<details class="connect-advanced"><summary>Advanced · Experimental</summary><p>Custom API credentials, server request settings, scheduled fetches and diagnostics.</p><a href="{{.AdvancedURL}}">Open advanced connections</a></details>{{end}}
 {{else}}{{template "connectionSavedData" .}}{{end}}
+{{if and .Advanced .Operator}}<section class="card connect-section"><div class="connect-section-head"><h3>Vendor usage</h3><span class="badge">Operator only</span></div><p class="connect-section-intro">{{.UsagePeriod}}. Attempt counts and currently stored connections; vendor billing terms determine actual charges.</p>{{if .VendorUsage}}<div class="connect-activity"><table><thead><tr><th>Engine</th><th>Provider</th><th>Stored</th><th>Management</th><th>Injected</th><th>Forwarded</th></tr></thead><tbody>{{range .VendorUsage}}<tr><td>{{.Engine}}</td><td>{{.Provider}}</td><td>{{.StoredConnections}}</td><td>{{.ManagementCalls}}</td><td>{{.InjectCalls}}</td><td>{{.ForwardCalls}}</td></tr>{{end}}</tbody></table></div>{{else}}<p class="muted">No managed connection activity this month.</p>{{end}}<p class="field-help">Cached responses spend no provider call. <a href="/api/admin/connector-usage">View monthly counters as JSON</a>.</p></section>{{end}}
 {{end}}
 
 {{define "connectionSavedData"}}{{if .Artifact}}<section class="card connect-section"><div class="connect-section-head"><h3>Saved results are separate</h3><i class="ph ph-database" aria-hidden="true"></i></div><p class="connect-section-intro">Disconnecting an account stops future access. Results this tool has already saved remain in its saved data.</p>
