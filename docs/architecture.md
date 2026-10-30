@@ -131,6 +131,9 @@ The only way data changes. Full route reference: `api.md`.
   the authenticated group (av-4ac9). Values come from env on `api.Config`
   (`PUBLIC_MODE_ENABLED`, `PUBLIC_INSTANCE_NAME`, `PUBLIC_INSTANCE_DESCRIPTION`,
   `PUBLIC_OWNER_ID`). 404 when public mode is off.
+- `POST/GET/DELETE /api/artifacts/:id/agent-grants`: owner-issued credentials
+  for agents outside the server (Exh-l2xj, §3.7a). Issuing needs a session, or
+  the page credential of a no-login instance. Not in `agentSubResources`.
 
 **Conditional source and widget saves** (av-n0gl): independent opaque revisions
 pair each read's bytes with its token. The version transaction checks the token
@@ -741,6 +744,35 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
 - **Guardrail** (av-gust): with `GUARDRAIL_*`, `ext/guard.ts` screens each user
   message on Pi's `input` hook; a failed screen blocks. `security.md` §5.4.
 
+### 3.7a External agents over MCP (Exh-17a5)
+
+An owner can let an agent of their own edit one artifact over MCP, with a Pi
+session's reach and no more. Setup and tools: `agent.md`; trust argument:
+`security.md` §5.5; routes: `api.md`.
+
+- **Persisted grants** (Exh-l2xj): `agent_grants` holds a SHA-256 digest per
+  token, cascading with the artifact; no expiry. They resolve to the same
+  `agentscope.Grant` as a Pi credential, so `agentScopeAllows`, version
+  provenance (`grant:<id>`, the label) and revision preconditions apply
+  unchanged. Always bound: never `POST /api/artifacts`. A disabled owner's
+  grants do not resolve. `GET /api/agent/credential` reports a credential's
+  own artifact id, the one allowlist entry outside `/api/artifacts`.
+- **Tools** (`internal/mcpserver`): the Pi tools minus `create_artifact`,
+  `get_selection`, `ask_user`, each an HTTP request through an `API`
+  interface. Targeted edits are applied by the API, exactly.
+  `internal/agentguidance` holds the prompt text Pi and MCP share.
+- **Stdio** (Exh-q6xo): `cmd/exhibit-mcp`, a separate binary for the agent's
+  machine, configured with `EXHIBIT_URL` and `EXHIBIT_TOKEN`.
+- **Remote** (Exh-uhvu): Streamable HTTP at `APP_ORIGIN/mcp`, bearer grant
+  only, never a cookie; each MCP session bound to its grant; foreign `Origin`
+  refused. Tools loop back through the router in-process with the session's
+  token, on a context that keeps cancellation and drops every value.
+- **OAuth** (Exh-354p, Exh-rhlq): protected-resource metadata and
+  `WWW-Authenticate` on 401; one `agentTokenVerifiers` seam for
+  `authMiddleware` and `/mcp`. A built-in authorization server (open DCR,
+  code + PKCE S256, consent page picking one artifact) issues agent grants as
+  access tokens. Client ids are signed registrations; codes are in memory.
+
 ### Hosted authentication
 
 Configured Clerk keys select the hosted login path. `internal/auth/clerk.go`
@@ -1007,6 +1039,7 @@ A share lives until deleted. There is no expiry, and `POST /api/shares` refuses 
 | Object-storage bodies | Blob interface | **done** (av-52ll) |
 | Tier-2 React | Render surface | in-iframe Babel, then esbuild |
 | Chat-UI ingest | API | Chrome extension as a new client |
+| Bring-your-own agents | agent grants + `/mcp` | **done** (Exh-17a5): one artifact per credential, pasted token or OAuth |
 
 ## 9. What this architecture deliberately is not
 

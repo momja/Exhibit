@@ -207,6 +207,10 @@ share_links(id, artifact_id UNIQUE)
 share_grants(artifact_id, recipient_id, created_at, PRIMARY KEY (artifact_id, recipient_id))
 -- Both cascade with the artifact; grants also cascade with the recipient.
 -- Card sharing indicators are computed by COUNT / EXISTS, not stored rollups.
+-- An owner-issued credential for an agent outside the server (Exh-l2xj): one
+-- artifact each, the token stored only as a digest, no expiry; listed and
+-- revoked on the artifact's page. OAuth-issued MCP tokens are rows here too.
+agent_grants(id, token_hash, owner_id, artifact_id, label, created_at, last_used_at)
 ```
 
 ### 4.5 Identity & auth

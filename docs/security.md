@@ -1514,6 +1514,70 @@ blocks when the screen fails. What it is not:
   provider account. It does nothing about what users publish, and it is not a
   topic filter.
 
+### 5.5 External agents over MCP: the same wall, a different driver
+
+An owner can hand an agent of their own (Claude Code, Cursor, Codex) a
+credential over one artifact (epic `Exh-17a5`): pasted as a token into the
+stdio connector (`cmd/exhibit-mcp`) or a remote client of `APP_ORIGIN/mcp`, or
+issued by this instance's OAuth flow. Every route to that credential ends at
+the same object: a persisted **agent grant** (`agent_grants`, Exh-l2xj), which
+`authMiddleware` resolves to the same `agentscope.Grant` a Pi session holds.
+§5.1 therefore applies unchanged, and what this section adds is only what is
+different.
+
+- **One credential, one artifact, by construction.** A grant names one
+  artifact at issue and is never rebound; it cannot create one (it is never
+  unbound) and reaches nothing `agentScopeAllows` does not list. The only
+  addition to that list is `GET /api/agent/credential`, which tells a
+  credential its own artifact id and nothing else. No MCP tool takes an id.
+- **Owner-issued.** Issuing needs a signed-in session, or the page credential
+  of an instance with no login (where the person and the operator are one).
+  The operator's static token on an instance with a login is refused: a
+  standing credential over somebody's artifact is that person's decision. A
+  grant, a recipient and a public visitor are refused, and `agent-grants` is
+  not in `agentSubResources`, so a credential cannot extend itself in time.
+- **Listable and revocable.** Every live grant is on its artifact's page, with
+  when it was issued and last used, OAuth-issued ones under the client's name.
+  Revoking deletes the row and the next request is a 401. Deleting the
+  artifact or the account removes its grants; disabling the account suspends
+  them. A grant does not expire, on the reasoning shares do not (§7 of the
+  PRD): visibility, not a timer.
+- **Stored as a digest.** The token is 256 random bits shown once; the store
+  keeps its SHA-256. A fast hash is enough for a secret that cannot be
+  guessed, and a leaked database names no usable token.
+- **Provenance from the row.** A version an external agent writes is
+  `origin=agent`, labelled with the grant's label and attributed to
+  `grant:<id>`, read from the grant, never from the request.
+- **`/mcp` takes a bearer grant and nothing ambient.** No cookie is read
+  there, so a page the owner visits has no credential to forge a request
+  with; the service token and Pi tokens are refused. Each MCP session is
+  bound to the grant that opened it. A foreign `Origin` is refused. Every tool
+  call is an in-process request through the router with the session's own
+  token, so the body limit, the scope check and the revision preconditions
+  are the same ones every other client meets.
+- **The OAuth server issues grants, not user tokens.** Its access token *is*
+  an agent grant over the one artifact the owner picked on the consent page,
+  so no token it issues is ever library-wide. Client ids are signed
+  registrations, so open registration stores nothing; codes are in memory,
+  single-use, five minutes, bound to the client, the redirect URI and a PKCE
+  S256 challenge. The consent page cannot be framed, its submit relies on the
+  `SameSite=Lax` session cookie (§1.4), and it shows the client's chosen name
+  as a claim beside the redirect host the browser will actually be sent to.
+
+**What is new is the driver.** A Pi session's only tools are Exhibit's. An
+external agent also holds whatever else its user gave it: a shell, a
+filesystem, other MCP servers, credentials for other services. Artifact text
+reaches it the same way, as tool results (§5.2), and the server's instructions
+carry the same contract that tool results are data. But Exhibit does not
+control that agent's prompt, model or other tools, so an injection in an
+artifact body (the URL-ingest case above all) is aimed at a more capable
+target than Pi. Exhibit's wall still holds on its side: the injection reaches
+one artifact here and nothing else in the library. What it can do *outside*
+Exhibit is bounded by the agent's own permissions, which are the user's to
+set. The setup copy says to connect an agent only to artifacts whose content
+the user trusts as much as anything else they paste into it, and clients that
+ask before running tools are the mitigation that lives on their side.
+
 ## 6. Residual risk
 
 Accepted, with eyes open (see the PRD §6.4): the model controls what an artifact

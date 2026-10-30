@@ -449,6 +449,63 @@ its `get_selection` tool rather than as part of `message`. See `docs/security.md
 (Ctrl+Shift+S) lets you click an element in the live preview and attach its
 screenshot + selector to your next prompt. See [docs/agent.md](./docs/agent.md).
 
+## Agent grants and MCP (external agents)
+
+An owner can let an agent of their own edit one artifact (epic `Exh-17a5`).
+See [docs/agent.md](./agent.md#external-agents-mcp) for setup and
+`security.md` §5.5 for the trust argument.
+
+```
+POST   /api/artifacts/:id/agent-grants          Issue a grant {"label"?} -> 201 {"grant": {id, artifact_id, label, created_at, last_used_at}, "token"}
+GET    /api/artifacts/:id/agent-grants          List live grants -> {"grants": [...]} (never a token)
+DELETE /api/artifacts/:id/agent-grants/:grantID Revoke one -> 204; the token's next request is 401
+GET    /api/agent/credential                    An agent credential's own scope -> {"artifact_id"}; 404 for anyone else
+POST|GET|DELETE /mcp                            MCP Streamable HTTP; Authorization: Bearer <grant token> only
+GET    /.well-known/oauth-protected-resource/mcp   Protected-resource metadata (RFC 9728); also at the bare path
+GET    /.well-known/oauth-authorization-server     Authorization-server metadata (RFC 8414)
+POST   /oauth/register                          Dynamic client registration (RFC 7591), public clients only
+GET    /oauth/authorize                         Consent page: the signed-in owner picks one artifact
+POST   /oauth/authorize                         The consent form's submit
+POST   /oauth/token                             authorization_code + PKCE (S256) -> {"access_token", "token_type": "Bearer"}
+```
+
+**Grants.** The token is returned once and stored only as a SHA-256 digest.
+Issuing needs a signed-in session, or any page credential on an instance with
+no login; the static token on an instance with a login gets `403`. The three
+routes are owner-only: another owner's or a recipient's request is `404`. A
+label is one line of at most 100 characters (default `External agent`) and is
+recorded on every version the grant writes, with `origin: "agent"` and
+`session_id: "grant:<id>"`. Grants do not expire. Disabling the owner's
+account suspends them; deleting the artifact or the account removes them.
+
+**What a grant reaches** is exactly what a Pi session bound to the artifact
+reaches (`security.md` §5.1): `GET`/`PATCH` of the artifact, its `state` and
+`widget` sub-resources, `GET` of its `assets`, and `/api/agent/credential`.
+Everything else is `403`, including `POST /api/artifacts`, `versions`,
+`origins`, `shares` and `agent-grants` itself. Body and widget writes must
+carry the revision they read (`expected_source_revision`,
+`expected_widget_revision`), or they are `428`.
+
+**`/mcp`** serves the tools `cmd/exhibit-mcp` serves over stdio:
+`get_artifact`, `edit_artifact`, `write_artifact`, `get_state`, `set_state`,
+`delete_state`, `get_widget`, `set_widget`, `edit_widget`. A request without a
+valid grant is `401` with
+`WWW-Authenticate: Bearer resource_metadata="<APP_ORIGIN>/.well-known/oauth-protected-resource/mcp"`.
+Session cookies are never read; a browser `Origin` other than `APP_ORIGIN` is
+`403`. An MCP session is bound to the grant that opened it, and idle sessions
+close after 30 minutes.
+
+**OAuth.** The protected-resource metadata names this instance as its only
+authorization server. Registration accepts `https` redirect URIs, `http` on
+the loopback interface (any port at authorization time, RFC 8252), and native
+private-use schemes; `token_endpoint_auth_method` must be `none` or omitted.
+Authorization requires `code_challenge_method=S256`; `resource`, if sent, must
+be `<APP_ORIGIN>/mcp`. The redirect carries `code`, `state` and `iss`. Codes
+are single-use and live five minutes. The access token is an agent grant
+labelled with the client's name: it has no `expires_in` and there is no
+refresh token. Errors follow RFC 6749 (`invalid_grant`, `invalid_request`,
+`invalid_target`, `unsupported_grant_type`, `access_denied`).
+
 ## Shares
 
 ```

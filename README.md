@@ -103,6 +103,15 @@ The full HTTP API reference — every route plus the ingest, network-allowlist,
 state (cross-device sync), collection/tag, agent, sharing, and render-surface
 flows — lives in [docs/api.md](./docs/api.md).
 
+## Use your own agent
+
+Any artifact can be edited by an agent of your own (Claude Code, Cursor,
+Codex, ...) over MCP: open it, choose **More → Connect your own agent**, and
+paste the configuration it gives you, or just point an OAuth-capable client at
+`<your instance>/mcp`. A connection reaches that one artifact and nothing else
+in your library, and you can revoke it from the same panel. Setup and tools:
+[docs/agent.md](./docs/agent.md#external-agents-mcp).
+
 ## Security model
 
 Full stance — CSP, vendoring, clipboard/file defaults — in [docs/security.md](./docs/security.md). In brief:
