@@ -10,8 +10,6 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
 main{padding:var(--space-8);max-width:900px;margin:0 auto}
-/* Match the approved account flow while retaining the ordinary admin header. */
-
 
 /* --- lede -------------------------------------------------------------- */
 .lede h2{font-size:28px;font-weight:650;letter-spacing:-.025em}
