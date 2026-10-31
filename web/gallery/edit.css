@@ -180,12 +180,5 @@ input.state-input{max-width:340px}
 .tag-error{color:var(--color-danger-hover);margin-top:8px}
 
 /* Edit-tag modal. */
-.modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:100}
-.modal-overlay[hidden]{display:none}
-.modal{background:var(--color-panel);border-radius:10px;padding:20px;width:380px;max-width:92vw;box-shadow:var(--shadow-modal)}
-.modal h2{font-size:16px;font-weight:600}
-.modal label{display:block;font-size:12px;color:var(--color-ink-mid);margin:12px 0 4px}
-.modal input[type=text]{width:100%;padding:7px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
-.modal input[type=text]:focus{border-color:var(--brand-blue)}
-.modal-error{color:var(--color-danger-hover);font-size:12px;margin-top:10px}
-.modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
+.tag-edit-dialog .modal-error{color:var(--color-danger-hover);font-size:12px;margin-top:10px}
+.tag-edit-dialog .modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}

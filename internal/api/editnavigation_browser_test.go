@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/momja/Exhibit/internal/chromium"
 	"github.com/momja/Exhibit/internal/chromium/chromiumtest"
@@ -46,6 +47,17 @@ func TestEditNavigationBrowser(t *testing.T) {
 				t.Helper()
 				_, err := chromedp.RunResponse(ctx, chromedp.Evaluate[chromedp.Void](js))
 				require.NoError(t, err)
+			}
+			back := func(selector string) {
+				t.Helper()
+				history, err := chromedp.Run(ctx, chromedp.NavigationEntries())
+				require.NoError(t, err)
+				require.Greater(t, history.CurrentIndex, int64(0))
+				// A protocol command survives the departing JavaScript context.
+				// Wait for the destination DOM, since a cached page has no load event.
+				_, err = chromedp.Call(ctx, page.NavigateToHistoryEntry, page.NavigateToHistoryEntryParams{EntryID: history.Entries[history.CurrentIndex-1].ID})
+				require.NoError(t, err)
+				require.NoError(t, chromedp.Do(ctx, chromedp.WaitVisible(chromedp.CSS(selector))))
 			}
 			wait := func(js string) {
 				t.Helper()
@@ -107,11 +119,11 @@ func TestEditNavigationBrowser(t *testing.T) {
 			navigate(`document.querySelector('#pip a[aria-label="My library"]').click()`)
 			wait(`document.querySelector('[data-gallery]')`)
 			check(`location.pathname === '/' && location.search === ''`, "Library does not depend on history")
-			eval(`history.back()`)
-			require.NoError(t, chromedp.Do(ctx, chromedp.WaitVisible(chromedp.CSS(`#pip-more`))))
-			eval(`history.back()`)
-			require.NoError(t, chromedp.Do(ctx, chromedp.WaitVisible(chromedp.CSS(`.app-header-back`))))
+			back(`#pip-more`)
+			back(`.app-header-back`)
+			wait(`document.querySelector('.cm-editor')`)
 			eval(`document.getElementById('title').value='Another draft after Back'; document.getElementById('title').dispatchEvent(new Event('input',{bubbles:true}));`)
+			wait(`document.querySelector('[data-unsaved-changes-target="status"]').textContent === 'Unsaved changes'`)
 			check(`(() => { const event = new Event('beforeunload',{cancelable:true}); window.dispatchEvent(event); return event.defaultPrevented; })()`, "native leave protection is restored after browser Back")
 		})
 	}

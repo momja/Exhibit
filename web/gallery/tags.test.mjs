@@ -27,6 +27,11 @@ async function loadTags({ responses = [], initial = {}, confirmed = true } = {})
     "tag-edit-error": { hidden: true },
     ...initial
   });
+  page.byId('tags-panel').querySelector = selector => page.byId(selector.slice(1));
+  const dialog = page.byId('tag-edit-modal');
+  // Feature tests observe the shared event boundary; Chromium tests own lifecycle.
+  dialog.addEventListener('exhibit:modal-open', () => { dialog.open = true; });
+  dialog.addEventListener('exhibit:modal-close', () => { dialog.open = false; dialog.dispatchEvent({ type: 'modal:closed' }); });
   page.window.apiFetch = api.apiFetch;
   await page.loadModule(TAGS_JS);
   page.window.location.reload = () => { reloads++; };
@@ -102,14 +107,14 @@ test("the edit dialog renames the tag library-wide and re-renders the panel", as
   const t = await loadTags();
   await t.clickAction("edit-tag", { tagId: "tag-1", tagName: "charts", tagColor: "#ffffff" });
   const modal = t.byId("tag-edit-modal");
-  assert.equal(modal.hidden, false);
+  assert.equal(modal.open, true);
   assert.equal(t.byId("tag-edit-name").value, "charts");
 
   t.byId("tag-edit-name").value = "graphs";
   await modal.dispatchEvent({ type: "click", target: { closest: (sel) => (sel === "#tag-edit-save" ? {} : null) } });
   assert.deepEqual(t.api.calls.map((c) => [c.method, c.path]), [["PATCH", "/api/tags/tag-1"]]);
   assert.deepEqual(JSON.parse(t.api.calls[0].body), { name: "graphs", color: "#ffffff" });
-  assert.equal(modal.hidden, true);
+  assert.equal(modal.open, false);
   assert.deepEqual(t.events, ["exhibit:tags-changed"]);
 });
 
@@ -119,7 +124,7 @@ test("deleting a tag asks first, and a declined confirm sends nothing", async ()
   const modal = t.byId("tag-edit-modal");
   await modal.dispatchEvent({ type: "click", target: { closest: (sel) => (sel === "#tag-edit-delete" ? {} : null) } });
   assert.equal(t.api.calls.length, 0);
-  assert.equal(modal.hidden, false);
+  assert.equal(modal.open, true);
 });
 
 test("creating validates its own name even when an existing tag is selected", async () => {

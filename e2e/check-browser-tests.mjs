@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs';
 
 // A green `go test` can include skipped browser tests. Require the existing
 // Stimulus integrations to actually pass, without changing their local opt-in.
-const required = new Set(['TestActionMenuBrowser', 'TestGalleryActionMenuDuplicationBrowser']);
+const required = new Set([
+  'TestActionMenuBrowser',
+  'TestGalleryActionMenuDuplicationBrowser',
+  'TestTagModalBrowser',
+]);
 for (const line of readFileSync(new URL('./artifacts/go-tests.jsonl', import.meta.url), 'utf8').split('\n').filter(Boolean)) {
   const event = JSON.parse(line);
   if (event.Package !== 'github.com/momja/Exhibit/internal/api' || !required.has(event.Test)) continue;
@@ -10,4 +14,4 @@ for (const line of readFileSync(new URL('./artifacts/go-tests.jsonl', import.met
   if (event.Action === 'pass') required.delete(event.Test);
 }
 if (required.size) throw new Error(`Missing required browser results: ${[...required].join(', ')}`);
-console.log('Both required Stimulus Chromium integrations executed and passed.');
+console.log('All required Stimulus Chromium integrations executed and passed.');

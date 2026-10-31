@@ -309,3 +309,19 @@ The screenshots show the real Settings page rendered with that provider stub:
 ![Settings](screenshots/Exh-r6a0/settings.png)
 
 [Phone layout](screenshots/Exh-r6a0/settings-mobile.png)
+
+## Shared native modal adoption
+
+The tag editor composes `modal` on a stable dialog inside the Tags panel,
+outside `#tags-body`. The feature sends `exhibit:modal-open` with its pencil
+as `detail.trigger`, vetoes dismissal while saving, and sends
+`exhibit:modal-close` after success. After the server-rendered tag body swaps,
+it focuses the replacement pencil or the existing-tag selector after deletion.
+Modal fields are resolved inside the owning panel rather than globally.
+
+Run `go test ./internal/api -run 'TestTagModalBrowser' -count=1` for native
+focus/Tab, Escape/backdrop, validation, save/htmx, and disconnect/reconnect
+checks. Set `MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots"` to refresh captures.
+
+[Tag editor desktop](screenshots/Exh-p3ah/1280.png) ·
+[Tag editor phone](screenshots/Exh-p3ah/390.png)

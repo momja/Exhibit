@@ -10,7 +10,7 @@ import { apiFetch } from './api-module.js';
   if (!panel) return;
 
   const artifactID = panel.dataset.artifactId;
-  const byId = (id) => document.getElementById(id);
+  const byId = (id) => panel.querySelector('#' + id);
 
   function changed() {
     document.body.dispatchEvent(new CustomEvent('exhibit:tags-changed'));
@@ -100,7 +100,7 @@ import { apiFetch } from './api-module.js';
     const action = target.closest ? target.closest('[data-action]') : null;
     if (action && action.dataset.action === 'detach-tag') return detach(action.dataset.tagId);
     if (action && action.dataset.action === 'edit-tag') {
-      return openEditModal(action.dataset.tagId, action.dataset.tagName, action.dataset.tagColor);
+      return openEditModal(action.dataset.tagId, action.dataset.tagName, action.dataset.tagColor, action);
     }
     const swatch = target.closest ? target.closest('.color-swatch') : null;
     if (swatch) return setColor('tag-add', byId('tag-add-create-fields'), swatch.dataset.color);
@@ -124,58 +124,73 @@ import { apiFetch } from './api-module.js';
 
   const modal = byId('tag-edit-modal');
   let editingTagID = null;
+  let busy = false;
+  let focusTagID = null;
+  panel.addEventListener('htmx:after:swap', () => {
+    if (!focusTagID || modal.open) return;
+    const pencil = [...panel.querySelectorAll('[data-action="edit-tag"]')].find(button => button.dataset.tagId === focusTagID);
+    (pencil || byId('tag-add-select')).focus();
+    focusTagID = null;
+  });
+  modal.addEventListener('modal:before-close', event => { if (busy) event.preventDefault(); });
+  modal.addEventListener('modal:closed', () => { editingTagID = null; });
 
-  function openEditModal(tagID, name, hex) {
+  async function mutateTag(method, body, failure) {
+    if (busy || !editingTagID) return;
+    busy = true;
+    const tagID = editingTagID;
+    const buttons = [...modal.querySelectorAll('button')];
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+      const response = await apiFetch('/api/tags/' + encodeURIComponent(tagID), {
+        method, ...(body ? { body: JSON.stringify(body) } : {})
+      }).catch(() => null);
+      if (!response?.ok) { setError('tag-edit-error', await errorOf(response, failure)); return; }
+      busy = false;
+      focusTagID = tagID;
+      closeEditModal();
+      changed();
+    } finally {
+      busy = false;
+      buttons.forEach(button => { button.disabled = false; });
+    }
+  }
+
+  function openEditModal(tagID, name, hex, trigger) {
+    if (busy || modal.open) return;
     editingTagID = tagID;
     byId('tag-edit-name').value = name;
     setColor('tag-edit', modal, hex);
     setError('tag-edit-error', '');
-    modal.hidden = false;
-    byId('tag-edit-name').focus();
+    modal.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger } }));
   }
 
   function closeEditModal() {
-    modal.hidden = true;
-    editingTagID = null;
+    modal.dispatchEvent(new CustomEvent('exhibit:modal-close'));
   }
 
   async function saveTag() {
     const name = byId('tag-edit-name').value.trim();
     if (!name) { setError('tag-edit-error', 'Name is required.'); return; }
-    const r = await apiFetch('/api/tags/' + encodeURIComponent(editingTagID), {
-      method: 'PATCH',
-      body: JSON.stringify({ name: name, color: byId('tag-edit-color-hex').value.trim() })
-    }).catch(function() { return null; });
-    if (!r || !r.ok) { setError('tag-edit-error', await errorOf(r, 'Failed to save tag.')); return; }
-    closeEditModal();
-    changed();
+    return mutateTag('PATCH', { name, color: byId('tag-edit-color-hex').value.trim() }, 'Failed to save tag.');
   }
 
   async function deleteTag() {
+    if (busy) return;
     const name = byId('tag-edit-name').value;
     if (!confirm('Delete tag "' + name + '"? It will be removed from every artifact. This cannot be undone.')) return;
-    const r = await apiFetch('/api/tags/' + encodeURIComponent(editingTagID), {
-      method: 'DELETE'
-    }).catch(function() { return null; });
-    if (!r || !r.ok) { setError('tag-edit-error', await errorOf(r, 'Failed to delete tag.')); return; }
-    closeEditModal();
-    changed();
+    return mutateTag('DELETE', null, 'Failed to delete tag.');
   }
 
   if (modal) {
     modal.addEventListener('click', function(e) {
       const target = e.target;
-      if (target === modal) return closeEditModal();
       const swatch = target.closest ? target.closest('.color-swatch') : null;
       if (swatch) return setColor('tag-edit', modal, swatch.dataset.color);
-      if (target.closest && target.closest('#tag-edit-cancel')) return closeEditModal();
       if (target.closest && target.closest('#tag-edit-save')) return saveTag();
       if (target.closest && target.closest('#tag-edit-delete')) return deleteTag();
       return undefined;
     });
     modal.addEventListener('input', function(e) { onColorInput('tag-edit', modal, e.target); });
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && !modal.hidden) closeEditModal();
-    });
   }
 })();
