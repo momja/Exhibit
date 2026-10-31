@@ -42,7 +42,10 @@ func (b modalBrowser) run(actions ...chromedp.Action[chromedp.Void]) {
 	require.NoError(b.t, chromedp.Do(b.ctx, actions...))
 }
 func (b modalBrowser) eval(js string) { b.t.Helper(); b.run(chromedp.Evaluate[chromedp.Void](js)) }
-func (b modalBrowser) wait(js string) { b.t.Helper(); b.run(chromedp.Poll[chromedp.Void](js)) }
+func (b modalBrowser) wait(js string) {
+	b.t.Helper()
+	require.NoError(b.t, chromedp.Do(b.ctx, chromedp.Poll[chromedp.Void](js, chromedp.WithPollingTimeout(8*time.Second))), js)
+}
 func (b modalBrowser) check(js string) {
 	b.t.Helper()
 	ok, err := chromedp.Run(b.ctx, chromedp.Evaluate[bool](js))
@@ -73,6 +76,24 @@ func (b modalBrowser) dialogCycle(selector, openJS, focusSelector string) {
 	b.wait(`document.querySelector('` + selector + `').open`)
 	b.eval(`document.querySelector('` + selector + `').dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:-1,clientY:-1}))`)
 	b.wait(`!document.querySelector('` + selector + `').open`)
+
+	// Every adopted consumer must release native modality on removal and
+	// reconnect the same node without retaining document-level listeners.
+	b.eval(openJS)
+	b.wait(`document.querySelector('` + selector + `').open`)
+	b.eval(`window.detachedModal=document.querySelector('` + selector + `');window.detachedParent=detachedModal.parentElement;detachedModal.remove()`)
+	b.wait(`!detachedModal.open`)
+	b.eval(`detachedParent.append(detachedModal)`)
+	b.run(chromedp.Sleep(30 * time.Millisecond))
+	b.eval(openJS)
+	b.wait(`detachedModal.open`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.wait(`!detachedModal.open`)
+
+	// Drain the real frame's message queue before a transaction test resets its
+	// reply log. Earlier cancellation replies must not race that reset.
+	b.eval(`if(window.permissionReport){window.permissionPong=false;document.querySelector('iframe').contentWindow.postMessage({__modalTestPing:true},'*')}`)
+	b.wait(`!window.permissionReport || window.permissionPong`)
 }
 
 func TestTagModalBrowser(t *testing.T) {
