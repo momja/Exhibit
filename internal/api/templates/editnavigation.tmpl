@@ -1,8 +1,8 @@
-{{define "editorLeaveDialog"}}<dialog class="modal-dialog editor-leave-dialog" data-unsaved-changes-target="dialog" data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel keydown->modal#wrapFocus modal:before-close->unsaved-changes#beforeClose modal:closed->unsaved-changes#closed" aria-labelledby="editor-leave-title">
+{{define "editorLeaveDialog"}}<dialog class="modal-dialog editor-leave-dialog" data-unsaved-changes-target="dialog" data-controller="modal" data-action="modal:before-close->unsaved-changes#beforeClose modal:closed->unsaved-changes#closed" aria-labelledby="editor-leave-title">
   <h2 id="editor-leave-title">Save changes before leaving?</h2>
   <p>Your unsaved edits will be discarded if you leave without saving. Changes already saved stay saved.</p>
   <div class="btn-row">
-    <button type="button" class="btn btn-sec" data-keep-editing data-modal-target="initialFocus" data-action="unsaved-changes#keepEditing">Keep editing</button>
+    <button type="button" class="btn btn-sec" data-keep-editing autofocus data-modal-dismiss>Keep editing</button>
     <button type="button" class="btn btn-sec" data-action="unsaved-changes#discard">Discard changes</button>
     <button type="button" class="btn" data-action="unsaved-changes#saveAndLeave">Save and leave</button>
   </div>

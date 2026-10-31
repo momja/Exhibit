@@ -64,9 +64,9 @@ class Modal {
     return true;
   }
 
-  close() {
+  close(reason = 'dismiss') {
     if (!this.element.open || this.operation) return false;
-    const event = new CustomEvent('modal:before-close', { bubbles: true, cancelable: true });
+    const event = new CustomEvent('modal:before-close', { bubbles: true, cancelable: true, detail: { reason } });
     this.element.dispatchEvent(event);
     if (event.defaultPrevented) return false;
     this.element.close();
@@ -124,7 +124,7 @@ class Modal {
     if (event.target !== this.element) return;
     const bounds = this.element.getBoundingClientRect();
     if (event.clientX < bounds.left || event.clientX > bounds.right ||
-        event.clientY < bounds.top || event.clientY > bounds.bottom) this.close();
+        event.clientY < bounds.top || event.clientY > bounds.bottom) this.close('backdrop');
   }
 
   wrapFocus(event) {

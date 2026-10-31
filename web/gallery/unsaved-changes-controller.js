@@ -1,18 +1,20 @@
 import { Controller } from '../stimulus/stimulus.js';
+import { modalFor } from './modal.js';
 import { hasEditorChanges, saveEditorChanges, discardEditorChanges, waitForEditorSave } from './editor-session.js';
 
 export default class UnsavedChangesController extends Controller {
   static targets = ['dialog', 'status'];
 
   connect() {
+    this.modal = modalFor(this.dialogTarget);
     this.restore();
   }
 
   restore() {
     // A browser Back can revive this same controller from the page cache.
     this.allowLeave = false;
-    this.setSaving(false);
-    this.closeDialog();
+    this.modal.pending = false;
+    this.modal.close();
     this.refresh();
   }
 
@@ -28,8 +30,7 @@ export default class UnsavedChangesController extends Controller {
     if (!hasEditorChanges()) return;
     event.preventDefault();
     this.destination = link.href;
-    this.trigger = link;
-    this.dialogTarget.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: link } }));
+    this.modal.show(link);
   }
 
   beforeUnload(event) {
@@ -42,60 +43,39 @@ export default class UnsavedChangesController extends Controller {
     this.allowLeave = true;
   }
 
-  keepEditing(event) {
-    event?.preventDefault();
-    if (this.saving) return;
-    this.closeDialog();
-  }
-
   beforeClose(event) {
-    if (this.saving) event.preventDefault();
+    if (event.detail.reason === 'backdrop') event.preventDefault();
   }
 
   closed() {
     this.destination = null;
-    this.trigger = null;
-  }
-
-  closeDialog() {
-    this.dialogTarget.dispatchEvent(new CustomEvent('exhibit:modal-close'));
   }
 
   async discard() {
-    if (this.saving) return;
-    this.setSaving(true);
-    try {
+    if (this.modal.pending) return;
+    const discarded = await this.modal.run(async () => {
       // A Save already submitted must settle before its confirmed snapshot
       // can be used to discard later edits. This never starts another save.
       await waitForEditorSave();
       discardEditorChanges();
-      this.leave();
-    } finally {
-      this.setSaving(false);
-    }
-  }
-
-  setSaving(value) {
-    this.saving = value;
-    this.dialogTarget.querySelectorAll('button').forEach(button => { button.disabled = value; });
+      return true;
+    });
+    if (discarded) this.leave();
   }
 
   async saveAndLeave() {
-    if (this.saving) return;
-    this.setSaving(true);
-    const saved = await saveEditorChanges();
-    this.setSaving(false);
+    if (this.modal.pending) return;
+    const saved = await this.modal.run(saveEditorChanges);
     if (saved) this.leave();
     else {
-      this.keepEditing();
+      this.modal.close();
       document.getElementById('status').scrollIntoView({block: 'nearest'});
     }
   }
 
   leave() {
     const destination = this.destination;
-    this.setSaving(false);
-    this.closeDialog();
+    this.modal.close();
     this.allowLeave = true;
     location.assign(destination);
   }
