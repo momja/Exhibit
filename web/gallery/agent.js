@@ -1,3 +1,4 @@
+import { modalFor } from './modal.js';
 import { apiFetch, apiEventSource } from './api-module.js';
 import { createSessionPreparation, createTypingPreparation } from './session-preparation.js';
 
@@ -159,33 +160,26 @@ function clearMaskedKey(secret) {
   secret.dataset.masked = 'false';
 }
 
-let keyBusy = false;
 const keyDialog = BYOK ? document.getElementById('key-modal') : null;
-keyDialog?.addEventListener('modal:before-close', event => { if (keyBusy) event.preventDefault(); });
+const keyModal = keyDialog && modalFor(keyDialog);
 keyDialog?.addEventListener('modal:closed', () => { clearMaskedKey(document.getElementById('key-secret')); });
 async function keyRequest(method, body) {
-  keyBusy = true;
-  const controls = [...keyDialog.querySelectorAll('input, select, button')];
-  controls.forEach(control => { control.disabled = true; });
   try {
     return await apiFetch('/api/agent/key', { method, ...(body ? { body: JSON.stringify(body) } : {}) });
   } catch {
     return { ok: false, json: async () => ({ error: 'Could not reach the server. Try again.' }) };
-  } finally {
-    keyBusy = false;
-    controls.forEach(control => { control.disabled = false; });
   }
 }
 
 function openKeyModal(event) {
-  if (!BYOK || keyBusy || keyDialog.open) return;
+  if (!BYOK || keyModal.pending || keyDialog.open) return;
   document.getElementById('key-error').hidden = true;
   document.getElementById('key-thinking').value = configuredThinkingLevel;
   const secret = document.getElementById('key-secret');
   if (keyConfigured) { showMaskedKey(secret); } else { clearMaskedKey(secret); }
-  keyDialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: event?.currentTarget || document.getElementById('key-btn') } }));
+  keyModal.show(event?.currentTarget || document.getElementById('key-btn'));
 }
-function closeKeyModal() { keyDialog?.dispatchEvent(new CustomEvent('exhibit:modal-close')); }
+function closeKeyModal() { keyModal?.close(); }
 
 // The masked placeholder is a single unit, not editable text: it can only be
 // cleared in full (Backspace/Delete), never edited in place. Cancel discards
@@ -209,7 +203,7 @@ function closeKeyModal() { keyDialog?.dispatchEvent(new CustomEvent('exhibit:mod
 })();
 
 async function saveKey() {
-  if (!BYOK || keyBusy) return;
+  if (!BYOK || keyModal.pending) return;
   const provider = document.getElementById('key-provider').value;
   const model = document.getElementById('key-model').value.trim();
   const thinking_level = document.getElementById('key-thinking').value;
@@ -225,15 +219,19 @@ async function saveKey() {
     api_key = secretInput.value.trim();
     if (!api_key) { errEl.textContent = 'Enter the API key.'; errEl.hidden = false; return; }
   }
-  const r = await keyRequest('PUT', {provider, model, api_key, thinking_level});
-  if (!r.ok) {
-    const d = await r.json().catch(() => ({}));
-    errEl.textContent = d.error || 'Failed to save key.';
-    errEl.hidden = false;
-    return;
-  }
+  const saved = await keyModal.run(async () => {
+    const r = await keyRequest('PUT', {provider, model, api_key, thinking_level});
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      errEl.textContent = d.error || 'Failed to save key.';
+      errEl.hidden = false;
+      return false;
+    }
+    await refreshKeyStatus();
+    return true;
+  });
+  if (!saved) return;
   closeKeyModal();
-  await refreshKeyStatus();
   // A new key means the next prompt should start a fresh session.
   resetSession();
   addMsg('sys', 'API key saved. The key is encrypted on the server and never returned to the browser.');
@@ -248,18 +246,22 @@ async function saveKey() {
 }
 
 async function deleteKey() {
-  if (!BYOK || keyBusy) return;
+  if (!BYOK || keyModal.pending) return;
   if (!confirm('Remove the stored API key?')) return;
-  const response = await keyRequest('DELETE');
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    const status = document.getElementById('key-error');
-    status.textContent = error.error || 'Failed to remove key.';
-    status.hidden = false;
-    return;
-  }
+  const removed = await keyModal.run(async () => {
+    const response = await keyRequest('DELETE');
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const status = document.getElementById('key-error');
+      status.textContent = error.error || 'Failed to remove key.';
+      status.hidden = false;
+      return false;
+    }
+    await refreshKeyStatus();
+    return true;
+  });
+  if (!removed) return;
   closeKeyModal();
-  await refreshKeyStatus();
   resetSession();
 }
 

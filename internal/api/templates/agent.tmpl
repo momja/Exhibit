@@ -83,7 +83,8 @@
      prompt needs — it simply never had the prompt. */}}
 {{template "networkPrompt"}}
 <dialog id="key-modal" class="modal-dialog key-dialog" aria-labelledby="key-title"
-  data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+  data-controller="modal">
+    <fieldset class="modal-fields">
     <h2 id="key-title">Agent API key</h2>
     <p class="note">Bring your own key. It is sent to your Exhibit server once, encrypted there at rest, and used only by the server-side agent — this page never sees it again.</p>
     <div class="current-key" id="current-key" hidden></div>
@@ -112,14 +113,15 @@
     </select>
     <p class="note" id="key-thinking-help">Higher levels can take longer. Available levels depend on the model. Applies to new or resumed conversations.</p>
     <label for="key-secret">API key</label>
-    <input type="password" id="key-secret" data-modal-target="initialFocus" placeholder="sk-…" autocomplete="off">
+    <input type="password" id="key-secret" autofocus placeholder="sk-…" autocomplete="off">
     <div id="key-error" class="modal-error" hidden></div>
     <div class="modal-actions">
       <button type="button" class="btn btn-danger" id="key-delete" hidden><i class="ph ph-trash"></i></button>
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="key-cancel" data-action="modal#dismiss">Cancel</button>
+      <button type="button" class="btn btn-sec" id="key-cancel" data-modal-dismiss>Cancel</button>
       <button type="button" class="btn" id="key-save"><i class="ph ph-check"></i> Save</button>
     </div>
+    </fieldset>
 </dialog>
 {{end}}
 <script>

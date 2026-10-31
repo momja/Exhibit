@@ -222,6 +222,7 @@ func TestAgentKeyModalBrowser(t *testing.T) {
 			// Delay at the transport boundary to exercise real native dismissal guards.
 			b.eval(`window.savedFetch=window.fetch;window.fetch=(url,options)=>options?.method==='PUT'?new Promise(resolve=>window.finishKey=()=>resolve(new Response('{"error":"Provider unavailable"}',{status:503,headers:{'Content-Type':'application/json'}}))):savedFetch(url,options);document.getElementById('key-secret').value='fixture';document.getElementById('key-save').click()`)
 			b.wait(`document.getElementById('key-cancel').disabled`)
+			b.check(`document.getElementById('key-provider').matches(':disabled') && document.getElementById('key-secret').matches(':disabled')`)
 			b.run(chromedp.KeyEvent(kb.Escape))
 			b.check(`document.getElementById('key-modal').open`)
 			b.eval(`finishKey()`)

@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi } from "./testdom.mjs";
+import { loadPageScript, recordingApi, nativeDialog } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
@@ -29,7 +29,7 @@ async function loadAgent({ artifact = null } = {}) {
     matchMedia: () => ({ matches: false, addEventListener() {} }),
     alert: () => {}, confirm: () => true
   }, { "net-modal": { hidden: true }, "key-modal": { hidden: true } });
-  page.byId('key-modal').addEventListener('exhibit:modal-open', () => { page.byId('key-modal').open=true; });
+  nativeDialog(page, page.byId('key-modal'));
   const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
     ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion']);
   Object.assign(page.context, page.window, bindings);
@@ -90,7 +90,7 @@ async function boot(responses) {
     matchMedia: () => ({ matches: false, addEventListener() {} }),
     alert: () => {}, confirm: () => true
   }, { "net-modal": { hidden: true }, "key-modal": { hidden: true } });
-  page.byId('key-modal').addEventListener('exhibit:modal-open', () => { page.byId('key-modal').open=true; });
+  nativeDialog(page, page.byId('key-modal'));
   const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
     ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion']);
   Object.assign(page.context, page.window, bindings);
