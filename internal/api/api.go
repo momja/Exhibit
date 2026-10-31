@@ -57,7 +57,7 @@ type Config struct {
 	// unavailable; Secrets seals the BYO provider keys at rest.
 	// AgentCredentials resolves the per-session scoped tokens agent sidecars
 	// authenticate with (av-e0yj) — the same registry the manager issues
-	// from. Nil means no agent credential is accepted at all.
+	// from. Nil disables Pi credentials; persisted library grants still work.
 	Agent            *agent.Manager
 	AgentCredentials *agentscope.Registry
 	Secrets          *secrets.Box
@@ -483,6 +483,7 @@ func (ro *Router) setupRoutes() {
 		// reload to show the new list would restart the tool the owner is
 		// looking at.
 		r.Get("/partials/share-panel", ro.sharePanelPartial)
+		r.Get("/partials/agent-grants", ro.agentGrantsPanelPartial)
 		// The capability badge + popover (av-isb3, av-41se), re-rendered
 		// after a runtime origin approval (av-mf1x). Same reason as the
 		// share panel: the frame reloads transparently under the widened
@@ -610,7 +611,11 @@ func (ro *Router) setupRoutes() {
 			})
 		})
 
+		r.Get("/api/agent-grants", ro.listAgentGrants)
+		r.Post("/api/agent-grants", ro.createAgentGrant)
+		r.Delete("/api/agent-grants/{grantID}", ro.deleteAgentGrant)
 		r.Route("/api/agent", func(r chi.Router) {
+			r.Get("/credential", ro.agentCredential)
 			// The per-owner key, and only when the owner is the one who
 			// supplies it: in platform mode this resource does not exist
 			// (av-siqf, agentplatform.go).

@@ -34,9 +34,13 @@ import (
 // person, and origin says what they were doing.
 func versionProvenance(r *http.Request, origin string) store.Provenance {
 	if g := agentGrantFromCtx(r.Context()); g != nil {
+		message := g.Prompt()
+		if !g.Scope().Library {
+			message = versionLabel(message)
+		}
 		return store.Provenance{
 			Origin:    store.VersionAgent,
-			Message:   versionLabel(g.Prompt()),
+			Message:   message,
 			SessionID: g.SessionID(),
 		}
 	}

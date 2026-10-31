@@ -125,6 +125,10 @@ var appOriginGETRoutes = []getRoute{
 	// makes goes to /api/shares or the artifact PATCH, under an unsafe method
 	// Lax withholds the cookie from.
 	{route: "/partials/share-panel"},
+	// Connected agents lists credentials; issuing/revoking require POST/DELETE.
+	{route: "/partials/agent-grants"},
+	{route: "/api/agent-grants"},
+	{route: "/api/agent/credential"},
 	// An earlier version of an artifact, shown running before a person decides
 	// whether to return to it (av-vw7r). A read that mints a short-lived token
 	// and changes nothing: the frame it carries is a render document that

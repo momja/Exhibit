@@ -136,3 +136,17 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
 
 /* Shared button display rules must not reveal deferred account actions. */
 .settings [hidden]{display:none!important}
+
+/* Connected agents: the server refreshes the list, while the issued token
+ * stays in a separate browser-only region until dismissed. */
+.agent-grants-list{margin-top:var(--space-6)}
+.agent-grants-table{min-width:620px}
+.agent-grants-table td{font-size:12px}
+.agent-grants-table .settings-name{max-width:190px}
+.agent-grant-form{margin-top:var(--space-6)}
+.agent-grant-create{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-3)}
+.agent-grant-create .field{flex:1;min-width:180px}
+.agent-grant-token{font-family:monospace;font-size:12px}
+.agent-grant-issued{border-top:1px solid var(--color-hairline);margin-top:var(--space-6)}
+.agent-grant-issued[hidden]{display:none}
+.agent-grant-command{background:var(--color-ground);border-radius:var(--radius-sm);padding:var(--space-4);margin:var(--space-3) 0 var(--space-5);font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}

@@ -100,9 +100,10 @@ type profileAccount struct {
 // active sessions, export — and a page laid out in cards takes each of those
 // as an addition rather than a redesign.
 type profilePageData struct {
-	Header  appHeaderView
-	Favicon template.URL
-	Account profileAccount
+	Header      appHeaderView
+	Favicon     template.URL
+	Account     profileAccount
+	AgentGrants *agentGrantsPanelView
 	pageCredentials
 }
 
@@ -114,6 +115,12 @@ type profilePageData struct {
 // — sessionGate redirects them to /auth/login first, on an instance that has
 // one — so there is no unauthenticated branch here to get wrong.
 func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
+	// With no login, a public visitor has no authority to view account
+	// connections or receive the operator credential embedded for page JS.
+	if !ro.loginEnabled() && ro.cfg.Public.Enabled && !ro.matchesServiceToken(bearerToken(r)) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	ctx := r.Context()
 	var acct profileAccount
 	u, err := ro.cfg.Store.GetUser(ctx, ownerIDFromCtx(ctx))
@@ -144,11 +151,18 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 			"Its library belongs to whoever can reach the origin; removing it is the operator's to do on the host."
 	}
 
+	agentGrants, err := ro.agentGrantsPanel(r)
+	if err != nil {
+		serverError(w, r, "profile agent grants", err)
+		return
+	}
+
 	creds := ro.pageCredentials(r)
 	page, err := renderPage("profile", profilePageData{
 		Header:          profileHeader(creds.Clerk),
 		Favicon:         template.URL(exhibitLogoDataURI),
 		Account:         acct,
+		AgentGrants:     agentGrants,
 		pageCredentials: creds,
 	})
 	if err != nil {

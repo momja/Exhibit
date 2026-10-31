@@ -12,7 +12,7 @@ tags: [mcp, auth, oauth]
 ---
 # OAuth resource-server support in the MCP service
 
-The half of MCP authorization the resource owns, now in exhibit-mcp serve (Exh-uhvu) rather than the core.
+The half of MCP authorization the resource owns, now in the exhibit-mcp service (Exh-uhvu) rather than the core.
 
 - GET /.well-known/oauth-protected-resource (RFC 9728, both the path-inserted and bare forms) on the service, naming the resource (MCP_PUBLIC_URL) and the core's APP_ORIGIN as its authorization server (EXHIBIT_PUBLIC_URL, defaulting to EXHIBIT_URL).
 - A 401 carries WWW-Authenticate: Bearer resource_metadata=...

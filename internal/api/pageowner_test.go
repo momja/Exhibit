@@ -78,6 +78,9 @@ type pageOwnerRoute struct {
 // appOriginGETOwnerScope is every GET route the app mux registers. A route
 // missing from here fails the walk on purpose.
 var appOriginGETOwnerScope = []pageOwnerRoute{
+	{route: "/partials/agent-grants", scopedByHandler: true, coveredBy: "agentgrants_test.go", why: "Lists only the caller’s library grants, with no owner id accepted; tested with two owners and a no-login instance"},
+	{route: "/api/agent-grants", why: "API owner-only grant listing, covered by agentgrants_test.go"},
+	{route: "/api/agent/credential", why: "Describes only the authenticated agent credential, covered by agentgrants_test.go"},
 	// These selections need grants/links, unlike the ordinary owner library.
 	// Their dedicated tests cover both session and single-user principals.
 	{route: "/shared", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Viewer selection; TestSharedGalleryRoutesResolveSingleUserOwner and TestSharedGalleryRecipientCardsAndRevocation"},

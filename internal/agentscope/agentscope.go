@@ -1,40 +1,33 @@
-// Package agentscope issues and resolves the credentials an agent chat
-// session authenticates to the Exhibit API with (av-e0yj).
+// Package agentscope represents agent credentials and their authority.
+// Pi sessions use process-lifetime Registry grants, limited to one artifact.
+// External agents use persisted grants over their owner's library, resolved
+// by the API from a stored token digest. Both carry server-owned provenance
+// and go through the API's deny-by-default route policy.
 //
-// The agent sidecar is driven by model output, and model output is steered by
-// text Exhibit does not author: artifact bodies and titles arrive verbatim
-// from URL ingest, and the render surface's element picker ships whatever
-// markup the user clicked. Handing such a session the operator's service token
-// would put the whole library inside the blast radius of one hostile page.
-//
-// So a session does not get the service token. It gets its own bearer token
-// that resolves to one Scope — an owner, plus at most one artifact — and the
-// API refuses anything outside it. The extension's id-less tools are the
-// ergonomic half of that guarantee; this registry is the enforced half, which
-// is what makes it hold even if the model talks the extension into something
-// else.
-//
-// The registry deliberately lives outside internal/agent: authorization is
-// Exhibit's to keep when the agent moves into its own service (Exh-k75k).
+// The registry lives outside internal/agent so API authorization remains
+// independent of the Pi subprocess lifecycle.
 package agentscope
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 )
 
 // Scope is the whole authority one session credential carries.
 //
-// An empty ArtifactID means the session has not bound to an artifact yet —
-// a create-mode session before its first save. It may create exactly one
-// artifact; the create binds it, and from then on the scope names a single
-// artifact for the rest of the session.
+// Library grants cover all artifacts owned by OwnerID. Otherwise an empty
+// ArtifactID means a Pi create-mode session before its first save: it may
+// create exactly one artifact, which binds it for the rest of the session.
 type Scope struct {
 	OwnerID    int64
 	ArtifactID string
+	// Library distinguishes whole-library access from Pi create mode.
+	Library bool
 }
 
 // Grant is one issued credential: an opaque token and the scope it resolves
@@ -97,7 +90,7 @@ func (g *Grant) BindArtifact(artifactID string) {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if g.scope.ArtifactID == "" {
+	if !g.scope.Library && g.scope.ArtifactID == "" {
 		g.scope.ArtifactID = artifactID
 	}
 }
@@ -168,4 +161,52 @@ func newToken() (string, error) {
 		return "", fmt.Errorf("generate agent session token: %w", err)
 	}
 	return "exagent_" + hex.EncodeToString(buf), nil
+}
+
+// --- Persisted grants (Exh-l2xj) --------------------------------------------
+//
+// An agent outside the server cannot hold a Registry grant: those live exactly
+// as long as the Pi subprocess they were minted for. The owner instead issues
+// a persisted grant, whose token is stored as a digest and resolved per
+// request. It resolves to a Grant like any other, so everything downstream of
+// authentication (agentScopeAllows, version provenance, the revision
+// preconditions) uses the same authority and provenance representation.
+
+// persistedTokenPrefix marks a persisted grant's token. Like the session
+// token's prefix it carries no authority; it lets the middleware skip the
+// database for a value that cannot be one, and lets a person recognize a
+// leaked token for what it is.
+const persistedTokenPrefix = "exgrant_"
+
+// NewPersistedToken returns a fresh 256-bit token for a persisted grant and
+// the digest the store keeps in its place.
+func NewPersistedToken() (token, digest string, err error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", "", fmt.Errorf("generate agent grant token: %w", err)
+	}
+	token = persistedTokenPrefix + hex.EncodeToString(buf)
+	return token, PersistedTokenDigest(token), nil
+}
+
+// IsPersistedToken reports whether token has a persisted grant's shape.
+func IsPersistedToken(token string) bool {
+	return strings.HasPrefix(token, persistedTokenPrefix)
+}
+
+// PersistedTokenDigest is what the store keeps for token, and what a request's
+// bearer value is looked up by.
+func PersistedTokenDigest(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// Persisted constructs a library grant with server-owned version provenance.
+// Binding after creation is deliberately a no-op for library grants.
+func Persisted(ownerID int64, grantID, label string) *Grant {
+	return &Grant{
+		sessionID: "grant:" + grantID,
+		scope:     Scope{OwnerID: ownerID, Library: true},
+		prompt:    label,
+	}
 }

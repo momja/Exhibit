@@ -17,4 +17,4 @@ tags: [docs, security, mcp]
 - api.md: agent-grant routes, GET /api/agent/credential, the OAuth endpoints.
 - architecture.md: section 3.7 (MCP service as a satellite), section 3.6 satellites, and the evolution-seams table.
 - deployment.md: running the MCP service (Compose profile, MCP_URL, proxy routing).
-- README: setup snippets for common clients (stdio and remote).
+- README: setup snippets for common clients (remote only).

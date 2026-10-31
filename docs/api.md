@@ -9,6 +9,40 @@ All routes require `Authorization: Bearer <token>` except public share links.
 An agent session's own bearer token is accepted too, but only within its scope
 (see Agent, below).
 
+## External-agent credentials
+
+```
+GET    /api/agent-grants             List the owner's connections: {"grants": [...]}
+POST   /api/agent-grants             Issue {"label": "My agent"} → {"grant": {...}, "token": "exgrant_..."}
+DELETE /api/agent-grants/:grantID    Revoke a connection (204; foreign/missing id: 404)
+GET    /api/agent/credential         Describe the authenticated agent credential
+```
+
+Management requires a signed-in session. Only on instances with no configured
+login may the operator use the service token (or no credential when authentication
+is off). Agent credentials cannot manage connections. Labels are trimmed and
+truncated to 100 Unicode characters, defaulting to `External agent`. Each grant
+contains `id`, `label`, `client` (empty for a pasted token), `created_at`, and
+nullable `last_used_at`. Only the issue response returns the token; the database
+stores its SHA-256 digest. Grants have no expiry. Revocation and disabled owners
+cause the next bearer request to return 401.
+
+A persisted token can list/search/create and get/patch any artifact **owned by**
+its owner, read and write its widget, read (never write or erase) its saved
+state, and read asset metadata.
+Artifacts shared with that owner and other owners' artifacts return 404. All
+other protected routes are refused, including artifact deletion, shares/grants,
+origins, versions/restore, tags/collections, duplicate, refetch, imports/exports,
+account/admin, pages and partials. Existing restrictions on agent PATCH fields,
+including `share_state_mode`, and revision preconditions still apply. Versions
+carry the grant label as message and `grant:<id>` as session with `origin=agent`.
+
+`GET /api/agent/credential` returns
+`{"scope":"library","grant_id":"…","label":"…"}` for these credentials, or
+`{"scope":"artifact","artifact_id":"…"}` for Pi credentials (empty artifact id
+while creating). Ordinary owner credentials receive 403. Pi credentials otherwise
+retain their one-artifact scope and process lifetime.
+
 ## Artifacts
 
 ```

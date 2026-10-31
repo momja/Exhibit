@@ -777,6 +777,38 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
 - **Guardrail** (av-gust): with `GUARDRAIL_*`, `ext/guard.ts` screens each user
   message on Pi's `input` hook; a failed screen blocks. `security.md` §5.4.
 
+### Persisted external-agent grants (Exh-l2xj)
+
+An owner connects an external agent from **Connected agents** on `/settings`
+(`/profile` alias). The same panel works with local, OIDC, Clerk and no-login
+instances. `GET/POST /api/agent-grants` and `DELETE /api/agent-grants/:grantID`
+require a session, or operator authority when no login is configured. The panel
+refreshes `/partials/agent-grants` through htmx on
+`exhibit:agent-grants-changed`; a newly issued token is displayed only once
+with a copy button. Connection configuration belongs to the optional MCP service layer.
+
+Migration 043 stores `agent_grants`: owner, label, client, SHA-256 token digest,
+created and last-used timestamps. No artifact, expiry, or foreign key to users
+(the no-login owner need not have a users row). Account deletion removes grants.
+The bearer is `exgrant_` plus 32 random bytes encoded as hex. Each request resolves
+its digest and refuses disabled owners; last use is updated at most once a minute.
+Revoked and unknown persisted tokens return 401 even on open/public instances.
+
+A library grant reaches only its owner's **own** artifacts: list/search, create,
+get/patch, widget read/write, saved-state reads (never writes: state is not
+versioned, so an agent's write could not be undone), and asset metadata reads. Creation never
+binds or narrows a library grant. State routes retain viewer semantics for people,
+but require ownership for agent principals, so incoming shares are 404 too.
+The route allowlist excludes pages, partials, account/admin, shares/grants,
+origins, history/restore, artifact deletion, tags/collections, duplicate,
+refetch and import/export. Existing agent field restrictions remain in force.
+Versions record `origin=agent`, the owner's label as message, and `grant:<id>`
+as session. Pi retains its process-lifetime one-artifact scope.
+`GET /api/agent/credential` describes the authenticated scope without a second
+store lookup, for future MCP clients.
+
+Screenshot: [Connected agents after issuance](screenshots/Exh-l2xj/01-connected-agents.png).
+
 ### Hosted authentication
 
 Configured Clerk keys select the hosted login path. `internal/auth/clerk.go`

@@ -30,36 +30,38 @@ A connected agent acts for the person who connected it, across their whole libra
 - Owner-issued, listable, revocable. Only a signed-in person can mint a grant (or the operator on a no-login instance); every live grant is listed on the account page with its label, client and last use, and revoking it makes the next request a 401.
 - Nothing new on the write path. MCP tools call the existing HTTP API; agent writes are versions with origin=agent and provenance (message, session) from the grant row, never from the request.
 - Untrusted artifact text reaches the external agent only as tool results (av-5s7g). The server instructions say so; the user's agent decides what to do with it.
-- MCP is optional. The MCP service is a satellite, like Litestream and Chromium: an operator who does not run it carries no MCP transport and exposes no MCP or OAuth endpoints. The stdio connector runs on the user's machine and needs nothing from the operator beyond the API.
+- MCP is optional. The MCP service is a satellite, like Litestream and Chromium: an operator who does not run it carries no MCP transport and exposes no MCP or OAuth endpoints, and their users are offered no MCP connection at all. There is one way in: the remote endpoint (no local connector; dropped 2026-10-31, see Notes).
 - Self-hosters get the feature without Clerk. OAuth is a layer on top, not a prerequisite.
 
 ## Architecture
 
 - **Core (the Exhibit server):** persisted library grants (store + routes + account-page panel), GET /api/agent/credential (what a token is), and, only when MCP_URL is configured, the built-in OAuth authorization server and the remote config shown in the panel.
-- **exhibit-mcp (one binary, two modes):** `exhibit-mcp` speaks stdio on the user's machine; `exhibit-mcp serve` speaks Streamable HTTP as the operator's optional MCP service (Compose profile `mcp`, routed at MCP_URL by the reverse proxy). Both run the same tools from internal/mcpserver and reach Exhibit only through its HTTP API with the caller's grant token. The service holds no database and no secrets of its own; it verifies each bearer by asking the core API, and serves the protected-resource metadata that names the core as authorization server.
+- **exhibit-mcp (the MCP service):** speaks Streamable HTTP as the operator's optional MCP service (Compose profile `mcp`, routed at MCP_URL by the reverse proxy). It runs the tools from internal/mcpserver and reaches Exhibit only through its HTTP API with the caller's grant token. The service holds no database and no secrets of its own; it verifies each bearer by asking the core API, and serves the protected-resource metadata that names the core as authorization server.
 
 ## Tools
 
-search_artifacts (new: query, optional tags; returns id, title, tags, updated_at), create_artifact, get_artifact, edit_artifact, write_artifact, get_state, set_state, delete_state, get_widget, set_widget, edit_widget. Every per-artifact tool takes artifact_id. Not exposed: deletion, restore, shares, tags/collections, asset upload, and Pi-only get_selection/ask_user.
+search_artifacts (new: query, optional tags; returns id, title, tags, updated_at), create_artifact, get_artifact, edit_artifact, write_artifact, get_state (read-only), get_widget, set_widget, edit_widget. Every per-artifact tool takes artifact_id. Not exposed: writing or erasing saved data (state is not versioned, so an agent change to it could not be undone; the route policy refuses it too, not only the tool list), deletion, restore, shares, tags/collections, asset upload, and Pi-only get_selection/ask_user.
 
 ## Stories (stacked in this order)
 
 1. Exh-l2xj: Persisted library grants: mint/list/revoke from the account page, authMiddleware resolves them to the owner's library.
-2. Exh-q6xo: MCP tools + stdio connector: artifact_id on every tool, search_artifacts, create_artifact.
-3. Exh-uhvu: The MCP service: `exhibit-mcp serve`, Compose profile, MCP_URL in core; no MCP transport in the core binary.
+2. Exh-q6xo: MCP tools: artifact_id on every tool, search_artifacts, create_artifact.
+3. Exh-uhvu: The MCP service: `exhibit-mcp`, Compose profile, MCP_URL in core; no MCP transport in the core binary.
 4. Exh-354p: OAuth resource-server half in the MCP service: protected-resource metadata, WWW-Authenticate, token check through the core.
 5. Exh-rhlq: Built-in authorization server in core (only with MCP_URL); consent approves library access.
 6. Exh-vora: Hosted Clerk as authorization server: superseded by Exh-rhlq, pending the owner's decision.
 7. Exh-xlju: Security and docs.
 
-Stories 1-2 deliver library-wide BYO-agent editing for anyone with a local agent and no operator setup. 3-5 add the remote endpoint and remove the token paste for clients that require OAuth.
+Stories 1-3 deliver library-wide BYO-agent editing with a pasted token (sent as an Authorization header); 4-5 add OAuth so clients sign in through the browser instead.
 
 ## Out of scope
 
 - Artifacts shared with the user (incoming grants); a library grant reaches the owner's own artifacts only.
-- Deleting artifacts, restoring versions, sharing, and network/capability decisions through MCP tools.
+- Writing or erasing saved data, deleting artifacts, restoring versions, sharing, and network/capability decisions through MCP tools.
 - Replacing the Pi harness; it keeps its process-lifetime, one-artifact grants.
 
 ## Notes
 
 **2026-10-31** Revised after the stack was opened as PRs #234-#239 and before any merged: one credential now covers the owner's library (with search_artifacts), and the remote endpoint moved out of the core into an optional MCP service. The PRs are rebuilt in place per story.
+
+**2026-10-31** Dropped the local stdio connector (`exhibit-mcp` on the user's machine with a pasted token). It existed only so users of instances without the MCP service could connect; a self-hoster who wants MCP is their own operator and can enable the service as easily, every mainstream client speaks remote MCP, and the connector needed the Go toolchain and left the token in plain text in the client config. Without MCP_URL the instance offers no MCP.

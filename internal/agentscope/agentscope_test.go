@@ -94,3 +94,23 @@ func TestGrantIsSafeForConcurrentUse(t *testing.T) {
 	wg.Wait()
 	assert.Equal(t, "artifact-a", g.Scope().ArtifactID)
 }
+
+func TestPersistedLibraryGrant(t *testing.T) {
+	token, digest, err := NewPersistedToken()
+	require.NoError(t, err)
+	require.True(t, IsPersistedToken(token))
+	require.Len(t, token, len("exgrant_")+64)
+	require.Len(t, digest, 64)
+	require.Equal(t, digest, PersistedTokenDigest(token))
+	other, otherDigest, err := NewPersistedToken()
+	require.NoError(t, err)
+	require.NotEqual(t, token, other)
+	require.NotEqual(t, digest, otherDigest)
+	g := Persisted(42, "grant-id", "My agent")
+	require.Equal(t, Scope{OwnerID: 42, Library: true}, g.Scope())
+	require.Equal(t, "grant:grant-id", g.SessionID())
+	require.Equal(t, "My agent", g.Prompt())
+	g.BindArtifact("created-artifact")
+	require.Equal(t, Scope{OwnerID: 42, Library: true}, g.Scope())
+	require.Empty(t, g.Token(), "resolved grants never retain the bearer")
+}

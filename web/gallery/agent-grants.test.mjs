@@ -1,0 +1,97 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { loadPageScript, recordingApi } from './testdom.mjs';
+
+const SCRIPT = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../internal/api/assets/gallery/agent-grants.js');
+const issued = (id, token) => ({ ok: true, status: 201, json: async () => ({ grant: { id }, token }) });
+const paths = (api) => api.calls.map((call) => call.method + ' ' + call.path);
+
+async function load(responses = []) {
+  const api = recordingApi(responses);
+  const events = [];
+  const copied = [];
+  const page = loadPageScript([], {
+    apiFetch: api.apiFetch,
+    navigator: { clipboard: { writeText: async (text) => { copied.push(text); } } }
+  }, {
+    'agent-grants-panel': { dataset: {} },
+    'agent-grant-issued': { hidden: true },
+    'agent-grant-label': { value: '' }
+  });
+  page.document.body.addEventListener('exhibit:agent-grants-changed', () => events.push('changed'));
+  const panel = page.byId('agent-grants-panel');
+  const controls = [page.byId('agent-grant-label'), page.byId('agent-grant-issue')];
+  panel.querySelectorAll = () => controls;
+  const issue = (label) => {
+    page.byId('agent-grant-label').value = label;
+    return panel.dispatchEvent({ type: 'submit', target: page.byId('agent-grant-form'), preventDefault() {} });
+  };
+  const click = (selector, element) => panel.dispatchEvent({ type: 'click', target: {
+    closest: (query) => query === selector ? element : null
+  } });
+  const revoke = (grantId) => click('[data-action="revoke-agent-grant"]', { dataset: { grantId } });
+  const copy = () => click('#agent-grant-copy', page.byId('agent-grant-copy'));
+  const dismiss = () => click('#agent-grant-dismiss', page.byId('agent-grant-dismiss'));
+  const refresh = () => panel.dispatchEvent({ type: 'htmx:after:swap', target: page.byId('agent-grants-body') });
+  await page.loadModule(SCRIPT);
+  return { ...page, api, events, copied, panel, controls, issue, revoke, copy, dismiss, refresh };
+}
+
+test('issue displays and copies the secret, keeping it through server list refresh', async () => {
+  const page = await load([issued('g-1', 'exgrant_secret')]);
+  await page.issue('  Claude Code  ');
+  assert.deepEqual(paths(page.api), ['POST /api/agent-grants']);
+  assert.deepEqual(JSON.parse(page.api.calls[0].body), { label: 'Claude Code' });
+  assert.deepEqual(page.events, ['changed']);
+  assert.equal(page.byId('agent-grant-issued').hidden, false);
+  assert.equal(page.byId('agent-grant-token').value, 'exgrant_secret');
+  assert.equal(page.byId('agent-grant-label').disabled, true);
+  await page.issue('double submit');
+  assert.equal(page.api.calls.length, 1, 'do not issue again while refreshing');
+  await page.refresh();
+  assert.equal(page.byId('agent-grant-label').disabled, false);
+  assert.equal(page.byId('agent-grant-token').value, 'exgrant_secret');
+  await page.copy();
+  assert.deepEqual(page.copied, ['exgrant_secret']);
+  assert.equal(page.byId('agent-grants-status').textContent, 'Token copied.');
+});
+
+test('dismissing and leaving the page erase the secret', async () => {
+  const page = await load([issued('g-1', 'exgrant_secret'), issued('g-2', 'exgrant_new')]);
+  await page.issue('agent');
+  await page.refresh();
+  await page.dismiss();
+  assert.equal(page.byId('agent-grant-token').value, '');
+  assert.equal(page.byId('agent-grant-issued').hidden, true);
+  assert.equal(page.byId('agent-grant-label').focused, true);
+  await page.issue('agent');
+  await page.dispatchOnWindow('pagehide');
+  assert.equal(page.byId('agent-grant-token').value, '');
+  assert.equal(page.byId('agent-grant-issued').hidden, true);
+});
+
+test('revoking another connection keeps the token; revoking its connection clears it', async () => {
+  const page = await load([issued('g-new', 'exgrant_secret'), { ok: true, status: 204 }, { ok: false, status: 404 }]);
+  await page.issue('agent');
+  await page.refresh();
+  await page.revoke('g/old');
+  await page.refresh();
+  assert.equal(page.byId('agent-grant-token').value, 'exgrant_secret');
+  await page.revoke('g-new');
+  assert.deepEqual(paths(page.api).slice(1), ['DELETE /api/agent-grants/g%2Fold', 'DELETE /api/agent-grants/g-new']);
+  assert.equal(page.byId('agent-grant-token').value, '');
+  assert.equal(page.byId('agent-grants-status').textContent, 'Token revoked.');
+});
+
+test('failed requests show an error and release controls after refresh failures', async () => {
+  const page = await load([{ ok: false, status: 500 }]);
+  await page.issue('agent');
+  assert.equal(page.byId('agent-grant-issued').hidden, true);
+  assert.equal(page.byId('agent-grants-status').textContent, 'Could not issue a token. Try again.');
+  assert.deepEqual(page.events, ['changed']);
+  await page.panel.dispatchEvent({ type: 'htmx:error', target: page.byId('agent-grants-body') });
+  assert.equal(page.byId('agent-grant-issue').disabled, false);
+  assert.match(page.byId('agent-grants-status').textContent, /could not refresh/);
+});
