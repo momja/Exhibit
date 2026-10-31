@@ -11,7 +11,8 @@ export default class UnsavedChangesController extends Controller {
   restore() {
     // A browser Back can revive this same controller from the page cache.
     this.allowLeave = false;
-    if (this.dialogTarget.open) this.dialogTarget.close();
+    this.setSaving(false);
+    this.closeDialog();
     this.refresh();
   }
 
@@ -28,8 +29,7 @@ export default class UnsavedChangesController extends Controller {
     event.preventDefault();
     this.destination = link.href;
     this.trigger = link;
-    if (!this.dialogTarget.open) this.dialogTarget.showModal();
-    this.dialogTarget.querySelector('[data-keep-editing]').focus();
+    this.dialogTarget.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: link } }));
   }
 
   beforeUnload(event) {
@@ -45,11 +45,24 @@ export default class UnsavedChangesController extends Controller {
   keepEditing(event) {
     event?.preventDefault();
     if (this.saving) return;
-    this.dialogTarget.close();
-    this.trigger?.focus();
+    this.closeDialog();
+  }
+
+  beforeClose(event) {
+    if (this.saving) event.preventDefault();
+  }
+
+  closed() {
+    this.destination = null;
+    this.trigger = null;
+  }
+
+  closeDialog() {
+    this.dialogTarget.dispatchEvent(new CustomEvent('exhibit:modal-close'));
   }
 
   async discard() {
+    if (this.saving) return;
     this.setSaving(true);
     try {
       // A Save already submitted must settle before its confirmed snapshot
@@ -68,6 +81,7 @@ export default class UnsavedChangesController extends Controller {
   }
 
   async saveAndLeave() {
+    if (this.saving) return;
     this.setSaving(true);
     const saved = await saveEditorChanges();
     this.setSaving(false);
@@ -79,12 +93,11 @@ export default class UnsavedChangesController extends Controller {
   }
 
   leave() {
-    this.dialogTarget.close();
+    const destination = this.destination;
+    this.setSaving(false);
+    this.closeDialog();
     this.allowLeave = true;
-    location.assign(this.destination);
+    location.assign(destination);
   }
 
-  disconnect() {
-    if (this.dialogTarget.open) this.dialogTarget.close();
-  }
 }

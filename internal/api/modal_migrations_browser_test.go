@@ -310,3 +310,38 @@ func TestAdminEntitlementModalBrowser(t *testing.T) {
 		})
 	}
 }
+
+func TestEditorLeaveModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			ro := newTestRouter(t)
+			id := createTestArtifact(t, ro, "Unsaved sample")
+			app := httptest.NewServer(ro)
+			defer app.Close()
+			ro.cfg.AppOrigin = app.URL
+			b := newModalBrowser(t, width)
+			b.run(chromedp.Navigate(app.URL + "/artifacts/" + id + "/edit"))
+			b.wait(`document.querySelector('.cm-editor')`)
+			b.eval(`document.getElementById('title').value='Draft';document.getElementById('title').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.app-header-back').click()`)
+			b.wait(`document.querySelector('.editor-leave-dialog').open`)
+			b.capture("Exh-yrgf", width)
+			b.check(`document.activeElement.hasAttribute('data-keep-editing')`)
+			// This coordinator intentionally requires a decision on backdrop clicks.
+			b.eval(`document.querySelector('.editor-leave-dialog').dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:-1,clientY:-1}))`)
+			b.check(`document.querySelector('.editor-leave-dialog').open`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.wait(`!document.querySelector('.editor-leave-dialog').open`)
+			b.check(`document.activeElement.matches('.app-header-back') && document.getElementById('title').value==='Draft'`)
+			b.eval(`document.querySelector('.app-header-back').click();window.editorDialog=document.querySelector('.editor-leave-dialog');window.editorDialogParent=editorDialog.parentElement;editorDialog.remove()`)
+			b.wait(`!editorDialog.open`)
+			b.eval(`editorDialogParent.append(editorDialog)`)
+			b.run(chromedp.Sleep(30 * time.Millisecond))
+			b.eval(`document.querySelector('.app-header-back').click()`)
+			b.wait(`editorDialog.open`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.wait(`!editorDialog.open`)
+
+		})
+	}
+}
+
