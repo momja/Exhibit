@@ -68,6 +68,24 @@ test('failed operations keep feature errors and permit a retry; the modal never 
   assert.equal(await p.modal.run(async () => 'retry'), 'retry');
 });
 
+test('event-driven work keeps the dialog pending until its completion event', async () => {
+  const p = await fixture();
+  p.modal.show();
+  p.dialog.addEventListener('feature:started', () => { p.modal.pending = true; });
+  p.dialog.addEventListener('feature:finished', () => { p.modal.pending = false; });
+  await p.dialog.dispatchEvent(new Event('feature:started'));
+  await p.dialog.dispatchEvent(new Event('feature:started'));
+  assert.equal(p.save.disabled, true);
+  assert.equal(p.modal.close(), false);
+  assert.equal(await p.modal.run(() => assert.fail('duplicate operation')), undefined);
+  await p.dialog.dispatchEvent(new Event('feature:finished'));
+  assert.equal(p.modal.pending, false);
+  assert.equal(p.save.disabled, false);
+  assert.equal(p.cancel.disabled, false);
+  assert.equal(p.unavailable.disabled, true);
+  assert.equal(p.modal.close(), true);
+});
+
 test('two handles have independent pending state and feature-specific dismissal guards remain optional', async () => {
   const p = await fixture();
   const second = nativeDialog(p, p.byId('second'));

@@ -33,7 +33,7 @@ async function fixture(respond = async () => Response.json({ id: 'created-copy' 
   const query = el('query');
   const newLink = el('new-link');
   query.value = 'original';
-  nativeDialog(page, dialog);
+  nativeDialog(page, dialog, [submit, cancel]);
   cancel.addEventListener('click', () => dialog.dispatchEvent({ type: 'click', target: {
     closest: selector => selector === '[data-modal-dismiss]' ? cancel : null
   } }));

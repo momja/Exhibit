@@ -28,7 +28,8 @@ class Modal {
       show: trigger => this.show(trigger),
       close: () => this.close(),
       run: operation => this.run(operation),
-      get pending() { return modal.operation !== null; }
+      get pending() { return modal.operation !== null; },
+      set pending(value) { value ? modal.begin() : modal.finish(); }
     };
     this.listeners = {
       cancel: event => { event.preventDefault(); this.close(); },
@@ -77,8 +78,8 @@ class Modal {
     return true;
   }
 
-  async run(callback) {
-    if (this.operation) return;
+  begin() {
+    if (this.operation) return this.operation;
     this.connect();
     // Buttons lock by default; a native fieldset can lock a whole working copy.
     // Restore each control's own disabled state, including previously disabled
@@ -87,16 +88,26 @@ class Modal {
       .map(control => [control, control.disabled]) };
     this.operation = operation;
     for (const [control] of operation.controls) control.disabled = true;
+    return operation;
+  }
+
+  finish() {
+    if (!this.operation) return;
+    this.restoreControls();
+    this.operation = null;
+
+  }
+
+  async run(callback) {
+    if (this.operation) return;
+    const operation = this.begin();
     try {
       // Invoke immediately, before awaiting: user activation for clipboard or
       // popup work must remain in the original click's call stack.
       const result = await callback();
       if (this.operation === operation) return result;
     } finally {
-      if (this.operation === operation) {
-        this.restoreControls();
-        this.operation = null;
-      }
+      if (this.operation === operation) this.finish();
     }
   }
 

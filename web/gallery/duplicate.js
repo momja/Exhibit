@@ -23,28 +23,23 @@ export function initializeDuplication(root) {
   const share = form.elements.copy_share_settings;
   const data = form.elements.copy_data;
   const submit = form.querySelector('[type="submit"]');
-  const cancel = form.querySelector('[data-duplicate-cancel]');
   const status = form.querySelector('[data-duplicate-status]');
   let artifactID = '';
-  let busy = false;
   let pending;
   let newArtifactID = '';
 
-  function controls() {
-    for (const input of [title, share, data]) input.disabled = busy || !!pending;
-    submit.disabled = busy;
-    cancel.disabled = busy;
+  // Only the uncertain-retry payload locks these fields. The modal owns
+  // in-flight buttons and dismissal; a failed response keeps identity/options.
+  function lockPayload() {
+    for (const input of [title, share, data]) input.disabled = !!pending;
   }
-  events.on(dialog, 'modal:before-close', event => {
-    if (busy) event.preventDefault();
-  });
   events.on(dialog, 'modal:closed', () => {
     // An unconfirmed request may already have succeeded. Reconcile when the
     // person closes the modal too, without issuing another mutation.
     if (pending) root.dispatchEvent(new CustomEvent('exhibit:artifacts-changed', { bubbles: true }));
   });
   events.on(root, 'exhibit:duplicate', event => {
-    if (busy || dialog.open) return;
+    if (modal.pending || dialog.open) return;
     artifactID = event.detail.artifactID;
     title.value = event.detail.title + ' (copy)';
     share.checked = false;
@@ -52,55 +47,57 @@ export function initializeDuplication(root) {
     pending = undefined;
     status.textContent = '';
     submit.textContent = 'Duplicate artifact';
-    controls();
+    lockPayload();
     modal.show(event.detail.trigger);
     title.select();
   });
   events.on(form, 'submit', async event => {
     event.preventDefault();
-    if (busy) return;
+    if (modal.pending) return;
     if (!pending && !title.value.trim()) {
       status.textContent = 'Enter a title for the copy.';
       title.focus();
       return;
     }
     pending ||= { title: title.value.trim(), copy_share_settings: share.checked, copy_data: data.checked, request_id: requestID() };
-    busy = true;
-    controls();
-    status.textContent = 'Duplicating artifact…';
-    try {
-      const response = await apiFetch('/api/artifacts/' + encodeURIComponent(artifactID) + '/duplicate', {
-        method: 'POST', body: JSON.stringify(pending)
-      });
-      if (!connected) return;
-      if (!response?.ok) {
-        // A client refusal published nothing. A server/network failure may
-        // have committed: preserve the payload and identity for a safe retry.
-        if (response && response.status < 500) {
-          pending = undefined;
-          const content = await response.json().catch(() => ({}));
-          status.textContent = content.error || 'Could not duplicate this artifact. Try again.';
-        } else {
-          status.textContent = 'Could not confirm duplication. Try again to check the saved result.';
+    lockPayload();
+    const duplicated = await modal.run(async () => {
+      status.textContent = 'Duplicating artifact…';
+      try {
+        const response = await apiFetch('/api/artifacts/' + encodeURIComponent(artifactID) + '/duplicate', {
+          method: 'POST', body: JSON.stringify(pending)
+        });
+        if (!connected) return;
+        if (!response?.ok) {
+          // A client refusal published nothing. A server/network failure may
+          // have committed: preserve the payload and identity for a safe retry.
+          if (response && response.status < 500) {
+            pending = undefined;
+            const content = await response.json().catch(() => ({}));
+            status.textContent = content.error || 'Could not duplicate this artifact. Try again.';
+          } else {
+            status.textContent = 'Could not confirm duplication. Try again to check the saved result.';
+          }
+          submit.textContent = 'Try again';
+          return;
         }
+        const artifact = await response.json();
+        if (!connected) return;
+        if (!artifact?.id) throw Error('missing duplicate result');
+        newArtifactID = artifact.id;
+        pending = undefined;
+        return true;
+      } catch {
+        if (!connected) return;
+        status.textContent = 'Could not confirm duplication. Try again to check the saved result.';
         submit.textContent = 'Try again';
-        return;
+      } finally {
+        if (connected) lockPayload();
       }
-      const artifact = await response.json();
-      if (!connected) return;
-      if (!artifact?.id) throw Error('missing duplicate result');
-      newArtifactID = artifact.id;
-      pending = undefined;
-      busy = false;
+    });
+    if (duplicated && connected) {
       modal.close();
       root.dispatchEvent(new CustomEvent('exhibit:artifacts-changed', { bubbles: true }));
-    } catch {
-      if (!connected) return;
-      status.textContent = 'Could not confirm duplication. Try again to check the saved result.';
-      submit.textContent = 'Try again';
-    } finally {
-      busy = false;
-      if (connected) controls();
     }
   });
   events.on(root.closest('[data-gallery]') || root, 'htmx:after:swap', () => {

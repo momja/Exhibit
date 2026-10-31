@@ -216,10 +216,15 @@ and return focus without a feature event. Reconnecting reuses the same handle;
 an old completion cannot unlock a new operation. The feature still owns any
 network request and its effects; removal does not cancel an API mutation.
 
+`pending = true` / `pending = false` applies the same lock for event-driven
+work whose completion already arrives through htmx. Do not wrap those events
+in a synthetic Promise.
+
 Optional feature escape hatches are cancellable `modal:before-close` and
 `modal:closed` events. Use them for domain decisions or cleanup, not generic
-busy handling. Duplicate temporarily retains its own pending-payload controls
-and dismissal guard; its open/close calls already use the handle. No old
+busy handling. Duplicate uses `run` for in-flight work and retains only its uncertain-retry
+payload lock: title/options stay fixed until the server confirms or refuses the
+request. Buttons and dismissal use the shared pending lock. No old
 `exhibit:modal-open`/`exhibit:modal-close` event interface is retained.
 
 Features own errors, API calls, refresh events, and focus selection after an
