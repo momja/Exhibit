@@ -494,3 +494,14 @@ its heading, explanation, status and wrapping footer use the same defaults.
 
 [Network prompt desktop](screenshots/Exh-1grc/1280.png) ·
 [Network prompt phone](screenshots/Exh-1grc/390.png)
+
+Download permission uses `modal` with Block as initial focus and the live
+artifact frame as return focus. Dismissal discards its bytes; delayed approval
+checks request identity and the frame's document generation before downloading.
+An iframe navigation clears the pending request even when its WindowProxy is
+unchanged. Approval failures are shown inside the dialog and allow retry.
+`TestDownloadModalBrowser` checks native dismissal, failed/late grants, and a
+successful download's filename, MIME type and byte count.
+
+[Download desktop](screenshots/Exh-fvzb/1280.png) ·
+[Download phone](screenshots/Exh-fvzb/390.png)

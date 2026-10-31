@@ -63,6 +63,7 @@ async function loadDetail({ readOnly = false, responses = [], headline = "" } = 
   page.document.body.addEventListener("exhibit:capabilities-changed",
     (e) => capabilitiesChanged.push(e.type));
   permissionDialog(page, 'net-modal');
+  permissionDialog(page, 'dl-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api, capabilitiesChanged };
 }

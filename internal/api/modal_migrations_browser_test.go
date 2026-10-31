@@ -407,3 +407,34 @@ func TestNetworkModalBrowser(t *testing.T) {
 		}
 	}
 }
+
+func TestDownloadModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			b, _ := newPermissionViewer(t, width, false)
+			report := `permissionReport({__avDownload:true,filename:'report.csv',mime:'text/csv',bytes:new ArrayBuffer(3)})`
+			b.dialogCycle("#dl-modal", report, "#dl-block")
+			b.eval(report)
+			b.capture("Exh-fvzb", width)
+			// A late grant can persist, but cannot download discarded or replaced bytes.
+			b.eval(`window.downloads=[];HTMLAnchorElement.prototype.click=function(){downloads.push(this.download)};window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishDownload=(ok=true)=>resolve(new Response('{}',{status:ok?200:503}))):savedFetch(url,opts);document.getElementById('dl-allow').click()`)
+			b.wait(`document.getElementById('dl-allow').disabled`)
+			b.eval(`finishDownload(false)`)
+			b.wait(`!document.getElementById('dl-allow').disabled`)
+			b.check(`document.querySelector('#dl-modal [data-permission-status]').textContent.includes('download') && document.getElementById('dl-modal').open`)
+			b.eval(`document.getElementById('dl-allow').click()`)
+			b.wait(`document.getElementById('dl-allow').disabled`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.eval(`finishDownload()`)
+			b.run(chromedp.Sleep(30 * time.Millisecond))
+			b.check(`downloads.length===0 && !document.getElementById('dl-modal').open`)
+			b.eval(`window.fetch=savedFetch;window.savedObjectURL=URL.createObjectURL;URL.createObjectURL=blob=>{window.downloadBlob=blob;return savedObjectURL(blob)}`)
+			b.eval(report)
+			b.wait(`document.getElementById('dl-modal').open`)
+			b.eval(`document.getElementById('dl-allow').click()`)
+			b.wait(`downloads.length===1`)
+			b.check(`downloads[0]==='report.csv' && downloadBlob.size===3 && downloadBlob.type==='text/csv' && !document.getElementById('dl-modal').open`)
+
+		})
+	}
+}

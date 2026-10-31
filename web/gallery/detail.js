@@ -27,6 +27,17 @@ import { networkPrompt } from './network-prompt.js';
  *   geolocationApproved - persisted first-use location approval (mutable)
  */
 
+// A frame navigation invalidates requests even though WindowProxy identity is
+// retained by the browser. Replies must belong to the document that asked.
+let previewGeneration = 0;
+document.querySelector('iframe')?.addEventListener('load', () => {
+  previewGeneration++;
+  document.dispatchEvent(new CustomEvent('exhibit:preview-reloaded'));
+});
+function currentPreviewRequest(request) {
+  return request?.frame === document.querySelector('iframe') && request.generation === previewGeneration;
+}
+
 // Whether this visitor may grant this artifact anything (av-awr4).
 //
 // Five first-use prompts on this page write per-artifact authority — downloads,
@@ -347,6 +358,9 @@ networkPrompt.announceTo(document.querySelector('iframe'));
 // single write path) so it survives reloads and devices, and is revocable
 // from its security settings. Denial just drops the bytes; the artifact keeps running.
 let pendingDownload = null;
+const downloadDialog = document.getElementById('dl-modal');
+for (const event of ['modal:closed', 'modal:disconnected']) downloadDialog.addEventListener(event, () => { pendingDownload = null; });
+document.addEventListener('exhibit:preview-reloaded', closeDownloadModal);
 
 window.addEventListener('message', function(e) {
   const d = e.data;
@@ -357,7 +371,7 @@ window.addEventListener('message', function(e) {
   const dl = {
     filename: String(d.filename || 'download'),
     mime: String(d.mime || 'application/octet-stream'),
-    bytes: d.bytes
+    bytes: d.bytes, frame, generation: previewGeneration
   };
   if (downloadsApproved) { triggerDownload(dl); return; }
   // Unapproved and not ours to approve: drop the bytes, exactly as a denial
@@ -367,7 +381,10 @@ window.addEventListener('message', function(e) {
   if (!mayApprove()) { pendingDownload = null; return; }
   pendingDownload = dl;
   document.getElementById('dl-filename').textContent = dl.filename;
-  document.getElementById('dl-modal').hidden = false;
+  if (!downloadDialog.isConnected) { pendingDownload = null; return; }
+  document.getElementById('dl-allow').disabled = false;
+  downloadDialog.querySelector('[data-permission-status]').textContent = '';
+  downloadDialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: frame } }));
 });
 
 // Reconstructs the transferred bytes as a Blob and downloads it via an
@@ -388,39 +405,48 @@ function triggerDownload(dl) {
 // via PATCH (the single write path). Downloads and clipboard both ride this.
 // The viewer never surfaces a revoke control (that's now Edit-page-only,
 // av-hwx2) — this only grants on the artifact's first attempt.
-async function setCapabilityApproved(field, approved, label) {
+async function setCapabilityApproved(field, approved, label, stillPending = () => true) {
   const st = document.getElementById('al-status');
+  const promptID = { downloads_approved: 'dl-modal', clipboard_approved: 'clip-modal', links_approved: 'link-modal', camera_approved: 'media-modal', microphone_approved: 'media-modal', geolocation_approved: 'geo-modal' }[field];
+  const promptStatus = document.getElementById(promptID)?.querySelector('[data-permission-status]');
+  if (promptStatus) promptStatus.textContent = '';
   const r = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
     body: JSON.stringify({[field]: approved})
   }).catch(function() { return null; });
-  if (!r || !r.ok) { st.textContent = '✗ Failed to update ' + label + ' permission'; return false; }
+  if (!stillPending()) return false;
+  if (!r || !r.ok) {
+    const message = '✗ Failed to update ' + label + ' permission';
+    st.textContent = message;
+    if (promptStatus) promptStatus.textContent = message;
+    return false;
+  }
   return true;
 }
 
-async function setDownloadsApproved(approved) {
-  if (!(await setCapabilityApproved('downloads_approved', approved, 'download'))) return false;
+async function setDownloadsApproved(approved, request) {
+  if (!(await setCapabilityApproved('downloads_approved', approved, 'download', () => pendingDownload === request && currentPreviewRequest(request)))) return false;
   downloadsApproved = approved;
   return true;
 }
 
 function closeDownloadModal() {
-  document.getElementById('dl-modal').hidden = true;
   pendingDownload = null;
+  downloadDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
 }
 
-document.getElementById('dl-block').addEventListener('click', closeDownloadModal);
-document.getElementById('dl-modal').addEventListener('click', function(e) {
-  if (e.target.id === 'dl-modal') closeDownloadModal();
-});
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape' && !document.getElementById('dl-modal').hidden) closeDownloadModal();
-});
 document.getElementById('dl-allow').addEventListener('click', async function() {
   const dl = pendingDownload;
-  if (!(await setDownloadsApproved(true))) return;
+  if (!dl || dl.saving) return;
+  dl.saving = true;
+  document.getElementById('dl-allow').disabled = true;
+  const saved = await setDownloadsApproved(true, dl);
+  dl.saving = false;
+  if (pendingDownload !== dl || !currentPreviewRequest(dl)) return;
+  document.getElementById('dl-allow').disabled = false;
+  if (!saved) return;
   closeDownloadModal();
-  if (dl) triggerDownload(dl);
+  triggerDownload(dl);
 });
 
 // Clipboard bridge: the sandboxed frame's navigator.clipboard is denied by

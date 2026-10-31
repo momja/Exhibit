@@ -104,7 +104,7 @@ func TestDetailPageRendersDownloadBridge(t *testing.T) {
 	// sees the persisted decision.
 	assert.Contains(t, page, "let downloadsApproved = false;")
 	// First-use prompt names the artifact (HTML-escaped) and the filename.
-	assert.Contains(t, page, `<div id="dl-modal" class="modal-overlay" hidden>`)
+	assert.Contains(t, page, `<dialog id="dl-modal" class="modal-dialog"`)
 	assert.Contains(t, page, `<strong>CSV &lt;Exporter&gt;</strong> wants to download <code id="dl-filename"></code>`)
 	assert.Contains(t, page, `id="dl-allow"`)
 	assert.Contains(t, page, `id="dl-block"`)
