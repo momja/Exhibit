@@ -139,7 +139,8 @@ func TestDetailPageRendersLinkConfirmationModal(t *testing.T) {
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(detailJS), `document.getElementById('link-host').textContent = url.hostname`)
-	assert.Contains(t, string(detailJS), `linkDialog.dispatchEvent(new CustomEvent('exhibit:modal-open'`)
+	// Native opening/dismissal outcomes are exercised by TestLinkModalBrowser.
+	assert.Regexp(t, `id="link-block"[^>]*autofocus[^>]*data-modal-dismiss`, page)
 	assert.Contains(t, string(detailJS), `setCapabilityApproved('links_approved', approved, 'link',`)
 	assert.Contains(t, string(detailJS), `tab.location = link.url`)
 }
