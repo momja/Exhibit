@@ -14,14 +14,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi } from "./testdom.mjs";
+import { loadPageScript, recordingApi, observeModal } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
 // The order agent.tmpl loads them in.
 const AGENT_JS = [
   path.join(ASSETS, "state-api.js"),
-  path.join(ASSETS, "network-prompt.js"),
 
 ];
 
@@ -41,9 +40,10 @@ async function loadAgent({ responses = [], artifact = { id: ID, title: "Artifact
     matchMedia: () => ({ matches: false, addEventListener() {} }),
     alert: () => {}, confirm: () => true
   }, {
-    "net-modal": { hidden: true },
+    "net-modal": { open: false },
     "key-modal": { hidden: true }
   });
+  observeModal(page, 'net-modal');
   const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
     ['ensureSession', 'handleAgentEvent']);
   Object.assign(page.context, page.window, bindings);
@@ -60,7 +60,7 @@ test("the agent page installs the prompt against its own preview frame", async (
   // Installed at all: the module refuses to install twice and no-ops without
   // the dialog, so a page that forgot the partial would silently have nothing.
   assert.ok(byId("net-modal"), "the shared dialog must be present");
-  assert.equal(byId("net-modal").hidden, true);
+  assert.equal(byId("net-modal").open, false);
 });
 
 test("a blocked origin in the preview opens the prompt", async () => {
@@ -71,7 +71,7 @@ test("a blocked origin in the preview opens the prompt", async () => {
 
   await page.postFromFrame(report("https://cdn.example.com"), frame.contentWindow);
 
-  assert.equal(page.byId("net-modal").hidden, false);
+  assert.equal(page.byId("net-modal").open, true);
   assert.equal(page.byId("net-origin").textContent, "https://cdn.example.com");
   assert.equal(page.byId("net-directive").textContent, "Blocked by img-src");
 });
@@ -95,7 +95,7 @@ test("Allow writes the decision and re-renders the pane rather than reassigning 
   // The pane is re-rendered by htmx, which mints a fresh render token in the
   // fragment; reassigning src here would reuse the stale one.
   assert.equal(frame.src, before, "the pane reloads through the fragment, not the src");
-  assert.equal(page.byId("net-modal").hidden, true);
+  assert.equal(page.byId("net-modal").open, false);
 });
 
 // A chat session that has not created anything yet has no artifact to decide
@@ -107,7 +107,7 @@ test("no prompt before the agent has created an artifact", async () => {
   frame.contentWindow = { posted: [], postMessage() {} };
 
   await page.postFromFrame(report("https://cdn.example.com"), frame.contentWindow);
-  assert.equal(page.byId("net-modal").hidden, true);
+  assert.equal(page.byId("net-modal").open, false);
   assert.deepEqual(originCalls(page.api), []);
 });
 
@@ -117,7 +117,7 @@ test("a report for a frame that is not the preview is ignored", async () => {
   frame.contentWindow = { posted: [], postMessage() {} };
 
   await page.postFromFrame(report("https://evil.example.com"), { notTheFrame: true });
-  assert.equal(page.byId("net-modal").hidden, true);
+  assert.equal(page.byId("net-modal").open, false);
 });
 
 test("the host announces itself to each swapped-in preview frame", async () => {

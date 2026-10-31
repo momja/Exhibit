@@ -15,14 +15,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi } from "./testdom.mjs";
+import { loadPageScript, recordingApi, observeModal } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
 const DETAIL_JS = [
-  path.join(ASSETS, "network-prompt.js"),
   path.join(ASSETS, "state-api.js"),
-  path.join(ASSETS, "detail.js")
 ];
 
 const ID = "art-1";
@@ -30,7 +28,7 @@ const OPEN_URL = "/artifacts/art-1/open";
 
 const HIDDEN = {
   "direct-open-modal": { hidden: true, dataset: { artifact: ID, viewer: "1", openUrl: OPEN_URL } },
-  "net-modal": { hidden: true },
+  "net-modal": { open: false },
   "dl-modal": { hidden: true },
   "clip-modal": { hidden: true },
   "link-modal": { hidden: true },
@@ -74,6 +72,9 @@ async function loadDetail({ readOnly = false, approvals = {}, responses = [] } =
       return null;
     }
   }, HIDDEN);
+  const netDialog = observeModal(page, 'net-modal');
+  page.byId('net-once').addEventListener('click', () => netDialog.dispatchEvent({type:'exhibit:modal-close'}));
+  await page.loadModule(path.join(ASSETS, 'detail.js'));
   await page.loadModule(path.join(ASSETS, "direct-open.js"));
   return { ...page, api, tabs, opened };
 }

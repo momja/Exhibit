@@ -37,156 +37,158 @@
  * no-op install rather than a thrown error, which is what keeps this safe to
  * load from a page that has not adopted it yet.
  */
-(function () {
-  // Every dismissal path and every answer runs through one install, so a page
-  // that calls install() twice would get two listeners racing over one dialog.
-  let installed = false;
+import { apiFetch } from './api-module.js';
 
-  window.ExhibitNetworkPrompt = {
-    install: function (opts) {
-      const modal = document.getElementById('net-modal');
-      if (!modal || installed) return;
-      installed = true;
 
-      const frame = opts.frame;
-      const artifactId = opts.artifactId;
-      const reload = opts.reload;
-      const readOnly = opts.readOnly || function () { return false; };
-      const explain = opts.explain || function () {};
-      // Where progress and failure are reported. A function that takes text
-      // rather than an element: the detail page has a status span, the agent
-      // page writes into its transcript, and neither should have to pretend to
-      // be the other. Omitted means the prompt reports nothing, which is worse
-      // than either but never wrong.
-      const report = opts.report || function () {};
+// Every dismissal path and every answer runs through one install, so a page
+// that calls install() twice would get two listeners racing over one dialog.
+let installed = false;
 
-      let pending = null;
-      const queue = [];
+export const networkPrompt = {
+  install: function (opts) {
+    const modal = document.getElementById('net-modal');
+    if (!modal || installed) return;
+    installed = true;
 
-      // Advances to the next queued report, or closes the dialog when the
-      // queue is empty. Every dismissal path goes through here, so "next" and
-      // "close" are one behaviour rather than two that can disagree.
-      function showNext() {
-        pending = queue.shift() || null;
-        if (!pending) {
-          modal.hidden = true;
-          const f = frame();
-          if (f) f.focus();
-          return;
-        }
-        // textContent, never innerHTML: the origin comes out of the artifact's
-        // own blocked request and must not be interpreted as markup here.
-        document.getElementById('net-origin').textContent = pending.origin;
-        document.getElementById('net-directive').textContent =
-          pending.directive ? 'Blocked by ' + pending.directive : '';
-        modal.hidden = false;
-        // Land on the safe answer, the way the link prompt does.
-        document.getElementById('net-once').focus();
-      }
+    const frame = opts.frame;
+    const artifactId = opts.artifactId;
+    const reload = opts.reload;
+    const readOnly = opts.readOnly || function () { return false; };
+    const explain = opts.explain || function () {};
+    // Where progress and failure are reported. A function that takes text
+    // rather than an element: the detail page has a status span, the agent
+    // page writes into its transcript, and neither should have to pretend to
+    // be the other. Omitted means the prompt reports nothing, which is worse
+    // than either but never wrong.
+    const report = opts.report || function () {};
 
-      // Records one origin's decision through the per-origin route. Not PATCH:
-      // neither page holds a working copy of the allowlist, and restating one
-      // would overwrite decisions made on the edit page since it loaded.
-      async function decide(origin, decision) {
-        const id = artifactId();
-        if (!id) return false;
-        const r = await apiFetch('/api/artifacts/' + encodeURIComponent(id) + '/origins', {
-          method: 'POST',
-          body: JSON.stringify({ origin: origin, decision: decision, source: 'runtime' })
-        }).catch(function () { return null; });
-        if (!r || !r.ok) { report('✗ Failed to save the decision for ' + origin); return false; }
-        return true;
-      }
+    let pending = null;
+    const queue = [];
 
-      window.addEventListener('message', function (e) {
-        const d = e.data;
-        if (!d || d.__avNetwork !== true) return;
-        const id = artifactId();
-        if (!id || d.artifactId !== id) return;
-        const f = frame();
-        if (!f || e.source !== f.contentWindow) return;
-        // A read-only visitor cannot record either answer — apiFetch would
-        // refuse the write — so prompting them would be asking a question with
-        // no answer. The render preamble already stays silent for an anonymous
-        // render; this is the same fact on the side that owns the dialog.
-        //
-        // Refused is not the same as unmentioned. A recipient's artifact is
-        // frozen at whatever its owner approved (av-awr4), and if that set is
-        // missing an origin the tool needs, the tool fails with the reason
-        // available nowhere the visitor will look. So the report is handed to
-        // the page's explanation instead of the queue — never both, since the
-        // whole claim is that this session asks nothing and writes nothing.
-        if (readOnly()) {
-          explain(String(d.origin || ''), String(d.directive || ''));
-          return;
-        }
-        queue.push({ origin: String(d.origin || ''), directive: String(d.directive || '') });
-        if (!pending) showNext();
-      });
-
-      document.getElementById('net-once').addEventListener('click', showNext);
-      modal.addEventListener('click', function (e) { if (e.target === modal) showNext(); });
-      document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && !modal.hidden) showNext();
-      });
-
-      document.getElementById('net-never').addEventListener('click', async function () {
-        const req = pending;
-        if (!req) { showNext(); return; }
-        // A failed write leaves the prompt up rather than pretending the origin
-        // was refused: the next load would ask again, having said it would not.
-        if (!(await decide(req.origin, 'block'))) return;
-        // Escape, the backdrop and Block once stay live while that write is in
-        // flight, and each one promotes the next queued report. Advancing again
-        // here would drop the promoted origin without ever showing it, and the
-        // preamble reports each origin only once per load, so it would be gone
-        // for good. Only this request's own dismissal is ours to make.
-        if (pending === req) showNext();
-      });
-
-      document.getElementById('net-allow').addEventListener('click', async function () {
-        const req = pending;
-        if (!req) { showNext(); return; }
-        if (!(await decide(req.origin, 'allow'))) return;
-        modal.hidden = true;
-        pending = null;
-        // The reload re-runs the artifact under the new CSP, so anything still
-        // blocked reports itself again. Drop the queue rather than ask twice
-        // about origins the fresh load is about to raise on its own.
-        queue.length = 0;
-        report('Applying…');
-        // The artifact's posture just changed, and the toolbar's capability
-        // badge still describes the allowlist as it was at page load
-        // (av-mf1x). Fire before the reload so the fragment re-fetch runs
-        // while the frame refetches. A page with no capability-cluster
-        // target — the agent page shares this module — hears nothing, which
-        // is correct: there is no badge there to refresh.
-        document.body.dispatchEvent(new CustomEvent('exhibit:capabilities-changed'));
-        reload();
-      });
-    },
-
-    // Tells a frame the host is listening, so the preamble flushes whatever it
-    // buffered — CSP-violation reports and the capability diagnostic both fire
-    // at frame load, before a page has attached its listeners, and a one-shot
-    // postMessage there is simply lost.
-    //
-    // Announced twice, and both are needed. On every `load`, for frames that
-    // load after this runs. And once immediately, because a frame that finished
-    // loading *before* this ran has already fired its `load` event and will not
-    // fire another — that ordering decides whether a prompt appears at all, and
-    // it varies with cache state. A duplicate ping is harmless: the preamble
-    // flushes its queue once.
-    //
-    // targetOrigin is '*' because the frame's origin is opaque; the preamble
-    // validates the ping came from our app origin.
-    announceTo: function (frame) {
-      if (!frame) return;
-      function announce() {
-        if (frame.contentWindow) frame.contentWindow.postMessage({ __avHostReady: true }, '*');
-      }
-      frame.addEventListener('load', announce);
-      announce();
+    // Advances to the next queued report, or closes the dialog when the
+    // queue is empty. Every dismissal path goes through here, so "next" and
+    // "close" are one behaviour rather than two that can disagree.
+    function close() {
+      modal.dispatchEvent(new CustomEvent('exhibit:modal-close'));
     }
-  };
-})();
+    function showNext() {
+      pending = queue.shift() || null;
+      // Reports from a removed agent preview no longer describe the tool.
+      while (pending && (pending.frame !== frame() || pending.artifactID !== artifactId())) pending = queue.shift() || null;
+      if (!pending) { if (modal.open) close(); return; }
+      document.getElementById('net-origin').textContent = pending.origin;
+      document.getElementById('net-directive').textContent = pending.directive ? 'Blocked by ' + pending.directive : '';
+      document.getElementById('net-never').disabled = false;
+      document.getElementById('net-allow').disabled = false;
+      modal.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: frame() } }));
+    }
+    modal.addEventListener('modal:closed', showNext);
+    modal.addEventListener('modal:disconnected', () => { pending = null; queue.length = 0; });
+
+    // Records one origin's decision through the per-origin route. Not PATCH:
+    // neither page holds a working copy of the allowlist, and restating one
+    // would overwrite decisions made on the edit page since it loaded.
+    async function decide(req, decision) {
+      if (req.writing || req !== pending || req.frame !== frame() || req.artifactID !== artifactId()) return false;
+      req.writing = true;
+      document.getElementById('net-never').disabled = true;
+      document.getElementById('net-allow').disabled = true;
+      const id = req.artifactID;
+      const origin = req.origin;
+      const r = await apiFetch('/api/artifacts/' + encodeURIComponent(id) + '/origins', {
+        method: 'POST',
+        body: JSON.stringify({ origin: origin, decision: decision, source: 'runtime' })
+      }).catch(function () { return null; });
+      req.writing = false;
+      if (req !== pending || req.frame !== frame() || req.artifactID !== artifactId()) return false;
+      document.getElementById('net-never').disabled = false;
+      document.getElementById('net-allow').disabled = false;
+      if (!r || !r.ok) { report('✗ Failed to save the decision for ' + origin); return false; }
+      return true;
+    }
+
+    window.addEventListener('message', function (e) {
+      const d = e.data;
+      if (!modal.isConnected || !d || d.__avNetwork !== true) return;
+      const id = artifactId();
+      if (!id || d.artifactId !== id) return;
+      const f = frame();
+      if (!f || e.source !== f.contentWindow) return;
+      // A read-only visitor cannot record either answer — apiFetch would
+      // refuse the write — so prompting them would be asking a question with
+      // no answer. The render preamble already stays silent for an anonymous
+      // render; this is the same fact on the side that owns the dialog.
+      //
+      // Refused is not the same as unmentioned. A recipient's artifact is
+      // frozen at whatever its owner approved (av-awr4), and if that set is
+      // missing an origin the tool needs, the tool fails with the reason
+      // available nowhere the visitor will look. So the report is handed to
+      // the page's explanation instead of the queue — never both, since the
+      // whole claim is that this session asks nothing and writes nothing.
+      if (readOnly()) {
+        explain(String(d.origin || ''), String(d.directive || ''));
+        return;
+      }
+      queue.push({ origin: String(d.origin || ''), directive: String(d.directive || ''), frame: f, artifactID: id });
+      if (!pending) showNext();
+    });
+
+    document.getElementById('net-never').addEventListener('click', async function () {
+      const req = pending;
+      if (!req) return;
+      // A failed write leaves the prompt up rather than pretending the origin
+      // was refused: the next load would ask again, having said it would not.
+      if (!(await decide(req, 'block'))) return;
+      // Escape, the backdrop and Block once stay live while that write is in
+      // flight, and each one promotes the next queued report. Advancing again
+      // here would drop the promoted origin without ever showing it, and the
+      // preamble reports each origin only once per load, so it would be gone
+      // for good. Only this request's own dismissal is ours to make.
+      if (pending === req) close();
+    });
+
+    document.getElementById('net-allow').addEventListener('click', async function () {
+      const req = pending;
+      if (!req) return;
+      if (!(await decide(req, 'allow'))) return;
+      pending = null;
+      // The reload re-runs the artifact under the new CSP, so anything still
+      // blocked reports itself again. Drop the queue rather than ask twice
+      // about origins the fresh load is about to raise on its own.
+      queue.length = 0;
+      close();
+      report('Applying…');
+      // The artifact's posture just changed, and the toolbar's capability
+      // badge still describes the allowlist as it was at page load
+      // (av-mf1x). Fire before the reload so the fragment re-fetch runs
+      // while the frame refetches. A page with no capability-cluster
+      // target — the agent page shares this module — hears nothing, which
+      // is correct: there is no badge there to refresh.
+      document.body.dispatchEvent(new CustomEvent('exhibit:capabilities-changed'));
+      reload();
+    });
+  },
+
+  // Tells a frame the host is listening, so the preamble flushes whatever it
+  // buffered — CSP-violation reports and the capability diagnostic both fire
+  // at frame load, before a page has attached its listeners, and a one-shot
+  // postMessage there is simply lost.
+  //
+  // Announced twice, and both are needed. On every `load`, for frames that
+  // load after this runs. And once immediately, because a frame that finished
+  // loading *before* this ran has already fired its `load` event and will not
+  // fire another — that ordering decides whether a prompt appears at all, and
+  // it varies with cache state. A duplicate ping is harmless: the preamble
+  // flushes its queue once.
+  //
+  // targetOrigin is '*' because the frame's origin is opaque; the preamble
+  // validates the ping came from our app origin.
+  announceTo: function (frame) {
+    if (!frame) return;
+    function announce() {
+      if (frame.contentWindow) frame.contentWindow.postMessage({ __avHostReady: true }, '*');
+    }
+    frame.addEventListener('load', announce);
+    announce();
+  }
+};

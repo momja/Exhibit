@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { loadPageScript, recordingApi } from './testdom.mjs';
+import { loadPageScript, recordingApi, observeModal } from './testdom.mjs';
 
 const assets = new URL('../../internal/api/assets/gallery/', import.meta.url);
 const asset = (name) => fileURLToPath(new URL(name, assets));
@@ -14,7 +14,7 @@ async function load({ artifact = 'art-1', viewer = '1', store = storage(), block
   const tabs = [];
   const api = recordingApi();
   const openURL = `/artifacts/${artifact}/open`;
-  const page = loadPageScript(['network-prompt.js', 'state-api.js', 'detail.js'].map(asset), {
+  const page = loadPageScript(['state-api.js'].map(asset), {
     ID: artifact, OPEN_URL: openURL, SOURCE_URL: '', TOKEN: '', READ_ONLY: readOnly,
     STATE_WRITABLE: !readOnly, SHARED_STATE: false,
     downloadsApproved: false, clipboardApproved: false, linksApproved: false,
@@ -31,6 +31,8 @@ async function load({ artifact = 'art-1', viewer = '1', store = storage(), block
     'capability-warning-banner', 'origin-blocked-banner', 'direct-open-modal'
   ].map((id) => [id, { hidden: true }])));
   page.byId('direct-open-modal').dataset = { artifact, viewer, openUrl: openURL };
+  observeModal(page, 'net-modal');
+  await page.loadModule(asset('detail.js'));
   await page.loadModule(asset('direct-open.js'));
   const trigger = page.byId('direct-open-toolbar');
   const prompt = page.byId('direct-open-modal');

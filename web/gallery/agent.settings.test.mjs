@@ -8,7 +8,7 @@ const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve()
 
 async function settingsPage(saved, byok = true) {
   const calls = [];
-  const page = loadPageScript([asset('state-api.js'), asset('network-prompt.js')], {
+  const page = loadPageScript([asset('state-api.js')], {
     TOKEN: '', READ_ONLY: false, BYOK: byok, artifact: null,
     apiFetch: async (path, options = {}) => {
       calls.push({path, ...options});

@@ -277,13 +277,12 @@ let geolocationApproved = {{if .Capability.GeolocationApproved}}true{{else}}fals
 <script src="{{asset "gallery/state-api.js"}}"></script>
 {{/* The runtime network prompt (av-kmwj), shared with the agent chat page
      (av-6xvs). Before detail.js, which installs it at load. */}}
-<script src="{{asset "gallery/network-prompt.js"}}"></script>
-<script src="{{asset "gallery/detail.js"}}"></script>
+{{template "componentScripts"}}
+<script type="module" src="{{asset "gallery/detail.js"}}"></script>
 <script type="module" src="{{asset "gallery/direct-open.js"}}"></script>
 {{/* The share panel's script, loaded only where the panel exists. It resolves
      everything by id inside #share-panel and tolerates the panel's absence, so
      the guard is a courtesy rather than the control. */}}
 {{if .Share}}<script type="module" src="{{asset "gallery/share.js"}}"></script>{{end}}
-{{template "componentScripts"}}
 </body>
 </html>{{end}}

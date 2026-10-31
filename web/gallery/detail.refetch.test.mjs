@@ -9,13 +9,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi } from "./testdom.mjs";
+import { loadPageScript, recordingApi, observeModal } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
 const DETAIL_JS = [
-  path.join(ASSETS, "network-prompt.js"),
-  path.join(ASSETS, "detail.js")
 ];
 
 // Runs one refetch against a queued response and returns what the page did.
@@ -42,7 +40,10 @@ async function refetchWith(body) {
   });
   let reloads = 0;
   page.window.location.reload = () => { reloads++; };
-  await page.context.refetchSource();
+  const netDialog = observeModal(page, 'net-modal');
+  page.byId('net-once').addEventListener('click', () => netDialog.dispatchEvent({type:'exhibit:modal-close'}));
+  await page.loadModule(path.join(ASSETS, 'detail.js'));
+  await page.window.refetchSource();
   const status = page.byId("al-status");
   return { api, status, reloads: () => reloads };
 }

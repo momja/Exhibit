@@ -1,3 +1,5 @@
+import { apiFetch, apiStateFetch } from './api-module.js';
+import { networkPrompt } from './network-prompt.js';
 /* Artifact detail (viewer) page script. Served from the app origin at
  * /assets/gallery/detail.js. The page's inline bootstrap <script> defines the
  * per-request globals this file reads (and reassigns) before it loads:
@@ -335,7 +337,7 @@ window.addEventListener('message', function(e) {
 // diagnostic (av-yvtb) and CSP-violation reports (av-kmwj) both fire at frame
 // load, before this page has attached its listeners — and flushes when the host
 // announces itself. announceTo owns both halves of that handshake.
-window.ExhibitNetworkPrompt.announceTo(document.querySelector('iframe'));
+networkPrompt.announceTo(document.querySelector('iframe'));
 
 // Download bridge: the sandboxed frame cannot download anything itself (the
 // sandbox omits allow-downloads). The shim posts intercepted download
@@ -865,7 +867,7 @@ function explainBlockedOrigin(origin) {
 // rendered, which expires — /open mints a fresh one on redirect, so the reload
 // works on a page that has been open all afternoon. The stamp only defeats the
 // browser's cache of the redirect itself.
-window.ExhibitNetworkPrompt.install({
+networkPrompt.install({
   frame: function () { return document.querySelector('iframe'); },
   artifactId: function () { return ID; },
   readOnly: function () { return !mayApprove(); },
@@ -951,3 +953,6 @@ function refetchNote(data) {
   }
   return parts.join(' ');
 }
+
+// Existing server-rendered toolbar action.
+window.refetchSource = refetchSource;

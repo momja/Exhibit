@@ -15,7 +15,6 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
 const AGENT_JS = [
   path.join(ASSETS, "state-api.js"),
-  path.join(ASSETS, "network-prompt.js"),
 
 ];
 

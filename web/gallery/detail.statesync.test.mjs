@@ -21,14 +21,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi } from "./testdom.mjs";
+import { loadPageScript, recordingApi, observeModal } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
 const DETAIL_JS = [
-  path.join(ASSETS, "network-prompt.js"),
   path.join(ASSETS, "state-api.js"),
-  path.join(ASSETS, "detail.js")
 ];
 
 const ID = "art-1";
@@ -36,7 +34,7 @@ const OPEN_URL = "/artifacts/art-1/open";
 const STATE_URL = "/api/artifacts/art-1/state";
 
 const HIDDEN = {
-  "net-modal": { hidden: true },
+  "net-modal": { open: false },
   "dl-modal": { hidden: true },
   "clip-modal": { hidden: true },
   "link-modal": { hidden: true },
@@ -51,7 +49,7 @@ const HIDDEN = {
 // changing between two polls.
 const stateResponse = (state) => ({ ok: true, status: 200, json: async () => state });
 
-function loadDetail({ readOnly = false, stateWritable = true, shared = false, responses = [] } = {}) {
+async function loadDetail({ readOnly = false, stateWritable = true, shared = false, responses = [] } = {}) {
   const api = recordingApi(responses);
   const page = loadPageScript(DETAIL_JS, {
     TOKEN: "",
@@ -69,6 +67,9 @@ function loadDetail({ readOnly = false, stateWritable = true, shared = false, re
     apiFetch: api.apiFetch,
     apiStateFetch: api.apiStateFetch
   }, HIDDEN);
+  const netDialog = observeModal(page, 'net-modal');
+  page.byId('net-once').addEventListener('click', () => netDialog.dispatchEvent({type:'exhibit:modal-close'}));
+  await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api };
 }
 
@@ -78,7 +79,7 @@ const synced = (changed, live) => ({ __avStateSynced: true, artifactId: ID, chan
 // --- the write half, which is what av-awr4 found missing -----------------
 
 test("a state write goes out through the state path, not the ordinary one", async () => {
-  const { api, postFromFrame } = loadDetail({ readOnly: true });
+  const { api, postFromFrame } = await loadDetail({ readOnly: true });
 
   await postFromFrame(stateWrite("todo", '["milk"]'));
 
@@ -92,7 +93,7 @@ test("a state write goes out through the state path, not the ordinary one", asyn
 // --- when the host asks --------------------------------------------------
 
 test("coming back to the tab resyncs, for every artifact", async () => {
-  const { api, setVisibility } = loadDetail({ shared: false, responses: [stateResponse({})] });
+  const { api, setVisibility } = await loadDetail({ shared: false, responses: [stateResponse({})] });
 
   await setVisibility("hidden");
   assert.deepEqual(api.calls, [], "a tab nobody is looking at asks nothing");
@@ -104,19 +105,19 @@ test("coming back to the tab resyncs, for every artifact", async () => {
 });
 
 test("only a shared artifact polls", async () => {
-  const solo = loadDetail({ shared: false, responses: [stateResponse({})] });
+  const solo = await loadDetail({ shared: false, responses: [stateResponse({})] });
   await solo.tickIntervals();
   assert.deepEqual(solo.api.calls, [],
     "nobody else writes your own rows, so a poll would spend a request every few " +
     "seconds forever to discover nothing");
 
-  const board = loadDetail({ shared: true, responses: [stateResponse({ position: "e4" })] });
+  const board = await loadDetail({ shared: true, responses: [stateResponse({ position: "e4" })] });
   await board.tickIntervals();
   assert.deepEqual(board.api.calls.map((c) => c.method + " " + c.path), ["GET " + STATE_URL]);
 });
 
 test("a visitor with no principal never polls and never asks", async () => {
-  const { api, tickIntervals, setVisibility } = loadDetail({
+  const { api, tickIntervals, setVisibility } = await loadDetail({
     readOnly: true, stateWritable: false, shared: true, responses: [stateResponse({})]
   });
 
@@ -132,7 +133,7 @@ test("a resync in flight with a local write waits", async () => {
   // The write's response is queued first, so the PUT is still unresolved when
   // the interval fires: a refetch landing there would push the pre-write server
   // copy back into the frame and visibly undo what the user just typed.
-  const { api, frame, postFromFrame, tickIntervals } = loadDetail({
+  const { api, frame, postFromFrame, tickIntervals } = await loadDetail({
     shared: true,
     responses: [new Promise(() => {}), stateResponse({ position: "e4" })]
   });
@@ -146,7 +147,7 @@ test("a resync in flight with a local write waits", async () => {
 });
 
 test("the fetched map is posted into the frame", async () => {
-  const { frame, tickIntervals } = loadDetail({
+  const { frame, tickIntervals } = await loadDetail({
     shared: true, responses: [stateResponse({ position: "e4" })]
   });
 
@@ -161,7 +162,7 @@ test("the fetched map is posted into the frame", async () => {
 // --- the reload control, and when it stays out of the way ----------------
 
 test("an artifact that ignores 'storage' is offered a reload", async () => {
-  const { byId, postFromFrame } = loadDetail({ shared: true });
+  const { byId, postFromFrame } = await loadDetail({ shared: true });
 
   await postFromFrame(synced(2, false));
 
@@ -171,7 +172,7 @@ test("an artifact that ignores 'storage' is offered a reload", async () => {
 });
 
 test("an artifact that listens is left alone", async () => {
-  const { byId, postFromFrame } = loadDetail({ shared: true });
+  const { byId, postFromFrame } = await loadDetail({ shared: true });
 
   await postFromFrame(synced(3, true));
 
@@ -180,7 +181,7 @@ test("an artifact that listens is left alone", async () => {
 });
 
 test("a resync that changed nothing says nothing", async () => {
-  const { byId, postFromFrame } = loadDetail({ shared: true });
+  const { byId, postFromFrame } = await loadDetail({ shared: true });
 
   await postFromFrame(synced(0, false));
 
@@ -188,7 +189,7 @@ test("a resync that changed nothing says nothing", async () => {
 });
 
 test("the reload is the visitor's to press, and goes through /open", async () => {
-  const { byId, frame, postFromFrame } = loadDetail({ shared: true });
+  const { byId, frame, postFromFrame } = await loadDetail({ shared: true });
 
   await postFromFrame(synced(1, false));
   assert.equal(frame.src, "", "nothing reloads on its own: a half-typed input would die with the frame");
@@ -202,7 +203,7 @@ test("the reload is the visitor's to press, and goes through /open", async () =>
 });
 
 test("a sync report from anywhere but our own frame is ignored", async () => {
-  const { byId, postFromFrame } = loadDetail({ shared: true });
+  const { byId, postFromFrame } = await loadDetail({ shared: true });
 
   await postFromFrame(synced(1, false), { postMessage() {} });
 

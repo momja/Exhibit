@@ -357,3 +357,52 @@ func TestEditorLeaveModalBrowser(t *testing.T) {
 	}
 }
 
+// Real viewer bootstrap for the permission consumers. Messages retain the
+// current sandbox frame identity; only transport delays are stubbed per case.
+func newPermissionViewer(t *testing.T, width int64, agent bool) (modalBrowser, string) {
+	t.Helper()
+	ro := newTestRouter(t)
+	id := createArtifact(t, ro, map[string]any{"title": "Permission sample", "body": `<!doctype html><h1>Permission sample</h1><script>addEventListener('message',event=>{if(event.data.__modalTestPing)parent.postMessage({__modalTestPong:true},'*');if(event.data.__avClipboardResult || event.data.__avMediaResult || event.data.__avGeolocationResult)parent.postMessage({__modalTestReply:event.data},'*')})</script>`})
+	app := httptest.NewServer(ro)
+	t.Cleanup(app.Close)
+	ro.cfg.AppOrigin = app.URL
+	render := httptest.NewServer(ro.RenderHandler())
+	t.Cleanup(render.Close)
+	ro.cfg.RenderOrigin = render.URL
+	b := newModalBrowser(t, width)
+	path := "/artifacts/" + id
+	if agent {
+		path = "/agent?artifact=" + id
+	}
+	b.run(chromedp.Navigate(app.URL + path))
+	b.wait(`document.querySelector('iframe')`)
+	if agent {
+		b.wait(`document.getElementById('key-modal').open`)
+		b.eval(`document.getElementById('key-cancel').click();document.getElementById('tab-preview').click()`)
+	}
+	b.eval(fmt.Sprintf(`window.permissionReplies=[];addEventListener('message',event=>{if(event.source===document.querySelector('iframe').contentWindow){if(event.data.__modalTestReply)permissionReplies.push(event.data.__modalTestReply);if(event.data.__modalTestPong)window.permissionPong=true}});window.permissionReport=data=>window.dispatchEvent(new MessageEvent('message',{source:document.querySelector('iframe').contentWindow,data:{artifactId:%q,...data}}))`, id))
+	return b, id
+}
+
+func TestNetworkModalBrowser(t *testing.T) {
+	for _, agent := range []bool{false, true} {
+		for _, width := range []int64{1280, 390} {
+			t.Run(fmt.Sprintf("agent=%t/%d", agent, width), func(t *testing.T) {
+				b, _ := newPermissionViewer(t, width, agent)
+				report := `permissionReport({__avNetwork:true,origin:'https://first.example.test',directive:'connect-src'})`
+				b.dialogCycle("#net-modal", report, "#net-once")
+				b.eval(report)
+				b.capture("Exh-1grc", width)
+				b.eval(`permissionReport({__avNetwork:true,origin:'https://second.example.test'});window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='POST'?new Promise(resolve=>window.finishNetwork=()=>resolve(new Response('{}',{status:200}))):savedFetch(url,opts);document.getElementById('net-never').click()`)
+				b.wait(`document.getElementById('net-never').disabled`)
+				b.run(chromedp.KeyEvent(kb.Escape))
+				b.wait(`document.getElementById('net-modal').open && document.getElementById('net-origin').textContent==='https://second.example.test'`)
+				b.eval(`finishNetwork()`)
+				b.run(chromedp.Sleep(30 * time.Millisecond))
+				b.check(`document.getElementById('net-modal').open && document.getElementById('net-origin').textContent==='https://second.example.test' && document.activeElement.id==='net-once'`)
+				b.run(chromedp.KeyEvent(kb.Escape))
+				b.wait(`!document.getElementById('net-modal').open`)
+			})
+		}
+	}
+}
