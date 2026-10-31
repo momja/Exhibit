@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -231,6 +232,36 @@ func TestAgentKeyModalBrowser(t *testing.T) {
 			b.eval(`document.getElementById('key-cancel').click()`)
 			b.wait(`!document.getElementById('key-modal').open`)
 			b.check(`document.getElementById('key-secret').value==='' && document.activeElement.id==='key-btn'`)
+		})
+	}
+}
+
+func TestFilterModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.Handle("/assets/", assetsHandler())
+			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, `<!doctype html><link rel="stylesheet" href="/assets/gallery/tokens.css"><link rel="stylesheet" href="/assets/gallery/components.css"><link rel="stylesheet" href="/assets/gallery/index.css"><link rel="stylesheet" href="/assets/phosphor/regular.css"><body>`)
+				for _, id := range []string{"one", "two"} {
+					sheet, err := renderPage("galleryFilterSheet", galleryGridData{ID: id, Filters: galleryFilters{Sections: []galleryFilterSection{{Label: "Collections", Options: []galleryFilterOption{{Label: "Research", PageURL: "#research"}}}, {Label: "Tags", Options: []galleryFilterOption{{Label: "Work", Color: "#0088ff", Active: true, PageURL: "#work"}}}}}})
+					require.NoError(t, err)
+					fmt.Fprintf(w, `<section data-controller="filter-sheet"><button id="%s-trigger" data-filter-sheet-target="trigger" data-action="filter-sheet#open">Filters</button>%s</section>`, id, sheet)
+				}
+				fmt.Fprint(w, `<script type="module" src="/assets/gallery/controllers.js"></script></body>`)
+			})
+			app := httptest.NewServer(mux)
+			defer app.Close()
+			b := newModalBrowser(t, width)
+			b.run(chromedp.Navigate(app.URL))
+			b.run(chromedp.Sleep(50 * time.Millisecond))
+			b.dialogCycle("#one-filter-sheet", `document.getElementById('one-trigger').click()`, `[aria-label="Close filters"]`)
+			b.check(`document.activeElement.id==='one-trigger'`)
+			b.eval(`document.getElementById('two-trigger').click()`)
+			b.wait(`document.getElementById('two-filter-sheet').open`)
+			b.capture("Exh-gynk", width)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.check(`document.activeElement.id==='two-trigger'`)
 		})
 	}
 }

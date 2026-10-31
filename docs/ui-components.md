@@ -420,3 +420,12 @@ from editable fields. Read-only fields use the shared state styling.
 
 [API key desktop](screenshots/Exh-uxyy/1280.png) ·
 [API key phone](screenshots/Exh-uxyy/390.png)
+
+Gallery filters compose `filter-sheet` (trigger-to-instance routing) with
+`modal` on the stable sheet. Only options swap; bottom-sheet sizing and safe
+area padding stay in gallery CSS. The close button is the initial focus.
+`TestGalleryFilterBrowser` covers actual htmx filters; `TestFilterModalBrowser`
+covers two independently addressed instances and shared keyboard dismissal.
+
+[Filters desktop](screenshots/Exh-gynk/1280.png) ·
+[Filters phone](screenshots/Exh-gynk/390.png)
