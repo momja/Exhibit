@@ -32,8 +32,8 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
   });
   page.document.body.addEventListener('exhibit:shares-changed', () => events.push('changed'));
   const panel = page.byId('share-panel');
-  // Real DOM events do not await async handlers. Let requests settle while
-  // the feature's promise continues to wait for the separately driven swap.
+  // Real DOM events do not await async handlers. Let requests settle before
+  // driving the separate htmx swap that completes the feature's pending work.
   const errors = [];
   const settle = async () => {
     await new Promise(resolve => setTimeout(resolve, 0));

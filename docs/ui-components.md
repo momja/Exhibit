@@ -375,10 +375,12 @@ checks. Set `MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots"` to refresh captures.
 
 Sharing uses the same handle on `#share-panel`; htmx replaces only its body.
 Its native `#share-body` fieldset locks all settings as one working copy.
-`run` wraps a mutation plus a feature-owned promise that settles on the htmx
-swap or refresh failure. No second busy flag or dismissal guard is needed.
+Sharing sets `pending` before the mutation and clears it after the htmx swap or
+refresh failure. Its existing event handlers retain responsibility for
+reconciling server state and selecting focus after the fragment is replaced.
+There is no second busy flag, control-disable loop, or promise wrapping the swap.
 After a failed refresh, the fieldset stays disabled because the settings are
-stale; Done is usable and reopening retries only the fragment. Input/IME,
+stale; Done takes focus and reopening retries only the fragment. Input/IME,
 disclosure and list scroll state remain feature-owned. Native dialog scrolling keeps Done reachable in short
 windows. `TestShareModalBrowser` checks both viewport sizes and real swaps.
 `TestShareModalTransactionsBrowser` covers partial success, pending guards,

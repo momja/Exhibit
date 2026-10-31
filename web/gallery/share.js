@@ -16,7 +16,6 @@ function initializeSharePanel() {
     linkID: byId('share-link-toggle').dataset.shareId || ''
   });
   let saved = readSaved();
-  let finishRefresh;
   let needsRefresh = false;
   let recipients = '';
   let composing = false;
@@ -45,18 +44,15 @@ function initializeSharePanel() {
     });
   }
 
-  async function refresh(operation) {
-    const completed = await dialog.run(async () => {
-      if (operation) await operation();
-      rememberDisclosures();
-      needsRefresh = true;
-      await new Promise(resolve => {
-        finishRefresh = resolve;
-        document.body.dispatchEvent(new CustomEvent('exhibit:shares-changed'));
-      });
-      return true;
-    });
-    if (!completed) return;
+  function refresh() {
+    rememberDisclosures();
+    needsRefresh = true;
+    dialog.pending = true;
+    document.body.dispatchEvent(new CustomEvent('exhibit:shares-changed'));
+  }
+
+  function finishRefresh() {
+    dialog.pending = false;
     // A failed refresh leaves stale settings locked, but Done becomes usable.
     byId('share-body').disabled = needsRefresh;
     if (!needsRefresh && panel.open && focusAfterRefresh) byId(focusAfterRefresh)?.focus();
@@ -84,22 +80,22 @@ function initializeSharePanel() {
   }
   const post = (body) => request('/api/shares', { method: 'POST', body: JSON.stringify(body) });
 
-  function mutate(operation, failureMessage, focus = '') {
+  async function mutate(operation, failureMessage, focus = '') {
     if (dialog.pending || needsRefresh) return;
+    dialog.pending = true;
     focusAfterRefresh = focus;
-    return refresh(async () => {
-      status('Saving changes…');
-      try {
-        const message = await operation();
-        mutationStatus = message || '✓ Changes saved';
-      } catch (error) {
-        mutationStatus = failureMessage;
-        // Even a failed bulk grant may have saved some names before its error.
-        // Reconcile with the server and retain the input for a safe retry.
-        restoreFields();
-      }
-      status(mutationStatus);
-    });
+    status('Saving changes…');
+    try {
+      const message = await operation();
+      mutationStatus = message || '✓ Changes saved';
+    } catch (error) {
+      mutationStatus = failureMessage;
+      // Even a failed bulk grant may have saved some names before its error.
+      // Reconcile with the server and retain the input for a safe retry.
+      restoreFields();
+    }
+    status(mutationStatus);
+    refresh();
   }
 
   // The single text field uses native implicit form submission: desktop Enter
@@ -217,8 +213,7 @@ function initializeSharePanel() {
   // with the server's missing-artifact notice.
   function refreshFailed() {
     needsRefresh = true;
-    finishRefresh?.();
-    finishRefresh = null;
+    finishRefresh();
     status('The sharing panel could not refresh. Close and reopen it to retry.');
   }
   panel.addEventListener('htmx:after:request', function(e) {
@@ -245,8 +240,7 @@ function initializeSharePanel() {
       focusAfterRefresh = 'share-close';
       mutationStatus = '';
       status('');
-      finishRefresh?.();
-      finishRefresh = null;
+      finishRefresh();
       return;
     }
     saved = readSaved();
@@ -258,8 +252,7 @@ function initializeSharePanel() {
     }
     const people = panel.querySelector('.share-people-list');
     if (people) people.scrollTop = peopleScrollTop;
-    finishRefresh?.();
-    finishRefresh = null;
+    finishRefresh();
   });
 }
 
