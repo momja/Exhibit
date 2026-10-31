@@ -620,6 +620,17 @@ func TestDirectOpenPendingBrowser(t *testing.T) {
 	b.eval(`approveDirect(true)`)
 	b.run(chromedp.Sleep(30 * time.Millisecond))
 	b.check(`directResults.length===1 && tabs[0].location===null && !document.getElementById('direct-open-modal').open && !Object.keys(localStorage).some(key=>key.startsWith('exhibit:direct-open:'))`)
+	// Disconnection has the same transaction cleanup as cancellation, without
+	// focusing a removed region or leaving a blank tab behind.
+	b.eval(`document.dispatchEvent(new CustomEvent('exhibit:open-directly',{detail:{trigger:document.getElementById('pip-more'),approve:()=>new Promise(resolve=>window.approveRemoved=resolve),resolve:value=>directResults.push(value)}}))`)
+	b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+	b.wait(`tabs.length===2 && document.getElementById('direct-open-confirm').disabled`)
+	b.eval(`window.removedDirect=document.getElementById('direct-open-modal');removedDirect.remove()`)
+	b.wait(`directResults.length===2 && directResults[1]===false && tabs[1].closed && !removedDirect.open`)
+	b.eval(`approveRemoved(true)`)
+	b.run(chromedp.Sleep(30 * time.Millisecond))
+	b.check(`directResults.length===2 && tabs[1].location===null && !Object.keys(localStorage).some(key=>key.startsWith('exhibit:direct-open:'))`)
+
 }
 
 func TestDirectOpenPreviewSwapBrowser(t *testing.T) {
