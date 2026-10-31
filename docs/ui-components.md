@@ -556,7 +556,7 @@ and the successful continuation through direct-open.
 [Location desktop](screenshots/Exh-7hh4/1280.png) ·
 [Location phone](screenshots/Exh-7hh4/390.png)
 
-Direct-open uses the shared controller for both viewer and agent. The feature
+Direct-open uses the shared handle for both viewer and agent. The feature
 retains viewer/artifact-scoped preferences, synchronous blank-tab claiming,
 opener severance, blocked-popup retry, approval callbacks and exactly-once
 promise settlement. Cancellation/disconnection closes unused placeholders. Its
@@ -584,3 +584,10 @@ Run all modal integrations and refresh their screenshots with:
 ```sh
 MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots" go test ./internal/api -run 'Test(.*Modal.*Browser|DirectOpenPendingBrowser|DirectOpenPreviewSwapBrowser)$' -count=1
 ```
+
+Direct-open keeps Cancel live while its placeholder tab awaits approval. The tab
+itself guards duplicate confirmation; there is no second generic busy flag.
+Network, download, and clipboard likewise keep cancellation live and retain
+request-specific write guards. Use shared `pending` for non-dismissible work
+(tags, Duplicate, sharing, keys, entitlements, editor saves, and link approval);
+do not apply it to cancellable permission transactions.

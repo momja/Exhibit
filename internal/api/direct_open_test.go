@@ -25,7 +25,7 @@ func TestDirectOpenPromptForEveryViewer(t *testing.T) {
 		assert.Contains(t, page, `Open outside the preview sandbox?</h2>`)
 		assert.Contains(t, page, `This tool will run as a regular web page. It can download files, navigate to external sites, and use browser features restricted in the preview, subject to your browser’s normal controls.</p>`)
 		assert.Contains(t, page, `<input type="checkbox" id="direct-open-remember"> Do not ask again for this artifact`)
-		assert.Contains(t, page, `id="direct-open-cancel" data-modal-target="initialFocus" data-action="modal#dismiss">Cancel</button>`)
+		assert.Contains(t, page, `id="direct-open-cancel" autofocus data-modal-dismiss>Cancel</button>`)
 		assert.Contains(t, page, `id="direct-open-confirm">Open directly</button>`)
 		for _, id := range []string{"direct-open-toolbar", "direct-open-banner"} {
 			assert.Contains(t, page, `id="`+id+`"`)

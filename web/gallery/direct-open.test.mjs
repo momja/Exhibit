@@ -38,8 +38,7 @@ async function load({ artifact = 'art-1', viewer = '1', store = storage(), block
   permissionDialog(page, 'media-modal');
   permissionDialog(page, 'geo-modal');
   await page.loadModule(asset('detail.js'));
-  const directDialog = observeModal(page, 'direct-open-modal');
-  page.byId('direct-open-cancel').addEventListener('click', () => directDialog.dispatchEvent({type:'exhibit:modal-close'}));
+  const directDialog = permissionDialog(page, 'direct-open-modal');
   await page.loadModule(asset('direct-open.js'));
   const trigger = page.byId('direct-open-toolbar');
   const prompt = page.byId('direct-open-modal');
@@ -74,7 +73,7 @@ for (const dismiss of ['cancel', 'shared dismissal']) {
     await page.trigger.click();
     page.checkbox.checked = true;
     if (dismiss === 'cancel') await page.cancel.click();
-    if (dismiss === 'shared dismissal') page.prompt.dispatchEvent({type:'exhibit:modal-close'});
+    if (dismiss === 'shared dismissal') page.prompt.dispatchEvent(new Event('cancel', { cancelable: true }));
     assert.equal(page.prompt.open, false);
     assert.equal(page.checkbox.checked, false);
     assert.equal(page.tabs.length, 0);
@@ -179,7 +178,7 @@ for (const [kind, request] of [
     assert.equal(page.prompt.open, true);
     assert.equal(page.tabs.length, 0);
     assert.deepEqual(page.api.calls, []);
-    page.prompt.dispatchEvent({type:'exhibit:modal-close'});
+    page.prompt.dispatchEvent(new Event('cancel', { cancelable: true }));
     await allowing;
     assert.equal(page.byId(`${kind}-modal`).open, true);
     assert.equal(page.tabs.length, 0);

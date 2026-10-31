@@ -1,6 +1,9 @@
+import { modalFor } from './modal.js';
+
 // App-origin gate for top-level artifact opens. Markup and copy live in the
 // template. /open also reloads frames, so the redirect itself stays ungated.
 const modal = document.getElementById('direct-open-modal');
+const dialog = modalFor(modal);
 const remember = document.getElementById('direct-open-remember');
 const confirm = document.getElementById('direct-open-confirm');
 const status = document.getElementById('direct-open-status');
@@ -23,7 +26,7 @@ function show(message = '') {
   status.hidden = !message;
   confirm.disabled = false;
   remember.disabled = false;
-  modal.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: focusTarget(pending) } }));
+  dialog.show(focusTarget(pending));
 }
 
 function finish(opened, disconnected = false) {
@@ -34,7 +37,7 @@ function finish(opened, disconnected = false) {
   remember.checked = false;
   confirm.disabled = false;
   remember.disabled = false;
-  modal.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  dialog.close();
   // Shared modal returns to the original trigger. Resolve a feature fallback
   // only when htmx or the toolbar menu has made that trigger unavailable.
   const target = focusTarget(request);
@@ -46,9 +49,10 @@ modal.addEventListener('modal:closed', () => finish(false));
 modal.addEventListener('modal:disconnected', () => finish(false, true));
 
 async function open(request, saveChoice) {
-  if (pending !== request || request.busy) return;
+  if (pending !== request || request.tab) return;
   if (request.stillPending && !request.stillPending()) { finish(false); return; }
-  request.busy = true;
+  // Only the confirmation is unavailable while this placeholder awaits approval.
+  // Cancellation remains live and owns closing that exact tab.
   confirm.disabled = true;
   remember.disabled = true;
   status.hidden = true;
@@ -66,7 +70,6 @@ async function open(request, saveChoice) {
   }
   request.tab = tab;
   if (!tab) {
-    request.busy = false;
     show('Your browser blocked the new tab. Allow popups for Exhibit and try again.');
     return;
   }
@@ -90,7 +93,6 @@ async function open(request, saveChoice) {
     tab.close();
     if (pending !== request) return;
     request.tab = null;
-    request.busy = false;
     show('Unable to open the artifact. Try again.');
   }
 }
@@ -105,7 +107,7 @@ function requestOpen(options = {}) {
   if (!artifact || !openUrl) { options.resolve?.(false); return; }
   const preferenceKey = viewer
     ? 'exhibit:direct-open:v1:' + JSON.stringify([viewer, artifact]) : null;
-  pending = { ...options, trigger, openUrl, preferenceKey, tab: null, busy: false };
+  pending = { ...options, trigger, openUrl, preferenceKey, tab: null };
   remember.checked = false;
   if (remembered(preferenceKey)) open(pending, false);
   else show();
