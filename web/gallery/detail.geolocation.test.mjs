@@ -74,6 +74,7 @@ async function loadDetail({ readOnly = false, approvals = {}, responses = [] } =
   }, HIDDEN);
   const netDialog = permissionDialog(page, 'net-modal');
   permissionDialog(page, 'dl-modal');
+  permissionDialog(page, 'clip-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   await page.loadModule(path.join(ASSETS, "direct-open.js"));
   return { ...page, api, tabs, opened };

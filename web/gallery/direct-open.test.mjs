@@ -33,6 +33,7 @@ async function load({ artifact = 'art-1', viewer = '1', store = storage(), block
   page.byId('direct-open-modal').dataset = { artifact, viewer, openUrl: openURL };
   permissionDialog(page, 'net-modal');
   permissionDialog(page, 'dl-modal');
+  permissionDialog(page, 'clip-modal');
   await page.loadModule(asset('detail.js'));
   await page.loadModule(asset('direct-open.js'));
   const trigger = page.byId('direct-open-toolbar');

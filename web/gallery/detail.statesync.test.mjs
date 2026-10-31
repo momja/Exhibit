@@ -69,6 +69,7 @@ async function loadDetail({ readOnly = false, stateWritable = true, shared = fal
   }, HIDDEN);
   const netDialog = permissionDialog(page, 'net-modal');
   permissionDialog(page, 'dl-modal');
+  permissionDialog(page, 'clip-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api };
 }

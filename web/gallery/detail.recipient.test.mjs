@@ -88,6 +88,7 @@ async function loadDetail({ readOnly, approvals = {} } = {}) {
   }, HIDDEN);
   const netDialog = permissionDialog(page, 'net-modal');
   permissionDialog(page, 'dl-modal');
+  permissionDialog(page, 'clip-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api, opened };
 }
@@ -191,7 +192,7 @@ test("an unapproved clipboard call is rejected into the frame rather than left h
 
   await postFromFrame(clipboardRead());
 
-  assert.equal(byId("clip-modal").hidden, true);
+  assert.equal(byId("clip-modal").open, false);
   const [reply] = frame.contentWindow.posted.filter((m) => m.__avClipboardResult);
   assert.ok(reply, "an unanswered clipboard promise is a hang, which is worse than a denial");
   assert.equal(reply.ok, false);
@@ -263,7 +264,7 @@ test("a recipient's session issues no API call at all across every bridge", asyn
     "sending them is how a recipient learns the tool is broken instead of that " +
     "it is not theirs");
   for (const id of ["net-modal", "dl-modal", "clip-modal", "link-modal", "media-modal", "geo-modal"]) {
-    assert.equal(["net-modal", "dl-modal"].includes(id) ? !byId(id).open : byId(id).hidden, true, id + " must not open for a visitor who cannot answer it");
+    assert.equal(["net-modal", "dl-modal", "clip-modal"].includes(id) ? !byId(id).open : byId(id).hidden, true, id + " must not open for a visitor who cannot answer it");
   }
 });
 

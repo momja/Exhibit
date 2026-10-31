@@ -459,6 +459,17 @@ document.getElementById('dl-allow').addEventListener('click', async function() {
 // result back into the frame, correlated by id. Denial rejects the shim's
 // promise so the artifact sees a normal DOMException.
 let pendingClip = null;
+const clipDialog = document.getElementById('clip-modal');
+function denyPendingClip() {
+  const req = pendingClip;
+  pendingClip = null;
+  if (req) replyClip(req, false, undefined, 'Clipboard access denied');
+}
+for (const event of ['modal:closed', 'modal:disconnected']) clipDialog.addEventListener(event, denyPendingClip);
+document.addEventListener('exhibit:preview-reloaded', () => {
+  pendingClip = null;
+  clipDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+});
 
 window.addEventListener('message', function(e) {
   const d = e.data;
@@ -466,69 +477,70 @@ window.addEventListener('message', function(e) {
   const frame = document.querySelector('iframe');
   if (!frame || e.source !== frame.contentWindow) return;
   const op = d.op === 'read' ? 'read' : 'write';
-  const req = { id: String(d.id), op: op, text: op === 'write' ? String(d.text == null ? '' : d.text) : null };
+  const req = { id: String(d.id), op: op, text: op === 'write' ? String(d.text == null ? '' : d.text) : null, frame, generation: previewGeneration };
   if (clipboardApproved) { performClipboard(req); return; }
   // Not ours to approve. Reject rather than drop: a clipboard call is a
   // promise the artifact is awaiting, so silence here is a hang, where a
   // rejection is the DOMException a blocked clipboard has always thrown.
-  if (!mayApprove()) { replyClip(req.id, false, undefined, 'Clipboard access denied'); return; }
+  if (!mayApprove() || !clipDialog.isConnected) { replyClip(req, false, undefined, 'Clipboard access denied'); return; }
+  if (pendingClip?.id === req.id && currentPreviewRequest(pendingClip)) return;
+  denyPendingClip();
+  if (clipDialog.open) clipDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
   pendingClip = req;
   document.getElementById('clip-direction').textContent = op === 'read' ? 'read' : 'write to';
-  document.getElementById('clip-modal').hidden = false;
+  document.getElementById('clip-allow').disabled = false;
+  clipDialog.querySelector('[data-permission-status]').textContent = '';
+  clipDialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: frame } }));
 });
 
 // Posts a clipboard result back into the sandbox frame. targetOrigin is '*'
 // because the frame's origin is opaque; the payload is only what the artifact
 // itself asked to read or write.
-function replyClip(id, ok, text, error) {
-  const frame = document.querySelector('iframe');
-  if (!frame) return;
+function replyClip(req, ok, text, error) {
+  if (!currentPreviewRequest(req)) return;
+  const frame = req.frame;
   frame.contentWindow.postMessage(
-    { __avClipboardResult: true, id: id, ok: ok, text: text, error: error }, '*'
+    { __avClipboardResult: true, id: req.id, ok: ok, text: text, error: error }, '*'
   );
 }
 
-async function performClipboard(req) {
+// Start the browser operation in the Allow click itself. Awaiting the grant
+// first would lose the gesture in browsers that require synchronous access.
+async function clipboardResult(req) {
   try {
-    if (req.op === 'read') {
-      const text = await navigator.clipboard.readText();
-      replyClip(req.id, true, text);
-    } else {
-      await navigator.clipboard.writeText(req.text);
-      replyClip(req.id, true);
-    }
+    if (req.op === 'read') return { ok: true, text: await navigator.clipboard.readText() };
+    await navigator.clipboard.writeText(req.text);
+    return { ok: true };
   } catch (err) {
-    replyClip(req.id, false, undefined, (err && err.message) || 'Clipboard operation failed');
+    return { ok: false, error: err?.message || 'Clipboard operation failed' };
   }
 }
-
-async function setClipboardApproved(approved) {
-  if (!(await setCapabilityApproved('clipboard_approved', approved, 'clipboard'))) return false;
+async function performClipboard(req) {
+  const result = await clipboardResult(req);
+  replyClip(req, result.ok, result.text, result.error);
+}
+async function setClipboardApproved(approved, request) {
+  if (!(await setCapabilityApproved('clipboard_approved', approved, 'clipboard', () => pendingClip === request && currentPreviewRequest(request)))) return false;
   clipboardApproved = approved;
   return true;
 }
 
-// deny=true rejects the pending request so the artifact's clipboard call
-// settles (with a DOMException) instead of hanging forever.
-function closeClipModal(deny) {
-  document.getElementById('clip-modal').hidden = true;
-  if (deny && pendingClip) replyClip(pendingClip.id, false, undefined, 'Clipboard access denied');
-  pendingClip = null;
-}
-
-document.getElementById('clip-block').addEventListener('click', function() { closeClipModal(true); });
-document.getElementById('clip-modal').addEventListener('click', function(e) {
-  if (e.target.id === 'clip-modal') closeClipModal(true);
-});
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape' && !document.getElementById('clip-modal').hidden) closeClipModal(true);
-});
 document.getElementById('clip-allow').addEventListener('click', async function() {
   const req = pendingClip;
-  if (!(await setClipboardApproved(true))) return;
-  document.getElementById('clip-modal').hidden = true;
+  if (!req || req.saving) return;
+  req.saving = true;
+  document.getElementById('clip-allow').disabled = true;
+  const operation = clipboardResult(req);
+  const saved = await setClipboardApproved(true, req);
+  req.saving = false;
+  if (pendingClip !== req || !currentPreviewRequest(req)) return;
+  document.getElementById('clip-allow').disabled = false;
+  if (!saved) return;
+  const result = await operation;
+  if (pendingClip !== req || !currentPreviewRequest(req)) return;
   pendingClip = null;
-  if (req) performClipboard(req);
+  clipDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  replyClip(req, result.ok, result.text, result.error);
 });
 
 // Link navigation bridge (av-r0dk): the sandboxed frame cannot open external

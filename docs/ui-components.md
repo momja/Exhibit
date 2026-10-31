@@ -505,3 +505,14 @@ successful download's filename, MIME type and byte count.
 
 [Download desktop](screenshots/Exh-fvzb/1280.png) ·
 [Download phone](screenshots/Exh-fvzb/390.png)
+
+Clipboard permission uses the same safe Block focus and native dismissal.
+The feature settles displaced and denied request IDs once, ignores late replies,
+and invalidates requests on frame navigation. Clipboard access starts in the
+Allow gesture; its result is delivered only after the grant persists and the
+request is still current. Native paste remains browser-owned. The browser test
+uses a clipboard adapter to assert real transient activation and relays replies
+through the sandbox frame; it never reads the operator's clipboard.
+
+[Clipboard desktop](screenshots/Exh-3917/1280.png) ·
+[Clipboard phone](screenshots/Exh-3917/390.png)

@@ -439,3 +439,33 @@ func TestDownloadModalBrowser(t *testing.T) {
 		})
 	}
 }
+
+func TestClipboardModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			b, _ := newPermissionViewer(t, width, false)
+			report := `permissionReport({__avClipboard:true,id:'first',op:'read'})`
+			b.dialogCycle("#clip-modal", report, "#clip-block")
+			b.eval(report)
+			b.capture("Exh-3917", width)
+			b.eval(`window.clipGestures=[];Object.defineProperty(navigator,'clipboard',{value:{readText(){clipGestures.push(navigator.userActivation.isActive);return Promise.resolve('test clipboard')},writeText(){clipGestures.push(navigator.userActivation.isActive);return Promise.resolve()}}});window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishClip=()=>resolve(new Response('{}',{status:200}))):savedFetch(url,opts);permissionReplies=[]`)
+			b.run(chromedp.Click(chromedp.CSS(`#clip-allow`)))
+			b.wait(`document.getElementById('clip-allow').disabled`)
+			b.check(`clipGestures.length===1 && clipGestures[0]`)
+			// Displacement denies the first request once; its late grant cannot answer second.
+			b.eval(`permissionReport({__avClipboard:true,id:'second',op:'write',text:'next'})`)
+			b.wait(`permissionReplies.length===1`)
+			b.check(`permissionReplies[0].id==='first' && !permissionReplies[0].ok`)
+			b.eval(`finishClip()`)
+			b.run(chromedp.Sleep(30 * time.Millisecond))
+			b.check(`permissionReplies.length===1 && document.getElementById('clip-modal').open && document.activeElement.id==='clip-block'`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.wait(`permissionReplies.length===2`)
+			b.check(`permissionReplies[1].id==='second' && !permissionReplies[1].ok`)
+			b.eval(`window.fetch=savedFetch;permissionReport({__avClipboard:true,id:'success',op:'read'})`)
+			b.run(chromedp.Click(chromedp.CSS(`#clip-allow`)))
+			b.wait(`permissionReplies.length===3`)
+			b.check(`permissionReplies[2].id==='success' && permissionReplies[2].ok && permissionReplies[2].text==='test clipboard' && clipGestures.at(-1) && !document.getElementById('clip-modal').open`)
+		})
+	}
+}
